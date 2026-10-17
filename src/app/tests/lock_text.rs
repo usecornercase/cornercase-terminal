@@ -4,7 +4,7 @@ use rstest::rstest;
 use crate::git::worktree::{Holder, Lock};
 
 fn lock(reason: &str, holder: Option<Holder>) -> Lock {
-    Lock { reason: reason.into(), holder }
+    Lock { reason: reason.into(), holder, role: None }
 }
 
 #[rstest]
@@ -29,4 +29,14 @@ fn the_message_names_the_reason(#[case] reason: &str, #[case] expected: &str) {
 )]
 fn the_note_says_who_holds_it(#[case] holder: Option<Holder>, #[case] changed: bool, #[case] expected: Option<&str>) {
     assert_eq!(lock_note(&lock("busy", holder), changed).as_deref(), expected);
+}
+
+#[test]
+fn a_lock_on_a_role_worktree_names_the_role_and_its_folder_not_the_run() {
+    let lock = Lock { role: Some(("coder A".into(), "/wt/coder-a".into())), ..lock("busy", None) };
+    assert_eq!(
+        lock_message("fix-login", &lock),
+        "The worktree of `coder A` (/wt/coder-a) is locked: busy. Unlock it and remove fix-login with its worktrees? \
+         The branches are kept."
+    );
 }

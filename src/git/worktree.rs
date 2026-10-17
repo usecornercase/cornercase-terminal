@@ -79,6 +79,7 @@ pub(crate) fn changed(path: &Path) -> Result<bool> {
 pub(crate) struct Lock {
     pub(crate) reason: String,
     pub(crate) holder: Option<Holder>,
+    pub(crate) role: Option<(String, PathBuf)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,7 +107,7 @@ pub(crate) fn lock(path: &Path) -> Result<Option<Lock>> {
         Err(e) => return Err(e.into()),
     };
     let holder = pid_in(&reason).map(|pid| if process::alive(pid) { Holder::Running(pid) } else { Holder::Gone(pid) });
-    Ok(Some(Lock { reason, holder }))
+    Ok(Some(Lock { reason, holder, role: None }))
 }
 
 fn pid_in(reason: &str) -> Option<i32> {

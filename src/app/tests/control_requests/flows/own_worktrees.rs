@@ -260,7 +260,9 @@ fn a_locked_role_worktree_stops_the_removal_with_its_reason() {
 
     let refused = error(close_removing(&mut team, run.workspace, false));
 
-    assert!(refused.contains("is locked") && refused.contains("busy"), "{refused}");
+    assert!(refused.contains("the worktree of `coder A`") && refused.contains("is locked (busy)"), "{refused}");
+    assert!(refused.contains(&format!("git worktree unlock {}", tree.display())), "{refused}");
+    assert!(!refused.contains(&run.workspace.to_string()) || refused.contains("in workspace"), "{refused}");
     assert!(tree.exists());
 }
 

@@ -320,17 +320,19 @@ impl App {
         let project = &self.projects[p];
         let (id, workspace) = (project.id, project.workspaces[w].id);
         let path = project.workspaces[w].path.clone();
-        let roles: Vec<PathBuf> = project.workspaces[w].role_worktrees.iter().map(|tree| tree.path.clone()).collect();
+        let roles: Vec<(String, PathBuf)> =
+            project.workspaces[w].role_worktrees.iter().map(|tree| (tree.role.clone(), tree.path.clone())).collect();
         let job = Job::new(Level::Info, "worktree", "status").with("workspace", workspace);
         self.spawn_job(
             job,
             move || {
                 let mut status = worktree::status(&path);
-                for role in roles.iter().filter(|role| role.is_dir()) {
+                for (name, role) in roles.iter().filter(|(_, role)| role.is_dir()) {
                     let found = worktree::status(role);
                     status.changed |= found.changed;
                     if status.lock.is_none() {
-                        status.lock = found.lock;
+                        status.lock =
+                            found.lock.map(|lock| worktree::Lock { role: Some((name.clone(), role.clone())), ..lock });
                     }
                 }
                 Ok(status)
@@ -519,7 +521,13 @@ fn remove_tree(
 pub(super) fn lock_message(label: &str, lock: &worktree::Lock) -> String {
     let reason = crate::text::truncate_right(&lock.reason, MAX_LOCK_REASON);
     let locked = if reason.is_empty() { "is locked".to_string() } else { format!("is locked: {reason}") };
-    format!("The worktree of {label} {locked}. Unlock it and delete its folder? The branch is kept.")
+    match &lock.role {
+        Some((name, path)) => format!(
+            "The worktree of `{name}` ({}) {locked}. Unlock it and remove {label} with its worktrees? The branches are kept.",
+            path.display()
+        ),
+        None => format!("The worktree of {label} {locked}. Unlock it and delete its folder? The branch is kept."),
+    }
 }
 
 pub(super) fn lock_note(lock: &worktree::Lock, changed: bool) -> Option<String> {

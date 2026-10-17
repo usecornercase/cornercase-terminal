@@ -174,7 +174,10 @@ mod remove {
         let (repo, _tmp, path) = with_worktree();
         locked(repo.path(), &path, Some("on a usb disk"));
 
-        assert_eq!(lock(&path).expect("read lock"), Some(Lock { reason: "on a usb disk".into(), holder: None }));
+        assert_eq!(
+            lock(&path).expect("read lock"),
+            Some(Lock { reason: "on a usb disk".into(), holder: None, role: None })
+        );
     }
 
     #[test]
@@ -182,7 +185,7 @@ mod remove {
         let (repo, _tmp, path) = with_worktree();
         locked(repo.path(), &path, None);
 
-        assert_eq!(lock(&path).expect("read lock"), Some(Lock { reason: String::new(), holder: None }));
+        assert_eq!(lock(&path).expect("read lock"), Some(Lock { reason: String::new(), holder: None, role: None }));
     }
 
     #[test]

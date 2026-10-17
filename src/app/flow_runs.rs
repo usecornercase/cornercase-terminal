@@ -51,8 +51,8 @@ fn make_trees(
     let mut made_paths: Vec<PathBuf> = Vec::new();
     let built = || -> crate::error::Result<Vec<(RoleWorktree, bool)>> {
         if let Some(path) = &run {
-            worktree::create(repo, branch, path)?;
             made_paths.push(path.clone());
+            worktree::create(repo, branch, path)?;
         }
         let mut trees = Vec::with_capacity(roles.len());
         for (role, role_branch) in roles {
@@ -60,8 +60,8 @@ fn make_trees(
                 (path, false)
             } else {
                 let path = worktree::checkout_path(dir, repo, &role_branch);
-                worktree::create_from(repo, &role_branch, &path, branch)?;
                 made_paths.push(path.clone());
+                worktree::create_from(repo, &role_branch, &path, branch)?;
                 (path, true)
             };
             trees.push((RoleWorktree { role, path: canonical(path), branch: role_branch }, made));
@@ -78,7 +78,7 @@ fn make_trees(
 }
 
 fn discard(repo: &Path, paths: &[PathBuf]) {
-    for path in paths.iter().rev() {
+    for path in paths.iter().rev().filter(|path| path.exists()) {
         if let Err(e) = worktree::remove(repo, path, true, false) {
             log::warning!("worktree", "could not clean up after a flow that did not start", error = e);
         }
