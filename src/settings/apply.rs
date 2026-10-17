@@ -152,9 +152,12 @@ impl Settings {
     pub(crate) fn secret(&mut self, key: &str, token: &Secret) -> Result<Action, Refused> {
         let row = match self.row_of_connection(key) {
             Some(row @ (Row::Token(_) | Row::Bot(_))) => row,
+            _ if key == "browsers" => return Err(Refused::Invalid(format!("`{key}` takes no secret"))),
             Some(_) => return Err(Refused::Invalid(format!("`{key}` takes no secret"))),
             None => {
-                return Err(Refused::Unknown(format!("there is no connection `{key}`; `cornercase config` lists them")));
+                return Err(Refused::Unknown(format!(
+                    "there is no connection `{key}`; `cornercase config` lists them"
+                )));
             }
         };
         let name = match &row {

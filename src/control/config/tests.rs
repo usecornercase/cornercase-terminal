@@ -113,10 +113,7 @@ mod request {
     #[test]
     fn it_travels_as_a_tagged_action() {
         let set = Configure::Set([("fetch_minutes".to_string(), json!(10))].into());
-        assert_eq!(
-            serde_json::to_value(&set).expect("json"),
-            json!({"action": "set", "entry": {"fetch_minutes": 10}})
-        );
+        assert_eq!(serde_json::to_value(&set).expect("json"), json!({"action": "set", "entry": {"fetch_minutes": 10}}));
         assert_eq!(serde_json::to_value(Configure::Get).expect("json"), json!({"action": "get"}));
     }
 

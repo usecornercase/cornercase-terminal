@@ -693,3 +693,4 @@ fn keys_wait_while_a_token_is_checked() {
     s.checking.push(Source::Shortcut);
     assert_eq!(press(&mut s, KeyCode::Esc), Action::None);
 }
+mod requests;
