@@ -327,7 +327,11 @@ impl App {
             move || {
                 let mut status = worktree::status(&path);
                 for role in roles.iter().filter(|role| role.is_dir()) {
-                    status.changed |= !matches!(worktree::changed(role), Ok(false));
+                    let found = worktree::status(role);
+                    status.changed |= found.changed;
+                    if status.lock.is_none() {
+                        status.lock = found.lock;
+                    }
                 }
                 Ok(status)
             },
@@ -399,10 +403,14 @@ impl App {
             move || {
                 let mut warnings = Vec::new();
                 for tree in roles.iter().filter(|tree| tree.path.is_dir()) {
-                    match remove_tree(&repo, &tree.path, &tree.branch, script.as_deref(), force, false) {
+                    match remove_tree(&repo, &tree.path, &tree.branch, script.as_deref(), force, unlock) {
                         Ok(None) => {}
                         Ok(Some(why)) => warnings.push(format!("the teardown of `{}` failed: {why}", tree.role)),
-                        Err(e) => warnings.push(format!("could not remove the worktree of `{}`: {e}", tree.role)),
+                        Err(e) => warnings.push(format!(
+                            "could not remove the worktree of `{}`, which stays in {}: {e}",
+                            tree.role,
+                            tree.path.display()
+                        )),
                     }
                 }
                 let failed = remove_tree(&repo, &path, &branch, script.as_deref(), force, unlock)?;

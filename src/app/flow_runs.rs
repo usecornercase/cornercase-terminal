@@ -40,6 +40,51 @@ pub(crate) struct Made {
     pub(crate) roles: Vec<(RoleWorktree, bool)>,
 }
 
+fn make_trees(
+    repo: &Path,
+    dir: &Path,
+    run: Option<PathBuf>,
+    branch: &str,
+    roles: Vec<(String, String)>,
+) -> crate::error::Result<Made> {
+    let canonical = |path: PathBuf| path.canonicalize().unwrap_or(path);
+    let mut made_paths: Vec<PathBuf> = Vec::new();
+    let built = || -> crate::error::Result<Vec<(RoleWorktree, bool)>> {
+        if let Some(path) = &run {
+            worktree::create(repo, branch, path)?;
+            made_paths.push(path.clone());
+        }
+        let mut trees = Vec::with_capacity(roles.len());
+        for (role, role_branch) in roles {
+            let (path, made) = if let Some(path) = git::checkout_of(repo, &role_branch) {
+                (path, false)
+            } else {
+                let path = worktree::checkout_path(dir, repo, &role_branch);
+                worktree::create_from(repo, &role_branch, &path, branch)?;
+                made_paths.push(path.clone());
+                (path, true)
+            };
+            trees.push((RoleWorktree { role, path: canonical(path), branch: role_branch }, made));
+        }
+        Ok(trees)
+    };
+    match built() {
+        Ok(roles) => Ok(Made { run: run.map(canonical), roles }),
+        Err(e) => {
+            discard(repo, &made_paths);
+            Err(e)
+        }
+    }
+}
+
+fn discard(repo: &Path, paths: &[PathBuf]) {
+    for path in paths.iter().rev() {
+        if let Err(e) = worktree::remove(repo, path, true, false) {
+            log::warning!("worktree", "could not clean up after a flow that did not start", error = e);
+        }
+    }
+}
+
 impl App {
     pub(super) fn flow_listing(&self, project: Option<&Path>) -> store::Listing {
         let project = project.map(store::project_dir);
@@ -76,25 +121,24 @@ impl App {
         let job = job.with("roles", roles.len()).with("run", run.is_some());
         self.spawn_job(
             job,
-            move || {
-                let canonical = |path: PathBuf| path.canonicalize().unwrap_or(path);
-                if let Some(path) = &run {
-                    worktree::create(&repo, &branch, path)?;
-                }
-                let mut trees = Vec::with_capacity(roles.len());
-                for (role, role_branch) in roles {
-                    let (path, made) = if let Some(path) = git::checkout_of(&repo, &role_branch) {
-                        (path, false)
-                    } else {
-                        let path = worktree::checkout_path(&dir, &repo, &role_branch);
-                        worktree::create_from(&repo, &role_branch, &path, &branch)?;
-                        (path, true)
-                    };
-                    trees.push((RoleWorktree { role, path: canonical(path), branch: role_branch }, made));
-                }
-                Ok(Made { run: run.map(canonical), roles: trees })
-            },
+            move || make_trees(&repo, &dir, run, &branch, roles),
             move |result, _| Some(AppEvent::Worktree(WorktreeEvent::Run { project: id, result, request })),
+        );
+    }
+
+    pub(super) fn discard_worktrees(&self, p: usize, paths: Vec<PathBuf>) {
+        if paths.is_empty() {
+            return;
+        }
+        let repo = self.projects[p].path.clone();
+        let job = Job::new(Level::Info, "worktree", "clean up a flow").with("worktrees", paths.len());
+        self.spawn_job(
+            job,
+            move || {
+                discard(&repo, &paths);
+                Ok(())
+            },
+            |_, _| None,
         );
     }
 

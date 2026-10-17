@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use ratatui::layout::Rect;
 
 use super::App;
+use super::toast::Toast;
 use crate::agents::AgentState;
 use crate::agents::launch::Launch;
 use crate::error::Result;
@@ -12,6 +13,7 @@ use crate::log::{self};
 use crate::project::{Tab, Workspace};
 use crate::state::{TabState, WorkspaceState};
 use crate::term::Term;
+use crate::ui;
 
 pub(super) const RESUME_GRACE: Duration = Duration::from_secs(30);
 
@@ -55,6 +57,9 @@ impl App {
             let mut term = self.spawn(area, cwd)?;
             if apart {
                 log::warning!("server", "a role's worktree is gone, so its agent does not resume", pane = term.id);
+                let name = role.map(|role| role.name.as_str()).unwrap_or_default();
+                let message = format!("the worktree of {name} is gone: it works in the run's worktree now");
+                self.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
             } else if self.resume(&mut term, pane.agent.as_ref(), role) {
                 term.agent.restore(pane.done, pane.pending);
             }

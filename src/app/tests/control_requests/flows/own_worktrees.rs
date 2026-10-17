@@ -1,4 +1,5 @@
 use super::*;
+use crate::agents::AgentState;
 use crate::config::ProjectSettings;
 use crate::flows::Worktree;
 use crate::git;
@@ -243,4 +244,42 @@ fn a_role_worktree_that_cannot_be_made_opens_no_tab() {
     assert!(team.app.runs.is_empty());
     let tabs: usize = team.app.projects[0].workspaces.iter().map(|w| w.tabs.len()).sum();
     assert_eq!(tabs, 1);
+    let made = |branch: &str| checkout_path(team.worktrees.path(), team.repo.path(), branch);
+    wait_until("the leftovers are cleaned up", || {
+        !made("fix-the-login-form").exists() && !made("fix-the-login-form--coder-a").exists()
+    });
+    assert!(blocked.exists());
+}
+
+#[test]
+fn a_locked_role_worktree_stops_the_removal_with_its_reason() {
+    let mut team = team("", "");
+    let run = started(&mut team);
+    let tree = tree_of(&team, "coder A");
+    run_git(team.repo.path(), ["worktree", "lock", "--reason", "busy", tree.to_str().expect("utf8")]).expect("lock");
+
+    let refused = error(close_removing(&mut team, run.workspace, false));
+
+    assert!(refused.contains("is locked") && refused.contains("busy"), "{refused}");
+    assert!(tree.exists());
+}
+
+#[test]
+fn a_role_whose_worktree_is_gone_on_restore_says_so_in_a_toast() {
+    let mut team = team("", "");
+    started(&mut team);
+    team.until_got(4);
+    let mut saved = team.app.state();
+    let workspace = saved.projects[0].workspaces.iter_mut().find(|w| w.run.is_some()).expect("the run");
+    let seat = workspace.run.as_ref().and_then(|run| run.members.iter().find(|s| s.role == "coder A")).expect("seat");
+    let (tab, pane) = (seat.tab, seat.pane);
+    workspace.tabs[tab].panes[pane].cwd = Some(PathBuf::from("/nonexistent/worktree"));
+    workspace.tabs[tab].panes[pane].agent =
+        Some(AgentState { kind: "claude".into(), conversation: "c1".into(), mode: None });
+    let (mut again, _rx) = new_app(team.config.path().join("config.json"));
+
+    again.restore(&saved, AREA);
+
+    let toast = again.toast.as_ref().map(|toast| toast.message.clone()).unwrap_or_default();
+    assert!(toast.contains("worktree of coder A is gone"), "{toast}");
 }

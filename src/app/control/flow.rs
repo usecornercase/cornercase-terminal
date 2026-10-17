@@ -250,20 +250,30 @@ impl App {
             if self.projects[p].closing {
                 return Err(format!("project {project} is closing"));
             }
+            let fresh: Vec<PathBuf> =
+                made.roles.iter().filter(|(_, made)| *made).map(|(tree, _)| tree.path.clone()).collect();
             starting.trees = made.roles;
             let Some(path) = made.run else {
                 let id = self
                     .workspace_on(p, &starting.branch)
                     .ok_or_else(|| format!("the workspace on branch {} is gone", starting.branch))?;
                 let (p, w) = self.usable_workspace(id)?;
-                return self.open_run(p, w, starting, area, false);
+                let opened = self.open_run(p, w, starting, area, false);
+                if opened.is_err() {
+                    self.discard_worktrees(p, fresh);
+                }
+                return opened;
             };
             let path = path.canonicalize().unwrap_or(path);
             let created = self.projects[p].workspaces.iter().all(|w| w.path != path);
-            let w = self.worktree_workspace(p, path);
+            let w = self.worktree_workspace(p, path.clone());
             let opened = self.open_run(p, w, starting, area, true);
-            if opened.is_err() && created {
-                self.projects[p].remove_workspace(w);
+            if opened.is_err() {
+                if created {
+                    self.projects[p].remove_workspace(w);
+                }
+                let run_tree = created.then_some(path).into_iter();
+                self.discard_worktrees(p, fresh.into_iter().chain(run_tree).collect());
             }
             opened
         });
