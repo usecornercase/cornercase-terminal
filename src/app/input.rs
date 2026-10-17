@@ -200,7 +200,8 @@ impl App {
             Some(label) => ui::changes_button(areas.issues, &label),
             None => Rect::default(),
         };
-        let todo = if areas.compact() || self.project().is_some() { areas.todo_button } else { Rect::default() };
+        let dot = self.config.todo_dot && self.todos.pending() > 0;
+        let todo = if areas.compact() || self.project().is_some() { areas.todo_with_dot(dot) } else { Rect::default() };
         let files = if self.project().is_some() { areas.files_button } else { Rect::default() };
         let toggle: fn(&mut Self) = if changes.contains(pos) {
             Self::toggle_changes

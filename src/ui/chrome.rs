@@ -213,20 +213,32 @@ pub(super) fn draw_issues_row(f: &mut Frame, view: &View, areas: &Areas) {
     }
 }
 
-fn draw_panel_button(f: &mut Frame, view: &View, r: Rect, label: &str, open: bool) {
+fn panel_button_style(view: &View, r: Rect, open: bool) -> Style {
     let idle = if open {
         Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(view.muted)
     };
-    draw_button(f, r, "", label, button_style(view, r, idle, Color::Cyan));
+    button_style(view, r, idle, Color::Cyan)
+}
+
+fn draw_panel_button(f: &mut Frame, view: &View, r: Rect, label: &str, open: bool) {
+    draw_button(f, r, "", label, panel_button_style(view, r, open));
 }
 
 fn draw_todo_button(f: &mut Frame, view: &View, areas: &Areas) {
-    draw_panel_button(f, view, areas.todo_button, TODO_LABEL, view.todo.is_some());
-    if let Some(r) = areas.todo_dot().filter(|_| view.todo_dot && view.todo_pending) {
-        f.render_widget(Span::styled(TODO_DOT, Style::default().fg(view.muted)), r);
+    let r = areas.todo_with_dot(view.todo_dot && view.todo_pending);
+    if r == areas.todo_button {
+        draw_panel_button(f, view, r, TODO_LABEL, view.todo.is_some());
+        return;
     }
+    let style = panel_button_style(view, r, view.todo.is_some());
+    let spans = vec![
+        Span::styled(format!(" {TODO_LABEL} "), style),
+        Span::styled(TODO_DOT, style.fg(view.muted)),
+        Span::styled(" ", style),
+    ];
+    f.render_widget(Paragraph::new(Line::from(spans)), middle(r));
 }
 
 fn todo_icon(glyphs: &Glyphs, pending: bool, width: u16, style: Style) -> Line<'static> {

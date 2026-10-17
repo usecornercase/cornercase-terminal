@@ -128,16 +128,16 @@ fn the_compact_todo_button_shows_no_dot_when_nothing_is_pending() {
 }
 
 #[test]
-fn the_dot_is_muted_and_left_of_the_button() {
+fn the_dot_is_muted_and_inside_the_button() {
     let a = layout(Rect::new(0, 0, 140, 18), Widths::default());
     let r = a.todo_button;
     let with = render_sized(&pending(true, true), 140, 18);
     let without = render_sized(&pending(false, true), 140, 18);
     let row = Rect { x: r.x - 2, width: r.width + 2, ..r };
-    let dot = with.backend().buffer()[(r.x - 1, r.y)].clone();
+    let dot = with.backend().buffer()[(r.right() - 2, r.y)].clone();
     assert_eq!(
-        (row_text(&with, row), row_text(&without, row), dot.fg),
-        (" ● TODO ".to_string(), "   TODO ".to_string(), Color::DarkGray)
+        (row_text(&with, row), row_text(&without, row), dot.fg, a.todo_with_dot(true)),
+        (" TODO ● ".to_string(), "   TODO ".to_string(), Color::DarkGray, row)
     );
 }
 
@@ -151,7 +151,7 @@ fn the_button_stays_right_aligned_with_changes() {
 fn a_narrow_footer_leaves_out_the_dot() {
     let widths = Widths { workspaces: MIN_COLUMN_WIDTH, ..Widths::default() };
     let a = layout(Rect::new(0, 0, 140, 18), widths);
-    assert_eq!(a.todo_dot(), None);
+    assert_eq!(a.todo_with_dot(true), a.todo_button);
 }
 
 #[test]

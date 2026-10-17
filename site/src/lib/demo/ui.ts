@@ -65,7 +65,7 @@ import {
   TODO_DOT,
   TODO_LABEL,
   FILES_LABEL,
-  todoDot,
+  todoWithDot,
 } from './layout';
 import { USAGE, STATS, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
@@ -974,10 +974,10 @@ export class Painter {
       this.region({ r, click: () => app.toggleChanges(), cursor: 'pointer' });
     }
     if (!areas.compact) {
-      const r = areas.todoButton;
-      this.button(r, '', TODO_LABEL, this.buttonStyle(r, app.todo.open ? { fg: 6, add: BOLD } : DARK, 6));
-      const dot = todoDot(areas);
-      if (dot && app.config.todoDot && app.todo.pending() > 0) this.line(dot, [seg(TODO_DOT, DARK)]);
+      const r = todoWithDot(areas, app.config.todoDot && app.todo.pending() > 0);
+      const style = this.buttonStyle(r, app.todo.open ? { fg: 6, add: BOLD } : DARK, 6);
+      if (r === areas.todoButton) this.button(r, '', TODO_LABEL, style);
+      else this.line(r, [seg(` ${TODO_LABEL} `, style), seg(TODO_DOT, { ...style, fg: 8 }), seg(' ', style)]);
       this.region({ r, click: () => app.toggleTodo(), cursor: 'pointer' });
       const f = areas.filesButton;
       this.button(f, '', FILES_LABEL, this.buttonStyle(f, app.filesShown() ? { fg: 6, add: BOLD } : DARK, 6));

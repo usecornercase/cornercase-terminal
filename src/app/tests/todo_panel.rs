@@ -245,7 +245,7 @@ fn the_button_shows_a_dot_while_items_are_pending() {
     tap(&mut app, |a| panel::check(item_row(a, 0)));
     tap(&mut app, |a| panel::clear_done(panel_area(a), &view(a)));
     seen.push(todo_button(&mut app));
-    assert_eq!(seen, ["   TODO ", " ● TODO ", "   TODO ", " ● TODO ", "   TODO "]);
+    assert_eq!(seen, ["   TODO ", " TODO ● ", "   TODO ", " TODO ● ", "   TODO "]);
 }
 
 #[test]

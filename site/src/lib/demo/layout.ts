@@ -383,9 +383,10 @@ const todoButton = (row: Rect): Rect => intersect(rect(right(row) - TODO_LABEL.l
 export const FILES_LABEL = 'Files';
 const filesButton = (row: Rect): Rect => intersect(rect(row.x + 1, row.y, FILES_LABEL.length + 2, 1), row);
 
-export function todoDot(areas: Areas): Rect | null {
-  const x = areas.todoButton.x - 1;
-  return !areas.compact && x > right(areas.filesButton) ? rect(x, areas.todoButton.y, 1, 1) : null;
+export function todoWithDot(areas: Areas, dot: boolean): Rect {
+  const r = areas.todoButton;
+  const x = r.x - 2;
+  return dot && !areas.compact && x > right(areas.filesButton) ? rect(x, r.y, r.w + 2, r.h) : r;
 }
 
 export const stackedWidth = (w: Widths, total: number): number =>

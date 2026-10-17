@@ -118,10 +118,12 @@ impl Areas {
         !self.bar.is_empty()
     }
 
-    pub(crate) fn todo_dot(&self) -> Option<Rect> {
+    pub(crate) fn todo_with_dot(&self, dot: bool) -> Rect {
         let r = self.todo_button;
-        let x = r.x.checked_sub(1).filter(|&x| !self.compact() && x > self.files_button.right())?;
-        Some(Rect { x, width: 1, ..r })
+        match r.x.checked_sub(2).filter(|&x| dot && !self.compact() && x > self.files_button.right()) {
+            Some(x) => Rect { x, width: r.width + 2, ..r },
+            None => r,
+        }
     }
 
     #[must_use]
