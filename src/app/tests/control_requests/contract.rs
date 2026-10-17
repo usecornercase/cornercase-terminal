@@ -252,7 +252,7 @@ mod not_found {
     #[case::a_tab(Command::Focus(wire::Focus { item: Item::Tab(999) }), "tab")]
     #[case::a_workspace(Command::Close(wire::Close { item: Item::Workspace(999), remove_worktree: false, force: false }), "workspace")]
     #[case::a_sent_pane(send_text(999, "hello", true, false), "pane")]
-    #[case::a_followed_pane(Command::Events(wire::Events { panes: vec![999], host: false }), "pane")]
+    #[case::a_followed_pane(Command::Events(wire::Events { panes: vec![999], host: false, notices: false }), "pane")]
     fn an_id_that_names_nothing_is_not_found(#[case] command: Command, #[case] kind: &str) {
         let (mut app, _rx) = app();
         let message = format!("there is no {kind} 999; `cornercase status` lists them");

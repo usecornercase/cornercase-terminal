@@ -23,6 +23,10 @@ pub(crate) fn use_host_events() -> Result<()> {
     require("host-events", "cannot send programs' clipboard writes and bells")
 }
 
+pub(crate) fn use_notices() -> Result<()> {
+    require("notices", "cannot send agent notices or tell a hidden view apart")
+}
+
 fn require(feature: &str, lacks: &str) -> Result<()> {
     let lacking = || {
         Error::Control(format!(

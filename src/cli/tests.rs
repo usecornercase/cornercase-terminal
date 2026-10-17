@@ -81,6 +81,14 @@ mod parsing {
         assert_eq!((theme.file.as_deref(), theme.clear), expected);
     }
 
+    #[rstest]
+    #[case::notices(&["events", "--notices"])]
+    #[case::hidden_view(&["view", "--hidden"])]
+    #[case::go(&["go", "cc-1-2"])]
+    fn the_notice_commands_parse(#[case] args: &[&str]) {
+        assert!(parse(args).is_ok());
+    }
+
     #[test]
     fn theme_refuses_a_file_with_clear_and_a_view() {
         assert!(parse(&["theme", "dark.json", "--clear"]).is_err());
@@ -307,6 +315,7 @@ mod parsing {
     #[case::rename(&["rename", "--view", "41", "x"])]
     #[case::surface(&["surface", "--view", "41"])]
     #[case::view_set(&["view-set", "--view", "41", "--claim"])]
+    #[case::go(&["go", "cc-1-2", "--view", "41"])]
     fn view_names_the_view_a_command_acts_in(#[case] args: &[&str]) {
         let cli = parse(args).expect("parse");
 
@@ -330,6 +339,7 @@ mod parsing {
     #[case::follow_with_a_view(&["status", "--follow", "--view", "4"])]
     #[case::set_without_a_view(&["view-set", "--claim"])]
     #[case::set_both_ways(&["view-set", "--view", "4", "--active", "--inactive"])]
+    #[case::visible_and_hidden(&["view-set", "--view", "4", "--visible", "--hidden"])]
     fn a_view_is_refused_where_it_makes_no_sense(#[case] args: &[&str]) {
         let refused = parse(args).expect_err("refused");
 

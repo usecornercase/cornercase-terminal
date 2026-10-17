@@ -143,14 +143,14 @@ struct Subscriber {
     client: u64,
     panes: Option<Vec<u64>>,
     host: bool,
+    notices: bool,
 }
 
 impl Subscriber {
     fn wants(&self, event: &Event) -> bool {
         (self.host || !event.host())
-            && self.panes.as_ref().is_none_or(|panes| {
-                event.kind() == Some(Kind::Pane) && event.ids.pane.is_some_and(|pane| panes.contains(&pane))
-            })
+            && (self.notices || !event.notice())
+            && self.panes.as_ref().is_none_or(|panes| event.about(panes))
     }
 }
 
@@ -159,9 +159,9 @@ impl Events {
         !self.subscribers.is_empty()
     }
 
-    pub(super) fn subscribe(&mut self, client: u64, panes: Vec<u64>, host: bool) {
+    pub(super) fn subscribe(&mut self, client: u64, panes: Vec<u64>, host: bool, notices: bool) {
         let panes = (!panes.is_empty()).then_some(panes);
-        self.subscribers.push(Subscriber { client, panes, host });
+        self.subscribers.push(Subscriber { client, panes, host, notices });
     }
 
     fn hosting(&self) -> bool {

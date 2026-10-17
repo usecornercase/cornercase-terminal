@@ -3,8 +3,10 @@ use std::time::Instant;
 use super::{Asker, Handled, json, name_of, none, pane_ids};
 use crate::app::menus::{Marked, Target};
 use crate::app::{App, Toast};
+use crate::control::contract::{Code, Refusal};
 use crate::control::{self, Command, Done, Item, Request, TodoItem, TodoList};
 use crate::host::notify::{self, Notification};
+use crate::log;
 use crate::project::Hierarchy;
 use crate::ui;
 
@@ -18,6 +20,28 @@ impl App {
             return Err(format!("pane {pane} runs no agent cornercase reads, so there is nothing to mark").into());
         }
         Ok(Some(json(&pane_ids(pane))))
+    }
+
+    pub(in crate::app) fn go_request(&mut self, asker: Asker, go: &control::Go) -> Handled {
+        let item = match self.act_on_notice(&go.token) {
+            None => {
+                let message = format!(
+                    "there is no notice {}: it is from another start of the server, or older than the last {} notices",
+                    go.token,
+                    notify::KEPT
+                );
+                return Err(Refusal::new(Code::NotFound, message));
+            }
+            Some(Err(gone)) => return Err(Refusal::new(Code::NotFound, gone)),
+            Some(Ok(item)) => item,
+        };
+        let projection = self.show_to(asker.view, item)?;
+        let ids = match asker.view {
+            Some(view) => self.view_ids(view),
+            None => self.project().map(|_| self.shown_ids(self.active)).unwrap_or_default(),
+        };
+        log::info!("activity", "notice gone to", view = asker.view.unwrap_or_default());
+        Ok(Some(json(&Done { ids, projection, ..Done::default() })))
     }
 
     pub(super) fn rename_request(&mut self, asker: Asker, rename: control::Rename) -> Handled {

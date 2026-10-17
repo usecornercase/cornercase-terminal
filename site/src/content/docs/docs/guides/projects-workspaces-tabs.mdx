@@ -136,7 +136,7 @@ An icon before the tab's name tells you what a recognised agent is doing when it
 | `!` orange | The agent needs you: it asks for permission or asks you a question. Any recognised agent reporting OSC 7501; otherwise Claude Code, Codex, Gemini CLI, Grok Build, Cursor CLI and GitHub Copilot CLI (Cursor only with `/status-indicators` turned on; Copilot for a permission prompt, a question or a plan awaiting approval). |
 | `!` red | The agent reported a failure through OSC 7501. It stays until the agent reports another state or clears it. |
 | `●` purple | You marked the agent as pending review. It stays until you mark it as reviewed, send the agent a new prompt or answer its question; opening the tab does not take it off. |
-| `✓` green | The agent finished while you were looking at another tab. It goes away when you open the tab. |
+| `✓` green | The agent finished while you were looking at another tab. It goes away when you open the tab, or when a program that draws cornercase shows it. |
 | `○` grey | The agent waits for your next message. |
 
 So that a finished or waiting agent in another project doesn't go unnoticed, `!`, `●` and `✓` also show at the end of its workspace's row (a collapsed workspace shows its most urgent status, `◐` and `○` too), of its project's row and, while the group is collapsed, of its group's header. When several tabs below a row disagree, orange `!` wins over red `!`, then `●`, then `✓`. In the [compact layout](../small-terminals/) the `≡` button shows them for every tab except the one on screen. To see every agent at once and jump to the one that needs you, turn on the [agents section](#the-agents-section).
@@ -215,7 +215,7 @@ When an agent asks you something or finishes in a tab you aren't looking at, cor
 - a **toast** in the bottom right corner says which agent and where, such as `! claude needs you in web-shop › main` or `✓ codex finished in web-shop › main`;
 - your terminal shows a **desktop notification**, so you find out while you are in another window.
 
-cornercase waits a second before telling you, so a question answered at once stays quiet, and it tells you once each time. The tab on screen doesn't notify you, even while cornercase's window is in the background.
+cornercase waits a second before telling you, so a question answered at once stays quiet, and it tells you once each time. The tab on screen doesn't notify you, even while cornercase's window is in the background, and neither does one that a program that draws cornercase shows ([A view of your own](../scripts-and-agents/#a-view-of-your-own)).
 
 The desktop notification is an escape sequence that cornercase writes to your terminal, the way it [copies to your clipboard](../panes-and-splits/#copy-text), so it also arrives when cornercase runs on another machine over SSH. When cornercase starts, it asks your terminal for its name and looks at variables such as `TERM_PROGRAM`, then picks what that terminal understands:
 
@@ -231,6 +231,8 @@ Some terminals, such as Ghostty on macOS, foot, Konsole and Warp, don't show a n
 #### Clicking a notification
 
 In **kitty, VS Code, Contour, foot 1.18 or later and Konsole 24.12 or later**, clicking the desktop notification of an agent that needs you or finished takes you to it: cornercase shows its project, workspace and tab and focuses its pane. If the notification covered several panes of one agent in a workspace, it goes to the one that still needs you. If none of its panes is left open it shows the workspace, and if that is gone too it says so in a toast.
+
+Scripts and other programs do the same with `cornercase go TOKEN` ([Follow events](../scripts-and-agents/#follow-events)).
 
 The toast has a **go** button that does the same, in any terminal and also inside tmux, and it stays 6 seconds instead of 2. In **Ghostty, iTerm2 and WezTerm** a click on the notification only brings the window forward; when you come back to it, the toast shows again with its **go** if that agent still needs you and isn't already on screen.
 

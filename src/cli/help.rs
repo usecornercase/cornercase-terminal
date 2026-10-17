@@ -10,7 +10,7 @@ pub(super) const AFTER_HELP: &str =
     "Ids come from `cornercase status` and last while the server runs. Inside a pane, the commands
 act on that pane, its tab, workspace and project unless told otherwise; elsewhere on what the window
 shows. Where a command takes --workspace ID, --worktree BRANCH names the workspace on that branch
-instead, in that same project. Only `focus` and `--focus` change what the window shows, or with --view ID what that view shows (see `cornercase view`). The
+instead, in that same project. Only `focus`, `go` and `--focus` change what the window shows, or with --view ID what that view shows (see `cornercase view`). The
 commands exit with 1 on errors and timeouts, and 2 on wrong usage, a branch no workspace is on
 included, or one several are on (both list the workspaces to pick from).
 
@@ -202,6 +202,18 @@ what the view shows changes.
 Examples:
   cornercase focus --pane 12
   cornercase focus --view 41 --tab 7";
+pub(super) const GO_HELP: &str =
+    "Does what a click on an agent's desktop notification does, or the go button of its toast: shows
+the agent's pane (the one still needing you, when the notice covered several), or its workspace once
+they are all closed, and prints the pane's id. With --view ID it moves that view (see
+`cornercase view`) instead of the window. TOKEN is a notice's, from `cornercase events --notices`.
+It fails for a token this server never gave or no longer keeps (the last 64; a restart forgets them),
+and when the agent and its workspace are gone.
+
+Examples:
+  cornercase events --notices --json | jq -r 'select(.event == \"notice\") | .token'
+  cornercase go cc-3f2a9c-4
+  cornercase go cc-3f2a9c-4 --view 41";
 pub(super) const NOTIFY_HELP: &str =
     "The desktop notification goes through the terminal of every open window, like the one for an
 agent that needs you.
@@ -326,6 +338,11 @@ pub(super) const EVENTS_HELP: &str = "It keeps running and prints one line per e
                                       or none once it left the pane
   pane 7  cargo  exited               the program in the foreground ended and the shell is back
   tab 3  opened in workspace 2        a project, workspace, tab or pane opened, or closed
+With --notices, each notice about an agent is told too, as the window's toast and desktop notification
+say it, with the same rules (a second's wait, once per change, never for a tab seen in the window or
+in a view), and with --json its token, agent, status, place, message and panes:
+  workspace 2  notice  claude needs you in shop › main  cc-3f2a9c-4
+`cornercase go TOKEN` then does what a click on that notification does.
 With --host, a program's own requests to the terminal are told too, for programs that draw the panes:
   pane 7  clipboard  11 bytes         it wrote to the clipboard (OSC 52); the text itself only with --json
   pane 7  bell  3 times               it rang the bell: one line a second per pane, with how many rang
@@ -339,7 +356,8 @@ A reader that falls far behind loses events, and a line says how many.
 Examples:
   cornercase events
   cornercase events --pane 12 --pane 14 --json
-  cornercase events --host --json";
+  cornercase events --host --json
+  cornercase events --notices --json";
 pub(super) const SURFACE_HELP: &str =
     "For programs that draw cornercase's terminals themselves, such as an editor extension or a
 GUI. It keeps running and prints the tab as one JSON object per line: first as it is now, then again
@@ -582,8 +600,14 @@ controls (whether it sizes its tab's terminals now). The view lives while this c
 stopping it closes the view and gives its tabs back. The first line is the state now; the view's id
 is in it. Keep it running in the background (`cornercase view --cols 120 --rows 40 > view.jsonl &`),
 read the id from the first line, and pass it as --view ID to `focus`, `new-tab`, `split`, `start`,
-`send`, `keys`, `read`, `wait`, `status`, `rename`, `mark` or `surface`: the view's tab is their
+`send`, `keys`, `read`, `wait`, `status`, `rename`, `mark`, `go` or `surface`: the view's tab is their
 default and --focus moves it.
+
+While the view is active, has a size and is not hidden, the tab it shows counts as seen like the
+window's: an agent there gets no done mark, toast or desktop notification. --hidden starts it hidden
+(`view-set --hidden` and `--visible` change it), for a window that is minimised or behind others:
+agents in its tab then notify again. While a view is open, the window's tab counts as seen only while
+a window is attached.
 
 A tab's terminals take the size of the window or the view that claimed it last, without the
 window's sidebar and panels: a view claims the tab it shows when it opens, moves there or turns
@@ -598,8 +622,10 @@ pub(super) const VIEW_SET_HELP: &str =
     "Changes a view that `cornercase view` holds open. --cols and --rows resize it, --inactive makes it
 size nothing and stream no terminals (its tabs go to whoever claimed them before, else the window),
 --active turns it back on and claims its tab, and --claim takes its tab back from the window or
-another view. It prints the view as it is now.
+another view. --hidden says its window is hidden or minimised, so agents in its tab notify again, and
+--visible says it is back. It prints the view as it is now.
 
 Examples:
   cornercase view-set --view 41 --cols 100 --rows 30
-  cornercase view-set --view 41 --claim";
+  cornercase view-set --view 41 --claim
+  cornercase view-set --view 41 --hidden";

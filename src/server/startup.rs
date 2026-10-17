@@ -63,6 +63,7 @@ impl Server {
         client.graphics = Graphics::new(id, hello.graphics, background);
         self.touch(id);
         self.fit(Some(id));
+        self.app.window_attached();
         if !self.started() {
             self.startup = Startup::Windowed;
             self.app.set_theme(hello.theme);

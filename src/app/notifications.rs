@@ -5,6 +5,7 @@ use super::App;
 use super::messenger::run_id;
 use super::toast::Toast;
 use crate::agents::activity::Status;
+use crate::control::{Event, Ids, Item, What};
 use crate::host::notify::{self, Notification};
 use crate::log;
 use crate::project::Hierarchy;
@@ -91,35 +92,64 @@ impl App {
                 window.missed = Some(token.clone());
             }
         }
+        let event = Event {
+            time: crate::time::Stamp(std::time::SystemTime::now()).to_string(),
+            what: What::Notice {
+                token,
+                agent: notice.agent.clone(),
+                status: notice.status.name().to_string(),
+                place: notify::clean(&notice.place),
+                message: notice.message.clone(),
+                panes: notice.panes.clone(),
+            },
+            ids: Ids { project: Some(notice.project), workspace: Some(notice.workspace), ..Ids::default() },
+        };
         notices.sent.push_back(notice);
         self.toast = Some(toast);
+        self.events.publish(&[event]);
     }
 
-    pub(crate) fn notification_clicked(&mut self, token: &str) {
-        let Some(notice) = self.notices.find(token).cloned() else { return };
+    pub(in crate::app) fn act_on_notice(&mut self, token: &str) -> Option<Result<Item, String>> {
+        let notice = self.notices.find(token).cloned()?;
         if self.toast.as_ref().is_some_and(|toast| toast.go.as_deref() == Some(token)) {
             self.toast = None;
         }
         for window in self.notices.windows.values_mut().filter(|w| w.missed.as_deref() == Some(token)) {
             window.missed = None;
         }
-        let pane = self.notice_pane(&notice);
-        let workspace_open = self
+        if let Some(pane) = self.notice_pane(&notice) {
+            return Some(Ok(Item::Pane(pane)));
+        }
+        let open = self
             .projects
             .workspace_in(notice.project, notice.workspace)
             .is_some_and(|(p, w)| !self.projects[p].closing && self.projects[p].workspaces[w].open());
-        let to = if let Some(pane) = pane {
-            self.jump_to_pane(pane);
-            "pane"
-        } else if workspace_open {
-            self.goto(Goto::Place { project: notice.project, workspace: Some(notice.workspace), tab: None });
-            "workspace"
+        Some(if open {
+            Ok(Item::Workspace(notice.workspace))
         } else {
-            self.toast =
-                Some(Toast::new(format!("{} in {} is gone", notice.agent, notice.place), ui::ToastIcon::Check));
-            "gone"
+            Err(format!("{} in {} is gone", notice.agent, notice.place))
+        })
+    }
+
+    pub(crate) fn notification_clicked(&mut self, token: &str) {
+        let Some(went) = self.act_on_notice(token) else { return };
+        let (pane, to) = match went {
+            Ok(Item::Pane(pane)) => {
+                self.jump_to_pane(pane);
+                (pane, "pane")
+            }
+            Ok(Item::Workspace(workspace)) => {
+                let project = self.notices.find(token).map_or(0, |notice| notice.project);
+                self.goto(Goto::Place { project, workspace: Some(workspace), tab: None });
+                (0, "workspace")
+            }
+            Ok(_) => return,
+            Err(gone) => {
+                self.toast = Some(Toast::new(gone, ui::ToastIcon::Check));
+                (0, "gone")
+            }
         };
-        log::info!("activity", "notification clicked", pane = pane.unwrap_or_default(), to = to);
+        log::info!("activity", "notification clicked", pane = pane, to = to);
     }
 
     fn notice_pane(&self, notice: &Notice) -> Option<u64> {
@@ -145,8 +175,9 @@ impl App {
         let needs = self.projects.workspace_in(notice.project, notice.workspace).is_some_and(|(p, w)| {
             let tabs = &self.projects[p].workspaces[w].tabs;
             let terms = || tabs.iter().flat_map(|tab| &tab.panes).filter(|term| notice.panes.contains(&term.id));
-            let shown = self.visible_tab().is_some_and(|id| {
-                tabs.iter().any(|tab| tab.id == id && tab.panes.iter().any(|term| notice.panes.contains(&term.id)))
+            let seen = self.seen_tabs();
+            let shown = seen.iter().any(|id| {
+                tabs.iter().any(|tab| tab.id == *id && tab.panes.iter().any(|term| notice.panes.contains(&term.id)))
             });
             !shown && terms().any(|term| term.agent.status().is_some_and(Status::needs_you))
         });

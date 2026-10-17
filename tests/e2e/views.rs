@@ -47,3 +47,13 @@ fn a_view_sizes_its_tab_and_moves_without_the_window_and_gives_both_back_when_it
     assert_eq!(after, before);
     assert_eq!(finish_within(streaming, TIMEOUT).status.code(), Some(0));
 }
+
+#[test]
+fn go_with_a_token_nobody_gave_fails_and_says_so() {
+    let app = Harness::start();
+
+    let out = app.session.cli(&["go", "cc-nope-1"]);
+
+    assert_eq!(out.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("there is no notice"), "{out:?}");
+}

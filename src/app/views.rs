@@ -17,6 +17,7 @@ pub(super) struct View {
     client: u64,
     pub(super) size: Option<(u16, u16)>,
     pub(super) active: bool,
+    visible: bool,
     pub(super) shown: Shown,
     pub(super) projection: u64,
     claimed: u64,
@@ -31,6 +32,10 @@ impl View {
 
     pub(super) fn eligible(&self) -> Option<u64> {
         self.shown.tab.filter(|_| self.active && self.size.is_some())
+    }
+
+    fn sees(&self) -> Option<u64> {
+        self.eligible().filter(|_| self.visible)
     }
 
     pub(super) fn area(&self) -> Option<Rect> {
@@ -53,6 +58,7 @@ pub(super) struct Views {
     list: Vec<View>,
     seq: u64,
     window: Option<(u64, u64)>,
+    windowed: bool,
     changed: bool,
     area: Option<Rect>,
     logged: HashMap<u64, u64>,
@@ -126,6 +132,7 @@ impl App {
             rows: view.size.map(|(_, rows)| rows),
             shown: self.tab_ids(&view.shown),
             controls,
+            visible: view.visible,
         }
     }
 
@@ -161,7 +168,9 @@ impl App {
         };
         let id = self.take_id();
         let active = open.active.unwrap_or(true);
-        let view = View { id, client, size, active, shown, projection: 1, claimed: 0, revision: 0, sent: None };
+        let visible = open.visible.unwrap_or(true);
+        let view =
+            View { id, client, size, active, visible, shown, projection: 1, claimed: 0, revision: 0, sent: None };
         let eligible = view.eligible().is_some();
         self.views.list.push(view);
         if eligible {
@@ -174,7 +183,8 @@ impl App {
             view = id,
             cols = size.map_or(0, |s| s.0),
             rows = size.map_or(0, |s| s.1),
-            active = active
+            active = active,
+            visible = visible
         );
         self.size_tabs(area);
         let report = self.view_report(id).ok_or_else(|| Refusal::from("the view closed"))?;
@@ -204,11 +214,21 @@ impl App {
             view.projection += 1;
         }
         (view.size, view.active) = (new_size, new_active);
+        if let Some(visible) = set.visible {
+            view.visible = visible;
+        }
         if eligible && (!was || set.claim) {
             self.views.claim(id);
         }
         self.views.changed = true;
-        log::info!("control", "view changed", view = id, active = set.active.unwrap_or(false), claim = set.claim);
+        log::info!(
+            "control",
+            "view changed",
+            view = id,
+            active = set.active.unwrap_or(false),
+            claim = set.claim,
+            visible = set.visible.unwrap_or(true)
+        );
         self.size_tabs(area);
         let info = self.views.get(id).map(|view| self.view_info(view)).unwrap_or_default();
         Ok(Some(json(&info)))
@@ -298,7 +318,17 @@ impl App {
         self.size_tabs(area);
     }
 
+    pub(crate) fn seen_tabs(&self) -> Vec<u64> {
+        let window = self.visible_tab().filter(|_| self.views.list.is_empty() || self.views.windowed);
+        window.into_iter().chain(self.views.list.iter().filter_map(View::sees)).collect()
+    }
+
+    pub(crate) fn window_attached(&mut self) {
+        self.views.windowed = true;
+    }
+
     pub(crate) fn window_gone(&mut self) {
+        self.views.windowed = false;
         if self.views.window.take().is_some() {
             self.views.changed = true;
             let area = self.views.area;

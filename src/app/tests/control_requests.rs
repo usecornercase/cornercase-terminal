@@ -235,7 +235,7 @@ fn follow(app: &mut App, panes: &[u64]) {
 }
 
 fn follow_with(app: &mut App, panes: &[u64], host: bool) {
-    let ack = done(now(app, None, Command::Events(wire::Events { panes: panes.to_vec(), host })));
+    let ack = done(now(app, None, Command::Events(wire::Events { panes: panes.to_vec(), host, notices: false })));
     assert_eq!(ack, Done::default());
 }
 

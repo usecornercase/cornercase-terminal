@@ -47,7 +47,7 @@ pub(super) const WATCH_AGENTS_EVERY: Duration = Duration::from_millis(500);
 
 impl App {
     pub(super) fn watch_agents(&mut self, now: Instant) {
-        let visible = self.visible_tab();
+        let seen_tabs = self.seen_tabs();
         let read = self.agents.watched.is_none_or(|at| now.duration_since(at) >= WATCH_AGENTS_EVERY);
         let elapsed = self.agents.watched.map_or(Duration::ZERO, |at| now.saturating_duration_since(at));
         let clock = SystemTime::now();
@@ -67,7 +67,7 @@ impl App {
             for workspace in &mut project.workspaces {
                 let measure = config.memory && shown && !(folds && workspace.collapsed);
                 for tab in &mut workspace.tabs {
-                    let seen = visible == Some(tab.id);
+                    let seen = seen_tabs.contains(&tab.id);
                     for term in &mut tab.panes {
                         if read {
                             let resuming = term.resuming.is_some();

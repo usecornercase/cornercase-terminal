@@ -493,3 +493,30 @@ fn a_view_change_reaches_the_view_at_once_but_a_watcher_keeps_its_pacing() {
     assert!(got.iter().any(|(client, _)| *client == A), "{got:?}");
     assert!(got.iter().all(|(client, _)| *client != 77), "{got:?}");
 }
+
+#[test]
+fn a_view_set_hidden_says_so_and_changes_neither_projection_nor_control() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let tab = tabs(&mut app, 1)[0];
+    let opened = open(&mut app, A, Some((100, 30)), Some(tab));
+    assert!(opened.visible);
+
+    let hidden = ok(set(&mut app, opened.id, A, SetView { visible: Some(false), ..SetView::default() }));
+
+    assert_eq!(hidden["visible"], false);
+    assert_eq!((hidden["projection"].clone(), hidden["controls"].clone()), (opened.projection.into(), true.into()));
+    assert!(!info(&mut app, opened.id).visible);
+}
+
+#[test]
+fn go_through_the_socket_answers_a_projection_and_refuses_an_unknown_token() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let tab = tabs(&mut app, 1)[0];
+    let opened = open(&mut app, A, Some((100, 30)), Some(tab));
+    let go = || Command::Go(wire::Go { token: "cc-nope-1".into() });
+
+    let refused = call(&mut app, B, Some(opened.id), go(), true);
+
+    assert_eq!(code(&refused), "not-found");
+    assert!(error_of(&refused).contains("there is no notice cc-nope-1"), "{refused}");
+}

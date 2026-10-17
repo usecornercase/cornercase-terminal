@@ -16,7 +16,7 @@ fn pane_of(app: &App, p: usize, t: usize) -> u64 {
     app.projects[p].workspaces[0].tabs[t].panes[0].id
 }
 
-fn active_tab(app: &App) -> usize {
+pub(super) fn active_tab(app: &App) -> usize {
     app.projects[app.active].workspaces[0].active
 }
 

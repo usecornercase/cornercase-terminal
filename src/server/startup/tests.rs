@@ -119,6 +119,19 @@ mod starting {
     }
 
     #[test]
+    fn with_a_view_open_the_windows_tab_counts_as_seen_only_while_a_window_is_attached() {
+        let mut cold = Cold::new();
+        cold.start(r#""cols":200,"rows":60"#);
+        cold.ask(r#"{"command":"view","args":{}}"#);
+        let without = cold.server.app.seen_tabs();
+
+        let _window = cold.attach(HostTheme::default());
+        let with = cold.server.app.seen_tabs();
+
+        assert_eq!((without.len(), with.len()), (0, 1));
+    }
+
+    #[test]
     fn a_first_terminal_that_cannot_open_is_an_error_and_the_next_call_is_already() {
         let mut cold = Cold::with_shell(TempDir::new(), None, "/nonexistent/sh");
 

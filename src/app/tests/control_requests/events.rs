@@ -51,7 +51,8 @@ fn following_panes_tells_only_about_them_and_ends_once_they_all_closed() {
 fn a_pane_that_does_not_exist_cannot_be_followed() {
     let (mut app, _rx, _dirs) = app_with(1);
 
-    let message = error(now(&mut app, None, Command::Events(wire::Events { panes: vec![999], host: false })));
+    let message =
+        error(now(&mut app, None, Command::Events(wire::Events { panes: vec![999], host: false, notices: false })));
 
     assert!(message.contains("there is no pane 999"), "{message}");
     assert!(!app.events.listening());
@@ -201,4 +202,30 @@ fn bells_before_anyone_asked_are_not_told_later() {
     app.refresh(Instant::now() + crate::app::events::BELL_EVERY * 2);
 
     assert_eq!(host_told(&mut app), []);
+}
+
+#[test]
+fn notices_reach_only_the_readers_that_asked_and_a_pane_reader_gets_those_naming_its_pane() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let pane = term(&app, 0).id;
+    let other = done(now(&mut app, None, new_tab(None))).ids.pane.expect("a pane");
+    app.events.subscribe(CLIENT, vec![pane], false, true);
+    app.events.subscribe(CLIENT + 1, Vec::new(), false, false);
+    let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
+    let _ = app.take_events();
+
+    app.notify("claude", activity::Status::Waiting, (project, workspace), vec![other]);
+    app.notify("claude", activity::Status::Waiting, (project, workspace), vec![pane]);
+
+    let tokens: Vec<_> = app
+        .take_events()
+        .into_iter()
+        .filter_map(|(client, streamed)| match streamed {
+            Streamed::Event(text) if text.contains("\"event\":\"notice\"") => Some((client, text)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(tokens.len(), 1, "{tokens:?}");
+    assert_eq!(tokens[0].0, CLIENT);
+    assert!(tokens[0].1.contains("\"panes\":[") && tokens[0].1.contains(&format!("{pane}")), "{tokens:?}");
 }

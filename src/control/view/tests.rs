@@ -45,6 +45,7 @@ fn the_view_in_a_request_is_left_out_when_absent() {
 fn the_commands_that_take_a_view_are_the_ones_that_act_on_a_place() {
     assert!(takes_view(&Command::Status(Status {})));
     assert!(takes_view(&Command::ViewSet(SetView::default())));
+    assert!(takes_view(&Command::Go(crate::control::Go::default())));
     assert!(!takes_view(&Command::Stats(crate::control::Stats {})));
     assert!(!takes_view(&Command::View(OpenView::default())));
 }
@@ -65,9 +66,19 @@ fn a_view_that_is_skipped_by_a_reader_reads_back_whole() {
         rows: Some(40),
         shown: Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) },
         controls: true,
+        visible: false,
     };
 
     let written = serde_json::to_string_pretty(&info).expect("json");
 
     assert_eq!(serde_json::from_str::<ViewInfo>(&written).expect("a view"), info);
+}
+
+#[test]
+fn a_view_read_without_visible_is_visible() {
+    let older: ViewInfo = serde_json::from_str(r#"{"id": 4, "active": true}"#).expect("a view");
+    let hidden: ViewInfo = serde_json::from_str(r#"{"id": 4, "visible": false}"#).expect("a view");
+
+    assert!(older.visible);
+    assert!(!hidden.visible);
 }

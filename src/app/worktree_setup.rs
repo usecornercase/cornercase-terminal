@@ -133,14 +133,14 @@ impl App {
     }
 
     pub(super) fn watch_setups(&mut self, now: Instant) {
-        let visible = self.visible_tab();
+        let seen = self.seen_tabs();
         let mut ended = Vec::new();
         let mut running = HashMap::new();
         for project in &mut self.projects {
             for workspace in &mut project.workspaces {
                 let id = workspace.id;
                 for tab in &mut workspace.tabs {
-                    let shown = visible == Some(tab.id);
+                    let shown = seen.contains(&tab.id);
                     for term in &mut tab.panes {
                         match &mut term.setup {
                             Some(setup::Pane::Running { status, .. }) => {
@@ -196,7 +196,7 @@ impl App {
     }
 
     fn setup_finished(&mut self, pane: u64, code: i32, now: Instant) {
-        let visible = self.visible_tab();
+        let seen = self.seen_tabs();
         let Some((project, workspace, tab)) = self.projects.iter().find_map(|p| {
             p.workspaces
                 .iter()
@@ -224,14 +224,14 @@ impl App {
         let failed = format!("exit status {code}");
         log::warning!("worktree", "setup failed", pane = pane, status = failed, ms = ms);
         if let Some(term) = self.projects.pane_by_mut(pane) {
-            term.setup = Some(setup::Pane::Failed { code: failed, unseen: visible != Some(tab), blame: true });
+            term.setup = Some(setup::Pane::Failed { code: failed, unseen: !seen.contains(&tab), blame: true });
         }
         let (dropped, ended) = self.drop_workspace_launches(workspace, None, "setup failed");
         let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return };
         let place = format!("{} › {}", self.project_label(&self.projects[p]), self.projects[p].workspaces[w].label());
         let tail = if dropped == 0 && ended == 0 { "" } else { ": its agent did not start" };
         let message = format!("setup failed in {place}{tail}");
-        if visible != Some(tab) {
+        if !seen.contains(&tab) {
             self.outbox
                 .notifications
                 .extend(Notification::new(&crate::host::notify::clean(&message), &self.config.desktop_notifications));

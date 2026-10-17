@@ -1,12 +1,27 @@
 use serde::{Deserialize, Serialize};
 
-use super::{Ids, Response};
+use super::{Fields, Ids, Response};
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct Events {
     pub(crate) panes: Vec<u64>,
     pub(crate) host: bool,
+    pub(crate) notices: bool,
+}
+
+impl Events {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        let panes: Vec<String> = self.panes.iter().map(u64::to_string).collect();
+        fields.maybe("panes", (!panes.is_empty()).then(|| panes.join(","))).add("host", self.host);
+        fields.add("notices", self.notices);
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Go {
+    pub(crate) token: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,6 +72,7 @@ pub(crate) enum What {
     Dropped { count: u64 },
     Clipboard { text: String },
     Bell { count: u64 },
+    Notice { token: String, agent: String, status: String, place: String, message: String, panes: Vec<u64> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -73,12 +89,24 @@ impl Event {
         match &self.what {
             What::Opened { kind } | What::Closed { kind } => Some(*kind),
             What::Status { .. } | What::Exited { .. } | What::Clipboard { .. } | What::Bell { .. } => Some(Kind::Pane),
+            What::Notice { .. } => Some(Kind::Workspace),
             What::Dropped { .. } => None,
         }
     }
 
     pub(crate) fn host(&self) -> bool {
         matches!(self.what, What::Clipboard { .. } | What::Bell { .. })
+    }
+
+    pub(crate) fn notice(&self) -> bool {
+        matches!(self.what, What::Notice { .. })
+    }
+
+    pub(crate) fn about(&self, panes: &[u64]) -> bool {
+        match &self.what {
+            What::Notice { panes: named, .. } => named.iter().any(|pane| panes.contains(pane)),
+            _ => self.kind() == Some(Kind::Pane) && self.ids.pane.is_some_and(|pane| panes.contains(&pane)),
+        }
     }
 
     pub(crate) fn streamed(&self) -> Option<String> {

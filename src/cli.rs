@@ -213,6 +213,10 @@ fn run_control(command: Control) -> Result<bool> {
             let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
             ask("focus", control::Command::Focus(control::Focus { item })).map(drop)
         }
+        Control::Go(go) => {
+            let command = control::Command::Go(control::Go { token: go.token });
+            say(ask("go", command)?, go.print.json, |done| id(done.ids.pane))
+        }
         Control::Notify(notify) => {
             let text = notify.text.join(" ");
             ask("notify", control::Command::Notify(control::Notify { text })).map(drop)
@@ -272,8 +276,12 @@ fn follow_events(args: EventsArgs) -> Result<()> {
     if args.host {
         client::use_host_events()?;
     }
+    if args.notices {
+        client::use_notices()?;
+    }
     let mut out = io::stdout().lock();
-    let command = control::Command::Events(control::Events { panes: args.panes, host: args.host });
+    let events = control::Events { panes: args.panes, host: args.host, notices: args.notices };
+    let command = control::Command::Events(events);
     client::follow("events", command, |value| {
         let line = if args.json { value.to_string() } else { event_line(&value) };
         quietly(writeln!(out, "{line}").and_then(|()| out.flush()))
@@ -301,6 +309,7 @@ fn event_line(value: &Value) -> String {
         }
         (Some(subject), What::Bell { count }) if *count > 1 => format!("{subject}  bell  {count} times"),
         (Some(subject), What::Bell { .. }) => format!("{subject}  bell"),
+        (Some(subject), What::Notice { token, message, .. }) => format!("{subject}  notice  {message}  {token}"),
         (_, What::Dropped { count }) => format!(
             "{count} event{} dropped: this command fell behind; `cornercase status` shows where things are now",
             if *count == 1 { "" } else { "s" }

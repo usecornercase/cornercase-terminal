@@ -164,7 +164,7 @@ impl App {
             return Err(none("pane", *pane));
         }
         self.publish(log::enabled(Level::Info));
-        self.events.subscribe(client, events.panes, events.host);
+        self.events.subscribe(client, events.panes, events.host, events.notices);
         Ok(Some(json(&Done::default())))
     }
 }

@@ -1,6 +1,7 @@
 pub(crate) mod queue;
 pub(crate) mod terminal;
 pub(crate) mod theme;
+pub(crate) mod view;
 
 use std::path::PathBuf;
 
@@ -8,7 +9,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::help::{
     ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, CONTRACT_HELP, EVENTS_HELP, FLOW_EXPORT_HELP,
-    FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, HERE_PANE, HERE_WORKSPACE, INPUT_HELP, KEY_NAMES,
+    FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, GO_HELP, HERE_PANE, HERE_WORKSPACE, INPUT_HELP, KEY_NAMES,
     KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP,
     NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP, RATIO_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP,
     RESTART_TIMEOUT, SCROLL_HELP, SEARCH_HELP, SELECTION_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP,
@@ -116,6 +117,11 @@ pub(crate) enum Control {
     Rename(RenameArgs),
     #[command(about = "Show a pane, tab, workspace or project in the window", after_help = FOCUS_HELP)]
     Focus(FocusArgs),
+    #[command(
+        about = "Go to the agent a notice is about, as a click on its desktop notification does",
+        after_help = GO_HELP
+    )]
+    Go(GoArgs),
     #[command(about = "Show a message in the window, with a desktop notification", after_help = NOTIFY_HELP)]
     Notify(NotifyArgs),
     #[command(about = "Have agents message you on Telegram or Discord until you turn it off", after_help = AWAY_HELP)]
@@ -146,9 +152,9 @@ pub(crate) enum Control {
         about = "Open a view of your own: its own tab and size, for programs that draw cornercase themselves",
         after_help = VIEW_HELP
     )]
-    View(ViewArgs),
+    View(view::ViewArgs),
     #[command(about = "Change a view: its size, whether it is active, or take back the tab it shows", after_help = VIEW_SET_HELP)]
-    ViewSet(ViewSetArgs),
+    ViewSet(view::ViewSetArgs),
     #[command(
         about = "Type keys, text, pastes and mouse events into a pane, for programs that draw its terminal",
         after_help = INPUT_HELP
@@ -189,6 +195,7 @@ impl Control {
             Self::Read(a) => a.view.view,
             Self::Wait(a) => a.view.view,
             Self::Focus(a) => a.view.view,
+            Self::Go(a) => a.view.view,
             Self::Rename(a) => a.view.view,
             Self::Surface(a) => a.view,
             Self::ViewSet(a) => Some(a.view),
@@ -201,45 +208,6 @@ impl Control {
 pub(crate) struct ViewArg {
     #[arg(long, value_name = "ID", help = VIEW_ARG)]
     pub(crate) view: Option<u64>,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct ViewArgs {
-    #[arg(
-        long,
-        value_name = "N",
-        requires = "rows",
-        help = "Columns of the view's surface (1 to 1000); without a size it only follows the session"
-    )]
-    pub(crate) cols: Option<u16>,
-    #[arg(long, value_name = "N", requires = "cols", help = "Rows of the view's surface (1 to 500)")]
-    pub(crate) rows: Option<u16>,
-    #[arg(long, help = "Start inactive: it sizes nothing and streams no terminals until `view-set --active`")]
-    pub(crate) inactive: bool,
-    #[arg(long, value_name = "ID", conflicts_with_all = ["workspace", "project"], help = "Start on this tab [default: what the window shows]")]
-    pub(crate) tab: Option<u64>,
-    #[arg(long, value_name = "ID", conflicts_with = "project", help = "Start on this workspace's active tab")]
-    pub(crate) workspace: Option<u64>,
-    #[arg(long, value_name = "ID", help = "Start on this project's active workspace")]
-    pub(crate) project: Option<u64>,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct ViewSetArgs {
-    #[arg(long, value_name = "ID", help = "The view, as the first line of `cornercase view` prints it")]
-    pub(crate) view: u64,
-    #[arg(long, value_name = "N", requires = "rows", help = "New columns (1 to 1000)")]
-    pub(crate) cols: Option<u16>,
-    #[arg(long, value_name = "N", requires = "cols", help = "New rows (1 to 500)")]
-    pub(crate) rows: Option<u16>,
-    #[arg(long, conflicts_with = "inactive", help = "Make it active again: it sizes its tab and streams terminals")]
-    pub(crate) active: bool,
-    #[arg(long, help = "Make it inactive: it sizes nothing and streams no terminals, and the tab goes back")]
-    pub(crate) inactive: bool,
-    #[arg(long, help = "Size the tab it shows from now on, even if the window or another view did last")]
-    pub(crate) claim: bool,
-    #[command(flatten)]
-    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]
@@ -534,6 +502,16 @@ pub(crate) struct CloseArgs {
 }
 
 #[derive(Debug, Args)]
+pub(crate) struct GoArgs {
+    #[arg(value_name = "TOKEN", help = "The notice's token, from `cornercase events --notices`")]
+    pub(crate) token: String,
+    #[command(flatten)]
+    pub(crate) view: ViewArg,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
 pub(crate) struct FocusArgs {
     #[command(flatten)]
     pub(crate) which: Which,
@@ -813,6 +791,11 @@ pub(crate) struct EventsArgs {
         help = "Also print what programs ask of the terminal: their clipboard writes (with the text in --json) and bells"
     )]
     pub(crate) host: bool,
+    #[arg(
+        long,
+        help = "Also print each notice about an agent that needs you, failed or finished, with its token for `cornercase go`"
+    )]
+    pub(crate) notices: bool,
     #[arg(long, help = "Print one JSON object per line instead of text")]
     pub(crate) json: bool,
 }

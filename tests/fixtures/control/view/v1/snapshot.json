@@ -117,6 +117,7 @@
       "tab": 3,
       "pane": 4
     },
-    "controls": true
+    "controls": true,
+    "visible": true
   }
 }

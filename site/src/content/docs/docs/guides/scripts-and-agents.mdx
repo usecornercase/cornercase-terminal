@@ -44,7 +44,7 @@ group 9  personal  collapsed
 - Every pane's shell has `CORNERCASE_PANE` set to its id. Inside a pane, commands act on that pane, its tab, workspace and project unless you name another one; `(you)` marks it in `status`. Run from anywhere else, they act on what the window shows, marked `(shown)`.
 - Where a command takes `--workspace ID`, `--worktree BRANCH` names the workspace on that branch instead, looked up in the same project: the one the command runs in, else the shown one. `cornercase start claude --worktree fix/login` made it, so `cornercase close --worktree fix/login --remove-worktree` can take it down without reading its id from `status`. A branch that no workspace there is on, or that several are on (a workspace without a worktree of its own shares its project's branch), exits with status 2 and lists the workspaces to pick from.
 - The pane is what `send`, `keys`, `read` and `wait` work on. Where they take `--tab ID`, it stands for the tab's agent pane, or its active pane when no agent runs in it.
-- **Nothing changes what the window shows** except `focus` and the `--focus` option. Whoever is looking at the window keeps seeing what they were looking at while a script opens tabs next to them. With `--view ID` they move that [view](#a-view-of-your-own) instead, and the window stays where it is.
+- **Nothing changes what the window shows** except `focus`, `go` and the `--focus` option. Whoever is looking at the window keeps seeing what they were looking at while a script opens tabs next to them. With `--view ID` they move that [view](#a-view-of-your-own) instead, and the window stays where it is.
 - With `--view ID`, the defaults are what that view shows: its project, workspace, tab and that tab's active pane, even inside a pane.
 
 ## Commands
@@ -63,7 +63,7 @@ group 9  personal  collapsed
 | `search TEXT` | Finds the panes where some text was said: in the agents' prompts and replies and in every pane's history. |
 | `read` | Prints a pane's screen, its last lines, or the last messages of one or several agents. |
 | `wait` | Waits until an agent stops working, a program ends, a line shows up or the output stops, in one pane or in the first or every one of several. |
-| `events` | Prints what happens as it happens: agents changing state, programs ending, panes, tabs, workspaces and projects opening and closing, and with `--host` programs' clipboard writes and bells. |
+| `events` | Prints what happens as it happens: agents changing state, programs ending, panes, tabs, workspaces and projects opening and closing, with `--host` programs' clipboard writes and bells, and with `--notices` the notices about agents. |
 | `surface` | Streams a tab's terminals as cells with their panes and dividers, for [a program that draws them](#stream-a-tabs-terminals). |
 | `view` | Opens a [view of your own](#a-view-of-your-own): its own tab and size, for a program that draws cornercase itself. |
 | `view-set` | Changes a view: its size, whether it is active, or takes back the tab it shows. |
@@ -72,6 +72,7 @@ group 9  personal  collapsed
 | `close` | Closes a pane, tab, workspace or project. |
 | `rename NAME` | Renames a tab, workspace, project or group. |
 | `focus` | Shows a pane, tab, workspace or project in the window. |
+| `go TOKEN` | Goes to the agent a notice is about, as a click on its desktop notification does, in the window or with `--view` in a view. |
 | `notify TEXT` | Shows a message in the window, with a desktop notification. |
 | `todo` | Adds to, lists, checks off and removes items of the [TODO list](../todo/), and sends one to an agent as `send --enter` would. |
 | `away` | Has agents message you [on Telegram](../telegram/) or [Discord](../discord/); `--off` stops it. |
@@ -196,10 +197,11 @@ cornercase surface --view "$id"
 ```
 
 - `view` has `id`, `projection`, `active`, `cols` and `rows` (`null` without a size), `shown` (the `project`, `workspace`, `tab` and `pane` it shows) and `controls` (whether it sizes its tab's terminals now). It starts on what the window shows, or on `--tab`, `--workspace` or `--project`; the window doesn't move. Each tab in the lines has `controller`: the id of the view sizing it, absent when the window does.
-- `--view ID` works on `status`, `focus`, `open`, `new-workspace`, `new-tab`, `split`, `start`, `send`, `keys`, `read`, `wait`, `mark`, `rename` and `surface`, also from separate commands. The view's tab is their default, and `focus`, `--focus` move the view, not the window or the other views. `focus --view` prints the view's new tab and its `projection`. Other commands refuse it. A server without views is refused up front, naming the update.
+- `--view ID` works on `status`, `focus`, `open`, `new-workspace`, `new-tab`, `split`, `start`, `send`, `keys`, `read`, `wait`, `mark`, `rename`, `go` and `surface`, also from separate commands. The view's tab is their default, and `focus`, `--focus` move the view, not the window or the other views. `focus --view` prints the view's new tab and its `projection`. Other commands refuse it. A server without views is refused up front, naming the update.
 - When something the view shows goes away, it moves like the window would: a closed tab to the one before it, a closing workspace or project to its neighbour. That never resizes a tab for it.
 - `surface --view ID` streams the tab the view shows, at the view's size, and follows the view to other tabs. It takes no `--tab`, `--cols` or `--rows`, and each frame carries `view` and `projection`.
-- `view-set --view ID` changes it: `--cols` and `--rows`, `--active` or `--inactive`, and `--claim` to size the tab it shows from now on. A view without a size, or inactive, sizes nothing and streams no terminals, but its lines keep following the session.
+- `view-set --view ID` changes it: `--cols` and `--rows`, `--active` or `--inactive`, `--hidden` or `--visible` (see below), and `--claim` to size the tab it shows from now on. A view without a size, or inactive, sizes nothing and streams no terminals, but its lines keep following the session.
+- The tab a view shows counts as seen, like the window's, while the view is active, has a size and is visible: an agent there gets no `✓`, toast or desktop notification. `view --hidden` and `view-set --hidden` say its window is hidden or minimised, so agents there notify again, and `--visible` says it is back. While a view is open, the window's tab counts as seen only while a window is attached; a program that only shows notices can open a view without a size.
 
 **Who sizes a tab.** One at a time, so two programs showing the same tab never fight over its size. The window is the default. A view claims the tab it shows when it opens, moves there, turns active, or with `--claim`; using a window (a key, a paste, a click) takes back the tab it shows, until the window shows another tab. The latest claim sizes the tab's terminals at the view's `cols` × `rows`, without the window's sidebar or panels; when it lets go (inactive, moved on, closed) the tab goes to the latest one left, else the window.
 
@@ -440,6 +442,7 @@ Repeat `--pane` and `--tab` to wait on several panes, with `--any` or `--all` (s
 cornercase events                          # everything, until the server stops
 cornercase events --pane 12 --pane 14      # only these panes, until they all closed
 cornercase events --host --json            # also clipboard writes and bells of programs
+cornercase events --notices --json         # also the notices about agents, with their tokens
 cornercase events --json | while read -r event; do …; done
 ```
 
@@ -457,6 +460,7 @@ pane 7  clipboard  11 bytes
 pane 7  bell  3 times
 pane 14  closed
 tab 15  closed
+workspace 2  notice  claude needs you in web-shop › main  cc-3f2a9c-4
 ```
 
 | Event | When |
@@ -465,6 +469,7 @@ tab 15  closed
 | `pane ID  PROGRAM  exited` | The program in the foreground ended and the shell is back, or another program took its place. |
 | `pane ID  clipboard  N bytes` | Only with `--host`: a program wrote to the clipboard (OSC 52, such as a yank in Neovim). The text is in `--json`'s `text`, never in the line. Reads and the primary selection are not told. |
 | `pane ID  bell` | Only with `--host`: a program rang the bell (a BEL character, not one that ends another escape sequence). It reads `bell  N times` when several rang. |
+| `workspace ID  notice  MESSAGE  TOKEN` | Only with `--notices`: cornercase told you an agent needs you, failed or finished, as the window's toast says it, with the same rules (a second's wait, once per change, never for a tab seen in the window or in a view). `--json` has `token`, `agent`, `status`, `place`, `message` and `panes`. A `--pane` reader gets the notices naming its panes. `cornercase go TOKEN [--view ID]` does what a click on the notification does; it fails for a token the server never gave or no longer keeps (the last 64) and when the agent and its workspace are gone. Check the `notices` feature before sending `--notices`. `notify`, the queue's and a failed setup's messages are not notices. |
 | `KIND ID  opened in PARENT` | A project, workspace, tab or pane opened. |
 | `KIND ID  closed` | A project, workspace, tab or pane closed. A pane closes when its shell exits, whatever closed it. |
 
@@ -558,10 +563,11 @@ cornercase stats --share
 | `search` | `matches`: `pane`, `tab`, `workspace`, `project`, `place`, `who`, `source` (`prompt`, `reply` or `screen`), `line`, `text`, `written`; and `capped`. See [Find where something was said](#find-where-something-was-said). |
 | `read` | `pane` and `text`. With `--last-message`, also `agent` (`claude`, `codex`, `gemini` or `opencode`), `written` (when the agent wrote it, in UTC, such as `2026-10-08T19:56:37.241Z`) and `turn_over` (`true` once the agent stopped working, as [`--until turn-over`](#wait) sees it; missing while cornercase doesn't know yet). |
 | `read --last-message` with several targets | `panes`: the individual `read --last-message` answers above, or entries with `error` and the requested `pane` or `tab` id. |
-| `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind`, `text` (for `clipboard`) or `count` (for `bell` and `dropped`) depending on the event. |
+| `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind`, `token`, `status`, `place`, `message`, `panes` (for `notice`), `text` (for `clipboard`) or `count` (for `bell` and `dropped`) depending on the event. |
 | `surface` | One object per line, see [Stream a tab's terminals](#stream-a-tabs-terminals): `boot`, `session`, `surface`, `revision`, `tab`, `cols`, `rows`, `layout`, `dividers`, `styles`, `hyperlinks` and `panes`; for `--view`, also `view` and `projection`. |
-| `view` | One object per line, see [A view of your own](#a-view-of-your-own): what `status --follow` prints, plus `view` (`id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`) and each tab's `controller`. |
-| `view-set` | The view: `id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`. |
+| `view` | One object per line, see [A view of your own](#a-view-of-your-own): what `status --follow` prints, plus `view` (`id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`, `visible`) and each tab's `controller`. |
+| `view-set` | The view: `id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`, `visible`. |
+| `go` | The ids it went to (`project`, `workspace`, `tab`, `pane`), and `projection` with `--view`. |
 | `input` | `pane`, `bytes` (what was written) and `skipped`: `event` (its position from 0) and `why` (`mouse`, `release`, or `key` for a press cornercase has no encoding for) of each event that was not sent. |
 | `scroll` | `pane` and `scroll`: `total`, `offset` and `rows`, as in a frame. |
 | `selection` | `pane` and `text` (absent when nothing is selected). |
@@ -616,11 +622,11 @@ cornercase contract --json
 cornercase 0.12.127
 contract 1
 boot 4242-1700000000
-commands 43 (43 available)
+commands 44 (44 available)
 stream events 1
 stream watch 1
 stream surface 1
-features boot, structured-errors, strict-fields, views, host-events, theme
+features boot, structured-errors, strict-fields, views, host-events, theme, notices
 ```
 
 `--json` prints an object with:
@@ -629,7 +635,7 @@ features boot, structured-errors, strict-fields, views, host-events, theme
 - `contract`: the version of the rules on this page, an integer starting at 1. It goes up only when something that was there changes meaning or shape, never when something is added.
 - `boot`: which start of the server this is. It changes on every start, `cornercase restart` included, since ids start again from 1. It is the same value as `CORNERCASE_SERVER` in the panes and `boot` in `status --json`.
 - `operations`: every request the server takes, by name, with `available`. A server with `start-server` among them can be started without a window; one without it needs a window before it opens terminals. One that is not available on this server has `available: false` and a `reason`; the others keep working.
-- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) and `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours).
+- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours) and `notices` (a view's `visible`, the `notices` field of `events` and the `go` request; check it before sending them).
 - `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals) and `{"name": "view", "version": 1}` for [`view`](#a-view-of-your-own), whose lines are `watch` format 1 plus `view`.
 
 A server from before `contract` says `the running cornercase server (…) has no contract command`, or that it is too old: it knows none of the rest of this section, so don't send it ids you kept from before.
