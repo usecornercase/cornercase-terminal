@@ -145,7 +145,7 @@ test('the publish block has a visible title, a paragraph, its own guide link and
   const block = astro.slice(astro.indexOf('<section class="publish"'), astro.indexOf('</section>', astro.indexOf('<section class="publish"')));
   const order = [
     '<p class="eyebrow cmd-line" aria-hidden="true">$ {topicCommand}</p>',
-    '<h2 id="publish-title">Publish yours</h2>',
+    "<h2 id=\"publish-title\">{page.empty ? 'Publish the first one' : 'Publish yours'}</h2>",
     'Add a <code>{MANIFEST}</code> to a public repository, then tag it with the topic.',
     'with no submission and no review.',
     '<p class="guide-link"><a href={`${guide}#publish-a-plugin`}>How publishing works →</a></p>',
@@ -177,6 +177,14 @@ test('the header is a command, a title, its output and one sentence, in one colu
 test('the header count is the command\'s output with singular and plural forms', () => {
   assert.equal(headline(page.plugins, page.repos), '13 plugins · 10 repositories · refreshed every hour');
   assert.equal(headline(1, 1), '1 plugin · 1 repository · refreshed every hour');
-  assert.equal(headline(0, 0), '0 plugins · 0 repositories · refreshed every hour');
+  assert.equal(headline(0, 0), 'no plugins yet · be the first');
   assert.equal(headline(1200, 2), '1,200 plugins · 2 repositories · refreshed every hour');
+});
+
+test('the empty state drops the browse section and shows the publish block once', () => {
+  assert.ok(astro.includes('!page.empty && ('));
+  assert.equal(astro.split('<section class="publish"').length - 1, 1);
+  assert.equal(astro.split('data-plugin-copy={topicCommand}').length - 1, 1);
+  assert.ok(!astro.includes('data-empty'));
+  assert.ok(astro.includes("{page.empty && 'No plugins are listed yet. '}"));
 });

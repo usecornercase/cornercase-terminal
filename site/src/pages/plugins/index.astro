@@ -125,102 +125,105 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
           )
         }
 
-        <section class="browse" aria-labelledby="browse-title">
-          <div class="shelf-head">
-            <div>
-              <p class="eyebrow cmd-line" aria-hidden="true">$ ls --all</p>
-              <h2 id="browse-title">Every plugin</h2>
-            </div>
-          </div>
-          <div class="controls">
-            <label class="search">
-              <span class="slash" aria-hidden="true">/</span>
-              <input type="search" data-search placeholder="search plugins, repositories, owners, languages…" autocomplete="off" spellcheck="false" aria-label="Search plugins" />
-            </label>
-            <label class="sort">
-              <span>sort</span>
-              <select data-sort aria-label="Sort plugins">
-                <option value="popular" selected>Popular</option>
-                <option value="trending">Trending</option>
-                <option value="recent">Recently updated</option>
-                <option value="newest">Newest</option>
-                <option value="name">Name</option>
-              </select>
-            </label>
-          </div>
-          <p class="line" data-line aria-live="polite">
-            <span data-line-count>{page.line.slice(0, 2).join(' · ')}</span>
-            {rest.map((part) => <><span aria-hidden="true"> · </span><span>{part}</span></>)}
-            <span aria-hidden="true"> · </span><time datetime={page.generated} data-ago="updated">updated {day(page.generated)}</time>
-          </p>
-          {page.empty && <p class="empty" data-empty>No plugins are listed yet.</p>}
-          <p class="empty" data-none hidden>No plugins match your search.</p>
-          <ul class="grid" data-grid data-page={PAGE_SIZE}>
-            {page.cards.map((card) => (
-              <li
-                class="card"
-                data-card
-                data-haystack={card.haystack}
-                data-plugins={card.plugins.length}
-                data-rank-popular={card.ranks.popular}
-                data-rank-trending={card.ranks.trending}
-                data-rank-recent={card.ranks.recent}
-                data-rank-newest={card.ranks.newest}
-                data-rank-name={card.ranks.name}
-              >
-                <div class="who">
-                  <Avatar owner={card.owner} />
-                  <a class="repo" href={`https://github.com/${card.repo}`} target="_blank" rel="noopener noreferrer">
-                    <span class="owner">{card.owner}/</span>
-                    <b>{card.name}</b>
-                    <span aria-hidden="true"> ↗</span>
-                  </a>
+        {
+          !page.empty && (
+            <section class="browse" aria-labelledby="browse-title">
+              <div class="shelf-head">
+                <div>
+                  <p class="eyebrow cmd-line" aria-hidden="true">$ ls --all</p>
+                  <h2 id="browse-title">Every plugin</h2>
                 </div>
-                <p class={card.description ? 'desc' : 'desc none'}>{card.description ?? 'No description provided.'}</p>
-                <p class="meta">
-                  <span><span aria-hidden="true">★</span> {number(card.stars)}<span class="sr-only"> stars</span></span>
-                  {card.language && (
-                    <span class="lang">
-                      <i class="lang-dot" data-lang={card.coloured ? card.language : undefined} aria-hidden="true"></i>
-                      {card.language}
-                    </span>
-                  )}
-                  {card.plugins.length === 1 && <span>v{card.plugins[0].version.replace(/^v/, '')}</span>}
-                  <time class="pushed" datetime={card.pushed} data-ago="updated">updated {day(card.pushed)}</time>
-                </p>
-                {card.plugins.length === 1 ? (
-                  <Command command={card.plugins[0].command} label={card.plugins[0].name} />
-                ) : (
-                  <details class="many">
-                    <summary>
-                      <span class="pill">{card.plugins.length} plugins</span>
-                      <span class="names">{card.plugins.map((p) => p.name).join(', ')}</span>
-                    </summary>
-                    <ul>
-                      {card.plugins.map((p) => (
-                        <li>
-                          <p class="plugin-name"><b>{p.name}</b> <span>v{p.version.replace(/^v/, '')}</span></p>
-                          <Command command={p.command} label={p.name} />
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
-              </li>
-            ))}
-          </ul>
-          <p class="more-wrap"><button type="button" class="more" data-more hidden>show more</button></p>
-        </section>
+              </div>
+              <div class="controls">
+                <label class="search">
+                  <span class="slash" aria-hidden="true">/</span>
+                  <input type="search" data-search placeholder="search plugins, repositories, owners, languages…" autocomplete="off" spellcheck="false" aria-label="Search plugins" />
+                </label>
+                <label class="sort">
+                  <span>sort</span>
+                  <select data-sort aria-label="Sort plugins">
+                    <option value="popular" selected>Popular</option>
+                    <option value="trending">Trending</option>
+                    <option value="recent">Recently updated</option>
+                    <option value="newest">Newest</option>
+                    <option value="name">Name</option>
+                  </select>
+                </label>
+              </div>
+              <p class="line" data-line aria-live="polite">
+                <span data-line-count>{page.line.slice(0, 2).join(' · ')}</span>
+                {rest.map((part) => <><span aria-hidden="true"> · </span><span>{part}</span></>)}
+                <span aria-hidden="true"> · </span><time datetime={page.generated} data-ago="updated">updated {day(page.generated)}</time>
+              </p>
+              <p class="empty" data-none hidden>No plugins match your search.</p>
+              <ul class="grid" data-grid data-page={PAGE_SIZE}>
+                {page.cards.map((card) => (
+                  <li
+                    class="card"
+                    data-card
+                    data-haystack={card.haystack}
+                    data-plugins={card.plugins.length}
+                    data-rank-popular={card.ranks.popular}
+                    data-rank-trending={card.ranks.trending}
+                    data-rank-recent={card.ranks.recent}
+                    data-rank-newest={card.ranks.newest}
+                    data-rank-name={card.ranks.name}
+                  >
+                    <div class="who">
+                      <Avatar owner={card.owner} />
+                      <a class="repo" href={`https://github.com/${card.repo}`} target="_blank" rel="noopener noreferrer">
+                        <span class="owner">{card.owner}/</span>
+                        <b>{card.name}</b>
+                        <span aria-hidden="true"> ↗</span>
+                      </a>
+                    </div>
+                    <p class={card.description ? 'desc' : 'desc none'}>{card.description ?? 'No description provided.'}</p>
+                    <p class="meta">
+                      <span><span aria-hidden="true">★</span> {number(card.stars)}<span class="sr-only"> stars</span></span>
+                      {card.language && (
+                        <span class="lang">
+                          <i class="lang-dot" data-lang={card.coloured ? card.language : undefined} aria-hidden="true"></i>
+                          {card.language}
+                        </span>
+                      )}
+                      {card.plugins.length === 1 && <span>v{card.plugins[0].version.replace(/^v/, '')}</span>}
+                      <time class="pushed" datetime={card.pushed} data-ago="updated">updated {day(card.pushed)}</time>
+                    </p>
+                    {card.plugins.length === 1 ? (
+                      <Command command={card.plugins[0].command} label={card.plugins[0].name} />
+                    ) : (
+                      <details class="many">
+                        <summary>
+                          <span class="pill">{card.plugins.length} plugins</span>
+                          <span class="names">{card.plugins.map((p) => p.name).join(', ')}</span>
+                        </summary>
+                        <ul>
+                          {card.plugins.map((p) => (
+                            <li>
+                              <p class="plugin-name"><b>{p.name}</b> <span>v{p.version.replace(/^v/, '')}</span></p>
+                              <Command command={p.command} label={p.name} />
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <p class="more-wrap"><button type="button" class="more" data-more hidden>show more</button></p>
+            </section>
+          )
+        }
 
         <section class="publish" aria-labelledby="publish-title">
           <div class="shelf-head">
             <div>
               <p class="eyebrow cmd-line" aria-hidden="true">$ {topicCommand}</p>
-              <h2 id="publish-title">Publish yours</h2>
+              <h2 id="publish-title">{page.empty ? 'Publish the first one' : 'Publish yours'}</h2>
             </div>
           </div>
           <p class="after">
-            Add a <code>{MANIFEST}</code> to a public repository, then tag it with the topic. It shows up here on the next refresh, with no submission and no review.
+            {page.empty && 'No plugins are listed yet. '}Add a <code>{MANIFEST}</code> to a public repository, then tag it with the topic. {page.empty ? 'Yours' : 'It'} shows up here on the next refresh, with no submission and no review.
           </p>
           <p class="guide-link"><a href={`${guide}#publish-a-plugin`}>How publishing works →</a></p>
           <div class="term">

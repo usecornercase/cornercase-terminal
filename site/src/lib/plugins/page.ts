@@ -47,7 +47,7 @@ const number = (n: number): string => n.toLocaleString('en-US');
 export const noun = (n: number, one: string, many: string): string => `${number(n)} ${n === 1 ? one : many}`;
 
 export const headline = (plugins: number, repos: number): string =>
-  `${noun(plugins, 'plugin', 'plugins')} · ${noun(repos, 'repository', 'repositories')} · refreshed every hour`;
+  plugins === 0 ? 'no plugins yet · be the first' : `${noun(plugins, 'plugin', 'plugins')} · ${noun(repos, 'repository', 'repositories')} · refreshed every hour`;
 
 export function view(index: Index): View {
   const cards = shown(index);
