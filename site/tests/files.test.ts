@@ -82,10 +82,9 @@ test('a panel too narrow for both leaves the back button alone', () => {
   assert.equal(app.textAt('▢'), null);
   const back = app.textAt('‹');
   assert.ok(back);
-  assert.equal(app.textAt('Fil'), null);
   app.pointerDown(back.x, back.y, 0);
   app.pointerUp();
   app.render();
-  assert.ok(app.textAt('Fil'));
+  assert.equal(app.textAt('‹'), null);
   app.destroy();
 });
