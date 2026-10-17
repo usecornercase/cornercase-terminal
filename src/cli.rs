@@ -17,6 +17,7 @@ use crate::remote::{self, Remote};
 use crate::{log, server};
 
 mod args;
+mod config;
 mod contract;
 mod flow;
 mod help;
@@ -248,6 +249,7 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Ratio(args) => terminal::ratio(&args),
         Control::Link(args) => terminal::link(&args),
         Control::Theme(args) => theme::run(&args),
+        Control::Config(args) => config::run(args),
     }?;
     Ok(true)
 }

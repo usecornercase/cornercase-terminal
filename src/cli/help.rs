@@ -479,6 +479,32 @@ Examples:
   cornercase theme - < light.json
   cornercase theme --clear
   cornercase theme --json";
+pub(super) const CONFIG_HELP: &str =
+    "Every setting of the Settings dialog, with its value, default, choices and the note the dialog
+shows, whether each account and bot is connected (and as whom), refused or not set, and each
+project's setup and teardown. `--json` prints the whole answer, which a program can draw a form from.
+
+`set` changes settings with the dialog's own checks and applies them at once, as the dialog does;
+nothing is saved unless every value is accepted. Values are converted by the setting's type: true or
+false for a switch, a whole number, a comma-separated list for issue_tabs, otherwise text.
+
+A token is never an argument: `secret` reads it from standard input (hidden on a terminal), checks it
+with its service as the dialog does, and says which account accepted it, never the token. `remove`
+forgets a token, a bot, a paired chat or the paired browsers.
+
+The server notices edits to config.json within a second and applies them. What cornercase changes
+meanwhile only rewrites the keys it touches, and it does not write over a file it cannot read.
+
+Examples:
+  cornercase config
+  cornercase config --json
+  cornercase config set sidebar tree
+  cornercase config set fetch_minutes 10 counts false
+  cornercase config set issue_tabs github,linear
+  printf '%s' \"$LINEAR_API_KEY\" | cornercase config secret linear
+  cornercase config remove linear
+  cornercase config project ~/code/web-shop --setup 'npm ci'";
+
 pub(super) const SKILL_HELP: &str = "Install them for Claude Code, Codex and other agents with
   npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 or put this text in an AGENTS.md or CLAUDE.md.";

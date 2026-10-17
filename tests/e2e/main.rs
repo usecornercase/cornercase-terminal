@@ -34,6 +34,7 @@ mod plugins;
 mod queue;
 mod remote;
 mod server;
+mod settings;
 mod sidebar;
 mod startup;
 mod updates;
