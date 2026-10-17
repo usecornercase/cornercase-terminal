@@ -571,6 +571,10 @@ mod output {
         "pane 4  codex  none → idle"
     )]
     #[case::a_program_ended(What::Exited { program: "cargo".into() }, PANE, "pane 4  cargo  exited")]
+    #[case::a_clipboard_write(What::Clipboard { text: "hello".into() }, PANE, "pane 4  clipboard  5 bytes")]
+    #[case::one_byte(What::Clipboard { text: "a".into() }, PANE, "pane 4  clipboard  1 byte")]
+    #[case::a_bell(What::Bell { count: 1 }, PANE, "pane 4  bell")]
+    #[case::bells(What::Bell { count: 3 }, PANE, "pane 4  bell  3 times")]
     #[case::one_dropped(
         What::Dropped { count: 1 },
         Ids::default(),

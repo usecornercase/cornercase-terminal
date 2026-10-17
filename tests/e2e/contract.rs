@@ -35,6 +35,7 @@ fn contract_describes_the_running_server_and_its_boot() {
         assert!(operations.iter().any(|op| op["name"] == name && op["available"] == true), "{name}: {contract}");
     }
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "views"), "{contract}");
+    assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "host-events"), "{contract}");
     assert!(
         contract["streams"].as_array().expect("streams").iter().any(|s| s["name"] == "view" && s["version"] == 1),
         "{contract}"

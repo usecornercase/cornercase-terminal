@@ -190,6 +190,35 @@ mod clipboard {
     }
 }
 
+mod bell {
+    use super::*;
+
+    fn rung_by(output: &[u8]) -> u32 {
+        let (mut emu, _) = emulator();
+        emu.feed(output);
+        emu.take_bells()
+    }
+
+    #[rstest]
+    #[case::one(b"\x07", 1)]
+    #[case::two(b"a\x07b\x07", 2)]
+    #[case::none(b"hello", 0)]
+    #[case::a_title_ended_by_bel(b"\x1b]0;title\x07", 0)]
+    #[case::a_clipboard_write_ended_by_bel(b"\x1b]52;c;aGVsbG8=\x07", 0)]
+    #[case::a_status_report_ended_by_bel(b"\x1b]7501;state=blocked:kind=question\x07", 0)]
+    fn counts_only_the_bells_a_program_rings(#[case] output: &[u8], #[case] count: u32) {
+        assert_eq!(rung_by(output), count);
+    }
+
+    #[test]
+    fn taking_resets_the_count() {
+        let (mut emu, _) = emulator();
+        emu.feed(b"\x07");
+        emu.take_bells();
+        assert_eq!(emu.take_bells(), 0);
+    }
+}
+
 mod title {
     use super::*;
 

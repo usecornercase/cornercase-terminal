@@ -199,7 +199,11 @@ fn press_keys(pane: u64, keys: &[&str]) -> Command {
 }
 
 fn follow(app: &mut App, panes: &[u64]) {
-    let ack = done(now(app, None, Command::Events(wire::Events { panes: panes.to_vec() })));
+    follow_with(app, panes, false);
+}
+
+fn follow_with(app: &mut App, panes: &[u64], host: bool) {
+    let ack = done(now(app, None, Command::Events(wire::Events { panes: panes.to_vec(), host })));
     assert_eq!(ack, Done::default());
 }
 

@@ -14,20 +14,25 @@ use crate::{paths, update::restart};
 static VIEW: OnceLock<u64> = OnceLock::new();
 
 pub(crate) fn use_view(view: u64) -> Result<()> {
-    let descriptor: control::contract::Descriptor =
-        answer(ask("contract", control::Command::Contract(control::Contract {})).map_err(|_| no_views())?)?;
-    if !descriptor.features.iter().any(|feature| feature == "views") {
-        return Err(no_views());
-    }
+    require("views", "has no views")?;
     let _ = VIEW.set(view);
     Ok(())
 }
 
-fn no_views() -> Error {
-    Error::Control(format!(
-        "the running cornercase server has no views; update cornercase and restart the server (this one is {})",
-        crate::version::CURRENT
-    ))
+pub(crate) fn use_host_events() -> Result<()> {
+    require("host-events", "cannot send programs' clipboard writes and bells")
+}
+
+fn require(feature: &str, lacks: &str) -> Result<()> {
+    let lacking = || {
+        Error::Control(format!(
+            "the running cornercase server {lacks}; update cornercase and restart the server (this one is {})",
+            crate::version::CURRENT
+        ))
+    };
+    let descriptor: control::contract::Descriptor =
+        answer(ask("contract", control::Command::Contract(control::Contract {})).map_err(|_| lacking())?)?;
+    if descriptor.features.iter().any(|offered| offered == feature) { Ok(()) } else { Err(lacking()) }
 }
 
 pub(crate) fn connect() -> Result<UnixStream> {

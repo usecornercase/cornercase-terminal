@@ -59,7 +59,8 @@
                   "active": true,
                   "caller": false,
                   "resumes": false,
-                  "resuming": false
+                  "resuming": false,
+                  "title": "✳ Claude Code"
                 },
                 {
                   "id": 5,
@@ -76,7 +77,8 @@
                   "active": false,
                   "caller": false,
                   "resumes": false,
-                  "resuming": false
+                  "resuming": false,
+                  "title": null
                 }
               ],
               "custom_name": "agents",

@@ -51,7 +51,7 @@ fn following_panes_tells_only_about_them_and_ends_once_they_all_closed() {
 fn a_pane_that_does_not_exist_cannot_be_followed() {
     let (mut app, _rx, _dirs) = app_with(1);
 
-    let message = error(now(&mut app, None, Command::Events(wire::Events { panes: vec![999] })));
+    let message = error(now(&mut app, None, Command::Events(wire::Events { panes: vec![999], host: false })));
 
     assert!(message.contains("there is no pane 999"), "{message}");
     assert!(!app.events.listening());
@@ -101,4 +101,104 @@ fn programs_are_not_looked_up_while_nobody_follows() {
 
 fn pane_job(app: &App, id: u64) -> Option<crate::term::Job> {
     pane(app, id).job.clone()
+}
+
+fn host_told(app: &mut App) -> Vec<(wire::What, wire::Ids)> {
+    let streamed = app.take_events();
+    told(&streamed.into_iter().map(|(_, streamed)| streamed).collect::<Vec<_>>())
+}
+
+#[test]
+fn a_programs_clipboard_write_and_bell_reach_a_follower_that_asked() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let pane = term(&app, 0).id;
+    let ids = first_tab(&app, pane);
+    follow_with(&mut app, &[], true);
+    app.take_host_writes();
+
+    app.output(pane, b"\x1b]52;c;aGVsbG8=\x07\x07");
+
+    assert_eq!(
+        host_told(&mut app),
+        [(wire::What::Clipboard { text: "hello".into() }, ids), (wire::What::Bell { count: 1 }, ids)]
+    );
+    assert_eq!(app.take_host_writes(), [clipboard::osc52("hello")]);
+}
+
+#[test]
+fn a_follower_that_did_not_ask_gets_neither() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let pane = term(&app, 0).id;
+    follow(&mut app, &[]);
+    app.take_host_writes();
+
+    app.output(pane, b"\x1b]52;c;aGVsbG8=\x07\x07");
+
+    assert_eq!(host_told(&mut app), []);
+    assert_eq!(app.take_host_writes(), [clipboard::osc52("hello")]);
+}
+
+#[rstest::rstest]
+#[case::a_read(b"\x1b]52;c;?\x07")]
+#[case::the_primary_selection(b"\x1b]52;p;aGVsbG8=\x07")]
+#[case::a_title_ended_by_bel(b"\x1b]0;title\x07")]
+fn what_is_not_a_clipboard_write_or_a_bell_tells_nothing(#[case] output: &[u8]) {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let pane = term(&app, 0).id;
+    follow_with(&mut app, &[], true);
+
+    app.output(pane, output);
+
+    assert_eq!(host_told(&mut app), []);
+}
+
+#[test]
+fn host_events_of_other_panes_are_left_out() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let followed = term(&app, 0).id;
+    let ids = first_tab(&app, followed);
+    let other = done(now(&mut app, None, new_tab(None))).ids.pane.expect("a pane");
+    follow_with(&mut app, &[followed], true);
+    app.take_events();
+
+    app.output(other, b"\x1b]52;c;aGVsbG8=\x07");
+    let left_out = host_told(&mut app);
+    app.output(followed, b"\x1b]52;c;aGVsbG8=\x07");
+
+    assert_eq!(left_out, []);
+    assert_eq!(host_told(&mut app), [(wire::What::Clipboard { text: "hello".into() }, ids)]);
+}
+
+#[test]
+fn bells_ringing_in_a_loop_are_told_at_most_once_a_second_with_their_count() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let pane = term(&app, 0).id;
+    let ids = first_tab(&app, pane);
+    follow_with(&mut app, &[], true);
+    for _ in 0..4 {
+        app.output(pane, b"\x07");
+    }
+    let start = Instant::now();
+    let first = host_told(&mut app);
+    let wake = app.tick(start);
+    app.refresh(start + crate::app::events::BELL_EVERY);
+    let second = host_told(&mut app);
+    app.refresh(start + crate::app::events::BELL_EVERY * 3);
+
+    assert_eq!(first, [(wire::What::Bell { count: 1 }, ids)]);
+    assert!(wake.is_some_and(|wake| wake <= crate::app::events::BELL_EVERY));
+    assert_eq!(second, [(wire::What::Bell { count: 3 }, ids)]);
+    assert_eq!(host_told(&mut app), []);
+}
+
+#[test]
+fn bells_before_anyone_asked_are_not_told_later() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let pane = term(&app, 0).id;
+
+    app.output(pane, b"\x07\x07");
+    follow_with(&mut app, &[], true);
+    app.refresh(Instant::now() + crate::app::events::BELL_EVERY * 2);
+
+    assert_eq!(host_told(&mut app), []);
 }

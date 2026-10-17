@@ -124,6 +124,7 @@ impl App {
         (term.agent.agent(), term.agent.status().map(Status::name), term.agent.background_shell()).hash(hash);
         term.context.context().map(|c| (&c.model, c.percent)).hash(hash);
         (term.dialog(), term.survey(), term.resume.is_some(), resuming).hash(hash);
+        term.emulator.title().hash(hash);
     }
 
     fn pane_info(&self, term: &Term, active: bool, caller: Option<u64>) -> PaneInfo {
@@ -144,6 +145,7 @@ impl App {
             caller: caller == Some(term.id),
             resumes: self.config.resume_agents && term.resume.is_some(),
             resuming: self.resume_holds(term.id),
+            title: Some(term.emulator.title()).filter(|title| !title.is_empty()),
         }
     }
 
@@ -161,7 +163,7 @@ impl App {
             return Err(none("pane", *pane));
         }
         self.publish(log::enabled(Level::Info));
-        self.events.subscribe(client, events.panes);
+        self.events.subscribe(client, events.panes, events.host);
         Ok(Some(json(&Done::default())))
     }
 }

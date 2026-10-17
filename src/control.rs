@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub(crate) mod contract;
+mod events;
 mod flow;
 mod search;
 pub(crate) mod start_server;
@@ -19,6 +20,7 @@ mod watch;
 pub(crate) use todo::{Todo, TodoSend};
 
 pub(crate) use contract::Contract;
+pub(crate) use events::{Event, Events, Kind, What};
 pub(crate) use flow::{
     BrokenFlow, Exported, FlowExport, FlowImport, FlowInfo, FlowList, FlowRun, Flows, Imported, MemberInfo, RoleInfo,
     RunInfo,
@@ -232,7 +234,7 @@ impl Command {
             Self::TodoSend(send) => send.fields(&mut fields),
             Self::Events(events) => {
                 let panes: Vec<String> = events.panes.iter().map(u64::to_string).collect();
-                fields.maybe("panes", (!panes.is_empty()).then(|| panes.join(",")));
+                fields.maybe("panes", (!panes.is_empty()).then(|| panes.join(","))).add("host", events.host);
             }
             Self::RestartWhenIdle(restart) => {
                 fields.maybe("timeout", restart.timeout);
@@ -523,85 +525,8 @@ pub(crate) struct Away {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub(crate) struct Events {
-    pub(crate) panes: Vec<u64>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
 pub(crate) struct RestartWhenIdle {
     pub(crate) timeout: Option<f64>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum Kind {
-    Project,
-    Workspace,
-    Tab,
-    Pane,
-}
-
-impl Kind {
-    pub(crate) fn name(self) -> &'static str {
-        match self {
-            Self::Project => "project",
-            Self::Workspace => "workspace",
-            Self::Tab => "tab",
-            Self::Pane => "pane",
-        }
-    }
-
-    pub(crate) fn id(self, ids: &Ids) -> Option<u64> {
-        match self {
-            Self::Project => ids.project,
-            Self::Workspace => ids.workspace,
-            Self::Tab => ids.tab,
-            Self::Pane => ids.pane,
-        }
-    }
-
-    pub(crate) fn parent(self) -> Option<Self> {
-        match self {
-            Self::Project => None,
-            Self::Workspace => Some(Self::Project),
-            Self::Tab => Some(Self::Workspace),
-            Self::Pane => Some(Self::Tab),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "event", rename_all = "lowercase")]
-pub(crate) enum What {
-    Opened { kind: Kind },
-    Closed { kind: Kind },
-    Status { agent: String, from: Option<String>, to: Option<String> },
-    Exited { program: String },
-    Dropped { count: u64 },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct Event {
-    pub(crate) time: String,
-    #[serde(flatten)]
-    pub(crate) what: What,
-    #[serde(flatten)]
-    pub(crate) ids: Ids,
-}
-
-impl Event {
-    pub(crate) fn kind(&self) -> Option<Kind> {
-        match &self.what {
-            What::Opened { kind } | What::Closed { kind } => Some(*kind),
-            What::Status { .. } | What::Exited { .. } => Some(Kind::Pane),
-            What::Dropped { .. } => None,
-        }
-    }
-
-    pub(crate) fn streamed(&self) -> Option<String> {
-        serde_json::to_string(&Response::Ok(serde_json::to_value(self).ok()?)).ok()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -915,6 +840,7 @@ pub struct PaneInfo {
     pub(crate) caller: bool,
     pub(crate) resumes: bool,
     pub(crate) resuming: bool,
+    pub(crate) title: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

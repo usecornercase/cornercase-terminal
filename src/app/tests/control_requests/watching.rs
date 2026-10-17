@@ -328,3 +328,24 @@ fn a_branch_checked_out_outside_cornercase_sends_the_new_branch() {
     assert_eq!(quiet, []);
     assert_eq!(branches, [Some("feat/outside".to_string())]);
 }
+
+#[test]
+fn a_title_the_program_sets_reaches_status_and_the_next_snapshot() {
+    let (mut app, rx, _dirs) = app_with(1);
+    let pane = term(&app, 0).id;
+    let revision = watching(&mut app).revision;
+    settled(&mut app, &rx, revision);
+    app.refresh(Instant::now());
+    app.trace_refresh();
+    let before = app.report(None).projects[0].workspaces[0].tabs[0].panes[0].title.clone();
+    published(&mut app);
+
+    app.output(pane, b"]2;watched-title");
+    app.refresh(Instant::now() + WATCH_AGENTS_EVERY);
+    app.trace_refresh();
+
+    let titles: Vec<Option<String>> =
+        published(&mut app).iter().map(|s| s.report.projects[0].workspaces[0].tabs[0].panes[0].title.clone()).collect();
+    assert_eq!(before, None);
+    assert_eq!(titles, [Some("watched-title".to_string())]);
+}

@@ -305,7 +305,7 @@ fn selection_selects_reads_copies_and_clears() {
     );
     ok(&mut app, "selection", &select);
     app.take_host_writes();
-    ok(&mut app, "selection", &json!({"pane": id, "copy": true}));
+    let copy = ok(&mut app, "selection", &json!({"pane": id, "copy": true}));
     let copied = app.take_host_writes();
     ok(&mut app, "selection", &json!({"pane": id, "clear": true}));
     let cleared = ok(&mut app, "selection", &json!({"pane": id}));
@@ -318,6 +318,7 @@ fn selection_selects_reads_copies_and_clears() {
     assert!(marked.rows[0][0].style.add_modifier.contains(Modifier::REVERSED));
     assert_eq!(block["text"].as_str(), Some("he\nse"));
     assert_eq!(copied.len(), 1);
+    assert_eq!(copy["text"].as_str(), Some("hello"));
     assert!(cleared["text"].is_null(), "{cleared}");
     assert_eq!(
         (nothing.code.as_str(), outside.code.as_str(), half.code.as_str()),

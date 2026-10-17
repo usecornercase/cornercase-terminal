@@ -7,6 +7,10 @@ Every pull request that changes the app adds a section here for its new version.
 - **Send a TODO to an agent.** In the TODO panel, each item left to do has a **`▸`** next to its `×` (on hover; always shown in the compact layout). It opens a menu of every agent running, by project and workspace, and picking one types the item into that agent and sends it, as `cornercase send --enter` would. Once the agent has taken it, the item is checked off and a message says where it went; what `send` refuses (an agent waiting for your answer, resuming, showing a dialog or its survey) the button refuses too, with the reason, and the item stays to do.
 - `cornercase todo send ID [--pane N | --tab N]` does the same from a script or an agent: the same target, refusals and confirmation as `send --enter`, then the item is checked off and it prints `sent todo 3 to pane 5`. A refused or unconfirmed send leaves it pending and exits 1. See Scripts and agents → Leave notes.
 
+## 0.12.127
+
+- **What programs ask of the terminal reaches other programs that draw cornercase.** `cornercase events --host` also prints, for each pane, the text a program copies to the clipboard (OSC 52, such as a yank in Neovim or `/copy` in Claude Code, with the text in `--json`) and its bells, at most one line a second per pane with how many rang. Followers that don't pass `--host` get nothing new. `status --json` and `status --follow` give each pane its `title`. `selection --copy` prints what it copied, so a program without a window can put it in the clipboard itself. Windows work as before.
+
 ## 0.12.126
 
 - **Drive a tab's terminals from another program.** For a program that draws cornercase's terminals itself with `surface`:

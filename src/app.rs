@@ -392,6 +392,7 @@ impl App {
             self.next_request(now),
             self.next_pairing(now),
             self.events.snapshots.wake(now, !self.views.is_empty()),
+            self.events.bell_wake(now),
             self.surface_wake(now),
             self.queued.area.and_then(|_| self.queued.queue.next(clock)),
         ]
@@ -428,6 +429,7 @@ impl App {
         self.pair_by_owner(now);
         self.watch_plugins(now);
         self.check_requests(now);
+        self.ring_bells(now);
         self.close_gone_flow_message();
         self.check_updates(now);
         self.refresh_files(now);
@@ -594,9 +596,11 @@ impl App {
         }
         if let Some(t) = self.projects.pane_by_mut(id) {
             t.feed(bytes);
-            for text in t.emulator.take_copied() {
-                self.copy(&text);
+            let (copied, rang) = (t.emulator.take_copied(), t.emulator.take_bells());
+            for text in &copied {
+                self.copy(text);
             }
+            self.tell_host(id, copied, rang, Instant::now());
         }
         self.surface_printed(id);
     }

@@ -797,6 +797,11 @@ pub(crate) struct EventsArgs {
         help = "Only what happens to these panes, and stop once they all closed"
     )]
     pub(crate) panes: Vec<u64>,
+    #[arg(
+        long,
+        help = "Also print what programs ask of the terminal: their clipboard writes (with the text in --json) and bells"
+    )]
+    pub(crate) host: bool,
     #[arg(long, help = "Print one JSON object per line instead of text")]
     pub(crate) json: bool,
 }

@@ -265,8 +265,11 @@ fn away_line(value: &Value) -> String {
 }
 
 fn follow_events(args: EventsArgs) -> Result<()> {
+    if args.host {
+        client::use_host_events()?;
+    }
     let mut out = io::stdout().lock();
-    let command = control::Command::Events(control::Events { panes: args.panes });
+    let command = control::Command::Events(control::Events { panes: args.panes, host: args.host });
     client::follow("events", command, |value| {
         let line = if args.json { value.to_string() } else { event_line(&value) };
         quietly(writeln!(out, "{line}").and_then(|()| out.flush()))
@@ -288,6 +291,12 @@ fn event_line(value: &Value) -> String {
             format!("{subject}  {agent}  {} → {}", state(from), state(to))
         }
         (Some(subject), What::Exited { program }) => format!("{subject}  {program}  exited"),
+        (Some(subject), What::Clipboard { text }) => {
+            let bytes = text.len();
+            format!("{subject}  clipboard  {bytes} byte{}", if bytes == 1 { "" } else { "s" })
+        }
+        (Some(subject), What::Bell { count }) if *count > 1 => format!("{subject}  bell  {count} times"),
+        (Some(subject), What::Bell { .. }) => format!("{subject}  bell"),
         (_, What::Dropped { count }) => format!(
             "{count} event{} dropped: this command fell behind; `cornercase status` shows where things are now",
             if *count == 1 { "" } else { "s" }
