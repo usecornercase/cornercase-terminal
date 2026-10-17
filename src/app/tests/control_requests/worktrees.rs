@@ -1,4 +1,6 @@
 use super::*;
+use crate::config::ProjectSettings;
+use crate::control::arrange::Removal;
 use crate::test_util::git;
 
 fn changed_workspace(app: &mut App, rx: &Receiver<AppEvent>) -> (u64, PathBuf) {
@@ -51,7 +53,7 @@ fn made(app: &mut App, rx: &Receiver<AppEvent>) -> (u64, PathBuf) {
 }
 
 fn remove(id: u64) -> Command {
-    Command::Close(wire::Close { item: Item::Workspace(id), remove_worktree: true, force: false })
+    Command::Close(wire::Close { item: Item::Workspace(id), remove_worktree: true, force: false, unlock: false })
 }
 
 #[test]
@@ -114,7 +116,7 @@ fn a_worktree_with_changes_is_refused_before_anything_stops() {
 }
 
 fn force_remove(id: u64) -> Command {
-    Command::Close(wire::Close { item: Item::Workspace(id), remove_worktree: true, force: true })
+    Command::Close(wire::Close { item: Item::Workspace(id), remove_worktree: true, force: true, unlock: false })
 }
 
 fn lock(repo: &Path, path: &Path) {
@@ -136,6 +138,7 @@ fn a_locked_worktree_is_refused_before_anything_stops() {
     let message = error(answered(&mut app, &rx, "git status answers"));
 
     assert!(message.contains("is locked (on a usb disk)") && message.contains("git worktree unlock"), "{message}");
+    assert!(message.contains("--unlock"), "{message}");
     assert!(untouched(&app, id, &path));
 }
 
@@ -169,4 +172,117 @@ fn only_a_repository_root_has_worktrees() {
     let message = error(now(&mut app, None, worktree("feat/x")));
 
     assert!(message.contains("is not the root of a git repository"), "{message}");
+}
+
+fn check(id: u64) -> Command {
+    Command::RemovalCheck(wire::RemovalCheck { workspace: Some(id) })
+}
+
+fn checked(app: &mut App, rx: &Receiver<AppEvent>, id: u64) -> Removal {
+    ask(app, None, check(id));
+    match answered(app, rx, "git checks the worktree") {
+        Response::Ok(value) => serde_json::from_value(value).expect("a removal"),
+        Response::Error(message) => panic!("the check was refused: {message}"),
+    }
+}
+
+fn unlock_remove(id: u64, force: bool) -> Command {
+    Command::Close(wire::Close { item: Item::Workspace(id), remove_worktree: true, force, unlock: true })
+}
+
+#[test]
+fn the_check_says_what_the_removal_would_lose_and_stops_nothing() {
+    let (mut app, rx, repo, _worktrees, _config) = repo();
+    let (id, path) = changed_workspace(&mut app, &rx);
+    lock(repo.path(), &path);
+    let key = repo.path().display().to_string();
+    app.config.projects.insert(key, ProjectSettings { setup: String::new(), teardown: "echo bye".into() });
+
+    let removal = checked(&mut app, &rx, id);
+
+    assert_eq!(
+        (removal.workspace, removal.path.as_path(), removal.branch.as_deref()),
+        (id, path.as_path(), Some("feat/x"))
+    );
+    assert!(removal.changed && removal.teardown && removal.roles.is_empty());
+    let lock = removal.lock.expect("the lock");
+    assert_eq!(
+        (lock.reason.as_str(), lock.path.as_path(), lock.role, lock.pid),
+        ("on a usb disk", path.as_path(), None, None)
+    );
+    assert!(untouched(&app, id, &path));
+}
+
+#[test]
+fn a_check_of_a_clean_worktree_finds_nothing_to_lose() {
+    let (mut app, rx, _repo, _worktrees, _config) = repo();
+    let (id, _) = made(&mut app, &rx);
+
+    let removal = checked(&mut app, &rx, id);
+
+    assert_eq!((removal.changed, removal.lock, removal.teardown), (false, None, false));
+}
+
+#[test]
+fn a_lock_naming_a_running_process_says_so() {
+    let (mut app, rx, repo, _worktrees, _config) = repo();
+    let (id, path) = made(&mut app, &rx);
+    let reason = format!("claude session x (pid {} start 1)", std::process::id());
+    git(repo.path(), &["worktree", "lock", "--reason", &reason, &path.display().to_string()]);
+
+    let lock = checked(&mut app, &rx, id).lock.expect("the lock");
+
+    assert_eq!((lock.pid, lock.running), (Some(i32::try_from(std::process::id()).expect("a pid")), Some(true)));
+}
+
+#[test]
+fn unlock_removes_a_locked_worktree() {
+    let (mut app, rx, repo, _worktrees, _config) = repo();
+    let (id, path) = locked_workspace(&mut app, &rx, repo.path());
+
+    ask(&mut app, None, unlock_remove(id, false));
+    done(answered(&mut app, &rx, "git removes the worktree"));
+
+    assert!(!path.exists());
+}
+
+#[test]
+fn unlock_alone_still_refuses_changes_and_force_removes_them() {
+    let (mut app, rx, repo, _worktrees, _config) = repo();
+    let (id, path) = changed_workspace(&mut app, &rx);
+    lock(repo.path(), &path);
+
+    ask(&mut app, None, unlock_remove(id, false));
+    let message = error(answered(&mut app, &rx, "git status answers"));
+    assert!(message.contains("has changes that are not committed") && message.contains("--force"), "{message}");
+    assert!(untouched(&app, id, &path));
+
+    ask(&mut app, None, unlock_remove(id, true));
+    done(answered(&mut app, &rx, "git removes the worktree"));
+    assert!(!path.exists());
+}
+
+#[test]
+fn unlock_without_removing_the_worktree_is_malformed() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let id = app.projects[0].workspaces[0].id;
+
+    let refused = refused(&mut app, "close", &json!({"item": {"workspace": id}, "unlock": true}));
+
+    assert_eq!(refused.code, "malformed");
+}
+
+#[test]
+fn a_check_of_a_plain_workspace_or_one_being_removed_is_refused() {
+    let (mut app, rx, _repo, _worktrees, _config) = repo();
+    let plain = app.projects[0].workspaces[0].id;
+    let message = error(now(&mut app, None, check(plain)));
+    assert!(message.contains("is not a git worktree"), "{message}");
+
+    let removing = removing_workspace(&mut app, &rx);
+    let message = error(now(&mut app, None, check(removing)));
+    assert!(message.contains("is being removed"), "{message}");
+
+    let refused = refused(&mut app, "removal-check", &json!({}));
+    assert_eq!(refused.code, "malformed");
 }

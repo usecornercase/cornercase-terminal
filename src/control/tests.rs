@@ -58,7 +58,7 @@ fn every_command_is_listed_by_name() {
         Command::Keys(Keys::default()),
         read(1),
         Command::Wait(Wait::default()),
-        Command::Close(Close { item: Item::Tab(1), remove_worktree: false, force: false }),
+        Command::Close(Close { item: Item::Tab(1), remove_worktree: false, force: false, unlock: false }),
         Command::Rename(Rename::default()),
         Command::Focus(Focus { item: Item::Pane(1) }),
         Command::Notify(Notify::default()),
@@ -94,6 +94,14 @@ fn every_command_is_listed_by_name() {
         Command::Go(Go::default()),
         Command::Redraw(Redraw::default()),
         Command::Config(Configure::default()),
+        Command::Move(Move { item: Item::Tab(1), before: None, into: None, ungroup: false }),
+        Command::MovePane(MovePane::default()),
+        Command::Collapse(Fold { item: Item::Group(1) }),
+        Command::Expand(Fold { item: Item::Group(1) }),
+        Command::GroupNew(GroupNew::default()),
+        Command::GroupStyle(GroupStyle::default()),
+        Command::GroupDelete(GroupDelete::default()),
+        Command::RemovalCheck(RemovalCheck::default()),
     ];
 
     let names: Vec<String> = commands
@@ -736,4 +744,16 @@ mod colours {
         assert_eq!(sent["theme"], json!({"from": "window", "scheme": "light"}));
         assert!(serde_json::to_value(Report::default()).expect("json").get("theme").is_none());
     }
+}
+
+#[test]
+fn a_close_from_an_older_command_does_not_unlock() {
+    let request: Request =
+        serde_json::from_str(r#"{"command": "close", "args": {"item": {"workspace": 4}, "remove_worktree": true}}"#)
+            .expect("a request");
+
+    assert_eq!(
+        request.command,
+        Command::Close(Close { item: Item::Workspace(4), remove_worktree: true, force: false, unlock: false })
+    );
 }

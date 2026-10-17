@@ -184,12 +184,17 @@ pub(super) const CLOSE_HELP: &str =
     "Its shells stop, as with its ×, but nothing asks first, not even for a project. A worktree's
 workspace stays listed while its worktree exists, and its branch is never deleted.
 --remove-worktree runs the project's teardown first; a teardown that fails is a warning on
-stderr, and the worktree is removed anyway.
+stderr, and the worktree is removed anyway. --check only says what removing it would lose, as the
+window's dialog does (changes that are not committed, a lock and whether its process still runs, the
+worktrees of a flow's roles that go with it, the teardown), and stops nothing. --unlock does what
+the dialog's unlock and remove does; changes still need --force.
 
 Examples:
   cornercase close --tab 9
   cornercase close --workspace 5 --remove-worktree
-  cornercase close --worktree fix/login --remove-worktree";
+  cornercase close --worktree fix/login --remove-worktree
+  cornercase close --worktree fix/login --remove-worktree --check
+  cornercase close --worktree fix/login --remove-worktree --unlock";
 pub(super) const RENAME_HELP: &str = "Examples:
   cornercase rename 'review #42'
   cornercase rename --workspace 5 ''";
@@ -600,6 +605,47 @@ with its version. A server without this command is older than the contract.
 Examples:
   cornercase contract
   cornercase contract --json";
+
+pub(super) const MOVE_HELP: &str =
+    "Puts a group, a project, a workspace or a tab before another of its kind, or at the end of its
+list with --last, as dragging its row does. A project moved before another joins that project's group;
+--into puts it after the projects of a group, --ungroup after the ones that have none. A workspace
+stays in its project and a tab in its workspace. Programs keep running, and the window keeps showing
+what it showed. Say the place every time, so a forgotten flag never sends a row to the end.
+
+Examples:
+  cornercase move --tab 9 --before 7
+  cornercase move --worktree fix/login --last
+  cornercase move --project 5 --into 12
+  cornercase move --project 5 --ungroup
+  cornercase move --group 12 --before 3";
+pub(super) const MOVE_PANE_HELP: &str =
+    "Swaps two panes of a tab, or moves one to the left, right, top or bottom of another, as dragging
+a pane with the right button does. Both keep running. It is refused when the tab would have no room
+for every pane at the size it has. The moved pane becomes the tab's active one. With --json it prints
+the tab's new layout.
+
+Examples:
+  cornercase move-pane --pane 4 --target 7 --place swap
+  cornercase move-pane --pane 4 --target 7 --place below --json";
+pub(super) const FOLD_HELP: &str =
+    "Sets it, whatever it was: a group shows or hides its projects, a project its workspaces and a
+workspace its tabs. Its shells keep running.
+
+Examples:
+  cornercase collapse --group 12
+  cornercase expand --worktree fix/login";
+pub(super) const GROUP_HELP: &str =
+    "`new` takes the next icon and colour, as + New › new group does, and prints the group's id. `style`
+without --icon and --colour prints the group's style and the icons and colours to choose from.
+`delete` keeps the projects, outside any group, unless --close-projects closes them too, which
+deletes the group once their shells have stopped.
+
+Examples:
+  cornercase group new work
+  cornercase group style 12 --icon '★' --colour 99
+  cornercase group style 12 --json
+  cornercase group delete 12 --close-projects";
 
 #[cfg(test)]
 mod tests;

@@ -1,6 +1,6 @@
 use ratatui::layout::{Position, Rect};
 
-use super::{Handled, json, none};
+use super::{Handled, conflict, json, malformed, none};
 use crate::app::App;
 use crate::control::contract::{Code, Refusal};
 use crate::control::surface::{self, Size};
@@ -15,14 +15,6 @@ use crate::project::Hierarchy;
 use crate::term::keys;
 use crate::term::mouse::{self, MouseMode};
 use crate::term::{self, Term};
-
-fn malformed(message: impl Into<String>) -> Refusal {
-    Refusal::new(Code::Malformed, message)
-}
-
-fn conflict(message: impl Into<String>) -> Refusal {
-    Refusal::new(Code::Conflict, message)
-}
 
 fn explicit(pane: Option<u64>, request: &str) -> Result<u64, Refusal> {
     pane.ok_or_else(|| malformed(format!("`{request}` needs the pane to act on: pass --pane")))

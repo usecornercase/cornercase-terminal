@@ -102,7 +102,7 @@ fn the_teardown_runs_before_the_folder_goes_and_a_failure_still_removes_it() {
     ask(
         &mut team.app,
         None,
-        Command::Close(wire::Close { item: Item::Workspace(id), remove_worktree: true, force: false }),
+        Command::Close(wire::Close { item: Item::Workspace(id), remove_worktree: true, force: false, unlock: false }),
     );
     let removed = done(answered(&mut team.app, &team.rx, "git removes the worktree"));
 
@@ -179,7 +179,7 @@ fn closing_the_setup_tab_drops_the_agent_and_its_status_file() {
     ask(
         &mut team.app,
         None,
-        Command::Close(wire::Close { item: Item::Tab(tab), remove_worktree: false, force: false }),
+        Command::Close(wire::Close { item: Item::Tab(tab), remove_worktree: false, force: false, unlock: false }),
     );
     let _ = (project, workspace);
 
@@ -218,7 +218,7 @@ fn a_setup_closed_before_the_first_watch_still_drops_the_agent() {
     ask(
         &mut team.app,
         None,
-        Command::Close(wire::Close { item: Item::Tab(tab), remove_worktree: false, force: false }),
+        Command::Close(wire::Close { item: Item::Tab(tab), remove_worktree: false, force: false, unlock: false }),
     );
 
     let mut got = Vec::new();

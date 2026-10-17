@@ -226,6 +226,41 @@ fn folding_and_a_group_style_send_the_new_session() {
 }
 
 #[test]
+fn an_arranged_session_shows_in_the_next_snapshot() {
+    let (mut app, rx, _dirs) = app_with(2);
+    let projects: Vec<u64> = app.projects.iter().map(|p| p.id).collect();
+    let pane = term(&app, 0).id;
+    let revision = watching(&mut app).revision;
+    let mut revision = settled(&mut app, &rx, revision);
+
+    let group = done(Response::Ok(ok(&mut app, "group-new", &json!({"name": "work"})))).group.expect("a group");
+    let snapshot = next(&mut app, revision);
+    assert_eq!(snapshot.report.groups.iter().map(|g| g.id).collect::<Vec<_>>(), [group]);
+    revision = snapshot.revision;
+
+    ok(&mut app, "move", &json!({"item": {"project": projects[1]}, "into": group}));
+    let snapshot = next(&mut app, revision);
+    let moved = snapshot.report.projects.iter().find(|p| p.id == projects[1]).expect("the project");
+    assert_eq!(moved.group, Some(group));
+    revision = snapshot.revision;
+
+    ok(&mut app, "collapse", &json!({"item": {"group": group}}));
+    let snapshot = next(&mut app, revision);
+    assert!(snapshot.report.groups[0].collapsed);
+    revision = snapshot.revision;
+
+    let added = done(Response::Ok(ok(&mut app, "split", &json!({"pane": pane})))).ids.pane.expect("a pane");
+    revision = next(&mut app, revision).revision;
+    revision = settled(&mut app, &rx, revision);
+    ok(&mut app, "move-pane", &json!({"pane": added, "target": pane, "place": "left"}));
+    let snapshot = next(&mut app, revision);
+    let tab = &snapshot.report.projects[0].workspaces[0].tabs[0];
+    let active: Vec<u64> = tab.panes.iter().filter(|p| p.active).map(|p| p.id).collect();
+    assert_eq!(active, [added]);
+    assert_eq!(serde_json::to_value(&tab.layout).expect("json")["split"]["first"]["leaf"], added);
+}
+
+#[test]
 fn changes_within_the_throttle_wait_and_go_out_as_one_snapshot() {
     let (mut app, rx, _dirs) = app_with(1);
     let tab = first_tab_id(&app);

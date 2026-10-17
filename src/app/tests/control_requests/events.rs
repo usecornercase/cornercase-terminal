@@ -13,7 +13,8 @@ fn tabs_and_panes_are_told_as_they_open_and_close_with_their_ids() {
 
     let ids = done(now(&mut app, None, new_tab(None))).ids;
     let opened = told(&streamed(&mut app));
-    let close = wire::Close { item: Item::Tab(ids.tab.expect("a tab")), remove_worktree: false, force: false };
+    let close =
+        wire::Close { item: Item::Tab(ids.tab.expect("a tab")), remove_worktree: false, force: false, unlock: false };
     done(now(&mut app, None, Command::Close(close)));
     let gone = until_told(&mut app, &rx, "the tab closes", |streamed| told(streamed).len() >= 2);
 
@@ -41,7 +42,7 @@ fn following_panes_tells_only_about_them_and_ends_once_they_all_closed() {
 
     done(now(&mut app, None, new_tab(None)));
     for pane in [other, followed] {
-        let close = wire::Close { item: Item::Pane(pane), remove_worktree: false, force: false };
+        let close = wire::Close { item: Item::Pane(pane), remove_worktree: false, force: false, unlock: false };
         done(now(&mut app, None, Command::Close(close)));
     }
     let got = until_told(&mut app, &rx, "the followed pane closes", |streamed| streamed.last() == Some(&Streamed::End));

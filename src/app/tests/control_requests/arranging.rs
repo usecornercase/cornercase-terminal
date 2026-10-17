@@ -9,7 +9,7 @@ fn close_stops_the_shells_of_a_tab() {
     done(now(
         &mut app,
         None,
-        Command::Close(wire::Close { item: Item::Tab(tab), remove_worktree: false, force: false }),
+        Command::Close(wire::Close { item: Item::Tab(tab), remove_worktree: false, force: false, unlock: false }),
     ));
 
     pump_until(&mut app, &rx, "the tab closes", |a| a.projects[0].workspaces[0].tabs.len() == 1);
@@ -23,7 +23,7 @@ fn a_project_closes_without_asking() {
     done(now(
         &mut app,
         None,
-        Command::Close(wire::Close { item: Item::Project(id), remove_worktree: false, force: false }),
+        Command::Close(wire::Close { item: Item::Project(id), remove_worktree: false, force: false, unlock: false }),
     ));
 
     pump_until(&mut app, &rx, "the project closes", |a| a.projects.len() == 1);

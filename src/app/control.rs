@@ -96,7 +96,8 @@ struct Pending {
 enum Stage {
     Worktree(Then),
     Run(u64, Box<Starting>),
-    Removing { force: bool },
+    Removing { force: bool, unlock: bool },
+    Check,
     Launch { confirm: Option<SystemTime>, wait: Option<Condition> },
     Confirm(Confirm),
     Watch(Watch),
@@ -138,6 +139,14 @@ pub(in crate::app) fn json(value: &impl Serialize) -> Value {
 
 fn sized(area: Option<Rect>) -> Result<Rect, String> {
     area.ok_or_else(|| NO_SIZE.to_string())
+}
+
+pub(in crate::app) fn malformed(message: impl Into<String>) -> Refusal {
+    Refusal::new(Code::Malformed, message)
+}
+
+pub(in crate::app) fn conflict(message: impl Into<String>) -> Refusal {
+    Refusal::new(Code::Conflict, message)
 }
 
 pub(in crate::app) fn none(kind: &str, id: u64) -> Refusal {
@@ -280,6 +289,7 @@ impl App {
                         | Stage::Several { .. }
                         | Stage::Reading
                         | Stage::Restart { .. }
+                        | Stage::Check
                 )
         });
     }
@@ -415,6 +425,14 @@ impl App {
             Command::Redraw(redraw) => self.redraw_surface_request(&redraw, now),
             Command::Ratio(ratio) => self.ratio_request(&ratio, area),
             Command::Link(at) => self.link_request(&at),
+            Command::Move(moving) => self.move_request(&moving),
+            Command::MovePane(moving) => self.move_pane_request(&moving, area),
+            Command::Collapse(fold) => self.fold_request("collapse", fold.item, true),
+            Command::Expand(fold) => self.fold_request("expand", fold.item, false),
+            Command::GroupNew(new) => self.group_new_request(&new),
+            Command::GroupStyle(style) => self.group_style_request(&style),
+            Command::GroupDelete(delete) => self.group_delete_request(&delete),
+            Command::RemovalCheck(check) => self.removal_check_request(client, &check),
             Command::LastMessage(last) => self.last_message_request(client, asker, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),

@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub(crate) mod arrange;
 pub(crate) mod config;
 pub(crate) mod contract;
 mod events;
@@ -21,6 +22,7 @@ mod watch;
 
 pub(crate) use todo::{Todo, TodoSend};
 
+pub(crate) use arrange::{Fold, GroupDelete, GroupNew, GroupStyle, Move, MovePane, RemovalCheck};
 pub(crate) use config::{ConfigInfo, Configure};
 pub(crate) use contract::Contract;
 pub(crate) use events::{Event, Events, Go, Kind, What};
@@ -126,6 +128,14 @@ pub(crate) enum Command {
     Go(Go),
     Redraw(Redraw),
     Config(Configure),
+    Move(Move),
+    MovePane(MovePane),
+    Collapse(Fold),
+    Expand(Fold),
+    GroupNew(GroupNew),
+    GroupStyle(GroupStyle),
+    GroupDelete(GroupDelete),
+    RemovalCheck(RemovalCheck),
 }
 
 impl Command {
@@ -177,9 +187,18 @@ impl Command {
             Self::Go(_) => 43,
             Self::Redraw(_) => 44,
             Self::Config(_) => 45,
+            Self::Move(_) => 46,
+            Self::MovePane(_) => 47,
+            Self::Collapse(_) => 48,
+            Self::Expand(_) => 49,
+            Self::GroupNew(_) => 50,
+            Self::GroupStyle(_) => 51,
+            Self::GroupDelete(_) => 52,
+            Self::RemovalCheck(_) => 53,
         }]
     }
 
+    #[expect(clippy::too_many_lines, reason = "one arm per request")]
     pub(crate) fn fields(&self) -> Vec<(&'static str, String)> {
         let mut fields = Fields::default();
         match self {
@@ -234,6 +253,7 @@ impl Command {
             }
             Self::Close(close) => {
                 fields.add("item", close.item).add("remove_worktree", close.remove_worktree).add("force", close.force);
+                fields.add("unlock", close.unlock);
             }
             Self::Rename(rename) => {
                 fields.maybe("item", rename.item).add("name", &rename.name);
@@ -276,11 +296,24 @@ impl Command {
             Self::StartServer(start) => start.fields(&mut fields),
             Self::Theme(theme) => theme.fields(&mut fields),
             Self::Config(config) => config.fields(&mut fields),
+            Self::Move(moving) => moving.fields(&mut fields),
+            Self::MovePane(moving) => moving.fields(&mut fields),
+            Self::Collapse(fold) | Self::Expand(fold) => {
+                fields.add("item", fold.item);
+            }
+            Self::GroupNew(new) => {
+                fields.add("name", &new.name);
+            }
+            Self::GroupStyle(style) => style.fields(&mut fields),
+            Self::GroupDelete(delete) => delete.fields(&mut fields),
+            Self::RemovalCheck(check) => {
+                fields.maybe("workspace", check.workspace);
+            }
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 46] = [
+    pub(crate) const NAMES: [&str; 54] = [
         "status",
         "open",
         "new-workspace",
@@ -327,6 +360,14 @@ impl Command {
         "go",
         "redraw",
         "config",
+        "move",
+        "move-pane",
+        "collapse",
+        "expand",
+        "group-new",
+        "group-style",
+        "group-delete",
+        "removal-check",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
@@ -507,6 +548,8 @@ pub(crate) struct Close {
     pub(crate) remove_worktree: bool,
     #[serde(default)]
     pub(crate) force: bool,
+    #[serde(default)]
+    pub(crate) unlock: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -596,6 +639,8 @@ pub(crate) struct Done {
     pub(crate) turn_over: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) projection: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) group: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

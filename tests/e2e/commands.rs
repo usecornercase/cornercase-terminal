@@ -468,6 +468,10 @@ fn a_worktree_made_from_the_command_line_is_removed_by_its_branch() {
     assert!(checkout.is_dir(), "no checkout at {}", checkout.display());
     let missing = session.cli(&["close", "--worktree", "e2e/other", "--remove-worktree"]);
     assert!(refused(&missing, 2, &format!("workspace {workspace}  e2e/cli  branch e2e/cli  worktree")), "{missing:?}");
+    let check = session.says(&["close", "--worktree", "e2e/cli", "--remove-worktree", "--check", "--json"]);
+    let check: serde_json::Value = serde_json::from_str(&check).expect("the check");
+    assert_eq!((&check["changed"], &check["lock"]), (&false.into(), &serde_json::Value::Null), "{check}");
+    assert!(checkout.is_dir(), "the check removed the checkout");
     session.says(&["close", "--worktree", "e2e/cli", "--remove-worktree"]);
 
     assert!(!checkout.exists(), "the checkout is still there");

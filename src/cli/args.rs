@@ -1,3 +1,4 @@
+pub(crate) mod arrange;
 pub(crate) mod config;
 pub(crate) mod plugin;
 pub(crate) mod queue;
@@ -11,13 +12,13 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::help::{
     ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, CONFIG_HELP, CONTRACT_HELP, EVENTS_HELP,
-    FLOW_EXPORT_HELP, FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, GO_HELP, HERE_PANE, HERE_WORKSPACE,
-    INPUT_HELP, KEY_NAMES, KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP,
-    NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP, RATIO_HELP, READ_HELP, REDRAW_HELP, REMOTE_HELP,
-    RENAME_HELP, RESIZE_HELP, RESTART_HELP, RESTART_TIMEOUT, SCROLL_HELP, SEARCH_HELP, SELECTION_HELP, SEND_HELP,
-    SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP,
-    TODO_SEND_HELP, UNTIL_AFTER, UPDATE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB,
-    WHEN_IDLE,
+    FLOW_EXPORT_HELP, FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP,
+    HERE_PANE, HERE_WORKSPACE, INPUT_HELP, KEY_NAMES, KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP, LONG_ABOUT,
+    MARK_HELP, MOVE_HELP, MOVE_PANE_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP,
+    RATIO_HELP, READ_HELP, REDRAW_HELP, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP, RESTART_TIMEOUT,
+    SCROLL_HELP, SEARCH_HELP, SELECTION_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP,
+    STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, TODO_SEND_HELP, UNTIL_AFTER, UPDATE_HELP, VIEW_ARG, VIEW_HELP,
+    VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -187,6 +188,22 @@ pub(crate) enum Control {
     Theme(theme::ThemeArgs),
     #[command(about = "Read and change settings, tokens and project commands", after_help = CONFIG_HELP)]
     Config(config::ConfigArgs),
+    #[command(
+        about = "Move a group, project, workspace or tab before another of its kind, or a project into or out of a group",
+        after_help = MOVE_HELP
+    )]
+    Move(arrange::MoveArgs),
+    #[command(
+        about = "Swap two panes of a tab, or move one to an edge of another, as the right-button drag does",
+        after_help = MOVE_PANE_HELP
+    )]
+    MovePane(arrange::MovePaneArgs),
+    #[command(about = "Collapse a group, project or workspace in the sidebar", after_help = FOLD_HELP)]
+    Collapse(arrange::FoldArgs),
+    #[command(about = "Expand a group, project or workspace in the sidebar", after_help = FOLD_HELP)]
+    Expand(arrange::FoldArgs),
+    #[command(about = "Create a group, change its icon and colour, or delete it", after_help = GROUP_HELP)]
+    Group(arrange::GroupArgs),
 }
 
 impl Control {
@@ -497,6 +514,7 @@ pub(crate) struct Which {
 }
 
 #[derive(Debug, Args)]
+#[expect(clippy::struct_excessive_bools, reason = "each flag is its own option of close")]
 pub(crate) struct CloseArgs {
     #[command(flatten)]
     pub(crate) which: Which,
@@ -508,6 +526,21 @@ pub(crate) struct CloseArgs {
     pub(crate) remove_worktree: bool,
     #[arg(long, requires = "remove_worktree", help = "Remove it even when git would lose changes")]
     pub(crate) force: bool,
+    #[arg(
+        long,
+        requires = "remove_worktree",
+        help = "Unlock a locked worktree first, as the window's unlock and remove does; changes still need --force"
+    )]
+    pub(crate) unlock: bool,
+    #[arg(
+        long,
+        requires = "remove_worktree",
+        conflicts_with_all = ["force", "unlock"],
+        help = "Only say what removing it would lose, as the window's dialog does; nothing stops"
+    )]
+    pub(crate) check: bool,
+    #[arg(long, requires = "check", help = "Print the check as JSON")]
+    pub(crate) json: bool,
 }
 
 #[derive(Debug, Args)]

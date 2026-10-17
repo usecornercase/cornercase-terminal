@@ -234,7 +234,7 @@ fn the_stream_ends_when_its_tab_closes() {
     done(now(
         &mut app,
         None,
-        Command::Close(wire::Close { item: Item::Tab(tab), remove_worktree: false, force: false }),
+        Command::Close(wire::Close { item: Item::Tab(tab), remove_worktree: false, force: false, unlock: false }),
     ));
     refreshing(&mut app, &rx, "the tab closes", |app| app.projects.tab_index(tab).is_none());
     let ended = app.render_surfaces(&[CLIENT], t0 + FRAME_EVERY);

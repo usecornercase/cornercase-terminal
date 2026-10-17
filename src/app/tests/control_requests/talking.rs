@@ -250,7 +250,12 @@ fn a_pane_that_closes_ends_a_wait_on_several_as_closed() {
     let other = made.ids.pane.expect("the new pane");
     ask(&mut app, None, wait_on(&[other, id], &[], true, Until::Text(r"mark-\d".into()), None));
 
-    let close = wire::Close { item: Item::Tab(made.ids.tab.expect("the tab")), remove_worktree: false, force: false };
+    let close = wire::Close {
+        item: Item::Tab(made.ids.tab.expect("the tab")),
+        remove_worktree: false,
+        force: false,
+        unlock: false,
+    };
     done(now(&mut app, None, Command::Close(close)));
     pump_until(&mut app, &rx, "the tab closes", |a| a.projects[0].workspaces[0].tabs.len() == 1);
     app.refresh(Instant::now());

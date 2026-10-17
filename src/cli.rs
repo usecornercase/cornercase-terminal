@@ -17,6 +17,7 @@ use crate::remote::{self, Remote};
 use crate::{log, server};
 
 mod args;
+mod arrange;
 mod config;
 mod contract;
 mod flow;
@@ -209,7 +210,19 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Wait(wait) => run_wait(wait),
         Control::Close(close) => {
             let item = close.which.item("close")?.ok_or_else(|| Error::Control("say what to close".into()))?;
-            let request = control::Close { item, remove_worktree: close.remove_worktree, force: close.force };
+            if close.check {
+                arrange::check_removal(item, close.json)?;
+                return Ok(true);
+            }
+            if close.unlock {
+                client::use_close_unlock()?;
+            }
+            let request = control::Close {
+                item,
+                remove_worktree: close.remove_worktree,
+                force: close.force,
+                unlock: close.unlock,
+            };
             let value = ask("close", control::Command::Close(request))?;
             if let Some(warning) = value.get("warning").and_then(Value::as_str) {
                 eprintln!("warning: {warning}");
@@ -217,6 +230,11 @@ fn run_control(command: Control) -> Result<bool> {
             Ok(())
         }
         Control::Rename(rename) => run_rename(rename),
+        Control::Move(args) => arrange::move_row(&args),
+        Control::MovePane(args) => arrange::move_pane(&args),
+        Control::Collapse(args) => arrange::fold(&args, "collapse"),
+        Control::Expand(args) => arrange::fold(&args, "expand"),
+        Control::Group(args) => arrange::group(args.action),
         Control::Focus(focus) => {
             let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
             ask("focus", control::Command::Focus(control::Focus { item })).map(drop)

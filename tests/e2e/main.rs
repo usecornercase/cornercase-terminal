@@ -24,6 +24,7 @@ use rstest::rstest;
 use sha2::{Digest, Sha256};
 
 mod agents;
+mod arranging;
 mod browser;
 mod commands;
 mod contract;

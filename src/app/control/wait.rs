@@ -226,6 +226,7 @@ impl App {
         let watch = match stage {
             Stage::Worktree(_) | Stage::Run(..) => return "git is still creating the worktree".into(),
             Stage::Removing { .. } => return "git is still removing the worktree".into(),
+            Stage::Check => return "git is still checking the worktree".into(),
             Stage::Launch { .. } => return format!("pane {pane} is still starting"),
             Stage::Setup(workspace) => {
                 return format!("workspace {workspace} is still running its setup in pane {pane}");

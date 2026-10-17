@@ -592,7 +592,8 @@ fn the_run_ends_with_its_workspace() {
     let mut team = Team::new();
     let run = team.started();
 
-    let close = wire::Close { item: Item::Workspace(run.workspace), remove_worktree: false, force: false };
+    let close =
+        wire::Close { item: Item::Workspace(run.workspace), remove_worktree: false, force: false, unlock: false };
     done(now(&mut team.app, None, Command::Close(close)));
 
     refreshing(&mut team.app, &team.rx, "the run goes with its workspace", |a| a.runs.is_empty());
@@ -727,7 +728,7 @@ fn the_folder_survives_the_end_of_the_run_and_goes_with_a_removed_worktree() {
 }
 
 fn force_remove(id: u64) -> Command {
-    Command::Close(wire::Close { item: Item::Workspace(id), remove_worktree: true, force: true })
+    Command::Close(wire::Close { item: Item::Workspace(id), remove_worktree: true, force: true, unlock: false })
 }
 
 #[test]
@@ -739,7 +740,12 @@ fn closing_the_project_removes_its_run_folders() {
     done(now(
         &mut team.app,
         None,
-        Command::Close(wire::Close { item: Item::Project(run.project), remove_worktree: false, force: false }),
+        Command::Close(wire::Close {
+            item: Item::Project(run.project),
+            remove_worktree: false,
+            force: false,
+            unlock: false,
+        }),
     ));
 
     wait_until("the folder is removed with its project", || {

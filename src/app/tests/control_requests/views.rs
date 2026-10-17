@@ -372,7 +372,7 @@ fn closing_the_views_tab_settles_it_on_a_neighbour_without_resizing_for_it() {
         &mut app,
         71,
         None,
-        Command::Close(wire::Close { item: Item::Tab(ids[1]), remove_worktree: false, force: false }),
+        Command::Close(wire::Close { item: Item::Tab(ids[1]), remove_worktree: false, force: false, unlock: false }),
         false,
     ))));
     refreshing(&mut app, &rx, "the tab closes", |app| app.projects.tab_index(ids[1]).is_none());

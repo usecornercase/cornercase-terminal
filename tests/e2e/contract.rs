@@ -45,6 +45,14 @@ fn contract_describes_the_running_server_and_its_boot() {
         "go",
         "redraw",
         "config",
+        "move",
+        "move-pane",
+        "collapse",
+        "expand",
+        "group-new",
+        "group-style",
+        "group-delete",
+        "removal-check",
     ] {
         assert!(operations.iter().any(|op| op["name"] == name && op["available"] == true), "{name}: {contract}");
     }
@@ -53,6 +61,7 @@ fn contract_describes_the_running_server_and_its_boot() {
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "theme"), "{contract}");
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "notices"), "{contract}");
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "config"), "{contract}");
+    assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "close-unlock"), "{contract}");
     assert!(
         contract["streams"].as_array().expect("streams").iter().any(|s| s["name"] == "view" && s["version"] == 1),
         "{contract}"

@@ -133,7 +133,7 @@ fn the_orchestrator_is_told_each_folder_and_branch() {
 }
 
 fn close_removing(team: &mut Team, workspace: u64, force: bool) -> Response {
-    let close = wire::Close { item: Item::Workspace(workspace), remove_worktree: true, force };
+    let close = wire::Close { item: Item::Workspace(workspace), remove_worktree: true, force, unlock: false };
     ask(&mut team.app, None, Command::Close(close));
     answered(&mut team.app, &team.rx, "the removal answers")
 }
@@ -278,8 +278,56 @@ fn a_locked_role_worktree_stops_the_removal_with_its_reason() {
 
     assert!(refused.contains("the worktree of `coder A`") && refused.contains("is locked (busy)"), "{refused}");
     assert!(refused.contains(&format!("git worktree unlock {}", tree.display())), "{refused}");
+    assert!(refused.contains("--unlock"), "{refused}");
     assert!(!refused.contains(&run.workspace.to_string()) || refused.contains("in workspace"), "{refused}");
     assert!(tree.exists());
+}
+
+fn lock_role(team: &Team, tree: &Path) {
+    run_git(team.repo.path(), ["worktree", "lock", "--reason", "busy", tree.to_str().expect("utf8")]).expect("lock");
+}
+
+#[test]
+fn the_check_lists_the_role_worktrees_and_a_roles_lock() {
+    let mut team = team("", "");
+    let run = started(&mut team);
+    let (a, b) = (tree_of(&team, "coder A"), tree_of(&team, "coder B"));
+    lock_role(&team, &a);
+
+    ask(&mut team.app, None, Command::RemovalCheck(wire::RemovalCheck { workspace: Some(run.workspace) }));
+    let Response::Ok(value) = answered(&mut team.app, &team.rx, "the check answers") else { panic!("refused") };
+    let removal: crate::control::arrange::Removal = serde_json::from_value(value).expect("a removal");
+
+    let roles: Vec<(&str, &Path, &str)> =
+        removal.roles.iter().map(|r| (r.role.as_str(), r.path.as_path(), r.branch.as_str())).collect();
+    assert_eq!(
+        roles,
+        [
+            ("coder A", a.as_path(), "fix-the-login-form--coder-a"),
+            ("coder B", b.as_path(), "fix-the-login-form--coder-b")
+        ]
+    );
+    let lock = removal.lock.expect("the lock");
+    assert_eq!(
+        (lock.role.as_deref(), lock.path.as_path(), lock.reason.as_str()),
+        (Some("coder A"), a.as_path(), "busy")
+    );
+    assert!(a.exists() && b.exists());
+}
+
+#[test]
+fn unlock_removes_a_run_whose_role_worktree_is_locked() {
+    let mut team = team("", "");
+    let run = started(&mut team);
+    let trees = [tree_of(&team, "coder A"), tree_of(&team, "coder B")];
+    lock_role(&team, &trees[0]);
+
+    let close = wire::Close { item: Item::Workspace(run.workspace), remove_worktree: true, force: false, unlock: true };
+    ask(&mut team.app, None, Command::Close(close));
+    done(answered(&mut team.app, &team.rx, "the removal answers"));
+
+    assert!(trees.iter().all(|tree| !tree.exists()));
+    assert!(git::has_branch(team.repo.path(), "fix-the-login-form--coder-a"));
 }
 
 #[test]
