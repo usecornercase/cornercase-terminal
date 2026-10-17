@@ -60,6 +60,7 @@ pub(crate) struct Saved {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Listing {
     pub(crate) flows: Vec<Saved>,
+    pub(crate) hidden: Vec<Flow>,
     pub(crate) broken: Vec<(PathBuf, String)>,
     pub(crate) builtins: Vec<String>,
 }
@@ -74,14 +75,35 @@ impl Listing {
     }
 
     pub(crate) fn conflict(&self, saved: &Saved) -> Option<String> {
-        conflict(&self.flows, saved)
+        conflict(&self.flows, &self.builtins, saved)
+    }
+
+    pub(crate) fn deleted(&self, name: &str) -> Option<&Flow> {
+        self.hidden.iter().find(|flow| same_name(&flow.name, name))
     }
 }
 
-pub(crate) fn conflict(flows: &[Saved], saved: &Saved) -> Option<String> {
-    let first = flows.iter().find(|other| same_name(&other.flow.name, &saved.flow.name))?;
-    (first.origin != saved.origin)
-        .then(|| format!("{} is also named `{}` and runs instead", first.origin.whose(), saved.flow.name.trim()))
+pub(crate) fn conflict(flows: &[Saved], builtins: &[String], saved: &Saved) -> Option<String> {
+    let name = saved.flow.name.trim();
+    match flows.iter().find(|other| same_name(&other.flow.name, &saved.flow.name)) {
+        Some(first) if first.origin != saved.origin => {
+            Some(format!("{} is also named `{name}` and runs instead", first.origin.whose()))
+        }
+        _ => (matches!(saved.origin, Origin::Project(_)) && builtins.iter().any(|built| same_name(built, name)))
+            .then(|| format!("the deleted built-in `{name}` keeps its name: give this one another")),
+    }
+}
+
+pub(crate) fn hide(names: &mut Vec<String>, name: &str) {
+    if !names.iter().any(|hidden| same_name(hidden, name)) {
+        names.push(name.trim().to_string());
+    }
+}
+
+pub(crate) fn unhide(names: &mut Vec<String>, name: &str) -> bool {
+    let before = names.len();
+    names.retain(|hidden| !same_name(hidden, name));
+    names.len() != before
 }
 
 pub(crate) fn edits_builtin(builtins: &[String], saved: &Saved) -> bool {
@@ -100,10 +122,11 @@ pub(crate) fn project_dir(project: &Path) -> PathBuf {
     project.join(".cornercase").join("flows")
 }
 
-pub(crate) fn list(builtins: Vec<Flow>, user: &Path, project: Option<&Path>) -> Listing {
+pub(crate) fn list(builtins: Vec<Flow>, hidden: &[String], user: &Path, project: Option<&Path>) -> Listing {
     let mut listing = Listing {
         builtins: builtins.iter().map(|flow| flow.name.clone()).collect(),
         flows: builtins.into_iter().map(|flow| Saved { flow, origin: Origin::BuiltIn }).collect(),
+        hidden: Vec::new(),
         broken: Vec::new(),
     };
     read_dir(user, Origin::User, &mut listing);
@@ -119,6 +142,12 @@ pub(crate) fn list(builtins: Vec<Flow>, user: &Path, project: Option<&Path>) -> 
     listing
         .flows
         .retain(|saved| saved.origin != Origin::BuiltIn || !yours.iter().any(|n| same_name(n, &saved.flow.name)));
+    let (gone, kept): (Vec<Saved>, Vec<Saved>) = std::mem::take(&mut listing.flows)
+        .into_iter()
+        .partition(|saved| saved.origin == Origin::BuiltIn && hidden.iter().any(|n| same_name(n, &saved.flow.name)));
+    listing.flows = kept;
+    listing.hidden = gone.into_iter().map(|saved| saved.flow).collect();
+    listing.hidden.sort_by_key(|flow| flow.name.trim().to_lowercase());
     listing.flows.sort_by_key(|saved| (saved.flow.name.trim().to_lowercase(), saved.origin.rank()));
     listing
 }

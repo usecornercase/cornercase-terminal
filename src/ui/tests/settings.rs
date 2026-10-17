@@ -7,6 +7,7 @@ fn row(section: &'static str, label: &str, value: &str, note: &str) -> SettingsR
         value: value.into(),
         note: note.into(),
         dangerous: false,
+        muted: false,
         removable: false,
         movable: false,
     }

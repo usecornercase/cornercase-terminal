@@ -17,7 +17,7 @@ fn listing() -> Listing {
     mine.name = "Mine".into();
     flows.push(Saved { flow: mine, origin: Origin::User(PathBuf::from("/flows/mine.toml")) });
     let builtins = flows.iter().take(4).map(|saved| saved.flow.name.clone()).collect();
-    Listing { flows, broken: vec![(PathBuf::from("/flows/bad.toml"), "broken".into())], builtins }
+    Listing { flows, hidden: Vec::new(), broken: vec![(PathBuf::from("/flows/bad.toml"), "broken".into())], builtins }
 }
 
 fn start() -> Start {
@@ -42,6 +42,22 @@ fn ready() -> Start {
 
 mod opening {
     use super::*;
+
+    #[test]
+    fn a_projects_flow_named_like_a_deleted_built_in_is_red_and_does_not_start() {
+        let mut listing = listing();
+        let mut project = listing.flows[0].flow.clone();
+        project.name = "Arena".into();
+        listing.flows.push(Saved { flow: project, origin: Origin::Project(PathBuf::from("/p/arena.toml")) });
+        listing.builtins.push("Arena".into());
+        let mut s = Start::new(7, "web-shop".into(), true, listing);
+        let i = s.items().iter().position(|item| item.name == "Arena").expect("listed");
+        assert!(s.items()[i].red, "{:?}", s.items()[i]);
+        s.cursor = i;
+        type_text(&mut s, "Add dark mode");
+        assert_eq!(s.start(), Action::None);
+        assert!(s.notice.is_some());
+    }
 
     #[test]
     fn it_lists_every_flow_but_files_that_cannot_be_read() {

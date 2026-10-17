@@ -40,6 +40,9 @@
   "accept_trust_prompts": true,
   "resume_agents": false,
   "keep_awake": true,
+  "hidden_flows": [
+    "Arena"
+  ],
   "trust_prompt_pattern": "Allow this folder",
   "gh": "fake-gh",
   "glab": "fake-glab",

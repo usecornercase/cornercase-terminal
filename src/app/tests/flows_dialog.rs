@@ -2,7 +2,7 @@ use super::*;
 use crate::agents::Known;
 use crate::flows::dialog::{self, Dialog, Row};
 use crate::flows::store;
-use crate::settings::Row as SettingsRow;
+use crate::settings::Page;
 
 const WIDE: Rect = Rect { x: 0, y: 0, width: 150, height: 44 };
 const SHORT: Rect = Rect { x: 0, y: 0, width: 150, height: 28 };
@@ -31,6 +31,15 @@ fn setup(project: bool) -> Setup {
 fn open(project: bool) -> Setup {
     let mut s = setup(project);
     s.app.open_flows(None, None);
+    s
+}
+
+fn settings_tab(project: bool) -> Setup {
+    let mut s = setup(project);
+    s.app.open_settings();
+    let names = Page::ALL.map(Page::name);
+    let at = ui::settings_tabs(ui::settings_area(WIDE), &names)[Page::Flows.index()].as_position();
+    click_in(&mut s.app, at, WIDE);
     s
 }
 
@@ -122,22 +131,64 @@ fn shown(app: &mut App, area: Rect) -> String {
 mod opening {
     use super::*;
 
+    fn settings_tab_names() -> Vec<&'static str> {
+        Page::ALL.map(Page::name).to_vec()
+    }
+
     #[test]
-    fn the_settings_row_opens_the_dialog_and_done_comes_back() {
-        let mut s = setup(false);
-        s.app.open_settings_on(&SettingsRow::Flows);
+    fn the_flows_tab_comes_right_after_agents_and_shows_the_list() {
+        let mut s = settings_tab(false);
+        let d = dialog(&s.app);
+        assert!(d.in_settings && d.edit.is_none());
+        assert_eq!(d.entries(), 5);
+        let v = view(&s.app, WIDE);
+        assert_eq!(v.title, "Settings");
+        assert_eq!(v.tabs, ["Worktrees", "Agents", "Flows", "Issues", "UI", "Remote", "Plugins"]);
+        assert_eq!(v.tab, 2);
+        button(&mut s.app, WIDE, dialog::DONE);
+        assert!(s.app.overlay.is_none());
+        s.app.open_settings();
+        assert!(dialog(&s.app).in_settings, "reopening lands on the last tab");
+    }
+
+    #[test]
+    fn tab_and_the_arrows_leave_for_the_next_settings_tabs() {
+        let mut s = settings_tab(false);
+        key_in(&mut s.app, KeyCode::Tab, WIDE);
         let Some(Overlay::Settings(settings)) = &s.app.overlay else { panic!("no settings") };
-        assert_eq!(settings.flows, "5 built in");
-        let i = settings.rows().iter().position(|r| *r == SettingsRow::Flows).expect("the flows row");
-        let sections: Vec<&'static str> = settings.rows().iter().map(SettingsRow::section).collect();
-        let pos = ui::settings_row(WIDE, &sections, settings.cursor, i).as_position();
-        click_in(&mut s.app, pos, WIDE);
-        assert_eq!(dialog(&s.app).entries(), 5);
+        assert_eq!(settings.page, Page::Issues);
+        s.app.settings_page = Page::Flows;
+        s.app.open_settings();
+        key_in(&mut s.app, KeyCode::BackTab, WIDE);
+        let Some(Overlay::Settings(settings)) = &s.app.overlay else { panic!("no settings") };
+        assert_eq!(settings.page, Page::Agents);
+    }
+
+    #[test]
+    fn a_click_on_another_settings_tab_leaves_the_flows_tab() {
+        let mut s = settings_tab(false);
+        let names = settings_tab_names();
+        click_in(&mut s.app, ui::flows_tabs(WIDE, &names)[4].as_position(), WIDE);
+        let Some(Overlay::Settings(settings)) = &s.app.overlay else { panic!("no settings") };
+        assert_eq!(settings.page, Page::Ui);
+    }
+
+    #[test]
+    fn edit_and_done_come_back_to_the_flows_tab() {
+        let mut s = settings_tab(false);
         duplicate_full_issue(&mut s, WIDE);
+        assert_eq!(view(&s.app, WIDE).title, "Flows › Full issue copy");
+        assert!(view(&s.app, WIDE).tabs.iter().all(|tab| tab != "Issues"));
         button(&mut s.app, WIDE, dialog::DONE);
-        button(&mut s.app, WIDE, dialog::DONE);
-        let Some(Overlay::Settings(settings)) = &s.app.overlay else { panic!("the settings did not come back") };
-        assert_eq!(settings.flows, "5 built in, 1 yours");
+        let v = view(&s.app, WIDE);
+        assert_eq!((v.title.as_str(), v.tabs.len(), v.tab), ("Settings", 7, 2));
+    }
+
+    #[test]
+    fn restart_opens_its_dialog_from_the_flows_tab() {
+        let mut s = settings_tab(false);
+        button(&mut s.app, WIDE, crate::settings::RESTART);
+        assert!(matches!(s.app.overlay, Some(Overlay::Restart)));
     }
 
     #[test]
@@ -252,6 +303,74 @@ mod built_in_flows {
         click_in(&mut s.app, submit.as_position(), WIDE);
         assert_eq!(files(&user_dir(&s)), Vec::<String>::new());
         assert_eq!(origin_of(&s.app, "Full issue"), store::Origin::BuiltIn);
+    }
+}
+
+mod deleting_built_ins {
+    use super::*;
+
+    fn confirm(s: &mut Setup, label: &str) {
+        let [submit, _] = ui::form_buttons(ui::form_area(WIDE), label);
+        click_in(&mut s.app, submit.as_position(), WIDE);
+    }
+
+    fn saved_hidden(s: &Setup) -> Vec<String> {
+        config::load(&s.config.path().join("config.json")).hidden_flows
+    }
+
+    #[test]
+    fn deleting_one_asks_then_hides_it_in_the_config_and_everywhere() {
+        let mut s = settings_tab(true);
+        select_flow(&mut s.app, WIDE, "Arena");
+        button(&mut s.app, WIDE, dialog::DELETE);
+        confirm(&mut s, dialog::DELETE);
+        assert_eq!(saved_hidden(&s), ["Arena"]);
+        assert_eq!(s.app.config.hidden_flows, ["Arena"]);
+        assert!(dialog(&s.app).flows.iter().all(|saved| saved.flow.name != "Arena"));
+        assert_eq!(dialog(&s.app).hidden.len(), 1);
+        let project = s.app.project().expect("a project").id;
+        s.app.open_start_flow(s.app.start_flow_in(project));
+        let Some(Overlay::StartFlow { start, .. }) = &s.app.overlay else { panic!("no start dialog") };
+        assert!(start.items().iter().all(|item| item.name != "Arena"));
+        s.app.open_settings();
+
+        let last = dialog(&s.app).entries() - 1;
+        click_list_row(&mut s.app, WIDE, last);
+        assert!(dialog(&s.app).show_hidden);
+        click_list_row(&mut s.app, WIDE, last + 1);
+        button(&mut s.app, WIDE, dialog::RESTORE_BUILT_IN);
+        assert_eq!(saved_hidden(&s), Vec::<String>::new());
+        assert_eq!(dialog(&s.app).hidden.len(), 0);
+        let d = dialog(&s.app);
+        assert_eq!(d.flows.get(d.cursor).map(|saved| saved.flow.name.as_str()), Some("Arena"));
+    }
+
+    #[test]
+    fn an_edited_one_offers_restore_default_and_delete() {
+        let mut s = settings_tab(false);
+        duplicate_full_issue(&mut s, WIDE);
+        button(&mut s.app, WIDE, dialog::DONE);
+        let copy = user_dir(&s).join("full-issue-copy.toml");
+        let mut flow = store::read(&copy).expect("the copy");
+        flow.name = "Quick".into();
+        store::save(&user_dir(&s), &flow, Some(&copy)).expect("rename it to a built-in's name");
+        s.app.refresh_flows();
+        select_flow(&mut s.app, WIDE, "Quick");
+        let labels = view(&s.app, WIDE).buttons;
+        assert!(labels.contains(&dialog::RESTORE) && labels.contains(&dialog::DELETE), "{labels:?}");
+
+        button(&mut s.app, WIDE, dialog::DELETE);
+        confirm(&mut s, dialog::DELETE);
+        assert_eq!(files(&user_dir(&s)), Vec::<String>::new());
+        assert_eq!(saved_hidden(&s), ["Quick"]);
+
+        store::save(&user_dir(&s), &flow, None).expect("save it again");
+        s.app.refresh_flows();
+        select_flow(&mut s.app, WIDE, "Quick");
+        button(&mut s.app, WIDE, dialog::RESTORE);
+        confirm(&mut s, dialog::RESTORE);
+        assert_eq!(files(&user_dir(&s)), Vec::<String>::new());
+        assert_eq!(saved_hidden(&s), Vec::<String>::new());
     }
 }
 
@@ -485,6 +604,25 @@ mod pages {
     fn the_list(#[case] area: Rect, #[case] size: &str) {
         let mut s = open(false);
         insta::assert_snapshot!(format!("the_list_{size}"), shown(&mut s.app, area));
+    }
+
+    #[rstest::rstest]
+    #[case::wide(WIDE, "wide")]
+    #[case::narrow(NARROW, "narrow")]
+    fn the_flows_tab(#[case] area: Rect, #[case] size: &str) {
+        let mut s = settings_tab(false);
+        insta::assert_snapshot!(format!("the_flows_tab_{size}"), shown(&mut s.app, area));
+    }
+
+    #[test]
+    fn the_deleted_built_ins() {
+        let mut s = settings_tab(false);
+        s.app.config.hidden_flows = vec!["Arena".into(), "Cross review".into()];
+        s.app.refresh_flows();
+        let last = dialog(&s.app).entries() - 1;
+        click_list_row(&mut s.app, WIDE, last);
+        click_list_row(&mut s.app, WIDE, last + 1);
+        insta::assert_snapshot!("the_deleted_built_ins", shown(&mut s.app, WIDE));
     }
 
     #[rstest::rstest]

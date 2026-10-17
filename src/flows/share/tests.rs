@@ -164,7 +164,7 @@ mod collisions {
             Saved { flow: named("Theirs"), origin: Origin::Project(PathBuf::from("/p/theirs.toml")) },
         ];
         flows.sort_by_key(|saved| saved.flow.name.clone());
-        Listing { flows, broken: Vec::new(), builtins: vec!["Quick".into()] }
+        Listing { flows, hidden: Vec::new(), broken: Vec::new(), builtins: vec!["Quick".into()] }
     }
 
     fn named(name: &str) -> Flow {

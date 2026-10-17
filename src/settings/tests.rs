@@ -52,7 +52,8 @@ mod pages {
 
     #[rstest]
     #[case::worktrees(Page::Worktrees, &[""])]
-    #[case::agents(Page::Agents, &["Agent", "How each agent starts", "Flows"])]
+    #[case::agents(Page::Agents, &["Agent", "How each agent starts"])]
+    #[case::flows(Page::Flows, &[])]
     #[case::issues(Page::Issues, &["Accounts", "Sources shown"])]
     #[case::ui(Page::Ui, &[""])]
     #[case::remote(Page::Remote, &["Browser", "Telegram", "Discord"])]
@@ -77,11 +78,22 @@ mod pages {
     }
 
     #[test]
+    fn the_flows_tab_comes_after_agents_and_has_no_rows() {
+        let mut s = settings();
+        s.open_page(Page::Agents);
+        press(&mut s, KeyCode::Right);
+        assert_eq!(s.page, Page::Flows);
+        assert_eq!(s.rows().len(), 0);
+        press(&mut s, KeyCode::Right);
+        assert_eq!(s.page, Page::Issues);
+    }
+
+    #[test]
     fn switching_selects_the_first_row() {
         let mut s = settings();
         go_to(&mut s, &Row::Trust);
         press(&mut s, KeyCode::Tab);
-        assert_eq!((s.page, s.cursor), (Page::Issues, 0));
+        assert_eq!((s.page, s.cursor), (Page::Flows, 0));
     }
 
     #[test]

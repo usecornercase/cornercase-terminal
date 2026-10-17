@@ -21,8 +21,12 @@ pub(crate) const DELETE_ROLE: &str = "delete role";
 pub(crate) const DISCARD: &str = "discard";
 pub(crate) const ADD_ROLE: &str = "+ add role";
 pub(crate) const RESTORE: &str = "restore default";
+pub(crate) const RESTORE_BUILT_IN: &str = "restore";
 const IMPORT_HINT: &str = "enter starts a new line · import opens the flow to check it · esc goes back";
-const BUILT_IN_HINT: &str = "a built-in flow: edit saves your version in your folder, in its place";
+const BUILT_IN_HINT: &str = "a built-in flow: edit saves your version in your folder, in its place; delete hides it";
+const SETTINGS_HINT: &str = "enter or a click on the selected flow edits it · tab or ←→ switches tabs";
+const LIST_HINT: &str = "enter or a click on the selected flow edits it · tab moves between flows";
+const DELETED_HINT: &str = "a deleted built-in flow: restore brings it back to every list";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Place {
@@ -47,6 +51,12 @@ pub(crate) enum Action {
     Duplicate(Box<Flow>),
     Export(Box<Flow>),
     Delete(PathBuf),
+    Hide { name: String, file: Option<PathBuf> },
+    Unhide(String),
+    Restore { file: PathBuf, name: String },
+    Tab(usize),
+    StepTab(isize),
+    Restart,
     ReadModels(Known),
     Fetch(registry::Source),
 }
@@ -60,6 +70,7 @@ pub(crate) enum Then {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Confirm {
     Delete(usize),
+    Hide(usize),
     Restore(usize),
     Leave(Then),
 }
@@ -85,12 +96,14 @@ pub(crate) struct Room {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[expect(clippy::struct_excessive_bools, reason = "one flag for each way a row can be drawn")]
 pub(crate) struct RowText {
     pub(crate) section: &'static str,
     pub(crate) label: String,
     pub(crate) value: String,
     pub(crate) note: String,
     pub(crate) red: bool,
+    pub(crate) muted: bool,
     pub(crate) removable: bool,
     pub(crate) movable: bool,
 }
@@ -137,6 +150,9 @@ pub(crate) enum Preview<'a> {
 #[derive(Debug)]
 pub(crate) struct Dialog {
     pub(crate) flows: Vec<Saved>,
+    pub(crate) hidden: Vec<Flow>,
+    pub(crate) in_settings: bool,
+    pub(crate) show_hidden: bool,
     pub(crate) broken: Vec<(PathBuf, String)>,
     pub(crate) cursor: usize,
     pub(crate) edit: Option<Box<Editing>>,
@@ -155,6 +171,9 @@ impl Dialog {
     pub(crate) fn new(listing: Listing, agents: Agents) -> Self {
         Self {
             flows: listing.flows,
+            hidden: listing.hidden,
+            in_settings: false,
+            show_hidden: false,
             broken: listing.broken,
             builtins: listing.builtins,
             cursor: 0,
@@ -173,6 +192,8 @@ impl Dialog {
     pub(crate) fn set_listing(&mut self, listing: Listing) {
         let before = self.selected().map(|saved| (saved.origin.clone(), saved.flow.name.clone()));
         self.flows = listing.flows;
+        self.hidden = listing.hidden;
+        self.show_hidden &= !self.hidden.is_empty();
         self.broken = listing.broken;
         self.builtins = listing.builtins;
         self.cursor = self.cursor.min(self.entries().saturating_sub(1));
@@ -188,16 +209,22 @@ impl Dialog {
         if let Some(edit) = &self.edit {
             return edit.text.is_none().then_some(Preview::Flow(&edit.flow));
         }
-        if let Some(saved) = self.selected() {
-            return Some(Preview::Flow(&saved.flow));
-        }
-        match self.broken.get(self.cursor.saturating_sub(self.flows.len())) {
-            Some((path, reason)) if self.cursor >= self.flows.len() => {
+        match self.entry(self.cursor) {
+            Some(Entry::Flow(saved)) => Some(Preview::Flow(&saved.flow)),
+            Some(Entry::Hidden(flow)) => Some(Preview::Flow(flow)),
+            Some(Entry::Broken(i)) => {
+                let (path, reason) = &self.broken[i];
                 let reason = reason.split_once("`: ").map_or(reason.as_str(), |(_, rest)| rest);
                 let file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 Some(Preview::Note(format!("{file} cannot be read as a flow, so it has no diagram: {reason}")))
             }
-            _ => Some(Preview::Note("no flows yet: new makes one, import brings one in".into())),
+            Some(Entry::Deleted) => Some(Preview::Note(format!(
+                "{} built-in flow{} deleted: hidden from this list, the start dialog and `cornercase flow list`. \
+                 Select one and click restore to bring it back.",
+                self.hidden.len(),
+                if self.hidden.len() == 1 { " is" } else { "s are" }
+            ))),
+            None => Some(Preview::Note("no flows yet: new makes one, import brings one in".into())),
         }
     }
 
@@ -217,21 +244,56 @@ impl Dialog {
     }
 
     pub(crate) fn entries(&self) -> usize {
-        self.flows.len() + self.broken.len()
+        let hidden = if self.hidden.is_empty() { 0 } else { 1 + if self.show_hidden { self.hidden.len() } else { 0 } };
+        self.flows.len() + self.broken.len() + hidden
+    }
+
+    fn entry(&self, i: usize) -> Option<Entry<'_>> {
+        let (flows, broken) = (self.flows.len(), self.broken.len());
+        if i < flows {
+            return Some(Entry::Flow(&self.flows[i]));
+        }
+        if i < flows + broken {
+            return Some(Entry::Broken(i - flows));
+        }
+        let past = i.checked_sub(flows + broken)?;
+        if self.hidden.is_empty() {
+            return None;
+        }
+        match past {
+            0 => Some(Entry::Deleted),
+            n if self.show_hidden => self.hidden.get(n - 1).map(Entry::Hidden),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn settings_tabs(&self) -> bool {
+        self.in_settings && self.edit.is_none() && self.importing.is_none()
+    }
+
+    pub(crate) fn toggle_deleted(&mut self) {
+        self.show_hidden = !self.show_hidden;
+    }
+
+    pub(crate) fn unhide(&self) -> Action {
+        match self.entry(self.cursor) {
+            Some(Entry::Hidden(flow)) => Action::Unhide(flow.name.clone()),
+            _ => Action::None,
+        }
+    }
+
+    pub(crate) fn activate(&mut self) -> Action {
+        match self.entry(self.cursor) {
+            Some(Entry::Deleted) => self.toggle_deleted(),
+            Some(Entry::Hidden(_)) => return self.unhide(),
+            Some(_) => self.open(self.cursor),
+            None => {}
+        }
+        Action::None
     }
 
     pub(crate) fn find(&self, origin: &Origin, name: &str) -> Option<usize> {
         self.flows.iter().position(|s| s.origin == *origin && (origin.path().is_some() || s.flow.name == name))
-    }
-
-    pub(crate) fn summary(&self) -> String {
-        let count = |builtin: bool| self.flows.iter().filter(|s| s.origin.editable() != builtin).count();
-        let mut parts = vec![format!("{} built in", count(true))];
-        let yours = count(false);
-        if yours > 0 {
-            parts.push(format!("{yours} yours"));
-        }
-        parts.join(", ")
     }
 
     pub(crate) fn select(&mut self, i: usize) {
@@ -248,9 +310,10 @@ impl Dialog {
     }
 
     fn path_at(&self, i: usize) -> Option<PathBuf> {
-        match self.flows.get(i) {
-            Some(saved) => saved.origin.path().map(PathBuf::from),
-            None => self.broken.get(i - self.flows.len()).map(|(path, _)| path.clone()),
+        match self.entry(i)? {
+            Entry::Flow(saved) => saved.origin.path().map(PathBuf::from),
+            Entry::Broken(i) => Some(self.broken[i].0.clone()),
+            Entry::Deleted | Entry::Hidden(_) => None,
         }
     }
 
@@ -302,10 +365,18 @@ impl Dialog {
     }
 
     pub(crate) fn ask_delete(&mut self) {
-        let deletable = self.selected().is_none_or(|saved| saved.origin.editable());
-        if self.cursor < self.entries() && deletable {
-            let edited = self.selected().is_some_and(|saved| store::edits_builtin(&self.builtins, saved));
-            self.confirm = Some(if edited { Confirm::Restore(self.cursor) } else { Confirm::Delete(self.cursor) });
+        self.confirm = match self.entry(self.cursor) {
+            Some(Entry::Flow(saved)) if !saved.origin.editable() || store::edits_builtin(&self.builtins, saved) => {
+                Some(Confirm::Hide(self.cursor))
+            }
+            Some(Entry::Flow(_) | Entry::Broken(_)) => Some(Confirm::Delete(self.cursor)),
+            _ => None,
+        };
+    }
+
+    fn ask_restore(&mut self) {
+        if self.selected().is_some_and(|saved| store::edits_builtin(&self.builtins, saved)) {
+            self.confirm = Some(Confirm::Restore(self.cursor));
         }
     }
 
@@ -358,7 +429,20 @@ impl Dialog {
 
     pub(crate) fn confirmed(&mut self) -> Action {
         match self.confirm.take() {
-            Some(Confirm::Delete(i) | Confirm::Restore(i)) => self.path_at(i).map_or(Action::None, Action::Delete),
+            Some(Confirm::Delete(i)) => self.path_at(i).map_or(Action::None, Action::Delete),
+            Some(Confirm::Restore(i)) => match (self.path_at(i), self.entry(i)) {
+                (Some(file), Some(Entry::Flow(saved))) => {
+                    Action::Restore { file, name: saved.flow.name.trim().to_string() }
+                }
+                _ => Action::None,
+            },
+            Some(Confirm::Hide(i)) => match self.entry(i) {
+                Some(Entry::Flow(saved)) => Action::Hide {
+                    name: saved.flow.name.trim().to_string(),
+                    file: saved.origin.path().map(PathBuf::from),
+                },
+                _ => Action::None,
+            },
             Some(Confirm::Leave(Then::List)) => {
                 self.edit = None;
                 Action::None
@@ -374,6 +458,22 @@ impl Dialog {
                 let message = match self.flows.get(i) {
                     Some(saved) => format!("Delete the flow {}? Its file goes too.", saved.flow.name.trim()),
                     None => "Delete this file, which cannot be read as a flow?".to_string(),
+                };
+                Some(("Delete flow", message, DELETE))
+            }
+            Confirm::Hide(i) => {
+                let edited = self.flows.get(i).is_some_and(|saved| saved.origin.editable());
+                let name = self.flows.get(i).map(|saved| saved.flow.name.trim().to_string()).unwrap_or_default();
+                let message = if edited {
+                    format!(
+                        "Delete {name}? Your version's file goes, and the built-in {name} is hidden too; deleted \
+                         built-ins, at the end of the list, brings it back."
+                    )
+                } else {
+                    format!(
+                        "Delete the built-in flow {name}? It comes with cornercase, so it is hidden from every \
+                         list; deleted built-ins, at the end of the list, brings it back."
+                    )
                 };
                 Some(("Delete flow", message, DELETE))
             }
@@ -396,6 +496,7 @@ impl Dialog {
         match &self.edit {
             Some(edit) if edit.flow.name.trim().is_empty() => "Flows › untitled".into(),
             Some(edit) => format!("Flows › {}", edit.flow.name.trim()),
+            None if self.in_settings => "Settings".into(),
             None => "Flows".into(),
         }
     }
@@ -408,7 +509,30 @@ impl Dialog {
             red: true,
             ..RowText::default()
         });
-        flows.chain(broken).collect()
+        let mut rows: Vec<RowText> = flows.chain(broken).collect();
+        if !self.hidden.is_empty() {
+            let (arrow, note) = if self.show_hidden {
+                ('▾', "enter hides them")
+            } else {
+                ('▸', "hidden from every list · enter shows them")
+            };
+            rows.push(RowText {
+                label: format!("{arrow} deleted built-ins ({})", self.hidden.len()),
+                note: note.into(),
+                muted: true,
+                ..RowText::default()
+            });
+            if self.show_hidden {
+                rows.extend(self.hidden.iter().map(|flow| RowText {
+                    label: format!("  {}", flow.name.trim()),
+                    value: agents_count(flow),
+                    note: format!("deleted · {}", plan_summary(flow)),
+                    muted: true,
+                    ..RowText::default()
+                }));
+            }
+        }
+        rows
     }
 
     pub(crate) fn buttons(&self, room: Room) -> Vec<&'static str> {
@@ -419,20 +543,24 @@ impl Dialog {
             return edit.buttons(room);
         }
         let mut buttons = Vec::new();
-        match self.selected() {
-            Some(saved) if store::edits_builtin(&self.builtins, saved) => {
-                buttons.extend([EDIT, DUPLICATE, EXPORT, RESTORE]);
+        match self.entry(self.cursor) {
+            Some(Entry::Flow(saved)) if store::edits_builtin(&self.builtins, saved) => {
+                buttons.extend([EDIT, DUPLICATE, EXPORT, RESTORE, DELETE]);
             }
-            Some(saved) if saved.origin.editable() => buttons.extend([EDIT, DUPLICATE, EXPORT, DELETE]),
-            Some(_) => buttons.extend([EDIT, DUPLICATE, EXPORT]),
-            None if self.cursor < self.entries() => buttons.push(DELETE),
-            None => {}
+            Some(Entry::Flow(_)) => buttons.extend([EDIT, DUPLICATE, EXPORT, DELETE]),
+            Some(Entry::Broken(_)) => buttons.push(DELETE),
+            Some(Entry::Hidden(_)) => buttons.push(RESTORE_BUILT_IN),
+            Some(Entry::Deleted) | None => {}
         }
         if !room.wide {
             buttons.push(if self.diagram { LIST } else { DIAGRAM });
         }
-        buttons.extend([IMPORT, NEW, DONE]);
-        for dropped in [IMPORT, EXPORT] {
+        buttons.extend([IMPORT, NEW]);
+        if self.in_settings {
+            buttons.push(crate::settings::RESTART);
+        }
+        buttons.push(DONE);
+        for dropped in [IMPORT, EXPORT, DUPLICATE] {
             if !room.wide && room.width > 0 && row_width(&buttons) > room.width {
                 buttons.retain(|label| *label != dropped);
             }
@@ -457,10 +585,18 @@ impl Dialog {
                 .as_ref()
                 .map_or_else(|| IMPORT_HINT.into(), |source| format!("fetching {}…", source.address()));
         }
-        match &self.edit {
-            Some(edit) => edit.hint(),
-            None if self.selected().is_some_and(|s| !s.origin.editable()) => BUILT_IN_HINT.into(),
-            None => "enter or a click on the selected flow edits it · tab moves between flows".into(),
+        match (&self.edit, self.entry(self.cursor)) {
+            (Some(edit), _) => edit.hint(),
+            (None, Some(Entry::Flow(saved))) if !saved.origin.editable() => BUILT_IN_HINT.into(),
+            (None, Some(Entry::Deleted)) => if self.show_hidden {
+                "enter hides the built-in flows you deleted"
+            } else {
+                "enter shows the built-in flows you deleted"
+            }
+            .into(),
+            (None, Some(Entry::Hidden(_))) => DELETED_HINT.into(),
+            (None, _) if self.in_settings => SETTINGS_HINT.into(),
+            (None, _) => LIST_HINT.into(),
         }
     }
 
@@ -492,7 +628,10 @@ impl Dialog {
             EDIT => self.open(self.cursor),
             DIAGRAM | LIST => self.diagram = !self.diagram,
             DUPLICATE => return self.duplicate(),
-            DELETE | RESTORE => self.ask_delete(),
+            DELETE => self.ask_delete(),
+            RESTORE => self.ask_restore(),
+            RESTORE_BUILT_IN => return self.unhide(),
+            crate::settings::RESTART => return Action::Restart,
             NEW => self.open_new(),
             DONE => return Action::Close,
             _ => {}
@@ -530,8 +669,16 @@ impl Dialog {
     }
 }
 
+enum Entry<'a> {
+    Flow(&'a Saved),
+    Broken(usize),
+    Deleted,
+    Hidden(&'a Flow),
+}
+
 pub(crate) fn flow_row(flows: &[Saved], builtins: &[String], saved: &Saved) -> RowText {
-    let problems: Vec<String> = store::conflict(flows, saved).into_iter().chain(saved.flow.problems()).collect();
+    let problems: Vec<String> =
+        store::conflict(flows, builtins, saved).into_iter().chain(saved.flow.problems()).collect();
     let (value, note) = match problems.as_slice() {
         [] => {
             let tag = store::tag(builtins, saved).map(|tag| format!("{tag} · ")).unwrap_or_default();

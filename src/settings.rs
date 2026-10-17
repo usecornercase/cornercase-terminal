@@ -54,7 +54,6 @@ pub(crate) enum Row {
     Trust,
     Resume,
     KeepAwake,
-    Flows,
     Remote,
     Browsers,
     Kind(String),
@@ -100,7 +99,6 @@ impl Row {
             Self::Tab(_) => "Sources shown",
             Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume | Self::KeepAwake => "Agent",
             Self::Kind(_) | Self::AddAgent => "How each agent starts",
-            Self::Flows => "Flows",
         }
     }
 
@@ -113,8 +111,7 @@ impl Row {
             | Self::Resume
             | Self::KeepAwake
             | Self::Kind(_)
-            | Self::AddAgent
-            | Self::Flows => Page::Agents,
+            | Self::AddAgent => Page::Agents,
             Self::Token(_)
             | Self::GitlabUrl
             | Self::JiraSite
@@ -202,6 +199,7 @@ pub(crate) enum Page {
     #[default]
     Worktrees,
     Agents,
+    Flows,
     Issues,
     Ui,
     Remote,
@@ -209,13 +207,14 @@ pub(crate) enum Page {
 }
 
 impl Page {
-    pub(crate) const ALL: [Self; 6] =
-        [Self::Worktrees, Self::Agents, Self::Issues, Self::Ui, Self::Remote, Self::Plugins];
+    pub(crate) const ALL: [Self; 7] =
+        [Self::Worktrees, Self::Agents, Self::Flows, Self::Issues, Self::Ui, Self::Remote, Self::Plugins];
 
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Worktrees => "Worktrees",
             Self::Agents => "Agents",
+            Self::Flows => "Flows",
             Self::Issues => "Issues",
             Self::Ui => "UI",
             Self::Remote => "Remote",
@@ -225,6 +224,12 @@ impl Page {
 
     pub(crate) fn index(self) -> usize {
         Self::ALL.iter().position(|p| *p == self).unwrap_or(0)
+    }
+
+    pub(crate) fn step(self, delta: isize) -> Self {
+        let count = Self::ALL.len();
+        let step = delta.rem_euclid(isize::try_from(count).unwrap_or(1)).unsigned_abs();
+        Self::ALL[(self.index() + step) % count]
     }
 }
 
@@ -247,7 +252,6 @@ pub(crate) enum Action {
     RemoveBot(Via),
     Pair(Via),
     ForgetChat(Via),
-    OpenFlows,
     Plugin(String, bool),
 }
 
@@ -313,7 +317,6 @@ pub(crate) struct Settings {
     pub(crate) awake: String,
     pub(crate) pulls: String,
     pub(crate) merged: String,
-    pub(crate) flows: String,
     pub(crate) remote: String,
     pub(crate) browsers: usize,
     pub(crate) messengers: [Messenger; Via::ALL.len()],
@@ -337,7 +340,6 @@ impl Settings {
             awake: String::new(),
             pulls: String::new(),
             merged: String::new(),
-            flows: String::new(),
             remote: String::new(),
             browsers: 0,
             messengers: Default::default(),
@@ -406,7 +408,6 @@ impl Settings {
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
         rows.extend([
             Row::AddAgent,
-            Row::Flows,
             Row::Sidebar,
             Row::Tabs,
             Row::IconBar,
@@ -451,9 +452,7 @@ impl Settings {
     }
 
     fn switch_page(&mut self, delta: isize) {
-        let count = Page::ALL.len();
-        let step = delta.rem_euclid(isize::try_from(count).unwrap_or(1)).unsigned_abs();
-        self.open_page(Page::ALL[(self.page.index() + step) % count]);
+        self.open_page(self.page.step(delta));
     }
 
     fn row(&self) -> Option<Row> {

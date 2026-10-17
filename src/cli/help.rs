@@ -257,7 +257,8 @@ It prints the workspace's id, then one line per role: its pane's id and the role
 by a tab. The run's folder for files, where every role writes its answers, is printed on stderr
 (run_dir with --json) and is in $CORNERCASE_RUN_DIR in the team's panes. A name is looked up in yours, then the built-in flows, then the project's: yours replaces
 a built-in flow of its name, and a project's flow never stands in for another of the same name; the
-command says so on stderr when it happens.
+command says so on stderr when it happens. A built-in flow deleted in Settings › Flows is refused,
+and keeps its name: a project's flow named like it does not run either.
 
 Examples:
   cornercase flow run Quick --prompt 'Fix the login form'

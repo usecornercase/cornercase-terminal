@@ -428,12 +428,65 @@ roles = ["coder"]
         let renamed = store::save(dir.path(), &flow, Some(&path)).expect("rename");
         assert_eq!(renamed, dir.path().join("renamed-flow.toml"));
         assert!(!path.exists());
-        let listing = store::list(Vec::new(), dir.path(), None);
+        let listing = store::list(Vec::new(), &[], dir.path(), None);
         let names: Vec<_> = listing.flows.iter().map(|saved| saved.flow.name.as_str()).collect();
         assert_eq!(names, ["Full issue", "Renamed flow!"]);
         assert!(listing.flows.iter().all(|saved| matches!(saved.origin, Origin::User(_))));
         store::delete(&renamed).expect("delete");
         assert!(!renamed.exists());
+    }
+
+    fn hidden_listing(hidden: &[String], user: &std::path::Path, project: &std::path::Path) -> store::Listing {
+        store::list(builtin::flows(&Known::ALL, Some(Known::Claude)), hidden, user, Some(&store::project_dir(project)))
+    }
+
+    #[test]
+    fn a_deleted_built_in_leaves_the_list_and_keeps_its_name() {
+        let (user, project) = (TempDir::new(), TempDir::new());
+        let arena = Flow { name: "Arena".into(), ..sample() };
+        store::save(&store::project_dir(project.path()), &arena, None).expect("save");
+        let listing = hidden_listing(&[" arena ".into()], user.path(), project.path());
+        let built_in = |listing: &store::Listing| {
+            listing.flows.iter().filter(|s| s.origin == Origin::BuiltIn && s.flow.name == "Arena").count()
+        };
+        assert_eq!(built_in(&listing), 0);
+        assert_eq!(listing.hidden.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["Arena"]);
+        assert!(listing.builtins.iter().any(|name| name == "Arena"));
+        let project_arena = listing.flows.iter().find(|s| s.flow.name == "Arena").expect("the project's flow");
+        assert_eq!(
+            listing.conflict(project_arena).as_deref(),
+            Some("the deleted built-in `Arena` keeps its name: give this one another")
+        );
+        assert!(listing.deleted("ARENA").is_some());
+    }
+
+    #[test]
+    fn a_built_in_added_after_the_config_was_written_still_shows() {
+        let (user, project) = (TempDir::new(), TempDir::new());
+        let listing = hidden_listing(&["Retired flow".into()], user.path(), project.path());
+        assert_eq!(listing.flows.len(), 5);
+        assert_eq!(listing.hidden, []);
+    }
+
+    #[test]
+    fn yours_named_like_a_deleted_built_in_is_listed_and_the_built_in_is_not_offered_back() {
+        let (user, project) = (TempDir::new(), TempDir::new());
+        store::save(user.path(), &Flow { name: "Arena".into(), ..sample() }, None).expect("save");
+        let listing = hidden_listing(&["Arena".into()], user.path(), project.path());
+        let yours = listing.flows.iter().find(|s| s.flow.name == "Arena").expect("yours");
+        assert!(store::edits_builtin(&listing.builtins, yours));
+        assert_eq!(listing.hidden, []);
+    }
+
+    #[test]
+    fn hiding_and_unhiding_go_by_name() {
+        let mut names = Vec::new();
+        store::hide(&mut names, "arena");
+        store::hide(&mut names, "Arena ");
+        assert_eq!(names, ["arena"]);
+        assert!(store::unhide(&mut names, " ARENA"));
+        assert_eq!(names, Vec::<String>::new());
+        assert!(!store::unhide(&mut names, "Arena"));
     }
 
     #[test]
@@ -446,7 +499,7 @@ roles = ["coder"]
         store::save(&dir, &quick, None).expect("save");
         std::fs::write(dir.join("broken.toml"), "name = ").expect("write");
         let builtins = builtin::flows(&Known::ALL, Some(Known::Claude));
-        let listing = store::list(builtins, user.path(), Some(&dir));
+        let listing = store::list(builtins, &[], user.path(), Some(&dir));
         let listed: Vec<(&str, &str)> =
             listing.flows.iter().map(|saved| (saved.flow.name.as_str(), saved.origin.label())).collect();
         assert_eq!(

@@ -6,7 +6,7 @@ use super::{Flow, ORCHESTRATOR, Role};
 use crate::agents::{self, Known};
 
 pub(crate) const HEADER: &str =
-    "# A cornercase flow: import it with `cornercase flow import <file>` or Settings → Agents → flows → import";
+    "# A cornercase flow: import it with `cornercase flow import <file>` or Settings → Flows → import";
 const VALUE_WIDTH: usize = 40;
 pub(crate) const MAX_BYTES: usize = 256 * 1024;
 

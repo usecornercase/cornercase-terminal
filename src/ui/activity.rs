@@ -92,7 +92,7 @@ impl Item {
             Self::Flow => view.flow.is_some(),
             Self::Remote => matches!(view.overlay, Some(Overlay::Remote(_))),
             Self::Usage => matches!(view.overlay, Some(Overlay::Usage(_))),
-            Self::Settings => matches!(view.overlay, Some(Overlay::Settings(_))),
+            Self::Settings => matches!(view.overlay, Some(Overlay::Settings(_) | Overlay::Flows(_))),
             Self::Update | Self::Quit => false,
         }
     }

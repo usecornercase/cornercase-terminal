@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::edit::{Editing, Row};
-use super::{Action, Dialog, Hit, Room};
+use super::{Action, Dialog, Entry, Hit, Room};
 
 impl Dialog {
     pub(crate) fn key(&mut self, key: KeyEvent, room: Room) -> Action {
@@ -71,7 +71,9 @@ impl Dialog {
     fn list_key(&mut self, key: KeyEvent) -> Action {
         match key.code {
             KeyCode::Esc => return Action::Close,
-            KeyCode::Enter => self.open(self.cursor),
+            KeyCode::Enter => return self.activate(),
+            KeyCode::Tab | KeyCode::Right if self.in_settings => return Action::StepTab(1),
+            KeyCode::BackTab | KeyCode::Left if self.in_settings => return Action::StepTab(-1),
             KeyCode::Up | KeyCode::BackTab => self.select(self.cursor.saturating_sub(1)),
             KeyCode::Down | KeyCode::Tab => self.select(self.cursor + 1),
             KeyCode::Delete | KeyCode::Backspace => self.ask_delete(),
@@ -112,16 +114,7 @@ impl Dialog {
             }
             return Action::None;
         }
-        let Some(edit) = &mut self.edit else {
-            if let Hit::Row(i) = hit {
-                if self.cursor == i {
-                    self.open(i);
-                } else {
-                    self.select(i);
-                }
-            }
-            return Action::None;
-        };
+        let Some(edit) = &mut self.edit else { return self.list_hit(hit) };
         edit.notice = None;
         match hit {
             Hit::Tab(i) => edit.show_tab(i, &self.agents),
@@ -143,6 +136,21 @@ impl Dialog {
                 }
             }
             Hit::Button(_) => {}
+        }
+        Action::None
+    }
+
+    fn list_hit(&mut self, hit: Hit) -> Action {
+        match hit {
+            Hit::Tab(i) if self.in_settings => return Action::Tab(i),
+            Hit::Row(i) if self.cursor == i => return self.activate(),
+            Hit::Row(i) => {
+                self.select(i);
+                if self.cursor == i && self.entry(i).is_some_and(|entry| matches!(entry, Entry::Deleted)) {
+                    self.toggle_deleted();
+                }
+            }
+            _ => {}
         }
         Action::None
     }

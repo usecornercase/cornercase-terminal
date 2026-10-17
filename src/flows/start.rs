@@ -126,7 +126,7 @@ impl Start {
     }
 
     fn problems(&self, saved: &Saved) -> Vec<String> {
-        store::conflict(&self.flows, saved).into_iter().chain(saved.flow.problems()).collect()
+        store::conflict(&self.flows, &self.builtins, saved).into_iter().chain(saved.flow.problems()).collect()
     }
 
     pub(crate) fn items(&self) -> Vec<Item> {
@@ -213,7 +213,7 @@ impl Start {
     pub(crate) fn start(&mut self) -> Action {
         let refused = match self.selected() {
             _ if !self.repo => Some("a flow needs a project that is the root of a git repository"),
-            None => Some("there is no flow to start"),
+            None => Some("there is no flow to start: make one, or bring a built-in back, in Settings › Flows"),
             Some(saved) if !self.problems(saved).is_empty() => Some("fix this flow's problems first: edit it"),
             Some(_) if self.prompt.text().trim().is_empty() => Some("say what the team should do in the prompt"),
             Some(_) if self.branch.trim().is_empty() => Some("the run needs a branch for its worktree"),

@@ -4,7 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
-use super::issues::{issue_buttons_in, issues_area};
+use super::issues::issue_buttons_in;
 use super::{
     Note, draw_dialog_buttons, draw_input, draw_tabs, first_visible, form_inner, list_item, pick_background, tabs_in,
 };
@@ -16,7 +16,7 @@ use crate::ui::widgets::{hovered, overlay_block, rail};
 const LABEL_WIDTH: usize = 26;
 
 pub(crate) fn settings_area(area: Rect) -> Rect {
-    issues_area(area)
+    super::flows::flows_area(area)
 }
 
 fn settings_rows(settings: Rect) -> [Rect; 5] {
@@ -202,12 +202,14 @@ fn rows_hit(body: Rect, layout: &SettingsLayout, pos: Position) -> Option<Settin
     Some(SettingsHit::Row(i))
 }
 
+#[expect(clippy::struct_excessive_bools, reason = "one flag for each way a row can be drawn")]
 pub(crate) struct SettingsRow {
     pub(crate) section: &'static str,
     pub(crate) label: String,
     pub(crate) value: String,
     pub(crate) note: String,
     pub(crate) dangerous: bool,
+    pub(crate) muted: bool,
     pub(crate) removable: bool,
     pub(crate) movable: bool,
 }
@@ -337,8 +339,14 @@ fn draw_settings_row(f: &mut Frame, view: &View, row: &SettingsRow, selected: bo
     let label = columns.label;
     let dim = Style::default().fg(view.muted);
     let (marker, bg) = if selected { ("▌ ", Style::default().bg(view.surface())) } else { ("  ", Style::default()) };
-    let label_style = if selected { bg.add_modifier(Modifier::BOLD) } else { bg };
-    let value_style = if row.dangerous { bg.fg(Color::Red) } else { bg };
+    let (label_style, value_style) = if row.muted {
+        (bg.fg(view.muted), bg.fg(view.muted))
+    } else {
+        (
+            if selected { bg.add_modifier(Modifier::BOLD) } else { bg },
+            if row.dangerous { bg.fg(Color::Red) } else { bg },
+        )
+    };
     let width = usize::from(r.width);
     let room = if columns.fill {
         let buttons = if row.removable || row.movable { 9 } else { 0 };

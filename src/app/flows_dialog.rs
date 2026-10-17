@@ -18,6 +18,7 @@ use crate::flows::{Flow, builtin, share};
 use crate::log::{self, Job, Level};
 use crate::paths;
 use crate::project::Hierarchy;
+use crate::settings::Page;
 use crate::ui::{self, FlowsHit, SettingsHit};
 
 const LIST_LABEL: usize = 26;
@@ -26,25 +27,38 @@ const IMPORT_HEADING: &str = "paste a flow, or type owner/repo or an https addre
 const HEADING: &str = "teams of agents that work through a plan, started from an issue or a prompt";
 
 impl App {
-    pub(super) fn open_flows(&mut self, project: Option<u64>, flow: Option<(&Origin, &str)>) {
+    fn flows_dialog_for(&self, project: Option<u64>) -> Dialog {
         let project = project.or_else(|| self.project().map(|p| p.id));
         let path = project.and_then(|id| self.project_path(id));
         let installed = builtin::installed(&self.config);
         let agents = Agents::new(installed, Known::of(&self.config.agent), path.is_some());
         let mut dialog = Dialog::new(self.flow_listing(path.as_deref()), agents);
         dialog.project = project;
+        dialog
+    }
+
+    pub(super) fn open_flows_tab(&mut self) {
+        self.settings_page = Page::Flows;
+        let mut dialog = self.flows_dialog_for(None);
+        dialog.in_settings = true;
+        self.overlay = Some(Overlay::Flows { dialog: Box::new(dialog), back: None });
+    }
+
+    fn open_settings_page(&mut self, page: Page) {
+        if page != Page::Flows {
+            self.settings_page = page;
+            self.open_settings();
+        }
+    }
+
+    pub(super) fn open_flows(&mut self, project: Option<u64>, flow: Option<(&Origin, &str)>) {
+        let mut dialog = self.flows_dialog_for(project);
         if let Some(i) = flow.and_then(|(origin, name)| dialog.find(origin, name)) {
             dialog.select(i);
             dialog.open(i);
         }
         let back = self.overlay.take().map(Box::new);
         self.overlay = Some(Overlay::Flows { dialog: Box::new(dialog), back });
-    }
-
-    pub(super) fn flows_note(&self) -> String {
-        let project = self.project().map(|p| p.path.clone());
-        let listing = self.flow_listing(project.as_deref());
-        Dialog::new(listing, Agents::default()).summary()
     }
 
     fn flows_dialog(&mut self) -> Option<&mut Dialog> {
@@ -133,18 +147,13 @@ impl App {
             Action::Close => {
                 let Some(Overlay::Flows { dialog, back }) = self.overlay.take() else { return };
                 self.overlay = back.map(|back| *back);
-                let note = self.flows_note();
                 let starting = match &self.overlay {
                     Some(Overlay::StartFlow { start, .. }) => Some(start.project),
                     _ => None,
                 };
                 let listing = starting.map(|project| self.flow_listing(self.project_path(project).as_deref()));
-                match (&mut self.overlay, listing) {
-                    (Some(Overlay::Settings(settings)), _) => settings.flows = note,
-                    (Some(Overlay::StartFlow { start, .. }), Some(listing)) => {
-                        start.set_listing(listing, dialog.last.as_ref());
-                    }
-                    _ => {}
+                if let (Some(Overlay::StartFlow { start, .. }), Some(listing)) = (&mut self.overlay, listing) {
+                    start.set_listing(listing, dialog.last.as_ref());
                 }
             }
             Action::Save { flow, place, previous } => {
@@ -169,9 +178,72 @@ impl App {
                     dialog.notice = Some(format!("could not delete the flow: {e}"));
                 }
             }
+            Action::Hide { name, file } => self.hide_flow(&name, file.as_deref()),
+            Action::Unhide(name) => self.unhide_flow(&name),
+            Action::Restore { file, name } => {
+                let deleted = store::delete(&file);
+                if deleted.is_ok() {
+                    log::info!("flows", "flow deleted", file = file_name(&file));
+                }
+                let mut next = self.config.clone();
+                if store::unhide(&mut next.hidden_flows, &name) {
+                    self.save_hidden(next);
+                }
+                self.refresh_flows();
+                if let (Err(e), Some(dialog)) = (deleted, self.flows_dialog()) {
+                    dialog.notice = Some(format!("could not delete the flow: {e}"));
+                }
+            }
+            Action::Tab(i) => self.open_settings_page(Page::ALL[i]),
+            Action::StepTab(delta) => self.open_settings_page(Page::Flows.step(delta)),
+            Action::Restart => self.open_restart(),
             Action::Export(flow) => self.flow_exported(&flow),
             Action::ReadModels(kind) => self.read_models(kind),
             Action::Fetch(source) => self.fetch_flow(source),
+        }
+    }
+
+    fn save_hidden(&mut self, config: crate::config::Config) {
+        if let Err(e) = crate::config::save(&self.config_path, &config) {
+            if let Some(dialog) = self.flows_dialog() {
+                dialog.notice = Some(format!("failed to save the settings: {e}"));
+            }
+            return;
+        }
+        self.set_config(config);
+    }
+
+    fn hide_flow(&mut self, name: &str, file: Option<&std::path::Path>) {
+        let mut failed = None;
+        if let Some(file) = file {
+            match store::delete(file) {
+                Ok(()) => log::info!("flows", "flow deleted", file = file_name(file)),
+                Err(e) => failed = Some(format!("could not delete the flow: {e}")),
+            }
+        }
+        let mut next = self.config.clone();
+        store::hide(&mut next.hidden_flows, name);
+        self.save_hidden(next);
+        log::info!("flows", "built-in flow hidden", name = name);
+        self.refresh_flows();
+        if let Some(dialog) = self.flows_dialog() {
+            dialog.notice = Some(failed.unwrap_or_else(|| {
+                format!("deleted {name}: deleted built-ins, at the end of the list, brings it back")
+            }));
+        }
+    }
+
+    fn unhide_flow(&mut self, name: &str) {
+        let mut next = self.config.clone();
+        store::unhide(&mut next.hidden_flows, name);
+        self.save_hidden(next);
+        log::info!("flows", "built-in flow restored", name = name);
+        self.refresh_flows();
+        if let Some(dialog) = self.flows_dialog() {
+            if let Some(i) = dialog.find(&Origin::BuiltIn, name) {
+                dialog.select(i);
+            }
+            dialog.notice = Some(format!("restored {name}"));
         }
     }
 
@@ -308,6 +380,7 @@ pub(super) fn settings_row(text: &RowText) -> ui::SettingsRow {
         value: text.value.clone(),
         note: text.note.clone(),
         dangerous: text.red,
+        muted: text.muted,
         removable: text.removable,
         movable: text.movable,
     }
@@ -353,11 +426,16 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
         (Some(_), _) => IMPORT_HEADING.to_string(),
         (None, edit) => edit.map_or_else(|| HEADING.to_string(), Editing::text_heading),
     };
+    let (tabs, tab) = if dialog.settings_tabs() {
+        (Page::ALL.iter().map(|page| page.name().to_string()).collect(), Page::Flows.index())
+    } else {
+        (edit.map(Editing::tabs).unwrap_or_default(), edit.map_or(0, Editing::tab_index))
+    };
     ui::Overlay::Flows(Box::new(ui::Flows {
         title: dialog.title(),
         heading,
-        tabs: edit.map(Editing::tabs).unwrap_or_default(),
-        tab: edit.map_or(0, Editing::tab_index),
+        tabs,
+        tab,
         rows,
         cursor: edit.map_or(dialog.cursor, |e| e.cursor),
         label: if edit.is_some() { FORM_LABEL } else { LIST_LABEL },

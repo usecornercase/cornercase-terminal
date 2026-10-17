@@ -326,6 +326,12 @@ fn pick(listing: &Listing, name: &str) -> Result<(Flow, Option<String>), String>
 
 fn lookup(listing: &Listing, name: &str) -> Result<(Saved, Option<String>), String> {
     let name = name.trim();
+    if let Some(flow) = listing.deleted(name) {
+        return Err(format!(
+            "the built-in flow `{}` was deleted: bring it back in Settings › Flows, under deleted built-ins",
+            flow.name.trim()
+        ));
+    }
     let found: Vec<&Saved> = listing.named(name).collect();
     let Some(first) = found.first() else {
         let names: Vec<&str> = listing.flows.iter().map(|saved| saved.flow.name.as_str()).collect();

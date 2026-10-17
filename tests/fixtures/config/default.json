@@ -31,6 +31,7 @@
   "accept_trust_prompts": false,
   "resume_agents": true,
   "keep_awake": false,
+  "hidden_flows": [],
   "trust_prompt_pattern": "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed",
   "gh": "gh",
   "glab": "glab",

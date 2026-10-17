@@ -782,3 +782,45 @@ fn a_saved_folder_that_is_not_a_plain_name_is_never_used() {
     assert_eq!(again.runs[0].dir, None);
     assert!(again.projects.iter().flat_map(|p| &p.workspaces).all(|w| w.run_dirs.is_empty()));
 }
+
+fn arena_deleted() -> Team {
+    Team::configured(FAKE, |config, _| config.hidden_flows = vec!["Arena".into()])
+}
+
+#[test]
+fn a_deleted_built_in_is_not_listed_and_flow_run_says_how_to_bring_it_back() {
+    let mut team = arena_deleted();
+    let listed: wire::Flows =
+        serde_json::from_value(value(&mut team.app, None, Command::FlowList(wire::FlowList::default())))
+            .expect("the flows");
+    assert!(listed.flows.iter().all(|f| f.name != "Arena"));
+    assert!(listed.flows.iter().any(|f| f.name == "Quick"));
+
+    let run = wire::FlowRun { name: "arena".into(), prompt: "x".into(), ..wire::FlowRun::default() };
+    let refused = error(now(&mut team.app, None, Command::FlowRun(run)));
+    assert!(refused.contains("was deleted") && refused.contains("Settings › Flows"), "{refused}");
+    let export = wire::FlowExport { name: "Arena".into(), ..wire::FlowExport::default() };
+    let refused = error(now(&mut team.app, None, Command::FlowExport(export)));
+    assert!(refused.contains("was deleted") && refused.contains("Settings › Flows"), "{refused}");
+}
+
+#[test]
+fn a_projects_flow_named_like_a_deleted_built_in_does_not_run_and_is_listed_with_a_problem() {
+    let mut team = arena_deleted();
+    let mut project = pair();
+    project.name = "Arena".into();
+    store::save(&store::project_dir(team.repo.path()), &project, None).expect("save the flow");
+
+    let listed: wire::Flows =
+        serde_json::from_value(value(&mut team.app, None, Command::FlowList(wire::FlowList::default())))
+            .expect("the flows");
+    let arena = listed.flows.iter().find(|f| f.name == "Arena").expect("the project's flow");
+    assert!(
+        arena.problems.iter().any(|p| p.contains("deleted built-in `Arena` keeps its name")),
+        "{:?}",
+        arena.problems
+    );
+
+    let run = wire::FlowRun { name: "Arena".into(), prompt: "x".into(), ..wire::FlowRun::default() };
+    assert!(error(now(&mut team.app, None, Command::FlowRun(run))).contains("was deleted"));
+}

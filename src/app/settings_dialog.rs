@@ -39,6 +39,10 @@ impl App {
     }
 
     pub(super) fn open_settings(&mut self) {
+        if self.settings_page == Page::Flows {
+            self.open_flows_tab();
+            return;
+        }
         let tokens = Source::REMOTE
             .into_iter()
             .map(|source| {
@@ -54,7 +58,6 @@ impl App {
         settings.awake = self.agents.awake.state().note();
         settings.pulls = self.pull_requests_note();
         settings.merged = self.merged_note();
-        settings.flows = self.flows_note();
         settings.remote = self.remote.note();
         settings.browsers = self.remote.web.paired();
         for via in Via::ALL {
@@ -82,6 +85,10 @@ impl App {
         let Some(Overlay::Settings(s)) = &mut self.overlay else { return };
         let action = s.key(key, Self::settings_pick_rows(area));
         self.settings_page = s.page;
+        if self.settings_page == Page::Flows {
+            self.open_flows_tab();
+            return;
+        }
         self.settings_act(action);
     }
 
@@ -134,6 +141,10 @@ impl App {
             None => settings::Action::None,
         };
         self.settings_page = s.page;
+        if self.settings_page == Page::Flows {
+            self.open_flows_tab();
+            return;
+        }
         self.settings_act(action);
     }
 
@@ -152,7 +163,6 @@ impl App {
                 self.set_config(*config);
             }
             settings::Action::CheckToken(source, token) => self.check_token(source, token),
-            settings::Action::OpenFlows => self.open_flows(None, None),
             settings::Action::ForgetBrowsers => {
                 let forgotten = self.forget_browsers();
                 if let Some(Overlay::Settings(s)) = &mut self.overlay {
@@ -215,6 +225,7 @@ pub(super) fn settings_view(settings: &Settings) -> ui::Settings {
                 value: text.value,
                 note: text.note,
                 dangerous: text.dangerous,
+                muted: false,
                 removable: settings.removal(i).is_some(),
                 movable: row.movable(),
             }
