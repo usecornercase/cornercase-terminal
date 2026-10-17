@@ -89,8 +89,9 @@ impl HostTheme {
         self.stands_out(BRIGHT_BLACK, MIN_MUTED_CONTRAST)
     }
 
-    pub(crate) fn soft_is_readable(&self) -> bool {
+    pub(crate) fn soft_is_readable(&self, surface: RgbColor) -> bool {
         self.stands_out(WHITE, MIN_SOFT_CONTRAST)
+            && self.palette[WHITE].is_none_or(|c| contrast(c, surface) >= MIN_SOFT_CONTRAST)
     }
 
     fn stands_out(&self, index: usize, min: f64) -> bool {

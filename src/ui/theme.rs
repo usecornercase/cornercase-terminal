@@ -1,3 +1,4 @@
+use libghostty_vt::style::RgbColor;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 
@@ -11,6 +12,10 @@ pub(super) const BRAND_COLOR: Color = Color::Indexed(99);
 pub(super) const DARK_SURFACE: Color = Color::Indexed(236);
 
 pub(super) const LIGHT_SURFACE: Color = Color::Indexed(254);
+
+const DARK_SURFACE_RGB: RgbColor = RgbColor { r: 0x30, g: 0x30, b: 0x30 };
+
+const LIGHT_SURFACE_RGB: RgbColor = RgbColor { r: 0xe4, g: 0xe4, b: 0xe4 };
 
 pub(super) const DARK_HOVER: Color = Color::Indexed(235);
 
@@ -61,9 +66,10 @@ pub(crate) fn muted(theme: &HostTheme) -> Color {
 }
 
 pub(crate) fn soft(theme: &HostTheme) -> Color {
-    if theme.soft_is_readable() {
+    let light = theme.is_light() == Some(true);
+    if theme.soft_is_readable(if light { LIGHT_SURFACE_RGB } else { DARK_SURFACE_RGB }) {
         Color::Gray
-    } else if theme.is_light() == Some(true) {
+    } else if light {
         LIGHT_SOFT
     } else {
         DARK_SOFT

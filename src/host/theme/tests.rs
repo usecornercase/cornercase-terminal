@@ -332,15 +332,17 @@ mod soft_is_readable {
     #[case::solarized_light(Some(rgb(0xfd, 0xf6, 0xe3)), Some(rgb(0xee, 0xe8, 0xd5)), false)]
     #[case::two_to_one_is_not_enough(Some(rgb(0x00, 0x00, 0x00)), Some(rgb(0x59, 0x59, 0x59)), false)]
     #[case::white_unknown(Some(rgb(0x1a, 0x1b, 0x26)), None, false)]
-    fn needs_the_white_to_stand_out_three_to_one(
+    #[case::readable_on_the_background_only(Some(rgb(0xff, 0xff, 0xff)), Some(rgb(0x94, 0x94, 0x94)), false)]
+    fn needs_the_white_to_stand_out_three_to_one_from_the_background_and_the_surface(
         #[case] background: Option<RgbColor>,
         #[case] white: Option<RgbColor>,
         #[case] expected: bool,
     ) {
         let mut theme = HostTheme { background, ..HostTheme::default() };
         theme.palette[7] = white;
+        let surface = if theme.is_light() == Some(true) { rgb(0xe4, 0xe4, 0xe4) } else { rgb(0x30, 0x30, 0x30) };
 
-        assert_eq!(theme.soft_is_readable(), expected);
+        assert_eq!(theme.soft_is_readable(surface), expected);
     }
 }
 
