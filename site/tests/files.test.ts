@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { App } from '../src/lib/demo/app';
+import { ADDRESS_RS } from '../src/lib/demo/data';
 import { world } from '../src/lib/demo/world';
 
 const PATH = 'src/returns/address.rs';
@@ -86,5 +87,36 @@ test('a panel too narrow for both leaves the back button alone', () => {
   app.pointerUp();
   app.render();
   assert.equal(app.textAt('‹'), null);
+  app.destroy();
+});
+
+test('a selection held at the bottom scrolls the file, and copy without one takes the whole file', () => {
+  const app = new App();
+  app.virtual = true;
+  app.scripted = true;
+  app.resize(140, 12);
+  world(app, { scripted: true });
+  app.files.open = true;
+  app.showFile(PATH);
+  app.render();
+  const copied: string[] = [];
+  app.on((event, detail) => {
+    if (event === 'copy') copied.push(detail ?? '');
+  });
+  const viewer = app.files.place(app.workspace()?.id ?? -1).viewer;
+  assert.ok(viewer);
+  app.fileAction('copy');
+  assert.equal(copied.at(-1), ADDRESS_RS);
+
+  const panel = app.areas().changes;
+  const lines = ADDRESS_RS.trimEnd().split('\n');
+  app.selectFileLine(1);
+  app.pointerMove(panel.x + 2, panel.y + panel.h - 1, 1);
+  app.advance(1000);
+  assert.ok(viewer.scroll > 0);
+  assert.deepEqual(viewer.selection, [1, lines.length]);
+  app.pointerUp();
+  app.fileAction('copy');
+  assert.equal(copied.at(-1), lines.join('\n'));
   app.destroy();
 });

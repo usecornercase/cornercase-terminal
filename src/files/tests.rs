@@ -73,8 +73,9 @@ mod viewer {
     use super::*;
 
     fn content(lines: &[&str]) -> Content {
+        let source = lines.join("\n").into();
         let lines = lines.iter().map(|l| (*l).to_string()).collect();
-        Content { stamp: Stamp::default(), language: None, body: disk::Body::Text { lines, styles: None } }
+        Content { stamp: Stamp::default(), language: None, body: disk::Body::Text { lines, styles: None, source } }
     }
 
     #[test]

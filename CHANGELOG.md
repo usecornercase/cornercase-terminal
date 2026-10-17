@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.119
+
+- **Select a whole file in the files panel.** While you drag over the lines of a file, holding the pointer on the first or last line shown (or past it) scrolls the file and the selection follows; the wheel scrolls it too while you keep the button pressed.
+- **copy** with no lines selected now copies the whole file instead of its path. Copied text is now exactly what is in the file, so tabs stay tabs.
+
 ## 0.12.118
 
 - The TODO button's dot for pending items now sits inside the button, after its name (` TODO ● `), like Remote's (` Remote ● `), and a click on it opens the list.

@@ -60,6 +60,7 @@ export interface FilesPlace {
 export class FilesPanel {
   open = false;
   selecting: number | null = null;
+  scrolled = -Infinity;
   full = false;
   private places = new Map<number, FilesPlace>();
 
@@ -668,7 +669,7 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
   });
 }
 
-export function lineNear(app: App, y: number): number | null {
+function shownRows(app: App): { body: Rect; rows: CodeRow[]; first: number; max: number } | null {
   const f = panel(app, app.areas().changes);
   const viewer = f?.place.viewer;
   if (!f || !viewer || !f.body.h) return null;
@@ -680,9 +681,15 @@ export function lineNear(app: App, y: number): number | null {
     text.length,
   );
   const rows = codeRows(text.length, g, viewer.unfolded);
-  if (!rows.length) return null;
-  const first = Math.min(viewer.scroll, Math.max(0, rows.length - f.body.h));
-  const at = Math.min(first + Math.max(0, Math.min(f.body.h - 1, y - f.body.y)), rows.length - 1);
+  const max = Math.max(0, rows.length - f.body.h);
+  return { body: f.body, rows, first: Math.min(viewer.scroll, max), max };
+}
+
+export function lineNear(app: App, y: number): number | null {
+  const shown = shownRows(app);
+  if (!shown?.rows.length) return null;
+  const { body, rows, first } = shown;
+  const at = Math.min(first + Math.max(0, Math.min(body.h - 1, y - body.y)), rows.length - 1);
   for (let i = at; i >= 0; i--) {
     const row = rows[i];
     if (row.kind === 'code') return row.n;
@@ -690,10 +697,19 @@ export function lineNear(app: App, y: number): number | null {
   return null;
 }
 
+export function lineEdge(app: App, y: number): { delta: number; max: number } | null {
+  const shown = shownRows(app);
+  if (!shown) return null;
+  const { body, first, max } = shown;
+  if (y <= body.y && first > 0) return { delta: -1, max };
+  if (y >= bottom(body) - 1 && first < max) return { delta: 1, max };
+  return null;
+}
+
 export function selectedText(files: Map<string, string>, viewer: FilesViewer): string {
-  if (!viewer.selection) return viewer.path;
+  const content = files.get(viewer.path);
+  if (content === undefined || picture(content)) return viewer.path;
+  if (!viewer.selection) return content;
   const [a, b] = ordered(viewer.selection);
-  return textLines(files.get(viewer.path) ?? '')
-    .slice(a - 1, b)
-    .join('\n');
+  return textLines(content).slice(a - 1, b).join('\n');
 }

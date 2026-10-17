@@ -11,7 +11,7 @@ import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, wo
 import { TodoPanel, todoWidth } from './todo';
 import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
 import { RUN_DIR, type Run } from './flowrun';
-import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, foundRows, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
+import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, foundRows, lineEdge, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
   GROUP_STYLES,
@@ -254,6 +254,7 @@ function checkEmail(input: string): [string, string?] {
 }
 const DOUBLE_CLICK = 400;
 const AUTO_SCROLL_EVERY = 150;
+const LINES_SCROLL_EVERY = 50;
 const KEEP_AWAKE_FOR = 30000;
 
 interface Focus {
@@ -890,6 +891,21 @@ export class App {
     const last = this.projects.map((x) => x.group).lastIndexOf(groupId);
     this.projects.splice(at >= 0 ? at : last >= 0 ? last + 1 : this.projects.length, 0, project);
     this.active = Math.max(0, this.projects.findIndex((x) => x.id === activeId));
+  }
+
+  private autoScrollLines(): void {
+    const h = this.hover;
+    const viewer = this.filesPlace()?.viewer;
+    const from = this.files.selecting;
+    if (from === null || !h || !viewer || this.now() - this.files.scrolled < LINES_SCROLL_EVERY) return;
+    const edge = lineEdge(this, h.y);
+    if (!edge) return;
+    this.scrollFiles(edge.delta, edge.max);
+    const line = lineNear(this, h.y);
+    if (line !== null) viewer.selection = [from, line];
+    this.files.scrolled = this.now();
+    this.dirty();
+    this.after(LINES_SCROLL_EVERY, () => this.autoScrollLines());
   }
 
   private autoScroll(): void {
@@ -3923,6 +3939,7 @@ export class App {
       const line = lineNear(this, y);
       const viewer = this.filesPlace()?.viewer;
       if (line !== null && viewer) viewer.selection = [this.files.selecting, line];
+      this.autoScrollLines();
       this.dirty();
       return;
     }

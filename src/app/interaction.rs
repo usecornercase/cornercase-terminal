@@ -13,6 +13,8 @@ pub(super) const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 
 pub(super) const AUTO_SCROLL_EVERY: Duration = Duration::from_millis(150);
 
+pub(super) const LINES_SCROLL_EVERY: Duration = Duration::from_millis(50);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Grab {
     Row(Target),
@@ -55,7 +57,7 @@ pub(super) enum Drag {
     Pane(PaneDrag),
     Selection { term: u64, link: Option<LinkPress> },
     Link(LinkPress),
-    Lines { workspace: u64, path: String, anchor: u32 },
+    Lines { workspace: u64, path: String, anchor: u32, area: Rect, moved: bool, scrolled: Option<Instant> },
 }
 
 impl Drag {

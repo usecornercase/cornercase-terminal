@@ -314,6 +314,21 @@ pub(crate) fn line_near(area: Rect, view: &View, y: u16) -> Option<u32> {
     })
 }
 
+pub(crate) fn edge(area: Rect, view: &View, y: u16) -> Option<isize> {
+    let body = parts(area).body;
+    if !matches!(view.screen, Screen::File(_)) || body.is_empty() {
+        return None;
+    }
+    let first = first(area, view);
+    if y <= body.y && first > 0 {
+        Some(-1)
+    } else if y >= body.bottom() - 1 && first < max_scroll(area, view) {
+        Some(1)
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn row_of(view: &View, line: u32) -> usize {
     match &view.screen {

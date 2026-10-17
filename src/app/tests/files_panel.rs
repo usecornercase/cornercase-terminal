@@ -209,6 +209,72 @@ fn copy_takes_the_selected_lines() {
 }
 
 #[test]
+fn copy_without_a_selection_takes_the_whole_file_as_it_is() {
+    let repo = git_repo(&[("src/main.rs", "fn main() {\n\trun();\n}\n")]);
+    let (mut app, rx) = opened(&repo);
+    show(&mut app, &rx, "src/main.rs");
+    let copy = action_pos(&app, Action::Copy);
+    click(&mut app, copy);
+    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("fn main() {\n\trun();\n}\n")));
+    let pos = line_pos(&app, 2);
+    click(&mut app, pos);
+    click(&mut app, copy);
+    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("\trun();")));
+}
+
+fn long_file() -> (TempDir, App, Receiver<AppEvent>) {
+    let source = (1..=200).map(|n| format!("let line_{n} = {n};\n")).collect::<Vec<_>>().concat();
+    let repo = git_repo(&[("src/main.rs", &source)]);
+    let (mut app, rx) = opened(&repo);
+    show(&mut app, &rx, "src/main.rs");
+    (repo, app, rx)
+}
+
+fn hold(app: &mut App, from: Instant, steps: u32) -> Instant {
+    for step in 1..=steps {
+        app.refresh(from + LINES_SCROLL_EVERY * step);
+    }
+    from + LINES_SCROLL_EVERY * steps
+}
+
+#[test]
+fn a_selection_held_at_an_edge_scrolls_the_file() {
+    let (_repo, mut app, _rx) = long_file();
+    let body = panel::parts(panel_area(&app)).body;
+    let (first, bottom) = (line_pos(&app, 1), Position::new(body.x + 2, body.bottom() - 1));
+    press(&mut app, first);
+    hold(&mut app, Instant::now(), 3);
+    assert_eq!(file(&app).scroll, 0, "a press alone does not scroll");
+
+    mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), bottom);
+    assert!(app.tick(Instant::now()).is_some_and(|wait| wait <= LINES_SCROLL_EVERY));
+    let held = hold(&mut app, Instant::now(), 9);
+    assert_eq!(file(&app).scroll, 10);
+    assert_eq!(file(&app).selection, Some((1, u32::from(body.height) + 10)));
+
+    mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(body.x + 2, body.y - 1));
+    let held = hold(&mut app, held, 3);
+    assert_eq!((file(&app).scroll, file(&app).selection), (7, Some((1, 8))));
+
+    mouse(&mut app, MouseEventKind::Up(MouseButton::Left), bottom);
+    hold(&mut app, held, 3);
+    assert_eq!((file(&app).scroll, app.lines_edge()), (7, None));
+}
+
+#[test]
+fn the_wheel_scrolls_a_selection_without_ending_it() {
+    let (_repo, mut app, _rx) = long_file();
+    let first = line_pos(&app, 1);
+    press(&mut app, first);
+    mouse(&mut app, MouseEventKind::ScrollDown, first);
+    mouse(&mut app, MouseEventKind::ScrollDown, first);
+    assert_eq!((file(&app).scroll, file(&app).selection), (6, Some((1, 7))));
+    let below = Position::new(first.x, first.y + 1);
+    mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), below);
+    assert_eq!(file(&app).selection, Some((1, 8)));
+}
+
+#[test]
 fn an_outside_file_keeps_its_absolute_path_for_actions_and_the_previous_search() {
     let (repo, other) = (repo(), TempDir::new());
     let path = other.path().join("note.md").display().to_string();
@@ -227,7 +293,7 @@ fn an_outside_file_keeps_its_absolute_path_for_actions_and_the_previous_search()
     let workspace = app.project().expect("project").workspace().expect("workspace").id;
     app.files.viewer_mut(workspace).expect("viewer").selection = None;
     click(&mut app, copy);
-    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52(&path)));
+    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("# Note\nRead this.\n")));
     click(&mut app, ask);
     assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52(&path)));
     open(&mut app);

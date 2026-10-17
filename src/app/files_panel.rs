@@ -7,7 +7,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::{Position, Rect};
 
 use super::input::wheel;
-use super::interaction::Drag;
+use super::interaction::{Drag, LINES_SCROLL_EVERY};
 use super::layout::Side;
 use super::{App, AppEvent};
 use crate::changes::{Checkout, Tints};
@@ -115,26 +115,22 @@ impl App {
                 };
                 let read = panics::contain(|| disk::read(&load.file, load.previous));
                 job.done();
-                if let Some(Some(disk::Read {
-                    content: disk::Content { body: disk::Body::Unreadable { reason, .. }, .. },
-                    ..
-                })) = &read
-                {
+                if let Some(Some(disk::Content { body: disk::Body::Unreadable { reason, .. }, .. })) = &read {
                     log::info!("files", "image unreadable", path = &load.path, reason = reason);
                 }
-                let Some(Some(read)) = read else {
+                let Some(Some(content)) = read else {
                     send(None, true);
                     return;
                 };
-                if read.source.is_none() {
-                    send(Some(read.content), true);
+                if !matches!(content.body, disk::Body::Text { .. }) {
+                    send(Some(content), true);
                     return;
                 }
                 if load.previous.is_none() {
-                    send(Some(read.content.clone()), false);
+                    send(Some(content.clone()), false);
                 }
-                let plain = read.content.clone();
-                let styled = panics::contain(|| disk::highlighted(read)).flatten();
+                let plain = content.clone();
+                let styled = panics::contain(|| disk::highlighted(content)).flatten();
                 send(Some(styled.unwrap_or(plain)), true);
             });
         }
@@ -358,7 +354,8 @@ impl App {
             Some(Hit::Line(n)) => {
                 if let Some(viewer) = self.files.viewer_mut(workspace) {
                     viewer.selection = Some((n, n));
-                    self.drag = Some(Drag::Lines { workspace, path: viewer.path.clone(), anchor: n });
+                    let path = viewer.path.clone();
+                    self.drag = Some(Drag::Lines { workspace, path, anchor: n, area, moved: false, scrolled: None });
                 }
             }
             Some(Hit::Fold(key)) => {
@@ -468,23 +465,72 @@ impl App {
         }
     }
 
-    pub(super) fn drag_lines(&mut self, workspace: u64, path: &str, anchor: u32, ev: MouseEvent, panel_area: Rect) {
-        let shown = self.files_shown()
-            && self.files_target().is_some_and(|(id, _)| id == workspace)
-            && self.files.viewer(workspace).is_some_and(|viewer| viewer.path == path);
-        if !shown {
+    pub(super) fn drag_lines(&mut self, ev: MouseEvent, panel_area: Rect) {
+        let Some(Drag::Lines { workspace, path, anchor, .. }) = self.drag.clone() else { return };
+        if !self.shows_file(workspace, &path) {
             self.drag = None;
             return;
         }
         match ev.kind {
             MouseEventKind::Drag(MouseButton::Left) => {
-                let Some(view) = self.files_view() else { return };
-                let Some(line) = panel::line_near(panel_area, &view, ev.row) else { return };
-                if let Some(viewer) = self.files.viewer_mut(workspace) {
-                    viewer.selection = Some((anchor, line));
+                if let Some(Drag::Lines { moved, .. }) = &mut self.drag {
+                    *moved = true;
                 }
+                self.select_lines(workspace, anchor, ev.row, panel_area);
+                self.auto_scroll_lines(Instant::now());
+            }
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+                if let Some(delta) = wheel(ev.kind) {
+                    self.scroll_viewer(workspace, panel_area, delta);
+                }
+                self.select_lines(workspace, anchor, ev.row, panel_area);
             }
             _ => self.drag = None,
+        }
+    }
+
+    pub(super) fn lines_edge(&self) -> Option<(Rect, u16, isize)> {
+        let Some(Drag::Lines { workspace, path, area, moved: true, .. }) = &self.drag else { return None };
+        let pos = self.hover?;
+        if !self.shows_file(*workspace, path) {
+            return None;
+        }
+        let panel_area = self.layout(*area).shown(self.nav).changes;
+        let delta = panel::edge(panel_area, &self.files_view()?, pos.y)?;
+        Some((panel_area, pos.y, delta))
+    }
+
+    pub(super) fn auto_scroll_lines(&mut self, now: Instant) {
+        let Some((panel_area, row, delta)) = self.lines_edge() else { return };
+        let Some(Drag::Lines { workspace, anchor, scrolled, .. }) = &mut self.drag else { return };
+        if scrolled.is_some_and(|at| now.duration_since(at) < LINES_SCROLL_EVERY) {
+            return;
+        }
+        *scrolled = Some(now);
+        let (workspace, anchor) = (*workspace, *anchor);
+        self.scroll_viewer(workspace, panel_area, delta);
+        self.select_lines(workspace, anchor, row, panel_area);
+    }
+
+    fn shows_file(&self, workspace: u64, path: &str) -> bool {
+        self.files_shown()
+            && self.files_target().is_some_and(|(id, _)| id == workspace)
+            && self.files.viewer(workspace).is_some_and(|viewer| viewer.path == path)
+    }
+
+    fn scroll_viewer(&mut self, workspace: u64, panel_area: Rect, delta: isize) {
+        let Some(view) = self.files_view() else { return };
+        let max = panel::max_scroll(panel_area, &view);
+        if let Some(viewer) = self.files.viewer_mut(workspace) {
+            viewer.scroll = viewer.scroll.min(max).saturating_add_signed(delta).min(max);
+        }
+    }
+
+    fn select_lines(&mut self, workspace: u64, anchor: u32, row: u16, panel_area: Rect) {
+        let Some(view) = self.files_view() else { return };
+        let Some(line) = panel::line_near(panel_area, &view, row) else { return };
+        if let Some(viewer) = self.files.viewer_mut(workspace) {
+            viewer.selection = Some((anchor, line));
         }
     }
 
@@ -508,15 +554,7 @@ impl App {
                 self.ask_agent(workspace, &reference);
             }
             Action::Copy => {
-                let text = match (selected, &viewer.content) {
-                    (Some((a, b)), Some(content)) => {
-                        let lines = content.lines();
-                        let range = usize::try_from(a).unwrap_or(1).saturating_sub(1)
-                            ..usize::try_from(b).unwrap_or(usize::MAX).min(lines.len());
-                        lines.get(range).map(|l| l.join("\n")).unwrap_or_default()
-                    }
-                    _ => path,
-                };
+                let text = viewer.content.as_ref().and_then(|content| content.text(selected)).unwrap_or(path);
                 self.copy(&text);
             }
         }

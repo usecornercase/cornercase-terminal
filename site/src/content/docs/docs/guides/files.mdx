@@ -58,13 +58,13 @@ To change a file, use **open**: the panel only reads.
 
 ### Pick lines and act on them
 
-Click a line to select it, or press and drag over several. The header says which, such as `lines 11–12`, and its buttons act on them:
+Click a line to select it, or press and drag over several. Hold the pointer on the first or last line shown, or past it, and the file scrolls while the selection follows; the wheel scrolls it too while you keep the button pressed. The header says which lines, such as `lines 11–12`, and its buttons act on them:
 
 | Button | Does |
 | --- | --- |
 | **open** | Opens the file in a new tab with your `$VISUAL` or `$EDITOR` (or `vi`), at the first selected line. The tab closes when you quit the editor. |
 | **ask agent** | Types a reference such as `src/returns/address.rs:11-12 ` into the agent running in this workspace and switches to its tab, so you can write your question after it. With nothing selected it types the file's path. Without an agent in the workspace, it copies the reference to your clipboard instead. |
-| **copy** | Copies the selected lines to your clipboard, or the file's path when nothing is selected. |
+| **copy** | Copies the selected lines to your clipboard, or the whole file when nothing is selected, exactly as it is on disk (tabs included). |
 
 ## Images
 
@@ -230,7 +230,7 @@ When a program prints the path of a file, hovering it underlines it, and clickin
 
 - A line number after the path opens the file at that line, selected, so **ask agent** takes it at once: `:12`, `:12:5`, a range like `:12-20`, or GitHub's `#L12-L20`.
 - A relative path is looked up from the folder of the program that printed it, then from the workspace's root. A leading `~/` expands to your home folder. Only regular files are links: folders, devices such as `/dev/zero` and FIFOs aren't opened.
-- Files inside the workspace keep their relative path. An outside file shows its absolute path, which **open**, **ask agent** and **copy** use too (with selected lines, **copy** still copies their text). It has no git marks. **`‹`** returns to the tree or your previous search results; the panel remembers the outside file when you close and reopen it, until the server stops.
+- Files inside the workspace keep their relative path. An outside file shows its absolute path, which **open** and **ask agent** use too. It has no git marks. **`‹`** returns to the tree or your previous search results; the panel remembers the outside file when you close and reopen it, until the server stops.
 - In a program that doesn't use the mouse, pressing and dragging over a path still selects text, as anywhere else.
 - In a program that uses the mouse, such as Claude Code in its full-screen mode, a click on a path that releases on the same spot opens the file, and the program doesn't see it; if you drag, the program gets the press and the drag as usual.
 

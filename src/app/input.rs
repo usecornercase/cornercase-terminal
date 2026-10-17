@@ -224,9 +224,7 @@ impl App {
             Some(Drag::Border(border)) => self.drag_border(border, ev, area),
             Some(Drag::Divider { tab, path }) => self.drag_divider(tab, &path, ev, areas.pane),
             Some(Drag::Pane(drag)) => self.drag_pane(drag, ev, areas.pane, area),
-            Some(Drag::Lines { workspace, path, anchor }) => {
-                self.drag_lines(workspace, &path, anchor, ev, areas.changes);
-            }
+            Some(Drag::Lines { .. }) => self.drag_lines(ev, areas.changes),
             Some(Drag::Selection { term, link }) => {
                 let pane = self.tab().and_then(|t| t.rect(areas.pane, term)).unwrap_or(areas.pane);
                 self.drag_selection(term, link, ev, pane);

@@ -37,10 +37,24 @@ fn reads_lines_and_the_language() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "fn main() {\n\tprintln!();\n}\n").expect("write");
     let read = read(&path, None).expect("read");
-    assert_eq!(read.content.lines(), ["fn main() {", "    println!();", "}"]);
-    assert_eq!(read.content.language, Some("rust"));
+    assert_eq!(read.lines(), ["fn main() {", "    println!();", "}"]);
+    assert_eq!(read.language, Some("rust"));
     let styled = highlighted(read).expect("highlighted");
     assert_eq!(styled.styles().map(<[Segments]>::len), Some(3));
+    assert_eq!(styled.text(None).as_deref(), Some("fn main() {\n\tprintln!();\n}\n"));
+}
+
+#[test]
+fn the_text_is_the_file_as_it_is_on_disk() {
+    let dir = TempDir::new();
+    let path = dir.path().join("Makefile");
+    let source = "all:\r\n\tcargo build\r\n\ntest:\n\tcargo test\n";
+    fs::write(&path, source).expect("write");
+    let content = read(&path, None).expect("read");
+    assert_eq!(content.text(None).as_deref(), Some(source));
+    assert_eq!(content.text(Some((2, 2))).as_deref(), Some("\tcargo build"));
+    assert_eq!(content.text(Some((4, 9))).as_deref(), Some("test:\n\tcargo test"));
+    assert_eq!(content.text(Some((9, 9))).as_deref(), Some(""));
 }
 
 #[test]
@@ -48,10 +62,10 @@ fn an_unchanged_file_is_not_read_again() {
     let dir = TempDir::new();
     let path = dir.path().join("a.txt");
     fs::write(&path, "one\n").expect("write");
-    let stamp = read(&path, None).expect("read").content.stamp;
+    let stamp = read(&path, None).expect("read").stamp;
     assert!(read(&path, Some(stamp)).is_none());
     fs::write(&path, "one\ntwo\n").expect("write");
-    assert_eq!(read(&path, Some(stamp)).map(|r| r.content.lines().len()), Some(2));
+    assert_eq!(read(&path, Some(stamp)).map(|r| r.lines().len()), Some(2));
 }
 
 #[test]
@@ -60,11 +74,12 @@ fn binary_and_missing_files_have_no_lines() {
     let path = dir.path().join("logo.png");
     fs::write(&path, [0x89, b'P', 0, 1]).expect("write");
     let read = read(&path, None).expect("read");
-    assert_eq!(read.content.body, Body::Binary);
+    assert_eq!(read.body, Body::Binary);
+    assert_eq!(read.text(None), None);
     fs::remove_file(&path).expect("remove");
-    let gone = super::read(&path, Some(read.content.stamp)).expect("read again");
-    assert_eq!(gone.content.body, Body::Missing);
-    assert!(super::read(&path, Some(gone.content.stamp)).is_none());
+    let gone = super::read(&path, Some(read.stamp)).expect("read again");
+    assert_eq!(gone.body, Body::Missing);
+    assert!(super::read(&path, Some(gone.stamp)).is_none());
 }
 
 #[test]
@@ -72,7 +87,7 @@ fn a_device_behind_a_link_is_not_read() {
     let dir = TempDir::new();
     let path = dir.path().join("null");
     std::os::unix::fs::symlink("/dev/null", &path).expect("link");
-    assert_eq!(read(&path, None).expect("read").content.body, Body::Binary);
+    assert_eq!(read(&path, None).expect("read").body, Body::Binary);
 }
 
 fn png(width: u32, height: u32) -> Vec<u8> {
@@ -93,12 +108,12 @@ fn an_image_is_decoded_again_each_time_it_changes() {
     let dir = TempDir::new();
     let path = dir.path().join("logo");
     fs::write(&path, png(4, 3)).expect("write");
-    let first = read(&path, None).expect("read").content;
+    let first = read(&path, None).expect("read");
     assert_eq!((picture(&first).width, picture(&first).height), (4, 3));
     assert!(first.lines().is_empty() && first.language.is_none());
 
     fs::write(&path, png(6, 2)).expect("write again");
-    let second = read(&path, Some(first.stamp)).expect("read again").content;
+    let second = read(&path, Some(first.stamp)).expect("read again");
 
     assert_eq!((picture(&second).width, picture(&second).height), (6, 2));
     assert_ne!(picture(&first).id, picture(&second).id);
@@ -112,7 +127,7 @@ fn a_broken_image_says_why() {
     bytes.truncate(40);
     fs::write(&path, &bytes).expect("write");
 
-    let body = read(&path, None).expect("read").content.body;
+    let body = read(&path, None).expect("read").body;
 
     assert!(matches!(body, Body::Unreadable { bytes: 40, ref reason, .. } if !reason.is_empty()), "{body:?}");
 }
@@ -126,8 +141,8 @@ fn an_image_may_be_larger_than_a_text_file() {
     fs::write(&photo, &bytes).expect("write the image");
     fs::write(&text, vec![b'a'; bytes.len()]).expect("write the text");
 
-    assert!(matches!(read(&photo, None).expect("read").content.body, Body::Image(_)));
-    assert!(matches!(read(&text, None).expect("read").content.body, Body::TooLarge(_)));
+    assert!(matches!(read(&photo, None).expect("read").body, Body::Image(_)));
+    assert!(matches!(read(&text, None).expect("read").body, Body::TooLarge(_)));
 }
 
 #[test]
@@ -136,5 +151,5 @@ fn an_svg_stays_text() {
     let path = dir.path().join("icon.svg");
     fs::write(&path, "<svg xmlns=\"http://www.w3.org/2000/svg\"/>\n").expect("write");
 
-    assert_eq!(read(&path, None).expect("read").content.lines().len(), 1);
+    assert_eq!(read(&path, None).expect("read").lines().len(), 1);
 }

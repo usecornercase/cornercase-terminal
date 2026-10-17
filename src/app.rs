@@ -47,6 +47,7 @@ use files_panel::FilesEvent;
 use interaction::AUTO_SCROLL_EVERY;
 use interaction::Drag;
 use interaction::Grab;
+use interaction::LINES_SCROLL_EVERY;
 use issues_dialog::{IssueConnections, IssueEvent};
 use launches::LAUNCH_EVERY;
 #[cfg(test)]
@@ -381,6 +382,7 @@ impl App {
 
     pub(super) fn tick_at(&self, now: Instant, clock: i64) -> Option<Duration> {
         let drag = self.row_drag().filter(|d| d.moved).map(|_| AUTO_SCROLL_EVERY);
+        let lines = self.lines_edge().map(|_| LINES_SCROLL_EVERY);
         let held = self.held_launch_panes();
         let launch =
             self.agents.launches.iter().any(|l| !l.waits_for_you() && !held.contains(&l.term)).then_some(LAUNCH_EVERY);
@@ -388,6 +390,7 @@ impl App {
             .then(|| activity::spin_wait(now.saturating_duration_since(self.booted)));
         [
             drag,
+            lines,
             launch,
             spin,
             self.flow_frame(now),
@@ -436,6 +439,7 @@ impl App {
         self.ask_sessions(now);
         self.refresh_changes(now);
         self.auto_scroll(now);
+        self.auto_scroll_lines(now);
         if self.synced.is_some_and(|at| now.duration_since(at) < SYNC_EVERY) {
             return;
         }

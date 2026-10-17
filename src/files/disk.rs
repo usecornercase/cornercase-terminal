@@ -59,7 +59,7 @@ const GONE: Stamp = Stamp { modified: None, len: 0, found: false };
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Body {
-    Text { lines: Vec<String>, styles: Option<Vec<Segments>> },
+    Text { lines: Vec<String>, styles: Option<Vec<Segments>>, source: Arc<str> },
     Image(Arc<Picture>),
     Unreadable { format: &'static str, bytes: u64, reason: String },
     Binary,
@@ -92,22 +92,25 @@ impl Content {
             _ => None,
         }
     }
+
+    pub(crate) fn text(&self, lines: Option<(u32, u32)>) -> Option<String> {
+        let Body::Text { source, .. } = &self.body else { return None };
+        let Some((first, last)) = lines else { return Some(source.to_string()) };
+        let skip = usize::try_from(first.saturating_sub(1)).unwrap_or(usize::MAX);
+        let take = usize::try_from(last.saturating_sub(first)).map_or(usize::MAX, |n| n.saturating_add(1));
+        Some(syntax::lines(source).skip(skip).take(take).map(|(_, line)| line).collect::<Vec<_>>().join("\n"))
+    }
 }
 
-pub(crate) struct Read {
-    pub(crate) content: Content,
-    pub(crate) source: Option<String>,
-}
-
-pub(crate) fn read(path: &Path, previous: Option<Stamp>) -> Option<Read> {
+pub(crate) fn read(path: &Path, previous: Option<Stamp>) -> Option<Content> {
     let meta = fs::metadata(path).ok();
     let stamp =
         meta.as_ref().map_or(GONE, |meta| Stamp { modified: meta.modified().ok(), len: meta.len(), found: true });
     if previous == Some(stamp) {
         return None;
     }
-    let content = |language, body| Content { stamp, language, body };
-    let plain = |body| Some(Read { content: content(None, body), source: None });
+    let content = |language, body| Some(Content { stamp, language, body });
+    let plain = |body| content(None, body);
     let Some(meta) = meta else { return plain(Body::Missing) };
     if !meta.is_file() {
         return plain(Body::Binary);
@@ -130,11 +133,11 @@ pub(crate) fn read(path: &Path, previous: Option<Stamp>) -> Option<Read> {
     if bytes[..bytes.len().min(BINARY_PROBE)].contains(&0) {
         return plain(Body::Binary);
     }
-    let source = String::from_utf8_lossy(&bytes).into_owned();
+    let source = String::from_utf8_lossy(&bytes);
     let lines = syntax::lines(&source).map(|(_, line)| syntax::expand(line)).collect();
     let first = syntax::lines(&source).next().map_or("", |(_, line)| line);
     let language = syntax::language(path, first);
-    Some(Read { content: content(language, Body::Text { lines, styles: None }), source: Some(source) })
+    content(language, Body::Text { lines, styles: None, source: Arc::from(source) })
 }
 
 fn head(path: &Path, limit: u64) -> io::Result<Vec<u8>> {
@@ -154,11 +157,10 @@ fn image(format: &'static str, bytes: &[u8]) -> Body {
     }
 }
 
-pub(crate) fn highlighted(read: Read) -> Option<Content> {
-    let (Some(language), Some(source)) = (read.content.language, read.source.as_deref()) else { return None };
-    let styles = syntax::highlight(source, language)?;
-    let Body::Text { lines, .. } = read.content.body else { return None };
-    Some(Content { body: Body::Text { lines, styles: Some(styles) }, ..read.content })
+pub(crate) fn highlighted(content: Content) -> Option<Content> {
+    let Body::Text { lines, source, .. } = content.body else { return None };
+    let styles = syntax::highlight(&source, content.language?)?;
+    Some(Content { body: Body::Text { lines, styles: Some(styles), source }, ..content })
 }
 
 #[cfg(test)]

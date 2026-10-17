@@ -46,7 +46,11 @@ fn opened(selection: Option<(u32, u32)>, unfolded: &[u32]) -> View {
     let source = "fn main() {\n    run();\n    done();\n}\n";
     let lines = source.lines().map(String::from).collect();
     let styles = crate::highlight::syntax::highlight(source, "rust");
-    let content = Content { stamp: disk::Stamp::default(), language: Some("rust"), body: Body::Text { lines, styles } };
+    let content = Content {
+        stamp: disk::Stamp::default(),
+        language: Some("rust"),
+        body: Body::Text { lines, styles, source: source.into() },
+    };
     let gutter = files::gutter(&diff::parse(PATCH)[0], 4);
     View {
         root: "~/projects/shop".into(),
