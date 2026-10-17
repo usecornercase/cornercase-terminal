@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.125
+
+- **Views for programs that draw cornercase themselves.** `cornercase view --cols N --rows N` opens a view of your own that lives while the command runs. It picks its own project, workspace and tab (`cornercase focus --view ID`, or `--view ID` on `new-tab`, `split`, `start`, `send` and the other commands), so an editor extension or a GUI can show another tab than the window without switching it, and each such program its own. `cornercase surface --view ID` streams the tab the view shows and follows it. The view's lines carry a `projection` number that changes with each move, so a program can drop frames drawn before it. `cornercase view-set` resizes a view, turns it inactive or active, or takes its tab back.
+- **Terminal sizes follow whoever last took them.** A tab's terminals take the size of the window or the view that claimed it last, without the window's sidebar and panels. Only that one resizes them, so two programs showing one tab no longer fight over its size. A view claims the tab it shows when it opens, moves there or turns active; using a window takes back the tab it shows. Closing a view or turning it inactive hands the tab back. Windows still mirror each other and share one size. See Scripts and agents → A view of your own.
+
 ## 0.12.124
 
 - **A pane takes no input while its agent comes back.** After a restart or an update, a pane where Claude Code, Codex, Gemini CLI, Grok Build or Cursor CLI was running shows **resuming claude…** until the agent is back in its conversation. Keys and pastes typed meanwhile are dropped, with a note saying why, instead of landing in front of the resume command or in the agent's start-up, where an Enter could answer a question you never saw. **cancel** gives you the pane back at once, as a plain shell if the command was not typed yet. A trust question still takes your answer.
