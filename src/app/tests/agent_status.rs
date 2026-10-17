@@ -4,6 +4,7 @@ use super::*;
 use crate::agents::activity::{Activity, Status};
 use crate::agents::claude::fake::FakeClaude;
 use crate::agents::codex::fake::FakeCodex;
+use crate::agents::copilot::fake::FakeCopilot;
 use crate::agents::cursor::fake::FakeCursor;
 use crate::agents::gemini::fake::FakeGemini;
 use crate::agents::grok::fake::FakeGrok;
@@ -12,6 +13,7 @@ use crate::config;
 use crate::test_util::write_executable;
 
 mod agents_section;
+mod copilot;
 mod flows;
 mod notifications;
 mod osc;
@@ -325,6 +327,7 @@ enum Fake {
     Opencode(FakeOpencode, usize),
     Grok(FakeGrok, usize),
     Cursor(FakeCursor, usize),
+    Copilot(FakeCopilot, usize),
 }
 
 fn start_opencode(app: &mut App, rx: &Receiver<AppEvent>) -> FakeOpencode {
@@ -393,6 +396,16 @@ impl Watched {
                 pump_until(app, rx, "cursor runs", |a| runs(a, agents::Known::Cursor.name()));
                 Fake::Cursor(cursor, app.projects[0].workspaces[0].active)
             }
+            agents::Known::Copilot => {
+                let copilot = FakeCopilot::new(&app.projects[0].path);
+                type_line(app, &copilot.command_line());
+                pump_until(app, rx, "copilot runs", |a| runs(a, agents::Known::Copilot.name()));
+                let tab = app.projects[0].workspaces[0].active;
+                watch_until(app, rx, "copilot holds its session", |a| {
+                    tab_term(a, 0, tab).context.record_for(agents::Known::Copilot).is_some()
+                });
+                Fake::Copilot(copilot, tab)
+            }
             agents::Known::Claude => {
                 let claude = FakeClaude::running(FakeClaude::SILENT);
                 claude.start(app);
@@ -453,6 +466,31 @@ impl Watched {
                         tab_term(a, 0, *tab).emulator.title() == title
                     });
                 }
+                Fake::Copilot(copilot, tab) => {
+                    let wanted = match status {
+                        "busy" => {
+                            copilot.permission(false);
+                            copilot.prompt("fix the login");
+                            copilot.turn(true);
+                            copilot.working(true);
+                            Activity::Working
+                        }
+                        "waiting" => {
+                            copilot.permission(true);
+                            Activity::Waiting
+                        }
+                        _ => {
+                            copilot.permission(false);
+                            copilot.reply("done", "gpt-4.1");
+                            copilot.turn(false);
+                            copilot.working(false);
+                            Activity::Idle
+                        }
+                    };
+                    watch_until(&mut self.app, &self.rx, "copilot's turn shows", |a| {
+                        tab_term(a, 0, *tab).context.activity("") == Some(wanted)
+                    });
+                }
                 Fake::Grok(grok, tab) => {
                     grok.report(status);
                     let wanted = match status {
@@ -492,7 +530,8 @@ fn a_restart_names_the_agent_at_work_and_the_other_program(
         agents::Known::Gemini,
         agents::Known::Opencode,
         agents::Known::Grok,
-        agents::Known::Cursor
+        agents::Known::Cursor,
+        agents::Known::Copilot
     )]
     agent: agents::Known,
 ) {
@@ -515,7 +554,13 @@ fn runs(app: &App, agent: &str) -> bool {
 
 #[rstest]
 fn a_tab_follows_turns_and_approvals(
-    #[values(agents::Known::Codex, agents::Known::Gemini, agents::Known::Grok, agents::Known::Cursor)]
+    #[values(
+        agents::Known::Codex,
+        agents::Known::Gemini,
+        agents::Known::Grok,
+        agents::Known::Cursor,
+        agents::Known::Copilot
+    )]
     agent: agents::Known,
 ) {
     let mut w = Watched::start(agent, false);
@@ -537,7 +582,8 @@ fn a_hidden_tab_that_needs_you_shows_a_toast_and_sends_one_notification(
         agents::Known::Codex,
         agents::Known::Gemini,
         agents::Known::Grok,
-        agents::Known::Cursor
+        agents::Known::Cursor,
+        agents::Known::Copilot
     )]
     agent: agents::Known,
 ) {
@@ -669,7 +715,8 @@ fn a_hidden_tab_that_finishes_says_so(
         agents::Known::Gemini,
         agents::Known::Opencode,
         agents::Known::Grok,
-        agents::Known::Cursor
+        agents::Known::Cursor,
+        agents::Known::Copilot
     )]
     agent: agents::Known,
 ) {
@@ -689,7 +736,8 @@ fn a_settled_change_notifies_once(
         agents::Known::Codex,
         agents::Known::Gemini,
         agents::Known::Grok,
-        agents::Known::Cursor
+        agents::Known::Cursor,
+        agents::Known::Copilot
     )]
     agent: agents::Known,
 ) {
@@ -709,7 +757,8 @@ fn the_visible_tab_stays_quiet(
         agents::Known::Codex,
         agents::Known::Gemini,
         agents::Known::Grok,
-        agents::Known::Cursor
+        agents::Known::Cursor,
+        agents::Known::Copilot
     )]
     agent: agents::Known,
 ) {

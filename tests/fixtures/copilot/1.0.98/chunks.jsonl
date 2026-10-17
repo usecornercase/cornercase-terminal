@@ -1,0 +1,2 @@
+{"type": "assistant.message", "data": {"messageId": "a1", "content": "First half. ", "apiCallId": "call-chunk", "chunkIndex": 0, "chunkCount": 2, "model": "gpt-4.1"}, "id": "00000000-0000-4000-8000-000000000048", "timestamp": "2026-10-17T17:23:10.000Z", "parentId": null}
+{"type": "assistant.message", "data": {"messageId": "a2", "content": "Second half.", "apiCallId": "call-chunk", "chunkIndex": 1, "chunkCount": 2, "model": "gpt-4.1"}, "id": "00000000-0000-4000-8000-000000000049", "timestamp": "2026-10-17T17:23:10.100Z", "parentId": null}

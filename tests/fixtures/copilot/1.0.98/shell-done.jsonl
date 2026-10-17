@@ -1,0 +1,1 @@
+{"type": "system.notification", "data": {"content": "<system_notification>done</system_notification>", "kind": {"type": "shell_completed", "shellId": "0", "exitCode": 0, "description": "bg"}}, "id": "00000000-0000-4000-8000-000000000058", "timestamp": "2026-10-17T17:23:30.000Z", "parentId": null}

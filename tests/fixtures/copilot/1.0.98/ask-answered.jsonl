@@ -1,0 +1,2 @@
+{"type": "human_response.recorded", "data": {"requestId": "req-2", "toolCallId": "call_2", "response": {"responseKind": "ask_user"}}, "id": "00000000-0000-4000-8000-000000000020", "timestamp": "2026-10-17T17:23:04.000Z", "parentId": null}
+{"type": "tool.execution_complete", "data": {"toolCallId": "call_2", "success": true}, "id": "00000000-0000-4000-8000-000000000021", "timestamp": "2026-10-17T17:23:04.100Z", "parentId": null}

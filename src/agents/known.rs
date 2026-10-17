@@ -1,4 +1,4 @@
-use super::{ModeTable, claude, codex, cursor, gemini, grok, opencode, usage};
+use super::{ModeTable, claude, codex, copilot, cursor, gemini, grok, opencode, usage};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Known {
@@ -8,11 +8,12 @@ pub enum Known {
     Opencode,
     Grok,
     Cursor,
+    Copilot,
 }
 
 impl Known {
-    pub(crate) const ALL: [Self; 6] =
-        [Self::Claude, Self::Codex, Self::Gemini, Self::Opencode, Self::Grok, Self::Cursor];
+    pub(crate) const ALL: [Self; 7] =
+        [Self::Claude, Self::Codex, Self::Gemini, Self::Opencode, Self::Grok, Self::Cursor, Self::Copilot];
 
     pub(crate) fn of(name: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|kind| kind.name() == name)
@@ -26,6 +27,7 @@ impl Known {
             Self::Opencode => opencode::NAME,
             Self::Grok => grok::NAME,
             Self::Cursor => cursor::NAME,
+            Self::Copilot => copilot::NAME,
         }
     }
 
@@ -37,6 +39,7 @@ impl Known {
             Self::Opencode => opencode::COMMAND,
             Self::Grok => grok::COMMAND,
             Self::Cursor => cursor::COMMAND,
+            Self::Copilot => copilot::COMMAND,
         }
     }
 
@@ -48,6 +51,7 @@ impl Known {
             Self::Opencode => opencode::TITLE,
             Self::Grok => grok::TITLE,
             Self::Cursor => cursor::TITLE,
+            Self::Copilot => copilot::TITLE,
         }
     }
 
@@ -59,6 +63,7 @@ impl Known {
             Self::Opencode => opencode::MODES,
             Self::Grok => grok::MODES,
             Self::Cursor => cursor::MODES,
+            Self::Copilot => copilot::MODES,
         }
     }
 
@@ -70,6 +75,7 @@ impl Known {
             Self::Opencode => opencode::ADD_DIR,
             Self::Grok => grok::ADD_DIR,
             Self::Cursor => cursor::ADD_DIR,
+            Self::Copilot => copilot::ADD_DIR,
         }
     }
 
@@ -81,6 +87,7 @@ impl Known {
             Self::Opencode => opencode::EFFORT,
             Self::Grok => grok::EFFORT,
             Self::Cursor => cursor::EFFORT,
+            Self::Copilot => copilot::EFFORT,
         }
     }
 
@@ -92,6 +99,7 @@ impl Known {
             Self::Opencode => opencode::MODEL_ALIAS,
             Self::Grok => grok::MODEL_ALIAS,
             Self::Cursor => cursor::MODEL_ALIAS,
+            Self::Copilot => copilot::MODEL_ALIAS,
         }
     }
 
@@ -103,6 +111,7 @@ impl Known {
             Self::Opencode => opencode::MODEL_FLAG,
             Self::Grok => grok::MODEL_FLAG,
             Self::Cursor => cursor::MODEL_FLAG,
+            Self::Copilot => copilot::MODEL_FLAG,
         }
     }
 
@@ -114,6 +123,7 @@ impl Known {
             Self::Opencode => opencode::UNATTENDED,
             Self::Grok => grok::UNATTENDED,
             Self::Cursor => cursor::UNATTENDED,
+            Self::Copilot => copilot::UNATTENDED,
         }
     }
 
@@ -125,6 +135,7 @@ impl Known {
             Self::Opencode => opencode::MODELS,
             Self::Grok => grok::MODELS,
             Self::Cursor => cursor::MODELS,
+            Self::Copilot => copilot::MODELS,
         }
     }
 
@@ -136,6 +147,7 @@ impl Known {
             Self::Opencode => opencode::CATALOGUE,
             Self::Grok => grok::CATALOGUE,
             Self::Cursor => cursor::CATALOGUE,
+            Self::Copilot => copilot::CATALOGUE,
         }
     }
 
@@ -147,6 +159,7 @@ impl Known {
             Self::Opencode => opencode::STATUS_BY_FOLDER,
             Self::Grok => grok::STATUS_BY_FOLDER,
             Self::Cursor => cursor::STATUS_BY_FOLDER,
+            Self::Copilot => copilot::STATUS_BY_FOLDER,
         }
     }
 
@@ -158,6 +171,7 @@ impl Known {
             Self::Opencode => opencode::RECORD_BY_FOLDER,
             Self::Grok => grok::RECORD_BY_FOLDER,
             Self::Cursor => cursor::RECORD_BY_FOLDER,
+            Self::Copilot => copilot::RECORD_BY_FOLDER,
         }
     }
 
@@ -169,6 +183,7 @@ impl Known {
             Self::Opencode => opencode::normalized(args),
             Self::Grok => grok::normalized(args),
             Self::Cursor => cursor::normalized(args),
+            Self::Copilot => copilot::normalized(args),
         }
     }
 
@@ -180,6 +195,7 @@ impl Known {
             Self::Opencode => opencode::RESUME,
             Self::Grok => grok::resume(args, conversation),
             Self::Cursor => cursor::resume(args, conversation),
+            Self::Copilot => copilot::resume(args, conversation),
         }
     }
 
@@ -191,6 +207,7 @@ impl Known {
             Self::Opencode => opencode::RUNS_AS,
             Self::Grok => grok::RUNS_AS,
             Self::Cursor => cursor::runs_as(arg),
+            Self::Copilot => copilot::runs_as(arg),
         }
     }
 
@@ -202,6 +219,7 @@ impl Known {
             Self::Opencode => opencode::INPUT_BOX,
             Self::Grok => grok::INPUT_BOX,
             Self::Cursor => cursor::INPUT_BOX,
+            Self::Copilot => copilot::INPUT_BOX,
         }
     }
 
@@ -213,6 +231,7 @@ impl Known {
             Self::Opencode => opencode::SURVEY,
             Self::Grok => grok::SURVEY,
             Self::Cursor => cursor::SURVEY,
+            Self::Copilot => copilot::SURVEY,
         }
     }
 
@@ -224,6 +243,7 @@ impl Known {
             Self::Opencode => opencode::HOLDS_PROMPTS,
             Self::Grok => grok::HOLDS_PROMPTS,
             Self::Cursor => cursor::HOLDS_PROMPTS,
+            Self::Copilot => copilot::HOLDS_PROMPTS,
         }
     }
 
@@ -235,6 +255,7 @@ impl Known {
             Self::Opencode => opencode::LOCAL_COMMAND,
             Self::Grok => grok::local_command(text),
             Self::Cursor => cursor::local_command(text),
+            Self::Copilot => copilot::local_command(text),
         }
     }
 
@@ -246,6 +267,7 @@ impl Known {
             Self::Opencode => opencode::UNFOUND,
             Self::Grok => grok::UNFOUND,
             Self::Cursor => cursor::UNFOUND,
+            Self::Copilot => copilot::UNFOUND,
         }
     }
 
@@ -257,6 +279,7 @@ impl Known {
             Self::Opencode => opencode::USAGE,
             Self::Grok => grok::USAGE,
             Self::Cursor => cursor::USAGE,
+            Self::Copilot => copilot::USAGE,
         }
     }
 }

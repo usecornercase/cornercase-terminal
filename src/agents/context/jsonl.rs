@@ -13,6 +13,14 @@ pub(in crate::agents) fn head(path: &Path) -> Option<serde_json::Value> {
     serde_json::from_slice(&bytes[..end]).ok()
 }
 
+pub(in crate::agents) fn values(bytes: &[u8]) -> Vec<serde_json::Value> {
+    bytes
+        .split(|byte| *byte == b'\n')
+        .filter(|line| !line.is_empty())
+        .filter_map(|line| serde_json::from_slice(line).ok())
+        .collect()
+}
+
 #[derive(Debug, Default)]
 pub(in crate::agents) struct Tail {
     read: u64,

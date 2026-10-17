@@ -26,13 +26,7 @@ impl Running {
     }
 
     fn send(&mut self, text: &str) {
-        let command = Command::Send(wire::SendText {
-            pane: Some(first(&self.app)),
-            text: Some(text.into()),
-            enter: true,
-            ..wire::SendText::default()
-        });
-        ask(&mut self.app, None, command);
+        send_enter(&mut self.app, text);
     }
 }
 
@@ -57,12 +51,8 @@ fn a_later_submission_confirms_a_pending_send() {
 #[test]
 fn an_unconfirmed_send_fails_instead_of_hanging() {
     let mut running = Running::new();
-    running.app.confirm_within = Duration::from_millis(300);
 
-    running.send("fix the login");
-
-    let message = error(answered(&mut running.app, &running.rx, "the send gives up"));
-    assert!(message.contains("not confirmed"), "{message}");
+    an_unconfirmed_send_gives_up(&mut running.app, &running.rx);
 }
 
 #[test]
@@ -78,16 +68,8 @@ fn the_last_message_is_the_reply_and_not_the_thinking_or_the_tools() {
         a.term().and_then(|t| t.context.conversation()).is_some()
     });
 
-    ask(
-        &mut running.app,
-        None,
-        Command::LastMessage(wire::LastMessage { pane: Some(id), ..wire::LastMessage::default() }),
-    );
+    let message = last_message(&mut running.app, &running.rx, id);
 
-    let message = match answered(&mut running.app, &running.rx, "the last message is read") {
-        Response::Ok(message) => message,
-        Response::Error(error) => panic!("last message failed: {error}"),
-    };
     assert_eq!((message["agent"].as_str(), message["text"].as_str()), (Some("cursor"), Some("The login is fixed.")));
     assert_eq!(message["turn_over"], true);
 }
@@ -98,10 +80,7 @@ fn the_last_message_is_the_reply_and_not_the_thinking_or_the_tools() {
 fn local_commands_return_after_enter_without_a_prompt_record(#[case] text: &str) {
     let mut running = Running::new();
 
-    running.send(text);
-
-    done(answered(&mut running.app, &running.rx, "the local command is submitted"));
-    assert_eq!(running.app.term().and_then(|t| t.context.prompted()), None);
+    a_local_command_needs_no_record(&mut running.app, &running.rx, text);
 }
 
 #[test]

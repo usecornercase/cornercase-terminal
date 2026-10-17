@@ -195,6 +195,19 @@ mod arguments {
     }
 
     #[test]
+    fn copilot_modes_follow_its_flags() {
+        let modes = modes(&config(), Known::Copilot.name());
+        let kind = Known::Copilot.name();
+        let mode = |argv: &[&str]| mode_of(kind, &strings(argv), &modes);
+        assert_eq!(mode(&["copilot", "--plan"]).as_deref(), Some("plan"));
+        assert_eq!(mode(&["copilot", "--mode=autopilot"]).as_deref(), Some("autopilot"));
+        assert_eq!(mode(&["copilot", "--autopilot"]).as_deref(), Some("autopilot"));
+        assert_eq!(mode(&["copilot", "--yolo"]).as_deref(), Some("allow all (dangerous)"));
+        assert_eq!(mode(&["copilot", "--allow-all", "--no-ask-user"]).as_deref(), Some("allow all (dangerous)"));
+        assert_eq!(mode(&["copilot", "--mode", "debug"]), None);
+    }
+
+    #[test]
     fn join_quotes_what_a_shell_would_split() {
         assert_eq!(join_args(&strings(&["--add-dir", "../my dir", "it's"])), r"--add-dir '../my dir' 'it'\''s'");
     }
@@ -255,6 +268,14 @@ mod arguments {
             start_line(&c, "claude", None, None, Some("huge")),
             Err("claude has no effort `huge`; its levels are `low`, `medium`, `high`, `xhigh`, `max`".into())
         );
+        assert_eq!(
+            start_line(&c, "copilot", None, None, Some("high")).as_deref(),
+            Ok("copilot --reasoning-effort high")
+        );
+        assert_eq!(
+            start_line(&c, "copilot", None, None, Some("turbo")),
+            Err("copilot has no effort `turbo`; its levels are `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`".into())
+        );
         assert_eq!(start_line(&c, "gemini", None, None, Some("high")), Err("gemini has no effort switch".into()));
     }
 
@@ -288,7 +309,7 @@ mod arguments {
         let refused = start_line(&c, "aider", None, Some("gpt"), None).expect_err("aider takes no model");
         assert_eq!(
             refused,
-            "cornercase passes a model to claude, codex, gemini, opencode, grok, cursor only; give aider its model in agent_args"
+            "cornercase passes a model to claude, codex, gemini, opencode, grok, cursor, copilot only; give aider its model in agent_args"
         );
     }
 
@@ -320,6 +341,12 @@ mod resuming {
         Known::Cursor.name(),
         Some("run everything (dangerous)"),
         "cursor-agent --force --resume 4f2c-91"
+    )]
+    #[case::copilot_in_plan(Known::Copilot.name(), Some("plan"), "copilot --mode plan --resume=4f2c-91")]
+    #[case::copilot_allowing_all(
+        Known::Copilot.name(),
+        Some("allow all (dangerous)"),
+        "copilot --allow-all --resume=4f2c-91"
     )]
     fn the_conversation_comes_back_in_the_mode_it_ran_in(
         #[case] kind: &str,
@@ -379,6 +406,11 @@ mod choosing {
         Some("cursor")
     )]
     #[case::cursor_by_name(&["/home/a/.local/bin/cursor-agent", "--use-system-ca", "/x/index.js"], Some("cursor"))]
+    #[case::copilot_npm(&["node", "/usr/lib/node_modules/@github/copilot/npm-loader.js"], Some("copilot"))]
+    #[case::copilot_npx(&["node", "/home/a/.npm/_npx/9f2/node_modules/@github/copilot/npm-loader.js"], Some("copilot"))]
+    #[case::copilot_standalone(&["/home/a/.local/bin/copilot"], Some("copilot"))]
+    #[case::gh_copilot(&["gh", "copilot", "--", "--model", "auto"], Some("copilot"))]
+    #[case::another_npm_loader(&["node", "/x/node_modules/other/npm-loader.js"], None)]
     #[case::grok_binary_named_agent(&["/home/a/.grok/bin/agent"], None)]
     #[case::a_worker_server_of_another_app(&["node", "/home/a/app/versions/1/index.js", "worker-server"], None)]
     #[case::a_shell(&["-zsh"], None)]

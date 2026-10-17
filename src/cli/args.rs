@@ -338,7 +338,7 @@ pub(crate) struct StartArgs {
     #[arg(
         long,
         value_name = "LEVEL",
-        help = "The agent's effort, such as high: Claude Code, Codex and Grok Build take one [default: the agent's own]"
+        help = "The agent's effort, such as high: Claude Code, Codex, Grok Build and GitHub Copilot CLI take one [default: the agent's own]"
     )]
     pub(crate) effort: Option<String>,
     #[arg(

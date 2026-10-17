@@ -99,7 +99,7 @@ impl Term {
         let mut cmd = CommandBuilder::new(shell);
         cmd.args(args);
         cmd.env("TERM", "xterm-256color");
-        for key in agents::claude::CLAUDE_SESSION_ENV {
+        for key in agents::claude::CLAUDE_SESSION_ENV.iter().chain(&agents::copilot::SESSION_ENV) {
             cmd.env_remove(key);
         }
         for (key, value) in env {

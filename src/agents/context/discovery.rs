@@ -40,6 +40,35 @@ impl<T: Send + 'static> Job<T> {
     }
 }
 
+#[derive(Debug)]
+pub(in crate::agents) struct Follower<S> {
+    kept: Option<Box<S>>,
+    reading: Job<Option<S>>,
+}
+
+impl<S> Default for Follower<S> {
+    fn default() -> Self {
+        Self { kept: None, reading: Job::default() }
+    }
+}
+
+impl<S: Send + 'static> Follower<S> {
+    pub(in crate::agents) fn poll(
+        &mut self,
+        work: impl FnOnce(Option<S>) -> Option<S> + Send + 'static,
+        mut answered: impl FnMut(Option<&mut S>),
+    ) {
+        if let Some(found) = self.reading.take() {
+            self.kept = found.map(Box::new);
+            answered(self.kept.as_deref_mut());
+        }
+        if !self.reading.running() {
+            let previous = self.kept.take().map(|session| *session);
+            self.reading.start(move || work(previous));
+        }
+    }
+}
+
 pub(in crate::agents) fn folder(pid: i32) -> Option<PathBuf> {
     process::cwd(pid)?.canonicalize().ok()
 }

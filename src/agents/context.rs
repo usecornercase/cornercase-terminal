@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::agents::activity::Activity;
-use crate::agents::{self, Known, claude, codex, cursor, gemini, grok, opencode};
+use crate::agents::{self, Known, claude, codex, copilot, cursor, gemini, grok, opencode};
 use crate::error::Result;
 
 pub(in crate::agents) mod counting;
@@ -30,6 +30,7 @@ pub(crate) enum Record {
     Opencode { database: PathBuf, session: String },
     Grok(PathBuf),
     Cursor(PathBuf),
+    Copilot(PathBuf),
 }
 
 impl Record {
@@ -41,6 +42,7 @@ impl Record {
             Self::Opencode { database, session } => opencode::database::last_message(database, session),
             Self::Grok(path) => grok::session::last_message(path),
             Self::Cursor(path) => cursor::store::last_message(path),
+            Self::Copilot(path) => copilot::message::last_message(path),
         }
     }
 
@@ -52,6 +54,7 @@ impl Record {
             Self::Opencode { database, session } => opencode::database::said_all(database, session, each),
             Self::Grok(path) => grok::session::said_all(path, each),
             Self::Cursor(path) => cursor::store::said_all(path, each),
+            Self::Copilot(path) => copilot::message::said_all(path, each),
         }
     }
 }
@@ -72,6 +75,7 @@ enum Reader {
     Opencode(opencode::Reader),
     Grok(grok::Reader),
     Cursor(cursor::Reader),
+    Copilot(copilot::Reader),
 }
 
 impl Reader {
@@ -83,6 +87,7 @@ impl Reader {
             Known::Opencode => Self::Opencode(opencode::Reader::default()),
             Known::Grok => Self::Grok(grok::Reader::default()),
             Known::Cursor => Self::Cursor(cursor::Reader::default()),
+            Known::Copilot => Self::Copilot(copilot::Reader::default()),
         }
     }
 
@@ -100,6 +105,7 @@ impl Reader {
             Self::Opencode(reader) => reader.update(look, since, shown, ledger),
             Self::Grok(reader) => reader.update(look, since, shown, ledger),
             Self::Cursor(reader) => reader.update(look, since, shown, ledger),
+            Self::Copilot(reader) => reader.update(look, since, shown, ledger),
         }
     }
 
@@ -111,6 +117,7 @@ impl Reader {
             Self::Opencode(reader) => reader.activity(),
             Self::Grok(reader) => reader.activity(title),
             Self::Cursor(reader) => Some(reader.activity(title)),
+            Self::Copilot(reader) => reader.activity(),
         }
     }
 
@@ -122,6 +129,7 @@ impl Reader {
             Self::Opencode(reader) => reader.record(),
             Self::Grok(reader) => reader.record(),
             Self::Cursor(reader) => reader.record(),
+            Self::Copilot(reader) => reader.record(),
         }
     }
 
@@ -133,6 +141,7 @@ impl Reader {
             Self::Opencode(_) => None,
             Self::Grok(reader) => reader.conversation(),
             Self::Cursor(reader) => reader.conversation(),
+            Self::Copilot(reader) => reader.conversation(),
         }
     }
 }
