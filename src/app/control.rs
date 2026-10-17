@@ -252,8 +252,8 @@ impl App {
         Ok(None)
     }
 
-    pub(crate) fn answer_start(&mut self, client: u64, started: &Started) {
-        self.refuse_or_answer(Some(client), Ok(json(started)));
+    pub(crate) fn answer_start(&mut self, client: u64, started: Result<&Started, String>) {
+        self.refuse_or_answer(Some(client), started.map(json).map_err(|message| Refusal::new(Code::Failed, message)));
     }
 
     fn answer(&mut self, client: Option<u64>, reply: Reply) {

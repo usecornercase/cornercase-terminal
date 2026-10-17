@@ -89,11 +89,16 @@ impl Server {
         if !already {
             self.startup = Startup::Headless;
             self.app.set_queue_area(area);
-            match self.open_first_terminals() {
-                Ok(done) => opened = done,
-                Err(e) => log::error!("server", "could not open a first terminal", error = e),
-            }
+            let first = self.open_first_terminals();
             self.app.start_plugins();
+            match first {
+                Ok(done) => opened = done,
+                Err(e) => {
+                    log::error!("server", "could not open a first terminal", error = e);
+                    self.app.answer_start(client, Err(format!("could not open a first terminal: {e}")));
+                    return;
+                }
+            }
         }
         let started = Started {
             already,
@@ -105,7 +110,7 @@ impl Server {
             boot: control::server_token().to_string(),
             version: version::CURRENT.to_string(),
         };
-        self.app.answer_start(client, &started);
+        self.app.answer_start(client, Ok(&started));
     }
 
     pub(super) fn open_first_terminals(&mut self) -> Result<Opened> {

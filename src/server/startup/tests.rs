@@ -28,13 +28,17 @@ impl Cold {
     }
 
     fn with(dir: TempDir, saved: Option<&state::State>) -> Self {
+        Self::with_shell(dir, saved, "/bin/sh")
+    }
+
+    fn with_shell(dir: TempDir, saved: Option<&state::State>, shell: &str) -> Self {
         let session = dir.path().join("session.json");
         if let Some(saved) = saved {
             persist::save(&session, saved).expect("save a session");
         }
         let (tx, _) = mpsc::channel();
         let (app_tx, _) = mpsc::channel();
-        let app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), app_tx);
+        let app = App::new(shell.into(), HostTheme::default(), dir.path().join("config.json"), app_tx);
         let todo_saver = Saver::new(dir.path().join("todos.json"), None);
         Self { server: Server::new(app, session, todo_saver, tx), _dir: dir }
     }
@@ -112,6 +116,19 @@ mod starting {
 
         assert_eq!((started.already, started.size, started.cols, started.rows), (true, SizeFrom::Window, COLS, ROWS));
         assert_eq!(cold.server.area, Some(Rect::new(0, 0, COLS, ROWS)));
+    }
+
+    #[test]
+    fn a_first_terminal_that_cannot_open_is_an_error_and_the_next_call_is_already() {
+        let mut cold = Cold::with_shell(TempDir::new(), None, "/nonexistent/sh");
+
+        let failed = cold.ask(r#"{"command":"start-server","args":{}}"#);
+        let again = cold.start("");
+
+        let message = failed["error"].as_str().unwrap_or_else(|| panic!("an error: {failed}"));
+        assert!(message.starts_with("could not open a first terminal:"), "{message}");
+        assert!(again.already);
+        assert_eq!(cold.server.startup, Startup::Headless);
     }
 
     #[test]

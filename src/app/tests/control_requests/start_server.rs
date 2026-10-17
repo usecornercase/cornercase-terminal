@@ -29,7 +29,7 @@ fn the_server_answers_in_the_shape_the_client_asked_for() {
     let (client, (cols, rows)) = app.take_start().expect("a start");
     let started = Started { cols, rows, size: SizeFrom::StartServer, ..Started::default() };
 
-    app.answer_start(client, &started);
+    app.answer_start(client, Ok(&started));
 
     let answers = app.take_answers();
     assert_eq!(answers.len(), 1, "{answers:?}");
