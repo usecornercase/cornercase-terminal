@@ -292,6 +292,7 @@ impl App {
     fn traced_places(&self) -> Vec<(Place, Option<PaneNow<'_>>)> {
         let open = "open";
         let place = |kind, id, parent, phase, ids| Place { key: Key { kind, id }, parent, phase, ids, opener: None };
+        let live = self.pane_ids();
         let mut places: Vec<(Place, Option<PaneNow>)> =
             self.groups.iter().map(|g| (place(Kind::Group, g.id, None, open, Ids::default()), None)).collect();
         for project in &self.projects {
@@ -307,7 +308,7 @@ impl App {
                     places.push((place(Kind::Tab, tab.id, Some(workspace.id), open, ids), None));
                     places.extend(tab.panes.iter().map(|term| {
                         let ids = Ids { pane: Some(term.id), ..ids };
-                        let opener = self.live_parent(term);
+                        let opener = Self::live_parent(term, &live);
                         (
                             Place { opener, ..place(Kind::Pane, term.id, Some(tab.id), open, ids) },
                             Some(PaneNow::of(term)),

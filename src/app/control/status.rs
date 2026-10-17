@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use super::{Handled, json, none};
@@ -18,6 +19,7 @@ use crate::version;
 impl App {
     pub(in crate::app) fn report(&self, caller: Option<u64>) -> Report {
         let caller = caller.filter(|id| self.projects.tab_of_pane(*id).is_some());
+        let live = self.pane_ids();
         let tab_info = |t: usize, tab: &Tab, active: usize| TabInfo {
             id: tab.id,
             name: tab.label(&self.config),
@@ -27,7 +29,7 @@ impl App {
                 .panes
                 .iter()
                 .enumerate()
-                .map(|(i, term)| self.pane_info(term, i == tab.active, caller))
+                .map(|(i, term)| self.pane_info(term, i == tab.active, caller, &live))
                 .collect(),
             custom_name: tab.name.clone(),
             layout: Some(control::Layout::from(&tab.layout)),
@@ -98,6 +100,7 @@ impl App {
 
     pub(in crate::app) fn refreshed(&self) -> u64 {
         let mut hash = DefaultHasher::new();
+        let live = self.pane_ids();
         for project in self.projects.iter().filter(|p| !p.closing) {
             project.id.hash(&mut hash);
             for workspace in project.workspaces.iter().filter(|w| !w.closing()) {
@@ -110,7 +113,8 @@ impl App {
                 for tab in &workspace.tabs {
                     (tab.id, tab.status().map(Status::name)).hash(&mut hash);
                     for term in &tab.panes {
-                        Self::pane_refreshed(term, self.resume_holds(term.id), self.live_parent(term), &mut hash);
+                        let parent = Self::live_parent(term, &live);
+                        Self::pane_refreshed(term, self.resume_holds(term.id), parent, &mut hash);
                     }
                 }
             }
@@ -130,7 +134,7 @@ impl App {
         term.emulator.title().hash(hash);
     }
 
-    fn pane_info(&self, term: &Term, active: bool, caller: Option<u64>) -> PaneInfo {
+    fn pane_info(&self, term: &Term, active: bool, caller: Option<u64>, live: &HashSet<u64>) -> PaneInfo {
         let context = term.context.context();
         PaneInfo {
             id: term.id,
@@ -149,7 +153,7 @@ impl App {
             resumes: self.config.resume_agents && term.resume.is_some(),
             resuming: self.resume_holds(term.id),
             title: Some(term.emulator.title()).filter(|title| !title.is_empty()),
-            parent: self.live_parent(term),
+            parent: Self::live_parent(term, live),
         }
     }
 

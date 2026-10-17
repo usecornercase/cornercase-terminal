@@ -442,7 +442,7 @@ impl App {
         if let Some(own) = own {
             let members = tabs.iter_mut().flat_map(|(_, tab)| &mut tab.panes);
             for term in members.filter(|term| term.id != own && run.role_of(term.id).is_some()) {
-                term.parent = term.parent.or(Some(own));
+                term.parent = Some(own);
             }
         }
         if let Some(term) = tabs.iter().flat_map(|(_, tab)| &tab.panes).find(|term| Some(term.id) == own) {

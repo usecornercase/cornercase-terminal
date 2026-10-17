@@ -184,7 +184,7 @@ mod live_parent {
 
         let made = made_pane(now(&mut app, Some(caller), new_tab(None)));
 
-        assert_eq!(app.live_parent(pane(&app, made)), Some(caller));
+        assert_eq!(App::live_parent(pane(&app, made), &app.pane_ids()), Some(caller));
     }
 
     #[test]
@@ -201,6 +201,6 @@ mod live_parent {
         refreshing(&mut app, &rx, "the parent's pane is gone", |a| a.projects.pane_by(caller).is_none());
 
         assert_eq!(pane(&app, made).parent, Some(caller));
-        assert_eq!(app.live_parent(pane(&app, made)), None);
+        assert_eq!(App::live_parent(pane(&app, made), &app.pane_ids()), None);
     }
 }

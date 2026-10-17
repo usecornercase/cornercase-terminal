@@ -112,7 +112,7 @@ impl App {
     }
 
     pub(super) fn agent_layout(&self, areas: &ui::Areas) -> ui::Rows {
-        ui::agent_rows(areas.agents_list, areas.pitch, self.agent_places().len(), self.scroll.agents)
+        ui::agent_rows(areas.agents_list, areas.pitch, self.agent_count(), self.scroll.agents)
     }
 
     fn agent_row_at(&self, areas: &ui::Areas, pos: Position) -> Option<(usize, usize, u64)> {

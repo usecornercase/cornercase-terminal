@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use super::App;
@@ -39,8 +40,12 @@ impl App {
         self.tab_mut().and_then(Tab::pane_mut)
     }
 
-    pub(super) fn live_parent(&self, term: &Term) -> Option<u64> {
-        term.parent.filter(|&id| self.projects.pane_by(id).is_some())
+    pub(super) fn pane_ids(&self) -> HashSet<u64> {
+        self.projects.terms().map(|term| term.id).collect()
+    }
+
+    pub(super) fn live_parent(term: &Term, live: &HashSet<u64>) -> Option<u64> {
+        term.parent.filter(|id| live.contains(id))
     }
 
     pub(super) fn group_index(&self, id: u64) -> Option<usize> {

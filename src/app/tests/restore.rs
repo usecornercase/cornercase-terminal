@@ -432,6 +432,36 @@ mod parents {
         assert_eq!(ids, [(Some(child), Some(parent)), (Some(parent), None), (None, Some(child))]);
     }
 
+    fn saved_parents(state: &State) -> Vec<(Option<u64>, Option<u64>)> {
+        let workspaces = state.projects.iter().flat_map(|p| &p.workspaces);
+        workspaces.flat_map(|w| &w.tabs).flat_map(|t| &t.panes).map(|pane| (pane.id, pane.parent)).collect()
+    }
+
+    #[test]
+    fn the_saved_session_names_open_parents_and_forgets_closed_ones() {
+        let (mut app, rx, _dirs) = app_with(1);
+        click_row(&mut app, WorkspaceRow::NewTab(0));
+        click_row(&mut app, WorkspaceRow::NewTab(0));
+        let ids: Vec<u64> = (0..3).map(|t| tab_term(&app, 0, t).id).collect();
+        let tabs = &mut app.projects[0].workspaces[0].tabs;
+        tabs[1].panes[0].parent = Some(ids[0]);
+        tabs[2].panes[0].parent = Some(ids[1]);
+
+        let state = app.state();
+        assert_eq!(saved_parents(&state), [(Some(ids[0]), None), (Some(ids[1]), Some(ids[0])), (None, Some(ids[1]))]);
+        let (mut restored, _rx) = empty_app();
+        assert!(restored.restore(&state, AREA), "every tab comes back");
+        let found = parents(&restored);
+        let [(root, None), (child, under_root), (_, under_child)] = found[..] else {
+            panic!("three panes, only the root without a parent: {found:?}");
+        };
+        assert_eq!((under_root, under_child), (Some(root), Some(child)));
+
+        app.close_tab(0, 0, 0);
+        pump_until(&mut app, &rx, "the parent's tab closes", |a| a.projects.pane_by(ids[0]).is_none());
+        assert_eq!(saved_parents(&app.state()), [(Some(ids[1]), None), (None, Some(ids[1]))]);
+    }
+
     #[test]
     fn a_parent_in_a_skipped_project_is_dropped() {
         let dir = TempDir::new();

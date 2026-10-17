@@ -60,7 +60,7 @@ impl App {
             if let Some(open) = self.workspace_on(p, &name) {
                 return Err(format!("branch {name} is already open in workspace {open}").into());
             }
-            let then = Then { start: None, wait: None, focus: new.focus, view: asker.view, parent: asker.caller };
+            let then = Then { start: None, wait: None, focus: new.focus, view: asker.view, parent: None };
             self.create_worktree(client, p, &name, then, None)?;
             return Ok(None);
         }
