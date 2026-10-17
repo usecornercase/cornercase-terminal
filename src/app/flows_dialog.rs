@@ -186,11 +186,9 @@ impl App {
                     log::info!("flows", "flow deleted", file = file_name(&file));
                 }
                 let mut next = self.config.clone();
-                if store::unhide(&mut next.hidden_flows, &name) {
-                    self.save_hidden(next);
-                }
+                let saved = !store::unhide(&mut next.hidden_flows, &name) || self.save_hidden(next);
                 self.refresh_flows();
-                if let (Err(e), Some(dialog)) = (deleted, self.flows_dialog()) {
+                if let (true, Err(e), Some(dialog)) = (saved, deleted, self.flows_dialog()) {
                     dialog.notice = Some(format!("could not delete the flow: {e}"));
                 }
             }
@@ -203,42 +201,51 @@ impl App {
         }
     }
 
-    fn save_hidden(&mut self, config: crate::config::Config) {
+    fn save_hidden(&mut self, config: crate::config::Config) -> bool {
         if let Err(e) = crate::config::save(&self.config_path, &config) {
             if let Some(dialog) = self.flows_dialog() {
                 dialog.notice = Some(format!("failed to save the settings: {e}"));
             }
-            return;
+            return false;
         }
         self.set_config(config);
+        true
     }
 
     fn hide_flow(&mut self, name: &str, file: Option<&std::path::Path>) {
-        let mut failed = None;
         if let Some(file) = file {
             match store::delete(file) {
                 Ok(()) => log::info!("flows", "flow deleted", file = file_name(file)),
-                Err(e) => failed = Some(format!("could not delete the flow: {e}")),
+                Err(e) => {
+                    if let Some(dialog) = self.flows_dialog() {
+                        dialog.notice = Some(format!("could not delete the flow: {e}"));
+                    }
+                    return;
+                }
             }
         }
         let mut next = self.config.clone();
         store::hide(&mut next.hidden_flows, name);
-        self.save_hidden(next);
-        log::info!("flows", "built-in flow hidden", name = name);
+        let saved = self.save_hidden(next);
         self.refresh_flows();
+        if !saved {
+            return;
+        }
+        log::info!("flows", "built-in flow hidden", name = name);
         if let Some(dialog) = self.flows_dialog() {
-            dialog.notice = Some(failed.unwrap_or_else(|| {
-                format!("deleted {name}: deleted built-ins, at the end of the list, brings it back")
-            }));
+            dialog.notice = Some(format!("deleted {name}: deleted built-ins, at the end of the list, brings it back"));
         }
     }
 
     fn unhide_flow(&mut self, name: &str) {
         let mut next = self.config.clone();
         store::unhide(&mut next.hidden_flows, name);
-        self.save_hidden(next);
-        log::info!("flows", "built-in flow restored", name = name);
+        let saved = self.save_hidden(next);
         self.refresh_flows();
+        if !saved {
+            return;
+        }
+        log::info!("flows", "built-in flow restored", name = name);
         if let Some(dialog) = self.flows_dialog() {
             if let Some(i) = dialog.find(&Origin::BuiltIn, name) {
                 dialog.select(i);

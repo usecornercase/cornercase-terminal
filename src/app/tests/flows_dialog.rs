@@ -752,3 +752,21 @@ mod import_page {
         insta::assert_snapshot!("the_import_page", shown(&mut s.app, WIDE));
     }
 }
+
+mod saving_the_hidden_names {
+    use super::*;
+
+    #[test]
+    fn a_config_that_cannot_be_written_keeps_the_flow_and_the_error() {
+        let mut s = settings_tab(false);
+        std::fs::create_dir(s.config.path().join("config.json")).expect("a folder where the file goes");
+        select_flow(&mut s.app, WIDE, "Arena");
+        button(&mut s.app, WIDE, dialog::DELETE);
+        let [submit, _] = ui::form_buttons(ui::form_area(WIDE), dialog::DELETE);
+        click_in(&mut s.app, submit.as_position(), WIDE);
+        let notice = dialog(&s.app).notice.clone().expect("a notice");
+        assert!(notice.starts_with("failed to save the settings"), "{notice}");
+        assert_eq!(s.app.config.hidden_flows, Vec::<String>::new());
+        assert!(dialog(&s.app).flows.iter().any(|saved| saved.flow.name == "Arena"));
+    }
+}

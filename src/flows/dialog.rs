@@ -462,8 +462,12 @@ impl Dialog {
                 Some(("Delete flow", message, DELETE))
             }
             Confirm::Hide(i) => {
-                let edited = self.flows.get(i).is_some_and(|saved| saved.origin.editable());
-                let name = self.flows.get(i).map(|saved| saved.flow.name.trim().to_string()).unwrap_or_default();
+                let saved = match self.entry(i) {
+                    Some(Entry::Flow(saved)) => Some(saved),
+                    _ => None,
+                };
+                let edited = saved.is_some_and(|saved| saved.origin.editable());
+                let name = saved.map(|saved| saved.flow.name.trim().to_string()).unwrap_or_default();
                 let message = if edited {
                     format!(
                         "Delete {name}? Your version's file goes, and the built-in {name} is hidden too; deleted \
