@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.123
+
+- **Flows have their own tab in Settings**, right after Agents: every flow with the selected one's diagram beside it, and edit, duplicate, export, delete, import and new, one click away. The flows row left the Agents tab. Settings now opens at the size of that list on every tab, so the diagram fits beside it and the tabs stay where they are.
+- **Delete the built-in flows you don't use.** **delete** on a built-in flow asks first, then hides it from Settings, the start dialog and `cornercase flow list`; `cornercase flow run` refuses it and says how to bring it back. A built-in you edited offers both **restore default** and **delete**. **deleted built-ins**, at the end of the list, brings them back. A run already going keeps its flow, and a project's flow named like a deleted one still never runs under that name. The names are kept in `hidden_flows` in `config.json`.
+
 ## 0.12.122
 
 - **Stream a tab's terminals to another program.** `cornercase surface --tab ID --cols N --rows N` keeps running and prints the tab as one JSON line each time it changes. Each line holds every pane's cells with their characters, colours and attributes, its cursor, the modes its program turned on (mouse, bracketed paste, alternate screen…) and how far it is scrolled, together with the panes' places and the dividers between them, laid out at the size you give. It works on a tab the window isn't showing, without switching to it. It stops when the tab closes or the server stops, and leaves the shells running when you stop it. Each line is complete and carries the server's `boot`, its own `revision` and the `session` revision of `status --follow`, so a program that falls behind just gets the latest state. Terminals keep the size the window gives them for now. See Scripts and agents → Stream a tab's terminals.
