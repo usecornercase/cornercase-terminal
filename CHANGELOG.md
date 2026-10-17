@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.113
+
+- **A folder for each flow run.** Every run gets a folder of its own, outside the worktree so nothing in it is ever committed, and every agent of the team has its path in `$CORNERCASE_RUN_DIR`. Each role writes its answers there, one file per answer, and replies with the file's path and a few lines; the orchestrator passes paths on instead of pasting reports, and writes its own decisions there, so a run leaves a record of what each role produced and what was decided. Claude Code, Codex and Cursor CLI get `--add-dir` for it.
+- The **Flow panel** lists the run's files under the diagram, newest first; click one to read it in the files panel. `cornercase flow run` prints the folder on standard error (`run_dir` with `--json`), and `cornercase status --json` gives each workspace's `run_dir`.
+- The folder is kept when the run ends, and removed with its workspace, when you close it or remove its worktree. It lives in `~/.local/state/cornercase/runs/` (next to the session), readable only by you.
+
 ## 0.12.112
 
 - **A role of a flow can work in a worktree of its own.** Set a role's **worktree** to **own** in the flow editor (`worktree = "own"` in its file, which then says `version = 2`) and cornercase makes it a worktree and a branch of its own, `<run's branch>--<role>`, from the run's branch: its tab opens there, the project's setup runs there, and its box in the diagram says ` own worktree `. The orchestrator's brief tells how to read each candidate from its branch, and a role that works in the run's worktree merges or cherry-picks the winner; cornercase never merges for you.
