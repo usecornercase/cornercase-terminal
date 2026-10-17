@@ -174,10 +174,10 @@ fn breadcrumb(view: &View, room: usize) -> Vec<Span<'static>> {
             .collect();
     let text = truncate_right(&crumbs.join(CRUMB_SEPARATOR), room);
     let project_len = project.name.chars().count().min(text.chars().count());
-    let bold = Style::default().fg(Color::White).add_modifier(Modifier::BOLD);
+    let bold = Style::default().fg(Color::Reset).add_modifier(Modifier::BOLD);
     let (head, rest): (String, String) =
         (text.chars().take(project_len).collect(), text.chars().skip(project_len).collect());
-    vec![Span::styled(head, bold), Span::styled(rest, Style::default().fg(Color::Gray))]
+    vec![Span::styled(head, bold), Span::styled(rest, Style::default().fg(view.soft))]
 }
 
 pub(super) fn draw_back(f: &mut Frame, view: &View, areas: &Areas, name: &str) {

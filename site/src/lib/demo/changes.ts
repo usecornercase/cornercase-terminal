@@ -1,5 +1,5 @@
 import { BOLD, ITALIC, type Rect, type Style, rect } from '../term/grid';
-import { rgb } from '../term/palette';
+import { DEFAULT, rgb } from '../term/palette';
 import type { App } from './app';
 import { ADDRESS_FIXED_RS, ADDRESS_RS, RETURNS_FIXED_RS, RETURNS_RS, RETURNS_TESTS_RS, THEME_RS, TREES, type Tree } from './data';
 import { highlight, language } from './highlight';
@@ -424,7 +424,7 @@ export function drawChanges(p: Painter, areas: Areas): void {
   const added = files.reduce((n, f) => n + f.added, 0);
   const removed = files.reduce((n, f) => n + f.removed, 0);
   const noun = files.length === 1 ? 'file' : 'files';
-  x = p.span(inner.x, sy, String(kept ? kept.size : files.length), { fg: 15, add: BOLD });
+  x = p.span(inner.x, sy, String(kept ? kept.size : files.length), { fg: DEFAULT, add: BOLD });
   x = p.span(x, sy, kept ? ` of ${files.length} ${noun}` : ` ${noun}`, { fg: 7 });
   if (added + removed > 0 && !kept) {
     x = p.span(x + 2, sy, `+${added}`, { fg: 2, add: BOLD });
@@ -463,7 +463,7 @@ export function drawChanges(p: Painter, areas: Areas): void {
       const end = right(r) - counts.length - totals.length - 2;
       p.g.fill(r, { bg: surface });
       let x = p.span(r.x + (header.workspace ? 3 : 1), r.y, app.changesHeaders.has(header.id) ? '▸ ' : '▾ ', DARK);
-      p.span(x, r.y, truncateRight(header.label, Math.max(0, end - x)), { fg: p.hovered(r) ? 6 : 15, add: BOLD });
+      p.span(x, r.y, truncateRight(header.label, Math.max(0, end - x)), { fg: p.hovered(r) ? 6 : DEFAULT, add: BOLD });
       x = p.span(end + 1, r.y, counts, DARK);
       x = p.span(x + 1, r.y, `+${added}`, { fg: 2 });
       p.span(x + 1, r.y, `−${removed}`, { fg: 1 });
@@ -537,7 +537,7 @@ function fileRow(p: Painter, f: FileDiff, r: Rect, surface: number): void {
   const path = truncateLeft(f.change.path, Math.max(0, pathEnd - (r.x + 6 + indent)));
   const cut = path.lastIndexOf('/') + 1;
   const px = p.span(r.x + 6 + indent, r.y, path.slice(0, cut), DARK);
-  p.span(px, r.y, path.slice(cut), muted ? DARK : { fg: 15, add: BOLD });
+  p.span(px, r.y, path.slice(cut), muted ? DARK : { fg: DEFAULT, add: BOLD });
   p.region({ r: rect(r.x, r.y, r.w - 3, 1), click: () => app.toggleChangesFile(f), cursor: 'pointer' });
   p.region({ r: check, click: () => app.toggleChangesViewed(f), cursor: 'pointer' });
 }

@@ -99,7 +99,7 @@ pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, projec
 #[cfg(test)]
 pub(crate) use star::star_buttons;
 pub(crate) use star::{StarButton, star_area, star_hit};
-pub(crate) use theme::{muted, outcome_icon};
+pub(crate) use theme::{muted, outcome_icon, soft};
 #[cfg(test)]
 pub(crate) use toast::toast_area;
 pub(crate) use toast::{Toast, ToastButton, ToastIcon, toast_button};
@@ -171,6 +171,7 @@ pub(crate) struct View<'a> {
     pub(crate) resizing: Option<Border>,
     pub(crate) light: bool,
     pub(crate) muted: Color,
+    pub(crate) soft: Color,
     pub(crate) tab: Option<TabView>,
     pub(crate) overlay: Option<Overlay>,
     pub(crate) toast: Option<Toast<'a>>,

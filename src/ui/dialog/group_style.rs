@@ -94,7 +94,7 @@ pub(in crate::ui) fn draw_group_style(f: &mut Frame, view: &View, group: &GroupE
     for (i, &colour) in GROUP_COLOURS.iter().enumerate() {
         let cell = grid_cell(colours, COLOURS_PER_ROW, COLOUR_CELL, i);
         let (open, close, edge) = if colour == group.colour {
-            ("[", "]", Style::default().fg(Color::White).add_modifier(Modifier::BOLD))
+            ("[", "]", Style::default().fg(Color::Reset).add_modifier(Modifier::BOLD))
         } else if hovered(view, cell) {
             ("[", "]", dim)
         } else {

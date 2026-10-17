@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/splits.rs
-assertion_line: 6916
 expression: "landing(Place::Below)"
 ---
 TestBackend { buffer: Buffer {
@@ -58,7 +57,7 @@ TestBackend { buffer: Buffer {
         x: 79, y: 3, fg: Indexed(239), bg: Reset, underline: Reset, modifier: NONE,
         x: 80, y: 3, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 0, y: 4, fg: Cyan, bg: Indexed(236), underline: Reset, modifier: NONE,
-        x: 2, y: 4, fg: White, bg: Indexed(236), underline: Reset, modifier: BOLD,
+        x: 2, y: 4, fg: Reset, bg: Indexed(236), underline: Reset, modifier: BOLD,
         x: 3, y: 4, fg: DarkGray, bg: Indexed(236), underline: Reset, modifier: NONE,
         x: 7, y: 4, fg: Reset, bg: Indexed(236), underline: Reset, modifier: NONE,
         x: 31, y: 4, fg: Indexed(239), bg: Reset, underline: Reset, modifier: NONE,

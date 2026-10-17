@@ -59,6 +59,7 @@ fn sample() -> View {
         live: true,
         light: false,
         muted: Color::DarkGray,
+        soft: Color::Gray,
         tints: TINTS,
         filter: None,
         glyphs: &crate::ui::icons::PLAIN,

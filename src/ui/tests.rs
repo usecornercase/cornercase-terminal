@@ -50,6 +50,7 @@ fn view(names: &[&str]) -> View<'static> {
         resizing: None,
         light: false,
         muted: Color::DarkGray,
+        soft: Color::Gray,
         projects_scroll: 0,
         workspaces_scroll: 0,
         tab: None,

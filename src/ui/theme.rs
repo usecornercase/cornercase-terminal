@@ -20,6 +20,10 @@ const DARK_MUTED: Color = Color::Indexed(243);
 
 const LIGHT_MUTED: Color = Color::Indexed(245);
 
+const DARK_SOFT: Color = Color::Indexed(250);
+
+const LIGHT_SOFT: Color = Color::Indexed(240);
+
 pub(super) const DARK_LINE: Color = Color::Indexed(239);
 
 const LIGHT_LINE: Color = Color::Indexed(250);
@@ -53,6 +57,16 @@ pub(crate) fn muted(theme: &HostTheme) -> Color {
         LIGHT_MUTED
     } else {
         DARK_MUTED
+    }
+}
+
+pub(crate) fn soft(theme: &HostTheme) -> Color {
+    if theme.soft_is_readable() {
+        Color::Gray
+    } else if theme.is_light() == Some(true) {
+        LIGHT_SOFT
+    } else {
+        DARK_SOFT
     }
 }
 

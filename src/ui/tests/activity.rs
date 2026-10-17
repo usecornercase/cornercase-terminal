@@ -199,3 +199,43 @@ mod drawing {
         assert_eq!([icons::count(1), icons::count(9), icons::count(12)], ["\u{f0ca0}", "\u{f0cb0}", "\u{f0cb2}"]);
     }
 }
+
+mod colours {
+    use libghostty_vt::style::RgbColor;
+
+    use super::*;
+
+    const SETTINGS: Position = Position::new(1, 20);
+
+    const fn rgb(r: u8, g: u8, b: u8) -> RgbColor {
+        RgbColor { r, g, b }
+    }
+
+    fn themed(background: RgbColor, white: RgbColor, hover: Option<Position>) -> Terminal<TestBackend> {
+        let mut theme = HostTheme { background: Some(background), ..HostTheme::default() };
+        theme.palette[7] = Some(white);
+        let v =
+            View { light: theme.is_light() == Some(true), muted: muted(&theme), soft: soft(&theme), ..with_bar(hover) };
+        render_sized(&v, W, 24)
+    }
+
+    #[rstest]
+    #[case::tokyo_night(rgb(0x1a, 0x1b, 0x26), rgb(0xa9, 0xb1, 0xd6), Color::Gray)]
+    #[case::github_light(rgb(0xff, 0xff, 0xff), rgb(0x6e, 0x77, 0x81), Color::Gray)]
+    #[case::solarized_light(rgb(0xfd, 0xf6, 0xe3), rgb(0xee, 0xe8, 0xd5), Color::Indexed(240))]
+    #[case::white_as_the_background(rgb(0x28, 0x2a, 0x36), rgb(0x28, 0x2a, 0x36), Color::Indexed(250))]
+    fn icons_show_on_the_background_at_rest_and_on_hover(
+        #[case] background: RgbColor,
+        #[case] white: RgbColor,
+        #[case] rest: Color,
+    ) {
+        let still = themed(background, white, None);
+        let lit = themed(background, white, Some(SETTINGS));
+        let (icon, name) = (&lit.backend().buffer()[SETTINGS], &lit.backend().buffer()[(WIDTH + 1, SETTINGS.y)]);
+        let bold = |cell: &ratatui::buffer::Cell| cell.modifier.contains(Modifier::BOLD);
+        assert_eq!(
+            (still.backend().buffer()[SETTINGS].fg, icon.fg, bold(icon), name.fg, bold(name)),
+            (rest, Color::Reset, true, Color::Reset, true)
+        );
+    }
+}

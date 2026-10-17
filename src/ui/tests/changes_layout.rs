@@ -44,6 +44,7 @@ fn with_panel() -> View<'static> {
         live: false,
         light: false,
         muted: Color::DarkGray,
+        soft: Color::Gray,
         tints,
         filter: None,
         glyphs: &icons::PLAIN,

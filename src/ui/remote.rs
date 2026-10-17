@@ -4,7 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Widget};
 
-use super::{muted, overlay_block, surface_colour};
+use super::{muted, overlay_block, soft, surface_colour};
 use crate::host::theme::HostTheme;
 use crate::text::truncate_right;
 
@@ -78,7 +78,7 @@ pub(crate) fn draw(buf: &mut Buffer, theme: &HostTheme, notice: &Notice) {
     let style = if notice.hovered {
         Style::default().fg(Color::Black).bg(Color::Gray)
     } else {
-        Style::default().fg(Color::Gray).bg(surface)
+        Style::default().fg(soft(theme)).bg(surface)
     };
     Paragraph::new(Span::styled(QUIT, style)).render(button, buf);
 }
