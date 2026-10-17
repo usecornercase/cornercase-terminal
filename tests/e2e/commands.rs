@@ -622,3 +622,64 @@ fn a_flow_from_a_repo_is_fetched_and_always_asks_first() {
     drop(session);
     let _ = server.wait();
 }
+
+fn cells_of(frame: &serde_json::Value, pane: usize) -> Vec<String> {
+    frame["panes"][pane]["lines"]
+        .as_array()
+        .expect("lines")
+        .iter()
+        .map(|line| {
+            let runs = line.as_array().expect("runs").iter();
+            runs.flat_map(|run| run["cells"].as_array().expect("cells").iter().filter_map(serde_json::Value::as_str))
+                .collect()
+        })
+        .collect()
+}
+
+fn spelled_in_green(frame: &serde_json::Value, word: &str) -> bool {
+    let green = |style: &serde_json::Value| {
+        let style = &frame["styles"][usize::try_from(style.as_u64().expect("a style")).expect("an index")];
+        style["bold"] == true && style["fg"]["index"] == 2
+    };
+    frame["panes"][0]["lines"].as_array().expect("lines").iter().any(|line| {
+        line.as_array().expect("runs").iter().any(|run| {
+            let text: String =
+                run["cells"].as_array().expect("cells").iter().filter_map(serde_json::Value::as_str).collect();
+            green(&run["style"]) && text.contains(word)
+        })
+    })
+}
+
+#[test]
+fn a_tab_the_window_does_not_show_streams_its_cells_until_it_closes() {
+    let app = Harness::start();
+    let pane = app.session.says(&["new-tab"]);
+    let shown = app.session.report().shown;
+    let rows: PaneRows = serde_json::from_str(&app.session.says(&["status", "--panes", "--json"])).expect("pane rows");
+    let tab = rows.panes.iter().find(|row| row.pane.to_string() == pane).expect("the new pane").tab.to_string();
+    let args = ["surface", "--tab", &tab, "--cols", "80", "--rows", "24"];
+    let mut streaming = app.session.spawn(&args);
+    let mut followed = Followed::of(&mut streaming);
+    followed.until("the first frame", |frame| frame["revision"] == 1);
+
+    app.session.says(&["send", "--pane", &pane, "--enter", "printf '\\033[1;32m%s\\033[0m\\n' surface-\"\"ok"]);
+    followed.until("the green word", |frame| spelled_in_green(frame, "surface-ok"));
+    let unchanged = app.session.report().shown == shown;
+    let on_screen = app.text().contains("surface-ok");
+    app.session.says(&["split", "--pane", &pane]);
+    followed.until("two panes and a divider", |frame| {
+        frame["panes"].as_array().is_some_and(|p| p.len() == 2)
+            && frame["dividers"].as_array().is_some_and(|d| d.len() == 1)
+    });
+    let mut again = app.session.spawn(&args);
+    let mut baseline = Followed::of(&mut again);
+    baseline.until("a whole baseline", |frame| frame["revision"] == 1);
+    let revisions: Vec<u64> = followed.seen.iter().filter_map(|frame| frame["revision"].as_u64()).collect();
+    app.session.says(&["close", "--tab", &tab]);
+
+    assert!(unchanged && !on_screen, "the window kept showing what it showed");
+    assert!(revisions.windows(2).all(|pair| pair[1] == pair[0] + 1), "{revisions:?}");
+    assert!(cells_of(&baseline.seen[0], 0).iter().any(|line| line.contains("surface-ok")));
+    assert_eq!(finish_within(streaming, TIMEOUT).status.code(), Some(0));
+    assert_eq!(finish_within(again, TIMEOUT).status.code(), Some(0));
+}
