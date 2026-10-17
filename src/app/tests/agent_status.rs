@@ -12,6 +12,7 @@ use crate::config;
 use crate::test_util::write_executable;
 
 mod flows;
+mod notifications;
 mod osc;
 mod resuming;
 
@@ -473,6 +474,10 @@ impl Watched {
         format!("{} › default", self.app.project_label(&self.app.projects[0]))
     }
 
+    fn token(&self) -> Option<String> {
+        self.app.toast.as_ref().and_then(|toast| toast.go.clone())
+    }
+
     fn told(&mut self) -> (Option<String>, Vec<Notification>) {
         (toast(&self.app).map(str::to_owned), self.app.take_notifications())
     }
@@ -540,7 +545,7 @@ fn a_hidden_tab_that_needs_you_shows_a_toast_and_sends_one_notification(
     w.report("waiting", 6);
 
     let text = format!("{} needs you in {}", agent.name(), w.place());
-    let notification = Notification { text: text.clone(), channel: None };
+    let notification = Notification { text: text.clone(), channel: None, token: w.token() };
     assert_eq!(w.told(), (Some(text), vec![notification]));
 }
 
@@ -672,7 +677,8 @@ fn a_hidden_tab_that_finishes_says_so(
     w.report("idle", 6);
 
     let text = format!("{} finished in {}", agent.name(), w.place());
-    assert_eq!(w.told().1, [Notification { text, channel: None }]);
+    let token = w.token();
+    assert_eq!(w.told().1, [Notification { text, channel: None, token }]);
 }
 
 #[rstest]

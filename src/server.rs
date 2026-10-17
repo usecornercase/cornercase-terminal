@@ -21,7 +21,7 @@ use signal_hook::iterator::Signals;
 use crate::app::{App, AppEvent, Streamed};
 use crate::control::{self, Ids, What};
 use crate::error::{Error, Result};
-use crate::host::notify::Channel;
+use crate::host::notify::{self, Channel};
 use crate::host::pointer;
 use crate::host::theme::HostTheme;
 use crate::log::{self, Level};
@@ -205,6 +205,7 @@ struct Client {
     zone: String,
     used: u64,
     notify: Channel,
+    sent: notify::Sent,
     pointer: Option<pointer::Terminal>,
     shape: Option<pointer::Shape>,
     graphics: Graphics,
@@ -217,6 +218,14 @@ struct Client {
 impl Client {
     fn send(&self, msg: ServerMessage) {
         self.out.send(msg);
+    }
+
+    fn leave(&self, msg: ServerMessage) {
+        let closes = self.sent.closes();
+        if !closes.is_empty() {
+            self.send(ServerMessage::Frame(closes));
+        }
+        self.send(msg);
     }
 
     fn stream(&mut self, text: String) {
@@ -613,8 +622,10 @@ impl Server {
             }
         }
         for notification in app.take_notifications() {
-            for client in clients.iter().filter(|c| c.screen.is_some()) {
-                log::info!("server", "notification sent", client = client.id, channel = client.notify.id());
+            for client in clients.iter_mut().filter(|c| c.screen.is_some()) {
+                let channel = notification.channel_for(client.notify).id();
+                log::info!("server", "notification sent", client = client.id, channel = channel);
+                client.sent.push(&notification, client.notify);
                 client.send(ServerMessage::Frame(notification.encode(client.notify)));
             }
         }
@@ -670,6 +681,7 @@ impl Server {
             ServerEvent::Accepted(stream) => self.accept(stream),
             ServerEvent::Message(id, ClientMessage::Hello(hello)) => self.hello(id, *hello),
             ServerEvent::Message(id, ClientMessage::Event(ev)) => self.input(id, ev),
+            ServerEvent::Message(_, ClientMessage::Activated(token)) => self.app.notification_clicked(&token),
             ServerEvent::Message(id, ClientMessage::Restart) => {
                 log::info!("server", "restart requested", client = id);
                 self.restart = Some(std::env::current_exe().unwrap_or_default());
@@ -725,6 +737,7 @@ impl Server {
             zone: "UTC".into(),
             used: 0,
             notify,
+            sent: notify::Sent::default(),
             pointer: None,
             shape: None,
             graphics,
@@ -815,6 +828,10 @@ impl Server {
             self.fit(Some(id));
             return;
         }
+        if let Event::FocusGained | Event::FocusLost = ev {
+            self.app.window_focus(id, ev == Event::FocusGained);
+            return;
+        }
         if is_use(&ev) {
             self.touch(id);
             self.fit(None);
@@ -836,7 +853,7 @@ impl Server {
         if self.app.take_detach() {
             log::info!("server", "client detached", client = id);
             if let Some(client) = self.client_mut(id) {
-                client.send(ServerMessage::Detached);
+                client.leave(ServerMessage::Detached);
             }
             self.remove(id);
         }
@@ -907,7 +924,7 @@ impl Server {
             log::error!("server", "failed to save the queue", error = e);
         }
         for client in self.clients.drain(..) {
-            client.send(self.restart.clone().map_or(ServerMessage::Shutdown, ServerMessage::Restart));
+            client.leave(self.restart.clone().map_or(ServerMessage::Shutdown, ServerMessage::Restart));
             let Client { out, screen, writer, .. } = client;
             drop((out, screen));
             let _ = writer.join();

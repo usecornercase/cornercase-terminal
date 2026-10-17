@@ -6,7 +6,17 @@ use rstest::rstest;
 
 use super::*;
 
-fn events(bytes: &[u8]) -> Vec<Event> {
+impl PartialEq<Event> for Input {
+    fn eq(&self, other: &Event) -> bool {
+        matches!(self, Self::Event(event) if event == other)
+    }
+}
+
+fn activated(token: &str) -> Input {
+    Input::Activated(token.into())
+}
+
+fn events(bytes: &[u8]) -> Vec<Input> {
     let mut events = Vec::new();
     Parser::default().feed(bytes, false, &mut |event| {
         events.push(event);
@@ -20,27 +30,36 @@ fn key(c: char) -> Event {
 }
 
 #[rstest]
-#[case::sixel(b"\x1b[?1;0;256S")]
-#[case::geometry(b"\x1b[?2;0;1000;570S")]
-#[case::attributes(b"\x1b[?62;22;52c")]
-#[case::secondary_attributes(b"\x1b[>1;400;0c")]
-#[case::cell_size(b"\x1b[6;34;16t")]
-#[case::color(b"\x1b]4;255;rgb:1111/2222/3333\x1b\\")]
-#[case::background(b"\x1b]11;rgb:00/00/00\x07")]
-#[case::terminal(b"\x1bP>|ghostty 1.3.1\x1b\\")]
-#[case::kitty(b"\x1b_Gi=31;OK\x1b\\")]
-fn late_replies_leave_the_next_click_and_key_alone(#[case] reply: &[u8]) {
+#[case::sixel(b"\x1b[?1;0;256S", None)]
+#[case::geometry(b"\x1b[?2;0;1000;570S", None)]
+#[case::attributes(b"\x1b[?62;22;52c", None)]
+#[case::secondary_attributes(b"\x1b[>1;400;0c", None)]
+#[case::cell_size(b"\x1b[6;34;16t", None)]
+#[case::color(b"\x1b]4;255;rgb:1111/2222/3333\x1b\\", None)]
+#[case::background(b"\x1b]11;rgb:00/00/00\x07", None)]
+#[case::terminal(b"\x1bP>|ghostty 1.3.1\x1b\\", None)]
+#[case::kitty(b"\x1b_Gi=31;OK\x1b\\", None)]
+#[case::clicked(b"\x1b]99;i=x;\x1b\\", Some("x"))]
+#[case::button(b"\x1b]99;i=x;2\x1b\\", Some("x"))]
+#[case::bell(b"\x1b]99;i=x;\x07", Some("x"))]
+#[case::contour(b"\x1b]99;i=x:p=activated;\x1b\\", Some("x"))]
+#[case::closed(b"\x1b]99;i=x:p=close;\x1b\\", None)]
+#[case::alive(b"\x1b]99;i=q:p=alive;x,y\x1b\\", None)]
+#[case::query(b"\x1b]99;i=q1:p=?;a=focus,report:o=always,unfocused:c=1\x1b\\", None)]
+#[case::bad_id(b"\x1b]99;i=x y;\x1b\\", None)]
+fn late_replies_leave_the_next_click_and_key_alone(#[case] reply: &[u8], #[case] token: Option<&str>) {
     let click = b"\x1b[<0;8;5M";
     let stream = [reply, click, b"z"].concat();
-    let expected = vec![
-        Event::Mouse(MouseEvent {
+    let mut expected: Vec<Input> = token.map(activated).into_iter().collect();
+    expected.extend([
+        Input::Event(Event::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 7,
             row: 4,
             modifiers: KeyModifiers::NONE,
-        }),
-        key('z'),
-    ];
+        })),
+        Input::Event(key('z')),
+    ]);
     assert_eq!(events(&stream), expected);
     for at in 1..stream.len() {
         let mut parser = Parser::new(true);
@@ -112,9 +131,25 @@ fn a_parser_panic_discards_its_bytes_and_keeps_the_rest_of_the_read() {
 
 #[test]
 fn replies_inside_a_paste_are_text() {
-    let text = "hello \x1b]4;1;rgb:ff/00/00\x07 \x1b[?1;0;256S";
+    let text = "hello \x1b]4;1;rgb:ff/00/00\x07 \x1b[?1;0;256S \x1b]99;i=x;\x1b\\";
     let stream = format!("\x1b[200~{text}\x1b[201~");
     assert_eq!(events(stream.as_bytes()), [Event::Paste(text.into())]);
+}
+
+#[test]
+fn a_click_report_split_after_its_prefix_is_still_read() {
+    let stream = b"\x1b]99;i=x;\x1b\\z";
+    for at in 5..stream.len() {
+        let mut parser = Parser::default();
+        let mut received = Vec::new();
+        let mut emit = |input| {
+            received.push(input);
+            true
+        };
+        parser.feed(&stream[..at], false, &mut emit);
+        parser.feed(&stream[at..], false, &mut emit);
+        assert_eq!(received, [activated("x"), Input::Event(key('z'))], "split at {at}");
+    }
 }
 
 #[test]

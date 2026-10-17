@@ -54,6 +54,7 @@ use layout::Focus;
 use layout::{Scrolls, Side};
 use merged_pull_requests::MergedPulls;
 use messenger::{Messenger, MessengerEvent};
+use notifications::Notices;
 use overlay::Overlay;
 use pull_requests::PullRequests;
 use queue_panel::{QueueEvent, QueueRuntime};
@@ -87,6 +88,7 @@ mod links;
 mod menus;
 mod merged_pull_requests;
 mod messenger;
+mod notifications;
 mod overlay;
 mod panes;
 mod picker_dialog;
@@ -149,6 +151,7 @@ pub(crate) struct App {
     divider_click: Option<(u64, Vec<bool>, Instant)>,
     toast: Option<Toast>,
     star: StarPrompt,
+    notices: Notices,
     overlay: Option<Overlay>,
     config: Config,
     config_path: PathBuf,
@@ -215,6 +218,7 @@ impl App {
             divider_click: None,
             toast: None,
             star: StarPrompt::default(),
+            notices: Notices::default(),
             overlay: None,
             config: config::load(&config_path),
             setups: std::collections::HashMap::new(),

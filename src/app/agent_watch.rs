@@ -3,8 +3,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use super::App;
 use super::menus::{Marked, MenuAction};
+use super::notifications::Said;
 use super::overlay::Overlay;
-use super::toast::Toast;
 use crate::agents;
 use crate::agents::AgentState;
 use crate::agents::activity;
@@ -12,13 +12,12 @@ use crate::agents::awake::{self, Awake};
 use crate::agents::context::Look;
 use crate::agents::launch::Launch;
 use crate::config::Config;
-use crate::host::notify::{self, Notification};
+use crate::host::notify;
 use crate::log::{self};
 use crate::process;
 use crate::project::Hierarchy;
 use crate::project::search::Goto;
 use crate::term::Term;
-use crate::ui::{self};
 
 pub(super) struct AgentRuntime {
     pub(super) launches: Vec<Launch>,
@@ -42,6 +41,8 @@ impl AgentRuntime {
     }
 }
 
+type NoticeKey = (String, activity::Status, u64, u64);
+
 pub(super) const WATCH_AGENTS_EVERY: Duration = Duration::from_millis(500);
 
 impl App {
@@ -59,7 +60,7 @@ impl App {
         let (config, dir, tree) = (&self.config, self.agents.claude_dir.as_deref(), self.drawn.tree);
         let folds = tree || self.drawn.tab_bar.is_empty();
         let jobs = self.events.listening();
-        let mut notices = Vec::new();
+        let mut notices: Vec<(NoticeKey, Vec<u64>)> = Vec::new();
         let (members, orchestrators) = (self.run_panes(false), self.run_panes(true));
         for (project, open) in self.projects.iter_mut().zip(open) {
             let shown = if tree { open } else { active == Some(project.id) };
@@ -115,9 +116,10 @@ impl App {
                             if let Some(status) = notice
                                 && let Some((agent, _)) = found
                             {
-                                let notice = (agent, status, project.id, workspace.id);
-                                if !notices.contains(&notice) {
-                                    notices.push(notice);
+                                let key = (agent, status, project.id, workspace.id);
+                                match notices.iter_mut().find(|(k, _)| *k == key) {
+                                    Some((_, panes)) => panes.push(term.id),
+                                    None => notices.push((key, vec![term.id])),
                                 }
                             }
                             term.job = if jobs { term.current_job(config) } else { None };
@@ -135,8 +137,8 @@ impl App {
             self.agents.stats.sample(clock, elapsed, &samples);
             self.agents.stats.prune(clock);
         }
-        for (agent, status, project, workspace) in notices {
-            self.notify(&agent, status, project, workspace);
+        for ((agent, status, project, workspace), panes) in notices {
+            self.notify(&agent, status, (project, workspace), panes);
         }
     }
 
@@ -150,7 +152,8 @@ impl App {
         }
     }
 
-    fn notify(&mut self, agent: &str, status: activity::Status, project: u64, workspace: u64) {
+    pub(super) fn notify(&mut self, agent: &str, status: activity::Status, at: (u64, u64), panes: Vec<u64>) {
+        let (project, workspace) = at;
         let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return };
         let what = match status {
             activity::Status::Waiting => "needs you",
@@ -166,10 +169,18 @@ impl App {
             agent = agent,
             status = status.name(),
             project = project.id,
-            workspace = project.workspaces[w].id
+            workspace = project.workspaces[w].id,
+            panes = panes.len()
         );
-        self.outbox.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
-        self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(status)));
+        self.tell(Said {
+            agent,
+            status,
+            place,
+            message,
+            project: project.id,
+            workspace: project.workspaces[w].id,
+            panes,
+        });
     }
 
     fn marked_panes(&self, marked: Marked) -> Vec<&Term> {

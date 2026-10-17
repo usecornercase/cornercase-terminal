@@ -181,3 +181,27 @@ test('A failed agent has a red mark and reaches the attention rollup', () => {
   assert.equal(watchPane(pane, 'failed', false, 1000), 'failed');
   app.destroy();
 });
+
+test('An agent toast has a go that shows its tab, and lasts six seconds', () => {
+  const app = new App();
+  app.virtual = true;
+  app.resize(177, 46);
+  world(app);
+  let toast = app.toast;
+  for (let t = 0; t < 120000 && !toast; t += 250) {
+    app.advance(250);
+    app.render();
+    toast = app.toast;
+  }
+  assert.ok(toast?.go, `a toast with a go: ${JSON.stringify(toast)}`);
+  assert.ok(toast.until - app.now() > 2000);
+  app.render();
+  const before = app.tab();
+  const at = app.textAt(' go ');
+  assert.ok(at, 'the go button');
+  app.pointerDown(at.x + 1, at.y, 0);
+  app.pointerUp();
+  assert.equal(app.toast, null);
+  assert.notEqual(app.tab(), before);
+  app.destroy();
+});

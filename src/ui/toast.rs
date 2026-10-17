@@ -12,6 +12,8 @@ use crate::agents::activity::Status;
 
 const UNDO_LABEL: &str = "undo";
 
+const GO_LABEL: &str = "go";
+
 const TOAST_ICON: &str = " ✓ ";
 
 const BUG_ICON: &str = " ✗ ";
@@ -31,6 +33,7 @@ pub(crate) enum ToastIcon {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToastButton {
     Undo,
+    Go,
     Cancel,
 }
 
@@ -38,6 +41,7 @@ impl ToastButton {
     fn label(self) -> &'static str {
         match self {
             Self::Undo => UNDO_LABEL,
+            Self::Go => GO_LABEL,
             Self::Cancel => CANCEL_LABEL,
         }
     }

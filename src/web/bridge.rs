@@ -204,8 +204,8 @@ fn pump(
             Ok(Message::Binary(bytes)) => {
                 heard = Instant::now();
                 let mut sent = true;
-                parser.feed(&bytes, false, &mut |event| {
-                    sent = protocol::send(socket, &ClientMessage::Event(event)).is_ok();
+                parser.feed(&bytes, false, &mut |input| {
+                    sent = protocol::send(socket, &ClientMessage::from(input)).is_ok();
                     sent
                 });
                 if !sent {
@@ -226,8 +226,8 @@ fn pump(
             Ok(_) => heard = Instant::now(),
             Err(e) if waiting(&e) => {
                 let mut sent = true;
-                parser.idle(&mut |event| {
-                    sent = protocol::send(socket, &ClientMessage::Event(event)).is_ok();
+                parser.idle(&mut |input| {
+                    sent = protocol::send(socket, &ClientMessage::from(input)).is_ok();
                     sent
                 });
                 if !sent {

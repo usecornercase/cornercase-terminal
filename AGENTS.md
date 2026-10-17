@@ -50,7 +50,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 - Closing the last project leaves the app open and empty. ` Quit ` only detaches.
 - `×` and ` ⋯ ` (the row's menu, as a right-click) buttons only show while hovering their row, except in compact mode, where they always show dimmed (touch screens have no hover) and closing a tab or a plain workspace asks first (`Overlay::CloseTab`, `Overlay::CloseWorkspace`), since an always-visible `×` is easy to tap by accident. Names are cut at the end (`text::truncate_right`), paths at the start (`truncate_left`).
 - At most one overlay is open (menu, form, confirmation, settings, usage, remote, pairing, picker, issues, search, keys menu). While it is open, no mouse event reaches the columns or the pane.
-- Overlays, hover, scroll, column widths and the toast live in `App` and are shared by every attached client. A toast can carry an ` undo ` (TODO removals), then lasts 6 s, or a ` cancel ` (a pending restart, shown for as long as it waits).
+- Overlays, hover, scroll, column widths and the toast live in `App` and are shared by every attached client. A toast can carry an ` undo ` (TODO removals) or a ` go ` (an agent's notice), then lasts 6 s, or a ` cancel ` (a pending restart, shown for as long as it waits).
 
 ## Architecture
 
@@ -107,7 +107,7 @@ src/update.rs     update check against GitHub releases, download, checksum, bina
 src/ui.rs         `View`, `draw()` and the re-exports of `ui/`; the rest of the screen is one file per part (no PTYs): ui/theme.rs colours, ui/widgets.rs shared drawing helpers, ui/layout.rs and ui/widths.rs the areas and column widths, ui/rows.rs the list engine, ui/sidebar.rs, ui/workspaces.rs, ui/tree.rs and ui/agents_section.rs the lists, ui/drop.rs where a dragged row lands, ui/chrome.rs footer, compact bar and borders, ui/pane.rs the pane, ui/toast.rs, ui/dialog.rs and ui/dialog/ every dialog (project_settings.rs); ui/changes.rs draws the changes panel, ui/todo.rs the TODO panel, ui/files.rs the files panel, ui/remote.rs the reconnecting notice, ui/tab_bar.rs the tab bar above the pane (geometry and drawing), ui/activity.rs the icon bar and ui/icons.rs its glyphs, ui/keys.rs the keys menu, ui/stats.rs the Stats page of the usage dialog, ui/remote_access.rs the ` Remote ` button and its QR dialogs, ui/flow.rs and ui/flow/ the flow diagram and the Flow panel
 
 src/app.rs        App state (issues, update, agents, outbox, scroll, upstream groups), new, server-facing methods, refresh and event dispatch, drawing the View; re-exports the event and image types
-src/app/          event.rs (AppEvent, Start), overlay.rs (overlay state, view and clicks), dialogs.rs (forms and confirmations), toast.rs, menus.rs (row and pane menus)
+src/app/          event.rs (AppEvent, Start), overlay.rs (overlay state, view and clicks), dialogs.rs (forms and confirmations), toast.rs, notifications.rs (notification clicks), menus.rs (row and pane menus)
                   input.rs (keys, mouse and paste), interaction.rs (drags and timing), jobs.rs (`spawn_job`, the one way to start a background job), layout.rs (focus and side panels), view.rs (View entries)
                   hierarchy.rs (active lookups, closing, renaming, groups and moving), tabs.rs (shells, tabs, workspaces and projects), session.rs (restoring and resuming)
                   sidebar.rs (lists, row menus and agents section), sidebar/drag.rs (row drags), sidebar/tree.rs, tab_bar.rs, panes.rs (pane mouse, scrollback, selection and dividers), links.rs (paths in panes)
