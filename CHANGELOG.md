@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.132
+
+- **The agents section shows who started whom.** An agent started by another agent (`cornercase start`, `new-tab` or `split` from its pane) is drawn right under it, indented, with lines joining them, and a flow's team hangs under its orchestrator, so you can see which agent works for which. Rows still move only when an agent starts or closes. A child whose parent closes becomes a root again. The tree comes back after a restart or an update.
+- **Scripts see it too.** Every pane in `status --json`, `status --follow` and `view` has `parent`, the pane that started it (`null` when none); `status --panes` has it as its last column and the text tree shows `(parent N)`. A pane's `opened` event in `cornercase events` names its parent.
+
 ## 0.12.131
 
 - **Programs see the colours of the app that drives cornercase.** `cornercase start-server --theme FILE` (or `-` for standard input) gives the server the foreground, background and 16 ANSI colours that programs in its terminals get when they ask, with no window attached. Claude Code, Neovim and delta pick their light or dark look from them.
