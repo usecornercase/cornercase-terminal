@@ -636,7 +636,7 @@ screen_todo() {
   cc_click 'TODO' 0 -1
   cc_wait 'clear done'
   cc_hover 'add a test for'
-  cc_wait 'add a test for Address::first_line  ×'
+  cc_wait '▸'
   cc_shot todo
 }
 

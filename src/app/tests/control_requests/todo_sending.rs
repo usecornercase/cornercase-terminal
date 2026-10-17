@@ -28,6 +28,34 @@ mod sending_a_todo_to_an_agent {
     }
 
     #[test]
+    fn a_client_that_leaves_mid_send_still_gets_the_item_checked_once() {
+        let mut agent = Agent::new();
+        let id = agent.start(None);
+        let todo = add(&mut agent.app, "fix the login");
+        ask(&mut agent.app, None, todo_send(todo, Some(id)));
+        agent.app.forget(CLIENT);
+
+        let refused = error(now(&mut agent.app, None, todo_send(todo, Some(id))));
+        agent.refreshing("the item is checked off", |a| is_done(a, todo));
+
+        assert!(refused.contains("already being sent"), "{refused}");
+        assert!(agent.app.toast.is_none());
+    }
+
+    #[test]
+    fn an_item_edited_while_it_is_sent_stays_pending() {
+        let mut agent = Agent::new();
+        let id = agent.start(None);
+        let todo = add(&mut agent.app, "fix the login");
+        ask(&mut agent.app, None, todo_send(todo, Some(id)));
+        agent.app.todos.edit(todo, "fix the logout");
+
+        done(agent.answered("the agent records the prompt"));
+
+        assert!(!is_done(&agent.app, todo));
+    }
+
+    #[test]
     fn works_for_an_internal_client_through_the_app() {
         let mut agent = Agent::new();
         let id = agent.start(None);

@@ -218,7 +218,13 @@ impl App {
 
     pub(in crate::app) fn todo_answered(&mut self, client: u64, reply: &Result<Value, String>) -> bool {
         let Some(place) = self.todo.sending.remove(&client) else { return false };
+        if place.is_empty() {
+            return true;
+        }
         self.toast = Some(match reply {
+            Ok(value) if value.get("unconfirmed").is_some() => {
+                Toast::new(format!("sent to {place}, not confirmed: stays to do"), ui::ToastIcon::Check)
+            }
             Ok(_) => Toast::new(format!("sent to {place}"), ui::ToastIcon::Check),
             Err(reason) => Toast::new(reason.clone(), ui::ToastIcon::Bug),
         });

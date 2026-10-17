@@ -101,7 +101,7 @@ impl App {
         if item.done {
             return Err(format!("todo {} is already done, so it is not sent; uncheck it first", todo.id).into());
         }
-        if self.requests.todo_sends.values().any(|&sending| sending == todo.id) {
+        if self.requests.todo_sends.values().any(|sending| sending.todo == todo.id) {
             return Err(format!("todo {} is already being sent; wait for its answer", todo.id).into());
         }
         let pane = self.target(asker, todo.pane, todo.tab)?;
@@ -109,15 +109,17 @@ impl App {
         if !self.runs_agent(term) {
             return Err(format!("pane {pane} runs no agent; `cornercase status --panes` lists the agents").into());
         }
+        let text = item.text.clone();
+        let confirmed = self.confirms(term, Some(&text));
         let send = control::SendText {
-            text: Some(item.text.clone()),
+            text: Some(text.clone()),
             enter: true,
             pane: todo.pane,
             tab: todo.tab,
             force: todo.force,
             ..control::SendText::default()
         };
-        self.requests.todo_sends.insert(client, todo.id);
+        self.requests.todo_sends.insert(client, super::Sending { todo: todo.id, text, confirmed });
         self.send_request(client, asker, send, now)
     }
 

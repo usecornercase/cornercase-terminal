@@ -74,12 +74,7 @@ impl App {
             )
             .into());
         }
-        let local = agents::detect(&self.config, &term.foreground_args())
-            .as_deref()
-            .and_then(agents::Known::of)
-            .is_some_and(|agent| send.text.as_deref().is_some_and(|text| agent.local_command(text)));
-        let confirm = (send.enter && !local && self.watched_agent(term).is_ok() && !self.record_hidden(term))
-            .then(SystemTime::now);
+        let confirm = (send.enter && self.confirms(term, send.text.as_deref())).then(SystemTime::now);
         let wait = send.wait.then(|| Condition::of(send.until)).transpose()?;
         if let Some(until) = &wait {
             self.can_wait(asker.caller, pane, until)?;
@@ -99,6 +94,14 @@ impl App {
         }
         let stage = Stage::Launch { confirm, wait };
         Ok(self.launch_within(client, pane_ids(pane), Some(Launch::enter(pane, now)), stage, timeout))
+    }
+
+    pub(super) fn confirms(&self, term: &term::Term, text: Option<&str>) -> bool {
+        let local = agents::detect(&self.config, &term.foreground_args())
+            .as_deref()
+            .and_then(agents::Known::of)
+            .is_some_and(|agent| text.is_some_and(|text| agent.local_command(text)));
+        !local && self.watched_agent(term).is_ok() && !self.record_hidden(term)
     }
 
     fn record_hidden(&self, term: &term::Term) -> bool {

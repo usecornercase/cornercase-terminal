@@ -403,6 +403,11 @@ fn run_todo(action: TodoAction) -> Result<()> {
             let send = control::TodoSend { id, pane, tab, force };
             say(ask("todo-send", control::Command::TodoSend(send))?, print.json, |done| {
                 let pane = done.ids.pane.map_or_else(String::new, |pane| format!(" to pane {pane}"));
+                if done.unconfirmed == Some(true) {
+                    return vec![format!(
+                        "sent todo {id}{pane}, but cornercase cannot tell whether the agent took it, so it stays to do"
+                    )];
+                }
                 vec![format!("sent todo {id}{pane}")]
             })
         }

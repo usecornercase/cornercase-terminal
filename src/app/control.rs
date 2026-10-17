@@ -58,8 +58,14 @@ pub(super) struct Requests {
     structured: HashSet<u64>,
     answers: Vec<(u64, String)>,
     launched: Vec<(u64, bool)>,
-    todo_sends: HashMap<u64, u64>,
+    todo_sends: HashMap<u64, Sending>,
     next: u64,
+}
+
+struct Sending {
+    todo: u64,
+    text: String,
+    confirmed: bool,
 }
 
 impl Requests {
@@ -234,7 +240,19 @@ impl App {
     pub(crate) fn forget(&mut self, client: u64) {
         self.requests.open.retain(|open| *open != client);
         self.requests.structured.remove(&client);
-        self.requests.todo_sends.remove(&client);
+        if let Some(sending) = self.requests.todo_sends.remove(&client) {
+            let orphan = crate::app::todo_panel::CLIENTS + self.todo.next_client;
+            self.todo.next_client += 1;
+            let mut kept = false;
+            for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
+                pending.client = Some(orphan);
+                kept = true;
+            }
+            if kept {
+                self.requests.todo_sends.insert(orphan, sending);
+                self.todo.sending.insert(orphan, String::new());
+            }
+        }
         if let Some((at, command)) = self.requests.asked.remove(&client) {
             log::info!(
                 "control",
@@ -283,12 +301,16 @@ impl App {
         let Some(client) = client else { return };
         let structured = self.requests.structured.remove(&client);
         let reply = match (self.requests.todo_sends.remove(&client), reply) {
-            (Some(todo), Ok(mut value)) => {
-                if self.todos.item(todo).is_some_and(|item| !item.done) {
-                    self.todos.toggle(todo);
+            (Some(sending), Ok(mut value)) => {
+                let same = self.todos.item(sending.todo).is_some_and(|item| !item.done && item.text == sending.text);
+                if sending.confirmed && same {
+                    self.todos.toggle(sending.todo);
                 }
                 if let Some(fields) = value.as_object_mut() {
-                    fields.insert("todo".into(), todo.into());
+                    fields.insert("todo".into(), sending.todo.into());
+                    if !sending.confirmed {
+                        fields.insert("unconfirmed".into(), true.into());
+                    }
                 }
                 Ok(value)
             }

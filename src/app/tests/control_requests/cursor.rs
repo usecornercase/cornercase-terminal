@@ -146,3 +146,16 @@ fn two_cursor_in_one_folder_each_follow_their_own_conversation() {
     let records = [first_pane, second_pane].map(|id| pane(&app, id).context.record_for(crate::agents::Known::Cursor));
     assert_ne!(records[0], records[1]);
 }
+
+#[test]
+fn a_todo_cursor_cannot_confirm_is_sent_but_stays_pending() {
+    let mut running = Running::new();
+    let id = first(&running.app);
+    let todo = running.app.todos.add("/plan the login").expect("an id");
+
+    ask(&mut running.app, None, Command::TodoSend(wire::TodoSend { id: todo, pane: Some(id), ..Default::default() }));
+    let sent = done(answered(&mut running.app, &running.rx, "the enter is pressed"));
+
+    let pending = running.app.todos.item(todo).is_some_and(|item| !item.done);
+    assert_eq!((sent.todo, sent.unconfirmed, pending), (Some(todo), Some(true), true));
+}
