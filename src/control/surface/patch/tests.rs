@@ -152,6 +152,31 @@ fn a_copy_is_used_only_when_it_sends_fewer_rows() {
 }
 
 #[test]
+fn many_identical_rows_still_copy_the_rows_that_moved() {
+    let mut was: Vec<&str> = vec!["same"; 12];
+    was.extend(["a1", "b2", "c3", "d4"]);
+    let mut now: Vec<&str> = vec!["same"; 11];
+    now.extend(["a1", "b2", "c3", "d4", "e5"]);
+
+    let changed = patch(&one(&was), &one(&now));
+
+    assert!(changed.lines.len() <= 2, "{changed:?}");
+    let rebuilt = changes(&one(&was), &one(&now)).expect("a patch");
+    assert_eq!(rebuilt.panes[0].lines.len(), changed.lines.len());
+}
+
+#[test]
+fn identical_rows_alone_never_make_a_copy() {
+    let was = one(&["same", "same", "same", "same"]);
+    let now = one(&["same", "same", "same", "other"]);
+
+    let changed = patch(&was, &now);
+
+    assert_eq!(changed.copy, None);
+    assert_eq!(rows_of(&changed), [3]);
+}
+
+#[test]
 fn blank_rows_do_not_vote_for_a_copy() {
     let was = one(&["", "", "", "", "x"]);
     let now = one(&["", "", "", "y", ""]);

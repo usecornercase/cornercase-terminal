@@ -311,7 +311,7 @@ impl App {
         sub.tab = tab;
         sub.area = area;
         let revision = sub.revision;
-        match changes {
+        let text = match changes {
             Some(changes) if changes.panes.is_empty() => {
                 sub.revision = base;
                 sub.frames -= 1;
@@ -331,7 +331,14 @@ impl App {
                 log::debug!("control", "surface sent", surface = id, revision = revision, kind = "complete");
                 frame.streamed()
             }
+        };
+        if text.is_none() {
+            let sub = &mut self.surfaces.subscriptions[at];
+            sub.revision = base;
+            sub.frames = sub.frames.saturating_sub(1);
+            sub.wants = Wants::Complete;
         }
+        text
     }
 
     fn subscription_mut(&mut self, id: Option<u64>, name: &str) -> Result<&mut Subscription, Refusal> {
