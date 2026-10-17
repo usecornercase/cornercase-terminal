@@ -58,6 +58,7 @@ pub(super) struct Requests {
     structured: HashSet<u64>,
     answers: Vec<(u64, String)>,
     launched: Vec<(u64, bool)>,
+    todo_sends: HashMap<u64, u64>,
     next: u64,
 }
 
@@ -233,6 +234,7 @@ impl App {
     pub(crate) fn forget(&mut self, client: u64) {
         self.requests.open.retain(|open| *open != client);
         self.requests.structured.remove(&client);
+        self.requests.todo_sends.remove(&client);
         if let Some((at, command)) = self.requests.asked.remove(&client) {
             log::info!(
                 "control",
@@ -280,6 +282,18 @@ impl App {
     fn refuse_or_answer(&mut self, client: Option<u64>, reply: Result<Value, Refusal>) {
         let Some(client) = client else { return };
         let structured = self.requests.structured.remove(&client);
+        let reply = match (self.requests.todo_sends.remove(&client), reply) {
+            (Some(todo), Ok(mut value)) => {
+                if self.todos.item(todo).is_some_and(|item| !item.done) {
+                    self.todos.toggle(todo);
+                }
+                if let Some(fields) = value.as_object_mut() {
+                    fields.insert("todo".into(), todo.into());
+                }
+                Ok(value)
+            }
+            (_, reply) => reply,
+        };
         let (code, reply) = match reply {
             Ok(value) => (Code::Failed, Ok(value)),
             Err(refusal) => (refusal.code, Err(refusal.message)),
@@ -352,6 +366,7 @@ impl App {
             Command::Focus(focus) => self.focus_request(asker, focus.item),
             Command::Notify(notify) => self.notify_request(&notify.text),
             Command::Todo(todo) => self.todo_request(todo),
+            Command::TodoSend(send) => self.todo_send_request(client, asker, &send, now),
             Command::Queue(queue) => self.queue_request(client, caller, queue, area, now),
             Command::Events(events) => self.events_request(client, events),
             Command::Surface(surface) => self.surface_request(client, asker.view, &surface, now),

@@ -11,8 +11,8 @@ use super::help::{
     KEYS_HELP, KILL_SERVER_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP,
     OPEN_HELP, PLUGIN_HELP, RATIO_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP,
     RESTART_TIMEOUT, SCROLL_HELP, SEARCH_HELP, SELECTION_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP,
-    START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, VIEW_ARG, VIEW_HELP,
-    VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
+    START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, TODO_HELP, TODO_SEND_HELP, UNTIL_AFTER, UPDATE_HELP, VIEW_ARG,
+    VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -645,6 +645,23 @@ pub(crate) enum TodoAction {
     Done {
         #[arg(value_name = "ID", help = "The item")]
         id: u64,
+    },
+    #[command(about = "Send an item's text to an agent, like `send --enter`, and check it off", after_help = TODO_SEND_HELP)]
+    Send {
+        #[arg(value_name = "ID", help = "The item")]
+        id: u64,
+        #[arg(long, value_name = "ID", help = HERE_PANE)]
+        pane: Option<u64>,
+        #[arg(long, value_name = "ID", conflicts_with = "pane", help = "A tab: its agent's pane, else its active one")]
+        tab: Option<u64>,
+        #[arg(
+            long,
+            help = "Send even when the agent shows a dialog, a panel or its shell mode instead of its input box, or \
+                    its feedback survey"
+        )]
+        force: bool,
+        #[command(flatten)]
+        print: Print,
     },
     #[command(about = "Remove an item")]
     Rm {

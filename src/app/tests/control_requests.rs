@@ -393,6 +393,7 @@ mod start_server;
 mod surfaces;
 mod talking;
 mod telegram;
+mod todo_sending;
 mod views;
 mod watching;
 mod worktrees;

@@ -305,7 +305,16 @@ Examples:
 pub(super) const TODO_HELP: &str = "Examples:
   cornercase todo add review the login fix
   cornercase todo list
-  cornercase todo done 3";
+  cornercase todo done 3
+  cornercase todo send 3 --pane 5";
+pub(super) const TODO_SEND_HELP: &str = "Types the item's text into the agent and presses Enter, as
+`cornercase send --enter` does, with the same target, refusals and confirmation that the agent took
+the prompt. Once it did, the item is checked off. A refused or unconfirmed send leaves it pending,
+prints the reason and exits with status 1. Only a pending item can be sent.
+
+Examples:
+  cornercase todo send 3
+  cornercase todo send 3 --pane 5 --json";
 pub(super) const EVENTS_HELP: &str = "It keeps running and prints one line per event, as it happens:
   pane 5  claude  working → waiting   an agent changed state: working, shell (its turn is over but a
                                       background shell it started still runs), waiting, done, idle,

@@ -1,7 +1,9 @@
+use std::time::Instant;
+
 use super::{Asker, Handled, json, name_of, none, pane_ids};
 use crate::app::menus::{Marked, Target};
 use crate::app::{App, Toast};
-use crate::control::{self, Done, Item, TodoItem, TodoList};
+use crate::control::{self, Command, Done, Item, Request, TodoItem, TodoList};
 use crate::host::notify::{self, Notification};
 use crate::project::Hierarchy;
 use crate::ui;
@@ -86,5 +88,35 @@ impl App {
             }
         };
         Ok(Some(json(&done)))
+    }
+
+    pub(super) fn todo_send_request(
+        &mut self,
+        client: u64,
+        asker: Asker,
+        todo: &control::TodoSend,
+        now: Instant,
+    ) -> Handled {
+        let item = self.todos.item(todo.id).ok_or_else(|| none("todo", todo.id))?;
+        if item.done {
+            return Err(format!("todo {} is already done, so it is not sent; uncheck it first", todo.id).into());
+        }
+        let send = control::SendText {
+            text: Some(item.text.clone()),
+            enter: true,
+            pane: todo.pane,
+            tab: todo.tab,
+            force: todo.force,
+            ..control::SendText::default()
+        };
+        self.requests.todo_sends.insert(client, todo.id);
+        self.send_request(client, asker, send, now)
+    }
+
+    #[cfg_attr(not(test), expect(dead_code, reason = "the TODO panel calls it in the next step"))]
+    pub(in crate::app) fn send_todo(&mut self, client: u64, todo: u64, pane: u64, now: Instant) {
+        let command = Command::TodoSend(control::TodoSend { id: todo, pane: Some(pane), ..Default::default() });
+        let request = Request { caller: None, server: None, contract: None, boot: None, view: None, command };
+        self.run_request(client, Ok(request), 0, None, now);
     }
 }

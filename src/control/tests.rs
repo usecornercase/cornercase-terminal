@@ -87,6 +87,7 @@ fn every_command_is_listed_by_name() {
         Command::Selection(Selection::default()),
         Command::Resize(Resize::default()),
         Command::Ratio(Ratio::default()),
+        Command::TodoSend(TodoSend::default()),
     ];
 
     let names: Vec<String> = commands
@@ -107,6 +108,24 @@ fn every_command_is_listed_by_name() {
 
     assert_eq!(names, Command::NAMES);
     assert_eq!(commands.iter().map(Command::name).collect::<Vec<_>>(), Command::NAMES);
+}
+
+#[test]
+fn a_todo_send_names_the_item_and_its_target_and_logs_no_text() {
+    let request: Request =
+        serde_json::from_str(r#"{"command": "todo-send", "args": {"id": 3, "pane": 5, "force": true}}"#)
+            .expect("a request");
+
+    assert_eq!(request.command, Command::TodoSend(TodoSend { id: 3, pane: Some(5), tab: None, force: true }));
+    assert_eq!(
+        request.command.fields(),
+        [
+            ("todo", "send".to_string()),
+            ("id", "3".to_string()),
+            ("pane", "5".to_string()),
+            ("force", "true".to_string())
+        ]
+    );
 }
 
 #[test]

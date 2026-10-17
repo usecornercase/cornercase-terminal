@@ -390,6 +390,13 @@ fn run_todo(action: TodoAction) -> Result<()> {
             Ok(())
         }
         TodoAction::Done { id } => ask("todo", control::Command::Todo(control::Todo::Done(id))).map(drop),
+        TodoAction::Send { id, pane, tab, force, print } => {
+            let send = control::TodoSend { id, pane, tab, force };
+            say(ask("todo-send", control::Command::TodoSend(send))?, print.json, |done| {
+                let pane = done.ids.pane.map_or_else(String::new, |pane| format!(" to pane {pane}"));
+                vec![format!("sent todo {id}{pane}")]
+            })
+        }
         TodoAction::Rm { id } => ask("todo", control::Command::Todo(control::Todo::Rm(id))).map(drop),
     }
 }

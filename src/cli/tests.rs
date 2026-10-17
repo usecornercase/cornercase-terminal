@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::{CommandFactory, Parser};
 use rstest::rstest;
 
-use super::args::{KillServerArgs, RestartArgs, StartServerArgs, UpdateArgs};
+use super::args::{KillServerArgs, RestartArgs, StartServerArgs, TodoAction, UpdateArgs};
 use super::status::cell;
 use super::*;
 use crate::control::{GroupInfo, Ids, PaneInfo, PaneRows, ProjectInfo, PullRequestInfo, TabInfo, WorkspaceInfo};
@@ -191,6 +191,16 @@ mod parsing {
 
         let Some(Command::Control(Control::Send(send))) = cli.command else { panic!("not send") };
         assert_eq!((send.timeout, send.force, send.wait), (Some(5.0), true, false));
+    }
+
+    #[test]
+    fn a_todo_is_sent_to_a_pane_or_a_tab_but_not_both() {
+        let cli = parse(&["todo", "send", "3", "--pane", "5", "--force", "--json"]).expect("parse");
+
+        let Some(Command::Control(Control::Todo(todo))) = cli.command else { panic!("not todo") };
+        let TodoAction::Send { id, pane, tab, force, print } = todo.action else { panic!("not send") };
+        assert_eq!((id, pane, tab, force, print.json), (3, Some(5), None, true, true));
+        assert!(parse(&["todo", "send", "3", "--pane", "5", "--tab", "6"]).is_err());
     }
 
     #[test]
