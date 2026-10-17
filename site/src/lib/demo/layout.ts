@@ -20,6 +20,8 @@ const UPDATE_MESSAGE_HEIGHT = 3;
 const MIN_MENU_ROW_WIDTH = 20;
 const ISSUES_WIDTH = 110;
 const ISSUES_HEIGHT = 30;
+const SETTINGS_WIDTH = 140;
+const SETTINGS_HEIGHT = 40;
 
 export const GROUP_ICONS = ['●', '◉', '◐', '◆', '■', '▲', '▼', '★', '✦', '♥', '♣', '♠'];
 export const GROUP_COLOURS = [1, 9, 208, 214, 3, 11, 2, 10, 6, 14, 4, 12, 99, 5, 13, 205];
@@ -855,6 +857,9 @@ export const updateNotes = (cols: number, rows: number): Rect => {
 };
 export const issuesArea = (cols: number, rows: number) =>
   centered(cols, rows, Math.min(Math.max(0, cols - 4), ISSUES_WIDTH), Math.min(Math.max(0, rows - 2), ISSUES_HEIGHT));
+
+export const settingsArea = (cols: number, rows: number) =>
+  centered(cols, rows, Math.min(Math.max(0, cols - 4), SETTINGS_WIDTH), Math.min(Math.max(0, rows - 2), SETTINGS_HEIGHT));
 
 export const usageArea = (cols: number, rows: number, body: number) =>
   centered(cols, rows, Math.min(Math.max(0, cols < 49 ? cols : cols - 2), FORM_WIDTH), Math.min(body + 5, rows));

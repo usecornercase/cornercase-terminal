@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-full files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting queue queue-form flow-run flows-list flows-import flows-edit flow-start"
+CC_SCREENS="first-run sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-full files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting queue queue-form flow-run flows-list flows-deleted flows-import flows-edit flow-start"
 
 pane_in() {
   cc status --json | node -e '
@@ -803,9 +803,28 @@ flows_open() {
   cc_start 140 38
   cc_wait 'web-shop'
   cc_click 'Settings'
-  cc_click 'Agents'
-  cc_click 'flows'
-  cc_wait 'teams of agents that work through a plan'
+  cc_click 'Flows   Issues'
+  cc_wait 'a built-in flow: edit saves'
+}
+
+screen_settings_flows() {
+  flows_open
+  cc_hover '╭─ Settings'
+  cc_shot settings-flows
+}
+
+screen_flows_deleted() {
+  cc_config '{"hidden_flows":["Arena","Cross review"]}'
+  cc_session "$CC_CAPTURE/sessions/$CC_SESSION.json"
+  cc_start 140 38
+  cc_wait 'web-shop'
+  cc_click 'Settings'
+  cc_click 'Flows   Issues'
+  cc_wait 'deleted built-ins'
+  cc_click 'deleted built-ins'
+  cc_wait 'enter hides them'
+  cc_hover '╭─ Settings'
+  cc_shot flows-deleted
 }
 
 flows_edit_full_issue() {
@@ -821,7 +840,7 @@ screen_flows_list() {
   cc_wait 'full-issue.toml'
   cc_click 'save   done' 7
   cc_wait 'open a pull request'
-  cc_hover '╭─ Flows'
+  cc_hover '╭─ Settings'
   cc_shot flows-list
 }
 
@@ -831,7 +850,7 @@ screen_flows_import() {
   cc_wait 'paste a flow'
   local file="$CC_CAPTURE/quick-review.toml"
   cat > "$file" <<'TOML'
-# A cornercase flow: import it with `cornercase flow import <file>` or Settings → Agents → flows → import
+# A cornercase flow: import it with `cornercase flow import <file>` or Settings → Flows → import
 name = "Quick review"
 end = "commits"
 

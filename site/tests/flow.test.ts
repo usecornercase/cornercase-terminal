@@ -211,10 +211,11 @@ test('starting and editing flows need a real cornercase', () => {
   assert.ok(shown(app, 'the demo only plays the flow in payments'));
   app.openSettings();
   inputKey(app, key('ArrowRight'));
-  const rows = app.settingsRows(1);
-  const at = rows.findIndex((row) => row.id === 'flows');
-  assert.equal(rows[at].section, 'Flows');
-  app.settingsClick(at);
+  assert.equal(app.settingsRows(1).some((row) => row.id === 'flows'), false);
+  inputKey(app, key('ArrowRight'));
+  const rows = app.settingsRows(2);
+  assert.deepEqual(rows.map((row) => row.label), ['Arena', 'Bug, test first', 'Cross review', 'Full issue', 'Quick']);
+  app.settingsClick(rows.findIndex((row) => row.label === 'Quick'));
   assert.ok(shown(app, 'the demo only plays the flow in payments'));
   app.destroy();
 });

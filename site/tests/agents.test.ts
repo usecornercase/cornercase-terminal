@@ -87,8 +87,8 @@ test('A working agent shows the moon, and turns once the spinner is picked in se
   app.advance(100);
   moon.push(icon());
   app.openSettings();
-  app.settingsPage(3);
-  app.settingsClick(app.settingsRows(3).findIndex((row) => row.id === 'working'));
+  app.settingsPage(4);
+  app.settingsClick(app.settingsRows(4).findIndex((row) => row.id === 'working'));
   const pick = app.overlay?.kind === 'settings' ? app.overlay.pick : undefined;
   assert.deepEqual(pick?.items.map((item) => item.value), ['moon', 'spinner']);
   app.choosePick(1);

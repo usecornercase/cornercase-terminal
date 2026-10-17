@@ -1,4 +1,4 @@
-# A cornercase flow: import it with `cornercase flow import <file>` or Settings → Agents → flows → import
+# A cornercase flow: import it with `cornercase flow import <file>` or Settings → Flows → import
 name = "Quick review"
 end = "commits"
 

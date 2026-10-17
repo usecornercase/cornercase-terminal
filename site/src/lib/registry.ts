@@ -201,5 +201,5 @@ export const everyFlow = (): RegistryFlow[] => [...builtIns(), ...registry()];
 export const endLabel = (end: RegistryFlow['end']): string => (end === 'commits' ? 'leaves the commits' : 'opens a pull request');
 export const repoUrl = (repo: string): string => `https://github.com/${repo}`;
 export const fileUrl = (flow: RegistryFlow): string => `${repoUrl(flow.repo)}/blob/HEAD/${flow.file}`;
-export const BUILT_IN_NOTE = 'It already comes with cornercase, so there is nothing to import: edit it in Settings → Agents → flows.';
+export const BUILT_IN_NOTE = 'It already comes with cornercase, so there is nothing to import: edit or delete it in Settings → Flows.';
 export const importCommand = (flow: RegistryFlow): string => `cornercase flow import ${flow.repo}`;

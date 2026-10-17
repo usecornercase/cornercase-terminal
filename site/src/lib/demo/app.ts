@@ -104,6 +104,13 @@ const PULL_REQUESTS_NEED = 'this needs cornercase on your computer: the demo has
 
 const SETUP_NEEDS = 'this needs cornercase on your computer: the demo runs no setup scripts';
 
+const BUILT_IN_FLOWS: [string, number, string][] = [
+  ['Arena', 7, 'coder A + coder B + coder C → judge → integrator → reviewer'],
+  ['Bug, test first', 4, 'reproducer → coder → tester'],
+  ['Cross review', 4, 'coder → reviewer + second reviewer'],
+  ['Full issue', 5, 'coder → reviewer + security → tester'],
+  ['Quick', 3, 'coder → reviewer'],
+];
 const FLOWS_NEED = 'this needs cornercase on your computer: the demo only plays the flow in payments';
 
 const NO_RUN = 'this workspace runs no flow';
@@ -2607,7 +2614,7 @@ export class App {
       if (opening) this.addTodo();
     } else if (a.kind === 'settings') this.openSettings();
     else if (a.kind === 'usage') this.openUsage();
-    else if (a.kind === 'away') this.openSettingsOn(4, 'telegram');
+    else if (a.kind === 'away') this.openSettingsOn(5, 'telegram');
     else if (a.kind === 'pullRequest') this.bug(PULL_REQUESTS_NEED);
     else if (a.kind === 'flow') this.toggleFlow();
     else if (a.kind === 'startFlow') this.bug(FLOWS_NEED);
@@ -2679,20 +2686,22 @@ export class App {
         });
       }
       rows.push({ id: 'add', section: 'How each agent starts', label: '+ another agent…', value: '', note: '' });
-      rows.push({ id: 'flows', section: 'Flows', label: 'flows', value: '5 built in', note: 'teams of agents that work through a plan' });
       return rows;
     }
-    if (page === 5) {
+    if (page === 2) {
+      return BUILT_IN_FLOWS.map(([name, agents, plan]) => ({ id: `flow:${name}`, section: '', label: name, value: `${agents} agents`, note: plan }));
+    }
+    if (page === 6) {
       return [{ id: 'plugins', section: 'Installed', label: 'no plugins yet', value: '', note: NO_PLUGINS }];
     }
-    if (page === 4) {
+    if (page === 5) {
       return [
         { id: 'remote', section: 'Browser', label: 'remote access', value: '[ ] off', note: "open this computer's cornercase from your phone over Tailscale" },
         { id: 'telegram', section: 'Telegram', label: 'bot', value: 'not set', note: 'make a bot with @BotFather and paste its token here' },
         { id: 'discord', section: 'Discord', label: 'bot', value: 'not set', note: 'make a Discord app with User Install and paste its bot token' },
       ];
     }
-    if (page === 2) {
+    if (page === 3) {
       const token = (s: Remote, section: string): SettingsRow => {
         const on = c.accounts[s];
         return { id: `token:${s}`, section, label: tokenName(s), value: on ? (s === 'asana' && !c.asanaWorkspaceName ? 'connected' : this.accountOf(s)) : 'not connected', note: on ? 'saved' : 'enter pastes one' };
@@ -2748,7 +2757,8 @@ export class App {
     if (o.capturing) return 'press the keys you want · backspace turns them off · esc cancels';
     if (o.edit) return 'enter saves · esc cancels';
     if (o.pick) return 'enter picks · type to filter · esc goes back';
-    if (o.page === 5) return 'plugins run as you and can do what you can; what they ask for is shown, not enforced';
+    if (o.page === 6) return 'plugins run as you and can do what you can; what they ask for is shown, not enforced';
+    if (o.page === 2) return 'enter or a click on the selected flow edits it · tab or ←→ switches tabs';
     return 'enter changes the selected setting · tab or ←→ switches tabs · every change is saved at once';
   }
 
@@ -2842,7 +2852,7 @@ export class App {
       o.notice = PULL_REQUESTS_NEED;
     } else if (row.id === 'merged') {
       o.notice = MERGED_NEED;
-    } else if (row.id === 'flows') {
+    } else if (row.id.startsWith('flow:')) {
       o.notice = FLOWS_NEED;
     } else if (row.id === 'plugins') {
       o.notice = NO_PLUGINS;
@@ -4335,8 +4345,8 @@ export class App {
     o.notice = undefined;
     if (k.key === 'Escape') this.closeOverlay();
     else if (k.key === 'Enter' || k.key === ' ') this.settingsActivate();
-    else if (k.key === 'Tab' || k.key === 'ArrowRight') this.settingsPage((o.page + (k.shift ? 5 : 1)) % 6);
-    else if (k.key === 'ArrowLeft') this.settingsPage((o.page + 5) % 6);
+    else if (k.key === 'Tab' || k.key === 'ArrowRight') this.settingsPage((o.page + (k.shift ? 6 : 1)) % 7);
+    else if (k.key === 'ArrowLeft') this.settingsPage((o.page + 6) % 7);
     else if (k.key === 'ArrowDown') o.cursor = Math.min(o.cursor + 1, rows.length - 1);
     else if (k.key === 'ArrowUp') o.cursor = Math.max(0, o.cursor - 1);
     else if ((k.key === 'Delete' || k.key === 'Backspace') && rows[o.cursor]?.id.startsWith('token:')) {

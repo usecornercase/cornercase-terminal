@@ -32,7 +32,7 @@ A **flow** is a team of coding agents and the plan they follow, saved as a templ
 | **Bug, test first** | a reproducer writes a failing test → coder → tester (back to the coder on failures, at most twice) → a pull request |
 | **Arena** | two or three competing coders, each in a worktree of its own → a judge → an integrator → a reviewer (back to the integrator on findings, at most twice) → a pull request |
 
-They come with cornercase, so they improve with each update, and they use the agents you have installed: the default agent (**settings → Agents → default agent**) orchestrates and codes, and the reviewers take other agents when you have them, so a change is reviewed by a model that did not write it. You can change them: save a built-in flow from the editor and your version, kept in your folder under the same name, takes its place (tagged `edited`, and no longer updated with cornercase); **`restore default`** brings the built-in back (see [Edit flows](#edit-flows)).
+They come with cornercase, so they improve with each update, and they use the agents you have installed: the default agent (**settings → Agents → default agent**) orchestrates and codes, and the reviewers take other agents when you have them, so a change is reviewed by a model that did not write it. You can change them: save a built-in flow from the editor and your version, kept in your folder under the same name, takes its place (tagged `edited`, and no longer updated with cornercase); **`restore default`** brings the built-in back, and **`delete`** hides one you never use (see [Edit flows](#edit-flows)).
 
 Unless a role asks for a worktree of its own, the whole team works in one worktree. Claude Code, Codex, Gemini CLI, Grok Build and Cursor CLI can take several roles of one flow; opencode takes one per worktree, since cornercase reads its status from its folder and cannot tell two opencode apart there: it can take several roles when they [work apart](#a-worktree-of-its-own). A flow that gives opencode two roles in one worktree says so in red and does not start, and the built-in flows give the other roles another agent. Two Codex or two Gemini CLI in one worktree still show their status, from their titles, but cornercase cannot tell their conversations apart: `read --last-message` fails for them, and the orchestrator reads their screens instead.
 
@@ -51,7 +51,7 @@ A flow works in a worktree of its own, so its project must be the root of a git 
   crop={[2, 1, 136, 36]}
 />
 
-The dialog lists the flows on the left under **Flow templates**, sorted by name, each with its number of agents and its description, or in red what keeps it from starting, and draws the selected one's diagram on the right (the wheel scrolls a diagram taller than its box). Below them go the **prompt** (what the team should do; `Enter` starts a new line, `Tab` moves to the branch), the **branch**, which follows the prompt's first words until you type one (cornercase adds a short suffix when those words give nothing, a default branch or a branch already taken, so two runs of one task never share a branch; a branch you type is refused when it is `main`, `master`, the project's default or the one its own folder is on). A project's flow that sets environment variables or extra arguments for its roles says so in red, since they run without asking. **`edit`** opens the selected flow in the [Flows dialog](#edit-flows) and brings you back; **`start`** starts it, shows the orchestrator's tab and opens the [Flow panel](#the-flow-panel).
+The dialog lists the flows on the left under **Flow templates**, sorted by name, each with its number of agents and its description, or in red what keeps it from starting (a deleted built-in's name is reserved), and draws the selected one's diagram on the right (the wheel scrolls a diagram taller than its box). Below them go the **prompt** (what the team should do; `Enter` starts a new line, `Tab` moves to the branch), the **branch**, which follows the prompt's first words until you type one (cornercase adds a short suffix when those words give nothing, a default branch or a branch already taken, so two runs of one task never share a branch; a branch you type is refused when it is `main`, `master`, the project's default or the one its own folder is on). A project's flow that sets environment variables or extra arguments for its roles says so in red, since they run without asking. **`edit`** opens the selected flow on its edit page, as in [settings → Flows](#edit-flows), and brings you back; **`start`** starts it, shows the orchestrator's tab and opens the [Flow panel](#the-flow-panel).
 
 Starting a flow:
 
@@ -125,12 +125,14 @@ By default every role works in the run's worktree, so a reviewer sees what the c
 
 ## Edit flows
 
-Open **settings → Agents → flows** to list them, in one list sorted by name: a project's flows are tagged `this project`, and built-in flows you changed `edited`. Click a flow to select it and see its diagram, and again (or **`edit`**) to open it. When the dialog is wide enough the diagram is drawn beside the list (the wheel over it scrolls a tall one); otherwise **`diagram`** shows it in place of the list and **`list`** brings the list back. A file that cannot be read says why instead of drawing a diagram. **`duplicate`** saves a copy in your folder and opens it, **`export`** and **`import`** [share a flow](#share-a-flow), **`new`** starts a flow with a coder and a reviewer, and **`delete`** (yours and the project's) asks first. A built-in flow opens like the others: saving it keeps your version in your folder under the same name, in its place, and for it **`restore default`** takes the place of **`delete`**: it asks first, then deletes your file, and the built-in flow comes back.
+Open **settings → Flows**, the tab right after Agents (`Tab` and `←` `→` move to the other tabs, `↑` `↓` between flows), to list them, in one list sorted by name: a project's flows are tagged `this project`, and built-in flows you changed `edited`. Click a flow to select it and see its diagram, and again (or **`edit`**) to open it. When the dialog is wide enough the diagram is drawn beside the list (the wheel over it scrolls a tall one); otherwise **`diagram`** shows it in place of the list and **`list`** brings the list back. A file that cannot be read says why instead of drawing a diagram. **`duplicate`** saves a copy in your folder and opens it, **`export`** and **`import`** [share a flow](#share-a-flow), **`new`** starts a flow with a coder and a reviewer, and **`delete`** asks first. A built-in flow opens like the others: saving it keeps your version in your folder under the same name, in its place.
+
+**Deleting a built-in flow** hides it, since it lives in cornercase itself and not in a file: it leaves Settings, the start dialog and `cornercase flow list`, and `cornercase flow run` refuses it and says how to bring it back. A built-in flow you edited offers both **`restore default`**, which deletes your file and brings the built-in back, and **`delete`**, which deletes your file and hides the built-in too. **`deleted built-ins`**, at the end of the list (click it, or `Enter`, to expand it), lists the ones you hid, muted with their diagram, and **`restore`** brings one back. A run already going keeps its flow. A deleted built-in keeps its name: a project's flow named like it is shown in red and does not run.
 
 <Screen
   name="flows-list"
-  alt="The Flows dialog: teams of agents that work through a plan, started from an issue or a prompt; one list sorted by name: Arena (6 agents, coder A + coder B → judge → integrator → reviewer), Bug, test first (4 agents, reproducer → coder → tester), Cross review (4 agents), Full issue (5 agents, tagged edited, selected) and Quick (3 agents); the diagram of Full issue on the right (the orchestrator, coder, reviewer and security, tester and the end open a pull request, with their loops); the buttons edit, duplicate, export, restore default, import, new and done"
-  caption="The flows, sorted by name, with their agents and their plan, and the selected one's diagram beside them; Full issue has been edited."
+  alt="The Flows tab of Settings (tabs Worktrees, Agents, Flows, Issues, UI, Remote, Plugins): one list sorted by name: Arena (6 agents, coder A + coder B → judge → integrator → reviewer), Bug, test first (4 agents, reproducer → coder → tester), Cross review (4 agents), Full issue (5 agents, tagged edited, selected) and Quick (3 agents); the diagram of Full issue on the right (the orchestrator, coder, reviewer and security, tester and the end open a pull request, with their loops); the buttons edit, duplicate, export, restore default, delete, import, new, restart and done"
+  caption="Settings › Flows: the flows sorted by name, with their agents and their plan, and the selected one's diagram beside them; Full issue has been edited."
   crop={[2, 1, 136, 35]}
 />
 
@@ -138,7 +140,7 @@ A flow opens on its **Flow** tab, with a tab for the **Orchestrator** and one pe
 
 <Screen
   name="flows-edit"
-  alt="The Flows dialog editing the built-in Full issue: the tabs Flow, Orchestrator, coder, reviewer, security, tester and + add role; the name, the description, and saved in yours, not saved yet; the plan with stage 2 open (roles reviewer, security; goes back to stage 1 when there are findings, at most 3 times), stages 1 and 3, + add stage, at the end open a pull request, notes; the diagram on the right, with the reviewer and security boxes of stage 2 drawn heavy; save and done"
+  alt="The Flows tab editing the built-in Full issue: the tabs Flow, Orchestrator, coder, reviewer, security, tester and + add role; the name, the description, and saved in yours, not saved yet; the plan with stage 2 open (roles reviewer, security; goes back to stage 1 when there are findings, at most 3 times), stages 1 and 3, + add stage, at the end open a pull request, notes; the diagram on the right, with the reviewer and security boxes of stage 2 drawn heavy; save and done"
   caption="Editing Full issue, with stage 2 open and drawn heavy in the diagram beside the form."
   crop={[2, 1, 136, 36]}
 />
@@ -151,7 +153,7 @@ A flow opens on its **Flow** tab, with a tab for the **Orchestrator** and one pe
 
 ## Share a flow
 
-A flow is a file, so sharing one is sending text. Select a flow in **settings → Agents → flows** and click **`export`**: its text is copied to your clipboard, even when cornercase runs on another machine, and the dialog says so. A teammate opens the same dialog and pastes (or clicks **`import`** and then pastes) on the **Flows › import** page, and **`import`** there opens the flow in the editor, **not saved yet**. Nothing is saved until they click **`save`**, so they can read what it does first; a name already taken becomes `Quick 2`.
+A flow is a file, so sharing one is sending text. Select a flow in **settings → Flows** and click **`export`**: its text is copied to your clipboard, even when cornercase runs on another machine, and the dialog says so. A teammate opens the same dialog and pastes (or clicks **`import`** and then pastes) on the **Flows › import** page, and **`import`** there opens the flow in the editor, **not saved yet**. Nothing is saved until they click **`save`**, so they can read what it does first; a name already taken becomes `Quick 2`.
 
 <Screen
   name="flows-import"
@@ -193,7 +195,7 @@ cornercase flow import octocat/security-audit
 
 | Flows | Where |
 | --- | --- |
-| Built in | In cornercase itself. |
+| Built in | In cornercase itself. The ones you delete are listed by name in [`hidden_flows`](../../reference/configuration/#hidden_flows) in `config.json`. |
 | Yours | `flows/` next to [`config.json`](../../reference/files-and-environment/): `~/.config/cornercase/flows/`. |
 | A project's | `.cornercase/flows/` in its repository. Commit them to share a flow with your team. |
 
