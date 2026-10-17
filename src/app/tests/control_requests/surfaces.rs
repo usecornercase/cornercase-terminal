@@ -17,6 +17,7 @@ fn text_of(command: &Command, boot: Option<&str>, structured: bool) -> String {
         server: None,
         contract: structured.then_some(1),
         boot: boot.map(str::to_string),
+        view: None,
         command: command.clone(),
     })
     .expect("json");

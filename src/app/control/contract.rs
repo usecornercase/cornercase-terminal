@@ -8,6 +8,8 @@ const UNAVAILABLE: &[(&str, &str)] = &[];
 
 const OPT_IN: [&str; 2] = ["contract", "boot"];
 
+const NULLABLE: [&str; 3] = ["contract", "boot", "view"];
+
 pub(super) struct Parsed {
     pub(super) structured: bool,
     pub(super) request: Result<Request, Refusal>,
@@ -32,7 +34,7 @@ pub(super) fn parse(text: &str) -> Parsed {
 fn without_null_opt_in(value: &Value) -> Value {
     let mut value = value.clone();
     if let Value::Object(map) = &mut value {
-        map.retain(|key, inner| !(inner.is_null() && OPT_IN.contains(&key.as_str())));
+        map.retain(|key, inner| !(inner.is_null() && NULLABLE.contains(&key.as_str())));
     }
     value
 }

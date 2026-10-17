@@ -16,6 +16,7 @@ pub(crate) mod picker;
 pub(crate) mod search;
 pub(crate) mod settings;
 pub mod split;
+pub(crate) mod view;
 pub(crate) mod vscode;
 
 pub(crate) use group::Group;

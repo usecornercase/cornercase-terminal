@@ -20,7 +20,8 @@ const CLIENT: u64 = 9;
 fn request(app: &mut App, caller: Option<u64>, command: Command, area: Option<Rect>) {
     let server = caller.map(|_| wire::server_token().to_string());
     let text =
-        serde_json::to_string(&wire::Request { caller, server, contract: None, boot: None, command }).expect("json");
+        serde_json::to_string(&wire::Request { caller, server, contract: None, boot: None, view: None, command })
+            .expect("json");
     app.request(CLIENT, &text, area, Instant::now());
 }
 
@@ -391,5 +392,6 @@ mod start_server;
 mod surfaces;
 mod talking;
 mod telegram;
+mod views;
 mod watching;
 mod worktrees;

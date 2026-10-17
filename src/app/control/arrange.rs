@@ -1,4 +1,4 @@
-use super::{Handled, json, name_of, none, pane_ids};
+use super::{Asker, Handled, json, name_of, none, pane_ids};
 use crate::app::menus::{Marked, Target};
 use crate::app::{App, Toast};
 use crate::control::{self, Done, Item, TodoItem, TodoList};
@@ -7,8 +7,8 @@ use crate::project::Hierarchy;
 use crate::ui;
 
 impl App {
-    pub(super) fn mark_request(&mut self, caller: Option<u64>, mark: &control::Mark) -> Handled {
-        let pane = self.target(caller, mark.pane, mark.tab)?;
+    pub(super) fn mark_request(&mut self, asker: Asker, mark: &control::Mark) -> Handled {
+        let pane = self.target(asker, mark.pane, mark.tab)?;
         if self.projects.pane_by(pane).is_none() {
             return Err(none("pane", pane));
         }
@@ -18,7 +18,7 @@ impl App {
         Ok(Some(json(&pane_ids(pane))))
     }
 
-    pub(super) fn rename_request(&mut self, caller: Option<u64>, rename: control::Rename) -> Handled {
+    pub(super) fn rename_request(&mut self, asker: Asker, rename: control::Rename) -> Handled {
         let target = match rename.item {
             Some(Item::Group(id)) => {
                 self.group_index(id).ok_or_else(|| none("group", id))?;
@@ -35,7 +35,7 @@ impl App {
             Some(Item::Tab(id)) => self.tab_target(self.projects.tab_index(id)).ok_or_else(|| none("tab", id))?,
             Some(Item::Pane(id)) => self.tab_target(self.projects.tab_of_pane(id)).ok_or_else(|| none("pane", id))?,
             None => {
-                let here = self.here(caller);
+                let here = self.here(asker);
                 let found = here.project.zip(here.workspace).zip(here.tab).map(|((p, w), t)| (p, w, t));
                 self.tab_target(found).ok_or("no tab is open here; pass --tab")?
             }

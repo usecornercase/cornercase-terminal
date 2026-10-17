@@ -795,7 +795,8 @@ impl Server {
             self.app.window_focus(id, ev == Event::FocusGained);
             return;
         }
-        if is_use(&ev) {
+        let used = is_use(&ev);
+        if used {
             self.touch(id);
             self.fit(None);
         }
@@ -808,6 +809,9 @@ impl Server {
         self.app.set_queue_zone(zone);
         if let Err(e) = self.app.handle_event(AppEvent::Input(ev), area) {
             log::warning!("app", "input failed", error = e);
+        }
+        if used {
+            self.app.window_used();
         }
         self.restart = self.app.take_restart();
         if self.restart.is_some() {

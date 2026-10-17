@@ -247,12 +247,67 @@ mod parsing {
         assert_eq!(refused.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
 
+    #[rstest]
+    #[case::status(&["status", "--view", "41"])]
+    #[case::focus(&["focus", "--tab", "3", "--view", "41"])]
+    #[case::new_tab(&["new-tab", "--focus", "--view", "41"])]
+    #[case::start(&["start", "claude", "--view", "41"])]
+    #[case::send(&["send", "--view", "41", "--enter"])]
+    #[case::keys(&["keys", "--view", "41", "enter"])]
+    #[case::read(&["read", "--view", "41"])]
+    #[case::wait(&["wait", "--view", "41"])]
+    #[case::rename(&["rename", "--view", "41", "x"])]
+    #[case::surface(&["surface", "--view", "41"])]
+    #[case::view_set(&["view-set", "--view", "41", "--claim"])]
+    fn view_names_the_view_a_command_acts_in(#[case] args: &[&str]) {
+        let cli = parse(args).expect("parse");
+
+        let Some(Command::Control(control)) = cli.command else { panic!("not a control command") };
+        assert_eq!(control.view(), Some(41));
+    }
+
+    #[test]
+    fn commands_without_a_view_name_none() {
+        let cli = parse(&["status"]).expect("parse");
+
+        let Some(Command::Control(control)) = cli.command else { panic!("not a control command") };
+        assert_eq!(control.view(), None);
+    }
+
+    #[rstest]
+    #[case::view_with_a_tab(&["surface", "--view", "4", "--tab", "3"])]
+    #[case::view_with_a_size(&["surface", "--view", "4", "--cols", "80", "--rows", "24"])]
+    #[case::half_a_size(&["view", "--cols", "80"])]
+    #[case::two_starts(&["view", "--tab", "3", "--project", "1"])]
+    #[case::follow_with_a_view(&["status", "--follow", "--view", "4"])]
+    #[case::set_without_a_view(&["view-set", "--claim"])]
+    #[case::set_both_ways(&["view-set", "--view", "4", "--active", "--inactive"])]
+    fn a_view_is_refused_where_it_makes_no_sense(#[case] args: &[&str]) {
+        let refused = parse(args).expect_err("refused");
+
+        assert!(
+            matches!(
+                refused.kind(),
+                clap::error::ErrorKind::ArgumentConflict | clap::error::ErrorKind::MissingRequiredArgument
+            ),
+            "{refused}"
+        );
+    }
+
+    #[test]
+    fn a_view_opens_with_a_size_and_a_place() {
+        let cli = parse(&["view", "--cols", "120", "--rows", "40", "--inactive", "--tab", "7"]).expect("parse");
+
+        let Some(Command::Control(Control::View(view))) = cli.command else { panic!("not view") };
+        assert_eq!((view.cols, view.rows, view.inactive, view.tab), (Some(120), Some(40), true, Some(7)));
+    }
+
     #[test]
     fn surface_takes_a_tab_and_a_size() {
         let cli = parse(&["surface", "--tab", "3", "--cols", "120", "--rows", "40"]).expect("parse");
 
         let Some(Command::Control(Control::Surface(surface))) = cli.command else { panic!("not surface") };
-        assert_eq!((surface.tab, surface.cols, surface.rows), (3, 120, 40));
+        assert_eq!((surface.tab, surface.cols, surface.rows), (Some(3), Some(120), Some(40)));
     }
 
     #[test]
@@ -299,6 +354,7 @@ mod output {
             panes: vec![pane(4, "zsh", true), claude],
             custom_name: None,
             layout: None,
+            controller: None,
         };
         let workspace = WorkspaceInfo {
             id: 2,
@@ -333,6 +389,7 @@ mod output {
                 project(9, "api", Some(8)),
             ],
             keep_awake: None,
+            view: None,
         }
     }
 

@@ -27,6 +27,7 @@ mod search;
 mod start_server;
 mod status;
 mod update;
+mod view;
 
 pub use args::Cli;
 #[cfg(test)]
@@ -108,8 +109,15 @@ fn print_log(path: &Path, args: &LogsArgs) -> Result<bool> {
 }
 
 fn stream_surface(args: &SurfaceArgs) -> Result<()> {
-    let surface = control::Surface { tab: Some(args.tab), cols: args.cols, rows: args.rows };
-    surface.area().map_err(Error::Control)?;
+    let surface = match args.view {
+        Some(_) => control::Surface::default(),
+        None => {
+            control::Surface { tab: args.tab, cols: args.cols.unwrap_or_default(), rows: args.rows.unwrap_or_default() }
+        }
+    };
+    if args.view.is_none() {
+        surface.area().map_err(Error::Control)?;
+    }
     stream_json("surface", control::Command::Surface(surface))
 }
 
@@ -126,6 +134,9 @@ pub(super) fn quietly(written: io::Result<()>) -> Result<bool> {
 }
 
 fn run_control(command: Control) -> Result<bool> {
+    if let Some(view) = command.view() {
+        client::use_view(view)?;
+    }
     match command {
         Control::Status(status) => run_status(&status),
         Control::Open(open) => {
@@ -161,7 +172,7 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Queue(queue) => queue::run(queue.action),
         Control::Send(send) => {
             let text = send.text.map(|text| if text == "-" { stdin() } else { Ok(text) }).transpose()?;
-            let Target { pane, tab } = send.target;
+            let Target { pane, tab, .. } = send.target;
             let request = control::SendText {
                 pane,
                 tab,
@@ -175,11 +186,11 @@ fn run_control(command: Control) -> Result<bool> {
             say(ask("send", control::Command::Send(request))?, send.print.json, ending)
         }
         Control::Keys(keys) => {
-            let Target { pane, tab } = keys.target;
+            let Target { pane, tab, .. } = keys.target;
             ask("keys", control::Command::Keys(control::Keys { pane, tab, keys: keys.keys })).map(drop)
         }
         Control::Mark(mark) => {
-            let Target { pane, tab } = mark.target;
+            let Target { pane, tab, .. } = mark.target;
             let request = control::Mark { pane, tab, reviewed: mark.reviewed };
             ask("mark", control::Command::Mark(request)).map(drop)
         }
@@ -194,16 +205,7 @@ fn run_control(command: Control) -> Result<bool> {
             }
             Ok(())
         }
-        Control::Rename(rename) => {
-            let Renamed { tab, workspace: id, worktree, project, group } = rename.renamed;
-            let workspace = workspace("rename", id, worktree.as_deref())?;
-            let item = tab
-                .map(Item::Tab)
-                .or_else(|| workspace.map(Item::Workspace))
-                .or_else(|| project.map(Item::Project))
-                .or_else(|| group.map(Item::Group));
-            ask("rename", control::Command::Rename(control::Rename { item, name: rename.name })).map(drop)
-        }
+        Control::Rename(rename) => run_rename(rename),
         Control::Focus(focus) => {
             let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
             ask("focus", control::Command::Focus(control::Focus { item })).map(drop)
@@ -222,8 +224,21 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Flow(flow) => flow::run(flow.action),
         Control::Contract(contract) => contract::run(contract.print.json),
         Control::Surface(args) => stream_surface(&args),
+        Control::View(args) => view::open(&args),
+        Control::ViewSet(args) => view::set(&args),
     }?;
     Ok(true)
+}
+
+fn run_rename(rename: args::RenameArgs) -> Result<()> {
+    let Renamed { tab, workspace: id, worktree, project, group } = rename.renamed;
+    let workspace = workspace("rename", id, worktree.as_deref())?;
+    let item = tab
+        .map(Item::Tab)
+        .or_else(|| workspace.map(Item::Workspace))
+        .or_else(|| project.map(Item::Project))
+        .or_else(|| group.map(Item::Group));
+    ask("rename", control::Command::Rename(control::Rename { item, name: rename.name })).map(drop)
 }
 
 fn away_line(value: &Value) -> String {

@@ -31,6 +31,7 @@ impl App {
                 .collect(),
             custom_name: tab.name.clone(),
             layout: Some(control::Layout::from(&tab.layout)),
+            controller: self.tab_controller(tab.id),
         };
         let workspace_info = |w: usize, ws: &Workspace, active: usize| WorkspaceInfo {
             id: ws.id,
@@ -90,6 +91,7 @@ impl App {
             groups: groups.collect(),
             projects: projects.collect(),
             keep_awake: self.keep_awake_info(),
+            view: None,
         }
     }
 

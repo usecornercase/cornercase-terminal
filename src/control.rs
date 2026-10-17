@@ -11,6 +11,7 @@ mod flow;
 mod search;
 pub(crate) mod start_server;
 pub(crate) mod surface;
+pub(crate) mod view;
 mod watch;
 
 pub(crate) use contract::Contract;
@@ -21,6 +22,7 @@ pub(crate) use flow::{
 pub(crate) use search::{Hit, Matches, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use surface::Surface;
+pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
 
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
@@ -36,6 +38,8 @@ pub(crate) struct Request {
     pub(crate) contract: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) boot: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) view: Option<u64>,
     #[serde(flatten)]
     pub(crate) command: Command,
 }
@@ -96,6 +100,8 @@ pub(crate) enum Command {
     StartServer(StartServer),
     Watch(Watch),
     Surface(Surface),
+    View(OpenView),
+    ViewSet(SetView),
 }
 
 impl Command {
@@ -134,6 +140,8 @@ impl Command {
             Self::StartServer(_) => 30,
             Self::Watch(_) => 31,
             Self::Surface(_) => 32,
+            Self::View(_) => 33,
+            Self::ViewSet(_) => 34,
         }]
     }
 
@@ -203,14 +211,7 @@ impl Command {
             Self::Notify(notify) => {
                 fields.add("bytes", notify.text.len());
             }
-            Self::Todo(todo) => {
-                match todo {
-                    Todo::Add(_) => fields.add("todo", "add"),
-                    Todo::List => fields.add("todo", "list"),
-                    Todo::Done(id) => fields.add("todo", "done").add("id", id),
-                    Todo::Rm(id) => fields.add("todo", "rm").add("id", id),
-                };
-            }
+            Self::Todo(todo) => todo.fields(&mut fields),
             Self::Events(events) => {
                 let panes: Vec<String> = events.panes.iter().map(u64::to_string).collect();
                 fields.maybe("panes", (!panes.is_empty()).then(|| panes.join(",")));
@@ -232,6 +233,8 @@ impl Command {
                 fields.add("bytes", search.query.len());
             }
             Self::Surface(surface) => surface.fields(&mut fields),
+            Self::View(view) => view.fields(&mut fields),
+            Self::ViewSet(set) => set.fields(&mut fields),
             Self::StartServer(start) => {
                 fields.maybe("cols", start.cols).maybe("rows", start.rows);
             }
@@ -239,7 +242,7 @@ impl Command {
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 33] = [
+    pub(crate) const NAMES: [&str; 35] = [
         "status",
         "open",
         "new-workspace",
@@ -273,6 +276,8 @@ impl Command {
         "start-server",
         "watch",
         "surface",
+        "view",
+        "view-set",
     ];
 }
 
@@ -483,6 +488,17 @@ pub(crate) struct Away {
     pub(crate) off: bool,
 }
 
+impl Todo {
+    fn fields(&self, fields: &mut Fields) {
+        match self {
+            Self::Add(_) => fields.add("todo", "add"),
+            Self::List => fields.add("todo", "list"),
+            Self::Done(id) => fields.add("todo", "done").add("id", id),
+            Self::Rm(id) => fields.add("todo", "rm").add("id", id),
+        };
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Todo {
@@ -618,6 +634,8 @@ pub(crate) struct Done {
     pub(crate) written: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) turn_over: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) projection: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -631,6 +649,8 @@ pub struct Report {
     pub projects: Vec<ProjectInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) keep_awake: Option<KeepAwake>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) view: Option<ViewInfo>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -859,6 +879,8 @@ pub struct TabInfo {
     pub panes: Vec<PaneInfo>,
     pub(crate) custom_name: Option<String>,
     pub(crate) layout: Option<Layout>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) controller: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

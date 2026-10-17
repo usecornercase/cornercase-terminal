@@ -11,6 +11,7 @@ fn a_start_server_request_travels_with_its_size_and_logs_it() {
         server: None,
         contract: None,
         boot: None,
+        view: None,
         command: Command::StartServer(StartServer { cols: Some(200), rows: None }),
     };
 

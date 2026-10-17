@@ -44,7 +44,8 @@ group 9  personal  collapsed
 - Every pane's shell has `CORNERCASE_PANE` set to its id. Inside a pane, commands act on that pane, its tab, workspace and project unless you name another one; `(you)` marks it in `status`. Run from anywhere else, they act on what the window shows, marked `(shown)`.
 - Where a command takes `--workspace ID`, `--worktree BRANCH` names the workspace on that branch instead, looked up in the same project: the one the command runs in, else the shown one. `cornercase start claude --worktree fix/login` made it, so `cornercase close --worktree fix/login --remove-worktree` can take it down without reading its id from `status`. A branch that no workspace there is on, or that several are on (a workspace without a worktree of its own shares its project's branch), exits with status 2 and lists the workspaces to pick from.
 - The pane is what `send`, `keys`, `read` and `wait` work on. Where they take `--tab ID`, it stands for the tab's agent pane, or its active pane when no agent runs in it.
-- **Nothing changes what the window shows** except `focus` and the `--focus` option. Whoever is looking at the window keeps seeing what they were looking at while a script opens tabs next to them.
+- **Nothing changes what the window shows** except `focus` and the `--focus` option. Whoever is looking at the window keeps seeing what they were looking at while a script opens tabs next to them. With `--view ID` they move that [view](#a-view-of-your-own) instead, and the window stays where it is.
+- With `--view ID`, the defaults are what that view shows: its project, workspace, tab and that tab's active pane, even inside a pane.
 
 ## Commands
 
@@ -64,6 +65,8 @@ group 9  personal  collapsed
 | `wait` | Waits until an agent stops working, a program ends, a line shows up or the output stops, in one pane or in the first or every one of several. |
 | `events` | Prints what happens as it happens: agents changing state, programs ending, panes, tabs, workspaces and projects opening and closing. |
 | `surface` | Streams a tab's terminals as cells with their panes and dividers, for [a program that draws them](#stream-a-tabs-terminals). |
+| `view` | Opens a [view of your own](#a-view-of-your-own): its own tab and size, for a program that draws cornercase itself. |
+| `view-set` | Changes a view: its size, whether it is active, or takes back the tab it shows. |
 | `close` | Closes a pane, tab, workspace or project. |
 | `rename NAME` | Renames a tab, workspace, project or group. |
 | `focus` | Shows a pane, tab, workspace or project in the window. |
@@ -170,11 +173,34 @@ A line has these keys:
 
 Things to know:
 
-- The panes are laid out in your `cols` × `rows` the way the window lays out a tab, including when the tab is too small for all its panes: then only the active one shows, over the whole surface. The terminals keep the size the window gives them, though, so a pane's `size` can differ from its `rect`: `lines` and `cursor` follow `size`. Streaming doesn't resize anything.
+- The panes are laid out in your `cols` × `rows` the way the window lays out a tab, including when the tab is too small for all its panes: then only the active one shows, over the whole surface. The terminals keep the size of whoever sizes the tab (the window, or [a view](#a-view-of-your-own)), though, so a pane's `size` can differ from its `rect`: `lines` and `cursor` follow `size`. Streaming a `--tab` doesn't resize anything.
 - `cols` is 1 to 1000 and `rows` 1 to 500. A connection streams one tab at one size: to change either, start another.
 - It ends, with status 0, when the tab closes or the server stops or restarts (stopping it yourself leaves the shells running). A pane whose shell exits drops out of the next line. A tab that doesn't exist, or an out-of-range size is an error, with status 1; a missing `--tab`, `--cols` or `--rows` is wrong usage, with status 2.
 - A reader that falls behind gets fewer lines, each complete, so it never has to repair a picture: the server draws a new line only while little is waiting for it. One that stops reading altogether is disconnected once the server has waited a second to write to it, like any client.
-- Not sent yet: patches (every line is complete), images and hyperlinks, underline styles and colours, a program's own palette changes, the title, bell and clipboard writes, pixel sizes, input and a terminal size you choose.
+- Not sent yet: patches (every line is complete), images and hyperlinks, underline styles and colours, a program's own palette changes, the title, bell and clipboard writes, pixel sizes, input and a terminal size set pane by pane.
+
+#### A view of your own
+
+Two programs that draw cornercase, or a program and the window, shouldn't have to share one selection and one size. `view` opens a **view**: its own project, workspace and tab, an optional size, and an active flag. It keeps running and prints the session as one JSON line each time it changes, like `status --follow`, plus a `view` object, and the view lives as long as the command does: stopping it closes the view and hands its tabs back. The processes keep running.
+
+```sh
+cornercase view --cols 120 --rows 40 > view.jsonl &
+id=$(head -n 1 view.jsonl | jq .ok.view.id)
+cornercase new-tab --view "$id" --focus --name logs
+cornercase surface --view "$id"
+```
+
+- `view` has `id`, `projection`, `active`, `cols` and `rows` (`null` without a size), `shown` (the `project`, `workspace`, `tab` and `pane` it shows) and `controls` (whether it sizes its tab's terminals now). It starts on what the window shows, or on `--tab`, `--workspace` or `--project`; the window doesn't move. Each tab in the lines has `controller`: the id of the view sizing it, absent when the window does.
+- `--view ID` works on `status`, `focus`, `open`, `new-workspace`, `new-tab`, `split`, `start`, `send`, `keys`, `read`, `wait`, `mark`, `rename` and `surface`, also from separate commands. The view's tab is their default, and `focus`, `--focus` move the view, not the window or the other views. `focus --view` prints the view's new tab and its `projection`. Other commands refuse it. A server without views is refused up front, naming the update.
+- When something the view shows goes away, it moves like the window would: a closed tab to the one before it, a closing workspace or project to its neighbour. That never resizes a tab for it.
+- `surface --view ID` streams the tab the view shows, at the view's size, and follows the view to other tabs. It takes no `--tab`, `--cols` or `--rows`, and each frame carries `view` and `projection`.
+- `view-set --view ID` changes it: `--cols` and `--rows`, `--active` or `--inactive`, and `--claim` to size the tab it shows from now on. A view without a size, or inactive, sizes nothing and streams no terminals, but its lines keep following the session.
+
+**Who sizes a tab.** One at a time, so two programs showing the same tab never fight over its size. The window is the default. A view claims the tab it shows when it opens, moves there, turns active, or with `--claim`; using a window (a key, a paste, a click) takes back the tab it shows, until the window shows another tab. The latest claim sizes the tab's terminals at the view's `cols` × `rows`, without the window's sidebar or panels; when it lets go (inactive, moved on, closed) the tab goes to the latest one left, else the window.
+
+**`projection`** starts at 1 and goes up each time what the view's surface shows changes: its tab, its size or whether it is active. Show a frame only when its `projection` is the latest one you know: an older one was drawn before your last move.
+
+Still shared with the window and every other view: the programs and their output, how a tab is split, which pane of a tab is focused (`focus --view --pane` moves it for everyone), the scroll position and the selected text. The window's overlays, side panels and sidebar scrolling are its own.
 
 #### Find where something was said
 
@@ -454,14 +480,17 @@ cornercase stats --share
 | `status` | `version`, `boot` (which start of the server this is, see [Contract and compatibility](#contract-and-compatibility)), `caller` (your pane's id, or `null`), `shown` (the ids of what the window shows), `groups` (`id`, `name`, `collapsed`, `icon`, `colour`), `projects` (`id`, `name`, `custom_name`, `path`, `group`, `active`, `collapsed`, `workspaces`), each workspace (`id`, `name`, `custom_name`, `path`, `branch`, `worktree`, `behind`, `pull_request`, `run_dir`, `active`, `collapsed`, `tabs`), each tab (`id`, `name`, `custom_name`, `status`, `active`, `layout`, `panes`), each pane (`id`, `path`, `program`, `agent`, `status`, `background_shell`, `dialog`, `survey`, `at_prompt`, `model`, `context`, `active`, `caller`, `resumes`, `resuming`). `pull_request` is `null`, or the pull request of the workspace's branch: `number`, `title`, `url`, `state` (`open`, `draft`, `merged` or `closed`), `checks` (`failing`, `pending`, `passing`, or `null` without checks) and `failed`, the names of the checks that failed. Groups, projects, workspaces and tabs come in the order of the sidebar. `colour` is a group's palette index (0-255) and `icon` its symbol; `custom_name` is the name given in cornercase, or `null` when the item takes its folder's, branch's or program's; `collapsed` is whether a project or workspace is folded. `layout` is how the tab's panes are split: `{"leaf": PANE}`, or `{"split": {"dir": D, "ratio": R, "first": …, "second": …}}`, where `dir` is `right` (side by side) or `down` (one above the other) and `ratio` is the share of the first side, from 0 to 1. `active` is whether it is the active one of its parent; `status` is `working`, `waiting`, `pending`, `done`, `idle` or `null`; `background_shell` is `true` while the agent's turn is over but a shell it started in the background still runs (its `status` stays `working`); `dialog` is `true` while a Claude Code agent shows a dialog, a panel or its shell mode instead of its input box; `survey` is `true` while it shows its feedback survey above its input box; `resumes` is `true` when the pane's agent conversation comes back after a restart; `resuming` is `true` while it is coming back, and the pane takes no input; `at_prompt` is whether the pane's shell sits at its prompt, with nothing else running in it, so it is `false` whenever an agent runs, whatever the agent shows. While **keep awake** is on, `keep_awake` has `held` (whether the computer is being kept awake now), `by` (the tool holding it) and `unavailable` (why it can't be, on this machine); see [Keep the computer awake](../../reference/agents/#keep-the-computer-awake). |
 | `status --follow` | One object per line: what `status` prints, plus `revision`. |
 | `status --panes` | `panes`: one object per pane, with the [columns of `--panes`](#one-line-per-pane) as keys, in their order: `pane`, `tab`, `workspace`, `project`, `program`, `agent`, `status`, `background_shell`, `dialog`, `at_prompt`, `model`, `context`, `caller`, `shown`, `active`, `tab_name`, `workspace_name`, `branch`, `worktree`, `project_name`, `path`, `survey`, `resuming`. Every object has every key, `null` where there is no value. |
-| `open`, `new-workspace`, `new-tab`, `split`, `start` | `project`, `workspace`, `tab`, `pane`: the ids of what was made (for `open`, the project's shown workspace, tab and pane). |
+| `open`, `new-workspace`, `new-tab`, `split`, `start` | `project`, `workspace`, `tab`, `pane`: the ids of what was made (for `open`, the project's shown workspace, tab and pane), and `projection` when `--focus --view` moved a view. |
+| `focus --view` | `project`, `workspace`, `tab`, `pane` the view shows now, and its `projection`. |
 | `send`, `wait` | `pane`, and, once a wait ended, `ended` (`idle`, `done`, `pending`, `waiting`, `working`, `shell`, `text` or `quiet`) and `line` for a `--text` match. `start --wait` adds `ended` and `line` too. |
 | `wait --any`, `wait --all` | `panes`: one entry per line of text, each with `pane`, `tab` when it was given as a `--tab`, `ended` (as above, or `closed`) and `line` for a `--text` match. |
 | `search` | `matches`: `pane`, `tab`, `workspace`, `project`, `place`, `who`, `source` (`prompt`, `reply` or `screen`), `line`, `text`, `written`; and `capped`. See [Find where something was said](#find-where-something-was-said). |
 | `read` | `pane` and `text`. With `--last-message`, also `agent` (`claude`, `codex`, `gemini` or `opencode`), `written` (when the agent wrote it, in UTC, such as `2026-10-08T19:56:37.241Z`) and `turn_over` (`true` once the agent stopped working, as [`--until turn-over`](#wait) sees it; missing while cornercase doesn't know yet). |
 | `read --last-message` with several targets | `panes`: the individual `read --last-message` answers above, or entries with `error` and the requested `pane` or `tab` id. |
 | `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind` or `count` (for `dropped`) depending on the event. |
-| `surface` | One object per line, see [Stream a tab's terminals](#stream-a-tabs-terminals): `boot`, `session`, `revision`, `tab`, `cols`, `rows`, `layout`, `dividers`, `styles` and `panes`. |
+| `surface` | One object per line, see [Stream a tab's terminals](#stream-a-tabs-terminals): `boot`, `session`, `revision`, `tab`, `cols`, `rows`, `layout`, `dividers`, `styles` and `panes`; for `--view`, also `view` and `projection`. |
+| `view` | One object per line, see [A view of your own](#a-view-of-your-own): what `status --follow` prints, plus `view` (`id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`) and each tab's `controller`. |
+| `view-set` | The view: `id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`. |
 | `todo list` | `todos`: `id`, `text`, `done`. |
 | `contract` | `version`, `contract`, `boot`, `operations` (`name`, `available`, and `reason` when it is not), `features` and `streams` (`name`, `version`). See [Contract and compatibility](#contract-and-compatibility). |
 
@@ -520,8 +549,8 @@ features boot, structured-errors, strict-fields
 - `contract`: the version of the rules on this page, an integer starting at 1. It goes up only when something that was there changes meaning or shape, never when something is added.
 - `boot`: which start of the server this is. It changes on every start, `cornercase restart` included, since ids start again from 1. It is the same value as `CORNERCASE_SERVER` in the panes and `boot` in `status --json`.
 - `operations`: every request the server takes, by name, with `available`. A server with `start-server` among them can be started without a window; one without it needs a window before it opens terminals. One that is not available on this server has `available: false` and a `reason`; the others keep working.
-- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`.
-- `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) and `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals).
+- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server).
+- `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals) and `{"name": "view", "version": 1}` for [`view`](#a-view-of-your-own), whose lines are `watch` format 1 plus `view`.
 
 A server from before `contract` says `the running cornercase server (…) has no contract command`, or that it is too old: it knows none of the rest of this section, so don't send it ids you kept from before.
 
@@ -543,9 +572,9 @@ A request through the socket is JSON: `{"command": "status", "args": {}}`, its `
 | Code | Meaning |
 | --- | --- |
 | `unsupported` | The server has no such request, or the request's `contract` is newer than the server's. Nothing was done. |
-| `malformed` | The request is not one: its arguments don't have the expected types. |
+| `malformed` | The request is not one: its arguments don't have the expected types, or it names a `view` and takes none (`` `stats` takes no view ``). |
 | `stale-boot` | The request's `boot` is not this server's: it restarted since, and the ids you hold may name other panes now. Nothing was done. |
-| `not-found` | No group, project, workspace, tab or pane has that id. |
+| `not-found` | No group, project, workspace, tab, pane or view has that id. A view is gone once the connection that opened it closes. |
 | `unknown-field` | A field this server doesn't know, named by its path, such as `args.bogus`. Nothing was done. |
 | `unavailable` | The request is listed in `operations` with `available: false`, with the `reason` as its message. No request is turned off today, so no server sends this code yet. |
 | `failed` | Anything else. |
@@ -556,7 +585,7 @@ With `boot` set to the value from `contract` or `status`, a request kept across 
 
 ### Talking to the socket directly
 
-The [socket](../../reference/command-line/#the-socket) takes one request per connection. Each message is framed as its length, 4 bytes little-endian, then its [postcard](https://postcard.jamesmunns.com/) encoding: a request is variant 4 followed by the JSON text (its length as a varint, then its UTF-8 bytes), an answer variant 5 in the same form. `events` sends one answer per event and ends with variant 2, 3 or 4 (its panes closed, the server stopped, or it restarted); `watch`, the request behind `status --follow`, answers with the state and then sends it again in the same form after each change, until variant 3 or 4; `surface` does the same with a tab's frame, and ends with variant 2 when the tab closes. Only your own user can connect. Nothing needs to be sent before the request.
+The [socket](../../reference/command-line/#the-socket) takes one request per connection. Each message is framed as its length, 4 bytes little-endian, then its [postcard](https://postcard.jamesmunns.com/) encoding: a request is variant 4 followed by the JSON text (its length as a varint, then its UTF-8 bytes), an answer variant 5 in the same form. `events` sends one answer per event and ends with variant 2, 3 or 4 (its panes closed, the server stopped, or it restarted); `watch`, the request behind `status --follow`, answers with the state and then sends it again in the same form after each change, until variant 3 or 4; `surface` does the same with a tab's frame, and ends with variant 2 when the tab closes (or its view does); `view` sends the state, with the view in it, and holds the view open until the connection closes. A request for a view carries its id as `view` next to `command`, once `contract` lists the feature `views`. Only your own user can connect. Nothing needs to be sent before the request.
 
 ## Teach your agents
 

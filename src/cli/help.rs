@@ -10,7 +10,7 @@ pub(super) const AFTER_HELP: &str =
     "Ids come from `cornercase status` and last while the server runs. Inside a pane, the commands
 act on that pane, its tab, workspace and project unless told otherwise; elsewhere on what the window
 shows. Where a command takes --workspace ID, --worktree BRANCH names the workspace on that branch
-instead, in that same project. Only `focus` and `--focus` change what the window shows. The
+instead, in that same project. Only `focus` and `--focus` change what the window shows, or with --view ID what that view shows (see `cornercase view`). The
 commands exit with 1 on errors and timeouts, and 2 on wrong usage, a branch no workspace is on
 included, or one several are on (both list the workspaces to pick from).
 
@@ -192,8 +192,15 @@ Examples:
 pub(super) const RENAME_HELP: &str = "Examples:
   cornercase rename 'review #42'
   cornercase rename --workspace 5 ''";
-pub(super) const FOCUS_HELP: &str = "Examples:
-  cornercase focus --pane 12";
+pub(super) const FOCUS_HELP: &str =
+    "Shows it in the window, or with --view ID in that view only (`cornercase view`), which then
+follows it: the window and other views stay where they are. With --view it prints the view's new
+tab and its `projection`, the number a view's lines and surface frames carry, which goes up each time
+what the view shows changes.
+
+Examples:
+  cornercase focus --pane 12
+  cornercase focus --view 41 --tab 7";
 pub(super) const NOTIFY_HELP: &str =
     "The desktop notification goes through the terminal of every open window, like the one for an
 agent that needs you.
@@ -323,14 +330,18 @@ replaces the one before. It holds the panes laid out at the given size, each wit
 its terminal's own size (size), its cells, cursor, modes and scroll position, plus the split tree,
 the dividers, and boot, session and revision.
 
-Terminals keep the size the window gives them, so size can differ from rect. The window keeps
-showing what it showed, also when the tab is not the one on screen. It ends when the tab closes or
+With --tab the surface resizes nothing: terminals keep the size of whoever sizes the tab (the
+window, or a view), so size can differ from rect. With --view ID it streams the tab that view
+shows, at the view's size, and follows the view to other tabs (each line carries view and
+projection); it pauses while the view is inactive or has no size, and ends when the view closes.
+The window keeps showing what it showed, also when the tab is not the one on screen. It ends when the tab closes or
 the server stops (status 0); stopping it leaves the shells running. A reader that falls behind gets
 fewer lines, each complete.
 
 Examples:
   cornercase surface --tab 3 --cols 120 --rows 40
-  cornercase surface --tab 3 --cols 120 --rows 40 | jq -c '[.revision, [.panes[].pane]]'";
+  cornercase surface --tab 3 --cols 120 --rows 40 | jq -c '[.revision, [.panes[].pane]]'
+  cornercase surface --view 41";
 pub(super) const SKILL_HELP: &str = "Install them for Claude Code, Codex and other agents with
   npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 or put this text in an AGENTS.md or CLAUDE.md.";
@@ -453,3 +464,35 @@ Examples:
   cornercase plugin disable my-plugin
   cornercase plugin update
   cornercase plugin remove notes";
+
+pub(super) const VIEW_ARG: &str = "Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window";
+pub(super) const VIEW_HELP: &str =
+    "For programs that draw cornercase themselves, such as an editor extension or a GUI, so that each
+picks its own tab and size without touching the window or the others. It keeps running and prints
+the session as one JSON line each time it changes, like `status --follow`, with a `view` object:
+id, projection, active, cols, rows, shown (the project, workspace, tab and pane it shows) and
+controls (whether it sizes its tab's terminals now). The view lives while this command runs:
+stopping it closes the view and gives its tabs back. The first line is the state now; the view's id
+is in it. Keep it running in the background (`cornercase view --cols 120 --rows 40 > view.jsonl &`),
+read the id from the first line, and pass it as --view ID to `focus`, `new-tab`, `split`, `start`,
+`send`, `keys`, `read`, `wait`, `status`, `rename`, `mark` or `surface`: the view's tab is their
+default and --focus moves it.
+
+A tab's terminals take the size of the window or the view that claimed it last, without the
+window's sidebar and panels: a view claims the tab it shows when it opens, moves there or turns
+active, and using the window takes back the tab it shows. Only that one resizes them. Without
+--cols and --rows the view only follows the session and sizes nothing. Shared with the window and
+other views: the processes, the split layout, the focused pane of a tab, scrolling and selection.
+
+Examples:
+  cornercase view --cols 120 --rows 40
+  cornercase view --cols 120 --rows 40 --tab 7";
+pub(super) const VIEW_SET_HELP: &str =
+    "Changes a view that `cornercase view` holds open. --cols and --rows resize it, --inactive makes it
+size nothing and stream no terminals (its tabs go to whoever claimed them before, else the window),
+--active turns it back on and claims its tab, and --claim takes its tab back from the window or
+another view. It prints the view as it is now.
+
+Examples:
+  cornercase view-set --view 41 --cols 100 --rows 30
+  cornercase view-set --view 41 --claim";

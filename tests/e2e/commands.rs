@@ -100,13 +100,13 @@ fn search_finds_what_a_pane_printed_with_its_ids() {
     assert_eq!(none, "pane\twho\tsource\tplace\tline\ttext");
 }
 
-struct Followed {
+pub(super) struct Followed {
     lines: std::sync::mpsc::Receiver<String>,
-    seen: Vec<serde_json::Value>,
+    pub(super) seen: Vec<serde_json::Value>,
 }
 
 impl Followed {
-    fn of(child: &mut std::process::Child) -> Self {
+    pub(super) fn of(child: &mut std::process::Child) -> Self {
         let out = child.stdout.take().expect("its output");
         let (tx, lines) = std::sync::mpsc::channel();
         thread::spawn(move || {
@@ -119,7 +119,7 @@ impl Followed {
         Self { lines, seen: Vec::new() }
     }
 
-    fn until(&mut self, what: &str, cond: impl Fn(&serde_json::Value) -> bool) {
+    pub(super) fn until(&mut self, what: &str, cond: impl Fn(&serde_json::Value) -> bool) {
         let deadline = Instant::now() + TIMEOUT;
         while !self.seen.iter().any(&cond) {
             let left = deadline.saturating_duration_since(Instant::now());

@@ -10,7 +10,7 @@ use super::help::{
     KILL_SERVER_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP,
     PLUGIN_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEARCH_HELP, SEND_HELP,
     SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, TODO_HELP, UNTIL_AFTER,
-    UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
+    UPDATE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -23,6 +23,7 @@ pub struct Cli {
 }
 
 #[derive(Debug, Subcommand)]
+#[expect(clippy::large_enum_variant, reason = "parsed once per process")]
 pub(crate) enum Command {
     #[command(flatten)]
     Control(Control),
@@ -138,6 +139,81 @@ pub(crate) enum Control {
         after_help = SURFACE_HELP
     )]
     Surface(SurfaceArgs),
+    #[command(
+        about = "Open a view of your own: its own tab and size, for programs that draw cornercase themselves",
+        after_help = VIEW_HELP
+    )]
+    View(ViewArgs),
+    #[command(about = "Change a view: its size, whether it is active, or take back the tab it shows", after_help = VIEW_SET_HELP)]
+    ViewSet(ViewSetArgs),
+}
+
+impl Control {
+    pub(crate) fn view(&self) -> Option<u64> {
+        match self {
+            Self::Status(a) => a.view.view,
+            Self::Open(a) => a.create.view.view,
+            Self::NewWorkspace(a) => a.create.view.view,
+            Self::NewTab(a) => a.create.view.view,
+            Self::Split(a) => a.create.view.view,
+            Self::Start(a) => a.create.view.view,
+            Self::Send(a) => a.target.view.view,
+            Self::Keys(a) => a.target.view.view,
+            Self::Mark(a) => a.target.view.view,
+            Self::Read(a) => a.view.view,
+            Self::Wait(a) => a.view.view,
+            Self::Focus(a) => a.view.view,
+            Self::Rename(a) => a.view.view,
+            Self::Surface(a) => a.view,
+            Self::ViewSet(a) => Some(a.view),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct ViewArg {
+    #[arg(long, value_name = "ID", help = VIEW_ARG)]
+    pub(crate) view: Option<u64>,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct ViewArgs {
+    #[arg(
+        long,
+        value_name = "N",
+        requires = "rows",
+        help = "Columns of the view's surface (1 to 1000); without a size it only follows the session"
+    )]
+    pub(crate) cols: Option<u16>,
+    #[arg(long, value_name = "N", requires = "cols", help = "Rows of the view's surface (1 to 500)")]
+    pub(crate) rows: Option<u16>,
+    #[arg(long, help = "Start inactive: it sizes nothing and streams no terminals until `view-set --active`")]
+    pub(crate) inactive: bool,
+    #[arg(long, value_name = "ID", conflicts_with_all = ["workspace", "project"], help = "Start on this tab [default: what the window shows]")]
+    pub(crate) tab: Option<u64>,
+    #[arg(long, value_name = "ID", conflicts_with = "project", help = "Start on this workspace's active tab")]
+    pub(crate) workspace: Option<u64>,
+    #[arg(long, value_name = "ID", help = "Start on this project's active workspace")]
+    pub(crate) project: Option<u64>,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct ViewSetArgs {
+    #[arg(long, value_name = "ID", help = "The view, as the first line of `cornercase view` prints it")]
+    pub(crate) view: u64,
+    #[arg(long, value_name = "N", requires = "rows", help = "New columns (1 to 1000)")]
+    pub(crate) cols: Option<u16>,
+    #[arg(long, value_name = "N", requires = "cols", help = "New rows (1 to 500)")]
+    pub(crate) rows: Option<u16>,
+    #[arg(long, conflicts_with = "inactive", help = "Make it active again: it sizes its tab and streams terminals")]
+    pub(crate) active: bool,
+    #[arg(long, help = "Make it inactive: it sizes nothing and streams no terminals, and the tab goes back")]
+    pub(crate) inactive: bool,
+    #[arg(long, help = "Size the tab it shows from now on, even if the window or another view did last")]
+    pub(crate) claim: bool,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]
@@ -152,18 +228,22 @@ pub(crate) struct StatusArgs {
     pub(crate) panes: bool,
     #[arg(
         long,
-        conflicts_with = "panes",
-        help = "Keep running and print the whole state as one JSON line each time it changes"
+        conflicts_with_all = ["panes", "view"],
+        help = "Keep running and print the whole state as one JSON line each time it changes (`cornercase view` does it for a view)"
     )]
     pub(crate) follow: bool,
+    #[command(flatten)]
+    pub(crate) view: ViewArg,
     #[command(flatten)]
     pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]
 pub(crate) struct Create {
-    #[arg(long, help = "Also show it in the window, which otherwise stays as it is")]
+    #[arg(long, help = "Also show it in the window, or in the view with --view, which otherwise stay as they are")]
     pub(crate) focus: bool,
+    #[command(flatten)]
+    pub(crate) view: ViewArg,
     #[command(flatten)]
     pub(crate) print: Print,
 }
@@ -174,6 +254,8 @@ pub(crate) struct Target {
     pub(crate) pane: Option<u64>,
     #[arg(long, value_name = "ID", conflicts_with = "pane", help = "A tab: its agent's pane, else its active one")]
     pub(crate) tab: Option<u64>,
+    #[command(flatten)]
+    pub(crate) view: ViewArg,
 }
 
 #[derive(Debug, Args)]
@@ -335,6 +417,8 @@ pub(crate) struct ReadArgs {
     #[arg(long, conflicts_with = "lines", help = "The last message of the agent in the pane, from its own record")]
     pub(crate) last_message: bool,
     #[command(flatten)]
+    pub(crate) view: ViewArg,
+    #[command(flatten)]
     pub(crate) print: Print,
 }
 
@@ -389,6 +473,8 @@ pub(crate) struct WaitArgs {
     #[arg(long, value_name = "SECONDS", value_parser = seconds, help = "Give up after this long, with status 1")]
     pub(crate) timeout: Option<f64>,
     #[command(flatten)]
+    pub(crate) view: ViewArg,
+    #[command(flatten)]
     pub(crate) print: Print,
 }
 
@@ -425,6 +511,8 @@ pub(crate) struct CloseArgs {
 pub(crate) struct FocusArgs {
     #[command(flatten)]
     pub(crate) which: Which,
+    #[command(flatten)]
+    pub(crate) view: ViewArg,
 }
 
 #[derive(Debug, Args)]
@@ -451,6 +539,8 @@ pub(crate) struct Renamed {
 pub(crate) struct RenameArgs {
     #[command(flatten)]
     pub(crate) renamed: Renamed,
+    #[command(flatten)]
+    pub(crate) view: ViewArg,
     #[arg(value_name = "NAME", help = "The new name; an empty one goes back to the default")]
     pub(crate) name: String,
 }
@@ -465,12 +555,34 @@ pub(crate) struct MarkArgs {
 
 #[derive(Debug, Args)]
 pub(crate) struct SurfaceArgs {
-    #[arg(long, value_name = "ID", help = "The tab to stream; `cornercase status` lists them")]
-    pub(crate) tab: u64,
-    #[arg(long, value_name = "N", help = "Columns of the surface the tab is laid out in (1 to 1000)")]
-    pub(crate) cols: u16,
-    #[arg(long, value_name = "N", help = "Rows of the surface the tab is laid out in (1 to 500)")]
-    pub(crate) rows: u16,
+    #[arg(
+        long,
+        value_name = "ID",
+        required_unless_present = "view",
+        help = "The tab to stream; `cornercase status` lists them"
+    )]
+    pub(crate) tab: Option<u64>,
+    #[arg(
+        long,
+        value_name = "N",
+        required_unless_present = "view",
+        help = "Columns of the surface the tab is laid out in (1 to 1000)"
+    )]
+    pub(crate) cols: Option<u16>,
+    #[arg(
+        long,
+        value_name = "N",
+        required_unless_present = "view",
+        help = "Rows of the surface the tab is laid out in (1 to 500)"
+    )]
+    pub(crate) rows: Option<u16>,
+    #[arg(
+        long,
+        value_name = "ID",
+        conflicts_with_all = ["tab", "cols", "rows"],
+        help = "Stream the tab this view shows, at the view's size, and follow it (see `cornercase view`)"
+    )]
+    pub(crate) view: Option<u64>,
 }
 
 #[derive(Debug, Args)]

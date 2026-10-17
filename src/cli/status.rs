@@ -32,6 +32,7 @@ fn home() -> Option<PathBuf> {
 
 pub(crate) fn render(report: &Report, home: Option<&Path>) -> String {
     let mut lines = Vec::new();
+    lines.extend(report.view.as_ref().map(super::view::describe));
     for project in report.loose() {
         project_lines(&mut lines, report, project, 0, home);
     }
@@ -70,9 +71,10 @@ pub(super) fn cell(value: &Value) -> String {
 }
 
 fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo, depth: usize, home: Option<&Path>) {
-    let shown = report.shown;
+    let shown = report.view.as_ref().map_or(report.shown, |view| view.shown);
+    let shown_mark = if report.view.is_some() { "view" } else { "shown" };
     let place = |path: &Path| crate::text::display_path(path, home);
-    let marks = |is_shown: bool| if is_shown { vec!["shown"] } else { Vec::new() };
+    let marks = |is_shown: bool| if is_shown { vec![shown_mark] } else { Vec::new() };
     let parts = [project.name.clone(), place(&project.path)];
     lines.push(line(depth, "project", project.id, &parts, &marks(shown.project == Some(project.id))));
     for workspace in &project.workspaces {

@@ -25,8 +25,16 @@ pub(super) struct Surfaces {
     subscriptions: Vec<Subscription>,
 }
 
+enum Place {
+    At(u64, Rect, Option<u64>),
+    Paused(&'static str),
+    Gone,
+}
+
 struct Subscription {
     client: u64,
+    view: Option<u64>,
+    projection: u64,
     tab: u64,
     area: Rect,
     revision: u64,
@@ -71,21 +79,35 @@ fn pane_of(term: &mut Term, id: u64, rect: Rect, active: bool, styles: &mut Styl
 }
 
 impl App {
-    pub(in crate::app) fn surface_request(&mut self, client: u64, surface: &Surface, now: Instant) -> Handled {
-        let Some(tab) = surface.tab else {
-            return Err(Refusal::new(Code::Malformed, "`surface` needs the tab to stream: pass --tab"));
+    pub(in crate::app) fn surface_request(
+        &mut self,
+        client: u64,
+        view: Option<u64>,
+        surface: &Surface,
+        now: Instant,
+    ) -> Handled {
+        let (tab, area, projection) = if let Some(view) = view {
+            self.view_surface(view, surface)?
+        } else {
+            let Some(tab) = surface.tab else {
+                return Err(Refusal::new(Code::Malformed, "`surface` needs the tab to stream: pass --tab"));
+            };
+            let area = surface.area().map_err(|message| Refusal::new(Code::Malformed, message))?;
+            (tab, area, None)
         };
-        let area = surface.area().map_err(|message| Refusal::new(Code::Malformed, message))?;
         if let Some(own) = self.surfaces.subscriptions.iter().find(|s| s.client == client) {
             let message =
                 format!("this connection already streams tab {}; open another connection for another tab", own.tab);
             return Err(Refusal::from(message));
         }
         let content = self.surface_content(tab, area).ok_or_else(|| none("tab", tab))?;
-        let frame = self.surface_frame(tab, area, 1, content.clone());
+        let frame =
+            self.surface_frame(tab, area, 1, projection.map(|p| (view.unwrap_or_default(), p)), content.clone());
         log::info!("control", "surface", client = client, tab = tab, cols = area.width, rows = area.height);
         self.surfaces.subscriptions.push(Subscription {
             client,
+            view,
+            projection: projection.unwrap_or_default(),
             tab,
             area,
             revision: 1,
@@ -118,8 +140,38 @@ impl App {
         Some(Content { layout: Some(layout), dividers, styles: styles.into_table(), panes })
     }
 
-    fn surface_frame(&self, tab: u64, area: Rect, revision: u64, content: Content) -> Frame {
+    fn view_surface(&self, view: u64, surface: &Surface) -> Result<(u64, Rect, Option<u64>), Refusal> {
+        if surface.tab.is_some() || surface.cols != 0 || surface.rows != 0 {
+            let message = "a view's surface takes the view's tab and size: leave out --tab, --cols and --rows";
+            return Err(Refusal::new(Code::Malformed, message));
+        }
+        match self.sub_place_of(view) {
+            Place::At(tab, area, projection) => Ok((tab, area, projection)),
+            Place::Paused(why) => Err(Refusal::from(format!("view {view} streams nothing now: {why}"))),
+            Place::Gone => Err(none("view", view)),
+        }
+    }
+
+    fn sub_place_of(&self, view: u64) -> Place {
+        let Some(view) = self.views.get(view) else { return Place::Gone };
+        match (view.eligible(), view.area()) {
+            (Some(tab), Some(area)) => Place::At(tab, area, Some(view.projection)),
+            _ => Place::Paused(view.why_not()),
+        }
+    }
+
+    fn sub_place(&self, sub: &Subscription) -> Place {
+        match sub.view {
+            Some(view) => self.sub_place_of(view),
+            None if self.projects.tab_index(sub.tab).is_some() => Place::At(sub.tab, sub.area, None),
+            None => Place::Gone,
+        }
+    }
+
+    fn surface_frame(&self, tab: u64, area: Rect, revision: u64, view: Option<(u64, u64)>, content: Content) -> Frame {
         Frame {
+            view: view.map(|(view, _)| view),
+            projection: view.map(|(_, projection)| projection),
             boot: control::server_token().to_string(),
             session: self.events.snapshots.revision(),
             revision,
@@ -131,20 +183,27 @@ impl App {
     }
 
     pub(crate) fn render_surfaces(&mut self, ready: &[u64], now: Instant) -> Vec<(u64, Surfaced)> {
+        self.settle_views();
         let mut out = Vec::new();
         let mut at = 0;
         while at < self.surfaces.subscriptions.len() {
-            let (client, tab, area) = {
-                let sub = &self.surfaces.subscriptions[at];
-                (sub.client, sub.tab, sub.area)
+            let client = self.surfaces.subscriptions[at].client;
+            let (tab, area, projection) = match self.sub_place(&self.surfaces.subscriptions[at]) {
+                Place::At(tab, area, projection) => (tab, area, projection),
+                Place::Paused(_) => {
+                    self.surfaces.subscriptions[at].dirty = false;
+                    at += 1;
+                    continue;
+                }
+                Place::Gone => {
+                    self.end_surface(at, "closed");
+                    out.push((client, Surfaced::End));
+                    continue;
+                }
             };
-            if self.projects.tab_index(tab).is_none() {
-                self.end_surface(at, "closed");
-                out.push((client, Surfaced::End));
-                continue;
-            }
             let sub = &mut self.surfaces.subscriptions[at];
-            if now.saturating_duration_since(sub.drawn) >= REFRESH_EVERY {
+            let forced = projection.is_some_and(|p| p != sub.projection);
+            if now.saturating_duration_since(sub.drawn) >= REFRESH_EVERY || forced {
                 sub.dirty = true;
             }
             if !sub.dirty || now < sub.next {
@@ -167,12 +226,16 @@ impl App {
             sub.drawn = now;
             sub.next = now + FRAME_EVERY;
             sub.dirty = false;
-            if let Some(content) = built.filter(|content| *content != sub.last) {
+            let view = sub.view.zip(projection);
+            if let Some(content) = built.filter(|content| forced || *content != sub.last) {
                 sub.revision += 1;
                 sub.frames += 1;
+                sub.projection = projection.unwrap_or_default();
                 let revision = sub.revision;
                 sub.last = content.clone();
-                let frame = self.surface_frame(tab, area, revision, content);
+                sub.tab = tab;
+                sub.area = area;
+                let frame = self.surface_frame(tab, area, revision, view, content);
                 if let Some(text) = frame.streamed() {
                     log::debug!("control", "surface frame", client = client, revision = revision, bytes = text.len());
                     out.push((client, Surfaced::Frame(text)));
@@ -198,8 +261,13 @@ impl App {
         }
         let Some((_, tab)) = self.projects.tab_with_pane(pane) else { return };
         let id = tab.id;
-        for sub in self.surfaces.subscriptions.iter_mut().filter(|sub| sub.tab == id) {
-            if tab.shown(sub.area).iter().any(|(shown, _)| *shown == pane) {
+        let places: Vec<Place> = self.surfaces.subscriptions.iter().map(|sub| self.sub_place(sub)).collect();
+        let Some((_, tab)) = self.projects.tab_with_pane(pane) else { return };
+        for (sub, place) in self.surfaces.subscriptions.iter_mut().zip(places) {
+            if let Place::At(on, area, _) = place
+                && on == id
+                && tab.shown(area).iter().any(|(shown, _)| *shown == pane)
+            {
                 sub.dirty = true;
             }
         }
@@ -209,7 +277,7 @@ impl App {
         self.surfaces
             .subscriptions
             .iter()
-            .filter(|sub| sub.dirty)
+            .filter(|sub| sub.dirty && matches!(self.sub_place(sub), Place::At(..)))
             .map(|sub| sub.next.saturating_duration_since(now))
             .min()
     }

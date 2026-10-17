@@ -262,6 +262,7 @@ impl App {
         if logged || self.following() {
             self.publish(logged);
         }
+        self.settle_views();
         self.publish_snapshot(Instant::now());
     }
 

@@ -103,6 +103,18 @@ impl Stage {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub(in crate::app) struct Asker {
+    pub(in crate::app) caller: Option<u64>,
+    pub(in crate::app) view: Option<u64>,
+}
+
+impl From<Option<u64>> for Asker {
+    fn from(caller: Option<u64>) -> Self {
+        Self { caller, view: None }
+    }
+}
+
 #[derive(Default)]
 struct Here {
     project: Option<usize>,
@@ -190,6 +202,7 @@ impl App {
                 self.requests.asked.insert(client, (now, command));
                 let mut fields = vec![("client", client.to_string())];
                 fields.extend(request.caller.map(|caller| ("caller", caller.to_string())));
+                fields.extend(request.view.map(|view| ("view", view.to_string())));
                 fields.extend(request.command.fields());
                 log::write_fields(Level::Info, "control", command, &fields);
             }
@@ -229,6 +242,7 @@ impl App {
         }
         self.events.forget(client);
         self.forget_surfaces(client);
+        self.forget_views(client);
         self.notices.forget(client);
         self.forget_flow_reads(Some(client));
         for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
@@ -300,40 +314,51 @@ impl App {
             return Err(stale_boot(boot));
         }
         let caller = request.caller.filter(|_| request.server.as_deref() == Some(control::server_token()));
+        let asker = Asker { caller, view: request.view };
+        self.check_view(&request)?;
+        self.settle_views();
         let noted = self.flow_steps(caller, &request.command, now);
         let handled = match request.command {
-            Command::Status(_) => Ok(Some(json(&self.report(caller)))),
+            Command::Status(_) => Ok(Some(match asker.view.and_then(|view| self.view_report(view)) {
+                Some(report) => json(&report),
+                None => json(&self.report(caller)),
+            })),
             Command::Stats(_) => Ok(Some(json(&self.stats_view(SystemTime::now())))),
             Command::Contract(_) => Ok(Some(json(&contract::descriptor()))),
             Command::StartServer(start) => self.start_server_request(client, &start),
-            Command::Open(open) => self.open_request(&open, area),
-            Command::NewWorkspace(new) => self.new_workspace_request(client, caller, new, area),
-            Command::NewTab(new) => self.new_tab_request(client, caller, new, area, now),
-            Command::Split(split) => self.split_request(client, caller, split, area, now),
-            Command::Start(start) | Command::StartWith(start) => self.start_request(client, caller, start, area, now),
-            Command::Send(send) => self.send_request(client, caller, send, now),
-            Command::Keys(keys) => self.keys_request(caller, &keys, now),
-            Command::Read(read) => self.read_request(caller, &read),
-            Command::Wait(wait) => self.wait_request(client, caller, wait, now),
-            Command::WaitSeveral(wait) => self.wait_several_request(client, caller, wait, now),
+            Command::Open(open) => self.open_request(asker, &open, area),
+            Command::NewWorkspace(new) => self.new_workspace_request(client, asker, new, area),
+            Command::NewTab(new) => self.new_tab_request(client, asker, new, area, now),
+            Command::Split(split) => self.split_request(client, asker, split, area, now),
+            Command::Start(start) | Command::StartWith(start) => self.start_request(client, asker, start, area, now),
+            Command::Send(send) => self.send_request(client, asker, send, now),
+            Command::Keys(keys) => self.keys_request(asker, &keys, now),
+            Command::Read(read) => self.read_request(asker, &read),
+            Command::Wait(wait) => self.wait_request(client, asker, wait, now),
+            Command::WaitSeveral(wait) => self.wait_several_request(client, asker, wait, now),
             Command::Close(close) => self.close_request(client, &close),
-            Command::Rename(rename) => self.rename_request(caller, rename),
-            Command::Focus(focus) => self.show(focus.item).map(|()| Some(json(&Done::default()))),
+            Command::Rename(rename) => self.rename_request(asker, rename),
+            Command::Focus(focus) => self.focus_request(asker, focus.item),
             Command::Notify(notify) => self.notify_request(&notify.text),
             Command::Todo(todo) => self.todo_request(todo),
             Command::Queue(queue) => self.queue_request(client, caller, queue, area, now),
             Command::Events(events) => self.events_request(client, events),
-            Command::Surface(surface) => self.surface_request(client, &surface, now),
+            Command::Surface(surface) => self.surface_request(client, asker.view, &surface, now),
             Command::Watch(_) => Ok(Some(json(&self.watch_snapshots(client, now)))),
-            Command::LastMessage(last) => self.last_message_request(client, caller, &last),
+            Command::LastMessage(last) => self.last_message_request(client, asker, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),
-            Command::Mark(mark) => self.mark_request(caller, &mark),
+            Command::Mark(mark) => self.mark_request(asker, &mark),
             Command::FlowList(list) => self.flow_list_request(caller, &list),
             Command::FlowRun(run) => self.flow_run_request(client, caller, run, area),
             Command::FlowExport(export) => self.flow_export_request(caller, &export),
             Command::FlowImport(import) => self.flow_import_request(caller, &import),
             Command::Search(search) => self.search_request(client, &search.query),
+            Command::View(open) => self.view_request(client, &open, area),
+            Command::ViewSet(set) => match asker.view {
+                Some(view) => self.view_set_request(view, &set, area),
+                None => Err(Refusal::new(Code::Malformed, "`view-set` needs the view to change: pass --view")),
+            },
         };
         self.flow_requested(client, noted, handled.is_ok());
         handled
@@ -370,8 +395,21 @@ impl App {
         }
     }
 
-    fn here(&self, caller: Option<u64>) -> Here {
-        if let Some(pane) = caller
+    fn here(&self, asker: impl Into<Asker>) -> Here {
+        let asker = asker.into();
+        if let Some(view) = asker.view.and_then(|id| self.views.get(id)) {
+            let shown = &view.shown;
+            let project = shown.project.and_then(|id| self.projects.project_index(id));
+            let workspace = project.zip(shown.workspace).and_then(|(p, id)| self.projects[p].index_of(id));
+            let tab = project
+                .zip(workspace)
+                .zip(shown.tab)
+                .and_then(|((p, w), id)| self.projects[p].workspaces[w].index_of(id));
+            let pane =
+                project.zip(workspace).zip(tab).and_then(|((p, w), t)| self.projects[p].workspaces[w].tabs[t].pane());
+            return Here { project, workspace, tab, pane: pane.map(|term| term.id) };
+        }
+        if let Some(pane) = asker.caller
             && let Some((p, w, t)) = self.projects.tab_of_pane(pane)
         {
             return Here { project: Some(p), workspace: Some(w), tab: Some(t), pane: Some(pane) };
@@ -405,15 +443,15 @@ impl App {
         self.ids(p, w, project.workspace().map(|w| w.active))
     }
 
-    fn here_workspace(&mut self, caller: Option<u64>) -> Result<(usize, usize), String> {
-        let here = self.here(caller);
+    fn here_workspace(&mut self, asker: impl Into<Asker>) -> Result<(usize, usize), String> {
+        let here = self.here(asker);
         let p = here.project.ok_or(NO_PROJECT)?;
         Ok((p, here.workspace.unwrap_or_else(|| self.ensure_workspace(p))))
     }
 
     pub(in crate::app) fn target(
         &self,
-        caller: Option<u64>,
+        asker: impl Into<Asker>,
         pane: Option<u64>,
         tab: Option<u64>,
     ) -> Result<u64, Refusal> {
@@ -429,10 +467,10 @@ impl App {
                 .find(|term| self.runs_agent(term));
             return agent.or_else(|| tab.pane()).map(|t| t.id).ok_or_else(|| format!("tab {id} has no pane").into());
         }
-        self.here(caller).pane.ok_or_else(|| NO_PANE.to_string().into())
+        self.here(asker).pane.ok_or_else(|| NO_PANE.to_string().into())
     }
 
-    fn show(&mut self, item: Item) -> Result<(), Refusal> {
+    pub(in crate::app) fn show(&mut self, item: Item) -> Result<(), Refusal> {
         let place = |app: &Self, p: usize, w: Option<usize>, t: Option<usize>| {
             let Ids { project, workspace, tab, .. } = app.ids(p, w, t);
             Goto::Place { project: project.unwrap_or_default(), workspace, tab }
@@ -464,7 +502,28 @@ impl App {
         Ok(())
     }
 
-    fn usable_workspace(&self, id: u64) -> Result<(usize, usize), Refusal> {
+    fn check_view(&self, request: &Request) -> Result<(), Refusal> {
+        let Some(view) = request.view else { return Ok(()) };
+        if !control::view::takes_view(&request.command) {
+            let message = format!("`{}` takes no view", request.command.name());
+            return Err(Refusal::new(Code::Malformed, message));
+        }
+        if self.views.get(view).is_none() {
+            let message = format!(
+                "there is no view {view}: it closed with the connection that opened it, or the server restarted"
+            );
+            return Err(Refusal::new(Code::NotFound, message));
+        }
+        Ok(())
+    }
+
+    fn focus_request(&mut self, asker: Asker, item: Item) -> Handled {
+        let projection = self.show_to(asker.view, item)?;
+        let ids = asker.view.map(|view| self.view_ids(view)).unwrap_or_default();
+        Ok(Some(json(&Done { ids, projection, ..Done::default() })))
+    }
+
+    pub(in crate::app) fn usable_workspace(&self, id: u64) -> Result<(usize, usize), Refusal> {
         let (p, w) = self.projects.workspace_index(id).ok_or_else(|| none("workspace", id))?;
         match self.projects[p].workspaces[w].phase {
             Phase::Open => Ok((p, w)),

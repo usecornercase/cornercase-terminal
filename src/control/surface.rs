@@ -43,6 +43,10 @@ pub(crate) struct Frame {
     pub(crate) tab: u64,
     pub(crate) cols: u16,
     pub(crate) rows: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) view: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) projection: Option<u64>,
     #[serde(flatten)]
     pub(crate) content: Content,
 }

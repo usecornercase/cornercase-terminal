@@ -4,7 +4,7 @@ use std::time::Instant;
 use ratatui::layout::Rect;
 
 use super::wait::Condition;
-use super::{Handled, NO_PROJECT, Pending, Stage, deadline, json, name_of, none, sized};
+use super::{Asker, Handled, NO_PROJECT, Pending, Stage, deadline, json, name_of, none, sized};
 use crate::agents;
 use crate::agents::launch::{self, Launch};
 use crate::app::App;
@@ -18,13 +18,14 @@ pub(super) struct Then {
     start: Option<(launch::Spec, Option<String>)>,
     wait: Option<Condition>,
     focus: bool,
+    view: Option<u64>,
 }
 
 const NO_AGENT: &str = "say which agent to start, such as `cornercase start claude`: settings → agents is on auto \
     and no agent runs here";
 
 impl App {
-    pub(super) fn open_request(&mut self, open: &control::Open, area: Option<Rect>) -> Handled {
+    pub(super) fn open_request(&mut self, asker: Asker, open: &control::Open, area: Option<Rect>) -> Handled {
         let path = open.path.canonicalize().map_err(|e| format!("cannot open `{}`: {e}", open.path.display()))?;
         if !path.is_dir() {
             return Err(format!("`{}` is not a folder", path.display()).into());
@@ -34,16 +35,17 @@ impl App {
             None => self.add_project(path, sized(area)?).map_err(|e| e.to_string())?,
         };
         let ids = self.shown_ids(p);
+        let mut projection = None;
         if open.focus {
-            self.show(Item::Project(self.projects[p].id))?;
+            projection = self.show_to(asker.view, Item::Project(self.projects[p].id))?;
         }
-        Ok(Some(json(&Done { ids, ..Done::default() })))
+        Ok(Some(json(&Done { ids, projection, ..Done::default() })))
     }
 
     pub(super) fn new_workspace_request(
         &mut self,
         client: u64,
-        caller: Option<u64>,
+        asker: Asker,
         new: control::NewWorkspace,
         area: Option<Rect>,
     ) -> Handled {
@@ -51,13 +53,13 @@ impl App {
         let name = name_of(Some(new.name)).ok_or("the workspace needs a name")?;
         let p = match new.project {
             Some(id) => self.projects.project_index(id).ok_or_else(|| none("project", id))?,
-            None => self.here(caller).project.ok_or(NO_PROJECT)?,
+            None => self.here(asker).project.ok_or(NO_PROJECT)?,
         };
         if new.worktree {
             if let Some(open) = self.workspace_on(p, &name) {
                 return Err(format!("branch {name} is already open in workspace {open}").into());
             }
-            let then = Then { start: None, wait: None, focus: new.focus };
+            let then = Then { start: None, wait: None, focus: new.focus, view: asker.view };
             self.create_worktree(client, p, &name, then, None)?;
             return Ok(None);
         }
@@ -66,16 +68,17 @@ impl App {
         self.projects[p].workspaces.push(workspace);
         let w = self.projects[p].workspaces.len() - 1;
         let ids = self.ids(p, Some(w), Some(0));
+        let mut projection = None;
         if new.focus {
-            self.show(Item::Tab(ids.tab.unwrap_or_default()))?;
+            projection = self.show_to(asker.view, Item::Tab(ids.tab.unwrap_or_default()))?;
         }
-        Ok(Some(json(&Done { ids, ..Done::default() })))
+        Ok(Some(json(&Done { ids, projection, ..Done::default() })))
     }
 
     pub(super) fn new_tab_request(
         &mut self,
         client: u64,
-        caller: Option<u64>,
+        asker: Asker,
         new: control::NewTab,
         area: Option<Rect>,
         now: Instant,
@@ -83,47 +86,53 @@ impl App {
         let area = sized(area)?;
         let (p, w) = match new.workspace {
             Some(id) => self.usable_workspace(id)?,
-            None => self.here_workspace(caller)?,
+            None => self.here_workspace(asker)?,
         };
         let t = self.push_tab(p, w, area, name_of(new.name)).map_err(|e| e.to_string())?;
         let ids = self.ids(p, Some(w), Some(t));
         let pane = ids.pane.unwrap_or_default();
+        let mut projection = None;
         if new.focus {
-            self.show(Item::Pane(pane))?;
+            projection = self.show_to(asker.view, Item::Pane(pane))?;
         }
         let launch = new.command.map(|command| Launch::command(pane, command, now));
-        Ok(self.launch_within(client, Done { ids, ..Done::default() }, launch, Stage::launch(None), None))
+        Ok(self.launch_within(client, Done { ids, projection, ..Done::default() }, launch, Stage::launch(None), None))
     }
 
     pub(super) fn split_request(
         &mut self,
         client: u64,
-        caller: Option<u64>,
+        asker: Asker,
         split: control::Split,
         area: Option<Rect>,
         now: Instant,
     ) -> Handled {
         let area = sized(area)?;
-        let pane = self.target(caller, split.pane, None)?;
+        let pane = self.target(asker, split.pane, None)?;
         let (p, w, t) = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
         let (dir, way) = if split.down { (Dir::Down, "down") } else { (Dir::Right, "right") };
-        if !self.projects[p].workspaces[w].tabs[t].can_split(self.layout(area).pane, pane, dir) {
+        if !self.projects[p].workspaces[w].tabs[t].can_split(
+            self.tab_area(self.projects[p].workspaces[w].tabs[t].id, area),
+            pane,
+            dir,
+        ) {
             return Err(format!("pane {pane} is too small to split {way}").into());
         }
         let new =
             self.split_pane(pane, dir, area, false).map_err(|e| e.to_string())?.ok_or_else(|| none("pane", pane))?;
         let ids = Ids { pane: Some(new), ..self.ids(p, Some(w), Some(t)) };
+        let mut projection = None;
         if split.focus {
-            self.show(Item::Pane(new))?;
+            projection = self.show_to(asker.view, Item::Pane(new))?;
         }
         let launch = split.command.map(|command| Launch::command(new, command, now));
-        Ok(self.launch_within(client, Done { ids, ..Done::default() }, launch, Stage::launch(None), None))
+        Ok(self.launch_within(client, Done { ids, projection, ..Done::default() }, launch, Stage::launch(None), None))
     }
 
     pub(super) fn start_request(
         &mut self,
         client: u64,
-        caller: Option<u64>,
+        asker: Asker,
         start: control::Start,
         area: Option<Rect>,
         now: Instant,
@@ -133,7 +142,7 @@ impl App {
         let wait = start.wait.then(|| Condition::of(start.until)).transpose()?;
         let queued = self.queued_spec(client);
         let kind =
-            if queued.is_some() { start.agent.unwrap_or_default() } else { self.agent_kind(caller, start.agent)? };
+            if queued.is_some() { start.agent.unwrap_or_default() } else { self.agent_kind(asker, start.agent)? };
         let prompt = start.prompt.filter(|p| !p.trim().is_empty());
         let spec = if let Some(spec) = queued {
             spec
@@ -148,11 +157,11 @@ impl App {
         } else if let Some(branch) = start.worktree.as_deref().map(str::trim).filter(|b| !b.is_empty()) {
             let p = match start.project {
                 Some(id) => self.projects.project_index(id).ok_or_else(|| none("project", id))?,
-                None => self.here(caller).project.ok_or(NO_PROJECT)?,
+                None => self.here(asker).project.ok_or(NO_PROJECT)?,
             };
             let open = self.workspace_on(p, branch).and_then(|id| self.projects.workspace_index(id));
             let Some(found) = open else {
-                let then = Then { start: Some((spec, name)), wait, focus: start.focus };
+                let then = Then { start: Some((spec, name)), wait, focus: start.focus, view: asker.view };
                 self.create_worktree(client, p, branch, then, timeout)?;
                 return Ok(None);
             };
@@ -171,19 +180,26 @@ impl App {
                 });
             (p, w)
         } else {
-            self.here_workspace(caller)?
+            self.here_workspace(asker)?
         };
         let t = self.push_tab(p, w, area, name).map_err(|e| e.to_string())?;
         let ids = self.ids(p, Some(w), Some(t));
         let pane = ids.pane.unwrap_or_default();
+        let mut projection = None;
         if start.focus {
-            self.show(Item::Pane(pane))?;
+            projection = self.show_to(asker.view, Item::Pane(pane))?;
         }
         let launch = Some(Launch::new(pane, spec, now));
-        Ok(self.launch_within(client, Done { ids, ..Done::default() }, launch, Stage::launch(wait), timeout))
+        Ok(self.launch_within(
+            client,
+            Done { ids, projection, ..Done::default() },
+            launch,
+            Stage::launch(wait),
+            timeout,
+        ))
     }
 
-    pub(in crate::app) fn agent_kind(&self, caller: Option<u64>, agent: Option<String>) -> Result<String, String> {
+    pub(in crate::app) fn agent_kind(&self, asker: impl Into<Asker>, agent: Option<String>) -> Result<String, String> {
         let kinds = agents::kinds(&self.config);
         if let Some(agent) = agent {
             return if kinds.contains(&agent) {
@@ -196,7 +212,7 @@ impl App {
                 ))
             };
         }
-        let running = self.here(caller).pane.and_then(|id| self.projects.pane_by(id));
+        let running = self.here(asker).pane.and_then(|id| self.projects.pane_by(id));
         let running = running.and_then(|term| agents::detect(&self.config, &term.foreground_args()));
         agents::resolve(&self.config, None, running.as_deref()).ok_or_else(|| NO_AGENT.to_string())
     }
@@ -265,7 +281,7 @@ impl App {
         pending.done.ids = self.ids(p, Some(w), Some(t));
         let pane = pending.done.ids.pane.unwrap_or_default();
         if then.focus {
-            self.show(Item::Pane(pane))?;
+            pending.done.projection = self.focus_in_view(then.view, pane)?;
         }
         let Some((spec, _)) = launch else {
             let workspace = self.projects[p].workspaces[w].id;

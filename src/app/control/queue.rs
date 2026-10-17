@@ -228,7 +228,7 @@ impl App {
             }
             return Err(reason);
         }
-        match self.start_request(client, None, start, self.queued.area, now) {
+        match self.start_request(client, None.into(), start, self.queued.area, now) {
             Ok(Some(value)) => {
                 self.queue_answered(client, &Ok(value));
             }

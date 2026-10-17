@@ -136,3 +136,24 @@ fn a_stream_ends_with_detached_when_its_tab_closes() {
 
     assert!(!attached.server.app.streams_surfaces());
 }
+
+#[test]
+fn using_the_window_takes_back_the_tab_a_view_sizes() {
+    let mut attached = Attached::new();
+    let opened = json(&ask(&mut attached, r#"{"command":"view","args":{"cols":50,"rows":10}}"#)[0]);
+    let controller = |attached: &mut Attached| {
+        let status = json(&ask(attached, r#"{"command":"status","args":{}}"#)[0]);
+        status["ok"]["projects"][0]["workspaces"][0]["tabs"][0]["controller"].clone()
+    };
+    let view = opened["ok"]["view"]["id"].clone();
+    let sized = controller(&mut attached);
+
+    let key =
+        crossterm::event::KeyEvent::new(crossterm::event::KeyCode::Char('a'), crossterm::event::KeyModifiers::NONE);
+    let typed = ServerEvent::Message(STREAMER, ClientMessage::Event(crossterm::event::Event::Key(key)));
+    let _ = attached.server.step(Step::Event(typed));
+    let taken = controller(&mut attached);
+
+    assert_eq!((opened["ok"]["view"]["controls"].clone(), sized), (Value::Bool(true), view));
+    assert_eq!(taken, Value::Null);
+}

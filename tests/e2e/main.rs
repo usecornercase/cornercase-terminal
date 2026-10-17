@@ -37,6 +37,7 @@ mod server;
 mod sidebar;
 mod startup;
 mod updates;
+mod views;
 
 const ROWS: u16 = 24;
 const COLS: u16 = 100;

@@ -1,0 +1,118 @@
+{
+  "revision": 7,
+  "version": "0.12.111",
+  "boot": "4242-1760600000",
+  "caller": null,
+  "shown": {
+    "project": 1,
+    "workspace": 2,
+    "tab": 3,
+    "pane": 4
+  },
+  "groups": [
+    {
+      "id": 10,
+      "name": "work",
+      "collapsed": false,
+      "icon": "●",
+      "colour": 33
+    }
+  ],
+  "projects": [
+    {
+      "id": 1,
+      "name": "shop",
+      "path": "/home/me/web-shop",
+      "group": 10,
+      "active": true,
+      "workspaces": [
+        {
+          "id": 2,
+          "name": "feat/dark-mode",
+          "path": "/home/me/.cornercase/worktrees/web-shop/feat-dark-mode",
+          "branch": "feat/dark-mode",
+          "worktree": true,
+          "behind": 0,
+          "pull_request": null,
+          "setup": null,
+          "run_dir": null,
+          "active": true,
+          "tabs": [
+            {
+              "id": 3,
+              "name": "agents",
+              "status": "working",
+              "active": true,
+              "panes": [
+                {
+                  "id": 4,
+                  "path": "/home/me/web-shop",
+                  "program": "claude",
+                  "agent": "claude",
+                  "status": "working",
+                  "background_shell": false,
+                  "dialog": false,
+                  "survey": false,
+                  "at_prompt": null,
+                  "model": "Opus 5.5",
+                  "context": 23,
+                  "active": true,
+                  "caller": false,
+                  "resumes": false
+                },
+                {
+                  "id": 5,
+                  "path": "/home/me/web-shop",
+                  "program": "claude",
+                  "agent": "claude",
+                  "status": "working",
+                  "background_shell": false,
+                  "dialog": false,
+                  "survey": false,
+                  "at_prompt": null,
+                  "model": "Opus 5.5",
+                  "context": 23,
+                  "active": false,
+                  "caller": false,
+                  "resumes": false
+                }
+              ],
+              "custom_name": "agents",
+              "layout": {
+                "split": {
+                  "dir": "right",
+                  "ratio": 0.6,
+                  "first": {
+                    "leaf": 4
+                  },
+                  "second": {
+                    "leaf": 5
+                  }
+                }
+              },
+              "controller": 41
+            }
+          ],
+          "custom_name": null,
+          "collapsed": true
+        }
+      ],
+      "custom_name": "shop",
+      "collapsed": false
+    }
+  ],
+  "view": {
+    "id": 41,
+    "projection": 3,
+    "active": true,
+    "cols": 120,
+    "rows": 40,
+    "shown": {
+      "project": 1,
+      "workspace": 2,
+      "tab": 3,
+      "pane": 4
+    },
+    "controls": true
+  }
+}

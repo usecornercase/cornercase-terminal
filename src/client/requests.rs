@@ -1,5 +1,6 @@
 use std::io::{self};
 use std::os::unix::net::UnixStream;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
@@ -9,6 +10,25 @@ use crate::control::{self, Request, Response};
 use crate::error::{Error, Result};
 use crate::protocol::{self, ClientMessage, ServerMessage};
 use crate::{paths, update::restart};
+
+static VIEW: OnceLock<u64> = OnceLock::new();
+
+pub(crate) fn use_view(view: u64) -> Result<()> {
+    let descriptor: control::contract::Descriptor =
+        answer(ask("contract", control::Command::Contract(control::Contract {})).map_err(|_| no_views())?)?;
+    if !descriptor.features.iter().any(|feature| feature == "views") {
+        return Err(no_views());
+    }
+    let _ = VIEW.set(view);
+    Ok(())
+}
+
+fn no_views() -> Error {
+    Error::Control(format!(
+        "the running cornercase server has no views; update cornercase and restart the server (this one is {})",
+        crate::version::CURRENT
+    ))
+}
 
 pub(crate) fn connect() -> Result<UnixStream> {
     let path = paths::socket();
@@ -48,8 +68,15 @@ fn ask_on(mut stream: UnixStream, name: &'static str, command: control::Command)
 pub(crate) fn request(stream: &mut UnixStream, command: control::Command) -> Result<()> {
     let caller = std::env::var(control::PANE_ENV).ok().and_then(|id| id.parse().ok());
     let server = std::env::var(control::SERVER_ENV).ok();
-    let request = serde_json::to_string(&Request { caller, server, contract: None, boot: None, command })
-        .map_err(|e| Error::Control(e.to_string()))?;
+    let request = serde_json::to_string(&Request {
+        caller,
+        server,
+        contract: None,
+        boot: None,
+        view: VIEW.get().copied(),
+        command,
+    })
+    .map_err(|e| Error::Control(e.to_string()))?;
     protocol::send(stream, &ClientMessage::Request(request))?;
     Ok(())
 }

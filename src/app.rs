@@ -116,6 +116,7 @@ mod trace;
 mod update_dialog;
 mod usage_dialog;
 mod view;
+mod views;
 mod worktree_setup;
 mod worktrees;
 
@@ -191,6 +192,7 @@ pub(crate) struct App {
     requests: control::Requests,
     events: events::Events,
     surfaces: surfaces::Surfaces,
+    views: views::Views,
     seen: trace::Seen,
     plugins: Plugins,
 }
@@ -260,6 +262,7 @@ impl App {
             requests: control::Requests::default(),
             events: events::Events::default(),
             surfaces: surfaces::Surfaces::default(),
+            views: views::Views::default(),
             seen: trace::Seen::default(),
             plugins,
         }
@@ -355,18 +358,6 @@ impl App {
             .map_or(pointer::Shape::Default, |d| divider(d.dir))
     }
 
-    pub(crate) fn resize(&mut self, area: Rect) {
-        let pane = self.layout(area).pane;
-        let tabs = self.projects.tabs_mut();
-        for tab in tabs {
-            for (id, r) in tab.shown(pane) {
-                if let Some(term) = tab.pane_by_mut(id) {
-                    term.resize(r.height.max(1), r.width.max(1));
-                }
-            }
-        }
-    }
-
     pub(crate) fn is_empty(&self) -> bool {
         self.projects.is_empty()
     }
@@ -400,7 +391,7 @@ impl App {
             self.flow_frame(now),
             self.next_request(now),
             self.next_pairing(now),
-            self.events.snapshots.wake(now),
+            self.events.snapshots.wake(now, !self.views.is_empty()),
             self.surface_wake(now),
             self.queued.area.and_then(|_| self.queued.queue.next(clock)),
         ]

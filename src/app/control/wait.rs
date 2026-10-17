@@ -3,7 +3,7 @@ use std::time::{Duration, Instant, SystemTime};
 use regex::Regex;
 
 use super::idle_restart::held;
-use super::{Handled, Pending, Reply, STARTS_WITHIN, Stage, deadline, duration, json, none, pane_ids};
+use super::{Asker, Handled, Pending, Reply, STARTS_WITHIN, Stage, deadline, duration, json, none, pane_ids};
 use crate::agents;
 use crate::agents::activity::{self, Status};
 use crate::app::App;
@@ -386,17 +386,11 @@ impl App {
         Ok(())
     }
 
-    pub(super) fn wait_request(
-        &mut self,
-        client: u64,
-        caller: Option<u64>,
-        wait: control::Wait,
-        now: Instant,
-    ) -> Handled {
-        let pane = self.target(caller, wait.pane, wait.tab)?;
+    pub(super) fn wait_request(&mut self, client: u64, asker: Asker, wait: control::Wait, now: Instant) -> Handled {
+        let pane = self.target(asker, wait.pane, wait.tab)?;
         let timeout = deadline(wait.timeout, now)?;
         let until = Condition::of(wait.until)?;
-        self.can_wait(caller, pane, &until)?;
+        self.can_wait(asker.caller, pane, &until)?;
         let key = self.requests.key();
         let watch = self.watch(pane, until, now);
         let pending = Pending { client: Some(client), key, timeout, done: pane_ids(pane), stage: Stage::Watch(watch) };
@@ -407,7 +401,7 @@ impl App {
     pub(super) fn wait_several_request(
         &mut self,
         client: u64,
-        caller: Option<u64>,
+        asker: Asker,
         wait: control::Wait,
         now: Instant,
     ) -> Handled {
@@ -425,9 +419,9 @@ impl App {
         }
         let mut parts = Vec::new();
         for (tab, pane) in targets {
-            let id = self.target(caller, pane, tab)?;
+            let id = self.target(asker, pane, tab)?;
             let until = Condition::of(wait.until.clone())?;
-            self.can_wait(caller, id, &until)?;
+            self.can_wait(asker.caller, id, &until)?;
             let done = Done { ids: Ids { tab, pane: Some(id), ..Ids::default() }, ..Done::default() };
             let stage = Stage::Watch(self.watch(id, until, now));
             parts.push(Pending { client: None, key: 0, timeout: None, done, stage });

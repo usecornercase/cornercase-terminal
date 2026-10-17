@@ -30,6 +30,7 @@ fn a_pane_of_another_server_is_not_the_caller() {
         server: Some("another".into()),
         contract: None,
         boot: None,
+        view: None,
         command: status,
     })
     .expect("json");

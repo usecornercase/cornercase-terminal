@@ -3,7 +3,7 @@ use std::time::{Instant, SystemTime};
 use crossterm::event::KeyCode;
 
 use super::wait::Condition;
-use super::{Handled, Pending, Stage, deadline, json, none, pane_ids};
+use super::{Asker, Handled, Pending, Stage, deadline, json, none, pane_ids};
 use crate::agents;
 use crate::agents::activity::{self, Status};
 use crate::agents::context;
@@ -40,14 +40,8 @@ fn turn_over(agent: &activity::Pane) -> Option<bool> {
 }
 
 impl App {
-    pub(super) fn send_request(
-        &mut self,
-        client: u64,
-        caller: Option<u64>,
-        send: control::SendText,
-        now: Instant,
-    ) -> Handled {
-        let pane = self.target(caller, send.pane, send.tab)?;
+    pub(super) fn send_request(&mut self, client: u64, asker: Asker, send: control::SendText, now: Instant) -> Handled {
+        let pane = self.target(asker, send.pane, send.tab)?;
         let timeout = deadline(send.timeout, now)?;
         let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
         if term.agent.status() == Some(Status::Waiting) {
@@ -88,7 +82,7 @@ impl App {
             .then(SystemTime::now);
         let wait = send.wait.then(|| Condition::of(send.until)).transpose()?;
         if let Some(until) = &wait {
-            self.can_wait(caller, pane, until)?;
+            self.can_wait(asker.caller, pane, until)?;
         }
         let text = send.text.filter(|t| !t.is_empty());
         if text.is_none() && !send.enter {
@@ -120,8 +114,8 @@ impl App {
             .any(|other| other.id != term.id && other.agent.agent() == Some(kind.name()) && other.cwd() == folder)
     }
 
-    pub(super) fn keys_request(&mut self, caller: Option<u64>, keys: &control::Keys, now: Instant) -> Handled {
-        let pane = self.target(caller, keys.pane, keys.tab)?;
+    pub(super) fn keys_request(&mut self, asker: Asker, keys: &control::Keys, now: Instant) -> Handled {
+        let pane = self.target(asker, keys.pane, keys.tab)?;
         let events = keys
             .keys
             .iter()
@@ -142,8 +136,8 @@ impl App {
         Ok(Some(json(&pane_ids(pane))))
     }
 
-    pub(super) fn read_request(&self, caller: Option<u64>, read: &control::Read) -> Handled {
-        let pane = self.target(caller, read.pane, read.tab)?;
+    pub(super) fn read_request(&self, asker: Asker, read: &control::Read) -> Handled {
+        let pane = self.target(asker, read.pane, read.tab)?;
         let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
         let text = match read.lines {
             Some(lines) => term.emulator.last_lines(lines),
@@ -153,13 +147,8 @@ impl App {
         Ok(Some(json(&Done { text: Some(text), ..pane_ids(pane) })))
     }
 
-    pub(super) fn last_message_request(
-        &mut self,
-        client: u64,
-        caller: Option<u64>,
-        last: &control::LastMessage,
-    ) -> Handled {
-        let pane = self.target(caller, last.pane, last.tab)?;
+    pub(super) fn last_message_request(&mut self, client: u64, asker: Asker, last: &control::LastMessage) -> Handled {
+        let pane = self.target(asker, last.pane, last.tab)?;
         let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
         let running = term.agent.agent().map(str::to_string);
         let running = running.or_else(|| agents::detect(&self.config, &term.foreground_args()));

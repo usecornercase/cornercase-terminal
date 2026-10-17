@@ -169,7 +169,8 @@ fn sent(
     command: Command,
 ) -> String {
     let (server, boot) = (server.map(str::to_string), boot.map(str::to_string));
-    let text = serde_json::to_string(&wire::Request { caller, server, contract, boot, command }).expect("json");
+    let text =
+        serde_json::to_string(&wire::Request { caller, server, contract, boot, view: None, command }).expect("json");
     raw(app, &text)
 }
 

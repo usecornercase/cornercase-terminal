@@ -141,6 +141,7 @@ fn a_surface_request_travels_with_its_tab_and_size_and_logs_them() {
         server: None,
         contract: None,
         boot: None,
+        view: None,
         command: Command::Surface(Surface { tab: Some(12), cols: 120, rows: 40 }),
     };
 

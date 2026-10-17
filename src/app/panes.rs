@@ -17,7 +17,7 @@ use crate::error::Result;
 use crate::log::{self};
 use crate::project::Hierarchy;
 use crate::project::split::{self, Dir};
-use crate::term::mouse;
+use crate::term::{Term, mouse};
 use crate::ui::{self};
 
 impl App {
@@ -66,7 +66,9 @@ impl App {
             }
         }
         let Some(tab) = self.tab() else { return };
-        let Some(pane) = tab.pane().and_then(|t| tab.rect(area, t.id)) else { return };
+        let Some(pane) = tab.pane().and_then(|t| tab.rect(area, t.id).map(|rect| within_terminal(t, rect))) else {
+            return;
+        };
         let Some(at) = pane_cell(pane, ev) else { return };
         if self.link_click(ev, at) {
             return;
@@ -147,7 +149,7 @@ impl App {
             self.drag = None;
             return;
         };
-        let at = pane_cell(pane, ev);
+        let at = pane_cell(within_terminal(term, pane), ev);
         if ev.kind == MouseEventKind::Drag(MouseButton::Left) {
             if link.as_ref().is_some_and(|p| Some(p.at) != at) {
                 link = None;
@@ -275,6 +277,11 @@ impl App {
         }
         Ok(())
     }
+}
+
+pub(super) fn within_terminal(term: &Term, rect: Rect) -> Rect {
+    let Ok((rows, cols)) = term.emulator.size() else { return rect };
+    Rect::new(rect.x, rect.y, rect.width.min(cols.max(1)), rect.height.min(rows.max(1)))
 }
 
 pub(super) fn pane_cell(pane: Rect, ev: MouseEvent) -> Option<Position> {

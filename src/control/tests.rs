@@ -8,7 +8,14 @@ fn read(pane: u64) -> Command {
 
 #[test]
 fn a_request_names_its_command_next_to_its_arguments() {
-    let request = Request { caller: Some(7), server: Some("1-2".into()), contract: None, boot: None, command: read(3) };
+    let request = Request {
+        caller: Some(7),
+        server: Some("1-2".into()),
+        contract: None,
+        boot: None,
+        view: None,
+        command: read(3),
+    };
 
     let sent = serde_json::to_value(&request).expect("json");
 
@@ -24,7 +31,10 @@ fn fields_from_a_newer_command_are_ignored() {
 
     let request: Request = serde_json::from_str(text).expect("a request");
 
-    assert_eq!(request, Request { caller: Some(7), server: None, contract: None, boot: None, command: read(3) });
+    assert_eq!(
+        request,
+        Request { caller: Some(7), server: None, contract: None, boot: None, view: None, command: read(3) }
+    );
 }
 
 #[test]
@@ -70,12 +80,21 @@ fn every_command_is_listed_by_name() {
         Command::StartServer(StartServer::default()),
         Command::Watch(Watch::default()),
         Command::Surface(Surface::default()),
+        Command::View(OpenView::default()),
+        Command::ViewSet(SetView::default()),
     ];
 
     let names: Vec<String> = commands
         .iter()
         .map(|command| {
-            let request = Request { caller: None, server: None, contract: None, boot: None, command: command.clone() };
+            let request = Request {
+                caller: None,
+                server: None,
+                contract: None,
+                boot: None,
+                view: None,
+                command: command.clone(),
+            };
             let sent = serde_json::to_value(request).expect("json");
             command_name(&sent).expect("a name").to_string()
         })
@@ -115,6 +134,7 @@ fn a_search_travels_as_its_query_and_logs_only_its_size() {
         server: None,
         contract: None,
         boot: None,
+        view: None,
         command: Command::Search(Search { query: "checkout".into() }),
     };
     let sent = serde_json::to_string(&request).expect("json");
@@ -250,8 +270,15 @@ fn new_columns_of_a_pane_row_go_after_the_released_ones() {
 fn turn_over_is_spelt_as_on_the_command_line() {
     let wait = Command::Wait(Wait { until: Until::TurnOver, ..Wait::default() });
 
-    let sent = serde_json::to_value(Request { caller: None, server: None, contract: None, boot: None, command: wait })
-        .expect("json");
+    let sent = serde_json::to_value(Request {
+        caller: None,
+        server: None,
+        contract: None,
+        boot: None,
+        view: None,
+        command: wait,
+    })
+    .expect("json");
 
     assert_eq!(sent["args"]["until"], json!("turn-over"));
 }
@@ -468,6 +495,7 @@ mod watch_v1 {
             panes: vec![pane(4, true), pane(5, false)],
             custom_name: Some("agents".into()),
             layout: Some(split()),
+            controller: None,
         };
         let workspace = WorkspaceInfo {
             id: 2,
@@ -501,6 +529,7 @@ mod watch_v1 {
                 groups: vec![group],
                 projects: vec![project],
                 keep_awake: None,
+                view: None,
             },
         }
     }
@@ -522,6 +551,38 @@ mod watch_v1 {
         let read: Snapshot = serde_json::from_str(fixture!("control/watch/v1/snapshot.json")).expect("a snapshot");
 
         assert_eq!(read, snapshot());
+    }
+
+    fn viewed() -> Snapshot {
+        let mut snapshot = snapshot();
+        snapshot.report.projects[0].workspaces[0].tabs[0].controller = Some(41);
+        let shown = snapshot.report.shown;
+        snapshot.report.view = Some(ViewInfo {
+            id: 41,
+            projection: 3,
+            active: true,
+            cols: Some(120),
+            rows: Some(40),
+            shown,
+            controls: true,
+        });
+        snapshot
+    }
+
+    #[test]
+    fn a_view_snapshot_is_written_as_its_fixture_and_reads_back() {
+        let written = serde_json::to_string_pretty(&viewed()).expect("json");
+        let read: Snapshot = serde_json::from_str(fixture!("control/view/v1/snapshot.json")).expect("a snapshot");
+
+        assert_eq!(written, fixture!("control/view/v1/snapshot.json").trim_end());
+        assert_eq!(read, viewed());
+    }
+
+    #[test]
+    fn a_snapshot_without_a_view_leaves_its_keys_out() {
+        let sent = serde_json::to_string(&snapshot()).expect("json");
+
+        assert!(!sent.contains("\"view\"") && !sent.contains("controller"), "{sent}");
     }
 
     #[test]

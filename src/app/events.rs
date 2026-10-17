@@ -79,8 +79,8 @@ impl Snapshots {
         self.built.is_some_and(|at| now.saturating_duration_since(at) < self.every)
     }
 
-    pub(super) fn wake(&self, now: Instant) -> Option<Duration> {
-        let built = self.built.filter(|_| self.due && !self.watchers.is_empty())?;
+    pub(super) fn wake(&self, now: Instant, viewing: bool) -> Option<Duration> {
+        let built = self.built.filter(|_| self.due && (viewing || !self.watchers.is_empty()))?;
         Some(self.every.saturating_sub(now.saturating_duration_since(built)))
     }
 }
@@ -142,6 +142,12 @@ impl Events {
     }
 }
 
+impl Events {
+    pub(super) fn push(&mut self, client: u64, streamed: Streamed) {
+        self.out.push((client, streamed));
+    }
+}
+
 impl App {
     pub(crate) fn take_events(&mut self) -> Vec<(u64, Streamed)> {
         std::mem::take(&mut self.events.out)
@@ -157,7 +163,8 @@ impl App {
     }
 
     pub(super) fn publish_snapshot(&mut self, now: Instant) {
-        if self.events.snapshots.watchers.is_empty() {
+        let watching = !self.events.snapshots.watchers.is_empty();
+        if !watching && self.views.is_empty() {
             return;
         }
         if self.events.snapshots.read != self.agents.watched {
@@ -168,16 +175,25 @@ impl App {
                 self.events.snapshots.changed = true;
             }
         }
+        let own = self.views.changed();
         let snapshots = &mut self.events.snapshots;
-        if !snapshots.changed {
+        if !snapshots.changed && !own {
             return;
         }
-        if snapshots.waits(now) {
+        if snapshots.waits(now) && !own {
             snapshots.due = true;
             return;
         }
         let report = self.report(None);
-        let Events { snapshots, out, .. } = &mut self.events;
-        snapshots.offer(report, now, out);
+        if watching {
+            let Events { snapshots, out, .. } = &mut self.events;
+            snapshots.offer(report.clone(), now, out);
+        } else {
+            let snapshots = &mut self.events.snapshots;
+            snapshots.built = Some(now);
+            snapshots.due = false;
+            snapshots.changed = false;
+        }
+        self.publish_views(&report);
     }
 }

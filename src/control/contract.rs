@@ -7,7 +7,8 @@ pub(crate) const CONTRACT: u32 = 1;
 pub(crate) const EVENTS_VERSION: u32 = 1;
 pub(crate) const WATCH_VERSION: u32 = 1;
 pub(crate) const SURFACE_VERSION: u32 = 1;
-pub(crate) const FEATURES: [&str; 3] = ["boot", "structured-errors", "strict-fields"];
+pub(crate) const VIEW_VERSION: u32 = 1;
+pub(crate) const FEATURES: [&str; 4] = ["boot", "structured-errors", "strict-fields", "views"];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Contract {}
@@ -114,6 +115,7 @@ pub(crate) fn describe(boot: &str, unavailable: &[(&str, &str)]) -> Descriptor {
             Stream { name: "events".into(), version: EVENTS_VERSION },
             Stream { name: "watch".into(), version: WATCH_VERSION },
             Stream { name: "surface".into(), version: SURFACE_VERSION },
+            Stream { name: "view".into(), version: VIEW_VERSION },
         ],
     }
 }
