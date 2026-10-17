@@ -378,6 +378,8 @@ function agentActivity(agent: Agent | null): Activity | null {
   return agent.working ? 'working' : 'idle';
 }
 
+const TODO_ICONS: Record<Status, string> = { idle: '○', working: '◐', done: '✓', pending: '●', failed: '!', waiting: '!' };
+
 export class App {
   cols = 120;
   rows = 34;
@@ -1994,6 +1996,32 @@ export class App {
     this.closeOverlay();
   }
 
+  askTodoAgent(todo: number, at: Pos): void {
+    this.todo.commit();
+    const rows = this.agentRows();
+    if (!rows.length) return this.bug('no agent is running');
+    this.overlay = { kind: 'menu', at, actions: rows.map((r) => ({ kind: 'sendTodo', todo, pane: r.pane })) };
+    this.dirty();
+  }
+
+  private todoAgent(pane: number): { label: string; place: string; kind: string } | null {
+    const row = this.agentRows().find((r) => r.pane === pane);
+    if (!row) return null;
+    const place = row.workspace ? `${row.project} › ${row.workspace}` : row.project;
+    return { label: `${TODO_ICONS[row.status]} ${place} · ${row.agent}`, place, kind: row.agent };
+  }
+
+  private sendTodo(todo: number, pane: number): void {
+    const item = this.todo.item(todo);
+    const found = this.findPane(pane);
+    const to = this.todoAgent(pane);
+    if (!item || !found || !to) return;
+    found.pane.shell.paste(item.text);
+    this.after(350, () => found.pane.shell.key({ key: 'Enter' }));
+    if (!item.done) this.todo.toggle(todo);
+    this.notify(`sent to ${to.kind} in ${to.place}`);
+  }
+
   private markAction(panes: Pane[]): Extract<MenuAction, { kind: 'mark' }> | null {
     const agents = panes.filter((pane) => pane.agent);
     if (!agents.length) return null;
@@ -2053,6 +2081,7 @@ export class App {
     if (a.kind === 'openProject') return 'open project';
     if (a.kind === 'newGroup') return 'new group';
     if (a.kind === 'base') return a.branch;
+    if (a.kind === 'sendTodo') return this.todoAgent(a.pane)?.label ?? '';
     if (a.kind === 'mark') return a.pending ? 'mark as pending review' : 'mark as reviewed';
     if (a.kind === 'showFlow') return 'show flow';
     if (a.kind === 'newWorkspace') return 'new workspace';
@@ -2115,6 +2144,7 @@ export class App {
       this.overlay = { kind: 'newGroup', input: '' };
       this.emit('narrate', this.narration.group);
     } else if (a.kind === 'mark') this.mark(a);
+    else if (a.kind === 'sendTodo') this.sendTodo(a.todo, a.pane);
     else if (a.kind === 'showFlow') return this.showFlowOf(a.workspace);
     else if (a.kind === 'newWorkspace') {
       this.nav = null;

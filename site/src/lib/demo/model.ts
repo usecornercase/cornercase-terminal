@@ -92,7 +92,8 @@ export type MenuAction =
   | { kind: 'showFlow'; workspace: number }
   | { kind: 'newWorkspace'; project: number }
   | { kind: 'startFlow'; project: number }
-  | { kind: 'projectSettings'; project: number };
+  | { kind: 'projectSettings'; project: number }
+  | { kind: 'sendTodo'; todo: number; pane: number };
 
 export interface PickItem {
   value: string;

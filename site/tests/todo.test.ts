@@ -48,3 +48,41 @@ for (const [columns, dot, plain] of [
     app.destroy();
   });
 }
+
+test('the send button of a pending TODO picks an agent and sends the text', () => {
+  const app = demo(140);
+  app.todo.add('fix the empty address');
+  app.toggleTodo();
+  app.todo.open = true;
+  app.render();
+  assert.equal(app.textAt('▸'), null);
+  const item = app.textAt('fix the empty address');
+  assert.ok(item);
+  app.pointerMove(item.x, item.y, 0);
+  app.render();
+  const at = app.textAt('▸');
+  assert.ok(at);
+  app.pointerDown(at.x, at.y, 0);
+  app.pointerUp();
+  assert.equal(app.overlay?.kind, 'menu');
+  const labels = app.overlay?.kind === 'menu' ? app.overlay.actions.map((a) => app.menuLabel(a)) : [];
+  assert.ok(labels.length > 0);
+  assert.match(labels[0], /^\S .+ · \w+/);
+  app.chooseMenu(0);
+  assert.match(app.toast?.text ?? '', /^sent to \w+ in /);
+  assert.equal(app.todo.items[0].done, true);
+  app.destroy();
+});
+
+test('the send button is always shown in compact mode and not on done items', () => {
+  const app = demo(80);
+  app.todo.add('a');
+  app.todo.add('b');
+  app.toggleTodoItem(app.todo.items[1].id);
+  app.toggleTodo();
+  app.todo.open = true;
+  app.render();
+  assert.ok(app.textAt('▸'));
+  assert.equal(app.textAt('▸', 1), null);
+  app.destroy();
+});
