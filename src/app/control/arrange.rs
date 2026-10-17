@@ -33,7 +33,7 @@ impl App {
                 return Err(Refusal::new(Code::NotFound, message));
             }
             Some(Err(gone)) => return Err(Refusal::new(Code::NotFound, gone)),
-            Some(Ok(item)) => item,
+            Some(Ok((_, item))) => item,
         };
         let projection = self.show_to(asker.view, item)?;
         let ids = match asker.view {

@@ -109,7 +109,7 @@ impl App {
         self.events.publish(&[event]);
     }
 
-    pub(in crate::app) fn act_on_notice(&mut self, token: &str) -> Option<Result<Item, String>> {
+    pub(in crate::app) fn act_on_notice(&mut self, token: &str) -> Option<Result<(u64, Item), String>> {
         let notice = self.notices.find(token).cloned()?;
         if self.toast.as_ref().is_some_and(|toast| toast.go.as_deref() == Some(token)) {
             self.toast = None;
@@ -118,14 +118,14 @@ impl App {
             window.missed = None;
         }
         if let Some(pane) = self.notice_pane(&notice) {
-            return Some(Ok(Item::Pane(pane)));
+            return Some(Ok((notice.project, Item::Pane(pane))));
         }
         let open = self
             .projects
             .workspace_in(notice.project, notice.workspace)
             .is_some_and(|(p, w)| !self.projects[p].closing && self.projects[p].workspaces[w].open());
         Some(if open {
-            Ok(Item::Workspace(notice.workspace))
+            Ok((notice.project, Item::Workspace(notice.workspace)))
         } else {
             Err(format!("{} in {} is gone", notice.agent, notice.place))
         })
@@ -134,12 +134,11 @@ impl App {
     pub(crate) fn notification_clicked(&mut self, token: &str) {
         let Some(went) = self.act_on_notice(token) else { return };
         let (pane, to) = match went {
-            Ok(Item::Pane(pane)) => {
+            Ok((_, Item::Pane(pane))) => {
                 self.jump_to_pane(pane);
                 (pane, "pane")
             }
-            Ok(Item::Workspace(workspace)) => {
-                let project = self.notices.find(token).map_or(0, |notice| notice.project);
+            Ok((project, Item::Workspace(workspace))) => {
                 self.goto(Goto::Place { project, workspace: Some(workspace), tab: None });
                 (0, "workspace")
             }
