@@ -138,11 +138,11 @@ cornercase status --follow | jq -c '[.revision, (.projects | length)]'
 cornercase status --follow | while read -r state; do echo "$state" > /tmp/cornercase-state.json; done
 ```
 
-- Each line is what `status --json` prints, plus `revision`, a number that grows with every line. It is always JSON, with `--json` or without, and it can't be combined with `--panes`.
+- Each line is what `status --json` prints, plus `revision`, a number that grows with every line, except `caller`, which is always `null`: find your own pane with `CORNERCASE_PANE` or `status --json` instead. It is always JSON, with `--json` or without, and it can't be combined with `--panes`.
 - Each line is the whole state and replaces the one before: there are no differences to apply, so a reader can skip lines and lose nothing but the steps in between.
 - `revision` only compares within one `boot`, the start of the server it came from. It ends, with status 0, when the server stops or restarts; to go on, run it again: its first line is the state at that moment, so nothing is missed. The same goes for a connection that ended (status 1).
 - A line comes shortly after a change, not for every change: several changes close together give one line with all of them. Output alone (a program printing in a pane) gives none, but what `status --json` shows moves too, such as an agent's status, its context or a pane's folder, and each of those gives a line, so a working agent can bring one every few seconds.
-- A reader that falls behind isn't disconnected for it: lines it hasn't read are replaced by the latest, so when it catches up it reads the state as it is now. One that stops reading altogether is disconnected once the server has waited a second to write to it, like any client.
+- A reader that falls behind isn't disconnected for it: the server keeps up to four lines waiting for it, which it still reads, older ones first; past those it keeps only the latest, so once it has read them it reads the state as it is now, with a jump in `revision`. One that stops reading altogether is disconnected once the server has waited a second to write to it, like any client.
 
 #### Find where something was said
 
@@ -469,10 +469,10 @@ cornercase contract --json
 ```
 
 ```text
-cornercase 0.12.116
+cornercase 0.12.117
 contract 1
 boot 4242-1700000000
-commands 31 (31 available)
+commands 32 (32 available)
 stream events 1
 stream watch 1
 features boot, structured-errors, strict-fields

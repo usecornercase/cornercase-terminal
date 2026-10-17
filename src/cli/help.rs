@@ -42,10 +42,12 @@ where there is no value.
 
 With --follow it keeps running and prints the whole state as one JSON line: first as it is now,
 then again shortly after each time something in it changes, always JSON, with
---json or without. Each line is what --json prints plus `revision`, which grows with every line;
+--json or without. Each line is what --json prints plus `revision`, which grows with every line,
+with `caller` always null;
 `boot` names the server's run, and revisions only compare within one boot. Each line replaces the
 one before. It ends when the server stops or restarts; to go on, run it again, and its first line
-is the state then, so nothing is missed. A reader that falls behind gets the latest state only.
+is the state then, so nothing is missed. A reader that falls behind reads at most four older
+lines, then the latest state.
 
 Examples:
   cornercase status
