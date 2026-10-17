@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -8,6 +9,7 @@ use crate::config::Config;
 pub(crate) mod brief;
 pub(crate) mod builtin;
 pub(crate) mod dialog;
+pub(crate) mod folder;
 pub(crate) mod progress;
 pub(crate) mod registry;
 pub(crate) mod run;
@@ -16,15 +18,18 @@ pub(crate) mod start;
 pub(crate) mod store;
 
 pub(crate) const ORCHESTRATOR: &str = "orchestrator";
-pub(crate) const VERSION: u32 = 1;
+pub(crate) const VERSION: u32 = 2;
+const OWN_WORKTREE_VERSION: u32 = 2;
 pub(crate) const MAX_ROLES: usize = 8;
 pub(crate) const FALLBACK_BRANCH: &str = "flow";
 const BRANCH_WORDS: usize = 8;
 const BRANCH_MAX: usize = 40;
+const ROLE_SLUG_MAX: usize = 24;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct Flow {
+    #[serde(default = "first_version")]
     pub(crate) version: u32,
     pub(crate) name: String,
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -69,7 +74,44 @@ pub(crate) struct Role {
     pub(crate) env: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) edits: bool,
+    #[serde(skip_serializing_if = "Worktree::is_shared")]
+    pub(crate) worktree: Worktree,
     pub(crate) prompt: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Worktree {
+    #[default]
+    Shared,
+    Own,
+}
+
+impl Worktree {
+    pub(crate) const ALL: [Self; 2] = [Self::Shared, Self::Own];
+
+    #[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's skip_serializing_if passes a reference")]
+    pub(crate) fn is_shared(&self) -> bool {
+        *self == Self::Shared
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Shared => "shared",
+            Self::Own => "own",
+        }
+    }
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Shared => "with the team, in the run's worktree",
+            Self::Own => "a worktree and branch of its own, for competing coders and prototypes",
+        }
+    }
+}
+
+fn first_version() -> u32 {
+    1
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -121,6 +163,10 @@ impl Flow {
         self.roles.iter().find(|role| role.name == name)
     }
 
+    pub(crate) fn file_version(&self) -> u32 {
+        if self.roles.iter().any(Role::own_worktree) { OWN_WORKTREE_VERSION } else { 1 }
+    }
+
     pub(crate) fn agents(&self) -> usize {
         self.roles.len() + 1
     }
@@ -139,6 +185,11 @@ impl Flow {
         }
         out.extend(self.control_problems());
         out.extend(role_problems(&self.orchestrator, ORCHESTRATOR));
+        if self.orchestrator.own_worktree() {
+            out.push(format!(
+                "the {ORCHESTRATOR} works in the run's worktree: only a role can have a worktree of its own"
+            ));
+        }
         if self.roles.is_empty() {
             out.push("the flow has no roles besides the orchestrator".to_string());
         }
@@ -163,6 +214,7 @@ impl Flow {
             out.push("the flow has no stages".to_string());
         }
         out.extend(self.folder_problems());
+        out.extend(self.branch_problems());
         for (i, stage) in self.stages.iter().enumerate() {
             let number = i + 1;
             if stage.roles.is_empty() {
@@ -177,6 +229,7 @@ impl Flow {
                     out.push(format!("`{name}` is in stage {} and stage {number}; a role works in one stage", k + 1));
                 }
             }
+            out.extend(self.sharing_problem(number, stage));
             if let Some(back) = &stage.back {
                 if back.to == 0 || back.to >= number {
                     out.push(format!("stage {number} can only go back to an earlier stage"));
@@ -215,8 +268,39 @@ impl Flow {
         out
     }
 
+    fn sharing_problem(&self, number: usize, stage: &Stage) -> Option<String> {
+        let sharing: Vec<String> = stage
+            .roles
+            .iter()
+            .filter_map(|name| self.roles.iter().find(|role| &role.name == name))
+            .filter(|role| role.edits && !role.own_worktree())
+            .map(|role| format!("`{}`", role.name.trim()))
+            .collect();
+        let (last, rest) = sharing.split_last().filter(|(_, rest)| !rest.is_empty())?;
+        Some(format!(
+            "stage {number} runs {} and {last} side by side, and they both edit the shared worktree: give all but \
+             one of them a worktree of its own, or put them in stages of their own",
+            rest.join(", ")
+        ))
+    }
+
+    fn branch_problems(&self) -> Vec<String> {
+        let mut seen: Vec<(String, &str)> = Vec::new();
+        let mut out = Vec::new();
+        for role in self.roles.iter().filter(|role| role.own_worktree()) {
+            let branch = role_branch("", &role.name);
+            if let Some((_, first)) = seen.iter().find(|(other, _)| *other == branch) {
+                out.push(format!("`{first}` and `{}` would work on the same branch: rename one", role.name.trim()));
+            } else {
+                seen.push((branch, role.name.trim()));
+            }
+        }
+        out
+    }
+
     fn folder_problems(&self) -> Vec<String> {
-        let members: Vec<&Role> = std::iter::once(&self.orchestrator).chain(&self.roles).collect();
+        let members: Vec<&Role> =
+            std::iter::once(&self.orchestrator).chain(self.roles.iter().filter(|role| !role.own_worktree())).collect();
         Known::ALL
             .into_iter()
             .filter(|kind| kind.status_by_folder())
@@ -230,7 +314,7 @@ impl Flow {
                 let title = kind.title();
                 Some(format!(
                     "{title} runs {} and {last}, but cornercase reads {title}'s status from its folder and cannot \
-                     tell two apart in one worktree: give all but one of them another agent",
+                     tell two apart in one worktree: give all but one of them another agent, or a worktree of its own",
                     rest.join(", ")
                 ))
             })
@@ -239,6 +323,10 @@ impl Flow {
 }
 
 impl Role {
+    pub(crate) fn own_worktree(&self) -> bool {
+        self.worktree == Worktree::Own
+    }
+
     pub(crate) fn summary(&self) -> String {
         let agent = if self.agent.trim().is_empty() { "no agent" } else { self.agent.trim() };
         std::iter::once(agent)
@@ -269,7 +357,7 @@ fn role_problems(role: &Role, name: &str) -> Vec<String> {
     out
 }
 
-fn parts(config: &Config, role: &Role) -> Option<(Known, Vec<String>, Vec<String>)> {
+fn parts(config: &Config, role: &Role, dir: Option<&Path>) -> Option<(Known, Vec<String>, Vec<String>)> {
     let kind = Known::of(&role.agent)?;
     let name = kind.name();
     let modes = agents::modes(config, name);
@@ -291,6 +379,10 @@ fn parts(config: &Config, role: &Role) -> Option<(Known, Vec<String>, Vec<String
     }
     let mut args = agents::with_effort(name, agents::with_model(name, args, picked), effort);
     args.extend(own);
+    if let (Some(flag), Some(dir)) = (kind.add_dir(), dir.and_then(Path::to_str)) {
+        args.push(flag.to_string());
+        args.push(dir.to_string());
+    }
     let mut words: Vec<String> = Vec::new();
     if !role.env.is_empty() {
         words.push("env".to_string());
@@ -308,15 +400,20 @@ fn quoted(words: impl IntoIterator<Item = String>) -> String {
     words.into_iter().map(|word| agents::quote(&word)).collect::<Vec<_>>().join(" ")
 }
 
-pub(crate) fn command(config: &Config, role: &Role) -> Option<String> {
-    let (_, words, args) = parts(config, role)?;
+pub(crate) fn command(config: &Config, role: &Role, dir: Option<&Path>) -> Option<String> {
+    let (_, words, args) = parts(config, role, dir)?;
     Some(quoted(words.into_iter().chain(args)))
 }
 
-pub(crate) fn resume(config: &Config, role: &Role, conversation: String) -> Option<String> {
-    let (kind, words, args) = parts(config, role)?;
+pub(crate) fn resume(config: &Config, role: &Role, conversation: String, dir: Option<&Path>) -> Option<String> {
+    let (kind, words, args) = parts(config, role, dir)?;
     let args = kind.resume(args, conversation)?;
     Some(quoted(words.into_iter().chain(args)))
+}
+
+pub(crate) fn role_branch(branch: &str, role: &str) -> String {
+    let slug = crate::issues::slug(role, ROLE_SLUG_MAX);
+    format!("{branch}--{}", if slug.is_empty() { "role" } else { &slug })
 }
 
 pub(crate) fn branch(task: &str) -> String {

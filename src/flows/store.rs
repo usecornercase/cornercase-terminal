@@ -153,11 +153,23 @@ pub(crate) fn parse(text: &str) -> std::result::Result<Flow, String> {
     if flow.version > super::VERSION {
         return Err("it was made by a newer cornercase".to_string());
     }
+    if let Some(role) =
+        flow.roles.iter().find(|role| role.own_worktree()).filter(|_| flow.version < flow.file_version())
+    {
+        return Err(format!(
+            "it gives `{}` a worktree of its own, which needs `version = {}`: an older cornercase would run it in \
+             the shared worktree",
+            role.name.trim(),
+            flow.file_version()
+        ));
+    }
+    flow.version = super::VERSION;
     Ok(flow)
 }
 
 pub(crate) fn to_text(flow: &Flow) -> std::result::Result<String, String> {
-    toml::to_string(flow).map_err(|e| e.to_string())
+    let versioned = Flow { version: flow.file_version(), ..flow.clone() };
+    toml::to_string(&versioned).map_err(|e| e.to_string())
 }
 
 pub(crate) fn file_name(name: &str) -> String {

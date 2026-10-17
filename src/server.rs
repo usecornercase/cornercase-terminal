@@ -327,6 +327,7 @@ pub(crate) fn run() -> Result<()> {
     app.set_queue(queue::load(&paths::queue(&session), crate::time::now()));
     app.set_queue_path(paths::queue(&session));
     app.set_setup_dir(path.parent().unwrap_or(Path::new(".")));
+    app.set_runs_dir(&paths::runs(&session));
     let stats = crate::agents::stats::load(&paths::stats(&session), SystemTime::now());
     log::info!(
         "stats",

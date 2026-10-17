@@ -17,7 +17,7 @@ A **flow** is a team of coding agents and the plan they follow, saved as a templ
 ## What a flow is
 
 - **An orchestrator**: an agent (Claude Code, Codex…) that reads what the others answer and decides what comes next. cornercase never parses a verdict out of an agent's text: the orchestrator does, the way you would.
-- **Roles**: a name (`coder`, `reviewer`…), an agent, optionally a model and an effort, extra arguments and environment variables, whether it may edit files, and its prompt. Each role gets a tab of its own.
+- **Roles**: a name (`coder`, `reviewer`…), an agent, optionally a model and an effort, extra arguments and environment variables, whether it may edit files, whether it works [in the run's worktree or in one of its own](#a-worktree-of-its-own), and its prompt. Each role gets a tab of its own.
 - **Stages**: the plan, in order. A stage holds one role, or several working in parallel (`reviewer + security`). A stage can send the work **back** to an earlier one when there are problems, at most a number of times (`findings → 1 · at most 3`).
 - **The end**: open a pull request, or leave the commits on the branch.
 - **Notes**: free text the orchestrator gets with its plan, such as *do not change the public API without asking*.
@@ -30,10 +30,11 @@ A **flow** is a team of coding agents and the plan they follow, saved as a templ
 | **Cross review** | coder → two reviewers (back to the coder on findings, at most 3 times) → a pull request |
 | **Quick** | coder → reviewer (one round) → the commits |
 | **Bug, test first** | a reproducer writes a failing test → coder → tester (back to the coder on failures, at most twice) → a pull request |
+| **Arena** | two or three competing coders, each in a worktree of its own → a judge → an integrator → a reviewer (back to the integrator on findings, at most twice) → a pull request |
 
 They come with cornercase, so they improve with each update, and they use the agents you have installed: the default agent (**settings → Agents → default agent**) orchestrates and codes, and the reviewers take other agents when you have them, so a change is reviewed by a model that did not write it. You can change them: save a built-in flow from the editor and your version, kept in your folder under the same name, takes its place (tagged `edited`, and no longer updated with cornercase); **`restore default`** brings the built-in back (see [Edit flows](#edit-flows)).
 
-The whole team works in one worktree. Claude Code, Codex, Gemini CLI, Grok Build and Cursor CLI can take several roles of one flow; opencode takes one, since cornercase reads its status from its folder and cannot tell two opencode apart there. A flow that gives opencode two roles says so in red and does not start, and the built-in flows give the other roles another agent. Two Codex or two Gemini CLI in one worktree still show their status, from their titles, but cornercase cannot tell their conversations apart: `read --last-message` fails for them, and the orchestrator reads their screens instead.
+Unless a role asks for a worktree of its own, the whole team works in one worktree. Claude Code, Codex, Gemini CLI, Grok Build and Cursor CLI can take several roles of one flow; opencode takes one per worktree, since cornercase reads its status from its folder and cannot tell two opencode apart there: it can take several roles when they [work apart](#a-worktree-of-its-own). A flow that gives opencode two roles in one worktree says so in red and does not start, and the built-in flows give the other roles another agent. Two Codex or two Gemini CLI in one worktree still show their status, from their titles, but cornercase cannot tell their conversations apart: `read --last-message` fails for them, and the orchestrator reads their screens instead.
 
 ## Start a flow
 
@@ -45,7 +46,7 @@ A flow works in a worktree of its own, so its project must be the root of a git 
 
 <Screen
   name="flow-start"
-  alt="The Start a flow dialog for #482 Returns page crashes on empty address: Full issue in web-shop, in a worktree of its own; under Flow templates, the four built-in flows, each with its number of agents and its description, with Full issue selected, and its diagram on the right; the prompt, the issue's address; the branch issue-482-returns-page-crashes-on-empty-address; the buttons edit, cancel and start"
+  alt="The Start a flow dialog for #482 Returns page crashes on empty address: Full issue in web-shop, in a worktree of its own; under Flow templates, the built-in flows, each with its number of agents and its description, with Full issue selected, and its diagram on the right; the prompt, the issue's address; the branch issue-482-returns-page-crashes-on-empty-address; the buttons edit, cancel and start"
   caption="Starting Full issue on issue #482: the plan on the right, the issue's prompt and branch below."
   crop={[2, 1, 136, 36]}
 />
@@ -54,10 +55,10 @@ The dialog lists the flows on the left under **Flow templates**, sorted by name,
 
 Starting a flow:
 
-1. Makes the worktree, or uses a worktree already on that branch if it runs no flow.
-2. Opens one tab per role, named after it, the orchestrator first.
-3. Starts each agent with its model, its effort, its arguments and its role prompt, which tells it to wait for the orchestrator's first message, and answers its question about trusting the new folder. A role that may not edit files is told so in its prompt.
-4. Starts the orchestrator last, once its team is up, with a brief cornercase writes: the task, the team with each role's pane id, the stages in words, the flow's notes, the rules for driving agents (wait before sending, one self-contained message at a time, read the last message rather than the screen, never answer another agent's permission prompt), the final action, and `cornercase mark` on its own pane when it is done, so the run shows as [pending review](../projects-workspaces-tabs/#pending-review).
+1. Makes the worktree, or uses a worktree already on that branch if it runs no flow, and one more for each role that [works apart](#a-worktree-of-its-own), on a branch made from the run's. The project's [setup](../worktrees/#set-up-each-new-worktree) runs in each new one, with its own branch.
+2. Opens one tab per role, named after it, the orchestrator first, each in its role's worktree.
+3. Starts each agent with its model, its effort, its arguments and its role prompt, which tells it to wait for the orchestrator's first message, and answers its question about trusting the new folder. A role that may not edit the worktree's files is told so in its prompt, and every role is told where to put its answers (see [The run's folder](#the-runs-folder)).
+4. Starts the orchestrator last, once its team is up, with a brief cornercase writes: the task, the team with each role's pane id, the stages in words, the flow's notes, the rules for driving agents (wait before sending, one self-contained message at a time, read the last message rather than the screen, never answer another agent's permission prompt), the run's folder, the final action, and `cornercase mark` on its own pane when it is done, so the run shows as [pending review](../projects-workspaces-tabs/#pending-review).
 
 The whole team starts at once, so the tabs and the diagram are complete from the first second; an agent waiting for its first message costs nothing. The roles' turns ending don't notify you or leave a `✓` on their tabs, since the orchestrator reads them; the orchestrator does when the run is done, and any agent still does when it [waits for you](../projects-workspaces-tabs/#notifications).
 
@@ -79,9 +80,9 @@ It takes the column on the right that the [changes](../changes/), [files](../fil
 
 <Screen
   name="flow-run"
-  alt="The Flow panel alone: Full issue and the first line of the task in its header, the orchestrator's box with a heavy border, the coder idle, the reviewer working with a heavy border and the security reviewer idle side by side, the tester idle, a loop from the reviewers back to the coder labelled findings · 1/3, another from the tester labelled failures · 0/2, and the end, open a pull request"
-  caption="The plan, live: who works, where the work went last, and how many rounds each loop took."
-  crop={[95, 0, 45, 24]}
+  alt="The Flow panel alone: Full issue and the first line of the task in its header, the orchestrator's box with a heavy border, the coder idle, the reviewer working with a heavy border and the security reviewer idle side by side, the tester idle, a loop from the reviewers back to the coder labelled findings · 1/3, another from the tester labelled failures · 0/2, and the end, open a pull request; under the diagram, Files · 4 lists coder-2.md, security-1.md, coder-1.md and orchestrator-1.md, with their ages"
+  caption="The plan, live: who works, where the work went last, how many rounds each loop took, and the files the roles wrote."
+  crop={[95, 0, 45, 31]}
 />
 
 **What it draws.** The orchestrator sits on top, apart, since it moves the work. The stages go top to bottom, the roles of a parallel stage side by side (stacked under a bracket when the panel is too narrow), and each loop is an arrow up the right side into the stage it returns to, labelled with what sends the work back and its rounds (`findings · 1/3`). The end is `◆ open a pull request` or `◆ leave the commits`. Each box names its role in its own colour, then its agent, model and effort (`claude · opus · high`).
@@ -99,7 +100,28 @@ It takes the column on the right that the [changes](../changes/), [files](../fil
 
 **Clicks.** Click a box to go to its tab. Click an arrow, or a loop's label, to read the last message sent along it, with a **`copy`** button; where an arrow splits into a parallel stage, each branch shows the message its own role got. The arrows that carried a message light up under the mouse, a branch with the way it took. The wheel scrolls a diagram taller than the panel.
 
-The messages are kept in memory only, at most the first 32 KiB of each: they never reach the [log](../../help/troubleshooting/#the-server-log), which keeps their sizes, nor the saved session. After a restart the panel shows the plan and the agents' status again, without the history.
+The messages are kept in memory only, at most the first 32 KiB of each: they never reach the [log](../../help/troubleshooting/#the-server-log), which keeps their sizes, nor the saved session. After a restart the panel shows the plan and the agents' status again, without the history; what the roles wrote to [the run's folder](#the-runs-folder) is still there.
+
+## The run's folder
+
+Every run gets a folder for its files, so long reports don't pile up in the orchestrator's context and the run leaves a record of what each role produced. It is outside the worktree, so nothing in it is ever committed, and every pane of the team has its path in **`$CORNERCASE_RUN_DIR`**.
+
+- **One file per answer.** Each role writes every answer to a file named after it and the next free number (`reviewer-1.md`, then `reviewer-2.md`) and replies with the file's path and a few lines. The orchestrator passes work on by path instead of pasting text, and writes its own decisions there too (`orchestrator-1.md`: what it asked, what came back, what it decided and why). Scratch files, logs and scripts a role needs go there as well, never in the worktree.
+- **Where it is.** In `runs/` next to the [saved session](../sessions/) (`~/.local/state/cornercase/runs/` by default; with `CORNERCASE_SOCKET`, `<session name>.runs/` next to the socket, so separate servers never share one), named by the day and the workspace (`2026-10-17-fix-login`, with `-2` when taken). It and `runs/` are readable only by you (mode `0700`).
+- **Who can reach it.** Claude Code, Codex and Cursor CLI start with `--add-dir` for it, so their file tools can write there. Gemini CLI, opencode and Grok Build have no flag cornercase uses for it, and write through their shell, which the prompt tells them to do when their file tools can't reach it.
+- **The Flow panel lists it.** Under the diagram, **Files · n** shows the folder's files, newest first, with their age; click one to read it in the [files panel](../files/). The list is read every two seconds while the panel shows, at most 200 files.
+- **How long it stays.** The folder survives the end of the run and a restart (a folder you deleted is made again), and goes with its workspace: removing the workspace (which removes its worktree), closing the project, or closing a plain workspace removes it, once the workspace's shells have exited. `cornercase close --workspace` on a worktree, without `--remove-worktree`, only stops its shells: the workspace and the folder stay. `cornercase flow run` prints the folder on stderr, with `run_dir` in `--json`, and `cornercase status --json` gives each workspace's `run_dir`, so a script finds the files of a run that ended.
+
+## A worktree of its own
+
+By default every role works in the run's worktree, so a reviewer sees what the coder wrote the moment it writes it. For work where several coders try the same task, set a role's **worktree** to **own** (`worktree = "own"` in the file): cornercase makes it a worktree and a branch of its own, `<run's branch>--<role>` (`fix-login--coder-a`), made from the run's branch, and its tab opens there. The built-in **Arena** flow does this for its competing coders; the diagram tags such a role's box ` own worktree ` (` own ` when the box is narrow).
+
+- **Seeing the work.** What a role has not committed is invisible to the rest, so the role's prompt tells it to commit on its branch, and the orchestrator's brief says to read a candidate with `git log`, `git diff` and `git show` on that branch, and to build or test it in its worktree folder. The role's worktree is a row in the sidebar like any other, so you can open its Changes and Files panels to compare candidates.
+- **Integrating.** cornercase never merges a candidate. A role that works in the run's worktree (the integrator in Arena) merges the chosen branch with `git merge`, or takes parts of the others by hand or with `git cherry-pick`; the orchestrator never edits.
+- **Rules.** Two roles that edit the run's worktree in one parallel stage are a problem, and the flow does not start: give all but one a worktree of their own, or put them in stages of their own. Only a role can work apart, not the orchestrator, and two such roles cannot have names that make one branch. When a run starts on a new branch, its role branches must not exist yet; on a branch that exists, role branches and their worktrees already there are reused.
+- **Lifetime and removal.** The worktrees stay until the run's workspace is removed, which asks first, checks every one of them for uncommitted changes, runs the project's teardown in each and removes them all; the branches are kept. A role's worktree cannot be removed on its own while its run lives.
+- **A file needs `version = 2`** when a role has one; cornercase writes it that way and refuses a file that says `own` without it, so an older cornercase does not run the coders in one worktree.
+- **Cost.** Each worktree is a checkout and builds on its own, and the project's setup runs in each, so several coders cost several times the disk and the first build.
 
 ## Edit flows
 
@@ -107,7 +129,7 @@ Open **settings → Agents → flows** to list them, in one list sorted by name:
 
 <Screen
   name="flows-list"
-  alt="The Flows dialog: teams of agents that work through a plan, started from an issue or a prompt; one list sorted by name: Bug, test first (4 agents, reproducer → coder → tester), Cross review (4 agents), Full issue (5 agents, tagged edited, selected) and Quick (3 agents); the diagram of Full issue on the right (the orchestrator, coder, reviewer and security, tester and the end open a pull request, with their loops); the buttons edit, duplicate, export, restore default, import, new and done"
+  alt="The Flows dialog: teams of agents that work through a plan, started from an issue or a prompt; one list sorted by name: Arena (6 agents, coder A + coder B → judge → integrator → reviewer), Bug, test first (4 agents, reproducer → coder → tester), Cross review (4 agents), Full issue (5 agents, tagged edited, selected) and Quick (3 agents); the diagram of Full issue on the right (the orchestrator, coder, reviewer and security, tester and the end open a pull request, with their loops); the buttons edit, duplicate, export, restore default, import, new and done"
   caption="The flows, sorted by name, with their agents and their plan, and the selected one's diagram beside them; Full issue has been edited."
   crop={[2, 1, 136, 35]}
 />
@@ -122,7 +144,7 @@ A flow opens on its **Flow** tab, with a tab for the **Orchestrator** and one pe
 />
 
 - **The Flow tab**: the name, a description, where it is saved (yours, or the project's), the stages, the final action and the notes. Click a stage to open it: **roles** (several work side by side), **goes back** (never, or to an earlier stage), **when** (what sends it back, such as `findings`) and **at most** (how many times). Hover a stage to move it with **`↑`** **`↓`** or remove it with **`×`**; **`+ add stage`** adds one.
-- **A role's tab**: its **name**, **agent**, **model** (the agent's default, the models cornercase knows for it, or **other…** to type one), **effort** (the agent's default, or one of its levels: Claude Code `low`, `medium`, `high`, `xhigh`, `max`; Codex `minimal` to `xhigh`; Grok Build `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; Gemini CLI, opencode and Cursor CLI have no effort switch; with Cursor it goes in the model id), **args** added to the agent's command, **env** as `KEY=value` pairs (Claude Code on Bedrock, for example), whether it **edits files**, and its **prompt**. Renaming a role renames it in every stage.
+- **A role's tab**: its **name**, **agent**, **model** (the agent's default, the models cornercase knows for it, or **other…** to type one), **effort** (the agent's default, or one of its levels: Claude Code `low`, `medium`, `high`, `xhigh`, `max`; Codex `minimal` to `xhigh`; Grok Build `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; Gemini CLI, opencode and Cursor CLI have no effort switch; with Cursor it goes in the model id), **args** added to the agent's command, **env** as `KEY=value` pairs (Claude Code on Bedrock, for example), whether it **edits files**, its **worktree** (**shared**, the run's, or **own**, one of its own for competing coders and prototypes; not for the orchestrator), and its **prompt**. Renaming a role renames it in every stage.
 - **Prompts and notes** open a larger editor: `Enter` starts a new line, **`save`** keeps the text, **`cancel`** or `Esc` drops it.
 
 **`save`** refuses while the flow has problems, listed in red under the form (a role in no stage, a loop that goes forward, an agent cornercase cannot start…). Renaming a flow renames its file. Closing a flow with unsaved changes asks first.
@@ -226,7 +248,7 @@ cornercase flow import quick.toml
 
 ## What is not covered
 
-- One worktree per role, for flows where several models compete and the orchestrator picks the best: the whole team works in one worktree, and only the roles told to edit change files.
+- The files of a run that ended in the Flow panel, which shows only while a run does: read them from `run_dir`. There is no way to turn the folder off; a flow's own prompts can say not to use it.
 - Flows that span several projects.
 - Scheduling a flow: the [queue](../queue/) starts single agents.
 - Message events in [`cornercase events`](../scripts-and-agents/#follow-events).

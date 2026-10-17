@@ -1,28 +1,37 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use ratatui::layout::Rect;
 
 use super::App;
 use crate::control;
 use crate::error::Result;
+use crate::flows::folder;
 use crate::project::split::Dir;
 use crate::project::{Hierarchy, Project, Tab, Workspace};
 use crate::protocol;
 use crate::term::{SpawnOptions, Term};
 
 impl App {
-    pub(super) fn pane_env(id: u64) -> Vec<(String, String)> {
-        vec![
+    pub(super) fn pane_env(id: u64, run: Option<&Path>) -> Vec<(String, String)> {
+        let mut env = vec![
             (protocol::NESTED_ENV.to_string(), "1".to_string()),
             (control::PANE_ENV.to_string(), id.to_string()),
             (control::SERVER_ENV.to_string(), control::server_token().to_string()),
-        ]
+        ];
+        if let Some(dir) = run.and_then(Path::to_str) {
+            env.push((folder::ENV.to_string(), dir.to_string()));
+        }
+        env
     }
 
     pub(super) fn spawn(&mut self, area: Rect, cwd: PathBuf) -> Result<Term> {
+        self.spawn_with(area, cwd, None)
+    }
+
+    pub(super) fn spawn_with(&mut self, area: Rect, cwd: PathBuf, run: Option<&Path>) -> Result<Term> {
         let (rows, cols) = self.pane_size(area);
         let id = self.take_id();
-        let env = Self::pane_env(id);
+        let env = Self::pane_env(id, run);
         let opts = SpawnOptions {
             id,
             shell: &self.shell,

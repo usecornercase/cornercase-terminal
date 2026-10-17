@@ -6,6 +6,7 @@ use self::split::{Dir, Node, Place};
 use crate::agents::activity::Status;
 use crate::agents::context::Context;
 use crate::config::Config;
+use crate::flows::run::RoleWorktree;
 use crate::git::worktree::setup;
 use crate::term::Term;
 
@@ -192,6 +193,8 @@ pub(crate) struct Workspace {
     pub(crate) behind: u32,
     pub(crate) base: Option<String>,
     pub(crate) collapsed: bool,
+    pub(crate) role_worktrees: Vec<RoleWorktree>,
+    pub(crate) run_dirs: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -214,6 +217,8 @@ impl Workspace {
             behind: 0,
             base: None,
             collapsed: false,
+            role_worktrees: Vec::new(),
+            run_dirs: Vec::new(),
         }
     }
 

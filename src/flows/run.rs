@@ -1,5 +1,8 @@
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::time::Instant;
+
+use serde::{Deserialize, Serialize};
 
 use super::Flow;
 use super::progress::Progress;
@@ -30,6 +33,13 @@ pub(crate) struct Member {
     pub(crate) pane: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RoleWorktree {
+    pub(crate) role: String,
+    pub(crate) path: PathBuf,
+    pub(crate) branch: String,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct Run {
     pub(crate) id: u64,
@@ -39,6 +49,7 @@ pub(crate) struct Run {
     pub(crate) members: Vec<Member>,
     pub(crate) messages: VecDeque<Message>,
     pub(crate) progress: Progress,
+    pub(crate) dir: Option<PathBuf>,
 }
 
 impl Run {
@@ -51,6 +62,7 @@ impl Run {
             members: Vec::new(),
             messages: VecDeque::new(),
             progress: Progress::default(),
+            dir: None,
         }
     }
 

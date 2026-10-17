@@ -230,3 +230,22 @@ test('a repository project offers project settings, which need a real cornercase
   assert.ok(shown(app, 'the demo runs no setup scripts'));
   app.destroy();
 });
+
+test("the Flow panel lists the run's files as it plays, and a click opens one", () => {
+  const app = demo(140, 60);
+  toRun(app);
+  app.toggleFlow();
+  app.render();
+  assert.ok(shown(app, 'Files · 0'));
+  assert.ok(shown(app, 'nothing yet'));
+  playUntil(app, 'coder-1.md');
+  assert.ok(shown(app, 'Files · '));
+  const at = app.textAt('coder-1.md');
+  assert.ok(at);
+  app.pointerDown(at.x + 1, at.y, 0);
+  app.pointerUp();
+  app.render();
+  assert.equal(app.filesShown(), true);
+  assert.ok(shown(app, '# coder, answer 1'));
+  app.destroy();
+});

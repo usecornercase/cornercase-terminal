@@ -2,15 +2,27 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.112
+## 0.12.114
 
 - Plugins: a folder with a `cornercase-plugin.toml` can add entries to the ` ⋯ ` and right-click menus of projects, workspaces, tabs and panes, run a command on every event `cornercase events` prints, keep a service running in the server (restarted if it stops), and keep a process running next to each window on this computer. Plugins talk back through the cornercase commands, so they can be written in any language.
 - `cornercase plugin link <folder>` adds a plugin, turned off; `enable`, `disable`, `list`, `logs` and `unlink` do the rest, and Settings has a new Plugins tab to turn them on and off.
 - `cornercase plugin install owner/repo` installs a plugin from GitHub (or any `https://` git address, or a folder), pinned to a commit, with `@tag`, `@branch` or `@commit` to choose one. A repository can hold several plugins in folders: `cornercase plugin install owner/repo/plugins/notes` (or `address//folder` outside GitHub). Before anything runs it shows where the plugin comes from, what it asks for and every command it will run, and asks; it is installed turned off. A plugin can ship prebuilt archives, checked against their sha256 before they are unpacked, or build steps that run once you confirm.
 - `cornercase plugin update` fetches installed plugins again and, when one changed, shows the new version's commands and asks before updating; `cornercase plugin remove` turns a plugin off, waits (up to 10 seconds) until its service and window processes have stopped, then deletes its installed copy; if something still runs, cannot be checked, or the plugin was turned on again meanwhile, it says so and deletes nothing, leaving the plugin installed.
 - Find plugins at usecornercase.dev/plugins: every public GitHub repository with the `cornercase-plugin` topic shows there, with each plugin it holds and the command that installs it; see what is trending and new, search it, and sort by stars, trending, recent activity, newest or name. Nobody reviews them, so read a plugin or trust its author before turning it on. To publish yours, add that topic to its repository.
-- A plugin whose command is a link leading out of its folder can no longer be linked or turned on, and `plugin list` and Settings say why.
 - A plugin runs as you and can do anything you can, including typing into every terminal. What it asks for is shown before you turn it on, but not enforced: only turn on plugins you trust.
+
+## 0.12.113
+
+- **A folder for each flow run.** Every run gets a folder of its own, outside the worktree so nothing in it is ever committed, and every agent of the team has its path in `$CORNERCASE_RUN_DIR`. Each role writes its answers there, one file per answer, and replies with the file's path and a few lines; the orchestrator passes paths on instead of pasting reports, and writes its own decisions there, so a run leaves a record of what each role produced and what was decided. Claude Code, Codex and Cursor CLI get `--add-dir` for it.
+- The **Flow panel** lists the run's files under the diagram, newest first; click one to read it in the files panel. `cornercase flow run` prints the folder on standard error (`run_dir` with `--json`), and `cornercase status --json` gives each workspace's `run_dir`.
+- The folder is kept when the run ends, and removed with its workspace, when you close it or remove its worktree. It lives in `~/.local/state/cornercase/runs/` (next to the session), readable only by you.
+
+## 0.12.112
+
+- **A role of a flow can work in a worktree of its own.** Set a role's **worktree** to **own** in the flow editor (`worktree = "own"` in its file, which then says `version = 2`) and cornercase makes it a worktree and a branch of its own, `<run's branch>--<role>`, from the run's branch: its tab opens there, the project's setup runs there, and its box in the diagram says ` own worktree `. The orchestrator's brief tells how to read each candidate from its branch, and a role that works in the run's worktree merges or cherry-picks the winner; cornercase never merges for you.
+- The new built-in flow **Arena** puts two or three competing coders, each on a different agent when you have them, in worktrees of their own, then a judge that tests every candidate, an integrator and a reviewer. It is meant for measurable work or an unclear shape, not for everyday features.
+- Two roles that edit the run's worktree side by side in one stage now keep a flow from starting, since they would overwrite each other: give all but one a worktree of their own, or put them in stages of their own. opencode can take several roles when they work apart.
+- A role's worktree goes with the run's workspace: removing the workspace checks all of them for uncommitted changes, runs the project's teardown in each and removes them; their branches are kept. One cannot be removed alone while its run lives.
 
 ## 0.12.111
 

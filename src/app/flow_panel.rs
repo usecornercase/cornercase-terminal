@@ -6,21 +6,29 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use serde_json::Value;
 
+use super::event::AppEvent;
 use super::input::wheel;
 use super::layout::Side;
 use super::overlay::Overlay;
 use super::pull_requests::DONE;
 use super::{App, Toast};
 use crate::control::Command;
+use crate::error::Result;
+use crate::files::link::Target;
+use crate::flows::folder::{self, Listing};
 use crate::flows::progress::Edge;
 use crate::flows::run::{Kind, Message, Run};
+use crate::log::{Job, Level};
 use crate::project::search::Goto;
 use crate::project::{Hierarchy, Project};
+use crate::time;
 use crate::todo::editor::wrap;
 use crate::ui::{self, flow};
 
 pub(super) const COPY: &str = "copy";
 pub(super) const FRAME_EVERY: Duration = Duration::from_millis(40);
+const LIST_EVERY: Duration = Duration::from_secs(2);
+const LIST_GIVE_UP: Duration = Duration::from_secs(30);
 const TITLE: &str = "Message";
 const MAX_TEXT: usize = 32 * 1024;
 const MAX_READS: usize = 16;
@@ -31,6 +39,9 @@ const NOTHING_SENT: &str = "(enter, with nothing typed)";
 pub(super) struct FlowPanel {
     scroll: u16,
     reads: Vec<(u64, Noted)>,
+    files: Option<(u64, Listing)>,
+    listing: Option<(u64, Instant)>,
+    listed: Option<Instant>,
 }
 
 pub(super) struct Noted {
@@ -129,7 +140,69 @@ impl App {
         let plan = flow::Diagram::plan(&run.flow, muted, light);
         let mut diagram = plan.live(&run.progress, |role| self.role_state(run, role), now);
         diagram.spin = spin;
-        Some(flow::View { name: run.flow.name.clone(), task: run.task.clone(), diagram, scroll: self.flow.scroll })
+        let files = self.flow.files.as_ref().filter(|(id, _)| *id == run.id).map(|(_, listing)| {
+            let now = std::time::SystemTime::now();
+            let age = |file: &folder::File| {
+                let secs = file.modified.and_then(|at| now.duration_since(at).ok()).map_or(0, |d| d.as_secs());
+                time::age(i64::try_from(secs).unwrap_or(i64::MAX))
+            };
+            let rows = listing.files.iter().map(|file| flow::FileRow { name: file.name.clone(), age: age(file) });
+            flow::Files { rows: rows.collect(), more: listing.more }
+        });
+        let files = files.or_else(|| run.dir.as_ref().map(|_| flow::Files { rows: Vec::new(), more: false }));
+        Some(flow::View {
+            name: run.flow.name.clone(),
+            task: run.task.clone(),
+            diagram,
+            files,
+            scroll: self.flow.scroll,
+        })
+    }
+
+    pub(super) fn refresh_run_files(&mut self, now: Instant) {
+        if self.side != Some(Side::Flow) || !self.panel_shown() {
+            return;
+        }
+        let Some((id, dir)) = self.shown_run().and_then(|run| Some((run.id, run.dir.clone()?))) else { return };
+        if let Some((_, since)) = self.flow.listing
+            && now.duration_since(since) < LIST_GIVE_UP
+        {
+            return;
+        }
+        if self.flow.listed.is_some_and(|at| now.duration_since(at) < LIST_EVERY) {
+            return;
+        }
+        self.flow.listing = Some((id, now));
+        self.flow.listed = Some(now);
+        let job = Job::new(Level::Debug, "flow", "list files").with("run", id);
+        self.spawn_job(
+            job,
+            move || Ok(folder::list(&dir)?),
+            move |result, job| {
+                if let Ok(listing) = &result {
+                    job.note("files", listing.files.len());
+                }
+                Some(AppEvent::RunFiles(id, result))
+            },
+        );
+    }
+
+    pub(super) fn run_files_listed(&mut self, run: u64, result: Result<Listing>) {
+        if self.flow.listing.is_some_and(|(id, _)| id == run) {
+            self.flow.listing = None;
+        }
+        if let Ok(listing) = result
+            && self.runs.iter().any(|r| r.id == run)
+        {
+            self.flow.files = Some((run, listing));
+        }
+    }
+
+    fn open_run_file(&mut self, index: usize) {
+        let path = self.flow.files.as_ref().and_then(|(_, listing)| listing.files.get(index)).map(|f| f.path.clone());
+        if let Some(path) = path.as_deref().and_then(std::path::Path::to_str) {
+            self.open_link(&Target { path: path.to_string(), lines: None });
+        }
     }
 
     pub(super) fn flow_frame(&self, now: Instant) -> Option<Duration> {
@@ -158,6 +231,7 @@ impl App {
                     self.jump_to_pane(pane);
                 }
             }
+            Some(flow::Hit::File(index)) => self.open_run_file(index),
             Some(flow::Hit::Edge(edge, to)) => {
                 let Some(workspace) = self.shown_run().map(|run| run.workspace) else { return };
                 self.overlay = Some(Overlay::FlowMessage { workspace, edge, to, scroll: 0 });
@@ -300,7 +374,7 @@ impl App {
         }
     }
 
-    pub(super) fn flow_answered(&mut self, client: u64, reply: &Result<Value, String>) {
+    pub(super) fn flow_answered(&mut self, client: u64, reply: &std::result::Result<Value, String>) {
         let Some(i) = self.flow.reads.iter().position(|(c, _)| *c == client) else { return };
         let (_, mut noted) = self.flow.reads.remove(i);
         let Ok(value) = reply else { return };

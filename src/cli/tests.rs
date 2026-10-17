@@ -271,6 +271,7 @@ mod output {
             behind: 2,
             pull_request: None,
             setup: None,
+            run_dir: None,
             active: true,
             tabs: vec![tab],
         };
@@ -503,8 +504,9 @@ mod output {
 
 mod flows {
     use super::args::ImportTo;
-    use super::flow::{confirmation, fetched, imported_line, listing, started};
+    use super::flow::{confirmation, fetched, folder_note, imported_line, listing, started};
     use crate::control::{BrokenFlow, FlowInfo, Flows, Imported, MemberInfo, RoleInfo, RunInfo};
+    use crate::flows::Worktree;
     use crate::flows::registry::Source;
 
     #[test]
@@ -537,7 +539,14 @@ mod flows {
     }
 
     fn role(role: &str, agent: &str, model: Option<&str>, edits: bool) -> RoleInfo {
-        RoleInfo { role: role.into(), agent: agent.into(), model: model.map(str::to_string), effort: None, edits }
+        RoleInfo {
+            role: role.into(),
+            agent: agent.into(),
+            model: model.map(str::to_string),
+            effort: None,
+            edits,
+            worktree: Worktree::Shared,
+        }
     }
 
     #[test]
@@ -576,7 +585,14 @@ mod flows {
 
     #[test]
     fn a_run_prints_its_workspace_then_a_pane_and_a_role_per_line() {
-        let member = |role: &str, pane| MemberInfo { role: role.into(), agent: "claude".into(), tab: 0, pane };
+        let member = |role: &str, pane| MemberInfo {
+            role: role.into(),
+            agent: "claude".into(),
+            tab: 0,
+            pane,
+            worktree: None,
+            branch: None,
+        };
         let run = RunInfo {
             workspace: 9,
             members: vec![member("orchestrator", 12), member("second reviewer", 14)],
@@ -584,6 +600,13 @@ mod flows {
         };
 
         assert_eq!(started(&run), "9\n12\torchestrator\n14\tsecond reviewer\n");
+    }
+
+    #[test]
+    fn a_run_names_its_folder_on_stderr_when_it_has_one() {
+        let run = RunInfo { run_dir: Some("/s/runs/2026-10-17-api".into()), ..RunInfo::default() };
+        assert_eq!(folder_note(&run).as_deref(), Some("the run keeps its files in /s/runs/2026-10-17-api"));
+        assert_eq!(folder_note(&RunInfo::default()), None);
     }
 }
 

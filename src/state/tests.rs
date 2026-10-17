@@ -77,6 +77,8 @@ mod file {
                         base: Some("main".into()),
                         collapsed: true,
                         run: None,
+                        role_worktrees: Vec::new(),
+                        run_dirs: Vec::new(),
                     }],
                     active: 0,
                     collapsed: false,
@@ -127,6 +129,8 @@ mod file {
                         base: None,
                         collapsed: false,
                         run: None,
+                        role_worktrees: Vec::new(),
+                        run_dirs: Vec::new(),
                     }],
                     active: 0,
                     collapsed: true,
@@ -479,11 +483,35 @@ mod mapping {
     }
 
     #[test]
+    fn run_folders_are_saved_by_name_and_restored_under_the_runs_folder() {
+        let mut workspace = Workspace::new(1, "/p".into(), None, true);
+        workspace.run_dirs = vec!["/s/runs/2026-10-17-a".into(), "/s/runs/2026-10-17-a-2".into()];
+        let saved = WorkspaceState::of(&workspace, None);
+        assert_eq!(saved.run_dirs, ["2026-10-17-a", "2026-10-17-a-2"]);
+        let back = saved.restore(2, "/p".into(), Vec::new(), Path::new("/t/runs"));
+        assert_eq!(back.run_dirs, [PathBuf::from("/t/runs/2026-10-17-a"), PathBuf::from("/t/runs/2026-10-17-a-2")]);
+    }
+
+    #[test]
+    fn a_saved_folder_name_that_is_not_one_plain_folder_is_dropped() {
+        let saved = WorkspaceState {
+            run_dirs: vec!["../etc".into(), "/etc".into(), "a/b".into(), "..".into(), "ok".into()],
+            ..WorkspaceState::plain("/p".into(), Vec::new(), 0)
+        };
+        let back = saved.restore(2, "/p".into(), Vec::new(), Path::new("/t/runs"));
+        assert_eq!(back.run_dirs, [PathBuf::from("/t/runs/ok")]);
+    }
+
+    #[test]
     fn restoring_clamps_an_active_child_that_is_out_of_range() {
         let workspace =
             WorkspaceState { tabs: Vec::new(), active: 9, ..WorkspaceState::plain("/p".into(), Vec::new(), 9) };
-        let restored =
-            workspace.restore(4, "/p".into(), vec![Tab::restored(5, None, vec![spawn_term(6, &[], None).0], None)]);
+        let restored = workspace.restore(
+            4,
+            "/p".into(),
+            vec![Tab::restored(5, None, vec![spawn_term(6, &[], None).0], None)],
+            Path::new("/runs"),
+        );
         assert_eq!(restored.active, 0);
         let project = ProjectState::of(&Project::new(1, "/p".into(), None), None, &[]);
         let project = ProjectState { active: 9, ..project };

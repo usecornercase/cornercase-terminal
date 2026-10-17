@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::agents::AgentState;
 use crate::changes::{Mode, Scope};
-use crate::flows::Flow;
-use crate::flows::run::Run;
+use crate::flows::run::{RoleWorktree, Run};
+use crate::flows::{Flow, folder};
 use crate::issues::People;
 use crate::project::group::GroupEntry;
 use crate::project::split::Node;
@@ -97,6 +97,10 @@ pub(crate) struct WorkspaceState {
     pub(crate) collapsed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) run: Option<RunState>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) role_worktrees: Vec<RoleWorktree>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) run_dirs: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -109,6 +113,8 @@ pub(crate) struct RunState {
     pub(crate) stage: Option<usize>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) rounds: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) dir: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,6 +123,10 @@ pub(crate) struct SeatState {
     pub(crate) tab: usize,
     #[serde(default)]
     pub(crate) pane: usize,
+}
+
+fn folder_name(dir: &Path) -> Option<String> {
+    dir.file_name().and_then(|name| name.to_str()).map(str::to_string)
 }
 
 impl RunState {
@@ -134,6 +144,7 @@ impl RunState {
             members,
             stage: run.progress.active,
             rounds: run.progress.all_rounds().to_vec(),
+            dir: run.dir.as_deref().and_then(folder_name),
         }
     }
 
@@ -184,6 +195,8 @@ impl WorkspaceState {
             base: None,
             collapsed: false,
             run: None,
+            role_worktrees: Vec::new(),
+            run_dirs: Vec::new(),
         }
     }
 }
@@ -214,12 +227,15 @@ impl ProjectState {
 }
 
 impl WorkspaceState {
-    pub(crate) fn restore(&self, id: u64, path: PathBuf, tabs: Vec<Tab>) -> Workspace {
+    pub(crate) fn restore(&self, id: u64, path: PathBuf, tabs: Vec<Tab>, runs: &Path) -> Workspace {
         let mut workspace = Workspace::new(id, path, self.name.clone(), self.worktree);
         workspace.base.clone_from(&self.base);
         workspace.collapsed = self.collapsed;
+        workspace.role_worktrees.clone_from(&self.role_worktrees);
         workspace.active = self.active.min(tabs.len().saturating_sub(1));
         workspace.tabs = tabs;
+        workspace.run_dirs =
+            self.run_dirs.iter().filter(|name| folder::valid(name)).map(|name| runs.join(name)).collect();
         workspace
     }
 }
@@ -245,6 +261,8 @@ impl WorkspaceState {
             active: workspace.active,
             collapsed: workspace.collapsed,
             run: run.map(|run| RunState::of(run, workspace)),
+            role_worktrees: workspace.role_worktrees.clone(),
+            run_dirs: workspace.run_dirs.iter().filter_map(|dir| folder_name(dir)).collect(),
         }
     }
 }

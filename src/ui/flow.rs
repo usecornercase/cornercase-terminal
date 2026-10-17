@@ -15,8 +15,11 @@ use crate::project::group::GROUP_STYLES;
 use crate::text;
 use crate::ui::theme::WAITING_COLOR;
 
+mod files;
 mod geometry;
 mod paint;
+
+pub(crate) use files::{FileRow, Files};
 
 use geometry::{Geometry, Place, layout};
 
@@ -25,6 +28,8 @@ const RED: u8 = 9;
 const HEADER: u16 = 3;
 const MORE_ABOVE: &str = " ↑ more ";
 const MORE_BELOW: &str = " ↓ more ";
+const OWN_LONG: &str = " own worktree ";
+const OWN_SHORT: &str = " own ";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum State {
@@ -38,6 +43,7 @@ pub(crate) struct Node {
     pub(crate) text: String,
     pub(crate) colour: Color,
     pub(crate) state: Option<State>,
+    pub(crate) own: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,6 +100,7 @@ pub(crate) enum Hit {
     Close,
     Role(String),
     Edge(Edge, Option<String>),
+    File(usize),
 }
 
 pub(crate) fn role_colour(index: usize) -> Color {
@@ -104,7 +111,13 @@ pub(crate) fn role_colour(index: usize) -> Color {
 
 impl Diagram {
     pub(crate) fn plan(flow: &Flow, muted: Color, light: bool) -> Self {
-        let node = |role: &Role, colour| Node { role: role.name.clone(), text: role.summary(), colour, state: None };
+        let node = |role: &Role, colour| Node {
+            role: role.name.clone(),
+            text: role.summary(),
+            colour,
+            state: None,
+            own: role.own_worktree(),
+        };
         let colour = |name: &str| flow.roles.iter().position(|r| r.name == name).map(|i| role_colour(i + 1));
         let stages = flow
             .stages
@@ -113,11 +126,11 @@ impl Diagram {
             .map(|(n, stage)| {
                 if stage.roles.is_empty() {
                     let role = format!("stage {}", n + 1);
-                    return vec![Node { role, text: "no roles".into(), colour: muted, state: None }];
+                    return vec![Node { role, text: "no roles".into(), colour: muted, state: None, own: false }];
                 }
                 let found = |name: &String| match (flow.role(name), colour(name)) {
                     (Some(role), Some(colour)) => node(role, colour),
-                    _ => Node { role: name.clone(), text: "not a role".into(), colour: muted, state: None },
+                    _ => Node { role: name.clone(), text: "not a role".into(), colour: muted, state: None, own: false },
                 };
                 stage.roles.iter().map(found).collect()
             })
@@ -269,15 +282,18 @@ pub(crate) fn scroll_to(diagram: &Diagram, area: Rect, stage: usize, scroll: u16
 pub(crate) fn draw_scrolled(buf: &mut Buffer, area: Rect, diagram: &Diagram, scroll: u16, hover: Option<Position>) {
     let scroll = scroll.min(max_scroll(diagram, area));
     draw_diagram(buf, area, diagram, scroll, hover);
-    let below = diagram_height(diagram, area.width).saturating_sub(scroll) > area.height;
+    markers(buf, area, diagram.muted, scroll, diagram_height(diagram, area.width));
+}
+
+fn markers(buf: &mut Buffer, area: Rect, muted: Color, scroll: u16, total: u16) {
     let more = |buf: &mut Buffer, y: u16, text: &str| {
         let x = area.right().saturating_sub(u16::try_from(text::cells(text)).unwrap_or(0));
-        put(buf, x, y, text, dim(diagram.muted), area.right());
+        put(buf, x, y, text, dim(muted), area.right());
     };
     if scroll > 0 && area.height > 0 {
         more(buf, area.y, MORE_ABOVE);
     }
-    if below && area.height > 0 {
+    if total.saturating_sub(scroll) > area.height && area.height > 0 {
         more(buf, area.bottom() - 1, MORE_BELOW);
     }
 }
@@ -297,7 +313,12 @@ pub(crate) struct View {
     pub(crate) name: String,
     pub(crate) task: String,
     pub(crate) diagram: Diagram,
+    pub(crate) files: Option<Files>,
     pub(crate) scroll: u16,
+}
+
+fn content_height(view: &View, width: u16) -> u16 {
+    diagram_height(&view.diagram, width).saturating_add(files::height(view.files.as_ref()))
 }
 
 pub(crate) fn body(area: Rect) -> Rect {
@@ -307,7 +328,7 @@ pub(crate) fn body(area: Rect) -> Rect {
 
 pub(crate) fn scrolled(area: Rect, view: &View, delta: isize) -> u16 {
     let body = body(area);
-    let most = diagram_height(&view.diagram, body.width).saturating_sub(body.height);
+    let most = content_height(view, body.width).saturating_sub(body.height);
     let scroll = isize::try_from(view.scroll).unwrap_or(0).saturating_add(delta).max(0);
     u16::try_from(scroll).unwrap_or(u16::MAX).min(most)
 }
@@ -317,7 +338,17 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
         return Some(Hit::Close);
     }
     let body = body(area);
-    body.contains(pos).then(|| diagram_hit(body, &view.diagram, view.scroll, pos)).flatten()
+    if !body.contains(pos) {
+        return None;
+    }
+    let scroll = scrolled(area, view, 0);
+    let top = diagram_height(&view.diagram, body.width);
+    if let Some(files) = &view.files
+        && let Some(hit) = files::hit(body, files, top, scroll, pos)
+    {
+        return Some(hit);
+    }
+    diagram_hit(body, &view.diagram, scroll, pos)
 }
 
 pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
@@ -330,7 +361,13 @@ pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Positio
     put(buf, row.x, row.y + 1, &task, dim(view.diagram.muted), row.right().min(area.right()));
     let body = body(area);
     let scroll = scrolled(area, view, 0);
-    draw_scrolled(buf, body, &view.diagram, scroll, hover.filter(|p| body.contains(*p)));
+    let hover = hover.filter(|p| body.contains(*p));
+    draw_diagram(buf, body, &view.diagram, scroll, hover);
+    let top = diagram_height(&view.diagram, body.width);
+    if let Some(files) = &view.files {
+        files::draw(buf, body, files, (top, scroll), view.diagram.muted, view.diagram.light, hover);
+    }
+    markers(buf, body, view.diagram.muted, scroll, content_height(view, body.width));
 }
 
 #[cfg(test)]

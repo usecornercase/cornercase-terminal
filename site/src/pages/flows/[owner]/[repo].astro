@@ -51,7 +51,7 @@ const stages = flow.stages.map((stage) => {
   <h2 id="roles">The team</h2>
   <table>
     <thead>
-      <tr><th>Role</th><th>Agent</th><th>Model</th><th>Effort</th><th>Edits</th></tr>
+      <tr><th>Role</th><th>Agent</th><th>Model</th><th>Effort</th><th>Edits</th><th>Worktree</th></tr>
     </thead>
     <tbody>
       {everyone.map((role) => (
@@ -61,6 +61,7 @@ const stages = flow.stages.map((stage) => {
           <td>{role.model ?? 'default'}</td>
           <td>{role.effort ?? 'default'}</td>
           <td>{role.edits ? 'yes' : 'no'}</td>
+          <td>{role.worktree === 'own' ? 'its own' : 'shared'}</td>
         </tr>
       ))}
     </tbody>

@@ -15,6 +15,7 @@ export const PROJECT = 'usecornercase/cornercase-terminal';
 export const REPO = /^[\w.-]+\/[\w.-]+$/;
 export const TOPIC = 'cornercase-flow';
 export const FILES = ['flow.toml', 'cornercase-flow.toml'];
+export const VERSION = 2;
 export const AGENTS = ['claude', 'codex', 'gemini', 'opencode', 'grok', 'cursor'];
 
 export interface RegistryRole {
@@ -23,6 +24,7 @@ export interface RegistryRole {
   model?: string;
   effort?: string;
   edits: boolean;
+  worktree: 'shared' | 'own';
   prompt: string;
 }
 
@@ -69,6 +71,7 @@ function role(value: unknown, fallback: string): RegistryRole {
     model: typeof r.model === 'string' ? r.model : undefined,
     effort: typeof r.effort === 'string' ? r.effort : undefined,
     edits: r.edits === true,
+    worktree: r.worktree === 'own' ? 'own' : 'shared',
     prompt: typeof r.prompt === 'string' ? r.prompt : '',
   };
 }
@@ -89,7 +92,7 @@ export function problems(text: string): string[] {
   const lead = (data.orchestrator ?? {}) as Record<string, unknown>;
   if (typeof data.name !== 'string' || !data.name.trim() || data.name.length > MAX_NAME) out.push('no name, or one that is too long');
   if (!short(data.description, MAX_DESCRIPTION)) out.push('the description is too long or not text');
-  if (typeof data.version === 'number' && data.version > 1) out.push('made by a newer cornercase');
+  if (typeof data.version === 'number' && data.version > VERSION) out.push('made by a newer cornercase');
   if (data.end !== undefined && data.end !== 'pull_request' && data.end !== 'commits') out.push('unknown end');
   if (typeof data.name === 'string' && control(data.name)) out.push('name has a control character');
   if (roles.length === 0 || roles.length > MAX_ROLES) out.push(`needs 1 to ${MAX_ROLES} roles besides the orchestrator`);
@@ -103,11 +106,15 @@ export function problems(text: string): string[] {
     }
     if (!short(r.name, MAX_WORD) || !short(r.model, MAX_WORD) || !short(r.effort, MAX_WORD)) out.push(`${who} has a name, model or effort that is too long or not text`);
     if (r.edits !== undefined && typeof r.edits !== 'boolean') out.push(`${who} has edits that is not true or false`);
+    if (r.worktree !== undefined && r.worktree !== 'shared' && r.worktree !== 'own') out.push(`${who} has a worktree that is not shared or own`);
+    if (r.worktree === 'own' && who === 'orchestrator') out.push('the orchestrator cannot have a worktree of its own');
     if (who !== 'orchestrator') {
       if (!who.trim() || who === 'orchestrator' || names.has(who)) out.push(`bad or repeated role name ${JSON.stringify(who)}`);
       names.add(who);
     }
   }
+  if (roles.some((r) => r.worktree === 'own') && !(typeof data.version === 'number' && data.version >= 2)) out.push('a role has a worktree of its own, which needs version = 2');
+  const byName = new Map(roles.map((r) => [String(r.name ?? ''), r] as const));
   const staged = new Set<string>();
   stages.forEach((s, i) => {
     const list = (Array.isArray(s.roles) ? s.roles : []) as unknown[];
@@ -116,6 +123,8 @@ export function problems(text: string): string[] {
       return;
     }
     if (list.length === 0) out.push(`stage ${i + 1} has no roles`);
+    const sharing = (list as string[]).filter((n) => byName.get(n)?.edits === true && byName.get(n)?.worktree !== 'own');
+    if (sharing.length > 1) out.push(`stage ${i + 1} runs ${sharing.join(' and ')} side by side, and they both edit the shared worktree`);
     for (const name of list as string[]) {
       if (!names.has(name)) out.push(`stage ${i + 1} names ${JSON.stringify(name)}, which is not a role`);
       else if (staged.has(name)) out.push(`${name} is in two stages`);

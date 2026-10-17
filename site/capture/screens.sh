@@ -773,6 +773,7 @@ screen_flow_run() {
   cc_wheel 'feat/dark-mode' down 3
   cc_hover 'Workspaces'
   cc_wait '├ ○ tester'
+  cc_wait 'coder-2.md' 30
   i=0
   while cc_text | grep -qF 'finished in'; do
     i=$((i + 1))

@@ -97,7 +97,8 @@ pub(crate) fn summary(flow: &Flow) -> String {
     let mut out = format!("{}\n", visible(flow.name.trim()));
     for role in std::iter::once(&flow.orchestrator).chain(&flow.roles) {
         let name = if role.name == ORCHESTRATOR { ORCHESTRATOR } else { role.name.trim() };
-        let _ = writeln!(out, "  {}: {}", visible(name), visible(&role.summary()));
+        let apart = if role.own_worktree() { " · own worktree" } else { "" };
+        let _ = writeln!(out, "  {}: {}{apart}", visible(name), visible(&role.summary()));
     }
     out
 }

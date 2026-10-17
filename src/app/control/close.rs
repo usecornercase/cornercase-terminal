@@ -27,6 +27,9 @@ impl App {
                     if !self.projects[p].workspaces[w].worktree {
                         return Err(format!("workspace {id} is not a git worktree").into());
                     }
+                    if let Some(refusal) = self.role_owner(p, w) {
+                        return Err(refusal.into());
+                    }
                     let key = self.requests.key();
                     self.spawn_check(p, w, Some(key));
                     let pending = Pending {
@@ -86,10 +89,16 @@ impl App {
             .map(|(p, w)| self.projects[p].workspaces[w].path.display().to_string())
             .unwrap_or_default();
         let reason = if lock.reason.is_empty() { String::new() } else { format!(" ({})", lock.reason) };
-        format!(
-            "workspace {workspace} is locked{reason}; unlock it with `git worktree unlock {}` to remove it",
-            shell_quote(&path)
-        )
+        match &lock.role {
+            Some((name, role)) => format!(
+                "the worktree of `{name}` in workspace {workspace} is locked{reason}; unlock it with `git worktree unlock {}` to remove the workspace",
+                shell_quote(&role.display().to_string())
+            ),
+            None => format!(
+                "workspace {workspace} is locked{reason}; unlock it with `git worktree unlock {}` to remove it",
+                shell_quote(&path)
+            ),
+        }
     }
 
     pub(in crate::app) fn worktree_gone(

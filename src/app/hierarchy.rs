@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use super::App;
 use super::menus::Target;
 use super::overlay::Overlay;
@@ -111,10 +113,15 @@ impl App {
         let Some(p) = self.projects.project_index(id) else { return };
         self.forget_project_changes(p);
         let project = &mut self.projects[p];
+        let dirs: Vec<(u64, Vec<PathBuf>)> =
+            project.workspaces.iter_mut().map(|w| (w.id, std::mem::take(&mut w.run_dirs))).collect();
         project.closing = true;
         project.kill();
         if !project.has_terms() {
             self.remove_project(p);
+        }
+        for (workspace, dirs) in dirs {
+            self.defer_run_dirs(workspace, dirs);
         }
     }
 
@@ -276,10 +283,13 @@ impl App {
         let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return };
         self.changes.forget(workspace);
         let workspace = &mut self.projects[p].workspaces[w];
+        let dirs = std::mem::take(&mut workspace.run_dirs);
+        let id = workspace.id;
         workspace.phase = Phase::Closing;
         workspace.kill();
         if workspace.tabs.is_empty() {
             self.projects[p].remove_workspace(w);
         }
+        self.defer_run_dirs(id, dirs);
     }
 }

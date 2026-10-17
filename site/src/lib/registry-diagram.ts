@@ -12,7 +12,7 @@ export function diagramSvg(flow: RegistryFlow, label: string): string {
   const shown: Flow = {
     name: flow.name,
     orchestrator: { name: 'orchestrator', agent: flow.orchestrator.agent, model: flow.orchestrator.model },
-    roles: flow.roles.map((r) => ({ name: r.name, agent: r.agent, model: r.model })),
+    roles: flow.roles.map((r) => ({ name: r.name, agent: r.agent, model: r.model, own: r.worktree === 'own' })),
     stages: flow.stages,
     end: flow.end === 'commits' ? 'leave the commits' : 'open a pull request',
   };

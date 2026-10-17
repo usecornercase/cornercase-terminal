@@ -1,8 +1,10 @@
 use std::time::Instant;
 
+use rstest::rstest;
+
 use super::run::{Kind, MAX_MESSAGES, Member, Message, Run};
 use super::store::{self, Origin};
-use super::{Back, End, Flow, ORCHESTRATOR, Role, Stage, branch, builtin, command, resume};
+use super::{Back, End, Flow, ORCHESTRATOR, Role, Stage, Worktree, branch, builtin, command, resume, role_branch};
 use crate::agents::Known;
 use crate::config::Config;
 use crate::test_util::TempDir;
@@ -101,8 +103,56 @@ mod builtins {
         assert_eq!(
             flow.problems(),
             ["opencode runs `orchestrator`, `coder` and `reviewer`, but cornercase reads opencode's status from its \
-                 folder and cannot tell two apart in one worktree: give all but one of them another agent"]
+                 folder and cannot tell two apart in one worktree: give all but one of them another agent, or a worktree of its own"]
         );
+    }
+
+    fn arena(installed: &[Known], default: Known) -> Flow {
+        builtin::flows(installed, Some(default)).pop().expect("flows")
+    }
+
+    #[test]
+    fn arena_is_the_last_built_in_and_every_set_of_agents_runs_it() {
+        for installed in every_set().into_iter().filter(|installed| !installed.is_empty()) {
+            let flow = arena(&installed, installed[0]);
+            assert_eq!(flow.name, "Arena");
+            let possible = installed.iter().any(|kind| !kind.status_by_folder()) || installed.len() >= 3;
+            assert!(!possible || flow.problems().is_empty(), "{installed:?}: {:?}", flow.problems());
+        }
+    }
+
+    #[test]
+    fn arena_gives_each_competing_coder_an_agent_and_a_worktree_of_its_own() {
+        let flow = arena(&Known::ALL, Known::Claude);
+        let coders: Vec<(&str, &str, bool)> = flow
+            .roles
+            .iter()
+            .filter(|r| r.own_worktree())
+            .map(|r| (r.name.as_str(), r.agent.as_str(), r.edits))
+            .collect();
+        assert_eq!(coders, [("coder A", "claude", true), ("coder B", "codex", true), ("coder C", "gemini", true)]);
+        assert_eq!(flow.stages[0].roles, ["coder A", "coder B", "coder C"]);
+        assert!(flow.roles.iter().filter(|r| !r.own_worktree()).all(|r| r.worktree == Worktree::Shared));
+
+        let two = arena(&[Known::Claude, Known::Codex], Known::Claude);
+        assert_eq!(two.stages[0].roles, ["coder A", "coder B"]);
+        let one = arena(&[Known::Claude], Known::Claude);
+        assert_eq!(one.stages[0].roles, ["coder A", "coder B"]);
+        assert!(one.roles.iter().take(2).all(|role| role.agent == "claude"));
+    }
+
+    #[test]
+    fn opencode_takes_several_roles_when_they_work_apart() {
+        let flow = arena(&[Known::Opencode, Known::Claude], Known::Opencode);
+        let own: Vec<&str> = flow.roles.iter().filter(|r| r.own_worktree()).map(|r| r.agent.as_str()).collect();
+        assert_eq!(own, ["opencode", "claude"]);
+        let shared: Vec<&str> = std::iter::once(&flow.orchestrator)
+            .chain(&flow.roles)
+            .filter(|r| !r.own_worktree())
+            .map(|r| r.agent.as_str())
+            .collect();
+        assert_eq!(shared.iter().filter(|agent| **agent == "opencode").count(), 1, "{shared:?}");
+        assert!(flow.problems().is_empty(), "{:?}", flow.problems());
     }
 
     #[test]
@@ -194,8 +244,127 @@ mod problems {
     }
 }
 
+mod worktrees {
+    use super::*;
+
+    fn pair() -> Flow {
+        let mut flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(2);
+        flow.roles = vec![
+            Role { name: "a".into(), agent: "claude".into(), edits: true, ..Role::default() },
+            Role { name: "b".into(), agent: "codex".into(), edits: true, ..Role::default() },
+        ];
+        flow.stages = vec![Stage { roles: vec!["a".into(), "b".into()], back: None }];
+        flow
+    }
+
+    #[test]
+    fn two_roles_that_edit_one_worktree_side_by_side_are_a_problem() {
+        let flow = pair();
+        assert_eq!(
+            flow.problems(),
+            ["stage 1 runs `a` and `b` side by side, and they both edit the shared worktree: give all but one of \
+              them a worktree of its own, or put them in stages of their own"]
+        );
+    }
+
+    #[rstest::rstest]
+    #[case::one_apart(true, false, true, false)]
+    #[case::both_apart(true, true, true, true)]
+    #[case::one_reads(false, false, true, false)]
+    fn the_problem_only_applies_to_roles_that_share_and_edit(
+        #[case] first_own: bool,
+        #[case] second_own: bool,
+        #[case] first_edits: bool,
+        #[case] second_edits: bool,
+    ) {
+        let mut flow = pair();
+        flow.roles[0].worktree = if first_own { Worktree::Own } else { Worktree::Shared };
+        flow.roles[1].worktree = if second_own { Worktree::Own } else { Worktree::Shared };
+        flow.roles[0].edits = first_edits;
+        flow.roles[1].edits = second_edits;
+        assert_eq!(flow.problems(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn the_orchestrator_works_in_the_runs_worktree() {
+        let mut flow = pair();
+        flow.roles[0].worktree = Worktree::Own;
+        flow.orchestrator.worktree = Worktree::Own;
+        assert_eq!(
+            flow.problems(),
+            ["the orchestrator works in the run's worktree: only a role can have a worktree of its own"]
+        );
+    }
+
+    #[test]
+    fn two_roles_whose_names_make_one_branch_are_a_problem() {
+        let mut flow = pair();
+        flow.roles[0].name = "Coder A".into();
+        flow.roles[1].name = "coder a".into();
+        flow.stages[0].roles = vec!["Coder A".into(), "coder a".into()];
+        flow.roles.iter_mut().for_each(|role| role.worktree = Worktree::Own);
+        assert_eq!(flow.problems(), ["`Coder A` and `coder a` would work on the same branch: rename one"]);
+    }
+
+    #[test]
+    fn opencode_takes_several_roles_that_work_apart_but_not_in_one_worktree() {
+        let mut flow = pair();
+        flow.orchestrator.agent = "claude".into();
+        flow.roles.iter_mut().for_each(|role| "opencode".clone_into(&mut role.agent));
+        flow.roles[0].worktree = Worktree::Own;
+        assert_eq!(flow.problems(), Vec::<String>::new());
+        flow.roles[1].worktree = Worktree::Shared;
+        flow.stages =
+            vec![Stage { roles: vec!["a".into()], back: None }, Stage { roles: vec!["b".into()], back: None }];
+        flow.orchestrator.agent = "opencode".into();
+        assert_eq!(flow.problems().len(), 1, "{:?}", flow.problems());
+    }
+
+    #[test]
+    fn a_role_branch_is_the_runs_branch_and_the_roles_slug() {
+        assert_eq!(role_branch("fix-login", "coder A"), "fix-login--coder-a");
+        assert_eq!(role_branch("fix", "***"), "fix--role");
+        assert_eq!(role_branch("", "coder A"), "--coder-a");
+    }
+}
+
 mod files {
     use super::*;
+
+    fn own() -> Flow {
+        let mut flow = builtin::flows(&Known::ALL, Some(Known::Claude)).pop().expect("arena");
+        assert_eq!(flow.name, "Arena");
+        flow.version = super::super::VERSION;
+        flow
+    }
+
+    #[test]
+    fn a_file_says_version_two_only_when_a_role_has_a_worktree_of_its_own() {
+        let text = store::to_text(&own()).expect("serialize");
+        assert!(text.starts_with("version = 2\n"), "{text}");
+        assert_eq!(text.matches("worktree = \"own\"").count(), 3, "{text}");
+        assert_eq!(store::parse(&text).expect("parse"), own());
+        let plain = store::to_text(&sample()).expect("serialize");
+        assert!(plain.starts_with("version = 1\n"), "{plain}");
+        assert!(!plain.contains("worktree = "), "{plain}");
+        assert_eq!(store::parse(&plain).expect("parse"), sample());
+    }
+
+    #[test]
+    fn an_own_worktree_without_version_two_is_refused_with_its_reason() {
+        let text = store::to_text(&own()).expect("serialize").replacen("version = 2", "version = 1", 1);
+        let refused = store::parse(&text).expect_err("refused");
+        assert!(refused.contains("`coder A`") && refused.contains("version = 2"), "{refused}");
+        let text = store::to_text(&own()).expect("serialize").replacen("version = 2\n", "", 1);
+        assert!(store::parse(&text).is_err());
+    }
+
+    #[test]
+    fn an_unknown_worktree_value_is_refused_with_its_line() {
+        let text = store::to_text(&own()).expect("serialize").replacen("worktree = \"own\"", "worktree = \"mine\"", 1);
+        let refused = store::parse(&text).expect_err("refused");
+        assert!(refused.starts_with("line "), "{refused}");
+    }
 
     #[test]
     fn a_flow_survives_a_round_trip_through_toml() {
@@ -283,6 +452,7 @@ roles = ["coder"]
         assert_eq!(
             listed,
             [
+                ("Arena", "built in"),
                 ("Bug, test first", "built in"),
                 ("Cross review", "built in"),
                 ("Full issue", "yours"),
@@ -292,9 +462,9 @@ roles = ["coder"]
             ]
         );
         let conflicts: Vec<Option<String>> = listing.flows.iter().map(|saved| listing.conflict(saved)).collect();
-        assert_eq!(conflicts[3].as_deref(), Some("yours is also named `Full issue` and runs instead"));
-        assert_eq!(conflicts[5].as_deref(), Some("the built-in one is also named `Quick` and runs instead"));
-        assert!(store::edits_builtin(&listing.builtins, &listing.flows[2]));
+        assert_eq!(conflicts[4].as_deref(), Some("yours is also named `Full issue` and runs instead"));
+        assert_eq!(conflicts[6].as_deref(), Some("the built-in one is also named `Quick` and runs instead"));
+        assert!(store::edits_builtin(&listing.builtins, &listing.flows[3]));
         assert_eq!(listing.broken[0].0, dir.join("broken.toml"));
     }
 
@@ -322,7 +492,7 @@ mod commands {
             ..Role::default()
         };
         assert_eq!(
-            command(&config, &role).as_deref(),
+            command(&config, &role, None).as_deref(),
             Some(
                 "env CLAUDE_CODE_USE_BEDROCK=1 claude --dangerously-skip-permissions --verbose --model opus --add-dir \
                  ../docs"
@@ -336,7 +506,7 @@ mod commands {
         config.agent_args.insert("codex".into(), vec!["--model".into(), "o3".into(), "--search".into()]);
         let role = Role { agent: "codex".into(), model: Some("gpt-5.5".into()), ..Role::default() };
         assert_eq!(
-            command(&config, &role).as_deref(),
+            command(&config, &role, None).as_deref(),
             Some("codex --dangerously-bypass-approvals-and-sandbox --search --model gpt-5.5")
         );
     }
@@ -358,7 +528,7 @@ mod commands {
             args: args.iter().map(|a| (*a).to_string()).collect(),
             ..Role::default()
         };
-        let line = command(&config, &role).expect("a known agent");
+        let line = command(&config, &role, None).expect("a known agent");
         assert_eq!(line, format!("codex --dangerously-bypass-approvals-and-sandbox {expected}"));
     }
 
@@ -379,9 +549,9 @@ mod commands {
             args: args.iter().map(|a| (*a).to_string()).collect(),
             ..Role::default()
         };
-        let line = command(&config, &role).expect("a known agent");
+        let line = command(&config, &role, None).expect("a known agent");
         assert_eq!(line, format!("claude --dangerously-skip-permissions {expected}"));
-        let resumed = resume(&config, &role, "c1".into()).expect("claude resumes");
+        let resumed = resume(&config, &role, "c1".into(), None).expect("claude resumes");
         assert_eq!(resumed, format!("claude --dangerously-skip-permissions {expected} --resume c1"));
     }
 
@@ -394,10 +564,45 @@ mod commands {
             ..Role::default()
         };
         assert_eq!(
-            resume(&Config::default(), &role, "c1".into()).as_deref(),
+            resume(&Config::default(), &role, "c1".into(), None).as_deref(),
             Some("env CLAUDE_CODE_USE_BEDROCK=1 claude --dangerously-skip-permissions --model opus --resume c1")
         );
-        assert_eq!(resume(&Config::default(), &Role { agent: "opencode".into(), ..Role::default() }, "c".into()), None);
+        assert_eq!(
+            resume(&Config::default(), &Role { agent: "opencode".into(), ..Role::default() }, "c".into(), None),
+            None
+        );
+    }
+
+    #[rstest]
+    #[case::claude(
+        "claude",
+        "claude --dangerously-skip-permissions --add-dir /r/d",
+        "claude --dangerously-skip-permissions --add-dir /r/d --resume c1"
+    )]
+    #[case::codex(
+        "codex",
+        "codex --dangerously-bypass-approvals-and-sandbox --add-dir /r/d",
+        "codex resume --dangerously-bypass-approvals-and-sandbox --add-dir /r/d c1"
+    )]
+    #[case::cursor(
+        "cursor",
+        "cursor-agent --force --trust --add-dir /r/d",
+        "cursor-agent --force --trust --add-dir /r/d --resume c1"
+    )]
+    #[case::gemini("gemini", "gemini --yolo --skip-trust", "gemini --yolo --skip-trust --resume c1")]
+    #[case::grok("grok", "grok --always-approve", "grok --always-approve --resume c1")]
+    fn the_run_folder_is_the_last_argument(#[case] agent: &str, #[case] start: &str, #[case] resumed: &str) {
+        let role = Role { agent: agent.into(), ..Role::default() };
+        let dir = Some(std::path::Path::new("/r/d"));
+        assert_eq!(command(&Config::default(), &role, dir).as_deref(), Some(start));
+        assert_eq!(resume(&Config::default(), &role, "c1".into(), dir).as_deref(), Some(resumed));
+    }
+
+    #[test]
+    fn opencode_gets_no_folder_flag() {
+        let role = Role { agent: "opencode".into(), ..Role::default() };
+        let dir = Some(std::path::Path::new("/r/d"));
+        assert_eq!(command(&Config::default(), &role, dir), command(&Config::default(), &role, None));
     }
 
     #[test]
@@ -414,11 +619,11 @@ mod commands {
     fn every_known_agent_has_a_mode_that_never_asks() {
         for kind in Known::ALL {
             let role = Role { agent: kind.name().into(), ..Role::default() };
-            let line = command(&Config::default(), &role).expect("known agent");
+            let line = command(&Config::default(), &role, None).expect("known agent");
             assert!(line.starts_with(kind.name()), "{line}");
             assert!(line.len() > kind.name().len(), "{line}");
         }
-        assert_eq!(command(&Config::default(), &Role { agent: "vim".into(), ..Role::default() }), None);
+        assert_eq!(command(&Config::default(), &Role { agent: "vim".into(), ..Role::default() }, None), None);
     }
 }
 

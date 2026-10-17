@@ -9,8 +9,8 @@ import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
 import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, workspaceDiff } from './changes';
 import { TodoPanel, todoWidth } from './todo';
-import { type DiagramHit, type PanelView, live, plan, scrolled as flowScrolled } from './flow';
-import type { Run } from './flowrun';
+import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
+import { RUN_DIR, type Run } from './flowrun';
 import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, foundRows, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
@@ -1350,7 +1350,8 @@ export class App {
       return paneStatus(found.pane) ?? 'none';
     };
     const diagram = live(plan(run.flow), run.progress, state, this.now());
-    return { name: run.flow.name, task: run.task, diagram, scroll: this.flowScroll };
+    const files = run.files.map((f) => ({ name: f.name, age: fileAge(this.now() - f.at) })).reverse();
+    return { name: run.flow.name, task: run.task, diagram, files, scroll: this.flowScroll };
   }
 
   scrollFlow(delta: number): boolean {
@@ -1369,6 +1370,12 @@ export class App {
       if (pane === undefined || !this.findPane(pane)) return;
       if (this.areas().compact) this.flowOpen = false;
       this.jumpToPane(pane);
+    } else if (hit.file !== undefined) {
+      const name = this.flowView()?.files?.[hit.file]?.name;
+      if (!name) return;
+      this.openFiles();
+      this.nav = null;
+      this.showFile(`${RUN_DIR}/${name}`);
     } else if (hit.edge) this.overlay = { kind: 'flowMessage', workspace: run.workspace, edge: hit.edge, to: hit.to ?? null, scroll: 0 };
     this.dirty();
   }
@@ -1603,6 +1610,7 @@ export class App {
       for (const w of p.workspaces)
         for (const [path, text] of workspaceFiles(p, w, workspaceDiff(p, w, 'all')))
           files.set(absolutePath(`${w.root}/${path}`), text);
+    for (const run of this.runs) for (const f of run.files) files.set(`${RUN_DIR}/${f.name}`, f.text);
     return files;
   }
 
@@ -2636,7 +2644,7 @@ export class App {
         });
       }
       rows.push({ id: 'add', section: 'How each agent starts', label: '+ another agent…', value: '', note: '' });
-      rows.push({ id: 'flows', section: 'Flows', label: 'flows', value: '4 built in', note: 'teams of agents that work through a plan' });
+      rows.push({ id: 'flows', section: 'Flows', label: 'flows', value: '5 built in', note: 'teams of agents that work through a plan' });
       return rows;
     }
     if (page === 5) {

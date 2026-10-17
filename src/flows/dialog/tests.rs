@@ -17,7 +17,8 @@ fn user_flow() -> Flow {
 }
 
 pub(super) fn dialog() -> Dialog {
-    let builtins = builtin::flows(&[Known::Claude, Known::Codex], Some(Known::Claude));
+    let mut builtins = builtin::flows(&[Known::Claude, Known::Codex], Some(Known::Claude));
+    builtins.retain(|flow| flow.name != "Arena");
     let mut flows: Vec<Saved> = builtins.into_iter().map(|flow| Saved { flow, origin: Origin::BuiltIn }).collect();
     flows.push(Saved { flow: user_flow(), origin: Origin::User(PathBuf::from("/flows/mine.toml")) });
     let broken = vec![(PathBuf::from("/flows/bad.toml"), "expected `=`".to_string())];

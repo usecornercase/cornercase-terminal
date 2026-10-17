@@ -22,7 +22,8 @@ A script reads the repositories with the topic on an hourly schedule, most starr
 
 - has neither `flow.toml` nor `cornercase-flow.toml` at its root, is a fork, or is archived;
 - has a file over 256 KiB or one cornercase cannot read, with no roles, an unknown agent, a role that is in no stage or a loop that goes back to a stage that does not exist;
-- sets `env` or `args` in any role: a flow in the list may not.
+- sets `env` or `args` in any role: a flow in the list may not;
+- is made by a newer cornercase (`version` above 2), gives a role a `worktree` other than `shared` or `own`, gives the orchestrator a worktree of its own, has a role with `worktree = "own"` in a file that does not say `version = 2`, or runs two roles that edit the shared worktree side by side in one stage.
 
 The list shows the flow as it was at the last refresh. Importing reads the repository's current file, so what a reader imports can be newer than what the page showed; keep prompts honest, and a reader will not be surprised.
 

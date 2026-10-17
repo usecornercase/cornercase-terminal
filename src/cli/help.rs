@@ -240,8 +240,12 @@ Without --worktree, the branch comes from the task's first words, with a short s
 says nothing, is a default branch or is already taken. A chosen branch that is main, master, the
 project's default or the one its own folder is on is refused: a flow works on a branch of its own.
 
+A role set to work in a worktree of its own (worktree = own) gets one on the branch <branch>--<role>, made from the
+run's branch, with the project's setup; the other roles work in the run's worktree.
+
 It prints the workspace's id, then one line per role: its pane's id and the role's name, separated
-by a tab. A name is looked up in yours, then the built-in flows, then the project's: yours replaces
+by a tab. The run's folder for files, where every role writes its answers, is printed on stderr
+(run_dir with --json) and is in $CORNERCASE_RUN_DIR in the team's panes. A name is looked up in yours, then the built-in flows, then the project's: yours replaces
 a built-in flow of its name, and a project's flow never stands in for another of the same name; the
 command says so on stderr when it happens.
 

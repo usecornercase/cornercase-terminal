@@ -2,7 +2,7 @@ use std::os::unix::fs::PermissionsExt;
 
 use super::*;
 use crate::agents::AgentState;
-use crate::app::flow_runs::Starting;
+use crate::app::flow_runs::{Made, Starting};
 use crate::control::RunInfo;
 use crate::flows::{Back, Flow, ORCHESTRATOR, Role, Stage, store};
 use crate::paths;
@@ -24,6 +24,7 @@ while [ -d "$log" ]; do sleep 0.1; done
 const FAKE: &str = r#"#!/bin/sh
 log="LOG"
 printf 'start %s\n' "$*" >> "$log/order"
+printf 'env %s\n' "$CORNERCASE_RUN_DIR" >> "$log/order"
 printf 'Do you trust the files in this folder?\n❯ 1. Yes, proceed\n  2. No, exit\n'
 read answer
 printf '\033[2J\033[Hagent ready> '
@@ -39,7 +40,7 @@ struct Team {
     repo: TempDir,
     log: TempDir,
     config: TempDir,
-    _worktrees: TempDir,
+    worktrees: TempDir,
     _bin: TempDir,
 }
 
@@ -74,21 +75,26 @@ impl Team {
     }
 
     fn with(script: &str) -> Self {
+        Self::configured(script, |_, _| {})
+    }
+
+    fn configured(script: &str, tweak: impl FnOnce(&mut Config, &Path)) -> Self {
         let (repo, log, config, worktrees, bin) =
             (git_repo(&[("README", "hi")]), TempDir::new(), TempDir::new(), TempDir::new(), TempDir::new());
         let fake = bin.path().join("claude");
         write_executable(&fake, &script.replace("LOG", &log.path().display().to_string()));
-        let settings = Config {
+        let mut settings = Config {
             worktrees_dir: worktrees.path().display().to_string(),
             agent_commands: [("claude".to_string(), fake.display().to_string())].into(),
             ..Config::default()
         };
+        tweak(&mut settings, repo.path());
         let config_path = write_config(config.path(), &settings);
         let flows = paths::flows(&config_path);
         std::fs::create_dir_all(&flows).expect("the flows folder");
         store::save(&flows, &pair(), None).expect("save the flow");
         let (app, rx) = app_in(repo.path(), config_path);
-        Self { app, rx, repo, log, config, _worktrees: worktrees, _bin: bin }
+        Self { app, rx, repo, log, config, worktrees, _bin: bin }
     }
 
     fn run(&mut self, name: &str, branch: Option<&str>) -> Response {
@@ -190,9 +196,14 @@ fn every_agent_starts_without_asking_its_trust_is_answered_and_the_orchestrator_
 
     let order = team.until_got(3);
 
-    assert!(order.contains(&"start --dangerously-skip-permissions --model opus".to_string()), "{order:#?}");
-    assert!(order.contains(&"start --dangerously-skip-permissions".to_string()), "{order:#?}");
-    assert!(order.contains(&"start --dangerously-skip-permissions --model sonnet".to_string()), "{order:#?}");
+    let dir = run.run_dir.as_ref().expect("the run's folder").display();
+    for line in [
+        format!("start --dangerously-skip-permissions --model opus --add-dir {dir}"),
+        format!("start --dangerously-skip-permissions --add-dir {dir}"),
+        format!("start --dangerously-skip-permissions --model sonnet --add-dir {dir}"),
+    ] {
+        assert!(order.contains(&line), "{line} is missing from {order:#?}");
+    }
     let briefed = position(&order, "start --dangerously-skip-permissions --model opus");
     assert!(position(&order, "got Write it.") < briefed, "{order:#?}");
     assert!(position(&order, "got Review it.") < briefed, "{order:#?}");
@@ -211,7 +222,10 @@ fn every_agent_starts_without_asking_its_trust_is_answered_and_the_orchestrator_
         assert!(brief.contains(part), "`{part}` is missing from {brief}");
     }
     assert!(order.iter().any(|l| l.starts_with("got Write it.") && l.contains("you may edit files")), "{order:#?}");
-    assert!(order.iter().any(|l| l.starts_with("got Review it.") && l.contains("do not edit files")), "{order:#?}");
+    assert!(
+        order.iter().any(|l| l.starts_with("got Review it.") && l.contains("do not edit the worktree's files")),
+        "{order:#?}"
+    );
 }
 
 #[test]
@@ -528,7 +542,14 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         team.app.projects[0].workspaces[0].phase = phase;
     }
     team.app.projects[0].closing = closing;
-    let starting = Starting { flow: pair(), task: "Fix it".into(), branch: "main".into(), focus: false, note: None };
+    let starting = Starting {
+        flow: pair(),
+        task: "Fix it".into(),
+        branch: "main".into(),
+        focus: false,
+        note: None,
+        trees: Vec::new(),
+    };
 
     let refused = team.app.open_run(0, 0, starting, AREA, false).expect_err("refused");
 
@@ -546,7 +567,7 @@ fn a_run_whose_shells_cannot_start_leaves_no_tab_and_no_workspace_behind() {
         made = team.rx.try_iter().find(|event| matches!(event, AppEvent::Worktree(_)));
         made.is_some()
     });
-    let Some(AppEvent::Worktree(WorktreeEvent::Created { result: Ok(path), .. })) = &made else {
+    let Some(AppEvent::Worktree(WorktreeEvent::Run { result: Ok(Made { run: Some(path), .. }), .. })) = &made else {
         panic!("not a new worktree: {made:?}")
     };
     let path = path.canonicalize().expect("the worktree");
@@ -559,6 +580,8 @@ fn a_run_whose_shells_cannot_start_leaves_no_tab_and_no_workspace_behind() {
     let refused = error(answers(&mut team.app).remove(0));
     assert!(refused.starts_with("failed to spawn shell"), "{refused}");
     assert!(team.app.runs.is_empty());
+    let root = runs_root(&team);
+    assert_eq!(std::fs::read_dir(&root).map_or(0, Iterator::count), 0, "the run's empty folder is removed");
     assert!(team.app.projects[0].workspaces.iter().all(|w| w.path != path), "the new workspace stayed");
     assert_eq!(team.app.projects[0].workspaces[0].tabs.len(), 1);
 }
@@ -608,10 +631,154 @@ fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_tol
         std::fs::read_to_string(&log).unwrap_or_default().lines().any(|l| l.starts_with("got cornercase restarted"))
     });
     let order = team.order();
-    assert!(order.contains(&"start --dangerously-skip-permissions --resume c1".to_string()), "{order:#?}");
-    assert!(order.contains(&"start --dangerously-skip-permissions --model sonnet --resume c2".to_string()));
-    assert!(order.contains(&"start --dangerously-skip-permissions --model opus --resume c0".to_string()));
+    let dir = again.runs[0].dir.as_ref().expect("the run's folder").display().to_string();
+    for line in [
+        format!("start --dangerously-skip-permissions --add-dir {dir} --resume c1"),
+        format!("start --dangerously-skip-permissions --model sonnet --add-dir {dir} --resume c2"),
+        format!("start --dangerously-skip-permissions --model opus --add-dir {dir} --resume c0"),
+    ] {
+        assert!(order.contains(&line), "{line} is missing from {order:#?}");
+    }
+    assert!(order.contains(&format!("env {dir}")), "{order:#?}");
+    assert!(told_with_folder(&order, &dir), "{order:#?}");
     let told = &order[position(&order, "got cornercase restarted")];
     let coder = again.runs[0].pane_of("coder").expect("the coder");
     assert!(told.contains(&format!("coder is pane {coder}")), "{told}");
+}
+
+mod own_worktrees;
+
+fn told_with_folder(order: &[String], dir: &str) -> bool {
+    order
+        .iter()
+        .any(|l| l.starts_with("got cornercase restarted") && l.contains(&format!("The run's folder is still {dir}.")))
+}
+
+fn mode(path: &Path) -> u32 {
+    std::fs::metadata(path).expect("metadata").permissions().mode() & 0o777
+}
+
+fn runs_root(team: &Team) -> PathBuf {
+    team.config.path().join("runs")
+}
+
+#[test]
+fn every_pane_of_a_run_has_its_private_folder_outside_the_worktree() {
+    let mut team = Team::new();
+    let run = team.started();
+    let order = team.until_got(3);
+    let dir = run.run_dir.clone().expect("the run's folder");
+
+    assert_eq!(dir.parent(), Some(runs_root(&team).as_path()));
+    assert_eq!(mode(&dir), 0o700);
+    let (p, w) = team.app.projects.workspace_index(run.workspace).expect("the workspace");
+    let workspace = &team.app.projects[p].workspaces[w];
+    assert!(!dir.starts_with(&workspace.path));
+    assert_eq!(workspace.run_dirs, std::slice::from_ref(&dir));
+    assert_eq!(team.app.runs[0].dir.as_deref(), Some(dir.as_path()));
+    assert_eq!(order.iter().filter(|l| **l == format!("env {}", dir.display())).count(), 3, "{order:#?}");
+    std::fs::write(dir.join("coder-1.md"), "done").expect("write into the folder");
+    let status = std::process::Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(&workspace.path)
+        .output()
+        .expect("git status");
+    assert_eq!(String::from_utf8_lossy(&status.stdout).trim(), "", "the folder is no part of the worktree");
+}
+
+#[test]
+fn the_status_names_the_run_folder_before_and_after_the_run_ends() {
+    let mut team = Team::new();
+    let run = team.started();
+    let dir = run.run_dir.clone().expect("the run's folder");
+    let folder_of = |team: &mut Team| {
+        let report = value(&mut team.app, None, Command::Status(wire::Status {}));
+        let projects = report["projects"].as_array().expect("projects").clone();
+        let workspaces = projects.iter().flat_map(|p| p["workspaces"].as_array().cloned().unwrap_or_default());
+        let mut workspaces = workspaces;
+        workspaces.find(|w| w["id"] == run.workspace).map(|w| w["run_dir"].clone()).expect("the workspace")
+    };
+
+    assert_eq!(folder_of(&mut team), serde_json::json!(dir));
+    team.app.runs.clear();
+    assert_eq!(folder_of(&mut team), serde_json::json!(dir));
+}
+
+#[test]
+fn the_folder_survives_the_end_of_the_run_and_goes_with_a_removed_worktree() {
+    let mut team = Team::new();
+    let run = team.started();
+    let dir = run.run_dir.clone().expect("the run's folder");
+    std::fs::write(dir.join("coder-1.md"), "kept").expect("a file");
+
+    team.app.runs.clear();
+    team.app.forget_runs();
+    assert!(dir.join("coder-1.md").exists(), "an ended run keeps its files");
+
+    ask(&mut team.app, None, force_remove(run.workspace));
+    done(answered(&mut team.app, &team.rx, "the worktree is removed"));
+    wait_until("the folder is removed with its worktree", || {
+        drain(&mut team.app, &team.rx);
+        team.app.refresh(Instant::now());
+        !dir.exists()
+    });
+}
+
+fn force_remove(id: u64) -> Command {
+    Command::Close(wire::Close { item: Item::Workspace(id), remove_worktree: true, force: true })
+}
+
+#[test]
+fn closing_the_project_removes_its_run_folders() {
+    let mut team = Team::new();
+    let run = team.started();
+    let dir = run.run_dir.clone().expect("the run's folder");
+
+    done(now(
+        &mut team.app,
+        None,
+        Command::Close(wire::Close { item: Item::Project(run.project), remove_worktree: false, force: false }),
+    ));
+
+    wait_until("the folder is removed with its project", || {
+        drain(&mut team.app, &team.rx);
+        team.app.refresh(Instant::now());
+        !dir.exists()
+    });
+}
+
+#[test]
+fn a_restore_makes_a_deleted_folder_again_and_keeps_the_one_that_is_there() {
+    let mut team = Team::new();
+    let run = team.started();
+    team.until_got(3);
+    let dir = run.run_dir.clone().expect("the run's folder");
+    let saved = team.app.state();
+    std::fs::remove_dir_all(&dir).expect("delete the folder");
+    let (mut again, _rx) = new_app(team.config.path().join("config.json"));
+
+    assert!(again.restore(&saved, AREA));
+
+    assert_eq!(again.runs[0].dir.as_deref(), Some(dir.as_path()));
+    assert_eq!(mode(&dir), 0o700);
+    std::fs::write(dir.join("coder-1.md"), "kept").expect("a file");
+    let (mut third, _rx) = new_app(team.config.path().join("config.json"));
+    assert!(third.restore(&saved, AREA));
+    assert!(dir.join("coder-1.md").exists(), "a restore deletes nothing");
+}
+
+#[test]
+fn a_saved_folder_that_is_not_a_plain_name_is_never_used() {
+    let mut team = Team::new();
+    team.started();
+    let mut saved = team.app.state();
+    let workspace = saved.projects[0].workspaces.iter_mut().find(|w| w.run.is_some()).expect("the run");
+    workspace.run.as_mut().expect("the run").dir = Some("../../elsewhere".into());
+    workspace.run_dirs = vec!["../../elsewhere".into()];
+    let (mut again, _rx) = new_app(team.config.path().join("config.json"));
+
+    assert!(again.restore(&saved, AREA));
+
+    assert_eq!(again.runs[0].dir, None);
+    assert!(again.projects.iter().flat_map(|p| &p.workspaces).all(|w| w.run_dirs.is_empty()));
 }

@@ -12,6 +12,7 @@ pub(in crate::agents) const COMMAND: &str = "cursor-agent";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const MODEL_ALIAS: Option<&str> = None;
 pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = None;
+pub(in crate::agents) const ADD_DIR: Option<&str> = Some("--add-dir");
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--force", "--trust"];
 pub(in crate::agents) const STATUS_BY_FOLDER: bool = false;
 pub(in crate::agents) const RECORD_BY_FOLDER: bool = false;

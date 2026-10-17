@@ -20,6 +20,7 @@ pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = Some(crate::
     flags: &["--effort"],
     config: None,
 });
+pub(in crate::agents) const ADD_DIR: Option<&str> = Some("--add-dir");
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--dangerously-skip-permissions"];
 pub(in crate::agents) const STATUS_BY_FOLDER: bool = false;
 pub(in crate::agents) const RECORD_BY_FOLDER: bool = false;

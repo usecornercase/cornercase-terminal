@@ -5,7 +5,7 @@ use ratatui::layout::Rect;
 
 use super::{Handled, NO_PROJECT, Pending, Stage, json, none, sized};
 use crate::app::App;
-use crate::app::flow_runs::Starting;
+use crate::app::flow_runs::{Made, Starting};
 use crate::control::{self, BrokenFlow, Done, Exported, FlowInfo, Flows, Imported, RoleInfo};
 use crate::error;
 use crate::flows::dialog::project_risks;
@@ -13,6 +13,7 @@ use crate::flows::share::{self, To};
 use crate::flows::store::{self, Listing, Origin, Saved};
 use crate::flows::{self, Flow, Role, builtin};
 use crate::git;
+use crate::git::worktree;
 use crate::log;
 use crate::paths;
 use crate::project::Hierarchy;
@@ -122,7 +123,7 @@ impl App {
         };
         let (flow, note) = pick(&self.flow_listing(Some(&self.projects[p].path)), &run.name)?;
         let branch = run.worktree.unwrap_or_default();
-        let starting = Starting { flow, task: run.prompt, branch, focus: run.focus, note };
+        let starting = Starting { flow, task: run.prompt, branch, focus: run.focus, note, trees: Vec::new() };
         self.run_flow(Some(client), self.projects[p].id, starting, area)
     }
 
@@ -142,15 +143,29 @@ impl App {
         if self.requests.pending.iter().any(busy) {
             return Err(format!("a flow is already starting on branch {branch}").into());
         }
-        if let Some(id) = self.workspace_on(p, &branch) {
+        let existing = self.workspace_on(p, &branch);
+        let roles: Vec<(String, String)> = starting
+            .flow
+            .roles
+            .iter()
+            .filter(|role| role.own_worktree())
+            .map(|role| (role.name.clone(), flows::role_branch(&branch, &role.name)))
+            .collect();
+        if let Some(id) = existing {
             let (p, w) = self.usable_workspace(id)?;
             if !self.projects[p].workspaces[w].worktree {
                 return Err(own_folder(&branch).into());
             }
-            return Ok(Some(json(&self.open_run(p, w, starting, area, false)?)));
+            if roles.is_empty() {
+                return Ok(Some(json(&self.open_run(p, w, starting, area, false)?)));
+            }
         }
         let key = self.requests.key();
-        self.spawn_worktree(p, branch, None, Some(key));
+        let path = self.projects[p].path.clone();
+        let made = existing
+            .is_none()
+            .then(|| worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &path, &branch));
+        self.spawn_run_worktrees(p, made, branch, roles, key);
         let stage = Stage::Run(project, Box::new(starting));
         self.requests.pending.push(Pending { client, key, timeout: None, done: Done::default(), stage });
         Ok(None)
@@ -162,21 +177,41 @@ impl App {
         let reserved = |b: &str| {
             ["main", "master"].contains(&b) || git::origin_head(path).as_deref() == Some(b) || own.as_deref() == Some(b)
         };
+        let stale = |b: &str| {
+            starting
+                .flow
+                .roles
+                .iter()
+                .filter(|role| role.own_worktree())
+                .map(|role| flows::role_branch(b, &role.name))
+                .find(|role_branch| git::has_branch(path, role_branch))
+        };
         if !starting.branch.is_empty() {
             return match starting.branch.as_str() {
                 b if own.as_deref() == Some(b) => Err(own_folder(b)),
                 b if reserved(b) => Err(format!(
                     "branch {b} is a default branch, and a flow works on a branch of its own: pick another branch"
                 )),
-                b => Ok(b.to_string()),
+                b => match stale(b).filter(|_| self.workspace_on(p, b).is_none() && !git::has_branch(path, b)) {
+                    Some(left) => Err(format!(
+                        "branch {left} already exists, and a new run's roles start from {b}: delete it or pick \
+                         another branch"
+                    )),
+                    None => Ok(b.to_string()),
+                },
             };
         }
         let starting_on = |b: &str| {
             let on = |pending: &Pending| matches!(&pending.stage, Stage::Run(other, s) if *other == project && s.branch == b);
             self.requests.pending.iter().any(on)
         };
-        let taken =
-            |b: &str| reserved(b) || self.workspace_on(p, b).is_some() || git::has_branch(path, b) || starting_on(b);
+        let taken = |b: &str| {
+            reserved(b)
+                || self.workspace_on(p, b).is_some()
+                || git::has_branch(path, b)
+                || starting_on(b)
+                || stale(b).is_some()
+        };
         let branch = flows::branch(&starting.task);
         if branch != flows::FALLBACK_BRANCH && !taken(&branch) {
             return Ok(branch);
@@ -187,25 +222,58 @@ impl App {
             .ok_or_else(|| format!("every branch named like {branch} is taken: pick a branch for the flow"))
     }
 
-    pub(super) fn flow_worktree_ready(
+    pub(in crate::app) fn run_worktrees_ready(
+        &mut self,
+        key: u64,
+        project: u64,
+        result: error::Result<Made>,
+        area: Rect,
+    ) {
+        let found = self.requests.pending.iter().position(|p| p.key == key && matches!(p.stage, Stage::Run(..)));
+        let Some(i) = found else { return };
+        let pending = self.requests.pending.remove(i);
+        if let Stage::Run(_, starting) = pending.stage {
+            self.flow_worktree_ready(pending.client, project, result, *starting, area);
+        }
+    }
+
+    fn flow_worktree_ready(
         &mut self,
         client: Option<u64>,
         project: u64,
-        result: error::Result<PathBuf>,
-        starting: Starting,
+        result: error::Result<Made>,
+        mut starting: Starting,
         area: Rect,
     ) {
-        let opened = result.map_err(|e| e.to_string()).and_then(|path| {
-            let path = path.canonicalize().unwrap_or(path);
+        let opened = result.map_err(|e| e.to_string()).and_then(|made| {
             let p = self.projects.project_index(project).ok_or_else(|| format!("project {project} closed"))?;
             if self.projects[p].closing {
                 return Err(format!("project {project} is closing"));
             }
-            let made = self.projects[p].workspaces.iter().all(|w| w.path != path);
-            let w = self.worktree_workspace(p, path);
+            let fresh: Vec<PathBuf> =
+                made.roles.iter().filter(|(_, made)| *made).map(|(tree, _)| tree.path.clone()).collect();
+            starting.trees = made.roles;
+            let Some(path) = made.run else {
+                let id = self
+                    .workspace_on(p, &starting.branch)
+                    .ok_or_else(|| format!("the workspace on branch {} is gone", starting.branch))?;
+                let (p, w) = self.usable_workspace(id)?;
+                let opened = self.open_run(p, w, starting, area, false);
+                if opened.is_err() {
+                    self.discard_worktrees(p, fresh);
+                }
+                return opened;
+            };
+            let path = path.canonicalize().unwrap_or(path);
+            let created = self.projects[p].workspaces.iter().all(|w| w.path != path);
+            let w = self.worktree_workspace(p, path.clone());
             let opened = self.open_run(p, w, starting, area, true);
-            if opened.is_err() && made {
-                self.projects[p].remove_workspace(w);
+            if opened.is_err() {
+                if created {
+                    self.projects[p].remove_workspace(w);
+                }
+                let run_tree = created.then_some(path).into_iter();
+                self.discard_worktrees(p, fresh.into_iter().chain(run_tree).collect());
             }
             opened
         });
@@ -229,6 +297,7 @@ fn flow_info(flow: &Flow, origin: &Origin) -> FlowInfo {
         model: role.model.clone(),
         effort: role.effort.clone(),
         edits: role.edits,
+        worktree: role.worktree,
     };
     FlowInfo {
         name: flow.name.clone(),

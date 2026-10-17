@@ -95,6 +95,14 @@ pub(crate) fn queue(session: &Path) -> PathBuf {
     }
 }
 
+pub(crate) fn runs(session: &Path) -> PathBuf {
+    if session.file_name().is_some_and(|name| name == "session.json") {
+        session.with_file_name("runs")
+    } else {
+        session.with_extension("runs")
+    }
+}
+
 pub(crate) fn stats(session: &Path) -> PathBuf {
     session.with_file_name("stats.json")
 }

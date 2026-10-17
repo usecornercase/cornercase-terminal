@@ -155,6 +155,8 @@ pub(crate) struct App {
     config: Config,
     config_path: PathBuf,
     setup_dir: PathBuf,
+    runs_dir: PathBuf,
+    pending_run_dirs: Vec<(u64, Vec<PathBuf>)>,
     setups: std::collections::HashMap<u64, (u64, PathBuf)>,
     shell: String,
     home: Option<PathBuf>,
@@ -221,6 +223,8 @@ impl App {
             config: config::load(&config_path),
             setups: std::collections::HashMap::new(),
             setup_dir: config_path.parent().map(std::path::Path::to_path_buf).unwrap_or_default(),
+            runs_dir: config_path.with_file_name("runs"),
+            pending_run_dirs: Vec::new(),
             config_path,
             shell,
             theme,
@@ -405,6 +409,8 @@ impl App {
         self.close_gone_flow_message();
         self.check_updates(now);
         self.refresh_files(now);
+        self.refresh_run_files(now);
+        self.flush_run_dirs();
         self.ask_sessions(now);
         self.refresh_changes(now);
         self.auto_scroll(now);
@@ -539,6 +545,7 @@ impl App {
             AppEvent::FlowFetched(source, result) => self.flow_fetched(&source, result),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
             AppEvent::Encoded { key, result } => self.encoded(key, result),
+            AppEvent::RunFiles(run, result) => self.run_files_listed(run, result),
             AppEvent::Web(event) => self.web_event(event),
             AppEvent::Tailscale(answer) => self.tailscale_answered(answer),
             AppEvent::Messenger(event) => self.messenger_event(event, area),

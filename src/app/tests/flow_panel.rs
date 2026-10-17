@@ -373,3 +373,89 @@ mod animation {
         assert_eq!(t.backend().buffer()[(at.x - 2, at.y)].symbol(), "━");
     }
 }
+
+mod files {
+    use std::time::SystemTime;
+
+    use super::*;
+
+    fn screen_text(t: &Terminal<TestBackend>) -> String {
+        t.backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect()
+    }
+
+    fn with_folder(app: &mut App, dir: &TempDir, files: &[(&str, u64)]) -> PathBuf {
+        let folder = dir.path().join("run");
+        std::fs::create_dir_all(&folder).expect("the run's folder");
+        for (name, age) in files {
+            let file = std::fs::File::create(folder.join(name)).expect("a file");
+            file.set_modified(SystemTime::now() - Duration::from_secs(*age)).expect("a time");
+        }
+        app.runs[0].dir = Some(folder.clone());
+        folder
+    }
+
+    fn listed(app: &mut App, rx: &Receiver<AppEvent>, text: &str) {
+        wait_until_within(text, Duration::from_secs(10), || {
+            drain(app, rx);
+            app.refresh(Instant::now());
+            let t = render(app, TALL);
+            let screen = screen_text(&t);
+            screen.contains(text)
+        });
+    }
+
+    #[test]
+    fn the_panel_lists_the_folders_files_newest_first_with_their_ages() {
+        let (mut app, rx, dir) = team();
+        with_folder(&mut app, &dir, &[("old.md", 7200), ("coder-1.md", 60)]);
+        app.show_flow();
+
+        listed(&mut app, &rx, "coder-1.md");
+
+        let (newest, oldest) = (spot(&mut app, "coder-1.md"), spot(&mut app, "old.md"));
+        assert!(newest.y < oldest.y);
+        assert_eq!(newest.y, spot(&mut app, "Files ·").y + 1);
+        assert_eq!(oldest.y, newest.y + 1);
+        let t = render(&mut app, TALL);
+        let row: String = (newest.x..TALL.right()).map(|x| t.backend().buffer()[(x, oldest.y)].symbol()).collect();
+        assert!(row.contains("2h"), "{row}");
+    }
+
+    #[test]
+    fn a_click_on_a_file_opens_it_in_the_files_panel() {
+        let (mut app, rx, dir) = team();
+        let folder = with_folder(&mut app, &dir, &[("coder-1.md", 60)]);
+        std::fs::write(folder.join("coder-1.md"), "the answer").expect("write");
+        app.show_flow();
+        listed(&mut app, &rx, "coder-1.md");
+
+        let at = spot(&mut app, "coder-1.md");
+        click_in(&mut app, at, TALL);
+
+        assert_eq!(app.side, Some(Side::Files));
+        wait_until_within("the file is read", Duration::from_secs(10), || {
+            drain(&mut app, &rx);
+            app.refresh(Instant::now());
+            let t = render(&mut app, TALL);
+            let screen = screen_text(&t);
+            screen.contains("the answer")
+        });
+    }
+
+    #[test]
+    fn an_empty_folder_says_so() {
+        let (mut app, rx, dir) = team();
+        with_folder(&mut app, &dir, &[]);
+        app.show_flow();
+        listed(&mut app, &rx, "nothing yet");
+    }
+
+    #[test]
+    fn a_run_without_a_folder_shows_no_files_section() {
+        let (mut app, _rx, _dir) = team();
+        app.show_flow();
+        let t = render(&mut app, TALL);
+        let screen = screen_text(&t);
+        assert!(!screen.contains("Files ·"), "{screen}");
+    }
+}
