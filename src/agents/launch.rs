@@ -37,14 +37,13 @@ enum Stage {
 }
 
 #[derive(Debug)]
-#[expect(clippy::struct_excessive_bools, reason = "each flag is its own fact about where the launch stands")]
 pub(crate) struct Launch {
     pub(crate) term: u64,
     pub(crate) key: Option<u64>,
     pub(crate) after: Vec<u64>,
     pub(crate) told: bool,
     pub(crate) trust: Option<Trust>,
-    pub(crate) resume: bool,
+    pub(crate) resume: Option<Instant>,
     spec: Spec,
     agent: bool,
     stage: Stage,
@@ -88,7 +87,7 @@ impl Launch {
             after: Vec::new(),
             told: false,
             trust: None,
-            resume: false,
+            resume: None,
             spec,
             agent: true,
             stage: Stage::Shell,
@@ -111,9 +110,13 @@ impl Launch {
         Self { agent: false, ..Self::new(term, Spec { command, prompt: None, submit: false, trusted: false }, now) }
     }
 
-    pub(crate) fn resume(term: u64, command: String, trusted: bool, now: Instant) -> Self {
+    pub(crate) fn resume(term: u64, command: String, trusted: bool, now: Instant, until: Instant) -> Self {
         let spec = Spec { command, prompt: None, submit: false, trusted };
-        Self { trust: Some(Trust::LeftToYou), resume: true, ..Self::new(term, spec, now) }
+        Self { trust: Some(Trust::LeftToYou), resume: Some(until), ..Self::new(term, spec, now) }
+    }
+
+    pub(crate) fn holds(&self, now: Instant) -> bool {
+        self.resume.is_some_and(|until| now < until) && self.parked.is_none()
     }
 
     pub(crate) fn enter(term: u64, now: Instant) -> Self {

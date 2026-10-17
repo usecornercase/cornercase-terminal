@@ -445,7 +445,7 @@ impl App {
         };
         let mut launch = Launch::new(term.id, spec, Instant::now());
         launch.after = run.members.iter().map(|m| m.pane).filter(|pane| *pane != term.id).collect();
-        launch.resume = true;
+        launch.resume = term.resuming;
         self.agents.launches.push(launch);
     }
 }

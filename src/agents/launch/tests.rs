@@ -315,3 +315,16 @@ fn a_busy_agent_gets_the_prompt_after_the_longest_wait() {
     launch.output(t + AGENT_LATEST);
     assert!(matches!(step(&mut launch, t + AGENT_LATEST, &agent("⠋ thinking")), Step::Done(_)));
 }
+
+mod holding {
+    use super::*;
+
+    #[test]
+    fn a_resume_holds_until_its_deadline_and_other_launches_never_do() {
+        let now = Instant::now();
+        let resume = Launch::resume(1, "claude --resume s1".into(), false, now, now + 30 * MS);
+        let start = Launch::new(1, spec(true), now);
+
+        assert_eq!((resume.holds(now), resume.holds(now + 30 * MS), start.holds(now)), (true, false, false));
+    }
+}

@@ -96,18 +96,20 @@ impl App {
         let Some(line) = self.resume_line(role, agent, run) else { return false };
         log::info!("app", "resuming a conversation", pane = term.id, agent = agent.kind);
         let now = Instant::now();
-        self.agents.launches.push(Launch::resume(term.id, line, role.is_some(), now));
+        self.agents.launches.push(Launch::resume(term.id, line, role.is_some(), now, now + RESUME_GRACE));
         term.resume = Some(agent.clone());
         term.resuming = Some(now + RESUME_GRACE);
         true
     }
 
     pub(super) fn resume_holds(&self, pane: u64) -> bool {
-        self.agents.launches.iter().any(|launch| launch.term == pane && launch.resume && !launch.waits_for_you())
+        let now = Instant::now();
+        self.agents.launches.iter().any(|launch| launch.term == pane && launch.holds(now))
     }
 
     pub(super) fn held_panes(&self) -> Vec<u64> {
-        self.agents.launches.iter().filter(|l| l.resume && !l.waits_for_you()).map(|l| l.term).collect()
+        let now = Instant::now();
+        self.agents.launches.iter().filter(|launch| launch.holds(now)).map(|launch| launch.term).collect()
     }
 
     pub(super) fn holds_input(&mut self) -> bool {
@@ -132,7 +134,8 @@ impl App {
     }
 
     fn cancel_resume(&mut self, pane: u64) {
-        let Some(i) = self.agents.launches.iter().position(|launch| launch.term == pane && launch.resume) else {
+        let Some(i) = self.agents.launches.iter().position(|launch| launch.term == pane && launch.resume.is_some())
+        else {
             return;
         };
         let typed = self.agents.launches.remove(i).typed();

@@ -247,6 +247,18 @@ mod input_while_resuming {
     }
 
     #[test]
+    fn the_hold_ends_with_the_grace_even_while_the_agent_still_starts() {
+        let (mut back, _rx, _bin, id) = resuming(STAYS);
+        let held = back.resume_holds(id);
+
+        if let Some(launch) = back.agents.launches.iter_mut().find(|launch| launch.term == id) {
+            launch.resume = Some(Instant::now());
+        }
+
+        assert_eq!((held, back.resume_holds(id), back.agents.launches.len()), (true, false, 1));
+    }
+
+    #[test]
     fn cancel_before_the_line_is_typed_leaves_a_shell_that_takes_keys() {
         let (mut back, rx, _bin, id) = resuming(STAYS);
         let pane = back.tab().and_then(|t| t.shown(back.layout(AREA).pane).first().map(|(_, r)| *r)).expect("a pane");
