@@ -6,7 +6,7 @@ description: Every setting in the settings modal and every key of config.json, w
 import { Aside } from '@astrojs/starlight/components';
 import Screen from '../../../../components/Screen.astro';
 
-cornercase is configured from the **Settings** modal, opened with the `Settings` button at the bottom of the projects column. Every change is saved at once to `config.json`, so there is nothing to apply or restart. You can also edit the file by hand; this page lists every key.
+cornercase is configured from the **Settings** modal, opened with the `Settings` button at the bottom of the projects column. Every change is saved at once to `config.json`, so there is nothing to apply or restart. You can also edit the file by hand, and the server applies it within a second; this page lists every key. A script or another app reads and changes the same settings with [`cornercase config`](../../guides/scripts-and-agents/#settings).
 
 ## The settings modal
 
@@ -481,5 +481,9 @@ Per-project commands, keyed by the project's folder (`~/` is expanded): `setup` 
 This keeps worktrees in `~/work/trees`, shows only the GitHub and Linear tabs, starts Codex in its *workspace write* sandbox by default, hides Claude Code's *auto* mode, adds a custom agent called `mine`, sends a fuller prompt for you, and keeps every pane equally bright.
 
 <Aside type="caution" title="Editing the file by hand">
-The server reads `config.json` once, when it starts, and the settings modal writes its own copy back whenever you change something there. Edit the file while no server is running, or run `cornercase kill-server` after editing so the next `cornercase` reads it. If the file isn't valid JSON, cornercase falls back to the defaults.
+The server looks at `config.json` once a second and applies what you saved, with no restart: a changed `remote` starts or stops browser access, `keep_awake` takes effect, the layout changes, and an open settings modal shows the new values. Editors that replace the file, or save it a moment late, are fine.
+
+If you and cornercase change the file at once, nothing is lost: whatever cornercase changes (a click in the modal, `cornercase config`) is applied to the file as it is on disk at that moment and rewrites only the keys it touches, so the rest of your edit stays. A key changed in both places keeps cornercase's change, which came last.
+
+If the file isn't valid JSON, or a value has the wrong type, cornercase says why in a message and in `cornercase config`, keeps the settings it was using, and does not write over the file until you fix it or remove it. A file that goes missing while the server runs also leaves the settings as they are; the next change writes it again. Only a server that starts with a broken file runs on the defaults.
 </Aside>
