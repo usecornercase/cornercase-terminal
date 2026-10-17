@@ -28,7 +28,7 @@ pub(crate) use flow::{
 pub(crate) use search::{Hit, Matches, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use surface::Surface;
-pub(crate) use terminal::{Input, Ratio, Resize, Scroll, Selection};
+pub(crate) use terminal::{Input, Link, Ratio, Resize, Scroll, Selection};
 pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
 
@@ -115,6 +115,7 @@ pub(crate) enum Command {
     Selection(Selection),
     Resize(Resize),
     Ratio(Ratio),
+    Link(Link),
 }
 
 impl Command {
@@ -160,7 +161,8 @@ impl Command {
             Self::Selection(_) => 37,
             Self::Resize(_) => 38,
             Self::Ratio(_) => 39,
-            Self::TodoSend(_) => 40,
+            Self::Link(_) => 40,
+            Self::TodoSend(_) => 41,
         }]
     }
 
@@ -260,6 +262,7 @@ impl Command {
             Self::Selection(selection) => selection.fields(&mut fields),
             Self::Resize(resize) => resize.fields(&mut fields),
             Self::Ratio(ratio) => ratio.fields(&mut fields),
+            Self::Link(link) => link.fields(&mut fields),
             Self::StartServer(start) => {
                 fields.maybe("cols", start.cols).maybe("rows", start.rows);
             }
@@ -267,7 +270,7 @@ impl Command {
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 41] = [
+    pub(crate) const NAMES: [&str; 42] = [
         "status",
         "open",
         "new-workspace",
@@ -308,11 +311,12 @@ impl Command {
         "selection",
         "resize",
         "ratio",
+        "link",
         "todo-send",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
-        matches!(name, "input" | "scroll" | "selection" | "resize" | "ratio")
+        matches!(name, "input" | "scroll" | "selection" | "resize" | "ratio" | "link")
     }
 }
 

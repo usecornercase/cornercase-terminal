@@ -33,4 +33,4 @@ When the environment has `CORNERCASE=1`, you run in a pane of cornercase, a term
 - When cornercase itself misbehaves (a command fails oddly, a tab or agent does something unexpected, "cornercase hit a bug"), `cornercase logs` prints what the server did, step by step, with its errors; quote the relevant lines to the user.
 
 Schedule follow-up work with `cornercase queue add --at 'in 2h' --agent claude --prompt '...'`, or `--issue URL_OR_KEY`. `claude reset` and `codex reset` capture the next five-hour reset. `queue list --json`, `queue edit ID --at TIME`, `queue run ID` and `queue remove ID` manage persistent entry ids. Queued launches accept folder trust prompts automatically.
-- `input`, `scroll`, `selection`, `resize` and `ratio` are for programs that draw cornercase's terminals themselves. To type into another agent use `send` and `keys`, which refuse to answer its prompts or type into its dialogs.
+- `input`, `scroll`, `selection`, `resize`, `ratio` and `link` are for programs that draw cornercase's terminals themselves. To type into another agent use `send` and `keys`, which refuse to answer its prompts or type into its dialogs.

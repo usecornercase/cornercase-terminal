@@ -98,3 +98,29 @@ fn the_fields_to_log_are_counts_and_sizes() {
     let shown: Vec<String> = fields.iter().map(|(key, value)| format!("{key}={value}")).collect();
     assert_eq!(shown, ["pane=3", "events=4", "keys=1", "mice=1", "text_bytes=6", "paste_bytes=7"]);
 }
+
+#[test]
+fn a_link_request_reads_and_is_written_back_and_logs_its_cell() {
+    let args = json!({"pane": 12, "size": {"cols": 80, "rows": 24}, "cell": {"x": 4, "y": 0}});
+    let parsed: Request = serde_json::from_value(json!({"command": "link", "args": args})).expect("a request");
+
+    assert_eq!(serde_json::to_value(&parsed).expect("json")["args"], args);
+    assert_eq!(parsed.command.fields(), [("pane", "12".to_string()), ("x", "4".to_string()), ("y", "0".to_string())]);
+    let raw = json!({"command": "link", "args": {"pane": 1, "cell": {"x": 1, "y": 2, "z": 3}}});
+    let stray: Request = serde_json::from_value(raw.clone()).expect("a request");
+    assert_eq!(unknown_fields(&raw, &stray).as_deref(), Some("args.cell.z"));
+}
+
+#[rstest]
+#[case::a_file(None, "/src/a.rs")]
+#[case::a_line(Some((7, 7)), "/src/a.rs:7")]
+#[case::a_range(Some((7, 9)), "/src/a.rs:7-9")]
+fn a_location_is_the_path_with_its_lines(#[case] lines: Option<(u32, u32)>, #[case] expected: &str) {
+    let link = FileLink {
+        path: "/src/a.rs".into(),
+        lines: lines.map(|(first, last)| Lines { first, last }),
+        ..FileLink::default()
+    };
+
+    assert_eq!(link.location(), expected);
+}

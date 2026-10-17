@@ -1,9 +1,9 @@
 use std::io::{self, BufRead as _};
 
-use super::args::terminal::{InputArgs, RatioArgs, ResizeArgs, ScrollArgs, SelectionArgs, Side};
+use super::args::terminal::{InputArgs, LinkArgs, RatioArgs, ResizeArgs, ScrollArgs, SelectionArgs, Side};
 use super::{print_json, print_out};
 use crate::client::{answer, ask};
-use crate::control::terminal::{End, InputEvent, Scrolled, Selection, Sent, Why};
+use crate::control::terminal::{End, InputEvent, Linked, Scrolled, Selection, Sent, Why};
 use crate::control::{self, Done};
 use crate::error::{Error, Result};
 
@@ -97,4 +97,16 @@ pub(super) fn ratio(args: &RatioArgs) -> Result<()> {
     let request = control::Ratio { tab: Some(args.tab), path, ratio: args.ratio };
     let value = ask("ratio", control::Command::Ratio(request))?;
     if args.print.json { print_json(&value) } else { Ok(()) }
+}
+
+pub(super) fn link(args: &LinkArgs) -> Result<()> {
+    let request = control::Link { pane: Some(args.pane), size: None, cell: Some(args.cell) };
+    let value = ask("link", control::Command::Link(request))?;
+    if args.print.json {
+        return print_json(&value);
+    }
+    match answer::<Linked>(value)?.link {
+        Some(link) => print_out(&format!("{}\n", link.location())),
+        None => Ok(()),
+    }
 }

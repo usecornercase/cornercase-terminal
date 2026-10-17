@@ -201,7 +201,7 @@ impl App {
     fn open_run_file(&mut self, index: usize) {
         let path = self.flow.files.as_ref().and_then(|(_, listing)| listing.files.get(index)).map(|f| f.path.clone());
         if let Some(path) = path.as_deref().and_then(std::path::Path::to_str) {
-            self.open_link(&Target { path: path.to_string(), lines: None });
+            self.open_link(&Target { path: path.to_string(), real: path.into(), lines: None });
         }
     }
 

@@ -281,7 +281,7 @@ fn an_outside_file_keeps_its_absolute_path_for_actions_and_the_previous_search()
     std::fs::write(&path, "# Note\nRead this.\n").expect("write");
     let (mut app, rx) = opened(&repo);
     search(&mut app, &rx, files::Mode::Text, "shop");
-    app.open_link(&files::link::Target { path: path.clone(), lines: Some((1, 2)) });
+    app.open_link(&files::link::Target { path: path.clone(), real: path.clone().into(), lines: Some((1, 2)) });
     settle(&mut app, &rx, "the outside file is read", |v| lines(v) == ["# Note", "Read this."]);
     assert!(file(&app).gutter.is_none());
     let ask = action_pos(&app, Action::Ask);

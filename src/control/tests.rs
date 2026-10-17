@@ -87,6 +87,7 @@ fn every_command_is_listed_by_name() {
         Command::Selection(Selection::default()),
         Command::Resize(Resize::default()),
         Command::Ratio(Ratio::default()),
+        Command::Link(Link::default()),
         Command::TodoSend(TodoSend::default()),
     ];
 

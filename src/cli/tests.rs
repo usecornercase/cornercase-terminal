@@ -130,6 +130,9 @@ mod parsing {
     #[case::clearing_and_copying(&["selection", "--pane", "1", "--clear", "--copy"])]
     #[case::a_selection_start_alone(&["selection", "--pane", "1", "--from", "1,1"])]
     #[case::a_bad_cell(&["selection", "--pane", "1", "--from", "3", "--to", "4,4"])]
+    #[case::a_link_without_a_cell(&["link", "--pane", "1"])]
+    #[case::a_link_with_a_bad_cell(&["link", "--pane", "1", "--cell", "3"])]
+    #[case::a_link_without_a_pane(&["link", "--cell", "1,2"])]
     #[case::a_ratio_over_one(&["ratio", "--tab", "1", "1.5"])]
     #[case::a_divider_in_the_middle(&["ratio", "--tab", "1", "--path", "middle", "0.5"])]
     #[case::resizing_nothing(&["resize", "--cols", "80", "--rows", "24"])]
@@ -342,6 +345,14 @@ mod parsing {
             (input.pane, input.events),
             (3, vec![r#"{"text":"x"}"#.to_string(), r#"{"key":{"code":"enter"}}"#.to_string()])
         );
+    }
+
+    #[test]
+    fn link_takes_its_pane_and_cell() {
+        let cli = parse(&["link", "--pane", "4", "--cell", "10,3", "--json"]).expect("parse");
+
+        let Some(Command::Control(Control::Link(link))) = cli.command else { panic!("not link") };
+        assert_eq!((link.pane, link.cell.x, link.cell.y, link.print.json), (4, 10, 3, true));
     }
 
     #[test]

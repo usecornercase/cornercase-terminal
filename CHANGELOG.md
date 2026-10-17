@@ -2,10 +2,20 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.129
+## 0.12.130
 
 - **Send a TODO to an agent.** In the TODO panel, each item left to do has a **`▸`** next to its `×` (on hover; always shown in the compact layout). It opens a menu of every agent running, by project and workspace, and picking one types the item into that agent and sends it, as `cornercase send --enter` would. Once the agent has taken it, the item is checked off and a message says where it went; what `send` refuses (an agent waiting for your answer, resuming, showing a dialog or its survey) the button refuses too, with the reason, and the item stays to do.
 - `cornercase todo send ID [--pane N | --tab N]` does the same from a script or an agent: the same target, refusals and confirmation as `send --enter`, then the item is checked off and it prints `sent todo 3 to pane 5`. A refused or unconfirmed send leaves it pending and exits 1; for an agent whose prompts cornercase cannot confirm (a `/` command, an agent it does not read) the text is sent, the item stays to do and it says so (exit 0). See Scripts and agents → Leave notes.
+
+## 0.12.129
+
+- **Surfaces carry everything a cell looks like.** For programs that draw cornercase's terminals with `cornercase surface`:
+  - Underline styles (double, curly, dotted, dashed), underline colours and overline are in the styles, so Neovim's undercurl diagnostics come through.
+  - Hyperlinks (OSC 8), from `ls --hyperlink`, compilers or `gh`, come as a table of addresses the cells point to, and a link that wraps onto the next line is one link.
+  - Each pane carries the colours its program changed (OSC 4, 10, 11, 12), so a program that redefines a colour looks as it does in a terminal.
+  - Clients that don't know these keys keep working: they are left out when a terminal uses none of them.
+- **`cornercase link --pane ID --cell X,Y`** says which file a click on that cell opens in the window: the path, its line or range, and whether it is inside the pane's workspace, so a program that draws the terminals gets cornercase's path detection without copying it. See Scripts and agents → Drive a tab's terminals.
+- **Backgrounds painted by clearing now show.** A line or region a program clears after setting a background colour (vim with a colour scheme, less, htop) keeps that colour in the window and in surfaces; it showed the terminal's own background before.
 
 ## 0.12.128
 

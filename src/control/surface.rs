@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::hash::Hash;
 use std::ops::RangeInclusive;
 
 use ratatui::layout::Rect;
@@ -8,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use super::start_server::within;
 use super::{Fields, Layout};
 use crate::project::split::Dir;
-use crate::term::emulator::{Cell, CursorShape};
+use crate::term::emulator::{Cell, CursorShape, Decor, ProgramColours, UnderlineStyle};
 use crate::term::mouse::{MouseEncoding, MouseMode};
 
 pub(crate) const COLS: RangeInclusive<u16> = 1..=1000;
@@ -58,6 +59,8 @@ pub(crate) struct Content {
     pub(crate) layout: Option<Layout>,
     pub(crate) dividers: Vec<Divider>,
     pub(crate) styles: Vec<Style>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) hyperlinks: Vec<Hyperlink>,
     pub(crate) panes: Vec<Pane>,
 }
 
@@ -72,7 +75,45 @@ pub(crate) struct Pane {
     pub(crate) cursor: Option<Cursor>,
     pub(crate) modes: Modes,
     pub(crate) scroll: Scroll,
+    #[serde(skip_serializing_if = "Colours::is_empty")]
+    pub(crate) colours: Colours,
     pub(crate) lines: Vec<Vec<Run>>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Colours {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) fg: Option<[u8; 3]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) bg: Option<[u8; 3]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) cursor: Option<[u8; 3]>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) palette: BTreeMap<String, [u8; 3]>,
+}
+
+impl Colours {
+    fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+impl From<ProgramColours> for Colours {
+    fn from(colours: ProgramColours) -> Self {
+        Self {
+            fg: colours.foreground,
+            bg: colours.background,
+            cursor: colours.cursor,
+            palette: colours.palette.into_iter().map(|(i, rgb)| (i.to_string(), rgb)).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Hyperlink {
+    pub(crate) uri: String,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -210,6 +251,8 @@ pub(crate) struct Scroll {
 #[serde(default)]
 pub(crate) struct Run {
     pub(crate) style: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) hyperlink: Option<usize>,
     pub(crate) cells: Vec<String>,
 }
 
@@ -249,6 +292,10 @@ impl Colour {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(default)]
 #[expect(clippy::struct_excessive_bools, reason = "each attribute is its own key in a surface's JSON")]
+#[expect(
+    clippy::struct_field_names,
+    reason = "`underline_style` is the key a surface's JSON names an underline's shape by"
+)]
 pub(crate) struct Style {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) fg: Option<Colour>,
@@ -262,6 +309,12 @@ pub(crate) struct Style {
     pub(crate) italic: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) underline: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) underline_style: Option<Underline>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) underline_colour: Option<Colour>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) overline: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) blink: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -272,16 +325,41 @@ pub(crate) struct Style {
     pub(crate) strikethrough: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Underline {
+    Double,
+    Curly,
+    Dotted,
+    Dashed,
+}
+
+impl Underline {
+    fn of(style: UnderlineStyle) -> Option<Self> {
+        match style {
+            UnderlineStyle::None | UnderlineStyle::Single => None,
+            UnderlineStyle::Double => Some(Self::Double),
+            UnderlineStyle::Curly => Some(Self::Curly),
+            UnderlineStyle::Dotted => Some(Self::Dotted),
+            UnderlineStyle::Dashed => Some(Self::Dashed),
+        }
+    }
+}
+
 impl Style {
-    fn of(look: Look) -> Self {
+    fn of(look: Look, decor: Decor) -> Self {
         let has = |modifier| look.add_modifier.contains(modifier) && !look.sub_modifier.contains(modifier);
+        let underline = has(Modifier::UNDERLINED);
         Self {
             fg: look.fg.and_then(Colour::of),
             bg: look.bg.and_then(Colour::of),
             bold: has(Modifier::BOLD),
             dim: has(Modifier::DIM),
             italic: has(Modifier::ITALIC),
-            underline: has(Modifier::UNDERLINED),
+            underline,
+            underline_style: Underline::of(decor.underline).filter(|_| underline),
+            underline_colour: Colour::of(decor.underline_colour).filter(|_| underline),
+            overline: decor.overline,
             blink: has(Modifier::SLOW_BLINK) || has(Modifier::RAPID_BLINK),
             inverse: has(Modifier::REVERSED),
             invisible: has(Modifier::HIDDEN),
@@ -291,47 +369,66 @@ impl Style {
 }
 
 #[derive(Debug)]
-pub(crate) struct Styles {
-    table: Vec<Style>,
-    index: HashMap<Style, usize>,
+pub(crate) struct Table<T> {
+    entries: Vec<T>,
+    index: HashMap<T, usize>,
 }
 
-impl Default for Styles {
-    fn default() -> Self {
-        Self { table: vec![Style::default()], index: HashMap::from([(Style::default(), 0)]) }
+impl<T: Clone + Eq + Hash> Table<T> {
+    fn seeded(first: Option<T>) -> Self {
+        let mut table = Self { entries: Vec::new(), index: HashMap::new() };
+        if let Some(first) = first {
+            table.of(first);
+        }
+        table
     }
-}
 
-impl Styles {
-    pub(crate) fn of(&mut self, look: Look) -> usize {
-        let style = Style::of(look);
-        if let Some(at) = self.index.get(&style) {
+    fn of(&mut self, entry: T) -> usize {
+        if let Some(at) = self.index.get(&entry) {
             return *at;
         }
-        self.table.push(style);
-        self.index.insert(style, self.table.len() - 1);
-        self.table.len() - 1
+        self.entries.push(entry.clone());
+        self.index.insert(entry, self.entries.len() - 1);
+        self.entries.len() - 1
     }
 
-    pub(crate) fn into_table(self) -> Vec<Style> {
-        self.table
+    pub(crate) fn into_entries(self) -> Vec<T> {
+        self.entries
     }
 }
 
-pub(crate) fn lines(rows: Vec<Vec<Cell>>, styles: &mut Styles) -> Vec<Vec<Run>> {
-    rows.into_iter().map(|row| runs(row, styles)).collect()
+#[derive(Debug)]
+pub(crate) struct Tables {
+    pub(crate) styles: Table<Style>,
+    pub(crate) hyperlinks: Table<Hyperlink>,
 }
 
-fn runs(row: Vec<Cell>, styles: &mut Styles) -> Vec<Run> {
-    let cells: Vec<(usize, Cell)> = row.into_iter().map(|cell| (styles.of(cell.style), cell)).collect();
-    let end =
-        cells.iter().rposition(|(style, cell)| *style != 0 || cell.spacer || cell.symbol != " ").map_or(0, |i| i + 1);
+impl Default for Tables {
+    fn default() -> Self {
+        Self { styles: Table::seeded(Some(Style::default())), hyperlinks: Table::seeded(None) }
+    }
+}
+
+pub(crate) fn lines(rows: Vec<Vec<Cell>>, links: &[String], tables: &mut Tables) -> Vec<Vec<Run>> {
+    let known: Vec<usize> = links.iter().map(|uri| tables.hyperlinks.of(Hyperlink { uri: uri.clone() })).collect();
+    rows.into_iter().map(|row| runs(row, &known, tables)).collect()
+}
+
+fn runs(row: Vec<Cell>, known: &[usize], tables: &mut Tables) -> Vec<Run> {
+    let cells: Vec<(usize, Option<usize>, Cell)> = row
+        .into_iter()
+        .map(|cell| (tables.styles.of(Style::of(cell.style, cell.decor)), cell.link.map(|i| known[i]), cell))
+        .collect();
+    let end = cells
+        .iter()
+        .rposition(|(style, link, cell)| *style != 0 || link.is_some() || cell.spacer || cell.symbol != " ")
+        .map_or(0, |i| i + 1);
     let mut runs: Vec<Run> = Vec::new();
-    for (style, cell) in cells.into_iter().take(end) {
+    for (style, hyperlink, cell) in cells.into_iter().take(end) {
         let symbol = if cell.spacer { String::new() } else { cell.symbol };
         match runs.last_mut() {
-            Some(run) if run.style == style => run.cells.push(symbol),
-            _ => runs.push(Run { style, cells: vec![symbol] }),
+            Some(run) if run.style == style && run.hyperlink == hyperlink => run.cells.push(symbol),
+            _ => runs.push(Run { style, hyperlink, cells: vec![symbol] }),
         }
     }
     runs

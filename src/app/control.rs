@@ -405,6 +405,7 @@ impl App {
             Command::Selection(selection) => self.selection_request(&selection),
             Command::Resize(resize) => self.resize_surface_request(&resize, now),
             Command::Ratio(ratio) => self.ratio_request(&ratio, area),
+            Command::Link(at) => self.link_request(&at),
             Command::LastMessage(last) => self.last_message_request(client, asker, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),

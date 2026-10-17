@@ -70,6 +70,16 @@ fn point(text: &str) -> Result<Point, String> {
 }
 
 #[derive(Debug, Args)]
+pub(crate) struct LinkArgs {
+    #[arg(long, value_name = "ID", required = true, help = PANE_REQUIRED)]
+    pub(crate) pane: u64,
+    #[arg(long, value_name = "X,Y", required = true, value_parser = point, help = "The cell: column and row of the pane's view, from 0")]
+    pub(crate) cell: Point,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
 pub(crate) struct ResizeArgs {
     #[arg(
         long,

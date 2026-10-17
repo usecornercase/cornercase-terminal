@@ -393,3 +393,80 @@ mod resizing {
         assert_ne!(one, two);
     }
 }
+
+mod cells {
+    use super::*;
+    use crate::control::surface::{Colours, Hyperlink, Underline};
+
+    const CLEAR: &str = "\x1b[2J\x1b[H";
+
+    fn frame_after(bytes: &str) -> Frame {
+        let (mut app, _rx, _dirs) = app_with(1);
+        let (pane, tab, t0) = (term(&app, 0).id, tab_of(&app, 0), Instant::now());
+        subscribe(&mut app, t0, tab);
+        output(&mut app, pane, &format!("{CLEAR}{bytes}"));
+        ready(&mut app, t0 + FRAME_EVERY).remove(0)
+    }
+
+    #[test]
+    fn hyperlinks_come_as_a_table_the_runs_index() {
+        let got = frame_after("\x1b]8;;https://example.com\x1b\\site\x1b]8;;\x1b\\ plain");
+
+        assert_eq!(got.content.hyperlinks, [Hyperlink { uri: "https://example.com".into() }]);
+        let runs = &got.content.panes[0].lines[0];
+        assert_eq!((runs[0].hyperlink, runs[0].cells.len()), (Some(0), 4));
+        assert_eq!(runs[1].hyperlink, None);
+    }
+
+    #[test]
+    fn a_hyperlink_that_wraps_is_one_entry_on_both_rows() {
+        let (mut app, _rx, _dirs) = app_with(1);
+        let (pane, tab, t0) = (term(&app, 0).id, tab_of(&app, 0), Instant::now());
+        let cols = usize::from(subscribe(&mut app, t0, tab).content.panes[0].size.cols);
+        let linked = "x".repeat(cols + 5);
+
+        output(&mut app, pane, &format!("{CLEAR}\x1b]8;;https://example.com/long\x1b\\{linked}\x1b]8;;\x1b\\"));
+        let got = ready(&mut app, t0 + FRAME_EVERY).remove(0);
+
+        assert_eq!(got.content.hyperlinks.len(), 1);
+        let lines = &got.content.panes[0].lines;
+        assert_eq!((lines[0][0].hyperlink, lines[1][0].hyperlink), (Some(0), Some(0)));
+        assert_eq!(lines[1][0].cells.len(), 5);
+    }
+
+    #[test]
+    fn undercurl_and_its_colour_reach_the_styles() {
+        let got = frame_after("\x1b[4:3;58:5:196mx");
+
+        let style = got.content.styles[got.content.panes[0].lines[0][0].style];
+        assert!(style.underline);
+        assert_eq!(style.underline_style, Some(Underline::Curly));
+        assert_eq!(style.underline_colour, Some(Colour::Index(196)));
+    }
+
+    #[test]
+    fn a_line_cleared_with_a_background_streams_it() {
+        let got = frame_after("\x1b[44mab\x1b[K");
+
+        let runs = &got.content.panes[0].lines[0];
+        assert_eq!(runs.len(), 1);
+        assert_eq!(got.content.styles[runs[0].style].bg, Some(Colour::Index(4)));
+        assert!(runs[0].cells.len() > 2);
+    }
+
+    #[test]
+    fn colours_a_program_changes_reach_its_pane_until_it_resets_them() {
+        let (mut app, _rx, _dirs) = app_with(1);
+        let (pane, tab, t0) = (term(&app, 0).id, tab_of(&app, 0), Instant::now());
+        subscribe(&mut app, t0, tab);
+
+        output(&mut app, pane, "\x1b]4;1;rgb:ff/00/00\x07\x1b]11;rgb:44/55/66\x07");
+        let set = ready(&mut app, t0 + FRAME_EVERY).remove(0);
+        let colours = &set.content.panes[0].colours;
+        assert_eq!((colours.palette["1"], colours.bg), ([255, 0, 0], Some([0x44, 0x55, 0x66])));
+
+        output(&mut app, pane, "\x1b]104\x07\x1b]111\x07");
+        let reset = ready(&mut app, t0 + FRAME_EVERY * 2).remove(0);
+        assert_eq!(reset.content.panes[0].colours, Colours::default());
+    }
+}

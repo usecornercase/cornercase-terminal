@@ -14,7 +14,14 @@ pub(crate) struct Link {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Target {
     pub(crate) path: String,
+    pub(crate) real: PathBuf,
     pub(crate) lines: Option<(u32, u32)>,
+}
+
+impl Target {
+    pub(crate) fn inside(&self) -> bool {
+        Path::new(&self.path).is_relative()
+    }
 }
 
 const TRAILING: [char; 5] = ['.', ',', ':', ';', '#'];
@@ -87,8 +94,20 @@ pub(crate) fn resolve(link: &Link, cwd: Option<&Path>, root: &Path, home: Option
     candidates.into_iter().find_map(|candidate| {
         let real = candidate.canonicalize().ok().filter(|p| p.is_file())?;
         let path = real.strip_prefix(&root).unwrap_or(&real).to_string_lossy().into_owned();
-        Some(Target { path, lines: link.lines })
+        Some(Target { path, real, lines: link.lines })
     })
+}
+
+pub(crate) fn under(
+    row: &[Cell],
+    col: u16,
+    cwd: Option<&Path>,
+    root: &Path,
+    home: Option<&Path>,
+) -> Option<(Link, Target)> {
+    let found = at(row, col)?;
+    let target = resolve(&found, cwd, root, home)?;
+    Some((found, target))
 }
 
 #[cfg(test)]
