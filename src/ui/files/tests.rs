@@ -407,3 +407,12 @@ fn a_long_path_stops_before_the_full_screen_button() {
     let buffer = terminal.backend().buffer();
     assert_eq!(buffer[(button.x - 1, button.y)].symbol(), " ");
 }
+
+#[test]
+fn the_full_screen_button_never_covers_the_back_button() {
+    let narrow = Rect::new(0, 0, 9, 12);
+    let view = full(false);
+    let back_at = back(narrow).as_position();
+    assert_eq!(hit(narrow, &view, back_at), Some(Hit::Back));
+    assert!(full_screen_button(narrow).is_empty() || full_screen_button(narrow).x >= back(narrow).right());
+}

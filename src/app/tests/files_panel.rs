@@ -631,6 +631,23 @@ mod full_screen {
     }
 
     #[test]
+    fn a_tab_closing_behind_it_ends_it() {
+        let (_repo, mut app, rx) = with_file();
+        app.add_tab(0, 0, AREA).expect("a tab");
+        render(&mut app, AREA);
+        toggle(&mut app);
+        let active = app.projects[0].workspaces[0].active;
+        app.close_tab(0, 0, active);
+        wait_until("the tab is gone", || {
+            app.refresh(Instant::now());
+            drain(&mut app, &rx);
+            render(&mut app, AREA);
+            app.projects[0].workspaces[0].tabs.len() == 1
+        });
+        assert!(!app.file_full_screen());
+    }
+
+    #[test]
     fn the_covered_tab_is_not_visible() {
         let (_repo, mut app, _rx) = with_file();
         let pane = app.tab().and_then(|t| t.pane()).expect("a pane").id;

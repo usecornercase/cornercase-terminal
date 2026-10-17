@@ -218,7 +218,8 @@ pub(crate) fn clear(area: Rect) -> Rect {
 
 pub(crate) fn full_screen_button(area: Rect) -> Rect {
     let x = close(area);
-    Rect::new(x.x.saturating_sub(BACK_WIDTH), x.y, BACK_WIDTH, 1).intersection(parts(area).title)
+    let button = Rect::new(x.x.saturating_sub(BACK_WIDTH), x.y, BACK_WIDTH, 1).intersection(parts(area).title);
+    if button.x < back(area).right() { Rect::default() } else { button }
 }
 
 pub(crate) fn back(area: Rect) -> Rect {
