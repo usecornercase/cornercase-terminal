@@ -9,8 +9,8 @@ use super::help::{
     FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, HERE_PANE, HERE_WORKSPACE, KEY_NAMES, KEYS_HELP,
     KILL_SERVER_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP,
     PLUGIN_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEARCH_HELP, SEND_HELP,
-    SKILL_HELP, SPLIT_HELP, START_HELP, STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE,
-    WAIT_TAB, WHEN_IDLE,
+    SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP, STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP,
+    WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -40,6 +40,11 @@ pub(crate) enum Command {
         after_help = RESTART_HELP
     )]
     Restart(RestartArgs),
+    #[command(
+        about = "Start the server without a window, or find the running one, and restore the session",
+        after_help = START_SERVER_HELP
+    )]
+    StartServer(StartServerArgs),
     #[command(about = "Stop the server and every shell in it", after_help = KILL_SERVER_HELP)]
     KillServer(KillServerArgs),
     #[command(about = "Print the server's log: what it did, step by step", after_help = LOGS_HELP)]
@@ -716,6 +721,20 @@ pub(crate) enum PluginAction {
         #[command(flatten)]
         logs: LogsArgs,
     },
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct StartServerArgs {
+    #[arg(
+        long,
+        value_name = "N",
+        help = "Columns of the terminals until a window attaches, 90 to 1000 [default: 160]"
+    )]
+    pub(crate) cols: Option<u16>,
+    #[arg(long, value_name = "N", help = "Rows of the terminals until a window attaches, 10 to 500 [default: 48]")]
+    pub(crate) rows: Option<u16>,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]

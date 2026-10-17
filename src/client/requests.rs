@@ -22,6 +22,14 @@ pub(crate) fn ask(name: &'static str, command: control::Command) -> Result<Value
     ask_on(connect()?, name, command)
 }
 
+pub(crate) fn ask_starting(name: &'static str, command: control::Command) -> Result<Value> {
+    let path = paths::socket();
+    protocol::check_socket_dir(&path)?;
+    let stream = super::connect_or_start(&path)?;
+    protocol::check_peer(&stream, protocol::own_uid())?;
+    ask_on(stream, name, command)
+}
+
 fn ask_on(mut stream: UnixStream, name: &'static str, command: control::Command) -> Result<Value> {
     request(&mut stream, command)?;
     loop {

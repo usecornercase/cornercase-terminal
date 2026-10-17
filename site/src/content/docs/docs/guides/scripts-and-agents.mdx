@@ -11,7 +11,18 @@ cornercase wait --pane "$pane" --until shell --timeout 900
 cornercase read --pane "$pane" --lines 40
 ```
 
-These commands never start a server. Without one, they say `no cornercase server is running` and exit with status 1.
+These commands never start a server, except [`start-server`](#start-without-a-window). Without one, they say `no cornercase server is running` and exit with status 1.
+
+## Start without a window
+
+A server waits for its first window before it restores your session, and until then commands that open terminals refuse. A script, a cron job or another UI that never opens a window starts the server with `start-server` first:
+
+```sh
+cornercase start-server
+pane=$(cornercase start claude --prompt "fix the failing test" --worktree fix/test)
+```
+
+It starts the server if none runs, restores the saved session once (or opens the folder you ran it from), and returns once its terminals exist; run again, it does nothing and says the server is already running. Until a window attaches, terminals are 160×48, or `--cols` and `--rows`. A window that attaches later finds the same tabs, with the same ids, takes over the size and gives the terminals its colours. See [Command line](../../reference/command-line/#cornercase-start-server) for its output.
 
 ## Ids and where commands act
 
@@ -415,10 +426,10 @@ Some messages you may meet:
 
 | Message | Meaning |
 | --- | --- |
-| `no cornercase server is running` | Start cornercase first; these commands never start a server. |
+| `no cornercase server is running` | Start cornercase first, or [`cornercase start-server`](#start-without-a-window) without a window; the other commands never start one. |
 | `the running cornercase server is too old for cornercase …` | The server comes from a release without these commands, or without this one. Restart it: `cornercase kill-server` (it closes all its terminals), then `cornercase`. |
 | `the running cornercase server (…) has no … command` | The command is newer than the server. Restart the server so it runs the version you installed. |
-| `this cornercase server has not opened a window yet …` | A server started without a window has no size to give a new terminal, and hasn't restored your session yet. Run `cornercase` once. |
+| `this cornercase server has not started its session yet …` | A server started without a window has no size to give a new terminal, and hasn't restored your session yet. Run [`cornercase start-server`](#start-without-a-window), or open a window with `cornercase`. |
 | `the agent in pane … is waiting for an answer …` | `send` refused to type into an agent's question or permission prompt. |
 | `the agent in pane … shows a dialog, a panel or its shell mode …` | `send` refused to type into a Claude Code dialog, panel or shell mode. Read the pane, close it and send again, or pass `--force`. |
 | `the agent in pane … shows Claude Code's feedback survey …` | `send` refused to type while Claude Code's survey would take a digit as its answer. Dismiss it with `cornercase keys --pane … 0` and send again, or pass `--force`. |
@@ -441,10 +452,10 @@ cornercase contract --json
 ```
 
 ```text
-cornercase 0.12.108
+cornercase 0.12.116
 contract 1
 boot 4242-1700000000
-commands 30 (30 available)
+commands 31 (31 available)
 stream events 1
 features boot, structured-errors, strict-fields
 ```
@@ -454,7 +465,7 @@ features boot, structured-errors, strict-fields
 - `version`: the server's release.
 - `contract`: the version of the rules on this page, an integer starting at 1. It goes up only when something that was there changes meaning or shape, never when something is added.
 - `boot`: which start of the server this is. It changes on every start, `cornercase restart` included, since ids start again from 1. It is the same value as `CORNERCASE_SERVER` in the panes and `boot` in `status --json`.
-- `operations`: every request the server takes, by name, with `available`. One that is not available on this server has `available: false` and a `reason`; the others keep working.
+- `operations`: every request the server takes, by name, with `available`. A server with `start-server` among them can be started without a window; one without it needs a window before it opens terminals. One that is not available on this server has `available: false` and a `reason`; the others keep working.
 - `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`.
 - `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events).
 

@@ -127,6 +127,7 @@ struct Outbox {
     notifications: Vec<Notification>,
     detach: bool,
     restart: bool,
+    start: Option<(u64, (u16, u16))>,
 }
 
 pub(crate) struct App {
@@ -273,7 +274,23 @@ impl App {
         })
     }
 
+    pub(crate) fn take_start(&mut self) -> Option<(u64, (u16, u16))> {
+        self.outbox.start.take()
+    }
+
     pub(crate) fn set_theme(&mut self, theme: HostTheme) {
+        self.theme = theme;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn backgrounds(&self) -> Vec<Option<libghostty_vt::style::RgbColor>> {
+        self.projects.terms().map(|term| term.emulator.default_background()).collect()
+    }
+
+    pub(crate) fn retheme(&mut self, theme: HostTheme) {
+        for term in self.projects.terms_mut() {
+            term.set_theme(&theme);
+        }
         self.theme = theme;
     }
 

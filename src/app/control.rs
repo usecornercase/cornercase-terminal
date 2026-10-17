@@ -23,7 +23,8 @@ use crate::app::App;
 use crate::app::flow_runs::Starting;
 use crate::app::messenger::CLIENTS as MESSENGER_CLIENTS;
 use crate::control::contract::{Code, Refusal};
-use crate::control::{self, Command, Done, Ids, Item, Request};
+use crate::control::start_server::Started;
+use crate::control::{self, Command, Done, Ids, Item, Request, StartServer};
 use crate::error;
 use crate::git;
 use crate::log::{self, Level};
@@ -37,8 +38,8 @@ const STARTS_WITHIN: Duration = Duration::from_secs(10);
 
 pub(super) const CONFIRM_WITHIN: Duration = Duration::from_secs(10);
 
-const NO_SIZE: &str = "this cornercase server has not opened a window yet, so a new terminal would have no size; \
-    run `cornercase` once first";
+const NO_SIZE: &str = "this cornercase server has not started its session yet, so a new terminal would have no size; \
+    run `cornercase start-server` (or open a window with `cornercase`) first";
 
 const NO_PROJECT: &str = "no project is open; open one with `cornercase open PATH`";
 
@@ -245,6 +246,16 @@ impl App {
         });
     }
 
+    fn start_server_request(&mut self, client: u64, start: &StartServer) -> Handled {
+        let size = start.size().map_err(|message| Refusal::new(Code::Malformed, message))?;
+        self.outbox.start = Some((client, size));
+        Ok(None)
+    }
+
+    pub(crate) fn answer_start(&mut self, client: u64, started: Result<&Started, String>) {
+        self.refuse_or_answer(Some(client), started.map(json).map_err(|message| Refusal::new(Code::Failed, message)));
+    }
+
     fn answer(&mut self, client: Option<u64>, reply: Reply) {
         self.refuse_or_answer(client, reply.map_err(Refusal::from));
     }
@@ -293,6 +304,7 @@ impl App {
             Command::Status(_) => Ok(Some(json(&self.report(caller)))),
             Command::Stats(_) => Ok(Some(json(&self.stats_view(SystemTime::now())))),
             Command::Contract(_) => Ok(Some(json(&contract::descriptor()))),
+            Command::StartServer(start) => self.start_server_request(client, &start),
             Command::Open(open) => self.open_request(&open, area),
             Command::NewWorkspace(new) => self.new_workspace_request(client, caller, new, area),
             Command::NewTab(new) => self.new_tab_request(client, caller, new, area, now),

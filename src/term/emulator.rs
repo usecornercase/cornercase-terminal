@@ -90,6 +90,15 @@ impl Emulator {
         })
     }
 
+    pub(crate) fn set_theme(&mut self, theme: &HostTheme) -> Result<()> {
+        apply_theme(&mut self.vt, theme)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn default_background(&self) -> Option<libghostty_vt::style::RgbColor> {
+        self.vt.default_bg_color().ok().flatten()
+    }
+
     pub(crate) fn take_copied(&mut self) -> Vec<String> {
         std::mem::take(&mut self.copied.borrow_mut())
     }

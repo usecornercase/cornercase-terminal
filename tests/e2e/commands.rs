@@ -272,30 +272,7 @@ fn several_agents_messages_are_read_in_order_and_failures_leave_the_others_visib
 }
 
 fn agent_app() -> Harness {
-    let session = Session::new();
-    std::fs::create_dir(session.dir.join("bin")).expect("create bin");
-    let agent = session.dir.join("bin").join("claude");
-    write_executable(
-        &agent,
-        r#"#!/bin/sh
-d="$CLAUDE_CONFIG_DIR"; mkdir -p "$d/sessions"; s="$d/sessions/$$.json"
-t="$d/projects/$(printf %s "$PWD" | tr -c 'A-Za-z0-9' '-')"; mkdir -p "$t"; n=0
-state() { printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "$PWD" "$1" > "$s"; }
-finished() { while [ ! -e "$d/finish" ]; do sleep 0.02; done; rm -f "$d/finish"; }
-said() { n=$((n+1)); printf '{"type":"assistant","timestamp":"2026-10-08T12:00:0%s.000Z","message":{"id":"m%s","model":"claude-opus-5-5","content":[{"type":"text","text":"said: %s"}]}}\n' "$n" "$n" "$1" >> "$t/s$$.jsonl"; }
-: > "$t/s$$.jsonl"
-state idle
-while printf 'agent> ' && IFS= read -r line; do
-  case "$line" in *panel*) printf 'Shell details\n'; read -r line; continue ;; esac
-  printf '{"type":"user","origin":{"kind":"human"},"timestamp":"%s.999Z"}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl"
-  state busy; finished; said "$line"
-  case "$line" in *background*) state shell; finished ;; esac
-  printf 'done: %s\n' "$line"; state idle
-done
-"#,
-    );
-    let config = format!("{{\"agent_commands\": {{\"claude\": \"{}\"}}}}", agent.display());
-    std::fs::write(session.dir.join("config.json"), config).expect("write config");
+    let session = agent_session();
     let mut app = Harness::open(Arc::clone(&session), ROWS, COLS);
     app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
     app
@@ -482,7 +459,7 @@ fn a_server_without_a_window_refuses_new_terminals() {
 
     let out = session.cli(&["new-tab"]);
 
-    assert!(refused(&out, 1, "has not opened a window yet"), "{out:?}");
+    assert!(refused(&out, 1, "cornercase start-server"), "{out:?}");
     assert_eq!(session.report().projects, []);
     drop(session);
     let _ = server.wait();

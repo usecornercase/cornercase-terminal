@@ -124,7 +124,7 @@ fn new_terminals_need_a_window_to_take_their_size_from() {
 
     request(&mut app, None, new_tab(None), None);
 
-    assert!(error(answers(&mut app).remove(0)).contains("has not opened a window yet"));
+    assert!(error(answers(&mut app).remove(0)).contains("cornercase start-server"));
 }
 
 #[test]

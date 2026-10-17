@@ -9,6 +9,7 @@ use serde_json::Value;
 pub(crate) mod contract;
 mod flow;
 mod search;
+pub(crate) mod start_server;
 
 pub(crate) use contract::Contract;
 pub(crate) use flow::{
@@ -16,6 +17,7 @@ pub(crate) use flow::{
     RunInfo,
 };
 pub(crate) use search::{Hit, Matches, Search};
+pub(crate) use start_server::StartServer;
 
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
 pub(crate) const SERVER_ENV: &str = "CORNERCASE_SERVER";
@@ -87,6 +89,7 @@ pub(crate) enum Command {
     FlowImport(FlowImport),
     Search(Search),
     Contract(Contract),
+    StartServer(StartServer),
 }
 
 impl Command {
@@ -122,6 +125,7 @@ impl Command {
             Self::FlowImport(_) => 27,
             Self::Search(_) => 28,
             Self::Contract(_) => 29,
+            Self::StartServer(_) => 30,
         }]
     }
 
@@ -219,11 +223,14 @@ impl Command {
             Self::Search(search) => {
                 fields.add("bytes", search.query.len());
             }
+            Self::StartServer(start) => {
+                fields.maybe("cols", start.cols).maybe("rows", start.rows);
+            }
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 30] = [
+    pub(crate) const NAMES: [&str; 31] = [
         "status",
         "open",
         "new-workspace",
@@ -254,6 +261,7 @@ impl Command {
         "flow-import",
         "search",
         "contract",
+        "start-server",
     ];
 }
 

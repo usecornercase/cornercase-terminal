@@ -19,6 +19,7 @@ use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 
 use crate::app::{App, AppEvent, Streamed};
+use crate::control::start_server::SizeFrom;
 use crate::control::{self, Ids, What};
 use crate::error::{Error, Result};
 use crate::host::notify::{self, Channel};
@@ -28,15 +29,17 @@ use crate::log::{self, Level};
 use crate::panics;
 use crate::paths;
 use crate::persist::{self, Saver};
-use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
+use crate::protocol::{self, ClientMessage, ServerMessage};
 use crate::queue;
 use crate::state;
 use crate::todo;
 use crate::version;
 
 mod images;
+mod startup;
 
 use images::Graphics;
+use startup::Startup;
 
 const TICK: Duration = Duration::from_millis(500);
 const SLOW_STEP: Duration = Duration::from_millis(100);
@@ -282,7 +285,8 @@ struct Server {
     area: Option<Rect>,
     next_client: u64,
     uses: u64,
-    started: bool,
+    startup: Startup,
+    size_from: SizeFrom,
     build: String,
     session: PathBuf,
     saver: Saver<state::State>,
@@ -444,7 +448,8 @@ impl Server {
             area: None,
             next_client: 1,
             uses: 0,
-            started: false,
+            startup: Startup::Waiting,
+            size_from: SizeFrom::Window,
             build: version::build_id(),
             saver: Saver::new(session.clone(), None),
             session,
@@ -578,7 +583,7 @@ impl Server {
             return;
         }
         self.observed = Some(now);
-        if self.started {
+        if self.started() {
             match self.saver.observe(self.app.state(), now) {
                 Ok(true) => log::debug!("server", "session saved", path = self.session.display()),
                 Ok(false) => {}
@@ -689,6 +694,9 @@ impl Server {
             }
             ServerEvent::Message(id, ClientMessage::Request(text)) => {
                 self.app.request(id, &text, self.area, Instant::now());
+                if let Some((client, size)) = self.app.take_start() {
+                    self.start_server(client, size);
+                }
             }
             ServerEvent::Message(id, ClientMessage::Graphics(graphics)) => {
                 log::info!(
@@ -753,76 +761,6 @@ impl Server {
         self.clients.iter_mut().find(|c| c.id == id)
     }
 
-    fn hello(&mut self, id: u64, hello: Hello) {
-        if hello.version != protocol::VERSION || hello.build != self.build {
-            log::warning!("server", "client from another build", client = id, build = hello.build);
-            self.reject(id, OTHER_BUILD);
-            return;
-        }
-        log::info!(
-            "server",
-            "client attached",
-            client = id,
-            cols = hello.cols,
-            rows = hello.rows,
-            terminal = hello.terminal.as_deref().unwrap_or("unknown"),
-            notify = hello.notify.id(),
-            pointer = hello.pointer.map_or("none", pointer::Terminal::id),
-            background = if hello.theme.background.is_some() { "known" } else { "unknown" },
-            truecolor = hello.theme.truecolor,
-            images = hello.graphics.images(),
-            cell = hello.graphics.cell_size(),
-            tmux = hello.graphics.tmux.id(),
-            missing = hello.graphics.why_not(),
-            id_hi = hello.graphics.id_hi,
-            probe = hello.probe,
-        );
-        let Some(client) = self.client_mut(id) else { return };
-        client.size = Some((hello.cols, hello.rows));
-        client.notify = hello.notify;
-        client.zone = hello.zone;
-        client.pointer = hello.pointer;
-        let background = hello.theme.background.map(|c| (c.r, c.g, c.b));
-        client.graphics = Graphics::new(id, hello.graphics, background);
-        self.touch(id);
-        self.fit(Some(id));
-        if !self.started {
-            self.started = true;
-            self.app.set_theme(hello.theme);
-            if let Err(e) = self.open_first_terminals() {
-                log::error!("server", "could not open a first terminal", error = e);
-            }
-            self.app.start_plugins();
-        }
-    }
-
-    fn open_first_terminals(&mut self) -> Result<()> {
-        let area = self.area.unwrap_or_default();
-        let saved = state::load(&self.session);
-        let complete = saved.as_ref().is_none_or(|saved| self.app.restore(saved, area));
-        match &saved {
-            Some(saved) => log::info!(
-                "server",
-                "session restored",
-                projects = saved.projects.len(),
-                complete = complete,
-                path = self.session.display()
-            ),
-            None => log::info!("server", "no session to restore", path = self.session.display()),
-        }
-        if !complete {
-            match persist::back_up(&self.session) {
-                Ok(backup) => log::warning!("server", "the session came back incomplete", copy = backup.display()),
-                Err(e) => log::error!("server", "failed to keep a copy of the session", error = e),
-            }
-        }
-        self.saver = Saver::new(self.session.clone(), saved);
-        if self.app.is_empty() || !(complete || self.app.has_terms()) {
-            self.app.open_here(area)?;
-        }
-        Ok(())
-    }
-
     fn input(&mut self, id: u64, ev: Event) {
         let Some(client) = self.client_mut(id).filter(|c| c.size.is_some()) else { return };
         if let Event::Resize(cols, rows) = ev {
@@ -869,20 +807,6 @@ impl Server {
         }
     }
 
-    fn fit(&mut self, resized: Option<u64>) {
-        let latest = self.clients.iter().filter(|c| c.size.is_some()).max_by_key(|c| c.used).and_then(|c| c.size);
-        let Some((cols, rows)) = latest else { return };
-        let area = Rect::new(0, 0, cols, rows);
-        let area_changed = self.area != Some(area);
-        if area_changed {
-            log::info!("server", "size", cols = cols, rows = rows);
-        }
-        self.area = Some(area);
-        for client in self.clients.iter_mut().filter(|c| area_changed || Some(c.id) == resized) {
-            client.reset_screen(area);
-        }
-    }
-
     fn reject(&mut self, id: u64, reason: &str) {
         log::warning!("server", "client rejected", client = id);
         if let Some(client) = self.client_mut(id) {
@@ -916,7 +840,7 @@ impl Server {
             log::error!("server", "failed to save the todo list", error = e);
         }
         if self.restart.is_some()
-            && self.started
+            && self.started()
             && let Err(e) = persist::save(&self.session, &self.app.state())
         {
             log::error!("server", "failed to save the session", error = e);

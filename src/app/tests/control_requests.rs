@@ -387,6 +387,7 @@ mod grok;
 mod one_folder;
 mod searching;
 mod setup;
+mod start_server;
 mod talking;
 mod telegram;
 mod worktrees;

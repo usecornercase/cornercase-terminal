@@ -53,6 +53,10 @@ impl App {
         self.queued.zone = zone;
     }
 
+    pub(crate) fn set_queue_area(&mut self, area: Rect) {
+        self.queued.area = Some(area);
+    }
+
     pub(super) fn drive_queue(&mut self, clock: i64, now: Instant) {
         if self.queued.area.is_none() {
             return;
