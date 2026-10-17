@@ -70,8 +70,24 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
     let split = TabState {
         name: Some("split shell".into()),
         panes: vec![
-            PaneState { cwd: Some(paths[2].clone()), right_clicks: false, agent: None, done: false, pending: false },
-            PaneState { cwd: Some(paths[3].clone()), right_clicks: true, agent: None, done: false, pending: false },
+            PaneState {
+                cwd: Some(paths[2].clone()),
+                right_clicks: false,
+                agent: None,
+                done: false,
+                pending: false,
+                id: None,
+                parent: None,
+            },
+            PaneState {
+                cwd: Some(paths[3].clone()),
+                right_clicks: true,
+                agent: None,
+                done: false,
+                pending: false,
+                id: None,
+                parent: None,
+            },
         ],
         active: 1,
         layout: Some(split::Node::Split {
@@ -111,6 +127,8 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                                         agent: None,
                                         done: false,
                                         pending: false,
+                                        id: None,
+                                        parent: None,
                                     }],
                                     active: 0,
                                     layout: None,
@@ -227,6 +245,8 @@ fn with_a_locked_pane(dir: &Path, locked: &Locked) -> WorkspaceState {
         agent: None,
         done: false,
         pending: false,
+        id: None,
+        parent: None,
     });
     ws
 }
@@ -260,7 +280,8 @@ fn a_split_tab_with_one_pane_that_cannot_start_is_left_out_whole() {
 fn a_tab_that_cannot_start_names_the_folder_and_why() {
     let (dir, locked, mut app, _rx, ws) = locked_restore();
 
-    let Err(e) = app.restore_tab(&ws.tabs[0], dir.path(), AREA, |_| None, None) else {
+    let Err(e) = app.restore_tab(&ws.tabs[0], dir.path(), AREA, |_| None, None, &mut session::Parents::default())
+    else {
         panic!("the second pane cannot start");
     };
 
@@ -363,4 +384,76 @@ fn a_window_that_comes_later_gives_its_colours_to_the_panes_already_open() {
 
     assert!(app.projects.terms().all(|term| term.emulator.default_background() == Some(background)));
     assert_eq!(app.theme.background, Some(background));
+}
+
+mod parents {
+    use super::*;
+
+    fn pane(id: Option<u64>, parent: Option<u64>) -> PaneState {
+        PaneState { id, parent, ..PaneState::at(None) }
+    }
+
+    fn workspace(dir: &Path, panes: Vec<PaneState>) -> WorkspaceState {
+        let mut ws = WorkspaceState::plain(dir.to_path_buf(), vec![None; panes.len()], 0);
+        for (tab, pane) in ws.tabs.iter_mut().zip(panes) {
+            tab.panes = vec![pane];
+        }
+        ws
+    }
+
+    fn parents(app: &App) -> Vec<(u64, Option<u64>)> {
+        app.projects.terms().map(|term| (term.id, term.parent)).collect()
+    }
+
+    #[test]
+    fn children_come_back_under_their_parents_with_new_ids() {
+        let (a, b) = (TempDir::new(), TempDir::new());
+        let (mut app, _rx) = empty_app();
+        let first = project(a.path(), vec![workspace(a.path(), vec![pane(Some(50), Some(40))])]);
+        let second = project(b.path(), vec![workspace(b.path(), vec![pane(Some(40), None), pane(None, Some(50))])]);
+
+        assert!(app.restore(&saved(vec![first, second], 0), AREA), "every tab comes back");
+
+        let found = parents(&app);
+        let [(child, under_parent), (parent, None), (grandchild, under_child)] = found[..] else {
+            panic!("three panes, only the root without a parent: {found:?}");
+        };
+        assert_eq!((under_parent, under_child), (Some(parent), Some(child)));
+        assert!(![40, 50].contains(&parent) && grandchild != child, "the new ids are used");
+        let saved: Vec<PaneState> = app
+            .state()
+            .projects
+            .iter()
+            .flat_map(|p| &p.workspaces)
+            .flat_map(|w| &w.tabs)
+            .flat_map(|t| t.panes.clone())
+            .collect();
+        let ids: Vec<_> = saved.iter().map(|pane| (pane.id, pane.parent)).collect();
+        assert_eq!(ids, [(Some(child), Some(parent)), (Some(parent), None), (None, Some(child))]);
+    }
+
+    #[test]
+    fn a_parent_in_a_skipped_project_is_dropped() {
+        let dir = TempDir::new();
+        let (mut app, _rx) = empty_app();
+        let gone = Path::new("/nonexistent/folder");
+        let skipped = project(gone, vec![workspace(gone, vec![pane(Some(40), None)])]);
+        let kept = project(dir.path(), vec![workspace(dir.path(), vec![pane(None, Some(40))])]);
+
+        app.restore(&saved(vec![skipped, kept], 1), AREA);
+
+        assert!(parents(&app).iter().all(|(_, parent)| parent.is_none()));
+    }
+
+    #[test]
+    fn a_parent_not_older_than_its_child_is_dropped() {
+        let dir = TempDir::new();
+        let (mut app, _rx) = empty_app();
+        let panes = vec![pane(Some(5), Some(7)), pane(Some(7), Some(5)), pane(Some(9), Some(9))];
+
+        app.restore(&saved(vec![project(dir.path(), vec![workspace(dir.path(), panes)])], 0), AREA);
+
+        let found = parents(&app);
+        assert_eq!(found.iter().map(|(_, parent)| *parent).collect::<Vec<_>>(), [None, Some(found[0].0), None]);
+    }
 }

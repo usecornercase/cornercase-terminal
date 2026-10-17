@@ -497,7 +497,8 @@ fn restore_brings_back_the_layout_and_the_right_clicks() {
 fn a_tab_saved_without_a_layout_puts_its_panes_side_by_side() {
     let dir = TempDir::new();
     let (mut app, _rx) = empty_app();
-    let pane_state = PaneState { cwd: None, right_clicks: false, agent: None, done: false, pending: false };
+    let pane_state =
+        PaneState { cwd: None, right_clicks: false, agent: None, done: false, pending: false, id: None, parent: None };
     let tab = TabState { name: None, panes: vec![pane_state.clone(), pane_state], active: 1, layout: None };
     let workspace = WorkspaceState {
         path: dir.path().to_path_buf(),

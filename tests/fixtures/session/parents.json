@@ -1,0 +1,47 @@
+{
+  "version": 5,
+  "projects": [
+    {
+      "path": "projects/team",
+      "workspaces": [
+        {
+          "path": "projects/team",
+          "worktree": false,
+          "tabs": [
+            {
+              "panes": [
+                {
+                  "cwd": "projects/team",
+                  "id": 4
+                }
+              ],
+              "active": 0
+            },
+            {
+              "panes": [
+                {
+                  "cwd": "projects/team",
+                  "id": 7,
+                  "parent": 4
+                }
+              ],
+              "active": 0
+            },
+            {
+              "panes": [
+                {
+                  "cwd": "projects/team",
+                  "parent": 7
+                }
+              ],
+              "active": 0
+            }
+          ],
+          "active": 0
+        }
+      ],
+      "active": 0
+    }
+  ],
+  "active": 0
+}

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -9,7 +10,7 @@ use crate::flows::{Flow, folder};
 use crate::issues::People;
 use crate::project::group::GroupEntry;
 use crate::project::split::Node;
-use crate::project::{Project, Tab, Workspace};
+use crate::project::{Hierarchy, Project, Tab, Workspace};
 use crate::term::Term;
 
 pub(crate) const VERSION: u32 = 5;
@@ -176,13 +177,17 @@ pub(crate) struct PaneState {
     pub(crate) done: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) pending: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) parent: Option<u64>,
 }
 
 impl WorkspaceState {
     pub(crate) fn plain(path: PathBuf, cwds: Vec<Option<PathBuf>>, active: usize) -> Self {
         let tabs = cwds.into_iter().map(|cwd| TabState {
             name: None,
-            panes: vec![PaneState { cwd, right_clicks: false, agent: None, done: false, pending: false }],
+            panes: vec![PaneState::at(cwd)],
             active: 0,
             layout: None,
         });
@@ -201,14 +206,25 @@ impl WorkspaceState {
     }
 }
 
+impl PaneState {
+    pub(crate) fn at(cwd: Option<PathBuf>) -> Self {
+        Self { cwd, right_clicks: false, agent: None, done: false, pending: false, id: None, parent: None }
+    }
+}
+
+pub(crate) fn named_parents(projects: &[Project]) -> HashSet<u64> {
+    let ids: HashSet<u64> = projects.terms().map(|term| term.id).collect();
+    projects.terms().filter_map(|term| term.parent).filter(|parent| ids.contains(parent)).collect()
+}
+
 impl ProjectState {
-    pub(crate) fn of(project: &Project, group: Option<usize>, runs: &[Run]) -> Self {
+    pub(crate) fn of(project: &Project, group: Option<usize>, runs: &[Run], parents: &HashSet<u64>) -> Self {
         let run = |id: u64| runs.iter().find(|run| run.workspace == id);
         Self {
             path: project.path.clone(),
             name: project.name.clone(),
             group,
-            workspaces: project.workspaces.iter().map(|w| WorkspaceState::of(w, run(w.id))).collect(),
+            workspaces: project.workspaces.iter().map(|w| WorkspaceState::of(w, run(w.id), parents)).collect(),
             active: project.active,
             collapsed: project.collapsed,
         }
@@ -251,13 +267,13 @@ impl TabState {
 }
 
 impl WorkspaceState {
-    pub(crate) fn of(workspace: &Workspace, run: Option<&Run>) -> Self {
+    pub(crate) fn of(workspace: &Workspace, run: Option<&Run>, parents: &HashSet<u64>) -> Self {
         Self {
             path: workspace.path.clone(),
             name: workspace.name.clone(),
             worktree: workspace.worktree,
             base: workspace.base.clone(),
-            tabs: workspace.tabs.iter().map(TabState::of).collect(),
+            tabs: workspace.tabs.iter().map(|tab| TabState::of(tab, parents)).collect(),
             active: workspace.active,
             collapsed: workspace.collapsed,
             run: run.map(|run| RunState::of(run, workspace)),
@@ -268,7 +284,7 @@ impl WorkspaceState {
 }
 
 impl TabState {
-    pub(crate) fn of(tab: &Tab) -> Self {
+    pub(crate) fn of(tab: &Tab, parents: &HashSet<u64>) -> Self {
         Self {
             name: tab.name.clone(),
             panes: tab
@@ -280,6 +296,8 @@ impl TabState {
                     agent: term.resume.clone(),
                     done: term.resume.is_some() && term.agent.unseen(),
                     pending: term.resume.is_some() && term.agent.pending(),
+                    id: parents.contains(&term.id).then_some(term.id),
+                    parent: term.parent.filter(|parent| parents.contains(parent)),
                 })
                 .collect(),
             active: tab.active,
@@ -372,13 +390,7 @@ impl From<V1State> for V2State {
             if i <= old.active {
                 active = workspaces.len();
             }
-            let terminals = vec![PaneState {
-                cwd: Some(cwd.clone()),
-                right_clicks: false,
-                agent: None,
-                done: false,
-                pending: false,
-            }];
+            let terminals = vec![PaneState::at(Some(cwd.clone()))];
             workspaces.push(V2Workspace { path: cwd, name: term.name, terminals, active: 0 });
         }
         Self { workspaces, active }
