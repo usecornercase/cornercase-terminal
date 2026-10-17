@@ -8,7 +8,7 @@ use super::*;
 use crate::test_util::TempDir;
 
 fn row(text: &str) -> Vec<Cell> {
-    text.chars().map(|c| Cell { symbol: c.to_string(), style: Style::default() }).collect()
+    text.chars().map(|c| Cell { symbol: c.to_string(), style: Style::default(), spacer: false }).collect()
 }
 
 struct Seen {

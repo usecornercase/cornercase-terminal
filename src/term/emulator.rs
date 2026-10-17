@@ -6,8 +6,9 @@ use crossterm::event::KeyEvent;
 use libghostty_vt::Terminal;
 use libghostty_vt::fmt::{Format, Formatter, FormatterOptions};
 use libghostty_vt::key::{Encoder, KittyKeyFlags};
+use libghostty_vt::render::CursorVisualStyle;
 use libghostty_vt::render::{CellIterator, RenderState, RowIterator};
-use libghostty_vt::screen::{Screen, TrackedGridRef};
+use libghostty_vt::screen::{CellWide, Screen, TrackedGridRef};
 use libghostty_vt::selection::{FormatOptions, Selection};
 use libghostty_vt::style::{Palette, StyleColor, Underline};
 use libghostty_vt::terminal::{
@@ -31,12 +32,38 @@ pub(crate) type ReplyFn = Box<dyn FnMut(&[u8])>;
 pub(crate) struct Cell {
     pub(crate) symbol: String,
     pub(crate) style: Style,
+    pub(crate) spacer: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum CursorShape {
+    #[default]
+    Block,
+    Bar,
+    Underline,
+    BlockHollow,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct Scrollbar {
+    pub(crate) total: u64,
+    pub(crate) offset: u64,
+    pub(crate) rows: u64,
+}
+
+impl Scrollbar {
+    fn below(self) -> usize {
+        usize::try_from(self.total.saturating_sub(self.offset.saturating_add(self.rows))).unwrap_or(usize::MAX)
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Snapshot {
     pub(crate) rows: Vec<Vec<Cell>>,
     pub(crate) cursor: Option<Position>,
+    pub(crate) shape: CursorShape,
+    pub(crate) blinking: bool,
+    pub(crate) scroll: Scrollbar,
     pub(crate) below: usize,
 }
 
@@ -178,10 +205,23 @@ impl Emulator {
         self.vt.scroll_viewport(ScrollViewport::Bottom);
     }
 
+    pub(crate) fn scrollbar(&self) -> Scrollbar {
+        self.vt.scrollbar().map_or_else(
+            |_| Scrollbar::default(),
+            |bar| Scrollbar { total: bar.total, offset: bar.offset, rows: bar.len },
+        )
+    }
+
     pub(crate) fn below(&self) -> usize {
-        self.vt.scrollbar().map_or(0, |bar| {
-            usize::try_from(bar.total.saturating_sub(bar.offset.saturating_add(bar.len))).unwrap_or(usize::MAX)
-        })
+        self.scrollbar().below()
+    }
+
+    pub(crate) fn focus_events(&self) -> bool {
+        self.mode(Mode::FOCUS_EVENT)
+    }
+
+    pub(crate) fn kitty_keyboard(&self) -> u8 {
+        self.vt.kitty_keyboard_flags().map_or(0, |flags| flags.bits())
     }
 
     pub(crate) fn active_contents(&mut self) -> Result<String> {
@@ -308,11 +348,19 @@ impl Emulator {
         let snap = self.render.update(&self.vt)?;
         let cursor =
             if snap.cursor_visible()? { snap.cursor_viewport()?.map(|vp| Position::new(vp.x, vp.y)) } else { None };
+        let shape = match snap.cursor_visual_style() {
+            Ok(CursorVisualStyle::Bar) => CursorShape::Bar,
+            Ok(CursorVisualStyle::Underline) => CursorShape::Underline,
+            Ok(CursorVisualStyle::BlockHollow) => CursorShape::BlockHollow,
+            _ => CursorShape::Block,
+        };
+        let blinking = snap.cursor_blinking().unwrap_or(false);
         let mut rows = Vec::new();
         let mut text = String::new();
         let mut row_it = self.rows.update(&snap)?;
         while let Some(row) = row_it.next() {
             let mut cells = Vec::new();
+            let mut spacer = false;
             let mut cell_it = self.cells.update(row)?;
             while let Some(cell) = cell_it.next() {
                 text.clear();
@@ -323,11 +371,14 @@ impl Emulator {
                 let symbol = if text.is_empty() { " ".to_string() } else { text.clone() };
                 let style = if cell.has_styling()? { to_style(cell.style()?) } else { Style::default() };
                 let style = if cell.is_selected()? { selected(style) } else { style };
-                cells.push(Cell { symbol, style });
+                let tail = std::mem::take(&mut spacer);
+                spacer = cell.graphemes_len()? > 0 && cell.raw_cell()?.wide()? == CellWide::Wide;
+                cells.push(Cell { symbol, style, spacer: tail });
             }
             rows.push(cells);
         }
-        Ok(Snapshot { rows, cursor, below: self.below() })
+        let scroll = self.scrollbar();
+        Ok(Snapshot { rows, cursor, shape, blinking, scroll, below: scroll.below() })
     }
 }
 

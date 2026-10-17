@@ -110,6 +110,54 @@ mod snapshot {
     }
 }
 
+mod surface_state {
+    use super::*;
+
+    #[test]
+    fn marks_the_cell_after_a_wide_character_as_its_spacer() {
+        let snap = snapshot_of("中x".as_bytes());
+        let row = &snap.rows[0];
+
+        assert_eq!((row[0].symbol.as_str(), row[0].spacer), ("中", false));
+        assert!(row[1].spacer);
+        assert_eq!((row[2].symbol.as_str(), row[2].spacer), ("x", false));
+    }
+
+    #[rstest]
+    #[case::bar(b"\x1b[5 q", CursorShape::Bar, true)]
+    #[case::block(b"\x1b[2 q", CursorShape::Block, false)]
+    #[case::underline(b"\x1b[4 q", CursorShape::Underline, false)]
+    fn says_the_cursor_shape_and_whether_it_blinks(
+        #[case] output: &[u8],
+        #[case] shape: CursorShape,
+        #[case] blinking: bool,
+    ) {
+        let snap = snapshot_of(output);
+
+        assert_eq!((snap.shape, snap.blinking), (shape, blinking));
+    }
+
+    #[test]
+    fn focus_events_follow_the_program() {
+        let (mut emu, _) = emulator();
+        assert!(!emu.focus_events());
+
+        emu.feed(b"\x1b[?1004h");
+
+        assert!(emu.focus_events());
+    }
+
+    #[test]
+    fn kitty_flags_follow_the_program() {
+        let (mut emu, _) = emulator();
+        assert_eq!(emu.kitty_keyboard(), 0);
+
+        emu.feed(b"\x1b[>1u");
+
+        assert_eq!(emu.kitty_keyboard(), 1);
+    }
+}
+
 mod clipboard {
     use super::*;
 
@@ -492,6 +540,18 @@ mod scrollback {
         emu.scroll(-3);
 
         assert_eq!((emu.below(), emu.snapshot().expect("snapshot").below), (3, 3));
+    }
+
+    #[test]
+    fn the_scrollbar_counts_the_history_and_where_the_view_is() {
+        let mut emu = numbered(10);
+        assert_eq!(emu.scrollbar(), Scrollbar { total: 10, offset: 6, rows: 4 });
+
+        emu.scroll(-3);
+
+        let snap = emu.snapshot().expect("snapshot");
+        assert_eq!(snap.scroll, Scrollbar { total: 10, offset: 3, rows: 4 });
+        assert_eq!(snap.below, 3);
     }
 
     #[test]
