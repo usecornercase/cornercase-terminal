@@ -223,7 +223,7 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
             </div>
           </div>
           <p class="after">
-            {page.empty && 'No plugins are listed yet. '}Add a <code>{MANIFEST}</code> to a public repository, then tag it with the topic. {page.empty ? 'Yours' : 'It'} shows up here on the next refresh, with no submission and no review.
+            Add a <code>{MANIFEST}</code> to a public repository, then tag it with the topic. {page.empty ? 'Your plugin' : 'It'} shows up here on the next refresh, with no submission and no review.
           </p>
           <p class="guide-link"><a href={`${guide}#publish-a-plugin`}>How publishing works →</a></p>
           <div class="term">

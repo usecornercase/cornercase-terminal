@@ -186,5 +186,5 @@ test('the empty state drops the browse section and shows the publish block once'
   assert.equal(astro.split('<section class="publish"').length - 1, 1);
   assert.equal(astro.split('data-plugin-copy={topicCommand}').length - 1, 1);
   assert.ok(!astro.includes('data-empty'));
-  assert.ok(astro.includes("{page.empty && 'No plugins are listed yet. '}"));
+  assert.ok(astro.includes("{page.empty ? 'Your plugin' : 'It'} shows up"));
 });
