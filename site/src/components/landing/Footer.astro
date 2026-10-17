@@ -2,21 +2,28 @@
 import { home, localeOf, words } from '../../i18n';
 import InstallBox from './InstallBox.astro';
 
+interface Props {
+  standalone?: boolean;
+}
+
+const { standalone = false } = Astro.props;
+
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const repo = 'https://github.com/usecornercase/cornercase-terminal';
 const discord = 'https://discord.gg/aYqCa4xC4R';
 const locale = localeOf(Astro.url);
 const t = words(Astro.url);
 const docsLang = locale === 'en' ? undefined : 'en';
+const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`);
 const columns: [string, [string, string, string?][]][] = [
   [
     t.footer.product,
     [
-      [t.nav.demo, '#demo'],
-      [t.nav.speed, '#speed'],
-      [t.nav.why, '#why'],
-      [t.nav.more, '#more'],
-      [t.nav.install, '#install'],
+      [t.nav.demo, anchor('demo')],
+      [t.nav.speed, anchor('speed')],
+      [t.nav.why, anchor('why')],
+      [t.nav.more, anchor('more')],
+      [t.nav.install, anchor('install')],
     ],
   ],
   [
@@ -41,19 +48,23 @@ const columns: [string, [string, string, string?][]][] = [
 ];
 ---
 
-<footer class="footer">
+<footer class:list={['footer', { standalone }]}>
   <div class="wrap">
-    <div class="cta reveal">
-      <h2>{t.footer.cta[0]}<br />{t.footer.cta[1]}<span>{t.footer.cta[2]}</span>{t.footer.cta[3]}</h2>
-      <div class="get">
-        <InstallBox />
+    {
+      !standalone && (
+      <div class="cta reveal">
+        <h2>{t.footer.cta[0]}<br />{t.footer.cta[1]}<span>{t.footer.cta[2]}</span>{t.footer.cta[3]}</h2>
+        <div class="get">
+          <InstallBox />
+        </div>
+        <div class="actions">
+          <a class="btn btn-ghost" href={`${base}/docs/first-steps/`} hreflang={docsLang}>{t.footer.first}</a>
+          <a class="btn btn-ghost" href={repo}>{t.footer.star}</a>
+          <a class="btn btn-ghost" href={discord}>{t.footer.discord}</a>
+        </div>
       </div>
-      <div class="actions">
-        <a class="btn btn-ghost" href={`${base}/docs/first-steps/`} hreflang={docsLang}>{t.footer.first}</a>
-        <a class="btn btn-ghost" href={repo}>{t.footer.star}</a>
-        <a class="btn btn-ghost" href={discord}>{t.footer.discord}</a>
-      </div>
-    </div>
+      )
+    }
     <div class="grid">
       <div class="brand">
         <a class="logo" href={home(locale)} aria-label={t.home}>
@@ -93,6 +104,15 @@ const columns: [string, [string, string, string?][]][] = [
       radial-gradient(800px 360px at 50% 0%, rgb(135 95 255 / 0.16), transparent 70%),
       var(--bg);
     overflow: hidden;
+  }
+
+  .footer.standalone {
+    padding-top: 0;
+    background: var(--bg);
+  }
+
+  .footer.standalone .grid {
+    margin-top: 0;
   }
 
   .cta {

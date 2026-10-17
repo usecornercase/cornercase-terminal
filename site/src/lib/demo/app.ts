@@ -92,7 +92,7 @@ import { type Node, type PanePlace, beside, fits, hasRoom, moved, placeArea, pla
 import { type Line, folderSlug, seg, slug, truncateRight } from './text';
 import { type Drag, type Frame, Painter, type Region } from './ui';
 
-const NO_PLUGINS = '`cornercase plugin link <folder>` adds one, then enter turns it on here';
+const NO_PLUGINS = '`cornercase plugin install <owner/repo>` adds one, then enter turns it on here';
 const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neither Tailscale nor a chat app';
 
 const ICON_BAR_NEEDS = 'this needs cornercase in your terminal: the demo has no Nerd Font';

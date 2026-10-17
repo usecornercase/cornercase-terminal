@@ -118,3 +118,38 @@ fn a_folder_that_cannot_be_linked_is_named_with_its_invisible_characters_escaped
     let error = registry.link(&home.path().join("gone\u{202e}")).expect_err("refused");
     assert!(error.contains("gone\\u{202e}") && !error.contains('\u{202e}'), "{error}");
 }
+
+mod programs {
+    use std::os::unix::fs::symlink;
+
+    use super::*;
+
+    fn with_service(dir: &Path) {
+        let text = "id = \"acme.notes\"\nname = \"Notes\"\nversion = \"1.0\"\n\n[[service]]\nid = \"s\"\ncommand = [\"bin/run\"]\n";
+        std::fs::write(dir.join(manifest::FILE), text).expect("manifest");
+        std::fs::create_dir_all(dir.join("bin")).expect("bin");
+    }
+
+    #[test]
+    fn a_program_linked_out_of_the_folder_cannot_be_linked() {
+        let (home, folder) = (TempDir::new(), TempDir::new());
+        with_service(folder.path());
+        symlink("/bin/sh", folder.path().join("bin/run")).expect("symlink");
+        let error = Registry::load(&home.path().join("plugins.json")).link(folder.path()).expect_err("refused");
+        assert!(error.contains("service s: `bin/run` is outside the plugin's folder"), "{error}");
+    }
+
+    #[test]
+    fn a_program_linked_out_later_cannot_run_and_says_why() {
+        let (home, folder) = (TempDir::new(), TempDir::new());
+        with_service(folder.path());
+        std::fs::write(folder.path().join("bin/run"), "#!/bin/sh\n").expect("script");
+        let mut registry = Registry::load(&home.path().join("plugins.json"));
+        registry.link(folder.path()).expect("link");
+        std::fs::remove_file(folder.path().join("bin/run")).expect("remove");
+        symlink("/bin/sh", folder.path().join("bin/run")).expect("symlink");
+        let listed = registry.plugins()[0].manifest.clone().expect_err("cannot run");
+        assert!(listed.contains("outside the plugin's folder"), "{listed}");
+        assert!(registry.set_enabled("acme.notes", true).expect_err("refused").contains("outside"));
+    }
+}

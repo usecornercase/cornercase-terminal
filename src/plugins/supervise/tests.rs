@@ -16,7 +16,7 @@ struct Fixture {
 impl Fixture {
     fn new(enabled: bool) -> Self {
         let (home, root) = (TempDir::new(), TempDir::new());
-        std::fs::write(root.path().join(FILE), SERVICE).expect("manifest");
+        fs::write(root.path().join(FILE), SERVICE).expect("manifest");
         write_executable(&root.path().join("serve"), "#!/bin/sh\necho $$ >> pids\nexec sleep 30\n");
         let places = Places::new(&home.path().join("config.json"), &home.path().join("session.json"));
         let mut registry = Registry::load(&places.registry);
@@ -27,7 +27,7 @@ impl Fixture {
     }
 
     fn pids(&self) -> Vec<i32> {
-        std::fs::read_to_string(self.root.path().join("pids"))
+        fs::read_to_string(self.root.path().join("pids"))
             .unwrap_or_default()
             .lines()
             .filter_map(|line| line.parse().ok())
@@ -54,7 +54,7 @@ fn a_service_that_ends_starts_again() {
     let _ = rustix::process::kill_process(rustix::process::Pid::from_raw(first).expect("pid"), Signal::KILL);
     wait_until_within("it starts again", Duration::from_secs(10), || fixture.pids().len() == 2);
     assert!(supervisor.note("acme.notes").is_some());
-    let log = std::fs::read_to_string(fixture.places.log("acme.notes")).expect("log");
+    let log = fs::read_to_string(fixture.places.log("acme.notes")).expect("log");
     assert_eq!(log.matches("service started").count(), 2, "{log}");
     drop((supervisor, fixture.home));
 }
@@ -103,4 +103,64 @@ fn window_processes_are_not_services() {
 #[case::at_most_a_minute(12, 60)]
 fn waits_longer_after_each_failure(#[case] failures: u32, #[case] seconds: u64) {
     assert_eq!(backoff(failures), Duration::from_secs(seconds));
+}
+
+#[test]
+fn a_process_that_cannot_be_recorded_is_stopped() {
+    let fixture = Fixture::new(true);
+    let state = fixture.places.state("acme.notes");
+    fs::create_dir_all(&state).expect("state folder");
+    fs::write(state.join(RUNNING_DIR), "not a folder").expect("running as a file");
+    let supervisor = Supervisor::start(Kind::Service, fixture.places.clone(), Vec::new());
+    let log = || fs::read_to_string(fixture.places.log("acme.notes")).unwrap_or_default();
+    wait_until("it is stopped again", || log().contains("service stopped") && log().contains("error="));
+    let log = log();
+    let pid: i32 = log
+        .split("service started")
+        .nth(1)
+        .and_then(|rest| rest.split("pid=").nth(1))
+        .and_then(|rest| rest.split_whitespace().next())
+        .and_then(|pid| pid.parse().ok())
+        .expect("the started pid");
+    wait_until("the process is gone", || !process::alive(pid));
+    drop((supervisor, fixture.home));
+}
+
+#[test]
+fn a_plugin_turned_off_on_disk_is_not_started_from_a_stale_list() {
+    let fixture = Fixture::new(true);
+    let plugin = Registry::load(&fixture.places.registry).plugins().remove(0);
+    let command = plugin.runs().expect("runs").service[0].command.clone();
+    fixture.switch(false);
+    let mut state = State {
+        kind: Kind::Service,
+        places: fixture.places.clone(),
+        env: Vec::new(),
+        notes: Notes::default(),
+        running: BTreeMap::new(),
+        waiting: BTreeMap::new(),
+    };
+    let key = Key { plugin: "acme.notes".into(), entry: "sync".into() };
+    state.spawn(&key, &Spec { plugin, command }, Instant::now());
+    assert!(state.running.is_empty() && fixture.pids().is_empty());
+}
+
+#[test]
+fn a_spawn_is_skipped_while_removal_holds_the_lock() {
+    let fixture = Fixture::new(true);
+    let plugin = Registry::load(&fixture.places.registry).plugins().remove(0);
+    let command = plugin.runs().expect("runs").service[0].command.clone();
+    let held = lock_file(&fixture.places, "acme.notes").expect("lock file");
+    flock(&held, FlockOperation::NonBlockingLockExclusive).expect("exclusive");
+    let mut state = State {
+        kind: Kind::Service,
+        places: fixture.places.clone(),
+        env: Vec::new(),
+        notes: Notes::default(),
+        running: BTreeMap::new(),
+        waiting: BTreeMap::new(),
+    };
+    let key = Key { plugin: "acme.notes".into(), entry: "sync".into() };
+    state.spawn(&key, &Spec { plugin, command }, Instant::now());
+    assert!(state.running.is_empty() && fixture.pids().is_empty());
 }

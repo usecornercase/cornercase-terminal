@@ -17,7 +17,7 @@ test('the Plugins tab is last and says how to add one and that plugins run as yo
   assert.ok(app.textAt('plugins run as you'));
   inputKey(app, key('Enter'));
   app.render();
-  assert.ok(app.textAt('`cornercase plugin link <folder>` adds one'));
+  assert.ok(app.textAt('`cornercase plugin install <owner/repo>` adds one'));
   inputKey(app, key('Tab'));
   assert.equal(app.overlay?.kind === 'settings' && app.overlay.page, 0);
   app.destroy();

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::fs::Metadata;
 use std::io::Read as _;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
@@ -40,6 +40,10 @@ pub(crate) struct Manifest {
     pub(crate) service: Vec<Process>,
     #[serde(default)]
     pub(crate) window: Vec<Process>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) download: BTreeMap<String, Download>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) build: Vec<Build>,
 }
 
 fn first_api() -> u32 {
@@ -106,21 +110,38 @@ pub(crate) struct Process {
     pub(crate) command: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub(crate) struct Download {
+    pub(crate) url: String,
+    pub(crate) sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub(crate) struct Build {
+    pub(crate) command: Vec<String>,
+}
+
 pub(crate) fn platform() -> &'static str {
     if cfg!(target_os = "macos") { "macos" } else { "linux" }
 }
 
 impl Manifest {
     pub(crate) fn load(root: &Path) -> Result<Self, String> {
-        Self::read(root).map_err(|e| text::escape_hidden(&e))
+        let manifest = Self::read(root)?;
+        manifest.programs(root)?;
+        Ok(manifest)
     }
 
-    fn read(root: &Path) -> Result<Self, String> {
+    pub(crate) fn read(root: &Path) -> Result<Self, String> {
+        Self::open(root).map_err(|e| text::escape_hidden(&e))
+    }
+
+    fn open(root: &Path) -> Result<Self, String> {
         let path = root.join(FILE);
         let cannot = |e: &dyn std::fmt::Display| format!("cannot read {}: {e}", path.display());
         let file = std::fs::OpenOptions::new()
             .read(true)
-            .custom_flags(OFlags::NONBLOCK.bits().cast_signed())
+            .custom_flags((OFlags::NONBLOCK | OFlags::NOFOLLOW).bits().cast_signed())
             .open(&path)
             .map_err(|e| cannot(&e))?;
         let meta = file.metadata().map_err(|e| cannot(&e))?;
@@ -150,6 +171,9 @@ impl Manifest {
             return Err(format!("{FILE}: {field} `{}` has an invisible or control character", around_hidden(value)));
         }
         valid_id("id", &self.id)?;
+        if serde_json::to_value(self).is_ok_and(|value| has_control(&value)) {
+            return Err(format!("{FILE}: a text in it holds a control character, such as an escape or a new line"));
+        }
         for (field, value) in [("name", &self.name), ("version", &self.version)] {
             if value.trim().is_empty() {
                 return Err(format!("{FILE}: `{field}` is empty"));
@@ -193,6 +217,12 @@ impl Manifest {
                 valid_command(&format!("{kind} `{}`", process.id), &process.command)?;
             }
         }
+        for build in &self.build {
+            valid_command("a build step", &build.command)?;
+        }
+        for (target, download) in &self.download {
+            valid_download(target, download)?;
+        }
         Ok(())
     }
 
@@ -215,6 +245,43 @@ impl Manifest {
                 std::iter::once(("a process id", p.id.as_str()))
                     .chain(p.command.iter().map(|arg| ("a command", arg.as_str())))
             }))
+            .chain(self.build.iter().flat_map(|b| b.command.iter().map(|arg| ("a build command", arg.as_str()))))
+            .chain(self.download.iter().flat_map(|(target, d)| {
+                [
+                    ("a download target", target.as_str()),
+                    ("a download url", d.url.as_str()),
+                    ("a download sha256", d.sha256.as_str()),
+                ]
+            }))
+    }
+
+    pub(crate) fn commands(&self) -> Vec<(String, &[String])> {
+        let mut commands: Vec<(String, &[String])> = Vec::new();
+        for process in &self.service {
+            commands.push((format!("service {}", process.id), &process.command));
+        }
+        for process in &self.window {
+            commands.push((format!("window process {}", process.id), &process.command));
+        }
+        for action in &self.actions {
+            let contexts: Vec<&str> = action.contexts.iter().map(|c| c.name()).collect();
+            commands.push((format!("action {} ({})", action.id, contexts.join(", ")), &action.command));
+        }
+        for hook in &self.events {
+            commands.push((format!("on {}", hook.on.name()), &hook.command));
+        }
+        commands
+    }
+
+    fn programs(&self, root: &Path) -> Result<(), String> {
+        for (what, command) in self.commands() {
+            program(root, command).map_err(|e| format!("{what}: {e}"))?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn download_here(&self) -> Option<&Download> {
+        self.download.get(crate::update::target()?)
     }
 
     pub(crate) fn runs(&self) -> Vec<String> {
@@ -271,6 +338,30 @@ fn valid_command(what: &str, command: &[String]) -> Result<(), String> {
     let path = Path::new(program);
     if path.is_relative() && path.components().any(|part| part == Component::ParentDir) {
         return Err(format!("{FILE}: {what} runs `{program}`, outside the plugin's folder"));
+    }
+    Ok(())
+}
+
+fn has_control(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::String(text) => text.chars().any(char::is_control),
+        serde_json::Value::Array(items) => items.iter().any(has_control),
+        serde_json::Value::Object(fields) => {
+            fields.iter().any(|(key, value)| key.chars().any(char::is_control) || has_control(value))
+        }
+        _ => false,
+    }
+}
+
+fn valid_download(target: &str, download: &Download) -> Result<(), String> {
+    let sha = &download.sha256;
+    if sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(format!("{FILE}: the download for {target} needs a sha256 of 64 hexadecimal digits"));
+    }
+    let url = download.url.as_str();
+    let loopback = ["http://127.0.0.1:", "http://localhost:"].iter().any(|start| url.starts_with(start));
+    if !(url.starts_with("https://") || loopback) || url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err(format!("{FILE}: the download for {target} must be an https:// address"));
     }
     Ok(())
 }

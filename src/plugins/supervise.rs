@@ -1,4 +1,7 @@
 use std::collections::BTreeMap;
+use std::fs::{self, File};
+use std::io::Write as _;
+use std::os::unix::fs::OpenOptionsExt;
 use std::process::Child;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -7,17 +10,22 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
+use rustix::fs::{FlockOperation, flock};
+use rustix::io::Errno;
 use rustix::process::Signal;
 
-use super::registry::{Plugin, Watch};
-use super::run::Places;
+use super::registry::{Entry, Plugin, Registry, Watch};
+use super::run::{Places, private_dir};
 use crate::log;
 use crate::panics;
+use crate::process;
 
 const CHECK_EVERY: Duration = Duration::from_millis(250);
+const LOCK_FILE: &str = "running.lock";
 const HEALTHY_AFTER: Duration = Duration::from_secs(60);
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
 const STOP_WITHIN: Duration = Duration::from_secs(2);
+const RUNNING_DIR: &str = "running";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Kind {
@@ -165,7 +173,18 @@ impl State {
 
     fn spawn(&mut self, key: &Key, spec: &Spec, now: Instant) {
         let kind = self.kind.name();
-        let child = self.places.command(&spec.plugin, &spec.command, &self.env, None).and_then(|mut c| c.spawn());
+        let lock = try_shared(&self.places, &key.plugin);
+        let child = match &lock {
+            Ok(Some(_)) if !on_disk(&self.places, &spec.plugin.entry) => return,
+            Ok(Some(_)) if !spec.plugin.root().is_dir() => {
+                Err(std::io::Error::new(std::io::ErrorKind::NotFound, "the plugin's folder is gone"))
+            }
+            Ok(Some(_)) => {
+                self.places.command(&spec.plugin, &spec.command, &self.env, None).and_then(|mut c| c.spawn())
+            }
+            Ok(None) => return,
+            Err(e) => Err(std::io::Error::new(e.kind(), e.to_string())),
+        };
         match child {
             Ok(child) => {
                 log::info!("plugins", "started", kind = kind, plugin = key.plugin, entry = key.entry, pid = child.id());
@@ -174,7 +193,29 @@ impl State {
                     &format!("{kind} started"),
                     &[("entry", &key.entry), ("pid", &child.id())],
                 );
-                self.running.insert(key.clone(), Running { spec: spec.clone(), child, since: now });
+                let run = Running { spec: spec.clone(), child, since: now };
+                match record(&self.places, &key.plugin, run.child.id(), &format!("{kind} {}", key.entry)) {
+                    Ok(()) => {
+                        self.running.insert(key.clone(), run);
+                    }
+                    Err(e) => {
+                        log::warning!(
+                            "plugins",
+                            "cannot record a running process, stopping it",
+                            kind = kind,
+                            plugin = key.plugin,
+                            entry = key.entry,
+                            error = e
+                        );
+                        self.places.note(
+                            &key.plugin,
+                            &format!("{kind} stopped"),
+                            &[("entry", &key.entry), ("error", &e)],
+                        );
+                        stop_children(&self.places, vec![run]);
+                        self.retry(key, now, false);
+                    }
+                }
             }
             Err(e) => {
                 log::warning!(
@@ -201,7 +242,9 @@ impl State {
             }
         }
         for (key, status, ran) in ended {
-            self.running.remove(&key);
+            if let Some(run) = self.running.remove(&key) {
+                forget(&self.places, &key.plugin, run.child.id());
+            }
             let kind = self.kind.name();
             log::warning!("plugins", "exited", kind = kind, plugin = key.plugin, entry = key.entry, status = status);
             self.places.note(&key.plugin, &format!("{kind} exited"), &[("entry", &key.entry), ("status", &status)]);
@@ -232,7 +275,7 @@ impl State {
     }
 
     fn stop(&self, key: &Key, run: Running) {
-        stop_children(vec![run]);
+        stop_children(&self.places, vec![run]);
         let kind = self.kind.name();
         log::info!("plugins", "stopped", kind = kind, plugin = key.plugin, entry = key.entry);
         self.places.note(&key.plugin, &format!("{kind} stopped"), &[("entry", &key.entry)]);
@@ -246,7 +289,7 @@ impl State {
         if !running.is_empty() {
             log::info!("plugins", "stopped every one", kind = self.kind.name(), count = running.len());
         }
-        stop_children(running.into_values().collect());
+        stop_children(&self.places, running.into_values().collect());
     }
 }
 
@@ -254,8 +297,88 @@ pub(crate) fn backoff(failures: u32) -> Duration {
     Duration::from_secs(1u64 << failures.saturating_sub(1).min(6)).min(MAX_BACKOFF)
 }
 
-fn stop_children(mut running: Vec<Running>) {
-    for run in &running {
+fn lock_file(places: &Places, plugin: &str) -> std::io::Result<File> {
+    let dir = places.state(plugin);
+    private_dir(&dir)?;
+    fs::OpenOptions::new().create(true).write(true).truncate(false).mode(0o600).open(dir.join(LOCK_FILE))
+}
+
+fn locked(file: File, operation: FlockOperation) -> std::io::Result<Option<File>> {
+    match flock(&file, operation) {
+        Ok(()) => Ok(Some(file)),
+        Err(Errno::WOULDBLOCK) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub(crate) fn try_shared(places: &Places, plugin: &str) -> std::io::Result<Option<File>> {
+    locked(lock_file(places, plugin)?, FlockOperation::NonBlockingLockShared)
+}
+
+pub(crate) fn exclude_spawns(places: &Places, plugin: &str, until: Instant) -> Result<(), String> {
+    let file = lock_file(places, plugin).map_err(|e| format!("cannot open the lock of `{plugin}`: {e}"))?;
+    loop {
+        match flock(&file, FlockOperation::NonBlockingLockExclusive) {
+            Ok(()) => return Ok(()),
+            Err(Errno::WOULDBLOCK) if Instant::now() < until => thread::sleep(Duration::from_millis(20)),
+            Err(Errno::WOULDBLOCK) => return Err(format!("a supervisor is still starting `{plugin}`")),
+            Err(e) => return Err(format!("cannot lock `{plugin}`: {e}")),
+        }
+    }
+}
+
+fn on_disk(places: &Places, entry: &Entry) -> bool {
+    Registry::load(&places.registry).entry(&entry.id).is_ok_and(|current| current == entry)
+}
+
+fn running_dir(places: &Places, plugin: &str) -> std::path::PathBuf {
+    places.state(plugin).join(RUNNING_DIR)
+}
+
+fn record(places: &Places, plugin: &str, pid: u32, what: &str) -> std::io::Result<()> {
+    let dir = running_dir(places, plugin);
+    private_dir(&dir)?;
+    let mut file =
+        fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(dir.join(pid.to_string()))?;
+    file.write_all(what.as_bytes())
+}
+
+fn forget(places: &Places, plugin: &str, pid: u32) {
+    let _ = fs::remove_file(running_dir(places, plugin).join(pid.to_string()));
+}
+
+pub(crate) fn running(places: &Places, plugin: &str) -> Result<Vec<i32>, String> {
+    let dir = running_dir(places, plugin);
+    let files = match fs::read_dir(&dir) {
+        Ok(files) => files,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(format!("cannot read {}: {e}", dir.display())),
+    };
+    let mut alive = Vec::new();
+    for file in files {
+        let file = file.map_err(|e| format!("cannot read {}: {e}", dir.display()))?;
+        match file.file_name().to_str().and_then(|name| name.parse::<i32>().ok()) {
+            Some(pid) if process::alive(pid) => alive.push(pid),
+            _ => {
+                let _ = fs::remove_file(file.path());
+            }
+        }
+    }
+    alive.sort_unstable();
+    Ok(alive)
+}
+
+fn stop_children(places: &Places, mut running: Vec<Running>) {
+    let all: Vec<(String, u32)> =
+        running.iter().map(|run| (run.spec.plugin.entry.id.clone(), run.child.id())).collect();
+    stop_all_of(&mut running);
+    for (plugin, pid) in all {
+        forget(places, &plugin, pid);
+    }
+}
+
+fn stop_all_of(running: &mut Vec<Running>) {
+    for run in running.iter() {
         super::run::signal(&run.child, Signal::TERM);
     }
     let until = Instant::now() + STOP_WITHIN;
@@ -266,7 +389,7 @@ fn stop_children(mut running: Vec<Running>) {
         }
         thread::sleep(Duration::from_millis(20));
     }
-    for mut run in running {
+    for mut run in std::mem::take(running) {
         super::run::signal(&run.child, Signal::KILL);
         let _ = run.child.wait();
     }

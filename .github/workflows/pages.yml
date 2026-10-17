@@ -60,6 +60,12 @@ jobs:
       - name: check
         run: npm run check
 
+      - name: plugins
+        if: ${{ github.event_name != 'pull_request' }}
+        run: npm run plugins
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: build
         run: npm run build
         env:

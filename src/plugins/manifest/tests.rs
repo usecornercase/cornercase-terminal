@@ -88,6 +88,8 @@ mod parsing {
     )]
     #[case::a_line_separator_in_the_description(&with("description = \"a\\u2028b\""), "description")]
     #[case::a_byte_order_mark_in_a_permission(&with("permissions = [\"\\uFEFFsend\"]"), "permissions")]
+    #[case::a_bidi_override_in_a_build_step(&with("[[build]]\ncommand = [\"make\", \"a\\u202eb\"]"), "a build command `a\\u{202e}b`")]
+    #[case::a_bidi_override_in_a_download(&with("[download.x86_64-unknown-linux-gnu]\nurl = \"https://acme.dev/a\\u202eb\"\nsha256 = \"00\""), "a download url")]
     #[case::a_soft_hyphen_in_a_title(&with("[[actions]]\nid = \"a\"\ntitle = \"t\\u00ADx\"\ncontexts = [\"tab\"]\ncommand = [\"x\"]"), "an action title")]
     #[case::a_newline_in_the_version("id = \"a\"\nname = \"x\"\nversion = \"1\\n2\"", "version `1\\u{a}2`")]
     #[case::a_tag_in_a_hook(&with("[[events]]\non = \"opened\"\ncommand = [\"x\\U000E0041\"]"), "a command")]
@@ -248,4 +250,13 @@ mod owners {
                 .contains("other users can write to cornercase-plugin.toml")
         );
     }
+}
+
+#[rstest::rstest]
+#[case::an_escape_in_a_command("[[build]]\ncommand = [\"x\", \"\\u001b[6A\\u001b[J\"]")]
+#[case::a_carriage_return_in_the_description("description = \"safe\\rhidden\"")]
+#[case::a_new_line_in_a_permission("permissions = [\"read\\nsend\"]")]
+fn a_control_character_that_could_rewrite_the_preview_is_refused(#[case] extra: &str) {
+    let error = Manifest::parse(&with(extra)).expect_err("refused");
+    assert!(error.contains("control character"), "{error}");
 }

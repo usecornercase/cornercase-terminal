@@ -72,6 +72,10 @@ pub(crate) fn discord(config: &Path) -> PathBuf {
     config.with_file_name("discord.json")
 }
 
+pub(crate) fn plugin_installs(session: &Path) -> PathBuf {
+    session.with_file_name("plugins").join("installed")
+}
+
 pub(crate) fn session() -> PathBuf {
     match custom_socket() {
         Some(socket) => socket.with_extension("json"),

@@ -29,11 +29,17 @@ pub(crate) struct Places {
     pub(crate) registry: PathBuf,
     config: PathBuf,
     state: PathBuf,
+    pub(crate) installs: PathBuf,
 }
 
 impl Places {
     pub(crate) fn new(config: &Path, session: &Path) -> Self {
-        Self { registry: paths::plugins(config), config: config.to_path_buf(), state: session.to_path_buf() }
+        Self {
+            registry: paths::plugins(config),
+            config: config.to_path_buf(),
+            state: session.to_path_buf(),
+            installs: paths::plugin_installs(session),
+        }
     }
 
     pub(crate) fn config(&self, id: &str) -> PathBuf {
@@ -108,7 +114,7 @@ impl Places {
     }
 }
 
-fn private_dir(path: &Path) -> io::Result<()> {
+pub(crate) fn private_dir(path: &Path) -> io::Result<()> {
     std::fs::DirBuilder::new().recursive(true).mode(0o700).create(path)?;
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
 }
