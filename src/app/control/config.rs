@@ -31,7 +31,7 @@ impl App {
             Configure::Get => Ok(Some(json(&self.described(Vec::new())))),
             Configure::Set(values) => self.config_set(&values),
             Configure::Project(change) => self.config_project(change),
-            Configure::Secret(secret) => self.config_secret(client, secret),
+            Configure::Secret(secret) => self.config_secret(client, &secret),
             Configure::Remove(key) => self.config_remove(&key),
         }
     }
@@ -91,7 +91,7 @@ impl App {
             notices.extend(model.apply(key, value).map_err(refusal)?);
         }
         if model.config != self.config {
-            self.write_config(model.config).map_err(|e| self.config_refusal(e))?;
+            self.write_config(&model.config).map_err(|e| self.config_refusal(e))?;
         }
         Ok(Some(json(&self.described(notices))))
     }
@@ -142,7 +142,7 @@ impl App {
         Ok(Some(json(&self.described(vec![format!("{name}: setup and teardown {saved}")]))))
     }
 
-    fn config_secret(&mut self, client: u64, secret: SecretChange) -> Handled {
+    fn config_secret(&mut self, client: u64, secret: &SecretChange) -> Handled {
         let action = self.settings_model(Page::default()).secret(&secret.key, &secret.value).map_err(refusal)?;
         let key = self.requests.key();
         match action {

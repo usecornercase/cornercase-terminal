@@ -194,10 +194,8 @@ impl App {
             settings::Action::Close => self.overlay = None,
             settings::Action::Restart => self.open_restart(),
             settings::Action::Save(config) => {
-                if let Err(e) = self.write_config(*config) {
-                    if let Some(Overlay::Settings(s)) = &mut self.overlay {
-                        s.notice = Some(e);
-                    }
+                if let (Err(e), Some(Overlay::Settings(s))) = (self.write_config(&config), &mut self.overlay) {
+                    s.notice = Some(e);
                 }
             }
             settings::Action::CheckToken(source, token) => self.check_token(source, token),

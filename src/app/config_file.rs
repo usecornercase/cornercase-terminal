@@ -89,8 +89,8 @@ impl App {
         Ok(())
     }
 
-    pub(super) fn write_config(&mut self, next: Config) -> Result<(), String> {
-        let changes = config::Changes::between(&self.config, &next);
+    pub(super) fn write_config(&mut self, next: &Config) -> Result<(), String> {
+        let changes = config::Changes::between(&self.config, next);
         self.change_config(|config| *config = changes.apply(config))
     }
 

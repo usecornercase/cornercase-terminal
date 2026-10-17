@@ -85,7 +85,7 @@ impl Settings {
                     _ => self.submit_text(typed)?,
                 }
             }
-            (Target::Mode(kind), _) | (Target::Extra(kind), _) => {
+            (Target::Mode(kind) | Target::Extra(kind), _) => {
                 if !self.listed_kinds().contains(kind) {
                     self.added.push(kind.clone());
                 }

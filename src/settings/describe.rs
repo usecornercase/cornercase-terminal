@@ -166,7 +166,7 @@ impl Settings {
             let mut setting = base(format!("agents.{kind}.mode"), format!("{kind} mode"), Kind::Choice);
             setting.value = Value::String(name.clone());
             setting.default = Value::String("default".into());
-            setting.shown = name.clone();
+            setting.shown.clone_from(&name);
             setting.dangerous = agents::is_dangerous(&name);
             setting.choices = self
                 .mode_items(kind)

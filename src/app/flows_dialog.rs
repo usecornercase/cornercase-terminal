@@ -183,7 +183,7 @@ impl App {
             Action::Restore { file, name } => {
                 let mut next = self.config.clone();
                 store::unhide(&mut next.hidden_flows, &name);
-                self.save_then_delete(next, Some(&file));
+                self.save_then_delete(&next, Some(&file));
                 self.refresh_flows();
             }
             Action::Tab(i) => self.open_settings_page(Page::ALL[i]),
@@ -195,7 +195,7 @@ impl App {
         }
     }
 
-    fn save_hidden(&mut self, config: crate::config::Config) -> bool {
+    fn save_hidden(&mut self, config: &crate::config::Config) -> bool {
         if let Err(e) = self.write_config(config) {
             if let Some(dialog) = self.flows_dialog() {
                 dialog.notice = Some(e);
@@ -205,7 +205,7 @@ impl App {
         true
     }
 
-    fn save_then_delete(&mut self, next: crate::config::Config, file: Option<&std::path::Path>) -> bool {
+    fn save_then_delete(&mut self, next: &crate::config::Config, file: Option<&std::path::Path>) -> bool {
         let previous = self.config.clone();
         let changed = next.hidden_flows != previous.hidden_flows;
         if changed && !self.save_hidden(next) {
@@ -218,7 +218,7 @@ impl App {
                 true
             }
             Err(e) => {
-                let rolled_back = !changed || self.save_hidden(previous);
+                let rolled_back = !changed || self.save_hidden(&previous);
                 if let Some(dialog) = self.flows_dialog() {
                     let kept = if rolled_back { "" } else { " (the deleted built-in list could not be put back)" };
                     dialog.notice = Some(format!("could not delete the flow: {e}{kept}"));
@@ -231,7 +231,7 @@ impl App {
     fn hide_flow(&mut self, name: &str, file: Option<&std::path::Path>) {
         let mut next = self.config.clone();
         store::hide(&mut next.hidden_flows, name);
-        let saved = self.save_then_delete(next, file);
+        let saved = self.save_then_delete(&next, file);
         self.refresh_flows();
         if !saved {
             return;
@@ -245,7 +245,7 @@ impl App {
     fn unhide_flow(&mut self, name: &str) {
         let mut next = self.config.clone();
         store::unhide(&mut next.hidden_flows, name);
-        let saved = self.save_hidden(next);
+        let saved = self.save_hidden(&next);
         self.refresh_flows();
         if !saved {
             return;

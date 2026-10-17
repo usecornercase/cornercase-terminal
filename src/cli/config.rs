@@ -49,7 +49,7 @@ fn absolute(path: &str) -> Result<PathBuf> {
 }
 
 fn converted(pairs: &[String]) -> Result<BTreeMap<String, Value>> {
-    if pairs.len() % 2 != 0 {
+    if !pairs.len().is_multiple_of(2) {
         return Err(Error::WrongUsage("`config set` takes KEY VALUE pairs, and the last key has no value".into()));
     }
     let described: Described = answer(request(Configure::Get)?)?;
@@ -200,7 +200,7 @@ pub(super) fn render(described: &Described, changed: bool) -> String {
     for setting in &described.settings {
         if setting.page != page {
             page = &setting.page;
-            let _ = write!(out, "{}{page}\n", if out.is_empty() { "" } else { "\n" });
+            let _ = writeln!(out, "{}{page}", if out.is_empty() { "" } else { "\n" });
         }
         let value = shown(&setting.value);
         let _ = writeln!(out, "  {:key_width$}  {value:value_width$}  {}", setting.key, setting.note);

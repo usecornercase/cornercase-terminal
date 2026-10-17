@@ -345,7 +345,7 @@ impl App {
             }
             Action::SetDefaultAgent(kind) => {
                 let config = Config { agent: kind.clone(), ..self.config.clone() };
-                let saved = self.write_config(config);
+                let saved = self.write_config(&config);
                 let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
                 match saved {
                     Ok(()) => b.default_agent_set(kind),
@@ -355,11 +355,11 @@ impl App {
             Action::CheckToken(source, token) => self.check_token(source, token),
             Action::SaveJira { site, email } => {
                 let config = Config { jira_site: site, jira_email: email, ..self.config.clone() };
-                return self.save_connection(Source::Jira, config, area);
+                return self.save_connection(Source::Jira, &config, area);
             }
             Action::SavePlane { workspace } => {
                 let config = Config { plane_workspace: workspace, ..self.config.clone() };
-                return self.save_connection(Source::Plane, config, area);
+                return self.save_connection(Source::Plane, &config, area);
             }
             Action::SaveAsana { workspace, token } => {
                 let key = Source::Asana.secret_key().unwrap_or_default();
@@ -370,11 +370,11 @@ impl App {
                     return Ok(());
                 }
                 let config = Config { asana_workspace: workspace, ..self.config.clone() };
-                return self.save_connection(Source::Asana, config, area);
+                return self.save_connection(Source::Asana, &config, area);
             }
             Action::SaveGitlab { url } => {
                 let config = Config { gitlab_url: url, ..self.config.clone() };
-                return self.save_connection(Source::Gitlab, config, area);
+                return self.save_connection(Source::Gitlab, &config, area);
             }
             Action::Disconnect(source) => self.disconnect(source),
             Action::Copy(url) => {
@@ -494,7 +494,7 @@ impl App {
         });
     }
 
-    fn save_connection(&mut self, source: Source, config: Config, area: Rect) -> Result<()> {
+    fn save_connection(&mut self, source: Source, config: &Config, area: Rect) -> Result<()> {
         let saved = self.write_config(config);
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
         if let Err(e) = saved {

@@ -112,87 +112,89 @@ mod describing {
 mod applying {
     use super::*;
 
-    fn apply(key: &str, value: Value) -> (Settings, Result<Option<String>, Refused>) {
+    fn apply(key: &str, value: &Value) -> (Settings, Result<Option<String>, Refused>) {
         let mut s = full();
-        let result = s.apply(key, &value);
+        let result = s.apply(key, value);
         (s, result)
     }
 
     #[test]
     fn a_switch_flips_with_the_modals_notice() {
-        let (s, result) = apply("counts", json!(false));
+        let (s, result) = apply("counts", &json!(false));
         assert_eq!(result, Ok(Some("rows no longer show how many they hold".into())));
         assert!(!s.config.counts);
     }
 
     #[test]
     fn the_same_value_changes_nothing() {
-        let (s, result) = apply("counts", json!(true));
+        let (s, result) = apply("counts", &json!(true));
         assert_eq!((result, s.config), (Ok(None), Config::default()));
     }
 
     #[test]
     fn a_number_is_a_whole_number() {
-        let (s, result) = apply("fetch_minutes", json!(10));
+        let (s, result) = apply("fetch_minutes", &json!(10));
         assert_eq!((result.is_ok(), s.config.fetch_minutes), (true, 10));
         for bad in [json!("x"), json!(-1), json!(1.5)] {
-            assert!(matches!(apply("fetch_minutes", bad).1, Err(Refused::Invalid(_))));
+            assert!(matches!(apply("fetch_minutes", &bad).1, Err(Refused::Invalid(_))));
         }
     }
 
     #[test]
     fn the_modals_check_refuses_a_relative_folder() {
-        let (s, result) = apply("worktrees_dir", json!("rel"));
+        let (s, result) = apply("worktrees_dir", &json!("rel"));
         assert_eq!(result, Err(Refused::Invalid("use an absolute path or one starting with ~/".into())));
         assert_eq!(s.config, Config::default());
     }
 
     #[test]
     fn a_wrong_type_is_refused() {
-        assert_eq!(apply("counts", json!("yes")).1, Err(Refused::Invalid("`counts` takes true or false".into())));
-        assert!(matches!(apply("jira_jql", json!(3)).1, Err(Refused::Invalid(_))));
+        assert_eq!(apply("counts", &json!("yes")).1, Err(Refused::Invalid("`counts` takes true or false".into())));
+        assert!(matches!(apply("jira_jql", &json!(3)).1, Err(Refused::Invalid(_))));
     }
 
     #[test]
     fn an_unknown_key_is_not_found() {
-        assert!(matches!(apply("nonsense", json!(1)).1, Err(Refused::Unknown(_))));
+        assert!(matches!(apply("nonsense", &json!(1)).1, Err(Refused::Unknown(_))));
     }
 
     #[test]
     fn a_token_is_not_a_setting() {
-        assert!(matches!(apply("linear", json!("x")).1, Err(Refused::Invalid(why)) if why.contains("secret")));
-        assert!(matches!(apply("browsers", json!(0)).1, Err(Refused::Invalid(_))));
+        assert!(matches!(apply("linear", &json!("x")).1, Err(Refused::Invalid(why)) if why.contains("secret")));
+        assert!(matches!(apply("browsers", &json!(0)).1, Err(Refused::Invalid(_))));
     }
 
     #[test]
     fn a_choice_must_be_one_that_is_offered() {
-        let (s, result) = apply("sidebar", json!("tree"));
+        let (s, result) = apply("sidebar", &json!("tree"));
         assert_eq!((result.is_ok(), s.config.sidebar.as_str()), (true, "tree"));
-        assert!(matches!(apply("sidebar", json!("diagonal")).1, Err(Refused::Invalid(_))));
-        assert!(matches!(apply("agents.claude.mode", json!("extra arguments…")).1, Err(Refused::Invalid(_))));
+        assert!(matches!(apply("sidebar", &json!("diagonal")).1, Err(Refused::Invalid(_))));
+        assert!(matches!(apply("agents.claude.mode", &json!("extra arguments…")).1, Err(Refused::Invalid(_))));
     }
 
     #[test]
     fn the_default_agent_is_a_choice() {
-        let (s, result) = apply("agent", json!("claude"));
+        let (s, result) = apply("agent", &json!("claude"));
         assert_eq!((result.is_ok(), s.config.agent.as_str()), (true, "claude"));
     }
 
     #[test]
     fn tabs_are_a_list_that_keeps_one() {
-        let (s, result) = apply("issue_tabs", json!(["github", "linear"]));
+        let (s, result) = apply("issue_tabs", &json!(["github", "linear"]));
         assert_eq!((result.is_ok(), s.config.issue_tabs), (true, vec!["github".to_string(), "linear".to_string()]));
-        assert_eq!(apply("issue_tabs", json!([])).1, Err(Refused::Invalid("at least one tab stays".into())));
-        assert!(matches!(apply("issue_tabs", json!(["nope"])).1, Err(Refused::Invalid(_))));
-        assert!(matches!(apply("issue_tabs", json!(["all", "all"])).1, Err(Refused::Invalid(_))));
-        assert!(matches!(apply("issue_tabs", json!("all")).1, Err(Refused::Invalid(_))));
+        assert_eq!(apply("issue_tabs", &json!([])).1, Err(Refused::Invalid("at least one tab stays".into())));
+        assert!(matches!(apply("issue_tabs", &json!(["nope"])).1, Err(Refused::Invalid(_))));
+        assert!(matches!(apply("issue_tabs", &json!(["all", "all"])).1, Err(Refused::Invalid(_))));
+        assert!(matches!(apply("issue_tabs", &json!("all")).1, Err(Refused::Invalid(_))));
     }
 
     #[test]
     fn the_prefix_is_read_as_the_capture_reads_it() {
-        let (s, result) = apply("prefix_key", json!("ctrl+]"));
+        let (s, result) = apply("prefix_key", &json!("ctrl+]"));
         assert_eq!((result.is_ok(), s.config.prefix_key.as_str()), (true, "ctrl+]"));
-        assert!(matches!(apply("prefix_key", json!("ctrl+c")).1, Err(Refused::Invalid(why)) if why.contains("ctrl+c")));
+        assert!(
+            matches!(apply("prefix_key", &json!("ctrl+c")).1, Err(Refused::Invalid(why)) if why.contains("ctrl+c"))
+        );
         let mut s = full();
         s.config.prefix_key = "ctrl+]".into();
         assert!(s.apply("prefix_key", &json!("")).is_ok());
@@ -201,12 +203,12 @@ mod applying {
 
     #[test]
     fn an_agents_mode_and_extra_arguments_change_its_arguments() {
-        let (s, result) = apply("agents.claude.mode", json!("plan"));
+        let (s, result) = apply("agents.claude.mode", &json!("plan"));
         assert!(result.expect("applied").is_some_and(|notice| notice.starts_with("claude starts with: ")));
         assert!(s.config.agent_args.contains_key("claude"));
         assert_eq!(value_of(&s, "agents.claude.mode"), json!("plan"));
 
-        let (s, result) = apply("agents.codex.extra", json!("--search"));
+        let (s, result) = apply("agents.codex.extra", &json!("--search"));
         assert!(result.is_ok());
         assert_eq!(value_of(&s, "agents.codex.extra"), json!("--search"));
     }

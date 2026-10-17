@@ -8,9 +8,9 @@ fn setting(session: &Session, key: &str) -> Value {
     found.expect("a setting")["value"].clone()
 }
 
-fn wait_for_setting(session: &Session, key: &str, expected: Value) {
+fn wait_for_setting(session: &Session, key: &str, expected: &Value) {
     let deadline = Instant::now() + TIMEOUT;
-    while setting(session, key) != expected {
+    while setting(session, key) != *expected {
         assert!(Instant::now() < deadline, "timed out waiting for {key} to be {expected}");
         thread::sleep(POLL);
     }
@@ -31,7 +31,7 @@ fn settings_are_changed_through_the_server_and_an_edit_of_the_file_is_picked_up(
     let path = session.dir.join("config.json");
     let text = std::fs::read_to_string(&path).expect("the saved file");
     std::fs::write(&path, text.replace("\"counts\": false", "\"counts\": true")).expect("edit the file");
-    wait_for_setting(&session, "counts", Value::Bool(true));
+    wait_for_setting(&session, "counts", &Value::Bool(true));
 
     let refused = session.cli(&["config", "set", "worktrees_dir", "relative"]);
     assert!(!refused.status.success());

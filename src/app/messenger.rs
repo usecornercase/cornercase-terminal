@@ -421,7 +421,7 @@ impl App {
         let current = |app: &Self, via: Via, id: u64| app.messenger(via).link.as_ref().is_some_and(|l| l.id == id);
         match event {
             MessengerEvent::Checked { via, token, result, request } => {
-                self.messenger_checked(via, &token, result, request)
+                self.messenger_checked(via, &token, result, request);
             }
             MessengerEvent::Paired { via, token, advice, result } => self.owner_answered(via, &token, advice, result),
             MessengerEvent::Link(via, link::Event::Updates(id, updates)) if current(self, via, id) => {
