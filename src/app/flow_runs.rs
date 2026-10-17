@@ -33,6 +33,7 @@ pub(super) struct Starting {
     pub(super) focus: bool,
     pub(super) note: Option<String>,
     pub(super) trees: Vec<(RoleWorktree, bool)>,
+    pub(super) parent: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -145,9 +146,14 @@ impl App {
         area: Rect,
     ) -> Result<(), String> {
         let branch = if branch.trim() == flows::branch(&task) { String::new() } else { branch };
-        self.run_flow(None, project, Starting { flow, task, branch, focus, note: None, trees: Vec::new() }, area)
-            .map(drop)
-            .map_err(String::from)
+        self.run_flow(
+            None,
+            project,
+            Starting { flow, task, branch, focus, note: None, trees: Vec::new(), parent: None },
+            area,
+        )
+        .map(drop)
+        .map_err(String::from)
     }
 
     pub(super) fn spawn_run_worktrees(
@@ -282,7 +288,7 @@ impl App {
         if self.runs.iter().any(|run| run.workspace == id) {
             return Err(format!("workspace {id} already runs a flow, and a workspace runs one at a time"));
         }
-        let Starting { flow, task, branch, focus, note, trees } = starting;
+        let Starting { flow, task, branch, focus, note, trees, parent } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
         run.id = self.take_id();
@@ -318,6 +324,11 @@ impl App {
                 remembered.push(tree.clone());
             }
             self.worktree_workspace(p, tree.path.clone());
+        }
+        let own = run.members[0].pane;
+        self.adopt(own, parent);
+        for member in &run.members[1..] {
+            self.adopt(member.pane, Some(own));
         }
         let now = Instant::now();
         let mut team = Vec::new();
@@ -409,7 +420,13 @@ impl App {
         }
     }
 
-    pub(super) fn restore_run(&mut self, workspace: u64, saved: &RunState, tabs: &[(usize, Tab)], dir: Option<&Path>) {
+    pub(super) fn restore_run(
+        &mut self,
+        workspace: u64,
+        saved: &RunState,
+        tabs: &mut [(usize, Tab)],
+        dir: Option<&Path>,
+    ) {
         let mut run = Run::new(workspace, saved.flow.clone(), saved.task.clone());
         run.dir = dir.map(Path::to_path_buf);
         run.id = self.take_id();
@@ -422,6 +439,12 @@ impl App {
         }
         log::info!("flow", "run restored", workspace = workspace, flow = run.flow.name, agents = run.members.len());
         let own = run.pane_of(flows::ORCHESTRATOR);
+        if let Some(own) = own {
+            let members = tabs.iter_mut().flat_map(|(_, tab)| &mut tab.panes);
+            for term in members.filter(|term| term.id != own && run.role_of(term.id).is_some()) {
+                term.parent = term.parent.or(Some(own));
+            }
+        }
         if let Some(term) = tabs.iter().flat_map(|(_, tab)| &tab.panes).find(|term| Some(term.id) == own) {
             self.brief_again(&run, term);
         }

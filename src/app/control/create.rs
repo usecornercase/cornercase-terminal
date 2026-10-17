@@ -19,6 +19,7 @@ pub(super) struct Then {
     wait: Option<Condition>,
     focus: bool,
     view: Option<u64>,
+    parent: Option<u64>,
 }
 
 const NO_AGENT: &str = "say which agent to start, such as `cornercase start claude`: settings → agents is on auto \
@@ -59,7 +60,7 @@ impl App {
             if let Some(open) = self.workspace_on(p, &name) {
                 return Err(format!("branch {name} is already open in workspace {open}").into());
             }
-            let then = Then { start: None, wait: None, focus: new.focus, view: asker.view };
+            let then = Then { start: None, wait: None, focus: new.focus, view: asker.view, parent: asker.caller };
             self.create_worktree(client, p, &name, then, None)?;
             return Ok(None);
         }
@@ -91,6 +92,7 @@ impl App {
         let t = self.push_tab(p, w, area, name_of(new.name)).map_err(|e| e.to_string())?;
         let ids = self.ids(p, Some(w), Some(t));
         let pane = ids.pane.unwrap_or_default();
+        self.adopt(pane, asker.caller);
         let mut projection = None;
         if new.focus {
             projection = self.show_to(asker.view, Item::Pane(pane))?;
@@ -121,6 +123,7 @@ impl App {
         let new =
             self.split_pane(pane, dir, area, false).map_err(|e| e.to_string())?.ok_or_else(|| none("pane", pane))?;
         let ids = Ids { pane: Some(new), ..self.ids(p, Some(w), Some(t)) };
+        self.adopt(new, asker.caller);
         let mut projection = None;
         if split.focus {
             projection = self.show_to(asker.view, Item::Pane(new))?;
@@ -161,7 +164,13 @@ impl App {
             };
             let open = self.workspace_on(p, branch).and_then(|id| self.projects.workspace_index(id));
             let Some(found) = open else {
-                let then = Then { start: Some((spec, name)), wait, focus: start.focus, view: asker.view };
+                let then = Then {
+                    start: Some((spec, name)),
+                    wait,
+                    focus: start.focus,
+                    view: asker.view,
+                    parent: asker.caller,
+                };
                 self.create_worktree(client, p, branch, then, timeout)?;
                 return Ok(None);
             };
@@ -185,6 +194,7 @@ impl App {
         let t = self.push_tab(p, w, area, name).map_err(|e| e.to_string())?;
         let ids = self.ids(p, Some(w), Some(t));
         let pane = ids.pane.unwrap_or_default();
+        self.adopt(pane, asker.caller);
         let mut projection = None;
         if start.focus {
             projection = self.show_to(asker.view, Item::Pane(pane))?;
@@ -197,6 +207,13 @@ impl App {
             Stage::launch(wait),
             timeout,
         ))
+    }
+
+    pub(in crate::app) fn adopt(&mut self, pane: u64, parent: Option<u64>) {
+        let parent = parent.filter(|&id| id != pane && self.projects.pane_by(id).is_some());
+        if let Some(term) = self.projects.pane_by_mut(pane) {
+            term.parent = parent;
+        }
     }
 
     pub(in crate::app) fn agent_kind(&self, asker: impl Into<Asker>, agent: Option<String>) -> Result<String, String> {
@@ -280,6 +297,9 @@ impl App {
         let t = launch.as_ref().map_or(self.projects[p].workspaces[w].active, |(_, t)| *t);
         pending.done.ids = self.ids(p, Some(w), Some(t));
         let pane = pending.done.ids.pane.unwrap_or_default();
+        if launch.is_some() {
+            self.adopt(pane, then.parent);
+        }
         if then.focus {
             pending.done.projection = self.focus_in_view(then.view, pane)?;
         }

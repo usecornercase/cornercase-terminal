@@ -39,6 +39,11 @@ impl App {
         self.tab_mut().and_then(Tab::pane_mut)
     }
 
+    #[cfg_attr(not(test), expect(dead_code, reason = "status and the agents section read it next"))]
+    pub(super) fn live_parent(&self, term: &Term) -> Option<u64> {
+        term.parent.filter(|&id| self.projects.pane_by(id).is_some())
+    }
+
     pub(super) fn group_index(&self, id: u64) -> Option<usize> {
         self.groups.iter().position(|g| g.id == id)
     }

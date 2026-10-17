@@ -39,7 +39,7 @@ impl App {
             }
         }
         if let Some(run) = &saved.run {
-            self.restore_run(id, run, &tabs, run_dir.as_deref());
+            self.restore_run(id, run, &mut tabs, run_dir.as_deref());
         }
         let tabs = tabs.into_iter().map(|(_, tab)| tab).collect();
         let mut workspace = saved.restore(id, path, tabs, &self.runs_dir);
