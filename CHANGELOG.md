@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.128
+
+- **Send a TODO to an agent.** In the TODO panel, each item left to do has a **`▸`** next to its `×` (on hover; always shown in the compact layout). It opens a menu of every agent running, by project and workspace, and picking one types the item into that agent and sends it, as `cornercase send --enter` would. Once the agent has taken it, the item is checked off and a message says where it went; what `send` refuses (an agent waiting for your answer, resuming, showing a dialog or its survey) the button refuses too, with the reason, and the item stays to do.
+- `cornercase todo send ID [--pane N | --tab N]` does the same from a script or an agent: the same target, refusals and confirmation as `send --enter`, then the item is checked off and it prints `sent todo 3 to pane 5`. A refused or unconfirmed send leaves it pending and exits 1. See Scripts and agents → Leave notes.
+
 ## 0.12.126
 
 - **Drive a tab's terminals from another program.** For a program that draws cornercase's terminals itself with `surface`:
