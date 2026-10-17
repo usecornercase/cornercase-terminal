@@ -2,6 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.137
+
+- **Scripts and other apps can arrange the session.** `cornercase group new`, `group style` and `group delete` create a group (with the next icon and colour), change its icon and colour, or delete it, keeping or closing its projects. `cornercase move` puts a group, project, workspace or tab before another or at the end, or moves a project into or out of a group; `cornercase collapse` and `expand` fold groups, projects and workspaces; and `cornercase move-pane` swaps two panes or moves one to an edge of another, as the right-button drag does.
+  - Programs keep running, and `status --follow` shows each change.
+  - See Scripts and agents → Arrange.
+- **Check a worktree before removing it.** `cornercase close --remove-worktree --check` says what the Remove workspace dialog shows (changes that are not committed, a lock with its reason and whether its process still runs, the worktrees of a flow's roles that go with it, and whether the project's teardown runs first), and stops nothing.
+  - `cornercase close --remove-worktree --unlock` removes a locked worktree, as the dialog's **unlock and remove** does. Changes still need `--force`.
+
 ## 0.12.136
 
 - **A build from source keeps to its own folders.** A debug build of cornercase (`cargo run` in a checkout) no longer shares your installed cornercase's server, session, settings or log: each checkout, and each worktree, gets its own server, with its session, log, stats, TODO list and queue in `~/.local/state/cornercase-dev/`, and every checkout shares one set of settings in `~/.config/cornercase-dev/`. So `cargo run -- kill-server` stops only that checkout's server, and working on cornercase from inside cornercase leaves your everyday session alone.
@@ -19,21 +27,10 @@ Every pull request that changes the app adds a section here for its new version.
   - If the file isn't valid JSON, cornercase now keeps the settings it was using, says why, and no longer writes over the file until you fix it (before, the next change saved the defaults over it).
 
 ## 0.12.134
-<<<<<<< HEAD
 
 - **Surfaces can send only what changed.** For programs that draw cornercase's terminals with `cornercase surface`: with `--patches`, the first line is complete and the next ones carry only the rows that changed in each pane, plus its cursor, and its modes, scroll position and colours when they change. Output that scrolls arrives as the rows that moved plus the new ones, so an agent streaming a reply costs a few hundred bytes a line instead of the whole tab. Each such line names the `revision` it applies to (`base`).
   - A complete line comes again whenever the layout, a size, the panes or the view change, after a reader fell behind, and on request: `cornercase redraw --surface ID`.
   - Programs that don't ask keep getting complete lines, exactly as before. See Scripts and agents → Stream a tab's terminals.
-
-## 0.12.133
-=======
->>>>>>> e571b364 (chore: fix the changelog sections after the rebase)
-
-- **Scripts and other apps can arrange the session.** `cornercase group new`, `group style` and `group delete` create a group (with the next icon and colour), change its icon and colour, or delete it, keeping or closing its projects. `cornercase move` puts a group, project, workspace or tab before another or at the end, or moves a project into or out of a group; `cornercase collapse` and `expand` fold groups, projects and workspaces; and `cornercase move-pane` swaps two panes or moves one to an edge of another, as the right-button drag does.
-  - Programs keep running, and `status --follow` shows each change.
-  - See Scripts and agents → Arrange.
-- **Check a worktree before removing it.** `cornercase close --remove-worktree --check` says what the Remove workspace dialog shows (changes that are not committed, a lock with its reason and whether its process still runs, the worktrees of a flow's roles that go with it, and whether the project's teardown runs first), and stops nothing.
-  - `cornercase close --remove-worktree --unlock` removes a locked worktree, as the dialog's **unlock and remove** does. Changes still need `--force`.
 
 ## 0.12.133
 
