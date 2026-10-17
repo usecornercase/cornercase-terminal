@@ -13,7 +13,7 @@ use crate::agents::launch::{self, Launch};
 use crate::control::{MemberInfo, RunInfo};
 use crate::flows::progress::Progress;
 use crate::flows::run::{Member, RoleWorktree, Run};
-use crate::flows::{self, Flow, Role, brief, builtin, store};
+use crate::flows::{self, Flow, Role, brief, builtin, folder, store};
 use crate::git;
 use crate::git::worktree;
 use crate::host::notify::{self, Notification};
@@ -23,6 +23,7 @@ use crate::project::search::Goto;
 use crate::project::{Hierarchy, Phase, Tab};
 use crate::state::RunState;
 use crate::term::Term;
+use crate::time;
 use crate::ui;
 
 pub(super) struct Starting {
@@ -86,6 +87,44 @@ fn discard(repo: &Path, paths: &[PathBuf]) {
 }
 
 impl App {
+    pub(crate) fn set_runs_dir(&mut self, dir: &Path) {
+        self.runs_dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
+    }
+
+    pub(super) fn defer_run_dirs(&mut self, workspace: u64, dirs: Vec<PathBuf>) {
+        if !dirs.is_empty() {
+            self.pending_run_dirs.push((workspace, dirs));
+        }
+    }
+
+    pub(super) fn flush_run_dirs(&mut self) {
+        let projects = &self.projects;
+        let (gone, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.pending_run_dirs)
+            .into_iter()
+            .partition(|(id, _)| projects.workspace_index(*id).is_none());
+        self.pending_run_dirs = kept;
+        for (_, dirs) in gone {
+            self.remove_run_dirs(dirs);
+        }
+    }
+
+    pub(super) fn remove_run_dirs(&self, dirs: Vec<PathBuf>) {
+        for dir in dirs {
+            let job = Job::new(Level::Info, "flow", "remove folder").with("path", dir.display());
+            self.spawn_job(
+                job,
+                move || Ok(folder::remove(&dir)?),
+                |result, job| {
+                    if let Ok((files, bytes)) = result {
+                        job.note("files", files);
+                        job.note("bytes", bytes);
+                    }
+                    None
+                },
+            );
+        }
+    }
+
     pub(super) fn flow_listing(&self, project: Option<&Path>) -> store::Listing {
         let project = project.map(store::project_dir);
         store::list(builtin::for_config(&self.config), &paths::flows(&self.config_path), project.as_deref())
@@ -182,6 +221,41 @@ impl App {
         Ok(())
     }
 
+    fn spawn_run_panes(
+        &mut self,
+        area: Rect,
+        (p, w): (usize, usize),
+        roles: &[Role],
+        trees: &[(RoleWorktree, bool)],
+        setup: bool,
+        dir: &Path,
+    ) -> Result<Vec<Term>, String> {
+        let (id, path) = (self.projects[p].workspaces[w].id, self.projects[p].workspaces[w].path.clone());
+        let mut terms = Vec::with_capacity(roles.len());
+        let script = self.setup_script(p);
+        let own = |role: &Role| trees.iter().find(|(tree, _)| tree.role == role.name);
+        let run_dir = Some(dir);
+        for (i, role) in roles.iter().enumerate() {
+            let tree = own(role);
+            let term = match (&script, tree) {
+                (Some(script), _) if i == 0 && setup => self.spawn_setup(area, (p, id), path.clone(), script, run_dir),
+                (Some(script), Some((tree, true))) => {
+                    self.spawn_setup(area, (p, id), tree.path.clone(), script, run_dir)
+                }
+                _ => self.spawn_with(area, tree.map_or_else(|| path.clone(), |(tree, _)| tree.path.clone()), run_dir),
+            };
+            match term {
+                Ok(term) => terms.push(term),
+                Err(e) => {
+                    let _ = std::fs::remove_dir(dir);
+                    self.projects[p].workspaces[w].run_dirs.retain(|kept| kept != dir);
+                    return Err(e.to_string());
+                }
+            }
+        }
+        Ok(terms)
+    }
+
     pub(super) fn open_run(
         &mut self,
         p: usize,
@@ -207,21 +281,17 @@ impl App {
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
         run.id = self.take_id();
-        let mut info = RunInfo { project: self.projects[p].id, workspace: id, branch, members: Vec::new(), note };
+        let mut info =
+            RunInfo { project: self.projects[p].id, workspace: id, branch, members: Vec::new(), note, run_dir: None };
         let path = self.projects[p].workspaces[w].path.clone();
-        let mut terms = Vec::with_capacity(roles.len());
-        let script = self.setup_script(p);
-        let own = |role: &Role| trees.iter().find(|(tree, _)| tree.role == role.name);
-        for (i, role) in roles.iter().enumerate() {
-            let tree = own(role);
-            let term = match (&script, tree) {
-                (Some(script), _) if i == 0 && setup => self.spawn_setup(area, (p, id), path.clone(), script),
-                (Some(script), Some((tree, true))) => self.spawn_setup(area, (p, id), tree.path.clone(), script),
-                _ => self.spawn(area, tree.map_or_else(|| path.clone(), |(tree, _)| tree.path.clone())),
-            };
-            terms.push(term.map_err(|e| e.to_string())?);
-        }
+        let dir = folder::make(&self.runs_dir, &path, time::now() * 1000)
+            .map_err(|e| format!("could not make the run's folder: {e}"))?;
+        self.projects[p].workspaces[w].run_dirs.push(dir.clone());
+        let terms = self.spawn_run_panes(area, (p, w), &roles, &trees, setup, &dir)?;
         let seats: Vec<RoleWorktree> = trees.iter().map(|(tree, _)| tree.clone()).collect();
+        log::info!("flow", "run folder made", workspace = id, path = dir.display());
+        run.dir = Some(dir.clone());
+        info.run_dir = Some(dir.clone());
         for (role, term) in roles.iter().zip(terms) {
             let pane = term.id;
             let tab = Tab::new(self.take_id(), Some(role.name.clone()), term);
@@ -248,11 +318,15 @@ impl App {
         let mut team = Vec::new();
         for (role, member) in roles.iter().zip(&run.members).skip(1) {
             let branch = seats.iter().find(|tree| tree.role == role.name).map(|tree| tree.branch.as_str());
-            let spec = self.flow_spec(role, brief::member(role, branch));
+            let spec = self.flow_spec(role, brief::member(role, branch, Some(&dir)), Some(&dir));
             self.agents.launches.push(Launch::new(member.pane, spec, now));
             team.push(member.pane);
         }
-        let spec = self.flow_spec(&roles[0], brief::brief(&run.flow, &run.task, &info.branch, &run.members, &seats));
+        let spec = self.flow_spec(
+            &roles[0],
+            brief::brief(&run.flow, &run.task, &info.branch, &run.members, &seats, Some(&dir)),
+            Some(&dir),
+        );
         let mut launch = Launch::new(run.members[0].pane, spec, now);
         launch.after = team;
         self.agents.launches.push(launch);
@@ -293,8 +367,8 @@ impl App {
         }
     }
 
-    fn flow_spec(&self, role: &Role, prompt: String) -> launch::Spec {
-        let command = flows::command(&self.config, role).unwrap_or_default();
+    fn flow_spec(&self, role: &Role, prompt: String, dir: Option<&Path>) -> launch::Spec {
+        let command = flows::command(&self.config, role, dir).unwrap_or_default();
         launch::Spec { command, prompt: Some(prompt), submit: true, trusted: true }
     }
 
@@ -316,15 +390,23 @@ impl App {
         self.forget_flow_reads(None);
     }
 
-    pub(super) fn resume_line(&self, role: Option<&Role>, agent: &agents::AgentState) -> Option<String> {
+    pub(super) fn resume_line(
+        &self,
+        role: Option<&Role>,
+        agent: &agents::AgentState,
+        dir: Option<&Path>,
+    ) -> Option<String> {
         match role {
-            Some(role) if role.agent == agent.kind => flows::resume(&self.config, role, agent.conversation.clone()),
+            Some(role) if role.agent == agent.kind => {
+                flows::resume(&self.config, role, agent.conversation.clone(), dir)
+            }
             _ => agents::resume_line(&self.config, agent),
         }
     }
 
-    pub(super) fn restore_run(&mut self, workspace: u64, saved: &RunState, tabs: &[(usize, Tab)]) {
+    pub(super) fn restore_run(&mut self, workspace: u64, saved: &RunState, tabs: &[(usize, Tab)], dir: Option<&Path>) {
         let mut run = Run::new(workspace, saved.flow.clone(), saved.task.clone());
+        run.dir = dir.map(Path::to_path_buf);
         run.id = self.take_id();
         run.progress = Progress::resumed(&run.flow, saved.stage, &saved.rounds);
         for seat in &saved.members {
@@ -348,10 +430,14 @@ impl App {
         else {
             return;
         };
-        let Some(line) = self.resume_line(Some(&run.flow.orchestrator), agent) else { return };
+        let Some(line) = self.resume_line(Some(&run.flow.orchestrator), agent, run.dir.as_deref()) else { return };
         self.agents.launches.retain(|launch| launch.term != term.id);
-        let spec =
-            launch::Spec { command: line, prompt: Some(brief::restored(&run.members)), submit: true, trusted: true };
+        let spec = launch::Spec {
+            command: line,
+            prompt: Some(brief::restored(&run.members, run.dir.as_deref())),
+            submit: true,
+            trusted: true,
+        };
         let mut launch = Launch::new(term.id, spec, Instant::now());
         launch.after = run.members.iter().map(|m| m.pane).filter(|pane| *pane != term.id).collect();
         self.agents.launches.push(launch);

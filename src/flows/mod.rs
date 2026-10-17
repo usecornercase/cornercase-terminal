@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -8,6 +9,7 @@ use crate::config::Config;
 pub(crate) mod brief;
 pub(crate) mod builtin;
 pub(crate) mod dialog;
+pub(crate) mod folder;
 pub(crate) mod progress;
 pub(crate) mod registry;
 pub(crate) mod run;
@@ -355,7 +357,7 @@ fn role_problems(role: &Role, name: &str) -> Vec<String> {
     out
 }
 
-fn parts(config: &Config, role: &Role) -> Option<(Known, Vec<String>, Vec<String>)> {
+fn parts(config: &Config, role: &Role, dir: Option<&Path>) -> Option<(Known, Vec<String>, Vec<String>)> {
     let kind = Known::of(&role.agent)?;
     let name = kind.name();
     let modes = agents::modes(config, name);
@@ -377,6 +379,10 @@ fn parts(config: &Config, role: &Role) -> Option<(Known, Vec<String>, Vec<String
     }
     let mut args = agents::with_effort(name, agents::with_model(name, args, picked), effort);
     args.extend(own);
+    if let (Some(flag), Some(dir)) = (kind.add_dir(), dir.and_then(Path::to_str)) {
+        args.push(flag.to_string());
+        args.push(dir.to_string());
+    }
     let mut words: Vec<String> = Vec::new();
     if !role.env.is_empty() {
         words.push("env".to_string());
@@ -394,13 +400,13 @@ fn quoted(words: impl IntoIterator<Item = String>) -> String {
     words.into_iter().map(|word| agents::quote(&word)).collect::<Vec<_>>().join(" ")
 }
 
-pub(crate) fn command(config: &Config, role: &Role) -> Option<String> {
-    let (_, words, args) = parts(config, role)?;
+pub(crate) fn command(config: &Config, role: &Role, dir: Option<&Path>) -> Option<String> {
+    let (_, words, args) = parts(config, role, dir)?;
     Some(quoted(words.into_iter().chain(args)))
 }
 
-pub(crate) fn resume(config: &Config, role: &Role, conversation: String) -> Option<String> {
-    let (kind, words, args) = parts(config, role)?;
+pub(crate) fn resume(config: &Config, role: &Role, conversation: String, dir: Option<&Path>) -> Option<String> {
+    let (kind, words, args) = parts(config, role, dir)?;
     let args = kind.resume(args, conversation)?;
     Some(quoted(words.into_iter().chain(args)))
 }

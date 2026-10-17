@@ -150,6 +150,7 @@ impl App {
     }
 
     pub(super) fn sync_worktrees(&mut self) {
+        let mut dirs = Vec::new();
         for p in 0..self.projects.len() {
             let project = &mut self.projects[p];
             if !git::is_repo_root(&project.path) {
@@ -165,6 +166,7 @@ impl App {
                 .collect();
             for w in gone {
                 self.changes.forget(project.workspaces[w].id);
+                dirs.append(&mut project.workspaces[w].run_dirs);
                 project.remove_workspace(w);
             }
             for workspace in &mut project.workspaces {
@@ -177,6 +179,7 @@ impl App {
                 self.projects[p].workspaces.push(Workspace::new(id, path, None, true));
             }
         }
+        self.remove_run_dirs(dirs);
     }
 
     pub(super) fn spawn_worktree(&self, p: usize, branch: String, start: Option<Start>, request: Option<u64>) {

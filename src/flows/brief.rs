@@ -1,14 +1,15 @@
 use std::fmt::Write as _;
+use std::path::Path;
 
 use super::run::{Member, RoleWorktree};
 use super::{End, Flow, ORCHESTRATOR, Role, Stage};
 
 pub(super) const WAIT_FIRST: &str = "Wait for the orchestrator's first message before doing anything.";
 
-pub(crate) fn member(role: &Role, branch: Option<&str>) -> String {
+pub(crate) fn member(role: &Role, branch: Option<&str>, dir: Option<&Path>) -> String {
     let prompt = role.prompt.trim();
     let prompt = prompt.strip_suffix(WAIT_FIRST).map_or(prompt, str::trim_end);
-    let told = match (role.edits, branch) {
+    let mut told = match (role.edits, branch) {
         (true, None) => {
             format!("You are `{}` in this team, and you may edit files and commit in this worktree.", role.name)
         }
@@ -17,17 +18,40 @@ pub(crate) fn member(role: &Role, branch: Option<&str>) -> String {
              branch {branch}: commit your work there, since the others read it from that branch.",
             role.name
         ),
-        (false, None) => format!("You are `{}` in this team: do not edit files and do not commit.", role.name),
+        (false, None) => {
+            format!("You are `{}` in this team: do not edit the worktree's files and do not commit.", role.name)
+        }
         (false, Some(branch)) => format!(
-            "You are `{}` in this team: do not edit files and do not commit. This worktree is yours alone, on branch \
-             {branch}.",
+            "You are `{}` in this team: do not edit the worktree's files and do not commit. This worktree is yours \
+             alone, on branch {branch}.",
             role.name
         ),
     };
+    if let Some(dir) = dir {
+        let stem = crate::issues::slug(&role.name, 40);
+        let stem = if stem.is_empty() { "answer" } else { stem.as_str() };
+        let _ = write!(
+            told,
+            " Write each answer to a file of its own in the run's folder, {} (also `${}`), named after your role \
+             and the next number free there (`{stem}-1.md`, then `{stem}-2.md`), and end your turn with that \
+             file's path and a summary of a few lines. Anything else too long for a message (a design, logs, a \
+             script that shows a bug) goes there too, never in the worktree; if your file tools cannot reach the \
+             folder, use your shell.",
+            dir.display(),
+            super::folder::ENV
+        );
+    }
     if prompt.is_empty() { format!("{told} {WAIT_FIRST}") } else { format!("{prompt}\n\n{told} {WAIT_FIRST}") }
 }
 
-pub(crate) fn brief(flow: &Flow, task: &str, branch: &str, members: &[Member], trees: &[RoleWorktree]) -> String {
+pub(crate) fn brief(
+    flow: &Flow,
+    task: &str,
+    branch: &str,
+    members: &[Member],
+    trees: &[RoleWorktree],
+    dir: Option<&Path>,
+) -> String {
     let pane = |role: &str| members.iter().find(|m| m.role == role).map(|m| m.pane);
     let mut out = format!(
         "You are the orchestrator of a team of coding agents that cornercase started for the flow \"{}\", all in \
@@ -63,17 +87,21 @@ pub(crate) fn brief(flow: &Flow, task: &str, branch: &str, members: &[Member], t
     if !notes.is_empty() {
         let _ = write!(out, "\n## Notes\n\n{}\n", notes.join("\n\n"));
     }
-    out.push_str(&rules(flow, members, own));
+    if let Some(dir) = dir {
+        out.push_str(&files(dir));
+    }
+    out.push_str(&rules(flow, members, own, dir));
     out
 }
 
-pub(crate) fn restored(members: &[Member]) -> String {
+pub(crate) fn restored(members: &[Member], dir: Option<&Path>) -> String {
     let own = members.iter().find(|m| m.role == ORCHESTRATOR).map(|m| m.pane);
     let team: Vec<String> =
         members.iter().filter(|m| m.role != ORCHESTRATOR).map(|m| format!("{} is pane {}", m.role, m.pane)).collect();
     let you = own.map_or_else(String::new, |id| format!(", and you are pane {id}"));
+    let folder = dir.map_or_else(String::new, |dir| format!(" The run's folder is still {}.", dir.display()));
     format!(
-        "cornercase restarted, so your team has new pane ids: {}{you}. Use these from now on. Any wait you had \
+        "cornercase restarted, so your team has new pane ids: {}{you}. Use these from now on.{folder} Any wait you had \
          running ended, and an agent may have lost the turn it was in: check what each one last answered with \
          `cornercase read --last-message`, then go on with the plan. If the plan was already done, answer `ok` and \
          do nothing else.",
@@ -137,7 +165,19 @@ fn end_line(end: End, branch: &str) -> String {
     }
 }
 
-fn rules(flow: &Flow, members: &[Member], own: Option<u64>) -> String {
+fn files(dir: &Path) -> String {
+    format!(
+        "\n## Files\n\nThe run has a folder for its files, {dir} (also `${env}` in every pane of the team). It is \
+         outside the worktree, so nothing in it is ever committed. Each agent writes every answer to a file of its \
+         own there and replies with the file's path and a few lines. Pass work on by path rather than pasting \
+         text, and read a file only when the summary is not enough. Write your own decisions there too, one file \
+         each (`orchestrator-<n>.md`: what you asked, what came back, what you decided and why).\n",
+        dir = dir.display(),
+        env = super::folder::ENV
+    )
+}
+
+fn rules(flow: &Flow, members: &[Member], own: Option<u64>, dir: Option<&Path>) -> String {
     let others: Vec<String> = flow
         .roles
         .iter()
@@ -161,14 +201,16 @@ fn rules(flow: &Flow, members: &[Member], own: Option<u64>) -> String {
          `cornercase read --pane N --lines 300` and take the answer from there.\n\
          - If `send` fails with `not confirmed`, run `cornercase read --pane N` before sending again: the agent may \
          have it.\n\
-         - Never edit files, commit or run the project's checks yourself: the roles do that.\n\
+         - Never edit {edit}, commit or run the project's checks yourself: the roles do that.{only}\n\
          - Never answer another agent's permission prompt or question (status `waiting` in \
          `cornercase status --panes`); tell the user with `cornercase notify` instead.\n\
          - Stay in this worktree: do not open, close or focus tabs, workspaces or worktrees. Each role's tab is \
          named after it.\n\
          - When the plan is done, do the final action, then run `{mark}` so the user sees the run waits for review, \
          and end your turn with a short summary.\n",
-        panes = others.join(" ")
+        panes = others.join(" "),
+        edit = if dir.is_some() { "the worktree's files" } else { "files" },
+        only = if dir.is_some() { " The run's folder is the only place you write." } else { "" }
     )
 }
 

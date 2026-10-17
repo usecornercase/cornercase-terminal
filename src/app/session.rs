@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use ratatui::layout::Rect;
@@ -8,7 +8,7 @@ use super::toast::Toast;
 use crate::agents::AgentState;
 use crate::agents::launch::Launch;
 use crate::error::Result;
-use crate::flows::Role;
+use crate::flows::{Role, folder};
 use crate::log::{self};
 use crate::project::{Tab, Workspace};
 use crate::state::{TabState, WorkspaceState};
@@ -24,11 +24,12 @@ impl App {
             return None;
         }
         let id = self.take_id();
+        let run_dir = self.restore_run_dir(saved);
         let mut tabs = Vec::new();
         let mut lost = 0;
         for (t, saved_tab) in saved.tabs.iter().enumerate().filter(|(_, t)| !t.panes.is_empty()) {
             let roles = |pane: usize| saved.run.as_ref().and_then(|run| run.role_at(t, pane));
-            match self.restore_tab(saved_tab, &path, area, roles) {
+            match self.restore_tab(saved_tab, &path, area, roles, run_dir.as_deref()) {
                 Ok(tab) => tabs.push((t, tab)),
                 Err(e) => {
                     log::error!("server", "could not restore a tab", workspace = path.display(), error = e);
@@ -37,9 +38,28 @@ impl App {
             }
         }
         if let Some(run) = &saved.run {
-            self.restore_run(id, run, &tabs);
+            self.restore_run(id, run, &tabs, run_dir.as_deref());
         }
-        Some((saved.restore(id, path, tabs.into_iter().map(|(_, tab)| tab).collect()), lost))
+        let tabs = tabs.into_iter().map(|(_, tab)| tab).collect();
+        let mut workspace = saved.restore(id, path, tabs, &self.runs_dir);
+        if let Some(dir) = run_dir.filter(|dir| !workspace.run_dirs.contains(dir)) {
+            workspace.run_dirs.push(dir);
+        }
+        Some((workspace, lost))
+    }
+
+    fn restore_run_dir(&self, saved: &WorkspaceState) -> Option<PathBuf> {
+        let name = saved.run.as_ref()?.dir.as_deref().filter(|name| folder::valid(name))?;
+        let dir = self.runs_dir.join(name);
+        match folder::ensure(&dir) {
+            Ok(true) => log::info!("flow", "run folder made again", path = dir.display()),
+            Ok(false) => {}
+            Err(e) => {
+                log::warning!("flow", "cannot use the run's folder", path = dir.display(), error = e);
+                return None;
+            }
+        }
+        Some(dir)
     }
 
     pub(super) fn restore_tab<'a>(
@@ -48,19 +68,21 @@ impl App {
         dir: &Path,
         area: Rect,
         roles: impl Fn(usize) -> Option<&'a Role>,
+        run: Option<&Path>,
     ) -> Result<Tab> {
         let mut panes = Vec::new();
         for (i, pane) in saved.panes.iter().enumerate() {
             let cwd = pane.cwd.clone().filter(|cwd| cwd.is_dir()).unwrap_or_else(|| dir.to_path_buf());
             let role = roles(i);
             let apart = role.is_some_and(Role::own_worktree) && pane.cwd.as_ref().is_none_or(|cwd| !cwd.is_dir());
-            let mut term = self.spawn(area, cwd)?;
+            let run = role.and(run);
+            let mut term = self.spawn_with(area, cwd, run)?;
             if apart {
                 log::warning!("server", "a role's worktree is gone, so its agent does not resume", pane = term.id);
                 let name = role.map(|role| role.name.as_str()).unwrap_or_default();
                 let message = format!("the worktree of {name} is gone: it works in the run's worktree now");
                 self.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
-            } else if self.resume(&mut term, pane.agent.as_ref(), role) {
+            } else if self.resume(&mut term, pane.agent.as_ref(), role, run) {
                 term.agent.restore(pane.done, pane.pending);
             }
             panes.push(term);
@@ -68,9 +90,9 @@ impl App {
         Ok(saved.restore(self.take_id(), panes))
     }
 
-    fn resume(&mut self, term: &mut Term, agent: Option<&AgentState>, role: Option<&Role>) -> bool {
+    fn resume(&mut self, term: &mut Term, agent: Option<&AgentState>, role: Option<&Role>, run: Option<&Path>) -> bool {
         let Some(agent) = agent.filter(|_| self.config.resume_agents) else { return false };
-        let Some(line) = self.resume_line(role, agent) else { return false };
+        let Some(line) = self.resume_line(role, agent, run) else { return false };
         log::info!("app", "resuming a conversation", pane = term.id, agent = agent.kind);
         let now = Instant::now();
         self.agents.launches.push(Launch::command(term.id, line, now));

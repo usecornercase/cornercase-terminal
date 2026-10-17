@@ -1,5 +1,7 @@
 use std::time::Instant;
 
+use rstest::rstest;
+
 use super::run::{Kind, MAX_MESSAGES, Member, Message, Run};
 use super::store::{self, Origin};
 use super::{Back, End, Flow, ORCHESTRATOR, Role, Stage, Worktree, branch, builtin, command, resume, role_branch};
@@ -490,7 +492,7 @@ mod commands {
             ..Role::default()
         };
         assert_eq!(
-            command(&config, &role).as_deref(),
+            command(&config, &role, None).as_deref(),
             Some(
                 "env CLAUDE_CODE_USE_BEDROCK=1 claude --dangerously-skip-permissions --verbose --model opus --add-dir \
                  ../docs"
@@ -504,7 +506,7 @@ mod commands {
         config.agent_args.insert("codex".into(), vec!["--model".into(), "o3".into(), "--search".into()]);
         let role = Role { agent: "codex".into(), model: Some("gpt-5.5".into()), ..Role::default() };
         assert_eq!(
-            command(&config, &role).as_deref(),
+            command(&config, &role, None).as_deref(),
             Some("codex --dangerously-bypass-approvals-and-sandbox --search --model gpt-5.5")
         );
     }
@@ -526,7 +528,7 @@ mod commands {
             args: args.iter().map(|a| (*a).to_string()).collect(),
             ..Role::default()
         };
-        let line = command(&config, &role).expect("a known agent");
+        let line = command(&config, &role, None).expect("a known agent");
         assert_eq!(line, format!("codex --dangerously-bypass-approvals-and-sandbox {expected}"));
     }
 
@@ -547,9 +549,9 @@ mod commands {
             args: args.iter().map(|a| (*a).to_string()).collect(),
             ..Role::default()
         };
-        let line = command(&config, &role).expect("a known agent");
+        let line = command(&config, &role, None).expect("a known agent");
         assert_eq!(line, format!("claude --dangerously-skip-permissions {expected}"));
-        let resumed = resume(&config, &role, "c1".into()).expect("claude resumes");
+        let resumed = resume(&config, &role, "c1".into(), None).expect("claude resumes");
         assert_eq!(resumed, format!("claude --dangerously-skip-permissions {expected} --resume c1"));
     }
 
@@ -562,10 +564,45 @@ mod commands {
             ..Role::default()
         };
         assert_eq!(
-            resume(&Config::default(), &role, "c1".into()).as_deref(),
+            resume(&Config::default(), &role, "c1".into(), None).as_deref(),
             Some("env CLAUDE_CODE_USE_BEDROCK=1 claude --dangerously-skip-permissions --model opus --resume c1")
         );
-        assert_eq!(resume(&Config::default(), &Role { agent: "opencode".into(), ..Role::default() }, "c".into()), None);
+        assert_eq!(
+            resume(&Config::default(), &Role { agent: "opencode".into(), ..Role::default() }, "c".into(), None),
+            None
+        );
+    }
+
+    #[rstest]
+    #[case::claude(
+        "claude",
+        "claude --dangerously-skip-permissions --add-dir /r/d",
+        "claude --dangerously-skip-permissions --add-dir /r/d --resume c1"
+    )]
+    #[case::codex(
+        "codex",
+        "codex --dangerously-bypass-approvals-and-sandbox --add-dir /r/d",
+        "codex resume --dangerously-bypass-approvals-and-sandbox --add-dir /r/d c1"
+    )]
+    #[case::cursor(
+        "cursor",
+        "cursor-agent --force --trust --add-dir /r/d",
+        "cursor-agent --force --trust --add-dir /r/d --resume c1"
+    )]
+    #[case::gemini("gemini", "gemini --yolo --skip-trust", "gemini --yolo --skip-trust --resume c1")]
+    #[case::grok("grok", "grok --always-approve", "grok --always-approve --resume c1")]
+    fn the_run_folder_is_the_last_argument(#[case] agent: &str, #[case] start: &str, #[case] resumed: &str) {
+        let role = Role { agent: agent.into(), ..Role::default() };
+        let dir = Some(std::path::Path::new("/r/d"));
+        assert_eq!(command(&Config::default(), &role, dir).as_deref(), Some(start));
+        assert_eq!(resume(&Config::default(), &role, "c1".into(), dir).as_deref(), Some(resumed));
+    }
+
+    #[test]
+    fn opencode_gets_no_folder_flag() {
+        let role = Role { agent: "opencode".into(), ..Role::default() };
+        let dir = Some(std::path::Path::new("/r/d"));
+        assert_eq!(command(&Config::default(), &role, dir), command(&Config::default(), &role, None));
     }
 
     #[test]
@@ -582,11 +619,11 @@ mod commands {
     fn every_known_agent_has_a_mode_that_never_asks() {
         for kind in Known::ALL {
             let role = Role { agent: kind.name().into(), ..Role::default() };
-            let line = command(&Config::default(), &role).expect("known agent");
+            let line = command(&Config::default(), &role, None).expect("known agent");
             assert!(line.starts_with(kind.name()), "{line}");
             assert!(line.len() > kind.name().len(), "{line}");
         }
-        assert_eq!(command(&Config::default(), &Role { agent: "vim".into(), ..Role::default() }), None);
+        assert_eq!(command(&Config::default(), &Role { agent: "vim".into(), ..Role::default() }, None), None);
     }
 }
 

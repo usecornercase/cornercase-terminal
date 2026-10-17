@@ -9,6 +9,7 @@ use crate::test_util::git as git_in;
 const AT: &str = r#"#!/bin/sh
 log="LOG"
 printf 'start in %s\n' "$(pwd -P)" >> "$log/order"
+printf 'with %s | %s\n' "$CORNERCASE_RUN_DIR" "$*" >> "$log/order"
 printf 'Do you trust the files in this folder?\n❯ 1. Yes, proceed\n  2. No, exit\n'
 read answer
 printf '\033[2J\033[Hagent ready> '
@@ -86,6 +87,21 @@ fn an_own_role_starts_in_a_worktree_of_its_own_on_a_branch_made_from_the_runs() 
     let folders: Vec<String> = started.iter().map(|l| l.trim_start_matches("start in ").to_string()).collect();
     assert_eq!(folders.iter().filter(|f| **f == run_folder).count(), 2, "{folders:#?}");
     assert!(folders.contains(&path.display().to_string()), "{folders:#?}");
+}
+
+#[test]
+fn a_role_in_its_own_worktree_still_gets_the_runs_folder_and_the_flag_for_it() {
+    let mut team = team("", "");
+    let run = started(&mut team);
+    let dir = run.run_dir.clone().expect("the run's folder").display().to_string();
+
+    let order = team.until_got(4);
+
+    let with: Vec<&String> = order.iter().filter(|l| l.starts_with("with ")).collect();
+    assert_eq!(with.len(), 4, "{order:#?}");
+    for line in with {
+        assert!(line.starts_with(&format!("with {dir} | ")) && line.ends_with(&format!("--add-dir {dir}")), "{line}");
+    }
 }
 
 #[test]

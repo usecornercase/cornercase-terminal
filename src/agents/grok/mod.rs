@@ -16,6 +16,7 @@ pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = Some(crate::
     flags: &["--reasoning-effort", "--effort"],
     config: None,
 });
+pub(in crate::agents) const ADD_DIR: Option<&str> = None;
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--always-approve"];
 pub(in crate::agents) const STATUS_BY_FOLDER: bool = false;
 pub(in crate::agents) const RECORD_BY_FOLDER: bool = false;

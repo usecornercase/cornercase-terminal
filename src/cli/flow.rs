@@ -36,6 +36,9 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
             if let Some(note) = &run.note {
                 eprintln!("{note}");
             }
+            if let Some(note) = folder_note(&run) {
+                eprintln!("{note}");
+            }
             print_out(&started(&run))
         }
         FlowAction::Export(export) => {
@@ -191,6 +194,10 @@ fn heading(flow: &FlowInfo) -> String {
         Some(path) => format!("{} ({origin}, {})", flow.name, path.display()),
         None => format!("{} ({origin})", flow.name),
     }
+}
+
+pub(super) fn folder_note(run: &RunInfo) -> Option<String> {
+    run.run_dir.as_ref().map(|dir| format!("the run keeps its files in {}", dir.display()))
 }
 
 pub(super) fn started(run: &RunInfo) -> String {

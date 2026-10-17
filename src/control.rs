@@ -805,6 +805,7 @@ pub struct WorkspaceInfo {
     pub(crate) behind: u32,
     pub(crate) pull_request: Option<PullRequestInfo>,
     pub(crate) setup: Option<String>,
+    pub(crate) run_dir: Option<PathBuf>,
     pub(crate) active: bool,
     pub tabs: Vec<TabInfo>,
 }

@@ -62,6 +62,17 @@ impl Known {
         }
     }
 
+    pub(crate) fn add_dir(self) -> Option<&'static str> {
+        match self {
+            Self::Claude => claude::ADD_DIR,
+            Self::Codex => codex::ADD_DIR,
+            Self::Gemini => gemini::ADD_DIR,
+            Self::Opencode => opencode::ADD_DIR,
+            Self::Grok => grok::ADD_DIR,
+            Self::Cursor => cursor::ADD_DIR,
+        }
+    }
+
     pub(crate) fn effort(self) -> Option<super::Effort> {
         match self {
             Self::Claude => claude::EFFORT,

@@ -526,6 +526,7 @@ export interface DiagramHit {
   role?: string;
   edge?: string;
   to?: string | null;
+  file?: number;
 }
 
 export function drawDiagram(p: Painter, area: Rect, d: Diagram, scroll: number, click: (hit: DiagramHit) => void): void {
@@ -640,11 +641,34 @@ function drawBox(p: Painter, put: (at: At, text: string, s: Style) => void, spot
   if (top) p.region({ r: rect(top[0], top[1], r.w, Math.max(0, Math.min(BOX_HEIGHT, bottom(p.app.areas().changes) - top[1]))), click: () => click({ role: node.role }), cursor: 'pointer' });
 }
 
+export interface PanelFile {
+  name: string;
+  age: string;
+}
+
 export interface PanelView {
   name: string;
   task: string;
   diagram: Diagram;
+  files: PanelFile[] | null;
   scroll: number;
+}
+
+const FILES_LEAD = 2;
+
+function filesHeight(view: PanelView): number {
+  return view.files ? FILES_LEAD + Math.max(1, view.files.length) : 0;
+}
+
+function contentHeight(view: PanelView, width: number): number {
+  return diagramHeight(view.diagram, width) + filesHeight(view);
+}
+
+export function fileAge(ms: number): string {
+  const minutes = Math.max(0, Math.floor(ms / 60000));
+  const hours = Math.floor(minutes / 60);
+  if (minutes < 60) return `${minutes}m`;
+  return hours < 24 ? `${hours}h` : `${Math.floor(hours / 24)}d`;
 }
 
 export function panelBody(area: Rect): Rect {
@@ -654,7 +678,7 @@ export function panelBody(area: Rect): Rect {
 
 export function scrolled(area: Rect, view: PanelView, delta: number): number {
   const body = panelBody(area);
-  const most = Math.max(0, diagramHeight(view.diagram, body.w) - body.h);
+  const most = Math.max(0, contentHeight(view, body.w) - body.h);
   return Math.max(0, Math.min(most, view.scroll + delta));
 }
 
@@ -672,8 +696,36 @@ export function drawFlow(p: Painter, areas: Areas, view: PanelView): void {
   const body = panelBody(area);
   const scroll = scrolled(area, view, 0);
   drawDiagram(p, body, view.diagram, scroll, (hit) => app.flowClick(hit));
+  if (view.files) drawFiles(p, body, view.files, diagramHeight(view.diagram, body.w) - scroll, (i) => app.flowClick({ file: i }));
   p.region({ r: body, wheel: (dy) => app.scrollFlow(Math.sign(dy) * 3) });
   const more = (y: number, text: string) => p.span(right(body) - len(text), y, text, DARK, len(text));
   if (scroll > 0) more(body.y, ' ↑ more ');
-  if (diagramHeight(view.diagram, body.w) - scroll > body.h && body.h > 0) more(bottom(body) - 1, ' ↓ more ');
+  if (contentHeight(view, body.w) - scroll > body.h && body.h > 0) more(bottom(body) - 1, ' ↓ more ');
+}
+
+function drawFiles(p: Painter, body: Rect, files: PanelFile[], top: number, click: (i: number) => void): void {
+  const at = (row: number) => {
+    const y = top + row;
+    return y >= 0 && y < body.h ? body.y + y : null;
+  };
+  const head = at(1);
+  if (head !== null) {
+    p.span(body.x, head, 'Files', { add: BOLD });
+    p.span(body.x + 5, head, ` · ${files.length}`, DARK);
+  }
+  if (!files.length) {
+    const y = at(FILES_LEAD);
+    if (y !== null) p.span(body.x, y, 'nothing yet', DARK);
+    return;
+  }
+  files.forEach((file, i) => {
+    const y = at(FILES_LEAD + i);
+    if (y === null) return;
+    const r = rect(body.x, y, body.w, 1);
+    if (p.hovered(r)) p.span(r.x, y, ' '.repeat(r.w), { bg: p.app.light ? 255 : 235 });
+    const age = len(file.age);
+    p.span(body.x, y, truncateRight(file.name, Math.max(0, body.w - age - 1)), {}, body.w);
+    p.span(right(body) - age, y, file.age, DARK, age);
+    p.region({ r, click: () => click(i), cursor: 'pointer' });
+  });
 }

@@ -271,6 +271,7 @@ mod output {
             behind: 2,
             pull_request: None,
             setup: None,
+            run_dir: None,
             active: true,
             tabs: vec![tab],
         };
@@ -503,7 +504,7 @@ mod output {
 
 mod flows {
     use super::args::ImportTo;
-    use super::flow::{confirmation, fetched, imported_line, listing, started};
+    use super::flow::{confirmation, fetched, folder_note, imported_line, listing, started};
     use crate::control::{BrokenFlow, FlowInfo, Flows, Imported, MemberInfo, RoleInfo, RunInfo};
     use crate::flows::Worktree;
     use crate::flows::registry::Source;
@@ -599,6 +600,13 @@ mod flows {
         };
 
         assert_eq!(started(&run), "9\n12\torchestrator\n14\tsecond reviewer\n");
+    }
+
+    #[test]
+    fn a_run_names_its_folder_on_stderr_when_it_has_one() {
+        let run = RunInfo { run_dir: Some("/s/runs/2026-10-17-api".into()), ..RunInfo::default() };
+        assert_eq!(folder_note(&run).as_deref(), Some("the run keeps its files in /s/runs/2026-10-17-api"));
+        assert_eq!(folder_note(&RunInfo::default()), None);
     }
 }
 

@@ -45,6 +45,7 @@ impl App {
         (p, workspace): (usize, u64),
         path: PathBuf,
         script: &str,
+        run: Option<&Path>,
     ) -> Result<Term> {
         let (rows, cols) = self.pane_size(area);
         let id = self.take_id();
@@ -55,7 +56,7 @@ impl App {
         let _ = std::fs::remove_file(&status);
         let branch = git::branch(&path).unwrap_or_default();
         let args = setup::args(script, &status, &self.shell, &self.projects[p].path, &branch);
-        let env = Self::pane_env(id);
+        let env = Self::pane_env(id, run);
         let opts = SpawnOptions {
             id,
             shell: "/bin/sh",
@@ -78,7 +79,7 @@ impl App {
         let Some(script) = self.setup_script(p) else { return self.push_tab(p, w, area, name) };
         let path = self.projects[p].workspaces[w].path.clone();
         let workspace = self.projects[p].workspaces[w].id;
-        let term = self.spawn_setup(area, (p, workspace), path, &script)?;
+        let term = self.spawn_setup(area, (p, workspace), path, &script, None)?;
         let tab = Tab::new(self.take_id(), name, term);
         let workspace = &mut self.projects[p].workspaces[w];
         workspace.tabs.push(tab);

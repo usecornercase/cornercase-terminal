@@ -194,6 +194,7 @@ pub(crate) struct Workspace {
     pub(crate) base: Option<String>,
     pub(crate) collapsed: bool,
     pub(crate) role_worktrees: Vec<RoleWorktree>,
+    pub(crate) run_dirs: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -217,6 +218,7 @@ impl Workspace {
             base: None,
             collapsed: false,
             role_worktrees: Vec::new(),
+            run_dirs: Vec::new(),
         }
     }
 

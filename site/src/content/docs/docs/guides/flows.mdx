@@ -57,8 +57,8 @@ Starting a flow:
 
 1. Makes the worktree, or uses a worktree already on that branch if it runs no flow, and one more for each role that [works apart](#a-worktree-of-its-own), on a branch made from the run's. The project's [setup](../worktrees/#set-up-each-new-worktree) runs in each new one, with its own branch.
 2. Opens one tab per role, named after it, the orchestrator first, each in its role's worktree.
-3. Starts each agent with its model, its effort, its arguments and its role prompt, which tells it to wait for the orchestrator's first message, and answers its question about trusting the new folder. A role that may not edit files is told so in its prompt.
-4. Starts the orchestrator last, once its team is up, with a brief cornercase writes: the task, the team with each role's pane id, the stages in words, the flow's notes, the rules for driving agents (wait before sending, one self-contained message at a time, read the last message rather than the screen, never answer another agent's permission prompt), the final action, and `cornercase mark` on its own pane when it is done, so the run shows as [pending review](../projects-workspaces-tabs/#pending-review).
+3. Starts each agent with its model, its effort, its arguments and its role prompt, which tells it to wait for the orchestrator's first message, and answers its question about trusting the new folder. A role that may not edit the worktree's files is told so in its prompt, and every role is told where to put its answers (see [The run's folder](#the-runs-folder)).
+4. Starts the orchestrator last, once its team is up, with a brief cornercase writes: the task, the team with each role's pane id, the stages in words, the flow's notes, the rules for driving agents (wait before sending, one self-contained message at a time, read the last message rather than the screen, never answer another agent's permission prompt), the run's folder, the final action, and `cornercase mark` on its own pane when it is done, so the run shows as [pending review](../projects-workspaces-tabs/#pending-review).
 
 The whole team starts at once, so the tabs and the diagram are complete from the first second; an agent waiting for its first message costs nothing. The roles' turns ending don't notify you or leave a `✓` on their tabs, since the orchestrator reads them; the orchestrator does when the run is done, and any agent still does when it [waits for you](../projects-workspaces-tabs/#notifications).
 
@@ -80,9 +80,9 @@ It takes the column on the right that the [changes](../changes/), [files](../fil
 
 <Screen
   name="flow-run"
-  alt="The Flow panel alone: Full issue and the first line of the task in its header, the orchestrator's box with a heavy border, the coder idle, the reviewer working with a heavy border and the security reviewer idle side by side, the tester idle, a loop from the reviewers back to the coder labelled findings · 1/3, another from the tester labelled failures · 0/2, and the end, open a pull request"
-  caption="The plan, live: who works, where the work went last, and how many rounds each loop took."
-  crop={[95, 0, 45, 24]}
+  alt="The Flow panel alone: Full issue and the first line of the task in its header, the orchestrator's box with a heavy border, the coder idle, the reviewer working with a heavy border and the security reviewer idle side by side, the tester idle, a loop from the reviewers back to the coder labelled findings · 1/3, another from the tester labelled failures · 0/2, and the end, open a pull request; under the diagram, Files · 4 lists coder-2.md, security-1.md, coder-1.md and orchestrator-1.md, with their ages"
+  caption="The plan, live: who works, where the work went last, how many rounds each loop took, and the files the roles wrote."
+  crop={[95, 0, 45, 31]}
 />
 
 **What it draws.** The orchestrator sits on top, apart, since it moves the work. The stages go top to bottom, the roles of a parallel stage side by side (stacked under a bracket when the panel is too narrow), and each loop is an arrow up the right side into the stage it returns to, labelled with what sends the work back and its rounds (`findings · 1/3`). The end is `◆ open a pull request` or `◆ leave the commits`. Each box names its role in its own colour, then its agent, model and effort (`claude · opus · high`).
@@ -100,7 +100,17 @@ It takes the column on the right that the [changes](../changes/), [files](../fil
 
 **Clicks.** Click a box to go to its tab. Click an arrow, or a loop's label, to read the last message sent along it, with a **`copy`** button; where an arrow splits into a parallel stage, each branch shows the message its own role got. The arrows that carried a message light up under the mouse, a branch with the way it took. The wheel scrolls a diagram taller than the panel.
 
-The messages are kept in memory only, at most the first 32 KiB of each: they never reach the [log](../../help/troubleshooting/#the-server-log), which keeps their sizes, nor the saved session. After a restart the panel shows the plan and the agents' status again, without the history.
+The messages are kept in memory only, at most the first 32 KiB of each: they never reach the [log](../../help/troubleshooting/#the-server-log), which keeps their sizes, nor the saved session. After a restart the panel shows the plan and the agents' status again, without the history; what the roles wrote to [the run's folder](#the-runs-folder) is still there.
+
+## The run's folder
+
+Every run gets a folder for its files, so long reports don't pile up in the orchestrator's context and the run leaves a record of what each role produced. It is outside the worktree, so nothing in it is ever committed, and every pane of the team has its path in **`$CORNERCASE_RUN_DIR`**.
+
+- **One file per answer.** Each role writes every answer to a file named after it and the next free number (`reviewer-1.md`, then `reviewer-2.md`) and replies with the file's path and a few lines. The orchestrator passes work on by path instead of pasting text, and writes its own decisions there too (`orchestrator-1.md`: what it asked, what came back, what it decided and why). Scratch files, logs and scripts a role needs go there as well, never in the worktree.
+- **Where it is.** In `runs/` next to the [saved session](../sessions/) (`~/.local/state/cornercase/runs/` by default; with `CORNERCASE_SOCKET`, `<session name>.runs/` next to the socket, so separate servers never share one), named by the day and the workspace (`2026-10-17-fix-login`, with `-2` when taken). It and `runs/` are readable only by you (mode `0700`).
+- **Who can reach it.** Claude Code, Codex and Cursor CLI start with `--add-dir` for it, so their file tools can write there. Gemini CLI, opencode and Grok Build have no flag cornercase uses for it, and write through their shell, which the prompt tells them to do when their file tools can't reach it.
+- **The Flow panel lists it.** Under the diagram, **Files · n** shows the folder's files, newest first, with their age; click one to read it in the [files panel](../files/). The list is read every two seconds while the panel shows, at most 200 files.
+- **How long it stays.** The folder survives the end of the run and a restart (a folder you deleted is made again), and goes with its workspace: when you close the workspace or the project, or remove its worktree. `cornercase flow run` prints the folder on stderr, with `run_dir` in `--json`, and `cornercase status --json` gives each workspace's `run_dir`, so a script finds the files of a run that ended.
 
 ## A worktree of its own
 
@@ -238,6 +248,7 @@ cornercase flow import quick.toml
 
 ## What is not covered
 
+- The files of a run that ended in the Flow panel, which shows only while a run does: read them from `run_dir`. There is no way to turn the folder off; a flow's own prompts can say not to use it.
 - Flows that span several projects.
 - Scheduling a flow: the [queue](../queue/) starts single agents.
 - Message events in [`cornercase events`](../scripts-and-agents/#follow-events).

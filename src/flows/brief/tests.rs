@@ -1,4 +1,6 @@
-use super::{brief, member};
+use std::path::Path;
+
+use super::{brief, member, restored};
 use crate::agents::Known;
 use crate::flows::run::{Member, RoleWorktree};
 use crate::flows::{Back, End, Flow, ORCHESTRATOR, Role, builtin, role_branch};
@@ -16,7 +18,7 @@ fn the_brief_holds_the_task_the_team_the_plan_and_the_end() {
     flow.roles[1].model = Some("gpt-5.5".into());
     flow.roles[1].effort = Some("high".into());
     flow.notes = "Do not change the public API.".into();
-    let text = brief(&flow, "Fix the login form\n", "fix-login", &members(), &[]);
+    let text = brief(&flow, "Fix the login form\n", "fix-login", &members(), &[], None);
 
     assert!(text.contains("flow \"Full issue\""), "{text}");
     assert!(text.contains("on branch fix-login"), "{text}");
@@ -47,7 +49,7 @@ fn the_brief_holds_the_task_the_team_the_plan_and_the_end() {
 #[test]
 fn an_answer_whose_record_cannot_be_found_is_read_from_the_screen() {
     let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
-    let text = brief(&flow, "Fix the login form", "fix-login", &members(), &[]);
+    let text = brief(&flow, "Fix the login form", "fix-login", &members(), &[], None);
     assert!(
         text.contains(
             "If it fails for an agent (its record cannot be found), read its screen with `cornercase read --pane N \
@@ -62,7 +64,7 @@ fn a_flow_that_leaves_the_commits_says_not_to_push() {
     let mut flow = builtin::flows(&[Known::Codex], None).remove(2);
     flow.end = End::Commits;
     flow.stages[1].back = Some(Back { to: 1, when: "findings".into(), at_most: 1 });
-    let text = brief(&flow, "x", "quick", &members(), &[]);
+    let text = brief(&flow, "x", "quick", &members(), &[], None);
 
     assert!(text.contains("If it reports findings, send them to coder and go back to stage 1; at most once"));
     assert!(text.contains("At the end: leave the commits on branch quick; do not push"), "{text}");
@@ -72,7 +74,7 @@ fn a_flow_that_leaves_the_commits_says_not_to_push() {
 fn three_roles_in_parallel_are_any_of_them() {
     let mut flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
     flow.stages[1].roles.push("tester".into());
-    let text = brief(&flow, "x", "b", &members(), &[]);
+    let text = brief(&flow, "x", "b", &members(), &[], None);
 
     assert!(text.contains("2. reviewer, security and tester, in parallel. If any of them reports findings"));
 }
@@ -81,14 +83,14 @@ fn three_roles_in_parallel_are_any_of_them() {
 fn a_member_is_told_whether_it_may_edit() {
     let coder = Role { name: "coder".into(), edits: true, prompt: "Write code.".into(), ..Role::default() };
     assert_eq!(
-        member(&coder, None),
+        member(&coder, None, None),
         "Write code.\n\nYou are `coder` in this team, and you may edit files and commit in this worktree. Wait for \
          the orchestrator's first message before doing anything."
     );
     let empty = Role { name: "reviewer".into(), ..Role::default() };
     assert_eq!(
-        member(&empty, None),
-        "You are `reviewer` in this team: do not edit files and do not commit. Wait for the orchestrator's first \
+        member(&empty, None, None),
+        "You are `reviewer` in this team: do not edit the worktree's files and do not commit. Wait for the orchestrator's first \
          message before doing anything."
     );
 }
@@ -119,7 +121,7 @@ fn arena_members() -> Vec<Member> {
 #[test]
 fn the_team_line_of_a_role_with_its_own_worktree_names_its_folder_and_branch() {
     let (flow, trees) = arena_trees();
-    let text = brief(&flow, "x", "fix", &arena_members(), &trees);
+    let text = brief(&flow, "x", "fix", &arena_members(), &trees, None);
 
     assert!(
         text.contains(
@@ -133,13 +135,13 @@ fn the_team_line_of_a_role_with_its_own_worktree_names_its_folder_and_branch() {
 #[test]
 fn the_worktrees_section_tells_how_to_read_and_integrate_candidates() {
     let (flow, trees) = arena_trees();
-    let text = brief(&flow, "x", "fix", &arena_members(), &trees);
+    let text = brief(&flow, "x", "fix", &arena_members(), &trees, None);
 
     assert!(text.contains("## Worktrees"), "{text}");
     assert!(text.contains("`git log fix..B`, `git diff fix...B` and `git show B:path`"), "{text}");
     assert!(text.contains("ask a role that edits this worktree to `git merge B`"), "{text}");
     assert!(text.contains("Never check out a role's branch here"), "{text}");
-    let plain = brief(&sample_flow(), "x", "fix", &members(), &[]);
+    let plain = brief(&sample_flow(), "x", "fix", &members(), &[], None);
     assert!(!plain.contains("## Worktrees"), "{plain}");
 }
 
@@ -150,7 +152,7 @@ fn sample_flow() -> Flow {
 #[test]
 fn a_member_with_its_own_worktree_is_told_its_branch() {
     let coder = Role { name: "coder A".into(), edits: true, ..Role::default() };
-    let told = member(&coder, Some("fix--coder-a"));
+    let told = member(&coder, Some("fix--coder-a"), None);
     assert!(
         told.starts_with(
             "You are `coder A` in this team, and you may edit files and commit in this worktree, which is yours alone, on branch fix--coder-a: commit your work there"
@@ -159,19 +161,80 @@ fn a_member_with_its_own_worktree_is_told_its_branch() {
     );
     let reader = Role { name: "judge".into(), ..Role::default() };
     assert!(
-        member(&reader, Some("b"))
-            .contains("do not edit files and do not commit. This worktree is yours alone, on branch b.")
+        member(&reader, Some("b"), None)
+            .contains("do not edit the worktree's files and do not commit. This worktree is yours alone, on branch b.")
     );
 }
 
 #[test]
 fn a_built_in_member_is_told_to_wait_once_and_last() {
     let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
-    let text = member(&flow.roles[1], None);
+    let text = member(&flow.roles[1], None, None);
 
     assert_eq!(text.matches("Wait for the orchestrator's first message").count(), 1, "{text}");
     assert!(
         text.ends_with("do not commit. Wait for the orchestrator's first message before doing anything."),
         "{text}"
     );
+}
+
+const DIR: &str = "/s/runs/2026-10-17-api";
+
+fn folder() -> &'static Path {
+    Path::new(DIR)
+}
+
+#[test]
+fn the_brief_names_the_run_folder_and_says_where_it_writes() {
+    let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
+    let text = brief(&flow, "x", "b", &members(), &[], Some(folder()));
+
+    assert!(
+        text.contains(&format!("## Files\n\nThe run has a folder for its files, {DIR} (also `$CORNERCASE_RUN_DIR`"))
+    );
+    assert!(text.contains("`orchestrator-<n>.md`"), "{text}");
+    assert!(text.contains("Never edit the worktree's files, commit"), "{text}");
+    assert!(text.contains("The run's folder is the only place you write."), "{text}");
+    assert!(text.find("## Files").expect("files") < text.find("## How to drive").expect("rules"));
+    assert_eq!(text.matches("--timeout 300`").count(), 2, "{text}");
+}
+
+#[test]
+fn without_a_folder_the_brief_has_no_files_section() {
+    let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
+    let text = brief(&flow, "x", "b", &members(), &[], None);
+
+    assert!(!text.contains("## Files"), "{text}");
+    assert!(!text.contains("only place you write"), "{text}");
+    assert!(text.contains("Never edit files, commit"), "{text}");
+}
+
+#[test]
+fn a_member_with_a_folder_writes_a_file_per_answer_and_still_waits_last() {
+    let coder = Role { name: "coder".into(), edits: true, prompt: "Write code.".into(), ..Role::default() };
+    let text = member(&coder, None, Some(folder()));
+    assert_eq!(
+        text,
+        format!(
+            "Write code.\n\nYou are `coder` in this team, and you may edit files and commit in this worktree. Write \
+             each answer to a file of its own in the run's folder, {DIR} (also `$CORNERCASE_RUN_DIR`), named after \
+             your role and the next number free there (`coder-1.md`, then `coder-2.md`), and end your turn with that \
+             file's path and a summary of a few lines. Anything else too long for a message (a design, logs, a \
+             script that shows a bug) goes there too, never in the worktree; if your file tools cannot reach the \
+             folder, use your shell. Wait for the orchestrator's first message before doing anything."
+        )
+    );
+    let reviewer = Role { name: "second reviewer".into(), ..Role::default() };
+    let text = member(&reviewer, None, Some(folder()));
+    assert!(text.contains("do not edit the worktree's files and do not commit. Write each answer"), "{text}");
+    assert!(text.contains("`second-reviewer-1.md`, then `second-reviewer-2.md`"), "{text}");
+    assert_eq!(text.matches("Wait for the orchestrator's first message").count(), 1, "{text}");
+    assert!(text.ends_with("before doing anything."), "{text}");
+}
+
+#[test]
+fn a_restored_brief_names_the_folder() {
+    let text = restored(&members(), Some(folder()));
+    assert!(text.contains(&format!("Use these from now on. The run's folder is still {DIR}. Any wait")), "{text}");
+    assert!(!restored(&members(), None).contains("folder"));
 }

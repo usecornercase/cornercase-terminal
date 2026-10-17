@@ -20,7 +20,7 @@ state() {
 }
 trap 'rm -f "$dir/sessions/$$.json"; exit 0' INT TERM HUP
 m=$(printf '\033[35m'); b=$(printf '\033[1m'); d=$(printf '\033[2m'); r=$(printf '\033[0m')
-args="$*"
+args=$(printf '%s' "$*" | sed 's/ *--add-dir [^ ]*//')
 box() {
   printf '%s╭────────────────────────────────────────────────────────────╮%s\n' "$m" "$r"
   printf '%s│%s%s agent session%s%s · %-43s%s%s│%s\n' "$m" "$r" "$b" "$r" "$d" "claude${args:+ $args}" "$r" "$m" "$r"
@@ -56,6 +56,12 @@ drain() {
 said() {
   printf '%s●%s %s\n' "$m" "$r" "$1"
 }
+answer_file() {
+  [ -n "$CORNERCASE_RUN_DIR" ] || return 0
+  n=1
+  while [ -e "$CORNERCASE_RUN_DIR/$1-$n.md" ]; do n=$((n + 1)); done
+  printf '# %s, answer %s\n\n%s\n' "$1" "$n" "$2" > "$CORNERCASE_RUN_DIR/$1-$n.md"
+}
 member() {
   role=$(drain "$1" | sed -n 's/.*You are `\([^`]*\)` in this team.*/\1/p' | head -n 1)
   fresh
@@ -80,6 +86,7 @@ member() {
       *) said 'Done.' ;;
     esac
     printf '\n'
+    answer_file "$role" "$line"
     state idle
   done
   exit 0
@@ -98,6 +105,7 @@ orchestrate() {
   state busy
   said 'Sending issue #482 to coder'
   tell coder 'Fix #482: the returns page crashes on an empty address.'
+  answer_file orchestrator 'Sent #482 to the coder.'
   sleep 3
   said 'coder committed the fix: asking reviewer and security'
   tell reviewer 'Review the fix for #482 on this branch.'

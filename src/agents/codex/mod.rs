@@ -18,6 +18,7 @@ pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = Some(crate::
     flags: &[],
     config: Some("model_reasoning_effort"),
 });
+pub(in crate::agents) const ADD_DIR: Option<&str> = Some("--add-dir");
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--dangerously-bypass-approvals-and-sandbox"];
 pub(in crate::agents) const STATUS_BY_FOLDER: bool = false;
 pub(in crate::agents) const RECORD_BY_FOLDER: bool = true;

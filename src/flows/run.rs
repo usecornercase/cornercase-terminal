@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
-use std::time::Instant;
 
 use super::Flow;
 use super::progress::Progress;
@@ -49,6 +49,7 @@ pub(crate) struct Run {
     pub(crate) members: Vec<Member>,
     pub(crate) messages: VecDeque<Message>,
     pub(crate) progress: Progress,
+    pub(crate) dir: Option<PathBuf>,
 }
 
 impl Run {
@@ -61,6 +62,7 @@ impl Run {
             members: Vec::new(),
             messages: VecDeque::new(),
             progress: Progress::default(),
+            dir: None,
         }
     }
 

@@ -267,10 +267,10 @@ mod hits {
     use super::*;
 
     fn panel(diagram: Diagram) -> View {
-        View { name: "Full issue".into(), task: "fix the login\nmore".into(), diagram, scroll: 0 }
+        View { name: "Full issue".into(), task: "fix the login\nmore".into(), diagram, files: None, scroll: 0 }
     }
 
-    const AREA: Rect = Rect::new(10, 2, 48, 40);
+    const AREA: Rect = Rect::new(10, 2, 48, 60);
 
     fn position(view: &View, text: &str) -> Position {
         let mut t = Terminal::new(TestBackend::new(AREA.right(), AREA.bottom())).expect("terminal");
@@ -358,6 +358,50 @@ mod hits {
         let short = Rect { height: 12, ..AREA };
         let most = diagram_height(&view.diagram, body(short).width) - body(short).height;
         assert_eq!((scrolled(short, &view, 100), scrolled(short, &view, -3)), (most, 0));
+    }
+
+    fn with_files(names: &[&str]) -> View {
+        let rows = names.iter().map(|name| FileRow { name: (*name).into(), age: "2h".into() }).collect();
+        View { files: Some(Files { rows, more: false }), ..panel(Diagram::plan(&full_issue(), MUTED, false)) }
+    }
+
+    #[test]
+    fn the_files_follow_the_diagram_newest_first_with_their_ages() {
+        let view = with_files(&["reviewer-2.md", "coder-1.md", "a-very-long-name-for-an-answer-file-that-is-cut.md"]);
+        let mut t = Terminal::new(TestBackend::new(AREA.right(), AREA.bottom())).expect("terminal");
+        t.draw(|f| draw(f, AREA, &view, None)).expect("draw");
+        insta::assert_snapshot!("panel_with_files", t.backend());
+    }
+
+    #[test]
+    fn a_file_row_is_a_hit() {
+        let view = with_files(&["reviewer-2.md", "coder-1.md"]);
+        assert_eq!(hit(AREA, &view, position(&view, "coder-1.md")), Some(Hit::File(1)));
+        assert_eq!(hit(AREA, &view, position(&view, "reviewer-2.md")), Some(Hit::File(0)));
+        assert_eq!(hit(AREA, &view, position(&view, "Files")), None);
+    }
+
+    #[test]
+    fn scrolling_reaches_the_last_file() {
+        let view = with_files(&["a.md", "b.md", "last.md"]);
+        let short = Rect { height: 12, ..AREA };
+        let total = diagram_height(&view.diagram, body(short).width) + 5;
+        let most = total - body(short).height;
+        let at = scrolled(short, &view, 100);
+        assert_eq!(at, most);
+        let bottom = View { scroll: at, ..view };
+        let mut t = Terminal::new(TestBackend::new(short.right(), short.bottom())).expect("terminal");
+        t.draw(|f| draw(f, short, &bottom, None)).expect("draw");
+        assert!(find(&t, "last.md").is_some());
+    }
+
+    #[test]
+    fn an_empty_folder_says_nothing_yet() {
+        let view = View { files: Some(Files { rows: Vec::new(), more: false }), ..with_files(&[]) };
+        let mut t = Terminal::new(TestBackend::new(AREA.right(), AREA.bottom())).expect("terminal");
+        t.draw(|f| draw(f, AREA, &view, None)).expect("draw");
+        assert!(find(&t, "nothing yet").is_some());
+        assert_eq!(hit(AREA, &view, position(&view, "nothing yet")), None);
     }
 
     #[test]

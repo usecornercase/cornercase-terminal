@@ -5,6 +5,7 @@ import { Agent } from './programs';
 
 export const ORCHESTRATOR = 'orchestrator';
 export const RUN_BRANCH = 'fix/webhook-signature';
+export const RUN_DIR = '/home/you/.local/state/cornercase/runs/2026-10-17-fix-webhook-signature';
 export const RUN_TASK = 'Check the Stripe signature before a webhook changes a charge.';
 const MEMBER_PACE = 1500;
 const BETWEEN = 1500;
@@ -19,6 +20,13 @@ export interface Run {
   members: { role: string; pane: number }[];
   progress: Progress;
   messages: Message[];
+  files: RunFile[];
+}
+
+export interface RunFile {
+  name: string;
+  at: number;
+  text: string;
 }
 
 export const FULL_ISSUE: Flow = {
@@ -66,7 +74,7 @@ function agentOf(app: App, run: Run, role: string): Agent | null {
 
 export function startRun(app: App, p: Project): Run {
   const w = app.addWorkspace(p, RUN_BRANCH, true);
-  const run: Run = { workspace: w.id, flow: FULL_ISSUE, task: RUN_TASK, members: [], progress: new Progress(), messages: [] };
+  const run: Run = { workspace: w.id, flow: FULL_ISSUE, task: RUN_TASK, members: [], progress: new Progress(), messages: [], files: [] };
   for (const role of [FULL_ISSUE.orchestrator, ...FULL_ISSUE.roles]) {
     const pane = app.newPane(p, w);
     const args = [...(ARGS[role.agent] ?? []), ...(role.model ? ['--model', role.model] : [])];
@@ -86,6 +94,12 @@ export function record(app: App, run: Run, to: string, text: string): void {
   run.messages.push(message);
   run.progress.send(run.flow, message);
   for (let t = FRAME; t <= TRAVEL + FRAME; t += FRAME) app.after(t, () => app.dirty());
+  app.dirty();
+}
+
+function write(app: App, run: Run, role: string, summary: string): void {
+  const n = run.files.filter((f) => f.name.startsWith(`${role}-`)).length + 1;
+  run.files.push({ name: `${role}-${n}.md`, at: app.now(), text: `# ${role}, answer ${n}\n\n${summary}\n` });
   app.dirty();
 }
 
@@ -109,7 +123,10 @@ function play(app: App, run: Run): void {
     when(
       () => sends.every(([role]) => !agentOf(app, run, role)?.working),
       () => {
-        lead()?.tool('Bash', `cornercase read --last-message ${panes}`, i === 1 ? 'reviewer: 1 finding, security: no findings' : 'done');
+        const summary = i === 1 ? 'reviewer: 1 finding, security: no findings' : 'done';
+        for (const [role, text] of sends) write(app, run, role, role === 'reviewer' && i === 1 ? 'One finding: compare the signatures in constant time.' : `Done: ${text}`);
+        lead()?.tool('Bash', `cornercase read --last-message ${panes}`, summary);
+        write(app, run, ORCHESTRATOR, `Read ${sends.map(([role]) => role).join(' and ')}: ${summary}.`);
         app.after(BETWEEN, () => when(() => true, () => stage(i + 1)));
       },
     );
@@ -128,6 +145,7 @@ function play(app: App, run: Run): void {
           if (own) markPane(own, false);
           run.progress = new Progress();
           run.messages = [];
+          run.files = [];
           begin();
         },
       ),
