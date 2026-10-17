@@ -4,6 +4,7 @@ use super::*;
 use crate::control::Snapshot;
 use crate::project::move_before;
 use crate::project::split::Node;
+use crate::test_util::git as run_git;
 
 fn watch(app: &mut App) -> Snapshot {
     let answer = value(app, None, Command::Watch(wire::Watch::default()));
@@ -25,6 +26,16 @@ fn lines(app: &mut App) -> Vec<Value> {
             },
             Streamed::Event(_) | Streamed::End => None,
         })
+        .collect()
+}
+
+fn published(app: &mut App) -> Vec<Snapshot> {
+    let parse = |text: &str| match serde_json::from_str(text) {
+        Ok(Response::Ok(value)) => serde_json::from_value(value).expect("a snapshot"),
+        other => panic!("not a snapshot: {other:?}"),
+    };
+    let take = app.take_events().into_iter();
+    take.filter_map(|(_, streamed)| if let Streamed::Snapshot(text) = streamed { Some(parse(&text)) } else { None })
         .collect()
 }
 
@@ -252,12 +263,14 @@ fn output_alone_publishes_nothing_until_a_step_is_traced() {
 }
 
 #[test]
-fn a_refresh_after_output_alone_does_not_build_the_session_again() {
+fn output_alone_does_not_build_the_session_again_even_when_the_refresh_reads_the_panes() {
     let (mut app, rx, _dirs) = app_with(1);
     let pane = term(&app, 0).id;
     let revision = watching(&mut app).revision;
     settled(&mut app, &rx, revision);
+    app.agents.watched = Some(Instant::now());
     app.trace_refresh();
+    app.take_events();
     let built = app.events.snapshots.built;
 
     let wrote = app.projects[0].workspaces[0].tabs[0].panes[0].write(b"echo cells-\"\"only\n");
@@ -272,7 +285,7 @@ fn a_refresh_after_output_alone_does_not_build_the_session_again() {
 
     assert!(wrote);
     assert_eq!(after_output, (built, Vec::new()));
-    assert_ne!(app.events.snapshots.built, built);
+    assert_eq!((app.events.snapshots.built, app.take_events()), (built, Vec::new()));
 }
 
 #[test]
@@ -290,4 +303,28 @@ fn watching_again_after_leaving_gets_the_current_session_with_a_later_revision()
     assert_eq!(again.report.boot, first.report.boot);
     assert!(again.revision > revision, "{} after {revision}", again.revision);
     assert_eq!(tab_named(&again, tab).as_deref(), Some("later"));
+}
+
+#[test]
+fn a_branch_checked_out_outside_cornercase_sends_the_new_branch() {
+    let repo = git_repo(&[("README", "hi")]);
+    let (mut app, rx) = empty_app();
+    app.open_project(repo.path().to_path_buf(), AREA).expect("open the repository");
+    let revision = watching(&mut app).revision;
+    settled(&mut app, &rx, revision);
+    app.refresh(Instant::now());
+    app.trace_refresh();
+    app.take_events();
+    app.refresh(Instant::now() + WATCH_AGENTS_EVERY);
+    app.trace_refresh();
+    let quiet = app.take_events();
+
+    run_git(repo.path(), &["checkout", "--quiet", "-b", "feat/outside"]);
+    app.refresh(Instant::now() + WATCH_AGENTS_EVERY * 2);
+    app.trace_refresh();
+
+    let branches: Vec<Option<String>> =
+        published(&mut app).iter().map(|snapshot| snapshot.report.projects[0].workspaces[0].branch.clone()).collect();
+    assert_eq!(quiet, []);
+    assert_eq!(branches, [Some("feat/outside".to_string())]);
 }

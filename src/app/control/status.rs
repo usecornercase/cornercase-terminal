@@ -1,4 +1,7 @@
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 use super::{Handled, json, none};
+use crate::agents::activity::Status;
 use crate::agents::awake;
 use crate::app::App;
 use crate::control::{
@@ -6,7 +9,9 @@ use crate::control::{
 };
 use crate::git;
 use crate::log::{self, Level};
+use crate::process;
 use crate::project::{Hierarchy, Tab, Workspace};
+use crate::pull_request::Ci;
 use crate::term::Term;
 use crate::version;
 
@@ -86,6 +91,37 @@ impl App {
             projects: projects.collect(),
             keep_awake: self.keep_awake_info(),
         }
+    }
+
+    pub(in crate::app) fn refreshed(&self) -> u64 {
+        let mut hash = DefaultHasher::new();
+        for project in self.projects.iter().filter(|p| !p.closing) {
+            project.id.hash(&mut hash);
+            for workspace in project.workspaces.iter().filter(|w| !w.closing()) {
+                (workspace.id, workspace.behind, git::branch(&workspace.path)).hash(&mut hash);
+                workspace.setup().map(|(_, state)| state.running()).hash(&mut hash);
+                if let Some(pull) = self.pull_request(workspace.id) {
+                    (pull.number, &pull.title, pull.state.name(), pull.ci().map(Ci::name)).hash(&mut hash);
+                    pull.failed().for_each(|check| check.name.hash(&mut hash));
+                }
+                for tab in &workspace.tabs {
+                    (tab.id, tab.status().map(Status::name)).hash(&mut hash);
+                    tab.panes.iter().for_each(|term| Self::pane_refreshed(term, &mut hash));
+                }
+            }
+        }
+        if let Some(awake) = self.keep_awake_info() {
+            (awake.held, awake.by, awake.unavailable).hash(&mut hash);
+        }
+        hash.finish()
+    }
+
+    fn pane_refreshed(term: &Term, hash: &mut DefaultHasher) {
+        let pid = term.foreground_pid();
+        (term.id, pid, pid.and_then(process::name), pid.and_then(process::cwd), term.shell_pid()).hash(hash);
+        (term.agent.agent(), term.agent.status().map(Status::name), term.agent.background_shell()).hash(hash);
+        term.context.context().map(|c| (&c.model, c.percent)).hash(hash);
+        (term.dialog(), term.survey(), term.resume.is_some()).hash(hash);
     }
 
     fn pane_info(&self, term: &Term, active: bool, caller: Option<u64>) -> PaneInfo {

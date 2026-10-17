@@ -28,6 +28,7 @@ pub(super) struct Snapshots {
     due: bool,
     pub(super) changed: bool,
     read: Option<Instant>,
+    refreshed: Option<u64>,
     pub(super) every: Duration,
 }
 
@@ -41,6 +42,7 @@ impl Default for Snapshots {
             due: false,
             changed: false,
             read: None,
+            refreshed: None,
             every: SNAPSHOT_EVERY,
         }
     }
@@ -151,14 +153,18 @@ impl App {
     }
 
     pub(super) fn publish_snapshot(&mut self, now: Instant) {
-        let (read, snapshots) = (self.agents.watched, &mut self.events.snapshots);
-        if snapshots.watchers.is_empty() {
+        if self.events.snapshots.watchers.is_empty() {
             return;
         }
-        if snapshots.read != read {
-            snapshots.read = read;
-            snapshots.changed = true;
+        if self.events.snapshots.read != self.agents.watched {
+            self.events.snapshots.read = self.agents.watched;
+            let refreshed = Some(self.refreshed());
+            if self.events.snapshots.refreshed != refreshed {
+                self.events.snapshots.refreshed = refreshed;
+                self.events.snapshots.changed = true;
+            }
         }
+        let snapshots = &mut self.events.snapshots;
         if !snapshots.changed {
             return;
         }
