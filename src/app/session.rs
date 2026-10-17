@@ -96,7 +96,8 @@ impl App {
         let Some(line) = self.resume_line(role, agent, run) else { return false };
         log::info!("app", "resuming a conversation", pane = term.id, agent = agent.kind);
         let now = Instant::now();
-        self.agents.launches.push(Launch::resume(term.id, line, role.is_some(), now, now + RESUME_GRACE));
+        let trusted = role.is_some_and(|role| role.agent == agent.kind);
+        self.agents.launches.push(Launch::resume(term.id, line, trusted, now, now + RESUME_GRACE));
         term.resume = Some(agent.clone());
         term.resuming = Some(now + RESUME_GRACE);
         true

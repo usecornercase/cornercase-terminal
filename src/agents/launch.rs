@@ -115,6 +115,11 @@ impl Launch {
         Self { trust: Some(Trust::LeftToYou), resume: Some(until), ..Self::new(term, spec, now) }
     }
 
+    #[cfg(test)]
+    pub(crate) fn trusted(&self) -> bool {
+        self.spec.trusted
+    }
+
     pub(crate) fn holds(&self, now: Instant) -> bool {
         self.resume.is_some_and(|until| now < until) && self.parked.is_none()
     }
