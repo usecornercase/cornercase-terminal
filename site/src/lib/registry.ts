@@ -16,7 +16,7 @@ export const REPO = /^[\w.-]+\/[\w.-]+$/;
 export const TOPIC = 'cornercase-flow';
 export const FILES = ['flow.toml', 'cornercase-flow.toml'];
 export const VERSION = 2;
-export const AGENTS = ['claude', 'codex', 'gemini', 'opencode', 'grok', 'cursor'];
+export const AGENTS = ['claude', 'codex', 'gemini', 'opencode', 'grok', 'cursor', 'copilot'];
 
 export interface RegistryRole {
   name: string;

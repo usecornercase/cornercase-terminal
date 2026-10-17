@@ -251,6 +251,8 @@ mod program {
         &["/home/a/.local/bin/agent", "--use-system-ca", "/home/a/.local/share/cursor-agent/versions/2026.10.14-941492e/index.js"],
         "cursor"
     )]
+    #[case::copilot_through_npm("node", &["node", "/usr/lib/node_modules/@github/copilot/npm-loader.js"], "copilot")]
+    #[case::copilot_standalone("MainThread", &["/home/a/.local/bin/copilot"], "copilot")]
     #[case::another_program_with_that_thread_name("MainThread", &["/usr/bin/other", "--flag"], "MainThread")]
     #[case::grok_binary_named_agent("agent", &["/home/a/.grok/bin/agent"], "agent")]
     #[case::another_program("nvim", &["nvim", "src/main.rs"], "nvim")]

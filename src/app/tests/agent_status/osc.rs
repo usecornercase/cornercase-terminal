@@ -16,6 +16,7 @@ fn report(w: &mut Watched, state: &str, ticks: usize) {
 #[case::opencode(agents::Known::Opencode)]
 #[case::grok(agents::Known::Grok)]
 #[case::cursor(agents::Known::Cursor)]
+#[case::copilot(agents::Known::Copilot)]
 fn a_report_overrides_the_agents_heuristics_and_clear_returns_to_them(#[case] agent: agents::Known) {
     let mut w = Watched::start(agent, true);
     report(&mut w, "idle", 1);

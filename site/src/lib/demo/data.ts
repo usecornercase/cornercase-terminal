@@ -568,6 +568,11 @@ export const MODES: Record<string, [string, string][]> = {
     ['auto review', '--auto-review'],
     ['run everything (dangerous)', '--force'],
   ],
+  copilot: [
+    ['plan', '--mode plan'],
+    ['autopilot', '--mode autopilot'],
+    ['allow all (dangerous)', '--allow-all'],
+  ],
 };
 
 export interface UsageWindow {

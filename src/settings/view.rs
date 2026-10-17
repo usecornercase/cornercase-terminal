@@ -6,7 +6,7 @@ use crate::shortcuts::Prefix;
 
 use super::{NO_PLUGINS, Page, Row, RowText, Settings, Status};
 
-const RESUME_NOTE: &str = "Claude, Codex, Gemini, Grok, Cursor, in their tabs";
+const RESUME_NOTE: &str = "Claude, Codex, Gemini, Grok, Cursor, Copilot, in their tabs";
 
 const ICON_BAR_NOTE: &str = "the buttons under the lists, as icons; needs a Nerd Font";
 

@@ -3,6 +3,7 @@ pub(crate) mod awake;
 pub mod claude;
 pub(crate) mod codex;
 pub(crate) mod context;
+pub mod copilot;
 pub(crate) mod cursor;
 pub(crate) mod gemini;
 pub(crate) mod grok;
@@ -34,8 +35,7 @@ pub(crate) const AUTO: &str = "auto";
 pub(crate) const DEFAULT_TRUST_PROMPT: &str =
     "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
 const TRUST_LINES: usize = 15;
-const OTHERS: [(&str, &str); 9] = [
-    ("copilot", "copilot"),
+const OTHERS: [(&str, &str); 8] = [
     ("amp", "amp"),
     ("droid", "droid"),
     ("pi", "pi"),

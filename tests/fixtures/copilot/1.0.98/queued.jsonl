@@ -1,0 +1,1 @@
+{"type": "user.message", "data": {"content": "then this", "transformedContent": "<current_datetime>x</current_datetime>\n\nthen this", "messageId": "msg-then-this", "delivery": "queued", "agentMode": "interactive"}, "id": "00000000-0000-4000-8000-000000000030", "timestamp": "2026-10-17T17:23:06.000Z", "parentId": null}

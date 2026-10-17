@@ -221,6 +221,7 @@ mod problems {
     #[case::claude("claude", false)]
     #[case::grok("grok", false)]
     #[case::cursor("cursor", false)]
+    #[case::copilot("copilot", false)]
     fn only_opencode_takes_one_role(#[case] agent: &str, #[case] refused: bool) {
         let mut flow = sample();
         flow.orchestrator.agent = agent.into();
@@ -644,6 +645,11 @@ mod commands {
     )]
     #[case::gemini("gemini", "gemini --yolo --skip-trust", "gemini --yolo --skip-trust --resume c1")]
     #[case::grok("grok", "grok --always-approve", "grok --always-approve --resume c1")]
+    #[case::copilot(
+        "copilot",
+        "copilot --allow-all --no-ask-user --add-dir /r/d",
+        "copilot --allow-all --no-ask-user --add-dir /r/d --resume=c1"
+    )]
     fn the_run_folder_is_the_last_argument(#[case] agent: &str, #[case] start: &str, #[case] resumed: &str) {
         let role = Role { agent: agent.into(), ..Role::default() };
         let dir = Some(std::path::Path::new("/r/d"));

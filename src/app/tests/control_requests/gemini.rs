@@ -20,13 +20,7 @@ impl Running {
     }
 
     fn send(&mut self, text: &str) {
-        let command = Command::Send(wire::SendText {
-            pane: Some(first(&self.app)),
-            text: Some(text.into()),
-            enter: true,
-            ..wire::SendText::default()
-        });
-        ask(&mut self.app, None, command);
+        send_enter(&mut self.app, text);
     }
 
     fn title(&mut self, title: &str) {
@@ -50,15 +44,7 @@ fn a_send_is_confirmed_and_wait_and_last_message_follow_the_same_conversation() 
     running.title("◇  Ready (project)");
     let ended = done(answered(&mut running.app, &running.rx, "the Gemini turn ends"));
     assert_eq!(ended.ended.as_deref(), Some("idle"));
-    ask(
-        &mut running.app,
-        None,
-        Command::LastMessage(wire::LastMessage { pane: Some(id), ..wire::LastMessage::default() }),
-    );
-    let message = match answered(&mut running.app, &running.rx, "Gemini's last message is read") {
-        Response::Ok(message) => message,
-        Response::Error(error) => panic!("last message failed: {error}"),
-    };
+    let message = last_message(&mut running.app, &running.rx, id);
     assert_eq!(message["agent"], "gemini");
     assert_eq!(message["text"], "OK");
     assert_eq!(message["turn_over"], true);
@@ -71,9 +57,7 @@ fn a_send_is_confirmed_and_wait_and_last_message_follow_the_same_conversation() 
 #[case::shell("!printf OK")]
 fn local_commands_return_after_enter_without_a_prompt_record(#[case] text: &str) {
     let mut running = Running::new();
-    running.send(text);
-    done(answered(&mut running.app, &running.rx, "the local command is submitted"));
-    assert_eq!(running.app.term().and_then(|t| t.context.prompted()), None);
+    a_local_command_needs_no_record(&mut running.app, &running.rx, text);
 }
 
 #[test]

@@ -194,6 +194,38 @@ fn send_text(pane: u64, text: &str, enter: bool, wait: bool) -> Command {
     Command::Send(wire::SendText { pane: Some(pane), text, enter, wait, ..wire::SendText::default() })
 }
 
+fn send_enter(app: &mut App, text: &str) {
+    let pane = first(app);
+    ask(app, None, send_text(pane, text, true, false));
+}
+
+fn last_message(app: &mut App, rx: &Receiver<AppEvent>, pane: u64) -> Value {
+    let wanted = wire::LastMessage { pane: Some(pane), ..wire::LastMessage::default() };
+    ask(app, None, Command::LastMessage(wanted));
+    match answered(app, rx, "the last message is read") {
+        Response::Ok(message) => message,
+        Response::Error(error) => panic!("last message failed: {error}"),
+    }
+}
+
+fn a_local_command_needs_no_record(app: &mut App, rx: &Receiver<AppEvent>, text: &str) {
+    send_enter(app, text);
+    done(answered(app, rx, "the local command is submitted"));
+    assert_eq!(app.term().and_then(|t| t.context.prompted()), None);
+}
+
+fn an_unconfirmed_send_gives_up(app: &mut App, rx: &Receiver<AppEvent>) {
+    app.confirm_within = Duration::from_millis(300);
+    send_enter(app, "fix the login");
+    let message = error(answered(app, rx, "the send gives up"));
+    assert!(message.contains("not confirmed"), "{message}");
+}
+
+fn a_waiting_agent_refuses_a_send(app: &mut App) {
+    send_enter(app, "continue");
+    assert!(error(answers(app).remove(0)).contains("waiting for an answer"));
+}
+
 fn press_keys(pane: u64, keys: &[&str]) -> Command {
     Command::Keys(wire::Keys { pane: Some(pane), tab: None, keys: keys.iter().map(ToString::to_string).collect() })
 }
@@ -381,6 +413,7 @@ fn reacted(message: i64) -> impl Fn(&Order) -> bool {
 mod agents;
 mod arranging;
 mod contract;
+mod copilot;
 mod creating;
 mod cursor;
 mod discord;

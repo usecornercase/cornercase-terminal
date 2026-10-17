@@ -28,6 +28,34 @@ test('Cursor is in the agent catalogue, its modes and the program list', () => {
   assert.equal(AGENT_KINDS['cursor-agent'], 'cursor');
 });
 
+test('Copilot is in the agent catalogue, its modes and the program list', () => {
+  assert.deepEqual(AGENTS.find(([kind]) => kind === 'copilot'), ['copilot', 'copilot']);
+  assert.deepEqual(MODES.copilot, [
+    ['plan', '--mode plan'],
+    ['autopilot', '--mode autopilot'],
+    ['allow all (dangerous)', '--allow-all'],
+  ]);
+  assert.equal(AGENT_KINDS.copilot, 'copilot');
+});
+
+test('Settings lists Copilot with its modes', () => {
+  const app = new App();
+  app.virtual = true;
+  app.resize(110, 40);
+  world(app, { scripted: true });
+  app.openSettings();
+  app.settingsPage(1);
+  const copilot = app.settingsRows(1).findIndex((row) => row.id === 'kind:copilot');
+  assert.ok(copilot >= 0);
+  app.settingsClick(copilot);
+  const modes = app.overlay?.kind === 'settings' ? app.overlay.pick : undefined;
+  assert.deepEqual(
+    modes?.items.map((item) => item.value),
+    ['default', 'plan', 'autopilot', 'allow all (dangerous)', 'extra arguments…'],
+  );
+  app.destroy();
+});
+
 test('Settings lists Cursor with its modes', () => {
   const app = new App();
   app.virtual = true;

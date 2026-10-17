@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn names_and_order_keep_the_saved_stats_positions() {
-    assert_eq!(Known::ALL.map(Known::name), ["claude", "codex", "gemini", "opencode", "grok", "cursor"]);
+    assert_eq!(Known::ALL.map(Known::name), ["claude", "codex", "gemini", "opencode", "grok", "cursor", "copilot"]);
 }
 
 #[test]
@@ -18,7 +18,7 @@ fn codex_gemini_and_opencode_find_their_records_by_their_folder() {
 }
 
 #[test]
-fn claude_codex_and_cursor_take_one_more_folder_by_flag() {
+fn claude_codex_cursor_and_copilot_take_one_more_folder_by_flag() {
     let flags: Vec<(Known, Option<&str>)> = Known::ALL.into_iter().map(|kind| (kind, kind.add_dir())).collect();
     assert_eq!(
         flags,
@@ -29,6 +29,7 @@ fn claude_codex_and_cursor_take_one_more_folder_by_flag() {
             (Known::Opencode, None),
             (Known::Grok, None),
             (Known::Cursor, Some("--add-dir")),
+            (Known::Copilot, Some("--add-dir")),
         ]
     );
 }

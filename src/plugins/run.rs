@@ -103,7 +103,7 @@ impl Places {
             .env(CONFIG_ENV, config)
             .env(STATE_ENV, state)
             .process_group(0);
-        for key in crate::agents::claude::CLAUDE_SESSION_ENV {
+        for key in crate::agents::claude::CLAUDE_SESSION_ENV.iter().chain(&crate::agents::copilot::SESSION_ENV) {
             built.env_remove(key);
         }
         for key in Source::REMOTE.into_iter().filter_map(Source::token_env) {

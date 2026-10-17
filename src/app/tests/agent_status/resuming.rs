@@ -298,3 +298,52 @@ mod input_while_resuming {
         assert!(matches!(forced, Response::Ok(_)), "{forced:?}");
     }
 }
+
+#[test]
+fn copilot_comes_back_in_its_conversation_and_mode() {
+    let (mut app, rx, _dirs) = app_with(1);
+    let copilot = FakeCopilot::new(&app.projects[0].path);
+    type_line(&mut app, &format!("{} --mode plan", copilot.command_line()));
+    pump_until(&mut app, &rx, "copilot runs", |a| runs(a, agents::Known::Copilot.name()));
+    watch_until(&mut app, &rx, "copilot holds its session", |a| {
+        a.term().is_some_and(|t| t.context.record_for(agents::Known::Copilot).is_some())
+    });
+    copilot.started("gpt-4.1");
+    copilot.prompt("hello");
+    copilot.reply("hi", "gpt-4.1");
+    let saved = remembered(&mut app, &rx);
+    let (mut back, rx, _bin) = restored(&saved, agents::Known::Copilot.name(), true);
+
+    wait_resumed(&mut back, &rx, &format!("--mode plan --resume={}", agents::copilot::fake::ID));
+
+    assert_eq!(saved_agent(&saved).and_then(|s| s.mode.as_deref()), Some("plan"));
+}
+
+#[test]
+fn a_restored_copilot_keeps_its_conversation_before_its_first_prompt() {
+    let (mut app, rx, _dirs) = app_with(1);
+    let copilot = FakeCopilot::new(&app.projects[0].path);
+    type_line(&mut app, &copilot.command_line());
+    watch_until(&mut app, &rx, "copilot holds its session", |a| {
+        a.term().is_some_and(|t| t.context.record_for(agents::Known::Copilot).is_some())
+    });
+    copilot.started("gpt-4.1");
+    copilot.prompt("hello");
+    let saved = remembered(&mut app, &rx);
+    copilot.quit();
+    watch_until(&mut app, &rx, "copilot exits", |a| !runs(a, agents::Known::Copilot.name()));
+    let (mut back, rx, _dirs) = app_with(0);
+    back.config.agent_commands.insert(agents::Known::Copilot.name().into(), copilot.script.display().to_string());
+    std::fs::remove_file(copilot.dir.path().join("signals/quit")).expect("clear quit");
+    assert!(back.restore(&saved, AREA));
+    refreshing(&mut back, &rx, "the conversation is known from the arguments", |a| {
+        a.term().and_then(|t| t.context.conversation()) == Some(agents::copilot::fake::ID)
+    });
+    back.agents.launches.clear();
+    let now = Instant::now();
+
+    back.watch_agents(now + RESUME_GRACE + WATCH_AGENTS_EVERY);
+
+    assert_eq!(saved_agent(&back.state()), saved_agent(&saved));
+    copilot.quit();
+}

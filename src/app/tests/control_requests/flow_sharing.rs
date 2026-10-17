@@ -218,7 +218,7 @@ mod importing {
         grok.roles[0].agent = "grok".into();
         let note = imported(s.import(&share::to_share(&grok).expect("export"), |_| {})).note.expect("a note");
         assert!(note.contains("not installed here"), "{note}");
-        assert!(builtin::installed(&s.app.config).len() < 6);
+        assert!(builtin::installed(&s.app.config).len() < crate::agents::Known::ALL.len());
     }
 
     #[test]

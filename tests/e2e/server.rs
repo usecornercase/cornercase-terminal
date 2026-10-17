@@ -213,13 +213,14 @@ fn running_cornercase_inside_itself_is_refused() {
 }
 
 #[test]
-fn shells_do_not_inherit_the_claude_code_session_that_started_the_server() {
-    let mut env: Vec<(&str, &str)> = CLAUDE_SESSION_ENV.iter().map(|key| (*key, "leaked")).collect();
+fn shells_do_not_inherit_the_agent_session_that_started_the_server() {
+    let keys: Vec<&str> = CLAUDE_SESSION_ENV.into_iter().chain(cornercase::agents::copilot::SESSION_ENV).collect();
+    let mut env: Vec<(&str, &str)> = keys.iter().map(|key| (*key, "leaked")).collect();
     env.push(("CORNERCASE_E2E_KEPT", "kept"));
     let mut app = Harness::open_with(Session::new(), ROWS, COLS, &env);
     app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
 
-    let vars = CLAUDE_SESSION_ENV.map(|key| format!("${{{key}}}")).concat();
+    let vars = keys.iter().map(|key| format!("${{{key}}}")).collect::<Vec<_>>().concat();
     app.send(format!("echo \"session-[{vars}]-$CORNERCASE_E2E_KEPT\"\r").as_bytes());
 
     app.wait_for("only the unrelated variable reaches the shell", |s| s.contains("session-[]-kept"));

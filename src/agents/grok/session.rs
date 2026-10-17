@@ -256,7 +256,7 @@ impl Session {
         }
         let mut saw_work = false;
         let mut closed = false;
-        for event in lines_of(&batch.bytes) {
+        for event in jsonl::values(&batch.bytes) {
             if work_event(&event) {
                 saw_work = true;
             }
@@ -277,7 +277,7 @@ impl Session {
             self.compact = None;
             self.newest = None;
         }
-        for update in lines_of(&batch.bytes) {
+        for update in jsonl::values(&batch.bytes) {
             self.apply_update(&update);
         }
         batch.reset
@@ -289,7 +289,7 @@ impl Session {
         if batch.reset {
             self.resumable = false;
         }
-        for line in lines_of(&batch.bytes) {
+        for line in jsonl::values(&batch.bytes) {
             self.apply_chat(&line);
         }
     }
@@ -596,7 +596,7 @@ impl Session {
             let mut child = self.take_child(&path);
             let updates = path.join("updates.jsonl");
             if let Some(batch) = read_tail(&mut child.tail, &updates) {
-                for update in lines_of(&batch.bytes) {
+                for update in jsonl::values(&batch.bytes) {
                     if let Some(record) = child_token(&update) {
                         self.push_extra(path.to_string_lossy().into_owned(), record);
                     }
@@ -702,14 +702,6 @@ fn summary_cwd(dir: &Path) -> Option<String> {
 
 fn read_tail(tail: &mut Tail, path: &Path) -> Option<jsonl::Batch> {
     tail.read(path).ok()
-}
-
-fn lines_of(bytes: &[u8]) -> Vec<Value> {
-    bytes
-        .split(|byte| *byte == b'\n')
-        .filter(|line| !line.is_empty())
-        .filter_map(|line| serde_json::from_slice(line).ok())
-        .collect()
 }
 
 fn back_limit() -> u64 {

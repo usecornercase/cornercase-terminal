@@ -2,10 +2,17 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.128
+## 0.12.129
 
 - **Send a TODO to an agent.** In the TODO panel, each item left to do has a **`▸`** next to its `×` (on hover; always shown in the compact layout). It opens a menu of every agent running, by project and workspace, and picking one types the item into that agent and sends it, as `cornercase send --enter` would. Once the agent has taken it, the item is checked off and a message says where it went; what `send` refuses (an agent waiting for your answer, resuming, showing a dialog or its survey) the button refuses too, with the reason, and the item stays to do.
 - `cornercase todo send ID [--pane N | --tab N]` does the same from a script or an agent: the same target, refusals and confirmation as `send --enter`, then the item is checked off and it prints `sent todo 3 to pane 5`. A refused or unconfirmed send leaves it pending and exits 1; for an agent whose prompts cornercase cannot confirm (a `/` command, an agent it does not read) the text is sent, the item stays to do and it says so (exit 0). See Scripts and agents → Leave notes.
+
+## 0.12.128
+
+- **GitHub Copilot CLI is now a full agent.** A tab running `copilot` shows whether it is working, needs you (a permission prompt, a question or a plan to approve) or is done, its model and how full its context is, and the project, workspace and tab rows carry the same icons as for the other agents. A background command it left running shows as working, as Claude Code's does. Its conversation comes back after a restart in the mode it ran in (`copilot --resume=<session id>`), `cornercase send --enter` confirms that it took the prompt, `read --last-message`, `wait` and the search in sessions read it, and Stats counts its prompts, turns, time and tokens.
+- Settings → Agents lists `copilot` with its modes (plan, autopilot, allow all), `start --effort` takes its `--reasoning-effort` levels, and flows can give it roles: it runs unattended with `--allow-all --no-ask-user` (never autopilot), gets the run's folder with `--add-dir`, and several roles can share one worktree.
+- Copilot's rate-limit and session-limit questions are not written to its session files, so they show as working rather than `!`. A resumed Copilot asks again whether you trust the folder unless you told it to remember it. Installs through npm and `gh copilot` are recognised too, but were not checked on a real install, and nothing was checked on macOS.
+- Shells no longer inherit the variables GitHub Copilot CLI sets for its own session (`COPILOT_AGENT_SESSION_ID`, `COPILOT_LOADER_PID` and others) when cornercase was started from one of its shells, so a `copilot` started in a pane is not confused with that session.
 
 ## 0.12.127
 

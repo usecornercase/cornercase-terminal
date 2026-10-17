@@ -1,0 +1,2 @@
+{"type": "session.shutdown", "data": {"shutdownType": "routine"}, "id": "00000000-0000-4000-8000-000000000050", "timestamp": "2026-10-17T17:23:11.000Z", "parentId": null}
+{"type": "session.resume", "data": {"resumeTime": "2026-10-17T17:23:12.000Z", "eventCount": 10, "selectedModel": "gpt-4.1", "context": {"cwd": "/home/user/scratch/work"}}, "id": "00000000-0000-4000-8000-000000000051", "timestamp": "2026-10-17T17:23:12.000Z", "parentId": null}
