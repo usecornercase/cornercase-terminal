@@ -105,5 +105,8 @@
       "custom_name": "shop",
       "collapsed": false
     }
-  ]
+  ],
+  "config": {
+    "revision": 2
+  }
 }

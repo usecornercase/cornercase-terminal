@@ -172,6 +172,7 @@ impl App {
                     self.overlay = None;
                 }
                 self.toast = Some(Toast::new(CONNECTED, ui::ToastIcon::Check));
+                self.settings_changed();
             }
             web::Event::Browsers(n) => self.remote.browsers = n,
         }
@@ -194,6 +195,7 @@ impl App {
 
     pub(super) fn forget_browsers(&mut self) -> Result<&'static str, String> {
         self.remote.web.forget().map_err(|e| format!("failed to forget the paired browsers: {e}"))?;
+        self.settings_changed();
         self.refresh_remote_note();
         Ok(FORGOTTEN)
     }

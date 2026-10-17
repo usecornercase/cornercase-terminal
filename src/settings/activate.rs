@@ -139,7 +139,7 @@ impl Settings {
         }
     }
 
-    fn pick_default_agent(&mut self, row: Row) -> Action {
+    pub(super) fn agent_items(&self) -> Vec<PickItem> {
         let auto = PickItem {
             value: agents::AUTO.into(),
             note: "the agent in your tab, otherwise ask".into(),
@@ -151,8 +151,24 @@ impl Settings {
             value: kind,
             dangerous: false,
         }));
+        items
+    }
+
+    fn pick_default_agent(&mut self, row: Row) -> Action {
+        let items = self.agent_items();
         self.open_pick(row, items);
         Action::None
+    }
+
+    pub(super) fn mode_items(&self, kind: &str) -> Vec<PickItem> {
+        let modes = agents::modes(&self.config, kind);
+        let mut items = vec![PickItem { value: "default".into(), note: "no mode arguments".into(), dangerous: false }];
+        items.extend(modes.iter().map(|(name, args)| PickItem {
+            value: name.clone(),
+            note: agents::join_args(args),
+            dangerous: agents::is_dangerous(name),
+        }));
+        items
     }
 
     fn pick_mode(&mut self, kind: String) -> Action {
@@ -161,12 +177,7 @@ impl Settings {
             self.edit_extra(&kind);
             return Action::None;
         }
-        let mut items = vec![PickItem { value: "default".into(), note: "no mode arguments".into(), dangerous: false }];
-        items.extend(modes.iter().map(|(name, args)| PickItem {
-            value: name.clone(),
-            note: agents::join_args(args),
-            dangerous: agents::is_dangerous(name),
-        }));
+        let mut items = self.mode_items(&kind);
         let extra = agents::extra_args(&kind, &agents::args(&self.config, &kind), &modes);
         items.push(PickItem { value: EXTRA_ARGS.into(), note: agents::join_args(&extra), dangerous: false });
         self.open_pick(Row::Kind(kind), items);

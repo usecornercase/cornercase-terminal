@@ -32,7 +32,7 @@ const ASK_FOR: Duration = Duration::from_mins(10);
 #[derive(Debug)]
 pub(crate) enum MessengerEvent {
     Link(Via, link::Event),
-    Checked { via: Via, token: Secret, result: Result<Identity, String> },
+    Checked { via: Via, token: Secret, result: Result<Identity, String>, request: Option<u64> },
     Paired { via: Via, token: Secret, advice: Advice, result: Result<Owned, String> },
     Advised { via: Via, link: u64, advice: Option<&'static str> },
 }
@@ -420,7 +420,9 @@ impl App {
     pub(super) fn messenger_event(&mut self, event: MessengerEvent, area: Rect) {
         let current = |app: &Self, via: Via, id: u64| app.messenger(via).link.as_ref().is_some_and(|l| l.id == id);
         match event {
-            MessengerEvent::Checked { via, token, result } => self.messenger_checked(via, &token, result),
+            MessengerEvent::Checked { via, token, result, request } => {
+                self.messenger_checked(via, &token, result, request)
+            }
             MessengerEvent::Paired { via, token, advice, result } => self.owner_answered(via, &token, advice, result),
             MessengerEvent::Link(via, link::Event::Updates(id, updates)) if current(self, via, id) => {
                 for update in updates {
@@ -452,6 +454,10 @@ impl App {
     }
 
     pub(super) fn check_messenger(&mut self, via: Via, token: Secret) {
+        self.check_messenger_for(via, token, None);
+    }
+
+    pub(super) fn check_messenger_for(&mut self, via: Via, token: Secret, request: Option<u64>) {
         let api = self.messenger(via).api.clone();
         let job = Job::new(Level::Info, via.target(), "check bot");
         let checked = token.0.clone();
@@ -460,12 +466,12 @@ impl App {
             move || Ok(via.check(&api, &checked)),
             move |result, _| {
                 let result = result.unwrap_or_else(|e| Err(e.to_string()));
-                Some(AppEvent::Messenger(MessengerEvent::Checked { via, token, result }))
+                Some(AppEvent::Messenger(MessengerEvent::Checked { via, token, result, request }))
             },
         );
     }
 
-    fn messenger_checked(&mut self, via: Via, token: &Secret, result: Result<Identity, String>) {
+    fn messenger_checked(&mut self, via: Via, token: &Secret, result: Result<Identity, String>, request: Option<u64>) {
         let messenger = self.messenger(via);
         let saved = result.and_then(|found| {
             secrets::write(&messenger.secrets, via.token_key(), &token.0)
@@ -490,6 +496,11 @@ impl App {
             self.restart_link(via);
         }
         let paired = self.messenger(via).paired();
+        if let Some(key) = request {
+            self.refresh_messenger_note(via);
+            self.secret_answered(key, saved.map(|name| format!("bot @{name} is ready")));
+            return;
+        }
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
             s.bot_checked(via, saved, paired);
         }
@@ -579,6 +590,7 @@ impl App {
     }
 
     pub(super) fn refresh_messenger_note(&mut self, via: Via) {
+        self.settings_changed();
         let view = self.messenger_settings(via);
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
             *s.messenger_mut(via) = view;
@@ -592,6 +604,7 @@ impl App {
             chat: messenger.chat_name().map(String::from),
             note: messenger.note(),
             checking: false,
+            refused: messenger.phase == Phase::Rejected,
         }
     }
 

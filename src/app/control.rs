@@ -1,5 +1,6 @@
 mod arrange;
 mod close;
+mod config;
 mod contract;
 mod create;
 mod flow;
@@ -385,6 +386,7 @@ impl App {
             Command::Contract(_) => Ok(Some(json(&contract::descriptor()))),
             Command::Theme(theme) => self.theme_request(&theme),
             Command::Go(go) => self.go_request(asker, &go),
+            Command::Config(config) => self.config_request(client, config),
             Command::StartServer(start) => self.start_server_request(client, &start),
             Command::Open(open) => self.open_request(asker, &open, area),
             Command::NewWorkspace(new) => self.new_workspace_request(client, asker, new, area),

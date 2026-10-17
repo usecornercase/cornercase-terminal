@@ -1,3 +1,4 @@
+use crate::issues::Secret;
 use serde_json::json;
 
 use super::*;
@@ -92,6 +93,7 @@ fn every_command_is_listed_by_name() {
         Command::Theme(Theme::default()),
         Command::Go(Go::default()),
         Command::Redraw(Redraw::default()),
+        Command::Config(Configure::default()),
     ];
 
     let names: Vec<String> = commands
@@ -151,6 +153,13 @@ fn the_fields_to_log_leave_out_what_is_typed() {
             events: vec![terminal::InputEvent::Text(secret.into()), terminal::InputEvent::Paste(secret.into())],
             ..Input::default()
         }),
+        Command::Config(Configure::Secret(config::SecretChange { key: "linear".into(), value: Secret(secret.into()) })),
+        Command::Config(Configure::Set([("jira_jql".to_string(), Value::String(secret.into()))].into())),
+        Command::Config(Configure::Project(config::ProjectChange {
+            setup: Some(secret.into()),
+            teardown: Some(secret.into()),
+            ..config::ProjectChange::default()
+        })),
     ];
 
     for command in commands {
@@ -609,6 +618,7 @@ mod watch_v1 {
                 keep_awake: None,
                 view: None,
                 theme: None,
+                config: Some(ConfigInfo { revision: 2 }),
             },
         }
     }

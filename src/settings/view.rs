@@ -216,28 +216,32 @@ impl Settings {
         ("prefix key".into(), value, note, clash.is_some())
     }
 
+    pub(crate) fn field_label(row: &Row) -> String {
+        match row {
+            Row::Folder => "worktrees folder".to_string(),
+            Row::Fetch => "fetch branches every (minutes, 0 turns it off)".to_string(),
+            Row::Token(source) => format!("{} {}", source.name(), source.token_name()),
+            Row::GitlabUrl => "GitLab URL for a self-hosted server (empty is gitlab.com)".to_string(),
+            Row::JiraSite => "Jira site, such as acme.atlassian.net".to_string(),
+            Row::JiraEmail => "Jira email".to_string(),
+            Row::JiraJql => "Jira filter (JQL, such as project = SHOP; empty lists everything)".to_string(),
+            Row::PlaneWorkspace => "Plane workspace, the part after app.plane.so/, such as acme".to_string(),
+            Row::PlaneUrl => "Plane URL for a self-hosted server (empty is Plane Cloud)".to_string(),
+            Row::PlaneFilter => "Plane filter (query parameters, such as priority=high)".to_string(),
+            Row::AsanaWorkspace => "Asana workspace, its name or ID (empty is your only one)".to_string(),
+            Row::AsanaProjects => {
+                "Asana projects, IDs or links separated by spaces (empty lists your tasks)".to_string()
+            }
+            Row::Kind(kind) => format!("{kind} extra arguments"),
+            Row::Bot(via) => via.token_field().to_string(),
+            _ => String::new(),
+        }
+    }
+
     pub(crate) fn edit_field(&self) -> Option<(String, String)> {
         self.edit.as_ref().map(|edit| {
             let token = matches!(edit.row, Row::Token(_) | Row::Bot(_));
-            let label = match &edit.row {
-                Row::Folder => "worktrees folder".to_string(),
-                Row::Fetch => "fetch branches every (minutes, 0 turns it off)".to_string(),
-                Row::Token(source) => format!("{} {}", source.name(), source.token_name()),
-                Row::GitlabUrl => "GitLab URL for a self-hosted server (empty is gitlab.com)".to_string(),
-                Row::JiraSite => "Jira site, such as acme.atlassian.net".to_string(),
-                Row::JiraEmail => "Jira email".to_string(),
-                Row::JiraJql => "Jira filter (JQL, such as project = SHOP; empty lists everything)".to_string(),
-                Row::PlaneWorkspace => "Plane workspace, the part after app.plane.so/, such as acme".to_string(),
-                Row::PlaneUrl => "Plane URL for a self-hosted server (empty is Plane Cloud)".to_string(),
-                Row::PlaneFilter => "Plane filter (query parameters, such as priority=high)".to_string(),
-                Row::AsanaWorkspace => "Asana workspace, its name or ID (empty is your only one)".to_string(),
-                Row::AsanaProjects => {
-                    "Asana projects, IDs or links separated by spaces (empty lists your tasks)".to_string()
-                }
-                Row::Kind(kind) => format!("{kind} extra arguments"),
-                Row::Bot(via) => via.token_field().to_string(),
-                _ => String::new(),
-            };
+            let label = Self::field_label(&edit.row);
             let value = if token { "•".repeat(edit.input.chars().count()) } else { edit.input.clone() };
             (label, value)
         })
@@ -245,7 +249,11 @@ impl Settings {
 
     pub(crate) fn pick_title(&self) -> String {
         let Some(pick) = &self.pick else { return String::new() };
-        match &pick.row {
+        Self::question(&pick.row)
+    }
+
+    pub(crate) fn question(row: &Row) -> String {
+        match row {
             Row::DefaultAgent => "Which agent takes an issue by default?".to_string(),
             Row::Sidebar => "How should projects, workspaces and tabs be laid out?".to_string(),
             Row::Tabs => "Where should a workspace's tabs go?".to_string(),

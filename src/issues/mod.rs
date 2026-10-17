@@ -135,7 +135,8 @@ impl Source {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub(crate) struct Secret(pub String);
 
 impl fmt::Debug for Secret {

@@ -19,6 +19,13 @@ pub(crate) enum Status {
     Env,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Refused {
+    Unknown(String),
+    Invalid(String),
+    Blocked(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Row {
     Folder,
@@ -261,6 +268,7 @@ pub(crate) struct Messenger {
     pub(crate) chat: Option<String>,
     pub(crate) note: String,
     pub(crate) checking: bool,
+    pub(crate) refused: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -387,6 +395,12 @@ impl Settings {
     }
 
     pub(crate) fn rows(&self) -> Vec<Row> {
+        let mut rows = self.every_row();
+        rows.retain(|row| row.page() == self.page);
+        rows
+    }
+
+    pub(crate) fn every_row(&self) -> Vec<Row> {
         let shown = self.shown_tabs();
         let hidden = TAB_IDS.iter().filter(|id| !shown.contains(id)).copied();
         let mut rows = vec![Row::Folder, Row::Fetch, Row::PullRequests, Row::MergedPullRequests];
@@ -438,7 +452,6 @@ impl Settings {
         if self.plugins.is_empty() {
             rows.push(Row::NoPlugins);
         }
-        rows.retain(|row| row.page() == self.page);
         rows
     }
 
@@ -488,6 +501,8 @@ impl Settings {
 }
 
 mod activate;
+mod apply;
+mod describe;
 mod input;
 mod submit;
 mod trackers;

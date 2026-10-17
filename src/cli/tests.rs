@@ -495,6 +495,7 @@ mod output {
             keep_awake: None,
             view: None,
             theme: None,
+            config: None,
         }
     }
 

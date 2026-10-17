@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use super::{Ids, Layout, ThemeInfo, ViewInfo};
+use super::{ConfigInfo, Ids, Layout, ThemeInfo, ViewInfo};
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -20,6 +20,8 @@ pub struct Report {
     pub(crate) view: Option<ViewInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) theme: Option<ThemeInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) config: Option<ConfigInfo>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -121,5 +121,8 @@
     },
     "controls": true,
     "visible": true
+  },
+  "config": {
+    "revision": 2
   }
 }

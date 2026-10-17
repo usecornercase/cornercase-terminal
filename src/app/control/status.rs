@@ -6,7 +6,8 @@ use crate::agents::activity::Status;
 use crate::agents::awake;
 use crate::app::App;
 use crate::control::{
-    self, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, PullRequestInfo, Report, TabInfo, WorkspaceInfo,
+    self, ConfigInfo, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, PullRequestInfo, Report, TabInfo,
+    WorkspaceInfo,
 };
 use crate::git;
 use crate::log::{self, Level};
@@ -95,6 +96,7 @@ impl App {
             keep_awake: self.keep_awake_info(),
             view: None,
             theme: Some(self.theme_info()),
+            config: Some(ConfigInfo { revision: self.config_file.revision }),
         }
     }
 

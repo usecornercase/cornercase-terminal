@@ -63,14 +63,18 @@ impl Settings {
         action
     }
 
-    fn save_tabs(&mut self, shown: &[&'static str]) -> Action {
+    pub(super) fn save_tabs(&mut self, shown: &[&'static str]) -> Action {
         let names: Vec<String> = shown.iter().map(|t| (*t).to_string()).collect();
         let notice = format!("tabs: {}", names.join(", "));
         self.save(Config { issue_tabs: names, ..self.config.clone() }, notice)
     }
 
     pub(crate) fn removal(&self, row: usize) -> Option<Action> {
-        match self.rows().get(row) {
+        self.rows().get(row).and_then(|row| self.removal_of_row(row))
+    }
+
+    pub(crate) fn removal_of_row(&self, row: &Row) -> Option<Action> {
+        match Some(row) {
             Some(Row::Token(source)) if matches!(self.status(*source), Some(Status::Saved(_))) => {
                 Some(Action::RemoveToken(*source))
             }

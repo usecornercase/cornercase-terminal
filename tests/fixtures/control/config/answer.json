@@ -1,0 +1,98 @@
+{
+  "revision": 4,
+  "path": "/home/me/.config/cornercase/config.json",
+  "settings": [
+    {
+      "key": "counts",
+      "page": "UI",
+      "section": "",
+      "label": "counts",
+      "type": "switch",
+      "value": true,
+      "default": true,
+      "shown": "[x] shown",
+      "note": "what a project or collapsed group holds, such as (3)",
+      "dangerous": false,
+      "restart": false
+    },
+    {
+      "key": "sidebar",
+      "page": "UI",
+      "section": "",
+      "label": "sidebar",
+      "type": "choice",
+      "value": "tree",
+      "default": "projects_on_top",
+      "shown": "tree",
+      "note": "how projects, workspaces and tabs are laid out",
+      "choices": [
+        {
+          "value": "projects_on_top",
+          "note": "one column",
+          "dangerous": false
+        },
+        {
+          "value": "tree",
+          "note": "one list",
+          "dangerous": false
+        }
+      ],
+      "question": "How should projects, workspaces and tabs be laid out?",
+      "dangerous": false,
+      "restart": false
+    },
+    {
+      "key": "worktrees_dir",
+      "page": "Worktrees",
+      "section": "",
+      "label": "worktrees folder",
+      "type": "text",
+      "value": "~/.cornercase/worktrees",
+      "default": "~/.cornercase/worktrees",
+      "shown": "~/.cornercase/worktrees",
+      "note": "",
+      "field": "worktrees folder",
+      "dangerous": false,
+      "restart": false
+    }
+  ],
+  "connections": [
+    {
+      "key": "linear",
+      "kind": "tracker",
+      "page": "Issues",
+      "section": "Accounts",
+      "label": "Linear API key",
+      "note": "saved",
+      "state": "connected",
+      "account": "@ana",
+      "from": "saved",
+      "field": "Linear API key",
+      "removable": true
+    },
+    {
+      "key": "browsers",
+      "kind": "browsers",
+      "page": "Remote",
+      "section": "Browser",
+      "label": "paired browsers",
+      "note": "enter forgets them all",
+      "state": "missing",
+      "count": 0,
+      "removable": false
+    }
+  ],
+  "projects": [
+    {
+      "folder": "/home/me/code/web-shop",
+      "key": "~/code/web-shop",
+      "project": 1,
+      "repository": true,
+      "setup": "npm ci",
+      "teardown": ""
+    }
+  ],
+  "notices": [
+    "sidebar: tree"
+  ]
+}

@@ -1,0 +1,179 @@
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use super::Fields;
+use crate::issues::Secret;
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "action", content = "entry", rename_all = "kebab-case")]
+pub(crate) enum Configure {
+    #[default]
+    Get,
+    Set(BTreeMap<String, Value>),
+    Project(ProjectChange),
+    Secret(SecretChange),
+    Remove(String),
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct ProjectChange {
+    pub(crate) project: Option<u64>,
+    pub(crate) path: Option<PathBuf>,
+    pub(crate) setup: Option<String>,
+    pub(crate) teardown: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct SecretChange {
+    pub(crate) key: String,
+    pub(crate) value: Secret,
+}
+
+impl Configure {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        match self {
+            Self::Get => fields.add("action", "get"),
+            Self::Set(values) => {
+                let keys: Vec<&str> = values.keys().map(String::as_str).collect();
+                fields.add("action", "set").add("keys", keys.join(","))
+            }
+            Self::Project(change) => fields
+                .add("action", "project")
+                .maybe("project", change.project)
+                .maybe("path", change.path.as_ref().map(|path| path.display()))
+                .add("setup", change.setup.is_some())
+                .add("teardown", change.teardown.is_some()),
+            Self::Secret(secret) => fields.add("action", "secret").add("key", &secret.key),
+            Self::Remove(key) => fields.add("action", "remove").add("key", key),
+        };
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Kind {
+    Switch,
+    Number,
+    #[default]
+    Text,
+    Choice,
+    List,
+    Key,
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Choice {
+    pub(crate) value: String,
+    pub(crate) note: String,
+    pub(crate) dangerous: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Setting {
+    pub(crate) key: String,
+    pub(crate) page: String,
+    pub(crate) section: String,
+    pub(crate) label: String,
+    #[serde(rename = "type")]
+    pub(crate) kind: Kind,
+    pub(crate) value: Value,
+    pub(crate) default: Value,
+    pub(crate) shown: String,
+    pub(crate) note: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) choices: Vec<Choice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) field: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) question: Option<String>,
+    pub(crate) dangerous: bool,
+    pub(crate) restart: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ConnectionKind {
+    #[default]
+    Tracker,
+    Browsers,
+    Bot,
+    Chat,
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum State {
+    #[default]
+    Missing,
+    Connected,
+    Refused,
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Connection {
+    pub(crate) key: String,
+    pub(crate) kind: ConnectionKind,
+    pub(crate) page: String,
+    pub(crate) section: String,
+    pub(crate) label: String,
+    pub(crate) note: String,
+    pub(crate) state: State,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) account: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) from: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) env: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) field: Option<String>,
+    pub(crate) removable: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct ProjectEntry {
+    pub(crate) folder: PathBuf,
+    pub(crate) key: String,
+    pub(crate) project: Option<u64>,
+    pub(crate) repository: bool,
+    pub(crate) setup: String,
+    pub(crate) teardown: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Described {
+    pub(crate) revision: u64,
+    pub(crate) path: PathBuf,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) problem: Option<String>,
+    pub(crate) settings: Vec<Setting>,
+    pub(crate) connections: Vec<Connection>,
+    pub(crate) projects: Vec<ProjectEntry>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) notices: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct ConfigInfo {
+    pub(crate) revision: u64,
+}
+
+#[cfg(test)]
+mod tests;

@@ -73,6 +73,17 @@ impl Settings {
         Action::None
     }
 
+    pub(super) fn save_prefix(&mut self, prefix: Option<Prefix>) -> Action {
+        let Some(prefix) = prefix else {
+            return self.save(Config { prefix_key: String::new(), ..self.config.clone() }, PREFIX_OFF.into());
+        };
+        let notice = match prefix.clash() {
+            Some(clash) => format!("{prefix} opens the keys menu; it is also {clash}"),
+            None => format!("{prefix} opens the keys menu"),
+        };
+        self.save(Config { prefix_key: prefix.to_string(), ..self.config.clone() }, notice)
+    }
+
     fn capture(&mut self, key: KeyEvent) -> Action {
         let plain = key.modifiers.is_empty();
         match key.code {
@@ -83,16 +94,12 @@ impl Settings {
             }
             KeyCode::Backspace | KeyCode::Delete if plain => {
                 self.capturing = false;
-                self.save(Config { prefix_key: String::new(), ..self.config.clone() }, PREFIX_OFF.into())
+                self.save_prefix(None)
             }
             _ => match Prefix::from_key(key) {
                 Ok(prefix) => {
                     self.capturing = false;
-                    let notice = match prefix.clash() {
-                        Some(clash) => format!("{prefix} opens the keys menu; it is also {clash}"),
-                        None => format!("{prefix} opens the keys menu"),
-                    };
-                    self.save(Config { prefix_key: prefix.to_string(), ..self.config.clone() }, notice)
+                    self.save_prefix(Some(prefix))
                 }
                 Err(why) => {
                     self.notice = Some(why);

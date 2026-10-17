@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub(crate) mod config;
 pub(crate) mod contract;
 mod events;
 mod flow;
@@ -20,6 +21,7 @@ mod watch;
 
 pub(crate) use todo::{Todo, TodoSend};
 
+pub(crate) use config::{ConfigInfo, Configure};
 pub(crate) use contract::Contract;
 pub(crate) use events::{Event, Events, Go, Kind, What};
 pub(crate) use flow::{
@@ -123,6 +125,7 @@ pub(crate) enum Command {
     Theme(Theme),
     Go(Go),
     Redraw(Redraw),
+    Config(Configure),
 }
 
 impl Command {
@@ -173,6 +176,7 @@ impl Command {
             Self::Theme(_) => 42,
             Self::Go(_) => 43,
             Self::Redraw(_) => 44,
+            Self::Config(_) => 45,
         }]
     }
 
@@ -271,11 +275,12 @@ impl Command {
             Self::Link(link) => link.fields(&mut fields),
             Self::StartServer(start) => start.fields(&mut fields),
             Self::Theme(theme) => theme.fields(&mut fields),
+            Self::Config(config) => config.fields(&mut fields),
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 45] = [
+    pub(crate) const NAMES: [&str; 46] = [
         "status",
         "open",
         "new-workspace",
@@ -321,6 +326,7 @@ impl Command {
         "theme",
         "go",
         "redraw",
+        "config",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
