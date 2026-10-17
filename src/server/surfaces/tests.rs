@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use serde_json::Value;
 
 use super::super::tests::a_bug::Attached;
@@ -93,14 +91,14 @@ fn a_reader_with_frames_queued_gets_none_until_it_has_room() {
 
     split(&mut attached, pane);
     attached.server.app.touch_surfaces();
-    let until = Instant::now() + Duration::from_millis(60);
-    while Instant::now() < until {
-        attached.server.surfaces();
-    }
+    attached.server.surfaces();
+    let blocked_ids = attached.server.with_room();
     let blocked = attached.messages();
     attached.server.clients[0].out.queued.store(0, std::sync::atomic::Ordering::Relaxed);
+    let open_ids = attached.server.with_room();
     let got = until_frame(&mut attached, 2);
 
+    assert_eq!((blocked_ids, open_ids), (vec![], vec![STREAMER]));
     assert_eq!(revisions(&blocked), Vec::<u64>::new());
     assert_eq!(revisions(&got), [2]);
 }

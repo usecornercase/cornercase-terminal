@@ -158,7 +158,7 @@ The first line is the tab as it is now, the next ones come when something it sho
 
 A line has these keys:
 
-- `boot`, `session` and `revision`: the server's start (see [Contract and compatibility](#contract-and-compatibility)), the `revision` of the latest [`status --follow`](#follow-the-whole-state) line when this one was drawn (0 while nobody follows), and this stream's own counter, from 1, up by one per line. A line from another `boot` is stale. To get a complete baseline again, run the command again: its first line is always complete.
+- `boot`, `session` and `revision`: the server's start (see [Contract and compatibility](#contract-and-compatibility)), the `revision` of the latest [`status --follow`](#follow-the-whole-state) line sent before this one was drawn (0 if none was sent since the server started), and this stream's own counter, from 1, up by one per line. A line from another `boot` is stale. To get a complete baseline again, run the command again: its first line is always complete.
 - `tab`, `cols` and `rows`: what you asked for.
 - `layout`: the tab's whole split tree, as in `status --json`, hidden panes included. `dividers`: each divider with its `dir`, its `path` through `layout` (`false` for the first side, `true` for the second), the region it divides (`area`) and its cells (`line`).
 - `panes`: the panes the surface shows, each with `pane` (its id), `active`, `rect` (`x`, `y`, `cols`, `rows`: where to draw it in the surface), `size` (its terminal's own columns and rows), `cursor` (`x`, `y`, `shape` as `block`, `bar`, `underline` or `block_hollow`, and `blinking`, or `null` when hidden or scrolled out of view), `modes`, `scroll` and `lines`.
@@ -171,7 +171,7 @@ Things to know:
 
 - The panes are laid out in your `cols` × `rows` the way the window lays out a tab, including when the tab is too small for all its panes: then only the active one shows, over the whole surface. The terminals keep the size the window gives them, though, so a pane's `size` can differ from its `rect`: `lines` and `cursor` follow `size`. Streaming doesn't resize anything.
 - `cols` is 1 to 1000 and `rows` 1 to 500. A connection streams one tab at one size: to change either, start another.
-- It ends, with status 0, when the tab closes or the server stops or restarts (stopping it yourself leaves the shells running). A pane whose shell exits drops out of the next line. A tab that doesn't exist, an out-of-range size or a missing `--tab` is an error, with status 1.
+- It ends, with status 0, when the tab closes or the server stops or restarts (stopping it yourself leaves the shells running). A pane whose shell exits drops out of the next line. A tab that doesn't exist, or an out-of-range size is an error, with status 1; a missing `--tab`, `--cols` or `--rows` is wrong usage, with status 2.
 - A reader that falls behind gets fewer lines, each complete, so it never has to repair a picture: the server draws a new line only while little is waiting for it. One that stops reading altogether is disconnected once the server has waited a second to write to it, like any client.
 - Not sent yet: patches (every line is complete), images and hyperlinks, underline styles and colours, a program's own palette changes, the title, bell and clipboard writes, pixel sizes, input and a terminal size you choose.
 
