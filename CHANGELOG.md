@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.128
+
+- **GitHub Copilot CLI is now a full agent.** A tab running `copilot` shows whether it is working, needs you (a permission prompt, a question or a plan to approve) or is done, its model and how full its context is, and the project, workspace and tab rows carry the same icons as for the other agents. A background command it left running shows as working, as Claude Code's does. Its conversation comes back after a restart in the mode it ran in (`copilot --resume=<session id>`), `cornercase send --enter` confirms that it took the prompt, `read --last-message`, `wait` and the search in sessions read it, and Stats counts its prompts, turns, time and tokens.
+- Settings → Agents lists `copilot` with its modes (plan, autopilot, allow all), `start --effort` takes its `--reasoning-effort` levels, and flows can give it roles: it runs unattended with `--allow-all --no-ask-user` (never autopilot), gets the run's folder with `--add-dir`, and several roles can share one worktree.
+- Copilot's rate-limit and session-limit questions are not written to its session files, so they show as working rather than `!`. A resumed Copilot asks again whether you trust the folder unless you told it to remember it. Installs through npm and `gh copilot` are recognised too, but were not checked on a real install, and nothing was checked on macOS.
+- Shells no longer inherit the variables GitHub Copilot CLI sets for its own session (`COPILOT_AGENT_SESSION_ID`, `COPILOT_LOADER_PID` and others) when cornercase was started from one of its shells, so a `copilot` started in a pane is not confused with that session.
+
 ## 0.12.127
 
 - **What programs ask of the terminal reaches other programs that draw cornercase.** `cornercase events --host` also prints, for each pane, the text a program copies to the clipboard (OSC 52, such as a yank in Neovim or `/copy` in Claude Code, with the text in `--json`) and its bells, at most one line a second per pane with how many rang. Followers that don't pass `--host` get nothing new. `status --json` and `status --follow` give each pane its `title`. `selection --copy` prints what it copied, so a program without a window can put it in the clipboard itself. Windows work as before.
