@@ -2,7 +2,7 @@ use super::*;
 use crate::changes::diff::Status;
 use crate::files::Mark;
 use crate::state;
-use crate::ui::changes::Action;
+use crate::ui::changes::{Action, close};
 use crate::ui::files::{self as panel, Screen};
 
 fn pressed_lines() -> (TempDir, App, Receiver<AppEvent>, Position) {
@@ -514,5 +514,152 @@ mod images {
 
         let placed = placed.expect("placed");
         assert!(placed.rect.right() <= narrow.visible.right() && placed.rect.width < wide.rect.width);
+    }
+}
+
+mod full_screen {
+    use super::*;
+
+    fn toggle(app: &mut App) {
+        let pos = panel::full_screen_button(panel_area(app)).as_position();
+        click(app, pos);
+    }
+
+    fn with_file() -> (TempDir, App, Receiver<AppEvent>) {
+        let repo = repo();
+        let (mut app, rx) = opened(&repo);
+        show(&mut app, &rx, "src/main.rs");
+        (repo, app, rx)
+    }
+
+    #[test]
+    fn the_button_gives_the_file_the_whole_window() {
+        let (_repo, mut app, _rx) = with_file();
+        let pane = app.pane_size(AREA);
+        toggle(&mut app);
+        assert_eq!((panel_area(&app), file(&app).full_screen, app.pane_size(AREA)), (AREA, true, pane));
+    }
+
+    #[rstest::rstest]
+    #[case::automatic(None)]
+    #[case::dragged(Some(50))]
+    fn the_button_brings_back_the_panel_at_its_width(#[case] width: Option<u16>) {
+        let (_repo, mut app, _rx) = with_file();
+        app.widths.changes = width;
+        let before = panel_area(&app);
+        toggle(&mut app);
+        toggle(&mut app);
+        assert_eq!((panel_area(&app), app.widths.changes, file(&app).full_screen), (before, width, false));
+    }
+
+    #[test]
+    fn scroll_selection_and_highlights_survive_both_ways() {
+        let (_repo, mut app, _rx) = with_file();
+        let ws = app.projects[0].workspaces[0].id;
+        app.files.open_at(ws, "src/main.rs", (2, 3), Some("run".into()));
+        let before = file(&app);
+        toggle(&mut app);
+        let full = file(&app);
+        toggle(&mut app);
+        let after = file(&app);
+        let same = |a: &panel::FileView, b: &panel::FileView| {
+            (a.scroll, a.selection, a.find.clone(), a.unfolded.clone())
+                == (b.scroll, b.selection, b.find.clone(), b.unfolded.clone())
+        };
+        assert!(same(&before, &full) && same(&before, &after));
+    }
+
+    #[test]
+    fn lines_and_copy_work_full_screen() {
+        let (_repo, mut app, _rx) = with_file();
+        toggle(&mut app);
+        let (first, last) = (line_pos(&app, 1), line_pos(&app, 3));
+        drag(&mut app, first, last);
+        assert_eq!(file(&app).selection, Some((1, 3)));
+        let pos = action_pos(&app, Action::Copy);
+        click(&mut app, pos);
+        assert!(file(&app).full_screen);
+        assert!(app.take_host_writes().iter().any(|w| !w.is_empty()));
+    }
+
+    #[test]
+    fn the_wheel_scrolls_the_file_anywhere() {
+        let (_repo, mut app, _rx) = with_file();
+        toggle(&mut app);
+        let projects = app.scroll.projects;
+        let at = app.layout(AREA).sidebar.as_position();
+        mouse(&mut app, MouseEventKind::ScrollDown, at);
+        assert_eq!((app.scroll.projects, file(&app).full_screen), (projects, true));
+    }
+
+    #[test]
+    fn back_and_close_end_it() {
+        let (_repo, mut app, rx) = with_file();
+        toggle(&mut app);
+        let back = panel::back(panel_area(&app)).as_position();
+        click(&mut app, back);
+        assert!(matches!(view(&app).screen, Screen::Tree(_)) && panel_area(&app) != AREA);
+        show(&mut app, &rx, "README.md");
+        toggle(&mut app);
+        let close = close(panel_area(&app)).as_position();
+        click(&mut app, close);
+        open(&mut app);
+        assert!(!app.file_full_screen() && panel_area(&app) != AREA);
+    }
+
+    #[test]
+    fn open_and_jumps_end_it() {
+        let (_repo, mut app, _rx) = with_file();
+        app.editor_env = vec![("VISUAL".into(), "true".into())];
+        toggle(&mut app);
+        let pos = action_pos(&app, Action::Open);
+        click(&mut app, pos);
+        assert!(!app.file_full_screen());
+        toggle(&mut app);
+        let pane = app.tab().and_then(|t| t.pane()).expect("a pane").id;
+        app.jump_to_pane(pane);
+        assert!(!app.file_full_screen());
+    }
+
+    #[test]
+    fn another_tab_ends_it() {
+        let (_repo, mut app, _rx) = with_file();
+        toggle(&mut app);
+        app.add_tab(0, 0, AREA).expect("a tab");
+        render(&mut app, AREA);
+        assert!(!app.file_full_screen());
+    }
+
+    #[test]
+    fn the_covered_tab_is_not_visible() {
+        let (_repo, mut app, _rx) = with_file();
+        let pane = app.tab().and_then(|t| t.pane()).expect("a pane").id;
+        assert!(app.visible_tab().is_some() && app.shows(pane));
+        toggle(&mut app);
+        assert!(app.visible_tab().is_none() && !app.shows(pane));
+        toggle(&mut app);
+        assert!(app.visible_tab().is_some() && app.shows(pane));
+    }
+
+    #[test]
+    fn a_contained_panic_puts_it_back() {
+        let (_repo, mut app, _rx) = with_file();
+        toggle(&mut app);
+        app.reset_interaction();
+        assert!(!app.file_full_screen());
+    }
+
+    #[test]
+    fn the_compact_layout_has_it_too() {
+        let small = Rect::new(0, 0, 80, 20);
+        let repo = repo();
+        let (mut app, _rx) = app_in(repo.path(), no_config());
+        let pos = app.layout(small).files_button.as_position();
+        click_in(&mut app, pos, small);
+        let workspace = app.projects[0].workspaces[0].id;
+        app.files.open_file(workspace, "src/main.rs");
+        let button = panel::full_screen_button(app.layout(small).changes).as_position();
+        click_in(&mut app, button, small);
+        assert_eq!(app.layout(small).changes, small);
     }
 }

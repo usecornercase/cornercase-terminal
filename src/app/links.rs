@@ -92,6 +92,7 @@ impl App {
     pub(super) fn link_hover(&self) -> Option<Position> {
         self.hover.filter(|_| {
             self.overlay.is_none()
+                && !self.file_full_screen()
                 && match &self.drag {
                     Some(Drag::Row(_) | Drag::Pane(_) | Drag::Selection { .. } | Drag::Divider { .. }) => false,
                     Some(Drag::Border(_) | Drag::Link(_) | Drag::Lines { .. }) | None => true,

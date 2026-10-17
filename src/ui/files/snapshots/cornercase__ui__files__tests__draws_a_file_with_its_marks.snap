@@ -2,7 +2,7 @@
 source: src/ui/files/tests.rs
 expression: "render(&opened(None, &[]))"
 ---
-  ‹  src/main.rs                             ×
+  ‹  src/main.rs                          ▢  ×
   4 lines · rust      open   ask agent   copy
 
    1   fn main() {

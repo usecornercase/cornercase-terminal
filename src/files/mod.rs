@@ -108,6 +108,7 @@ pub(crate) struct Panel {
     naming: Option<(u64, Instant)>,
     texts: HashMap<u64, Answer<search::Text>>,
     grepping: Option<(u64, String, Arc<AtomicBool>, Instant)>,
+    full_screen: bool,
 }
 
 pub(crate) struct List {
@@ -220,7 +221,16 @@ impl Panel {
         self.viewer(workspace).is_none() && self.query(workspace).is_some_and(|q| q.focused)
     }
 
+    pub(crate) fn full_screen(&self) -> bool {
+        self.full_screen
+    }
+
+    pub(crate) fn set_full_screen(&mut self, on: bool) {
+        self.full_screen = on;
+    }
+
     pub(crate) fn close(&mut self) {
+        self.full_screen = false;
         self.unfocus();
     }
 
@@ -348,6 +358,7 @@ impl Panel {
     }
 
     pub(crate) fn open_file(&mut self, workspace: u64, path: &str) {
+        self.full_screen = false;
         let place = self.places.entry(workspace).or_default();
         place.last = Some(path.to_string());
         place.viewer = Some(Viewer { path: path.to_string(), ..Viewer::default() });
@@ -355,6 +366,7 @@ impl Panel {
     }
 
     pub(crate) fn close_file(&mut self, workspace: u64) {
+        self.full_screen = false;
         if let Some(place) = self.places.get_mut(&workspace) {
             place.viewer = None;
         }

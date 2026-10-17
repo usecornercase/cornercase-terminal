@@ -205,7 +205,14 @@ impl App {
             selection: viewer.selection,
             find: viewer.find.clone(),
             image: None,
+            full_screen: self.file_full_screen(),
         }
+    }
+
+    pub(super) fn file_full_screen(&self) -> bool {
+        self.files.full_screen()
+            && self.files_shown()
+            && self.files_target().is_some_and(|(ws, _)| self.files.viewer(ws).is_some())
     }
 
     fn folder_view(&self, workspace: u64) -> TreeView {
@@ -338,6 +345,7 @@ impl App {
             Some(Hit::Clear) => self.edit_query(workspace, String::clear),
             Some(Hit::Found(i)) => self.open_found(workspace, &view, i),
             Some(Hit::Back) => self.files.close_file(workspace),
+            Some(Hit::FullScreen) => self.files.set_full_screen(!self.files.full_screen()),
             Some(Hit::Row(i)) => {
                 let Screen::Tree(tree) = &view.screen else { return Ok(()) };
                 let Some(row) = tree.rows.get(i) else { return Ok(()) };

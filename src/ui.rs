@@ -272,11 +272,7 @@ impl View<'_> {
     }
 }
 
-pub(crate) fn draw(f: &mut Frame, view: &View) {
-    let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some() || view.flow.is_some();
-    let areas = full_layout(f.area(), view.widths, panel, view.sidebar, view.agents.is_some(), view.icons)
-        .with_tab_bar(view.tab_bar.is_some())
-        .shown(view.nav);
+fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
     if let Some(bar) = view.tab_bar.as_ref().filter(|_| view.has_project && !areas.tab_bar.is_empty()) {
         tab_bar::draw(f, view, bar, areas.tab_bar);
     }
@@ -287,7 +283,7 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
         None => {}
     }
     if areas.compact() {
-        draw_bar(f, view, &areas);
+        draw_bar(f, view, areas);
         if view.nav.is_some() {
             f.render_widget(Clear, areas.pane);
         }
@@ -295,26 +291,38 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
         draw_column_border(f, view.line(), areas.projects_border);
         draw_column_border(f, view.line(), areas.workspaces_border);
         draw_separator(f, view.line(), areas.stack_border);
-        draw_borders(f, view, &areas);
+        draw_borders(f, view, areas);
         draw_search_bar(f, view, areas.search);
         activity::draw(f, view, areas.activity);
     }
     if areas.tree {
-        draw_tree(f, view, &areas);
+        draw_tree(f, view, areas);
     } else if !areas.sidebar.is_empty() {
-        draw_sidebar(f, view, &areas);
+        draw_sidebar(f, view, areas);
     }
     if let Some(agents) = &view.agents {
-        draw_agents(f, view, agents, &areas);
+        draw_agents(f, view, agents, areas);
     }
     if [areas.separator, areas.settings, areas.usage, areas.quit].iter().any(|r| !r.is_empty()) {
-        draw_footer(f, view, &areas);
+        draw_footer(f, view, areas);
     }
     if !areas.workspaces.is_empty() {
-        draw_workspaces(f, view, &areas);
+        draw_workspaces(f, view, areas);
     }
     if view.has_project && [areas.workspaces_separator, areas.issues].iter().any(|r| !r.is_empty()) {
-        draw_issues_row(f, view, &areas);
+        draw_issues_row(f, view, areas);
+    }
+}
+
+pub(crate) fn draw(f: &mut Frame, view: &View) {
+    let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some() || view.flow.is_some();
+    let full = view.files.as_ref().is_some_and(files::View::full_screen);
+    let areas = full_layout(f.area(), view.widths, panel, view.sidebar, view.agents.is_some(), view.icons)
+        .with_tab_bar(view.tab_bar.is_some())
+        .with_full_screen(full, f.area())
+        .shown(view.nav);
+    if !full {
+        draw_main(f, view, &areas);
     }
     if panel && !areas.changes.is_empty() {
         f.render_widget(Clear, areas.changes);
@@ -330,7 +338,9 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
             (None, None, None, None) => {}
         }
     }
-    activity::draw_tooltip(f, view, areas.activity);
+    if !full {
+        activity::draw_tooltip(f, view, areas.activity);
+    }
     if view.overlay.as_ref().is_some_and(Overlay::is_modal) {
         let area = f.area();
         f.buffer_mut().set_style(area, Style::default().add_modifier(Modifier::DIM));

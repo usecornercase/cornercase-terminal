@@ -173,6 +173,7 @@ impl App {
 
     pub(super) fn goto(&mut self, goto: Goto) {
         self.nav = None;
+        self.files.set_full_screen(false);
         let (project, workspace, tab) = match goto {
             Goto::Group(id) => {
                 if let Some(entry) = self.group_mut(id) {

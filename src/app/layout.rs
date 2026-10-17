@@ -38,6 +38,7 @@ impl App {
         let (panel, sidebar) = (self.panel_shown(), self.sidebar());
         ui::full_layout(area, self.widths, panel, sidebar, self.config.agents_section, self.config.icon_bar)
             .with_tab_bar(config::Tabs::from_setting(&self.config.tabs) == config::Tabs::Top)
+            .with_full_screen(self.file_full_screen(), area)
     }
 
     pub(super) fn panel_shown(&self) -> bool {
@@ -74,7 +75,7 @@ impl App {
     }
 
     pub(super) fn visible_tab(&self) -> Option<u64> {
-        self.focus().tab.filter(|_| self.nav.is_none())
+        self.focus().tab.filter(|_| self.nav.is_none() && !self.file_full_screen())
     }
 
     pub(super) fn focus(&self) -> Focus {
@@ -89,6 +90,9 @@ impl App {
 
     pub(super) fn follow(&mut self, area: Rect) {
         self.queued.area = Some(area);
+        if self.focus() != self.scroll.followed {
+            self.files.set_full_screen(false);
+        }
         let areas = self.layout(area);
         let relayout = areas.tree != self.drawn.tree || areas.tab_bar.is_empty() != self.drawn.tab_bar.is_empty();
         self.drawn = areas;

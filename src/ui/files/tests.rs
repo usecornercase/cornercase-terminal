@@ -60,6 +60,7 @@ fn opened(selection: Option<(u32, u32)>, unfolded: &[u32]) -> View {
             selection,
             find: None,
             image: None,
+            full_screen: false,
         }),
         light: false,
         muted: Color::DarkGray,
@@ -234,6 +235,7 @@ mod images {
                 selection: None,
                 find: None,
                 image,
+                full_screen: false,
             }),
             ..tree()
         }
@@ -363,4 +365,45 @@ mod images {
     fn sizes_read_like_a_file_manager(#[case] bytes: u64, #[case] shown: &str) {
         assert_eq!(size(bytes), shown);
     }
+}
+
+fn full(on: bool) -> View {
+    let mut view = opened(None, &[]);
+    if let Screen::File(file) = &mut view.screen {
+        file.full_screen = on;
+    }
+    view
+}
+
+#[test]
+fn hits_the_full_screen_button_on_a_file_only() {
+    let at = full_screen_button(AREA).as_position();
+    assert_eq!(hit(AREA, &opened(None, &[]), at), Some(Hit::FullScreen));
+    assert_ne!(hit(AREA, &tree(), at), Some(Hit::FullScreen));
+    assert_ne!(hit(AREA, &texts(), at), Some(Hit::FullScreen));
+}
+
+#[test]
+fn the_full_screen_button_turns_into_restore_and_stays_lit() {
+    let cell = |view: &View| {
+        let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("terminal");
+        terminal.draw(|f| draw(f, AREA, view, None)).expect("draw");
+        let c = terminal.backend().buffer()[(full_screen_button(AREA).x + 1, full_screen_button(AREA).y)].clone();
+        (c.symbol().to_string(), c.fg)
+    };
+    assert_eq!(cell(&full(false)), ("▢".to_string(), dim(Color::DarkGray).fg.expect("a colour")));
+    assert_eq!(cell(&full(true)), ("❐".to_string(), Color::Cyan));
+}
+
+#[test]
+fn a_long_path_stops_before_the_full_screen_button() {
+    let mut view = full(false);
+    if let Screen::File(file) = &mut view.screen {
+        file.path = "a/very/long/folder/name/that/goes/on/and/on/and/on/for/ever/main.rs".into();
+    }
+    let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("terminal");
+    terminal.draw(|f| draw(f, AREA, &view, None)).expect("draw");
+    let button = full_screen_button(AREA);
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(button.x - 1, button.y)].symbol(), " ");
 }

@@ -8,12 +8,22 @@ pub(crate) struct Glyphs {
     pub(crate) filter: &'static str,
     pub(crate) names: &'static str,
     pub(crate) said: &'static str,
+    pub(crate) full_screen: &'static str,
+    pub(crate) restore: &'static str,
 }
 
-pub(crate) const PLAIN: Glyphs =
-    Glyphs {
-        menu: "≡", changes: "±", files: "▤", todo: "☐", search: "⌕", filter: "⌕", names: "▤", said: "❯"
-    };
+pub(crate) const PLAIN: Glyphs = Glyphs {
+    menu: "≡",
+    changes: "±",
+    files: "▤",
+    todo: "☐",
+    search: "⌕",
+    filter: "⌕",
+    names: "▤",
+    said: "❯",
+    full_screen: "▢",
+    restore: "❐",
+};
 
 pub(crate) const NERD: Glyphs = Glyphs {
     menu: "\u{eb94}",
@@ -24,6 +34,8 @@ pub(crate) const NERD: Glyphs = Glyphs {
     filter: "\u{eaf1}",
     names: "\u{ea7b}",
     said: "\u{eac7}",
+    full_screen: "\u{eb4c}",
+    restore: "\u{eb4d}",
 };
 
 pub(crate) fn glyphs(nerd: bool) -> &'static Glyphs {

@@ -135,6 +135,14 @@ impl Areas {
     }
 
     #[must_use]
+    pub(crate) fn with_full_screen(self, shown: bool, area: Rect) -> Self {
+        if !shown || self.changes.is_empty() {
+            return self;
+        }
+        Self { changes: area, changes_border: Rect::default(), ..self }
+    }
+
+    #[must_use]
     pub(crate) fn shown(self, nav: Option<Nav>) -> Self {
         if !self.compact() {
             return self;
