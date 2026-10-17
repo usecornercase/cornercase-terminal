@@ -5,7 +5,7 @@ use crate::app::App;
 use crate::control::contract::{Code, Refusal};
 use crate::control::surface::{self, Size};
 use crate::control::terminal::{
-    End, Input, InputEvent, Moved, Point, Ratio, Scroll, Scrolled, Selection, Sent, Skipped, Why,
+    End, Input, InputEvent, KeyKind, Moved, Point, Ratio, Scroll, Scrolled, Selection, Sent, Skipped, Why,
 };
 use crate::control::{Done, Layout};
 use crate::log;
@@ -56,6 +56,10 @@ fn busy(term: &Term, pane: u64) -> Refusal {
     }
 }
 
+fn unsent(kind: KeyKind) -> Why {
+    if kind == KeyKind::Release { Why::Release } else { Why::Key }
+}
+
 struct Encoded {
     bytes: Vec<u8>,
     skipped: Vec<Skipped>,
@@ -70,7 +74,7 @@ fn encode(term: &mut Term, pane: u64, input: &Input, dims: (u16, u16)) -> Result
                 let bytes = term.emulator.encode_key(key.event().map_err(malformed)?);
                 out.typed |= !bytes.is_empty();
                 if bytes.is_empty() {
-                    out.skipped.push(Skipped { event, why: Why::Release });
+                    out.skipped.push(Skipped { event, why: unsent(key.kind) });
                 }
                 out.bytes.extend(bytes);
             }
@@ -84,7 +88,7 @@ fn encode(term: &mut Term, pane: u64, input: &Input, dims: (u16, u16)) -> Result
                 out.bytes.extend(text.chars().flat_map(|c| term.emulator.encode_key(keys::typed(c))));
             }
             InputEvent::Paste(text) => {
-                out.typed = true;
+                out.typed |= !text.is_empty();
                 out.bytes.extend(term.pasted(text));
             }
             InputEvent::Mouse(at) => {
@@ -221,5 +225,16 @@ impl App {
             self.resize(area);
         }
         Ok(Some(json(&Moved { tab: id, layout })))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_a_release_is_skipped_as_a_release() {
+        assert_eq!(unsent(KeyKind::Release), Why::Release);
+        assert_eq!([unsent(KeyKind::Press), unsent(KeyKind::Repeat)], [Why::Key, Why::Key]);
     }
 }

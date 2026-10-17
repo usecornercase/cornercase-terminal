@@ -32,6 +32,7 @@ fn skipped(why: Why) -> &'static str {
     match why {
         Why::Mouse => "the program does not read the mouse that way",
         Why::Release => "the program does not take key releases",
+        Why::Key => "cornercase has no encoding for this key",
     }
 }
 

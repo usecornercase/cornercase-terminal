@@ -517,7 +517,7 @@ cornercase stats --share
 | `surface` | One object per line, see [Stream a tab's terminals](#stream-a-tabs-terminals): `boot`, `session`, `surface`, `revision`, `tab`, `cols`, `rows`, `layout`, `dividers`, `styles` and `panes`; for `--view`, also `view` and `projection`. |
 | `view` | One object per line, see [A view of your own](#a-view-of-your-own): what `status --follow` prints, plus `view` (`id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`) and each tab's `controller`. |
 | `view-set` | The view: `id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`. |
-| `input` | `pane`, `bytes` (what was written) and `skipped`: `event` (its position from 0) and `why` (`mouse` or `release`) of each event that was not sent. |
+| `input` | `pane`, `bytes` (what was written) and `skipped`: `event` (its position from 0) and `why` (`mouse`, `release`, or `key` for a press cornercase has no encoding for) of each event that was not sent. |
 | `scroll` | `pane` and `scroll`: `total`, `offset` and `rows`, as in a frame. |
 | `selection` | `pane` and `text` (absent when nothing is selected). |
 | `resize` | `surface`, `tab`, `cols` and `rows`. |
