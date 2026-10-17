@@ -181,16 +181,10 @@ impl App {
             Action::Hide { name, file } => self.hide_flow(&name, file.as_deref()),
             Action::Unhide(name) => self.unhide_flow(&name),
             Action::Restore { file, name } => {
-                let deleted = store::delete(&file);
-                if deleted.is_ok() {
-                    log::info!("flows", "flow deleted", file = file_name(&file));
-                }
                 let mut next = self.config.clone();
-                let saved = !store::unhide(&mut next.hidden_flows, &name) || self.save_hidden(next);
+                store::unhide(&mut next.hidden_flows, &name);
+                self.save_then_delete(next, Some(&file));
                 self.refresh_flows();
-                if let (true, Err(e), Some(dialog)) = (saved, deleted, self.flows_dialog()) {
-                    dialog.notice = Some(format!("could not delete the flow: {e}"));
-                }
             }
             Action::Tab(i) => self.open_settings_page(Page::ALL[i]),
             Action::StepTab(delta) => self.open_settings_page(Page::Flows.step(delta)),
@@ -212,21 +206,33 @@ impl App {
         true
     }
 
-    fn hide_flow(&mut self, name: &str, file: Option<&std::path::Path>) {
-        if let Some(file) = file {
-            match store::delete(file) {
-                Ok(()) => log::info!("flows", "flow deleted", file = file_name(file)),
-                Err(e) => {
-                    if let Some(dialog) = self.flows_dialog() {
-                        dialog.notice = Some(format!("could not delete the flow: {e}"));
-                    }
-                    return;
+    fn save_then_delete(&mut self, next: crate::config::Config, file: Option<&std::path::Path>) -> bool {
+        let previous = self.config.clone();
+        let changed = next.hidden_flows != previous.hidden_flows;
+        if changed && !self.save_hidden(next) {
+            return false;
+        }
+        let Some(file) = file else { return true };
+        match store::delete(file) {
+            Ok(()) => {
+                log::info!("flows", "flow deleted", file = file_name(file));
+                true
+            }
+            Err(e) => {
+                let rolled_back = !changed || self.save_hidden(previous);
+                if let Some(dialog) = self.flows_dialog() {
+                    let kept = if rolled_back { "" } else { " (the deleted built-in list could not be put back)" };
+                    dialog.notice = Some(format!("could not delete the flow: {e}{kept}"));
                 }
+                false
             }
         }
+    }
+
+    fn hide_flow(&mut self, name: &str, file: Option<&std::path::Path>) {
         let mut next = self.config.clone();
         store::hide(&mut next.hidden_flows, name);
-        let saved = self.save_hidden(next);
+        let saved = self.save_then_delete(next, file);
         self.refresh_flows();
         if !saved {
             return;

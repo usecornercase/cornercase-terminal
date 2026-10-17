@@ -770,3 +770,63 @@ mod saving_the_hidden_names {
         assert!(dialog(&s.app).flows.iter().any(|saved| saved.flow.name == "Arena"));
     }
 }
+
+mod ordering {
+    use super::*;
+
+    fn edited_quick(s: &mut Setup) -> PathBuf {
+        let mut flow = crate::flows::builtin::starter(&[], None);
+        flow.name = "Quick".into();
+        std::fs::create_dir_all(user_dir(s)).expect("the flows folder");
+        let path = store::save(&user_dir(s), &flow, None).expect("save");
+        s.app.refresh_flows();
+        path
+    }
+
+    fn delete_selected(s: &mut Setup, label: &str) {
+        select_flow(&mut s.app, WIDE, "Quick");
+        button(&mut s.app, WIDE, label);
+        let [submit, _] = ui::form_buttons(ui::form_area(WIDE), label);
+        click_in(&mut s.app, submit.as_position(), WIDE);
+    }
+
+    #[test]
+    fn a_failed_save_keeps_the_users_file_when_deleting_an_edited_built_in() {
+        let mut s = settings_tab(false);
+        let file = edited_quick(&mut s);
+        std::fs::create_dir(s.config.path().join("config.json")).expect("a folder where the file goes");
+        delete_selected(&mut s, dialog::DELETE);
+        assert!(file.exists());
+        assert_eq!(s.app.config.hidden_flows, Vec::<String>::new());
+        assert!(dialog(&s.app).notice.clone().unwrap_or_default().starts_with("failed to save"));
+    }
+
+    #[test]
+    fn a_failed_save_keeps_the_users_file_on_restore_default() {
+        let mut s = settings_tab(false);
+        let file = edited_quick(&mut s);
+        s.app.config.hidden_flows = vec!["Quick".into()];
+        std::fs::create_dir(s.config.path().join("config.json")).expect("a folder where the file goes");
+        delete_selected(&mut s, dialog::RESTORE);
+        assert!(file.exists());
+        assert_eq!(s.app.config.hidden_flows, ["Quick"]);
+    }
+
+    #[test]
+    fn a_failed_delete_puts_the_hidden_names_back() {
+        use std::os::unix::fs::PermissionsExt;
+        let mut s = settings_tab(false);
+        let file = edited_quick(&mut s);
+        let dir = user_dir(&s);
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o500)).expect("read only");
+        if std::fs::File::create(dir.join("probe")).is_ok() {
+            return;
+        }
+        delete_selected(&mut s, dialog::DELETE);
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).expect("writable again");
+        assert!(file.exists());
+        assert_eq!(s.app.config.hidden_flows, Vec::<String>::new());
+        assert_eq!(config::load(&s.config.path().join("config.json")).hidden_flows, Vec::<String>::new());
+        assert!(dialog(&s.app).notice.clone().unwrap_or_default().starts_with("could not delete"));
+    }
+}
