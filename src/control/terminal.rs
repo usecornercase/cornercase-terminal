@@ -159,6 +159,7 @@ pub(crate) struct Skipped {
 pub(crate) enum Why {
     Mouse,
     Release,
+    Key,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -487,7 +487,7 @@ cornercase stats --share
 | `read` | `pane` and `text`. With `--last-message`, also `agent` (`claude`, `codex`, `gemini` or `opencode`), `written` (when the agent wrote it, in UTC, such as `2026-10-08T19:56:37.241Z`) and `turn_over` (`true` once the agent stopped working, as [`--until turn-over`](#wait) sees it; missing while cornercase doesn't know yet). |
 | `read --last-message` with several targets | `panes`: the individual `read --last-message` answers above, or entries with `error` and the requested `pane` or `tab` id. |
 | `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind` or `count` (for `dropped`) depending on the event. |
-| `input` | `pane`, `bytes` (what was written) and `skipped`: `event` (its position from 0) and `why` (`mouse` or `release`) of each event that was not sent. |
+| `input` | `pane`, `bytes` (what was written) and `skipped`: `event` (its position from 0) and `why` (`mouse`, `release`, or `key` for a press cornercase has no encoding for) of each event that was not sent. |
 | `scroll` | `pane` and `scroll`: `total`, `offset` and `rows`, as in a frame. |
 | `selection` | `pane` and `text` (absent when nothing is selected). |
 | `resize` | `surface`, `tab`, `cols` and `rows`. |

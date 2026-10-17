@@ -343,3 +343,17 @@ fn a_ratio_moves_a_divider_and_the_terminals_follow() {
         ["not-found", "malformed", "malformed", "not-found"]
     );
 }
+
+#[test]
+fn an_empty_paste_sends_nothing_and_leaves_the_view_where_it_is() {
+    let (mut app, _rx) = app();
+    let id = first(&app);
+    numbered(app.projects.pane_by_mut(id).expect("pane"), 100);
+    app.projects.pane_by_mut(id).expect("pane").emulator.scroll(-5);
+    let before = pane(&app, id).emulator.scrollbar().offset;
+
+    let answer = sent(&mut app, id, &json!([{"paste": ""}]));
+
+    assert_eq!(answer.bytes, 0);
+    assert_eq!(pane(&app, id).emulator.scrollbar().offset, before);
+}
