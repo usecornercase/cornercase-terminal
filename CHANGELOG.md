@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.127
+
+- **What programs ask of the terminal reaches other programs that draw cornercase.** `cornercase events --host` also prints, for each pane, the text a program copies to the clipboard (OSC 52, such as a yank in Neovim or `/copy` in Claude Code, with the text in `--json`) and its bells, at most one line a second per pane with how many rang. Followers that don't pass `--host` get nothing new. `status --json` and `status --follow` give each pane its `title`. `selection --copy` prints what it copied, so a program without a window can put it in the clipboard itself. Windows work as before.
+
 ## 0.12.126
 
 - **Drive a tab's terminals from another program.** For a program that draws cornercase's terminals itself with `surface`:
