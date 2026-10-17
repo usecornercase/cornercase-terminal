@@ -17,7 +17,7 @@ use crate::host::theme::HostTheme;
 use crate::paths;
 use crate::{host::pointer, process};
 
-pub(crate) const VERSION: u32 = 4;
+pub(crate) const VERSION: u32 = 5;
 pub const NESTED_ENV: &str = "CORNERCASE";
 pub(crate) const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
 const MAX_MESSAGE: usize = 64 * 1024 * 1024;
@@ -30,6 +30,7 @@ pub(crate) enum ClientMessage {
     Restart,
     Request(String),
     Graphics(Support),
+    Activated(String),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

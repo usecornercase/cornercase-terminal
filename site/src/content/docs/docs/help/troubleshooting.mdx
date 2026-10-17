@@ -147,8 +147,12 @@ Over SSH, it's your local terminal that needs to allow it.
 - Your system must let your terminal show notifications: on macOS, in **System Settings → Notifications**.
 - **iTerm2** shows them only with *Notification Center Alerts* on, in **Settings → Profiles → Terminal**.
 - **foot** shows them with `notify-send`, which has to be installed.
-- Ghostty on macOS, foot, Konsole and Warp don't show one while their window is in front, and kitty, Contour and VS Code are asked not to: look for the toast.
+- Ghostty on macOS, foot, Konsole and Warp don't show one while their window is in front, and kitty, Contour, VS Code, foot 1.18 or later and Konsole 24.12 or later are asked not to: look for the toast.
 - Inside tmux, screen or Zellij, cornercase only rings the bell, which your multiplexer decides what to do with.
+
+### A click on a notification doesn't take me to the agent
+
+Only kitty, VS Code, Contour, foot 1.18 or later and Konsole 24.12 or later report a click; Ghostty, iTerm2, WezTerm and Warp only bring the window forward. Use the **go** button of the toast, which comes back when you return to the window, in any terminal. Inside tmux, screen or Zellij cornercase only rings the bell, so there is nothing to click. If text like `99;i=cc-…` appears in a shell, a notification was clicked after its window was killed or lost its connection, so cornercase could not close it first; it is harmless.
 
 ### An image shows a message instead of the picture
 

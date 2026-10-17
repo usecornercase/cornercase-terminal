@@ -259,9 +259,9 @@ export const NOTIFY_AFTER = 1000;
 
 export const NOTIFY_CHOICES: [string, string][] = [
   ['auto', 'what your terminal understands'],
-  ['osc777', 'Ghostty, WezTerm, foot, Konsole, Warp, Rio'],
+  ['osc777', 'Ghostty, WezTerm, Warp, Rio, foot before 1.18, Konsole before 24.12'],
   ['osc9', 'iTerm2'],
-  ['osc99', 'kitty, Contour, VS Code'],
+  ['osc99', 'kitty, Contour, VS Code, foot 1.18+, Konsole 24.12+'],
   ['bell', 'a beep or a mark on the window, in any terminal'],
   ['off', 'only the toast and the marks in cornercase'],
 ];

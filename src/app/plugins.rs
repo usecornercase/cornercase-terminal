@@ -224,7 +224,7 @@ impl App {
         let places = self.plugins.places.clone();
         let job =
             Job::new(Level::Info, "plugins", "action").with("plugin", &plugin.entry.id).with("action", &action.id);
-        let (name, title) = (plugin.name().to_string(), action.title.clone());
+        let (name, title) = (plugin.name(), action.title.clone());
         self.spawn_job(
             job,
             move || {
@@ -341,7 +341,7 @@ fn hook_name(event: &control::Event) -> Option<&'static str> {
 fn plugin_row(plugin: &Plugin, running: Option<String>) -> PluginRow {
     let id = plugin.entry.id.clone();
     match &plugin.manifest {
-        Err(e) => PluginRow { id, label: plugin.entry.id.clone(), on: false, note: e.clone(), broken: true },
+        Err(e) => PluginRow { id, label: plugin.name(), on: false, note: e.clone(), broken: true },
         Ok(manifest) => {
             let on = plugin.entry.enabled;
             let windows = if manifest.window.is_empty() { "" } else { " · its window process runs in local windows" };

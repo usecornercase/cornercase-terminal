@@ -31,16 +31,17 @@ pub(super) struct Toast {
     pub(super) icon: ui::ToastIcon,
     pub(super) at: Instant,
     pub(super) undo: Option<Undo>,
+    pub(super) go: Option<String>,
 }
 
 impl Toast {
     pub(super) fn new(message: impl Into<String>, icon: ui::ToastIcon) -> Self {
-        Self { message: message.into(), icon, at: Instant::now(), undo: None }
+        Self { message: message.into(), icon, at: Instant::now(), undo: None, go: None }
     }
 
     pub(super) fn lasts(&self) -> Duration {
         match self.icon {
-            _ if self.undo.is_some() => UNDO_FOR,
+            _ if self.undo.is_some() || self.go.is_some() => UNDO_FOR,
             ui::ToastIcon::Bug => BUG_FOR,
             ui::ToastIcon::Restart => Duration::MAX,
             ui::ToastIcon::Check | ui::ToastIcon::Agent(_) => TOAST_FOR,
@@ -50,6 +51,7 @@ impl Toast {
     pub(super) fn view(&self) -> ui::Toast<'_> {
         let button = match self.icon {
             _ if self.undo.is_some() => Some(ui::ToastButton::Undo),
+            _ if self.go.is_some() => Some(ui::ToastButton::Go),
             ui::ToastIcon::Restart => Some(ui::ToastButton::Cancel),
             ui::ToastIcon::Check | ui::ToastIcon::Agent(_) | ui::ToastIcon::Bug => None,
         };
@@ -66,6 +68,7 @@ impl App {
         match self.toast.take() {
             Some(Toast { undo: Some(Undo::Todos(removed)), .. }) => self.todos.restore(removed),
             Some(Toast { undo: Some(Undo::Queue(entries)), .. }) => self.queued.queue.restore(entries),
+            Some(Toast { go: Some(token), .. }) => self.notification_clicked(&token),
             Some(Toast { icon: ui::ToastIcon::Restart, .. }) => self.cancel_restarts(),
             _ => {}
         }

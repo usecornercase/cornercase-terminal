@@ -28,6 +28,19 @@ fn the_prefix_key_opens_a_menu_whose_keys_run_actions() {
 }
 
 #[test]
+fn focus_reporting_is_on_while_attached_and_off_once_it_leaves() {
+    let mut app = Harness::start();
+    app.wait_for_raw("focus reporting is turned on", |raw| raw.contains("\x1b[?1004h"));
+
+    app.click(areas().quit.as_position());
+    app.wait_exit("client exits");
+
+    app.wait_for_raw("focus reporting is turned off after it was on", |raw| {
+        raw.rfind("\x1b[?1004l").zip(raw.rfind("\x1b[?1004h")).is_some_and(|(off, on)| off > on)
+    });
+}
+
+#[test]
 fn ctrl_enter_reaches_a_program_that_asked_for_kitty_keys() {
     let mut app = Harness::start();
     app.wait_for_raw("the app asks the terminal for kitty keys", |raw| raw.contains("\x1b[>1u"));

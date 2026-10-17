@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashSet};
+use std::fs::Metadata;
 use std::io::Read as _;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
@@ -7,13 +8,14 @@ use rustix::fs::OFlags;
 use rustix::process::getgid;
 use serde::{Deserialize, Serialize};
 
-use crate::version;
+use crate::{text, version};
 
 pub(crate) const FILE: &str = "cornercase-plugin.toml";
 pub(crate) const API: u32 = 1;
 const MAX_ID: usize = 64;
 const MAX_BYTES: u64 = 64 * 1024;
 const MAX_ENTRIES: usize = 64;
+const MAX_QUOTED: usize = 80;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub(crate) struct Manifest {
@@ -131,6 +133,10 @@ impl Manifest {
     }
 
     pub(crate) fn read(root: &Path) -> Result<Self, String> {
+        Self::open(root).map_err(|e| text::escape_hidden(&e))
+    }
+
+    fn open(root: &Path) -> Result<Self, String> {
         let path = root.join(FILE);
         let cannot = |e: &dyn std::fmt::Display| format!("cannot read {}: {e}", path.display());
         let file = std::fs::OpenOptions::new()
@@ -143,15 +149,8 @@ impl Manifest {
             return Err(cannot(&"it is not a file"));
         }
         let folder = std::fs::metadata(root).map_err(|e| cannot(&e))?;
-        for (what, meta) in [("the plugin's folder", &folder), (FILE, &meta)] {
-            if meta.uid() != crate::protocol::own_uid() {
-                return Err(format!("{what} belongs to another user; a plugin runs as you"));
-            }
-            let shared_group = meta.mode() & 0o020 != 0 && meta.gid() != getgid().as_raw();
-            if meta.mode() & 0o002 != 0 || shared_group {
-                return Err(format!("other users can write to {what}; a plugin runs as you"));
-            }
-        }
+        guarded("the plugin's folder", &folder)?;
+        guarded(FILE, &meta)?;
         let mut text = String::new();
         file.take(MAX_BYTES + 1).read_to_string(&mut text).map_err(|e| cannot(&e))?;
         if text.len() as u64 > MAX_BYTES {
@@ -161,12 +160,16 @@ impl Manifest {
     }
 
     pub(crate) fn parse(text: &str) -> Result<Self, String> {
-        let manifest: Self = toml::from_str(text).map_err(|e| format!("{FILE}: {}", e.message()))?;
-        manifest.check()?;
+        let shown = |e: String| text::escape_hidden(&e);
+        let manifest: Self = toml::from_str(text).map_err(|e| shown(format!("{FILE}: {}", e.message())))?;
+        manifest.check().map_err(shown)?;
         Ok(manifest)
     }
 
     fn check(&self) -> Result<(), String> {
+        if let Some((field, value)) = self.texts().find(|(_, value)| value.chars().any(text::hidden)) {
+            return Err(format!("{FILE}: {field} `{}` has an invisible or control character", around_hidden(value)));
+        }
         valid_id("id", &self.id)?;
         if serde_json::to_value(self).is_ok_and(|value| has_control(&value)) {
             return Err(format!("{FILE}: a text in it holds a control character, such as an escape or a new line"));
@@ -221,6 +224,35 @@ impl Manifest {
             valid_download(target, download)?;
         }
         Ok(())
+    }
+
+    fn texts(&self) -> impl Iterator<Item = (&'static str, &str)> {
+        let fields =
+            [("id", &self.id), ("name", &self.name), ("version", &self.version), ("description", &self.description)];
+        let lists = [("platforms", &self.platforms), ("permissions", &self.permissions)];
+        fields
+            .into_iter()
+            .map(|(field, value)| (field, value.as_str()))
+            .chain(self.min_cornercase.iter().map(|value| ("min_cornercase", value.as_str())))
+            .chain(lists.into_iter().flat_map(|(field, values)| values.iter().map(move |v| (field, v.as_str()))))
+            .chain(self.actions.iter().flat_map(|a| {
+                [("an action id", a.id.as_str()), ("an action title", a.title.as_str())]
+                    .into_iter()
+                    .chain(a.command.iter().map(|arg| ("a command", arg.as_str())))
+            }))
+            .chain(self.events.iter().flat_map(|h| h.command.iter().map(|arg| ("a command", arg.as_str()))))
+            .chain(self.service.iter().chain(&self.window).flat_map(|p| {
+                std::iter::once(("a process id", p.id.as_str()))
+                    .chain(p.command.iter().map(|arg| ("a command", arg.as_str())))
+            }))
+            .chain(self.build.iter().flat_map(|b| b.command.iter().map(|arg| ("a build command", arg.as_str()))))
+            .chain(self.download.iter().flat_map(|(target, d)| {
+                [
+                    ("a download target", target.as_str()),
+                    ("a download url", d.url.as_str()),
+                    ("a download sha256", d.sha256.as_str()),
+                ]
+            }))
     }
 
     pub(crate) fn commands(&self) -> Vec<(String, &[String])> {
@@ -278,6 +310,15 @@ impl Manifest {
     }
 }
 
+fn around_hidden(value: &str) -> String {
+    let chars: Vec<char> = value.chars().collect();
+    let at = chars.iter().position(|&c| text::hidden(c)).unwrap_or(0);
+    let start = at.saturating_sub(MAX_QUOTED / 2);
+    let end = (start + MAX_QUOTED).min(chars.len());
+    let cut = |cut: bool| if cut { "…" } else { "" };
+    format!("{}{}{}", cut(start > 0), chars[start..end].iter().collect::<String>(), cut(end < chars.len()))
+}
+
 fn valid_id(field: &str, id: &str) -> Result<(), String> {
     let mut chars = id.chars();
     let first = chars.next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
@@ -326,6 +367,10 @@ fn valid_download(target: &str, download: &Download) -> Result<(), String> {
 }
 
 pub(crate) fn program(root: &Path, command: &[String]) -> Result<(PathBuf, Vec<String>), String> {
+    resolve(root, command).map_err(|e| text::escape_hidden(&e))
+}
+
+fn resolve(root: &Path, command: &[String]) -> Result<(PathBuf, Vec<String>), String> {
     let (first, args) = command.split_first().ok_or("no command")?;
     let path = Path::new(first);
     if !(path.is_relative() && first.contains('/')) {
@@ -334,10 +379,31 @@ pub(crate) fn program(root: &Path, command: &[String]) -> Result<(PathBuf, Vec<S
     let outside = || format!("`{first}` is outside the plugin's folder");
     let root = root.canonicalize().map_err(|e| format!("cannot open the plugin's folder: {e}"))?;
     let program = root.join(path).canonicalize().map_err(|e| format!("cannot run `{first}`: {e}"))?;
-    if !program.starts_with(&root) {
+    let Ok(inside) = program.strip_prefix(&root) else {
         return Err(outside());
+    };
+    guarded("the plugin's folder", &metadata(&root)?)?;
+    let mut part = PathBuf::new();
+    for component in inside.components() {
+        part.push(component);
+        guarded(&format!("`{}`", part.display()), &metadata(&root.join(&part))?)?;
     }
     Ok((program, args.to_vec()))
+}
+
+fn metadata(path: &Path) -> Result<Metadata, String> {
+    std::fs::metadata(path).map_err(|e| format!("cannot read {}: {e}", path.display()))
+}
+
+fn guarded(what: &str, meta: &Metadata) -> Result<(), String> {
+    if meta.uid() != crate::protocol::own_uid() {
+        return Err(format!("{what} belongs to another user; a plugin runs as you"));
+    }
+    let shared_group = meta.mode() & 0o020 != 0 && meta.gid() != getgid().as_raw();
+    if meta.mode() & 0o002 != 0 || shared_group {
+        return Err(format!("other users can write to {what}; a plugin runs as you"));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

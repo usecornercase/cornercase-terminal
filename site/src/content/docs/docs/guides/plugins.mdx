@@ -104,11 +104,11 @@ sha256 = "9f2c…"                   # 64 hexadecimal digits
 
 `[download]` may name `aarch64-apple-darwin`, `x86_64-apple-darwin`, `aarch64-unknown-linux-gnu` and `x86_64-unknown-linux-gnu`. An archive is a `.tar.gz` served over `https://`; its files are unpacked into the plugin's folder. Links, devices and paths that lead out of the folder refuse the whole archive. When the archive's sha256 differs, nothing is unpacked. If a build step changes `cornercase-plugin.toml`, nothing is installed.
 
-Fields cornercase doesn't know are ignored, so a manifest written for a newer cornercase still loads. The plugin's folder and its manifest must be yours and not writable by other users. A manifest that cannot be read shows in `plugin list` and in Settings with the reason, and never hides the other plugins.
+Fields cornercase doesn't know are ignored, so a manifest written for a newer cornercase still loads. The plugin's folder and its manifest must be yours and not writable by other users. Its texts may not hold control characters or invisible ones (bidirectional overrides, zero-width spaces and the like), which could make a command read differently from what runs. A manifest that cannot be read shows in `plugin list` and in Settings with the reason, and never hides the other plugins.
 
 ### Commands
 
-A `command` is a list: the program, then its arguments. It never goes through a shell, so nothing in it is expanded or split. A program with a `/` in its name, like `bin/notes`, is looked up in the plugin's folder and must stay inside it: `..`, and symbolic links that lead out of the folder, are refused when the plugin is linked, installed or turned on, and `plugin list` and Settings say why. So is a program that is not there yet: build it before you link the folder. A bare name, like `python3`, is looked up on the `PATH`.
+A `command` is a list: the program, then its arguments. It never goes through a shell, so nothing in it is expanded or split. A program with a `/` in its name, like `bin/notes`, is looked up in the plugin's folder and must stay inside it: `..`, and symbolic links that lead out of the folder, are refused when the plugin is linked, installed or turned on, and `plugin list` and Settings say why. So is a program that is not there yet: build it before you link the folder. That program, and every folder between the plugin's folder and it, must be yours and not writable by other users. A bare name, like `python3`, is looked up on the `PATH`.
 
 Each command's output, and its errors, go to the plugin's log, with a line from cornercase when a service or window process starts, stops or exits. `cornercase plugin logs <id>` prints it.
 

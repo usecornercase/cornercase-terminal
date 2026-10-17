@@ -94,6 +94,17 @@ mod compatibility {
     }
 
     #[derive(Debug, Deserialize)]
+    #[expect(dead_code, reason = "decoded only, the way a server from before Activated reads it")]
+    enum BeforeActivated {
+        KillServer,
+        Hello(Box<Hello>),
+        Event(Event),
+        Restart,
+        Request(String),
+        Graphics(Support),
+    }
+
+    #[derive(Debug, Deserialize)]
     #[expect(dead_code, reason = "decoded only, the way a client from before Response reads it")]
     enum BeforeResponse {
         Rejected(String),
@@ -136,6 +147,16 @@ mod compatibility {
         let graphics = ClientMessage::Graphics(Support { id_hi: 7, ..Support::default() });
 
         assert_eq!(read_as::<BeforeGraphics>(&graphics), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn activations_come_after_every_older_client_variant() {
+        assert_eq!(postcard::to_stdvec(&ClientMessage::Activated(String::new())).expect("encode"), [6, 0]);
+    }
+
+    #[test]
+    fn a_server_without_activations_reads_one_as_invalid_data() {
+        assert_eq!(read_as::<BeforeActivated>(&ClientMessage::Activated("x".into())), io::ErrorKind::InvalidData);
     }
 
     #[test]

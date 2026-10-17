@@ -6,7 +6,7 @@ use std::time::SystemTime;
 use serde::{Deserialize, Serialize};
 
 use super::manifest::{self, Manifest};
-use crate::persist;
+use crate::{persist, text};
 
 const VERSION: u32 = 1;
 
@@ -45,11 +45,11 @@ impl Source {
 
     pub(crate) fn describe(&self) -> String {
         match self {
-            Self::Link { path } => format!("linked from {}", path.display()),
+            Self::Link { path } => format!("linked from {}", text::escape_hidden(&path.display().to_string())),
             Self::Git { repo, reference, subdir, commit, .. } => {
                 let at = reference.as_ref().map_or_else(String::new, |r| format!("@{r}"));
                 let inside = subdir.as_ref().map_or_else(String::new, |s| format!(", folder {s},"));
-                format!("installed from {repo}{at}{inside} at {}", short(commit))
+                text::escape_hidden(&format!("installed from {repo}{at}{inside} at {}", short(commit)))
             }
         }
     }
@@ -85,8 +85,8 @@ impl Plugin {
         self.entry.source.root()
     }
 
-    pub(crate) fn name(&self) -> &str {
-        self.manifest.as_ref().map_or(&self.entry.id, |m| &m.name)
+    pub(crate) fn name(&self) -> String {
+        self.manifest.as_ref().map_or_else(|_| text::escape_hidden(&self.entry.id), |m| m.name.clone())
     }
 }
 
@@ -137,7 +137,8 @@ impl Registry {
     }
 
     pub(crate) fn link(&mut self, folder: &Path) -> Result<(Manifest, bool), String> {
-        let path = folder.canonicalize().map_err(|e| format!("cannot open {}: {e}", folder.display()))?;
+        let cannot = |e: io::Error| text::escape_hidden(&format!("cannot open {}: {e}", folder.display()));
+        let path = folder.canonicalize().map_err(cannot)?;
         let manifest = Manifest::load(&path)?;
         let source = Source::Link { path };
         let enabled = match self.entries.iter_mut().find(|entry| entry.id == manifest.id) {

@@ -86,7 +86,7 @@ pub(super) fn run(action: PluginAction) -> Result<bool> {
 
 fn install_from(places: &Places, spec: &str, yes: bool) -> Result<()> {
     let origin = Origin::parse(&folder_spec(spec)).map_err(Error::Plugin)?;
-    println!("fetching {}…", origin.spec());
+    println!("fetching {}…", crate::text::escape_hidden(&origin.spec()));
     let fetched = install::fetch(&origin, places).map_err(Error::Plugin)?;
     if !confirmed(&fetched, yes, "Install it?")? {
         println!("nothing was installed");
@@ -176,14 +176,15 @@ fn list_text(plugins: &[Plugin]) -> String {
         let on = if plugin.entry.enabled { "on" } else { "off" };
         match &plugin.manifest {
             Ok(manifest) => {
-                let _ = writeln!(text, "{}  {}  {on}  {}", plugin.entry.id, manifest.version, manifest.name);
+                let id = crate::text::escape_hidden(&plugin.entry.id);
+                let _ = writeln!(text, "{id}  {}  {on}  {}", manifest.version, manifest.name);
                 let _ = writeln!(text, "  {}\n  {}", plugin.entry.source.describe(), manifest.asks());
                 if !manifest.runs().is_empty() {
                     let _ = writeln!(text, "  runs {}", manifest.runs().join(", "));
                 }
             }
             Err(e) => {
-                let _ = writeln!(text, "{}  -  {on}  cannot run", plugin.entry.id);
+                let _ = writeln!(text, "{}  -  {on}  cannot run", plugin.name());
                 let _ = writeln!(text, "  {}\n  {e}", plugin.entry.source.describe());
             }
         }
@@ -209,7 +210,20 @@ fn list_json(plugins: &[Plugin], places: &Places) -> String {
             })
         })
         .collect();
-    let mut text = serde_json::to_string_pretty(&json!({ "plugins": rows })).unwrap_or_default();
+    let json = serde_json::to_string_pretty(&json!({ "plugins": rows })).unwrap_or_default();
+    let mut text = json.chars().fold(String::with_capacity(json.len()), |mut out, c| {
+        if c != '\n' && crate::text::hidden(c) {
+            c.encode_utf16(&mut [0; 2]).iter().for_each(|unit| {
+                let _ = write!(out, "\\u{unit:04x}");
+            });
+        } else {
+            out.push(c);
+        }
+        out
+    });
     text.push('\n');
     text
 }
+
+#[cfg(test)]
+mod tests;

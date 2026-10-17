@@ -94,6 +94,20 @@ mod installing {
     use super::*;
 
     #[test]
+    fn a_hidden_character_in_the_source_is_shown_escaped() {
+        let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
+        let hidden = remote.bare.path().join("evil\u{202e}lmth.git");
+        fs::rename(remote.bare.path().join("repo.git"), &hidden).expect("rename");
+        let url = hidden.display().to_string();
+        let origin = Origin { repo: url.clone(), url, reference: None, subdir: None };
+        let preview = fetch(&origin, &places(&home)).expect("fetch").preview().join("\n");
+        assert!(preview.contains("evil\\u{202e}lmth.git") && !preview.contains('\u{202e}'), "{preview}");
+        let gone = Origin { reference: Some("nope\u{202e}".into()), ..origin };
+        let error = fetch(&gone, &places(&home)).map(|_| ()).expect_err("no such ref");
+        assert!(!error.contains('\u{202e}'), "{error}");
+    }
+
+    #[test]
     fn a_plugin_from_a_bare_repository_lands_turned_off_at_its_commit() {
         let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
         let places = places(&home);
@@ -218,6 +232,16 @@ mod building {
         assert!(fetched.preview().join("\n").contains("Installing it runs, in its folder:\n  ./make"));
         install(fetched, &places).expect("install");
         assert!(root(&places).join("bin/run").exists());
+    }
+
+    #[test]
+    fn a_hidden_character_in_a_build_step_is_refused_before_the_preview() {
+        let remote = Remote::new(&manifest("1.0", "\n[[build]]\ncommand = [\"./make\", \"a\u{202e}b\"]\n"));
+        let home = TempDir::new();
+        let places = places(&home);
+        let error = fetch(&remote.origin(None), &places).map(|_| ()).expect_err("refused");
+        assert!(error.contains("a\\u{202e}b") && !error.contains('\u{202e}'), "{error}");
+        assert_eq!(staged(&places), 0);
     }
 
     #[test]

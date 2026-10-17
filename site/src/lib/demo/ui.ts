@@ -129,6 +129,7 @@ const tabIcon = (t: Tab, now: number | null): Seg => {
 };
 const BRAND = 99;
 const UNDO = 'undo';
+const GO = 'go';
 const SEVERITY: Record<UsageWindow['severity'], number> = { normal: 2, warning: 208, critical: 1 };
 const severityOf = (percent: number): UsageWindow['severity'] => (percent >= 90 ? 'critical' : percent >= 75 ? 'warning' : 'normal');
 const USAGE_BAR = '━';
@@ -339,7 +340,7 @@ export class Painter {
       if (view) drawFlow(this, areas, view);
     }
     this.overlay(areas);
-    if (app.toast) this.toast(app.toast.text, app.toast.status, app.toast.undo, app.toast.bug);
+    if (app.toast) this.toast(app.toast.text, app.toast.status, app.toast.undo ? [UNDO, app.toast.undo] : app.toast.go ? [GO, app.toast.go] : undefined, app.toast.bug);
     return { regions: this.regions, cursor: this.cursor, areas };
   }
 
@@ -1495,9 +1496,9 @@ export class Painter {
     else if (selected) this.span(hint.x, hint.y, `  ${truncateLeft(`enter goes to ${selected.name}`, hint.w - 2)}`, DARK);
   }
 
-  private toast(message: string, status?: Status, undo?: () => void, bug?: boolean): void {
+  private toast(message: string, status?: Status, button?: [string, () => void], bug?: boolean): void {
     const app = this.app;
-    const w = Math.min(3 + [...message].length + 1 + (undo ? UNDO.length + 3 : 0) + 2, app.cols);
+    const w = Math.min(3 + [...message].length + 1 + (button ? button[0].length + 3 : 0) + 2, app.cols);
     const h = Math.min(3, app.rows);
     const r = rect(Math.max(0, app.cols - w - 1), Math.max(0, app.rows - h - 1), w, h);
     const icon = bug ? seg('✗', { fg: 1, add: BOLD }) : status ? statusIcon(status, spinAt(app)) : seg('✓', { fg: 2 });
@@ -1505,10 +1506,11 @@ export class Painter {
     this.g.box(r, { fg: icon.s?.fg ?? 2 });
     const x = this.span(r.x + 1, r.y + 1, ` ${icon.t} `, icon.s ?? {});
     this.span(x, r.y + 1, message, {}, right(r) - 1 - x);
-    if (!undo) return;
-    const b = intersect(rect(right(r) - UNDO.length - 4, r.y + 1, UNDO.length + 2, 1), r);
-    this.span(b.x, b.y, ` ${UNDO} `, this.hovered(b) ? PRESSED : { fg: 6, add: BOLD });
-    this.region({ r: b, click: undo, cursor: 'pointer' });
+    if (!button) return;
+    const [label, act] = button;
+    const b = intersect(rect(right(r) - label.length - 4, r.y + 1, label.length + 2, 1), r);
+    this.span(b.x, b.y, ` ${label} `, this.hovered(b) ? PRESSED : { fg: 6, add: BOLD });
+    this.region({ r: b, click: act, cursor: 'pointer' });
   }
 }
 

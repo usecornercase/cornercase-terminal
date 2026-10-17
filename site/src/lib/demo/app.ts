@@ -413,7 +413,7 @@ export class App {
   agentsScroll = 0;
   overlay: Overlay | null = null;
   hover: Pos | null = null;
-  toast: { text: string; until: number; status?: Status; undo?: () => void; bug?: boolean } | null = null;
+  toast: { text: string; until: number; status?: Status; undo?: () => void; go?: () => void; bug?: boolean } | null = null;
   focused = false;
   selection: { pane: number; from: Pos; to: Pos; rect: Rect } | null = null;
   dragging: Drag | null = null;
@@ -585,7 +585,10 @@ export class App {
             const status = watchPane(pane, agentActivity(agent), t === visible, now);
             const member = this.runs.some((r) => r.members.slice(1).some((m) => m.pane === pane.id));
             if (member && pane.unseen && !pane.pending) pane.unseen = false;
-            if (status && agent && !(member && status === 'done')) this.notify(`${agent.name} ${status === 'waiting' ? 'needs you' : status === 'failed' ? 'failed' : 'finished'} in ${projectLabel(p)} › ${workspaceLabel(w)}`, status);
+            if (status && agent && !(member && status === 'done')) this.notify(`${agent.name} ${status === 'waiting' ? 'needs you' : status === 'failed' ? 'failed' : 'finished'} in ${projectLabel(p)} › ${workspaceLabel(w)}`, status, () => {
+              this.toast = null;
+              this.jumpToPane(pane.id);
+            });
             else if (pane.since === now && !pane.notified) this.after(NOTIFY_AFTER, () => this.dirty());
           }
         }
@@ -671,9 +674,10 @@ export class App {
     return n;
   }
 
-  notify(text: string, status?: Status): void {
-    this.toast = { text, until: this.now() + 2000, status };
-    this.after(2050, () => this.dirty());
+  notify(text: string, status?: Status, go?: () => void): void {
+    const lasts = go ? 6000 : 2000;
+    this.toast = { text, until: this.now() + lasts, status, go };
+    this.after(lasts + 50, () => this.dirty());
     this.dirty();
   }
 

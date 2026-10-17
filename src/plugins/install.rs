@@ -14,6 +14,7 @@ use super::supervise;
 use crate::git::worktree;
 use crate::http::{self, Service};
 use crate::process;
+use crate::text;
 
 const BUILD_WITHIN: Duration = Duration::from_mins(15);
 const STOP_WAIT: Duration = Duration::from_secs(10);
@@ -115,12 +116,8 @@ impl Fetched {
             "Once on, it runs as you and can do anything you can, in every terminal: read its code or trust its author."
                 .into(),
         );
-        lines.iter().map(|line| printable(line)).collect()
+        lines.iter().map(|line| text::escape_hidden(line)).collect()
     }
-}
-
-fn printable(text: &str) -> String {
-    text.chars().map(|c| if c.is_control() { c.escape_default().to_string() } else { c.to_string() }).collect()
 }
 
 fn shown(command: &[String]) -> String {
@@ -138,6 +135,10 @@ fn shown(command: &[String]) -> String {
 }
 
 pub(crate) fn fetch(origin: &Origin, places: &Places) -> Result<Fetched, String> {
+    fetch_from(origin, places).map_err(|e| text::escape_hidden(&e))
+}
+
+fn fetch_from(origin: &Origin, places: &Places) -> Result<Fetched, String> {
     let staging = Staging(stage(places).map_err(|e| format!("cannot make a folder to fetch into: {e}"))?);
     let checkout = staging.0.join(CHECKOUT);
     git(
@@ -250,7 +251,7 @@ fn git<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(
         command.env_remove(key);
     }
     let out = command.output().map_err(|e| format!("cannot run git: {e}"))?;
-    worktree::check(out).map_err(|e| format!("git: {e}"))
+    worktree::check(out).map_err(|e| format!("git: {}", text::escape_hidden(&e.to_string())))
 }
 
 fn conflict(registry: &Registry, id: &str, origin: &Origin) -> Result<(), String> {

@@ -227,6 +227,7 @@ impl App {
             );
         }
         self.events.forget(client);
+        self.notices.forget(client);
         self.forget_flow_reads(Some(client));
         for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
             pending.client = None;

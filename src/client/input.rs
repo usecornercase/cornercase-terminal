@@ -8,18 +8,34 @@ use std::time::{Duration, Instant, SystemTime};
 use crossterm::event::Event;
 use rustix::event::{PollFd, PollFlags, Timespec};
 
-use crate::paths;
-use crate::{log, panics};
+use crate::host::notify;
+use crate::protocol::ClientMessage;
+use crate::{log, panics, paths};
 
 mod parse;
 
 const RETRY: Duration = Duration::from_millis(20);
 const REPLY_WAIT: Duration = Duration::from_secs(1);
-const REPLY_PREFIXES: &[&[u8]] = &[b"\x1b]4;", b"\x1b]10;", b"\x1b]11;", b"\x1bP>|", b"\x1b_Gi="];
+const REPLY_PREFIXES: &[&[u8]] = &[b"\x1b]4;", b"\x1b]10;", b"\x1b]11;", b"\x1bP>|", b"\x1b_Gi=", b"\x1b]99;"];
 const ESC_WAIT: Duration = Duration::from_millis(100);
 const SEQUENCE_LIMIT: usize = 4096;
 
 type Decode<'a> = dyn FnMut(&[u8], bool) -> io::Result<Option<Decoded>> + 'a;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Input {
+    Event(Event),
+    Activated(String),
+}
+
+impl From<Input> for ClientMessage {
+    fn from(input: Input) -> Self {
+        match input {
+            Input::Event(event) => Self::Event(event),
+            Input::Activated(token) => Self::Activated(token),
+        }
+    }
+}
 
 pub(super) enum Decoded {
     Event(Event),
@@ -39,7 +55,7 @@ impl Parser {
         Self { replies_until: probe_timed_out.then(|| Instant::now() + REPLY_WAIT), ..Self::default() }
     }
 
-    pub(crate) fn feed(&mut self, bytes: &[u8], full: bool, emit: &mut impl FnMut(Event) -> bool) -> bool {
+    pub(crate) fn feed(&mut self, bytes: &[u8], full: bool, emit: &mut impl FnMut(Input) -> bool) -> bool {
         self.feed_with(bytes, full, emit, &mut parse::parse_event)
     }
 
@@ -47,12 +63,12 @@ impl Parser {
         &mut self,
         bytes: &[u8],
         full: bool,
-        emit: &mut impl FnMut(Event) -> bool,
+        emit: &mut impl FnMut(Input) -> bool,
         decode: &mut Decode<'_>,
     ) -> bool {
         if bytes.first() == Some(&0x1b) && self.pending == b"\x1b" {
             self.reset();
-            if !emit(Event::Key(crossterm::event::KeyCode::Esc.into())) {
+            if !emit(Input::Event(Event::Key(crossterm::event::KeyCode::Esc.into()))) {
                 return false;
             }
         }
@@ -77,7 +93,13 @@ impl Parser {
             {
                 if end {
                     self.replies_until = Some(Instant::now() + REPLY_WAIT);
+                    let activated = notify::activation(&self.pending);
                     self.reset();
+                    if let Some(token) = activated
+                        && !emit(Input::Activated(token))
+                    {
+                        return false;
+                    }
                 }
                 continue;
             }
@@ -95,7 +117,7 @@ impl Parser {
             match result {
                 Some(Ok(Some(Decoded::Event(event)))) => {
                     self.reset();
-                    if !emit(event) {
+                    if !emit(Input::Event(event)) {
                         return false;
                     }
                 }
@@ -124,16 +146,16 @@ impl Parser {
         true
     }
 
-    pub(crate) fn idle(&mut self, emit: &mut impl FnMut(Event) -> bool) -> bool {
+    pub(crate) fn idle(&mut self, emit: &mut impl FnMut(Input) -> bool) -> bool {
         if self.since.is_some_and(|since| since.elapsed() >= ESC_WAIT) && self.pending == b"\x1b" {
             self.reset();
-            return emit(Event::Key(crossterm::event::KeyCode::Esc.into()));
+            return emit(Input::Event(Event::Key(crossterm::event::KeyCode::Esc.into())));
         }
         if self.since.is_some_and(|since| since.elapsed() >= ESC_WAIT) && reply_prefix(&self.pending) {
             let bytes = std::mem::take(&mut self.pending);
             self.since = None;
             if let Some(Ok(Some(Decoded::Event(event)))) = panics::contain(|| parse::parse_event(&bytes[..2], false))
-                && !emit(event)
+                && !emit(Input::Event(event))
             {
                 return false;
             }
@@ -208,7 +230,7 @@ pub(super) fn run(
     probe_timed_out: bool,
     mut poll: impl FnMut(Duration) -> io::Result<bool>,
     mut read: impl FnMut(&mut [u8]) -> io::Result<usize>,
-    mut emit: impl FnMut(Event) -> bool,
+    mut emit: impl FnMut(Input) -> bool,
     mut pause: impl FnMut(Duration),
 ) {
     let mut parser = Parser::new(probe_timed_out);

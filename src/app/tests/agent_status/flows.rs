@@ -41,5 +41,6 @@ fn a_run_that_ends_marked_for_review_says_it_finished() {
 
     assert_eq!(tab_term(&w.app, 0, 0).agent.status(), Some(Status::Pending));
     let text = format!("claude finished in {}", w.place());
-    assert_eq!(w.told().1, [Notification { text, channel: None }]);
+    let token = w.token();
+    assert_eq!(w.told().1, [Notification { text, channel: None, token }]);
 }

@@ -29,6 +29,7 @@ use crate::{host::pointer, version};
 
 enum Incoming {
     Input(Event),
+    Activated(String),
     InputEnded,
     Server(u64, Received),
     Linked(u64, Result<Link>),
@@ -181,6 +182,12 @@ impl Window<'_> {
         match incoming {
             Incoming::Signal | Incoming::InputEnded => Ok(Some(Ending::Detached)),
             Incoming::Input(ev) => self.input(ev),
+            Incoming::Activated(token) => {
+                if let Some(out) = &self.out {
+                    let _ = out.send(ClientMessage::Activated(token));
+                }
+                Ok(None)
+            }
             Incoming::Tmux(outer) => {
                 self.tmux_checked(outer);
                 Ok(None)
@@ -466,7 +473,13 @@ impl Threads {
                 probe_timed_out,
                 |wait| input::readable(&input, wait),
                 |bytes| rustix::io::read(&input, bytes).map_err(Into::into),
-                |event| tx.send(Incoming::Input(event)).is_ok(),
+                |input| {
+                    tx.send(match input {
+                        input::Input::Event(event) => Incoming::Input(event),
+                        input::Input::Activated(token) => Incoming::Activated(token),
+                    })
+                    .is_ok()
+                },
                 thread::sleep,
             );
         })?;

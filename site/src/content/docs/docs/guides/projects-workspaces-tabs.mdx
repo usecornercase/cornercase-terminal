@@ -218,12 +218,20 @@ The desktop notification is an escape sequence that cornercase writes to your te
 
 | Terminal | Notification |
 | --- | --- |
-| Ghostty, WezTerm, foot, Konsole, Warp, Rio | OSC 777 |
+| Ghostty, WezTerm, Warp, Rio, foot before 1.18 and Konsole before 24.12 (or when they don't say their version) | OSC 777 |
 | iTerm2 | OSC 9 |
-| kitty, Contour, VS Code | OSC 99, shown only while the terminal isn't focused |
+| kitty, Contour, VS Code, foot 1.18 or later, Konsole 24.12 or later | OSC 99, shown only while the terminal isn't focused |
 | Any other, or cornercase inside tmux, screen or Zellij | A bell, which most terminals turn into a sound or a mark on the window |
 
-Some terminals, such as Ghostty on macOS, foot, Konsole and Warp, don't show a notification while their window is in front; the toast tells you then. Each attached cornercase gets what its own terminal understands. To choose one yourself, or to turn them off, use **settings → UI → desktop notifications**; the toast and the marks stay either way. If none shows up, see [No desktop notification shows up](../../help/troubleshooting/#no-desktop-notification-shows-up).
+Some terminals, such as Ghostty on macOS, foot, Konsole and Warp, don't show a notification while their window is in front; the toast tells you then.
+
+#### Clicking a notification
+
+In **kitty, VS Code, Contour, foot 1.18 or later and Konsole 24.12 or later**, clicking the desktop notification of an agent that needs you or finished takes you to it: cornercase shows its project, workspace and tab and focuses its pane. If the notification covered several panes of one agent in a workspace, it goes to the one that still needs you. If none of its panes is left open it shows the workspace, and if that is gone too it says so in a toast.
+
+The toast has a **go** button that does the same, in any terminal and also inside tmux, and it stays 6 seconds instead of 2. In **Ghostty, iTerm2 and WezTerm** a click on the notification only brings the window forward; when you come back to it, the toast shows again with its **go** if that agent still needs you and isn't already on screen.
+
+When you quit, restart or stop the server, cornercase closes the notifications it sent, where the terminal can, so a click later doesn't type anything into your shell. Each attached cornercase gets what its own terminal understands. To choose one yourself, or to turn them off, use **settings → UI → desktop notifications**; the toast and the marks stay either way. If none shows up, see [No desktop notification shows up](../../help/troubleshooting/#no-desktop-notification-shows-up).
 
 ### Usage and stats
 
