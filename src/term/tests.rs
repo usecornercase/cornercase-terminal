@@ -137,6 +137,20 @@ mod output {
     }
 }
 
+mod pasting {
+    use super::*;
+
+    #[test]
+    fn a_paste_is_bracketed_only_when_the_program_asks_and_cannot_end_itself() {
+        let (mut term, _rx) = spawn_sh();
+        let plain = term.pasted("a\x1b[201~b");
+        term.feed(b"\x1b[?2004h");
+
+        assert_eq!(plain, b"a\x1b[201~b");
+        assert_eq!(term.pasted("a\x1b[201~b"), b"\x1b[200~ab\x1b[201~");
+    }
+}
+
 mod writing {
     use super::*;
 

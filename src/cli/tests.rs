@@ -120,6 +120,18 @@ mod parsing {
     #[case::an_unknown_command(&["frobnicate"])]
     #[case::a_surface_without_a_tab(&["surface", "--cols", "80", "--rows", "24"])]
     #[case::a_surface_without_a_size(&["surface", "--tab", "3"])]
+    #[case::input_without_a_pane(&["input", r#"{"text":"x"}"#])]
+    #[case::input_that_is_not_json(&["input", "--pane", "1", "hello"])]
+    #[case::input_of_an_unknown_kind(&["input", "--pane", "1", r#"{"focus":true}"#])]
+    #[case::scrolling_two_ways(&["scroll", "--pane", "1", "--up", "2", "--top"])]
+    #[case::scrolling_no_way(&["scroll", "--pane", "1"])]
+    #[case::scrolling_no_rows(&["scroll", "--pane", "1", "--up", "0"])]
+    #[case::a_selection_end_alone(&["selection", "--pane", "1", "--to", "1,1"])]
+    #[case::clearing_and_copying(&["selection", "--pane", "1", "--clear", "--copy"])]
+    #[case::a_bad_cell(&["selection", "--pane", "1", "--from", "3", "--to", "4,4"])]
+    #[case::a_ratio_over_one(&["ratio", "--tab", "1", "1.5"])]
+    #[case::a_divider_in_the_middle(&["ratio", "--tab", "1", "--path", "middle", "0.5"])]
+    #[case::resizing_nothing(&["resize", "--cols", "80", "--rows", "24"])]
     #[case::a_flow_without_a_task(&["flow", "run", "Quick"])]
     #[case::an_import_without_a_file(&["flow", "import"])]
     #[case::an_import_to_nowhere(&["flow", "import", "f.toml", "--to", "other"])]
@@ -253,6 +265,25 @@ mod parsing {
 
         let Some(Command::Control(Control::Surface(surface))) = cli.command else { panic!("not surface") };
         assert_eq!((surface.tab, surface.cols, surface.rows), (3, 120, 40));
+    }
+
+    #[test]
+    fn input_keeps_its_events_in_order() {
+        let cli = parse(&["input", "--pane", "3", r#"{"text":"x"}"#, r#"{"key":{"code":"enter"}}"#]).expect("parse");
+
+        let Some(Command::Control(Control::Input(input))) = cli.command else { panic!("not input") };
+        assert_eq!(
+            (input.pane, input.events),
+            (3, vec![r#"{"text":"x"}"#.to_string(), r#"{"key":{"code":"enter"}}"#.to_string()])
+        );
+    }
+
+    #[test]
+    fn ratio_names_its_divider_from_the_outside_in() {
+        let cli = parse(&["ratio", "--tab", "3", "--path", "second,first", "0.25"]).expect("parse");
+
+        let Some(Command::Control(Control::Ratio(ratio))) = cli.command else { panic!("not ratio") };
+        assert_eq!((ratio.tab, ratio.ratio, ratio.path.len()), (3, 0.25, 2));
     }
 
     #[test]

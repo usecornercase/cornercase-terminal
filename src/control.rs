@@ -11,6 +11,7 @@ mod flow;
 mod search;
 pub(crate) mod start_server;
 pub(crate) mod surface;
+pub(crate) mod terminal;
 mod watch;
 
 pub(crate) use contract::Contract;
@@ -21,6 +22,7 @@ pub(crate) use flow::{
 pub(crate) use search::{Hit, Matches, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use surface::Surface;
+pub(crate) use terminal::{Input, Ratio, Resize, Scroll, Selection};
 pub(crate) use watch::{Layout, Snapshot, Watch};
 
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
@@ -96,6 +98,11 @@ pub(crate) enum Command {
     StartServer(StartServer),
     Watch(Watch),
     Surface(Surface),
+    Input(Input),
+    Scroll(Scroll),
+    Selection(Selection),
+    Resize(Resize),
+    Ratio(Ratio),
 }
 
 impl Command {
@@ -134,9 +141,15 @@ impl Command {
             Self::StartServer(_) => 30,
             Self::Watch(_) => 31,
             Self::Surface(_) => 32,
+            Self::Input(_) => 33,
+            Self::Scroll(_) => 34,
+            Self::Selection(_) => 35,
+            Self::Resize(_) => 36,
+            Self::Ratio(_) => 37,
         }]
     }
 
+    #[expect(clippy::too_many_lines, reason = "one arm per command")]
     pub(crate) fn fields(&self) -> Vec<(&'static str, String)> {
         let mut fields = Fields::default();
         match self {
@@ -232,6 +245,11 @@ impl Command {
                 fields.add("bytes", search.query.len());
             }
             Self::Surface(surface) => surface.fields(&mut fields),
+            Self::Input(input) => input.fields(&mut fields),
+            Self::Scroll(scroll) => scroll.fields(&mut fields),
+            Self::Selection(selection) => selection.fields(&mut fields),
+            Self::Resize(resize) => resize.fields(&mut fields),
+            Self::Ratio(ratio) => ratio.fields(&mut fields),
             Self::StartServer(start) => {
                 fields.maybe("cols", start.cols).maybe("rows", start.rows);
             }
@@ -239,7 +257,7 @@ impl Command {
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 33] = [
+    pub(crate) const NAMES: [&str; 38] = [
         "status",
         "open",
         "new-workspace",
@@ -273,7 +291,16 @@ impl Command {
         "start-server",
         "watch",
         "surface",
+        "input",
+        "scroll",
+        "selection",
+        "resize",
+        "ratio",
     ];
+
+    pub(crate) fn chatty(name: &str) -> bool {
+        matches!(name, "input" | "scroll" | "selection" | "resize" | "ratio")
+    }
 }
 
 fn listed(ids: &[u64]) -> String {

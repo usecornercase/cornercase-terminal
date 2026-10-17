@@ -191,3 +191,14 @@ fn a_streamed_frame_is_its_fixture_under_ok() {
     assert_eq!(streamed, json!({"ok": fixture}));
     assert!(matches!(serde_json::from_value::<Response>(streamed), Ok(Response::Ok(_))));
 }
+
+#[test]
+fn a_frame_names_its_stream_and_one_without_a_name_still_reads() {
+    let mut fixture: Value = serde_json::from_str(fixture!("control/surface/v1/frame.json")).expect("fixture");
+    assert_eq!(frame().surface, 2);
+
+    fixture.as_object_mut().expect("an object").remove("surface");
+    let older: Frame = serde_json::from_value(fixture).expect("a frame");
+
+    assert_eq!(older.surface, 0);
+}

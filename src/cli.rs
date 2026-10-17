@@ -26,6 +26,7 @@ mod read;
 mod search;
 mod start_server;
 mod status;
+mod terminal;
 mod update;
 
 pub use args::Cli;
@@ -125,6 +126,7 @@ pub(super) fn quietly(written: io::Result<()>) -> Result<bool> {
     }
 }
 
+#[expect(clippy::too_many_lines, reason = "one arm per command")]
 fn run_control(command: Control) -> Result<bool> {
     match command {
         Control::Status(status) => run_status(&status),
@@ -222,6 +224,11 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Flow(flow) => flow::run(flow.action),
         Control::Contract(contract) => contract::run(contract.print.json),
         Control::Surface(args) => stream_surface(&args),
+        Control::Input(args) => terminal::input(&args),
+        Control::Scroll(args) => terminal::scroll(&args),
+        Control::Selection(args) => terminal::selection(&args),
+        Control::Resize(args) => terminal::resize(&args),
+        Control::Ratio(args) => terminal::ratio(&args),
     }?;
     Ok(true)
 }
