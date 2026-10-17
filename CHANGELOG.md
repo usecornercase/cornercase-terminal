@@ -2,6 +2,16 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.129
+
+- **Surfaces carry everything a cell looks like.** For programs that draw cornercase's terminals with `cornercase surface`:
+  - Underline styles (double, curly, dotted, dashed), underline colours and overline are in the styles, so Neovim's undercurl diagnostics come through.
+  - Hyperlinks (OSC 8), from `ls --hyperlink`, compilers or `gh`, come as a table of addresses the cells point to, and a link that wraps onto the next line is one link.
+  - Each pane carries the colours its program changed (OSC 4, 10, 11, 12), so a program that redefines a colour looks as it does in a terminal.
+  - Clients that don't know these keys keep working: they are left out when a terminal uses none of them.
+- **`cornercase link --pane ID --cell X,Y`** says which file a click on that cell opens in the window: the path, its line or range, and whether it is inside the pane's workspace, so a program that draws the terminals gets cornercase's path detection without copying it. See Scripts and agents → Drive a tab's terminals.
+- **Backgrounds painted by clearing now show.** A line or region a program clears after setting a background colour (vim with a colour scheme, less, htop) keeps that colour in the window and in surfaces; it showed the terminal's own background before.
+
 ## 0.12.128
 
 - **GitHub Copilot CLI is now a full agent.** A tab running `copilot` shows whether it is working, needs you (a permission prompt, a question or a plan to approve) or is done, its model and how full its context is, and the project, workspace and tab rows carry the same icons as for the other agents. A background command it left running shows as working, as Claude Code's does. Its conversation comes back after a restart in the mode it ran in (`copilot --resume=<session id>`), `cornercase send --enter` confirms that it took the prompt, `read --last-message`, `wait` and the search in sessions read it, and Stats counts its prompts, turns, time and tokens.
