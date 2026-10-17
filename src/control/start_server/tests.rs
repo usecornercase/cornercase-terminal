@@ -12,14 +12,14 @@ fn a_start_server_request_travels_with_its_size_and_logs_it() {
         contract: None,
         boot: None,
         view: None,
-        command: Command::StartServer(StartServer { cols: Some(200), rows: None }),
+        command: Command::StartServer(StartServer { cols: Some(200), rows: None, theme: None }),
     };
 
     let sent = serde_json::to_value(&request).expect("json");
 
     assert_eq!(
         sent,
-        json!({"caller": null, "server": null, "command": "start-server", "args": {"cols": 200, "rows": null}})
+        json!({"caller": null, "server": null, "command": "start-server", "args": {"cols": 200, "rows": null, "theme": null}})
     );
     assert_eq!(serde_json::from_value::<Request>(sent).expect("a request"), request);
     assert_eq!(request.command.fields(), [("cols", "200".to_string())]);
@@ -37,7 +37,7 @@ fn without_a_size_it_is_the_default() {
 #[case::smallest(Some(90), Some(10), (90, 10))]
 #[case::largest(Some(1000), Some(500), (1000, 500))]
 fn a_size_in_range_is_taken(#[case] cols: Option<u16>, #[case] rows: Option<u16>, #[case] size: (u16, u16)) {
-    assert_eq!(StartServer { cols, rows }.size(), Ok(size));
+    assert_eq!(StartServer { cols, rows, theme: None }.size(), Ok(size));
 }
 
 #[rstest]
@@ -46,7 +46,7 @@ fn a_size_in_range_is_taken(#[case] cols: Option<u16>, #[case] rows: Option<u16>
 #[case::too_short(None, Some(9), "rows must be between 10 and 500, not 9")]
 #[case::too_tall(None, Some(501), "rows must be between 10 and 500, not 501")]
 fn a_size_out_of_range_names_the_range(#[case] cols: Option<u16>, #[case] rows: Option<u16>, #[case] error: &str) {
-    assert_eq!(StartServer { cols, rows }.size(), Err(error.to_string()));
+    assert_eq!(StartServer { cols, rows, theme: None }.size(), Err(error.to_string()));
 }
 
 #[test]
@@ -60,6 +60,7 @@ fn the_answer_names_where_its_size_comes_from() {
         size: SizeFrom::StartServer,
         boot: "1-2".into(),
         version: "0.1.0".into(),
+        theme: None,
     };
 
     let sent = serde_json::to_value(&started).expect("json");
@@ -79,4 +80,26 @@ fn an_answer_an_older_server_lacks_fields_of_still_reads() {
 
     assert!(started.already);
     assert_eq!(started.size, SizeFrom::Window);
+}
+
+#[test]
+fn a_request_with_a_theme_round_trips_and_logs_only_that_it_has_one() {
+    let theme = crate::test_util::theme(libghostty_vt::style::RgbColor { r: 26, g: 27, b: 38 });
+    let request = StartServer { cols: None, rows: None, theme: Some(Box::new(theme)) };
+
+    let sent = serde_json::to_value(&request).expect("json");
+
+    assert_eq!(serde_json::from_value::<StartServer>(sent).expect("a request"), request);
+    let mut fields = Fields::default();
+    request.fields(&mut fields);
+    assert_eq!(fields.0, [("theme", "true".to_string())]);
+}
+
+#[test]
+fn the_answer_says_where_the_colours_come_from_when_it_has_them() {
+    let started = Started { theme: Some(ThemeInfo::default()), ..Started::default() };
+    let sent = serde_json::to_value(&started).expect("json");
+
+    assert_eq!(sent["theme"], json!({"from": "default", "scheme": null}));
+    assert!(serde_json::to_value(Started::default()).expect("json").get("theme").is_none());
 }

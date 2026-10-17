@@ -27,6 +27,7 @@ mod search;
 mod start_server;
 mod status;
 mod terminal;
+mod theme;
 mod update;
 mod view;
 
@@ -134,6 +135,7 @@ pub(super) fn quietly(written: io::Result<()>) -> Result<bool> {
     }
 }
 
+#[expect(clippy::too_many_lines, reason = "one arm per command for scripts")]
 fn run_control(command: Control) -> Result<bool> {
     if let Some(view) = command.view() {
         client::use_view(view)?;
@@ -233,6 +235,7 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Resize(args) => terminal::resize(&args),
         Control::Ratio(args) => terminal::ratio(&args),
         Control::Link(args) => terminal::link(&args),
+        Control::Theme(args) => theme::run(&args),
     }?;
     Ok(true)
 }

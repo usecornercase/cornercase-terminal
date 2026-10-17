@@ -180,7 +180,7 @@ impl Term {
 
     pub(crate) fn set_theme(&mut self, theme: &HostTheme) {
         if let Err(error) = self.emulator.set_theme(theme) {
-            crate::log::warning!("app", "cannot apply the window's colours to a pane", pane = self.id, error = error);
+            crate::log::warning!("app", "cannot apply the colours to a pane", pane = self.id, error = error);
         }
     }
 

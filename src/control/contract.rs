@@ -8,7 +8,7 @@ pub(crate) const EVENTS_VERSION: u32 = 1;
 pub(crate) const WATCH_VERSION: u32 = 1;
 pub(crate) const SURFACE_VERSION: u32 = 1;
 pub(crate) const VIEW_VERSION: u32 = 1;
-pub(crate) const FEATURES: [&str; 5] = ["boot", "structured-errors", "strict-fields", "views", "host-events"];
+pub(crate) const FEATURES: [&str; 6] = ["boot", "structured-errors", "strict-fields", "views", "host-events", "theme"];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Contract {}

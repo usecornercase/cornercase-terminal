@@ -40,7 +40,7 @@ impl App {
             rows,
             cols,
             cwd: Some(cwd),
-            theme: &self.theme,
+            theme: self.terminal_theme(),
         };
         Term::spawn(opts, self.tx.clone())
     }

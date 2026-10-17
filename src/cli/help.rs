@@ -426,6 +426,27 @@ inside the pane's workspace and which cells the path takes.
 Examples:
   cornercase link --pane 12 --cell 10,3
   cornercase link --pane 12 --cell 10,3 --json";
+pub(super) const THEME_HELP: &str =
+    "Programs in the terminals ask for the colours they are drawn with (OSC 10, 11 and 4, and the light
+or dark query): Claude Code, Neovim and delta pick their look from the answer. The server takes them
+from the first window, so a program that drives cornercase without one gives them here, and changes
+them when the system switches between light and dark.
+
+FILE is JSON with the foreground, the background and the 16 ANSI colours as [r, g, b], and up to 256
+palette entries (entries 16 and up are optional, null keeps the default):
+  {\"foreground\": [192, 202, 245], \"background\": [26, 27, 38], \"palette\": [[21, 22, 30], ...]}
+Use - to read it from standard input.
+
+These colours win over a window's until you give others, --clear, or the server stops; a window that
+attaches later keeps drawing with its own colours and leaves them alone. Programs that asked to hear
+about colour scheme changes (mode 2031) are told when light and dark switch. Without FILE or --clear,
+it says where the colours come from: default, window or client.
+
+Examples:
+  cornercase theme dark.json
+  cornercase theme - < light.json
+  cornercase theme --clear
+  cornercase theme --json";
 pub(super) const SKILL_HELP: &str = "Install them for Claude Code, Codex and other agents with
   npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 or put this text in an AGENTS.md or CLAUDE.md.";
@@ -461,12 +482,13 @@ pub(super) const START_SERVER_HELP: &str =
 if none runs (no terminal needed), restores the saved session once, as the first window would, and
 answers when its terminals exist. Agents that resume their conversations are still typing then.
 Until a window attaches, terminals take the size given here; the first window takes it over, and
-gives the terminals its colours. Run again, it starts nothing and says the server is already
-running, with the size in use and where it comes from.
+gives the terminals its colours unless --theme gave them. Run again, it starts nothing and says the
+server is already running, with the size in use and where it comes from.
 
 Examples:
   cornercase start-server
-  cornercase start-server --cols 200 --rows 60 --json";
+  cornercase start-server --cols 200 --rows 60 --json
+  cornercase start-server --theme dark.json";
 pub(super) const KILL_SERVER_HELP: &str =
     "Run from a terminal inside cornercase, it would stop the server it runs in, and this terminal with
 it, so it asks first; without a terminal it refuses unless --yes is given. To stop another server from

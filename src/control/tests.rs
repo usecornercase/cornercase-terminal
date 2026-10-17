@@ -89,6 +89,7 @@ fn every_command_is_listed_by_name() {
         Command::Ratio(Ratio::default()),
         Command::Link(Link::default()),
         Command::TodoSend(TodoSend::default()),
+        Command::Theme(Theme::default()),
     ];
 
     let names: Vec<String> = commands
@@ -582,6 +583,7 @@ mod watch_v1 {
                 projects: vec![project],
                 keep_awake: None,
                 view: None,
+                theme: None,
             },
         }
     }
@@ -682,5 +684,20 @@ mod watch_v1 {
         let snapshot: Snapshot = serde_json::from_value(json!({"boot": "1-2"})).expect("a snapshot");
 
         assert_eq!((snapshot.revision, snapshot.report.boot.as_str()), (0, "1-2"));
+    }
+}
+
+mod colours {
+    use super::*;
+
+    #[test]
+    fn a_report_says_where_the_colours_come_from() {
+        let theme = crate::test_util::theme(libghostty_vt::style::RgbColor { r: 251, g: 250, b: 246 });
+        let report = Report { theme: Some(ThemeInfo::of(theme::ThemeFrom::Window, &theme)), ..Report::default() };
+
+        let sent = serde_json::to_value(&report).expect("json");
+
+        assert_eq!(sent["theme"], json!({"from": "window", "scheme": "light"}));
+        assert!(serde_json::to_value(Report::default()).expect("json").get("theme").is_none());
     }
 }

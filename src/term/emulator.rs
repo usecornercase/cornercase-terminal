@@ -118,6 +118,7 @@ pub(crate) struct Emulator {
     rung: Rc<Counter<u32>>,
     status: status::Status,
     reply: Rc<RefCell<ReplyFn>>,
+    scheme: Option<ColorScheme>,
 }
 
 impl Emulator {
@@ -149,11 +150,28 @@ impl Emulator {
             rung,
             status: status::Status::default(),
             reply,
+            scheme: scheme_of(theme),
         })
     }
 
     pub(crate) fn set_theme(&mut self, theme: &HostTheme) -> Result<()> {
-        apply_theme(&mut self.vt, theme)
+        self.vt.set_default_fg_color(None)?;
+        self.vt.set_default_bg_color(None)?;
+        self.vt.set_default_color_palette(None)?;
+        self.vt.on_color_scheme(|_| None)?;
+        apply_theme(&mut self.vt, theme)?;
+        let scheme = scheme_of(theme);
+        if scheme != self.scheme {
+            self.scheme = scheme;
+            if let Some(scheme) = scheme
+                && self.mode(Mode::COLOR_SCHEME_REPORT)
+            {
+                let mut buf = [0u8; 16];
+                let len = scheme.encode_report(&mut buf)?;
+                (self.reply.borrow_mut())(&buf[..len]);
+            }
+        }
+        Ok(())
     }
 
     #[cfg(test)]
@@ -607,11 +625,14 @@ fn apply_theme(vt: &mut Terminal<'static, 'static>, theme: &HostTheme) -> Result
         }
         vt.set_default_color_palette(Some(Palette(colors)))?;
     }
-    if let Some(light) = theme.is_light() {
-        let scheme = if light { ColorScheme::Light } else { ColorScheme::Dark };
+    if let Some(scheme) = scheme_of(theme) {
         vt.on_color_scheme(move |_| Some(scheme))?;
     }
     Ok(())
+}
+
+fn scheme_of(theme: &HostTheme) -> Option<ColorScheme> {
+    theme.is_light().map(|light| if light { ColorScheme::Light } else { ColorScheme::Dark })
 }
 
 fn to_color(color: StyleColor) -> Color {

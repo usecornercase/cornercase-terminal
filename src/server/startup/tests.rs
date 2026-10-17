@@ -232,3 +232,132 @@ mod the_first_window {
         assert_eq!(cold.panes().len(), 1);
     }
 }
+
+mod client_colours {
+    use super::*;
+    use crate::control::theme::ThemeFrom;
+    use crate::test_util::theme;
+
+    const DARK: RgbColor = RgbColor { r: 26, g: 27, b: 38 };
+    const LIGHT: RgbColor = RgbColor { r: 251, g: 250, b: 246 };
+    const WINDOW: RgbColor = RgbColor { r: 0x1d, g: 0x20, b: 0x22 };
+
+    fn theme_arg(background: RgbColor) -> String {
+        format!(r#""theme":{}"#, serde_json::to_string(&theme(background)).expect("json"))
+    }
+
+    fn window_theme() -> HostTheme {
+        HostTheme { background: Some(WINDOW), ..HostTheme::default() }
+    }
+
+    fn colours(cold: &Cold) -> Vec<Option<RgbColor>> {
+        cold.server.app.backgrounds()
+    }
+
+    fn from(cold: &mut Cold) -> serde_json::Value {
+        cold.ask(r#"{"command":"status","args":{}}"#)["ok"]["theme"].clone()
+    }
+
+    fn clear(cold: &mut Cold) -> serde_json::Value {
+        cold.ask(r#"{"command":"theme","args":{"clear":true}}"#)["ok"].clone()
+    }
+
+    #[test]
+    fn a_theme_given_to_start_server_colours_the_restored_terminals_and_says_so() {
+        let mut cold = Cold::new();
+
+        let started = cold.start(&theme_arg(DARK));
+
+        assert_eq!(
+            serde_json::to_value(started.theme).expect("json"),
+            serde_json::json!({"from": "client", "scheme": "dark"})
+        );
+        assert_eq!(colours(&cold), [Some(DARK)]);
+    }
+
+    #[test]
+    fn a_window_after_a_client_theme_leaves_the_terminals_alone() {
+        let mut cold = Cold::new();
+        cold.start(&theme_arg(DARK));
+
+        let _window = cold.attach(window_theme());
+
+        assert_eq!(colours(&cold), [Some(DARK)]);
+        assert_eq!(cold.server.startup, Startup::Windowed);
+        assert_eq!(from(&mut cold)["from"], "client");
+    }
+
+    #[test]
+    fn clearing_after_a_window_gives_the_terminals_the_windows_colours() {
+        let mut cold = Cold::new();
+        cold.start(&theme_arg(DARK));
+        let _window = cold.attach(window_theme());
+
+        let info = clear(&mut cold);
+
+        assert_eq!(colours(&cold), [Some(WINDOW)]);
+        assert_eq!(info["from"], "window");
+    }
+
+    #[test]
+    fn clearing_without_a_window_goes_back_to_the_defaults() {
+        let mut cold = Cold::new();
+        cold.start(&theme_arg(DARK));
+
+        let info = clear(&mut cold);
+
+        assert_eq!(colours(&cold), [None]);
+        assert_eq!(info, serde_json::json!({"from": "default", "scheme": null}));
+    }
+
+    #[test]
+    fn a_theme_given_to_a_running_server_applies() {
+        let mut cold = Cold::new();
+        cold.start("");
+        let _window = cold.attach(window_theme());
+
+        let started = cold.start(&theme_arg(LIGHT));
+
+        assert!(started.already);
+        assert_eq!(started.theme.map(|t| t.from), Some(ThemeFrom::Client));
+        assert_eq!(colours(&cold), [Some(LIGHT)]);
+    }
+
+    #[test]
+    fn a_theme_given_before_the_session_starts_colours_its_first_terminals() {
+        let mut cold = Cold::new();
+        let text = serde_json::json!({"command": "theme", "args": {"theme": theme(DARK)}}).to_string();
+        cold.ask(&text);
+
+        let _window = cold.attach(window_theme());
+
+        assert_eq!(colours(&cold), [Some(DARK)]);
+        assert_eq!(from(&mut cold)["from"], "client");
+    }
+
+    #[test]
+    fn without_a_theme_a_headless_server_behaves_as_before() {
+        let mut cold = Cold::new();
+
+        let started = cold.start("");
+
+        assert_eq!(colours(&cold), [None]);
+        assert_eq!(
+            serde_json::to_value(started.theme).expect("json"),
+            serde_json::json!({"from": "default", "scheme": null})
+        );
+    }
+
+    #[test]
+    fn an_invalid_theme_starts_nothing() {
+        let mut cold = Cold::new();
+        let mut broken = serde_json::to_value(theme(DARK)).expect("json");
+        broken["background"] = serde_json::Value::Null;
+        let text = serde_json::json!({"contract": 1, "command": "start-server", "args": {"theme": broken}}).to_string();
+
+        let answer = cold.ask(&text);
+
+        assert_eq!(answer["error"]["code"], "malformed", "{answer}");
+        assert_eq!((cold.server.startup, cold.server.area), (Startup::Waiting, None));
+    }
+}

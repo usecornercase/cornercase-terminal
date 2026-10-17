@@ -19,6 +19,7 @@ use crate::agents::launch::Launch;
 use crate::agents::usage;
 use crate::changes::{self};
 use crate::config::{self, Config};
+use crate::control::theme::{ThemeFrom, ThemeInfo};
 use crate::error::{Error, Result};
 use crate::files;
 use crate::host::notify::Notification;
@@ -110,6 +111,7 @@ mod start_flow_dialog;
 mod surfaces;
 mod tab_bar;
 mod tabs;
+mod theme;
 mod toast;
 mod todo_panel;
 mod trace;
@@ -169,6 +171,8 @@ pub(crate) struct App {
     shell: String,
     home: Option<PathBuf>,
     theme: HostTheme,
+    window_theme: bool,
+    client_theme: Option<HostTheme>,
     tx: Sender<AppEvent>,
     synced: Option<Instant>,
     booted: Instant,
@@ -239,6 +243,8 @@ impl App {
             config_path,
             shell,
             theme,
+            window_theme: false,
+            client_theme: None,
             tx,
             synced: None,
             booted: Instant::now(),
@@ -288,6 +294,18 @@ impl App {
 
     pub(crate) fn set_theme(&mut self, theme: HostTheme) {
         self.theme = theme;
+        self.window_theme = true;
+    }
+
+    pub(crate) fn theme_info(&self) -> ThemeInfo {
+        let from = if self.client_theme.is_some() {
+            ThemeFrom::Client
+        } else if self.window_theme {
+            ThemeFrom::Window
+        } else {
+            ThemeFrom::Default
+        };
+        ThemeInfo::of(from, self.terminal_theme())
     }
 
     #[cfg(test)]
@@ -295,11 +313,14 @@ impl App {
         self.projects.terms().map(|term| term.emulator.default_background()).collect()
     }
 
-    pub(crate) fn retheme(&mut self, theme: HostTheme) {
-        for term in self.projects.terms_mut() {
-            term.set_theme(&theme);
-        }
+    pub(crate) fn retheme(&mut self, theme: HostTheme) -> bool {
         self.theme = theme;
+        self.window_theme = true;
+        let paint = self.client_theme.is_none();
+        if paint {
+            self.paint_terminals();
+        }
+        paint
     }
 
     pub(crate) fn report_bug(&mut self) {

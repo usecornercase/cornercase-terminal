@@ -2,6 +2,9 @@ use std::ops::RangeInclusive;
 
 use serde::{Deserialize, Serialize};
 
+use super::{Fields, ThemeInfo};
+use crate::host::theme::HostTheme;
+
 pub(crate) const DEFAULT_COLS: u16 = 160;
 pub(crate) const DEFAULT_ROWS: u16 = 48;
 pub(crate) const COLS: RangeInclusive<u16> = 90..=1000;
@@ -12,9 +15,17 @@ pub(crate) const ROWS: RangeInclusive<u16> = 10..=500;
 pub(crate) struct StartServer {
     pub(crate) cols: Option<u16>,
     pub(crate) rows: Option<u16>,
+    pub(crate) theme: Option<Box<HostTheme>>,
 }
 
 impl StartServer {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.maybe("cols", self.cols).maybe("rows", self.rows);
+        if self.theme.is_some() {
+            fields.add("theme", true);
+        }
+    }
+
     pub(crate) fn size(&self) -> Result<(u16, u16), String> {
         let cols = within("cols", self.cols.unwrap_or(DEFAULT_COLS), &COLS)?;
         let rows = within("rows", self.rows.unwrap_or(DEFAULT_ROWS), &ROWS)?;
@@ -49,6 +60,8 @@ pub(crate) struct Started {
     pub(crate) size: SizeFrom,
     pub(crate) boot: String,
     pub(crate) version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) theme: Option<ThemeInfo>,
 }
 
 #[cfg(test)]

@@ -7,14 +7,27 @@ use crate::error::{Error, Result};
 use crate::version;
 
 pub(super) fn run(args: &StartServerArgs) -> Result<()> {
-    let request = StartServer { cols: args.cols, rows: args.rows };
+    let theme = args.theme.as_deref().map(super::theme::read).transpose()?;
+    let sent = theme.is_some();
+    let request = StartServer { cols: args.cols, rows: args.rows, theme };
     request.size().map_err(Error::Control)?;
     let value = ask_starting("start-server", control::Command::StartServer(request))?;
     let started: Started = answer(value.clone())?;
+    ignored_theme(sent, &started)?;
     for warning in warnings(&started) {
         eprintln!("warning: {warning}");
     }
     if args.print.json { print_json(&value) } else { print_out(&summary(&started)) }
+}
+
+fn ignored_theme(sent: bool, started: &Started) -> Result<()> {
+    if sent && started.theme.is_none() {
+        let version = if started.version.is_empty() { "an older version" } else { started.version.as_str() };
+        return Err(Error::Control(format!(
+            "the running cornercase server ({version}) takes no theme; update cornercase and restart the server"
+        )));
+    }
+    Ok(())
 }
 
 fn summary(started: &Started) -> String {

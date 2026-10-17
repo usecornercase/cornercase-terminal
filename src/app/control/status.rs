@@ -92,6 +92,7 @@ impl App {
             projects: projects.collect(),
             keep_awake: self.keep_awake_info(),
             view: None,
+            theme: Some(self.theme_info()),
         }
     }
 

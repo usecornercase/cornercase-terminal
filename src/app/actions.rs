@@ -36,7 +36,7 @@ impl App {
             rows,
             cols,
             cwd: Some(target.dir.clone()),
-            theme: &self.theme,
+            theme: self.terminal_theme(),
         };
         let term = Term::spawn(opts, self.tx.clone())?;
         let tab = Tab::new(self.take_id(), None, term);

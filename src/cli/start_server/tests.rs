@@ -10,6 +10,7 @@ fn started() -> Started {
         size: SizeFrom::StartServer,
         boot: "1-2".into(),
         version: version::CURRENT.into(),
+        theme: None,
     }
 }
 
@@ -61,5 +62,27 @@ mod warnings {
                 version::CURRENT
             )]
         );
+    }
+}
+
+mod older_servers {
+    use super::*;
+    use crate::control::ThemeInfo;
+
+    #[test]
+    fn a_theme_sent_to_a_server_that_does_not_answer_with_one_is_an_error_naming_its_version() {
+        let error = ignored_theme(true, &started()).expect_err("refused").to_string();
+        assert!(error.contains(version::CURRENT) && error.contains("takes no theme"), "{error}");
+    }
+
+    #[test]
+    fn a_theme_the_server_answered_for_is_fine() {
+        let answered = Started { theme: Some(ThemeInfo::default()), ..started() };
+        assert!(ignored_theme(true, &answered).is_ok());
+    }
+
+    #[test]
+    fn nothing_sent_nothing_to_check() {
+        assert!(ignored_theme(false, &started()).is_ok());
     }
 }

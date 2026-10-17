@@ -13,6 +13,7 @@ mod search;
 pub(crate) mod start_server;
 pub(crate) mod surface;
 pub(crate) mod terminal;
+pub(crate) mod theme;
 mod todo;
 pub(crate) mod view;
 mod watch;
@@ -29,6 +30,7 @@ pub(crate) use search::{Hit, Matches, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use surface::Surface;
 pub(crate) use terminal::{Input, Link, Ratio, Resize, Scroll, Selection};
+pub(crate) use theme::{Theme, ThemeInfo};
 pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
 
@@ -116,6 +118,7 @@ pub(crate) enum Command {
     Resize(Resize),
     Ratio(Ratio),
     Link(Link),
+    Theme(Theme),
 }
 
 impl Command {
@@ -163,10 +166,10 @@ impl Command {
             Self::Ratio(_) => 39,
             Self::Link(_) => 40,
             Self::TodoSend(_) => 41,
+            Self::Theme(_) => 42,
         }]
     }
 
-    #[expect(clippy::too_many_lines, reason = "one arm per command")]
     pub(crate) fn fields(&self) -> Vec<(&'static str, String)> {
         let mut fields = Fields::default();
         match self {
@@ -264,14 +267,13 @@ impl Command {
             Self::Resize(resize) => resize.fields(&mut fields),
             Self::Ratio(ratio) => ratio.fields(&mut fields),
             Self::Link(link) => link.fields(&mut fields),
-            Self::StartServer(start) => {
-                fields.maybe("cols", start.cols).maybe("rows", start.rows);
-            }
+            Self::StartServer(start) => start.fields(&mut fields),
+            Self::Theme(theme) => theme.fields(&mut fields),
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 42] = [
+    pub(crate) const NAMES: [&str; 43] = [
         "status",
         "open",
         "new-workspace",
@@ -314,6 +316,7 @@ impl Command {
         "ratio",
         "link",
         "todo-send",
+        "theme",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
@@ -598,6 +601,8 @@ pub struct Report {
     pub(crate) keep_awake: Option<KeepAwake>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) view: Option<ViewInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) theme: Option<ThemeInfo>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

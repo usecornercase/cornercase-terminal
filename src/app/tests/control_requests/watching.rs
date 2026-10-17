@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use super::*;
 use crate::control::Snapshot;
+use crate::control::theme::ThemeFrom;
 use crate::project::move_before;
 use crate::project::split::Node;
 use crate::test_util::git as run_git;
@@ -348,4 +349,22 @@ fn a_title_the_program_sets_reaches_status_and_the_next_snapshot() {
         published(&mut app).iter().map(|s| s.report.projects[0].workspaces[0].tabs[0].panes[0].title.clone()).collect();
     assert_eq!(before, None);
     assert_eq!(titles, [Some("watched-title".to_string())]);
+}
+
+#[test]
+fn a_theme_change_sends_the_whole_session_with_the_next_revision() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let first = watching(&mut app);
+    assert_eq!(first.report.theme.map(|t| t.from), Some(ThemeFrom::Default));
+
+    let theme = serde_json::to_value(crate::test_util::theme(libghostty_vt::style::RgbColor { r: 1, g: 2, b: 3 }))
+        .expect("json");
+    let text = serde_json::json!({"command": "theme", "args": {"theme": theme}}).to_string();
+    app.request(9, &text, Some(AREA), Instant::now());
+    app.take_answers();
+    app.trace();
+    app.refresh(Instant::now() + Duration::from_secs(1));
+
+    let snapshot = next(&mut app, first.revision);
+    assert_eq!(snapshot.report.theme.map(|t| t.from), Some(ThemeFrom::Client));
 }

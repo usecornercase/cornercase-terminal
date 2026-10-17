@@ -31,11 +31,12 @@ fn contract_describes_the_running_server_and_its_boot() {
         contract["streams"].as_array().expect("streams").iter().any(|s| s["name"] == "events" && s["version"] == 1),
         "{contract}"
     );
-    for name in ["surface", "view", "view-set", "input", "scroll", "selection", "resize", "ratio", "link"] {
+    for name in ["surface", "view", "view-set", "input", "scroll", "selection", "resize", "ratio", "link", "theme"] {
         assert!(operations.iter().any(|op| op["name"] == name && op["available"] == true), "{name}: {contract}");
     }
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "views"), "{contract}");
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "host-events"), "{contract}");
+    assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "theme"), "{contract}");
     assert!(
         contract["streams"].as_array().expect("streams").iter().any(|s| s["name"] == "view" && s["version"] == 1),
         "{contract}"

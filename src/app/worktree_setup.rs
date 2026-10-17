@@ -65,7 +65,7 @@ impl App {
             rows,
             cols,
             cwd: Some(path),
-            theme: &self.theme,
+            theme: self.terminal_theme(),
         };
         let mut term = Term::spawn(opts, self.tx.clone())?;
         self.setups.insert(id, (workspace, status.clone()));

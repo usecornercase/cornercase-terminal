@@ -72,8 +72,11 @@ impl Server {
             self.app.start_plugins();
         } else if self.startup == Startup::Headless {
             self.startup = Startup::Windowed;
-            log::info!("server", "first window gives its colours to the open terminals", client = id);
-            self.app.retheme(hello.theme);
+            if self.app.retheme(hello.theme) {
+                log::info!("server", "first window gives its colours to the open terminals", client = id);
+            } else {
+                log::info!("server", "first window keeps the colours a client gave the terminals", client = id);
+            }
         }
     }
 
@@ -109,6 +112,7 @@ impl Server {
             size: self.size_from,
             boot: control::server_token().to_string(),
             version: version::CURRENT.to_string(),
+            theme: Some(self.app.theme_info()),
         };
         self.app.answer_start(client, Ok(&started));
     }

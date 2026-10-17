@@ -22,7 +22,7 @@ cornercase start-server
 pane=$(cornercase start claude --prompt "fix the failing test" --worktree fix/test)
 ```
 
-It starts the server if none runs, restores the saved session once (or opens the folder you ran it from), and returns once its terminals exist; run again, it does nothing and says the server is already running. Until a window attaches, terminals are 160×48, or `--cols` and `--rows`. A window that attaches later finds the same tabs, with the same ids, takes over the size and gives the terminals its colours. See [Command line](../../reference/command-line/#cornercase-start-server) for its output.
+It starts the server if none runs, restores the saved session once (or opens the folder you ran it from), and returns once its terminals exist; run again, it does nothing and says the server is already running. Until a window attaches, terminals are 160×48, or `--cols` and `--rows`. A window that attaches later finds the same tabs, with the same ids, takes over the size and gives the terminals its colours, unless you [gave them](#colours-for-programs) with `--theme FILE`. See [Command line](../../reference/command-line/#cornercase-start-server) for its output.
 
 ## Ids and where commands act
 
@@ -231,6 +231,36 @@ cornercase link --pane 12 --cell 10,3
 - `resize` lays a running `surface` out at another size without starting it again; `ID` is the `surface` of its lines. Its next line comes at the new size, with the next `revision`. It resizes no terminal: they keep the size of whoever sizes the tab. A surface that follows a view (`surface --view`) takes the view's size, so `resize` refuses it: change the view with `view-set`.
 - `link --cell X,Y` says which file a click on that cell of the pane's view opens in the window (columns and rows from 0, as in `lines`), so you get cornercase's detection of the paths programs print without copying it: the path under the cell, looked up from the folder of the program in the foreground, then from the root of the pane's workspace, with its line or lines. It prints `path`, `path:12` or `path:12-30`, and nothing, with status 0, when the cell holds no file; `--json` also says whether the file is inside the workspace. It opens nothing, and OSC 8 links are in the frame's `hyperlinks`, not here.
 - Requests on different connections aren't ordered: send the next `input` after the answer to the previous one, or put several events in one request. Unlike the other commands, these six log at debug level, since a program sends them as fast as someone types or drags.
+
+#### Colours for programs
+
+Programs in the terminals ask for the colours they are drawn with (OSC 10, 11 and 4, and the light or dark query): Claude Code, Neovim and delta pick their look from the answer. The server takes them from the first window, so a program that drives cornercase without one has to give them:
+
+```sh
+cornercase start-server --theme dark.json
+cornercase theme light.json        # the system switched to light
+cornercase theme - < dark.json     # read from standard input
+cornercase theme                   # client colours, dark
+cornercase theme --clear           # back to the window's colours, or the defaults
+```
+
+```json
+{
+  "foreground": [192, 202, 245],
+  "background": [26, 27, 38],
+  "palette": [[21, 22, 30], [247, 118, 142], [158, 206, 106], [224, 175, 104],
+              [122, 162, 247], [187, 154, 247], [125, 207, 255], [169, 177, 214],
+              [65, 72, 104], [247, 118, 142], [158, 206, 106], [224, 175, 104],
+              [122, 162, 247], [187, 154, 247], [125, 207, 255], [192, 202, 245]]
+}
+```
+
+- The foreground, the background and the 16 ANSI colours are required, as `[r, g, b]`. `palette` may go up to 256 entries; entries 16 and up are optional (absent or `null` keeps the default cube and greys). A theme that misses a part is refused (`malformed`, and `cornercase` exits 1 before connecting). Over the socket the request is `{"command": "theme", "args": {"theme": {…}}}`, `{"args": {"clear": true}}` or `{"args": {}}` to read; `start-server` takes the same object as `args.theme`.
+- The answer, and `theme` in [`status --json`](#json), `status --follow` and the `start-server` answer, say where the colours come from: `{"from": "default" | "window" | "client", "scheme": "light" | "dark" | null}`.
+- These colours win over a window's until you give others, clear them, or the server stops. They are not saved: after a restart give them again. A window that attaches later draws its own chrome with its own colours and leaves the terminals' alone; clearing gives the terminals the first window's colours, if one ever gave them. `start-server --theme` applies even when the server already runs. The last theme given wins.
+- Every open terminal and every one made afterwards takes the new colours at once. Programs that turned on colour scheme reports (mode 2031) are told when light and dark switch. A program that read the colours once at start keeps its guess until it asks again, and a colour a program set itself (OSC 4, 10, 11) wins over these.
+- [`surface`](#stream-a-tabs-terminals) frames keep palette indices: resolve them with the colours you gave, so the program's guess and your drawing agree.
+- Not covered: the cursor colour, colours per view, and the TUI's own colours, which stay the window's.
 
 #### Find where something was said
 
@@ -518,7 +548,7 @@ cornercase stats --share
 
 | Command | Fields |
 | --- | --- |
-| `status` | `version`, `boot` (which start of the server this is, see [Contract and compatibility](#contract-and-compatibility)), `caller` (your pane's id, or `null`), `shown` (the ids of what the window shows), `groups` (`id`, `name`, `collapsed`, `icon`, `colour`), `projects` (`id`, `name`, `custom_name`, `path`, `group`, `active`, `collapsed`, `workspaces`), each workspace (`id`, `name`, `custom_name`, `path`, `branch`, `worktree`, `behind`, `pull_request`, `run_dir`, `active`, `collapsed`, `tabs`), each tab (`id`, `name`, `custom_name`, `status`, `active`, `layout`, `panes`), each pane (`id`, `path`, `program`, `agent`, `status`, `background_shell`, `dialog`, `survey`, `at_prompt`, `model`, `context`, `active`, `caller`, `resumes`, `resuming`, `title`). `title` is what the program last set as its title (OSC 0 or 2), as a terminal tab shows it, or `null`; it can change several times a second while an agent works, and `status --follow` sends it at most every half second. `pull_request` is `null`, or the pull request of the workspace's branch: `number`, `title`, `url`, `state` (`open`, `draft`, `merged` or `closed`), `checks` (`failing`, `pending`, `passing`, or `null` without checks) and `failed`, the names of the checks that failed. Groups, projects, workspaces and tabs come in the order of the sidebar. `colour` is a group's palette index (0-255) and `icon` its symbol; `custom_name` is the name given in cornercase, or `null` when the item takes its folder's, branch's or program's; `collapsed` is whether a project or workspace is folded. `layout` is how the tab's panes are split: `{"leaf": PANE}`, or `{"split": {"dir": D, "ratio": R, "first": …, "second": …}}`, where `dir` is `right` (side by side) or `down` (one above the other) and `ratio` is the share of the first side, from 0 to 1. `active` is whether it is the active one of its parent; `status` is `working`, `waiting`, `pending`, `done`, `idle` or `null`; `background_shell` is `true` while the agent's turn is over but a shell it started in the background still runs (its `status` stays `working`); `dialog` is `true` while a Claude Code agent shows a dialog, a panel or its shell mode instead of its input box; `survey` is `true` while it shows its feedback survey above its input box; `resumes` is `true` when the pane's agent conversation comes back after a restart; `resuming` is `true` while it is coming back, and the pane takes no input; `at_prompt` is whether the pane's shell sits at its prompt, with nothing else running in it, so it is `false` whenever an agent runs, whatever the agent shows. While **keep awake** is on, `keep_awake` has `held` (whether the computer is being kept awake now), `by` (the tool holding it) and `unavailable` (why it can't be, on this machine); see [Keep the computer awake](../../reference/agents/#keep-the-computer-awake). |
+| `status` | `version`, `boot` (which start of the server this is, see [Contract and compatibility](#contract-and-compatibility)), `caller` (your pane's id, or `null`), `shown` (the ids of what the window shows), `groups` (`id`, `name`, `collapsed`, `icon`, `colour`), `projects` (`id`, `name`, `custom_name`, `path`, `group`, `active`, `collapsed`, `workspaces`), each workspace (`id`, `name`, `custom_name`, `path`, `branch`, `worktree`, `behind`, `pull_request`, `run_dir`, `active`, `collapsed`, `tabs`), each tab (`id`, `name`, `custom_name`, `status`, `active`, `layout`, `panes`), each pane (`id`, `path`, `program`, `agent`, `status`, `background_shell`, `dialog`, `survey`, `at_prompt`, `model`, `context`, `active`, `caller`, `resumes`, `resuming`, `title`). `title` is what the program last set as its title (OSC 0 or 2), as a terminal tab shows it, or `null`; it can change several times a second while an agent works, and `status --follow` sends it at most every half second. `pull_request` is `null`, or the pull request of the workspace's branch: `number`, `title`, `url`, `state` (`open`, `draft`, `merged` or `closed`), `checks` (`failing`, `pending`, `passing`, or `null` without checks) and `failed`, the names of the checks that failed. Groups, projects, workspaces and tabs come in the order of the sidebar. `colour` is a group's palette index (0-255) and `icon` its symbol; `custom_name` is the name given in cornercase, or `null` when the item takes its folder's, branch's or program's; `collapsed` is whether a project or workspace is folded. `layout` is how the tab's panes are split: `{"leaf": PANE}`, or `{"split": {"dir": D, "ratio": R, "first": …, "second": …}}`, where `dir` is `right` (side by side) or `down` (one above the other) and `ratio` is the share of the first side, from 0 to 1. `active` is whether it is the active one of its parent; `status` is `working`, `waiting`, `pending`, `done`, `idle` or `null`; `background_shell` is `true` while the agent's turn is over but a shell it started in the background still runs (its `status` stays `working`); `dialog` is `true` while a Claude Code agent shows a dialog, a panel or its shell mode instead of its input box; `survey` is `true` while it shows its feedback survey above its input box; `resumes` is `true` when the pane's agent conversation comes back after a restart; `resuming` is `true` while it is coming back, and the pane takes no input; `at_prompt` is whether the pane's shell sits at its prompt, with nothing else running in it, so it is `false` whenever an agent runs, whatever the agent shows. While **keep awake** is on, `keep_awake` has `held` (whether the computer is being kept awake now), `by` (the tool holding it) and `unavailable` (why it can't be, on this machine); see [Keep the computer awake](../../reference/agents/#keep-the-computer-awake). `theme` says where the colours of the terminals' programs come from: `from` and `scheme` (see [Colours for programs](#colours-for-programs)). |
 | `status --follow` | One object per line: what `status` prints, plus `revision`. |
 | `status --panes` | `panes`: one object per pane, with the [columns of `--panes`](#one-line-per-pane) as keys, in their order: `pane`, `tab`, `workspace`, `project`, `program`, `agent`, `status`, `background_shell`, `dialog`, `at_prompt`, `model`, `context`, `caller`, `shown`, `active`, `tab_name`, `workspace_name`, `branch`, `worktree`, `project_name`, `path`, `survey`, `resuming`. Every object has every key, `null` where there is no value. |
 | `open`, `new-workspace`, `new-tab`, `split`, `start` | `project`, `workspace`, `tab`, `pane`: the ids of what was made (for `open`, the project's shown workspace, tab and pane), and `projection` when `--focus --view` moved a view. |
@@ -586,12 +616,11 @@ cornercase contract --json
 cornercase 0.12.127
 contract 1
 boot 4242-1700000000
-commands 40 (40 available)
+commands 42 (42 available)
 stream events 1
 stream watch 1
 stream surface 1
-stream view 1
-features boot, structured-errors, strict-fields, views, host-events
+features boot, structured-errors, strict-fields, views, host-events, theme
 ```
 
 `--json` prints an object with:
@@ -600,7 +629,7 @@ features boot, structured-errors, strict-fields, views, host-events
 - `contract`: the version of the rules on this page, an integer starting at 1. It goes up only when something that was there changes meaning or shape, never when something is added.
 - `boot`: which start of the server this is. It changes on every start, `cornercase restart` included, since ids start again from 1. It is the same value as `CORNERCASE_SERVER` in the panes and `boot` in `status --json`.
 - `operations`: every request the server takes, by name, with `available`. A server with `start-server` among them can be started without a window; one without it needs a window before it opens terminals. One that is not available on this server has `available: false` and a `reason`; the others keep working.
-- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it).
+- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) and `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours).
 - `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals) and `{"name": "view", "version": 1}` for [`view`](#a-view-of-your-own), whose lines are `watch` format 1 plus `view`.
 
 A server from before `contract` says `the running cornercase server (…) has no contract command`, or that it is too old: it knows none of the rest of this section, so don't send it ids you kept from before.

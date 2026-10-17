@@ -412,3 +412,35 @@ pub(crate) fn decoded(request: &str) -> String {
     }
     String::from_utf8_lossy(&out).into_owned()
 }
+
+const ANSI: [(u8, u8, u8); 16] = [
+    (21, 22, 30),
+    (247, 118, 142),
+    (158, 206, 106),
+    (224, 175, 104),
+    (122, 162, 247),
+    (187, 154, 247),
+    (125, 207, 255),
+    (169, 177, 214),
+    (65, 72, 104),
+    (247, 118, 142),
+    (158, 206, 106),
+    (224, 175, 104),
+    (122, 162, 247),
+    (187, 154, 247),
+    (125, 207, 255),
+    (192, 202, 245),
+];
+
+pub(crate) fn theme(background: libghostty_vt::style::RgbColor) -> crate::host::theme::HostTheme {
+    use libghostty_vt::style::RgbColor;
+    let mut theme = crate::host::theme::HostTheme {
+        foreground: Some(RgbColor { r: 192, g: 202, b: 245 }),
+        background: Some(background),
+        ..crate::host::theme::HostTheme::default()
+    };
+    for (slot, (r, g, b)) in theme.palette.iter_mut().zip(ANSI) {
+        *slot = Some(RgbColor { r, g, b });
+    }
+    theme
+}

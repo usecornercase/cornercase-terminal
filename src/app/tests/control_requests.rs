@@ -430,6 +430,7 @@ mod start_server;
 mod surfaces;
 mod talking;
 mod telegram;
+mod theme;
 mod todo_sending;
 mod views;
 mod watching;

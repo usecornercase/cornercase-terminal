@@ -53,16 +53,38 @@ mod parsing {
     }
 
     #[rstest]
-    #[case::defaults(&["start-server"], (None, None, false))]
-    #[case::a_size(&["start-server", "--cols", "200", "--rows", "60"], (Some(200), Some(60), false))]
-    #[case::json(&["start-server", "--json"], (None, None, true))]
-    fn start_server_takes_a_size_and_json(#[case] args: &[&str], #[case] expected: (Option<u16>, Option<u16>, bool)) {
+    #[case::defaults(&["start-server"], (None, None, None, false))]
+    #[case::a_size(&["start-server", "--cols", "200", "--rows", "60"], (Some(200), Some(60), None, false))]
+    #[case::json(&["start-server", "--json"], (None, None, None, true))]
+    #[case::a_theme(&["start-server", "--theme", "dark.json"], (None, None, Some("dark.json"), false))]
+    #[case::a_theme_from_stdin(&["start-server", "--theme", "-"], (None, None, Some("-"), false))]
+    fn start_server_takes_a_size_a_theme_and_json(
+        #[case] args: &[&str],
+        #[case] expected: (Option<u16>, Option<u16>, Option<&str>, bool),
+    ) {
         let cli = parse(args).expect("parse");
 
-        let Some(Command::StartServer(StartServerArgs { cols, rows, print })) = cli.command else {
+        let Some(Command::StartServer(StartServerArgs { cols, rows, theme, print })) = cli.command else {
             panic!("not start-server")
         };
-        assert_eq!((cols, rows, print.json), expected);
+        assert_eq!((cols, rows, theme.as_deref(), print.json), expected);
+    }
+
+    #[rstest]
+    #[case::read(&["theme"], (None, false))]
+    #[case::a_file(&["theme", "dark.json"], (Some("dark.json"), false))]
+    #[case::clear(&["theme", "--clear"], (None, true))]
+    fn theme_takes_a_file_or_clear(#[case] args: &[&str], #[case] expected: (Option<&str>, bool)) {
+        let cli = parse(args).expect("parse");
+
+        let Some(Command::Control(Control::Theme(theme))) = cli.command else { panic!("not theme") };
+        assert_eq!((theme.file.as_deref(), theme.clear), expected);
+    }
+
+    #[test]
+    fn theme_refuses_a_file_with_clear_and_a_view() {
+        assert!(parse(&["theme", "dark.json", "--clear"]).is_err());
+        assert!(parse(&["theme", "--view", "3"]).is_err());
     }
 
     #[rstest]
@@ -443,6 +465,7 @@ mod output {
             ],
             keep_awake: None,
             view: None,
+            theme: None,
         }
     }
 

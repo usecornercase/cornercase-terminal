@@ -285,6 +285,10 @@ impl App {
 
     fn start_server_request(&mut self, client: u64, start: &StartServer) -> Handled {
         let size = start.size().map_err(|message| Refusal::new(Code::Malformed, message))?;
+        if let Some(theme) = &start.theme {
+            control::theme::check(theme).map_err(|message| Refusal::new(Code::Malformed, message))?;
+            self.give_theme(Some((**theme).clone()));
+        }
         self.outbox.start = Some((client, size));
         Ok(None)
     }
@@ -379,6 +383,7 @@ impl App {
             })),
             Command::Stats(_) => Ok(Some(json(&self.stats_view(SystemTime::now())))),
             Command::Contract(_) => Ok(Some(json(&contract::descriptor()))),
+            Command::Theme(theme) => self.theme_request(&theme),
             Command::StartServer(start) => self.start_server_request(client, &start),
             Command::Open(open) => self.open_request(asker, &open, area),
             Command::NewWorkspace(new) => self.new_workspace_request(client, asker, new, area),

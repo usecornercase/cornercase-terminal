@@ -32,6 +32,7 @@ mod describing {
         assert_eq!(descriptor.contract, CONTRACT);
         assert_eq!(descriptor.boot, "1-2");
         assert_eq!(descriptor.features, FEATURES);
+        assert!(descriptor.features.iter().any(|feature| feature == "theme"));
     }
 
     #[test]
