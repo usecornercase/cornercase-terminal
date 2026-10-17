@@ -2,6 +2,7 @@ import { drawQueueForm, queueBounds } from './queue';
 import { counting, factor, duration, ramp, rows as statRows } from '../stats/model';
 import type { Cursor } from '../term/canvas';
 import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
+import { DEFAULT } from '../term/palette';
 import { type AgentRow, type App, crop } from './app';
 import { changesLabel, drawChanges, hasChanges } from './changes';
 import { drawFiles } from './files';
@@ -394,7 +395,7 @@ export class Painter {
       const line: Line = [seg(' ', bg), { ...icon, s: { ...bg, ...icon.s } }, seg(' ', bg)];
       const count = tabOthers(tab.panes.length - 1);
       const room = Math.max(0, r.w - width(line) - 5 - (count ? 1 + count.length : 0));
-      line.push(seg(truncateRight(tabLabel(tab), room), active ? { ...bg, fg: 15, add: BOLD } : { ...bg, fg: 7 }));
+      line.push(seg(truncateRight(tabLabel(tab), room), active ? { ...bg, fg: DEFAULT, add: BOLD } : { ...bg, fg: 7 }));
       if (count) line.push(seg(' ', bg), seg(count, { ...bg, fg: 8 }));
       this.band(r, line, bg);
       const grab: Target = { kind: 'tab', project: project.id, workspace: project.workspaces[w].id, tab: tab.id };
@@ -607,7 +608,7 @@ export class Painter {
     const crumbs = [projectLabel(p), w ? workspaceLabel(w) : null, t ? tabLabel(t) : null].filter(Boolean) as string[];
     const text = truncateRight(crumbs.join(' › '), room);
     const head = Math.min([...projectLabel(p)].length, [...text].length);
-    return [seg([...text].slice(0, head).join(''), { fg: 15, add: BOLD }), seg([...text].slice(head).join(''), { fg: 7 })];
+    return [seg([...text].slice(0, head).join(''), { fg: DEFAULT, add: BOLD }), seg([...text].slice(head).join(''), { fg: 7 })];
   }
 
   private title(r: Rect, text: string): void {
@@ -693,7 +694,7 @@ export class Painter {
     const badge = summary ? projectAttention(project) : null;
     const marks = fitTags(badge ? [statusIcon(badge, spinAt(app))] : [], room - count.length);
     const name = truncateRight(projectLabel(project), room - count.length - marks.reserved);
-    const line = [...b.lead, seg(name, p === app.active ? { fg: 15, add: BOLD } : { fg: 7 }), seg(count, DARK)];
+    const line = [...b.lead, seg(name, p === app.active ? { fg: DEFAULT, add: BOLD } : { fg: 7 }), seg(count, DARK)];
     pushTags(line, marks, [...name].length + count.length, room);
     this.band(b.r, line, b.bg);
     const grab: Target = { kind: 'project', project: project.id };
@@ -707,7 +708,7 @@ export class Painter {
     const project = app.projects[p];
     const ws = project.workspaces[w];
     const active = p === app.active && w === project.active;
-    const style: Style = ws.removing ? { fg: 8, add: BOLD } : active ? { fg: 15, add: BOLD } : { fg: 7, add: BOLD };
+    const style: Style = ws.removing ? { fg: 8, add: BOLD } : active ? { fg: DEFAULT, add: BOLD } : { fg: 7, add: BOLD };
     const room = this.room(b);
     const statuses = ws.tabs.map(tabStatus);
     const status = badge === 'highest' ? highest(statuses) : badge === 'attention' ? attention(statuses) : null;
@@ -737,7 +738,7 @@ export class Painter {
     const name = marks.segs.length ? [...truncateRight(tabLabel(tab), fit)].slice(0, Math.max(0, fit)).join('') : truncateRight(tabLabel(tab), room);
     const line = [...b.lead];
     line.push(tabIcon(tab, spinAt(app)), seg(' '));
-    line.push(seg(name, active ? { fg: 15 } : { fg: 7 }));
+    line.push(seg(name, active ? { fg: DEFAULT } : { fg: 7 }));
     pushTags(line, marks, [...name].length, room);
     this.band(b.r, line, b.bg);
     const details = app.tabDetails(tab);
@@ -890,7 +891,7 @@ export class Painter {
     const line: Line = [marker(entry.active), statusIcon(entry.status, spinAt(this.app)), seg(' ')];
     const indent = width(line);
     const room = Math.max(0, r.w - indent - 1);
-    line.push(...agentPlace(entry, room, { fg: entry.active ? 15 : 7 }));
+    line.push(...agentPlace(entry, room, { fg: entry.active ? DEFAULT : 7 }));
     this.band(r, line, bg);
     this.details(r, pitch, entry.details, indent, entry.agent);
     if (entry.active) this.rail(r);
@@ -1144,7 +1145,7 @@ export class Painter {
       const cell = styleColour(cols, rows, i);
       if (isEmpty(cell)) return;
       const chosen = colour === group.colour;
-      const [open, close, edge]: [string, string, Style] = chosen ? ['[', ']', { fg: 15, add: BOLD }] : this.hovered(cell) ? ['[', ']', DARK] : [' ', ' ', DARK];
+      const [open, close, edge]: [string, string, Style] = chosen ? ['[', ']', { fg: DEFAULT, add: BOLD }] : this.hovered(cell) ? ['[', ']', DARK] : [' ', ' ', DARK];
       drawLine(this.g, cell.x, cell.y, [seg(open, edge), seg('██', { fg: colour }), seg(close, edge)], cell.w);
       this.region({ r: cell, click: () => app.setGroupStyle(undefined, colour), cursor: 'pointer' });
     });

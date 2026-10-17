@@ -70,13 +70,13 @@ pub(super) fn overlay_block(muted: Color, title: &str) -> Block<'_> {
     }
 }
 
-pub(super) fn tab_style(active: bool, lit: bool, surface: Color) -> Style {
+pub(super) fn tab_style(active: bool, lit: bool, surface: Color, rest: Color) -> Style {
     if active {
         Style::default().fg(Color::Cyan).bg(surface).add_modifier(Modifier::BOLD)
     } else if lit {
         Style::default().fg(Color::Cyan)
     } else {
-        Style::default().fg(Color::Gray)
+        Style::default().fg(rest)
     }
 }
 

@@ -719,6 +719,7 @@ impl App {
             resizing: self.drag.as_ref().and_then(Drag::border),
             light: self.theme.is_light() == Some(true),
             muted: ui::muted(&self.theme),
+            soft: ui::soft(&self.theme),
             tab,
             overlay,
             toast: self.toast.as_ref().map(Toast::view),

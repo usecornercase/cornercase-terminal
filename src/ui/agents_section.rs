@@ -90,7 +90,7 @@ pub(super) fn draw_agent(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry:
     }
     let indent = line.iter().map(Span::width).sum::<usize>();
     let room = usize::from(r.width).saturating_sub(indent + 1);
-    let colour = if entry.active { Color::White } else { Color::Gray };
+    let colour = if entry.active { Color::Reset } else { view.soft };
     line.extend(agent_place(entry, room, Style::default().fg(colour), dim(view.muted)));
     draw_band(f, r, Line::from(line), bg);
     draw_details(f, view.muted, (r, row_close_button(r, pitch)), &entry.details, Some(&entry.agent), indent);

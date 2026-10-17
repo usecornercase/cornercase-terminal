@@ -235,6 +235,7 @@ impl App {
             },
             light: self.theme.is_light() == Some(true),
             muted: ui::muted(&self.theme),
+            soft: ui::soft(&self.theme),
             tints: Tints::of(&self.theme),
             filter,
             glyphs: ui::glyphs(self.config.icon_bar),

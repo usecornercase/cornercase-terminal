@@ -191,7 +191,7 @@ pub(super) fn dialog_button_style(view: &View, r: Rect, primary: bool) -> Style 
         (true, true) => Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD),
         (true, false) => Style::default().fg(Color::Cyan).bg(view.surface()).add_modifier(Modifier::BOLD),
         (false, true) => Style::default().fg(Color::Black).bg(Color::Gray),
-        (false, false) => Style::default().fg(Color::Gray).bg(view.surface()),
+        (false, false) => Style::default().fg(view.soft).bg(view.surface()),
     }
 }
 
@@ -229,7 +229,7 @@ fn draw_input(f: &mut Frame, muted: Color, row: Rect, label: &str, value: &str) 
 
 fn draw_tabs(f: &mut Frame, view: &View, rects: &[Rect], names: &[&str], active: usize) {
     for (i, (rect, name)) in rects.iter().zip(names).enumerate() {
-        let style = tab_style(i == active, hovered(view, *rect), view.surface());
+        let style = tab_style(i == active, hovered(view, *rect), view.surface(), view.soft);
         f.render_widget(Paragraph::new(Span::styled(format!(" {name} "), style)), *rect);
     }
 }

@@ -11,8 +11,10 @@ const THEMED_COLORS: usize = 16;
 const ESC: u8 = 0x1b;
 const BEL: u8 = 0x07;
 const LIGHT_LUMINANCE: u32 = 128_000;
+const WHITE: usize = 7;
 const BRIGHT_BLACK: usize = 8;
 const MIN_MUTED_CONTRAST: f64 = 2.0;
+const MIN_SOFT_CONTRAST: f64 = 3.0;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "WireTheme", into = "WireTheme")]
@@ -84,8 +86,16 @@ impl HostTheme {
     }
 
     pub(crate) fn muted_is_readable(&self) -> bool {
-        self.background
-            .is_none_or(|bg| self.palette[BRIGHT_BLACK].is_some_and(|c| contrast(c, bg) >= MIN_MUTED_CONTRAST))
+        self.stands_out(BRIGHT_BLACK, MIN_MUTED_CONTRAST)
+    }
+
+    pub(crate) fn soft_is_readable(&self, surface: RgbColor) -> bool {
+        self.stands_out(WHITE, MIN_SOFT_CONTRAST)
+            && self.palette[WHITE].is_none_or(|c| contrast(c, surface) >= MIN_SOFT_CONTRAST)
+    }
+
+    fn stands_out(&self, index: usize, min: f64) -> bool {
+        self.background.is_none_or(|bg| self.palette[index].is_some_and(|c| contrast(c, bg) >= min))
     }
 
     fn apply_osc(&mut self, body: &str) {

@@ -62,6 +62,7 @@ pub(crate) struct View {
     pub(crate) live: bool,
     pub(crate) light: bool,
     pub(crate) muted: Color,
+    pub(crate) soft: Color,
     pub(crate) tints: Tints,
     pub(crate) filter: Option<FilterView>,
     pub(crate) glyphs: &'static Glyphs,
@@ -410,7 +411,8 @@ pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Positio
 
 fn draw_tabs(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>) {
     for (scope, r, label) in scopes(area, view) {
-        let style = super::tab_style(scope == view.scope, hovered(hover, r), super::surface_colour(view.light));
+        let style =
+            super::tab_style(scope == view.scope, hovered(hover, r), super::surface_colour(view.light), view.soft);
         put(buf, r.x, r.y, &label, style, r.right());
     }
     if view.scope == Scope::Every {
@@ -418,7 +420,8 @@ fn draw_tabs(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>)
         put(buf, row.x + 1, row.y, "uncommitted", dim(view.muted), row.right());
     }
     for (mode, r) in tabs(area).into_iter().filter(|_| view.scope == Scope::Project) {
-        let style = super::tab_style(mode == view.mode, hovered(hover, r), super::surface_colour(view.light));
+        let style =
+            super::tab_style(mode == view.mode, hovered(hover, r), super::surface_colour(view.light), view.soft);
         put(buf, r.x, r.y, &format!(" {} ", mode.label()), style, r.right());
     }
     let r = filter_button(area);
@@ -479,12 +482,12 @@ fn draw_summary(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Positio
                 row.x,
                 row.y,
                 &filtered.unwrap_or(n).to_string(),
-                Style::default().fg(Color::White).bold(),
+                Style::default().fg(Color::Reset).bold(),
                 end,
             );
             let files = if n == 1 { "file" } else { "files" };
             let label = filtered.map_or_else(|| format!(" {files}"), |_| format!(" of {n} {files}"));
-            x = put(buf, x, row.y, &label, Style::default().fg(Color::Gray), end);
+            x = put(buf, x, row.y, &label, Style::default().fg(view.soft), end);
             let (added, removed) = (diff.added(), diff.removed());
             if added + removed > 0 && filtered.is_none() {
                 x = put(buf, x + 2, row.y, &format!("+{added}"), Style::default().fg(Color::Green).bold(), end);
@@ -502,7 +505,7 @@ fn draw_summary(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Positio
     }
     if !selector.is_empty() {
         let style =
-            if hovered(hover, selector) { Style::default().fg(Color::Cyan) } else { Style::default().fg(Color::Gray) };
+            if hovered(hover, selector) { Style::default().fg(Color::Cyan) } else { Style::default().fg(view.soft) };
         put(buf, selector.x, selector.y, &format!(" {} ", base_label(view)), style, selector.right());
     }
 }
@@ -561,7 +564,7 @@ fn draw_row(
                 x = put(buf, x, r.y, "┄┄ ", dim(super::line_colour(view.light)), end);
                 let room = usize::from(end.saturating_sub(x + 2));
                 let context = cut(&hunk.context, room);
-                x = put(buf, x, r.y, &context, Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC), end);
+                x = put(buf, x, r.y, &context, Style::default().fg(view.soft).add_modifier(Modifier::ITALIC), end);
                 x += 1;
             }
             let rest = usize::from(end.saturating_sub(x + 1));
@@ -593,7 +596,7 @@ fn draw_header(buf: &mut Buffer, view: &View, diff: &Diff, header: &Header, r: R
     let x = r.x + if header.workspace { 3 } else { 1 };
     let arrow = if header.folded { "▸ " } else { "▾ " };
     let x = put(buf, x, r.y, arrow, dim(view.muted), end);
-    let style = Style::default().fg(if hovered(hover, r) { Color::Cyan } else { Color::White }).bold();
+    let style = Style::default().fg(if hovered(hover, r) { Color::Cyan } else { Color::Reset }).bold();
     put(buf, x, r.y, &cut(&header.label, usize::from(end.saturating_sub(x))), style, end);
     let x = put(buf, end + 1, r.y, &counts, dim(view.muted), r.right());
     let x = put(buf, x + 1, r.y, &format!("+{added}"), Style::default().fg(Color::Green), r.right());
@@ -654,7 +657,7 @@ fn draw_file(buf: &mut Buffer, view: &View, file: &File, i: usize, r: Rect, hove
     let (folder, name) = shown.split_at(split);
     let x = put(buf, start, r.y, folder, dim(view.muted), path_end);
     let name_style =
-        if muted { dim(view.muted) } else { Style::default().fg(Color::White).add_modifier(Modifier::BOLD) };
+        if muted { dim(view.muted) } else { Style::default().fg(Color::Reset).add_modifier(Modifier::BOLD) };
     put(buf, x, r.y, name, name_style, path_end);
 }
 

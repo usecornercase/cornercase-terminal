@@ -202,9 +202,9 @@ pub(super) fn draw_group(f: &mut Frame, view: &View, g: usize, band: Band) {
 pub(super) fn draw_project_band(f: &mut Frame, view: &View, band: Band, p: usize, summary: bool) {
     let entry = &view.projects[p];
     let title_style = if p == view.active {
-        Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+        Style::default().fg(Color::Reset).add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(Color::Gray)
+        Style::default().fg(view.soft)
     };
     let count = if summary && view.counts { format!(" ({})", entry.workspaces) } else { String::new() };
     let room = band.room();

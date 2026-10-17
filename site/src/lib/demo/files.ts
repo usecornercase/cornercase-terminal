@@ -1,5 +1,6 @@
 import { ASPECT } from '../term/canvas';
 import { BOLD, IMAGE_CELL, type Rect, type Style, rect } from '../term/grid';
+import { DEFAULT } from '../term/palette';
 import type { App } from './app';
 import { type FileDiff, drawPanelBorder, tintsOf } from './changes';
 import { type Picture, type Tree, picture } from './data';
@@ -532,11 +533,11 @@ function drawFound(p: Painter, f: Panel, rows: Found[]): void {
     } else if (row.kind !== 'file' && p.hovered(r)) p.g.fill(r, { bg: f.hover });
     if (row.kind === 'name') {
       const [shown, indices] = tail(row.path, row.indices, r.w - 3);
-      paint(p, r.x + 2, r.y, right(r) - 1, pathLine(shown, { fg: 15 }), indices.map((n): Lines => [n, n + 1]), { fg: 6, add: BOLD });
+      paint(p, r.x + 2, r.y, right(r) - 1, pathLine(shown, { fg: DEFAULT }), indices.map((n): Lines => [n, n + 1]), { fg: 6, add: BOLD });
     } else if (row.kind === 'file') {
       const count = String(row.count);
       const end = right(r) - count.length - 2;
-      paint(p, r.x + 2, r.y, end - 1, pathLine(row.path, { fg: 15, add: BOLD }), [], {});
+      paint(p, r.x + 2, r.y, end - 1, pathLine(row.path, { fg: DEFAULT, add: BOLD }), [], {});
       p.span(end + 1, r.y, count, DARK);
     } else {
       const x = p.span(r.x + 2, r.y, String(row.n).padStart(5), DARK) + 2;
@@ -603,7 +604,7 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
   const shown = truncateLeft(viewer.path, Math.max(0, end - start));
   const cut = shown.lastIndexOf('/') + 1;
   const px = p.span(start, inner.y, shown.slice(0, cut), DARK, Math.max(0, end - start));
-  p.span(px, inner.y, shown.slice(cut), { fg: 15, add: BOLD }, Math.max(0, end - px));
+  p.span(px, inner.y, shown.slice(cut), { fg: DEFAULT, add: BOLD }, Math.max(0, end - px));
 
   const info = inner.y + 1;
   const content = f.files.get(viewer.path);

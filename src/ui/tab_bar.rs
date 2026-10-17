@@ -274,7 +274,7 @@ pub(crate) fn draw(f: &mut Frame, view: &View, bar: &TabBar, r: Rect) {
 }
 
 fn draw_tab(f: &mut Frame, view: &View, tab: &TabEntry, (r, bg): (Rect, Style), marked: bool) {
-    let style = if marked { bg.fg(Color::White).add_modifier(Modifier::BOLD) } else { bg.fg(Color::Gray) };
+    let style = if marked { bg.fg(Color::Reset).add_modifier(Modifier::BOLD) } else { bg.fg(view.soft) };
     let mut line = vec![Span::styled(" ", bg)];
     let mut used = 1;
     line.extend(tab.prefix(view.muted, bg, view.spin));

@@ -381,7 +381,7 @@ pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Positio
 fn draw_title(buf: &mut Buffer, area: Rect, view: &View) {
     let row = parts(area).title;
     let end = close(area).x.saturating_sub(1);
-    let style = super::tab_style(true, false, super::surface_colour(view.light));
+    let style = super::tab_style(true, false, super::surface_colour(view.light), view.muted);
     let x = put(buf, row.x, row.y, &format!(" {LABEL} "), style, end) + 1;
     put(buf, x, row.y, &truncate_left(&view.root, usize::from(end.saturating_sub(x))), dim(view.muted), end);
 }
@@ -447,7 +447,7 @@ fn tail(path: &str, indices: &[u32], room: usize) -> (String, Vec<u32>) {
 fn path_segments(path: &str, view: &View) -> Segments {
     let split = path.rfind('/').map_or(0, |i| i + 1);
     let (folder, name) = path.split_at(split);
-    vec![(folder.to_string(), dim(view.muted)), (name.to_string(), Style::default().fg(Color::White))]
+    vec![(folder.to_string(), dim(view.muted)), (name.to_string(), Style::default().fg(Color::Reset))]
 }
 
 fn draw_found(buf: &mut Buffer, area: Rect, view: &View, search: &SearchView, hover: Option<Position>) {
@@ -560,7 +560,7 @@ fn draw_header(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover
     let split = shown.rfind('/').map_or(0, |i| i + 1);
     let (folder, name) = shown.split_at(split);
     let x = put(buf, start, b.y, folder, dim(view.muted), end);
-    put(buf, x, b.y, name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD), end);
+    put(buf, x, b.y, name, Style::default().fg(Color::Reset).add_modifier(Modifier::BOLD), end);
     let glyph = if file.full_screen { view.glyphs.restore } else { view.glyphs.full_screen };
     let style =
         if file.full_screen || hovered(hover, full) { Style::default().fg(Color::Cyan) } else { dim(view.muted) };

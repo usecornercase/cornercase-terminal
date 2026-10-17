@@ -415,8 +415,8 @@ pub(super) fn draw_workspace_band(
 ) {
     let colour = match (entry.removing, active) {
         (true, _) => view.muted,
-        (false, true) => Color::White,
-        (false, false) => Color::Gray,
+        (false, true) => Color::Reset,
+        (false, false) => view.soft,
     };
     let style = Style::default().fg(colour).add_modifier(Modifier::BOLD);
     let room = band.room();
@@ -441,7 +441,7 @@ pub(super) fn draw_workspace_band(
 }
 
 pub(super) fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEntry, active: bool) {
-    let style = Style::default().fg(if active { Color::White } else { Color::Gray });
+    let style = Style::default().fg(if active { Color::Reset } else { view.soft });
     let indent = band.lead_width() + ICON_WIDTH;
     let max = band.room().saturating_sub(ICON_WIDTH);
     let others = (tab.others > 0).then(|| Span::styled(format!("+{}", tab.others), Style::default().fg(view.muted)));

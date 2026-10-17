@@ -171,8 +171,8 @@ pub(super) fn draw(f: &mut Frame, view: &View, bar: Rect) {
             Item::Quit if lit => Color::Red,
             Item::Update => Color::Cyan,
             _ if open => Color::Cyan,
-            _ if lit => Color::White,
-            _ => Color::Gray,
+            _ if lit => Color::Reset,
+            _ => view.soft,
         };
         let style = if open || lit { bg.fg(fg).add_modifier(Modifier::BOLD) } else { bg.fg(fg) };
         put(buf, r.x + 1, r.y, item.icon(), style, r.right());
@@ -190,7 +190,7 @@ pub(super) fn draw_tooltip(f: &mut Frame, view: &View, bar: Rect) {
     let screen = f.area();
     let width = u16::try_from(text.chars().count()).unwrap_or(u16::MAX).min(screen.right().saturating_sub(bar.right()));
     let tip = Rect { x: bar.right(), y: r.y, width, height: 1 };
-    let style = Style::default().fg(Color::White).bg(view.surface()).add_modifier(Modifier::BOLD);
+    let style = Style::default().fg(Color::Reset).bg(view.surface()).add_modifier(Modifier::BOLD);
     f.render_widget(Clear, tip);
     f.render_widget(Paragraph::new(Span::styled(text, style)), tip);
 }
