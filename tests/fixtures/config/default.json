@@ -10,7 +10,8 @@
     "shortcut",
     "linear",
     "jira",
-    "plane"
+    "plane",
+    "asana"
   ],
   "gitlab_url": "",
   "jira_site": "",
@@ -19,6 +20,8 @@
   "plane_url": "",
   "plane_workspace": "",
   "plane_filter": "",
+  "asana_workspace": "",
+  "asana_projects": "",
   "agent": "auto",
   "agent_args": {},
   "agent_modes": {},

@@ -119,7 +119,8 @@ pub(crate) const DEFAULT_PORT: u16 = 47681;
 pub(crate) const DEFAULT_PROMPT: &str = "{url}";
 pub(crate) const DEFAULT_GH: &str = "gh";
 pub(crate) const DEFAULT_GLAB: &str = "glab";
-pub(crate) const DEFAULT_ISSUE_TABS: [&str; 7] = ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane"];
+pub(crate) const DEFAULT_ISSUE_TABS: [&str; 8] =
+    ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"];
 pub(crate) const DEFAULT_FETCH_MINUTES: u64 = 5;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -158,6 +159,8 @@ pub(crate) struct Config {
     pub(crate) plane_url: String,
     pub(crate) plane_workspace: String,
     pub(crate) plane_filter: String,
+    pub(crate) asana_workspace: String,
+    pub(crate) asana_projects: String,
     pub(crate) agent: String,
     pub(crate) agent_args: BTreeMap<String, Vec<String>>,
     pub(crate) agent_modes: BTreeMap<String, BTreeMap<String, Vec<String>>>,
@@ -205,6 +208,8 @@ impl Default for Config {
             plane_url: String::new(),
             plane_workspace: String::new(),
             plane_filter: String::new(),
+            asana_workspace: String::new(),
+            asana_projects: String::new(),
             agent: agents::AUTO.into(),
             agent_args: BTreeMap::new(),
             agent_modes: BTreeMap::new(),
@@ -300,6 +305,7 @@ fn migrate(keys: &mut Map<String, Value>) {
     }
     add_tab(keys, "jira_site", "jira", None);
     add_tab(keys, "plane_workspace", "plane", None);
+    add_tab(keys, "asana_workspace", "asana", None);
     add_tab(keys, "gitlab_url", "gitlab", Some("github"));
 }
 

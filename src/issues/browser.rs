@@ -122,6 +122,8 @@ pub(crate) struct TokenForm {
     pub(crate) checking: bool,
     pub(crate) error: Option<String>,
     pub(crate) step: Step,
+    pub(crate) token: Option<Secret>,
+    pub(crate) choices: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -216,6 +218,7 @@ pub(crate) enum Action {
     CheckToken(Source, Secret),
     SaveJira { site: String, email: String },
     SavePlane { workspace: String },
+    SaveAsana { workspace: String, token: Secret },
     SaveGitlab { url: String },
     Disconnect(Source),
     Copy(String),

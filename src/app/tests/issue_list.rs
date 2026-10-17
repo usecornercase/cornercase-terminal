@@ -4,11 +4,11 @@ use super::*;
 use crate::issues::secrets;
 use crate::test_util::{FakeHttp, fake_gh};
 
-fn assert_only_linear(s: &Setup) {
+pub(super) fn assert_only_linear(s: &Setup) {
     assert_eq!(s.app.issues.accounts.keys().collect::<Vec<_>>(), [&Source::Linear]);
 }
 
-fn accounts_with_linear(s: &mut Setup, source: Source, workspace: &str) {
+pub(super) fn accounts_with_linear(s: &mut Setup, source: Source, workspace: &str) {
     s.app.issues.accounts.insert(source, Account { handle: "Ana".into(), workspace: workspace.into() });
     s.app.issues.accounts.insert(Source::Linear, Account { handle: "ana".into(), workspace: "b".into() });
 }
@@ -36,15 +36,15 @@ pub(super) const FAKE_AGENT: &str = "#!/bin/sh\nprintf 'Do you trust the files i
             printf '%s' \"$answer\" > answered\nprintf '\\033[2J\\033[H'\n\
             printf 'agent ready> '\nread line\nprintf '%s' \"$line\" > got\n";
 
-struct Setup {
-    app: App,
-    rx: Receiver<AppEvent>,
+pub(super) struct Setup {
+    pub(super) app: App,
+    pub(super) rx: Receiver<AppEvent>,
     worktrees: TempDir,
-    config: TempDir,
+    pub(super) config: TempDir,
     _dir: TempDir,
 }
 
-fn setup(git: bool, gh_script: &str) -> Setup {
+pub(super) fn setup(git: bool, gh_script: &str) -> Setup {
     let dir = if git { git_repo(&[("README", "hi")]) } else { TempDir::new() };
     let (worktrees, config) = (TempDir::new(), TempDir::new());
     let gh = fake_gh(config.path(), &format!("touch \"$0.called\"\necho \"$@\" >> \"$0.args\"\n{gh_script}"));
@@ -79,24 +79,24 @@ fn shortcut(s: &mut Setup, routes: Vec<(&'static str, u16, &'static str)>) -> Fa
     fake_shortcut(&mut s.app, all)
 }
 
-fn secrets_file(s: &Setup) -> PathBuf {
+pub(super) fn secrets_file(s: &Setup) -> PathBuf {
     paths::secrets(&s.config.path().join("config.json"))
 }
 
-fn browser(app: &App) -> &Browser {
+pub(super) fn browser(app: &App) -> &Browser {
     let Some(Overlay::Issues(b)) = &app.overlay else { panic!("the list is not open") };
     b
 }
 
-fn shown(app: &App) -> Vec<String> {
+pub(super) fn shown(app: &App) -> Vec<String> {
     browser(app).shown().iter().map(|i| i.key.clone()).collect()
 }
 
-fn loaded(app: &App, source: Source) -> bool {
+pub(super) fn loaded(app: &App, source: Source) -> bool {
     browser(app).lists.get(&source).is_some_and(|l| !l.loading)
 }
 
-fn open_list(s: &mut Setup) {
+pub(super) fn open_list(s: &mut Setup) {
     click(&mut s.app, areas().issues.as_position());
 }
 
@@ -105,7 +105,7 @@ fn open_loaded(s: &mut Setup, source: Source) {
     pump_until(&mut s.app, &s.rx, "the issues load", |a| loaded(a, source));
 }
 
-fn enter(s: &mut Setup) {
+pub(super) fn enter(s: &mut Setup) {
     send_key(&mut s.app, KeyCode::Enter, KeyModifiers::NONE);
 }
 
@@ -140,7 +140,7 @@ fn to_tab_after_open(s: &mut Setup, tab: IssueTab) {
     to_tab(s, tab);
 }
 
-fn to_tab(s: &mut Setup, tab: IssueTab) {
+pub(super) fn to_tab(s: &mut Setup, tab: IssueTab) {
     let i = browser(&s.app).tabs.iter().position(|t| *t == tab).expect("the tab is shown");
     for _ in 0..i {
         send_key(&mut s.app, KeyCode::Tab, KeyModifiers::NONE);

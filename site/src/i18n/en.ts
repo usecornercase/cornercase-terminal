@@ -97,7 +97,7 @@ export const page = {
       {
         num: '1 · Start',
         title: 'From an issue to an agent at work, in one click.',
-        text: 'Pick an issue from GitHub, GitLab, Linear, Jira, Plane or Shortcut and press start. cornercase creates a worktree on a branch named after the issue, opens a tab in it and hands the issue to your agent as its first prompt. No branch to name, no folder to make, nothing to paste.',
+        text: 'Pick an issue from GitHub, GitLab, Linear, Jira, Plane, Asana or Shortcut and press start. cornercase creates a worktree on a branch named after the issue, opens a tab in it and hands the issue to your agent as its first prompt. No branch to name, no folder to make, nothing to paste.',
         more: 'Issues to agents →',
         label:
           'The issues dialog of web-shop with #482, Returns page crashes on empty address, selected: start opens it in its own worktree.',
@@ -243,7 +243,7 @@ export const demo = {
     settings: 'Change anything, it’s saved at once. Try Agents → default agent.',
     restart: (resume: boolean) =>
       `For real, the server starts again and every tab comes back with a new shell${resume ? ', agents back in their conversations' : ''}. The demo keeps yours running.`,
-    issues: 'Your issues from GitHub, GitLab, Shortcut, Linear, Jira and Plane. Click one to read it, then press start.',
+    issues: 'Your issues from GitHub, GitLab, Shortcut, Linear, Jira, Plane and Asana. Click one to read it, then press start.',
     issue: (key: string) => `${key}. Press start and an agent takes it, on its own branch.`,
     branch: (branch: string) => `A fresh branch for it: ${branch}.`,
     agentTab: 'A new tab for the agent.',

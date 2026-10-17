@@ -387,6 +387,11 @@ fn inline_element(element: &Element) -> String {
             let code = one_line(&plain(&element.children));
             if code.is_empty() { String::new() } else { code_span(&code) }
         }
+        "a" if element.attr("data-asana-type") == Some("user")
+            || element.attr("data-asana-accessible") == Some("false") =>
+        {
+            inner()
+        }
         "a" => {
             let text = inner();
             let href = element.attr("href").unwrap_or_default();

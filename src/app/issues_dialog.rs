@@ -21,8 +21,8 @@ use crate::issues::browser::{
 use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
 use crate::issues::secrets;
 use crate::issues::{
-    self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, gitlab, jira, linear, plane,
-    shortcut,
+    self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, asana, gitlab, jira, linear,
+    plane, shortcut,
 };
 use crate::list::Search;
 use crate::log::{self, Job, Level};
@@ -65,6 +65,7 @@ pub(super) struct Apis {
     pub(super) linear: String,
     pub(super) jira: Option<String>,
     pub(super) plane: Option<String>,
+    pub(super) asana: String,
 }
 
 impl Apis {
@@ -75,6 +76,7 @@ impl Apis {
             linear: var(linear::API_ENV, linear::DEFAULT_API),
             jira: std::env::var(jira::API_ENV).ok(),
             plane: std::env::var(plane::API_ENV).ok(),
+            asana: var(asana::API_ENV, asana::DEFAULT_API),
         }
     }
 }
@@ -165,6 +167,16 @@ impl App {
         Some(plane::Api { base, app, slug: config.plane_workspace.clone(), token, filter: config.plane_filter.clone() })
     }
 
+    fn asana(&self, token: String) -> asana::Api {
+        let config = &self.config;
+        asana::Api {
+            base: self.issues.apis.asana.clone(),
+            token,
+            workspace: config.asana_workspace.clone(),
+            projects: asana::project_gids(&config.asana_projects),
+        }
+    }
+
     fn gitlab(&self, token: String, project: Option<u64>) -> gitlab::Api {
         let dir = project.and_then(|id| self.projects.project_index(id)).map(|p| self.projects[p].path.clone());
         gitlab::Api { base: gitlab::server(&self.config.gitlab_url), token, dir: dir.unwrap_or_default() }
@@ -194,6 +206,7 @@ impl App {
             }
             Source::Jira => self.jira(self.token(source)?.0).map(Client::Jira),
             Source::Plane => self.plane(self.token(source)?.0).map(Client::Plane),
+            Source::Asana => Some(Client::Asana(self.asana(self.token(source)?.0))),
             Source::Gitlab => Some(Client::Gitlab(self.gitlab(self.token(source)?.0, Some(project)))),
         }
     }
@@ -347,6 +360,17 @@ impl App {
             Action::SavePlane { workspace } => {
                 let config = Config { plane_workspace: workspace, ..self.config.clone() };
                 return self.save_connection(Source::Plane, config, area);
+            }
+            Action::SaveAsana { workspace, token } => {
+                let key = Source::Asana.secret_key().unwrap_or_default();
+                if let Err(e) = secrets::write(&self.issues.secrets_path, key, &token.0) {
+                    if let Some(Overlay::Issues(b)) = &mut self.overlay {
+                        b.token_rejected(Source::Asana, format!("failed to save the access token: {e}"));
+                    }
+                    return Ok(());
+                }
+                let config = Config { asana_workspace: workspace, ..self.config.clone() };
+                return self.save_connection(Source::Asana, config, area);
             }
             Action::SaveGitlab { url } => {
                 let config = Config { gitlab_url: url, ..self.config.clone() };
@@ -505,6 +529,7 @@ impl App {
             Source::Linear => Ok(Client::Linear { url: self.issues.apis.linear.clone(), token: token.0.clone() }),
             Source::Jira => self.jira(token.0.clone()).map(Client::Jira).ok_or("set the Jira site and email first"),
             Source::Plane => self.plane(token.0.clone()).map(Client::Plane).ok_or("set the Plane workspace first"),
+            Source::Asana => Ok(Client::Asana(self.asana(token.0.clone()))),
             Source::Gitlab => Ok(Client::Gitlab(self.gitlab(token.0.clone(), None))),
         };
         let client = match client {
@@ -536,6 +561,16 @@ impl App {
         result: Result<Account>,
         area: Rect,
     ) -> Result<()> {
+        let result = match result {
+            Err(Error::Workspaces(found)) => {
+                if let Some(Overlay::Issues(b)) = &mut self.overlay {
+                    b.choose_workspace(source, token.clone(), found.choices);
+                    return Ok(());
+                }
+                Ok(Account { handle: found.handle, workspace: String::new() })
+            }
+            other => other,
+        };
         let saved = result.and_then(|account| {
             let key = source.secret_key().ok_or_else(|| Error::Api("nothing to save".into()))?;
             secrets::write(&self.issues.secrets_path, key, &token.0)
@@ -812,6 +847,13 @@ fn token_view(browser: &Browser, source: Source) -> (ui::IssuesBody, Option<ui::
         Step::Email => {
             help.push("Type the email you sign in to Atlassian with and press Enter.".into());
         }
+        Step::Workspace if source == Source::Asana => {
+            let names = form.map_or_else(String::new, |f| {
+                f.choices.iter().map(|(_, name)| name.as_str()).collect::<Vec<_>>().join(", ")
+            });
+            help.push(format!("Your Asana token belongs to several workspaces: {names}."));
+            help.push("Type the one to use and press Enter.".into());
+        }
         Step::Workspace => {
             help.push("Type your Plane workspace, the part after the server's name, such as acme.".into());
             help.push("Then press Enter.".into());
@@ -852,6 +894,9 @@ fn token_view(browser: &Browser, source: Source) -> (ui::IssuesBody, Option<ui::
         _ if source == Source::Plane => {
             help.extend([String::new(), "The workspace is saved in your settings.".into()]);
         }
+        _ if source == Source::Asana => {
+            help.extend([String::new(), "The workspace is saved in your settings.".into()]);
+        }
         _ if source == Source::Gitlab => {
             help.extend([String::new(), "The server is saved in your settings.".into()]);
         }
@@ -881,7 +926,7 @@ fn list_view(browser: &Browser, now: i64) -> (ui::IssuesBody, Option<ui::Note>, 
     } else if matches!(browser.current(), Tab::One(source) if source.in_repository()) && !browser.github {
         "this project is not in a git repository".into()
     } else if browser.sources().is_empty() {
-        "nothing to list here: connect GitLab, Shortcut, Linear, Jira or Plane in their tabs".into()
+        "nothing to list here: connect GitLab, Shortcut, Linear, Jira, Plane or Asana in their tabs".into()
     } else if browser.closed {
         "no issues".into()
     } else {

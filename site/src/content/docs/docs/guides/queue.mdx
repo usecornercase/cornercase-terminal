@@ -11,7 +11,7 @@ The queue is the last tab of the [Issues](../issues-and-agents/) dialog: click *
 
 ## Schedule an issue or a prompt
 
-In [Issues](../issues-and-agents/), click **`schedule`** beside **`start`**. Choose the agent and destination as usual, then enter the time. Once saved, the dialog comes back on the **`Queue`** tab with the new entry. GitHub, GitLab, Shortcut, Linear, Jira and Plane issues use your configured [prompt template](../../reference/prompt/).
+In [Issues](../issues-and-agents/), click **`schedule`** beside **`start`**. Choose the agent and destination as usual, then enter the time. Once saved, the dialog comes back on the **`Queue`** tab with the new entry. GitHub, GitLab, Shortcut, Linear, Jira, Plane and Asana issues use your configured [prompt template](../../reference/prompt/).
 
 For a free prompt, click **`new`** on the **`Queue`** tab and type the prompt. Then choose **When**, **Where**, the **Agent** and its **Mode**: each is a list that opens below it on a click, or with `Space`, `↑` or `↓` when it has the keys. Pick an option with a click or the arrows and `Enter`; typing filters a long list, such as the places. In a repository root, **Open in** chooses a **new tab** or a **new worktree**, and a new worktree asks for its branch beside it. A workspace always gets a new tab. An issue already supplies its usual branch name.
 
@@ -56,6 +56,7 @@ cornercase queue add --at 'in 2h' --agent claude --prompt 'Fix the login form'
 cornercase queue add --at 'tomorrow 9:00' --agent codex --worktree fix-login --prompt 'Fix the login form'
 cornercase queue add --at 'claude reset' --agent claude --issue https://github.com/acme/shop/issues/482
 cornercase queue add --at 14:30 --agent codex --source linear --issue ENG-123 --workspace 12
+cornercase queue add --at 14:30 --agent codex --source asana --issue 1205551234567890 --workspace 12
 cornercase queue list
 cornercase queue list --json
 cornercase queue edit 1 --at 'in 3h' --prompt 'Fix logout too'
@@ -66,7 +67,7 @@ cornercase queue remove 1
 
 `add` prints the entry's persistent id. `--workspace` selects an open workspace; `--project` selects an open project root; `--worktree` selects or creates a branch in that project. Without a destination, a prompt uses the current workspace and an issue uses its usual worktree when the project is a repository root. Use `--source` for ambiguous keys and self-hosted tracker URLs.
 
-An issue URL must belong to the project: GitHub and GitLab issues are read from the project's own repository, and Jira, Plane, Linear and Shortcut ones from the site or workspace you are connected to, so a URL of another repository or site is refused instead of starting the wrong issue. A bare key goes to the only tracker that can read it: `#7` to the project's GitHub or GitLab, `sc-482` to Shortcut, a number to the repository or Shortcut, and keys such as `ENG-7` to Linear, Jira or Plane. When two trackers could read it, add `--source`. `--mode` names a configured agent mode, and `--name` sets the entry and tab name. `edit` can omit `--at` to keep the exact scheduled instant; `add` needs `--at` and either `--prompt` or `--issue`. Editing an entry's `--issue` moves it to the new issue's branch, unless you also pass `--worktree`. `add`, `edit` and `list` support `--json`.
+An issue URL must belong to the project: GitHub and GitLab issues are read from the project's own repository, and Jira, Plane, Linear, Shortcut and Asana ones from the site or workspace you are connected to, so a URL of another repository or site is refused instead of starting the wrong issue. An Asana link works in its old (`/0/<project>/<task>`) and new (`/1/<workspace>/project/<project>/task/<task>`) forms and must name a task of the account you are connected to. A bare key goes to the only tracker that can read it: `#7` to the project's GitHub or GitLab, `sc-482` to Shortcut, a number to the repository or Shortcut, and keys such as `ENG-7` to Linear, Jira, Plane or Asana. A bare number is never taken for Asana: use `--source asana` to read a task by its id. When two trackers could read it, add `--source`. `--mode` names a configured agent mode, and `--name` sets the entry and tab name. `edit` can omit `--at` to keep the exact scheduled instant; `add` needs `--at` and either `--prompt` or `--issue`. Editing an entry's `--issue` moves it to the new issue's branch, unless you also pass `--worktree`. `add`, `edit` and `list` support `--json`.
 
 ## Storage
 

@@ -89,6 +89,9 @@ impl Browser {
                 buttons
             }
             Screen::List => match self.token_form().map(|source| self.form_step(source)) {
+                Some(Step::Workspace) if self.token_form() == Some(Source::Asana) => {
+                    vec![Button::Next, Button::Back, Button::Cancel]
+                }
                 Some(Step::Site | Step::Workspace | Step::Server) => vec![Button::Next, Button::Cancel],
                 Some(Step::Email) => vec![Button::Next, Button::Back, Button::Cancel],
                 Some(Step::Token)

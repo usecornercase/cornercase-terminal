@@ -28,6 +28,10 @@ impl App {
         if plane(&config) != plane(&self.config) {
             self.forget_issues(Source::Plane);
         }
+        let asana = |c: &Config| (c.asana_workspace.clone(), c.asana_projects.clone());
+        if asana(&config) != asana(&self.config) {
+            self.forget_issues(Source::Asana);
+        }
         if config.gitlab_url != self.config.gitlab_url {
             self.forget_issues(Source::Gitlab);
         }

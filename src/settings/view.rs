@@ -81,7 +81,9 @@ impl Settings {
             | Row::JiraJql
             | Row::PlaneWorkspace
             | Row::PlaneUrl
-            | Row::PlaneFilter => tracker_row(config, row),
+            | Row::PlaneFilter
+            | Row::AsanaProjects => tracker_row(config, row),
+            Row::AsanaWorkspace => self.asana_workspace_row(),
             Row::Tab(id) => self.tab_row(id),
             Row::DefaultAgent => {
                 let note = if config.agent == agents::AUTO {
@@ -164,6 +166,20 @@ impl Settings {
         RowText { label, value, note, dangerous }
     }
 
+    fn asana_workspace_row(&self) -> (String, String, String, bool) {
+        let saved = &self.config.asana_workspace;
+        let name = match self.status(Source::Asana) {
+            Some(Status::Saved(Some(account))) if !account.workspace.is_empty() => Some(account.workspace.clone()),
+            _ => None,
+        };
+        let value = name.clone().or_else(|| (!saved.is_empty()).then(|| saved.clone()));
+        let note = match &name {
+            Some(name) if !saved.is_empty() && !saved.eq_ignore_ascii_case(name) => format!("ID {saved}"),
+            _ => "name or ID".to_string(),
+        };
+        ("Asana workspace".into(), value.unwrap_or_else(|| "your only one".into()), note, false)
+    }
+
     fn token_row(&self, source: Source) -> (String, String, String, bool) {
         let label = format!("{} {}", source.name(), source.token_name());
         let (value, note) = match self.status(source) {
@@ -184,7 +200,8 @@ impl Settings {
             "shortcut" => "Shortcut",
             "linear" => "Linear",
             "jira" => "Jira",
-            _ => "Plane",
+            "plane" => "Plane",
+            _ => "Asana",
         };
         let note = if id == "all" { "every source together".into() } else { String::new() };
         (format!("{} {name}", if on { "[x]" } else { "[ ]" }), String::new(), note, false)
@@ -216,6 +233,10 @@ impl Settings {
                 Row::PlaneWorkspace => "Plane workspace, the part after app.plane.so/, such as acme".to_string(),
                 Row::PlaneUrl => "Plane URL for a self-hosted server (empty is Plane Cloud)".to_string(),
                 Row::PlaneFilter => "Plane filter (query parameters, such as priority=high)".to_string(),
+                Row::AsanaWorkspace => "Asana workspace, its name or ID (empty is your only one)".to_string(),
+                Row::AsanaProjects => {
+                    "Asana projects, IDs or links separated by spaces (empty lists your tasks)".to_string()
+                }
                 Row::Kind(kind) => format!("{kind} extra arguments"),
                 Row::Bot(via) => via.token_field().to_string(),
                 _ => String::new(),
@@ -283,7 +304,8 @@ fn tracker_row(config: &Config, row: &Row) -> (String, String, String, bool) {
         Row::JiraJql => ("Jira filter", &config.jira_jql, "none", "JQL, such as project = SHOP"),
         Row::PlaneWorkspace => ("Plane workspace", &config.plane_workspace, "not set", "the part after app.plane.so/"),
         Row::PlaneUrl => ("Plane URL", &config.plane_url, "Plane Cloud", "for a self-hosted server"),
-        _ => ("Plane filter", &config.plane_filter, "none", "query parameters, such as priority=high"),
+        Row::PlaneFilter => ("Plane filter", &config.plane_filter, "none", "query parameters, such as priority=high"),
+        _ => ("Asana projects", &config.asana_projects, "your tasks", "IDs or links, empty lists your tasks"),
     };
     let value = if value.is_empty() { empty.to_string() } else { value.clone() };
     (label.into(), value, note.into(), false)

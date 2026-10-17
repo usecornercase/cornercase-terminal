@@ -689,8 +689,8 @@ screen_settings_issues() {
   settings_open
   cc_click 'Issues'
   cc_wait 'Jira site'
-  cc_hover 'GitHub'
-  cc_wait '↑  ↓  │'
+  cc_hover '╭─ Settings'
+  cc_wait 'IDs or links, empty lists your tasks'
   cc_shot settings-issues
 }
 

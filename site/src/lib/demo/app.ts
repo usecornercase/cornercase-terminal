@@ -146,12 +146,14 @@ const SAID_MATCHES = 300;
 
 type Listener = (event: string, detail?: string) => void;
 
-const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', gitlab: 'GitLab', shortcut: 'Shortcut', linear: 'Linear', jira: 'Jira', plane: 'Plane' };
+const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', gitlab: 'GitLab', shortcut: 'Shortcut', linear: 'Linear', jira: 'Jira', plane: 'Plane', asana: 'Asana' };
+const DEMO_WORKSPACE = 'Acme';
+const DEMO_WORKSPACE_ID = '1200';
 const QUEUE = 'queue';
 const QUEUE_EVERY = "every project's scheduled agents";
 const QUEUE_COLOURS: Partial<Record<QueueEntry['state'], number>> = { failed: 1, missed: 3, started: 2 };
 
-type Remote = 'gitlab' | 'shortcut' | 'linear' | 'jira' | 'plane';
+type Remote = 'gitlab' | 'shortcut' | 'linear' | 'jira' | 'plane' | 'asana';
 const REMOTES: Record<Remote, { name: string; token: string; env: string; help: string }> = {
   gitlab: {
     name: 'GitLab',
@@ -183,6 +185,12 @@ const REMOTES: Record<Remote, { name: string; token: string; env: string; help: 
     env: 'PLANE_API_KEY',
     help: 'Create an API key in Plane under Profile settings → Personal access tokens, paste it here and press Enter.',
   },
+  asana: {
+    name: 'Asana',
+    token: 'access token',
+    env: 'ASANA_ACCESS_TOKEN',
+    help: 'Create a personal access token in Asana under Settings → Apps → Developer apps, paste it here and press Enter.',
+  },
 };
 const isRemote = (s: string): s is Remote => Object.hasOwn(REMOTES, s);
 const tokenName = (s: Remote) => `${REMOTES[s].name} ${REMOTES[s].token}`;
@@ -192,6 +200,24 @@ function checkWorkspace(input: string): [string, string?] {
   if (!slug) return ['', 'type your workspace, the part after app.plane.so/, such as acme'];
   if (!/^[a-z0-9_-]+$/.test(slug)) return ['', 'a workspace is lowercase letters, numbers and dashes, such as acme'];
   return [slug];
+}
+
+const PROJECTS_EXAMPLE = 'type project IDs or links, such as 1200000000000001 or https://app.asana.com/0/1200000000000001/list';
+
+function projectGid(token: string): string | undefined {
+  const link = token.includes('://');
+  const path = link ? token.slice(token.indexOf('://') + 3) : token;
+  const parts = path.split(/[/?#]/).filter(Boolean);
+  const marker = ['project', '0'].map((m) => parts.indexOf(m)).find((i) => i >= 0);
+  const at = marker !== undefined ? marker + 1 : link ? undefined : 0;
+  const part = at === undefined ? undefined : parts[at];
+  return part && /^\d+$/.test(part) ? part : undefined;
+}
+
+function checkProjects(input: string): [string, string?] {
+  const tokens = input.split(/[\s,]+/).filter(Boolean);
+  const gids = tokens.map(projectGid).filter((g): g is string => !!g);
+  return gids.length === tokens.length ? [gids.join(', ')] : ['', PROJECTS_EXAMPLE];
 }
 
 function checkUrl(input: string, example = 'https://plane.acme.dev'): [string, string?] {
@@ -2626,7 +2652,7 @@ export class App {
     if (page === 2) {
       const token = (s: Remote, section: string): SettingsRow => {
         const on = c.accounts[s];
-        return { id: `token:${s}`, section, label: tokenName(s), value: on ? this.accountOf(s) : 'not connected', note: on ? 'saved' : 'enter pastes one' };
+        return { id: `token:${s}`, section, label: tokenName(s), value: on ? (s === 'asana' && !c.asanaWorkspaceName ? 'connected' : this.accountOf(s)) : 'not connected', note: on ? 'saved' : 'enter pastes one' };
       };
       const rows: SettingsRow[] = [
         token('shortcut', 'Accounts'),
@@ -2641,8 +2667,11 @@ export class App {
         { id: 'plane-filter', section: 'Plane', label: 'Plane filter', value: c.planeFilter || 'none', note: 'query parameters, such as priority=high' },
         { id: 'gitlab-url', section: 'GitLab', label: 'GitLab URL', value: c.gitlabUrl || 'gitlab.com', note: 'for a self-hosted server' },
         token('gitlab', 'GitLab'),
+        this.asanaWorkspaceRow(),
+        { id: 'asana-projects', section: 'Asana', label: 'Asana projects', value: c.asanaProjects || 'your tasks', note: 'IDs or links, empty lists your tasks' },
+        token('asana', 'Asana'),
       ];
-      const hidden = ['all', 'github', 'gitlab', 'shortcut', 'linear', 'jira', 'plane'].filter((s) => !c.sources.includes(s));
+      const hidden = ['all', 'github', 'gitlab', 'shortcut', 'linear', 'jira', 'plane', 'asana'].filter((s) => !c.sources.includes(s));
       for (const s of [...c.sources, ...hidden]) {
         rows.push({ id: `src:${s}`, section: 'Sources shown', label: `${c.sources.includes(s) ? '[x]' : '[ ]'} ${SOURCE_NAMES[s]}`, value: '', note: s === 'all' ? 'every source together' : '' });
       }
@@ -2792,6 +2821,10 @@ export class App {
       o.edit = { row: row.id, label: 'GitLab URL for a self-hosted server (empty is gitlab.com)', input: c.gitlabUrl, token: false };
     } else if (row.id === 'plane-filter') {
       o.edit = { row: row.id, label: 'Plane filter (query parameters, such as priority=high)', input: c.planeFilter, token: false };
+    } else if (row.id === 'asana-workspace') {
+      o.edit = { row: row.id, label: 'Asana workspace, its name or ID (empty is your only one)', input: c.asanaWorkspace, token: false };
+    } else if (row.id === 'asana-projects') {
+      o.edit = { row: row.id, label: 'Asana projects, IDs or links separated by spaces (empty lists your tasks)', input: c.asanaProjects, token: false };
     } else if (row.id.startsWith('src:')) {
       const id = row.id.slice(4);
       if (c.sources.includes(id)) {
@@ -2940,7 +2973,7 @@ export class App {
         this.after(900, () => {
           o.busy = undefined;
           o.edit = undefined;
-          this.config.accounts[source] = true;
+          this.setAccount(source, true);
           o.notice = `${REMOTES[source].name} connected as ${this.accountOf(source)}`;
           this.dirty();
         });
@@ -2979,6 +3012,19 @@ export class App {
         this.config.gitlabUrl = value;
         o.edit = undefined;
         o.notice = !value ? 'GitLab is gitlab.com' : unencrypted(value) ? `GitLab server: ${value}; ${UNENCRYPTED}` : `GitLab server: ${value}`;
+      }
+    } else if (edit.row === 'asana-workspace') {
+      this.config.asanaWorkspace = edit.input.trim();
+      this.config.asanaWorkspaceName = '';
+      o.edit = undefined;
+      o.notice = this.config.asanaWorkspace ? `Asana workspace: ${this.config.asanaWorkspace}` : 'the Asana workspace was cleared';
+    } else if (edit.row === 'asana-projects') {
+      const [value, error] = checkProjects(edit.input);
+      if (error) edit.error = error;
+      else {
+        this.config.asanaProjects = value;
+        o.edit = undefined;
+        o.notice = value ? `Asana projects: ${value}` : 'Asana lists your tasks';
       }
     } else if (edit.row === 'plane-filter') {
       this.config.planeFilter = edit.input.trim();
@@ -3097,7 +3143,24 @@ export class App {
     };
   }
 
+  private setAccount(source: Remote, on: boolean): void {
+    this.config.accounts[source] = on;
+    if (source === 'asana') {
+      const saved = this.config.asanaWorkspace.trim();
+      const demo = !saved || saved === DEMO_WORKSPACE_ID || saved.toLowerCase() === DEMO_WORKSPACE.toLowerCase();
+      this.config.asanaWorkspaceName = on && demo ? DEMO_WORKSPACE : '';
+    }
+  }
+
+  private asanaWorkspaceRow(): SettingsRow {
+    const saved = this.config.asanaWorkspace;
+    const name = this.config.asanaWorkspaceName;
+    const note = name && saved && saved.toLowerCase() !== name.toLowerCase() ? `ID ${saved}` : 'name or ID';
+    return { id: 'asana-workspace', section: 'Asana', label: 'Asana workspace', value: name || saved || 'your only one', note };
+  }
+
   private accountOf(source: Remote): string {
+    if (source === 'asana') return this.config.asanaWorkspaceName ? `@you in ${this.config.asanaWorkspaceName}` : '@you';
     if (source === 'gitlab') return `@you in ${gitlabServer(this.config.gitlabUrl).replace(/^https?:\/\//, '')}`;
     return `@you in ${source === 'jira' ? this.config.jiraSite : source === 'plane' ? this.config.planeWorkspace : 'acme'}`;
   }
@@ -3118,12 +3181,18 @@ export class App {
     const project = this.config.jiraJql.trim().match(/^project\s*=\s*"?([a-z][a-z0-9_]*)"?$/i)?.[1].toUpperCase();
     return ISSUES.filter((i) => (source === 'all' ? allowed(i.source) : i.source === source && allowed(i.source)))
       .filter((i) => i.source !== 'jira' || !project || i.key.startsWith(`${project}-`))
+      .filter((i) => i.source !== 'asana' || this.asanaListed(i))
       .filter((i) => !o.mine || i.mine)
       .filter((i) => !f || [i.key, i.title, i.author, i.state, ...i.labels].some((k) => k.toLowerCase().includes(f)));
   }
 
+  private asanaListed(i: Issue): boolean {
+    const projects = this.config.asanaProjects.split(/[\s,]+/).map(projectGid).filter((g): g is string => !!g);
+    return projects.length ? projects.some((gid) => i.projects?.includes(gid)) : i.mine;
+  }
+
   branchFor(i: Issue): string {
-    const prefix = i.source === 'github' ? `issue-${i.number}` : i.source === 'gitlab' ? `${i.number}` : i.source === 'shortcut' ? `sc-${i.number}` : i.key;
+    const prefix = i.source === 'github' ? `issue-${i.number}` : i.source === 'gitlab' ? `${i.number}` : i.source === 'shortcut' ? `sc-${i.number}` : i.source === 'asana' && /^\d+$/.test(i.key) ? `asana-${i.key}` : i.key;
     const s = slug(i.title, 40);
     return s ? `${prefix}-${s}` : prefix;
   }
@@ -3287,7 +3356,7 @@ export class App {
         : (source === 'github' || source === 'gitlab') && !p?.repo
           ? 'this project is not in a git repository'
           : nothing
-            ? 'nothing to list here: connect GitLab, Shortcut, Linear, Jira or Plane in their tabs'
+            ? 'nothing to list here: connect GitLab, Shortcut, Linear, Jira, Plane or Asana in their tabs'
             : 'no open issues';
     const account = isRemote(source) ? this.accountOf(source) : '';
     const hint = o.loading ? 'loading…' : [account, sel ? `enter reads ${sel.key} · start works on it ${this.startHint(sel, o)}` : ''].filter(Boolean).join(' · ');
@@ -3417,7 +3486,7 @@ export class App {
     }
     if (label === 'disconnect') {
       const source = this.issuesSource(o) as Remote;
-      this.config.accounts[source] = false;
+      this.setAccount(source, false);
       o.token = this.freshToken(source);
       return this.dirty();
     }
@@ -3515,7 +3584,7 @@ export class App {
     o.busy = 'checking…';
     this.after(900, () => {
       o.busy = undefined;
-      this.config.accounts[source] = true;
+      this.setAccount(source, true);
       o.token = this.freshToken(source);
       o.loading = true;
       this.after(400, () => {
@@ -4214,7 +4283,7 @@ export class App {
     else if ((k.key === 'Delete' || k.key === 'Backspace') && rows[o.cursor]?.id.startsWith('token:')) {
       const source = rows[o.cursor].id.slice(6) as Remote;
       if (this.config.accounts[source]) {
-        this.config.accounts[source] = false;
+        this.setAccount(source, false);
         o.notice = `the ${tokenName(source)} was removed`;
       }
     }

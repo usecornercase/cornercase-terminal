@@ -8,7 +8,7 @@ use crate::messenger::Via;
 
 pub(crate) const DONE: &str = "done";
 pub(crate) const RESTART: &str = "restart";
-const TAB_IDS: [&str; 7] = DEFAULT_ISSUE_TABS;
+const TAB_IDS: [&str; 8] = DEFAULT_ISSUE_TABS;
 const EXTRA_ARGS: &str = "extra arguments…";
 const NO_PLUGINS: &str = "`cornercase plugin install <owner/repo>` adds one, then enter turns it on here";
 
@@ -46,6 +46,8 @@ pub(crate) enum Row {
     PlaneWorkspace,
     PlaneUrl,
     PlaneFilter,
+    AsanaWorkspace,
+    AsanaProjects,
     Tab(&'static str),
     DefaultAgent,
     Submit,
@@ -92,6 +94,7 @@ impl Row {
             Self::Plugin(_) | Self::NoPlugins => "Installed",
             Self::Token(Source::Jira) | Self::JiraSite | Self::JiraEmail | Self::JiraJql => "Jira",
             Self::Token(Source::Plane) | Self::PlaneWorkspace | Self::PlaneUrl | Self::PlaneFilter => "Plane",
+            Self::Token(Source::Asana) | Self::AsanaWorkspace | Self::AsanaProjects => "Asana",
             Self::Token(Source::Gitlab) | Self::GitlabUrl => "GitLab",
             Self::Token(_) => "Accounts",
             Self::Tab(_) => "Sources shown",
@@ -120,6 +123,8 @@ impl Row {
             | Self::PlaneWorkspace
             | Self::PlaneUrl
             | Self::PlaneFilter
+            | Self::AsanaWorkspace
+            | Self::AsanaProjects
             | Self::Tab(_) => Page::Issues,
             Self::Sidebar
             | Self::Tabs
@@ -390,6 +395,9 @@ impl Settings {
                     rows.extend([Row::PlaneWorkspace, Row::PlaneUrl, Row::Token(Source::Plane), Row::PlaneFilter]);
                 }
                 Source::Gitlab => rows.extend([Row::GitlabUrl, Row::Token(Source::Gitlab)]),
+                Source::Asana => {
+                    rows.extend([Row::AsanaWorkspace, Row::AsanaProjects, Row::Token(Source::Asana)]);
+                }
                 _ => rows.push(Row::Token(*source)),
             }
         }
@@ -457,6 +465,13 @@ impl Settings {
     }
 
     fn save(&mut self, config: Config, notice: String) -> Action {
+        if config.asana_workspace != self.config.asana_workspace {
+            for (source, status) in &mut self.tokens {
+                if *source == Source::Asana && matches!(status, Status::Saved(_)) {
+                    *status = Status::Saved(None);
+                }
+            }
+        }
         self.config = config.clone();
         self.notice = Some(notice);
         Action::Save(Box::new(config))

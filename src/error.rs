@@ -2,6 +2,13 @@ use std::path::PathBuf;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
+#[derive(Debug)]
+pub struct Workspaces {
+    pub handle: String,
+    pub choices: Vec<(String, String)>,
+    pub message: String,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("failed to open a pty")]
@@ -58,6 +65,8 @@ pub enum Error {
     Usage(String),
     #[error("{0}")]
     Plugin(String),
+    #[error("{}", .0.message)]
+    Workspaces(Box<Workspaces>),
     #[error("cannot read `{}`: {reason}", path.display())]
     CodeWorkspace { path: PathBuf, reason: String },
     #[error("cannot read `{}`: {cause}", path.display())]

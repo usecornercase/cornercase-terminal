@@ -35,6 +35,8 @@ pub(crate) fn locator(text: &str, source: Option<&str>, available: &[Source]) ->
             Some(Source::Jira)
         } else if host == "app.plane.so" {
             Some(Source::Plane)
+        } else if host == "app.asana.com" {
+            Some(Source::Asana)
         } else {
             None
         };
@@ -42,11 +44,16 @@ pub(crate) fn locator(text: &str, source: Option<&str>, available: &[Source]) ->
         if inferred.is_some_and(|inferred| inferred != source) {
             return Err(Error::Api("the issue URL and --source disagree".into()));
         }
+        if source == Source::Asana {
+            let key = asana_task(path).ok_or_else(|| Error::Api("the issue URL has no readable issue key".into()))?;
+            return Ok(Locator { source, key: key.into(), url: Some(text.into()) });
+        }
         let marker = match source {
             Source::Github | Source::Gitlab => "issues",
             Source::Shortcut => "story",
             Source::Linear => "issue",
             Source::Jira | Source::Plane => "browse",
+            Source::Asana => unreachable!("an Asana URL returns above"),
         };
         let key = parts
             .windows(2)
@@ -67,9 +74,11 @@ pub(crate) fn locator(text: &str, source: Option<&str>, available: &[Source]) ->
             &[Source::Github, Source::Gitlab, Source::Shortcut],
             "a number needs a repository or Shortcut",
         )?,
-        None => {
-            only(available, &[Source::Linear, Source::Jira, Source::Plane], "this key needs Linear, Jira or Plane")?
-        }
+        None => only(
+            available,
+            &[Source::Linear, Source::Jira, Source::Plane, Source::Asana],
+            "this key needs Linear, Jira, Plane or Asana",
+        )?,
     };
     let key = match source {
         Source::Shortcut => text.trim_start_matches("sc-"),
@@ -86,7 +95,7 @@ fn only(available: &[Source], kinds: &[Source], missing: &str) -> Result<Source>
     let found: Vec<_> = kinds.iter().copied().filter(|kind| available.contains(kind)).collect();
     match found.as_slice() {
         [source] => Ok(*source),
-        [] => Err(Error::Api(format!("{missing}; use --source github|gitlab|shortcut|linear|jira|plane"))),
+        [] => Err(Error::Api(format!("{missing}; use --source github|gitlab|shortcut|linear|jira|plane|asana"))),
         _ => {
             let names: Vec<_> = found.iter().map(|source| source.id()).collect();
             Err(Error::Api(format!("this key could be {}; use --source to choose", names.join(" or "))))
@@ -104,9 +113,10 @@ pub(crate) fn find(client: &Client, locator: &Locator) -> Result<Issue> {
         Client::Linear { url, token } => crate::issues::linear::Api { url, token }.find(key),
         Client::Jira(api) => api.find(key),
         Client::Plane(api) => api.find(key),
+        Client::Asana(api) => api.find(key),
     }?;
     match &locator.url {
-        Some(url) if place(url) != place(&issue.url) => Err(Error::Api(format!(
+        Some(url) if !same_issue(locator.source, url, &issue.url) => Err(Error::Api(format!(
             "that URL is not an issue of this project's {}: its {} is {}",
             locator.source.name(),
             issue.key,
@@ -114,6 +124,28 @@ pub(crate) fn find(client: &Client, locator: &Locator) -> Result<Issue> {
         ))),
         _ => Ok(issue),
     }
+}
+
+fn same_issue(source: Source, given: &str, found: &str) -> bool {
+    if source == Source::Asana {
+        let task = |url: &str| {
+            let path = url.split_once("://").map_or(url, |(_, rest)| rest).split_once('/').map(|(_, path)| path);
+            path.and_then(asana_task).map(str::to_string)
+        };
+        return task(given).is_some() && task(given) == task(found);
+    }
+    place(given) == place(found)
+}
+
+fn asana_task(path: &str) -> Option<&str> {
+    let path = path.split(['?', '#']).next().unwrap_or_default();
+    let parts: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
+    let gid = match parts.iter().position(|part| *part == "task") {
+        Some(i) => parts.get(i + 1),
+        None if parts.first() == Some(&"0") => parts.get(2),
+        None => None,
+    };
+    gid.copied().filter(|gid| gid.bytes().all(|b| b.is_ascii_digit()))
 }
 
 fn place(url: &str) -> Option<Vec<String>> {

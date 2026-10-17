@@ -2,15 +2,23 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.111
+## 0.12.112
 
 - Plugins: a folder with a `cornercase-plugin.toml` can add entries to the ` ⋯ ` and right-click menus of projects, workspaces, tabs and panes, run a command on every event `cornercase events` prints, keep a service running in the server (restarted if it stops), and keep a process running next to each window on this computer. Plugins talk back through the cornercase commands, so they can be written in any language.
 - `cornercase plugin link <folder>` adds a plugin, turned off; `enable`, `disable`, `list`, `logs` and `unlink` do the rest, and Settings has a new Plugins tab to turn them on and off.
 - `cornercase plugin install owner/repo` installs a plugin from GitHub (or any `https://` git address, or a folder), pinned to a commit, with `@tag`, `@branch` or `@commit` to choose one. A repository can hold several plugins in folders: `cornercase plugin install owner/repo/plugins/notes` (or `address//folder` outside GitHub). Before anything runs it shows where the plugin comes from, what it asks for and every command it will run, and asks; it is installed turned off. A plugin can ship prebuilt archives, checked against their sha256 before they are unpacked, or build steps that run once you confirm.
 - `cornercase plugin update` fetches installed plugins again and, when one changed, shows the new version's commands and asks before updating; `cornercase plugin remove` turns a plugin off, waits (up to 10 seconds) until its service and window processes have stopped, then deletes its installed copy; if something still runs, cannot be checked, or the plugin was turned on again meanwhile, it says so and deletes nothing, leaving the plugin installed.
+- Find plugins at usecornercase.dev/plugins: every public GitHub repository with the `cornercase-plugin` topic shows there, with each plugin it holds and the command that installs it; see what is trending and new, search it, and sort by stars, trending, recent activity, newest or name. Nobody reviews them, so read a plugin or trust its author before turning it on. To publish yours, add that topic to its repository.
 - A plugin whose command is a link leading out of its folder can no longer be linked or turned on, and `plugin list` and Settings say why.
 - A plugin runs as you and can do anything you can, including typing into every terminal. What it asks for is shown before you turn it on, but not enforced: only turn on plugins you trust.
-- Find plugins at usecornercase.dev/plugins: every public GitHub repository with the `cornercase-plugin` topic shows there, with each plugin it holds and the command that installs it; see what is trending and new, search it, and sort by stars, trending, recent activity, newest or name. Nobody reviews them, so read a plugin or trust its author before turning it on. To publish yours, add that topic to its repository.
+
+## 0.12.111
+
+- A new **Asana** tab in the issues browser reads tasks from Asana and starts an agent on one like on any other tracker's issue. Connect it from the tab: paste a personal access token from **Settings → Apps → Developer apps** in Asana (`ASANA_ACCESS_TOKEN` works too). When the account belongs to several workspaces, cornercase asks which one to use; it is saved in **Settings → Issues → Asana**.
+- The tab lists your open tasks, or, when you set **Asana projects** in **Settings → Issues → Asana** (IDs or links, separated by spaces or commas), the open tasks of those projects. **closed** adds completed tasks, and **people** filters by assignee and creator. In your-tasks mode the assignee is always you, so choosing someone else asks you to set Asana projects instead. Subtasks, milestones and approvals are not listed.
+- A task's description and comments are read as Markdown (mentions show as plain `@name`, images as `[image]`). Its branch is named after its ID field, such as `ENG-42-fix-login`, or `asana-<task id>-fix-login` when its project has none.
+- `cornercase queue add --issue` takes an Asana link, in the old or the new format, or an ID-field key such as `ENG-42`; a bare task id needs `--source asana`.
+- **Settings → Issues → Asana** has the workspace, the projects and the access token. Lists saved before get the Asana tab added once, at the end.
 
 ## 0.12.110
 
