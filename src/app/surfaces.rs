@@ -5,7 +5,7 @@ use ratatui::layout::Rect;
 use super::App;
 use super::control::{Handled, json, none};
 use crate::control::contract::{Code, Refusal};
-use crate::control::surface::{self, Area, Content, Cursor, Frame, Modes, Pane, Scroll, Size, Styles, Surface, lines};
+use crate::control::surface::{self, Area, Content, Cursor, Frame, Modes, Pane, Scroll, Size, Surface, Tables, lines};
 use crate::control::terminal::{Resize, Resized};
 use crate::control::{self, Layout};
 use crate::log;
@@ -48,8 +48,8 @@ struct Subscription {
     last: Content,
 }
 
-fn pane_of(term: &mut Term, id: u64, rect: Rect, active: bool, styles: &mut Styles) -> Pane {
-    let snapshot = term.emulator.snapshot().unwrap_or_default();
+fn pane_of(term: &mut Term, id: u64, rect: Rect, active: bool, tables: &mut Tables) -> Pane {
+    let snapshot = term.emulator.surface_snapshot().unwrap_or_default();
     let (rows, cols) = term.emulator.size().unwrap_or_default();
     let cursor = snapshot.cursor.map(|at| Cursor {
         x: at.x,
@@ -77,7 +77,8 @@ fn pane_of(term: &mut Term, id: u64, rect: Rect, active: bool, styles: &mut Styl
         cursor,
         modes,
         scroll,
-        lines: lines(snapshot.rows, styles),
+        colours: emulator.program_colours().into(),
+        lines: lines(snapshot.rows, &snapshot.links, tables),
     }
 }
 
@@ -140,18 +141,24 @@ impl App {
         let layout = Layout::from(&tab.layout);
         let dividers = tab.layout.dividers(area);
         let active = tab.pane().map(|term| term.id);
-        let mut styles = Styles::default();
+        let mut tables = Tables::default();
         let mut panes = Vec::new();
         for (id, rect) in tab.shown(area) {
             if let Some(term) = tab.pane_by_mut(id) {
-                panes.push(pane_of(term, id, rect, active == Some(id), &mut styles));
+                panes.push(pane_of(term, id, rect, active == Some(id), &mut tables));
             }
         }
         let dividers = dividers
             .into_iter()
             .map(|d| surface::Divider { dir: d.dir, path: d.path, area: d.area.into(), line: d.line.into() })
             .collect();
-        Some(Content { layout: Some(layout), dividers, styles: styles.into_table(), panes })
+        Some(Content {
+            layout: Some(layout),
+            dividers,
+            styles: tables.styles.into_entries(),
+            hyperlinks: tables.hyperlinks.into_entries(),
+            panes,
+        })
     }
 
     fn view_surface(&self, view: u64, surface: &Surface) -> Result<(u64, Rect, Option<u64>), Refusal> {

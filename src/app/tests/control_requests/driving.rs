@@ -377,3 +377,119 @@ fn a_ratio_that_only_rounds_out_of_range_is_refused_and_changes_nothing() {
     assert_eq!(refusal.code, "malformed", "{}", refusal.message);
     assert_eq!(layout, before);
 }
+
+mod link {
+    use super::*;
+
+    fn showing(dir: &Path, text: &str) -> (App, Receiver<AppEvent>, u64) {
+        let (mut app, rx) = app_in(dir, no_config());
+        let id = first(&app);
+        pane_mut(&mut app, id).feed(format!("\x1b[2J\x1b[H{text}").as_bytes());
+        (app, rx, id)
+    }
+
+    fn pane_mut(app: &mut App, id: u64) -> &mut Term {
+        app.projects.pane_by_mut(id).expect("the pane")
+    }
+
+    fn at(app: &mut App, pane: u64, x: u16, y: u16) -> Value {
+        ok(app, "link", &json!({"pane": pane, "cell": {"x": x, "y": y}}))
+    }
+
+    fn repo() -> TempDir {
+        git_repo(&[("src/main.rs", "fn main() {\n    run();\n}\n")])
+    }
+
+    #[test]
+    fn answers_what_a_click_opens() {
+        let repo = repo();
+        let (mut app, _rx, id) = showing(repo.path(), "look at src/main.rs:2-3");
+        let workspace = app.projects[0].workspaces[0].id;
+
+        let answer = at(&mut app, id, 12, 0);
+
+        let canonical = repo.path().join("src/main.rs").canonicalize().expect("canonical");
+        assert_eq!(
+            answer,
+            json!({"pane": id, "link": {
+                "path": canonical.to_string_lossy(), "inside": true, "workspace": workspace,
+                "relative": "src/main.rs", "lines": {"first": 2, "last": 3}, "row": 0, "start": 8, "end": 23
+            }})
+        );
+    }
+
+    #[test]
+    fn a_path_outside_the_workspace_is_absolute_and_not_inside() {
+        let (repo, other) = (repo(), TempDir::new());
+        std::fs::write(other.path().join("plan.md"), "# Plan").expect("write");
+        let printed = other.path().join("plan.md").display().to_string();
+        let (mut app, _rx, id) = showing(repo.path(), &printed);
+
+        let answer = at(&mut app, id, 2, 0);
+
+        let link = &answer["link"];
+        assert_eq!(link["inside"], false);
+        assert_eq!(link["path"], other.path().join("plan.md").canonicalize().expect("path").to_string_lossy().as_ref());
+        assert!(link.get("relative").is_none() && link.get("lines").is_none());
+    }
+
+    #[rstest]
+    #[case::missing_file("see missing.rs", 5)]
+    #[case::a_url("https://example.com/src/main.rs", 10)]
+    #[case::a_blank_cell("src/main.rs", 40)]
+    fn a_cell_on_no_file_answers_null(#[case] text: &str, #[case] x: u16) {
+        let repo = repo();
+        let (mut app, _rx, id) = showing(repo.path(), text);
+
+        assert_eq!(at(&mut app, id, x, 0), json!({"pane": id, "link": null}));
+    }
+
+    #[test]
+    fn a_relative_path_resolves_from_the_programs_folder_first() {
+        let repo = repo();
+        std::fs::create_dir(repo.path().join("sub")).expect("mkdir");
+        std::fs::write(repo.path().join("sub/only-here.txt"), "x").expect("write");
+        let (mut app, rx, id) = showing(repo.path(), "");
+        sent(&mut app, id, &line_in(id, "cd sub"));
+        let sub = repo.path().join("sub");
+        pump_until(&mut app, &rx, "the shell is in sub", |a| pane(a, id).cwd().as_deref() == Some(sub.as_path()));
+        pane_mut(&mut app, id).feed(b"\x1b[2J\x1b[Honly-here.txt");
+
+        let answer = at(&mut app, id, 3, 0);
+
+        assert_eq!(answer["link"]["relative"], "sub/only-here.txt");
+    }
+
+    #[test]
+    fn a_pane_of_another_workspace_resolves_in_its_own_workspace() {
+        let (repo, other) = (repo(), TempDir::new());
+        let (mut app, rx, id) = showing(repo.path(), "");
+        sent(&mut app, id, &line_in(id, "cd /"));
+        pump_until(&mut app, &rx, "the shell is in /", |a| pane(a, id).cwd().as_deref() == Some(Path::new("/")));
+        pane_mut(&mut app, id).feed(b"\x1b[2J\x1b[Hsrc/main.rs");
+        app.open_project(other.path().to_path_buf(), AREA).expect("another project");
+        assert_ne!(first(&app), id, "the window shows the other project");
+        let workspace = app.projects[0].workspaces[0].id;
+
+        let answer = at(&mut app, id, 3, 0);
+
+        assert_eq!((&answer["link"]["inside"], &answer["link"]["workspace"]), (&json!(true), &json!(workspace)));
+        assert_eq!(answer["link"]["relative"], "src/main.rs");
+    }
+
+    #[rstest]
+    #[case::no_pane(json!({"cell": {"x": 0, "y": 0}}), "malformed")]
+    #[case::no_cell(json!({"pane": 0}), "malformed")]
+    #[case::unknown_pane(json!({"pane": 9999, "cell": {"x": 0, "y": 0}}), "not-found")]
+    #[case::outside(json!({"pane": 0, "cell": {"x": 500, "y": 0}}), "conflict")]
+    #[case::other_size(json!({"pane": 0, "size": {"cols": 3, "rows": 3}, "cell": {"x": 0, "y": 0}}), "conflict")]
+    fn rejected_link_requests(#[case] mut args: Value, #[case] code: &str) {
+        let repo = repo();
+        let (mut app, _rx, id) = showing(repo.path(), "src/main.rs");
+        if args["pane"] == 0 {
+            args["pane"] = json!(id);
+        }
+
+        assert_eq!(refused(&mut app, "link", &args).code, code);
+    }
+}

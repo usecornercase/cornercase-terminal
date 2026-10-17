@@ -828,3 +828,162 @@ mod driven_selection {
         assert_eq!(emu.scrollbar().offset, 0);
     }
 }
+
+mod background_erase {
+    use super::*;
+
+    #[test]
+    fn a_line_cleared_with_a_palette_background_keeps_it() {
+        let cells = snapshot_of(b"\x1b[44mab\x1b[K").rows.remove(0);
+        assert_eq!(cells[1].style.bg, Some(Color::Indexed(4)));
+        assert_eq!(cells[40].style.bg, Some(Color::Indexed(4)));
+    }
+
+    #[test]
+    fn cells_erased_with_an_rgb_background_keep_it() {
+        let cells = snapshot_of(b"\x1b[48;2;1;2;3m\x1b[2X").rows.remove(0);
+        assert_eq!(cells[1].style.bg, Some(Color::Rgb(1, 2, 3)));
+        assert_eq!(cells[2].style, Style::default());
+    }
+
+    #[test]
+    fn a_plain_blank_stays_default() {
+        assert_eq!(snapshot_of(b"ab\x1b[K").rows[0][10].style, Style::default());
+    }
+}
+
+mod cell_decor {
+    use super::*;
+
+    fn decor_of(output: &[u8]) -> Cell {
+        snapshot_of(output).rows[0][0].clone()
+    }
+
+    #[rstest]
+    #[case::curly(b"\x1b[4:3mx", UnderlineStyle::Curly)]
+    #[case::double(b"\x1b[21mx", UnderlineStyle::Double)]
+    #[case::double_sub(b"\x1b[4:2mx", UnderlineStyle::Double)]
+    #[case::dotted(b"\x1b[4:4mx", UnderlineStyle::Dotted)]
+    #[case::dashed(b"\x1b[4:5mx", UnderlineStyle::Dashed)]
+    #[case::single(b"\x1b[4mx", UnderlineStyle::Single)]
+    fn reads_the_underline_style(#[case] output: &[u8], #[case] expected: UnderlineStyle) {
+        let cell = decor_of(output);
+        assert_eq!(cell.decor.underline, expected);
+        assert!(cell.style.add_modifier.contains(Modifier::UNDERLINED));
+    }
+
+    #[rstest]
+    #[case::palette(b"\x1b[4;58:5:196mx", Color::Indexed(196))]
+    #[case::palette_semicolons(b"\x1b[58;5;12;4mx", Color::Indexed(12))]
+    #[case::rgb(b"\x1b[4;58:2::1:2:3mx", Color::Rgb(1, 2, 3))]
+    #[case::none(b"\x1b[4mx", Color::Reset)]
+    fn reads_the_underline_colour(#[case] output: &[u8], #[case] expected: Color) {
+        assert_eq!(decor_of(output).decor.underline_colour, expected);
+    }
+
+    #[test]
+    fn reads_the_overline() {
+        assert!(decor_of(b"\x1b[53mx").decor.overline);
+        assert!(!decor_of(b"x").decor.overline);
+    }
+}
+
+mod hyperlinks {
+    use super::*;
+
+    fn surface_of(cols: u16, output: &[u8]) -> Snapshot {
+        let replies = Box::new(|_: &[u8]| {});
+        let mut emu = Emulator::new(6, cols, 0, &HostTheme::default(), replies).expect("emulator");
+        emu.feed(output);
+        emu.surface_snapshot().expect("snapshot")
+    }
+
+    #[test]
+    fn the_window_snapshot_reads_no_hyperlinks() {
+        let snap = snapshot_of(b"\x1b]8;;https://example.com\x1b\\site\x1b]8;;\x1b\\");
+        assert_eq!(snap.links.len(), 0);
+        assert!(snap.rows.iter().flatten().all(|cell| cell.link.is_none()));
+    }
+
+    #[test]
+    fn a_hyperlink_names_its_uri_on_every_cell_and_across_a_wrap() {
+        let output = b"\x1b]8;;https://example.com/a\x1b\\abcdefghijklmnopqrstuvwxyz0123\x1b]8;;\x1b\\ plain";
+        let snap = surface_of(20, output);
+        assert_eq!(snap.links, ["https://example.com/a"]);
+        assert!(snap.rows[0].iter().all(|cell| cell.link == Some(0)));
+        assert!(snap.rows[1][..10].iter().all(|cell| cell.link == Some(0)));
+        assert!(snap.rows[1][11..].iter().all(|cell| cell.link.is_none()));
+    }
+
+    #[test]
+    fn two_addresses_are_two_entries() {
+        let snap = surface_of(40, b"\x1b]8;;https://a.test\x1b\\a\x1b]8;;https://b.test\x1b\\b\x1b]8;;\x1b\\c");
+        assert_eq!(snap.links, ["https://a.test", "https://b.test"]);
+        let links: Vec<_> = snap.rows[0][..3].iter().map(|cell| cell.link).collect();
+        assert_eq!(links, [Some(0), Some(1), None]);
+    }
+
+    #[test]
+    fn a_blank_cell_in_a_link_carries_it() {
+        let snap = surface_of(40, b"\x1b]8;;file:///tmp/x\x1b\\   \x1b]8;;\x1b\\<");
+        assert_eq!(snap.links, ["file:///tmp/x"]);
+        assert_eq!(snap.rows[0][1].link, Some(0));
+        assert_eq!(snap.rows[0][3].link, None);
+    }
+}
+
+mod program_colours {
+    use super::*;
+    use libghostty_vt::style::RgbColor;
+
+    fn after(output: &[u8]) -> ProgramColours {
+        let (mut emu, _) = emulator();
+        emu.feed(output);
+        emu.program_colours()
+    }
+
+    #[test]
+    fn a_program_that_changed_nothing_has_none() {
+        assert_eq!(after(b"hello"), ProgramColours::default());
+    }
+
+    #[test]
+    fn the_palette_and_default_colours_a_program_sets_show() {
+        let colours = after(
+            b"\x1b]4;1;rgb:ff/00/00\x07\x1b]4;200;#102030\x07\x1b]10;#112233\x07\x1b]11;rgb:44/55/66\x07\x1b]12;#778899\x07",
+        );
+        assert_eq!(colours.palette, [(1, [255, 0, 0]), (200, [16, 32, 48])]);
+        assert_eq!(colours.foreground, Some([0x11, 0x22, 0x33]));
+        assert_eq!(colours.background, Some([0x44, 0x55, 0x66]));
+        assert_eq!(colours.cursor, Some([0x77, 0x88, 0x99]));
+    }
+
+    #[test]
+    fn a_host_theme_is_not_an_override_also_when_it_changes() {
+        let mut theme = HostTheme { foreground: Some(RgbColor { r: 200, g: 200, b: 200 }), ..HostTheme::default() };
+        theme.palette[1] = Some(RgbColor { r: 1, g: 2, b: 3 });
+        let (mut emu, _) = themed_emulator(&theme);
+        assert_eq!(emu.program_colours(), ProgramColours::default());
+        emu.feed(b"\x1b]4;5;#abcdef\x07");
+        theme.palette[1] = Some(RgbColor { r: 9, g: 9, b: 9 });
+        emu.set_theme(&theme).expect("theme");
+        assert_eq!(emu.program_colours().palette, [(5, [0xab, 0xcd, 0xef])]);
+    }
+
+    #[rstest]
+    #[case::one_entry(b"\x1b]104;1\x07")]
+    #[case::the_palette(b"\x1b]104\x07")]
+    #[case::the_foreground(b"\x1b]110\x07")]
+    #[case::the_background(b"\x1b]111\x07")]
+    #[case::the_cursor(b"\x1b]112\x07")]
+    fn resets_clear_what_they_name(#[case] reset: &[u8]) {
+        let mut output = b"\x1b]4;1;#ff0000\x07\x1b]10;#112233\x07\x1b]11;#445566\x07\x1b]12;#778899\x07".to_vec();
+        output.extend_from_slice(reset);
+        let colours = after(&output);
+        let left = usize::from(!colours.palette.is_empty())
+            + usize::from(colours.foreground.is_some())
+            + usize::from(colours.background.is_some())
+            + usize::from(colours.cursor.is_some());
+        assert_eq!(left, 3);
+    }
+}

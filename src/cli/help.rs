@@ -332,8 +332,8 @@ pub(super) const SURFACE_HELP: &str =
 GUI. It keeps running and prints the tab as one JSON object per line: first as it is now, then again
 each time something it shows changes, at most about 60 times a second. Each line is complete and
 replaces the one before. It holds the panes laid out at the given size, each with its place (rect),
-its terminal's own size (size), its cells, cursor, modes and scroll position, plus the split tree,
-the dividers, and boot, session and revision.
+its terminal's own size (size), its cells (with their hyperlinks), the colours its program changed,
+cursor, modes and scroll position, plus the split tree, the dividers, and boot, session and revision.
 
 Each line names its stream with `surface`, which `cornercase resize` takes to lay a --tab surface out at
 another size. With --tab the surface resizes no terminal: terminals keep the size of whoever sizes the tab (the
@@ -402,6 +402,17 @@ terminals follow at once.
 Examples:
   cornercase ratio --tab 3 0.3
   cornercase ratio --tab 3 --path second 0.5";
+pub(super) const LINK_HELP: &str =
+    "For programs that draw cornercase's terminals themselves (see `cornercase surface`). Prints the
+file a click on that cell opens in the window: the path a program printed there, looked up from the
+folder of the program in the foreground, then from the root of the pane's workspace, with its line or
+lines (path:12, path:12-30). CELL is the column and row of the pane's view, from 0, as a surface frame
+numbers them. Prints nothing when the cell holds no such path. --json also says whether the file is
+inside the pane's workspace and which cells the path takes.
+
+Examples:
+  cornercase link --pane 12 --cell 10,3
+  cornercase link --pane 12 --cell 10,3 --json";
 pub(super) const SKILL_HELP: &str = "Install them for Claude Code, Codex and other agents with
   npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 or put this text in an AGENTS.md or CLAUDE.md.";

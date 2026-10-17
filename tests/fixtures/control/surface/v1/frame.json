@@ -15,13 +15,17 @@
       "line": {"x": 59, "y": 0, "cols": 1, "rows": 40}
     }
   ],
-  "styles": [{}, {"fg": {"index": 2}, "bold": true}, {"bg": {"rgb": [40, 44, 52]}, "inverse": true}],
+  "styles": [{}, {"fg": {"index": 2}, "bold": true}, {"bg": {"rgb": [40, 44, 52]}, "inverse": true},
+    {"underline": true, "underline_style": "curly", "underline_colour": {"index": 196}},
+    {"underline": true, "underline_colour": {"rgb": [255, 128, 0]}, "overline": true}
+  ],
+  "hyperlinks": [{"uri": "https://example.com/docs/a-long-page"}, {"uri": "file:///home/u/web-shop/README.md"}],
   "panes": [
     {
       "pane": 13,
       "active": true,
       "rect": {"x": 0, "y": 0, "cols": 59, "rows": 40},
-      "size": {"cols": 51, "rows": 3},
+      "size": {"cols": 51, "rows": 5},
       "cursor": {"x": 2, "y": 1, "shape": "bar", "blinking": true},
       "modes": {
         "mouse": "press_release",
@@ -33,10 +37,18 @@
         "focus_events": true,
         "kitty_keyboard": 1
       },
-      "scroll": {"total": 1200, "offset": 1197, "rows": 3},
+      "scroll": {"total": 1200, "offset": 1195, "rows": 5},
+      "colours": {
+        "fg": [220, 220, 220],
+        "bg": [16, 16, 16],
+        "cursor": [255, 0, 255],
+        "palette": {"1": [255, 0, 0], "200": [16, 32, 48]}
+      },
       "lines": [
         [{"style": 0, "cells": ["$", " ", "l", "s"]}],
         [{"style": 1, "cells": ["o", "k"]}, {"style": 0, "cells": [" ", "中", "", "x"]}],
+        [{"style": 3, "cells": ["e", "r", "r"]}, {"style": 0, "hyperlink": 0, "cells": ["s", "e", "e", " ", "d", "o"]}],
+        [{"style": 0, "hyperlink": 0, "cells": ["c", "s"]}, {"style": 4, "hyperlink": 0, "cells": ["!"]}, {"style": 4, "hyperlink": 1, "cells": ["?"]}],
         []
       ]
     },

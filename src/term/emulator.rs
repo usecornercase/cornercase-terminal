@@ -4,11 +4,12 @@ use std::rc::Rc;
 
 use crossterm::event::KeyEvent;
 use libghostty_vt::Terminal;
+use libghostty_vt::error::Error;
 use libghostty_vt::fmt::{Format, Formatter, FormatterOptions};
 use libghostty_vt::key::{Encoder, KittyKeyFlags};
 use libghostty_vt::render::CursorVisualStyle;
 use libghostty_vt::render::{CellIterator, RenderState, RowIterator};
-use libghostty_vt::screen::{CellWide, Screen, TrackedGridRef};
+use libghostty_vt::screen::{CellContentTag, CellWide, Screen, TrackedGridRef};
 use libghostty_vt::selection::{FormatOptions, Selection};
 use libghostty_vt::style::{Palette, StyleColor, Underline};
 use libghostty_vt::terminal::{
@@ -28,11 +29,39 @@ use crate::text::Needle;
 pub(crate) type Result<T> = libghostty_vt::error::Result<T>;
 pub(crate) type ReplyFn = Box<dyn FnMut(&[u8])>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub(crate) enum UnderlineStyle {
+    #[default]
+    None,
+    Single,
+    Double,
+    Curly,
+    Dotted,
+    Dashed,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub(crate) struct Decor {
+    pub(crate) underline: UnderlineStyle,
+    pub(crate) underline_colour: Color,
+    pub(crate) overline: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Cell {
     pub(crate) symbol: String,
     pub(crate) style: Style,
     pub(crate) spacer: bool,
+    pub(crate) decor: Decor,
+    pub(crate) link: Option<usize>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct ProgramColours {
+    pub(crate) palette: Vec<(u8, [u8; 3])>,
+    pub(crate) foreground: Option<[u8; 3]>,
+    pub(crate) background: Option<[u8; 3]>,
+    pub(crate) cursor: Option<[u8; 3]>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -65,6 +94,7 @@ pub(crate) struct Snapshot {
     pub(crate) blinking: bool,
     pub(crate) scroll: Scrollbar,
     pub(crate) below: usize,
+    pub(crate) links: Vec<String>,
 }
 
 impl Snapshot {
@@ -373,6 +403,35 @@ impl Emulator {
     }
 
     pub(crate) fn snapshot(&mut self) -> Result<Snapshot> {
+        self.capture(false)
+    }
+
+    pub(crate) fn surface_snapshot(&mut self) -> Result<Snapshot> {
+        self.capture(true)
+    }
+
+    pub(crate) fn program_colours(&self) -> ProgramColours {
+        let (Ok(now), Ok(default)) = (self.vt.color_palette(), self.vt.default_color_palette()) else {
+            return ProgramColours::default();
+        };
+        let rgb = |c: libghostty_vt::style::RgbColor| [c.r, c.g, c.b];
+        let palette = (0..=u8::MAX)
+            .filter(|&i| now.0[usize::from(i)] != default.0[usize::from(i)])
+            .map(|i| (i, rgb(now.0[usize::from(i)])))
+            .collect();
+        let changed = |now: Result<Option<_>>, default: Result<Option<_>>| {
+            let now = now.ok().flatten()?;
+            (Some(now) != default.ok().flatten()).then(|| rgb(now))
+        };
+        ProgramColours {
+            palette,
+            foreground: changed(self.vt.fg_color(), self.vt.default_fg_color()),
+            background: changed(self.vt.bg_color(), self.vt.default_bg_color()),
+            cursor: changed(self.vt.cursor_color(), self.vt.default_cursor_color()),
+        }
+    }
+
+    fn capture(&mut self, links: bool) -> Result<Snapshot> {
         if self.below() > 0 && self.mouse_mode() != MouseMode::None {
             self.scroll_to_bottom();
         }
@@ -388,8 +447,12 @@ impl Emulator {
         let blinking = snap.cursor_blinking().unwrap_or(false);
         let mut rows = Vec::new();
         let mut text = String::new();
+        let mut found = Vec::new();
+        let mut uri = vec![0u8; 2048];
         let mut row_it = self.rows.update(&snap)?;
+        let mut y = 0u32;
         while let Some(row) = row_it.next() {
+            let linked_row = links && row.raw_row()?.has_hyperlink()?;
             let mut cells = Vec::new();
             let mut spacer = false;
             let mut cell_it = self.cells.update(row)?;
@@ -400,17 +463,82 @@ impl Emulator {
                 }
                 text.retain(|c| !c.is_control());
                 let symbol = if text.is_empty() { " ".to_string() } else { text.clone() };
-                let style = if cell.has_styling()? { to_style(cell.style()?) } else { Style::default() };
+                let raw = cell.raw_cell()?;
+                let (style, decor) = if cell.has_styling()? {
+                    let s = cell.style()?;
+                    (to_style(s), to_decor(s))
+                } else {
+                    (background(raw)?, Decor::default())
+                };
                 let style = if cell.is_selected()? { selected(style) } else { style };
                 let tail = std::mem::take(&mut spacer);
-                spacer = cell.graphemes_len()? > 0 && cell.raw_cell()?.wide()? == CellWide::Wide;
-                cells.push(Cell { symbol, style, spacer: tail });
+                spacer = cell.graphemes_len()? > 0 && raw.wide()? == CellWide::Wide;
+                let link = if linked_row && raw.has_hyperlink()? {
+                    let x = u16::try_from(cells.len()).unwrap_or(u16::MAX);
+                    link_at(&self.vt, x, y, &mut uri, &mut found)?
+                } else {
+                    None
+                };
+                cells.push(Cell { symbol, style, spacer: tail, decor, link });
             }
             rows.push(cells);
+            y += 1;
         }
         let scroll = self.scrollbar();
-        Ok(Snapshot { rows, cursor, shape, blinking, scroll, below: scroll.below() })
+        Ok(Snapshot { rows, cursor, shape, blinking, scroll, below: scroll.below(), links: found })
     }
+}
+
+fn link_at(
+    vt: &Terminal<'static, 'static>,
+    x: u16,
+    y: u32,
+    buf: &mut Vec<u8>,
+    found: &mut Vec<String>,
+) -> Result<Option<usize>> {
+    let at = vt.grid_ref(Point::Viewport(PointCoordinate { x, y }))?;
+    let len = match at.hyperlink_uri(buf) {
+        Err(Error::OutOfSpace { required }) => {
+            buf.resize(required, 0);
+            at.hyperlink_uri(buf)?
+        }
+        other => other?,
+    };
+    if len == 0 {
+        return Ok(None);
+    }
+    let mut uri = String::from_utf8_lossy(&buf[..len]).into_owned();
+    uri.retain(|c| !c.is_control());
+    if let Some(i) = found.iter().rposition(|known| *known == uri) {
+        return Ok(Some(i));
+    }
+    found.push(uri);
+    Ok(Some(found.len() - 1))
+}
+
+fn background(raw: libghostty_vt::screen::Cell) -> Result<Style> {
+    Ok(match raw.content_tag()? {
+        CellContentTag::BgColorPalette => {
+            Style::default().fg(Color::Reset).bg(Color::Indexed(raw.bg_color_palette()?.0))
+        }
+        CellContentTag::BgColorRgb => {
+            let c = raw.bg_color_rgb()?;
+            Style::default().fg(Color::Reset).bg(Color::Rgb(c.r, c.g, c.b))
+        }
+        CellContentTag::Codepoint | CellContentTag::CodepointGrapheme => Style::default(),
+    })
+}
+
+fn to_decor(s: libghostty_vt::style::Style) -> Decor {
+    let underline = match s.underline {
+        Underline::None => UnderlineStyle::None,
+        Underline::Double => UnderlineStyle::Double,
+        Underline::Curly => UnderlineStyle::Curly,
+        Underline::Dotted => UnderlineStyle::Dotted,
+        Underline::Dashed => UnderlineStyle::Dashed,
+        _ => UnderlineStyle::Single,
+    };
+    Decor { underline, underline_colour: to_color(s.underline_color), overline: s.overline }
 }
 
 fn plain<'t, 's>() -> FormatOptions<'t, 's> {

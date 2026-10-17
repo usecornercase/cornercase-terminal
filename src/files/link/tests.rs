@@ -1,14 +1,17 @@
 use std::fs;
 use std::process::Command;
 
-use ratatui::style::Style;
 use rstest::rstest;
 
 use super::*;
 use crate::test_util::TempDir;
 
 fn row(text: &str) -> Vec<Cell> {
-    text.chars().map(|c| Cell { symbol: c.to_string(), style: Style::default(), spacer: false }).collect()
+    text.chars().map(|c| Cell { symbol: c.to_string(), ..Cell::default() }).collect()
+}
+
+fn shown(target: Option<Target>) -> Option<(String, Option<(u32, u32)>)> {
+    target.map(|t| (t.path, t.lines))
 }
 
 struct Seen {
@@ -83,7 +86,7 @@ fn a_file_outside_the_workspace_opens_with_its_absolute_path() {
     fs::write(other.path().join("x.txt"), "").expect("write");
     let path = other.path().join("x.txt").display().to_string();
     let target = resolve(&Link { start: 0, end: 1, path: path.clone(), lines: Some((2, 4)) }, None, root.path(), None);
-    assert_eq!(target, Some(Target { path, lines: Some((2, 4)) }));
+    assert_eq!(shown(target), Some((path, Some((2, 4)))));
 }
 
 #[rstest]
@@ -97,7 +100,7 @@ fn expands_home_paths(#[case] inside: bool) {
     fs::write(&file, "# Plan").expect("write");
     let link = Link { start: 0, end: 1, path: "~/.claude/plans/fix.md".into(), lines: Some((3, 9)) };
     let path = if inside { ".claude/plans/fix.md".to_string() } else { file.display().to_string() };
-    assert_eq!(resolve(&link, Some(root.path()), root.path(), Some(home)), Some(Target { path, lines: link.lines }));
+    assert_eq!(shown(resolve(&link, Some(root.path()), root.path(), Some(home))), Some((path, link.lines)));
     assert!(resolve(&link, None, root.path(), None).is_none());
 }
 
@@ -116,7 +119,7 @@ fn relative_paths_can_reach_outside_the_workspace(#[case] path: &str, #[case] cw
     fs::write(root.join("x.txt"), "inside").expect("write");
     let link = Link { start: 0, end: 1, path: path.into(), lines: None };
     let target = resolve(&link, Some(&dir.path().join(cwd)), &root, None);
-    assert_eq!(target, Some(Target { path: file.display().to_string(), lines: None }));
+    assert_eq!(shown(target), Some((file.display().to_string(), None)));
 }
 
 #[test]
@@ -125,7 +128,22 @@ fn an_absolute_path_inside_the_workspace_stays_relative() {
     let file = root.path().join("note.md");
     fs::write(&file, "note").expect("write");
     let link = Link { start: 0, end: 1, path: file.display().to_string(), lines: None };
-    assert_eq!(resolve(&link, None, root.path(), None), Some(Target { path: "note.md".into(), lines: None }));
+    assert_eq!(shown(resolve(&link, None, root.path(), None)), Some(("note.md".into(), None)));
+}
+
+#[test]
+fn under_finds_the_path_and_says_whether_it_is_inside() {
+    let (root, other) = (TempDir::new(), TempDir::new());
+    fs::write(root.path().join("a.rs"), "").expect("write");
+    fs::write(other.path().join("b.rs"), "").expect("write");
+    let outside = other.path().join("b.rs").display().to_string();
+    let (found, target) = under(&row("see a.rs:3"), 5, None, root.path(), None).expect("inside");
+    assert_eq!((found.start, found.end, target.lines, target.inside()), (4, 10, Some((3, 3)), true));
+    assert_eq!(target.real, root.path().join("a.rs"));
+    let (_, target) = under(&row(&outside), 2, None, root.path(), None).expect("outside");
+    assert!(!target.inside());
+    assert!(under(&row("see c.rs"), 5, None, root.path(), None).is_none());
+    assert!(under(&row("see a.rs"), 1, None, root.path(), None).is_none());
 }
 
 #[test]

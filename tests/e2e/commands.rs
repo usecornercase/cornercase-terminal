@@ -763,3 +763,23 @@ fn a_surface_resizes_in_place_and_a_divider_moves() {
     assert_eq!(resized, 2, "the stream kept counting");
     assert_eq!(finish_within(streaming, TIMEOUT).status.code(), Some(0));
 }
+
+#[test]
+fn link_says_which_file_a_click_on_a_printed_path_opens() {
+    let app = Harness::start();
+    let pane = app.session.says(&["new-tab"]);
+    typed(&app, &pane, "printf 'a\\nb\\nc\\n' > note.md; printf '\\033[H\\033[2Jsee note.md:2\\n'");
+    app.session.says(&["wait", "--pane", &pane, "--text", "^see note.md:2$", "--timeout", "10"]);
+
+    let text = app.session.says(&["link", "--pane", &pane, "--cell", "4,0"]);
+    let json = app.session.says(&["link", "--pane", &pane, "--cell", "4,0", "--json"]);
+    let nothing = app.session.says(&["link", "--pane", &pane, "--cell", "0,0"]);
+
+    let link = serde_json::from_str::<serde_json::Value>(&json).expect("json")["link"].clone();
+    assert!(text.ends_with("/note.md:2"), "{text}");
+    assert_eq!(
+        (&link["inside"], &link["relative"], &link["lines"]["first"]),
+        (&true.into(), &"note.md".into(), &2.into())
+    );
+    assert_eq!(nothing, "");
+}

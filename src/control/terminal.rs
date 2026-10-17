@@ -253,6 +253,62 @@ impl Ratio {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Link {
+    pub(crate) pane: Option<u64>,
+    pub(crate) size: Option<Size>,
+    pub(crate) cell: Option<Point>,
+}
+
+impl Link {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.maybe("pane", self.pane);
+        if let Some(cell) = self.cell {
+            fields.add("x", cell.x).add("y", cell.y);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Linked {
+    pub(crate) pane: u64,
+    pub(crate) link: Option<FileLink>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FileLink {
+    pub(crate) path: String,
+    pub(crate) inside: bool,
+    pub(crate) workspace: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) relative: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) lines: Option<Lines>,
+    pub(crate) row: u16,
+    pub(crate) start: u16,
+    pub(crate) end: u16,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Lines {
+    pub(crate) first: u32,
+    pub(crate) last: u32,
+}
+
+impl FileLink {
+    pub(crate) fn location(&self) -> String {
+        match self.lines {
+            None => self.path.clone(),
+            Some(Lines { first, last }) if first == last => format!("{}:{first}", self.path),
+            Some(Lines { first, last }) => format!("{}:{first}-{last}", self.path),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Moved {
     pub(crate) tab: u64,

@@ -5,9 +5,11 @@ use crate::app::App;
 use crate::control::contract::{Code, Refusal};
 use crate::control::surface::{self, Size};
 use crate::control::terminal::{
-    End, Input, InputEvent, KeyKind, Moved, Point, Ratio, Scroll, Scrolled, Selection, Sent, Skipped, Why,
+    End, FileLink, Input, InputEvent, KeyKind, Lines, Link, Linked, Moved, Point, Ratio, Scroll, Scrolled, Selection,
+    Sent, Skipped, Why,
 };
 use crate::control::{Done, Layout};
+use crate::files::link;
 use crate::log;
 use crate::project::Hierarchy;
 use crate::term::keys;
@@ -197,6 +199,40 @@ impl App {
             self.copy(text);
         }
         Ok(Some(json(&Done { text, ..super::pane_ids(pane) })))
+    }
+
+    pub(in crate::app) fn link_request(&mut self, at: &Link) -> Handled {
+        let pane = explicit(at.pane, "link")?;
+        let cell = at.cell.ok_or_else(|| malformed("`link` needs the cell to look at: pass --cell X,Y"))?;
+        let (p, w, t) = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
+        let home = self.home.clone();
+        let workspace = &mut self.projects[p].workspaces[w];
+        let (root, id) = (workspace.path.clone(), workspace.id);
+        let term = workspace.tabs[t].pane_by_mut(pane).ok_or_else(|| none("pane", pane))?;
+        let dims = fits(term, pane, at.size)?;
+        if let Some(refusal) = outside(pane, cell, dims) {
+            return Err(refusal);
+        }
+        let screen = term.emulator.snapshot().map_err(|e| Refusal::from(format!("cannot read pane {pane}: {e}")))?;
+        let cwd = term.cwd();
+        let found = screen
+            .rows
+            .get(usize::from(cell.y))
+            .and_then(|row| link::under(row, cell.x, cwd.as_deref(), &root, home.as_deref()));
+        let link = found.map(|(span, target)| {
+            let inside = target.inside();
+            FileLink {
+                path: target.real.to_string_lossy().into_owned(),
+                inside,
+                workspace: id,
+                relative: inside.then(|| target.path.clone()),
+                lines: target.lines.map(|(first, last)| Lines { first, last }),
+                row: cell.y,
+                start: span.start,
+                end: span.end,
+            }
+        });
+        Ok(Some(json(&Linked { pane, link })))
     }
 
     pub(in crate::app) fn ratio_request(&mut self, ratio: &Ratio, area: Option<Rect>) -> Handled {

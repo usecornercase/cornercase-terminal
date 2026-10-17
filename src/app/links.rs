@@ -18,8 +18,8 @@ impl App {
         let home = self.home.clone();
         let term = self.term_mut()?;
         let screen = term.emulator.snapshot().ok()?;
-        let found = link::at(screen.rows.get(usize::from(at.y))?, at.x)?;
-        link::resolve(&found, term.cwd().as_deref(), &root, home.as_deref())
+        link::under(screen.rows.get(usize::from(at.y))?, at.x, term.cwd().as_deref(), &root, home.as_deref())
+            .map(|(_, target)| target)
     }
 
     pub(super) fn link_click(&mut self, ev: MouseEvent, at: Position) -> bool {
@@ -114,8 +114,8 @@ impl App {
             return None;
         }
         let (row, col) = (hover.y - pane.y, hover.x - pane.x);
-        let found = link::at(screens.get(tab.active)?.rows.get(usize::from(row))?, col)?;
-        link::resolve(&found, term.cwd().as_deref(), root, home)?;
+        let (found, _) =
+            link::under(screens.get(tab.active)?.rows.get(usize::from(row))?, col, term.cwd().as_deref(), root, home)?;
         Some((row, found.start..found.end))
     }
 }

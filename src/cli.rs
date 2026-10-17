@@ -232,6 +232,7 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Selection(args) => terminal::selection(&args),
         Control::Resize(args) => terminal::resize(&args),
         Control::Ratio(args) => terminal::ratio(&args),
+        Control::Link(args) => terminal::link(&args),
     }?;
     Ok(true)
 }
