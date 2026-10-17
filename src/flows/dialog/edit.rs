@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use super::{Agents, CANCEL, DELETE_ROLE, DIAGRAM, DONE, FORM, Place, Room, SAVE};
 use crate::agents::{self, Known};
-use crate::flows::{Back, End, Flow, MAX_ROLES, ORCHESTRATOR, Role, Stage, builtin};
+use crate::flows::{Back, End, Flow, MAX_ROLES, ORCHESTRATOR, Role, Stage, Worktree, builtin};
 use crate::list::Search;
 use crate::todo::editor::Editor;
 
@@ -38,6 +38,7 @@ pub(crate) enum Row {
     Args,
     Env,
     Edits,
+    Worktree,
     Prompt,
 }
 
@@ -189,7 +190,17 @@ impl Editing {
             }
             Tab::Orchestrator => vec![Row::Agent, Row::Model, Row::Effort, Row::Args, Row::Env, Row::Prompt],
             Tab::Role(_) => {
-                vec![Row::RoleName, Row::Agent, Row::Model, Row::Effort, Row::Args, Row::Env, Row::Edits, Row::Prompt]
+                vec![
+                    Row::RoleName,
+                    Row::Agent,
+                    Row::Model,
+                    Row::Effort,
+                    Row::Args,
+                    Row::Env,
+                    Row::Edits,
+                    Row::Worktree,
+                    Row::Prompt,
+                ]
             }
         }
     }
@@ -286,7 +297,14 @@ impl Editing {
             }
             Row::RoleName | Row::Args | Row::Env | Row::Prompt => self.activate_role(row),
             Row::Effort if self.effort_levels().is_none() => {}
-            Row::Place | Row::Roles(_) | Row::Back(_) | Row::End | Row::Agent | Row::Model | Row::Effort => {
+            Row::Place
+            | Row::Roles(_)
+            | Row::Back(_)
+            | Row::End
+            | Row::Agent
+            | Row::Model
+            | Row::Effort
+            | Row::Worktree => {
                 let items = self.choices(row, agents);
                 self.pick = Some(Pick { row, items, search: Search::default() });
             }
@@ -538,7 +556,7 @@ impl Editing {
             .find(|n| !taken(n))
             .unwrap_or_default();
         let taken: Vec<Known> = std::iter::once(&self.flow.orchestrator)
-            .chain(&self.flow.roles)
+            .chain(self.flow.roles.iter().filter(|role| !role.own_worktree()))
             .filter_map(|role| Known::of(&role.agent))
             .collect();
         self.flow.roles.push(builtin::member(&name, &agents.installed, agents.default, &taken));
@@ -620,6 +638,9 @@ impl Editing {
                 .collect(),
             Row::Model => self.model_choices(agents),
             Row::Effort => self.effort_choices(),
+            Row::Worktree => {
+                Worktree::ALL.iter().map(|kind| choice(kind.name().into(), kind.name().into(), kind.label())).collect()
+            }
             _ => Vec::new(),
         }
     }
@@ -703,6 +724,11 @@ impl Editing {
             Row::Effort => {
                 if let Some(role) = self.role_mut() {
                     role.effort = (value != DEFAULT_MODEL).then_some(value);
+                }
+            }
+            Row::Worktree => {
+                if let Some(role) = self.role_mut() {
+                    role.worktree = Worktree::ALL.into_iter().find(|kind| kind.name() == value).unwrap_or_default();
                 }
             }
             _ => {}

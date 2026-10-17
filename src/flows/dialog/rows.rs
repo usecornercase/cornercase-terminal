@@ -53,9 +53,15 @@ impl Editing {
             Row::AddStage => text("+ add stage", String::new(), ""),
             Row::End => text("◆ at the end", flow.end.label().into(), ""),
             Row::Notes => text("notes", one_line(&flow.notes), TEXT_MARK),
-            Row::RoleName | Row::Agent | Row::Model | Row::Effort | Row::Args | Row::Env | Row::Edits | Row::Prompt => {
-                self.role_row(row, agents)
-            }
+            Row::RoleName
+            | Row::Agent
+            | Row::Model
+            | Row::Effort
+            | Row::Args
+            | Row::Env
+            | Row::Edits
+            | Row::Worktree
+            | Row::Prompt => self.role_row(row, agents),
         }
     }
 
@@ -98,6 +104,11 @@ impl Editing {
                 };
                 text("edits files", value.into(), note.into())
             }
+            Row::Worktree => {
+                let note =
+                    if role.own_worktree() { "its own branch, made from the run's" } else { "where the team works" };
+                text("worktree", role.worktree.name().into(), note.into())
+            }
             _ => text("prompt", one_line(&role.prompt), TEXT_MARK.into()),
         }
     }
@@ -128,6 +139,7 @@ impl Editing {
             Row::Agent => format!("Which agent is the {role}?"),
             Row::Model => format!("Which model does the {role} use?"),
             Row::Effort => format!("How hard does the {role} think?"),
+            Row::Worktree => format!("Where does the {role} work?"),
             _ => String::new(),
         }
     }

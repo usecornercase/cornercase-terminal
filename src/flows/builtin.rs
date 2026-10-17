@@ -1,5 +1,5 @@
 use super::brief::WAIT_FIRST;
-use super::{Back, End, Flow, ORCHESTRATOR, Role, Stage};
+use super::{Back, End, Flow, ORCHESTRATOR, Role, Stage, Worktree};
 use crate::agents::Known;
 
 const ORCHESTRATE: &str = "Keep every message to an agent self-contained: say what to do and what to answer with. \
@@ -9,6 +9,33 @@ const CODER: &str = "You are the coder in a team of coding agents working in thi
      orchestrator, sends you the work. Implement it here, run the project's checks, and commit locally with clear \
      messages. Do not push and do not open pull requests. End each turn with a short summary of what you changed and \
      what you checked.";
+
+const COMPETITOR: &str = "You are a competing coder in a team of coding agents. You work in a git worktree of your \
+     own, on a branch of your own, which the other coders cannot touch. The orchestrator sends every competitor the \
+     same task and the same rubric. Implement it your way, run the project's checks, and commit on your branch: the \
+     others read your work from its commits, so what is not committed does not count. Do not push and do not open \
+     pull requests. End each turn with a short summary of the approach you took and what you checked.";
+
+const JUDGE: &str = "You are the judge in a team of coding agents working in this git worktree. Do not edit files \
+     and do not commit. The competing coders each work on a branch of their own, which the orchestrator names. When \
+     the orchestrator asks, read every candidate with `git log`, `git diff base...branch` and `git show \
+     branch:path`, and build and test each one in its own worktree folder. Run the checks or the benchmark the \
+     orchestrator names. Score every candidate against the rubric with evidence, say which one to use as the base \
+     and which parts of the others are worth taking, file by file. Answer with the scores, the recommendation and \
+     the grafts.";
+
+const INTEGRATOR: &str = "You integrate the winning candidate in a team of coding agents working in this git \
+     worktree. The orchestrator names the branch to take and the parts of the others to graft. Merge that branch \
+     here with `git merge`, apply the grafts by hand or with `git cherry-pick`, run the project's checks, and commit \
+     with clear messages. Do not push and do not open pull requests. End each turn with a short summary of what you \
+     merged and what you checked.";
+
+const ARENA: &str = "Run it as a competition. Before any coder starts, write the rubric: what a good result is and \
+     how it is measured (tests, a benchmark, size, how easy it is to extend), and send the same message with the \
+     task and the rubric to every competing coder. Choose by the judge's evidence, not by how long an answer is, and \
+     pick as the base the one a maintainer can extend. Take the good parts of the others by asking the integrator to \
+     graft them by hand. If no candidate is good enough, converge or reframe the task once and ask the coders again. \
+     Leave the losing worktrees as they are.";
 
 const REVIEWER: &str = "You are a code reviewer in a team of coding agents working in this git worktree. Do not \
      edit files and do not commit. When the orchestrator asks, review the changes on this branch against its base \
@@ -56,7 +83,7 @@ impl Agents {
     }
 
     fn spread(&self, mut flow: Flow) -> Flow {
-        let mut order: Vec<usize> = (0..flow.roles.len()).collect();
+        let mut order: Vec<usize> = (0..flow.roles.len()).filter(|&i| !flow.roles[i].own_worktree()).collect();
         order.sort_by_key(|&i| !flow.roles[i].edits);
         let mut taken: Vec<Known> = Vec::new();
         let members = order.into_iter().map(Some).chain([None]);
@@ -84,8 +111,61 @@ fn role(name: &str, agent: Known, edits: bool, prompt: &str) -> Role {
     }
 }
 
+fn own(mut role: Role) -> Role {
+    role.worktree = Worktree::Own;
+    role
+}
+
 fn orchestrator(agent: Known) -> Role {
     Role { name: ORCHESTRATOR.into(), agent: agent.name().into(), prompt: ORCHESTRATE.into(), ..Role::default() }
+}
+
+fn competitors(agents: &Agents) -> Vec<Role> {
+    let mut kinds = vec![agents.main];
+    for _ in 0..2 {
+        let next = agents.other(&kinds);
+        if kinds.contains(&next) {
+            break;
+        }
+        kinds.push(next);
+    }
+    if kinds.len() == 1 {
+        kinds.push(agents.main);
+    }
+    kinds
+        .into_iter()
+        .zip(['A', 'B', 'C'])
+        .map(|(kind, letter)| own(role(&format!("coder {letter}"), kind, true, COMPETITOR)))
+        .collect()
+}
+
+fn arena(agents: &Agents, second: Known) -> Flow {
+    let main = agents.main;
+    let coders = competitors(agents);
+    let names: Vec<&str> = coders.iter().map(|role| role.name.as_str()).collect();
+    let first = stage(&names, None);
+    let mut orchestrator = orchestrator(main);
+    orchestrator.prompt = format!("{ORCHESTRATE} {ARENA}");
+    let mut roles = coders;
+    roles.push(role("judge", main, false, JUDGE));
+    roles.push(role("integrator", main, true, INTEGRATOR));
+    roles.push(role("reviewer", second, false, REVIEWER));
+    Flow {
+        name: "Arena".into(),
+        description: "Competing coders, each in a worktree of its own, a judge, then one result: for measurable work \
+                      or an unclear shape, not everyday features."
+            .into(),
+        orchestrator,
+        roles,
+        stages: vec![
+            first,
+            stage(&["judge"], None),
+            stage(&["integrator"], None),
+            stage(&["reviewer"], Some((3, "findings", 2))),
+        ],
+        end: End::PullRequest,
+        ..Flow::default()
+    }
 }
 
 fn stage(roles: &[&str], back: Option<(usize, &str, u32)>) -> Stage {
@@ -162,6 +242,7 @@ fn planned(agents: &Agents) -> Vec<Flow> {
             end: End::PullRequest,
             ..Flow::default()
         },
+        arena(agents, second),
     ]
 }
 

@@ -144,7 +144,8 @@ fn width_of(text: &str) -> u16 {
 }
 
 fn natural(node: &Node) -> u16 {
-    width_of(&node.role).max(width_of(&node.text)).saturating_add(6)
+    let tag = if node.own { width_of(super::OWN_SHORT).saturating_add(5) } else { 6 };
+    width_of(&node.role).saturating_add(tag).max(width_of(&node.text).saturating_add(6))
 }
 
 pub(super) fn row_width(k: usize, width: u16) -> u16 {

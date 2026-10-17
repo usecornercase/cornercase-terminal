@@ -1,7 +1,7 @@
 use super::{brief, member};
 use crate::agents::Known;
-use crate::flows::run::Member;
-use crate::flows::{Back, End, ORCHESTRATOR, Role, builtin};
+use crate::flows::run::{Member, RoleWorktree};
+use crate::flows::{Back, End, Flow, ORCHESTRATOR, Role, builtin, role_branch};
 
 fn members() -> Vec<Member> {
     [(ORCHESTRATOR, 12), ("coder", 14), ("reviewer", 15), ("security", 16), ("tester", 17)]
@@ -16,7 +16,7 @@ fn the_brief_holds_the_task_the_team_the_plan_and_the_end() {
     flow.roles[1].model = Some("gpt-5.5".into());
     flow.roles[1].effort = Some("high".into());
     flow.notes = "Do not change the public API.".into();
-    let text = brief(&flow, "Fix the login form\n", "fix-login", &members());
+    let text = brief(&flow, "Fix the login form\n", "fix-login", &members(), &[]);
 
     assert!(text.contains("flow \"Full issue\""), "{text}");
     assert!(text.contains("on branch fix-login"), "{text}");
@@ -47,7 +47,7 @@ fn the_brief_holds_the_task_the_team_the_plan_and_the_end() {
 #[test]
 fn an_answer_whose_record_cannot_be_found_is_read_from_the_screen() {
     let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
-    let text = brief(&flow, "Fix the login form", "fix-login", &members());
+    let text = brief(&flow, "Fix the login form", "fix-login", &members(), &[]);
     assert!(
         text.contains(
             "If it fails for an agent (its record cannot be found), read its screen with `cornercase read --pane N \
@@ -62,7 +62,7 @@ fn a_flow_that_leaves_the_commits_says_not_to_push() {
     let mut flow = builtin::flows(&[Known::Codex], None).remove(2);
     flow.end = End::Commits;
     flow.stages[1].back = Some(Back { to: 1, when: "findings".into(), at_most: 1 });
-    let text = brief(&flow, "x", "quick", &members());
+    let text = brief(&flow, "x", "quick", &members(), &[]);
 
     assert!(text.contains("If it reports findings, send them to coder and go back to stage 1; at most once"));
     assert!(text.contains("At the end: leave the commits on branch quick; do not push"), "{text}");
@@ -72,7 +72,7 @@ fn a_flow_that_leaves_the_commits_says_not_to_push() {
 fn three_roles_in_parallel_are_any_of_them() {
     let mut flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
     flow.stages[1].roles.push("tester".into());
-    let text = brief(&flow, "x", "b", &members());
+    let text = brief(&flow, "x", "b", &members(), &[]);
 
     assert!(text.contains("2. reviewer, security and tester, in parallel. If any of them reports findings"));
 }
@@ -81,22 +81,93 @@ fn three_roles_in_parallel_are_any_of_them() {
 fn a_member_is_told_whether_it_may_edit() {
     let coder = Role { name: "coder".into(), edits: true, prompt: "Write code.".into(), ..Role::default() };
     assert_eq!(
-        member(&coder),
+        member(&coder, None),
         "Write code.\n\nYou are `coder` in this team, and you may edit files and commit in this worktree. Wait for \
          the orchestrator's first message before doing anything."
     );
     let empty = Role { name: "reviewer".into(), ..Role::default() };
     assert_eq!(
-        member(&empty),
+        member(&empty, None),
         "You are `reviewer` in this team: do not edit files and do not commit. Wait for the orchestrator's first \
          message before doing anything."
+    );
+}
+
+fn arena_trees() -> (Flow, Vec<RoleWorktree>) {
+    let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).pop().expect("arena");
+    let trees = flow
+        .roles
+        .iter()
+        .filter(|role| role.own_worktree())
+        .map(|role| RoleWorktree {
+            role: role.name.clone(),
+            path: format!("/wt/{}", role.name.replace(' ', "-")).into(),
+            branch: role_branch("fix", &role.name),
+        })
+        .collect();
+    (flow, trees)
+}
+
+fn arena_members() -> Vec<Member> {
+    std::iter::once(ORCHESTRATOR)
+        .chain(["coder A", "coder B", "coder C", "judge", "integrator", "reviewer"])
+        .zip(12..)
+        .map(|(role, pane)| Member { role: role.into(), pane })
+        .collect()
+}
+
+#[test]
+fn the_team_line_of_a_role_with_its_own_worktree_names_its_folder_and_branch() {
+    let (flow, trees) = arena_trees();
+    let text = brief(&flow, "x", "fix", &arena_members(), &trees);
+
+    assert!(
+        text.contains(
+            "- coder A (pane 13): claude, edits files, in its own worktree /wt/coder-A on branch fix--coder-a\n"
+        ),
+        "{text}"
+    );
+    assert!(text.contains("- judge (pane 16): claude, must not edit files\n"), "{text}");
+}
+
+#[test]
+fn the_worktrees_section_tells_how_to_read_and_integrate_candidates() {
+    let (flow, trees) = arena_trees();
+    let text = brief(&flow, "x", "fix", &arena_members(), &trees);
+
+    assert!(text.contains("## Worktrees"), "{text}");
+    assert!(text.contains("`git log fix..B`, `git diff fix...B` and `git show B:path`"), "{text}");
+    assert!(text.contains("ask a role that edits this worktree to `git merge B`"), "{text}");
+    assert!(text.contains("Never check out a role's branch here"), "{text}");
+    let plain = brief(&sample_flow(), "x", "fix", &members(), &[]);
+    assert!(!plain.contains("## Worktrees"), "{plain}");
+}
+
+fn sample_flow() -> Flow {
+    builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0)
+}
+
+#[test]
+fn a_member_with_its_own_worktree_is_told_its_branch() {
+    let coder = Role { name: "coder A".into(), edits: true, ..Role::default() };
+    let told = member(&coder, Some("fix--coder-a"));
+    assert!(
+        told.starts_with(
+            "You are `coder A` in this team, and you may edit files and commit in this worktree, which is yours alone, on branch fix--coder-a: commit your work there"
+        ),
+        "{told}"
+    );
+    let reader = Role { name: "judge".into(), ..Role::default() };
+    assert!(
+        member(&reader, Some("b"))
+            .contains("do not edit files and do not commit. This worktree is yours alone, on branch b.")
     );
 }
 
 #[test]
 fn a_built_in_member_is_told_to_wait_once_and_last() {
     let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
-    let text = member(&flow.roles[1]);
+    let text = member(&flow.roles[1], None);
 
     assert_eq!(text.matches("Wait for the orchestrator's first message").count(), 1, "{text}");
     assert!(

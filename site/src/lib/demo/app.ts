@@ -2635,7 +2635,7 @@ export class App {
         });
       }
       rows.push({ id: 'add', section: 'How each agent starts', label: '+ another agent…', value: '', note: '' });
-      rows.push({ id: 'flows', section: 'Flows', label: 'flows', value: '4 built in', note: 'teams of agents that work through a plan' });
+      rows.push({ id: 'flows', section: 'Flows', label: 'flows', value: '5 built in', note: 'teams of agents that work through a plan' });
       return rows;
     }
     if (page === 4) {

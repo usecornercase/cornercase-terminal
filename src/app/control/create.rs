@@ -227,20 +227,10 @@ impl App {
         result: error::Result<PathBuf>,
         area: Rect,
     ) {
-        let found = self
-            .requests
-            .pending
-            .iter()
-            .position(|p| p.key == key && matches!(p.stage, Stage::Worktree(_) | Stage::Run(..)));
+        let found = self.requests.pending.iter().position(|p| p.key == key && matches!(p.stage, Stage::Worktree(_)));
         let Some(i) = found else { return };
         let mut pending = self.requests.pending.remove(i);
-        let then = match std::mem::replace(&mut pending.stage, Stage::launch(None)) {
-            Stage::Worktree(then) => then,
-            Stage::Run(_, starting) => {
-                return self.flow_worktree_ready(pending.client, project, result, *starting, area);
-            }
-            _ => return,
-        };
+        let Stage::Worktree(then) = std::mem::replace(&mut pending.stage, Stage::launch(None)) else { return };
         match self.open_worktree(project, result, then, area, &mut pending) {
             Ok(true) => self.requests.pending.push(pending),
             Ok(false) => self.answer(pending.client, Ok(json(&pending.done))),

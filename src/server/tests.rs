@@ -80,6 +80,7 @@ mod a_bug {
             base: None,
             collapsed: false,
             run: None,
+            role_worktrees: Vec::new(),
         };
         let project =
             ProjectState { path, name: None, group: None, workspaces: vec![workspace], active: 0, collapsed: false };

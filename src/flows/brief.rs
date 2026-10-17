@@ -1,22 +1,33 @@
 use std::fmt::Write as _;
 
-use super::run::Member;
+use super::run::{Member, RoleWorktree};
 use super::{End, Flow, ORCHESTRATOR, Role, Stage};
 
 pub(super) const WAIT_FIRST: &str = "Wait for the orchestrator's first message before doing anything.";
 
-pub(crate) fn member(role: &Role) -> String {
+pub(crate) fn member(role: &Role, branch: Option<&str>) -> String {
     let prompt = role.prompt.trim();
     let prompt = prompt.strip_suffix(WAIT_FIRST).map_or(prompt, str::trim_end);
-    let told = if role.edits {
-        format!("You are `{}` in this team, and you may edit files and commit in this worktree.", role.name)
-    } else {
-        format!("You are `{}` in this team: do not edit files and do not commit.", role.name)
+    let told = match (role.edits, branch) {
+        (true, None) => {
+            format!("You are `{}` in this team, and you may edit files and commit in this worktree.", role.name)
+        }
+        (true, Some(branch)) => format!(
+            "You are `{}` in this team, and you may edit files and commit in this worktree, which is yours alone, on \
+             branch {branch}: commit your work there, since the others read it from that branch.",
+            role.name
+        ),
+        (false, None) => format!("You are `{}` in this team: do not edit files and do not commit.", role.name),
+        (false, Some(branch)) => format!(
+            "You are `{}` in this team: do not edit files and do not commit. This worktree is yours alone, on branch \
+             {branch}.",
+            role.name
+        ),
     };
     if prompt.is_empty() { format!("{told} {WAIT_FIRST}") } else { format!("{prompt}\n\n{told} {WAIT_FIRST}") }
 }
 
-pub(crate) fn brief(flow: &Flow, task: &str, branch: &str, members: &[Member]) -> String {
+pub(crate) fn brief(flow: &Flow, task: &str, branch: &str, members: &[Member], trees: &[RoleWorktree]) -> String {
     let pane = |role: &str| members.iter().find(|m| m.role == role).map(|m| m.pane);
     let mut out = format!(
         "You are the orchestrator of a team of coding agents that cornercase started for the flow \"{}\", all in \
@@ -28,7 +39,10 @@ pub(crate) fn brief(flow: &Flow, task: &str, branch: &str, members: &[Member]) -
     for role in &flow.roles {
         let at = pane(&role.name).map_or_else(|| "no pane".to_string(), |id| format!("pane {id}"));
         let edits = if role.edits { "edits files" } else { "must not edit files" };
-        let _ = writeln!(out, "- {} ({at}): {}, {edits}", role.name, role.summary());
+        let place = trees.iter().find(|tree| tree.role == role.name).map_or_else(String::new, |tree| {
+            format!(", in its own worktree {} on branch {}", tree.path.display(), tree.branch)
+        });
+        let _ = writeln!(out, "- {} ({at}): {}, {edits}{place}", role.name, role.summary());
     }
     let own = pane(ORCHESTRATOR);
     let you = own.map_or_else(String::new, |id| format!(" (pane {id})"));
@@ -41,6 +55,9 @@ pub(crate) fn brief(flow: &Flow, task: &str, branch: &str, members: &[Member]) -
         let _ = writeln!(out, "{}. {}", i + 1, stage_line(flow, stage));
     }
     let _ = writeln!(out, "\nAt the end: {}.", end_line(flow.end, branch));
+    if !trees.is_empty() {
+        out.push_str(&worktrees(branch));
+    }
     let notes: Vec<&str> =
         [flow.notes.trim(), flow.orchestrator.prompt.trim()].into_iter().filter(|n| !n.is_empty()).collect();
     if !notes.is_empty() {
@@ -61,6 +78,20 @@ pub(crate) fn restored(members: &[Member]) -> String {
          `cornercase read --last-message`, then go on with the plan. If the plan was already done, answer `ok` and \
          do nothing else.",
         team.join(", ")
+    )
+}
+
+fn worktrees(branch: &str) -> String {
+    format!(
+        "\n## Worktrees\n\nA role marked as being in its own worktree works apart from this one; the others share \
+         this worktree, on branch {branch}.\n\n\
+         - Reading: what such a role has not committed is invisible from here, and its candidate is its branch B. \
+         Read it with `git log {branch}..B`, `git diff {branch}...B` and `git show B:path`; to build or test it, run \
+         the commands in its worktree folder.\n\
+         - Integrating: ask a role that edits this worktree to `git merge B` (a fast-forward when {branch} has not \
+         moved), or to take parts of it by hand or with `git cherry-pick`. Never check out a role's branch here, and \
+         never merge it yourself.\n\
+         - Those worktrees stay until this workspace is removed.\n"
     )
 }
 

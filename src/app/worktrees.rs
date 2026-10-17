@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use ratatui::layout::Rect;
@@ -7,10 +7,12 @@ use ratatui::layout::Rect;
 use super::App;
 use super::event::AppEvent;
 use super::event::Start;
+use super::flow_runs::Made;
 use super::overlay::Overlay;
 use super::toast::Toast;
 use crate::agents::launch::Launch;
 use crate::error::Result;
+use crate::flows::run::RoleWorktree;
 use crate::git;
 use crate::git::upstream;
 use crate::git::worktree::{self, setup};
@@ -47,6 +49,7 @@ pub(super) enum Check {
 #[derive(Debug)]
 pub(crate) enum WorktreeEvent {
     Created { project: u64, result: Result<PathBuf>, start: Option<Start>, request: Option<u64> },
+    Run { project: u64, result: Result<Made>, request: u64 },
     Checked { project: u64, workspace: u64, status: worktree::Status, request: Option<u64> },
     Removed { project: u64, workspace: u64, result: Result<Option<String>>, request: Option<u64> },
     Behind { project: u64, behind: Vec<(u64, u32)> },
@@ -57,6 +60,7 @@ impl WorktreeEvent {
     pub(crate) fn name(&self) -> &'static str {
         match self {
             Self::Created { .. } => "worktree created",
+            Self::Run { .. } => "run worktrees created",
             Self::Checked { .. } => "worktree checked",
             Self::Removed { .. } => "worktree removed",
             Self::Behind { .. } => "behind",
@@ -74,6 +78,7 @@ impl App {
             WorktreeEvent::Created { project, result, start, request: None } => {
                 self.worktree_created(project, result, start, area)?;
             }
+            WorktreeEvent::Run { project, result, request } => self.run_worktrees_ready(request, project, result, area),
             WorktreeEvent::Checked { project, workspace, status, request: Some(key) } => {
                 self.removal_checked(key, project, workspace, &status);
             }
@@ -161,6 +166,9 @@ impl App {
             for w in gone {
                 self.changes.forget(project.workspaces[w].id);
                 project.remove_workspace(w);
+            }
+            for workspace in &mut project.workspaces {
+                workspace.role_worktrees.retain(|tree| tree.path.is_dir());
             }
             let missing: Vec<PathBuf> =
                 linked.into_iter().filter(|path| project.workspaces.iter().all(|w| &w.path != path)).collect();
@@ -282,7 +290,27 @@ impl App {
         Ok(())
     }
 
+    pub(super) fn role_owner(&self, p: usize, w: usize) -> Option<String> {
+        let path = &self.projects[p].workspaces[w].path;
+        let project = &self.projects[p];
+        project.workspaces.iter().filter(|owner| owner.open()).find_map(|owner| {
+            let tree = owner.role_worktrees.iter().find(|tree| &tree.path == path)?;
+            self.runs.iter().any(|run| run.workspace == owner.id).then(|| {
+                format!(
+                    "this worktree belongs to `{}` in the flow running in {} › {}: it is removed with that workspace",
+                    tree.role,
+                    self.project_label(project),
+                    owner.label()
+                )
+            })
+        })
+    }
+
     pub(super) fn ask_removal(&mut self, p: usize, w: usize) {
+        if let Some(refusal) = self.role_owner(p, w) {
+            self.toast = Some(Toast::new(refusal, ui::ToastIcon::Bug));
+            return;
+        }
         let (project, workspace) = (self.projects[p].id, self.projects[p].workspaces[w].id);
         self.spawn_check(p, w, None);
         self.overlay = Some(Overlay::RemoveWorkspace { project, workspace, check: Check::Running, lock: None });
@@ -292,10 +320,17 @@ impl App {
         let project = &self.projects[p];
         let (id, workspace) = (project.id, project.workspaces[w].id);
         let path = project.workspaces[w].path.clone();
+        let roles: Vec<PathBuf> = project.workspaces[w].role_worktrees.iter().map(|tree| tree.path.clone()).collect();
         let job = Job::new(Level::Info, "worktree", "status").with("workspace", workspace);
         self.spawn_job(
             job,
-            move || Ok(worktree::status(&path)),
+            move || {
+                let mut status = worktree::status(&path);
+                for role in roles.iter().filter(|role| role.is_dir()) {
+                    status.changed |= !matches!(worktree::changed(role), Ok(false));
+                }
+                Ok(status)
+            },
             move |status, job| {
                 job.note("changed", status.as_ref().map_or(true, |s| s.changed));
                 job.note("locked", status.as_ref().is_ok_and(|s| s.lock.is_some()));
@@ -353,23 +388,46 @@ impl App {
         self.changes.forget(workspace);
         self.projects[p].step_off(w);
         let (repo, path) = (self.projects[p].path.clone(), self.projects[p].workspaces[w].path.clone());
-        let teardown = self.teardown_script(p).map(|script| (script, git::branch(&path).unwrap_or_default()));
+        let roles = self.take_role_trees(p, w);
+        let script = self.teardown_script(p);
+        let branch = git::branch(&path).unwrap_or_default();
         let job = Job::new(Level::Info, "worktree", "remove").with("workspace", workspace).with("path", path.display());
-        let job = job.with("force", force).with("unlock", unlock).with("teardown", teardown.is_some());
+        let job = job.with("force", force).with("unlock", unlock).with("teardown", script.is_some());
+        let job = job.with("roles", roles.len());
         self.spawn_job(
             job,
             move || {
-                let failed = teardown.and_then(|(script, branch)| {
-                    setup::teardown(&script, &path, &repo, &branch, setup::TEARDOWN_WITHIN)
-                });
-                if let Some(why) = &failed {
-                    crate::log::debug!("worktree", "teardown failed", why = why);
+                let mut warnings = Vec::new();
+                for tree in roles.iter().filter(|tree| tree.path.is_dir()) {
+                    match remove_tree(&repo, &tree.path, &tree.branch, script.as_deref(), force, false) {
+                        Ok(None) => {}
+                        Ok(Some(why)) => warnings.push(format!("the teardown of `{}` failed: {why}", tree.role)),
+                        Err(e) => warnings.push(format!("could not remove the worktree of `{}`: {e}", tree.role)),
+                    }
                 }
-                worktree::remove(&repo, &path, force, unlock).map(|()| failed)
+                let failed = remove_tree(&repo, &path, &branch, script.as_deref(), force, unlock)?;
+                let warnings: Vec<String> = failed.into_iter().chain(warnings).collect();
+                Ok((!warnings.is_empty()).then(|| warnings.join("; ")))
             },
             move |result, _| Some(AppEvent::Worktree(WorktreeEvent::Removed { project, workspace, result, request })),
         );
         true
+    }
+
+    fn take_role_trees(&mut self, p: usize, w: usize) -> Vec<RoleWorktree> {
+        let trees = self.projects[p].workspaces[w].role_worktrees.clone();
+        let project = &mut self.projects[p];
+        let mut stopped = Vec::new();
+        for tree in &trees {
+            if let Some(row) = project.workspaces.iter_mut().find(|row| row.path == tree.path && row.open()) {
+                row.kill();
+                stopped.push(row.id);
+            }
+        }
+        for id in stopped {
+            self.changes.forget(id);
+        }
+        trees
     }
 
     pub(super) fn worktree_removed(&mut self, project: u64, workspace: u64, result: Result<Option<String>>) {
@@ -409,6 +467,11 @@ impl App {
             })
             .unwrap_or_default();
         let teardown = found.is_some_and(|(p, _)| self.teardown_script(p).is_some());
+        let roles = found.map_or(0, |(p, w)| {
+            self.projects[p].workspaces[w].role_worktrees.iter().filter(|tree| tree.path.is_dir()).count()
+        });
+        let kept = if roles == 0 { "The branch is kept." } else { "The branches are kept." };
+        let with_roles = if roles == 0 { String::new() } else { format!(", with the worktrees of its {roles} roles") };
         let (message, note) = match lock {
             Some(lock) => (
                 lock_message(&label, lock) + if teardown { " Its teardown runs first." } else { "" },
@@ -416,7 +479,7 @@ impl App {
             ),
             None => (
                 format!(
-                    "Remove the workspace {label} and delete its worktree folder {path}? {}The branch is kept.",
+                    "Remove the workspace {label} and delete its worktree folder {path}{with_roles}? {}{kept}",
                     if teardown { "Its teardown runs first. " } else { "" }
                 ),
                 match check {
@@ -428,6 +491,21 @@ impl App {
         };
         ui::Overlay::Confirm(ui::Confirm { title: "Remove workspace", message, note, submit, extra: None })
     }
+}
+
+fn remove_tree(
+    repo: &Path,
+    path: &Path,
+    branch: &str,
+    script: Option<&str>,
+    force: bool,
+    unlock: bool,
+) -> Result<Option<String>> {
+    let failed = script.and_then(|script| setup::teardown(script, path, repo, branch, setup::TEARDOWN_WITHIN));
+    if let Some(why) = &failed {
+        crate::log::debug!("worktree", "teardown failed", why = why);
+    }
+    worktree::remove(repo, path, force, unlock).map(|()| failed)
 }
 
 pub(super) fn lock_message(label: &str, lock: &worktree::Lock) -> String {

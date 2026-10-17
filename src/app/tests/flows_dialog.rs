@@ -127,17 +127,17 @@ mod opening {
         let mut s = setup(false);
         s.app.open_settings_on(&SettingsRow::Flows);
         let Some(Overlay::Settings(settings)) = &s.app.overlay else { panic!("no settings") };
-        assert_eq!(settings.flows, "4 built in");
+        assert_eq!(settings.flows, "5 built in");
         let i = settings.rows().iter().position(|r| *r == SettingsRow::Flows).expect("the flows row");
         let sections: Vec<&'static str> = settings.rows().iter().map(SettingsRow::section).collect();
         let pos = ui::settings_row(WIDE, &sections, settings.cursor, i).as_position();
         click_in(&mut s.app, pos, WIDE);
-        assert_eq!(dialog(&s.app).entries(), 4);
+        assert_eq!(dialog(&s.app).entries(), 5);
         duplicate_full_issue(&mut s, WIDE);
         button(&mut s.app, WIDE, dialog::DONE);
         button(&mut s.app, WIDE, dialog::DONE);
         let Some(Overlay::Settings(settings)) = &s.app.overlay else { panic!("the settings did not come back") };
-        assert_eq!(settings.flows, "4 built in, 1 yours");
+        assert_eq!(settings.flows, "5 built in, 1 yours");
     }
 
     #[test]
@@ -191,7 +191,7 @@ mod files_on_disk {
         let [submit, _] = ui::form_buttons(ui::form_area(WIDE), dialog::DELETE);
         click_in(&mut s.app, submit.as_position(), WIDE);
         assert_eq!(files(&user_dir(&s)), Vec::<String>::new());
-        assert_eq!(dialog(&s.app).entries(), 4);
+        assert_eq!(dialog(&s.app).entries(), 5);
     }
 
     #[test]
@@ -243,7 +243,7 @@ mod built_in_flows {
         assert_eq!(files(&user_dir(&s)), ["full-issue.toml"]);
         assert_eq!(store::read(&file).expect("read your version").notes, "Keep the API.");
         button(&mut s.app, WIDE, dialog::DONE);
-        assert_eq!((dialog(&s.app).entries(), origin_of(&s.app, "Full issue")), (4, store::Origin::User(file)));
+        assert_eq!((dialog(&s.app).entries(), origin_of(&s.app, "Full issue")), (5, store::Origin::User(file)));
         let note = view(&s.app, WIDE).rows[dialog(&s.app).cursor].note.clone();
         assert!(note.starts_with("edited · "), "{note}");
 
@@ -322,7 +322,7 @@ mod list_preview {
     fn the_list_draws_the_selected_flows_diagram_beside_it() {
         let mut s = open(false);
         let screen = shown(&mut s.app, WIDE);
-        assert!(screen.contains("Diagram") && screen.contains("open a pull request"), "{screen}");
+        assert!(screen.contains("Diagram") && screen.contains("orchestrator"), "{screen}");
         assert!(dialog(&s.app).edit.is_none());
     }
 
@@ -392,7 +392,7 @@ mod list_preview {
         assert!(!shown(&mut s.app, NARROW).contains("Diagram"));
         button(&mut s.app, NARROW, dialog::DIAGRAM);
         let screen = shown(&mut s.app, NARROW);
-        assert!(screen.contains("Diagram") && screen.contains("open a pull request"), "{screen}");
+        assert!(screen.contains("Diagram") && screen.contains("orchestrator"), "{screen}");
         button(&mut s.app, NARROW, dialog::LIST);
         assert!(!shown(&mut s.app, NARROW).contains("Diagram"));
     }

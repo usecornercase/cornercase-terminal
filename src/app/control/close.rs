@@ -27,6 +27,9 @@ impl App {
                     if !self.projects[p].workspaces[w].worktree {
                         return Err(format!("workspace {id} is not a git worktree").into());
                     }
+                    if let Some(refusal) = self.role_owner(p, w) {
+                        return Err(refusal.into());
+                    }
                     let key = self.requests.key();
                     self.spawn_check(p, w, Some(key));
                     let pending = Pending {

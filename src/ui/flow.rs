@@ -25,6 +25,8 @@ const RED: u8 = 9;
 const HEADER: u16 = 3;
 const MORE_ABOVE: &str = " ↑ more ";
 const MORE_BELOW: &str = " ↓ more ";
+const OWN_LONG: &str = " own worktree ";
+const OWN_SHORT: &str = " own ";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum State {
@@ -38,6 +40,7 @@ pub(crate) struct Node {
     pub(crate) text: String,
     pub(crate) colour: Color,
     pub(crate) state: Option<State>,
+    pub(crate) own: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,7 +107,13 @@ pub(crate) fn role_colour(index: usize) -> Color {
 
 impl Diagram {
     pub(crate) fn plan(flow: &Flow, muted: Color, light: bool) -> Self {
-        let node = |role: &Role, colour| Node { role: role.name.clone(), text: role.summary(), colour, state: None };
+        let node = |role: &Role, colour| Node {
+            role: role.name.clone(),
+            text: role.summary(),
+            colour,
+            state: None,
+            own: role.own_worktree(),
+        };
         let colour = |name: &str| flow.roles.iter().position(|r| r.name == name).map(|i| role_colour(i + 1));
         let stages = flow
             .stages
@@ -113,11 +122,11 @@ impl Diagram {
             .map(|(n, stage)| {
                 if stage.roles.is_empty() {
                     let role = format!("stage {}", n + 1);
-                    return vec![Node { role, text: "no roles".into(), colour: muted, state: None }];
+                    return vec![Node { role, text: "no roles".into(), colour: muted, state: None, own: false }];
                 }
                 let found = |name: &String| match (flow.role(name), colour(name)) {
                     (Some(role), Some(colour)) => node(role, colour),
-                    _ => Node { role: name.clone(), text: "not a role".into(), colour: muted, state: None },
+                    _ => Node { role: name.clone(), text: "not a role".into(), colour: muted, state: None, own: false },
                 };
                 stage.roles.iter().map(found).collect()
             })

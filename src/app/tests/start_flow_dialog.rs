@@ -169,7 +169,7 @@ mod the_dialog {
         let s = opened(true);
         let view = view(&s.app, WIDE);
         let (list, prompt) = (ui::start_list(WIDE, view.shape()), ui::start_prompt(WIDE, view.shape()));
-        assert_eq!((list.height, prompt.y - list.bottom()), (9, 2));
+        assert_eq!((list.height, prompt.y - list.bottom()), (11, 2));
         assert!(prompt.height > list.height);
     }
 

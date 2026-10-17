@@ -49,6 +49,22 @@ mod create {
     }
 
     #[test]
+    fn create_from_branches_from_the_base_not_from_head() {
+        let repo = git_repo(&[("README", "hi")]);
+        git(repo.path(), &["checkout", "-q", "-b", "base"]);
+        std::fs::write(repo.path().join("later"), "x").expect("write");
+        git(repo.path(), &["add", "later"]);
+        git(repo.path(), &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "later"]);
+        git(repo.path(), &["checkout", "-q", "-"]);
+        let out = TempDir::new();
+        let path = out.path().join("wt");
+
+        create_from(repo.path(), "role", &path, "base").expect("create worktree");
+
+        assert_eq!((current_branch(&path).as_deref(), read(&path.join("later")).as_deref()), (Some("role"), Some("x")));
+    }
+
+    #[test]
     fn checks_out_an_existing_branch() {
         let repo = git_repo(&[("README", "hi")]);
         git(repo.path(), &["branch", "already-there"]);

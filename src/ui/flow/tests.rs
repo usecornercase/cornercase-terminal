@@ -85,6 +85,7 @@ mod plan {
     #[case::cross_review(1)]
     #[case::quick(2)]
     #[case::bug_test_first(3)]
+    #[case::arena(4)]
     fn built_in_flows_at_46_columns(#[case] i: usize) {
         let flow = if i == 0 { full_issue() } else { flows().remove(i) };
         let d = Diagram::plan(&flow, MUTED, false);
@@ -99,6 +100,33 @@ mod plan {
     fn full_issue_at_other_widths(#[case] width: u16) {
         let d = Diagram::plan(&full_issue(), MUTED, false);
         insta::assert_snapshot!(format!("full_issue_{width}"), render(&d, width).backend());
+    }
+
+    #[test]
+    fn arena_at_100_columns() {
+        let d = Diagram::plan(&flows().remove(4), MUTED, false);
+        insta::assert_snapshot!("arena_100", render(&d, 100).backend());
+    }
+
+    #[test]
+    fn a_role_with_a_worktree_of_its_own_says_so_on_its_top_border() {
+        let d = Diagram::plan(&flows().remove(4), MUTED, false);
+        let t = render(&d, 100);
+        let (x, y) = find(&t, " own ╮").expect("the short tag");
+        assert_eq!(cell(&t, x + 1, y).fg, MUTED);
+        assert_eq!(find(&t, "coder A").map(|(_, row)| row), Some(y));
+        assert!(find(&t, "judge").is_some_and(|(_, row)| find(&t, " own ╮").is_some_and(|(_, own)| own != row)));
+    }
+
+    #[test]
+    fn a_box_with_room_names_the_tag_in_full() {
+        let mut flow = flows().remove(2);
+        flow.roles[0].name = "a".into();
+        flow.stages[0].roles[0] = "a".into();
+        flow.roles[0].worktree = crate::flows::Worktree::Own;
+        let d = Diagram::plan(&flow, MUTED, false);
+        let t = render(&d, 60);
+        assert!(find(&t, "own worktree").is_some(), "{:?}", t.backend());
     }
 
     #[test]

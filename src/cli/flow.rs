@@ -7,6 +7,7 @@ use super::{print_json, print_out, read_prompt};
 use crate::client::{answer, ask, confirm};
 use crate::control::{self, Exported, FlowInfo, Flows, Imported, RunInfo};
 use crate::error::{Error, Result};
+use crate::flows::Worktree;
 use crate::flows::registry::{self, Source};
 use crate::flows::share;
 
@@ -157,7 +158,12 @@ pub(super) fn listing(flows: &Flows) -> String {
             .map(|role| {
                 let model = role.model.as_deref().map(|m| format!(" · {m}")).unwrap_or_default();
                 let effort = role.effort.as_deref().map(|e| format!(" · {e}")).unwrap_or_default();
-                let edits = if role.edits { " (edits)" } else { "" };
+                let edits = match (role.edits, role.worktree) {
+                    (true, Worktree::Own) => " (edits, own worktree)",
+                    (true, Worktree::Shared) => " (edits)",
+                    (false, Worktree::Own) => " (own worktree)",
+                    (false, Worktree::Shared) => "",
+                };
                 format!("{}: {}{model}{effort}{edits}", role.role, role.agent)
             })
             .collect();

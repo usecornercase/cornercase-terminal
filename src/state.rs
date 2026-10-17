@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::agents::AgentState;
 use crate::changes::{Mode, Scope};
 use crate::flows::Flow;
-use crate::flows::run::Run;
+use crate::flows::run::{RoleWorktree, Run};
 use crate::issues::People;
 use crate::project::group::GroupEntry;
 use crate::project::split::Node;
@@ -97,6 +97,8 @@ pub(crate) struct WorkspaceState {
     pub(crate) collapsed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) run: Option<RunState>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) role_worktrees: Vec<RoleWorktree>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -184,6 +186,7 @@ impl WorkspaceState {
             base: None,
             collapsed: false,
             run: None,
+            role_worktrees: Vec::new(),
         }
     }
 }
@@ -218,6 +221,7 @@ impl WorkspaceState {
         let mut workspace = Workspace::new(id, path, self.name.clone(), self.worktree);
         workspace.base.clone_from(&self.base);
         workspace.collapsed = self.collapsed;
+        workspace.role_worktrees.clone_from(&self.role_worktrees);
         workspace.active = self.active.min(tabs.len().saturating_sub(1));
         workspace.tabs = tabs;
         workspace
@@ -245,6 +249,7 @@ impl WorkspaceState {
             active: workspace.active,
             collapsed: workspace.collapsed,
             run: run.map(|run| RunState::of(run, workspace)),
+            role_worktrees: workspace.role_worktrees.clone(),
         }
     }
 }

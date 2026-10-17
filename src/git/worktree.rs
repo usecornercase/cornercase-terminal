@@ -32,6 +32,10 @@ pub(crate) fn checkout_path(worktrees_dir: &Path, repo: &Path, branch: &str) -> 
 }
 
 pub(crate) fn create(repo: &Path, branch: &str, path: &Path) -> Result<()> {
+    create_from(repo, branch, path, "HEAD")
+}
+
+pub(crate) fn create_from(repo: &Path, branch: &str, path: &Path, base: &str) -> Result<()> {
     if path.exists() {
         return Err(Error::PathExists(path.to_path_buf()));
     }
@@ -44,7 +48,7 @@ pub(crate) fn create(repo: &Path, branch: &str, path: &Path) -> Result<()> {
     } else {
         check(git(
             repo,
-            [OsStr::new("worktree"), "add".as_ref(), "-b".as_ref(), branch.as_ref(), path, "HEAD".as_ref()],
+            [OsStr::new("worktree"), "add".as_ref(), "-b".as_ref(), branch.as_ref(), path, base.as_ref()],
         )?)?;
     }
     for file in included_files(repo)? {

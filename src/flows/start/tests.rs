@@ -10,7 +10,8 @@ use crate::flows::dialog::DIAGRAM;
 const ROOM: Room = Room { width: 30, height: 4, wide: true };
 
 fn listing() -> Listing {
-    let builtins = builtin::flows(&[Known::Claude, Known::Codex], Some(Known::Claude));
+    let mut builtins = builtin::flows(&[Known::Claude, Known::Codex], Some(Known::Claude));
+    builtins.retain(|flow| flow.name != "Arena");
     let mut flows: Vec<Saved> = builtins.into_iter().map(|flow| Saved { flow, origin: Origin::BuiltIn }).collect();
     let mut mine = flows[2].flow.clone();
     mine.name = "Mine".into();

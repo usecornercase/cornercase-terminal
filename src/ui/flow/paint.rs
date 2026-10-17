@@ -209,6 +209,16 @@ fn draw_box(frame: &mut Canvas, d: &Diagram, node: &Node, placed: &Placed, lit: 
     if r.width >= 6 {
         frame.put((r.x + 2, top), &format!(" {name} "), name_style);
     }
+    if node.own && r.width >= 6 {
+        let used = u16::try_from(text::cells(&name)).unwrap_or(u16::MAX).saturating_add(4);
+        let tag = [super::OWN_LONG, super::OWN_SHORT]
+            .into_iter()
+            .find(|tag| u16::try_from(text::cells(tag)).is_ok_and(|w| w + 1 + used <= r.width));
+        if let Some(tag) = tag {
+            let x = r.right() - 1 - u16::try_from(text::cells(tag)).unwrap_or(0);
+            frame.put((x, top), tag, bg.fg(d.muted));
+        }
+    }
     let icon = match node.state {
         Some(State::Agent(Some(status))) => Some(status_icon(d.muted, status, d.spin)),
         Some(State::Agent(None)) => Some(status_icon(d.muted, Status::Idle, d.spin)),

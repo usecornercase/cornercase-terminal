@@ -121,6 +121,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                             base: Some("release".into()),
                             collapsed: true,
                             run: None,
+                            role_worktrees: Vec::new(),
                         },
                     ],
                 )

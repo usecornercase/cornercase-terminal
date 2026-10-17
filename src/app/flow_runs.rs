@@ -1,20 +1,23 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use ratatui::layout::Rect;
 
 use super::App;
+use super::event::AppEvent;
 use super::toast::Toast;
+use super::worktrees::WorktreeEvent;
 use crate::agents;
 use crate::agents::activity;
 use crate::agents::launch::{self, Launch};
 use crate::control::{MemberInfo, RunInfo};
 use crate::flows::progress::Progress;
-use crate::flows::run::{Member, Run};
+use crate::flows::run::{Member, RoleWorktree, Run};
 use crate::flows::{self, Flow, Role, brief, builtin, store};
 use crate::git;
+use crate::git::worktree;
 use crate::host::notify::{self, Notification};
-use crate::log;
+use crate::log::{self, Job, Level};
 use crate::paths;
 use crate::project::search::Goto;
 use crate::project::{Hierarchy, Phase, Tab};
@@ -28,6 +31,13 @@ pub(super) struct Starting {
     pub(super) branch: String,
     pub(super) focus: bool,
     pub(super) note: Option<String>,
+    pub(super) trees: Vec<(RoleWorktree, bool)>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Made {
+    pub(crate) run: Option<PathBuf>,
+    pub(crate) roles: Vec<(RoleWorktree, bool)>,
 }
 
 impl App {
@@ -46,9 +56,46 @@ impl App {
         area: Rect,
     ) -> Result<(), String> {
         let branch = if branch.trim() == flows::branch(&task) { String::new() } else { branch };
-        self.run_flow(None, project, Starting { flow, task, branch, focus, note: None }, area)
+        self.run_flow(None, project, Starting { flow, task, branch, focus, note: None, trees: Vec::new() }, area)
             .map(drop)
             .map_err(String::from)
+    }
+
+    pub(super) fn spawn_run_worktrees(
+        &self,
+        p: usize,
+        run: Option<PathBuf>,
+        branch: String,
+        roles: Vec<(String, String)>,
+        request: u64,
+    ) {
+        let project = &self.projects[p];
+        let (id, repo) = (project.id, project.path.clone());
+        let dir = self.config.worktrees_dir(self.home.as_deref());
+        let job = Job::new(Level::Info, "worktree", "add for a flow").with("project", id).with("branch", &branch);
+        let job = job.with("roles", roles.len()).with("run", run.is_some());
+        self.spawn_job(
+            job,
+            move || {
+                let canonical = |path: PathBuf| path.canonicalize().unwrap_or(path);
+                if let Some(path) = &run {
+                    worktree::create(&repo, &branch, path)?;
+                }
+                let mut trees = Vec::with_capacity(roles.len());
+                for (role, role_branch) in roles {
+                    let (path, made) = if let Some(path) = git::checkout_of(&repo, &role_branch) {
+                        (path, false)
+                    } else {
+                        let path = worktree::checkout_path(&dir, &repo, &role_branch);
+                        worktree::create_from(&repo, &role_branch, &path, &branch)?;
+                        (path, true)
+                    };
+                    trees.push((RoleWorktree { role, path: canonical(path), branch: role_branch }, made));
+                }
+                Ok(Made { run: run.map(canonical), roles: trees })
+            },
+            move |result, _| Some(AppEvent::Worktree(WorktreeEvent::Run { project: id, result, request })),
+        );
     }
 
     pub(super) fn run_refusal(&self, p: usize, starting: &Starting) -> Result<(), String> {
@@ -112,40 +159,67 @@ impl App {
         if self.runs.iter().any(|run| run.workspace == id) {
             return Err(format!("workspace {id} already runs a flow, and a workspace runs one at a time"));
         }
-        let Starting { flow, task, branch, focus, note } = starting;
+        let Starting { flow, task, branch, focus, note, trees } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
         run.id = self.take_id();
         let mut info = RunInfo { project: self.projects[p].id, workspace: id, branch, members: Vec::new(), note };
         let path = self.projects[p].workspaces[w].path.clone();
         let mut terms = Vec::with_capacity(roles.len());
-        let script = self.setup_script(p).filter(|_| setup);
-        for i in 0..roles.len() {
-            let term = match (&script, i) {
-                (Some(script), 0) => self.spawn_setup(area, (p, id), path.clone(), script),
-                _ => self.spawn(area, path.clone()),
+        let script = self.setup_script(p);
+        let own = |role: &Role| trees.iter().find(|(tree, _)| tree.role == role.name);
+        for (i, role) in roles.iter().enumerate() {
+            let tree = own(role);
+            let term = match (&script, tree) {
+                (Some(script), _) if i == 0 && setup => self.spawn_setup(area, (p, id), path.clone(), script),
+                (Some(script), Some((tree, true))) => self.spawn_setup(area, (p, id), tree.path.clone(), script),
+                _ => self.spawn(area, tree.map_or_else(|| path.clone(), |(tree, _)| tree.path.clone())),
             };
             terms.push(term.map_err(|e| e.to_string())?);
         }
+        let seats: Vec<RoleWorktree> = trees.iter().map(|(tree, _)| tree.clone()).collect();
         for (role, term) in roles.iter().zip(terms) {
             let pane = term.id;
             let tab = Tab::new(self.take_id(), Some(role.name.clone()), term);
             run.members.push(Member { role: role.name.clone(), pane });
-            info.members.push(MemberInfo { role: role.name.clone(), agent: role.agent.clone(), tab: tab.id, pane });
+            let tree = seats.iter().find(|tree| tree.role == role.name);
+            info.members.push(MemberInfo {
+                role: role.name.clone(),
+                agent: role.agent.clone(),
+                tab: tab.id,
+                pane,
+                worktree: tree.map(|tree| tree.path.clone()),
+                branch: tree.map(|tree| tree.branch.clone()),
+            });
             self.projects[p].workspaces[w].tabs.push(tab);
+        }
+        for tree in &seats {
+            let remembered = &mut self.projects[p].workspaces[w].role_worktrees;
+            if !remembered.iter().any(|known| known.path == tree.path) {
+                remembered.push(tree.clone());
+            }
+            self.worktree_workspace(p, tree.path.clone());
         }
         let now = Instant::now();
         let mut team = Vec::new();
         for (role, member) in roles.iter().zip(&run.members).skip(1) {
-            let spec = self.flow_spec(role, brief::member(role));
+            let branch = seats.iter().find(|tree| tree.role == role.name).map(|tree| tree.branch.as_str());
+            let spec = self.flow_spec(role, brief::member(role, branch));
             self.agents.launches.push(Launch::new(member.pane, spec, now));
             team.push(member.pane);
         }
-        let spec = self.flow_spec(&roles[0], brief::brief(&run.flow, &run.task, &info.branch, &run.members));
+        let spec = self.flow_spec(&roles[0], brief::brief(&run.flow, &run.task, &info.branch, &run.members, &seats));
         let mut launch = Launch::new(run.members[0].pane, spec, now);
         launch.after = team;
         self.agents.launches.push(launch);
-        log::info!("flow", "run started", workspace = id, flow = run.flow.name, agents = roles.len());
+        log::info!(
+            "flow",
+            "run started",
+            workspace = id,
+            flow = run.flow.name,
+            agents = roles.len(),
+            worktrees = seats.len()
+        );
         self.runs.push(run);
         if focus && let Some(first) = info.members.first() {
             self.goto(Goto::Place { project: info.project, workspace: Some(id), tab: Some(first.tab) });

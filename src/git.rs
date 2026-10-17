@@ -28,6 +28,10 @@ pub(crate) fn has_branch(dir: &Path, name: &str) -> bool {
             .is_ok_and(|refs| refs.lines().any(|line| line.split_whitespace().nth(1) == Some(reference.as_str())))
 }
 
+pub(crate) fn checkout_of(repo: &Path, branch: &str) -> Option<PathBuf> {
+    linked_worktrees(repo).into_iter().find(|path| checked_out(path).as_deref() == Some(branch))
+}
+
 pub(crate) fn has_remote(dir: &Path) -> bool {
     let Some(config) = common_dir(dir).and_then(|common| std::fs::read_to_string(common.join("config")).ok()) else {
         return false;

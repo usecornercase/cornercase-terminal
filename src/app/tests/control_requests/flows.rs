@@ -2,7 +2,7 @@ use std::os::unix::fs::PermissionsExt;
 
 use super::*;
 use crate::agents::AgentState;
-use crate::app::flow_runs::Starting;
+use crate::app::flow_runs::{Made, Starting};
 use crate::control::RunInfo;
 use crate::flows::{Back, Flow, ORCHESTRATOR, Role, Stage, store};
 use crate::paths;
@@ -39,7 +39,7 @@ struct Team {
     repo: TempDir,
     log: TempDir,
     config: TempDir,
-    _worktrees: TempDir,
+    worktrees: TempDir,
     _bin: TempDir,
 }
 
@@ -74,21 +74,26 @@ impl Team {
     }
 
     fn with(script: &str) -> Self {
+        Self::configured(script, |_, _| {})
+    }
+
+    fn configured(script: &str, tweak: impl FnOnce(&mut Config, &Path)) -> Self {
         let (repo, log, config, worktrees, bin) =
             (git_repo(&[("README", "hi")]), TempDir::new(), TempDir::new(), TempDir::new(), TempDir::new());
         let fake = bin.path().join("claude");
         write_executable(&fake, &script.replace("LOG", &log.path().display().to_string()));
-        let settings = Config {
+        let mut settings = Config {
             worktrees_dir: worktrees.path().display().to_string(),
             agent_commands: [("claude".to_string(), fake.display().to_string())].into(),
             ..Config::default()
         };
+        tweak(&mut settings, repo.path());
         let config_path = write_config(config.path(), &settings);
         let flows = paths::flows(&config_path);
         std::fs::create_dir_all(&flows).expect("the flows folder");
         store::save(&flows, &pair(), None).expect("save the flow");
         let (app, rx) = app_in(repo.path(), config_path);
-        Self { app, rx, repo, log, config, _worktrees: worktrees, _bin: bin }
+        Self { app, rx, repo, log, config, worktrees, _bin: bin }
     }
 
     fn run(&mut self, name: &str, branch: Option<&str>) -> Response {
@@ -528,7 +533,14 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         team.app.projects[0].workspaces[0].phase = phase;
     }
     team.app.projects[0].closing = closing;
-    let starting = Starting { flow: pair(), task: "Fix it".into(), branch: "main".into(), focus: false, note: None };
+    let starting = Starting {
+        flow: pair(),
+        task: "Fix it".into(),
+        branch: "main".into(),
+        focus: false,
+        note: None,
+        trees: Vec::new(),
+    };
 
     let refused = team.app.open_run(0, 0, starting, AREA, false).expect_err("refused");
 
@@ -546,7 +558,7 @@ fn a_run_whose_shells_cannot_start_leaves_no_tab_and_no_workspace_behind() {
         made = team.rx.try_iter().find(|event| matches!(event, AppEvent::Worktree(_)));
         made.is_some()
     });
-    let Some(AppEvent::Worktree(WorktreeEvent::Created { result: Ok(path), .. })) = &made else {
+    let Some(AppEvent::Worktree(WorktreeEvent::Run { result: Ok(Made { run: Some(path), .. }), .. })) = &made else {
         panic!("not a new worktree: {made:?}")
     };
     let path = path.canonicalize().expect("the worktree");
@@ -615,3 +627,5 @@ fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_tol
     let coder = again.runs[0].pane_of("coder").expect("the coder");
     assert!(told.contains(&format!("coder is pane {coder}")), "{told}");
 }
+
+mod own_worktrees;

@@ -505,6 +505,7 @@ mod flows {
     use super::args::ImportTo;
     use super::flow::{confirmation, fetched, imported_line, listing, started};
     use crate::control::{BrokenFlow, FlowInfo, Flows, Imported, MemberInfo, RoleInfo, RunInfo};
+    use crate::flows::Worktree;
     use crate::flows::registry::Source;
 
     #[test]
@@ -537,7 +538,14 @@ mod flows {
     }
 
     fn role(role: &str, agent: &str, model: Option<&str>, edits: bool) -> RoleInfo {
-        RoleInfo { role: role.into(), agent: agent.into(), model: model.map(str::to_string), effort: None, edits }
+        RoleInfo {
+            role: role.into(),
+            agent: agent.into(),
+            model: model.map(str::to_string),
+            effort: None,
+            edits,
+            worktree: Worktree::Shared,
+        }
     }
 
     #[test]
@@ -576,7 +584,14 @@ mod flows {
 
     #[test]
     fn a_run_prints_its_workspace_then_a_pane_and_a_role_per_line() {
-        let member = |role: &str, pane| MemberInfo { role: role.into(), agent: "claude".into(), tab: 0, pane };
+        let member = |role: &str, pane| MemberInfo {
+            role: role.into(),
+            agent: "claude".into(),
+            tab: 0,
+            pane,
+            worktree: None,
+            branch: None,
+        };
         let run = RunInfo {
             workspace: 9,
             members: vec![member("orchestrator", 12), member("second reviewer", 14)],

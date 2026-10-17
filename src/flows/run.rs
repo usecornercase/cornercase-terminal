@@ -1,4 +1,7 @@
 use std::collections::VecDeque;
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
 use super::Flow;
@@ -28,6 +31,13 @@ pub(crate) struct Message {
 pub(crate) struct Member {
     pub(crate) role: String,
     pub(crate) pane: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RoleWorktree {
+    pub(crate) role: String,
+    pub(crate) path: PathBuf,
+    pub(crate) branch: String,
 }
 
 #[derive(Debug, Clone)]

@@ -81,7 +81,7 @@ test('lengths and types are capped', () => {
 test('the built-in flows come first, as built in, and each draws a plan', () => {
   const all = everyFlow();
   const built = builtIns();
-  assert.deepEqual(built.map((f) => f.name), ['Full issue', 'Cross review', 'Quick', 'Bug, test first']);
+  assert.deepEqual(built.map((f) => f.name), ['Full issue', 'Cross review', 'Quick', 'Bug, test first', 'Arena']);
   assert.deepEqual(all.slice(0, built.length).map((f) => f.slug), built.map((f) => f.slug));
   for (const flow of built) {
     assert.ok(flow.builtIn && flow.owner === 'cornercase' && flow.repo === 'usecornercase/cornercase-terminal' && flow.stars === 0);
@@ -106,4 +106,39 @@ test('a community repository cannot take the built-in flows folder', () => {
     rmSync(dir, { recursive: true, force: true });
   }
   assert.ok(said[0].includes('built-in'));
+});
+
+test('a role can have a worktree of its own, with version 2', () => {
+  const [{ text }] = JSON.parse(JSON.stringify(registry(fixture)));
+  const own = text.replace('version = 1', 'version = 2').replace('edits = true', 'edits = true\nworktree = "own"');
+  assert.deepEqual(problems(own), []);
+  const flow = toFlow({ repo: 'a/b', stars: 1, description: '', topics: [], file: 'flow.toml', text: own });
+  assert.deepEqual(flow.roles.map((r) => r.worktree), ['own', 'shared']);
+  assert.ok(problems(own.replace('version = 2', 'version = 1')).some((p) => p.includes('version = 2')));
+  assert.ok(problems(own.replace('version = 2\n', '')).some((p) => p.includes('version = 2')));
+  assert.ok(problems(own.replace('version = 2', 'version = 3')).some((p) => p.includes('newer')));
+  assert.ok(problems(own.replace('"own"', '"mine"')).some((p) => p.includes('shared or own')));
+  assert.ok(problems(own.replace('prompt = "Keep', 'worktree = "own"\nprompt = "Keep')).some((p) => p.includes('orchestrator cannot')));
+});
+
+test('two roles that edit the shared worktree side by side are refused', () => {
+  const [{ text }] = JSON.parse(JSON.stringify(registry(fixture)));
+  const both = text
+    .replace('prompt = "You check docs', 'edits = true\nprompt = "You check docs')
+    .replace('[[stage]]\nroles = ["writer"]\n\n[[stage]]\nroles = ["checker"]\n\n[stage.back]\nto = 1\nwhen = "findings"\nat_most = 2', '[[stage]]\nroles = ["writer", "checker"]');
+  assert.ok(problems(both).some((p) => p.includes('both edit the shared worktree')), problems(both).join('; '));
+  const apart = both.replace('version = 1', 'version = 2').replace('edits = true\nprompt = "You check docs', 'edits = true\nworktree = "own"\nprompt = "You check docs');
+  assert.deepEqual(problems(apart), []);
+});
+
+test('the arena flow has competing coders with a worktree of their own, and its plan says so', () => {
+  const arena = builtIns().find((f) => f.name === 'Arena');
+  assert.ok(arena);
+  const own = arena.roles.filter((r) => r.worktree === 'own');
+  assert.ok(own.length >= 2 && own.every((r) => r.edits));
+  assert.ok(arena.roles.filter((r) => r.worktree !== 'own').every((r) => r.name !== own[0].name));
+  const svg = diagramSvg(arena, arena.name);
+  assert.ok(svg.startsWith('<svg') && svg.includes('own'));
+  const plain = diagramSvg({ ...arena, roles: arena.roles.map((r) => ({ ...r, worktree: 'shared' as const })) }, arena.name);
+  assert.notEqual(svg, plain, 'an own role draws its tag');
 });

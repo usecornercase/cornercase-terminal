@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use super::Fields;
+use crate::flows::Worktree;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -48,6 +49,8 @@ pub(crate) struct RoleInfo {
     pub(crate) model: Option<String>,
     pub(crate) effort: Option<String>,
     pub(crate) edits: bool,
+    #[serde(skip_serializing_if = "Worktree::is_shared")]
+    pub(crate) worktree: Worktree,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -75,6 +78,10 @@ pub(crate) struct MemberInfo {
     pub(crate) agent: String,
     pub(crate) tab: u64,
     pub(crate) pane: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) worktree: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) branch: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

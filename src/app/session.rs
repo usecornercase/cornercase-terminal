@@ -50,8 +50,12 @@ impl App {
         let mut panes = Vec::new();
         for (i, pane) in saved.panes.iter().enumerate() {
             let cwd = pane.cwd.clone().filter(|cwd| cwd.is_dir()).unwrap_or_else(|| dir.to_path_buf());
+            let role = roles(i);
+            let apart = role.is_some_and(Role::own_worktree) && pane.cwd.as_ref().is_none_or(|cwd| !cwd.is_dir());
             let mut term = self.spawn(area, cwd)?;
-            if self.resume(&mut term, pane.agent.as_ref(), roles(i)) {
+            if apart {
+                log::warning!("server", "a role's worktree is gone, so its agent does not resume", pane = term.id);
+            } else if self.resume(&mut term, pane.agent.as_ref(), role) {
                 term.agent.restore(pane.done, pane.pending);
             }
             panes.push(term);
