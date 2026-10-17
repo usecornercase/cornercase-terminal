@@ -1,4 +1,4 @@
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::*;
 use crate::agents::claude::fake::FakeClaude;
@@ -27,6 +27,42 @@ fn request(app: &mut App, caller: Option<u64>, command: Command, area: Option<Re
 
 fn ask(app: &mut App, caller: Option<u64>, command: Command) {
     request(app, caller, command, Some(AREA));
+}
+
+struct Refused {
+    code: String,
+    message: String,
+}
+
+fn call(app: &mut App, command: &str, args: &Value) -> std::result::Result<Value, Refused> {
+    call_as(app, command, args, None)
+}
+
+fn call_as(app: &mut App, command: &str, args: &Value, boot: Option<&str>) -> std::result::Result<Value, Refused> {
+    let text = json!({"contract": 1, "boot": boot, "command": command, "args": args}).to_string();
+    app.request(CLIENT, &text, Some(AREA), Instant::now());
+    let mut answers = app.take_answers();
+    assert_eq!(answers.len(), 1, "an answer at once");
+    let (_, text) = answers.remove(0);
+    let mut reply: Value = serde_json::from_str(&text).expect("a reply");
+    match reply["error"].take() {
+        Value::Null => Ok(reply["ok"].take()),
+        error => Err(Refused {
+            code: error["code"].as_str().unwrap_or_default().to_string(),
+            message: error["message"].as_str().unwrap_or_default().to_string(),
+        }),
+    }
+}
+
+fn ok(app: &mut App, command: &str, args: &Value) -> Value {
+    call(app, command, args).unwrap_or_else(|e| panic!("{command} refused: {} {}", e.code, e.message))
+}
+
+fn refused(app: &mut App, command: &str, args: &Value) -> Refused {
+    match call(app, command, args) {
+        Ok(value) => panic!("{command} was taken: {value}"),
+        Err(refused) => refused,
+    }
 }
 
 fn answers(app: &mut App) -> Vec<Response> {

@@ -9,37 +9,6 @@ use crate::test_util::theme;
 const DARK: RgbColor = RgbColor { r: 26, g: 27, b: 38 };
 const LIGHT: RgbColor = RgbColor { r: 251, g: 250, b: 246 };
 
-struct Refused {
-    code: String,
-    message: String,
-}
-
-fn call(app: &mut App, command: &str, args: &Value) -> std::result::Result<Value, Refused> {
-    let text = json!({"contract": 1, "command": command, "args": args}).to_string();
-    app.request(CLIENT, &text, Some(AREA), Instant::now());
-    let mut answers = app.take_answers();
-    assert_eq!(answers.len(), 1, "an answer at once");
-    let mut reply: Value = serde_json::from_str(&answers.remove(0).1).expect("a reply");
-    match reply["error"].take() {
-        Value::Null => Ok(reply["ok"].take()),
-        error => Err(Refused {
-            code: error["code"].as_str().unwrap_or_default().to_string(),
-            message: error["message"].as_str().unwrap_or_default().to_string(),
-        }),
-    }
-}
-
-fn ok(app: &mut App, command: &str, args: &Value) -> Value {
-    call(app, command, args).unwrap_or_else(|e| panic!("{command} refused: {} {}", e.code, e.message))
-}
-
-fn refused(app: &mut App, command: &str, args: &Value) -> Refused {
-    match call(app, command, args) {
-        Ok(value) => panic!("{command} was taken: {value}"),
-        Err(refused) => refused,
-    }
-}
-
 fn give(app: &mut App, colours: &HostTheme) -> Value {
     ok(app, "theme", &json!({"theme": colours}))
 }

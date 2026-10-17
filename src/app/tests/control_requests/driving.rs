@@ -7,44 +7,8 @@ use crate::control::terminal::{Sent, Why};
 use crate::project::Hierarchy;
 use crate::project::split::Dir;
 
-struct Refused {
-    code: String,
-    message: String,
-}
-
-fn call(app: &mut App, command: &str, args: &Value) -> std::result::Result<Value, Refused> {
-    call_as(app, command, args, None)
-}
-
-fn call_as(app: &mut App, command: &str, args: &Value, boot: Option<&str>) -> std::result::Result<Value, Refused> {
-    let text = json!({"contract": 1, "boot": boot, "command": command, "args": args}).to_string();
-    app.request(CLIENT, &text, Some(AREA), Instant::now());
-    let mut answers = app.take_answers();
-    assert_eq!(answers.len(), 1, "an answer at once");
-    let (_, text) = answers.remove(0);
-    let mut reply: Value = serde_json::from_str(&text).expect("a reply");
-    match reply["error"].take() {
-        Value::Null => Ok(reply["ok"].take()),
-        error => Err(Refused {
-            code: error["code"].as_str().unwrap_or_default().to_string(),
-            message: error["message"].as_str().unwrap_or_default().to_string(),
-        }),
-    }
-}
-
-fn ok(app: &mut App, command: &str, args: &Value) -> Value {
-    call(app, command, args).unwrap_or_else(|e| panic!("{command} refused: {} {}", e.code, e.message))
-}
-
 fn sent(app: &mut App, pane: u64, events: &Value) -> Sent {
     serde_json::from_value(ok(app, "input", &json!({"pane": pane, "events": events}))).expect("sent")
-}
-
-fn refused(app: &mut App, command: &str, args: &Value) -> Refused {
-    match call(app, command, args) {
-        Ok(value) => panic!("{command} was taken: {value}"),
-        Err(refused) => refused,
-    }
 }
 
 fn hidden_tab(app: &mut App) -> u64 {
