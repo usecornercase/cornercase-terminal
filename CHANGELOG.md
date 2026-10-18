@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.141
+
+- **A sound when an agent needs you or finishes.** cornercase now plays a short sound on the computer you are looking at when an agent in another tab needs you (a question, a permission, a failure) or finishes its turn, at the same moments as its toast. It plays even while the window is focused, when Ghostty and other terminals hide the desktop notification, and also inside tmux and through `cornercase remote`.
+  - The two sounds differ, so you can tell which one happened without looking. **sound when it needs you** and **sound when it finishes** take a file of your own, on the window's computer.
+  - Only agents you started play a sound: those started by another agent or by a flow stay quiet unless you turn on **sound for subagents**.
+  - It is on by default; turn off **sound** in Settings → UI to stop it. The toast and desktop notification are unchanged. A window opened inside a plain `ssh` session plays nothing.
+
 ## 0.12.140
 
 - **`cornercase remote` no longer starts a second server.** The server's socket now sits next to your session, in `~/.local/state/cornercase/` (or `$XDG_STATE_HOME/cornercase/`), instead of a folder that depends on the login. An SSH session without `XDG_RUNTIME_DIR`, a script run from cron or another login now reach the same server instead of starting a second one that restored an old copy of your session, resumed the same agents again and overwrote your saved session and stats.
