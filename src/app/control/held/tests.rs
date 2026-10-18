@@ -12,7 +12,13 @@ fn the_band_counts_the_messages_and_names_the_first_sender(
     #[case] from: Option<u64>,
     #[case] expected: &str,
 ) {
-    assert_eq!(label(count, from), expected);
+    assert_eq!(label(count, from, false), expected);
+}
+
+#[test]
+fn an_acknowledged_message_says_it_goes_right_after_the_persons_prompt() {
+    assert_eq!(label(1, Some(40), true), "queued: goes right after yours");
+    assert_eq!(label(2, Some(40), true), "2 queued: the first goes right after yours");
 }
 
 #[test]

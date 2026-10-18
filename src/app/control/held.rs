@@ -49,7 +49,13 @@ pub(super) fn waiting(pane: u64, why: Option<Why>) -> String {
     }
 }
 
-pub(crate) fn label(count: usize, from: Option<u64>) -> String {
+pub(crate) fn label(count: usize, from: Option<u64>, queued: bool) -> String {
+    if queued {
+        return match count {
+            1 => "queued: goes right after yours".to_string(),
+            n => format!("{n} queued: the first goes right after yours"),
+        };
+    }
     let from = from.map(|pane| format!(" from pane {pane}")).unwrap_or_default();
     let waiting = match count {
         1 => format!("1 message waiting{from}"),
@@ -68,13 +74,11 @@ impl App {
         self.held(pane).count()
     }
 
-    pub(in crate::app) fn held_label(&self, pane: u64) -> Option<String> {
+    pub(in crate::app) fn held_label(&self, pane: u64) -> Option<(String, bool)> {
         let first = self.held(pane).next()?;
         let newest = self.held_keys(pane).max()?;
-        if self.requests.hidden.get(&pane).is_some_and(|hidden| *hidden >= newest) {
-            return None;
-        }
-        Some(label(self.held_sends(pane), first.from))
+        let queued = self.requests.queued.get(&pane).is_some_and(|acked| *acked >= newest);
+        Some((label(self.held_sends(pane), first.from, queued), queued))
     }
 
     fn held_keys(&self, pane: u64) -> impl Iterator<Item = u64> {
@@ -82,14 +86,14 @@ impl App {
         held.filter(|p| matches!(p.stage, Stage::Held(_))).map(|p| p.key)
     }
 
-    pub(in crate::app) fn hide_held(&mut self, pane: u64) {
+    pub(in crate::app) fn queue_held(&mut self, pane: u64) {
         if let Some(newest) = self.held_keys(pane).max() {
-            log::info!("control", "held sends hidden", pane = pane);
-            self.requests.hidden.insert(pane, newest);
+            log::info!("control", "held sends acknowledged", pane = pane);
+            self.requests.queued.insert(pane, newest);
         }
     }
 
-    pub(in crate::app) fn held_labels(&self) -> HashMap<u64, String> {
+    pub(in crate::app) fn held_labels(&self) -> HashMap<u64, (String, bool)> {
         let panes = self.requests.pending.iter().filter(|p| matches!(p.stage, Stage::Held(_)));
         let panes: HashSet<u64> = panes.filter_map(|p| p.done.ids.pane).collect();
         panes.into_iter().filter_map(|pane| Some((pane, self.held_label(pane)?))).collect()
@@ -147,7 +151,7 @@ impl App {
             .filter(|p| matches!(p.stage, Stage::Held(_)))
             .filter_map(|p| p.done.ids.pane)
             .collect();
-        self.requests.hidden.retain(|pane, _| held.contains(pane));
+        self.requests.queued.retain(|pane, _| held.contains(pane));
         let mut seen = HashSet::new();
         let mut i = 0;
         while let Some(pending) = self.requests.pending.get(i) {

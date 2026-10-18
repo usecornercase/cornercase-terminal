@@ -32,8 +32,9 @@ fn claude_shown() -> (Agent, u64) {
 
 fn notice(app: &App) -> (Position, Option<Position>) {
     let pane = app.tab().and_then(|t| t.shown(app.layout(AREA).pane).first().map(|(_, r)| *r)).expect("a pane");
-    let bar = ui::held_notice(pane, 0).expect("the bar fits");
-    (bar.send.as_position(), bar.hide.map(Rect::as_position))
+    let queued = app.held_label(first(app)).is_some_and(|(_, queued)| queued);
+    let bar = ui::held_notice(pane, 0, queued).expect("the bar fits");
+    (bar.send.as_position(), bar.wait.map(Rect::as_position))
 }
 
 fn screen_lines(app: &App, id: u64) -> Vec<String> {
@@ -88,7 +89,7 @@ fn held_sends_go_out_one_at_a_time_in_the_order_they_came() {
     ask(&mut app, None, send_text(id, "first-", false, false));
     ask(&mut app, None, send_text(id, "second", false, false));
     held_now(&mut app);
-    assert_eq!(app.held_label(id).as_deref(), Some("2 messages waiting · goes after yours"));
+    assert_eq!(app.held_label(id).map(|(text, _)| text).as_deref(), Some("2 messages waiting · goes after yours"));
     send_key(&mut app, KeyCode::Char('u'), KeyModifiers::CONTROL);
 
     done(answered(&mut app, &rx, "the first goes out"));
@@ -165,23 +166,24 @@ fn send_now_in_the_band_sends_the_first_message_over_the_draft() {
 }
 
 #[test]
-fn hide_in_the_bar_hides_it_until_another_message_is_held_and_still_sends() {
+fn wait_turn_keeps_the_bar_queued_until_another_message_is_held_and_still_sends() {
     let (mut app, rx, id) = drafting();
     ask(&mut app, Some(id), send_text(id, "first-", false, false));
     held_now(&mut app);
     let label = format!("1 message waiting from pane {id} · goes after yours");
-    assert_eq!(app.held_label(id).as_deref(), Some(label.as_str()));
+    assert_eq!(app.held_label(id), Some((label, false)));
 
-    let hide = notice(&app).1.expect("a hide button");
-    click(&mut app, hide);
-    assert_eq!((app.held_label(id), app.held_sends(id)), (None, 1));
+    let wait = notice(&app).1.expect("a wait turn button");
+    click(&mut app, wait);
+    assert_eq!(app.held_label(id), Some(("queued: goes right after yours".into(), true)));
+    assert_eq!(notice(&app).1, None, "the wait turn button goes");
 
     ask(&mut app, Some(id), send_text(id, "second", false, false));
     held_now(&mut app);
-    assert!(app.held_label(id).is_some(), "a new message shows the bar again");
+    assert_eq!(app.held_label(id).map(|(_, queued)| queued), Some(false), "a new message asks again");
 
     send_key(&mut app, KeyCode::Char('u'), KeyModifiers::CONTROL);
-    done(answered(&mut app, &rx, "the hidden message still goes out"));
+    done(answered(&mut app, &rx, "the first goes out after the person"));
     done(answered(&mut app, &rx, "the second follows"));
     pump_until(&mut app, &rx, "both reach cat", |a| pane_screen(a, id).contains("first-second"));
 }

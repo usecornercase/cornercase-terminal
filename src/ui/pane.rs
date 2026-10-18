@@ -10,8 +10,9 @@ use ratatui::widgets::Paragraph;
 use super::View;
 use super::dialog::dialog_button_style;
 use super::sidebar::NEW_BUTTON;
-use super::theme::BRAND_COLOR;
+use super::theme::{BRAND_COLOR, status_icon};
 use super::widgets::sidebar_hovered;
+use crate::agents::activity::Status;
 use crate::project::split::{Dir, Node, Place};
 use crate::term::emulator::Snapshot;
 use crate::text::truncate_right;
@@ -45,7 +46,7 @@ pub(crate) struct TabView {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PaneBand {
     Resuming(String),
-    Held(String),
+    Held { text: String, queued: bool },
 }
 
 fn draw_centered(f: &mut Frame, area: Rect, lines: Vec<Line<'static>>) {
@@ -122,7 +123,7 @@ pub(crate) fn scrollback_badge(pane: Rect, below: usize) -> Option<Rect> {
 
 const RESUME_CANCEL: &str = " cancel ";
 const HELD_SEND: &str = " send now ";
-const HELD_HIDE: &str = " hide ";
+const HELD_WAIT: &str = " wait turn ";
 const HELD_TEXT_MIN: u16 = 6;
 
 fn resume_label(agent: &str) -> String {
@@ -143,28 +144,29 @@ pub(crate) fn resume_notice(pane: Rect, agent: &str) -> Option<(Rect, Rect)> {
 pub(crate) struct HeldBar {
     pub(crate) text: Rect,
     pub(crate) send: Rect,
-    pub(crate) hide: Option<Rect>,
+    pub(crate) wait: Option<Rect>,
 }
 
 fn width_of(text: &str) -> u16 {
     u16::try_from(text.chars().count()).unwrap_or(u16::MAX)
 }
 
-pub(crate) fn held_notice(pane: Rect, below: usize) -> Option<HeldBar> {
+pub(crate) fn held_notice(pane: Rect, below: usize, queued: bool) -> Option<HeldBar> {
     let room = match scrollback_badge(pane, below) {
         Some(badge) => badge.x.saturating_sub(pane.x).saturating_sub(1),
         None => pane.width,
     };
-    let (send_w, hide_w) = (width_of(HELD_SEND), width_of(HELD_HIDE));
+    let (send_w, wait_w) = (width_of(HELD_SEND), width_of(HELD_WAIT));
     if pane.height == 0 || room < send_w {
         return None;
     }
     let y = pane.bottom() - 1;
-    let hide = (room >= send_w + 1 + hide_w).then(|| Rect::new(pane.x + room - hide_w, y, hide_w, 1));
-    let send_x = hide.map_or(pane.x + room - send_w, |hide| hide.x - 1 - send_w);
+    let fits = !queued && room >= send_w + 1 + wait_w;
+    let wait = fits.then(|| Rect::new(pane.x + room - wait_w, y, wait_w, 1));
+    let send_x = wait.map_or(pane.x + room - send_w, |wait| wait.x - 1 - send_w);
     let space = send_x.saturating_sub(pane.x).saturating_sub(1);
     let text = Rect::new(pane.x, y, if space >= HELD_TEXT_MIN { space } else { 0 }, 1);
-    Some(HeldBar { text, send: Rect::new(send_x, y, send_w, 1), hide })
+    Some(HeldBar { text, send: Rect::new(send_x, y, send_w, 1), wait })
 }
 
 fn draw_resume_notice(f: &mut Frame, view: &View, pane: Rect, agent: &str) {
@@ -177,18 +179,24 @@ fn draw_resume_notice(f: &mut Frame, view: &View, pane: Rect, agent: &str) {
     f.render_widget(Paragraph::new(Span::styled(RESUME_CANCEL, style)), button);
 }
 
-fn draw_held_notice(f: &mut Frame, view: &View, pane: Rect, below: usize, label: &str) {
-    let Some(bar) = held_notice(pane, below) else { return };
-    let end = bar.hide.unwrap_or(bar.send).right();
-    let row = Rect::new(pane.x, bar.send.y, end - pane.x, 1);
-    f.buffer_mut().set_style(row, Style::default().bg(view.surface()));
-    let room = usize::from(bar.text.width.saturating_sub(2));
-    let text = format!(" {}", truncate_right(label, room));
-    f.render_widget(Paragraph::new(Span::styled(text, Style::default().fg(view.muted).bg(view.surface()))), bar.text);
+fn draw_held_notice(f: &mut Frame, view: &View, pane: (Rect, usize), label: &str, queued: bool) {
+    let Some(bar) = held_notice(pane.0, pane.1, queued) else { return };
+    let x = pane.0.x;
+    let end = bar.wait.unwrap_or(bar.send).right();
+    f.buffer_mut().set_style(Rect::new(x, bar.send.y, end - x, 1), Style::default().bg(view.surface()));
+    let muted = Style::default().fg(view.muted).bg(view.surface());
+    let mut spans = vec![Span::styled(" ", muted)];
+    if queued {
+        spans.extend([status_icon(view.muted, Status::Working, view.spin), Span::styled(" ", muted)]);
+    }
+    let used = spans.iter().map(Span::width).sum::<usize>();
+    let room = usize::from(bar.text.width).saturating_sub(used + 1);
+    spans.push(Span::styled(truncate_right(label, room), muted));
+    f.render_widget(Paragraph::new(Line::from(spans)).style(muted), bar.text);
     let send = dialog_button_style(view, bar.send, true);
     f.render_widget(Paragraph::new(Span::styled(HELD_SEND, send)), bar.send);
-    if let Some(hide) = bar.hide {
-        f.render_widget(Paragraph::new(Span::styled(HELD_HIDE, dialog_button_style(view, hide, false))), hide);
+    if let Some(wait) = bar.wait {
+        f.render_widget(Paragraph::new(Span::styled(HELD_WAIT, dialog_button_style(view, wait, false))), wait);
     }
 }
 
@@ -217,7 +225,9 @@ pub(super) fn draw_tab(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
         draw_scrollback_badge(f, view, pane, screen.below);
         match tab.bands.get(i) {
             Some(Some(PaneBand::Resuming(agent))) => draw_resume_notice(f, view, pane, agent),
-            Some(Some(PaneBand::Held(label))) => draw_held_notice(f, view, pane, screen.below, label),
+            Some(Some(PaneBand::Held { text, queued })) => {
+                draw_held_notice(f, view, (pane, screen.below), text, *queued);
+            }
             _ => {}
         }
     }

@@ -142,8 +142,11 @@ impl App {
 
     pub(super) fn pane_bands(&self) -> HashMap<u64, ui::PaneBand> {
         let now = Instant::now();
-        let mut bands: HashMap<u64, ui::PaneBand> =
-            self.held_labels().into_iter().map(|(pane, label)| (pane, ui::PaneBand::Held(label))).collect();
+        let mut bands: HashMap<u64, ui::PaneBand> = self
+            .held_labels()
+            .into_iter()
+            .map(|(pane, (text, queued))| (pane, ui::PaneBand::Held { text, queued }))
+            .collect();
         for launch in self.agents.launches.iter().filter(|launch| launch.holds(now)) {
             if let Some(term) = self.projects.pane_by(launch.term) {
                 bands.insert(term.id, ui::PaneBand::Resuming(resumed(term)));
@@ -168,9 +171,9 @@ impl App {
     pub(super) fn press_held_notice(&mut self, area: Rect, pos: Position) -> bool {
         let Some(tab) = self.tab() else { return false };
         let pressed = tab.shown(area).into_iter().find_map(|(id, rect)| {
-            self.held_label(id).filter(|_| !self.resume_holds(id))?;
-            let bar = ui::held_notice(rect, tab.pane_by(id)?.emulator.below())?;
-            match (bar.send.contains(pos), bar.hide.is_some_and(|hide| hide.contains(pos))) {
+            let (_, queued) = self.held_label(id).filter(|_| !self.resume_holds(id))?;
+            let bar = ui::held_notice(rect, tab.pane_by(id)?.emulator.below(), queued)?;
+            match (bar.send.contains(pos), bar.wait.is_some_and(|wait| wait.contains(pos))) {
                 (true, _) => Some((id, true)),
                 (_, true) => Some((id, false)),
                 _ => None,
@@ -178,7 +181,7 @@ impl App {
         });
         match pressed {
             Some((pane, true)) => self.send_held_now(pane),
-            Some((pane, false)) => self.hide_held(pane),
+            Some((pane, false)) => self.queue_held(pane),
             None => return false,
         }
         true
