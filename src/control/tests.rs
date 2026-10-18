@@ -326,7 +326,7 @@ fn the_columns_of_a_pane_row_are_its_keys_in_order() {
 fn new_columns_of_a_pane_row_go_after_the_released_ones() {
     let released = "pane tab workspace project program agent status background_shell dialog at_prompt model \
                         context caller shown active tab_name workspace_name branch worktree project_name path survey \
-                        resuming";
+                        resuming parent subagents";
 
     assert!(PaneRow::COLUMNS.join(" ").starts_with(released), "{:?}", PaneRow::COLUMNS);
 }
@@ -620,7 +620,10 @@ mod watch_v1 {
             name: "agents".into(),
             status: Some("working".into()),
             active: true,
-            panes: vec![pane(4, true), PaneInfo { parent: Some(4), subagents: 2, ..pane(5, false) }],
+            panes: vec![
+                pane(4, true),
+                PaneInfo { parent: Some(4), subagents: 2, role: Some("coder".into()), ..pane(5, false) },
+            ],
             custom_name: Some("agents".into()),
             layout: Some(split()),
             controller: None,

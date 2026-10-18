@@ -11,8 +11,10 @@ use super::menus::Target;
 use super::overlay::Overlay;
 use super::plugins::Spot;
 use crate::error::Result;
+use crate::flows;
 use crate::git;
 use crate::project::Workspace;
+use crate::term::Term;
 use crate::ui::{self, SidebarHit, SidebarRow, WorkspaceHit, WorkspaceRow};
 
 mod drag;
@@ -87,6 +89,14 @@ impl App {
         });
     }
 
+    fn seated(&self, term: &Term, depth: usize) -> (Option<String>, bool) {
+        let Some((run, role)) = self.seat(term.id) else { return (None, true) };
+        let under = depth > 0
+            && role != flows::ORCHESTRATOR
+            && term.parent.and_then(|parent| self.seat(parent)).is_some_and(|(theirs, _)| theirs.id == run.id);
+        (Some(role.to_string()), !under)
+    }
+
     pub(super) fn agents_view(&self) -> ui::AgentsView {
         let focus = self.focus();
         let narrow = self.drawn.agents_list.width < ui::MIN_MENU_ROW_WIDTH;
@@ -96,11 +106,14 @@ impl App {
             let tab = &workspace.tabs[t];
             let term = &tab.panes[i];
             let context = term.context.context();
+            let (role, place) = self.seated(term, node.depth);
             ui::AgentEntry {
                 status: term.agent.status(),
                 agent: term.agent.agent().unwrap_or_default().to_string(),
                 project: self.project_label(project),
                 workspace: (project.workspaces.len() > 1).then(|| workspace.label()),
+                role,
+                place,
                 details: self.details(context, None, term.context.subagents()),
                 active: focus.tab == Some(tab.id) && tab.active == i,
                 depth: node.depth,

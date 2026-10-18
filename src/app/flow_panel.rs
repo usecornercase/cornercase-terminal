@@ -87,6 +87,10 @@ fn lines(message: &Message, width: usize, muted: Color) -> Vec<Line<'static>> {
 }
 
 impl App {
+    pub(super) fn seat(&self, pane: u64) -> Option<(&Run, &str)> {
+        self.runs.iter().find_map(|run| Some((run, run.role_of(pane)?)))
+    }
+
     pub(super) fn run_of(&self, workspace: u64) -> Option<&Run> {
         self.runs.iter().find(|run| run.workspace == workspace)
     }
