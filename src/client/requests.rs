@@ -39,6 +39,10 @@ pub(crate) fn use_issues() -> Result<()> {
     require("issues", "cannot start work from an issue")
 }
 
+pub(crate) fn use_todo_panel() -> Result<()> {
+    require("todo-panel", "cannot edit, uncheck, reorder or restore TODO items")
+}
+
 fn require(feature: &str, lacks: &str) -> Result<()> {
     let lacking = || {
         Error::Control(format!(

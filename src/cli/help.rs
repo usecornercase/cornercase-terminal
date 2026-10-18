@@ -339,7 +339,19 @@ pub(super) const TODO_HELP: &str = "Examples:
   cornercase todo add review the login fix
   cornercase todo list
   cornercase todo done 3
-  cornercase todo send 3 --pane 5";
+  cornercase todo undone 3
+  cornercase todo edit 3 review the login fix again
+  cornercase todo move 3 --before 5
+  cornercase todo move 3 --last
+  cornercase todo rm 3
+  cornercase todo clear-done
+  cornercase todo restore 7
+  cornercase todo send 3 --pane 5
+
+`rm` and `clear-done` print a number that `restore` takes to put back what they removed, where it was;
+the server keeps the last 16 removals until it stops. An item moves among its kind: before an item of
+the other kind it stops at the end of the ones to do, or at the first done one. `done` checks an item
+off, or back on; `undone` only puts a done item back.";
 pub(super) const TODO_SEND_HELP: &str = "Types the item's text into the agent and presses Enter, as
 `cornercase send --enter` does, with the same target, refusals and confirmation that the agent took
 the prompt. Once it did, the item is checked off. A refused or unconfirmed send leaves it pending,

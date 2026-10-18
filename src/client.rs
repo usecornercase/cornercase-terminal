@@ -31,7 +31,8 @@ mod window;
 
 pub(crate) use requests::{answer, ask, ask_starting, follow, follow_all, report_now, running_now};
 pub(crate) use requests::{
-    answered, request, use_close_unlock, use_host_events, use_issues, use_notices, use_surface_patches, use_view,
+    answered, request, use_close_unlock, use_host_events, use_issues, use_notices, use_surface_patches, use_todo_panel,
+    use_view,
 };
 pub(crate) use server_process::{Found, find, find_or_start, wait_for_exit};
 pub(crate) use server_process::{kill_server, restart_server};

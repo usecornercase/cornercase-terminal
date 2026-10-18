@@ -63,6 +63,7 @@ fn contract_describes_the_running_server_and_its_boot() {
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "config"), "{contract}");
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "close-unlock"), "{contract}");
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "issues"), "{contract}");
+    assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "todo-panel"), "{contract}");
     assert!(
         contract["streams"].as_array().expect("streams").iter().any(|s| s["name"] == "view" && s["version"] == 1),
         "{contract}"

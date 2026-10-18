@@ -34,6 +34,7 @@ mod describing {
         assert_eq!(descriptor.features, FEATURES);
         assert!(descriptor.features.iter().any(|feature| feature == "theme"));
         assert!(descriptor.features.iter().any(|feature| feature == "notices"));
+        assert!(descriptor.features.iter().any(|feature| feature == "todo-panel"));
         assert!(descriptor.features.iter().any(|feature| feature == "close-unlock"));
         assert!(descriptor.features.iter().any(|feature| feature == "issues"));
         assert_eq!(descriptor.features.last().map(String::as_str), Some("issues"));
@@ -197,6 +198,11 @@ mod finding_unknown_fields {
     #[case::queue_list(json!({"command": "queue", "args": {"action": "list"}}))]
     #[case::todo_add(json!({"command": "todo", "args": {"add": "write the docs"}}))]
     #[case::todo_list(json!({"command": "todo", "args": "list"}))]
+    #[case::todo_edit(json!({"command": "todo", "args": {"edit": {"id": 3, "text": "again"}}}))]
+    #[case::todo_move(json!({"command": "todo", "args": {"move": {"id": 3, "before": 5}}}))]
+    #[case::todo_move_last(json!({"command": "todo", "args": {"move": {"id": 3}}}))]
+    #[case::todo_clear_done(json!({"command": "todo", "args": "clear-done"}))]
+    #[case::todo_restore(json!({"command": "todo", "args": {"restore": 7}}))]
     #[case::events(json!({"command": "events", "args": {"panes": [3]}}))]
     #[case::flow_import(json!({"command": "flow-import", "args": {"text": "name = 'x'", "place": "yours",
         "replace": true}}))]
@@ -211,6 +217,11 @@ mod finding_unknown_fields {
     #[case::status(json!({"command": "status", "args": {}}))]
     #[case::send(json!({"command": "send", "args": {"pane": 3, "text": "hi"}}))]
     #[case::todo_list(json!({"command": "todo", "args": "list"}))]
+    #[case::todo_edit(json!({"command": "todo", "args": {"edit": {"id": 3, "text": "again"}}}))]
+    #[case::todo_move(json!({"command": "todo", "args": {"move": {"id": 3, "before": 5}}}))]
+    #[case::todo_move_last(json!({"command": "todo", "args": {"move": {"id": 3}}}))]
+    #[case::todo_clear_done(json!({"command": "todo", "args": "clear-done"}))]
+    #[case::todo_restore(json!({"command": "todo", "args": {"restore": 7}}))]
     #[case::queue_remove(json!({"command": "queue", "args": {"action": "remove", "entry": 7}}))]
     #[case::contract(json!({"contract": 1, "boot": "1-2", "command": "contract", "args": {}}))]
     #[case::watch(json!({"contract": 1, "boot": "1-2", "command": "watch", "args": {}}))]

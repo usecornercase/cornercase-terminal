@@ -668,6 +668,8 @@ pub(crate) struct Done {
 #[serde(default)]
 pub(crate) struct TodoList {
     pub(crate) todos: Vec<TodoItem>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) undo: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

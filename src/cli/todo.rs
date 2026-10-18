@@ -1,6 +1,6 @@
 use super::args::todo::TodoAction;
 use super::{id, print_json, say};
-use crate::client::{answer, ask};
+use crate::client::{answer, ask, use_todo_panel};
 use crate::control::{self, TodoList};
 use crate::error::Result;
 
@@ -37,6 +37,34 @@ pub(super) fn run(action: TodoAction) -> Result<()> {
                 vec![format!("sent todo {id}{pane}")]
             })
         }
-        TodoAction::Rm { id } => ask("todo", control::Command::Todo(control::Todo::Rm(id))).map(drop),
+        TodoAction::Rm { id, print } => removal(control::Todo::Rm(id), print.json),
+        TodoAction::Edit { id, text } => panel(control::Todo::Edit { id, text: text.join(" ") }),
+        TodoAction::Undone { id } => panel(control::Todo::Undone(id)),
+        TodoAction::Move { id, before, last: _ } => panel(control::Todo::Move { id, before }),
+        TodoAction::ClearDone(print) => {
+            use_todo_panel()?;
+            removal(control::Todo::ClearDone, print.json)
+        }
+        TodoAction::Restore { undo } => panel(control::Todo::Restore(undo)),
     }
 }
+
+fn panel(todo: control::Todo) -> Result<()> {
+    use_todo_panel()?;
+    ask("todo", control::Command::Todo(todo)).map(drop)
+}
+
+fn removal(todo: control::Todo, json: bool) -> Result<()> {
+    let value = ask("todo", control::Command::Todo(todo))?;
+    if json {
+        return print_json(&value);
+    }
+    let list: TodoList = answer(value)?;
+    if let Some(undo) = list.undo {
+        println!("{undo}");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests;
