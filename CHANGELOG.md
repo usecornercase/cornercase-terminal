@@ -926,3 +926,8 @@ Every pull request that changes the app adds a section here for its new version.
 - First release with prebuilt binaries for Linux and macOS: install with `curl -fsSL https://usecornercase.dev/install.sh | sh` or `brew install usecornercase/tap/cornercase`.
 - cornercase checks for new versions once a day and updates itself from the sidebar; turn it off in settings → TUI.
 - `cornercase --version` prints the version.
+
+## 0.12.144
+
+- **Scripts and other apps can read your plan limits.** `cornercase usage` prints what the Usage dialog's Limits tab shows: for Claude Code and Codex, how much of each limit you have used and when it resets, extra usage or credits, and how old the numbers are. Like the tab, it asks the agents on the server's machine, which sends no prompt and costs no tokens, and waits for a probe already on its way rather than asking twice; `--cached` prints the last answer without asking. Nothing is asked between requests.
+  - `--json` gives each limit's kind, model, percentage, severity and reset time in UTC, for another app to draw. See Scripts and agents → Plan usage.
