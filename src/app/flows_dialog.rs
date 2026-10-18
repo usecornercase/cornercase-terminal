@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
@@ -157,11 +157,11 @@ impl App {
                 }
             }
             Action::Save { flow, place, previous } => {
-                let saved = self.flows_dir(place).and_then(|dir| save(&dir, &flow, previous.as_deref()));
+                let saved = self.flows_dir(place).and_then(|dir| self.save_flow_file(&dir, &flow, previous.as_deref()));
                 self.flows_saved(saved, Dialog::saved);
             }
             Action::Duplicate(flow) => {
-                let saved = save(&paths::flows(&self.config_path), &flow, None);
+                let saved = self.save_flow_file(&paths::flows(&self.config_path), &flow, None);
                 self.flows_saved(saved, |dialog, path| {
                     if let Some(i) = dialog.find(&Origin::User(path), "") {
                         dialog.open(i);
@@ -169,22 +169,34 @@ impl App {
                 });
             }
             Action::Delete(path) => {
-                let deleted = store::delete(&path);
-                if deleted.is_ok() {
-                    log::info!("flows", "flow deleted", file = file_name(&path));
-                }
-                self.refresh_flows();
-                if let (Err(e), Some(dialog)) = (deleted, self.flows_dialog()) {
-                    dialog.notice = Some(format!("could not delete the flow: {e}"));
+                if let (Err(e), Some(dialog)) = (self.delete_flow_file(&path), self.flows_dialog()) {
+                    dialog.notice = Some(e);
                 }
             }
-            Action::Hide { name, file } => self.hide_flow(&name, file.as_deref()),
-            Action::Unhide(name) => self.unhide_flow(&name),
+            Action::Hide { name, file } => match self.hide_builtin(&name, file.as_deref()) {
+                Ok(()) => {
+                    if let Some(dialog) = self.flows_dialog() {
+                        dialog.notice =
+                            Some(format!("deleted {name}: deleted built-ins, at the end of the list, brings it back"));
+                    }
+                }
+                Err(e) => self.flows_notice(e),
+            },
+            Action::Unhide(name) => match self.unhide_builtin(&name, None) {
+                Ok(()) => {
+                    if let Some(dialog) = self.flows_dialog() {
+                        if let Some(i) = dialog.find(&Origin::BuiltIn, &name) {
+                            dialog.select(i);
+                        }
+                        dialog.notice = Some(format!("restored {name}"));
+                    }
+                }
+                Err(e) => self.flows_notice(e),
+            },
             Action::Restore { file, name } => {
-                let mut next = self.config.clone();
-                store::unhide(&mut next.hidden_flows, &name);
-                self.save_then_delete(&next, Some(&file));
-                self.refresh_flows();
+                if let Err(e) = self.unhide_builtin(&name, Some(&file)) {
+                    self.flows_notice(e);
+                }
             }
             Action::Tab(i) => self.open_settings_page(Page::ALL[i]),
             Action::StepTab(delta) => self.open_settings_page(Page::Flows.step(delta)),
@@ -195,68 +207,78 @@ impl App {
         }
     }
 
-    fn save_hidden(&mut self, config: &crate::config::Config) -> bool {
-        if let Err(e) = self.write_config(config) {
-            if let Some(dialog) = self.flows_dialog() {
-                dialog.notice = Some(e);
-            }
-            return false;
+    fn flows_notice(&mut self, notice: String) {
+        if let Some(dialog) = self.flows_dialog() {
+            dialog.notice = Some(notice);
         }
-        true
     }
 
-    fn save_then_delete(&mut self, next: &crate::config::Config, file: Option<&std::path::Path>) -> bool {
+    pub(in crate::app) fn save_flow_file(
+        &mut self,
+        dir: &Path,
+        flow: &Flow,
+        previous: Option<&Path>,
+    ) -> Result<PathBuf, String> {
+        let saved = save(dir, flow, previous);
+        if let Ok(path) = &saved {
+            log::info!("flows", "flow saved", file = file_name(path));
+        }
+        self.refresh_flows();
+        saved
+    }
+
+    pub(in crate::app) fn delete_flow_file(&mut self, path: &Path) -> Result<(), String> {
+        let deleted = store::delete(path);
+        if deleted.is_ok() {
+            log::info!("flows", "flow deleted", file = file_name(path));
+        }
+        self.refresh_flows();
+        deleted.map_err(|e| format!("could not delete the flow: {e}"))
+    }
+
+    fn save_then_delete(&mut self, next: &crate::config::Config, file: Option<&Path>) -> Result<(), String> {
         let previous = self.config.clone();
         let changed = next.hidden_flows != previous.hidden_flows;
-        if changed && !self.save_hidden(next) {
-            return false;
+        if changed {
+            self.write_config(next)?;
         }
-        let Some(file) = file else { return true };
+        let Some(file) = file else { return Ok(()) };
         match store::delete(file) {
             Ok(()) => {
                 log::info!("flows", "flow deleted", file = file_name(file));
-                true
+                Ok(())
             }
             Err(e) => {
-                let rolled_back = !changed || self.save_hidden(&previous);
-                if let Some(dialog) = self.flows_dialog() {
-                    let kept = if rolled_back { "" } else { " (the deleted built-in list could not be put back)" };
-                    dialog.notice = Some(format!("could not delete the flow: {e}{kept}"));
-                }
-                false
+                let rolled_back = !changed || self.write_config(&previous).is_ok();
+                let kept = if rolled_back { "" } else { " (the deleted built-in list could not be put back)" };
+                Err(format!("could not delete the flow: {e}{kept}"))
             }
         }
     }
 
-    fn hide_flow(&mut self, name: &str, file: Option<&std::path::Path>) {
+    pub(in crate::app) fn hide_builtin(&mut self, name: &str, file: Option<&Path>) -> Result<(), String> {
         let mut next = self.config.clone();
         store::hide(&mut next.hidden_flows, name);
         let saved = self.save_then_delete(&next, file);
         self.refresh_flows();
-        if !saved {
-            return;
+        if saved.is_ok() {
+            log::info!("flows", "built-in flow hidden", name = name);
         }
-        log::info!("flows", "built-in flow hidden", name = name);
-        if let Some(dialog) = self.flows_dialog() {
-            dialog.notice = Some(format!("deleted {name}: deleted built-ins, at the end of the list, brings it back"));
-        }
+        saved
     }
 
-    fn unhide_flow(&mut self, name: &str) {
+    pub(in crate::app) fn unhide_builtin(&mut self, name: &str, file: Option<&Path>) -> Result<(), String> {
         let mut next = self.config.clone();
         store::unhide(&mut next.hidden_flows, name);
-        let saved = self.save_hidden(&next);
+        let saved = match file {
+            Some(file) => self.save_then_delete(&next, Some(file)),
+            None => self.write_config(&next),
+        };
         self.refresh_flows();
-        if !saved {
-            return;
+        if saved.is_ok() {
+            log::info!("flows", "built-in flow restored", name = name);
         }
-        log::info!("flows", "built-in flow restored", name = name);
-        if let Some(dialog) = self.flows_dialog() {
-            if let Some(i) = dialog.find(&Origin::BuiltIn, name) {
-                dialog.select(i);
-            }
-            dialog.notice = Some(format!("restored {name}"));
-        }
+        saved
     }
 
     fn flow_exported(&mut self, flow: &Flow) {
@@ -292,10 +314,6 @@ impl App {
     }
 
     fn flows_saved(&mut self, saved: Result<PathBuf, String>, then: impl FnOnce(&mut Dialog, PathBuf)) {
-        if let Ok(path) = &saved {
-            log::info!("flows", "flow saved", file = file_name(path));
-        }
-        self.refresh_flows();
         let Some(dialog) = self.flows_dialog() else { return };
         match saved {
             Ok(path) => then(dialog, path),
@@ -348,11 +366,11 @@ impl App {
     }
 }
 
-fn save(dir: &std::path::Path, flow: &Flow, previous: Option<&std::path::Path>) -> Result<PathBuf, String> {
+fn save(dir: &Path, flow: &Flow, previous: Option<&Path>) -> Result<PathBuf, String> {
     store::save(dir, flow, previous).map_err(|e| e.to_string())
 }
 
-fn file_name(path: &std::path::Path) -> String {
+fn file_name(path: &Path) -> String {
     path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
