@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.152
+
+- No changes you will notice: a test that failed now and then is fixed.
+
 ## 0.12.151
 
 - **Collapse an agent's team in the agents section.** An agent that started others (with `cornercase start`, `new-tab` or `split`, or a flow's orchestrator) now has a `▾` before its icon: click it to fold the agents under it into its row, and `▸` to show them again, or right-click the row for **collapse** and **expand**. A click on the rest of the row still jumps to the agent. A collapsed row says how many agents it hides (`+4`) and shows `!`, `●` or `✓` when one of them needs you, so a team you put away can still call you. Jumping to an agent hidden in it, with `a`, a notification or **go**, opens the way to it, and what you collapsed is saved with your session.
