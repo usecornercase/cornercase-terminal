@@ -468,6 +468,7 @@ mod parents;
 mod searching;
 mod setup;
 mod start_server;
+mod subagents;
 mod surfaces;
 mod talking;
 mod telegram;

@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use crate::agents::activity::Activity;
 use crate::agents::{self, Known, claude, codex, copilot, cursor, gemini, grok, opencode};
@@ -15,6 +15,11 @@ pub(crate) use message::{Role, Said, Spoken};
 use counting::Ledger;
 
 const TAIL: u64 = 1024 * 1024;
+const SUBAGENT_STALE: Duration = Duration::from_mins(10);
+
+pub(in crate::agents) fn fresh(at: SystemTime, now: SystemTime) -> bool {
+    now.duration_since(at).is_ok_and(|age| age < SUBAGENT_STALE) || at > now
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Context {
@@ -121,6 +126,14 @@ impl Reader {
         }
     }
 
+    fn subagents(&self) -> usize {
+        match self {
+            Self::Claude(reader) => reader.subagents(),
+            Self::Copilot(reader) => reader.subagents(),
+            Self::Codex(_) | Self::Gemini(_) | Self::Opencode(_) | Self::Grok(_) | Self::Cursor(_) => 0,
+        }
+    }
+
     fn record(&self) -> Option<Record> {
         match self {
             Self::Claude(reader) => reader.record(),
@@ -192,7 +205,15 @@ impl Pane {
     }
 
     pub(crate) fn activity(&self, title: &str) -> Option<Activity> {
-        self.reader.as_ref()?.activity(title)
+        let reader = self.reader.as_ref()?;
+        match reader.activity(title)? {
+            Activity::Idle | Activity::Shell if reader.subagents() > 0 => Some(Activity::Subagents),
+            activity => Some(activity),
+        }
+    }
+
+    pub(crate) fn subagents(&self) -> usize {
+        self.reader.as_ref().map_or(0, Reader::subagents)
     }
 
     pub(crate) fn record_for(&self, kind: Known) -> Option<Record> {

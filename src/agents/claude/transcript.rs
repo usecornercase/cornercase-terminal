@@ -8,7 +8,7 @@ use serde_json::Value;
 use super::MODEL_FLAG;
 use crate::agents::context::counting::{self, Record as CountRecord, Usage as CountUsage};
 use crate::agents::context::jsonl::Tail;
-use crate::agents::context::{Context, Look, percent};
+use crate::agents::context::{Context, Look, fresh, percent};
 use crate::process;
 
 const DIR_NAME_MAX: usize = 200;
@@ -20,6 +20,7 @@ pub(in crate::agents) const ASSISTANT: &str = r#""type":"assistant""#;
 const COMPACT_BOUNDARY: &str = r#""compact_boundary""#;
 const COMMAND: &str = "<command-name>";
 const SHELL_INPUT: &str = "<bash-input>";
+const INTERRUPTED: &str = "[Request interrupted by user";
 const NOT_TYPED: [&str; 2] = ["<task-notification>", "<agent-message"];
 const MODEL_ENV: &str = "ANTHROPIC_MODEL";
 pub(crate) const NO_LONG_ENV: &str = "CLAUDE_CODE_DISABLE_1M_CONTEXT";
@@ -27,9 +28,34 @@ const MAX_TOKENS_ENV: &str = "CLAUDE_CODE_MAX_CONTEXT_TOKENS";
 pub(crate) const NO_COMPACT_ENV: &str = "DISABLE_COMPACT";
 
 #[derive(Debug, Default)]
+struct Child {
+    tail: Tail,
+    written: Option<SystemTime>,
+    replied: bool,
+    meta: Option<(Option<SystemTime>, Meta)>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct Meta {
+    #[serde(rename = "requestShape")]
+    shape: Option<String>,
+    finished: Option<bool>,
+    #[serde(rename = "stoppedByUser")]
+    stopped: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(in crate::agents) struct Running {
+    written: SystemTime,
+    replied: bool,
+    ended: bool,
+    background: bool,
+}
+
+#[derive(Debug, Default)]
 pub(in crate::agents) struct Subagents {
     directory: Option<(PathBuf, SystemTime)>,
-    tails: HashMap<PathBuf, Tail>,
+    children: HashMap<PathBuf, Child>,
     pub(in crate::agents) records: Vec<(PathBuf, Vec<CountRecord>)>,
 }
 
@@ -48,25 +74,74 @@ impl Subagents {
                     }
                 }
             }
-            self.tails.retain(|path, _| paths.contains(path));
+            self.children.retain(|path, _| paths.contains(path));
             for path in paths {
-                self.tails.entry(path).or_default();
+                self.children.entry(path).or_default();
             }
             self.directory = directory;
         }
-        for (path, tail) in &mut self.tails {
-            if let Ok(batch) = tail.read_since(path, Some(since)) {
-                let records = batch
-                    .bytes
-                    .split(|b| *b == b'\n')
-                    .filter_map(claude_entry)
-                    .filter_map(|entry| counted_claude(&entry, false))
-                    .collect();
+        for (path, child) in &mut self.children {
+            child.written = std::fs::metadata(path).and_then(|m| m.modified()).ok();
+            let stamp = std::fs::metadata(path.with_extension("meta.json")).and_then(|m| m.modified()).ok();
+            if child.meta.as_ref().is_none_or(|(known, _)| *known != stamp) {
+                let meta = std::fs::read_to_string(path.with_extension("meta.json"))
+                    .ok()
+                    .and_then(|text| serde_json::from_str(&text).ok())
+                    .unwrap_or_default();
+                child.meta = Some((stamp, meta));
+            }
+            if let Ok(batch) = child.tail.read_since(path, Some(since)) {
+                if batch.reset {
+                    child.replied = false;
+                }
+                let mut records = Vec::new();
+                for entry in batch.bytes.split(|b| *b == b'\n').filter_map(claude_entry) {
+                    if entry["type"] == "assistant" {
+                        child.replied =
+                            matches!(entry["message"]["stop_reason"].as_str(), Some("end_turn" | "stop_sequence"));
+                    }
+                    records.extend(counted_claude(&entry, false));
+                }
                 self.records.push((path.clone(), records));
             }
         }
         self
     }
+
+    pub(in crate::agents) fn running(&self) -> Vec<Running> {
+        self.children
+            .values()
+            .filter_map(|child| {
+                let meta = child.meta.as_ref().map(|(_, meta)| meta);
+                Some(Running {
+                    written: child.written?,
+                    replied: child.replied,
+                    ended: meta.is_some_and(|m| m.finished == Some(true) || m.stopped == Some(true)),
+                    background: meta.is_some_and(|m| m.shape.as_deref() == Some("background")),
+                })
+            })
+            .collect()
+    }
+}
+
+pub(in crate::agents) fn live(
+    children: &[Running],
+    since: SystemTime,
+    busy: bool,
+    interrupted: Option<SystemTime>,
+    now: SystemTime,
+) -> usize {
+    children
+        .iter()
+        .filter(|child| {
+            child.written >= since
+                && fresh(child.written, now)
+                && !child.ended
+                && !child.replied
+                && interrupted.is_none_or(|at| child.written > at)
+                && (child.background || busy)
+        })
+        .count()
 }
 
 pub(in crate::agents) fn transcript_path(dir: &Path, cwd: &Path, id: &str) -> Option<PathBuf> {
@@ -111,6 +186,7 @@ pub(in crate::agents) struct Transcript {
     pub(in crate::agents) counted: Vec<CountRecord>,
     pub(in crate::agents) reply: Option<Reply>,
     pub(in crate::agents) prompted: Option<SystemTime>,
+    pub(in crate::agents) interrupted: Option<SystemTime>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -163,12 +239,21 @@ impl Message {
 
 impl Transcript {
     pub(in crate::agents) fn new(path: PathBuf) -> Self {
-        Self { path, len: 0, tail: Tail::default(), counted: Vec::new(), reply: None, prompted: None }
+        Self {
+            path,
+            len: 0,
+            tail: Tail::default(),
+            counted: Vec::new(),
+            reply: None,
+            prompted: None,
+            interrupted: None,
+        }
     }
 
     pub(in crate::agents) fn update(&mut self) {
         let Ok(batch) = self.tail.read(&self.path) else {
             self.reply = None;
+            self.interrupted = None;
             self.len = 0;
             self.tail = Tail::default();
             return;
@@ -176,6 +261,7 @@ impl Transcript {
         if batch.reset {
             self.reply = None;
             self.prompted = None;
+            self.interrupted = None;
         }
         self.len = std::fs::metadata(&self.path).map_or(0, |m| m.len());
         if let Some(mark) = batch.bytes.rsplit(|b| *b == b'\n').find_map(mark) {
@@ -187,6 +273,12 @@ impl Transcript {
         let read_at = SystemTime::now();
         for line in batch.bytes.split(|b| *b == b'\n') {
             let Some(entry) = claude_entry(line) else { continue };
+            if entry["type"] == "user"
+                && entry["isSidechain"] != true
+                && std::str::from_utf8(line).is_ok_and(|line| line.contains(INTERRUPTED))
+            {
+                self.interrupted = self.interrupted.max(counting::timestamp(&entry).or(Some(read_at)));
+            }
             self.prompted = self.prompted.max(prompt(&entry, read_at));
             if let Some(record) = counted_claude(&entry, true) {
                 self.counted.push(record);
@@ -196,9 +288,18 @@ impl Transcript {
 }
 
 fn relevant_claude(line: &str) -> bool {
-    [r#""usage""#, r#""origin""#, "queued_command", COMMAND, SHELL_INPUT, r#""operation""#, COMPACT_BOUNDARY]
-        .iter()
-        .any(|marker| line.contains(marker))
+    [
+        r#""usage""#,
+        r#""origin""#,
+        "queued_command",
+        COMMAND,
+        SHELL_INPUT,
+        r#""operation""#,
+        COMPACT_BOUNDARY,
+        INTERRUPTED,
+    ]
+    .iter()
+    .any(|marker| line.contains(marker))
 }
 
 fn claude_entry(line: &[u8]) -> Option<Value> {

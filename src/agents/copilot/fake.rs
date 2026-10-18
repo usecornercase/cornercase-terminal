@@ -231,6 +231,17 @@ done
         self.event("system.notification", &json!({"kind": kind}));
     }
 
+    pub(crate) fn subagent_started(&self, call: &str) {
+        self.event(
+            "subagent.started",
+            &json!({"toolCallId": call, "agentName": "explore", "executionMode": "background"}),
+        );
+    }
+
+    pub(crate) fn subagent_ended(&self, call: &str) {
+        self.event("subagent.completed", &json!({"toolCallId": call, "agentName": "explore"}));
+    }
+
     pub(crate) fn clear(&self, id: &str) {
         self.event("session.shutdown", &json!({"shutdownType": "routine"}));
         std::fs::create_dir_all(self.session(id)).expect("create the new session");

@@ -12,6 +12,7 @@ pub(crate) const SPIN_EVERY: Duration = Duration::from_millis(100);
 pub(crate) enum Activity {
     Working,
     Shell,
+    Subagents,
     Waiting,
     Idle,
     Ready,
@@ -48,6 +49,10 @@ impl Status {
             Self::Waiting => "waiting",
         }
     }
+}
+
+pub(crate) fn subagents_text(count: usize) -> String {
+    format!("{count} subagent{}", if count == 1 { "" } else { "s" })
 }
 
 pub(crate) fn highest(statuses: impl IntoIterator<Item = Option<Status>>) -> Option<Status> {
@@ -104,7 +109,10 @@ impl Pane {
         }
         let restored = std::mem::take(&mut self.restored);
         let before = self.status();
-        let finished = matches!(self.activity, Some(Activity::Working | Activity::Shell | Activity::Waiting));
+        let finished = matches!(
+            self.activity,
+            Some(Activity::Working | Activity::Shell | Activity::Subagents | Activity::Waiting)
+        );
         if activity == Some(Activity::Working) {
             self.worked = Some(now);
             self.marks.pending &= !matches!(
@@ -191,13 +199,17 @@ impl Pane {
         self.activity == Some(Activity::Shell)
     }
 
+    pub(crate) fn waits_on_subagents(&self) -> bool {
+        self.activity == Some(Activity::Subagents)
+    }
+
     pub(crate) fn state(&self) -> Option<&'static str> {
         if self.background_shell() { Some(SHELL) } else { self.status().map(Status::name) }
     }
 
     pub(crate) fn status(&self) -> Option<Status> {
         Some(match self.activity? {
-            Activity::Working | Activity::Shell => Status::Working,
+            Activity::Working | Activity::Shell | Activity::Subagents => Status::Working,
             Activity::Waiting => Status::Waiting,
             Activity::Failed => Status::Failed,
             Activity::Idle | Activity::Ready | Activity::Done if self.marks.pending => Status::Pending,

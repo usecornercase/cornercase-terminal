@@ -83,6 +83,7 @@ struct Held {
     id: String,
     activity: Option<Activity>,
     resumable: bool,
+    subagents: usize,
 }
 
 #[derive(Debug, Default)]
@@ -113,6 +114,7 @@ impl Reader {
                         id: session.id.clone(),
                         activity: session.activity,
                         resumable: session.resumable,
+                        subagents: session.subagents,
                     }
                 });
                 if self.held.is_none() {
@@ -125,6 +127,10 @@ impl Reader {
 
     pub(in crate::agents) fn activity(&self) -> Option<Activity> {
         self.held.as_ref()?.activity
+    }
+
+    pub(in crate::agents) fn subagents(&self) -> usize {
+        self.held.as_ref().map_or(0, |held| held.subagents)
     }
 
     pub(in crate::agents) fn record(&self) -> Option<Record> {

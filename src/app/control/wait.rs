@@ -253,6 +253,10 @@ impl App {
                 "the agent in pane {pane} ended its turn, but a background shell it started still runs; \
                  --until turn-over ends there"
             ),
+            Condition::Stops | Condition::Idle | Condition::TurnOver if term.agent.waits_on_subagents() => format!(
+                "the agent in pane {pane} ended its turn, but {} it started still run; it goes on when they end",
+                activity::subagents_text(term.context.subagents())
+            ),
             _ => format!("the agent in pane {pane} is {}", term.agent.status().map_or("starting", Status::name)),
         }
     }

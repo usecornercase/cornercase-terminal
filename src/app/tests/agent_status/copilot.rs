@@ -91,3 +91,27 @@ fn a_background_shell_keeps_the_tab_working_after_the_turn() {
 
     assert_eq!(status(&app, 0, tab), Some(Status::Working));
 }
+
+#[test]
+fn a_sub_agent_keeps_the_tab_working_after_the_turn() {
+    let (mut app, rx, _dirs) = app_with(1);
+    let fake = FakeCopilot::new(&app.projects[0].path);
+    let tab = start(&mut app, &rx, &fake);
+    fake.started("gpt-4.1");
+    fake.prompt("explore it");
+    fake.turn(true);
+    fake.working(true);
+    watch_until(&mut app, &rx, "it works", |a| status(a, 0, tab) == Some(Status::Working));
+    fake.subagent_started("agent-1");
+    fake.turn(false);
+    fake.working(false);
+
+    watch_until(&mut app, &rx, "the sub-agent shows as working", |a| {
+        tab_term(a, 0, tab).context.activity("") == Some(Activity::Subagents)
+    });
+    let early = app.take_notifications();
+    fake.subagent_ended("agent-1");
+
+    watch_until(&mut app, &rx, "the tab is idle", |a| status(a, 0, tab) == Some(Status::Idle));
+    assert_eq!(early.len(), 0);
+}

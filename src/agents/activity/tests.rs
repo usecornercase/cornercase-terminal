@@ -56,6 +56,15 @@ mod pane {
         &[(Some(Activity::Shell), false), (Some(Activity::Idle), false)],
         Some(Status::Done)
     )]
+    #[case::left_subagents_running(&[(Some(Activity::Working), false), (Some(Activity::Subagents), false)], Some(Status::Working))]
+    #[case::subagents_ended_out_of_sight(
+        &[(Some(Activity::Working), false), (Some(Activity::Subagents), false), (Some(Activity::Idle), false)],
+        Some(Status::Done)
+    )]
+    #[case::subagents_ended_in_sight(
+        &[(Some(Activity::Working), false), (Some(Activity::Subagents), false), (Some(Activity::Idle), true)],
+        Some(Status::Idle)
+    )]
     fn follows_the_agent(#[case] steps: &[(Option<Activity>, bool)], #[case] expected: Option<Status>) {
         assert_eq!(after(steps), expected);
     }
@@ -78,6 +87,12 @@ mod pane {
     #[case::its_background_shell_still_runs(Some(Activity::Shell), Some(Activity::Shell), Some(Activity::Shell), false)]
     #[case::it_took_the_prompt(Some(Activity::Shell), Some(Activity::Shell), Some(Activity::Working), true)]
     #[case::it_left_a_background_shell(Some(Activity::Idle), Some(Activity::Idle), Some(Activity::Shell), true)]
+    #[case::its_subagents_still_run(
+        Some(Activity::Subagents),
+        Some(Activity::Subagents),
+        Some(Activity::Subagents),
+        false
+    )]
     fn reacting_is_working_or_changing_after_the_moment(
         #[case] first: Option<Activity>,
         #[case] between: Option<Activity>,
@@ -91,6 +106,7 @@ mod pane {
     #[case::nothing_runs(None, None)]
     #[case::working(Some(Activity::Working), Some("working"))]
     #[case::background_shell(Some(Activity::Shell), Some("shell"))]
+    #[case::subagents(Some(Activity::Subagents), Some("working"))]
     #[case::waiting(Some(Activity::Waiting), Some("waiting"))]
     #[case::idle(Some(Activity::Idle), Some("idle"))]
     fn tells_scripts_about_a_background_shell(#[case] activity: Option<Activity>, #[case] expected: Option<&str>) {
@@ -119,6 +135,7 @@ mod notice {
     const WORKING: (Option<Activity>, bool) = (Some(Activity::Working), false);
     const WAITING: (Option<Activity>, bool) = (Some(Activity::Waiting), false);
     const IDLE: (Option<Activity>, bool) = (Some(Activity::Idle), false);
+    const SUBAGENTS: (Option<Activity>, bool) = (Some(Activity::Subagents), false);
     const WAITING_IN_SIGHT: (Option<Activity>, bool) = (Some(Activity::Waiting), true);
     const TICK: Duration = Duration::from_millis(500);
 
@@ -143,6 +160,10 @@ mod notice {
     #[case::flips_straight_back(&[WORKING, WAITING, WORKING, WORKING, WORKING], &[])]
     #[case::seen_before_it_settled(&[WORKING, WAITING_IN_SIGHT, WAITING, WAITING, WAITING], &[])]
     #[case::asks_then_finishes(&[WORKING, WAITING, WAITING, WAITING, IDLE, IDLE, IDLE], &[(3, Status::Waiting), (6, Status::Done)])]
+    #[case::subagents_finish_once_the_last_ends(
+        &[WORKING, SUBAGENTS, SUBAGENTS, SUBAGENTS, SUBAGENTS, IDLE, IDLE, IDLE, IDLE],
+        &[(7, Status::Done)]
+    )]
     #[case::finishes_twice(&[WORKING, IDLE, IDLE, IDLE, WORKING, IDLE, IDLE, IDLE], &[(3, Status::Done), (7, Status::Done)])]
     #[case::only_works(&[WORKING, WORKING, WORKING, IDLE], &[])]
     fn comes_once_the_change_settles(#[case] steps: &[(Option<Activity>, bool)], #[case] expected: &[(usize, Status)]) {
@@ -271,6 +292,17 @@ mod marks {
 
         pane.see();
         pane.update(Some(Activity::Idle), true, now + TICK);
+
+        assert_eq!(pane.status(), Some(Status::Pending));
+    }
+
+    #[test]
+    fn a_mark_stays_while_subagents_run() {
+        let (mut pane, now) = claude(Activity::Idle);
+        pane.mark(true);
+
+        pane.update(Some(Activity::Subagents), false, now + TICK);
+        pane.update(Some(Activity::Idle), false, now + TICK * 2);
 
         assert_eq!(pane.status(), Some(Status::Pending));
     }

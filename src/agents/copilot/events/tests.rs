@@ -20,6 +20,11 @@ const TRUNCATION: &str = fixture!("copilot/1.0.98/truncation.jsonl");
 const CONTEXT_CLEARED: &str = fixture!("copilot/1.0.98/context-cleared.jsonl");
 const MODEL_CHANGE: &str = fixture!("copilot/1.0.98/model-change.jsonl");
 const SUBAGENT: &str = fixture!("copilot/1.0.98/subagent.jsonl");
+const SUBAGENT_STARTED: &str = fixture!("copilot/1.0.98/subagent-started.jsonl");
+const SUBAGENT_COMPLETED: &str = fixture!("copilot/1.0.98/subagent-completed.jsonl");
+const SUBAGENT_CANCELLED: &str = fixture!("copilot/1.0.98/subagent-cancelled.jsonl");
+const SUBAGENT_FAILED: &str = fixture!("copilot/1.0.98/subagent-failed.jsonl");
+const SUBAGENT_ACTIVE: &str = fixture!("copilot/1.0.98/subagent-active.jsonl");
 const RESUME: &str = fixture!("copilot/1.0.98/resume.jsonl");
 const SHELL: &str = fixture!("copilot/1.0.98/shell.jsonl");
 const SHELL_DONE: &str = fixture!("copilot/1.0.98/shell-done.jsonl");
@@ -231,5 +236,45 @@ mod tokens {
         let ids: Vec<&str> = state.counted.iter().map(|record| record.id.as_str()).collect();
 
         assert!(ids.iter().all(|id| !id.is_empty()) && ids.len() == 2);
+    }
+}
+
+mod subagents {
+    use std::time::Duration;
+
+    use super::*;
+
+    fn minutes(after: u64) -> SystemTime {
+        Stamp::parse("2026-10-17T17:30:00.000Z").expect("a time") + Duration::from_secs(60 * after)
+    }
+
+    #[rstest]
+    #[case::completed(SUBAGENT_COMPLETED)]
+    #[case::failed(SUBAGENT_FAILED)]
+    #[case::cancelled(SUBAGENT_CANCELLED)]
+    fn a_sub_agent_runs_until_it_completes_or_fails(#[case] end: &str) {
+        let open = fold(&[SUBAGENT_STARTED]);
+        let ended = fold(&[SUBAGENT_STARTED, end]);
+
+        assert_eq!((open.subagents(minutes(1)), ended.subagents(minutes(1))), (1, 0));
+    }
+
+    #[test]
+    fn a_new_process_forgets_its_sub_agents() {
+        assert_eq!(fold(&[SUBAGENT_STARTED, RESUME]).subagents(minutes(1)), 0);
+    }
+
+    #[test]
+    fn a_quiet_sub_agent_stops_counting_after_ten_minutes() {
+        let open = fold(&[SUBAGENT_STARTED]);
+
+        assert_eq!((open.subagents(minutes(9)), open.subagents(minutes(10))), (1, 0));
+    }
+
+    #[test]
+    fn its_own_events_keep_it_fresh() {
+        let open = fold(&[SUBAGENT_STARTED, SUBAGENT_ACTIVE]);
+
+        assert_eq!((open.subagents(minutes(15)), open.subagents(minutes(19))), (1, 0));
     }
 }

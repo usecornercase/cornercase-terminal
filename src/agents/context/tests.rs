@@ -30,6 +30,80 @@ mod pane {
     }
 }
 
+mod subagents {
+    use super::*;
+    use crate::agents::claude::transcript::transcript_path;
+    use crate::test_util::{TempDir, wait_until};
+
+    const RUNNING: &str =
+        r#"{"type":"user","isSidechain":true,"agentId":"a1","message":{"role":"user","content":"look"}}"#;
+    const DONE: &str = r#"{"type":"assistant","isSidechain":true,"agentId":"a1","timestamp":"2026-10-17T10:00:00.000Z","message":{"id":"m","model":"synthetic","stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}}"#;
+
+    struct Setup {
+        dir: TempDir,
+        sub: PathBuf,
+        pane: Pane,
+    }
+
+    impl Setup {
+        fn new(status: &str) -> Self {
+            let dir = TempDir::new();
+            let transcript = transcript_path(dir.path(), dir.path(), "session").expect("path");
+            let sub = transcript.with_extension("").join("subagents/agent-a1.jsonl");
+            std::fs::create_dir_all(sub.parent().expect("parent")).expect("directory");
+            std::fs::write(&transcript, "").expect("transcript");
+            std::fs::write(sub.with_extension("meta.json"), r#"{"requestShape":"background"}"#).expect("meta");
+            std::fs::write(&sub, format!("{RUNNING}\n")).expect("subagent");
+            std::fs::create_dir(dir.path().join("sessions")).expect("sessions");
+            let setup = Self { dir, sub, pane: Pane::watching(1, Known::Claude, SystemTime::UNIX_EPOCH) };
+            setup.status(status);
+            setup
+        }
+
+        fn status(&self, status: &str) {
+            std::fs::write(
+                self.dir.path().join("sessions/1.json"),
+                serde_json::json!({"pid": 1, "sessionId": "session", "cwd": self.dir.path(), "status": status})
+                    .to_string(),
+            )
+            .expect("session");
+        }
+
+        fn settle(&mut self, activity: Activity, subagents: usize) {
+            let look = Look { claude_dir: Some(self.dir.path()), ..pane_look(1) };
+            wait_until("the subagents are read", || {
+                self.pane.update(Some(Known::Claude), &look);
+                self.pane.activity("") == Some(activity) && self.pane.subagents() == subagents
+            });
+        }
+    }
+
+    #[test]
+    fn an_idle_claude_with_a_running_subagent_keeps_working() {
+        let mut setup = Setup::new("idle");
+        setup.settle(Activity::Subagents, 1);
+
+        std::fs::write(&setup.sub, format!("{RUNNING}\n{DONE}\n")).expect("final reply");
+
+        setup.settle(Activity::Idle, 0);
+    }
+
+    #[test]
+    fn a_background_shell_left_with_a_subagent_waits_on_the_subagent() {
+        Setup::new("shell").settle(Activity::Subagents, 1);
+    }
+
+    #[test]
+    fn a_question_wins_over_subagents() {
+        Setup::new("waiting").settle(Activity::Waiting, 1);
+    }
+
+    #[test]
+    fn a_busy_agent_stays_working_and_counts_them() {
+        Setup::new("busy").settle(Activity::Working, 1);
+    }
+}
+
 pub(in crate::agents) mod counting_records {
     use super::*;
     use crate::agents::claude::transcript::transcript_path;

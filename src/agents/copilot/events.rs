@@ -1,10 +1,10 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::SystemTime;
 
 use serde_json::Value;
 
 use crate::agents::context::counting::{self, Record, Usage};
-use crate::agents::context::{Context, percent};
+use crate::agents::context::{Context, fresh, percent};
 use crate::agents::stats::Tokens;
 
 const OPEN: usize = 64;
@@ -27,6 +27,7 @@ pub(in crate::agents) struct Fold {
     permissions: HashSet<String>,
     asks: HashSet<String>,
     shells: HashSet<String>,
+    subagents: HashMap<String, SystemTime>,
     open: bool,
     pub(in crate::agents) resumable: bool,
     pub(in crate::agents) prompted: Option<SystemTime>,
@@ -65,13 +66,27 @@ impl Fold {
     pub(in crate::agents) fn apply(&mut self, event: &Value) {
         let at = counting::timestamp(event);
         let data = &event["data"];
+        self.touch(data, at);
         match event["type"].as_str() {
             Some("session.start" | "session.resume") => {
                 self.select(text(data, "selectedModel"), at);
                 self.permissions.clear();
                 self.asks.clear();
                 self.shells.clear();
+                self.subagents.clear();
                 self.open = false;
+            }
+            Some("subagent.started") => {
+                if let Some((id, at)) = text(data, "toolCallId").zip(at)
+                    && (self.subagents.len() < OPEN || self.subagents.contains_key(id))
+                {
+                    self.subagents.insert(id.to_string(), at);
+                }
+            }
+            Some("subagent.completed" | "subagent.failed") => {
+                if let Some(id) = text(data, "toolCallId") {
+                    self.subagents.remove(id);
+                }
             }
             Some("session.model_change") => {
                 self.selected = text(data, "newModel").map(str::to_string);
@@ -124,6 +139,7 @@ impl Fold {
                 self.permissions.clear();
                 self.asks.clear();
                 self.shells.clear();
+                self.subagents.clear();
                 self.open = false;
             }
             Some("session.context_cleared" | "session.truncation") => {
@@ -136,6 +152,17 @@ impl Fold {
             }
             _ => {}
         }
+    }
+
+    fn touch(&mut self, data: &Value, at: Option<SystemTime>) {
+        let parent = text(data, "parentToolCallId").or_else(|| text(&data["usage"], "parentToolCallId"));
+        if let Some((seen, at)) = parent.and_then(|id| self.subagents.get_mut(id)).zip(at) {
+            *seen = (*seen).max(at);
+        }
+    }
+
+    pub(in crate::agents) fn subagents(&self, now: SystemTime) -> usize {
+        self.subagents.values().filter(|at| fresh(**at, now)).count()
     }
 
     fn select(&mut self, model: Option<&str>, at: Option<SystemTime>) {

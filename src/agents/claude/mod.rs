@@ -4,7 +4,7 @@ use std::time::SystemTime;
 
 use serde::Deserialize;
 
-use self::transcript::{Limits, Subagents, Transcript, transcript_path};
+use self::transcript::{Limits, Running, Subagents, Transcript, live, transcript_path};
 use crate::agents::activity::{Activity, BRAILLE, glyph};
 use crate::agents::context::counting::Ledger;
 use crate::agents::context::discovery::Job;
@@ -104,6 +104,8 @@ pub(in crate::agents) struct Reader {
     subagents: Subagents,
     following: Job<Subagents>,
     session: Option<Session>,
+    children: Vec<Running>,
+    live: usize,
 }
 
 impl Reader {
@@ -121,6 +123,7 @@ impl Reader {
         });
         let Some((dir, cwd, path)) = found else {
             self.transcript = None;
+            self.live = 0;
             *shown = None;
             return None;
         };
@@ -141,13 +144,21 @@ impl Reader {
             for (path, records) in std::mem::take(&mut found.records) {
                 ledger.apply(&path.to_string_lossy(), since, records);
             }
+            self.children = found.running();
             self.subagents = found;
         }
         if !self.following.running() {
             let state = std::mem::take(&mut self.subagents);
             self.following.start(move || state.read(&parent, since));
         }
+        let busy = matches!(self.activity(&look.title), Activity::Working | Activity::Waiting);
+        let interrupted = self.transcript.as_ref().and_then(|t| t.interrupted);
+        self.live = live(&self.children, since, busy, interrupted, SystemTime::now());
         prompted
+    }
+
+    pub(in crate::agents) fn subagents(&self) -> usize {
+        self.live
     }
 
     pub(in crate::agents) fn activity(&self, title: &str) -> Activity {

@@ -14,6 +14,7 @@ use crate::process;
 const BACK_DEFAULT: u64 = 64 * 1024 * 1024;
 const FAMILY: usize = 16;
 const SELECTIONS: [&str; 3] = ["session.start", "session.resume", "session.model_change"];
+const SUBAGENTS: [&str; 3] = ["subagent.started", "subagent.completed", "subagent.failed"];
 const BOUNDARIES: [&str; 5] = [
     "session.auto_mode_resolved",
     "session.compaction_complete",
@@ -36,6 +37,7 @@ pub(in crate::agents) struct Session {
     pub(in crate::agents) activity: Option<Activity>,
     pub(in crate::agents) context: Option<Context>,
     pub(in crate::agents) counted: Vec<Record>,
+    pub(in crate::agents) subagents: usize,
     held: bool,
     seeded: bool,
     tail: Tail,
@@ -162,7 +164,7 @@ fn seed(path: &Path) -> Vec<Value> {
         let keep = if SELECTIONS.contains(&kind) {
             selected = true;
             true
-        } else if BOUNDARIES.contains(&kind) {
+        } else if BOUNDARIES.contains(&kind) || SUBAGENTS.contains(&kind) {
             true
         } else if kind == "session.usage_record" {
             events::is_main(&event["data"]["usage"]) && !std::mem::replace(&mut used, true)
@@ -198,6 +200,7 @@ impl Session {
             activity: None,
             context: None,
             counted: Vec::new(),
+            subagents: 0,
             prompted: None,
             resumable: false,
             home,
@@ -239,6 +242,7 @@ impl Session {
         } else {
             Some(Activity::Idle)
         };
+        self.subagents = self.fold.subagents(SystemTime::now());
         self.context = self.fold.context();
         self.prompted = self.prompted.max(self.fold.prompted);
         self.resumable = self.fold.resumable;

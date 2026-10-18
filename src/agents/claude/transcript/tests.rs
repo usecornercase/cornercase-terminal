@@ -677,3 +677,133 @@ mod counting_records {
         assert_eq!(sum(ledger.take()).0, 0);
     }
 }
+
+mod subagents {
+    use std::time::Duration;
+
+    use super::*;
+
+    const START: Duration = Duration::from_secs(1_000_000);
+
+    fn line(stop: Option<&str>) -> String {
+        let stop = stop.map_or("null".to_string(), |s| format!(r#""{s}""#));
+        format!(
+            r#"{{"type":"assistant","isSidechain":true,"agentId":"a1","timestamp":"2026-10-17T10:00:00.000Z","message":{{"id":"m","model":"sonnet","stop_reason":{stop},"usage":{{"input_tokens":1,"output_tokens":1}}}}}}"#
+        )
+    }
+
+    fn write(dir: &Path, text: &str, meta: Option<&str>) -> PathBuf {
+        let path = dir.join("agent-a1.jsonl");
+        write_file(&path, text);
+        let meta_path = path.with_extension("meta.json");
+        match meta {
+            Some(meta) => write_file(&meta_path, meta),
+            None => drop(std::fs::remove_file(&meta_path)),
+        }
+        path
+    }
+
+    fn running(dir: &Path) -> Vec<Running> {
+        Subagents::default().read(dir, SystemTime::UNIX_EPOCH).running()
+    }
+
+    fn count(children: &[Running], busy: bool) -> usize {
+        let now = SystemTime::now();
+        live(children, SystemTime::UNIX_EPOCH, busy, None, now)
+    }
+
+    const BACKGROUND: &str = r#"{"agentType":"general-purpose","requestShape":"background"}"#;
+
+    #[test]
+    fn a_subagent_runs_until_its_final_reply() {
+        let temp = TempDir::new();
+        write(temp.path(), &format!("{}\n", line(None)), Some(BACKGROUND));
+        assert_eq!(count(&running(temp.path()), false), 1);
+
+        write(temp.path(), &format!("{}\n{}\n", line(None), line(Some("end_turn"))), Some(BACKGROUND));
+        assert_eq!(count(&running(temp.path()), false), 0);
+    }
+
+    #[rstest]
+    #[case::finished(r#"{"requestShape":"background","finished":true}"#)]
+    #[case::stopped(r#"{"requestShape":"background","stoppedByUser":true}"#)]
+    fn a_finished_or_stopped_meta_ends_it(#[case] meta: &str) {
+        let temp = TempDir::new();
+        write(temp.path(), &format!("{}\n", line(None)), Some(meta));
+
+        assert_eq!(count(&running(temp.path()), true), 0);
+    }
+
+    #[test]
+    fn a_revived_subagent_runs_again() {
+        let temp = TempDir::new();
+        let text = format!("{}\n{}\n{}\n", line(None), line(Some("end_turn")), line(None));
+        write(temp.path(), &text, Some(BACKGROUND));
+
+        assert_eq!(count(&running(temp.path()), false), 1);
+    }
+
+    #[rstest]
+    #[case::foreground(Some(r#"{"requestShape":"foreground"}"#))]
+    #[case::no_meta(None)]
+    fn a_foreground_subagent_counts_only_while_the_agent_is_busy(#[case] meta: Option<&str>) {
+        let temp = TempDir::new();
+        write(temp.path(), &format!("{}\n", line(None)), meta);
+        let children = running(temp.path());
+
+        assert_eq!((count(&children, false), count(&children, true)), (0, 1));
+    }
+
+    #[test]
+    fn an_interrupt_ends_the_subagents_written_before_it() {
+        let temp = TempDir::new();
+        write(temp.path(), &format!("{}\n", line(None)), Some(BACKGROUND));
+        let children = running(temp.path());
+        let written = children[0].written;
+        let now = SystemTime::now();
+
+        let before = live(&children, SystemTime::UNIX_EPOCH, false, Some(written - Duration::from_secs(1)), now);
+        let after = live(&children, SystemTime::UNIX_EPOCH, false, Some(written + Duration::from_secs(1)), now);
+
+        assert_eq!((before, after), (1, 0));
+    }
+
+    #[test]
+    fn a_subagent_quiet_for_ten_minutes_stops_counting() {
+        let temp = TempDir::new();
+        write(temp.path(), &format!("{}\n", line(None)), Some(BACKGROUND));
+        let children = running(temp.path());
+        let written = children[0].written;
+        let at = |minutes: u64| {
+            live(&children, SystemTime::UNIX_EPOCH, false, None, written + Duration::from_secs(60 * minutes))
+        };
+
+        assert_eq!((at(9), at(10)), (1, 0));
+    }
+
+    #[test]
+    fn a_subagent_written_before_the_agent_started_does_not_count() {
+        let temp = TempDir::new();
+        write(temp.path(), &format!("{}\n", line(None)), Some(BACKGROUND));
+        let children = running(temp.path());
+        let later = children[0].written + START;
+
+        assert_eq!(live(&children, later, true, None, later), 0);
+    }
+
+    #[test]
+    fn an_interrupt_is_recorded_with_its_time() {
+        let temp = TempDir::new();
+        let path = temp.path().join("t.jsonl");
+        let text = r#"{"type":"user","isSidechain":false,"timestamp":"2026-10-17T10:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}"#;
+        write_file(&path, &format!("{text}\n"));
+        let mut transcript = Transcript::new(path.clone());
+
+        transcript.update();
+        let at = transcript.interrupted;
+        write_file(&path, "");
+        transcript.update();
+
+        assert_eq!((at.is_some(), transcript.interrupted), (true, None));
+    }
+}

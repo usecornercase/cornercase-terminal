@@ -167,7 +167,7 @@ fn a_turn_over_with_a_background_shell_ends_only_a_wait_for_the_turn() {
     assert_eq!(ended.ended.as_deref(), Some("done"));
 }
 
-fn in_status(app: &mut App, id: u64) -> wire::PaneInfo {
+pub(super) fn in_status(app: &mut App, id: u64) -> wire::PaneInfo {
     let report: Report = serde_json::from_value(value(app, None, Command::Status(wire::Status {}))).expect("a report");
     let mut tabs = report.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs);
     tabs.find_map(|t| t.panes.iter().find(|p| p.id == id)).expect("the agent's pane").clone()

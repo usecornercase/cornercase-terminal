@@ -75,6 +75,7 @@ impl App {
                             let found = agent_in(config, dir, term, now);
                             let activity = found.as_ref().map(|(_, activity)| *activity);
                             let before = term.agent.state();
+                            let was_waiting = term.agent.waits_on_subagents();
                             term.agent.follow(found.as_ref().map(|(agent, _)| agent.as_str()));
                             if term.resuming.is_some_and(|until| now >= until) {
                                 term.agent.give_up();
@@ -107,6 +108,7 @@ impl App {
                                     to = state.unwrap_or("none"),
                                 );
                             }
+                            log_subagents(term, was_waiting);
                             let routine = members.contains(&term.id) && notice == Some(activity::Status::Done);
                             let ended = orchestrators.contains(&term.id)
                                 && !seen
@@ -294,5 +296,17 @@ fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, 
     }
     if found.is_some() || term.resuming.is_none_or(|until| now >= until) {
         term.resume = found;
+    }
+}
+
+fn log_subagents(term: &Term, was_waiting: bool) {
+    if term.agent.waits_on_subagents() != was_waiting {
+        log::info!(
+            "activity",
+            "subagents",
+            pane = term.id,
+            count = term.context.subagents(),
+            waiting = term.agent.waits_on_subagents(),
+        );
     }
 }
