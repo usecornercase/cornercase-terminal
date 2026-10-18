@@ -138,7 +138,7 @@ fn single(screen: Snapshot) -> TabView {
         dragging: None,
         link: None,
         landing: None,
-        resuming: Vec::new(),
+        bands: Vec::new(),
     }
 }
 

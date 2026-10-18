@@ -2,6 +2,7 @@ use std::time::{Instant, SystemTime};
 
 use crossterm::event::KeyCode;
 
+use super::held::Held;
 use super::wait::Condition;
 use super::{Asker, Handled, Pending, Stage, deadline, json, none, pane_ids};
 use crate::agents;
@@ -9,6 +10,7 @@ use crate::agents::activity::{self, Status};
 use crate::agents::context;
 use crate::agents::launch::Launch;
 use crate::app::{App, AppEvent};
+use crate::control::contract::Refusal;
 use crate::control::{self, Done};
 use crate::error;
 use crate::log::{Job, Level};
@@ -42,38 +44,7 @@ impl App {
     pub(super) fn send_request(&mut self, client: u64, asker: Asker, send: control::SendText, now: Instant) -> Handled {
         let pane = self.target(asker, send.pane, send.tab)?;
         let timeout = deadline(send.timeout, now)?;
-        let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
-        if term.agent.status() == Some(Status::Waiting) {
-            return Err(format!(
-                "the agent in pane {pane} is waiting for an answer to a question or a permission prompt, and what \
-                 you send would answer it; ask the user, then answer with `cornercase keys`"
-            )
-            .into());
-        }
-        if !send.force && self.resume_holds(pane) {
-            return Err(format!(
-                "pane {pane} is resuming its agent's conversation, and what you send would reach its shell or its \
-                 start-up instead; send again once `cornercase status` no longer shows it resuming, or with --force"
-            )
-            .into());
-        }
-        if !send.force && term.dialog() {
-            return Err(format!(
-                "the agent in pane {pane} shows a dialog, a panel or its shell mode instead of its input box, and \
-                 what you send would go there; `cornercase read --pane {pane}` shows it: send again once it is \
-                 closed, or with --force"
-            )
-            .into());
-        }
-        if !send.force && term.survey() {
-            return Err(format!(
-                "the agent in pane {pane} shows Claude Code's feedback survey above its input box (`1: Bad  2: Fine  \
-                 3: Good  0: Dismiss`), and a digit sent alone would answer it; dismiss it with `cornercase keys \
-                 --pane {pane} 0` and send again, or send with --force"
-            )
-            .into());
-        }
-        let confirm = (send.enter && self.confirms(term, send.text.as_deref())).then(SystemTime::now);
+        self.refuse_send(pane, send.force)?;
         let wait = send.wait.then(|| Condition::of(send.until)).transpose()?;
         if let Some(until) = &wait {
             self.can_wait(asker.caller, pane, until)?;
@@ -82,17 +53,66 @@ impl App {
         if text.is_none() && !send.enter {
             return Err("nothing to send: give a text, - to read it from stdin, or --enter".into());
         }
-        if let Some(text) = &text
+        let held = Held { text, enter: send.enter, wait, from: asker.caller, force: send.force };
+        if !send.force && self.holding_back(pane, now).is_some() {
+            return Ok(self.hold(client, pane, held, timeout, now));
+        }
+        Ok(match self.put_through(pane, held, now)? {
+            None => Some(json(&pane_ids(pane))),
+            Some((launch, stage)) => self.launch_within(client, pane_ids(pane), Some(launch), stage, timeout),
+        })
+    }
+
+    pub(super) fn refuse_send(&self, pane: u64, force: bool) -> Result<(), Refusal> {
+        let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
+        if term.agent.status() == Some(Status::Waiting) {
+            return Err(format!(
+                "the agent in pane {pane} is waiting for an answer to a question or a permission prompt, and what \
+                 you send would answer it; ask the user, then answer with `cornercase keys`"
+            )
+            .into());
+        }
+        if !force && self.resume_holds(pane) {
+            return Err(format!(
+                "pane {pane} is resuming its agent's conversation, and what you send would reach its shell or its \
+                 start-up instead; send again once `cornercase status` no longer shows it resuming, or with --force"
+            )
+            .into());
+        }
+        if !force && term.dialog() {
+            return Err(format!(
+                "the agent in pane {pane} shows a dialog, a panel or its shell mode instead of its input box, and \
+                 what you send would go there; `cornercase read --pane {pane}` shows it: send again once it is \
+                 closed, or with --force"
+            )
+            .into());
+        }
+        if !force && term.survey() {
+            return Err(format!(
+                "the agent in pane {pane} shows Claude Code's feedback survey above its input box (`1: Bad  2: Fine  \
+                 3: Good  0: Dismiss`), and a digit sent alone would answer it; dismiss it with `cornercase keys \
+                 --pane {pane} 0` and send again, or send with --force"
+            )
+            .into());
+        }
+        Ok(())
+    }
+
+    pub(super) fn put_through(
+        &mut self,
+        pane: u64,
+        held: Held,
+        now: Instant,
+    ) -> Result<Option<(Launch, Stage)>, Refusal> {
+        let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
+        let confirm = (held.enter && self.confirms(term, held.text.as_deref())).then(SystemTime::now);
+        if let Some(text) = &held.text
             && let Some(term) = self.projects.pane_by_mut(pane)
             && !term.paste(text)
         {
             return Err(not_reading(pane).into());
         }
-        if !send.enter {
-            return Ok(Some(json(&pane_ids(pane))));
-        }
-        let stage = Stage::Launch { confirm, wait };
-        Ok(self.launch_within(client, pane_ids(pane), Some(Launch::enter(pane, now)), stage, timeout))
+        Ok(held.enter.then(|| (Launch::enter(pane, now), Stage::Launch { confirm, wait: held.wait })))
     }
 
     pub(super) fn confirms(&self, term: &term::Term, text: Option<&str>) -> bool {

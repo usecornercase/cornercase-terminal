@@ -9,7 +9,7 @@ use crate::project::Hierarchy;
 use crate::term::Term;
 use crate::ui;
 
-const INPUT_HOLDS: Duration = Duration::from_secs(2);
+pub(in crate::app) const INPUT_HOLDS: Duration = Duration::from_secs(2);
 
 const RESTART_CANCELLED: &str = "the restart was cancelled in the window; the server keeps running";
 

@@ -25,6 +25,8 @@ pub(super) struct Parents {
     wanted: Vec<(u64, Option<u64>, u64)>,
 }
 
+const SENDING: &str = "a message from `cornercase send` is going into this pane; wait a moment, so the two do not join";
+
 impl App {
     pub(super) fn restore_workspace(
         &mut self,
@@ -138,16 +140,47 @@ impl App {
         self.agents.launches.iter().any(|launch| launch.term == pane && launch.holds(now))
     }
 
-    pub(super) fn held_panes(&self) -> Vec<u64> {
+    pub(super) fn pane_bands(&self) -> HashMap<u64, ui::PaneBand> {
         let now = Instant::now();
-        self.agents.launches.iter().filter(|launch| launch.holds(now)).map(|launch| launch.term).collect()
+        let mut bands: HashMap<u64, ui::PaneBand> =
+            self.held_labels().into_iter().map(|(pane, label)| (pane, ui::PaneBand::Held(label))).collect();
+        for launch in self.agents.launches.iter().filter(|launch| launch.holds(now)) {
+            if let Some(term) = self.projects.pane_by(launch.term) {
+                bands.insert(term.id, ui::PaneBand::Resuming(resumed(term)));
+            }
+        }
+        bands
     }
 
     pub(super) fn holds_input(&mut self) -> bool {
-        let Some(term) = self.term().filter(|term| self.resume_holds(term.id)) else { return false };
-        let message =
-            format!("{} is resuming its conversation in this pane; wait for it, or press cancel", resumed(term));
+        let Some(term) = self.term() else { return false };
+        let message = if self.resume_holds(term.id) {
+            format!("{} is resuming its conversation in this pane; wait for it, or press cancel", resumed(term))
+        } else if self.sending(term.id) {
+            SENDING.to_string()
+        } else {
+            return false;
+        };
         self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(Status::Working)));
+        true
+    }
+
+    pub(super) fn press_held_notice(&mut self, area: Rect, pos: Position) -> bool {
+        let Some(tab) = self.tab() else { return false };
+        let pressed = tab.shown(area).into_iter().find_map(|(id, rect)| {
+            let label = self.held_label(id).filter(|_| !self.resume_holds(id))?;
+            let (_, send, discard) = ui::held_notice(rect, &label)?;
+            match (send.contains(pos), discard.contains(pos)) {
+                (true, _) => Some((id, true)),
+                (_, true) => Some((id, false)),
+                _ => None,
+            }
+        });
+        match pressed {
+            Some((pane, true)) => self.send_held_now(pane),
+            Some((pane, false)) => self.discard_held(pane),
+            None => return false,
+        }
         true
     }
 

@@ -2,7 +2,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use regex::Regex;
 
-use super::idle_restart::held;
+use super::held;
+use super::idle_restart::held as holding;
 use super::{Asker, Handled, Pending, Reply, STARTS_WITHIN, Stage, deadline, duration, json, none, pane_ids};
 use crate::agents;
 use crate::agents::activity::{self, Status};
@@ -116,6 +117,8 @@ fn not_confirmed(pane: u64) -> String {
 
 impl App {
     pub(in crate::app) fn check_requests(&mut self, now: Instant) {
+        self.settle_drafts(now);
+        self.release_held(now);
         let launched = std::mem::take(&mut self.requests.launched);
         let mut kept = Vec::new();
         for mut pending in std::mem::take(&mut self.requests.pending) {
@@ -234,13 +237,14 @@ impl App {
             Stage::Check => return "git is still checking the worktree".into(),
             Stage::Issue(asking) => return format!("{} is still looking the issue up", asking.source().name()),
             Stage::Usage(_) => return "the agents have not said their usage yet".into(),
+            Stage::Held(_) => return held::waiting(pane, self.blocked(pane, Instant::now())),
             Stage::Launch { .. } => return format!("pane {pane} is still starting"),
             Stage::Setup(workspace) => {
                 return format!("workspace {workspace} is still running its setup in pane {pane}");
             }
             Stage::Confirm(confirm) => return self.unrecorded(confirm.pane),
             Stage::Reading => return format!("the record of pane {pane} is still being read"),
-            Stage::Restart { caller } => return held(&self.holding(*caller, Instant::now())),
+            Stage::Restart { caller } => return holding(&self.holding(*caller, Instant::now())),
             Stage::Several { parts, .. } => {
                 let pending = parts.iter().filter(|part| part.done.ended.is_none());
                 let waits = pending.map(|part| self.waiting_on(&part.stage, part.done.ids.pane.unwrap_or_default()));
@@ -358,7 +362,11 @@ impl App {
                 Stage::Confirm(confirm) => Some(confirm.by),
                 _ => None,
             };
-            deadline.into_iter().chain(confirm).chain(watches.into_iter().flat_map(|watch| self.due(watch)))
+            let held: Vec<Instant> = match &pending.stage {
+                Stage::Held(_) => self.held_due(pending.done.ids.pane.unwrap_or_default()),
+                _ => Vec::new(),
+            };
+            deadline.into_iter().chain(confirm).chain(held).chain(watches.into_iter().flat_map(|watch| self.due(watch)))
         });
         due.filter(|at| *at > now).min().map(|at| at.saturating_duration_since(now).max(SOONEST))
     }

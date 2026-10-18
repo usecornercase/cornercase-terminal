@@ -120,3 +120,34 @@ mod bypass_consent {
         assert!(!super::super::bypass_consent("⏵⏵ bypass permissions on (shift+tab to cycle)"));
     }
 }
+
+mod draft {
+    use rstest::rstest;
+
+    use crate::agents::Known;
+
+    const RULE: &str = "────────────────────────────────────────";
+    const DIM: char = '~';
+
+    fn lines(rows: &[&str]) -> Vec<(String, String)> {
+        let lit = |row: &str| row.chars().map(|c| if c == DIM { ' ' } else { c }).collect::<String>();
+        let text = |row: &str| row.replace(DIM, "x");
+        rows.iter().map(|row| (text(row), lit(row))).collect()
+    }
+
+    #[rstest]
+    #[case::empty(&["● Done.", RULE, "❯\u{a0}", RULE], Some(false))]
+    #[case::a_dim_suggestion(&[RULE, "❯\u{a0}~~~~~~~~~~~~~~~", RULE, "  ? for shortcuts"], Some(false))]
+    #[case::typed_text(&[RULE, "❯\u{a0}add tests", RULE], Some(true))]
+    #[case::a_second_line(&[RULE, "❯\u{a0}", "  and run them", RULE], Some(true))]
+    #[case::text_under_the_bottom_rule(&[RULE, "❯\u{a0}", RULE, "  ⏵⏵ auto mode on"], Some(false))]
+    #[case::no_box(&["  Shell details", "  x to stop"], None)]
+    fn is_text_in_the_box_that_is_not_dim(#[case] rows: &[&str], #[case] expected: Option<bool>) {
+        assert_eq!(Known::Claude.draft(|| lines(rows)), expected);
+    }
+
+    #[test]
+    fn is_not_read_for_other_agents() {
+        assert_eq!(Known::Codex.draft(|| lines(&[RULE, "› fix it"])), None);
+    }
+}

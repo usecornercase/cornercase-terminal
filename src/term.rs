@@ -3,6 +3,7 @@ pub(crate) mod keys;
 pub(crate) mod memory;
 pub(crate) mod mouse;
 mod status;
+pub(crate) mod typing;
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -12,9 +13,11 @@ use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Instant;
 
+use crossterm::event::KeyEvent;
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 
 use self::emulator::Emulator;
+use self::typing::Typing;
 use crate::agents::activity;
 use crate::agents::context;
 use crate::agents::{self, AgentState, Known};
@@ -53,6 +56,7 @@ pub(crate) struct Term {
     pub(crate) resuming: Option<Instant>,
     pub(crate) output_at: Instant,
     pub(crate) input_at: Option<Instant>,
+    pub(crate) typing: Typing,
     pub(crate) submitted: Option<Instant>,
     pub(crate) input_seen: Option<i32>,
     pub(crate) job: Option<Job>,
@@ -137,6 +141,7 @@ impl Term {
             resuming: None,
             output_at: Instant::now(),
             input_at: None,
+            typing: Typing::default(),
             submitted: None,
             input_seen: None,
             job: None,
@@ -229,6 +234,40 @@ impl Term {
 
     pub(crate) fn became_shell(&mut self) {
         self.interactive = true;
+    }
+
+    pub(crate) fn typed_key(&mut self, key: KeyEvent) {
+        let pid = self.foreground_pid();
+        self.typing.key(key, pid, Instant::now());
+    }
+
+    pub(crate) fn typed_text(&mut self, text: &str) {
+        let pid = self.foreground_pid();
+        self.typing.text(text, pid, Instant::now());
+    }
+
+    pub(crate) fn typed_paste(&mut self, text: &str) {
+        let pid = self.foreground_pid();
+        self.typing.paste(text, pid, Instant::now());
+    }
+
+    pub(crate) fn draft(&self, now: Instant) -> bool {
+        self.typing.drafting() && self.typing.draft(self.foreground_pid(), now)
+    }
+
+    pub(crate) fn settle_draft(&mut self, now: Instant) {
+        if !self.typing.drafting() {
+            return;
+        }
+        let pid = self.foreground_pid();
+        let seen =
+            self.agent.agent().and_then(Known::of).filter(|_| self.input_seen.is_some() && self.input_seen == pid);
+        let emulator = &mut self.emulator;
+        let lines = || emulator.active_snapshot().map(|s| s.lit_lines()).unwrap_or_default();
+        let empty = seen.is_some_and(|agent| agent.draft(lines) == Some(false));
+        if empty || !self.typing.draft(pid, now) {
+            self.typing.clear();
+        }
     }
 
     pub(crate) fn dialog(&self) -> bool {

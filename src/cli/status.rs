@@ -115,14 +115,21 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
                     (None, None) => String::new(),
                 };
                 let subagents = (pane.subagents > 0).then(|| activity::subagents_text(pane.subagents as usize));
+                let held = match pane.held_sends {
+                    0 => None,
+                    1 => Some("1 message held".to_string()),
+                    n => Some(format!("{n} messages held")),
+                };
                 let notes: Vec<String> = subagents
                     .into_iter()
+                    .chain(held)
                     .chain(
                         [
                             (pane.background_shell, "background shell"),
                             (pane.dialog, "dialog open"),
                             (pane.survey, "survey open"),
                             (pane.resuming, "resuming"),
+                            (pane.draft, "draft"),
                         ]
                         .into_iter()
                         .filter(|(on, _)| *on)

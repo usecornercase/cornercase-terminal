@@ -13,6 +13,17 @@ pub(in crate::agents) fn input_box(screen: &str) -> Option<bool> {
     Some(box_rule(&screen.lines().collect::<Vec<_>>()).is_some())
 }
 
+pub(in crate::agents) fn draft(lines: &[(String, String)]) -> Option<bool> {
+    let texts: Vec<&str> = lines.iter().map(|(text, _)| text.as_str()).collect();
+    let top = box_rule(&texts)? + 1;
+    let inside = lines[top..].iter().take_while(|(text, _)| !rule(text));
+    let typed = inside.enumerate().any(|(i, (_, lit))| {
+        let lit = if i == 0 { lit.strip_prefix(INPUT_MARK).unwrap_or(lit) } else { lit };
+        lit.chars().any(|c| !c.is_whitespace())
+    });
+    Some(typed)
+}
+
 pub(in crate::agents) fn bypass_consent(screen: &str) -> bool {
     let compact: String = screen.chars().filter(|c| !c.is_whitespace()).collect();
     compact.contains("BypassPermissionsmode") && compact.contains("Yes,Iaccept")
@@ -32,11 +43,12 @@ pub(in crate::agents) fn survey(screen: &str) -> bool {
         .is_some_and(|line| line.starts_with(SURVEY_BULLET))
 }
 
+fn rule(line: &str) -> bool {
+    let line = line.trim();
+    line.chars().count() >= RULE_MIN && line.chars().all(|c| c == RULE)
+}
+
 fn box_rule(lines: &[&str]) -> Option<usize> {
-    let rule = |line: &str| {
-        let line = line.trim();
-        line.chars().count() >= RULE_MIN && line.chars().all(|c| c == RULE)
-    };
     lines.windows(2).rposition(|pair| rule(pair[0]) && pair[1].starts_with(INPUT_MARK))
 }
 

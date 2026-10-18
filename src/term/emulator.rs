@@ -98,6 +98,17 @@ pub(crate) struct Snapshot {
 }
 
 impl Snapshot {
+    pub(crate) fn lit_lines(&self) -> Vec<(String, String)> {
+        let line = |row: &[Cell], lit: bool| {
+            let text: String = row
+                .iter()
+                .map(|c| if lit && c.style.add_modifier.contains(Modifier::DIM) { " " } else { c.symbol.as_str() })
+                .collect();
+            text.trim_end().to_string()
+        };
+        self.rows.iter().map(|row| (line(row, false), line(row, true))).collect()
+    }
+
     pub(crate) fn contents(&self) -> String {
         self.rows
             .iter()
@@ -286,15 +297,19 @@ impl Emulator {
     }
 
     pub(crate) fn active_contents(&mut self) -> Result<String> {
+        self.active_snapshot().map(|s| s.contents())
+    }
+
+    pub(crate) fn active_snapshot(&mut self) -> Result<Snapshot> {
         let scrolled = self.vt.scrollbar().ok().filter(|_| self.below() > 0);
         if scrolled.is_some() {
             self.scroll_to_bottom();
         }
-        let text = self.snapshot().map(|s| s.contents());
+        let snapshot = self.snapshot();
         if let Some(bar) = scrolled {
             self.vt.scroll_viewport(ScrollViewport::Row(usize::try_from(bar.offset).unwrap_or(usize::MAX)));
         }
-        text
+        snapshot
     }
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {

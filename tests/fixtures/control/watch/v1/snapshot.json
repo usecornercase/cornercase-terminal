@@ -63,7 +63,9 @@
                   "title": "✳ Claude Code",
                   "parent": null,
                   "subagents": 0,
-                  "role": null
+                  "role": null,
+                  "held_sends": 0,
+                  "draft": false
                 },
                 {
                   "id": 5,
@@ -84,7 +86,9 @@
                   "title": null,
                   "parent": 4,
                   "subagents": 2,
-                  "role": "coder"
+                  "role": "coder",
+                  "held_sends": 0,
+                  "draft": false
                 }
               ],
               "custom_name": "agents",

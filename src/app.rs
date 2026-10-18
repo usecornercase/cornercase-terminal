@@ -192,6 +192,7 @@ pub(crate) struct App {
     usage_page: usage::Page,
     usage_timeout: Duration,
     confirm_within: Duration,
+    typing_holds: Duration,
     queued: QueueRuntime,
     todos: Todos,
     runs: Vec<crate::flows::run::Run>,
@@ -268,6 +269,7 @@ impl App {
             usage_page: usage::Page::default(),
             usage_timeout: usage::TIMEOUT,
             confirm_within: control::CONFIRM_WITHIN,
+            typing_holds: control::INPUT_HOLDS,
             queued: QueueRuntime::default(),
             todos: Todos::default(),
             runs: Vec::new(),
@@ -724,7 +726,7 @@ impl App {
         let landing = self.pane_landing(pane_area);
         let pointer = self.link_hover();
         let root = self.project().and_then(Project::workspace).map(|w| w.path.clone());
-        let (home, held) = (self.home.clone(), self.held_panes());
+        let (home, bands) = (self.home.clone(), self.pane_bands());
         let tab = self.tab_mut().and_then(|tab| {
             let layout = tab.layout_by_index()?;
             let screens: Vec<_> = tab.panes.iter_mut().map(|t| t.emulator.snapshot().unwrap_or_default()).collect();
@@ -732,8 +734,8 @@ impl App {
             let link = pointer
                 .zip(root.as_deref())
                 .and_then(|(at, root)| Self::hovered_link(tab, &screens, pane_area, at, root, home.as_deref()));
-            let resuming = tab.panes.iter().map(|t| held.contains(&t.id).then(|| session::resumed(t))).collect();
-            Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging, link, landing, resuming })
+            let bands = tab.panes.iter().map(|t| bands.get(&t.id).cloned()).collect();
+            Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging, link, landing, bands })
         });
         self.toast = self.toast.take().filter(|t| t.at.elapsed() < t.lasts());
         let visible = self.visible_tab();

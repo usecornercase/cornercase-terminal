@@ -150,6 +150,7 @@ fn new_app(config_path: PathBuf) -> (App, Receiver<AppEvent>) {
     let mut app = App::new("/bin/sh".into(), HostTheme::default(), config_path, tx);
     app.config.sidebar = config::Sidebar::SideBySide.id().into();
     app.config.sound = false;
+    app.typing_holds = Duration::ZERO;
     if app.config.gh == config::DEFAULT_GH {
         app.config.gh = "/nonexistent/gh".into();
         app.config.glab = "/nonexistent/glab".into();

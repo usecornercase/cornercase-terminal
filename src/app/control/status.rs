@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::time::Instant;
 
 use super::{Handled, json, none};
 use crate::agents::activity::Status;
@@ -150,6 +151,7 @@ impl App {
                         let parent = Self::live_parent(term, &live);
                         self.seat(term.id).map(|(_, role)| role).hash(&mut hash);
                         Self::pane_refreshed(term, self.resume_holds(term.id), parent, &mut hash);
+                        (self.held_sends(term.id), term.typing.drafting()).hash(&mut hash);
                     }
                 }
             }
@@ -192,6 +194,8 @@ impl App {
             parent: Self::live_parent(term, live),
             subagents: u32::try_from(term.context.subagents()).unwrap_or(u32::MAX),
             role: self.seat(term.id).map(|(_, role)| role.to_string()),
+            held_sends: u32::try_from(self.held_sends(term.id)).unwrap_or(u32::MAX),
+            draft: term.draft(Instant::now()),
         }
     }
 

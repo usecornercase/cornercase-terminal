@@ -138,3 +138,21 @@ fn a_todo_cursor_cannot_confirm_is_sent_but_stays_pending() {
     let pending = running.app.todos.item(todo).is_some_and(|item| !item.done);
     assert_eq!((sent.todo, sent.unconfirmed, pending), (Some(todo), Some(true), true));
 }
+
+#[test]
+fn a_draft_typed_into_cursor_holds_a_send_until_the_line_is_cleared() {
+    let mut running = Running::new();
+    let id = first(&running.app);
+    type_text(&mut running.app, "my own question");
+
+    running.send("next");
+    running.app.refresh(Instant::now());
+    assert_eq!((answers(&mut running.app).len(), running.app.held_sends(id)), (0, 1));
+    assert!(pane(&running.app, id).draft(Instant::now()), "the person's draft is seen");
+
+    send_key(&mut running.app, KeyCode::Char('u'), KeyModifiers::CONTROL);
+    refreshing(&mut running.app, &running.rx, "the cleared line lets the send go", |a| a.held_sends(id) == 0);
+    running.fake.turn_at("next", Some(millis(SystemTime::now() + Duration::from_secs(60))));
+
+    assert_eq!(done(answered(&mut running.app, &running.rx, "the send is confirmed")).ids.pane, Some(id));
+}

@@ -18,6 +18,8 @@ pub(super) const NO_AGENT: &str = "no agent here, so the reference is copied";
 
 const RESUMING: &str = "the agent is resuming its conversation, so the reference is copied";
 
+const BUSY: &str = "a message is going into the agent's input, so the reference is copied";
+
 const EDIT_SCRIPT: &str = "exec ${VISUAL:-${EDITOR:-vi}} \"+$1\" \"$2\"";
 
 impl App {
@@ -65,15 +67,17 @@ impl App {
             self.toast = Some(Toast::new(NO_AGENT, ui::ToastIcon::Check));
             return;
         };
-        if self.resume_holds(id) {
+        if self.resume_holds(id) || self.sending(id) {
             self.outbox.host_writes.push(clipboard::osc52(text.trim_end()));
             self.jump_to_pane(id);
-            self.toast = Some(Toast::new(RESUMING, ui::ToastIcon::Check));
+            let why = if self.sending(id) { BUSY } else { RESUMING };
+            self.toast = Some(Toast::new(why, ui::ToastIcon::Check));
             return;
         }
         let tab = &mut self.projects[p].workspaces[w].tabs[t];
         let sent = tab.pane_by_mut(id).is_some_and(|term| {
             term.emulator.scroll_to_bottom();
+            term.typed_paste(text);
             term.paste(text)
         });
         self.jump_to_pane(id);

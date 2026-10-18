@@ -223,6 +223,18 @@ impl Known {
         }
     }
 
+    pub(crate) fn draft(self, lines: impl FnOnce() -> Vec<(String, String)>) -> Option<bool> {
+        match self {
+            Self::Claude => claude::screen::draft(&lines()),
+            Self::Codex => codex::INPUT_BOX,
+            Self::Gemini => gemini::INPUT_BOX,
+            Self::Opencode => opencode::INPUT_BOX,
+            Self::Grok => grok::INPUT_BOX,
+            Self::Cursor => cursor::INPUT_BOX,
+            Self::Copilot => copilot::INPUT_BOX,
+        }
+    }
+
     pub(crate) fn survey(self, screen: &str) -> bool {
         match self {
             Self::Claude => claude::screen::survey(screen),

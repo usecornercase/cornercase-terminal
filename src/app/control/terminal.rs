@@ -107,17 +107,34 @@ impl App {
 
     pub(in crate::app) fn input_request(&mut self, input: &Input) -> Handled {
         let pane = explicit(input.pane, "input")?;
+        let sending = self.sending(pane);
         let term = self.pane_mut(pane)?;
         let dims = fits(term, pane, input.size)?;
         if input.events.is_empty() {
             return Err(malformed("no events given"));
         }
         let sent = encode(term, pane, input, dims)?;
+        if sent.typed && sending {
+            return Err(Refusal::new(
+                Code::Busy,
+                format!(
+                    "a message sent with `cornercase send` is between its paste and its Enter in pane {pane}, and                      what you type would join it; nothing was sent: send again in a moment"
+                ),
+            ));
+        }
         if !sent.bytes.is_empty() && !term.write(&sent.bytes) {
             return Err(busy(term, pane));
         }
         if sent.typed {
             term.emulator.scroll_to_bottom();
+            for event in &input.events {
+                match event {
+                    InputEvent::Key(key) => key.event().into_iter().for_each(|key| term.typed_key(key)),
+                    InputEvent::Text(text) => term.typed_text(text),
+                    InputEvent::Paste(text) => term.typed_paste(text),
+                    InputEvent::Mouse(_) => {}
+                }
+            }
         }
         let answer = Sent { pane, bytes: sent.bytes.len(), skipped: sent.skipped };
         Ok(Some(json(&answer)))

@@ -14,6 +14,7 @@ use super::theme::BRAND_COLOR;
 use super::widgets::sidebar_hovered;
 use crate::project::split::{Dir, Node, Place};
 use crate::term::emulator::Snapshot;
+use crate::text::truncate_right;
 
 const MOVE_LABEL: &str = "move here";
 
@@ -38,7 +39,13 @@ pub(crate) struct TabView {
     pub(crate) dragging: Option<Vec<bool>>,
     pub(crate) link: Option<(u16, Range<u16>)>,
     pub(crate) landing: Option<(Rect, Place)>,
-    pub(crate) resuming: Vec<Option<String>>,
+    pub(crate) bands: Vec<Option<PaneBand>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PaneBand {
+    Resuming(String),
+    Held(String),
 }
 
 fn draw_centered(f: &mut Frame, area: Rect, lines: Vec<Line<'static>>) {
@@ -114,30 +121,64 @@ pub(crate) fn scrollback_badge(pane: Rect, below: usize) -> Option<Rect> {
 }
 
 const RESUME_CANCEL: &str = " cancel ";
+const HELD_SEND: &str = " send now ";
+const HELD_DISCARD: &str = " discard ";
+const HELD_MIN: usize = 8;
 
 fn resume_label(agent: &str) -> String {
     format!(" resuming {agent}… ")
 }
 
-pub(crate) fn resume_notice(pane: Rect, agent: &str) -> Option<(Rect, Rect)> {
-    let label = u16::try_from(resume_label(agent).chars().count()).unwrap_or(u16::MAX);
-    let button = u16::try_from(RESUME_CANCEL.chars().count()).unwrap_or(u16::MAX);
-    let width = label.saturating_add(button).saturating_add(1);
+fn band(pane: Rect, parts: &[&str]) -> Option<Vec<Rect>> {
+    let widths: Vec<u16> = parts.iter().map(|p| u16::try_from(p.chars().count()).unwrap_or(u16::MAX)).collect();
+    let width = widths.iter().fold(0u16, |sum, w| sum.saturating_add(*w).saturating_add(1)).saturating_sub(1);
     if pane.height == 0 || width > pane.width {
         return None;
     }
-    let (x, y) = (pane.x + (pane.width - width) / 2, pane.y + pane.height / 2);
-    Some((Rect::new(x, y, label, 1), Rect::new(x + label + 1, y, button, 1)))
+    let (mut x, y) = (pane.x + (pane.width - width) / 2, pane.y + pane.height / 2);
+    let rects = widths.into_iter().map(|w| {
+        let r = Rect::new(x, y, w, 1);
+        x = x.saturating_add(w).saturating_add(1);
+        r
+    });
+    Some(rects.collect())
+}
+
+pub(crate) fn resume_notice(pane: Rect, agent: &str) -> Option<(Rect, Rect)> {
+    let rects = band(pane, &[&resume_label(agent), RESUME_CANCEL])?;
+    Some((rects[0], rects[1]))
+}
+
+fn held_text(pane: Rect, label: &str) -> Option<String> {
+    let buttons = HELD_SEND.chars().count() + HELD_DISCARD.chars().count() + 4;
+    let room = usize::from(pane.width).saturating_sub(buttons);
+    (room >= HELD_MIN).then(|| format!(" {} ", truncate_right(label, room)))
+}
+
+pub(crate) fn held_notice(pane: Rect, label: &str) -> Option<(Rect, Rect, Rect)> {
+    let rects = band(pane, &[&held_text(pane, label)?, HELD_SEND, HELD_DISCARD])?;
+    Some((rects[0], rects[1], rects[2]))
+}
+
+fn draw_band(f: &mut Frame, view: &View, pane: Rect, (label, text): (Rect, String), buttons: &[(Rect, &str, bool)]) {
+    let band = Rect { y: label.y, height: 1, ..pane };
+    f.buffer_mut().set_style(band, Style::default().bg(view.surface()));
+    let bold = Style::default().bg(view.surface()).add_modifier(Modifier::BOLD);
+    f.render_widget(Paragraph::new(Span::styled(text, bold)), label);
+    for &(button, name, primary) in buttons {
+        let style = dialog_button_style(view, button, primary);
+        f.render_widget(Paragraph::new(Span::styled(name, style)), button);
+    }
 }
 
 fn draw_resume_notice(f: &mut Frame, view: &View, pane: Rect, agent: &str) {
     let Some((label, button)) = resume_notice(pane, agent) else { return };
-    let band = Rect { y: label.y, height: 1, ..pane };
-    f.buffer_mut().set_style(band, Style::default().bg(view.surface()));
-    let text = Style::default().bg(view.surface()).add_modifier(Modifier::BOLD);
-    f.render_widget(Paragraph::new(Span::styled(resume_label(agent), text)), label);
-    let style = dialog_button_style(view, button, false);
-    f.render_widget(Paragraph::new(Span::styled(RESUME_CANCEL, style)), button);
+    draw_band(f, view, pane, (label, resume_label(agent)), &[(button, RESUME_CANCEL, false)]);
+}
+
+fn draw_held_notice(f: &mut Frame, view: &View, pane: Rect, text: &str) {
+    let (Some((label, send, discard)), Some(text)) = (held_notice(pane, text), held_text(pane, text)) else { return };
+    draw_band(f, view, pane, (label, text), &[(send, HELD_SEND, true), (discard, HELD_DISCARD, false)]);
 }
 
 fn draw_scrollback_badge(f: &mut Frame, view: &View, pane: Rect, below: usize) {
@@ -163,8 +204,10 @@ pub(super) fn draw_tab(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
             f.buffer_mut().set_style(r, Style::default().fg(Color::Cyan).add_modifier(Modifier::UNDERLINED));
         }
         draw_scrollback_badge(f, view, pane, screen.below);
-        if let Some(Some(agent)) = tab.resuming.get(i) {
-            draw_resume_notice(f, view, pane, agent);
+        match tab.bands.get(i) {
+            Some(Some(PaneBand::Resuming(agent))) => draw_resume_notice(f, view, pane, agent),
+            Some(Some(PaneBand::Held(label))) => draw_held_notice(f, view, pane, label),
+            _ => {}
         }
     }
     if let Some((r, place)) = tab.landing {

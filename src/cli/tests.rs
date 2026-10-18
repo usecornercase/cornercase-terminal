@@ -656,6 +656,8 @@ mod output {
         report.projects[0].workspaces[0].tabs[0].panes[1].parent = Some(4);
         report.projects[0].workspaces[0].tabs[0].panes[1].subagents = 2;
         report.projects[0].workspaces[0].tabs[0].panes[1].role = Some("coder".into());
+        report.projects[0].workspaces[0].tabs[0].panes[1].held_sends = 1;
+        report.projects[0].workspaces[0].tabs[0].panes[1].draft = true;
 
         let text = pane_table(&report.panes()).expect("a table");
 
@@ -663,11 +665,11 @@ mod output {
             text,
             "pane\ttab\tworkspace\tproject\tprogram\tagent\tstatus\tbackground_shell\tdialog\tat_prompt\tmodel\t\
                  context\tcaller\tshown\tactive\ttab_name\tworkspace_name\tbranch\tworktree\tproject_name\tpath\t\
-                 survey\tresuming\tparent\tsubagents\trole\n\
+                 survey\tresuming\tparent\tsubagents\trole\theld_sends\tdraft\n\
                  4\t3\t2\t1\tzsh\t-\t-\tfalse\tfalse\ttrue\t-\t-\tfalse\ttrue\ttrue\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\tfalse\t-\t0\t-\n\
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\tfalse\t-\t0\t-\t0\tfalse\n\
                  5\t3\t2\t1\tclaude\tclaude\tworking\tfalse\tfalse\t-\tOpus 5.5\t23\ttrue\tfalse\tfalse\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\ttrue\t4\t2\tcoder\n"
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\ttrue\t4\t2\tcoder\t1\ttrue\n"
         );
     }
 

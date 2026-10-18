@@ -106,6 +106,8 @@ impl Report {
                         parent: pane.parent,
                         subagents: pane.subagents,
                         role: pane.role.clone(),
+                        held_sends: pane.held_sends,
+                        draft: pane.draft,
                     }));
                 }
             }
@@ -150,10 +152,12 @@ pub struct PaneRow {
     pub(crate) parent: Option<u64>,
     pub(crate) subagents: u32,
     pub(crate) role: Option<String>,
+    pub(crate) held_sends: u32,
+    pub(crate) draft: bool,
 }
 
 impl PaneRow {
-    pub const COLUMNS: [&str; 26] = [
+    pub const COLUMNS: [&str; 28] = [
         "pane",
         "tab",
         "workspace",
@@ -180,6 +184,8 @@ impl PaneRow {
         "parent",
         "subagents",
         "role",
+        "held_sends",
+        "draft",
     ];
 }
 
@@ -299,4 +305,6 @@ pub struct PaneInfo {
     pub(crate) parent: Option<u64>,
     pub(crate) subagents: u32,
     pub(crate) role: Option<String>,
+    pub(crate) held_sends: u32,
+    pub(crate) draft: bool,
 }

@@ -66,6 +66,7 @@ impl App {
         let Some(term) = self.term_mut() else { return };
         term.emulator.scroll_to_bottom();
         let bytes = term.emulator.encode_key(key);
+        term.typed_key(key);
         if !bytes.is_empty() && !term.write(&bytes) {
             self.toast = Some(Toast::new(NOT_READING, ui::ToastIcon::Bug));
         }
@@ -404,6 +405,7 @@ impl App {
         }
         if let Some(term) = self.term_mut() {
             term.emulator.scroll_to_bottom();
+            term.typed_paste(text);
             if !term.paste(text) {
                 self.toast = Some(Toast::new(NOT_READING, ui::ToastIcon::Bug));
             }

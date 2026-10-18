@@ -28,7 +28,9 @@ impl App {
             return;
         }
         if ev.kind == MouseEventKind::Down(MouseButton::Left)
-            && (self.press_resume_notice(area, pos) || self.press_scrollback_badge(area, pos))
+            && (self.press_resume_notice(area, pos)
+                || self.press_held_notice(area, pos)
+                || self.press_scrollback_badge(area, pos))
         {
             return;
         }
@@ -97,7 +99,7 @@ impl App {
     }
 
     pub(super) fn forward_mouse(&mut self, ev: MouseEvent, at: Position) {
-        if self.term().is_some_and(|term| self.resume_holds(term.id)) {
+        if self.term().is_some_and(|term| self.resume_holds(term.id) || self.sending(term.id)) {
             return;
         }
         let Some(term) = self.term_mut() else { return };
