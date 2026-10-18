@@ -2,6 +2,16 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.135
+
+- **Settings for scripts and other apps.** `cornercase config` lists every setting of the Settings dialog with its value, default, choices and the note the dialog shows, whether each account and bot is connected (and as whom), refused or not set, and each project's setup and teardown.
+  - `cornercase config set KEY VALUE` changes settings with the dialog's own checks, all or none, and applies them at once as the dialog does: browser access starts or stops, keep awake takes effect, the layout changes.
+  - `config project` sets a project's setup and teardown. `config secret KEY` checks and saves a tracker's token or a bot's, read from standard input; it says which account accepted it, never the token. `config remove KEY` removes one.
+  - Programs that follow the session see `config.revision` grow in `status --follow` when a setting changes. See Scripts and agents → Settings.
+- **Editing config.json applies at once.** The server notices within a second and applies the change, with no restart: browser access, keep awake, the layout, and an open Settings dialog all follow.
+  - A change made in cornercase meanwhile rewrites only the keys it touches, so the rest of your edit stays.
+  - If the file isn't valid JSON, cornercase now keeps the settings it was using, says why, and no longer writes over the file until you fix it (before, the next change saved the defaults over it).
+
 ## 0.12.134
 
 - **Surfaces can send only what changed.** For programs that draw cornercase's terminals with `cornercase surface`: with `--patches`, the first line is complete and the next ones carry only the rows that changed in each pane, plus its cursor, and its modes, scroll position and colours when they change. Output that scrolls arrives as the rows that moved plus the new ones, so an agent streaming a reply costs a few hundred bytes a line instead of the whole tab. Each such line names the `revision` it applies to (`base`).
