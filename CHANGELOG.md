@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.148
+
+- No changes you will notice: a test that failed now and then is fixed.
+
 ## 0.12.147
 
 - **A flow's end lights up once its pull request exists, and shows its checks.** In the Flow panel, `◆ open a pull request` used to turn purple only while the orchestrator rested with its review mark, so it went grey again as soon as the orchestrator kept working, asked you something or got one more change to make, even with the pull request open. Now it turns purple as soon as the run's branch has a pull request (open, a draft or merged), and once the orchestrator has marked its pane for review the run remembers it, also after a restart. A flow that leaves the commits lights from that mark.
