@@ -13,6 +13,7 @@ pub(crate) mod contract;
 mod events;
 mod flow;
 pub(crate) mod issues;
+pub(crate) mod plugins;
 mod search;
 pub(crate) mod start_server;
 mod status;
@@ -39,6 +40,7 @@ pub(crate) use flow::{
     RunInfo,
 };
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
+pub(crate) use plugins::{PluginActions, PluginList, PluginRun};
 pub(crate) use search::{Hit, Matches, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use status::{GroupInfo, KeepAwake, PullRequestInfo};
@@ -160,6 +162,9 @@ pub(crate) enum Command {
     ChangesBase(ChangesBase),
     ChangesViewed(ChangesViewed),
     Usage(Usage),
+    PluginList(PluginList),
+    PluginActions(PluginActions),
+    PluginRun(PluginRun),
 }
 
 impl Command {
@@ -233,6 +238,9 @@ impl Command {
             Self::ChangesBase(_) => 65,
             Self::ChangesViewed(_) => 66,
             Self::Usage(_) => 67,
+            Self::PluginList(_) => 68,
+            Self::PluginActions(_) => 69,
+            Self::PluginRun(_) => 70,
         }]
     }
 
@@ -248,6 +256,7 @@ impl Command {
             | Self::Go(_)
             | Self::UpdateCheck(_)
             | Self::UpdateInstall(_)
+            | Self::PluginList(_)
             | Self::App(_) => {}
             Self::Open(open) => {
                 fields.add("path", open.path.display()).add("focus", open.focus);
@@ -366,11 +375,13 @@ impl Command {
             Self::ChangesBase(base) => base.fields(&mut fields),
             Self::ChangesViewed(viewed) => viewed.fields(&mut fields),
             Self::Usage(usage) => usage.fields(&mut fields),
+            Self::PluginActions(actions) => actions.fields(&mut fields),
+            Self::PluginRun(run) => run.fields(&mut fields),
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 68] = [
+    pub(crate) const NAMES: [&str; 71] = [
         "status",
         "open",
         "new-workspace",
@@ -439,6 +450,9 @@ impl Command {
         "changes-base",
         "changes-viewed",
         "usage",
+        "plugin-list",
+        "plugin-actions",
+        "plugin-run",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

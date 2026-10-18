@@ -205,6 +205,10 @@ mod parsing {
     #[case::an_import_to_nowhere(&["flow", "import", "f.toml", "--to", "other"])]
     #[case::an_export_without_a_name(&["flow", "export"])]
     #[case::a_flow_with_two_tasks(&["flow", "run", "Quick", "--prompt", "x", "--prompt-file", "y"])]
+    #[case::a_plugin_run_without_a_target(&["plugin", "run", "a", "b"])]
+    #[case::a_plugin_run_on_two_targets(&["plugin", "run", "a", "b", "--pane", "1", "--tab", "2"])]
+    #[case::a_plugin_action_context_that_is_a_group(&["plugin", "actions", "--context", "group"])]
+    #[case::a_negative_revision(&["plugin", "run", "a", "b", "--pane", "1", "--revision", "-1"])]
     fn wrong_usage_exits_with_2(#[case] args: &[&str]) {
         assert_eq!(parse(args).expect_err("wrong usage").exit_code(), 2);
     }

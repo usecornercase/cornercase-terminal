@@ -739,6 +739,12 @@ folder of yours instead while you write one.
 A plugin runs as you and can do anything you can, including typing into every terminal. What it asks for is shown \
 before you turn it on, not enforced. A running server picks up changes within a second.
 
+`actions` lists what plugins add to the menus, for a kind of row (--context) or all of them, and `run` runs one on \
+a project, workspace, tab or pane as its menu entry does: in the workspace's folder, with the ids of what you \
+name, stopped after 5 minutes, its output in the plugin's log. Both ask the running server; `run` waits for the \
+action and exits with 1 when it fails. An action listed before the plugins changed is refused (pass the --revision \
+`actions --json` printed, or none for the current one).
+
 Examples:
   cornercase plugin install acme/notes
   cornercase plugin install acme/notes@v1.2.0
@@ -747,6 +753,8 @@ Examples:
   cornercase plugin link ~/code/my-plugin
   cornercase plugin enable my-plugin
   cornercase plugin list
+  cornercase plugin actions --context pane
+  cornercase plugin run acme.notes open --pane 5
   cornercase plugin logs my-plugin --follow
   cornercase plugin disable my-plugin
   cornercase plugin update

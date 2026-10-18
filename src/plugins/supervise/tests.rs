@@ -54,6 +54,10 @@ fn a_service_that_ends_starts_again() {
     let _ = rustix::process::kill_process(rustix::process::Pid::from_raw(first).expect("pid"), Signal::KILL);
     wait_until_within("it starts again", Duration::from_secs(10), || fixture.pids().len() == 2);
     assert!(supervisor.note("acme.notes").is_some());
+    wait_until("the new pid is published", || {
+        let pid = fixture.pids().last().and_then(|pid| u32::try_from(*pid).ok());
+        matches!(supervisor.seen("acme.notes").as_slice(), [(entry, Seen::Running { pid: seen })] if entry == "sync" && Some(*seen) == pid)
+    });
     let log = fs::read_to_string(fixture.places.log("acme.notes")).expect("log");
     assert_eq!(log.matches("service started").count(), 2, "{log}");
     drop((supervisor, fixture.home));
@@ -163,4 +167,19 @@ fn a_spawn_is_skipped_while_removal_holds_the_lock() {
     let key = Key { plugin: "acme.notes".into(), entry: "sync".into() };
     state.spawn(&key, &Spec { plugin, command }, Instant::now());
     assert!(state.running.is_empty() && fixture.pids().is_empty());
+}
+
+#[test]
+fn the_note_names_what_runs_and_what_waits() {
+    let now = Instant::now();
+    let running = [("sync".to_string(), Seen::Running { pid: 1 })];
+    assert_eq!(describe(Kind::Service, &running, now).as_deref(), Some("service sync runs"));
+    let waiting = [("sync".to_string(), Seen::Stopped { until: now + Duration::from_millis(2500) })];
+    assert_eq!(
+        describe(Kind::Window, &waiting, now).as_deref(),
+        Some("window process sync stopped · starting again in 3 s")
+    );
+    let both = [("a".to_string(), Seen::Running { pid: 1 }), ("b".to_string(), Seen::Stopped { until: now })];
+    assert_eq!(describe(Kind::Service, &both, now).as_deref(), Some("service b stopped · starting again in 1 s"));
+    assert_eq!(describe(Kind::Service, &[], now), None);
 }

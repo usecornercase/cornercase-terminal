@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.147
+
+- **Other apps and scripts can list and run plugin actions.** `cornercase plugin actions` lists the entries your plugins add to the row and pane menus, for one kind of row or all of them, and `cornercase plugin run PLUGIN ACTION --pane ID` (or `--tab`, `--workspace`, `--project`) runs one as its menu entry does: in the workspace's folder, with the ids of what you name, stopped after 5 minutes, its output in the plugin's log. It waits for the action, prints how it ended and exits with 1 when it failed. An action listed before the plugins changed is refused rather than run.
+  - Other apps can also read the plugins as Settings › Plugins shows them, including what each service is doing, with the `plugin-list` request. See Scripts and agents → Plugins.
+
 ## 0.12.146
 
 - **Scripts and other apps can read your plan limits.** `cornercase usage` prints what the Usage dialog's Limits tab shows: for Claude Code and Codex, how much of each limit you have used and when it resets, extra usage or credits, and how old the numbers are. Like the tab, it asks the agents on the server's machine, which sends no prompt and costs no tokens, and waits for a probe already on its way rather than asking twice; `--cached` prints the last answer without asking. Nothing is asked between requests.

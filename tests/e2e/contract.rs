@@ -55,6 +55,9 @@ fn contract_describes_the_running_server_and_its_boot() {
         "removal-check",
         "app",
         "usage",
+        "plugin-list",
+        "plugin-actions",
+        "plugin-run",
     ] {
         assert!(operations.iter().any(|op| op["name"] == name && op["available"] == true), "{name}: {contract}");
     }

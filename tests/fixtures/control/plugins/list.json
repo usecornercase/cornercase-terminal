@@ -1,0 +1,59 @@
+{
+  "revision": 3,
+  "problem": null,
+  "plugins": [
+    {
+      "id": "acme.notes",
+      "enabled": true,
+      "state": "on",
+      "error": null,
+      "label": "acme.notes 1.0",
+      "note": "service sync runs",
+      "source": {
+        "kind": "link",
+        "path": "/code/notes"
+      },
+      "log": "/state/plugins/state/acme.notes/plugin.log",
+      "manifest": {
+        "id": "acme.notes",
+        "name": "Notes",
+        "version": "1.0"
+      },
+      "services": [
+        {
+          "id": "sync",
+          "state": "running",
+          "pid": 4242,
+          "restart_in": null
+        },
+        {
+          "id": "watch",
+          "state": "stopped",
+          "pid": null,
+          "restart_in": 3
+        },
+        {
+          "id": "late",
+          "state": "starting",
+          "pid": null,
+          "restart_in": null
+        }
+      ]
+    },
+    {
+      "id": "acme.broken",
+      "enabled": false,
+      "state": "cannot-run",
+      "error": "cannot read the manifest",
+      "label": "acme.broken 1.0",
+      "note": "service sync runs",
+      "source": {
+        "kind": "link",
+        "path": "/code/notes"
+      },
+      "log": "/state/plugins/state/acme.broken/plugin.log",
+      "manifest": null,
+      "services": []
+    }
+  ]
+}

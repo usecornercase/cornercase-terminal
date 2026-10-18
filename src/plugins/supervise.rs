@@ -65,9 +65,33 @@ struct Waiting {
     at: Instant,
 }
 
-pub(crate) type Notes = Arc<Mutex<BTreeMap<String, String>>>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Seen {
+    Running { pid: u32 },
+    Stopped { until: Instant },
+}
+
+pub(crate) type Notes = Arc<Mutex<BTreeMap<String, Vec<(String, Seen)>>>>;
+
+pub(crate) fn restart_in(until: Instant, now: Instant) -> u64 {
+    until.saturating_duration_since(now).as_secs() + 1
+}
+
+fn describe(kind: Kind, seen: &[(String, Seen)], now: Instant) -> Option<String> {
+    let kind = kind.name();
+    let stopped = seen.iter().rev().find_map(|(entry, s)| match s {
+        Seen::Stopped { until } => {
+            Some(format!("{kind} {entry} stopped · starting again in {} s", restart_in(*until, now)))
+        }
+        Seen::Running { .. } => None,
+    });
+    stopped.or_else(|| {
+        seen.iter().find_map(|(entry, s)| matches!(s, Seen::Running { .. }).then(|| format!("{kind} {entry} runs")))
+    })
+}
 
 pub(crate) struct Supervisor {
+    kind: Kind,
     stop: Option<Sender<()>>,
     thread: Option<JoinHandle<()>>,
     notes: Notes,
@@ -100,7 +124,7 @@ impl Supervisor {
             }
             state.stop_all();
         });
-        Self { stop: Some(tx), thread: Some(thread), notes, steps }
+        Self { kind, stop: Some(tx), thread: Some(thread), notes, steps }
     }
 
     #[cfg(test)]
@@ -108,8 +132,12 @@ impl Supervisor {
         self.steps.load(Ordering::SeqCst)
     }
 
+    pub(crate) fn seen(&self, plugin: &str) -> Vec<(String, Seen)> {
+        self.notes.lock().get(plugin).cloned().unwrap_or_default()
+    }
+
     pub(crate) fn note(&self, plugin: &str) -> Option<String> {
-        self.notes.lock().get(plugin).cloned()
+        describe(self.kind, &self.seen(plugin), Instant::now())
     }
 }
 
@@ -168,7 +196,7 @@ impl State {
             }
             self.spawn(key, spec, now);
         }
-        self.publish(now);
+        self.publish();
     }
 
     fn spawn(&mut self, key: &Key, spec: &Spec, now: Instant) {
@@ -258,18 +286,24 @@ impl State {
         self.waiting.insert(key.clone(), Waiting { failures, at: now + wait });
     }
 
-    fn publish(&self, now: Instant) {
-        let mut notes = BTreeMap::new();
-        for key in self.running.keys() {
-            notes.entry(key.plugin.clone()).or_insert_with(|| format!("{} {} runs", self.kind.name(), key.entry));
+    fn publish(&self) {
+        let mut notes: BTreeMap<String, Vec<(String, Seen)>> = BTreeMap::new();
+        for (key, run) in &self.running {
+            notes
+                .entry(key.plugin.clone())
+                .or_default()
+                .push((key.entry.clone(), Seen::Running { pid: run.child.id() }));
         }
         for (key, waiting) in &self.waiting {
-            if self.running.contains_key(key) {
-                continue;
+            if !self.running.contains_key(key) {
+                notes
+                    .entry(key.plugin.clone())
+                    .or_default()
+                    .push((key.entry.clone(), Seen::Stopped { until: waiting.at }));
             }
-            let secs = waiting.at.saturating_duration_since(now).as_secs() + 1;
-            let note = format!("{} {} stopped · starting again in {secs} s", self.kind.name(), key.entry);
-            notes.insert(key.plugin.clone(), note);
+        }
+        for seen in notes.values_mut() {
+            seen.sort_by(|a, b| a.0.cmp(&b.0));
         }
         *self.notes.lock() = notes;
     }

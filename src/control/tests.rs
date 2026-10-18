@@ -116,6 +116,9 @@ fn every_command_is_listed_by_name() {
         Command::ChangesBase(ChangesBase::default()),
         Command::ChangesViewed(ChangesViewed::default()),
         Command::Usage(Usage::default()),
+        Command::PluginList(PluginList::default()),
+        Command::PluginActions(PluginActions::default()),
+        Command::PluginRun(PluginRun { plugin: "a".into(), action: "b".into(), revision: 0, item: Item::Pane(1) }),
     ];
 
     let names: Vec<String> = commands
