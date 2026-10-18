@@ -129,6 +129,8 @@ mod worktrees;
 pub(crate) use event::AppEvent;
 pub(crate) use events::Streamed;
 pub(crate) use images::{Placed, Sight};
+#[cfg(test)]
+pub(crate) use surfaces::FRAME_EVERY;
 pub(crate) use surfaces::Surfaced;
 
 #[derive(Default)]
