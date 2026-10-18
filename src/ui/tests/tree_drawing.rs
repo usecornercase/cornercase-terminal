@@ -23,7 +23,7 @@ fn with_tree() -> View<'static> {
             ProjectShape { group: Some(0), collapsed: true, workspaces: Vec::new() },
         ],
     };
-    let details = Details { model: Some("Opus 5.5".into()), percent: Some(23), memory: None };
+    let details = Details { model: Some("Opus 5.5".into()), percent: Some(23), subagents: 0, memory: None };
     let claude = TabEntry { status: Some(Status::Working), details, ..TabEntry::from("claude") };
     let finished = TabEntry { status: Some(Status::Done), ..TabEntry::from("") };
     let workspaces = vec![

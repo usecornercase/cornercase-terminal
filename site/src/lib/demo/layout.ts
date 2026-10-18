@@ -839,10 +839,11 @@ export const menuButton = (row: Rect, pitch: number): Rect => {
 export interface Details {
   model: string | null;
   percent: number | null;
+  subagents: number;
   memory: number | null;
 }
 
-export const tabLines = (d: Details): number => (d.model !== null || d.percent !== null || d.memory !== null ? 2 : 1);
+export const tabLines = (d: Details): number => (d.model !== null || d.percent !== null || d.subagents > 0 || d.memory !== null ? 2 : 1);
 
 export function centered(cols: number, rows: number, w: number, h: number): Rect {
   return rect(Math.floor((cols - w) / 2), Math.floor((rows - h) / 2), w, h);

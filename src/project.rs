@@ -110,6 +110,10 @@ impl Tab {
         self.panes.iter().filter_map(|t| t.memory.bytes()).reduce(u64::saturating_add)
     }
 
+    pub(crate) fn subagents(&self) -> usize {
+        self.panes.iter().map(|t| t.context.subagents()).sum()
+    }
+
     pub(crate) fn focus(&mut self, id: u64) {
         if let Some(i) = self.panes.iter().position(|t| t.id == id) {
             self.active = i;

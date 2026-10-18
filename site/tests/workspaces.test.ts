@@ -43,3 +43,19 @@ test('the arrow expands a collapsed workspace again', () => {
   assert.equal(project.workspaces[0].collapsed, false);
   app.destroy();
 });
+
+test('A tab shows how many subagents its agent still runs on its second line', () => {
+  const app = new App();
+  app.virtual = true;
+  app.resize(140, 40);
+  world(app, { scripted: true });
+  const pane = app.projects[0].workspaces[0].tabs[0].panes[0];
+  const screen = () => app.render().grid.cells.map((c) => c.ch).join('');
+  assert.ok(!screen().includes('subagent'));
+  pane.subagents = 1;
+  assert.ok(screen().includes('1 subagent'));
+  assert.ok(!screen().includes('1 subagents'));
+  pane.subagents = 2;
+  assert.ok(screen().includes('2 subagents'));
+  app.destroy();
+});

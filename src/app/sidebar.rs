@@ -101,7 +101,7 @@ impl App {
                 agent: term.agent.agent().unwrap_or_default().to_string(),
                 project: self.project_label(project),
                 workspace: (project.workspaces.len() > 1).then(|| workspace.label()),
-                details: self.details(context, None),
+                details: self.details(context, None, term.context.subagents()),
                 active: focus.tab == Some(tab.id) && tab.active == i,
                 depth: node.depth,
                 last: node.last,

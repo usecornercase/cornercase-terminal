@@ -35,7 +35,11 @@ impl App {
         ui::tab_bar::TabBar {
             tabs: self.bar_tabs(),
             active: workspace.filter(|w| !w.tabs.is_empty()).map(|w| w.active),
-            details: self.details(pane.and_then(|t| t.context.context()), pane.and_then(|t| t.memory.bytes())),
+            details: self.details(
+                pane.and_then(|t| t.context.context()),
+                pane.and_then(|t| t.memory.bytes()),
+                pane.map_or(0, |t| t.context.subagents()),
+            ),
             scroll: self.scroll.tab_bar,
         }
     }

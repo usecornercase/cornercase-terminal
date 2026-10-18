@@ -652,6 +652,7 @@ export class Painter {
       const severity = severityOf(d.percent);
       fixed.push(seg(`${d.percent}%`, severity === 'normal' ? DARK : { fg: SEVERITY[severity] }));
     }
+    if (d.subagents > 0) fixed.push(seg(`${d.subagents} subagent${d.subagents === 1 ? '' : 's'}`, DARK));
     if (d.memory !== null) fixed.push(seg(memorySize(d.memory), DARK));
     const fixedWidth = width([...lead, ...fixed]) + (lead.length + fixed.length) * CONTEXT_SEPARATOR.length;
     const shift = Math.max(0, Math.min(indent, free - Math.max(0, fixedWidth - CONTEXT_SEPARATOR.length)));

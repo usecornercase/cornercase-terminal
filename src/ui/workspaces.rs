@@ -226,12 +226,13 @@ impl TabEntry {
 pub struct Details {
     pub(crate) model: Option<String>,
     pub(crate) percent: Option<u16>,
+    pub(crate) subagents: usize,
     pub(crate) memory: Option<u64>,
 }
 
 impl Details {
     pub fn lines(&self) -> u16 {
-        1 + u16::from(self.model.is_some() || self.percent.is_some() || self.memory.is_some())
+        1 + u16::from(self.model.is_some() || self.percent.is_some() || self.subagents > 0 || self.memory.is_some())
     }
 }
 
@@ -483,9 +484,10 @@ pub(super) fn draw_details(
         };
         Span::styled(format!("{used}%"), level)
     });
+    let subagents = (details.subagents > 0).then(|| Span::styled(activity::subagents_text(details.subagents), dim));
     let memory = details.memory.map(|bytes| Span::styled(memory_size(bytes), dim));
     let lead = agent.map(|agent| Span::styled(agent.to_string(), dim));
-    let fixed: Vec<Span> = percent.into_iter().chain(memory).collect();
+    let fixed: Vec<Span> = percent.into_iter().chain(subagents).chain(memory).collect();
     let separator = CONTEXT_SEPARATOR.chars().count();
     let fixed_width = lead.iter().chain(&fixed).map(|s| s.width() + separator).sum::<usize>();
     let free = usize::from(r.width).saturating_sub(reserved + 1);

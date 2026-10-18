@@ -1,7 +1,7 @@
 use super::*;
 
 fn with_bar() -> View<'static> {
-    let details = Details { model: Some("Opus 5.5".into()), percent: Some(15), memory: None };
+    let details = Details { model: Some("Opus 5.5".into()), percent: Some(15), subagents: 0, memory: None };
     let claude = TabEntry { status: Some(Status::Working), details: details.clone(), ..TabEntry::from("claude") };
     let tabs = vec![claude, TabEntry::from("zsh")];
     View {

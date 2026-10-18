@@ -85,6 +85,7 @@ import {
   tabContext,
   tabLabel,
   tabMemory,
+  tabSubagents,
   tabStatus,
   watchPane,
   workspaceLabel,
@@ -773,7 +774,7 @@ export class App {
                 agent: pane.agent ?? '',
                 project: projectLabel(p),
                 workspace: p.workspaces.length > 1 ? workspaceLabel(w) : null,
-                details: { model: c.model ? (pane.context?.model ?? null) : null, percent: c.context ? (pane.context?.percent ?? null) : null, memory: null },
+                details: { model: c.model ? (pane.context?.model ?? null) : null, percent: c.context ? (pane.context?.percent ?? null) : null, subagents: pane.subagents ?? 0, memory: null },
                 active: t === focused && t.active === pane.id,
               },
             ];
@@ -808,6 +809,7 @@ export class App {
     return {
       model: c.model ? (context?.model ?? null) : null,
       percent: c.context ? (context?.percent ?? null) : null,
+      subagents: tabSubagents(t),
       memory: c.memory ? tabMemory(t) : null,
     };
   }
@@ -846,6 +848,7 @@ export class App {
     return {
       model: c.model ? (pane?.context?.model ?? null) : null,
       percent: c.context ? (pane?.context?.percent ?? null) : null,
+      subagents: pane?.subagents ?? 0,
       memory: c.memory ? (pane?.memory ?? null) : null,
     };
   }

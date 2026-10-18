@@ -19,13 +19,14 @@ impl App {
     }
 
     pub(super) fn tab_details(&self, tab: &Tab) -> ui::Details {
-        self.details(tab.context(), tab.memory())
+        self.details(tab.context(), tab.memory(), tab.subagents())
     }
 
-    pub(super) fn details(&self, context: Option<&Context>, memory: Option<u64>) -> ui::Details {
+    pub(super) fn details(&self, context: Option<&Context>, memory: Option<u64>, subagents: usize) -> ui::Details {
         ui::Details {
             model: context.filter(|_| self.config.model).map(|c| c.model.clone()),
             percent: context.and_then(|c| c.percent).filter(|_| self.config.context),
+            subagents,
             memory: memory.filter(|_| self.config.memory),
         }
     }

@@ -1,7 +1,7 @@
 use super::*;
 
 fn opus(percent: u16) -> Details {
-    Details { model: Some("Opus 5.5".into()), percent: Some(percent), memory: None }
+    Details { model: Some("Opus 5.5".into()), percent: Some(percent), subagents: 0, memory: None }
 }
 
 fn with_details(details: Details) -> View<'static> {
@@ -37,7 +37,7 @@ fn renders_the_model_and_the_context_under_the_tab() {
 }
 
 fn agent(name: &str, model: &str, percent: Option<u16>) -> View<'static> {
-    let mut view = with_details(Details { model: Some(model.into()), percent, memory: None });
+    let mut view = with_details(Details { model: Some(model.into()), percent, subagents: 0, memory: None });
     let tab = &mut view.workspaces[0].tabs[0];
     tab.name = name.into();
     tab.status = None;
@@ -126,6 +126,9 @@ fn a_narrow_column_cuts_the_model_first(#[case] workspaces: u16, #[case] memory:
 #[case::the_memory(Details { memory: Some(300 * MB), ..Details::default() }, "▌ │   300 MB")]
 #[case::the_model_and_the_memory(Details { memory: Some(GB * 12 / 10), ..codex_model() }, "▌ │   gpt-5.4 · 1.2 GB")]
 #[case::the_context_and_the_memory(Details { model: None, memory: Some(300 * MB), ..opus(17) }, "▌ │   17% · 300 MB")]
+#[case::one_subagent(Details { subagents: 1, ..Details::default() }, "▌ │   1 subagent")]
+#[case::the_context_and_the_subagents(Details { subagents: 2, ..opus(17) }, "▌ │   17% · 2 subagents")]
+#[case::the_subagents_and_the_memory(Details { subagents: 2, memory: Some(300 * MB), ..Details::default() }, "▌ │ 2 subagents · 300 MB")]
 fn each_part_shows_without_the_others(#[case] details: Details, #[case] expected: &str) {
     let v = with_details(details);
     let r = row(&v, AREA, WorkspaceRow::Tab(0, 0));
