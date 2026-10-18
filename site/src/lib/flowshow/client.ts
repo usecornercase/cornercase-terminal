@@ -158,7 +158,6 @@ export function mount(root: HTMLElement): void {
   toggle?.addEventListener('click', () => {
     paused = !paused;
     root.toggleAttribute('data-paused', paused);
-    toggle.setAttribute('aria-pressed', String(paused));
     toggle.textContent = (paused ? toggle.dataset.play : toggle.dataset.pause) ?? '';
     if (paused) stop();
     else run();

@@ -26,7 +26,7 @@ const glyphs = ['⇄', '∥', '◐', '◆'];
         <div class="window-bar">
           <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
           <span class="window-title">Flow · web-shop › issue-482-returns-page-crashes</span>
-          <button type="button" class="tui toggle" data-toggle aria-pressed="false" data-pause={t.pause} data-play={t.play}>{t.pause}</button>
+          <button type="button" class="tui toggle" data-toggle data-pause={t.pause} data-play={t.play}>{t.pause}</button>
         </div>
         <div class="stage">
           <Fragment set:html={graphSvg('wide')} />
