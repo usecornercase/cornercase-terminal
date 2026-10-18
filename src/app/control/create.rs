@@ -14,12 +14,18 @@ use crate::git;
 use crate::project::Hierarchy;
 use crate::project::split::Dir;
 
+pub(super) struct Within {
+    pub(super) timeout: Option<(Instant, f64)>,
+    pub(super) named: Option<String>,
+}
+
 pub(super) struct Then {
     start: Option<(launch::Spec, Option<String>)>,
     wait: Option<Condition>,
     focus: bool,
     view: Option<u64>,
     parent: Option<u64>,
+    named: Option<String>,
 }
 
 const NO_AGENT: &str = "say which agent to start, such as `cornercase start claude`: settings → agents is on auto \
@@ -60,7 +66,7 @@ impl App {
             if let Some(open) = self.workspace_on(p, &name) {
                 return Err(format!("branch {name} is already open in workspace {open}").into());
             }
-            let then = Then { start: None, wait: None, focus: new.focus, view: asker.view, parent: None };
+            let then = Then { start: None, wait: None, focus: new.focus, view: asker.view, parent: None, named: None };
             self.create_worktree(client, p, &name, then, None)?;
             return Ok(None);
         }
@@ -142,6 +148,29 @@ impl App {
     ) -> Handled {
         let area = sized(area)?;
         let timeout = deadline(start.timeout, now)?;
+        if start.issue.is_some() {
+            if start.wait {
+                Condition::of(start.until.clone())?;
+            }
+            return self.start_issue_request(client, asker, start, timeout);
+        }
+        if start.source.is_some() {
+            return Err(super::malformed("--source needs --issue"));
+        }
+        self.start_within(client, asker, start, Some(area), now, Within { timeout, named: None })
+    }
+
+    pub(super) fn start_within(
+        &mut self,
+        client: u64,
+        asker: Asker,
+        start: control::Start,
+        area: Option<Rect>,
+        now: Instant,
+        within: Within,
+    ) -> Handled {
+        let Within { timeout, named } = within;
+        let area = sized(area)?;
         let wait = start.wait.then(|| Condition::of(start.until)).transpose()?;
         let queued = self.queued_spec(client);
         let kind =
@@ -163,6 +192,9 @@ impl App {
                 None => self.here(asker).project.ok_or(NO_PROJECT)?,
             };
             let open = self.workspace_on(p, branch).and_then(|id| self.projects.workspace_index(id));
+            if let (Some((p, w)), Some(name)) = (open, &named) {
+                self.name_workspace(p, w, name);
+            }
             let Some(found) = open else {
                 let then = Then {
                     start: Some((spec, name)),
@@ -170,6 +202,7 @@ impl App {
                     focus: start.focus,
                     view: asker.view,
                     parent: asker.caller,
+                    named,
                 };
                 self.create_worktree(client, p, branch, then, timeout)?;
                 return Ok(None);
@@ -207,6 +240,13 @@ impl App {
             Stage::launch(wait),
             timeout,
         ))
+    }
+
+    fn name_workspace(&mut self, p: usize, w: usize, name: &str) {
+        let workspace = &mut self.projects[p].workspaces[w];
+        if workspace.name.is_none() {
+            workspace.name = Some(name.to_string());
+        }
     }
 
     pub(in crate::app) fn adopt(&mut self, pane: u64, parent: Option<u64>) {
@@ -283,6 +323,9 @@ impl App {
         let path = path.canonicalize().unwrap_or(path);
         let p = self.projects.project_index(project).ok_or_else(|| format!("project {project} closed"))?;
         let w = self.worktree_workspace(p, path);
+        if let Some(name) = &then.named {
+            self.name_workspace(p, w, name);
+        }
         let launch = match then.start {
             Some((spec, name)) => {
                 let t = self.push_setup_tab(p, w, area, name).map_err(|e| e.to_string())?;

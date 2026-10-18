@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::args::{FlowAction, FlowImportArgs, ImportTo};
 use super::{print_json, print_out, read_prompt};
-use crate::client::{answer, ask, confirm};
+use crate::client::{self, answer, ask, confirm};
 use crate::control::{self, Exported, FlowInfo, Flows, Imported, RunInfo};
 use crate::error::{Error, Result};
 use crate::flows::Worktree;
@@ -21,11 +21,16 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
             print_out(&listing(&answer(value)?))
         }
         FlowAction::Run(run) => {
+            if run.issue.key.is_some() {
+                client::use_issues()?;
+            }
             let request = control::FlowRun {
                 name: run.name,
                 prompt: read_prompt(run.prompt, run.prompt_file)?.unwrap_or_default(),
                 worktree: run.worktree,
                 project: run.project,
+                issue: run.issue.key,
+                source: run.issue.source,
                 focus: run.create.focus,
             };
             let value = ask("flow run", control::Command::FlowRun(request))?;

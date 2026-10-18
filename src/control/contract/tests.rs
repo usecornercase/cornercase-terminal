@@ -35,7 +35,8 @@ mod describing {
         assert!(descriptor.features.iter().any(|feature| feature == "theme"));
         assert!(descriptor.features.iter().any(|feature| feature == "notices"));
         assert!(descriptor.features.iter().any(|feature| feature == "close-unlock"));
-        assert_eq!(descriptor.features.last().map(String::as_str), Some("sound"));
+        assert!(descriptor.features.iter().any(|feature| feature == "issues"));
+        assert_eq!(descriptor.features.last().map(String::as_str), Some("issues"));
     }
 
     #[test]

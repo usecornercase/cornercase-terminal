@@ -47,7 +47,7 @@ fn fields_an_older_command_lacks_take_their_defaults() {
 
 #[test]
 fn every_command_is_listed_by_name() {
-    let commands = [
+    let commands = vec![
         Command::Status(Status::default()),
         Command::Open(Open::default()),
         Command::NewWorkspace(NewWorkspace::default()),
@@ -102,6 +102,10 @@ fn every_command_is_listed_by_name() {
         Command::GroupStyle(GroupStyle::default()),
         Command::GroupDelete(GroupDelete::default()),
         Command::RemovalCheck(RemovalCheck::default()),
+        Command::IssueSources(IssueSources::default()),
+        Command::IssueList(IssueList::default()),
+        Command::IssueRead(IssueRead::default()),
+        Command::IssuePeople(IssuePeople::default()),
     ];
 
     let names: Vec<String> = commands

@@ -5,6 +5,7 @@ mod contract;
 mod create;
 mod flow;
 mod idle_restart;
+mod issues;
 mod queue;
 mod search;
 mod status;
@@ -34,6 +35,7 @@ use crate::project::search::Goto;
 use crate::project::{Hierarchy, Phase, Tab, Workspace};
 use crate::term::Term;
 use create::Then;
+use issues::Asking;
 use wait::{Condition, Confirm, Watch};
 
 const STARTS_WITHIN: Duration = Duration::from_secs(10);
@@ -105,6 +107,7 @@ enum Stage {
     Reading,
     Setup(u64),
     Restart { caller: Option<u64> },
+    Issue(Box<Asking>),
 }
 
 impl Stage {
@@ -290,6 +293,7 @@ impl App {
                         | Stage::Reading
                         | Stage::Restart { .. }
                         | Stage::Check
+                        | Stage::Issue(_)
                 )
         });
     }
@@ -433,6 +437,10 @@ impl App {
             Command::GroupStyle(style) => self.group_style_request(&style),
             Command::GroupDelete(delete) => self.group_delete_request(&delete),
             Command::RemovalCheck(check) => self.removal_check_request(client, &check),
+            Command::IssueSources(sources) => self.issue_sources_request(asker, &sources),
+            Command::IssueList(list) => self.issue_list_request(client, asker, &list),
+            Command::IssueRead(read) => self.issue_read_request(client, asker, &read),
+            Command::IssuePeople(people) => self.issue_people_request(client, asker, &people),
             Command::LastMessage(last) => self.last_message_request(client, asker, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),

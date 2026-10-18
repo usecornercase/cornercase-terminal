@@ -20,16 +20,16 @@ fn shortcut_with_token(s: &mut Setup) -> FakeHttp {
     server
 }
 
-const LIST: &str = r#"[
+pub(super) const LIST: &str = r#"[
             {"number":7,"title":"Fix the login","state":"OPEN","labels":[{"name":"bug"}],"author":{"login":"ana"},
              "updatedAt":"2026-09-19T12:00:00Z","url":"https://github.com/acme/shop/issues/7"},
             {"number":3,"title":"Dark mode","state":"OPEN","labels":[],"author":{"login":"luis"},
              "updatedAt":"2026-09-01T12:00:00Z","url":"https://github.com/acme/shop/issues/3"}
         ]"#;
-const VIEW: &str = r#"{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"assignees":[],
+pub(super) const VIEW: &str = r#"{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"assignees":[],
             "author":{"login":"ana"},"updatedAt":"","url":"u","body":"It **breaks**.",
             "comments":[{"author":{"login":"bo"},"body":"Same here","createdAt":""}]}"#;
-const STORIES: &str = r#"{"data":[{"id":482,"name":"Returns page crashes","app_url":"https://app.shortcut.com/acme/story/482",
+pub(super) const STORIES: &str = r#"{"data":[{"id":482,"name":"Returns page crashes","app_url":"https://app.shortcut.com/acme/story/482",
             "updated_at":"2026-09-30T00:00:00Z"}],"next":null}"#;
 
 pub(super) const FAKE_AGENT: &str = "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\n\
@@ -39,7 +39,7 @@ pub(super) const FAKE_AGENT: &str = "#!/bin/sh\nprintf 'Do you trust the files i
 pub(super) struct Setup {
     pub(super) app: App,
     pub(super) rx: Receiver<AppEvent>,
-    worktrees: TempDir,
+    pub(super) worktrees: TempDir,
     pub(super) config: TempDir,
     _dir: TempDir,
 }
@@ -64,11 +64,11 @@ pub(super) fn setup(git: bool, gh_script: &str) -> Setup {
     Setup { app, rx, worktrees, config, _dir: dir }
 }
 
-fn listing() -> Setup {
+pub(super) fn listing() -> Setup {
     setup(true, &format!("if [ \"$2\" = view ]; then cat <<'EOF'\n{VIEW}\nEOF\nelse cat <<'EOF'\n{LIST}\nEOF\nfi"))
 }
 
-fn shortcut(s: &mut Setup, routes: Vec<(&'static str, u16, &'static str)>) -> FakeHttp {
+pub(super) fn shortcut(s: &mut Setup, routes: Vec<(&'static str, u16, &'static str)>) -> FakeHttp {
     let mut all = vec![
         ("GET /api/v3/member", 200, crate::test_util::SHORTCUT_MEMBER),
         ("GET /api/v3/members", 200, "[]"),
@@ -116,7 +116,7 @@ fn start(s: &mut Setup) {
     pump_until(&mut s.app, &s.rx, "the issue workspace opens", |a| a.projects[0].workspaces.len() == 2);
 }
 
-fn checkout(s: &Setup) -> PathBuf {
+pub(super) fn checkout(s: &Setup) -> PathBuf {
     let repo = s.app.projects[0].path.file_name().expect("repo name").to_owned();
     s.worktrees.path().join(repo).join("issue-7-fix-the-login")
 }

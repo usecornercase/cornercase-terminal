@@ -1,0 +1,37 @@
+{
+  "project": 1,
+  "issues": [
+    {
+      "source": "github",
+      "key": "#7",
+      "number": 7,
+      "title": "Fix the login",
+      "url": "https://example.com/#7",
+      "state": "OPEN",
+      "closed": false,
+      "labels": [
+        "bug"
+      ],
+      "assignees": [
+        "ana"
+      ],
+      "author": "bo",
+      "updated_at": "2026-09-19T12:00:00Z",
+      "branch": "issue-7-fix-the-login"
+    }
+  ],
+  "sources": [
+    {
+      "source": "github",
+      "count": 1,
+      "cached": false
+    },
+    {
+      "source": "linear",
+      "count": 0,
+      "cached": true,
+      "account": "@ana in acme",
+      "error": "Linear answered 429"
+    }
+  ]
+}

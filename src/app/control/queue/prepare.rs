@@ -2,8 +2,8 @@ use crate::agents;
 use crate::app::App;
 use crate::control::QueueAdd;
 use crate::git;
-use crate::issues::locate::{self as issue, Locator};
-use crate::issues::{Client, Source, gitlab};
+use crate::issues::Client;
+use crate::issues::locate::Locator;
 use crate::project::Hierarchy;
 use crate::queue::{Entry, Place, Task};
 
@@ -11,29 +11,8 @@ impl App {
     pub(super) fn queue_issue(&self, project: u64, add: &QueueAdd) -> Result<Option<(Client, Locator)>, String> {
         add.issue
             .as_ref()
-            .map(|text| {
-                let locator = issue::locator(text, add.source.as_deref(), &self.issue_sources(project))
-                    .map_err(|error| error.to_string())?;
-                let source = locator.source;
-                let api = self.client(source, project).ok_or_else(|| format!("{} is not connected", source.name()))?;
-                Ok((api, locator))
-            })
+            .map(|text| self.locate_issue(project, text, add.source.as_deref()).map_err(String::from))
             .transpose()
-    }
-
-    fn issue_sources(&self, project: u64) -> Vec<Source> {
-        let mut sources: Vec<_> = Source::REMOTE
-            .into_iter()
-            .filter(|source| !source.in_repository() && self.client(*source, project).is_some())
-            .collect();
-        let path = self.projects.project_index(project).map(|p| self.projects[p].path.clone()).unwrap_or_default();
-        let server = gitlab::server(&self.config.gitlab_url);
-        if self.client(Source::Gitlab, project).is_some() && gitlab::has_project(&server, &git::remote_urls(&path)) {
-            sources.push(Source::Gitlab);
-        } else if git::branch(&path).is_some() {
-            sources.push(Source::Github);
-        }
-        sources
     }
 
     pub(super) fn queue_task(

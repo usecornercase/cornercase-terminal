@@ -10,6 +10,7 @@ pub(crate) mod config;
 pub(crate) mod contract;
 mod events;
 mod flow;
+pub(crate) mod issues;
 mod search;
 pub(crate) mod start_server;
 mod status;
@@ -30,6 +31,7 @@ pub(crate) use flow::{
     BrokenFlow, Exported, FlowExport, FlowImport, FlowInfo, FlowList, FlowRun, Flows, Imported, MemberInfo, RoleInfo,
     RunInfo,
 };
+pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use search::{Hit, Matches, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use status::{GroupInfo, KeepAwake, PullRequestInfo};
@@ -136,6 +138,10 @@ pub(crate) enum Command {
     GroupStyle(GroupStyle),
     GroupDelete(GroupDelete),
     RemovalCheck(RemovalCheck),
+    IssueSources(IssueSources),
+    IssueList(IssueList),
+    IssueRead(IssueRead),
+    IssuePeople(IssuePeople),
 }
 
 impl Command {
@@ -195,6 +201,10 @@ impl Command {
             Self::GroupStyle(_) => 51,
             Self::GroupDelete(_) => 52,
             Self::RemovalCheck(_) => 53,
+            Self::IssueSources(_) => 54,
+            Self::IssueList(_) => 55,
+            Self::IssueRead(_) => 56,
+            Self::IssuePeople(_) => 57,
         }]
     }
 
@@ -225,6 +235,7 @@ impl Command {
                 fields.maybe("worktree", start.worktree.as_ref());
                 fields.maybe("project", start.project);
                 fields.maybe("workspace", start.workspace).add("prompt", start.prompt.is_some());
+                fields.add("issue", start.issue.is_some()).maybe("source", start.source.as_ref());
                 fields.add("wait", start.wait).maybe("until", start.wait.then(|| start.until.name()));
                 fields.maybe("timeout", start.timeout).add("focus", start.focus);
             }
@@ -309,11 +320,15 @@ impl Command {
             Self::RemovalCheck(check) => {
                 fields.maybe("workspace", check.workspace);
             }
+            Self::IssueSources(sources) => sources.fields(&mut fields),
+            Self::IssueList(list) => list.fields(&mut fields),
+            Self::IssueRead(read) => read.fields(&mut fields),
+            Self::IssuePeople(people) => people.fields(&mut fields),
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 54] = [
+    pub(crate) const NAMES: [&str; 58] = [
         "status",
         "open",
         "new-workspace",
@@ -368,6 +383,10 @@ impl Command {
         "group-style",
         "group-delete",
         "removal-check",
+        "issue-sources",
+        "issue-list",
+        "issue-read",
+        "issue-people",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
@@ -456,6 +475,8 @@ pub(crate) struct Start {
     pub(crate) workspace: Option<u64>,
     pub(crate) name: Option<String>,
     pub(crate) prompt: Option<String>,
+    pub(crate) issue: Option<String>,
+    pub(crate) source: Option<String>,
     pub(crate) wait: bool,
     pub(crate) until: Until,
     pub(crate) timeout: Option<f64>,

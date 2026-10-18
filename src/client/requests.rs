@@ -35,6 +35,10 @@ pub(crate) fn use_close_unlock() -> Result<()> {
     require("close-unlock", "cannot unlock a worktree to remove it")
 }
 
+pub(crate) fn use_issues() -> Result<()> {
+    require("issues", "cannot start work from an issue")
+}
+
 fn require(feature: &str, lacks: &str) -> Result<()> {
     let lacking = || {
         Error::Control(format!(

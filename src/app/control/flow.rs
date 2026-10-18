@@ -117,6 +117,12 @@ impl App {
         area: Option<Rect>,
     ) -> Handled {
         let area = sized(area)?;
+        if run.issue.is_some() {
+            return self.flow_issue_request(client, caller, run);
+        }
+        if run.source.is_some() {
+            return Err(super::malformed("--source needs --issue"));
+        }
         let p = match run.project {
             Some(id) => self.projects.project_index(id).ok_or_else(|| none("project", id))?,
             None => self.here(caller).project.ok_or(NO_PROJECT)?,
@@ -319,7 +325,7 @@ fn origin_name(origin: &Origin) -> &'static str {
     }
 }
 
-fn pick(listing: &Listing, name: &str) -> Result<(Flow, Option<String>), String> {
+pub(super) fn pick(listing: &Listing, name: &str) -> Result<(Flow, Option<String>), String> {
     let (saved, note) = lookup(listing, name)?;
     let note = [note, risks(&saved.flow, &saved.origin)].into_iter().flatten().collect::<Vec<_>>();
     Ok((saved.flow, (!note.is_empty()).then(|| note.join(" "))))

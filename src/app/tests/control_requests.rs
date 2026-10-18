@@ -29,6 +29,7 @@ fn ask(app: &mut App, caller: Option<u64>, command: Command) {
     request(app, caller, command, Some(AREA));
 }
 
+#[derive(Debug)]
 struct Refused {
     code: String,
     message: String,
@@ -43,8 +44,11 @@ fn call_as(app: &mut App, command: &str, args: &Value, boot: Option<&str>) -> st
     app.request(CLIENT, &text, Some(AREA), Instant::now());
     let mut answers = app.take_answers();
     assert_eq!(answers.len(), 1, "an answer at once");
-    let (_, text) = answers.remove(0);
-    let mut reply: Value = serde_json::from_str(&text).expect("a reply");
+    reply_of(&answers.remove(0).1)
+}
+
+fn reply_of(text: &str) -> std::result::Result<Value, Refused> {
+    let mut reply: Value = serde_json::from_str(text).expect("a reply");
     match reply["error"].take() {
         Value::Null => Ok(reply["ok"].take()),
         error => Err(Refused {
@@ -52,6 +56,42 @@ fn call_as(app: &mut App, command: &str, args: &Value, boot: Option<&str>) -> st
             message: error["message"].as_str().unwrap_or_default().to_string(),
         }),
     }
+}
+
+fn send_waiting(
+    app: &mut App,
+    rx: &Receiver<AppEvent>,
+    caller: Option<u64>,
+    command: &str,
+    args: &Value,
+) -> Vec<(u64, String)> {
+    let server = caller.map(|_| wire::server_token());
+    let text = json!({"contract": 1, "caller": caller, "server": server, "command": command, "args": args}).to_string();
+    app.request(CLIENT, &text, Some(AREA), Instant::now());
+    let mut got = Vec::new();
+    wait_until("the answer", || {
+        drain(app, rx);
+        app.refresh(Instant::now());
+        got.extend(app.take_answers());
+        !got.is_empty()
+    });
+    got
+}
+
+fn asked(app: &mut App, rx: &Receiver<AppEvent>, command: &str, args: &Value) -> std::result::Result<Value, Refused> {
+    asked_by(app, rx, None, command, args)
+}
+
+fn asked_by(
+    app: &mut App,
+    rx: &Receiver<AppEvent>,
+    caller: Option<u64>,
+    command: &str,
+    args: &Value,
+) -> std::result::Result<Value, Refused> {
+    let mut answers = send_waiting(app, rx, caller, command, args);
+    assert_eq!(answers.len(), 1);
+    reply_of(&answers.remove(0).1)
 }
 
 fn ok(app: &mut App, command: &str, args: &Value) -> Value {
@@ -461,6 +501,7 @@ mod flows;
 mod gemini;
 mod grok;
 mod groups;
+mod issues;
 mod one_folder;
 mod ordering;
 mod pane_moves;

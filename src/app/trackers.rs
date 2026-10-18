@@ -4,13 +4,16 @@ use std::path::PathBuf;
 use super::App;
 use super::event::AppEvent;
 use super::issues_dialog::IssueEvent;
-use crate::error::Error;
+use crate::control::contract::{Code, Refusal};
+use crate::error::{Error, Result};
 use crate::git;
 use crate::issues::browser::{Place, Tab};
 use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
+use crate::issues::locate::{self, Locator};
 use crate::issues::secrets;
 use crate::issues::{
-    Account, Client, People, Person, Query, Secret, Source, asana, gitlab, jira, linear, plane, shortcut,
+    Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, asana, gitlab, jira, linear, plane,
+    shortcut,
 };
 use crate::log::{Job, Level};
 use crate::project::Hierarchy;
@@ -20,6 +23,7 @@ pub(super) struct IssueConnections {
     pub(super) closed: bool,
     pub(super) people: People,
     pub(super) people_cache: HashMap<(Source, Option<u64>), Vec<Person>>,
+    pub(super) failures: HashMap<(Source, Option<u64>), String>,
     pub(super) accounts: HashMap<Source, Account>,
     pub(super) epochs: HashMap<Source, u64>,
     pub(super) tab: Option<Tab>,
@@ -35,6 +39,7 @@ impl IssueConnections {
             closed: false,
             people: People::default(),
             people_cache: HashMap::new(),
+            failures: HashMap::new(),
             accounts: HashMap::new(),
             epochs: HashMap::new(),
             tab: None,
@@ -141,27 +146,65 @@ impl App {
         }
     }
 
-    pub(super) fn places(&self) -> (Vec<Place>, usize) {
+    pub(super) fn places(&self, project: Option<usize>, workspace: Option<usize>) -> (Vec<Place>, Option<usize>) {
         let mut places = Vec::new();
-        let mut here = 0;
-        for (p, project) in self.projects.iter().enumerate().filter(|(_, p)| !p.closing) {
-            let name = self.project_label(project);
-            if git::is_repo_root(&project.path) {
-                if p == self.active {
-                    here = places.len();
+        let mut here = None;
+        for (p, open) in self.projects.iter().enumerate().filter(|(_, p)| !p.closing) {
+            let name = self.project_label(open);
+            if git::is_repo_root(&open.path) {
+                if project == Some(p) {
+                    here = Some(places.len());
                 }
-                places.push(Place { project: project.id, workspace: None, label: name, worktree: true });
+                places.push(Place { project: open.id, workspace: None, label: name, worktree: true });
                 continue;
             }
-            for (w, workspace) in project.workspaces.iter().enumerate().filter(|(_, w)| w.open()) {
-                if p == self.active && w == project.active {
-                    here = places.len();
+            for (w, found) in open.workspaces.iter().enumerate().filter(|(_, w)| w.open()) {
+                if project == Some(p) && workspace == Some(w) {
+                    here = Some(places.len());
                 }
-                let label = format!("{name} › {}", workspace.label());
-                places.push(Place { project: project.id, workspace: Some(workspace.id), label, worktree: false });
+                let label = format!("{name} › {}", found.label());
+                places.push(Place { project: open.id, workspace: Some(found.id), label, worktree: false });
             }
         }
         (places, here)
+    }
+
+    pub(in crate::app) fn issue_sources(&self, project: u64) -> Vec<Source> {
+        let mut sources: Vec<_> = Source::REMOTE
+            .into_iter()
+            .filter(|source| !source.in_repository() && self.client(*source, project).is_some())
+            .collect();
+        let path = self.projects.project_index(project).map(|p| self.projects[p].path.clone()).unwrap_or_default();
+        let server = gitlab::server(&self.config.gitlab_url);
+        if self.client(Source::Gitlab, project).is_some() && gitlab::has_project(&server, &git::remote_urls(&path)) {
+            sources.push(Source::Gitlab);
+        } else if git::branch(&path).is_some() {
+            sources.push(Source::Github);
+        }
+        sources
+    }
+
+    pub(in crate::app) fn locate_issue(
+        &self,
+        project: u64,
+        text: &str,
+        source: Option<&str>,
+    ) -> std::result::Result<(Client, Locator), Refusal> {
+        let locator = locate::locator(text, source, &self.issue_sources(project))
+            .map_err(|error| Refusal::new(Code::Malformed, error.to_string()))?;
+        let name = locator.source.name();
+        let client = self
+            .client(locator.source, project)
+            .ok_or_else(|| Refusal::new(Code::Conflict, format!("{name} is not connected")))?;
+        Ok((client, locator))
+    }
+
+    pub(super) fn note_list(&mut self, source: Source, project: u64, result: &Result<Listed>) {
+        let key = (source, source.in_repository().then_some(project));
+        match result {
+            Ok(_) => drop(self.issues.failures.remove(&key)),
+            Err(error) => drop(self.issues.failures.insert(key, error.to_string())),
+        }
     }
 
     pub(super) fn cache_key(&self, source: Source, project: u64, query: &Query) -> CacheKey {
@@ -186,6 +229,7 @@ impl App {
         self.issues.accounts.remove(&source);
         self.issues.cache.forget(source);
         self.issues.people_cache.retain(|(s, _), _| *s != source);
+        self.issues.failures.retain(|(s, _), _| *s != source);
         *self.issues.epochs.entry(source).or_default() += 1;
     }
 
@@ -238,4 +282,12 @@ pub(super) fn env_tokens() -> HashMap<Source, String> {
             (!token.is_empty()).then(|| (source, token.to_string()))
         })
         .collect()
+}
+
+#[derive(Debug)]
+pub(crate) enum IssueReply {
+    Lists { query: Query, lists: Vec<(Source, Result<Listed>)>, unavailable: Vec<(Source, String)> },
+    Read(Result<(Issue, Detail)>),
+    People(Source, Result<Vec<Person>>),
+    Found(Result<Issue>),
 }

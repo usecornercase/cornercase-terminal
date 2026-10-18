@@ -172,8 +172,12 @@ impl App {
         token: &Secret,
         result: Result<Account, Error>,
     ) {
+        let mut unchosen = None;
         let result = match result {
-            Err(Error::Workspaces(found)) => Ok(Account { handle: found.handle, workspace: String::new() }),
+            Err(Error::Workspaces(found)) => {
+                unchosen = Some(found.message.clone());
+                Ok(Account { handle: found.handle, workspace: String::new() })
+            }
             other => other,
         };
         let saved = result.and_then(|account| {
@@ -185,6 +189,9 @@ impl App {
         if let Ok(account) = &saved {
             self.forget_issues(source);
             self.learn_account(source, account);
+            if let Some(message) = unchosen {
+                self.issues.failures.insert((source, None), message);
+            }
             self.refresh_open_settings();
         }
         let answer = saved.map(|account| format!("{} connected as {}", source.name(), account.describe()));

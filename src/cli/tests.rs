@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use clap::{CommandFactory, Parser};
 use rstest::rstest;
 
+use super::args::issue::IssueAction;
 use super::args::{KillServerArgs, RestartArgs, StartServerArgs, TodoAction, UpdateArgs};
 use super::status::cell;
 use super::*;
@@ -18,6 +19,37 @@ mod parsing {
     #[test]
     fn the_definitions_are_consistent() {
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn start_takes_an_issue_and_its_source_but_not_a_prompt_with_it() {
+        let cli = parse(&["start", "claude", "--issue", "7", "--source", "github", "--project", "3"]).expect("parse");
+        let Some(Command::Control(Control::Start(start))) = cli.command else { panic!("not a start") };
+        assert_eq!(
+            (start.issue.key.as_deref(), start.issue.source.as_deref(), start.project),
+            (Some("7"), Some("github"), Some(3))
+        );
+        assert!(parse(&["start", "--issue", "7", "--prompt", "x"]).is_err());
+        assert!(parse(&["start", "--source", "github"]).is_err());
+        assert!(parse(&["start", "--issue", "7", "--source", "bugzilla"]).is_err());
+        assert!(parse(&["start", "--issue", "7", "--project", "1", "--workspace", "2"]).is_err());
+    }
+
+    #[test]
+    fn a_flow_needs_a_task_or_an_issue() {
+        assert!(parse(&["flow", "run", "Quick", "--issue", "ENG-42"]).is_ok());
+        assert!(parse(&["flow", "run", "Quick"]).is_err());
+        assert!(parse(&["flow", "run", "Quick", "--issue", "ENG-42", "--prompt", "x"]).is_err());
+    }
+
+    #[test]
+    fn the_issue_filters_have_the_dialogs_names_as_aliases() {
+        let cli = parse(&["issue", "list", "--owner", "me", "--reporter", "@bo", "--source", "jira"]).expect("parse");
+        let Some(Command::Control(Control::Issue(args))) = cli.command else { panic!("not an issue command") };
+        let IssueAction::List(list) = args.action else { panic!("not a list") };
+        assert_eq!((list.assignee.as_deref(), list.author.as_deref()), (Some("me"), Some("@bo")));
+        assert!(parse(&["issue", "people", "bugzilla"]).is_err());
+        assert!(parse(&["issue", "read", "#7"]).is_ok());
     }
 
     #[test]

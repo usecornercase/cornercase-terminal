@@ -59,7 +59,8 @@ group 9  personal  collapsed
 | `new-workspace NAME` | Adds a workspace to a project, or a git worktree with `--worktree`. Prints its id. |
 | `new-tab` | Opens a tab, optionally typing a command into it. Prints the pane's id. |
 | `split` | Splits a pane right, or down, optionally typing a command. Prints the new pane's id. |
-| `start [AGENT]` | Starts a coding agent in a new tab and gives it a prompt. Prints the pane's id. |
+| `start [AGENT]` | Starts a coding agent in a new tab and gives it a prompt, or with `--issue` the issue's. Prints the pane's id. |
+| `issue sources`, `issue list`, `issue read KEY`, `issue people SOURCE` | Read the [issue trackers](#issues) through the server: which are connected, their lists with the Issues dialog's filters, an issue with its comments, and whom the filters can name. |
 | `flow list`, `flow run NAME`, `flow export NAME`, `flow import SOURCE` | Lists the [flows](../flows/), starts one (a team of agents in a worktree, run by an orchestrator agent), prints one as text to share, or adds one someone shared. |
 | `send [TEXT]` | Pastes text into a pane, and presses Enter with `--enter`. |
 | `keys KEY…` | Presses keys in a pane. |
@@ -363,6 +364,7 @@ git diff | cornercase start claude --prompt-file -
 - **Where**: a new tab in the workspace the command runs in; in another workspace with `--workspace ID`; or with `--worktree BRANCH`, in the workspace on that branch, made as a new worktree when there is none.
 - `--name` names the tab, `--prompt` gives the prompt and `--prompt-file` reads it from a file, or from standard input with `-`. Without a prompt, the agent just starts.
 - `--model` starts it with that model, through the agent's own flag (`--model opus`, `--model gpt-5.5`), replacing a model set in its arguments. `--mode` picks another of the agent's modes, as **settings → Agents** lists them (`--mode plan`), instead of the one chosen there. A mode the agent lacks is refused with the list of its modes. `--effort` sets how hard the agent thinks, through its own switch (`--effort high` for Claude Code, `-c model_reasoning_effort=high` for Codex, `--reasoning-effort high` for Grok Build and GitHub Copilot CLI; Cursor CLI takes it in the model id), replacing an effort set in its arguments; a level the agent does not take is refused with its levels, and Gemini CLI, opencode and Cursor CLI, which have no effort switch, refuse any. A server older than these options refuses them rather than start the agent with the settings' mode, which could be one that never asks.
+- `--issue KEY` starts the agent on an [issue](#issues) instead of a prompt, as the Issues dialog's **start** does: the branch is the one named after the issue, the prompt comes from **settings → Issues → prompt**, and it is always submitted, whatever **send the prompt** says there. A key such as `#482`, `sc-48` or `ENG-42`, or the issue's URL; `--source` picks the tracker when a key could be several. A GitHub or GitLab issue is worked on in the repository of `--project ID` (default: the one the command runs in, else the shown one), in a worktree on its branch; a workspace already on that branch gets a new tab with the agent. Shortcut, Linear, Jira, Plane and Asana issues aren't tied to a repository, so with several places open the command lists them and asks for `--project ID` (a new worktree) or `--workspace ID` (a new tab). The workspace is named after the issue, and so is a tab unless `--name` says otherwise.
 - `--wait` then waits like [`wait`](#wait) does, and prints how it ended on a second line. `--until` with one of `wait`'s states (`idle`, `working`, `waiting`, `shell`, `turn-over`) waits for that one instead.
 
 ### Start a flow
@@ -371,6 +373,7 @@ git diff | cornercase start claude --prompt-file -
 cornercase flow list
 cornercase flow run Quick --prompt 'Fix the login form'
 cornercase flow run 'Full issue' --prompt-file issue.md --worktree fix-login --json
+cornercase flow run 'Full issue' --issue ENG-42 --project 3
 ```
 
 `flow list` prints each [flow](../flows/), yours, the built-in ones (those you have not replaced) and the project's, sorted by name, with its description, its roles with their agents, models and efforts, and what keeps it from running, if anything; files it cannot read are listed with their error. `flow run` starts one as the window's **start** does: it makes the worktree (from `--worktree`, else from the task's first words, with a short suffix when they give nothing, a default branch or a branch already taken), opens a tab per role, starts every agent without permission prompts and answers their trust questions, and starts the orchestrator last with its brief. It answers once the tabs exist, while the agents are still starting: the workspace's id, then one line per role with its pane's id and the role's name, separated by a tab. The run's [folder for its files](../flows/#the-runs-folder) is printed on stderr (`run_dir` with `--json`), and every pane of the team has it in `$CORNERCASE_RUN_DIR`.
@@ -383,12 +386,39 @@ cornercase flow run 'Full issue' --prompt-file issue.md --worktree fix-login --j
 ```
 
 - A role set to `worktree = "own"` gets a [worktree of its own](../flows/#a-worktree-of-its-own) on the branch `<branch>--<role>`, made from the run's branch, with the project's setup. `--json` then adds, for each such role, its `worktree` (the folder) and `branch`; the other roles' entries have neither. The answer waits for every worktree and its setup, and a role worktree that cannot be made opens nothing.
-- The task comes from `--prompt`, or from a file with `--prompt-file` (`-` reads standard input).
+- The task comes from `--prompt`, or from a file with `--prompt-file` (`-` reads standard input), or from an issue with `--issue KEY`, as the dialog's **start a flow** takes it: its branch, its prompt template and, for an issue that isn't tied to a repository, `--project ID` when several projects are repositories (see [Issues](#issues)).
 - The flows of the project the command runs in, else the shown one, else `--project ID`, are found too. A name is looked up in yours, then the built-in flows, then the project's: yours replaces a built-in flow of its name, and a project's flow, which comes with the repository, never stands in for another of the same name; the command says so on standard error when a name is in several places. A built-in flow you deleted in [settings → Flows](../flows/#edit-flows) is refused, and keeps its name: a project's flow named like it does not run either. An unknown name lists the flows.
 - It refuses before anything opens a flow with problems, an agent that is not installed, a project that is not the root of a git repository, a branch that already runs a flow, and a `--worktree` that is `main`, `master`, the project's default branch or the one its own folder is on: a flow works on a branch of its own.
 - Nothing changes in the window unless you pass `--focus`, which shows the orchestrator's tab and opens the [Flow panel](../flows/#the-flow-panel).
 
 `flow export NAME` prints a flow as TOML, so `cornercase flow export Quick > quick.toml` makes a file to send, and `--json` prints its name, origin, path and text. `flow import SOURCE` (a file, `-` for standard input, an `https://` address or `OWNER/REPO` on GitHub, see [community flows](../flows/#community-flows)) adds one to yours, or to the project's with `--to project`, and prints where it went. A flow from an address or a repository, or that sets `env` or `args`, asks first, or needs `--yes` without a terminal; a name that is taken is refused unless `--replace` overwrites it or `--name` gives the new one another. A text over 256 KiB is refused. See [Share a flow](../flows/#share-a-flow).
+
+### Issues
+
+```sh
+cornercase issue sources
+cornercase issue list --source github --assignee me
+cornercase issue list --closed --json
+cornercase issue read '#482'
+cornercase issue people jira
+cornercase start claude --issue '#482'
+```
+
+These read the trackers through the connections the server already holds, the ones the [Issues dialog](../issues-and-agents/) uses: GitHub through `gh`, the others through the tokens saved in settings or set in the environment. They change nothing at a tracker. Another program that wants the issues gets them without keeping a client for each tracker or a token of its own.
+
+`issue sources` says, for the project (`--project ID`, default the one the command runs in, else the shown one), which trackers are connected and as whom, in the order of the dialog's tabs, then the others. Each is one of:
+
+- `connected`, with its account and where its token comes from (`through gh`, saved, or `from LINEAR_API_KEY`).
+- `missing`, with what is missing: `token` (connect it with `cornercase config secret SOURCE`, the token on standard input), `site` and `email` for Jira (`cornercase config set jira_site …`), `workspace` for Plane and Asana (`plane_workspace`, `asana_workspace`), or `repository` (the project isn't a git repository, or for GitLab none of its remotes is on `gitlab_url`).
+- `failing`, with the reason the last list failed (a rejected token, a rate limit, an Asana token that belongs to several workspaces). It is a list's failure only, and the next good list or a change to that tracker's token or settings clears it.
+
+It ends with the places an issue that isn't tied to a repository can be worked on: a repository-root project is `a new worktree`, an open workspace of any other project `a new tab`, and the one you are in is marked.
+
+`issue list` prints one line per issue under a header, separated by tabs (`source`, `key`, `state`, `author`, `updated_at`, `title`, `url`, `branch`, with `-` for nothing; new columns only at the end). Without `--source` it lists every connected tracker the project can use, newest first, as the dialog's All tab does. `--closed` adds closed issues, and `--assignee` and `--author` (also `--owner` and `--requester`, `--creator`, `--reporter`, the names the dialog uses) take `me`, `anyone`, a handle or, for Jira, Plane and Asana, an id from `issue people`; a handle needs `--source`, since a filter names one tracker's people. `--cached` answers from the lists the server already holds, without asking any tracker, and an empty answer then means nothing was held for those filters. A tracker that fails does not stop the others: it is named on standard error with its reason, its cached list (if there is one) is still printed, and the command exits 1 after printing the rest.
+
+`issue read KEY` prints the issue's title, the dialog's info line, its URL and the branch `start` would use, then its description as Markdown and its comments. `KEY` is a key or a URL, as for `start --issue`; a URL of another repository, site or workspace than the project's is refused. `issue people SOURCE` prints whom that tracker's filters can name, one per line with the handle, name and id.
+
+With `--json`, `sources` prints `{"project", "closed", "sources": [...], "places": [...]}`, `list` prints `{"project", "issues": [...], "sources": [{"source", "count", "cached", "account", "error"}]}`, `read` prints `{"issue", "info", "body", "comments", "prompt"}` and `people` prints `{"source", "fields", "cached", "people"}`. They are four requests, `issue-sources`, `issue-list`, `issue-read` and `issue-people`, with the same options as fields (`people` is the two filters in the order `fields` names them: `"me"`, `"anyone"` or `{"person": {"handle": "bo", "id": null}}`). A request is refused with `not-found` for an unknown project, `malformed` for an unknown source or a person without one, and `conflict` for an issue of a tracker that is not connected or that was reconnected while it was read. `start` and `flow-run` take `issue` and `source`, which an older server would ignore, so check the `issues` [feature](#ask-the-server-first) first.
 
 ### Talk to a pane
 
@@ -714,11 +744,11 @@ cornercase contract --json
 cornercase 0.12.137
 contract 1
 boot 4242-1700000000
-commands 54 (54 available)
+commands 58 (58 available)
 stream events 1
 stream watch 1
 stream surface 1
-features boot, structured-errors, strict-fields, views, host-events, theme, notices, surface-patches, config, close-unlock, sound
+features boot, structured-errors, strict-fields, views, host-events, theme, notices, surface-patches, config, close-unlock, sound, issues
 ```
 
 `--json` prints an object with:
@@ -727,7 +757,7 @@ features boot, structured-errors, strict-fields, views, host-events, theme, noti
 - `contract`: the version of the rules on this page, an integer starting at 1. It goes up only when something that was there changes meaning or shape, never when something is added.
 - `boot`: which start of the server this is. It changes on every start, `cornercase restart` included, since ids start again from 1. It is the same value as `CORNERCASE_SERVER` in the panes and `boot` in `status --json`.
 - `operations`: every request the server takes, by name, with `available`. A server with `start-server` among them can be started without a window; one without it needs a window before it opens terminals. One that is not available on this server has `available: false` and a `reason`; the others keep working.
-- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours), `notices` (a view's `visible`, the `notices` field of `events` and the `go` request; check it before sending them), `surface-patches` (the `patches` field of `surface`; an older server ignores it and sends complete lines, so check it before asking) `config` (the `config` request and `config.revision`) `close-unlock` (the `unlock` field of `close`, which an older server ignores and then refuses with the lock's message; check it before sending it) and `sound` (a notice's `sound` field: an older server never sends it).
+- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours), `notices` (a view's `visible`, the `notices` field of `events` and the `go` request; check it before sending them), `surface-patches` (the `patches` field of `surface`; an older server ignores it and sends complete lines, so check it before asking) `config` (the `config` request and `config.revision`) `close-unlock` (the `unlock` field of `close`, which an older server ignores and then refuses with the lock's message; check it before sending it) and `sound` (a notice's `sound` field: an older server never sends it) and `issues` (the `issue` and `source` fields of `start` and `flow-run`, which an older server ignores and then starts the agent without the issue; check it before sending them).
 - `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals) and `{"name": "view", "version": 1}` for [`view`](#a-view-of-your-own), whose lines are `watch` format 1 plus `view`.
 
 A server from before `contract` says `the running cornercase server (…) has no contract command`, or that it is too old: it knows none of the rest of this section, so don't send it ids you kept from before.
@@ -756,7 +786,7 @@ A request through the socket is JSON: `{"command": "status", "args": {}}`, its `
 | `unknown-field` | A field this server doesn't know, named by its path, such as `args.bogus`. Nothing was done. |
 | `unavailable` | The request is listed in `operations` with `available: false`, with the `reason` as its message. No request is turned off today, so no server sends this code yet. |
 | `busy` | The pane's program isn't reading its input: 16 MiB are waiting for it. Only `input` answers this; `send` and `keys` keep answering `failed`. Nothing was sent. |
-| `conflict` | The request doesn't fit the current state: the pane's terminal has another size, a cell is outside it, the program scrolls itself, nothing is selected to copy, or, for `config`, a token set by an environment variable, a project folder that isn't a repository or a `config.json` that cannot be read; or a row moved before one of another workspace or project, a pane moved to another tab, or where its tab has no room. Read the latest state and try again. Nothing was done. |
+| `conflict` | The request doesn't fit the current state: the pane's terminal has another size, a cell is outside it, the program scrolls itself, nothing is selected to copy, or, for `config`, a token set by an environment variable, a project folder that isn't a repository or a `config.json` that cannot be read; or a row moved before one of another workspace or project, a pane moved to another tab, or where its tab has no room; or an issue of a tracker that is not connected, a place to choose for an issue that isn't tied to a repository, or tracker settings that changed during the lookup. Read the latest state and try again. Nothing was done. |
 | `failed` | Anything else. |
 
 The `message` is the text the command would print. Text that is not JSON at all gets the plain form, `{"error": "…"}`, since the server can't tell what the request asked for. Without `contract` or `boot`, a field the server doesn't know is ignored, as it always was; with them it is refused, so a newer option never passes for done on an older server. Either one set to `null` counts as not sent. A `contract` newer than the server's is refused with `unsupported`, so a client written for later rules learns it at once instead of being read under older ones. The `cornercase` commands themselves send neither, so what they print doesn't change.

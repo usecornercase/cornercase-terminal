@@ -29,6 +29,7 @@ mod browser;
 mod commands;
 mod contract;
 mod input;
+mod issues;
 mod panels;
 mod panes;
 mod plugins;

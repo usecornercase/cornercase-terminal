@@ -7,6 +7,7 @@ use super::App;
 use super::event::AppEvent;
 use super::event::Start;
 use super::overlay::Overlay;
+use super::trackers::IssueReply;
 use crate::agents;
 use crate::agents::launch::{self};
 use crate::config::Config;
@@ -31,6 +32,7 @@ pub(crate) enum IssueEvent {
     Read { source: Source, epoch: u64, key: String, result: Result<Detail> },
     TokenChecked { source: Source, epoch: u64, token: Secret, result: Result<Account>, request: Option<u64> },
     People { project: u64, source: Source, epoch: u64, result: Result<Vec<Person>> },
+    Replied { key: u64, project: u64, epochs: Vec<(Source, u64)>, answer: Box<IssueReply> },
 }
 
 impl IssueEvent {
@@ -40,6 +42,12 @@ impl IssueEvent {
             Self::Read { .. } => "issue read",
             Self::TokenChecked { .. } => "token checked",
             Self::People { .. } => "people loaded",
+            Self::Replied { answer, .. } => match &**answer {
+                IssueReply::Lists { .. } => "issues loaded",
+                IssueReply::Read(_) => "issue read",
+                IssueReply::People(..) => "people loaded",
+                IssueReply::Found(_) => "issue found",
+            },
         }
     }
 }
@@ -71,6 +79,9 @@ impl App {
                     None => self.token_checked(source, &token, result, area)?,
                 }
             }
+            IssueEvent::Replied { key, project, epochs, answer } => {
+                self.issue_replied(key, project, &epochs, *answer, area);
+            }
             IssueEvent::People { project, source, epoch, result } => {
                 if epoch == self.epoch(source) {
                     self.people_loaded(project, source, result);
@@ -85,7 +96,8 @@ impl App {
     }
 
     pub(super) fn open_issues(&mut self, area: Rect) -> Result<()> {
-        let (places, here) = self.places();
+        let (places, here) = self.places(Some(self.active), self.project().map(|p| p.active));
+        let here = here.unwrap_or(0);
         let Some(project) = self.project() else { return Ok(()) };
         let connections = Source::REMOTE
             .into_iter()
@@ -292,6 +304,7 @@ impl App {
     }
 
     pub(super) fn issues_loaded(&mut self, project: u64, source: Source, query: &Query, result: Result<Listed>) {
+        self.note_list(source, project, &result);
         if let Ok(listed) = &result {
             let key = self.cache_key(source, project, query);
             self.issues.cache.put(key, listed.issues.clone());

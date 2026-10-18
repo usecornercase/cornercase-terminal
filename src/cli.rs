@@ -22,6 +22,7 @@ mod config;
 mod contract;
 mod flow;
 mod help;
+mod issue;
 mod plugin;
 mod queue;
 mod read;
@@ -268,6 +269,7 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Link(args) => terminal::link(&args),
         Control::Theme(args) => theme::run(&args),
         Control::Config(args) => config::run(args),
+        Control::Issue(args) => return issue::run(args.action),
     }?;
     Ok(true)
 }
@@ -369,16 +371,21 @@ fn run_start(start: StartArgs) -> Result<()> {
     let prompt = read_prompt(start.prompt, start.prompt_file)?;
     let chosen = start.model.is_some() || start.mode.is_some() || start.effort.is_some();
     let name = if chosen { "start-with" } else { "start" };
+    if start.issue.key.is_some() {
+        client::use_issues()?;
+    }
     let request = control::Start {
         agent: start.agent,
         model: start.model,
         mode: start.mode,
         effort: start.effort,
-        project: None,
+        project: start.project,
         worktree: start.worktree,
         workspace: start.workspace,
         name: start.name,
         prompt,
+        issue: start.issue.key,
+        source: start.issue.source,
         wait: start.wait,
         until: start.until.map_or(Until::Stops, Until::from),
         timeout: start.timeout,

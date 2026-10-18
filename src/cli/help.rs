@@ -94,7 +94,16 @@ submitted, and the command prints the pane's id; it fails if the agent never sho
 --wait, a second line says how the wait ended: idle, done (it finished out of sight) or waiting
 (it needs an answer); with --until it waits for that state instead, as `cornercase wait --until` does.
 
+--issue KEY (a key such as #482, sc-48 or ENG-42, or the issue's URL) starts the agent on that issue as
+the Issues dialog's start does: GitHub and GitLab issues in a worktree on the branch named after the issue, of
+the project's own repository; the prompt comes from settings' prompt template and is always submitted.
+Shortcut, Linear, Jira, Plane and Asana issues aren't tied to a repository: when several places are open the
+command lists them and asks for --project (a new worktree) or --workspace (a new tab). A workspace already
+on the branch gets a new tab. It needs a server that knows the `issues` feature.
+
 Examples:
+  cornercase start claude --issue '#482'
+  cornercase start codex --issue ENG-42 --project 3
   cornercase start claude --worktree fix-login --prompt 'Fix the login form, then commit'
   cornercase start codex --prompt-file task.md --wait --timeout 1800
   cornercase start claude --mode plan --model opus --prompt 'Plan the login rework'";
@@ -270,6 +279,7 @@ flows/ next to config.json, and a project's in .cornercase/flows/ in its reposit
 Examples:
   cornercase flow list
   cornercase flow run Quick --prompt 'Fix the login form'
+  cornercase flow run 'Full issue' --issue ENG-42 --project 3
   cornercase flow run 'Full issue' --prompt-file task.md --worktree fix-login
   cornercase flow export Quick > quick.toml
   cornercase flow import quick.toml";
@@ -280,7 +290,9 @@ answering their trust prompts. The orchestrator starts last, with a brief: the t
 its pane ids, the stages, and how to drive the agents. Nothing is shown in the window unless you
 pass --focus.
 
-Without --worktree, the branch comes from the task's first words, with a short suffix when that
+With --issue KEY instead of --prompt, the task is the issue's, from the same prompt template and branch the
+Issues dialog's start a flow uses; an issue that isn't tied to a repository needs --project when several
+projects are repositories. Otherwise, without --worktree, the branch comes from the task's first words, with a short suffix when that
 says nothing, is a default branch or is already taken. A chosen branch that is main, master, the
 project's default or the one its own folder is on is refused: a flow works on a branch of its own.
 
@@ -512,6 +524,29 @@ Examples:
   printf '%s' \"$LINEAR_API_KEY\" | cornercase config secret linear
   cornercase config remove linear
   cornercase config project ~/code/web-shop --setup 'npm ci'";
+
+pub(super) const ISSUE_HELP: &str =
+    "These read the trackers through the server's own connections, the ones the Issues dialog uses:
+GitHub through gh, the others through the tokens in settings (connect one with
+`cornercase config secret SOURCE`). Nothing is changed at a tracker.
+
+sources says which trackers are connected for a project and as whom, what is missing (a token,
+Jira's site and email, Plane's workspace, a repository) and why one fails, then where an issue
+that isn't tied to a repository can be worked on. list prints one line per issue, separated by
+tabs under a header; --closed, --assignee and --author are the dialog's filters: me, anyone, a
+handle, or for Jira, Plane and Asana an id from `issue people`. A tracker that fails is named on
+stderr, and the command exits 1 after listing the others. read prints an issue's details, its
+description in Markdown and its comments. people lists whom a tracker's filters can name.
+
+To work on one: `cornercase start --issue KEY`, or `cornercase flow run NAME --issue KEY`.
+
+Examples:
+  cornercase issue sources
+  cornercase issue list --source github --assignee me
+  cornercase issue list --closed --json
+  cornercase issue read '#482'
+  cornercase issue read https://linear.app/acme/issue/ENG-42/fix-login
+  cornercase issue people jira";
 
 pub(super) const SKILL_HELP: &str = "Install them for Claude Code, Codex and other agents with
   npx skills add usecornercase/cornercase-terminal --skill cornercase -g

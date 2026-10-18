@@ -1,5 +1,6 @@
 pub(crate) mod arrange;
 pub(crate) mod config;
+pub(crate) mod issue;
 pub(crate) mod plugin;
 pub(crate) mod queue;
 pub(crate) mod terminal;
@@ -13,12 +14,12 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use super::help::{
     ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, CONFIG_HELP, CONTRACT_HELP, EVENTS_HELP,
     FLOW_EXPORT_HELP, FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP,
-    HERE_PANE, HERE_WORKSPACE, INPUT_HELP, KEY_NAMES, KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP, LONG_ABOUT,
-    MARK_HELP, MOVE_HELP, MOVE_PANE_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP,
-    RATIO_HELP, READ_HELP, REDRAW_HELP, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP, RESTART_TIMEOUT,
-    SCROLL_HELP, SEARCH_HELP, SELECTION_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP,
-    STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, TODO_SEND_HELP, UNTIL_AFTER, UPDATE_HELP, VIEW_ARG, VIEW_HELP,
-    VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
+    HERE_PANE, HERE_WORKSPACE, INPUT_HELP, ISSUE_HELP, KEY_NAMES, KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP,
+    LONG_ABOUT, MARK_HELP, MOVE_HELP, MOVE_PANE_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP,
+    PLUGIN_HELP, RATIO_HELP, READ_HELP, REDRAW_HELP, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP,
+    RESTART_TIMEOUT, SCROLL_HELP, SEARCH_HELP, SELECTION_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP,
+    START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, TODO_SEND_HELP, UNTIL_AFTER, UPDATE_HELP,
+    VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -204,6 +205,11 @@ pub(crate) enum Control {
     Expand(arrange::FoldArgs),
     #[command(about = "Create a group, change its icon and colour, or delete it", after_help = GROUP_HELP)]
     Group(arrange::GroupArgs),
+    #[command(
+        about = "Read issues from the trackers: which are connected, their lists, an issue and the people to filter by",
+        after_help = ISSUE_HELP
+    )]
+    Issue(issue::IssueArgs),
 }
 
 impl Control {
@@ -355,6 +361,13 @@ pub(crate) struct StartArgs {
     pub(crate) worktree: Option<String>,
     #[arg(long, value_name = "ID", help = HERE_WORKSPACE)]
     pub(crate) workspace: Option<u64>,
+    #[arg(
+        long,
+        value_name = "ID",
+        conflicts_with = "workspace",
+        help = "The project: a new tab in its folder, or where --worktree or --issue makes the worktree [default: the one this runs in, else the shown one]"
+    )]
+    pub(crate) project: Option<u64>,
     #[arg(long, help = "The tab's name [default: the agent's]")]
     pub(crate) name: Option<String>,
     #[arg(long, value_name = "TEXT", conflicts_with = "prompt_file", help = "What to ask it")]
@@ -367,6 +380,8 @@ pub(crate) struct StartArgs {
     pub(crate) until: Option<UntilArg>,
     #[arg(long, value_name = "SECONDS", value_parser = seconds, help = "Give up after this long, with status 1")]
     pub(crate) timeout: Option<f64>,
+    #[command(flatten)]
+    pub(crate) issue: issue::IssueArg,
     #[command(flatten)]
     pub(crate) create: Create,
 }
@@ -802,7 +817,7 @@ pub(crate) struct FlowRunArgs {
         long,
         value_name = "TEXT",
         conflicts_with = "prompt_file",
-        required_unless_present = "prompt_file",
+        required_unless_present_any = ["prompt_file", "issue"],
         help = "The task: what the team should do"
     )]
     pub(crate) prompt: Option<String>,
@@ -817,6 +832,8 @@ pub(crate) struct FlowRunArgs {
     pub(crate) worktree: Option<String>,
     #[arg(long, value_name = "ID", help = "The project [default: the one this runs in, else the shown one]")]
     pub(crate) project: Option<u64>,
+    #[command(flatten)]
+    pub(crate) issue: issue::IssueArg,
     #[command(flatten)]
     pub(crate) create: Create,
 }

@@ -7,11 +7,6 @@ use crate::test_util::{SHORTCUT_MEMBER, git_repo};
 
 const MARKER: &str = "t0k-marker";
 
-struct Refused {
-    code: String,
-    message: String,
-}
-
 struct Setup {
     app: App,
     rx: Receiver<AppEvent>,
@@ -26,31 +21,8 @@ fn setup() -> Setup {
     Setup { app, rx, config, folder }
 }
 
-fn send(s: &mut Setup, args: &Value) -> Vec<(u64, String)> {
-    let text = json!({"contract": 1, "command": "config", "args": args}).to_string();
-    s.app.request(CLIENT, &text, Some(AREA), Instant::now());
-    let mut got = Vec::new();
-    wait_until("the answer", || {
-        drain(&mut s.app, &s.rx);
-        s.app.refresh(Instant::now());
-        got.extend(s.app.take_answers());
-        !got.is_empty()
-    });
-    got
-}
-
 fn call(s: &mut Setup, args: &Value) -> std::result::Result<Value, Refused> {
-    let mut answers = send(s, args);
-    assert_eq!(answers.len(), 1);
-    let (_, text) = answers.remove(0);
-    let mut reply: Value = serde_json::from_str(&text).expect("a reply");
-    match reply["error"].take() {
-        Value::Null => Ok(reply["ok"].take()),
-        error => Err(Refused {
-            code: error["code"].as_str().unwrap_or_default().to_string(),
-            message: error["message"].as_str().unwrap_or_default().to_string(),
-        }),
-    }
+    asked(&mut s.app, &s.rx, "config", args)
 }
 
 fn ok(s: &mut Setup, args: &Value) -> Described {

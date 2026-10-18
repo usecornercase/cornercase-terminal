@@ -18,6 +18,8 @@ pub(crate) struct FlowRun {
     pub(crate) prompt: String,
     pub(crate) worktree: Option<String>,
     pub(crate) project: Option<u64>,
+    pub(crate) issue: Option<String>,
+    pub(crate) source: Option<String>,
     pub(crate) focus: bool,
 }
 
@@ -136,6 +138,7 @@ impl FlowRun {
     pub(super) fn fields(&self, fields: &mut Fields) {
         fields.add("flow", &self.name).maybe("worktree", self.worktree.as_ref()).maybe("project", self.project);
         fields.add("prompt_bytes", self.prompt.len()).add("focus", self.focus);
+        fields.add("issue", self.issue.is_some()).maybe("source", self.source.as_ref());
     }
 }
 

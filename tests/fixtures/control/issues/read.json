@@ -1,0 +1,33 @@
+{
+  "issue": {
+    "source": "github",
+    "key": "#7",
+    "number": 7,
+    "title": "Fix the login",
+    "url": "https://example.com/#7",
+    "state": "OPEN",
+    "closed": false,
+    "labels": [
+      "bug"
+    ],
+    "assignees": [
+      "ana"
+    ],
+    "author": "bo",
+    "updated_at": "2026-09-19T12:00:00Z",
+    "branch": "issue-7-fix-the-login"
+  },
+  "info": [
+    "OPEN",
+    "bug"
+  ],
+  "body": "It **breaks**.",
+  "comments": [
+    {
+      "author": "bo",
+      "created_at": "2026-09-19T12:00:00Z",
+      "body": "Same here"
+    }
+  ],
+  "prompt": "https://example.com/#7"
+}

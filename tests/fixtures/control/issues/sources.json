@@ -1,0 +1,96 @@
+{
+  "project": 1,
+  "closed": false,
+  "sources": [
+    {
+      "source": "github",
+      "name": "GitHub",
+      "tab": true,
+      "repository": true,
+      "state": "connected",
+      "missing": [],
+      "from": "gh",
+      "fields": [
+        "assignee",
+        "author"
+      ],
+      "people": [
+        "anyone",
+        "anyone"
+      ]
+    },
+    {
+      "source": "linear",
+      "name": "Linear",
+      "tab": true,
+      "repository": false,
+      "state": "connected",
+      "missing": [],
+      "account": "@ana in acme",
+      "from": "saved",
+      "fields": [
+        "assignee",
+        "creator"
+      ],
+      "people": [
+        "me",
+        "anyone"
+      ]
+    },
+    {
+      "source": "jira",
+      "name": "Jira",
+      "tab": false,
+      "repository": false,
+      "state": "missing",
+      "missing": [
+        "site",
+        "email",
+        "token"
+      ],
+      "fields": [
+        "assignee",
+        "reporter"
+      ],
+      "people": [
+        "anyone",
+        "anyone"
+      ]
+    },
+    {
+      "source": "shortcut",
+      "name": "Shortcut",
+      "tab": true,
+      "repository": false,
+      "state": "failing",
+      "missing": [],
+      "reason": "the token was rejected",
+      "from": "env",
+      "env": "SHORTCUT_API_TOKEN",
+      "fields": [
+        "owner",
+        "requester"
+      ],
+      "people": [
+        "anyone",
+        "anyone"
+      ]
+    }
+  ],
+  "places": [
+    {
+      "project": 1,
+      "workspace": null,
+      "label": "web-shop",
+      "worktree": true,
+      "here": true
+    },
+    {
+      "project": 2,
+      "workspace": 7,
+      "label": "notes › default",
+      "worktree": false,
+      "here": false
+    }
+  ]
+}

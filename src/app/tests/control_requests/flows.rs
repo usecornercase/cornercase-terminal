@@ -832,3 +832,41 @@ fn a_projects_flow_named_like_a_deleted_built_in_does_not_run_and_is_listed_with
     let run = wire::FlowRun { name: "Arena".into(), prompt: "x".into(), ..wire::FlowRun::default() };
     assert!(error(now(&mut team.app, None, Command::FlowRun(run))).contains("was deleted"));
 }
+
+const ISSUE: &str = r#"{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"author":{"login":"ana"},"updatedAt":"","url":"https://github.com/acme/shop/issues/7"}"#;
+
+#[test]
+fn a_flow_runs_on_an_issue_with_the_branch_its_start_would_use() {
+    let gh_dir = TempDir::new();
+    let gh = crate::test_util::fake_gh(gh_dir.path(), &format!("cat <<'EOF'\n{ISSUE}\nEOF"));
+    let mut team = Team::configured(FAKE, |config, _| config.gh = gh.display().to_string());
+    team.app.issues.env_tokens.clear();
+    let run = wire::FlowRun { name: "Pair".into(), issue: Some("#7".into()), ..wire::FlowRun::default() };
+    ask(&mut team.app, None, Command::FlowRun(run));
+
+    let Response::Ok(value) = answered(&mut team.app, &team.rx, "the flow's tabs are open") else {
+        panic!("the flow did not start")
+    };
+    let started: RunInfo = serde_json::from_value(value).expect("the run");
+
+    assert_eq!(started.branch, "issue-7-fix-the-login");
+}
+
+#[test]
+fn a_flow_on_an_issue_of_a_remote_tracker_asks_which_project() {
+    let mut team = Team::new();
+    team.app.issues.env_tokens.clear();
+    let other = git_repo(&[("README", "hi")]);
+    team.app.open_project(other.path().to_path_buf(), AREA).expect("a second repository");
+    crate::issues::secrets::write(&paths::secrets(&team.config.path().join("config.json")), "shortcut_token", "t0k")
+        .expect("save token");
+    let story = r#"{"id":482,"name":"Returns page crashes","app_url":"https://app.shortcut.com/acme/story/482"}"#;
+    let _server = fake_shortcut(&mut team.app, vec![("GET /api/v3/stories/482", 200, story)]);
+
+    let run = wire::FlowRun { name: "Pair".into(), issue: Some("sc-482".into()), ..wire::FlowRun::default() };
+    ask(&mut team.app, None, Command::FlowRun(run));
+    let refused = error(answered(&mut team.app, &team.rx, "the flow is refused"));
+
+    assert!(refused.contains("say which project the team works in with --project ID"), "{refused}");
+    assert!(team.app.runs.is_empty());
+}

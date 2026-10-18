@@ -1,0 +1,15 @@
+{
+  "source": "jira",
+  "fields": [
+    "assignee",
+    "reporter"
+  ],
+  "cached": false,
+  "people": [
+    {
+      "handle": "ana",
+      "name": "Ana Ruiz",
+      "id": "acc-1"
+    }
+  ]
+}

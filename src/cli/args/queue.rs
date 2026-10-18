@@ -38,7 +38,7 @@ pub(crate) struct QueueAdd {
     pub(crate) prompt: Option<String>,
     #[arg(long, help = "Issue URL or key; its prompt uses the configured template")]
     pub(crate) issue: Option<String>,
-    #[arg(long, requires = "issue", value_parser = ["github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"], help = "Tracker for an ambiguous issue key or a self-hosted URL")]
+    #[arg(long, requires = "issue", value_parser = super::issue::SOURCES, help = "Tracker for an ambiguous issue key or a self-hosted URL")]
     pub(crate) source: Option<String>,
     #[arg(long, conflicts_with = "workspace", help = "Project id for a repository root or new worktree")]
     pub(crate) project: Option<u64>,
