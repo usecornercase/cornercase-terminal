@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.145
+
+- **Other apps and scripts can show the changes panel.** `cornercase changes list` prints a workspace's changed files, or every project's with `--every`, and `--follow` keeps printing them as they change, using the same git options that never take the index lock while an agent commits.
+  - `changes file PATH` prints a file's diff; with `--json` each line has its numbers, the words that changed and its highlighting.
+  - `changes gap` prints the unchanged lines between two hunks, `changes base` the branches it can compare with (naming one picks it), and `changes viewed` marks a file as viewed, as the panel's `✓` does. The base and the marks are shared with the window; the mode of a followed list is its own, so the panel's tabs don't move.
+  - `status --json` gives each workspace its count of changed files, for a badge.
+
 ## 0.12.144
 
 - **Other apps and scripts can follow the TODO list, the queue, away, updates and keep awake.** `cornercase status --app` prints them as JSON, and `status --app --follow` prints them again each time one of them changes. See Scripts and agents → Follow the rest of the app.
