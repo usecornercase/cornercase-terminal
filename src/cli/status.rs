@@ -86,9 +86,13 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
             _ => "setup failed".to_string(),
         }));
         parts.extend((workspace.behind > 0).then(|| format!("{} behind", workspace.behind)));
-        parts.extend(workspace.pull_request.as_ref().map(|pull| match &pull.checks {
-            Some(checks) => format!("pull request #{} {}, checks {checks}", pull.number, pull.state),
-            None => format!("pull request #{} {}", pull.number, pull.state),
+        parts.extend(workspace.pull_request.as_ref().map(|pull| {
+            let mut said = vec![format!("pull request #{} {}", pull.number, pull.state)];
+            if pull.conflicts {
+                said.push(pull.base.as_ref().map_or("conflicts".to_string(), |base| format!("conflicts with {base}")));
+            }
+            said.extend(pull.checks.as_ref().map(|checks| format!("checks {checks}")));
+            said.join(", ")
         }));
         lines.push(line(depth + 1, "workspace", workspace.id, &parts, &marks(shown.workspace == Some(workspace.id))));
         for tab in &workspace.tabs {

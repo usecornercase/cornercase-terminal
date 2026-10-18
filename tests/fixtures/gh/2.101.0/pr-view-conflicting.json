@@ -1,0 +1,18 @@
+{
+  "baseRefName": "main",
+  "isDraft": false,
+  "mergeable": "CONFLICTING",
+  "number": 486,
+  "state": "OPEN",
+  "statusCheckRollup": [
+    {
+      "__typename": "StatusContext",
+      "context": "review-bot",
+      "startedAt": "2026-10-17T23:06:03Z",
+      "state": "SUCCESS",
+      "targetUrl": ""
+    }
+  ],
+  "title": "Remember the last address used at checkout",
+  "url": "https://github.com/acme/web-shop/pull/486"
+}

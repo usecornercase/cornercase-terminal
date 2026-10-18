@@ -1,5 +1,7 @@
 {
+  "baseRefName": "main",
   "isDraft": false,
+  "mergeable": "MERGEABLE",
   "number": 482,
   "state": "OPEN",
   "statusCheckRollup": [

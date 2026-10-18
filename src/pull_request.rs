@@ -8,7 +8,7 @@ use crate::gh;
 
 pub(crate) mod merged;
 
-const FIELDS: &str = "number,title,url,state,isDraft,statusCheckRollup";
+const FIELDS: &str = "number,title,url,state,isDraft,mergeable,baseRefName,statusCheckRollup";
 
 const NOT_FOUND: &str = "no pull requests found";
 
@@ -89,6 +89,8 @@ pub(crate) struct PullRequest {
     pub(crate) title: String,
     pub(crate) url: String,
     pub(crate) state: State,
+    pub(crate) conflicting: Option<bool>,
+    pub(crate) base: String,
     pub(crate) checks: Vec<Check>,
 }
 
@@ -97,6 +99,7 @@ pub(crate) struct Mark {
     pub(crate) number: u64,
     pub(crate) state: State,
     pub(crate) ci: Option<Ci>,
+    pub(crate) conflicts: bool,
 }
 
 impl PullRequest {
@@ -118,7 +121,21 @@ impl PullRequest {
     }
 
     pub(crate) fn mark(&self) -> Mark {
-        Mark { number: self.number, state: self.state, ci: self.ci() }
+        Mark { number: self.number, state: self.state, ci: self.ci(), conflicts: self.conflicts() }
+    }
+
+    pub(crate) fn conflicts(&self) -> bool {
+        !self.state.settled() && self.conflicting == Some(true)
+    }
+
+    pub(crate) fn keep_known(&mut self, before: &Self) {
+        if self.conflicting.is_none() && self.number == before.number {
+            self.conflicting = before.conflicting;
+        }
+    }
+
+    pub(crate) fn base_name(&self) -> &str {
+        if self.base.is_empty() { "its base" } else { &self.base }
     }
 
     pub(crate) fn count(&self, outcome: Outcome) -> usize {
@@ -137,17 +154,31 @@ impl PullRequest {
             .map(|(n, name)| format!("{n} {name}"))
             .collect();
         let checks = if counts.is_empty() { "no checks".to_string() } else { counts.join(", ") };
-        format!("{} · {checks}", self.state.name())
+        if self.conflicts() {
+            format!("{} · conflicts with {} · {checks}", self.state.name(), self.base_name())
+        } else {
+            format!("{} · {checks}", self.state.name())
+        }
     }
 
-    pub(crate) fn failures(&self) -> String {
+    pub(crate) fn problems(&self) -> Option<String> {
         let checks: Vec<String> = self
             .failed()
             .map(
                 |check| if check.url.is_empty() { check.name.clone() } else { format!("{} {}", check.name, check.url) },
             )
             .collect();
-        format!("pull request #{} failed its checks: {} ", self.number, checks.join(", "))
+        let mut parts = Vec::new();
+        if self.conflicts() {
+            parts.push(format!("has merge conflicts with {}", self.base_name()));
+        }
+        if !checks.is_empty() {
+            parts.push(format!("failed its checks: {}", checks.join(", ")));
+        }
+        if parts.is_empty() {
+            return None;
+        }
+        Some(format!("pull request #{} {} ", self.number, parts.join(" and ")))
     }
 }
 
@@ -179,6 +210,10 @@ struct Raw {
     state: String,
     #[serde(default)]
     is_draft: bool,
+    #[serde(default)]
+    mergeable: Option<String>,
+    #[serde(default)]
+    base_ref_name: Option<String>,
     #[serde(default)]
     status_check_rollup: Vec<RawCheck>,
 }
@@ -272,7 +307,13 @@ impl From<Raw> for PullRequest {
             let key = |c: &Check| (c.outcome, c.workflow.is_empty(), c.workflow.clone(), c.name.clone());
             key(a).cmp(&key(b))
         });
-        Self { number: raw.number, title: raw.title, url: raw.url, state, checks }
+        let conflicting = match raw.mergeable.as_deref() {
+            Some("CONFLICTING") => Some(true),
+            Some("MERGEABLE") => Some(false),
+            _ => None,
+        };
+        let base = raw.base_ref_name.unwrap_or_default();
+        Self { number: raw.number, title: raw.title, url: raw.url, state, conflicting, base, checks }
     }
 }
 

@@ -37,6 +37,9 @@ pub(super) const ASK_AGENT: &str = "ask agent";
 
 pub(super) const DONE: &str = "done";
 
+const CONFLICT_NOTE: [&str; 2] =
+    ["GitHub runs no pull_request workflows until the", "conflict is resolved, so checks may be missing."];
+
 const NOTE: &str = "each workspace's pull request and its checks, from gh";
 
 #[derive(Default)]
@@ -184,12 +187,16 @@ impl App {
             _ => {}
         }
         self.pulls.answered.insert(project, Answered { at: now, error });
-        for (workspace, branch, pull) in found {
+        for (workspace, branch, mut pull) in found {
             let path = self.projects.workspace_index(workspace).map(|(p, w)| &self.projects[p].workspaces[w].path);
             if path.and_then(|path| git::checked_out(path)) != Some(branch.clone()) {
                 continue;
             }
-            let shown = self.pulls.found.get(&workspace).and_then(|f| f.pull.as_ref()).map(PullRequest::mark);
+            let before = self.pulls.found.get(&workspace).and_then(|f| f.pull.as_ref());
+            if let (Some(pull), Some(before)) = (pull.as_mut(), before) {
+                pull.keep_known(before);
+            }
+            let shown = before.map(PullRequest::mark);
             if shown != pull.as_ref().map(PullRequest::mark) {
                 let mark = pull.as_ref().map(PullRequest::mark);
                 log::info!(
@@ -198,7 +205,8 @@ impl App {
                     workspace = workspace,
                     number = mark.map_or(0, |m| m.number),
                     state = mark.map_or("none", |m| m.state.name()),
-                    checks = mark.and_then(|m| m.ci).map_or("none", |ci| ci.name())
+                    checks = mark.and_then(|m| m.ci).map_or("none", |ci| ci.name()),
+                    conflicts = mark.is_some_and(|m| m.conflicts)
                 );
             }
             self.pulls.found.insert(workspace, Found { branch, at: Some(now), pull });
@@ -282,14 +290,17 @@ impl App {
     }
 
     pub(super) fn pull_request_extra(&self, workspace: u64) -> Option<&'static str> {
-        self.pull_request(workspace).filter(|p| p.ci() == Some(pull_request::Ci::Failing)).map(|_| ASK_AGENT)
+        self.pull_request(workspace).and_then(PullRequest::problems).map(|_| ASK_AGENT)
     }
 
-    pub(super) fn pull_request_view(&self, workspace: u64, scroll: usize) -> Option<ui::Overlay> {
-        let pull = self.pull_request(workspace)?;
+    fn pull_request_lines(&self, pull: &PullRequest) -> Vec<Line<'static>> {
         let grey = ui::muted(&self.theme);
         let muted = Style::default().fg(grey);
-        let mut notes = vec![Line::from(Span::styled(pull.summary(), muted)), Line::default()];
+        let mut notes = vec![Line::from(Span::styled(pull.summary(), muted))];
+        if pull.conflicts() {
+            notes.extend(CONFLICT_NOTE.map(|line| Line::from(Span::styled(line, muted))));
+        }
+        notes.push(Line::default());
         notes.extend(pull.checks.iter().map(|check| {
             let mut spans = vec![ui::outcome_icon(grey, check.outcome), Span::raw(" ")];
             spans.push(Span::raw(check.name.clone()));
@@ -298,6 +309,12 @@ impl App {
             }
             Line::from(spans)
         }));
+        notes
+    }
+
+    pub(super) fn pull_request_view(&self, workspace: u64, scroll: usize) -> Option<ui::Overlay> {
+        let pull = self.pull_request(workspace)?;
+        let notes = self.pull_request_lines(pull);
         let project = self.projects.workspace_index(workspace).map(|(p, _)| self.projects[p].id);
         let error = project.and_then(|id| self.pulls.answered.get(&id)).and_then(|a| a.error.clone());
         Some(ui::Overlay::Update(ui::Update {
@@ -326,7 +343,7 @@ impl App {
         if submit.contains(pos) {
             self.overlay = self.submit_pull_request(workspace);
         } else if extra.is_some_and(|r| r.contains(pos)) {
-            self.ask_agent_about_checks(workspace);
+            self.ask_agent_about_pull_request(workspace);
         } else if cancel.contains(pos) {
             self.overlay = None;
         }
@@ -334,7 +351,7 @@ impl App {
 
     pub(super) fn scroll_pull_request(&mut self, delta: isize, area: Rect) {
         let Some(Overlay::PullRequest { workspace, scroll }) = self.overlay else { return };
-        let lines = self.pull_request(workspace).map_or(0, |p| p.checks.len() + 2);
+        let lines = self.pull_request(workspace).map_or(0, |p| self.pull_request_lines(p).len());
         let scroll = ui::update_scroll(area, lines, scroll.saturating_add_signed(delta));
         self.overlay = Some(Overlay::PullRequest { workspace, scroll });
     }
@@ -346,8 +363,8 @@ impl App {
         None
     }
 
-    fn ask_agent_about_checks(&mut self, workspace: u64) {
-        let Some(text) = self.pull_request(workspace).map(PullRequest::failures) else { return };
+    fn ask_agent_about_pull_request(&mut self, workspace: u64) {
+        let Some(text) = self.pull_request(workspace).and_then(PullRequest::problems) else { return };
         self.overlay = None;
         self.ask_agent(workspace, &text);
     }

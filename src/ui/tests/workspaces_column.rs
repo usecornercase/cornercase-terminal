@@ -182,7 +182,11 @@ mod pull_request_tag {
     }
 
     fn mark(state: State, ci: Option<Ci>) -> Mark {
-        Mark { number: 482, state, ci }
+        Mark { number: 482, state, ci, conflicts: false }
+    }
+
+    fn conflicting(state: State, ci: Option<Ci>) -> Mark {
+        Mark { conflicts: true, ..mark(state, ci) }
     }
 
     fn tag_style(v: &View) -> (Color, bool) {
@@ -200,6 +204,20 @@ mod pull_request_tag {
     #[case::no_checks(mark(State::Open, None), "#482", Color::DarkGray, false)]
     #[case::merged(mark(State::Merged, Some(Ci::Failing)), "#482", Color::Indexed(99), false)]
     #[case::closed(mark(State::Closed, Some(Ci::Passing)), "#482", Color::DarkGray, true)]
+    #[case::conflicting_with_passing_checks(
+        conflicting(State::Open, Some(Ci::Passing)),
+        "#482!",
+        Color::Indexed(208),
+        false
+    )]
+    #[case::conflicting_before_failing_checks(
+        conflicting(State::Open, Some(Ci::Failing)),
+        "#482!",
+        Color::Indexed(208),
+        false
+    )]
+    #[case::conflicting_draft_without_checks(conflicting(State::Draft, None), "#482!", Color::Indexed(208), false)]
+    #[case::merged_never_conflicts(conflicting(State::Merged, None), "#482", Color::Indexed(99), false)]
     fn says_the_state_and_the_checks(
         #[case] mark: Mark,
         #[case] tag: &str,
@@ -246,6 +264,13 @@ mod pull_request_tag {
         }
 
         assert_eq!(badge_text(&v).as_deref(), Some(expected));
+    }
+
+    #[test]
+    fn a_conflict_mark_is_the_target_too() {
+        let v = tagged("login", 0, conflicting(State::Open, Some(Ci::Passing)));
+
+        assert_eq!(badge_text(&v).as_deref(), Some("#482!"));
     }
 
     #[test]

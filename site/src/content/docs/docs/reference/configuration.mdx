@@ -27,7 +27,7 @@ The ` restart ` button next to ` done ` restarts cornercase. It first lists what
 | **worktrees folder** | Where new [worktrees](../../guides/worktrees/) are checked out: `<folder>/<repository>/<branch>`. Must be an absolute path or start with `~/`. |
 | **fetch branches every** | How often, in minutes, the remotes are fetched to show the [commits to pull](../../guides/worktrees/#commits-to-pull) as `↓n` on each workspace. `0` turns it off. |
 | **merged PRs in stats** | On (the default): Usage → Stats counts your merged pull requests and merge requests, read with `gh` and `glab`. Off: nothing is asked. The note names the accounts read, or why none were. See [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats). |
-| **pull requests** | On (the default): each workspace whose branch has a pull request on GitHub shows its number and the state of its checks, read with `gh`. Off: nothing is asked. The note says why none show when `gh` is missing, logged out or failing. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks). |
+| **pull requests** | On (the default): each workspace whose branch has a pull request on GitHub shows its number, the state of its checks and whether it has merge conflicts, read with `gh`. Off: nothing is asked. The note says why none show when `gh` is missing, logged out or failing. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks). |
 
 ### Agents
 
@@ -275,7 +275,7 @@ How often, in minutes, each project's remotes are fetched to show the [commits t
 
 #### `pull_requests`
 
-Whether each workspace shows the pull request of its branch and the state of its checks, asked of GitHub with [`gh`](#gh). On by default. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks).
+Whether each workspace shows the pull request of its branch and the state of its checks and whether it has merge conflicts, asked of GitHub with [`gh`](#gh). On by default. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks).
 
 #### `merged_pull_requests`
 

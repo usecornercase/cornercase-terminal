@@ -241,6 +241,8 @@ pub(crate) struct PullRequestInfo {
     pub(crate) state: String,
     pub(crate) checks: Option<String>,
     pub(crate) failed: Vec<String>,
+    pub(crate) conflicts: bool,
+    pub(crate) base: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

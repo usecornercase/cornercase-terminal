@@ -50,6 +50,8 @@ impl App {
                 state: pull.state.name().into(),
                 checks: pull.ci().map(|ci| ci.name().into()),
                 failed: pull.failed().map(|check| check.name.clone()).collect(),
+                conflicts: pull.conflicts(),
+                base: Some(pull.base.clone()).filter(|base| !base.is_empty()),
             }),
             setup: ws.setup().map(|(_, state)| if state.running() { "running" } else { "failed" }.to_string()),
             run_dir: self
@@ -109,7 +111,15 @@ impl App {
                 (workspace.id, workspace.behind, git::branch(&workspace.path)).hash(&mut hash);
                 workspace.setup().map(|(_, state)| state.running()).hash(&mut hash);
                 if let Some(pull) = self.pull_request(workspace.id) {
-                    (pull.number, &pull.title, pull.state.name(), pull.ci().map(Ci::name)).hash(&mut hash);
+                    (
+                        pull.number,
+                        &pull.title,
+                        pull.state.name(),
+                        pull.ci().map(Ci::name),
+                        pull.conflicts(),
+                        &pull.base,
+                    )
+                        .hash(&mut hash);
                     pull.failed().for_each(|check| check.name.hash(&mut hash));
                 }
                 for tab in &workspace.tabs {

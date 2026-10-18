@@ -5,6 +5,8 @@ use crate::test_util::{TempDir, fake_gh, fixture};
 
 const VIEW: &str = fixture!("gh/2.101.0/pr-view.json");
 
+const CONFLICTING: &str = fixture!("gh/2.101.0/pr-view-conflicting.json");
+
 fn gh_printing(tmp: &TempDir, json: &str) -> std::path::PathBuf {
     fake_gh(tmp.path(), &format!("echo \"$@\" > args; cat <<'EOF'\n{json}\nEOF"))
 }
@@ -18,7 +20,7 @@ fn check(name: &str, outcome: Outcome) -> Check {
 }
 
 fn pull(state: State, checks: Vec<Check>) -> PullRequest {
-    PullRequest { number: 7, title: "x".into(), url: "u".into(), state, checks }
+    PullRequest { number: 7, title: "x".into(), url: "u".into(), state, conflicting: None, base: String::new(), checks }
 }
 
 mod find {
@@ -223,9 +225,97 @@ mod texts {
         found.checks.push(check("bot", Outcome::Failed));
 
         assert_eq!(
-            found.failures(),
-            "pull request #482 failed its checks: tests (ubuntu-24.04) \
-             https://github.com/acme/web-shop/actions/runs/1001/job/2001, bot "
+            found.problems().as_deref(),
+            Some(
+                "pull request #482 failed its checks: tests (ubuntu-24.04) \
+                 https://github.com/acme/web-shop/actions/runs/1001/job/2001, bot "
+            )
         );
+    }
+
+    #[test]
+    fn the_summary_says_it_conflicts_before_the_checks() {
+        assert_eq!(parsed(CONFLICTING).summary(), "open · conflicts with main · 1 passed");
+        let mut found = pull(State::Open, Vec::new());
+        found.conflicting = Some(true);
+        assert_eq!(found.summary(), "open · conflicts with its base · no checks");
+    }
+
+    #[test]
+    fn the_problems_name_the_conflict_then_the_failed_checks() {
+        let mut found = parsed(CONFLICTING);
+        assert_eq!(found.problems().as_deref(), Some("pull request #486 has merge conflicts with main "));
+        found.checks.push(check("bot", Outcome::Failed));
+        assert_eq!(
+            found.problems().as_deref(),
+            Some("pull request #486 has merge conflicts with main and failed its checks: bot ")
+        );
+        assert_eq!(pull(State::Open, Vec::new()).problems(), None);
+    }
+}
+
+mod conflicts {
+    use super::*;
+
+    #[rstest]
+    #[case::conflicting(r#""mergeable":"CONFLICTING""#, Some(true))]
+    #[case::mergeable(r#""mergeable":"MERGEABLE""#, Some(false))]
+    #[case::unknown(r#""mergeable":"UNKNOWN""#, None)]
+    #[case::missing(r#""title":"x""#, None)]
+    #[case::null(r#""mergeable":null"#, None)]
+    fn come_from_gh_mergeable(#[case] field: &str, #[case] expected: Option<bool>) {
+        assert_eq!(parsed(&format!(r#"{{"number":1,{field}}}"#)).conflicting, expected);
+    }
+
+    #[test]
+    fn the_fixtures_say_whether_they_conflict_and_name_their_base() {
+        let (view, conflicting) = (parsed(VIEW), parsed(CONFLICTING));
+
+        assert_eq!((view.conflicting, view.base.as_str()), (Some(false), "main"));
+        assert_eq!((conflicting.conflicting, conflicting.base.as_str()), (Some(true), "main"));
+        assert_eq!(conflicting.checks, [check_with("review-bot", Outcome::Passed)]);
+    }
+
+    fn check_with(name: &str, outcome: Outcome) -> Check {
+        check(name, outcome)
+    }
+
+    #[rstest]
+    #[case::open(State::Open, true)]
+    #[case::draft(State::Draft, true)]
+    #[case::merged(State::Merged, false)]
+    #[case::closed(State::Closed, false)]
+    fn only_an_open_or_draft_one_conflicts(#[case] state: State, #[case] expected: bool) {
+        let mut found = pull(state, Vec::new());
+        found.conflicting = Some(true);
+
+        assert_eq!(found.conflicts(), expected);
+    }
+
+    #[rstest]
+    #[case::unknown_keeps(None, Some(true), 7, Some(true))]
+    #[case::known_replaces(Some(false), Some(true), 7, Some(false))]
+    #[case::another_pull_request_starts_unknown(None, Some(true), 8, None)]
+    fn an_answer_keeps_what_the_last_one_knew_only_when_it_knows_nothing(
+        #[case] now: Option<bool>,
+        #[case] before: Option<bool>,
+        #[case] number: u64,
+        #[case] expected: Option<bool>,
+    ) {
+        let mut last = pull(State::Open, Vec::new());
+        last.conflicting = before;
+        let mut answer = pull(State::Open, Vec::new());
+        (answer.conflicting, answer.number) = (now, number);
+
+        answer.keep_known(&last);
+
+        assert_eq!(answer.conflicting, expected);
+    }
+
+    #[test]
+    fn the_mark_has_it_beside_the_checks() {
+        let mark = parsed(CONFLICTING).mark();
+
+        assert_eq!((mark.conflicts, mark.ci), (true, Some(Ci::Passing)));
     }
 }

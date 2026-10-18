@@ -534,6 +534,27 @@ mod output {
     }
 
     #[test]
+    fn a_pull_request_with_conflicts_says_so_before_its_checks() {
+        let mut report = report();
+        let mut pull = PullRequestInfo {
+            number: 482,
+            state: "open".into(),
+            checks: Some("passing".into()),
+            conflicts: true,
+            base: Some("main".into()),
+            ..PullRequestInfo::default()
+        };
+        report.projects[0].workspaces[0].pull_request = Some(pull.clone());
+        let named = render(&report, Some(Path::new("/home/ana")));
+        pull.base = None;
+        report.projects[0].workspaces[0].pull_request = Some(pull);
+        let bare = render(&report, Some(Path::new("/home/ana")));
+
+        assert!(named.contains("pull request #482 open, conflicts with main, checks passing  (shown)\n"), "{named}");
+        assert!(bare.contains("pull request #482 open, conflicts, checks passing  (shown)\n"), "{bare}");
+    }
+
+    #[test]
     fn an_agent_left_with_a_background_shell_still_reads_working() {
         let mut report = report();
         report.projects[0].workspaces[0].tabs[0].panes[1].background_shell = true;

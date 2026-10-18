@@ -106,6 +106,7 @@ pub(super) fn pull_tag(muted: Color, mark: Mark) -> Span<'static> {
     let (text, style) = match (mark.state, mark.ci) {
         (State::Merged, _) => (number, Style::default().fg(BRAND_COLOR)),
         (State::Closed, _) => (number, Style::default().fg(muted).add_modifier(Modifier::CROSSED_OUT)),
+        _ if mark.conflicts => (format!("{number}!"), Style::default().fg(WAITING_COLOR)),
         (_, None) => (number, Style::default().fg(muted)),
         (_, Some(ci)) => {
             let outcome = match ci {

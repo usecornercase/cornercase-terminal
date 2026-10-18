@@ -6,6 +6,8 @@ use crate::test_util::{clone_of, fake_gh, fixture, git};
 
 const VIEW: &str = fixture!("gh/2.101.0/pr-view.json");
 
+const CONFLICTING: &str = fixture!("gh/2.101.0/pr-view-conflicting.json");
+
 const URL: &str = "https://github.com/acme/web-shop/pull/482";
 
 struct Repo {
@@ -42,8 +44,12 @@ fn gh_answering(dir: &Path, found: &str) -> PathBuf {
     )
 }
 
+fn printing_json(json: &str) -> String {
+    format!("cat <<'EOF'\n{json}\nEOF")
+}
+
 fn printing() -> String {
-    format!("cat <<'EOF'\n{VIEW}\nEOF")
+    printing_json(VIEW)
 }
 
 fn repo_with(found: &str, configure: impl FnOnce(&mut Config)) -> Repo {
@@ -98,9 +104,19 @@ fn badge_pos(app: &mut App, which: char) -> Position {
     find_in(app, r, AREA, which)
 }
 
-fn open_dialog(repo: &mut Repo) {
+fn open_dialog_of(repo: &mut Repo, number: u64) {
     right_click_row(&mut repo.app, WorkspaceRow::Workspace(1));
-    pick(&mut repo.app, "pull request #482");
+    pick(&mut repo.app, &format!("pull request #{number}"));
+}
+
+fn open_dialog(repo: &mut Repo) {
+    open_dialog_of(repo, 482);
+}
+
+fn conflicting() -> Repo {
+    let mut repo = repo_with(&printing_json(CONFLICTING), |_| {});
+    repo.ask("gh answers");
+    repo
 }
 
 mod asking {
@@ -218,12 +234,103 @@ mod asking {
         let pull = report.projects[0].workspaces[1].pull_request.as_ref().expect("in the report");
         assert_eq!((pull.number, pull.state.as_str(), pull.checks.as_deref()), (482, "open", Some("failing")));
         assert_eq!(pull.failed, ["tests (ubuntu-24.04)"]);
+        assert_eq!((pull.conflicts, pull.base.as_deref()), (false, Some("main")));
         assert_eq!(report.projects[0].workspaces[0].pull_request, None);
+    }
+}
+
+mod conflicts {
+    use super::*;
+
+    #[test]
+    fn a_conflicting_one_shows_its_mark_whatever_its_checks() {
+        let mut repo = conflicting();
+
+        let row = row_text(&mut repo.app, WorkspaceRow::Workspace(1));
+
+        assert!(row.contains("#486!") && !row.contains('✓'), "{row}");
+    }
+
+    #[test]
+    fn an_unknown_answer_keeps_the_conflict_shown() {
+        let mut repo = repo_with("cat \"$0.json\"", |_| {});
+        let json = repo.tmp.path().join("gh.json");
+        std::fs::write(&json, CONFLICTING).expect("json");
+        repo.ask("first answer");
+        std::fs::write(&json, CONFLICTING.replace("CONFLICTING", "UNKNOWN")).expect("json");
+
+        repo.app.ask_pull_requests(Instant::now() + Duration::from_mins(10));
+        pump_until(&mut repo.app, &repo.rx, "second answer", |a| a.pulls.asking.is_empty());
+
+        assert!(row_text(&mut repo.app, WorkspaceRow::Workspace(1)).contains("#486!"));
+        assert_eq!(repo.calls().len(), 2);
+        std::fs::write(&json, CONFLICTING.replace("CONFLICTING", "MERGEABLE")).expect("json");
+        repo.app.ask_pull_requests(Instant::now() + Duration::from_mins(20));
+        pump_until(&mut repo.app, &repo.rx, "third answer", |a| a.pulls.asking.is_empty());
+        assert!(row_text(&mut repo.app, WorkspaceRow::Workspace(1)).contains("#486✓"));
+    }
+
+    #[test]
+    fn scripts_see_the_conflict_and_its_base() {
+        let repo = conflicting();
+
+        let report = repo.app.report(None);
+
+        let pull = report.projects[0].workspaces[1].pull_request.as_ref().expect("in the report");
+        assert_eq!(
+            (pull.conflicts, pull.base.as_deref(), pull.checks.as_deref()),
+            (true, Some("main"), Some("passing"))
+        );
+    }
+
+    #[test]
+    fn a_new_conflict_changes_what_watchers_see() {
+        let mut repo = repo_with("cat \"$0.json\"", |_| {});
+        let json = repo.tmp.path().join("gh.json");
+        std::fs::write(&json, CONFLICTING.replace("CONFLICTING", "MERGEABLE")).expect("json");
+        repo.ask("first answer");
+        let before = repo.app.refreshed();
+        std::fs::write(&json, CONFLICTING).expect("json");
+
+        repo.app.ask_pull_requests(Instant::now() + Duration::from_mins(10));
+        pump_until(&mut repo.app, &repo.rx, "second answer", |a| a.pulls.asking.is_empty());
+
+        assert_ne!(repo.app.refreshed(), before);
     }
 }
 
 mod dialog {
     use super::*;
+
+    #[test]
+    fn a_conflict_is_said_with_why_checks_are_missing() {
+        let mut repo = conflicting();
+
+        open_dialog_of(&mut repo, 486);
+
+        assert_eq!(
+            notes(&repo.app),
+            [
+                "open · conflicts with main · 1 passed",
+                "GitHub runs no pull_request workflows until the",
+                "conflict is resolved, so checks may be missing.",
+                "",
+                "✓ review-bot",
+            ]
+        );
+    }
+
+    #[test]
+    fn ask_agent_hands_over_the_conflict() {
+        let mut repo = conflicting();
+        open_dialog_of(&mut repo, 486);
+
+        click(&mut repo.app, ui::update_extra(AREA, COPY_LINK, DONE, ASK_AGENT).as_position());
+
+        let text = "pull request #486 has merge conflicts with main";
+        assert_eq!(repo.app.outbox.host_writes, [clipboard::osc52(text)]);
+        assert_eq!(toast(&repo.app), Some(NO_AGENT));
+    }
 
     #[test]
     fn opens_from_the_workspace_menu_with_its_checks() {

@@ -63,7 +63,7 @@ const rollup = (pull) =>
   );
 for (const pull of data.PULLS) {
   const url = `https://github.com/acme/web-shop/pull/${pull.number}`;
-  const view = { number: pull.number, title: pull.title, url, state: 'OPEN', isDraft: false, statusCheckRollup: rollup(pull) };
+  const view = { number: pull.number, title: pull.title, url, state: 'OPEN', isDraft: false, baseRefName: 'main', mergeable: 'MERGEABLE', statusCheckRollup: rollup(pull) };
   writeFileSync(join(gh, `pr-${pull.branch.replace(/\//g, '-')}.json`), JSON.stringify(view));
 }
 
