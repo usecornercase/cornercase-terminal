@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.154
+
+- **Keep two accounts of Claude Code, Codex or Gemini CLI and choose which one new agents start with.** An account is a folder of its own where the agent keeps its login (`cornercase account add claude work --login` makes one and opens a tab to log in there), and a profile picks one account per agent (`cornercase profile new Work claude=work codex=work`). `cornercase profile use Work` makes new tabs and agents start with those accounts, without logging out of anything; tabs already open keep theirs, so a work agent and a personal one can run side by side. `--profile NAME` on `start`, `new-tab` and `flow run` uses another profile once. See Accounts and profiles in the docs.
+  - Accounts share your settings, instructions, skills and commands through links to the agent's usual folder; the login, history and sessions stay with each account. cornercase never reads or copies a token.
+  - Agents resume their conversations with their account after a restart, and `status --json` names each agent's `account`. A button in the window comes in a later release.
+
 ## 0.12.153
 
 - No changes you will notice: a test that failed now and then is fixed.
