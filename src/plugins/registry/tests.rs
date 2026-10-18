@@ -153,3 +153,20 @@ mod programs {
         assert!(registry.set_enabled("acme.notes", true).expect_err("refused").contains("outside"));
     }
 }
+
+#[test]
+fn the_label_and_note_are_what_settings_shows() {
+    let (home, folder) = (TempDir::new(), TempDir::new());
+    let mut registry = linked(&home, &folder);
+    let off = registry.plugins().remove(0);
+    assert_eq!((off.label().as_str(), off.note(None).as_str()), ("Notes 1.0", "declares no permissions · runs as you"));
+    registry.set_enabled("acme.notes", true).expect("on");
+    let on = registry.plugins().remove(0);
+    assert_eq!(on.note(None), "");
+    assert_eq!(on.note(Some("service sync runs")), "service sync runs");
+    assert_eq!(off.note(Some("service sync runs")), "declares no permissions · runs as you");
+    std::fs::write(folder.path().join(manifest::FILE), "broken").expect("manifest");
+    let broken = registry.plugins().remove(0);
+    assert_eq!(broken.label(), "acme.notes");
+    assert_ne!(broken.note(None), "");
+}

@@ -1,6 +1,7 @@
 use super::flow_panel::team;
 use super::*;
 use crate::agents::AgentState;
+use crate::agents::activity::Activity;
 use crate::flows::ORCHESTRATOR;
 use crate::flows::progress::Edge;
 use crate::flows::run::{Kind, Message};
@@ -68,4 +69,41 @@ fn the_plan_goes_on_where_it_stood_after_a_restart() {
     assert_eq!((progress.active, progress.rounds(1)), (Some(2), 1));
     assert_eq!(progress.last.as_ref().map(|step| step.edge), Some(Edge::Forward(1)));
     assert_eq!(progress.outside, None);
+}
+
+#[test]
+fn a_restored_run_keeps_its_latched_end() {
+    let (mut app, _rx, _dir) = team();
+    app.runs[0].ended = Some("feat/x".into());
+    let (mut again, _rx2) = new_app(no_config());
+
+    assert!(again.restore(&app.state(), AREA));
+
+    assert_eq!(again.runs[0].ended.as_deref(), Some("feat/x"));
+    let end = again.flow_view(Instant::now(), None).and_then(|view| view.diagram.live).expect("live").end;
+    assert!(end.reached);
+}
+
+#[test]
+fn the_roles_come_back_after_a_restart() {
+    let (app, _rx, _dir) = team();
+    let (mut again, _rx) = new_app(no_config());
+
+    assert!(again.restore(&app.state(), AREA));
+    for tab in &mut again.projects[0].workspaces[0].tabs {
+        for term in &mut tab.panes {
+            term.agent.follow(Some(agents::Known::Claude.name()));
+            term.agent.update(Some(Activity::Idle), true, Instant::now());
+        }
+    }
+    again.runs[0].members.iter().for_each(|member| assert!(again.projects.pane_by(member.pane).is_some()));
+
+    let seated: Vec<(Option<String>, bool)> =
+        again.agents_view().entries.into_iter().map(|e| (e.role, e.place)).collect();
+    let (orchestrators, members): (Vec<_>, Vec<_>) =
+        seated.iter().filter(|(role, _)| role.is_some()).partition(|(role, _)| role.as_deref() == Some(ORCHESTRATOR));
+    assert_eq!(
+        (orchestrators, members.iter().all(|(_, place)| !place)),
+        (vec![&(Some(ORCHESTRATOR.to_string()), true)], true)
+    );
 }

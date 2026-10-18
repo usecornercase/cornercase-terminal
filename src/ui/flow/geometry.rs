@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use ratatui::layout::Rect;
 
-use super::{Diagram, Node};
+use super::{Diagram, Node, TAG_GAP};
 use crate::flows::progress::Edge;
 use crate::text;
 
@@ -66,6 +66,8 @@ pub(super) struct Geometry {
     pub(super) outside: Option<(Edge, Vec<At>)>,
     pub(super) end: Option<At>,
     pub(super) below: Option<At>,
+    pub(super) end_label: String,
+    pub(super) end_tag: Option<At>,
 }
 
 impl Geometry {
@@ -348,16 +350,29 @@ pub(super) fn layout(d: &Diagram, width: u16) -> Geometry {
     }
     b.geometry.end = Some((b.cx, b.y));
     b.y += 1;
-    let words = width_of(d.end);
+    let end_row = b.y - 1;
+    let words = d.end_cells();
     if b.cx + 2 + words > width {
         b.geometry.below = Some((b.cx.saturating_sub(words / 2).max(left), b.y));
         b.y += 1;
     }
+    end_words(&mut b, d, width, end_row);
     loops(&mut b, &shapes, &lanes);
     labels(&mut b, d, &lanes);
     outside(&mut b, d, &shapes);
     b.geometry.height = b.y;
     b.geometry
+}
+
+fn end_words(b: &mut Builder, d: &Diagram, width: u16, end_row: u16) {
+    let at = b.geometry.below.unwrap_or((b.cx + 2, end_row));
+    let room = usize::from(width.saturating_sub(at.0));
+    let tag = d.tag().map(|tag| tag.width()).filter(|&w| w <= room);
+    let label_room = tag.map_or(room, |w| room.saturating_sub(w + text::cells(TAG_GAP)));
+    let label = if tag.is_some() && label_room < 2 { String::new() } else { text::truncate_cells(d.end, label_room) };
+    let gap = if label.is_empty() { 0 } else { width_of(TAG_GAP) };
+    b.geometry.end_tag = tag.map(|_| (at.0 + width_of(&label) + gap, at.1));
+    b.geometry.end_label = label;
 }
 
 fn port(shapes: &[(Shape, Vec<Rect>)], stage: usize, incoming: bool) -> Option<Rect> {

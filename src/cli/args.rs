@@ -40,7 +40,6 @@ pub struct Cli {
 }
 
 #[derive(Debug, Subcommand)]
-#[expect(clippy::large_enum_variant, reason = "parsed once per process")]
 pub(crate) enum Command {
     #[command(flatten)]
     Control(Control),

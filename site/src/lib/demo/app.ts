@@ -10,7 +10,7 @@ import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from '
 import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, workspaceDiff } from './changes';
 import { TodoPanel, todoWidth } from './todo';
 import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
-import { RUN_DIR, type Run } from './flowrun';
+import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
 import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, fileMax, foundRows, lineEdge, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
@@ -282,6 +282,8 @@ export interface AgentRow extends TreeSpot {
   agent: string;
   project: string;
   workspace: string | null;
+  role: string | null;
+  place: boolean;
   details: Details;
   active: boolean;
 }
@@ -775,6 +777,8 @@ export class App {
                 agent: pane.agent ?? '',
                 project: projectLabel(p),
                 workspace: p.workspaces.length > 1 ? workspaceLabel(w) : null,
+                role: null,
+                place: true,
                 details: { model: c.model ? (pane.context?.model ?? null) : null, percent: c.context ? (pane.context?.percent ?? null) : null, subagents: pane.subagents ?? 0, memory: null },
                 active: t === focused && t.active === pane.id,
               },
@@ -783,7 +787,20 @@ export class App {
         ),
       );
     });
-    return agentTree(flat, (row) => row.pane, (row) => row.parent);
+    const seat = (pane: number | null) => {
+      if (pane === null) return null;
+      for (const run of this.runs) {
+        const member = run.members.find((m) => m.pane === pane);
+        if (member) return { run, role: member.role };
+      }
+      return null;
+    };
+    return agentTree(flat, (row) => row.pane, (row) => row.parent).map((row) => {
+      const own = seat(row.pane);
+      const theirs = seat(row.parent);
+      const under = row.depth > 0 && own !== null && own.role !== ORCHESTRATOR && theirs !== null && theirs.run === own.run;
+      return { ...row, role: own?.role ?? null, place: !under };
+    });
   }
 
   jumpToPane(id: number): void {
@@ -1400,7 +1417,9 @@ export class App {
       if (!found) return id === undefined ? 'none' : 'closed';
       return paneStatus(found.pane) ?? 'none';
     };
-    const diagram = live(plan(run.flow), run.progress, state, this.now());
+    const own = run.members.find((m) => m.role === ORCHESTRATOR)?.pane;
+    if (own !== undefined && this.findPane(own)?.pane.pending) run.ended = true;
+    const diagram = live(plan(run.flow), run.progress, state, run.ended, this.now());
     const files = run.files.map((f) => ({ name: f.name, age: fileAge(this.now() - f.at) })).reverse();
     return { name: run.flow.name, task: run.task, diagram, files, scroll: this.flowScroll };
   }
@@ -2042,7 +2061,10 @@ export class App {
   private mark(a: Extract<MenuAction, { kind: 'mark' }>): void {
     for (const id of a.panes) {
       const found = this.findPane(id);
-      if (found) markPane(found.pane, a.pending);
+      if (!found) continue;
+      markPane(found.pane, a.pending);
+      if (!a.pending) continue;
+      for (const run of this.runs) if (run.members.some((m) => m.role === ORCHESTRATOR && m.pane === id)) run.ended = true;
     }
   }
 

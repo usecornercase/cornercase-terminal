@@ -3,7 +3,7 @@ use crate::plugins::Registry;
 use crate::plugins::manifest::FILE;
 use crate::test_util::write_executable;
 
-const MANIFEST: &str = r#"id = "acme.notes"
+pub(super) const MANIFEST: &str = r#"id = "acme.notes"
 name = "Notes"
 version = "1.0"
 permissions = ["read"]
@@ -25,15 +25,15 @@ on = "opened"
 command = ["./hook"]
 "#;
 
-struct Plugged {
-    app: App,
-    rx: Receiver<AppEvent>,
-    root: TempDir,
+pub(super) struct Plugged {
+    pub(super) app: App,
+    pub(super) rx: Receiver<AppEvent>,
+    pub(super) root: TempDir,
     _config: TempDir,
     _dirs: Vec<TempDir>,
 }
 
-fn plugged(enabled: bool) -> Plugged {
+pub(super) fn plugged(enabled: bool) -> Plugged {
     let (config, root, project) = (TempDir::new(), TempDir::new(), TempDir::new());
     std::fs::write(root.path().join(FILE), MANIFEST).expect("manifest");
     let out = root.path().join("out");
@@ -59,7 +59,7 @@ fn plugged(enabled: bool) -> Plugged {
 }
 
 impl Plugged {
-    fn read(&self, name: &str) -> String {
+    pub(super) fn read(&self, name: &str) -> String {
         std::fs::read_to_string(self.root.path().join(name)).unwrap_or_default()
     }
 }

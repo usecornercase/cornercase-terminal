@@ -145,6 +145,8 @@ const NO_TAB = 'no tab open';
 const AGENTS_TITLE = 'Agents';
 const NO_AGENTS = 'no agents running';
 const MIN_WORKSPACE_WIDTH = 4;
+const MIN_ROLE_WIDTH = 4;
+const ROLE_SEPARATOR = ' · ';
 const MOVE_LABEL = 'move here';
 const SWAP_LABEL = 'swap';
 const NO_TAB_HINT = ' opens a shell here';
@@ -1533,10 +1535,18 @@ export class Painter {
 }
 
 function agentPlace(entry: AgentRow, room: number, name: Style): Line {
+  if (entry.role !== null && !entry.place) return [seg(truncateRight(entry.role, room), name)];
   const project = [...entry.project].length;
   const rest = room - (project + 3);
-  if (entry.workspace !== null && rest >= MIN_WORKSPACE_WIDTH) return [seg(entry.project, name), seg(' › ', DARK), seg(truncateRight(entry.workspace, rest), name)];
-  return [seg(truncateRight(entry.project, room), name)];
+  const spans: Line =
+    entry.workspace !== null && rest >= MIN_WORKSPACE_WIDTH
+      ? [seg(entry.project, name), seg(' › ', DARK), seg(truncateRight(entry.workspace, rest), name)]
+      : [seg(truncateRight(entry.project, room), name)];
+  if (entry.role !== null) {
+    const left = room - (width(spans) + [...ROLE_SEPARATOR].length);
+    if (left >= MIN_ROLE_WIDTH) spans.push(seg(ROLE_SEPARATOR, DARK), seg(truncateRight(entry.role, left), name));
+  }
+  return spans;
 }
 
 function amongTabs(rows: WorkspaceRow[], i: number): boolean {

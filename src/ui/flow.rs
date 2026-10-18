@@ -4,6 +4,7 @@ use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::Span;
 
 pub(crate) use super::todo::close;
 use super::todo::header;
@@ -12,8 +13,9 @@ use crate::agents::activity::Status;
 use crate::flows::progress::{Edge, Progress};
 use crate::flows::{Flow, ORCHESTRATOR, Role};
 use crate::project::group::GROUP_STYLES;
+use crate::pull_request::Mark;
 use crate::text;
-use crate::ui::theme::WAITING_COLOR;
+use crate::ui::theme::{WAITING_COLOR, pull_tag};
 
 mod files;
 mod geometry;
@@ -30,6 +32,7 @@ const MORE_ABOVE: &str = " ↑ more ";
 const MORE_BELOW: &str = " ↓ more ";
 const OWN_LONG: &str = " own worktree ";
 const OWN_SHORT: &str = " own ";
+const TAG_GAP: &str = " · ";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum State {
@@ -74,11 +77,17 @@ pub(crate) struct Lit {
     pub(crate) dot: Option<f64>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct Ending {
+    pub(crate) reached: bool,
+    pub(crate) pull: Option<Mark>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct Live {
     pub(crate) lit: Option<Lit>,
     pub(crate) outside: Option<Edge>,
-    pub(crate) ended: bool,
+    pub(crate) end: Ending,
     pub(crate) messages: Vec<(Edge, String)>,
 }
 
@@ -101,6 +110,7 @@ pub(crate) enum Hit {
     Role(String),
     Edge(Edge, Option<String>),
     File(usize),
+    Pull,
 }
 
 pub(crate) fn role_colour(index: usize) -> Color {
@@ -162,7 +172,7 @@ impl Diagram {
         Self { focus: stage, ..self }
     }
 
-    pub(crate) fn live(mut self, progress: &Progress, of: impl Fn(&str) -> State, now: Instant) -> Self {
+    pub(crate) fn live(mut self, progress: &Progress, of: impl Fn(&str) -> State, end: Ending, now: Instant) -> Self {
         self.orchestrator.state = Some(of(ORCHESTRATOR));
         for node in self.stages.iter_mut().flatten() {
             node.state = Some(of(&node.role));
@@ -189,9 +199,18 @@ impl Diagram {
         let edges = self.edges();
         let sent = progress.sent().filter(|(edge, _)| edges.contains(edge));
         let messages = sent.map(|(edge, to)| (edge, to.to_string())).collect();
-        let ended = self.orchestrator.state == Some(State::Agent(Some(Status::Pending)));
-        self.live = Some(Live { lit, outside: progress.outside, ended, messages });
+        self.live = Some(Live { lit, outside: progress.outside, end, messages });
         self
+    }
+
+    fn tag(&self) -> Option<Span<'static>> {
+        self.live.as_ref()?.end.pull.map(|mark| pull_tag(self.muted, mark))
+    }
+
+    fn end_cells(&self) -> u16 {
+        let label = u16::try_from(text::cells(self.end)).unwrap_or(u16::MAX);
+        let tag = self.tag().map_or(0, |tag| u16::try_from(text::cells(TAG_GAP) + tag.width()).unwrap_or(u16::MAX));
+        label.saturating_add(tag)
     }
 
     fn edges(&self) -> Vec<Edge> {

@@ -255,19 +255,34 @@ test('The agents section hangs a flow team under its orchestrator', () => {
   assert.deepEqual(team.slice(1).map((row) => row.last), [false, false, false, true]);
   assert.ok(team.slice(1).every((row) => row.parent === team[0].pane));
 
-  const { grid } = app.render();
-  const list = app.areas().agentsList;
-  const lines = Array.from({ length: list.h }, (_, i) => grid.line(list.y + i).slice(list.x, list.x + list.w));
-  const drawn = lines.filter((line) => line.includes('payments'));
-  assert.equal(drawn.length, 5, lines.join('\n'));
-  assert.match(drawn[0], /^[▌ ] \S payments/);
-  assert.deepEqual(
-    drawn.slice(1).map((line) => line.slice(2, 3)),
-    ['├', '├', '├', '└'],
-  );
-  assert.ok(drawn.slice(1).every((line) => /^[▌ ] [├└] \S payments/.test(line)), drawn.join('\n'));
-  const second = lines[lines.indexOf(drawn[1]) + 1];
-  assert.equal(second.slice(2, 3), '│');
+  assert.deepEqual(team.map((row) => [row.role, row.place]), [
+    ['orchestrator', true],
+    ['coder', false],
+    ['reviewer', false],
+    ['security', false],
+    ['tester', false],
+  ]);
+
+  const drawnLines = () => {
+    const { grid } = app.render();
+    const list = app.areas().agentsList;
+    return Array.from({ length: list.h }, (_, i) => grid.line(list.y + i).slice(list.x, list.x + list.w));
+  };
+  const lines = drawnLines();
+  const lead0 = lines.findIndex((line) => line.includes('payments'));
+  assert.ok(lead0 >= 0, lines.join('\n'));
+  assert.equal(lines.filter((line) => line.includes('payments')).length, 1, lines.join('\n'));
+  assert.match(lines[lead0], /^[▌ ] \S payments › /);
+  assert.ok(!lines[lead0].includes('orchestrator'), lines[lead0]);
+  const members = [2, 4, 6, 8].map((n) => lines[lead0 + n]);
+  const roles = ['coder', 'reviewer', 'security', 'tester'];
+  members.forEach((line, i) => assert.match(line, new RegExp(`^[▌ ] [├└] \\S ${roles[i]}\\s*$`), members.join('\n')));
+  assert.deepEqual(members.map((line) => line.slice(2, 3)), ['├', '├', '├', '└']);
+  assert.equal(lines[lead0 + 3].slice(2, 3), '│');
+
+  app.widths = { ...app.widths, projects: 60, agents: 40 };
+  const wide = drawnLines();
+  assert.ok(wide.some((line) => line.includes('payments › fix/webhook-signature · orchestrator')), wide.join('\n'));
   app.destroy();
 });
 

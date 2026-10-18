@@ -105,6 +105,7 @@ impl Report {
                         resuming: pane.resuming,
                         parent: pane.parent,
                         subagents: pane.subagents,
+                        role: pane.role.clone(),
                     }));
                 }
             }
@@ -148,10 +149,11 @@ pub struct PaneRow {
     pub(crate) resuming: bool,
     pub(crate) parent: Option<u64>,
     pub(crate) subagents: u32,
+    pub(crate) role: Option<String>,
 }
 
 impl PaneRow {
-    pub const COLUMNS: [&str; 25] = [
+    pub const COLUMNS: [&str; 26] = [
         "pane",
         "tab",
         "workspace",
@@ -177,6 +179,7 @@ impl PaneRow {
         "resuming",
         "parent",
         "subagents",
+        "role",
     ];
 }
 
@@ -229,12 +232,21 @@ pub struct WorkspaceInfo {
     pub(crate) pull_request: Option<PullRequestInfo>,
     pub(crate) setup: Option<String>,
     pub(crate) run_dir: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) run: Option<RunStatus>,
     pub(crate) active: bool,
     pub tabs: Vec<TabInfo>,
     pub(crate) custom_name: Option<String>,
     pub(crate) collapsed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) changes: Option<super::ChangesCount>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct RunStatus {
+    pub(crate) end: String,
+    pub(crate) reached: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -286,4 +298,5 @@ pub struct PaneInfo {
     pub(crate) title: Option<String>,
     pub(crate) parent: Option<u64>,
     pub(crate) subagents: u32,
+    pub(crate) role: Option<String>,
 }

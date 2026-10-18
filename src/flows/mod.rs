@@ -147,6 +147,13 @@ pub(crate) enum End {
 impl End {
     pub(crate) const ALL: [Self; 2] = [Self::PullRequest, Self::Commits];
 
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::PullRequest => "pull_request",
+            Self::Commits => "commits",
+        }
+    }
+
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::PullRequest => "open a pull request",

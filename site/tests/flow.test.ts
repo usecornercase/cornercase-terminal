@@ -5,7 +5,7 @@ import { inputKey } from '../src/lib/demo/client';
 import { type Flow, Progress } from '../src/lib/demo/flow';
 import { FULL_ISSUE, RUN_BRANCH } from '../src/lib/demo/flowrun';
 import { keysItems } from '../src/lib/demo/keys';
-import { workspaceLabel } from '../src/lib/demo/model';
+import { markPane, workspaceLabel } from '../src/lib/demo/model';
 import { world } from '../src/lib/demo/world';
 
 const key = (k: string, ctrl = false) => ({ key: k, metaKey: false, isComposing: false, ctrlKey: ctrl, altKey: false, shiftKey: false });
@@ -23,6 +23,13 @@ function toRun(app: App): void {
   app.selectProject(p);
   app.selectWorkspace(p, app.projects[p].workspaces.findIndex((w) => workspaceLabel(w) === RUN_BRANCH));
   app.render();
+}
+
+function endOf(app: App) {
+  app.render();
+  let at = null;
+  for (let n = 0; app.textAt('◆', n); n++) at = app.textAt('◆', n);
+  return at;
 }
 
 function shown(app: App, needle: string): boolean {
@@ -87,8 +94,9 @@ test('the run plays while its panel shows: working boxes, a round, then the end'
   playUntil(app, '┏━ tester');
   playUntil(app, 'marked as pending review');
   app.render();
-  const end = app.textAt('◆');
+  const end = endOf(app);
   assert.ok(end);
+  assert.equal(app.render().grid.at(end.x, end.y)?.fg, 99);
   const run = app.runs[0];
   const done = () => run.members.slice(1).filter((m) => app.findPane(m.pane)?.pane.unseen).length;
   assert.equal(done(), 0);
@@ -248,5 +256,23 @@ test("the Flow panel lists the run's files as it plays, and a click opens one", 
   app.render();
   assert.equal(app.filesShown(), true);
   assert.ok(shown(app, '# coder, answer 1'));
+  app.destroy();
+});
+
+test('the end stays lit once the orchestrator marked it, until the run starts over', () => {
+  const app = demo();
+  toRun(app);
+  app.toggleFlow();
+  playUntil(app, 'marked as pending review');
+  app.render();
+  const end = endOf(app);
+  assert.ok(end);
+  const own = app.findPane(app.runs[0].members[0].pane)?.pane;
+  assert.ok(own);
+  assert.equal(app.render().grid.at(end.x, end.y)?.fg, 99);
+  markPane(own, false);
+  assert.equal(app.render().grid.at(end.x, end.y)?.fg, 99);
+  playUntil(app, '┏━ coder', 60000);
+  assert.notEqual(app.render().grid.at(end.x, end.y)?.fg, 99);
   app.destroy();
 });

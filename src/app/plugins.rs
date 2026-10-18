@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
@@ -8,9 +8,11 @@ use super::event::AppEvent;
 use super::menus::MenuAction;
 use super::overlay::Overlay;
 use crate::control;
-use crate::error::{Error, Result};
+use crate::control::plugins::{ActionInfo, ActionRan, ActionsInfo, PluginInfo, PluginsInfo, ServiceInfo};
+use crate::error::Error;
 use crate::log::{self, Job, Level};
 use crate::plugins::manifest::Action;
+use crate::plugins::registry::missing;
 use crate::plugins::{Context, Kind, Places, Plugin, Registry, Supervisor, Watch, run};
 use crate::project::Hierarchy;
 use crate::protocol;
@@ -36,7 +38,7 @@ pub(super) enum Spot {
 }
 
 impl Spot {
-    fn context(self) -> Context {
+    pub(super) fn context(self) -> Context {
         match self {
             Self::Project(_) => Context::Project,
             Self::Workspace(..) => Context::Workspace,
@@ -49,12 +51,13 @@ impl Spot {
 #[derive(Debug)]
 pub(crate) enum PluginEvent {
     Failed { plugin: String, title: String, reason: String },
+    Ran { request: u64, ran: Box<Result<ActionRan, String>> },
 }
 
 impl PluginEvent {
     pub(super) fn name(&self) -> &'static str {
         match self {
-            Self::Failed { .. } => "plugin action",
+            Self::Failed { .. } | Self::Ran { .. } => "plugin action",
         }
     }
 }
@@ -86,7 +89,7 @@ impl Plugins {
         hooked(&self.loaded)
     }
 
-    fn actions(&self) -> impl Iterator<Item = (&Plugin, &Action)> {
+    pub(super) fn actions(&self) -> impl Iterator<Item = (&Plugin, &Action)> {
         self.loaded
             .iter()
             .filter_map(|p| p.runs().map(|m| (p, m)))
@@ -106,22 +109,17 @@ fn server_env() -> Vec<(String, String)> {
     vec![(protocol::NESTED_ENV.to_string(), "1".to_string())]
 }
 
-fn run_to_end(
-    places: &Places,
-    plugin: &Plugin,
-    argv: &[String],
-    env: &[(String, String)],
-    cwd: Option<&Path>,
-    within: Duration,
-) -> Result<()> {
-    let child = places.command(plugin, argv, env, cwd).and_then(|mut c| c.spawn());
-    let child =
-        child.map_err(|e| Error::Plugin(format!("cannot start {}: {e}", argv.first().map_or("", String::as_str))))?;
-    match run::finish(child, within)? {
-        Some(status) if status.success() => Ok(()),
-        Some(status) => Err(Error::Plugin(status.to_string())),
-        None => Err(Error::Plugin(format!("stopped after {} s", within.as_secs()))),
+fn action_env(ids: &control::Ids, action: &Action, context: Context) -> Vec<(String, String)> {
+    let mut env = server_env();
+    let pairs = [(PROJECT_ENV, ids.project), (WORKSPACE_ENV, ids.workspace), (TAB_ENV, ids.tab)];
+    env.extend(pairs.into_iter().filter_map(|(key, id)| id.map(|id| (key.to_string(), id.to_string()))));
+    if let Some(pane) = ids.pane {
+        env.push((control::PANE_ENV.to_string(), pane.to_string()));
+        env.push((control::SERVER_ENV.to_string(), control::server_token().to_string()));
     }
+    env.push((ACTION_ENV.into(), action.id.clone()));
+    env.push((CONTEXT_ENV.into(), context.name().into()));
+    env
 }
 
 impl App {
@@ -152,7 +150,7 @@ impl App {
         self.reload_plugins();
     }
 
-    fn reload_plugins(&mut self) {
+    pub(super) fn reload_plugins(&mut self) {
         let Some(loaded) = self.plugins.changed() else { return };
         if hooked(&loaded) && !self.following() {
             self.publish(log::enabled(Level::Info));
@@ -178,11 +176,14 @@ impl App {
         self.plugins.actions().nth(usize::from(index)).map(|(_, action)| action.title.clone()).unwrap_or_default()
     }
 
-    fn spot_env(&self, spot: Spot) -> Option<(Vec<(String, String)>, PathBuf)> {
+    pub(super) fn spot_env(&self, spot: Spot) -> Option<(control::Ids, PathBuf)> {
         let (p, w, t, pane) = match spot {
             Spot::Project(project) => {
                 let p = self.projects.project_index(project)?;
-                return Some((vec![(PROJECT_ENV.into(), project.to_string())], self.projects[p].path.clone()));
+                return Some((
+                    control::Ids { project: Some(project), ..control::Ids::default() },
+                    self.projects[p].path.clone(),
+                ));
             }
             Spot::Workspace(project, workspace) => {
                 let (p, w) = self.projects.workspace_in(project, workspace)?;
@@ -198,16 +199,13 @@ impl App {
             }
         };
         let workspace = &self.projects[p].workspaces[w];
-        let mut env = vec![
-            (PROJECT_ENV.to_string(), self.projects[p].id.to_string()),
-            (WORKSPACE_ENV.to_string(), workspace.id.to_string()),
-        ];
-        env.extend(t.map(|t| (TAB_ENV.to_string(), workspace.tabs[t].id.to_string())));
-        if let Some(pane) = pane {
-            env.push((control::PANE_ENV.to_string(), pane.to_string()));
-            env.push((control::SERVER_ENV.to_string(), control::server_token().to_string()));
-        }
-        Some((env, workspace.path.clone()))
+        let ids = control::Ids {
+            project: Some(self.projects[p].id),
+            workspace: Some(workspace.id),
+            tab: t.map(|t| workspace.tabs[t].id),
+            pane,
+        };
+        Some((ids, workspace.path.clone()))
     }
 
     pub(super) fn run_plugin_action(&self, spot: Spot, index: u16, revision: u32) {
@@ -215,35 +213,52 @@ impl App {
             return;
         }
         let Some((plugin, action)) = self.plugins.actions().nth(usize::from(index)) else { return };
-        let Some((spot_env, cwd)) = self.spot_env(spot) else { return };
         let (plugin, action) = (plugin.clone(), action.clone());
-        let mut env = server_env();
-        env.extend(spot_env);
-        env.push((ACTION_ENV.into(), action.id.clone()));
-        env.push((CONTEXT_ENV.into(), spot.context().name().into()));
+        self.start_plugin_action(spot, plugin, action, None);
+    }
+
+    pub(super) fn start_plugin_action(&self, spot: Spot, plugin: Plugin, action: Action, request: Option<u64>) -> bool {
+        let Some((ids, cwd)) = self.spot_env(spot) else { return false };
+        let context = spot.context();
+        let env = action_env(&ids, &action, context);
         let places = self.plugins.places.clone();
         let job =
             Job::new(Level::Info, "plugins", "action").with("plugin", &plugin.entry.id).with("action", &action.id);
-        let (name, title) = (plugin.name(), action.title.clone());
+        let (name, title, id) = (plugin.name(), action.title.clone(), plugin.entry.id.clone());
         self.spawn_job(
             job,
             move || {
                 places.note(&plugin.entry.id, "action started", &[("action", &action.id)]);
-                let ran = run_to_end(&places, &plugin, &action.command, &env, Some(&cwd), ACTION_WITHIN);
-                if let Err(e) = &ran {
-                    places.note(&plugin.entry.id, "action failed", &[("action", &action.id), ("error", e)]);
+                let ran = run::run_to_end(&places, &plugin, &action.command, &env, Some(&cwd), ACTION_WITHIN);
+                if let Some(e) = ran.failure() {
+                    places.note(&plugin.entry.id, "action failed", &[("action", &action.id), ("error", &e)]);
                 }
-                ran.map_err(|e| Error::Plugin(format!("{e}; `cornercase plugin logs {}` says more", plugin.entry.id)))
+                let log = places.log(&plugin.entry.id);
+                Ok((ActionRan::of(&plugin.entry.id, &action.id, context, ids, &ran, log), ran.failure()))
             },
-            move |ran, _| {
-                let reason = ran.err()?.to_string();
+            move |result, job| {
+                let failure = result.as_ref().ok().and_then(|(_, failure)| failure.clone());
+                if let Some(e) = &failure {
+                    job.fail(e);
+                }
+                if let Some(request) = request {
+                    let ran = result.map(|(ran, _)| ran).map_err(|e| e.to_string());
+                    return Some(AppEvent::Plugin(PluginEvent::Ran { request, ran: Box::new(ran) }));
+                }
+                let reason = match result {
+                    Ok((_, Some(e))) => format!("{e}; `cornercase plugin logs {id}` says more"),
+                    Ok((_, None)) => return None,
+                    Err(e) => e.to_string(),
+                };
                 Some(AppEvent::Plugin(PluginEvent::Failed { plugin: name, title, reason }))
             },
         );
+        true
     }
 
     pub(super) fn plugin_answered(&mut self, event: PluginEvent) {
         match event {
+            PluginEvent::Ran { request, ran } => self.plugin_ran(request, *ran),
             PluginEvent::Failed { plugin, title, reason } => {
                 let message = format!("{plugin}: {title} failed: {reason}");
                 self.toast = Some(super::Toast::new(message, ui::ToastIcon::Bug));
@@ -278,15 +293,71 @@ impl App {
         self.spawn_job(
             job,
             move || {
-                let ran = run_to_end(&places, &plugin, &command, &env, None, HOOK_WITHIN);
-                if let Err(e) = &ran {
+                let ran = run::run_to_end(&places, &plugin, &command, &env, None, HOOK_WITHIN);
+                let failure = ran.failure();
+                if let Some(e) = &failure {
                     places.note(&plugin.entry.id, "hook failed", &[("on", &on), ("error", e)]);
                 }
                 running.fetch_sub(1, Ordering::SeqCst);
-                ran
+                failure.map_or(Ok(()), |e| Err(Error::Plugin(e)))
             },
             |_, _| None,
         );
+    }
+
+    pub(in crate::app) fn plugin_revision(&self) -> u32 {
+        self.plugins.revision
+    }
+
+    pub(in crate::app) fn plugin_infos(&self, now: Instant) -> PluginsInfo {
+        let places = &self.plugins.places;
+        let plugins = self
+            .plugins
+            .loaded
+            .iter()
+            .map(|plugin| {
+                let id = &plugin.entry.id;
+                let running = self.plugins.services.as_ref().and_then(|s| s.note(id));
+                let services = plugin.runs().map_or_else(Vec::new, |manifest| {
+                    let seen = self.plugins.services.as_ref().map(|s| s.seen(id)).unwrap_or_default();
+                    ServiceInfo::of(&manifest.service, &seen, now)
+                });
+                PluginInfo::of(plugin, places, running.as_deref(), services)
+            })
+            .collect();
+        PluginsInfo { revision: Some(self.plugins.revision), problem: Registry::open(&places.registry).err(), plugins }
+    }
+
+    pub(in crate::app) fn plugin_action_infos(&self, context: Option<Context>) -> ActionsInfo {
+        let actions = self
+            .plugins
+            .actions()
+            .filter(|(_, action)| context.is_none_or(|c| action.contexts.contains(&c)))
+            .map(|(plugin, action)| ActionInfo {
+                plugin: plugin.entry.id.clone(),
+                name: plugin.name(),
+                action: action.id.clone(),
+                title: action.title.clone(),
+                contexts: action.contexts.iter().map(|c| c.name().to_string()).collect(),
+            })
+            .collect();
+        ActionsInfo { revision: self.plugins.revision, actions }
+    }
+
+    pub(in crate::app) fn plugin_action(&self, plugin: &str, action: &str) -> Result<(Plugin, Action), String> {
+        let found = self.plugins.loaded.iter().find(|p| p.entry.id == plugin).ok_or_else(|| missing(plugin))?;
+        let manifest = match (&found.manifest, found.entry.enabled) {
+            (Err(e), _) => return Err(format!("`{plugin}` cannot run: {e}")),
+            (Ok(_), false) => {
+                return Err(format!("`{plugin}` is off; `cornercase plugin enable {plugin}` turns it on"));
+            }
+            (Ok(manifest), true) => manifest,
+        };
+        let found_action =
+            manifest.actions.iter().find(|a| a.id == action).ok_or_else(|| {
+                format!("`{plugin}` has no action `{action}`; `cornercase plugin actions` lists them")
+            })?;
+        Ok((found.clone(), found_action.clone()))
     }
 
     pub(super) fn plugin_rows(&self) -> Vec<PluginRow> {
@@ -296,7 +367,7 @@ impl App {
             .into_iter()
             .map(|plugin| {
                 let running = self.plugins.services.as_ref().and_then(|s| s.note(&plugin.entry.id));
-                plugin_row(&plugin, running)
+                plugin_row(&plugin, running.as_deref())
             })
             .collect()
     }
@@ -341,20 +412,12 @@ fn hook_name(event: &control::Event) -> Option<&'static str> {
     }
 }
 
-fn plugin_row(plugin: &Plugin, running: Option<String>) -> PluginRow {
-    let id = plugin.entry.id.clone();
-    match &plugin.manifest {
-        Err(e) => PluginRow { id, label: plugin.name(), on: false, note: e.clone(), broken: true },
-        Ok(manifest) => {
-            let on = plugin.entry.enabled;
-            let windows = if manifest.window.is_empty() { "" } else { " · its window process runs in local windows" };
-            let note = match running {
-                Some(running) if on => running,
-                _ if on => format!("{}{windows}", manifest.description),
-                _ => format!("{} · runs as you", manifest.asks()),
-            };
-            let label = format!("{} {}", manifest.name, manifest.version);
-            PluginRow { id, label, on, note, broken: false }
-        }
+fn plugin_row(plugin: &Plugin, running: Option<&str>) -> PluginRow {
+    PluginRow {
+        id: plugin.entry.id.clone(),
+        label: plugin.label(),
+        on: plugin.runs().is_some(),
+        note: plugin.note(running),
+        broken: plugin.manifest.is_err(),
     }
 }

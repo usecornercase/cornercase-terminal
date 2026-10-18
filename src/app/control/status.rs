@@ -6,8 +6,8 @@ use crate::agents::activity::Status;
 use crate::agents::awake;
 use crate::app::App;
 use crate::control::{
-    self, AppState, ConfigInfo, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, PullRequestInfo, Report, TabInfo,
-    WorkspaceInfo,
+    self, AppState, ConfigInfo, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, PullRequestInfo, Report, RunStatus,
+    TabInfo, WorkspaceInfo,
 };
 use crate::git;
 use crate::log::{self, Level};
@@ -57,6 +57,7 @@ impl App {
             }),
             setup: ws.setup().map(|(_, state)| if state.running() { "running" } else { "failed" }.to_string()),
             run_dir: self.workspace_run_dir(ws),
+            run: self.run_status(ws.id),
             active: w == active,
             tabs: ws.tabs.iter().enumerate().map(|(t, tab)| tab_info(t, tab, ws.active)).collect(),
             custom_name: ws.name.clone(),
@@ -112,6 +113,11 @@ impl App {
         }
     }
 
+    fn run_status(&self, workspace: u64) -> Option<RunStatus> {
+        let run = self.run_of(workspace)?;
+        Some(RunStatus { end: run.flow.end.name().into(), reached: run.reached(self.pull_request(workspace)) })
+    }
+
     pub(in crate::app) fn refreshed(&self) -> u64 {
         let mut hash = DefaultHasher::new();
         let live = self.pane_ids();
@@ -132,10 +138,12 @@ impl App {
                         .hash(&mut hash);
                     pull.failed().for_each(|check| check.name.hash(&mut hash));
                 }
+                self.run_status(workspace.id).hash(&mut hash);
                 for tab in &workspace.tabs {
                     (tab.id, tab.status().map(Status::name)).hash(&mut hash);
                     for term in &tab.panes {
                         let parent = Self::live_parent(term, &live);
+                        self.seat(term.id).map(|(_, role)| role).hash(&mut hash);
                         Self::pane_refreshed(term, self.resume_holds(term.id), parent, &mut hash);
                     }
                 }
@@ -178,6 +186,7 @@ impl App {
             title: Some(term.emulator.title()).filter(|title| !title.is_empty()),
             parent: Self::live_parent(term, live),
             subagents: u32::try_from(term.context.subagents()).unwrap_or(u32::MAX),
+            role: self.seat(term.id).map(|(_, role)| role.to_string()),
         }
     }
 

@@ -116,6 +116,9 @@ fn every_command_is_listed_by_name() {
         Command::ChangesBase(ChangesBase::default()),
         Command::ChangesViewed(ChangesViewed::default()),
         Command::Usage(Usage::default()),
+        Command::PluginList(PluginList::default()),
+        Command::PluginActions(PluginActions::default()),
+        Command::PluginRun(PluginRun { plugin: "a".into(), action: "b".into(), revision: 0, item: Item::Pane(1) }),
         Command::FlowSave(FlowSave::default()),
         Command::FlowDelete(FlowDelete::default()),
         Command::FlowHide(FlowHide::default()),
@@ -333,7 +336,7 @@ fn the_columns_of_a_pane_row_are_its_keys_in_order() {
 fn new_columns_of_a_pane_row_go_after_the_released_ones() {
     let released = "pane tab workspace project program agent status background_shell dialog at_prompt model \
                         context caller shown active tab_name workspace_name branch worktree project_name path survey \
-                        resuming";
+                        resuming parent subagents";
 
     assert!(PaneRow::COLUMNS.join(" ").starts_with(released), "{:?}", PaneRow::COLUMNS);
 }
@@ -627,7 +630,10 @@ mod watch_v1 {
             name: "agents".into(),
             status: Some("working".into()),
             active: true,
-            panes: vec![pane(4, true), PaneInfo { parent: Some(4), subagents: 2, ..pane(5, false) }],
+            panes: vec![
+                pane(4, true),
+                PaneInfo { parent: Some(4), subagents: 2, role: Some("coder".into()), ..pane(5, false) },
+            ],
             custom_name: Some("agents".into()),
             layout: Some(split()),
             controller: None,
@@ -813,4 +819,15 @@ fn todo_actions_read_by_name(#[case] text: &str, #[case] expected: Todo) {
     let todo: Todo = serde_json::from_str(text).expect("a todo action");
     assert_eq!(todo, expected);
     assert_eq!(serde_json::from_str::<Todo>(&serde_json::to_string(&todo).expect("json")).expect("back"), expected);
+}
+
+#[test]
+fn a_workspace_says_whether_its_flow_run_reached_its_end() {
+    let run = RunStatus { end: "pull_request".into(), reached: true };
+    let with = WorkspaceInfo { run: Some(run), ..WorkspaceInfo::default() };
+
+    let sent = serde_json::to_value(&with).expect("json");
+
+    assert_eq!(sent["run"], json!({"end": "pull_request", "reached": true}));
+    assert!(serde_json::to_value(WorkspaceInfo::default()).expect("json").get("run").is_none());
 }

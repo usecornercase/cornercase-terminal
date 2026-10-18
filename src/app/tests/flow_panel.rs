@@ -12,22 +12,27 @@ use crate::flows::run::{Kind, Member, Run};
 use crate::shortcuts::Group;
 
 const CLIENT: u64 = 7;
-const TALL: Rect = Rect { x: 0, y: 0, width: 120, height: 60 };
+pub(super) const TALL: Rect = Rect { x: 0, y: 0, width: 120, height: 60 };
 const ROLES: [&str; 5] = [ORCHESTRATOR, "coder", "reviewer", "security", "tester"];
 
 pub(super) fn team() -> (App, Receiver<AppEvent>, TempDir) {
     let dir = TempDir::new();
     let (mut app, rx) = app_in(dir.path(), no_config());
     let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
-    let p = app.active;
-    let mut run = Run::new(app.projects[p].workspaces[0].id, flow, "fix the login\nand the rest".into());
+    let place = (app.active, 0);
+    run_in(&mut app, place, flow);
+    (app, rx, dir)
+}
+
+pub(super) fn run_in(app: &mut App, (p, w): (usize, usize), flow: crate::flows::Flow) {
+    let workspace = app.projects[p].workspaces[w].id;
+    let mut run = Run::new(workspace, flow, "fix the login\nand the rest".into());
     for role in ROLES {
-        let t = app.push_tab(p, 0, AREA, Some(role.into())).expect("a tab for the role");
-        let pane = app.projects[p].workspaces[0].tabs[t].panes[0].id;
+        let t = app.push_tab(p, w, AREA, Some(role.into())).expect("a tab for the role");
+        let pane = app.projects[p].workspaces[w].tabs[t].panes[0].id;
         run.members.push(Member { role: role.into(), pane });
     }
     app.runs.push(run);
-    (app, rx, dir)
 }
 
 fn pane(app: &App, role: &str) -> u64 {
@@ -52,7 +57,7 @@ fn messages(app: &App) -> Vec<(String, String, Kind, Option<String>)> {
     run.messages.iter().map(|m| (m.from.clone(), m.to.clone(), m.kind, m.text.clone())).collect()
 }
 
-fn spot(app: &mut App, text: &str) -> Position {
+pub(super) fn spot(app: &mut App, text: &str) -> Position {
     let t = render(app, TALL);
     let buf = t.backend().buffer();
     let panel = app.layout(TALL).changes;

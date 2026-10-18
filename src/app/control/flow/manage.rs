@@ -18,6 +18,9 @@ impl App {
             return Err(NO_PROJECT.into());
         }
         let flow = save.flow.clone().into_flow();
+        if store::to_text(&flow).is_ok_and(|text| text.len() > share::MAX_BYTES) {
+            return Err(malformed(format!("the flow is {}", share::too_large())));
+        }
         let listing = self.flow_listing(project.as_deref());
         let previous = match &save.path {
             Some(path) => Some(listed_file(&listing, path)?),

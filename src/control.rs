@@ -13,6 +13,7 @@ pub(crate) mod contract;
 mod events;
 mod flow;
 pub(crate) mod issues;
+pub(crate) mod plugins;
 mod search;
 pub(crate) mod start_server;
 mod status;
@@ -43,9 +44,10 @@ pub(crate) use flow::{
     StepInfo,
 };
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
+pub(crate) use plugins::{PluginActions, PluginList, PluginRun};
 pub(crate) use search::{Hit, Matches, Search};
 pub(crate) use start_server::StartServer;
-pub(crate) use status::{GroupInfo, KeepAwake, PullRequestInfo};
+pub(crate) use status::{GroupInfo, KeepAwake, PullRequestInfo, RunStatus};
 pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, WorkspaceInfo};
 pub(crate) use surface::Surface;
 pub(crate) use terminal::{Input, Link, Ratio, Redraw, Resize, Scroll, Selection};
@@ -164,6 +166,9 @@ pub(crate) enum Command {
     ChangesBase(ChangesBase),
     ChangesViewed(ChangesViewed),
     Usage(Usage),
+    PluginList(PluginList),
+    PluginActions(PluginActions),
+    PluginRun(PluginRun),
     FlowSave(FlowSave),
     FlowDelete(FlowDelete),
     FlowHide(FlowHide),
@@ -244,13 +249,16 @@ impl Command {
             Self::ChangesBase(_) => 65,
             Self::ChangesViewed(_) => 66,
             Self::Usage(_) => 67,
-            Self::FlowSave(_) => 68,
-            Self::FlowDelete(_) => 69,
-            Self::FlowHide(_) => 70,
-            Self::FlowRestore(_) => 71,
-            Self::FlowRuns(_) => 72,
-            Self::FlowMessages(_) => 73,
-            Self::FlowFiles(_) => 74,
+            Self::PluginList(_) => 68,
+            Self::PluginActions(_) => 69,
+            Self::PluginRun(_) => 70,
+            Self::FlowSave(_) => 71,
+            Self::FlowDelete(_) => 72,
+            Self::FlowHide(_) => 73,
+            Self::FlowRestore(_) => 74,
+            Self::FlowRuns(_) => 75,
+            Self::FlowMessages(_) => 76,
+            Self::FlowFiles(_) => 77,
         }]
     }
 
@@ -266,6 +274,7 @@ impl Command {
             | Self::Go(_)
             | Self::UpdateCheck(_)
             | Self::UpdateInstall(_)
+            | Self::PluginList(_)
             | Self::FlowRuns(_)
             | Self::App(_) => {}
             Self::Open(open) => {
@@ -385,6 +394,8 @@ impl Command {
             Self::ChangesBase(base) => base.fields(&mut fields),
             Self::ChangesViewed(viewed) => viewed.fields(&mut fields),
             Self::Usage(usage) => usage.fields(&mut fields),
+            Self::PluginActions(actions) => actions.fields(&mut fields),
+            Self::PluginRun(run) => run.fields(&mut fields),
             Self::FlowSave(save) => save.fields(&mut fields),
             Self::FlowDelete(delete) => delete.fields(&mut fields),
             Self::FlowHide(hide) => hide.fields(&mut fields),
@@ -395,7 +406,7 @@ impl Command {
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 75] = [
+    pub(crate) const NAMES: [&str; 78] = [
         "status",
         "open",
         "new-workspace",
@@ -464,6 +475,9 @@ impl Command {
         "changes-base",
         "changes-viewed",
         "usage",
+        "plugin-list",
+        "plugin-actions",
+        "plugin-run",
         "flow-save",
         "flow-delete",
         "flow-hide",

@@ -34,6 +34,7 @@ input box, which `cornercase send` refuses (`dialog` in the JSON).
 refuses too (`survey` in the JSON): `cornercase keys --pane N 0` dismisses it.
 `(resuming)` is a pane whose agent is coming back in its conversation after a restart: until it
 is back, it takes no input and `cornercase send` refuses it (`resuming` in the JSON).
+`(role coder)` marks a flow member and the role it plays (`role` in the JSON).
 
 With --panes it prints one line per pane instead, for scripts, in the sidebar's order: a header
 line naming the columns, then one row per pane, its columns separated by tabs. The columns are
@@ -41,8 +42,9 @@ pane, tab, workspace, project (their ids), program, agent, status, background_sh
 at_prompt, model, context, caller (the pane running the command), shown (the pane the window
 shows), active (its tab's active pane), tab_name, workspace_name, branch, worktree, project_name,
 path, survey (Claude Code's feedback survey shows), resuming (the agent is coming back in its
-conversation), parent (the pane that started it) and subagents (how many it still runs); new ones only ever go at the end. Values are as in the JSON (true or false, context as a
-number, full paths), with - where there is none and a space for a tab or line break in a name.
+conversation), parent (the pane that started it), subagents (how many it still runs) and role (the
+role it plays in a flow, from its run); new ones only ever go at the end. Values are as in the
+JSON (true or false, context as a number, full paths), with - where there is none and a space for a tab or line break in a name.
 With --json, it prints {\"panes\": [...]}, one object per pane with the columns as keys and null
 where there is no value.
 
@@ -681,6 +683,12 @@ folder of yours instead while you write one.
 A plugin runs as you and can do anything you can, including typing into every terminal. What it asks for is shown \
 before you turn it on, not enforced. A running server picks up changes within a second.
 
+`actions` lists what plugins add to the menus, for a kind of row (--context) or all of them, and `run` runs one on \
+a project, workspace, tab or pane as its menu entry does: in the workspace's folder, with the ids of what you \
+name, stopped after 5 minutes, its output in the plugin's log. Both ask the running server; `run` waits for the \
+action and exits with 1 when it fails. An action listed before the plugins changed is refused (pass the --revision \
+`actions --json` printed, or none for the current one).
+
 Examples:
   cornercase plugin install acme/notes
   cornercase plugin install acme/notes@v1.2.0
@@ -689,6 +697,8 @@ Examples:
   cornercase plugin link ~/code/my-plugin
   cornercase plugin enable my-plugin
   cornercase plugin list
+  cornercase plugin actions --context pane
+  cornercase plugin run acme.notes open --pane 5
   cornercase plugin logs my-plugin --follow
   cornercase plugin disable my-plugin
   cornercase plugin update

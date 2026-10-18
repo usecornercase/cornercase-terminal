@@ -24,6 +24,10 @@ const AGENT_LINES: u16 = 2;
 
 const MIN_WORKSPACE_WIDTH: usize = 4;
 
+const MIN_ROLE_WIDTH: usize = 4;
+
+const ROLE_SEPARATOR: &str = " · ";
+
 const GUIDE_STEP: usize = 2;
 
 pub(crate) fn agent_rows(list: Rect, pitch: u16, agents: usize, scroll: usize) -> Rows {
@@ -44,6 +48,8 @@ pub(crate) struct AgentEntry {
     pub(crate) agent: String,
     pub(crate) project: String,
     pub(crate) workspace: Option<String>,
+    pub(crate) role: Option<String>,
+    pub(crate) place: bool,
     pub(crate) details: Details,
     pub(crate) active: bool,
     pub(crate) depth: usize,
@@ -118,14 +124,26 @@ fn draw_guides(f: &mut Frame, colour: Color, r: Rect, entry: &AgentEntry) {
 }
 
 fn agent_place(entry: &AgentEntry, room: usize, name: Style, separator: Style) -> Vec<Span<'static>> {
+    if let Some(role) = entry.role.as_deref().filter(|_| !entry.place) {
+        return vec![Span::styled(truncate_right(role, room), name)];
+    }
     let project = entry.project.chars().count();
     let rest = room.saturating_sub(project + CRUMB_SEPARATOR.chars().count());
-    match entry.workspace.as_deref().filter(|_| rest >= MIN_WORKSPACE_WIDTH) {
+    let mut spans = match entry.workspace.as_deref().filter(|_| rest >= MIN_WORKSPACE_WIDTH) {
         Some(workspace) => vec![
             Span::styled(entry.project.clone(), name),
             Span::styled(CRUMB_SEPARATOR, separator),
             Span::styled(truncate_right(workspace, rest), name),
         ],
         None => vec![Span::styled(truncate_right(&entry.project, room), name)],
+    };
+    if let Some(role) = &entry.role {
+        let used: usize = spans.iter().map(|span| span.content.chars().count()).sum();
+        let left = room.saturating_sub(used + ROLE_SEPARATOR.chars().count());
+        if left >= MIN_ROLE_WIDTH {
+            spans.push(Span::styled(ROLE_SEPARATOR, separator));
+            spans.push(Span::styled(truncate_right(role, left), name));
+        }
     }
+    spans
 }

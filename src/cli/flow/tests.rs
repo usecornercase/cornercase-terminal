@@ -177,6 +177,22 @@ mod runs {
     }
 
     #[test]
+    fn a_dropped_frame_is_told_and_not_read_as_a_message() {
+        let frame = serde_json::json!({"event": "dropped", "count": 3});
+
+        assert_eq!(
+            frame_text(frame.clone(), false).expect("text"),
+            "3 messages dropped: this command fell behind; run it again to read what is kept\n"
+        );
+        assert!(
+            frame_text(serde_json::json!({"event": "dropped", "count": 1}), false)
+                .expect("text")
+                .starts_with("1 message dropped")
+        );
+        assert_eq!(frame_text(frame, true).expect("json"), "{\"count\":3,\"event\":\"dropped\"}\n");
+    }
+
+    #[test]
     fn files_are_a_tab_separated_table_with_a_header_and_dashes_for_gaps() {
         let files = RunFiles {
             files: vec![

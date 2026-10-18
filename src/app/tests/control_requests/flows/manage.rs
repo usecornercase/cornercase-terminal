@@ -2,6 +2,7 @@ use serde_json::{Value, json};
 
 use super::*;
 use crate::control::{FlowRemoved, FlowSaved, FlowSpec, Flows};
+use crate::flows::share;
 use crate::flows::store::Origin;
 
 fn spec(flow: &Flow) -> Value {
@@ -172,6 +173,21 @@ fn a_draft_for_a_project_that_is_not_open_is_not_found() {
     let refused = save_refused(&mut team, &named("Draft"), &json!({"place": "project", "project": 99999}));
 
     assert_eq!(refused.code, "not-found");
+}
+
+#[test]
+fn a_draft_over_the_size_a_flow_can_be_shared_at_is_malformed() {
+    let mut team = Team::new();
+    let mut draft = named("Huge");
+    draft.roles[0].prompt = "x".repeat(share::MAX_BYTES);
+    let before = files(&yours(&team));
+
+    let refused = save_refused(&mut team, &draft, &json!({"check": true}));
+    let saving = save_refused(&mut team, &draft, &json!({}));
+
+    assert_eq!((refused.code.as_str(), saving.code.as_str()), ("malformed", "malformed"));
+    assert!(refused.message.contains("too large"), "{}", refused.message);
+    assert_eq!(files(&yours(&team)), before);
 }
 
 #[test]

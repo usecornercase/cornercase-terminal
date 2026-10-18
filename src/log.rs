@@ -122,13 +122,14 @@ pub(crate) struct Job {
     target: &'static str,
     what: &'static str,
     fields: Vec<(&'static str, String)>,
+    failed: Option<String>,
     started: Instant,
     slow: Duration,
 }
 
 impl Job {
     pub(crate) fn new(level: Level, target: &'static str, what: &'static str) -> Self {
-        Self { level, target, what, fields: Vec::new(), started: Instant::now(), slow: SLOW }
+        Self { level, target, what, fields: Vec::new(), failed: None, started: Instant::now(), slow: SLOW }
     }
 
     #[must_use]
@@ -150,6 +151,12 @@ impl Job {
         }
     }
 
+    pub(crate) fn fail(&mut self, error: impl Display) {
+        if LOGGER.get().is_some() {
+            self.failed = Some(error.to_string());
+        }
+    }
+
     #[must_use]
     pub(crate) fn begin(self) -> Self {
         self.log(self.level, "started", &[]);
@@ -161,9 +168,10 @@ impl Job {
     }
 
     pub(crate) fn finish<T, E: Display>(self, result: &Result<T, E>) {
-        match result {
-            Ok(_) => self.end(None),
-            Err(e) => self.end(Some(e)),
+        match (result, self.failed.clone()) {
+            (Err(e), _) => self.end(Some(e)),
+            (Ok(_), Some(failed)) => self.end(Some(&failed)),
+            (Ok(_), None) => self.end(None),
         }
     }
 

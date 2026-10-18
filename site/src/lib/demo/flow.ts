@@ -168,7 +168,7 @@ export function plan(flow: Flow): Diagram {
   };
 }
 
-export function live(d: Diagram, progress: Progress, state: (role: string) => NodeState, now: number): Diagram {
+export function live(d: Diagram, progress: Progress, state: (role: string) => NodeState, ended: boolean, now: number): Diagram {
   d.orchestrator.state = state(ORCHESTRATOR);
   for (const n of d.stages.flat()) n.state = state(n.role);
   d.loops.forEach((l, stage) => {
@@ -191,7 +191,7 @@ export function live(d: Diagram, progress: Progress, state: (role: string) => No
   ];
   const keys = new Set(edges.map(edgeKey));
   const messages = progress.sent().filter((key) => keys.has(key.split('|')[0]));
-  d.live = { lit, outside: progress.outside, ended: d.orchestrator.state === 'pending', messages };
+  d.live = { lit, outside: progress.outside, ended, messages };
   return d;
 }
 

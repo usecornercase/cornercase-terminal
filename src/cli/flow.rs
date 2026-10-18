@@ -363,14 +363,27 @@ fn messages_of(args: &FlowMessagesArgs) -> Result<()> {
         return print_out(&text);
     }
     client::follow_all("flow messages", command, |value| {
-        let text = match value.get("messages") {
-            Some(_) => {
-                answer::<FlowBacklog>(value)?.messages.iter().map(|message| message_text(message, json)).collect()
-            }
-            None => message_text(&answer::<FlowMessage>(value)?, json),
-        };
+        let text = frame_text(value, json)?;
         let mut out = std::io::stdout().lock();
         quietly(std::io::Write::write_all(&mut out, text.as_bytes()).and_then(|()| std::io::Write::flush(&mut out)))
+    })
+}
+
+pub(super) fn frame_text(value: serde_json::Value, json: bool) -> Result<String> {
+    if value.get("event").and_then(serde_json::Value::as_str) == Some("dropped") {
+        let count = value.get("count").and_then(serde_json::Value::as_u64).unwrap_or_default();
+        return Ok(if json {
+            format!("{value}\n")
+        } else {
+            format!(
+                "{count} message{} dropped: this command fell behind; run it again to read what is kept\n",
+                if count == 1 { "" } else { "s" }
+            )
+        });
+    }
+    Ok(match value.get("messages") {
+        Some(_) => answer::<FlowBacklog>(value)?.messages.iter().map(|message| message_text(message, json)).collect(),
+        None => message_text(&answer::<FlowMessage>(value)?, json),
     })
 }
 

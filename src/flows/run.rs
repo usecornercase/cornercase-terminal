@@ -4,8 +4,9 @@ use std::time::{Instant, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
-use super::Flow;
 use super::progress::{Edge, Progress};
+use super::{End, Flow};
+use crate::pull_request::{self, PullRequest};
 
 pub(crate) const MAX_MESSAGES: usize = 256;
 
@@ -54,6 +55,7 @@ pub(crate) struct Run {
     pub(crate) progress: Progress,
     pub(crate) dir: Option<PathBuf>,
     pub(crate) recorded: u64,
+    pub(crate) ended: Option<String>,
 }
 
 impl Run {
@@ -68,6 +70,7 @@ impl Run {
             progress: Progress::default(),
             dir: None,
             recorded: 0,
+            ended: None,
         }
     }
 
@@ -89,4 +92,28 @@ impl Run {
         self.messages.push_back(message);
         self.messages.back().unwrap_or_else(|| unreachable!("a message was just pushed"))
     }
+
+    pub(crate) fn pull<'a>(&self, pull: Option<&'a PullRequest>) -> Option<&'a PullRequest> {
+        pull.filter(|_| self.flow.end == End::PullRequest)
+    }
+
+    pub(crate) fn reached(&self, pull: Option<&PullRequest>) -> bool {
+        self.ended.is_some() || self.pull(pull).is_some_and(|pull| pull.state != pull_request::State::Closed)
+    }
+
+    pub(crate) fn latch(&mut self, marked: bool, branch: impl FnOnce() -> Option<String>) -> bool {
+        if self.ended.is_some() || !marked {
+            return false;
+        }
+        self.ended = branch();
+        self.ended.is_some()
+    }
+
+    pub(crate) fn moved_to(&mut self, branch: Option<&str>) -> Option<String> {
+        let moved = matches!((&self.ended, branch), (Some(ended), Some(now)) if ended != now);
+        moved.then(|| self.ended.take()).flatten()
+    }
 }
+
+#[cfg(test)]
+mod tests;
