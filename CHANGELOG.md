@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.136
+
+- **A build from source keeps to its own folders.** A debug build of cornercase (`cargo run` in a checkout) no longer shares your installed cornercase's server, session, settings or log: each checkout, and each worktree, gets its own server, with its session, log, stats, TODO list and queue in `~/.local/state/cornercase-dev/`, and every checkout shares one set of settings in `~/.config/cornercase-dev/`. So `cargo run -- kill-server` stops only that checkout's server, and working on cornercase from inside cornercase leaves your everyday session alone.
+  - Installed releases, `cargo install` and `cargo run --release` keep their folders, and `CORNERCASE_SOCKET` still puts everything next to the socket you give.
+  - A debug build's settings start empty: copy your `config.json` into `~/.config/cornercase-dev/` to start from yours.
+
 ## 0.12.135
 
 - **Settings for scripts and other apps.** `cornercase config` lists every setting of the Settings dialog with its value, default, choices and the note the dialog shows, whether each account and bot is connected (and as whom), refused or not set, and each project's setup and teardown.
