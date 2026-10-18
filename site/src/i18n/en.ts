@@ -9,6 +9,7 @@ export const page = {
     demo: 'Live simulation',
     speed: 'Speed',
     why: 'Why cornercase',
+    flows: 'Flows',
     more: 'Features',
     plugins: 'Plugins',
     docs: 'Docs',
@@ -143,6 +144,32 @@ export const page = {
       session: 'a Claude Code session',
     },
   },
+  flows: {
+    eyebrow: 'Flows',
+    title: ['One issue.', 'A whole team on it.'],
+    lead: "Pick an issue and click `start a flow`: cornercase starts a team of agents in a new worktree, and an orchestrator agent runs the plan. It hands the work from the planner to the coder to the reviewers, sends it back when they find something, and opens the pull request when it's done.",
+    label:
+      'An animated diagram of a flow on issue #482. The orchestrator agent hands the issue to a planner, then to a coder. A reviewer and a security reviewer check the change side by side. The reviewer finds a problem, so the work goes back to the coder. After a second review both pass, and the orchestrator opens pull request #487, whose checks pass.',
+    steps: {
+      issue: 'Give it an issue. The orchestrator reads it and runs the plan.',
+      plan: 'The planner reads the code and writes the plan.',
+      code: 'The coder writes the fix and commits it.',
+      review: 'A reviewer and a security reviewer check it at once, on other models.',
+      back: 'One finding. Back to the coder, at most three times.',
+      again: 'Fixed, and reviewed again, side by side. All clear.',
+      pr: 'The orchestrator opens the pull request. Checks pass.',
+    },
+    pause: 'pause',
+    play: 'play',
+    points: [
+      ['Any agent in any role', "Claude plans, Codex codes, Gemini checks security. Each role picks its agent, model and effort, so the code is reviewed by a model that didn't write it."],
+      ['Side by side, and back', 'Reviewers work in parallel, and their findings send the work back to the coder, as many times as you allow.'],
+      ['Watch the work move', 'The Flow panel lights up each role as it works. Click an arrow to read what went along it.'],
+      ['Five built in, or your own', 'Five flows come with cornercase, from a quick review to an arena of competing coders. Edit them, write your own, or import one from the community.'],
+    ] as [string, string][],
+    more: 'How flows work →',
+    community: 'Community flows →',
+  },
   more: {
     title: 'Everything else, a click away.',
     groups: [
@@ -150,7 +177,6 @@ export const page = {
         name: 'For your agents',
         items: [
           ['Status, model and context', 'Working, needs you or done, under every tab. Plus the model and how full its context is.'],
-          ['Flows, a team per task', 'One agent codes, others review and test, and an orchestrator runs them, from a template. The Flow panel shows the work move.'],
           ['Notifications', 'Claude needs you? Your terminal taps you on the shoulder. Even over SSH.'],
           ['Usage and stats', 'Your plan limits and the work your agents did in parallel.'],
           ['On Telegram or Discord', 'Away from the desk? Your agents message you there. Reply, and it reaches them.'],
