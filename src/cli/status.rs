@@ -5,6 +5,7 @@ use serde_json::Value;
 
 use super::args::StatusArgs;
 use super::{print_json, print_out};
+use crate::agents::activity;
 use crate::client::{answer, ask};
 use crate::control::{self, PaneRow, PaneRows, ProjectInfo, Report};
 use crate::error::{Error, Result};
@@ -105,15 +106,21 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
                     (None, Some(percent)) => format!("{percent}%"),
                     (None, None) => String::new(),
                 };
-                let notes: Vec<&str> = [
-                    (pane.background_shell, "background shell"),
-                    (pane.dialog, "dialog open"),
-                    (pane.survey, "survey open"),
-                    (pane.resuming, "resuming"),
-                ]
-                .into_iter()
-                .filter_map(|(on, note)| on.then_some(note))
-                .collect();
+                let subagents = (pane.subagents > 0).then(|| activity::subagents_text(pane.subagents as usize));
+                let notes: Vec<String> = subagents
+                    .into_iter()
+                    .chain(
+                        [
+                            (pane.background_shell, "background shell"),
+                            (pane.dialog, "dialog open"),
+                            (pane.survey, "survey open"),
+                            (pane.resuming, "resuming"),
+                        ]
+                        .into_iter()
+                        .filter(|(on, _)| *on)
+                        .map(|(_, note)| note.to_string()),
+                    )
+                    .collect();
                 let status = pane.status.clone().unwrap_or_default();
                 let parts = [
                     pane.program.clone().unwrap_or_else(|| "?".into()),

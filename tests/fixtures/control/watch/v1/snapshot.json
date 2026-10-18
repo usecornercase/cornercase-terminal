@@ -61,7 +61,8 @@
                   "resumes": false,
                   "resuming": false,
                   "title": "✳ Claude Code",
-                  "parent": null
+                  "parent": null,
+                  "subagents": 0
                 },
                 {
                   "id": 5,
@@ -80,7 +81,8 @@
                   "resumes": false,
                   "resuming": false,
                   "title": null,
-                  "parent": 4
+                  "parent": 4,
+                  "subagents": 0
                 }
               ],
               "custom_name": "agents",

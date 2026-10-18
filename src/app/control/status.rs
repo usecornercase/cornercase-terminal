@@ -142,6 +142,7 @@ impl App {
         (term.id, pid, pid.and_then(process::name), pid.and_then(process::cwd), term.shell_pid()).hash(hash);
         (term.agent.agent(), term.agent.status().map(Status::name), term.agent.background_shell()).hash(hash);
         term.context.context().map(|c| (&c.model, c.percent)).hash(hash);
+        term.context.subagents().hash(hash);
         (term.dialog(), term.survey(), term.resume.is_some(), resuming, parent).hash(hash);
         term.emulator.title().hash(hash);
     }
@@ -166,6 +167,7 @@ impl App {
             resuming: self.resume_holds(term.id),
             title: Some(term.emulator.title()).filter(|title| !title.is_empty()),
             parent: Self::live_parent(term, live),
+            subagents: u32::try_from(term.context.subagents()).unwrap_or(u32::MAX),
         }
     }
 

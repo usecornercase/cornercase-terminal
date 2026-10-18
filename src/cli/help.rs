@@ -26,6 +26,8 @@ waiting for an answer, done out of sight, failed, idle), its model and how full 
 marks the pane running the command, `(shown)` what the window shows. `working (background shell)`
 is a Claude Code agent whose turn is over while a shell it started in the background still runs:
 it wakes up when that shell ends (`background_shell` in the JSON, where the status stays working).
+`working (2 subagents)` is an agent whose own turn is over while subagents it started still run
+(`subagents` in the JSON, the number): it goes on when they report back, so it stays working.
 `(dialog open)` is a Claude Code agent showing a dialog, a panel or its shell mode instead of its
 input box, which `cornercase send` refuses (`dialog` in the JSON).
 `(survey open)` is Claude Code's feedback survey above its input box, which `cornercase send`
@@ -38,8 +40,8 @@ line naming the columns, then one row per pane, its columns separated by tabs. T
 pane, tab, workspace, project (their ids), program, agent, status, background_shell, dialog,
 at_prompt, model, context, caller (the pane running the command), shown (the pane the window
 shows), active (its tab's active pane), tab_name, workspace_name, branch, worktree, project_name,
-path, survey (Claude Code's feedback survey shows) and resuming (the agent is coming back in its
-conversation); new ones only ever go at the end. Values are as in the JSON (true or false, context as a
+path, survey (Claude Code's feedback survey shows), resuming (the agent is coming back in its
+conversation), parent (the pane that started it) and subagents (how many it still runs); new ones only ever go at the end. Values are as in the JSON (true or false, context as a
 number, full paths), with - where there is none and a space for a tab or line break in a name.
 With --json, it prints {\"panes\": [...]}, one object per pane with the columns as keys and null
 where there is no value.
@@ -162,7 +164,8 @@ pub(super) const WAIT_HELP: &str =
     "By default it waits until the agent stops working: idle, done, failed, pending (marked for review) or
 waiting. A Claude Code agent whose turn is over while a background shell it started still runs
 counts as working, since it wakes up when the shell ends; --until turn-over also ends there, and
-prints shell. It then prints how it ended (idle, done, failed, pending, waiting, working, shell or quiet),
+prints shell. Subagents an agent started keep every wait waiting, --until turn-over included: the
+agent goes on when they end. It then prints how it ended (idle, done, failed, pending, waiting, working, shell or quiet),
 or the line that matched.
 Waiting for an agent needs OSC 7501 reports, or a reader for Claude Code, Codex, Gemini CLI,
 opencode, Grok Build, Cursor CLI or GitHub Copilot CLI in the pane. Without reports, Gemini status needs its dynamic window title,
@@ -566,7 +569,7 @@ resume their conversations afterwards. Every attached window reopens on the new 
 
 With --when-idle, it waits until no agent is working before restarting: idle, done, pending review
 and waiting for you count as stopped, and so does a Claude Code agent whose turn is over while a
-shell it started in the background still runs. The server restarts in the same step it sees that,
+shell it started in the background still runs, but not one whose subagents still run. The server restarts in the same step it sees that,
 so no agent starts a turn in between, and every window shows that a restart is pending meanwhile,
 with a button that cancels it. Programs that are not agents, such as a dev server, stop as with any restart. The pane
 this runs in never holds the restart. --timeout gives up with status 1 and the server keeps running,

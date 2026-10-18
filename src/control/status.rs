@@ -104,6 +104,7 @@ impl Report {
                         survey: pane.survey,
                         resuming: pane.resuming,
                         parent: pane.parent,
+                        subagents: pane.subagents,
                     }));
                 }
             }
@@ -146,10 +147,11 @@ pub struct PaneRow {
     pub(crate) survey: bool,
     pub(crate) resuming: bool,
     pub(crate) parent: Option<u64>,
+    pub(crate) subagents: u32,
 }
 
 impl PaneRow {
-    pub const COLUMNS: [&str; 24] = [
+    pub const COLUMNS: [&str; 25] = [
         "pane",
         "tab",
         "workspace",
@@ -174,6 +176,7 @@ impl PaneRow {
         "survey",
         "resuming",
         "parent",
+        "subagents",
     ];
 }
 
@@ -280,4 +283,5 @@ pub struct PaneInfo {
     pub(crate) resuming: bool,
     pub(crate) title: Option<String>,
     pub(crate) parent: Option<u64>,
+    pub(crate) subagents: u32,
 }

@@ -565,6 +565,16 @@ mod output {
     }
 
     #[test]
+    fn an_agent_with_subagents_says_how_many() {
+        let mut report = report();
+        report.projects[0].workspaces[0].tabs[0].panes[1].subagents = 2;
+
+        let text = render(&report, Some(Path::new("/home/ana")));
+
+        assert!(text.contains("pane 5  claude  working (2 subagents)  Opus 5.5 · 23%  ~/shop  (you)\n"), "{text}");
+    }
+
+    #[test]
     fn a_pane_started_from_another_names_its_parent() {
         let mut report = report();
         report.projects[0].workspaces[0].tabs[0].panes[1].parent = Some(4);
@@ -581,6 +591,7 @@ mod output {
         report.projects[0].workspaces[0].tabs[0].panes[1].survey = true;
         report.projects[0].workspaces[0].tabs[0].panes[1].resuming = true;
         report.projects[0].workspaces[0].tabs[0].panes[1].parent = Some(4);
+        report.projects[0].workspaces[0].tabs[0].panes[1].subagents = 2;
 
         let text = pane_table(&report.panes()).expect("a table");
 
@@ -588,11 +599,11 @@ mod output {
             text,
             "pane\ttab\tworkspace\tproject\tprogram\tagent\tstatus\tbackground_shell\tdialog\tat_prompt\tmodel\t\
                  context\tcaller\tshown\tactive\ttab_name\tworkspace_name\tbranch\tworktree\tproject_name\tpath\t\
-                 survey\tresuming\tparent\n\
+                 survey\tresuming\tparent\tsubagents\n\
                  4\t3\t2\t1\tzsh\t-\t-\tfalse\tfalse\ttrue\t-\t-\tfalse\ttrue\ttrue\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\tfalse\t-\n\
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\tfalse\t-\t0\n\
                  5\t3\t2\t1\tclaude\tclaude\tworking\tfalse\tfalse\t-\tOpus 5.5\t23\ttrue\tfalse\tfalse\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\ttrue\t4\n"
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\ttrue\t4\t2\n"
         );
     }
 
