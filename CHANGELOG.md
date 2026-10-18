@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.151
+
+- **Collapse an agent's team in the agents section.** An agent that started others (with `cornercase start`, `new-tab` or `split`, or a flow's orchestrator) now has a `▾` before its icon: click it to fold the agents under it into its row, and `▸` to show them again, or right-click the row for **collapse** and **expand**. A click on the rest of the row still jumps to the agent. A collapsed row says how many agents it hides (`+4`) and shows `!`, `●` or `✓` when one of them needs you, so a team you put away can still call you. Jumping to an agent hidden in it, with `a`, a notification or **go**, opens the way to it, and what you collapsed is saved with your session.
+  - Scripts and other apps: `cornercase collapse --pane ID` and `expand --pane ID`, and `collapsed: true` on the pane in `status --json`, `status --follow` and view lines (`(collapsed)` in `status`).
+
 ## 0.12.150
 
 - **Other apps and scripts can follow a flow run.** `cornercase flow runs` prints where each run stands: its stage, the rounds of its loops, the last step and the last one outside the plan, each role's pane and status, and whether the orchestrator marked the end; `--follow` prints it again as it changes. `cornercase flow messages` prints what the orchestrator and the roles sent each other, as the Flow panel's arrows show it, and `cornercase flow files` lists the run's folder, also after the run ended.
