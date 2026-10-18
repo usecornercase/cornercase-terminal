@@ -88,6 +88,7 @@ pub(super) enum MenuAction {
     NewGroup,
     Pane(u64, PaneAction),
     Mark(Marked, bool),
+    AgentFold(u64, bool),
     PullRequest(u64),
     ShowFlow(u64),
     Browser,
@@ -140,6 +141,8 @@ impl App {
             MenuAction::Pane(_, action) => action.label().into(),
             MenuAction::Mark(_, true) => "mark as pending review".into(),
             MenuAction::Mark(_, false) => "mark as reviewed".into(),
+            MenuAction::AgentFold(_, true) => "collapse".into(),
+            MenuAction::AgentFold(_, false) => "expand".into(),
             MenuAction::PullRequest(workspace) => {
                 self.pull_request(workspace).map(|p| format!("pull request #{}", p.number)).unwrap_or_default()
             }
@@ -234,6 +237,9 @@ impl App {
             MenuAction::Pane(pane, action) => return self.pane_action(pane, action, area),
             MenuAction::Mark(marked, pending) => {
                 self.mark(marked, pending);
+            }
+            MenuAction::AgentFold(pane, collapsed) => {
+                self.set_agent_fold(pane, collapsed);
             }
             MenuAction::PullRequest(workspace) => self.open_pull_request(workspace),
             MenuAction::ShowFlow(workspace) => self.show_flow_of(workspace),

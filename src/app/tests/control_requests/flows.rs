@@ -648,6 +648,8 @@ fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_tol
     assert!(told.contains(&format!("coder is pane {coder}")), "{told}");
 }
 
+mod feed;
+mod manage;
 mod own_worktrees;
 mod parents;
 

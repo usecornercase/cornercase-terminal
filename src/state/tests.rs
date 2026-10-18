@@ -71,6 +71,7 @@ mod file {
                                 pending: false,
                                 id: None,
                                 parent: None,
+                                collapsed: false,
                             }],
                             active: 0,
                             layout: None,
@@ -108,6 +109,7 @@ mod file {
                                     pending: true,
                                     id: None,
                                     parent: None,
+                                    collapsed: false,
                                 },
                                 PaneState {
                                     cwd: Some("worktrees/returns/src".into()),
@@ -121,6 +123,7 @@ mod file {
                                     pending: false,
                                     id: None,
                                     parent: None,
+                                    collapsed: false,
                                 },
                             ],
                             active: 1,
@@ -177,9 +180,14 @@ mod file {
     }
 
     #[test]
-    fn parents_round_trip_through_their_own_fixture() {
+    fn parents_and_folds_round_trip_through_their_own_fixture() {
         let mut saved = state(&["projects/team"]);
-        let pane = |id, parent| PaneState { id, parent, ..PaneState::at(Some("projects/team".into())) };
+        let pane = |id, parent| PaneState {
+            id,
+            parent,
+            collapsed: id == Some(4),
+            ..PaneState::at(Some("projects/team".into()))
+        };
         saved.projects[0].workspaces[0].tabs = [pane(Some(4), None), pane(Some(7), Some(4)), pane(None, Some(7))]
             .into_iter()
             .map(|pane| TabState { name: None, panes: vec![pane], active: 0, layout: None })
@@ -472,6 +480,7 @@ mod mapping {
             pending: false,
             id: None,
             parent: None,
+            collapsed: false,
         };
         TabState { name: None, panes: vec![pane; panes], active, layout: None }
     }

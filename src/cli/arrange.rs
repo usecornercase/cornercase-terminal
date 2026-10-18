@@ -1,6 +1,6 @@
 use super::args::arrange::{FoldArgs, GroupAction, MoveArgs, MovePaneArgs};
 use super::{id, print_json, print_out, say, workspace};
-use crate::client::{answer, ask};
+use crate::client::{answer, ask, use_agent_folds};
 use crate::control::arrange::{
     Fold, GroupDelete, GroupNew, GroupStyle, Locked, Move, MovePane, Removal, RemovalCheck, Styled,
 };
@@ -13,6 +13,7 @@ struct Row<'a> {
     workspace: Option<u64>,
     branch: Option<&'a str>,
     tab: Option<u64>,
+    pane: Option<u64>,
 }
 
 impl Row<'_> {
@@ -23,6 +24,7 @@ impl Row<'_> {
             .or_else(|| self.project.map(Item::Project))
             .or_else(|| workspace.map(Item::Workspace))
             .or_else(|| self.tab.map(Item::Tab))
+            .or_else(|| self.pane.map(Item::Pane))
             .ok_or_else(|| Error::WrongUsage(format!("say what `{command}` acts on")))
     }
 }
@@ -34,6 +36,7 @@ pub(super) fn move_row(args: &MoveArgs) -> Result<()> {
         workspace: args.workspace,
         branch: args.worktree.as_deref(),
         tab: args.tab,
+        pane: None,
     };
     let request = Move { item: row.item("move")?, before: args.before, into: args.into, ungroup: args.ungroup };
     ask("move", Command::Move(request)).map(drop)
@@ -46,7 +49,11 @@ pub(super) fn fold(args: &FoldArgs, command: &'static str) -> Result<()> {
         workspace: args.workspace,
         branch: args.worktree.as_deref(),
         tab: None,
+        pane: args.pane,
     };
+    if args.pane.is_some() {
+        use_agent_folds()?;
+    }
     let request = Fold { item: row.item(command)? };
     let command_request = if command == "collapse" { Command::Collapse(request) } else { Command::Expand(request) };
     ask(command, command_request).map(drop)

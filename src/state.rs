@@ -170,6 +170,7 @@ pub(crate) struct TabState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(clippy::struct_excessive_bools, reason = "each flag is its own key in the saved session")]
 pub(crate) struct PaneState {
     pub(crate) cwd: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -184,6 +185,8 @@ pub(crate) struct PaneState {
     pub(crate) id: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) parent: Option<u64>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) collapsed: bool,
 }
 
 impl WorkspaceState {
@@ -211,7 +214,16 @@ impl WorkspaceState {
 
 impl PaneState {
     pub(crate) fn at(cwd: Option<PathBuf>) -> Self {
-        Self { cwd, right_clicks: false, agent: None, done: false, pending: false, id: None, parent: None }
+        Self {
+            cwd,
+            right_clicks: false,
+            agent: None,
+            done: false,
+            pending: false,
+            id: None,
+            parent: None,
+            collapsed: false,
+        }
     }
 }
 
@@ -301,6 +313,7 @@ impl TabState {
                     pending: term.resume.is_some() && term.agent.pending(),
                     id: parents.contains(&term.id).then_some(term.id),
                     parent: term.parent.filter(|parent| parents.contains(parent)),
+                    collapsed: term.collapsed,
                 })
                 .collect(),
             active: tab.active,

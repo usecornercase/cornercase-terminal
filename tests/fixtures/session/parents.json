@@ -12,7 +12,8 @@
               "panes": [
                 {
                   "cwd": "projects/team",
-                  "id": 4
+                  "id": 4,
+                  "collapsed": true
                 }
               ],
               "active": 0

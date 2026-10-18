@@ -270,6 +270,7 @@ impl App {
         let now = Instant::now();
         self.publish_snapshot(now);
         self.publish_app(now);
+        self.publish_flow_runs(now);
     }
 
     pub(super) fn publish(&mut self, logged: bool) {

@@ -35,6 +35,7 @@ refuses too (`survey` in the JSON): `cornercase keys --pane N 0` dismisses it.
 `(resuming)` is a pane whose agent is coming back in its conversation after a restart: until it
 is back, it takes no input and `cornercase send` refuses it (`resuming` in the JSON).
 `(role coder)` marks a flow member and the role it plays (`role` in the JSON).
+`(collapsed)` is an agent whose children are hidden in the agents section (`collapsed` in the JSON).
 
 With --panes it prints one line per pane instead, for scripts, in the sidebar's order: a header
 line naming the columns, then one row per pane, its columns separated by tabs. The columns are
@@ -281,71 +282,6 @@ Examples:
   cornercase mark
   cornercase mark --pane 12
   cornercase mark --pane 12 --reviewed";
-pub(super) const FLOW_HELP: &str =
-    "A flow is a team of coding agents and the plan they follow: one tab per role in a new
-worktree, every agent started without permission prompts, and an orchestrator agent that sends the
-work from role to role with these commands. The built-in flows come with cornercase; yours live in
-flows/ next to config.json, and a project's in .cornercase/flows/ in its repository.
-
-Examples:
-  cornercase flow list
-  cornercase flow run Quick --prompt 'Fix the login form'
-  cornercase flow run 'Full issue' --issue ENG-42 --project 3
-  cornercase flow run 'Full issue' --prompt-file task.md --worktree fix-login
-  cornercase flow export Quick > quick.toml
-  cornercase flow import quick.toml";
-pub(super) const FLOW_RUN_HELP: &str =
-    "It makes the worktree (or uses a worktree already on that branch, if it runs no flow), opens a
-tab per role named after it, the orchestrator first, and starts every agent with its role prompt,
-answering their trust prompts. The orchestrator starts last, with a brief: the task, the team and
-its pane ids, the stages, and how to drive the agents. Nothing is shown in the window unless you
-pass --focus.
-
-With --issue KEY instead of --prompt, the task is the issue's, from the same prompt template and branch the
-Issues dialog's start a flow uses; an issue that isn't tied to a repository needs --project when several
-projects are repositories. Otherwise, without --worktree, the branch comes from the task's first words, with a short suffix when that
-says nothing, is a default branch or is already taken. A chosen branch that is main, master, the
-project's default or the one its own folder is on is refused: a flow works on a branch of its own.
-
-A role set to work in a worktree of its own (worktree = own) gets one on the branch <branch>--<role>, made from the
-run's branch, with the project's setup; the other roles work in the run's worktree.
-
-It prints the workspace's id, then one line per role: its pane's id and the role's name, separated
-by a tab. The run's folder for files, where every role writes its answers, is printed on stderr
-(run_dir with --json) and is in $CORNERCASE_RUN_DIR in the team's panes. A name is looked up in yours, then the built-in flows, then the project's: yours replaces
-a built-in flow of its name, and a project's flow never stands in for another of the same name; the
-command says so on stderr when it happens. A built-in flow deleted in Settings › Flows is refused,
-and keeps its name: a project's flow named like it does not run either.
-
-Examples:
-  cornercase flow run Quick --prompt 'Fix the login form'
-  cornercase flow run 'Bug, test first' --prompt-file bug.md --worktree fix-crash --json";
-pub(super) const FLOW_EXPORT_HELP: &str =
-    "It prints the flow as TOML, the file a flow is kept in, so a teammate can read its prompts, variables
-and arguments before importing it. A name is looked up as `flow run` does. Variables a flow sets are
-named on stderr: check no secret goes with them.
-
-Examples:
-  cornercase flow export Quick > quick.toml
-  cornercase flow export 'Full issue' --json";
-pub(super) const FLOW_IMPORT_HELP: &str =
-    "It reads a flow at most 256 KiB long, lists its roles, and saves it in yours (or the project's, with
---to project). The source is a file, - for standard input, an https:// address, or OWNER/REPO, a GitHub
-repository with a flow.toml (or cornercase-flow.toml) at its root; usecornercase.dev/flows lists them.
-Every agent of a flow runs without permission prompts, so a flow from an address or a repository,
-which nobody reviewed, always asks first, and so does one that sets
-variables or arguments; without a terminal it refuses unless you pass --yes.
-
-A name that is already taken is refused: pass --replace to overwrite that flow, or --name to import
-this one under another name. A built-in flow's name is yours to take, with --replace, and it then
-stands in its place. A project's flow never takes the place of one of yours or a built-in.
-
-Examples:
-  cornercase flow import quick.toml
-  cornercase flow import octocat/security-audit
-  cornercase flow import https://example.com/flows/mine.toml
-  cornercase flow import quick.toml --to project --name 'Quick mine'
-  ssh host cornercase flow export Quick | cornercase flow import - --yes";
 pub(super) const TODO_HELP: &str = "Examples:
   cornercase todo add review the login fix
   cornercase todo list
@@ -691,10 +627,12 @@ Examples:
   cornercase move-pane --pane 4 --target 7 --place below --json";
 pub(super) const FOLD_HELP: &str =
     "Sets it, whatever it was: a group shows or hides its projects, a project its workspaces and a
-workspace its tabs. Its shells keep running.
+workspace its tabs; an agent's pane (--pane) hides the agents it started in the agents section.
+Its shells keep running.
 
 Examples:
   cornercase collapse --group 12
+  cornercase collapse --pane 12
   cornercase expand --worktree fix/login";
 pub(super) const GROUP_HELP: &str =
     "`new` takes the next icon and colour, as + New › new group does, and prints the group's id. `style`
@@ -725,6 +663,13 @@ Examples:
   cornercase changes base origin/main
   cornercase changes viewed src/main.rs";
 
+mod flow;
+
+pub(in crate::cli) use flow::{
+    FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP, FLOW_HELP, FLOW_HIDE_HELP, FLOW_IMPORT_HELP,
+    FLOW_MESSAGES_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP,
+};
+
 #[cfg(test)]
 mod tests;
 
@@ -741,6 +686,12 @@ folder of yours instead while you write one.
 A plugin runs as you and can do anything you can, including typing into every terminal. What it asks for is shown \
 before you turn it on, not enforced. A running server picks up changes within a second.
 
+`actions` lists what plugins add to the menus, for a kind of row (--context) or all of them, and `run` runs one on \
+a project, workspace, tab or pane as its menu entry does: in the workspace's folder, with the ids of what you \
+name, stopped after 5 minutes, its output in the plugin's log. Both ask the running server; `run` waits for the \
+action and exits with 1 when it fails. An action listed before the plugins changed is refused (pass the --revision \
+`actions --json` printed, or none for the current one).
+
 Examples:
   cornercase plugin install acme/notes
   cornercase plugin install acme/notes@v1.2.0
@@ -749,6 +700,8 @@ Examples:
   cornercase plugin link ~/code/my-plugin
   cornercase plugin enable my-plugin
   cornercase plugin list
+  cornercase plugin actions --context pane
+  cornercase plugin run acme.notes open --pane 5
   cornercase plugin logs my-plugin --follow
   cornercase plugin disable my-plugin
   cornercase plugin update

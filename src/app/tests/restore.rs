@@ -78,6 +78,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                 pending: false,
                 id: None,
                 parent: None,
+                collapsed: false,
             },
             PaneState {
                 cwd: Some(paths[3].clone()),
@@ -87,6 +88,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                 pending: false,
                 id: None,
                 parent: None,
+                collapsed: false,
             },
         ],
         active: 1,
@@ -129,6 +131,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                                         pending: false,
                                         id: None,
                                         parent: None,
+                                        collapsed: false,
                                     }],
                                     active: 0,
                                     layout: None,
@@ -247,6 +250,7 @@ fn with_a_locked_pane(dir: &Path, locked: &Locked) -> WorkspaceState {
         pending: false,
         id: None,
         parent: None,
+        collapsed: false,
     });
     ws
 }
@@ -430,6 +434,28 @@ mod parents {
             .collect();
         let ids: Vec<_> = saved.iter().map(|pane| (pane.id, pane.parent)).collect();
         assert_eq!(ids, [(Some(child), Some(parent)), (Some(parent), None), (None, Some(child))]);
+    }
+
+    #[test]
+    fn a_fold_comes_back_with_its_pane() {
+        let dir = TempDir::new();
+        let (mut app, _rx) = empty_app();
+        let parent = PaneState { collapsed: true, ..pane(Some(40), None) };
+        let ws = workspace(dir.path(), vec![parent, pane(None, Some(40))]);
+
+        assert!(app.restore(&saved(vec![project(dir.path(), vec![ws])], 0), AREA), "every tab comes back");
+
+        let folds: Vec<bool> = app.projects.terms().map(|term| term.collapsed).collect();
+        assert_eq!(folds, [true, false]);
+        let written: Vec<bool> = app
+            .state()
+            .projects
+            .iter()
+            .flat_map(|p| &p.workspaces)
+            .flat_map(|w| &w.tabs)
+            .flat_map(|t| t.panes.iter().map(|pane| pane.collapsed))
+            .collect();
+        assert_eq!(written, [true, false]);
     }
 
     fn saved_parents(state: &State) -> Vec<(Option<u64>, Option<u64>)> {

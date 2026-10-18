@@ -1,0 +1,15 @@
+{
+  "plugin": "acme.notes",
+  "action": "fail",
+  "context": "pane",
+  "project": 1,
+  "workspace": 2,
+  "tab": 3,
+  "pane": 5,
+  "ended": "exited",
+  "code": 3,
+  "signal": null,
+  "error": "exit status: 3",
+  "ms": 41,
+  "log": "/state/plugins/state/acme.notes/plugin.log"
+}

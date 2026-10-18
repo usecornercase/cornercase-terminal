@@ -169,37 +169,63 @@ fn collapse_and_expand_set_the_fold_whatever_it_was() {
     let group = new_group(&mut app, "work");
     let project = app.projects[0].id;
     let workspace = app.projects[0].workspaces[0].id;
-    let folds =
-        |app: &App| (app.groups[0].entry.collapsed, app.projects[0].collapsed, app.projects[0].workspaces[0].collapsed);
+    let pane = app.projects[0].workspaces[0].tabs[0].panes[0].id;
+    app.projects.pane_by_mut(pane).expect("the pane").agent.follow(Some("claude"));
+    app.projects.pane_by_mut(pane).expect("the pane").agent.update(
+        Some(activity::Activity::Idle),
+        true,
+        Instant::now(),
+    );
+    let folds = |app: &App| {
+        (
+            app.groups[0].entry.collapsed,
+            app.projects[0].collapsed,
+            app.projects[0].workspaces[0].collapsed,
+            app.projects[0].workspaces[0].tabs[0].panes[0].collapsed,
+        )
+    };
+    let items =
+        [json!({"group": group}), json!({"project": project}), json!({"workspace": workspace}), json!({"pane": pane})];
 
-    for item in [json!({"group": group}), json!({"project": project}), json!({"workspace": workspace})] {
+    for item in &items {
         ok(&mut app, "collapse", &json!({"item": item}));
         ok(&mut app, "collapse", &json!({"item": item}));
     }
-    assert_eq!(folds(&app), (true, true, true));
-    for item in [json!({"group": group}), json!({"project": project}), json!({"workspace": workspace})] {
+    assert_eq!(folds(&app), (true, true, true, true));
+    for item in &items {
         ok(&mut app, "expand", &json!({"item": item}));
         ok(&mut app, "expand", &json!({"item": item}));
     }
-    assert_eq!(folds(&app), (false, false, false));
+    assert_eq!(folds(&app), (false, false, false, false));
 }
 
-#[rstest]
-#[case::a_tab(json!({"tab": 1}))]
-#[case::a_pane(json!({"pane": 1}))]
-fn a_tab_or_a_pane_has_no_fold(#[case] item: Value) {
+#[test]
+fn a_pane_without_an_agent_has_no_fold() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let pane = app.projects[0].workspaces[0].tabs[0].panes[0].id;
+
+    let refused = refused(&mut app, "collapse", &json!({"item": {"pane": pane}}));
+
+    assert_eq!(refused.code, "conflict", "{}", refused.message);
+    assert!(!app.projects[0].workspaces[0].tabs[0].panes[0].collapsed);
+}
+
+#[test]
+fn a_tab_has_no_fold() {
     let (mut app, _rx) = app();
 
-    let refused = refused(&mut app, "collapse", &json!({"item": item}));
+    let refused = refused(&mut app, "collapse", &json!({"item": {"tab": 1}}));
 
     assert_eq!(refused.code, "malformed");
 }
 
-#[test]
-fn an_unknown_row_has_no_fold() {
+#[rstest]
+#[case::a_project(json!({"project": 999}))]
+#[case::a_pane(json!({"pane": 999}))]
+fn an_unknown_row_has_no_fold(#[case] item: Value) {
     let (mut app, _rx) = app();
 
-    let refused = refused(&mut app, "expand", &json!({"item": {"project": 999}}));
+    let refused = refused(&mut app, "expand", &json!({"item": item}));
 
     assert_eq!(refused.code, "not-found");
 }

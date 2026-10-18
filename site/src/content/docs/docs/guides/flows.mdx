@@ -61,7 +61,7 @@ Starting a flow:
 3. Starts each agent with its model, its effort, its arguments and its role prompt, which tells it to wait for the orchestrator's first message, and answers its question about trusting the new folder. A role that may not edit the worktree's files is told so in its prompt, and every role is told where to put its answers (see [The run's folder](#the-runs-folder)).
 4. Starts the orchestrator last, once its team is up, with a brief cornercase writes: the task, the team with each role's pane id, the stages in words, the flow's notes, the rules for driving agents (wait before sending, one self-contained message at a time, read the last message rather than the screen, never answer another agent's permission prompt), the run's folder, the final action, and `cornercase mark` on its own pane when it is done, so the run shows as [pending review](../projects-workspaces-tabs/#pending-review).
 
-The whole team starts at once, so the tabs and the diagram are complete from the first second; with the [agents section](../projects-workspaces-tabs/#the-agents-section) on, the team hangs under its orchestrator there, each member listed by its role; an agent waiting for its first message costs nothing. The roles' turns ending don't notify you or leave a `✓` on their tabs, since the orchestrator reads them; the orchestrator does when the run is done, and any agent still does when it [waits for you](../projects-workspaces-tabs/#notifications).
+The whole team starts at once, so the tabs and the diagram are complete from the first second; with the [agents section](../projects-workspaces-tabs/#the-agents-section) on, the team hangs under its orchestrator there, each member listed by its role, and the team can be collapsed into the orchestrator's row; an agent waiting for its first message costs nothing. The roles' turns ending don't notify you or leave a `✓` on their tabs, since the orchestrator reads them; the orchestrator does when the run is done, and any agent still does when it [waits for you](../projects-workspaces-tabs/#notifications).
 
 <Screen
   name="flow-agents"
@@ -136,7 +136,7 @@ By default every role works in the run's worktree, so a reviewer sees what the c
 
 Open **settings → Flows**, the tab right after Agents (`Tab` and `←` `→` move to the other tabs, `↑` `↓` between flows), to list them, in one list sorted by name: a project's flows are tagged `this project`, and built-in flows you changed `edited`. Click a flow to select it and see its diagram, and again (or **`edit`**) to open it. When the dialog is wide enough the diagram is drawn beside the list (the wheel over it scrolls a tall one); otherwise **`diagram`** shows it in place of the list and **`list`** brings the list back. A file that cannot be read says why instead of drawing a diagram. **`duplicate`** saves a copy in your folder and opens it, **`export`** and **`import`** [share a flow](#share-a-flow), **`new`** starts a flow with a coder and a reviewer, and **`delete`** asks first. A built-in flow opens like the others: saving it keeps your version in your folder under the same name, in its place.
 
-**Deleting a built-in flow** hides it, since it lives in cornercase itself and not in a file: it leaves Settings, the start dialog and `cornercase flow list`, and `cornercase flow run` refuses it and says how to bring it back. A built-in flow you edited offers both **`restore default`**, which deletes your file and brings the built-in back, and **`delete`**, which deletes your file and hides the built-in too. **`deleted built-ins`**, at the end of the list (click it, or `Enter`, to expand it), lists the ones you hid, muted with their diagram, and **`restore`** brings one back. A run already going keeps its flow. A deleted built-in keeps its name: a project's flow named like it is shown in red and does not run.
+**Deleting a built-in flow** hides it, since it lives in cornercase itself and not in a file: it leaves Settings, the start dialog and `cornercase flow list`, and `cornercase flow run` refuses it and says how to bring it back. A built-in flow you edited offers both **`restore default`**, which deletes your file and brings the built-in back, and **`delete`**, which deletes your file and hides the built-in too. **`deleted built-ins`**, at the end of the list (click it, or `Enter`, to expand it), lists the ones you hid, muted with their diagram, and **`restore`** brings one back. A run already going keeps its flow. From a shell, `cornercase flow hide NAME` does the same as **`delete`** on a built-in flow, `cornercase flow restore NAME` as **`restore`** and **`restore default`**, and `cornercase flow delete NAME` deletes a flow of yours or the project's (see [Manage flows](../scripts-and-agents/#manage-flows)). A deleted built-in keeps its name: a project's flow named like it is shown in red and does not run.
 
 <Screen
   name="flows-list"
@@ -253,17 +253,18 @@ cornercase flow list
 cornercase flow run 'Full issue' --prompt-file issue.md --worktree fix-login
 cornercase flow export Quick > quick.toml
 cornercase flow import quick.toml
+cornercase flow hide Quick
 ```
 
-`flow export` and `flow import` [share a flow](#share-a-flow). `flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
+`flow export` and `flow import` [share a flow](#share-a-flow). `flow delete`, `flow hide` and `flow restore` [manage them](../scripts-and-agents/#manage-flows), `flow runs`, `flow messages` and `flow files` [follow a run](../scripts-and-agents/#follow-a-flow-run), and a program with an editor of its own reads each flow whole in `flow list --json` and saves one with the `flow-save` request. `flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
 
 `cornercase status --json` gives each workspace that runs a flow a `run` with its `end` and whether it was `reached`.
 
 ## What is not covered
 
-- The files of a run that ended in the Flow panel, which shows only while a run does: read them from `run_dir`. There is no way to turn the folder off; a flow's own prompts can say not to use it.
+- The files of a run that ended in the Flow panel, which shows only while a run does: `cornercase flow files` lists them, and `run_dir` is their folder. There is no way to turn the folder off; a flow's own prompts can say not to use it.
 - Flows that span several projects.
 - A GitLab merge request at a flow's end: the end reads GitHub pull requests through `gh`; elsewhere it lights from the orchestrator's mark.
 - Scheduling a flow: the [queue](../queue/) starts single agents.
-- Message events in [`cornercase events`](../scripts-and-agents/#follow-events).
+- Message events in [`cornercase events`](../scripts-and-agents/#follow-events): a run's messages are their own stream, [`cornercase flow messages`](../scripts-and-agents/#follow-a-flow-run).
 - Agents cornercase doesn't know: a role runs Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI or GitHub Copilot CLI.

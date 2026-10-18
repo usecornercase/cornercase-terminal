@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
@@ -12,7 +12,7 @@ use super::layout::Side;
 use super::overlay::Overlay;
 use super::pull_requests::DONE;
 use super::{App, Toast};
-use crate::control::Command;
+use crate::control::{Command, FlowMessage};
 use crate::error::Result;
 use crate::files::link::Target;
 use crate::flows::folder::{self, Listing};
@@ -148,7 +148,7 @@ impl App {
         let mut diagram = plan.live(&run.progress, |role| self.role_state(run, role), end, now);
         diagram.spin = spin;
         let files = self.flow.files.as_ref().filter(|(id, _)| *id == run.id).map(|(_, listing)| {
-            let now = std::time::SystemTime::now();
+            let now = SystemTime::now();
             let age = |file: &folder::File| {
                 let secs = file.modified.and_then(|at| now.duration_since(at).ok()).map_or(0, |d| d.as_secs());
                 time::age(i64::try_from(secs).unwrap_or(i64::MAX))
@@ -364,6 +364,9 @@ impl App {
                     text: text.as_deref().map(kept),
                     bytes: text.as_ref().map_or(0, String::len),
                     at: now,
+                    time: SystemTime::now(),
+                    seq: 0,
+                    edge: None,
                 },
                 answered,
             })
@@ -404,8 +407,9 @@ impl App {
     fn record_flow(&mut self, noted: Noted) {
         let Noted { run, panes: (from, to), message, .. } = noted;
         let same = |r: &Run| r.role_of(from) == Some(&message.from) && r.role_of(to) == Some(&message.to);
-        if let Some(run) = self.runs.iter_mut().find(|r| r.id == run && same(r)) {
-            run.record(message);
-        }
+        let Some(run) = self.runs.iter_mut().find(|r| r.id == run && same(r)) else { return };
+        let message = run.record(message).clone();
+        let wire = FlowMessage::of(run, &message);
+        self.publish_flow_message(&wire);
     }
 }
