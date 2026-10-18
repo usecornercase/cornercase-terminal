@@ -61,7 +61,7 @@ group 9  personal  collapsed
 | `split` | Splits a pane right, or down, optionally typing a command. Prints the new pane's id. |
 | `start [AGENT]` | Starts a coding agent in a new tab and gives it a prompt, or with `--issue` the issue's. Prints the pane's id. |
 | `issue sources`, `issue list`, `issue read KEY`, `issue people SOURCE` | Read the [issue trackers](#issues) through the server: which are connected, their lists with the Issues dialog's filters, an issue with its comments, and whom the filters can name. |
-| `flow list`, `flow run NAME`, `flow export NAME`, `flow import SOURCE` | Lists the [flows](../flows/), starts one (a team of agents in a worktree, run by an orchestrator agent), prints one as text to share, or adds one someone shared. |
+| `flow list`, `flow run NAME`, `flow export NAME`, `flow import SOURCE`, `flow delete NAME`, `flow hide NAME`, `flow restore NAME` | Lists the [flows](../flows/), starts one (a team of agents in a worktree, run by an orchestrator agent), prints one as text to share, adds one someone shared, deletes one of yours or the project's, or deletes a built-in flow and brings it back. |
 | `send [TEXT]` | Pastes text into a pane, and presses Enter with `--enter`. |
 | `keys KEY…` | Presses keys in a pane. |
 | `search TEXT` | Finds the panes where some text was said: in the agents' prompts and replies and in every pane's history. |
@@ -434,6 +434,25 @@ cornercase flow run 'Full issue' --issue ENG-42 --project 3
 
 `flow export NAME` prints a flow as TOML, so `cornercase flow export Quick > quick.toml` makes a file to send, and `--json` prints its name, origin, path and text. `flow import SOURCE` (a file, `-` for standard input, an `https://` address or `OWNER/REPO` on GitHub, see [community flows](../flows/#community-flows)) adds one to yours, or to the project's with `--to project`, and prints where it went. A flow from an address or a repository, or that sets `env` or `args`, asks first, or needs `--yes` without a terminal; a name that is taken is refused unless `--replace` overwrites it or `--name` gives the new one another. A text over 256 KiB is refused. See [Share a flow](../flows/#share-a-flow).
 
+### Manage flows
+
+```sh
+cornercase flow list --json
+cornercase flow delete 'Quick mine'
+cornercase flow hide Quick
+cornercase flow restore Quick
+```
+
+Each verb means one thing. `flow delete NAME` deletes the file of a flow of yours or the project's (`--in yours` or `--in project` when both have the name, `--project ID`, or `--path FILE` for a file that cannot be read, as `flow list --json` gives it) and nothing else: a run already going keeps the plan it was started with. It refuses a built-in flow, which has no file, and your version of one, with the command that does what you mean (`conflict`). `flow hide NAME` is what the delete button of [settings → Flows](../flows/#edit-flows) does with a built-in flow: it hides its name, and deletes your version of it if you edited it. `flow restore NAME` brings a hidden built-in back and deletes your version of it. Both change nothing when there is nothing to do (`changed` is `false`), and name only built-in flows (`not-found` for others). None asks first, and `--json` prints `name`, `origin`, `deleted` (the file), `hidden` and `changed`.
+
+An app with an editor of its own works on the flow as JSON. `flow list --json` gives each flow whole as `flow`: `name`, `description`, `notes`, `end` (`pull_request` or `commits`), `orchestrator` and `roles` (each with `name`, `agent`, `model`, `effort`, `args`, `env`, `edits`, `worktree` (`shared` or `own`) and `prompt`) and `stages` (`roles` and `back`, `null` or `to` counted **from 1**, as in the file and the editor, `when` and `at_most`), with `edited` for your version of a built-in. The deleted built-ins come as `hidden`, and `builtins` lists every built-in name, which stays reserved even while it is hidden. The request `flow-save` takes that same `flow`, `place` (`yours` or `project`), `project`, `path` (the file of the flow being edited, as `flow list --json` gave it, when it is renamed or moved: the old file is deleted; any other path is `not-found`) and `check`:
+
+```json
+{"command": "flow-save", "args": {"flow": {"name": "Quick mine", "description": "", "notes": "", "end": "pull_request", "orchestrator": {"name": "orchestrator", "agent": "claude", "model": null, "effort": null, "args": [], "env": {}, "edits": false, "worktree": "shared", "prompt": "Run it."}, "roles": [{"name": "coder", "agent": "claude", "model": null, "effort": null, "args": [], "env": {}, "edits": true, "worktree": "shared", "prompt": "Write it."}], "stages": [{"roles": ["coder"], "back": null}]}, "place": "yours", "path": null, "check": true}}
+```
+
+With `check` it answers `problems` (what the editor shows in red: the flow's own and a name conflict) and the `check` text (what a project's flow runs unattended: its `env` and `args`), and writes nothing; without it, it saves, answers the `path` and is refused as `malformed` while the flow has problems of its own. A request is `not-found` for a project that is not open and a `path` that is no flow file, and `malformed` for another place. The last write wins over an editor open on the same flow, as with a file edited by hand.
+
 ### Issues
 
 ```sh
@@ -768,6 +787,10 @@ A refusal has a code: `not-found` for a key that names no setting or connection,
 | `focus --view` | `project`, `workspace`, `tab`, `pane` the view shows now, and its `projection`. |
 | `send`, `wait` | `pane`, and, once a wait ended, `ended` (`idle`, `done`, `pending`, `waiting`, `working`, `shell`, `text` or `quiet`) and `line` for a `--text` match. `start --wait` adds `ended` and `line` too. |
 | `wait --any`, `wait --all` | `panes`: one entry per line of text, each with `pane`, `tab` when it was given as a `--tab`, `ended` (as above, or `closed`) and `line` for a `--text` match. |
+| `flow list` | `flows` (each with `name`, `origin`, `path`, `description`, `roles`, `problems`, `check`, `flow` and `edited`), `broken`, `hidden` (the deleted built-in flows, like `flows`) and `builtins`. See [Manage flows](#manage-flows). |
+| `flow run` | `run` (the run's id), `project`, `workspace`, `branch`, `members` and `run_dir`. |
+| `flow delete`, `flow hide`, `flow restore` | `name`, `origin`, `deleted`, `hidden`, `changed`. |
+| `flow-save` (a request) | `name`, `origin`, `path`, `saved`, `problems`, `check`. |
 | `usage` | `agents`: `agent`, `title`, `loading`, `read_at`, `age`, `plan`, `limited`, `limits` (`label`, `kind`, `scope`, `percent`, `severity`, `resets_at`), `extra`, `notice`, `error`. See [Plan usage](#plan-usage). |
 | `search` | `matches`: `pane`, `tab`, `workspace`, `project`, `place`, `who`, `source` (`prompt`, `reply` or `screen`), `line`, `text`, `written`; and `capped`. See [Find where something was said](#find-where-something-was-said). |
 | `read` | `pane` and `text`. With `--last-message`, also `agent` (`claude`, `codex`, `gemini` or `opencode`), `written` (when the agent wrote it, in UTC, such as `2026-10-08T19:56:37.241Z`) and `turn_over` (`true` once the agent stopped working, as [`--until turn-over`](#wait) sees it; missing while cornercase doesn't know yet). |

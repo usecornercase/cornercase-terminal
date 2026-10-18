@@ -473,6 +473,10 @@ impl App {
             Command::FlowRun(run) => self.flow_run_request(client, caller, run, area),
             Command::FlowExport(export) => self.flow_export_request(caller, &export),
             Command::FlowImport(import) => self.flow_import_request(caller, &import),
+            Command::FlowSave(save) => self.flow_save_request(caller, &save),
+            Command::FlowDelete(delete) => self.flow_delete_request(caller, &delete),
+            Command::FlowHide(hide) => self.flow_hide_request(&hide),
+            Command::FlowRestore(restore) => self.flow_restore_request(&restore),
             Command::Search(search) => self.search_request(client, &search.query),
             Command::View(open) => self.view_request(client, &open, area),
             Command::ViewSet(set) => match asker.view {

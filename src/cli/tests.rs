@@ -877,6 +877,7 @@ mod flows {
                 },
             ],
             broken: vec![BrokenFlow { path: "/c/flows/x.toml".into(), error: "expected `=`".into() }],
+            ..Flows::default()
         };
 
         assert_eq!(

@@ -1,3 +1,5 @@
+mod manage;
+
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
 
@@ -6,7 +8,8 @@ use ratatui::layout::Rect;
 use super::{Handled, NO_PROJECT, Pending, Stage, json, none, sized};
 use crate::app::App;
 use crate::app::flow_runs::{Made, Starting};
-use crate::control::{self, BrokenFlow, Done, Exported, FlowInfo, Flows, Imported, RoleInfo};
+use crate::control::contract::Refusal;
+use crate::control::{self, BrokenFlow, Done, Exported, FlowInfo, FlowSpec, Flows, Imported, RoleInfo};
 use crate::error;
 use crate::flows::dialog::project_risks;
 use crate::flows::share::{self, To};
@@ -25,17 +28,10 @@ impl App {
             None => self.here(caller).project,
         };
         let listing = self.flow_listing(p.map(|p| self.projects[p].path.as_path()));
-        let flows = listing
-            .flows
-            .iter()
-            .map(|saved| {
-                let mut info = flow_info(&saved.flow, &saved.origin);
-                info.problems.extend(listing.conflict(saved));
-                info
-            })
-            .collect();
+        let (flows, hidden) = manage::info_listing(&listing);
+        let builtins = listing.builtins;
         let broken = listing.broken.into_iter().map(|(path, error)| BrokenFlow { path, error }).collect();
-        Ok(Some(json(&Flows { flows, broken })))
+        Ok(Some(json(&Flows { flows, broken, hidden, builtins })))
     }
 
     pub(super) fn flow_export_request(&self, caller: Option<u64>, export: &control::FlowExport) -> Handled {
@@ -101,7 +97,7 @@ impl App {
         Ok(Some(json(&imported)))
     }
 
-    fn flows_scope(&self, caller: Option<u64>, project: Option<u64>) -> Result<Option<PathBuf>, String> {
+    fn flows_scope(&self, caller: Option<u64>, project: Option<u64>) -> Result<Option<PathBuf>, Refusal> {
         let p = match project {
             Some(id) => Some(self.projects.project_index(id).ok_or_else(|| none("project", id))?),
             None => self.here(caller).project,
@@ -314,6 +310,8 @@ fn flow_info(flow: &Flow, origin: &Origin) -> FlowInfo {
         roles: std::iter::once(&flow.orchestrator).chain(&flow.roles).map(role).collect(),
         problems: flow.problems(),
         check: risks(flow, origin),
+        flow: FlowSpec::from(flow),
+        edited: false,
     }
 }
 

@@ -2,10 +2,10 @@ use std::fmt::Write as _;
 use std::io::{IsTerminal as _, Read as _};
 use std::path::Path;
 
-use super::args::{FlowAction, FlowImportArgs, ImportTo};
+use super::args::{FlowAction, FlowDeleteArgs, FlowImportArgs, ImportTo};
 use super::{print_json, print_out, read_prompt};
 use crate::client::{self, answer, ask, confirm};
-use crate::control::{self, Exported, FlowInfo, Flows, Imported, RunInfo};
+use crate::control::{self, Exported, FlowInfo, FlowRemoved, Flows, Imported, RunInfo};
 use crate::error::{Error, Result};
 use crate::flows::Worktree;
 use crate::flows::registry::{self, Source};
@@ -59,7 +59,72 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
             print_out(&exported.text)
         }
         FlowAction::Import(import) => import_flow(import),
+        FlowAction::Delete(delete) => delete_flow(delete),
+        FlowAction::Hide(hide) => {
+            let request = control::FlowHide { name: hide.name };
+            removed("flow hide", control::Command::FlowHide(request), hide.print.json, hidden_line)
+        }
+        FlowAction::Restore(restore) => {
+            let request = control::FlowRestore { name: restore.name };
+            removed("flow restore", control::Command::FlowRestore(request), restore.print.json, restored_line)
+        }
     }
+}
+
+fn delete_flow(args: FlowDeleteArgs) -> Result<()> {
+    let request = control::FlowDelete {
+        name: args.name.unwrap_or_default(),
+        place: args.place.map(|place| place.name().to_string()).unwrap_or_default(),
+        project: args.project,
+        path: args.path.map(std::path::absolute).transpose()?,
+    };
+    removed("flow delete", control::Command::FlowDelete(request), args.print.json, deleted_line)
+}
+
+fn removed(
+    name: &'static str,
+    command: control::Command,
+    json: bool,
+    line: impl Fn(&FlowRemoved) -> String,
+) -> Result<()> {
+    let value = ask(name, command)?;
+    if json {
+        return print_json(&value);
+    }
+    print_out(&line(&answer(value)?))
+}
+
+pub(super) fn deleted_line(removed: &FlowRemoved) -> String {
+    let place = match removed.origin.as_deref() {
+        Some("project") => " (this project's)",
+        Some(_) => " (yours)",
+        None => "",
+    };
+    let path = removed.deleted.as_ref().map(|path| format!(": {}", path.display())).unwrap_or_default();
+    format!("deleted {}{place}{path}\n", share::visible(&removed.name))
+}
+
+pub(super) fn hidden_line(removed: &FlowRemoved) -> String {
+    let name = share::visible(&removed.name);
+    if !removed.changed {
+        return format!("the built-in flow {name} was already deleted\n");
+    }
+    let edit =
+        removed.deleted.as_ref().map(|path| format!(", and your version {}", path.display())).unwrap_or_default();
+    format!("deleted the built-in flow {name}{edit}; `cornercase flow restore {name}` brings it back\n")
+}
+
+pub(super) fn restored_line(removed: &FlowRemoved) -> String {
+    let name = share::visible(&removed.name);
+    if !removed.changed {
+        return format!("the built-in flow {name} is shown and not edited: nothing to restore\n");
+    }
+    let edit = removed
+        .deleted
+        .as_ref()
+        .map(|path| format!("; your version {} is deleted", path.display()))
+        .unwrap_or_default();
+    format!("restored the built-in flow {name}{edit}\n")
 }
 
 fn import_flow(args: FlowImportArgs) -> Result<()> {
@@ -186,6 +251,14 @@ pub(super) fn listing(flows: &Flows) -> String {
     for broken in &flows.broken {
         let _ = writeln!(out, "cannot read {}: {}", broken.path.display(), broken.error);
     }
+    if !flows.hidden.is_empty() {
+        let names: Vec<String> = flows.hidden.iter().map(|flow| share::visible(&flow.name)).collect();
+        let _ = writeln!(
+            out,
+            "deleted built-in flows: {} (`cornercase flow restore NAME` brings one back)",
+            names.join(", ")
+        );
+    }
     out
 }
 
@@ -212,3 +285,6 @@ pub(super) fn started(run: &RunInfo) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests;

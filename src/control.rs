@@ -35,8 +35,8 @@ pub(crate) use config::{ConfigInfo, Configure};
 pub(crate) use contract::Contract;
 pub(crate) use events::{Event, Events, Go, Kind, What};
 pub(crate) use flow::{
-    BrokenFlow, Exported, FlowExport, FlowImport, FlowInfo, FlowList, FlowRun, Flows, Imported, MemberInfo, RoleInfo,
-    RunInfo,
+    BrokenFlow, Exported, FlowDelete, FlowExport, FlowHide, FlowImport, FlowInfo, FlowList, FlowRemoved, FlowRestore,
+    FlowRun, FlowSave, FlowSaved, FlowSpec, Flows, Imported, MemberInfo, RoleInfo, RunInfo,
 };
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use search::{Hit, Matches, Search};
@@ -160,6 +160,10 @@ pub(crate) enum Command {
     ChangesBase(ChangesBase),
     ChangesViewed(ChangesViewed),
     Usage(Usage),
+    FlowSave(FlowSave),
+    FlowDelete(FlowDelete),
+    FlowHide(FlowHide),
+    FlowRestore(FlowRestore),
 }
 
 impl Command {
@@ -233,6 +237,10 @@ impl Command {
             Self::ChangesBase(_) => 65,
             Self::ChangesViewed(_) => 66,
             Self::Usage(_) => 67,
+            Self::FlowSave(_) => 68,
+            Self::FlowDelete(_) => 69,
+            Self::FlowHide(_) => 70,
+            Self::FlowRestore(_) => 71,
         }]
     }
 
@@ -366,11 +374,15 @@ impl Command {
             Self::ChangesBase(base) => base.fields(&mut fields),
             Self::ChangesViewed(viewed) => viewed.fields(&mut fields),
             Self::Usage(usage) => usage.fields(&mut fields),
+            Self::FlowSave(save) => save.fields(&mut fields),
+            Self::FlowDelete(delete) => delete.fields(&mut fields),
+            Self::FlowHide(hide) => hide.fields(&mut fields),
+            Self::FlowRestore(restore) => restore.fields(&mut fields),
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 68] = [
+    pub(crate) const NAMES: [&str; 72] = [
         "status",
         "open",
         "new-workspace",
@@ -439,6 +451,10 @@ impl Command {
         "changes-base",
         "changes-viewed",
         "usage",
+        "flow-save",
+        "flow-delete",
+        "flow-hide",
+        "flow-restore",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

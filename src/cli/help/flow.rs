@@ -10,7 +10,9 @@ Examples:
   cornercase flow run 'Full issue' --issue ENG-42 --project 3
   cornercase flow run 'Full issue' --prompt-file task.md --worktree fix-login
   cornercase flow export Quick > quick.toml
-  cornercase flow import quick.toml";
+  cornercase flow import quick.toml
+  cornercase flow hide Quick
+  cornercase flow delete 'Quick mine'";
 pub(in crate::cli) const FLOW_RUN_HELP: &str =
     "It makes the worktree (or uses a worktree already on that branch, if it runs no flow), opens a
 tab per role named after it, the orchestrator first, and starts every agent with its role prompt,
@@ -63,3 +65,27 @@ Examples:
   cornercase flow import https://example.com/flows/mine.toml
   cornercase flow import quick.toml --to project --name 'Quick mine'
   ssh host cornercase flow export Quick | cornercase flow import - --yes";
+pub(in crate::cli) const FLOW_DELETE_HELP: &str =
+    "It deletes the flow's file, from yours or from the project's, and nothing else: a run already going keeps
+the plan it was started with. It never touches a built-in flow, which has no file: `flow hide` deletes one,
+and a flow of yours that edits a built-in is deleted by `flow restore` (the built-in comes back) or
+`flow hide` (the built-in stays deleted). Pass --in when yours and the project's have the same name, or
+--path with the file `flow list --json` gives for a flow that cannot be read.
+
+Examples:
+  cornercase flow delete 'Quick mine'
+  cornercase flow delete Review --in project
+  cornercase flow delete --path ~/.config/cornercase/flows/broken.toml";
+pub(in crate::cli) const FLOW_HIDE_HELP: &str =
+    "A built-in flow lives in the binary, so deleting it hides its name: your choice, kept across updates,
+which `flow restore` undoes. If you edited the flow, your version is deleted too. It is what Settings › Flows
+does with the delete button on a built-in flow. Hiding one that is already hidden changes nothing.
+
+Examples:
+  cornercase flow hide Quick";
+pub(in crate::cli) const FLOW_RESTORE_HELP: &str =
+    "It brings a deleted built-in flow back, and when you edited it, deletes your version so the built-in
+is the one that runs again. A flow that is shown and not edited has nothing to restore.
+
+Examples:
+  cornercase flow restore Quick";

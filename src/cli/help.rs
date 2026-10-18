@@ -660,7 +660,9 @@ Examples:
 
 mod flow;
 
-pub(in crate::cli) use flow::{FLOW_EXPORT_HELP, FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP};
+pub(in crate::cli) use flow::{
+    FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_HELP, FLOW_HIDE_HELP, FLOW_IMPORT_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP,
+};
 
 #[cfg(test)]
 mod tests;

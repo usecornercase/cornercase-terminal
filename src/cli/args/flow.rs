@@ -4,7 +4,9 @@ use clap::{Args, Subcommand, ValueEnum};
 
 use super::issue;
 use super::{Create, Print, branch};
-use crate::cli::help::{FLOW_EXPORT_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP};
+use crate::cli::help::{
+    FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_HIDE_HELP, FLOW_IMPORT_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP,
+};
 
 #[derive(Debug, Args)]
 pub(crate) struct FlowArgs {
@@ -31,6 +33,56 @@ pub(crate) enum FlowAction {
         after_help = FLOW_IMPORT_HELP
     )]
     Import(FlowImportArgs),
+    #[command(
+        about = "Delete a flow of yours or the project's, by name or by its file",
+        after_help = FLOW_DELETE_HELP
+    )]
+    Delete(FlowDeleteArgs),
+    #[command(
+        about = "Delete a built-in flow, as Settings › Flows does; `flow restore` brings it back",
+        after_help = FLOW_HIDE_HELP
+    )]
+    Hide(FlowNameArgs),
+    #[command(
+        about = "Bring a deleted built-in flow back, and delete your version of it",
+        after_help = FLOW_RESTORE_HELP
+    )]
+    Restore(FlowNameArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowNameArgs {
+    #[arg(value_name = "NAME", help = "The built-in flow, as `cornercase flow list` names it")]
+    pub(crate) name: String,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowDeleteArgs {
+    #[arg(
+        value_name = "NAME",
+        required_unless_present = "path",
+        conflicts_with = "path",
+        help = "The flow, as `cornercase flow list` names it"
+    )]
+    pub(crate) name: Option<String>,
+    #[arg(
+        long = "in",
+        value_enum,
+        help = "Only the flow of yours or the project's [default: either, when only one has it]"
+    )]
+    pub(crate) place: Option<ImportTo>,
+    #[arg(long, value_name = "ID", help = "The project whose flows to look in [default: the one this runs in]")]
+    pub(crate) project: Option<u64>,
+    #[arg(
+        long,
+        value_name = "FILE",
+        help = "The flow's file, also one that cannot be read, as `flow list --json` gives it"
+    )]
+    pub(crate) path: Option<PathBuf>,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]

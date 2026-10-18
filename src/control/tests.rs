@@ -116,6 +116,10 @@ fn every_command_is_listed_by_name() {
         Command::ChangesBase(ChangesBase::default()),
         Command::ChangesViewed(ChangesViewed::default()),
         Command::Usage(Usage::default()),
+        Command::FlowSave(FlowSave::default()),
+        Command::FlowDelete(FlowDelete::default()),
+        Command::FlowHide(FlowHide::default()),
+        Command::FlowRestore(FlowRestore::default()),
     ];
 
     let names: Vec<String> = commands
