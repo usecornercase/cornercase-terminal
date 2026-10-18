@@ -6,6 +6,13 @@ Every pull request that changes the app adds a section here for its new version.
 
 - **A worktree git has forgotten can be closed again.** When git no longer knows a worktree (after `git worktree prune`, or a removal that failed half way) but its folder is still there, its workspace used to stay in the sidebar for good: removing it failed with `is not a working tree` and closing it did nothing. Now it goes away as soon as its tabs are closed, like a worktree whose folder was deleted. The leftover folder stays on disk for you to delete. If cornercase cannot read git's list of worktrees, it keeps every workspace rather than guess.
 
+## 0.12.143
+
+- **Scripts and other apps can browse your issues and start work on one.** `cornercase issue sources` says which trackers are connected for a project and as whom, what is still missing (a token, Jira's site and email, Plane's workspace) and why one fails. `issue list` lists issues with the Issues dialog's filters (closed, assignee, author and the others) from the same lists and caches, `issue read KEY` prints an issue with its description and comments, and `issue people SOURCE` lists whom the filters can name.
+  - `cornercase start --issue KEY` (a key such as `#482`, `sc-48` or `ENG-42`, or the issue's URL) starts an agent on it as the dialog's **start** does: in a worktree on the branch named after the issue, with your prompt template. `cornercase flow run NAME --issue KEY` does the same for a team, like **start a flow**.
+  - Shortcut, Linear, Jira, Plane and Asana issues aren't tied to a repository: when several places are open, the command lists them and asks for `--project` or `--workspace`, as the dialog asks **where…**.
+  - Trackers are connected as before with `cornercase config secret`, with the dialog's checks. Issue texts never reach the log. See Scripts and agents → Issues.
+
 ## 0.12.141
 
 - **A sound when an agent needs you or finishes.** cornercase now plays a short sound on the computer you are looking at when an agent in another tab needs you (a question, a permission, a failure) or finishes its turn, at the same moments as its toast. It plays even while the window is focused, when Ghostty and other terminals hide the desktop notification, and also inside tmux and through `cornercase remote`.
