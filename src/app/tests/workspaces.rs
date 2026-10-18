@@ -125,6 +125,18 @@ fn checkouts_removed_outside_go_away() {
     assert_eq!(app.projects[0].workspaces.len(), 1);
 }
 
+#[test]
+fn checkouts_git_no_longer_knows_go_away_once_their_shells_stop() {
+    let (repo, mut app, _rx, _tmp, path) = external_checkout();
+    std::fs::remove_dir_all(repo.path().join(".git/worktrees/hotfix")).expect("drop the registration");
+    assert!(path.join(".git").is_file());
+
+    app.sync_worktrees();
+
+    assert_eq!(app.projects[0].workspaces.len(), 1);
+    assert!(path.is_dir());
+}
+
 mod behind {
     use super::*;
     use crate::test_util::git;

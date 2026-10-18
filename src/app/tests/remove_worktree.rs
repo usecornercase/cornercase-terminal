@@ -138,6 +138,23 @@ fn the_row_stays_until_git_answers_even_once_the_folder_is_gone() {
 }
 
 #[test]
+fn a_removal_git_refuses_for_a_worktree_it_forgot_still_lets_the_row_go() {
+    let mut s = with_worktree();
+    checked(&mut s);
+    let name = s.path.file_name().expect("folder name").to_owned();
+    std::fs::remove_dir_all(s.repo.path().join(".git/worktrees").join(name)).expect("drop the registration");
+
+    click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
+    pump_until(&mut s.app, &s.rx, "git refuses", |a| a.projects[0].workspaces.get(1).is_none_or(Workspace::open));
+    pump_until(&mut s.app, &s.rx, "the shells stop", |a| {
+        a.projects[0].workspaces.get(1).is_none_or(|w| w.tabs.is_empty())
+    });
+    s.app.sync_worktrees();
+
+    assert_eq!(s.app.projects[0].workspaces.len(), 1);
+}
+
+#[test]
 fn the_row_keeps_its_name_while_git_deletes_the_folder() {
     let mut s = with_worktree();
     checked(&mut s);

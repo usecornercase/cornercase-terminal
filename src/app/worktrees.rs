@@ -161,7 +161,7 @@ impl App {
                 .rev()
                 .filter(|&w| {
                     let ws = &project.workspaces[w];
-                    ws.worktree && ws.open() && ws.tabs.is_empty() && !ws.path.is_dir()
+                    ws.worktree && ws.open() && ws.tabs.is_empty() && !linked.contains(&ws.path)
                 })
                 .collect();
             for w in gone {
