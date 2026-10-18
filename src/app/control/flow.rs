@@ -1,3 +1,4 @@
+mod feed;
 mod manage;
 
 use std::hash::{DefaultHasher, Hash, Hasher};

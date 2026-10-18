@@ -56,12 +56,7 @@ impl App {
                 base: Some(pull.base.clone()).filter(|base| !base.is_empty()),
             }),
             setup: ws.setup().map(|(_, state)| if state.running() { "running" } else { "failed" }.to_string()),
-            run_dir: self
-                .runs
-                .iter()
-                .find(|run| run.workspace == ws.id)
-                .and_then(|run| run.dir.clone())
-                .or_else(|| ws.run_dirs.last().cloned()),
+            run_dir: self.workspace_run_dir(ws),
             active: w == active,
             tabs: ws.tabs.iter().enumerate().map(|(t, tab)| tab_info(t, tab, ws.active)).collect(),
             custom_name: ws.name.clone(),

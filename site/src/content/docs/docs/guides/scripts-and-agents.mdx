@@ -62,6 +62,7 @@ group 9  personal  collapsed
 | `start [AGENT]` | Starts a coding agent in a new tab and gives it a prompt, or with `--issue` the issue's. Prints the pane's id. |
 | `issue sources`, `issue list`, `issue read KEY`, `issue people SOURCE` | Read the [issue trackers](#issues) through the server: which are connected, their lists with the Issues dialog's filters, an issue with its comments, and whom the filters can name. |
 | `flow list`, `flow run NAME`, `flow export NAME`, `flow import SOURCE`, `flow delete NAME`, `flow hide NAME`, `flow restore NAME` | Lists the [flows](../flows/), starts one (a team of agents in a worktree, run by an orchestrator agent), prints one as text to share, adds one someone shared, deletes one of yours or the project's, or deletes a built-in flow and brings it back. |
+| `flow runs`, `flow messages`, `flow files` | Where each running flow stands, what its roles sent each other, and the files of its folder: see [Follow a flow run](#follow-a-flow-run). |
 | `send [TEXT]` | Pastes text into a pane, and presses Enter with `--enter`. |
 | `keys KEY…` | Presses keys in a pane. |
 | `search TEXT` | Finds the panes where some text was said: in the agents' prompts and replies and in every pane's history. |
@@ -201,6 +202,23 @@ cornercase status --app --follow | jq -c '[.revision, (.todos | length)]'
 - `update`: `release` (`version` and its `notes`, each with a `version` and `text`), or `none` saying why there is no release: `disabled` (a development build), `off` (`check_updates` is off and nothing was checked), `unchecked`, `up-to-date` or `failed`. Also `checking`, `checked` (UTC time of the last answer), `error` (why the last check failed), `install` (`{"method": "replace", "path": …}` when cornercase can replace itself, `{"method": "command", "command": …}` when you must run a command, as with Homebrew), `installing`, `installed` (restart to use it) and `install_error`. [`update-check` and `update-install`](#updates-from-a-program) drive it.
 - `keep_awake`: as in `status --json`, or `null` while the setting is off. `version` and `boot` are the server's, as in `status`.
 - It follows the rules of [`status --follow`](#follow-the-whole-state): every line is the whole state and carries a `revision` that grows by one per line, `revision` only compares within one `boot`, a reader that falls behind reads at most four older lines and then the latest, and it ends when the server stops or restarts. A line is built at most twice a second, and only while someone follows. It is a stream of its own so that the session's lines do not carry the queue's prompts and the release notes every half second.
+
+#### Follow a flow run
+
+A [flow](../flows/) run is state of its own: the stage the work is in, the loops, each role's pane and status, what the roles sent each other, the files they wrote. Another UI needs it to draw the Flow panel, and a script needs it to know whether a team is done.
+
+```sh
+cornercase flow runs
+cornercase flow runs --follow | jq -c '[.revision, (.runs | length)]'
+cornercase flow messages --worktree fix-login --follow
+cornercase flow files --worktree fix-login
+```
+
+- **`flow runs`** prints one block per running flow: its workspace, the stage (counted from 1 for people), the rounds of its loops, the task's first line, each role's pane and status (`closed` once its pane is gone), the last step and the last one outside the plan, and whether the orchestrator marked its pane for review, which is how a run ends. `--follow` prints the same as one JSON line each time something changes, until the server stops. The request is `flow-runs`, a stream like [`status --app`](#follow-the-rest-of-the-app): every line is the whole state with a `revision` (see [`status --follow`](#follow-the-whole-state) for what that guarantees), built at most every half second and only while someone follows.
+- **A run in the JSON** has `run` (its id, which `flow run` answers too and which a restore changes), `project`, `workspace`, `flow` (the plan the team was briefed with, as in [Manage flows](#manage-flows), frozen at the start: editing or deleting the flow does not change it), `task`, `dir` (the run's folder), `roles` (the orchestrator first, then the flow's roles in order; each with `role`, `pane`, `tab`, `status`, `closed`, and `worktree` and `branch` for a role with a worktree of its own; a role with no pane, after a restore that could not bring it back, has `null` for all), `stage`, `rounds`, `holder`, `last`, `outside`, `ended` and `messages`.
+- **Stages here count from 0**, the index in `flow.stages`, unlike a loop's `back.to`, which counts from 1 as in the flow's file. `stage` is the stage the work is in (`null` before the orchestrator sends anything), `rounds` has one number per stage (how many times its loop went back), and `holder` is the role that last got the work. A step is `{"edge": …, "from": …, "to": …, "time": …}`, where `edge` is `{"kind": "forward", "stage": N}` (it leaves stage N), `{"kind": "loop", "stage": N}` (stage N's loop) or `{"kind": "outside", "from": N or null, "to": M}` (a role of a stage the plan does not lead to), `from` is the role that held the work before (not the sender, which is always the orchestrator) and `time` is UTC. `outside` is the last step outside the plan, and `ended` is `true` once the orchestrator's pane is marked for review. Only what the orchestrator sends into a role moves the work, as in the diagram.
+- **`flow messages`** prints what the orchestrator and the roles of a run sent each other: its sends, and the keys it pressed, the screens it read and the waits it made, each with its time, who, to whom and the text. `--workspace ID` or `--worktree BRANCH` names the run (the one in the pane's own workspace, else the shown one, by default); with no run there it says so. `--follow` goes on printing until the run ends. With `--json` each message is one line: `run`, `workspace`, `seq` (counted from 1 for the run), `time`, `from`, `to`, `kind` (`send`, `keys`, `read` or `wait`), `text` (`null` when there was none), `bytes` (the real size: a text is kept up to 32 KiB) and `edge`, the step along the plan it moved the work through (`null` when it moved nothing); the backlog comes first, expanded into those lines. Only the last 256 messages of a run are kept, in memory, and never logged or saved, so a run that was restored starts with none. The request is `flow-messages`, a stream of its own on its connection: its answer is `{"boot", "run", "workspace", "messages": [...]}` with every message kept so far, then each new message is one line, in order, with no gap in between, and it ends (`Detached`) when the run does. A client that cannot keep up gets a `{"event": "dropped", "count": N}` line, as in [Follow events](#follow-events), and reconnects to read what is kept. A second `flow-messages` on one connection is `conflict`.
+- **`flow files`** lists the files of the run's folder, newest first, at most 200, as a table (`name`, `bytes`, `modified`, `path`; `--json` prints `workspace`, `run`, `dir`, `files` and `more`). After the run ended it lists the last folder the workspace's runs made, for as long as the workspace lives; a workspace that never ran a flow is `conflict`, and a folder that was deleted `failed`. The request is `flow-files`, one answer. To read a file, open its `path`: reading it over the socket is left out, as it is for the files panel.
 
 #### Stream a tab's terminals
 
@@ -790,6 +808,9 @@ A refusal has a code: `not-found` for a key that names no setting or connection,
 | `flow list` | `flows` (each with `name`, `origin`, `path`, `description`, `roles`, `problems`, `check`, `flow` and `edited`), `broken`, `hidden` (the deleted built-in flows, like `flows`) and `builtins`. See [Manage flows](#manage-flows). |
 | `flow run` | `run` (the run's id), `project`, `workspace`, `branch`, `members` and `run_dir`. |
 | `flow delete`, `flow hide`, `flow restore` | `name`, `origin`, `deleted`, `hidden`, `changed`. |
+| `flow runs` | `version`, `boot`, `runs` (with `--follow`, each line also has `revision`), see [Follow a flow run](#follow-a-flow-run). |
+| `flow messages` | One object per line: `run`, `workspace`, `seq`, `time`, `from`, `to`, `kind`, `text`, `bytes`, `edge`. |
+| `flow files` | `workspace`, `run`, `dir`, `files` (`name`, `path`, `bytes`, `modified`) and `more`. |
 | `flow-save` (a request) | `name`, `origin`, `path`, `saved`, `problems`, `check`. |
 | `usage` | `agents`: `agent`, `title`, `loading`, `read_at`, `age`, `plan`, `limited`, `limits` (`label`, `kind`, `scope`, `percent`, `severity`, `resets_at`), `extra`, `notice`, `error`. See [Plan usage](#plan-usage). |
 | `search` | `matches`: `pane`, `tab`, `workspace`, `project`, `place`, `who`, `source` (`prompt`, `reply` or `screen`), `line`, `text`, `written`; and `capped`. See [Find where something was said](#find-where-something-was-said). |
@@ -866,13 +887,15 @@ cornercase contract --json
 cornercase 0.12.137
 contract 1
 boot 4242-1700000000
-commands 68 (68 available)
+commands 75 (75 available)
 stream events 1
 stream watch 1
 stream surface 1
 stream view 1
 stream app 1
 stream changes 1
+stream flow-runs 1
+stream flow-messages 1
 features boot, structured-errors, strict-fields, views, host-events, theme, notices, surface-patches, config, close-unlock, sound, issues, todo-panel, changes
 ```
 
@@ -883,7 +906,7 @@ features boot, structured-errors, strict-fields, views, host-events, theme, noti
 - `boot`: which start of the server this is. It changes on every start, `cornercase restart` included, since ids start again from 1. It is the same value as `CORNERCASE_SERVER` in the panes and `boot` in `status --json`.
 - `operations`: every request the server takes, by name, with `available`. A server with `start-server` among them can be started without a window; one without it needs a window before it opens terminals. One that is not available on this server has `available: false` and a `reason`; the others keep working.
 - `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours), `notices` (a view's `visible`, the `notices` field of `events` and the `go` request; check it before sending them), `surface-patches` (the `patches` field of `surface`; an older server ignores it and sends complete lines, so check it before asking) `config` (the `config` request and `config.revision`) `close-unlock` (the `unlock` field of `close`, which an older server ignores and then refuses with the lock's message; check it before sending it), `sound` (a notice's `sound` field: an older server never sends it), `issues` (the `issue` and `source` fields of `start` and `flow-run`, which an older server ignores and then starts the agent without the issue; check it before sending them) and `todo-panel` (the `todo` request's `edit`, `undone`, `move`, `clear-done` and `restore`; an older server refuses them as malformed, so check it before sending them) and `changes` (the `changes` requests and the `changes` count of `status`).
-- `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals) and `{"name": "view", "version": 1}` for [`view`](#a-view-of-your-own), whose lines are `watch` format 1 plus `view`, and `{"name": "app", "version": 1}` for [`status --app`](#follow-the-rest-of-the-app), and `{"name": "changes", "version": 1}` for [`changes`](#follow-a-workspaces-changes).
+- `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals) and `{"name": "view", "version": 1}` for [`view`](#a-view-of-your-own), whose lines are `watch` format 1 plus `view`, and `{"name": "app", "version": 1}` for [`status --app`](#follow-the-rest-of-the-app), `{"name": "changes", "version": 1}` for [`changes`](#follow-a-workspaces-changes), and `{"name": "flow-runs", "version": 1}` and `{"name": "flow-messages", "version": 1}` for [`flow runs`](#follow-a-flow-run) and `flow messages`.
 
 A server from before `contract` says `the running cornercase server (…) has no contract command`, or that it is too old: it knows none of the rest of this section, so don't send it ids you kept from before.
 

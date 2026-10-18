@@ -120,6 +120,9 @@ fn every_command_is_listed_by_name() {
         Command::FlowDelete(FlowDelete::default()),
         Command::FlowHide(FlowHide::default()),
         Command::FlowRestore(FlowRestore::default()),
+        Command::FlowRuns(FlowRunsWatch::default()),
+        Command::FlowMessages(FlowMessages::default()),
+        Command::FlowFiles(FlowFiles::default()),
     ];
 
     let names: Vec<String> = commands

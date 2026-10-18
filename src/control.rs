@@ -34,9 +34,13 @@ pub(crate) use changes::{Changes, ChangesBase, ChangesCount, ChangesFile, Change
 pub(crate) use config::{ConfigInfo, Configure};
 pub(crate) use contract::Contract;
 pub(crate) use events::{Event, Events, Go, Kind, What};
+#[cfg(test)]
+pub(crate) use flow::{BackSpec, RoleSpec, StageSpec};
 pub(crate) use flow::{
-    BrokenFlow, Exported, FlowDelete, FlowExport, FlowHide, FlowImport, FlowInfo, FlowList, FlowRemoved, FlowRestore,
-    FlowRun, FlowSave, FlowSaved, FlowSpec, Flows, Imported, MemberInfo, RoleInfo, RunInfo,
+    BrokenFlow, Exported, FlowBacklog, FlowDelete, FlowExport, FlowFiles, FlowHide, FlowImport, FlowInfo, FlowList,
+    FlowMessage, FlowMessages, FlowRemoved, FlowRestore, FlowRun, FlowRuns, FlowRunsWatch, FlowSave, FlowSaved,
+    FlowSpec, Flows, Imported, MemberInfo, RoleInfo, RoleState, RunEdge, RunFile, RunFiles, RunInfo, RunState,
+    StepInfo,
 };
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use search::{Hit, Matches, Search};
@@ -164,6 +168,9 @@ pub(crate) enum Command {
     FlowDelete(FlowDelete),
     FlowHide(FlowHide),
     FlowRestore(FlowRestore),
+    FlowRuns(FlowRunsWatch),
+    FlowMessages(FlowMessages),
+    FlowFiles(FlowFiles),
 }
 
 impl Command {
@@ -241,6 +248,9 @@ impl Command {
             Self::FlowDelete(_) => 69,
             Self::FlowHide(_) => 70,
             Self::FlowRestore(_) => 71,
+            Self::FlowRuns(_) => 72,
+            Self::FlowMessages(_) => 73,
+            Self::FlowFiles(_) => 74,
         }]
     }
 
@@ -256,6 +266,7 @@ impl Command {
             | Self::Go(_)
             | Self::UpdateCheck(_)
             | Self::UpdateInstall(_)
+            | Self::FlowRuns(_)
             | Self::App(_) => {}
             Self::Open(open) => {
                 fields.add("path", open.path.display()).add("focus", open.focus);
@@ -378,11 +389,13 @@ impl Command {
             Self::FlowDelete(delete) => delete.fields(&mut fields),
             Self::FlowHide(hide) => hide.fields(&mut fields),
             Self::FlowRestore(restore) => restore.fields(&mut fields),
+            Self::FlowMessages(messages) => messages.fields(&mut fields),
+            Self::FlowFiles(files) => files.fields(&mut fields),
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 72] = [
+    pub(crate) const NAMES: [&str; 75] = [
         "status",
         "open",
         "new-workspace",
@@ -455,10 +468,24 @@ impl Command {
         "flow-delete",
         "flow-hide",
         "flow-restore",
+        "flow-runs",
+        "flow-messages",
+        "flow-files",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
-        matches!(name, "input" | "scroll" | "selection" | "resize" | "ratio" | "link" | "changes-file" | "changes-gap")
+        matches!(
+            name,
+            "input"
+                | "scroll"
+                | "selection"
+                | "resize"
+                | "ratio"
+                | "link"
+                | "changes-file"
+                | "changes-gap"
+                | "flow-files"
+        )
     }
 }
 

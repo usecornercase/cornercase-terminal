@@ -11,6 +11,8 @@ Examples:
   cornercase flow run 'Full issue' --prompt-file task.md --worktree fix-login
   cornercase flow export Quick > quick.toml
   cornercase flow import quick.toml
+  cornercase flow runs
+  cornercase flow messages --worktree fix-login --follow
   cornercase flow hide Quick
   cornercase flow delete 'Quick mine'";
 pub(in crate::cli) const FLOW_RUN_HELP: &str =
@@ -89,3 +91,37 @@ is the one that runs again. A flow that is shown and not edited has nothing to r
 
 Examples:
   cornercase flow restore Quick";
+pub(in crate::cli) const FLOW_RUNS_HELP: &str =
+    "It prints one block per running flow: its workspace, the stage the work is in and the rounds of its loops,
+the role that holds the work, the last step along the plan and the last one outside it, each role's pane and
+status (closed once its pane is gone), and whether the orchestrator marked its own pane for review, which is
+how a run ends. Stages count from 1 here; --json counts them from 0, as the diagram's boxes do.
+
+--follow prints the same runs as one JSON line each time something changes, the first line included, until the
+server stops; each line has a revision that only goes up while the server runs. The answer of a run that
+has no message yet or no step has them null.
+
+Examples:
+  cornercase flow runs
+  cornercase flow runs --follow";
+pub(in crate::cli) const FLOW_MESSAGES_HELP: &str =
+    "It prints what the orchestrator and the roles of the run sent each other, as the Flow panel's arrows show it:
+the orchestrator's sends, and the keys it pressed, the screens it read and the waits it made, with the text
+that was sent. Only what this server saw is kept (the last 256, in memory, never saved), so a run that was
+restored starts with none. The text is cut at 32 KiB; `bytes` says its real size.
+
+--follow goes on printing each new message until the run ends. With --json each message is one line with
+its run, workspace, seq (counted from 1 for the run), time, from, to, kind (send, keys, read or wait), text,
+bytes and edge, the step along the plan it moved the work through, or null.
+
+Examples:
+  cornercase flow messages --workspace 4
+  cornercase flow messages --worktree fix-login --follow --json";
+pub(in crate::cli) const FLOW_FILES_HELP: &str =
+    "It lists the files in the run's folder, where every role writes its answers: name, size, when it was
+changed and its path, tab-separated under a header, newest first, at most 200. After the run ended it lists the
+last folder the workspace's runs made, for as long as the workspace lives.
+
+Examples:
+  cornercase flow files
+  cornercase flow files --worktree fix-login --json";

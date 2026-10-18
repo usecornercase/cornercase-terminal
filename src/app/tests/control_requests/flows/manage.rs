@@ -26,6 +26,12 @@ fn saved(team: &mut Team, flow: &Flow, extra: &Value) -> FlowSaved {
     serde_json::from_value(ok(&mut team.app, "flow-save", &args)).expect("a save")
 }
 
+fn save_refused(team: &mut Team, flow: &Flow, extra: &Value) -> Refused {
+    let mut args = json!({"flow": spec(flow), "place": "yours", "path": null, "check": false});
+    args.as_object_mut().expect("args").extend(extra.as_object().expect("extra").clone());
+    refused(&mut team.app, "flow-save", &args)
+}
+
 fn removed(value: Value) -> FlowRemoved {
     serde_json::from_value(value).expect("a removal")
 }
@@ -152,11 +158,7 @@ fn a_previous_path_that_names_no_flow_file_is_not_found() {
     let other = team.config.path().join("precious.toml");
     std::fs::write(&other, "keep me").expect("a file");
 
-    let refused = refused(
-        &mut team.app,
-        "flow-save",
-        &json!({"flow": spec(&named("Draft")), "place": "yours", "path": other, "check": false}),
-    );
+    let refused = save_refused(&mut team, &named("Draft"), &json!({"path": other}));
 
     assert_eq!(refused.code, "not-found");
     assert_eq!(std::fs::read_to_string(&other).expect("the file"), "keep me");
@@ -167,11 +169,7 @@ fn a_previous_path_that_names_no_flow_file_is_not_found() {
 fn a_draft_for_a_project_that_is_not_open_is_not_found() {
     let mut team = Team::new();
 
-    let refused = refused(
-        &mut team.app,
-        "flow-save",
-        &json!({"flow": spec(&named("Draft")), "place": "project", "project": 99999, "path": null, "check": false}),
-    );
+    let refused = save_refused(&mut team, &named("Draft"), &json!({"place": "project", "project": 99999}));
 
     assert_eq!(refused.code, "not-found");
 }
@@ -180,11 +178,7 @@ fn a_draft_for_a_project_that_is_not_open_is_not_found() {
 fn an_unknown_place_is_malformed() {
     let mut team = Team::new();
 
-    let refused = refused(
-        &mut team.app,
-        "flow-save",
-        &json!({"flow": spec(&named("Draft")), "place": "cloud", "path": null, "check": false}),
-    );
+    let refused = save_refused(&mut team, &named("Draft"), &json!({"place": "cloud"}));
 
     assert_eq!(refused.code, "malformed");
 }

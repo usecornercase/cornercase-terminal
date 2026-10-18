@@ -149,7 +149,7 @@ pub(crate) enum Control {
     Queue(queue::QueueArgs),
     #[command(about = "Follow agents, programs, panes and tabs as they change, one line per event", after_help = EVENTS_HELP)]
     Events(EventsArgs),
-    #[command(about = "List, start, export or import flows: teams of agents in a worktree, run by an orchestrator agent", after_help = FLOW_HELP)]
+    #[command(about = "List, start, follow, share and manage flows: teams of agents in a worktree, run by an orchestrator agent", after_help = FLOW_HELP)]
     Flow(FlowArgs),
     #[command(
         about = "Print what this server offers to scripts: its version, contract, boot, commands and streams",

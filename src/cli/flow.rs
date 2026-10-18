@@ -2,10 +2,15 @@ use std::fmt::Write as _;
 use std::io::{IsTerminal as _, Read as _};
 use std::path::Path;
 
-use super::args::{FlowAction, FlowDeleteArgs, FlowImportArgs, ImportTo};
-use super::{print_json, print_out, read_prompt};
+use super::args::{
+    FlowAction, FlowDeleteArgs, FlowFilesArgs, FlowImportArgs, FlowMessagesArgs, FlowRunsArgs, ImportTo,
+};
+use super::{print_json, print_out, quietly, read_prompt, stream_json, workspace};
 use crate::client::{self, answer, ask, confirm};
-use crate::control::{self, Exported, FlowInfo, FlowRemoved, Flows, Imported, RunInfo};
+use crate::control::{
+    self, Exported, FlowBacklog, FlowInfo, FlowMessage, FlowRemoved, FlowRuns, Flows, Imported, RunEdge, RunFiles,
+    RunInfo, RunState,
+};
 use crate::error::{Error, Result};
 use crate::flows::Worktree;
 use crate::flows::registry::{self, Source};
@@ -59,6 +64,9 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
             print_out(&exported.text)
         }
         FlowAction::Import(import) => import_flow(import),
+        FlowAction::Runs(runs) => follow_runs(&runs),
+        FlowAction::Messages(messages) => messages_of(&messages),
+        FlowAction::Files(files) => files_of(&files),
         FlowAction::Delete(delete) => delete_flow(delete),
         FlowAction::Hide(hide) => {
             let request = control::FlowHide { name: hide.name };
@@ -282,6 +290,136 @@ pub(super) fn started(run: &RunInfo) -> String {
     let mut out = format!("{}\n", run.workspace);
     for member in &run.members {
         let _ = writeln!(out, "{}\t{}", member.pane, member.role);
+    }
+    out
+}
+
+fn follow_runs(args: &FlowRunsArgs) -> Result<()> {
+    let command = control::Command::FlowRuns(control::FlowRunsWatch {});
+    if args.follow {
+        return stream_json("flow-runs", command);
+    }
+    let value = ask("flow runs", command)?;
+    if args.print.json {
+        return print_json(&value);
+    }
+    print_out(&runs_text(&answer(value)?))
+}
+
+pub(super) fn runs_text(runs: &FlowRuns) -> String {
+    if runs.runs.is_empty() {
+        return "no flow is running\n".into();
+    }
+    runs.runs.iter().map(run_block).collect::<Vec<_>>().join("\n")
+}
+
+fn run_block(run: &RunState) -> String {
+    let mut out = format!("workspace {}  {}", run.workspace, share::visible(&run.flow.name));
+    match run.stage {
+        Some(stage) => {
+            let _ = write!(out, "  stage {} of {}", stage + 1, run.flow.stages.len());
+        }
+        None => out.push_str("  not started"),
+    }
+    for (stage, rounds) in run.rounds.iter().enumerate().filter(|(_, rounds)| **rounds > 0) {
+        if let Some(back) = run.flow.stages.get(stage).and_then(|stage| stage.back.as_ref()) {
+            let _ = write!(out, "  {} {rounds}/{}", share::visible(&back.when), back.at_most);
+        }
+    }
+    out.push('\n');
+    let task = run.task.lines().next().unwrap_or_default();
+    let _ = writeln!(out, "  task: {}", share::visible(&crate::text::truncate_right(task, 100)));
+    let width = run.roles.iter().map(|role| role.role.chars().count()).max().unwrap_or_default();
+    for role in &run.roles {
+        let pane = role.pane.map_or_else(|| "-".to_string(), |pane| format!("pane {pane}"));
+        let status = match (&role.status, role.closed) {
+            (_, true) => "closed",
+            (Some(status), false) => status.as_str(),
+            (None, false) => "-",
+        };
+        let _ = writeln!(out, "  {:<width$}  {pane:<9}  {status}", share::visible(&role.role));
+    }
+    if let Some(last) = &run.last {
+        let from = last.from.as_deref().map(|from| format!("{} ", share::visible(from))).unwrap_or_default();
+        let _ = writeln!(out, "  last: {from}→ {}", share::visible(&last.to));
+    }
+    if let Some(RunEdge::Outside { from, to }) = run.outside {
+        let from = from.map_or_else(|| "the start".to_string(), |from| format!("stage {}", from + 1));
+        let _ = writeln!(out, "  outside the plan: {from} → stage {}", to + 1);
+    }
+    if run.ended {
+        out.push_str("  ended: the orchestrator marked its pane for review\n");
+    }
+    out
+}
+
+fn messages_of(args: &FlowMessagesArgs) -> Result<()> {
+    let workspace = workspace("flow messages", args.place.workspace, args.place.worktree.as_deref())?;
+    let command = control::Command::FlowMessages(control::FlowMessages { workspace });
+    let json = args.print.json;
+    if !args.follow {
+        let backlog: FlowBacklog = answer(ask("flow messages", command)?)?;
+        let text: String = backlog.messages.iter().map(|message| message_text(message, json)).collect();
+        return print_out(&text);
+    }
+    client::follow_all("flow messages", command, |value| {
+        let text = match value.get("messages") {
+            Some(_) => {
+                answer::<FlowBacklog>(value)?.messages.iter().map(|message| message_text(message, json)).collect()
+            }
+            None => message_text(&answer::<FlowMessage>(value)?, json),
+        };
+        let mut out = std::io::stdout().lock();
+        quietly(std::io::Write::write_all(&mut out, text.as_bytes()).and_then(|()| std::io::Write::flush(&mut out)))
+    })
+}
+
+fn message_text(message: &FlowMessage, json: bool) -> String {
+    if json {
+        return format!("{}\n", serde_json::to_string(message).unwrap_or_default());
+    }
+    let what = match message.kind.as_str() {
+        "send" => "sent",
+        "keys" => "keys pressed",
+        "read" => "read",
+        "wait" => "waited for",
+        other => other,
+    };
+    let bytes = message.bytes;
+    let mut out = format!(
+        "{}  {} → {}  {what}  {bytes} byte{}\n",
+        message.time,
+        share::visible(&message.from),
+        share::visible(&message.to),
+        if bytes == 1 { "" } else { "s" }
+    );
+    for line in message.text.iter().flat_map(|text| text.lines()) {
+        let line: String = line.chars().map(|c| if c.is_control() && c != '\t' { ' ' } else { c }).collect();
+        let _ = writeln!(out, "  {line}");
+    }
+    out
+}
+
+fn files_of(args: &FlowFilesArgs) -> Result<()> {
+    let workspace = workspace("flow files", args.place.workspace, args.place.worktree.as_deref())?;
+    let value = ask("flow files", control::Command::FlowFiles(control::FlowFiles { workspace }))?;
+    if args.print.json {
+        return print_json(&value);
+    }
+    let files: RunFiles = answer(value)?;
+    if files.more {
+        eprintln!("only the newest {} files are listed", files.files.len());
+    }
+    print_out(&files_text(&files))
+}
+
+pub(super) fn files_text(files: &RunFiles) -> String {
+    let mut out = String::from("name\tbytes\tmodified\tpath\n");
+    for file in &files.files {
+        let name = file.name.replace(|c: char| c.is_control(), " ");
+        let path = file.path.display().to_string().replace(|c: char| c.is_control(), " ");
+        let modified = file.modified.as_deref().unwrap_or("-");
+        let _ = writeln!(out, "{name}\t{}\t{modified}\t{path}", file.bytes);
     }
     out
 }

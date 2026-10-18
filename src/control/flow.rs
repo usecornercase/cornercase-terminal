@@ -4,7 +4,10 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use super::Fields;
+use crate::flows::progress::{Edge, Step};
+use crate::flows::run::{Kind, Message, Run};
 use crate::flows::{self, Back, End, Flow, Role, Stage, Worktree};
+use crate::time::Stamp;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -354,6 +357,183 @@ impl FlowImport {
         fields.add("text_bytes", self.text.len()).maybe("name", self.name.as_ref());
         fields.maybe("project", self.project).add("place", &self.place);
         fields.add("replace", self.replace).add("check", self.check);
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowRunsWatch {}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowMessages {
+    pub(crate) workspace: Option<u64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowFiles {
+    pub(crate) workspace: Option<u64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowRuns {
+    pub(crate) version: String,
+    pub(crate) boot: String,
+    pub(crate) runs: Vec<RunState>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct RunState {
+    pub(crate) run: u64,
+    pub(crate) project: u64,
+    pub(crate) workspace: u64,
+    pub(crate) flow: FlowSpec,
+    pub(crate) task: String,
+    pub(crate) dir: Option<PathBuf>,
+    pub(crate) roles: Vec<RoleState>,
+    pub(crate) stage: Option<usize>,
+    pub(crate) rounds: Vec<u32>,
+    pub(crate) holder: Option<String>,
+    pub(crate) last: Option<StepInfo>,
+    pub(crate) outside: Option<RunEdge>,
+    pub(crate) ended: bool,
+    pub(crate) messages: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct RoleState {
+    pub(crate) role: String,
+    pub(crate) pane: Option<u64>,
+    pub(crate) tab: Option<u64>,
+    pub(crate) status: Option<String>,
+    pub(crate) closed: bool,
+    pub(crate) worktree: Option<PathBuf>,
+    pub(crate) branch: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub(crate) enum RunEdge {
+    Forward { stage: usize },
+    Loop { stage: usize },
+    Outside { from: Option<usize>, to: usize },
+}
+
+impl Default for RunEdge {
+    fn default() -> Self {
+        Self::Forward { stage: 0 }
+    }
+}
+
+impl From<Edge> for RunEdge {
+    fn from(edge: Edge) -> Self {
+        match edge {
+            Edge::Forward(stage) => Self::Forward { stage },
+            Edge::Loop(stage) => Self::Loop { stage },
+            Edge::Outside { from, to } => Self::Outside { from, to },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct StepInfo {
+    pub(crate) edge: RunEdge,
+    pub(crate) from: Option<String>,
+    pub(crate) to: String,
+    pub(crate) time: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowMessage {
+    pub(crate) run: u64,
+    pub(crate) workspace: u64,
+    pub(crate) seq: u64,
+    pub(crate) time: String,
+    pub(crate) from: String,
+    pub(crate) to: String,
+    pub(crate) kind: String,
+    pub(crate) text: Option<String>,
+    pub(crate) bytes: usize,
+    pub(crate) edge: Option<RunEdge>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowBacklog {
+    pub(crate) boot: String,
+    pub(crate) run: u64,
+    pub(crate) workspace: u64,
+    pub(crate) messages: Vec<FlowMessage>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct RunFiles {
+    pub(crate) workspace: u64,
+    pub(crate) run: Option<u64>,
+    pub(crate) dir: PathBuf,
+    pub(crate) files: Vec<RunFile>,
+    pub(crate) more: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct RunFile {
+    pub(crate) name: String,
+    pub(crate) path: PathBuf,
+    pub(crate) bytes: u64,
+    pub(crate) modified: Option<String>,
+}
+
+impl From<&Step> for StepInfo {
+    fn from(step: &Step) -> Self {
+        Self {
+            edge: step.edge.into(),
+            from: step.from.clone(),
+            to: step.to.clone(),
+            time: Stamp(step.time).to_string(),
+        }
+    }
+}
+
+impl FlowMessage {
+    pub(crate) fn of(run: &Run, message: &Message) -> Self {
+        let kind = match message.kind {
+            Kind::Send => "send",
+            Kind::Keys => "keys",
+            Kind::Read => "read",
+            Kind::Wait => "wait",
+        };
+        Self {
+            run: run.id,
+            workspace: run.workspace,
+            seq: message.seq,
+            time: Stamp(message.time).to_string(),
+            from: message.from.clone(),
+            to: message.to.clone(),
+            kind: kind.into(),
+            text: message.text.clone(),
+            bytes: message.bytes,
+            edge: message.edge.map(Into::into),
+        }
+    }
+}
+
+impl FlowMessages {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.maybe("workspace", self.workspace);
+    }
+}
+
+impl FlowFiles {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.maybe("workspace", self.workspace);
     }
 }
 

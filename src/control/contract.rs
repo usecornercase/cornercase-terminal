@@ -11,6 +11,8 @@ pub(crate) const VIEW_VERSION: u32 = 1;
 pub(crate) const APP_VERSION: u32 = 1;
 
 pub(crate) const CHANGES_VERSION: u32 = 1;
+pub(crate) const FLOW_RUNS_VERSION: u32 = 1;
+pub(crate) const FLOW_MESSAGES_VERSION: u32 = 1;
 pub(crate) const FEATURES: [&str; 14] = [
     "boot",
     "structured-errors",
@@ -138,6 +140,8 @@ pub(crate) fn describe(boot: &str, unavailable: &[(&str, &str)]) -> Descriptor {
             Stream { name: "view".into(), version: VIEW_VERSION },
             Stream { name: "app".into(), version: APP_VERSION },
             Stream { name: "changes".into(), version: CHANGES_VERSION },
+            Stream { name: "flow-runs".into(), version: FLOW_RUNS_VERSION },
+            Stream { name: "flow-messages".into(), version: FLOW_MESSAGES_VERSION },
         ],
     }
 }

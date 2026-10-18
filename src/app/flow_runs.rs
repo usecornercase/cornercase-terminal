@@ -411,6 +411,7 @@ impl App {
             kept
         });
         self.forget_flow_reads(None);
+        self.end_flow_messages();
     }
 
     pub(super) fn resume_line(

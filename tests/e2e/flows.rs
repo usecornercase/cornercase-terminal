@@ -82,3 +82,37 @@ fn an_imported_flow_is_deleted_by_name() {
     assert!(!again.status.success());
     assert!(String::from_utf8_lossy(&again.stderr).contains("flow hide Quick"), "{again:?}");
 }
+
+#[test]
+fn with_no_run_there_is_nothing_to_follow() {
+    let app = Harness::start();
+
+    let runs = json(&app.session, &["flow", "runs", "--json"]);
+    let text = app.session.says(&["flow", "runs"]);
+    let messages = app.session.cli(&["flow", "messages"]);
+    let files = app.session.cli(&["flow", "files"]);
+
+    assert_eq!(runs["runs"].as_array().map(Vec::len), Some(0), "{runs}");
+    assert_eq!(runs["boot"], json(&app.session, &["status", "--json"])["boot"]);
+    assert_eq!(text, "no flow is running");
+    assert!(!messages.status.success());
+    assert!(String::from_utf8_lossy(&messages.stderr).contains("runs no flow"), "{messages:?}");
+    assert!(!files.status.success());
+    assert!(String::from_utf8_lossy(&files.stderr).contains("no run folder"), "{files:?}");
+}
+
+#[test]
+fn the_runs_stream_starts_with_the_current_state() {
+    let app = Harness::start();
+    let mut child = app.session.spawn(&["flow", "runs", "--follow"]);
+    let stdout = child.stdout.take().expect("a pipe");
+    let mut first = String::new();
+
+    std::io::BufRead::read_line(&mut std::io::BufReader::new(stdout), &mut first).expect("a line");
+    let _ = child.kill();
+    let _ = child.wait();
+
+    let line: Value = serde_json::from_str(&first).expect("a JSON line");
+    assert_eq!(line["runs"].as_array().map(Vec::len), Some(0), "{first}");
+    assert!(line["revision"].as_u64().is_some_and(|revision| revision >= 1), "{first}");
+}

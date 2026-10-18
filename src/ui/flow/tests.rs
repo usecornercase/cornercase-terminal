@@ -36,7 +36,17 @@ fn render(d: &Diagram, width: u16) -> Terminal<TestBackend> {
 }
 
 fn send(at: Instant, to: &str) -> Message {
-    Message { from: ORCHESTRATOR.into(), to: to.into(), kind: Kind::Send, text: Some(format!("go {to}")), bytes: 0, at }
+    Message {
+        from: ORCHESTRATOR.into(),
+        to: to.into(),
+        kind: Kind::Send,
+        text: Some(format!("go {to}")),
+        bytes: 0,
+        at,
+        time: std::time::SystemTime::UNIX_EPOCH,
+        seq: 0,
+        edge: None,
+    }
 }
 
 fn progress(flow: &Flow, sends: &[&str], start: Instant) -> Progress {

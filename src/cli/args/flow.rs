@@ -2,10 +2,12 @@ use std::path::PathBuf;
 
 use clap::{Args, Subcommand, ValueEnum};
 
+use super::changes::Where;
 use super::issue;
 use super::{Create, Print, branch};
 use crate::cli::help::{
-    FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_HIDE_HELP, FLOW_IMPORT_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP,
+    FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP, FLOW_HIDE_HELP, FLOW_IMPORT_HELP, FLOW_MESSAGES_HELP,
+    FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP,
 };
 
 #[derive(Debug, Args)]
@@ -34,6 +36,18 @@ pub(crate) enum FlowAction {
     )]
     Import(FlowImportArgs),
     #[command(
+        about = "Print where each running flow stands: its stage, its loops, each role's pane and status",
+        after_help = FLOW_RUNS_HELP
+    )]
+    Runs(FlowRunsArgs),
+    #[command(
+        about = "Print what the orchestrator and the roles of a run sent each other, and follow new messages",
+        after_help = FLOW_MESSAGES_HELP
+    )]
+    Messages(FlowMessagesArgs),
+    #[command(about = "List the files of a run's folder, newest first, also after the run ended", after_help = FLOW_FILES_HELP)]
+    Files(FlowFilesArgs),
+    #[command(
         about = "Delete a flow of yours or the project's, by name or by its file",
         after_help = FLOW_DELETE_HELP
     )]
@@ -48,6 +62,32 @@ pub(crate) enum FlowAction {
         after_help = FLOW_RESTORE_HELP
     )]
     Restore(FlowNameArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowRunsArgs {
+    #[arg(long, help = "Print the runs again, as one JSON line, each time something changes")]
+    pub(crate) follow: bool,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowMessagesArgs {
+    #[command(flatten)]
+    pub(crate) place: Where,
+    #[arg(long, help = "Go on printing each new message until the run ends")]
+    pub(crate) follow: bool,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowFilesArgs {
+    #[command(flatten)]
+    pub(crate) place: Where,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]
