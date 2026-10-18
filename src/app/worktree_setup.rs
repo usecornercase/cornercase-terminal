@@ -6,6 +6,7 @@ use ratatui::layout::Rect;
 
 use super::App;
 use super::toast::Toast;
+use crate::accounts::Accounts;
 use crate::agents::activity::Status;
 use crate::error::Result;
 use crate::git;
@@ -45,7 +46,7 @@ impl App {
         (p, workspace): (usize, u64),
         path: PathBuf,
         script: &str,
-        run: Option<&Path>,
+        (run, accounts): (Option<&Path>, Accounts),
     ) -> Result<Term> {
         let (rows, cols) = self.pane_size(area);
         let id = self.take_id();
@@ -56,18 +57,22 @@ impl App {
         let _ = std::fs::remove_file(&status);
         let branch = git::branch(&path).unwrap_or_default();
         let args = setup::args(script, &status, &self.shell, &self.projects[p].path, &branch);
-        let env = self.pane_env(id, run);
+        accounts.link(|kind| self.default_home(kind));
+        let env = self.pane_env(id, run, &accounts);
+        let removed = accounts.removed();
         let opts = SpawnOptions {
             id,
             shell: "/bin/sh",
             args: &args,
             env: &env,
+            remove: &removed,
             rows,
             cols,
             cwd: Some(path),
             theme: self.terminal_theme(),
         };
         let mut term = Term::spawn(opts, self.tx.clone())?;
+        term.set_accounts(accounts);
         self.setups.insert(id, (workspace, status.clone()));
         term.setup = Some(setup::Pane::Running { status, since: Instant::now() });
         log::info!("worktree", "setup started", pane = id, bytes = script.len());
@@ -75,11 +80,23 @@ impl App {
     }
 
     pub(super) fn push_setup_tab(&mut self, p: usize, w: usize, area: Rect, name: Option<String>) -> Result<usize> {
+        let accounts = self.active_accounts();
+        self.push_setup_tab_in(p, w, area, name, accounts)
+    }
+
+    pub(super) fn push_setup_tab_in(
+        &mut self,
+        p: usize,
+        w: usize,
+        area: Rect,
+        name: Option<String>,
+        accounts: Accounts,
+    ) -> Result<usize> {
         self.projects[p].workspaces[w].clear_failed_setups();
-        let Some(script) = self.setup_script(p) else { return self.push_tab(p, w, area, name) };
+        let Some(script) = self.setup_script(p) else { return self.push_tab_in(p, w, area, name, accounts) };
         let path = self.projects[p].workspaces[w].path.clone();
         let workspace = self.projects[p].workspaces[w].id;
-        let term = self.spawn_setup(area, (p, workspace), path, &script, None)?;
+        let term = self.spawn_setup(area, (p, workspace), path, &script, (None, accounts))?;
         let tab = Tab::new(self.take_id(), name, term);
         let workspace = &mut self.projects[p].workspaces[w];
         workspace.tabs.push(tab);

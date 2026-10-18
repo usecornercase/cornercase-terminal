@@ -341,7 +341,7 @@ fn a_role_whose_worktree_is_gone_on_restore_says_so_in_a_toast() {
     let (tab, pane) = (seat.tab, seat.pane);
     workspace.tabs[tab].panes[pane].cwd = Some(PathBuf::from("/nonexistent/worktree"));
     workspace.tabs[tab].panes[pane].agent =
-        Some(AgentState { kind: "claude".into(), conversation: "c1".into(), mode: None });
+        Some(AgentState { kind: "claude".into(), conversation: "c1".into(), mode: None, account: None });
     let (mut again, _rx) = new_app(team.config.path().join("config.json"));
 
     again.restore(&saved, AREA);

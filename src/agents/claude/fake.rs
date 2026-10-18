@@ -91,7 +91,8 @@ rm -f "$s"
 
     pub(crate) fn command_line(&self, args: &str) -> String {
         let unset = format!(
-            "env -u {} -u {}",
+            "env -u {} -u {} -u {}",
+            crate::agents::claude::CLAUDE_DIR_ENV,
             crate::agents::claude::transcript::NO_LONG_ENV,
             crate::agents::claude::transcript::NO_COMPACT_ENV
         );

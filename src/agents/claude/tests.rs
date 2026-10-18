@@ -86,4 +86,14 @@ mod config_dir {
         let found = claude_dir_from(env.map(OsString::from), Some(Path::new("/home/a")));
         assert_eq!(found, expected.map(PathBuf::from));
     }
+
+    #[rstest]
+    #[case::not_set(&[("HOME", "/home/a")], None)]
+    #[case::set(&[("CLAUDE_CONFIG_DIR", "/home/a/accounts/work")], Some("/home/a/accounts/work"))]
+    #[case::empty(&[("CLAUDE_CONFIG_DIR", "")], None)]
+    #[case::relative(&[("CLAUDE_CONFIG_DIR", "work")], None)]
+    fn of_an_agent_comes_from_its_own_environment(#[case] env: &[(&str, &str)], #[case] expected: Option<&str>) {
+        let env = env.iter().map(|(name, value)| ((*name).to_string(), (*value).to_string())).collect();
+        assert_eq!(own_dir(env), expected.map(PathBuf::from));
+    }
 }

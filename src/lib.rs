@@ -11,6 +11,7 @@ pub(crate) mod text;
 pub(crate) mod time;
 pub mod version;
 
+pub(crate) mod accounts;
 pub mod agents;
 pub(crate) mod changes;
 pub mod config;

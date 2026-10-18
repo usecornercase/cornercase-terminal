@@ -7,6 +7,7 @@ use crate::agents::context::discovery::Job;
 use crate::agents::context::{Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "cursor";
+pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = None;
 pub(in crate::agents) const TITLE: &str = "Cursor CLI";
 pub(in crate::agents) const COMMAND: &str = "cursor-agent";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";

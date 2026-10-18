@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub(crate) mod accounts;
 mod app_state;
 pub(crate) mod arrange;
 pub(crate) mod changes;
@@ -27,6 +28,10 @@ mod watch;
 
 pub(crate) use todo::{Todo, TodoSend};
 
+pub(crate) use accounts::{
+    AccountAdd, AccountList, AccountRemove, AccountsInfo, ProfileDelete, ProfileList, ProfileNew, ProfileSet,
+    ProfileUse,
+};
 pub(crate) use app_state::{
     AppState, AppWatch, AwayInfo, InstallInfo, NoUpdate, Notes, ReleaseInfo, UpdateCheck, UpdateInfo, UpdateInstall,
 };
@@ -176,6 +181,14 @@ pub(crate) enum Command {
     FlowRuns(FlowRunsWatch),
     FlowMessages(FlowMessages),
     FlowFiles(FlowFiles),
+    AccountList(AccountList),
+    AccountAdd(AccountAdd),
+    AccountRemove(AccountRemove),
+    ProfileList(ProfileList),
+    ProfileNew(ProfileNew),
+    ProfileSet(ProfileSet),
+    ProfileUse(ProfileUse),
+    ProfileDelete(ProfileDelete),
 }
 
 impl Command {
@@ -259,6 +272,14 @@ impl Command {
             Self::FlowRuns(_) => 75,
             Self::FlowMessages(_) => 76,
             Self::FlowFiles(_) => 77,
+            Self::AccountList(_) => 78,
+            Self::AccountAdd(_) => 79,
+            Self::AccountRemove(_) => 80,
+            Self::ProfileList(_) => 81,
+            Self::ProfileNew(_) => 82,
+            Self::ProfileSet(_) => 83,
+            Self::ProfileUse(_) => 84,
+            Self::ProfileDelete(_) => 85,
         }]
     }
 
@@ -276,7 +297,9 @@ impl Command {
             | Self::UpdateInstall(_)
             | Self::PluginList(_)
             | Self::FlowRuns(_)
-            | Self::App(_) => {}
+            | Self::App(_)
+            | Self::AccountList(_)
+            | Self::ProfileList(_) => {}
             Self::Open(open) => {
                 fields.add("path", open.path.display()).add("focus", open.focus);
             }
@@ -287,6 +310,7 @@ impl Command {
             Self::NewTab(new) => {
                 fields.maybe("workspace", new.workspace).maybe("name", new.name.as_ref());
                 fields.add("command", new.command.is_some()).add("focus", new.focus);
+                fields.maybe("profile", new.profile.as_ref());
             }
             Self::Split(split) => {
                 fields.maybe("pane", split.pane).add("down", split.down).add("command", split.command.is_some());
@@ -301,6 +325,7 @@ impl Command {
                 fields.add("issue", start.issue.is_some()).maybe("source", start.source.as_ref());
                 fields.add("wait", start.wait).maybe("until", start.wait.then(|| start.until.name()));
                 fields.maybe("timeout", start.timeout).add("focus", start.focus);
+                fields.maybe("profile", start.profile.as_ref());
             }
             Self::Send(send) => {
                 fields.maybe("pane", send.pane).maybe("tab", send.tab);
@@ -402,11 +427,19 @@ impl Command {
             Self::FlowRestore(restore) => restore.fields(&mut fields),
             Self::FlowMessages(messages) => messages.fields(&mut fields),
             Self::FlowFiles(files) => files.fields(&mut fields),
+            Self::AccountAdd(add) => add.fields(&mut fields),
+            Self::AccountRemove(remove) => remove.fields(&mut fields),
+            Self::ProfileSet(set) => set.fields(&mut fields),
+            Self::ProfileNew(ProfileNew { name, .. })
+            | Self::ProfileUse(ProfileUse { name })
+            | Self::ProfileDelete(ProfileDelete { name }) => {
+                fields.add("name", name);
+            }
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 78] = [
+    pub(crate) const NAMES: [&str; 86] = [
         "status",
         "open",
         "new-workspace",
@@ -485,6 +518,14 @@ impl Command {
         "flow-runs",
         "flow-messages",
         "flow-files",
+        "account-list",
+        "account-add",
+        "account-remove",
+        "profile-list",
+        "profile-new",
+        "profile-set",
+        "profile-use",
+        "profile-delete",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
@@ -561,6 +602,7 @@ pub(crate) struct NewTab {
     pub(crate) name: Option<String>,
     pub(crate) command: Option<String>,
     pub(crate) focus: bool,
+    pub(crate) profile: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -590,6 +632,7 @@ pub(crate) struct Start {
     pub(crate) until: Until,
     pub(crate) timeout: Option<f64>,
     pub(crate) focus: bool,
+    pub(crate) profile: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

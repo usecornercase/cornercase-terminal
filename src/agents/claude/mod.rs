@@ -11,6 +11,26 @@ use crate::agents::context::discovery::Job;
 use crate::agents::context::{Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "claude";
+pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = Some(crate::agents::AccountHome {
+    env: "CLAUDE_CONFIG_DIR",
+    default: &[".claude"],
+    subdir: None,
+    links: &[
+        "settings.json",
+        "settings.local.json",
+        "CLAUDE.md",
+        "agents",
+        "commands",
+        "skills",
+        "plugins",
+        "output-styles",
+        "hooks",
+        "keybindings.json",
+        "statusline*",
+    ],
+    remove: &["CLAUDE_SECURESTORAGE_CONFIG_DIR"],
+    login: &["auth", "login"],
+});
 pub(in crate::agents) const TITLE: &str = "Claude Code";
 pub(in crate::agents) const COMMAND: &str = "claude";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
@@ -106,6 +126,7 @@ pub(in crate::agents) struct Reader {
     session: Option<Session>,
     children: Vec<Running>,
     live: usize,
+    home: Option<(i32, Vec<String>, Option<PathBuf>)>,
 }
 
 impl Reader {
@@ -116,8 +137,9 @@ impl Reader {
         shown: &mut Option<Context>,
         ledger: &mut Ledger,
     ) -> Option<SystemTime> {
-        self.session = Session::read(look.claude_dir, look.pid);
-        let found = look.claude_dir.zip(self.session.as_ref()).and_then(|(dir, session)| {
+        let home = self.home(look);
+        self.session = Session::read(home.as_deref(), look.pid);
+        let found = home.as_deref().zip(self.session.as_ref()).and_then(|(dir, session)| {
             let cwd = session.cwd.as_deref()?;
             Some((dir, cwd, transcript_path(dir, cwd, session.id.as_deref()?)?))
         });
@@ -157,6 +179,17 @@ impl Reader {
         prompted
     }
 
+    fn home(&mut self, look: &Look<'_>) -> Option<PathBuf> {
+        if let Some(dir) = look.account_dir {
+            return Some(dir.to_path_buf());
+        }
+        if self.home.as_ref().is_none_or(|(pid, args, _)| *pid != look.pid || *args != look.args) {
+            let own = (look.pid > 0).then(|| own_dir(crate::process::env(look.pid))).flatten();
+            self.home = Some((look.pid, look.args.clone(), own));
+        }
+        self.home.as_ref().and_then(|(_, _, own)| own.clone()).or_else(|| look.claude_dir.map(Path::to_path_buf))
+    }
+
     pub(in crate::agents) fn subagents(&self) -> usize {
         self.live
     }
@@ -176,6 +209,11 @@ impl Reader {
 
 pub(crate) fn claude_dir(home: Option<&Path>) -> Option<PathBuf> {
     claude_dir_from(std::env::var_os(CLAUDE_DIR_ENV), home)
+}
+
+fn own_dir(env: Vec<(String, String)>) -> Option<PathBuf> {
+    let (_, dir) = env.into_iter().find(|(name, _)| name == CLAUDE_DIR_ENV)?;
+    Some(PathBuf::from(dir)).filter(|dir| dir.is_absolute())
 }
 
 fn claude_dir_from(env: Option<OsString>, home: Option<&Path>) -> Option<PathBuf> {

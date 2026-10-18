@@ -110,6 +110,7 @@ impl App {
             away: self.away_info(),
             update: self.update_info(),
             keep_awake: self.keep_awake_info(),
+            profile: self.config.active_profile().map(|(name, _)| name.to_string()),
         }
     }
 
@@ -163,6 +164,7 @@ impl App {
         term.context.subagents().hash(hash);
         (term.dialog(), term.survey(), term.resume.is_some(), resuming, parent).hash(hash);
         term.emulator.title().hash(hash);
+        term.account().hash(hash);
     }
 
     fn pane_info(&self, term: &Term, active: bool, caller: Option<u64>, live: &HashSet<u64>) -> PaneInfo {
@@ -188,6 +190,7 @@ impl App {
             subagents: u32::try_from(term.context.subagents()).unwrap_or(u32::MAX),
             role: self.seat(term.id).map(|(_, role)| role.to_string()),
             collapsed: term.collapsed,
+            account: term.account().map(str::to_string),
         }
     }
 

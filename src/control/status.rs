@@ -301,4 +301,6 @@ pub struct PaneInfo {
     pub(crate) role: Option<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) collapsed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) account: Option<String>,
 }

@@ -22,13 +22,43 @@ fn tabs_and_panes_are_told_as_they_open_and_close_with_their_ids() {
     assert_eq!(
         opened,
         [
-            (wire::What::Opened { kind: wire::Kind::Tab, parent: None }, tab),
-            (wire::What::Opened { kind: wire::Kind::Pane, parent: None }, ids),
+            (
+                wire::What::Opened { kind: wire::Kind::Tab, parent: None, accounts: std::collections::BTreeMap::new() },
+                tab
+            ),
+            (
+                wire::What::Opened {
+                    kind: wire::Kind::Pane,
+                    parent: None,
+                    accounts: std::collections::BTreeMap::new()
+                },
+                ids
+            ),
         ]
     );
     assert_eq!(
         told(&gone),
         [(wire::What::Closed { kind: wire::Kind::Pane }, ids), (wire::What::Closed { kind: wire::Kind::Tab }, tab)]
+    );
+}
+
+#[test]
+fn a_pane_opened_with_accounts_names_them() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let root = TempDir::new();
+    crate::accounts::add(root.path(), crate::agents::Known::Claude, "work", None).expect("the account");
+    app.set_accounts_dir(root.path());
+    app.config.profiles.insert("Work".into(), [("claude".to_string(), "work".to_string())].into());
+    app.config.profile = "Work".into();
+    follow(&mut app, &[]);
+
+    let ids = done(now(&mut app, None, new_tab(None))).ids;
+    let opened = told(&streamed(&mut app));
+
+    let accounts = [("claude".to_string(), "work".to_string())].into();
+    assert!(
+        opened.contains(&(wire::What::Opened { kind: wire::Kind::Pane, parent: None, accounts }, ids)),
+        "{opened:?}"
     );
 }
 

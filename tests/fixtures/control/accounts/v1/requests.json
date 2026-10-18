@@ -1,0 +1,13 @@
+[
+  {"command": "account-list", "args": {}},
+  {"command": "account-add", "args": {"provider": "claude", "name": "work", "login": true, "workspace": 2, "focus": false}},
+  {"command": "account-remove", "args": {"provider": "claude", "name": "work"}},
+  {"command": "profile-list", "args": {}},
+  {"command": "profile-new", "args": {"name": "Work", "accounts": {"claude": "work"}}},
+  {"command": "profile-set", "args": {"name": "Work", "provider": "codex", "account": null, "rename": "Job"}},
+  {"command": "profile-use", "args": {"name": "Work"}},
+  {"command": "profile-delete", "args": {"name": "Work"}},
+  {"command": "start", "args": {"agent": "claude", "prompt": "Fix the login", "profile": "Work"}},
+  {"command": "new-tab", "args": {"profile": ""}},
+  {"command": "flow-run", "args": {"name": "Quick", "prompt": "Fix the login", "profile": "Work"}}
+]

@@ -306,6 +306,48 @@ mod config_file {
         );
     }
 
+    fn work_profile(c: &mut Config) {
+        let accounts = std::collections::BTreeMap::from([("claude".to_string(), "work".to_string())]);
+        c.profiles.insert("Work".into(), accounts);
+        c.profile = "Work".into();
+    }
+
+    #[test]
+    fn a_profile_chosen_outside_is_applied_and_raises_the_revision() {
+        let mut s = open();
+        let before = s.app.config_file.revision;
+        edit_outside(&s, work_profile);
+
+        later(&mut s);
+
+        assert_eq!(s.app.config.active_profile().map(|(name, _)| name), Some("Work"));
+        assert!(s.app.config_file.revision > before);
+    }
+
+    #[test]
+    fn going_back_to_the_system_outside_is_applied() {
+        let mut s = open();
+        edit_outside(&s, work_profile);
+        later(&mut s);
+        let before = s.app.config_file.revision;
+        edit_outside(&s, |c| c.profile.clear());
+
+        s.app.refresh(Instant::now() + Duration::from_secs(4));
+
+        assert_eq!((s.app.config.profile.as_str(), s.app.config_file.revision > before), ("", true));
+    }
+
+    #[test]
+    fn a_change_in_the_modal_keeps_a_profile_chosen_outside() {
+        let mut s = open();
+        edit_outside(&s, work_profile);
+
+        click_row(&mut s, &Row::Detail(Detail::Memory));
+
+        let saved = config::load(&config_path(&s));
+        assert_eq!((saved.profile.as_str(), saved.memory), ("Work", true));
+    }
+
     #[test]
     fn the_modal_reads_the_file_before_it_saves() {
         let mut s = open();

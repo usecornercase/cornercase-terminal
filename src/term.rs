@@ -15,6 +15,7 @@ use std::time::Instant;
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 
 use self::emulator::Emulator;
+use crate::accounts::{self, Accounts};
 use crate::agents::activity;
 use crate::agents::context;
 use crate::agents::{self, AgentState, Known};
@@ -59,6 +60,8 @@ pub(crate) struct Term {
     pub(crate) setup: Option<setup::Pane>,
     pub(crate) parent: Option<u64>,
     pub(crate) collapsed: bool,
+    accounts: Accounts,
+    account: accounts::Seen,
     master: Box<dyn MasterPty + Send>,
     writer: Writer,
     child: Box<dyn Child + Send + Sync>,
@@ -83,6 +86,7 @@ pub(crate) struct SpawnOptions<'a> {
     pub(crate) shell: &'a str,
     pub(crate) args: &'a [String],
     pub(crate) env: &'a [(String, String)],
+    pub(crate) remove: &'a [&'a str],
     pub(crate) rows: u16,
     pub(crate) cols: u16,
     pub(crate) cwd: Option<PathBuf>,
@@ -95,7 +99,7 @@ fn pty_size(rows: u16, cols: u16) -> PtySize {
 
 impl Term {
     pub(crate) fn spawn<E: From<Event> + Send + 'static>(opts: SpawnOptions, tx: Sender<E>) -> Result<Self> {
-        let SpawnOptions { id, shell, args, env, rows, cols, cwd, theme } = opts;
+        let SpawnOptions { id, shell, args, env, remove, rows, cols, cwd, theme } = opts;
         let pair = native_pty_system().openpty(pty_size(rows, cols)).map_err(|e| Error::OpenPty(e.into()))?;
 
         let mut cmd = CommandBuilder::new(shell);
@@ -106,6 +110,9 @@ impl Term {
         }
         for (key, value) in env {
             cmd.env(key, value);
+        }
+        for key in remove {
+            cmd.env_remove(key);
         }
         let dir = cwd.or_else(|| std::env::current_dir().ok());
         if let Some(dir) = &dir {
@@ -144,12 +151,35 @@ impl Term {
             setup: None,
             parent: None,
             collapsed: false,
+            accounts: Accounts::default(),
+            account: accounts::Seen::default(),
             master: pair.master,
             writer,
             child,
             size: (rows, cols),
             interactive: args.is_empty(),
         })
+    }
+
+    pub(crate) fn accounts(&self) -> &Accounts {
+        &self.accounts
+    }
+
+    pub(crate) fn account(&self) -> Option<&str> {
+        self.account.name()
+    }
+
+    pub(crate) fn see_account(
+        &mut self,
+        root: &Path,
+        agent: Option<(i32, Known, &[String])>,
+        env: impl FnOnce(i32) -> Vec<(String, String)>,
+    ) {
+        self.account.update(root, &self.accounts, agent, env);
+    }
+
+    pub(crate) fn set_accounts(&mut self, accounts: Accounts) {
+        self.accounts = accounts;
     }
 
     pub(crate) fn feed(&mut self, bytes: &[u8]) {

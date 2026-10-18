@@ -47,15 +47,23 @@ pub(crate) fn use_agent_folds() -> Result<()> {
     require("agent-folds", "cannot collapse or expand an agent's children")
 }
 
+pub(crate) fn use_accounts() -> Result<()> {
+    require("accounts", "has no account profiles")
+}
+
 fn require(feature: &str, lacks: &str) -> Result<()> {
+    require_on(connect(), feature, lacks)
+}
+
+fn require_on(stream: Result<UnixStream>, feature: &str, lacks: &str) -> Result<()> {
     let lacking = || {
         Error::Control(format!(
             "the running cornercase server {lacks}; update cornercase and restart the server (this one is {})",
             crate::version::CURRENT
         ))
     };
-    let descriptor: control::contract::Descriptor =
-        answer(ask("contract", control::Command::Contract(control::Contract {})).map_err(|_| lacking())?)?;
+    let asked = stream.and_then(|stream| ask_on(stream, "contract", control::Command::Contract(control::Contract {})));
+    let descriptor: control::contract::Descriptor = answer(asked.map_err(|_| lacking())?)?;
     if descriptor.features.iter().any(|offered| offered == feature) { Ok(()) } else { Err(lacking()) }
 }
 

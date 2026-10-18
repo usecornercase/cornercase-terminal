@@ -1,0 +1,36 @@
+{
+  "version": 5,
+  "projects": [
+    {
+      "path": "projects/team",
+      "workspaces": [
+        {
+          "path": "projects/team",
+          "worktree": false,
+          "tabs": [
+            {
+              "panes": [
+                {
+                  "cwd": "projects/team",
+                  "agent": {
+                    "kind": "claude",
+                    "conversation": "s1",
+                    "account": "work"
+                  },
+                  "accounts": {
+                    "claude": "work",
+                    "codex": "home"
+                  }
+                }
+              ],
+              "active": 0
+            }
+          ],
+          "active": 0
+        }
+      ],
+      "active": 0
+    }
+  ],
+  "active": 0
+}

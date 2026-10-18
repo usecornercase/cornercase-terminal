@@ -71,6 +71,7 @@ export default defineConfig({
             { label: 'Flows', slug: 'docs/guides/flows' },
             { label: 'Community flows', link: '/flows/' },
             { label: 'Queue agents', slug: 'docs/guides/queue' },
+            { label: 'Accounts and profiles', slug: 'docs/guides/accounts' },
             { label: 'Scripts and agents', slug: 'docs/guides/scripts-and-agents' },
             { label: 'Search', slug: 'docs/guides/search' },
             { label: 'Sessions and the server', slug: 'docs/guides/sessions' },

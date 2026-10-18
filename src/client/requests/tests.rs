@@ -33,3 +33,48 @@ fn a_server_older_than_requests_is_too_old() {
 
     assert!(matches!(error, Error::OldServer("contract")), "{error:?}");
 }
+
+mod features {
+    use super::*;
+
+    fn offering(features: &[&str]) -> (Result<()>, Vec<String>) {
+        let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
+        let mut descriptor = control::contract::describe("boot", &[]);
+        descriptor.features.retain(|feature| features.contains(&feature.as_str()));
+        let server = thread::spawn(move || {
+            let mut asked = Vec::new();
+            while let Ok(Some(ClientMessage::Request(text))) = protocol::recv::<ClientMessage>(&mut theirs) {
+                asked.push(text);
+                let answer = serde_json::to_string(&Response::Ok(json(&descriptor))).expect("json");
+                protocol::send(&mut theirs, &ServerMessage::Response(answer)).expect("an answer");
+            }
+            asked
+        });
+
+        let checked = require_on(Ok(ours), "accounts", "has no account profiles");
+
+        (checked, server.join().expect("the fake server"))
+    }
+
+    fn json(descriptor: &control::contract::Descriptor) -> Value {
+        serde_json::to_value(descriptor).expect("a descriptor")
+    }
+
+    #[test]
+    fn a_server_without_accounts_is_refused_after_asking_only_for_its_contract() {
+        let (checked, asked) = offering(&["views"]);
+
+        let error = checked.expect_err("refused");
+        assert!(error.to_string().contains("has no account profiles"), "{error}");
+        assert_eq!(asked.len(), 1, "{asked:?}");
+        assert!(asked[0].contains("\"contract\""), "{}", asked[0]);
+    }
+
+    #[test]
+    fn a_server_with_accounts_lets_the_request_go() {
+        let (checked, asked) = offering(&["accounts"]);
+
+        checked.expect("accepted");
+        assert_eq!(asked.len(), 1);
+    }
+}

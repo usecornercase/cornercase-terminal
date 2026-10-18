@@ -77,6 +77,8 @@ mod file {
                 ProjectSettings { setup: "npm ci\ncp ../.env .env".into(), teardown: "docker compose down".into() },
             )]
             .into(),
+            profiles: BTreeMap::new(),
+            profile: String::new(),
         };
         matches_fixture(crate::test_util::fixture!("config/config.json"), &expected);
     }
@@ -402,6 +404,74 @@ mod changes {
         let mut new = Config::default();
         new.set_project(Path::new("/srv/a"), None, ProjectSettings { setup: "make".into(), teardown: String::new() });
         assert_eq!(Changes::between(&Config::default(), &new).keys(), ["projects"]);
+    }
+}
+
+mod profiles {
+    use super::*;
+
+    fn work() -> Config {
+        let accounts = BTreeMap::from([("claude".to_string(), "work".to_string())]);
+        Config {
+            profiles: BTreeMap::from([("Work".to_string(), accounts)]),
+            profile: "Work".into(),
+            ..Config::default()
+        }
+    }
+
+    #[test]
+    fn are_left_out_of_the_file_while_there_are_none() {
+        let dir = TempDir::new();
+        let path = dir.path().join("config.json");
+        save(&path, &Config::default()).expect("save the config");
+        let text = std::fs::read_to_string(&path).expect("read the saved config");
+        assert!(!text.contains("profile"), "{text}");
+    }
+
+    #[test]
+    fn round_trip_through_the_file() {
+        let dir = TempDir::new();
+        let path = dir.path().join("config.json");
+        save(&path, &work()).expect("save the config");
+        let text = std::fs::read_to_string(&path).expect("read the saved config");
+        assert!(text.contains("\"profile\": \"Work\""), "{text}");
+        assert_eq!(load(&path), work());
+    }
+
+    #[test]
+    fn the_active_one_gives_its_accounts() {
+        let config = work();
+        let (name, accounts) = config.active_profile().expect("an active profile");
+        assert_eq!((name, accounts.get("claude").map(String::as_str)), ("Work", Some("work")));
+        assert_eq!(config.unknown_profile(), None);
+    }
+
+    #[test]
+    fn an_empty_one_is_the_system() {
+        let config = Config { profile: String::new(), ..work() };
+        assert_eq!(config.active_profile(), None);
+        assert_eq!(config.unknown_profile(), None);
+    }
+
+    #[test]
+    fn one_that_does_not_exist_counts_as_the_system() {
+        let config = Config { profile: "Gone".into(), ..work() };
+        assert_eq!(config.active_profile(), None);
+        assert_eq!(config.unknown_profile(), Some("Gone"));
+    }
+
+    #[test]
+    fn going_back_to_the_system_is_a_change_that_applies() {
+        let changes = Changes::between(&work(), &Config::default());
+        assert_eq!(changes.keys(), ["profile", "profiles"]);
+        let merged = changes.apply(&Config { memory: true, ..work() });
+        assert_eq!((merged.profile.as_str(), merged.profiles.is_empty(), merged.memory), ("", true, true));
+    }
+
+    #[test]
+    fn choosing_one_is_a_change_of_its_key_alone() {
+        let changes = Changes::between(&Config::default(), &Config { profile: "Work".into(), ..Config::default() });
+        assert_eq!(changes.keys(), ["profile"]);
     }
 }
 

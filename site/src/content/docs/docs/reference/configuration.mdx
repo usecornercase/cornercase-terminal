@@ -276,6 +276,8 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`remote`](#remote) | boolean | `false` |
 | [`remote_port`](#remote_port) | number | `47681` |
 | [`projects`](#projects) | object | `{}` |
+| [`profiles`](#profiles) | object | `{}` |
+| [`profile`](#profile) | string | `""` |
 
 #### `worktrees_dir`
 
@@ -482,6 +484,18 @@ Per-project commands, keyed by the project's folder (`~/` is expanded): `setup` 
 ```json
 "projects": { "~/code/web-shop": { "setup": "npm ci\ncp ../.env .env", "teardown": "docker compose down" } }
 ```
+
+#### `profiles`
+
+Your [profiles](../../guides/accounts/): for each, the account each agent uses. Left out of the file while you have none. Manage them with `cornercase profile`.
+
+```json
+"profiles": { "Work": { "claude": "work", "codex": "work" }, "Home": { "claude": "personal" } }
+```
+
+#### `profile`
+
+The active profile, whose accounts new tabs and agents start with. Empty, the default, is *System*: each agent's usual login. A name that is not in `profiles` counts as empty. `cornercase profile use` changes it, and an edit to the file applies at once.
 
 ### A customised example
 

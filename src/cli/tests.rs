@@ -10,7 +10,7 @@ use super::status::cell;
 use super::*;
 use crate::control::{GroupInfo, Ids, PaneInfo, PaneRows, ProjectInfo, PullRequestInfo, TabInfo, WorkspaceInfo};
 
-fn parse(args: &[&str]) -> std::result::Result<Cli, clap::Error> {
+pub(super) fn parse(args: &[&str]) -> std::result::Result<Cli, clap::Error> {
     Cli::try_parse_from(std::iter::once("cornercase").chain(args.iter().copied()))
 }
 
@@ -739,14 +739,14 @@ mod output {
     const TAB: Ids = Ids { pane: None, ..PANE };
 
     #[rstest]
-    #[case::a_pane_opened(What::Opened { kind: control::Kind::Pane, parent: None }, PANE, "pane 4  opened in tab 3")]
+    #[case::a_pane_opened(What::Opened { kind: control::Kind::Pane, parent: None, accounts: std::collections::BTreeMap::new() }, PANE, "pane 4  opened in tab 3")]
     #[case::a_pane_opened_from_another(
-        What::Opened { kind: control::Kind::Pane, parent: Some(2) },
+        What::Opened { kind: control::Kind::Pane, parent: Some(2), accounts: std::collections::BTreeMap::new() },
         PANE,
         "pane 4  opened in tab 3 from pane 2"
     )]
     #[case::a_project_opened(
-        What::Opened { kind: control::Kind::Project, parent: None },
+        What::Opened { kind: control::Kind::Project, parent: None, accounts: std::collections::BTreeMap::new() },
         Ids { project: Some(1), ..Ids::default() },
         "project 1  opened"
     )]

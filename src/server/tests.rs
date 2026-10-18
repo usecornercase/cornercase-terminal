@@ -70,6 +70,7 @@ pub(super) mod a_bug {
                 id: None,
                 parent: None,
                 collapsed: false,
+                accounts: std::collections::BTreeMap::new(),
             }],
             active: 0,
             layout: None,

@@ -6,6 +6,7 @@ use super::App;
 use super::menus::{Marked, MenuAction};
 use super::notifications::Said;
 use super::overlay::Overlay;
+use crate::accounts;
 use crate::agents;
 use crate::agents::AgentState;
 use crate::agents::activity;
@@ -64,6 +65,7 @@ impl App {
         let active = self.project().map(|p| p.id);
         let open = self.tree_open();
         let (config, dir, tree) = (&self.config, self.agents.claude_dir.as_deref(), self.drawn.tree);
+        let root = self.accounts_dir.as_path();
         let folds = tree || self.drawn.tab_bar.is_empty();
         let jobs = self.following();
         let mut notices: Vec<(NoticeKey, Vec<u64>)> = Vec::new();
@@ -77,7 +79,7 @@ impl App {
                     for term in &mut tab.panes {
                         if read {
                             let resuming = term.resuming.is_some();
-                            let found = agent_in(config, dir, term, now);
+                            let found = agent_in(config, (dir, root), term, now);
                             let activity = found.as_ref().map(|(_, activity)| *activity);
                             let before = term.agent.state();
                             let was_waiting = term.agent.waits_on_subagents();
@@ -295,7 +297,7 @@ impl App {
 
 fn agent_in(
     config: &Config,
-    dir: Option<&Path>,
+    (dir, root): (Option<&Path>, &Path),
     term: &mut Term,
     now: Instant,
 ) -> Option<(String, activity::Activity)> {
@@ -307,13 +309,22 @@ fn agent_in(
         term.status_agent = Some((pid, name.clone()));
     }
     let agent = name.as_deref().and_then(agents::Known::of);
+    let given = agent.and_then(|kind| Some(kind.account()?.config(&term.accounts().get(kind)?.home)));
     let (args, title) = {
         let screen = || term.emulator.screen_text().unwrap_or_default();
-        let look =
-            Look { pid: pid.unwrap_or_default(), args, title: term.emulator.title(), screen: &screen, claude_dir: dir };
+        let look = Look {
+            pid: pid.unwrap_or_default(),
+            args,
+            title: term.emulator.title(),
+            screen: &screen,
+            claude_dir: dir,
+            account_dir: given.as_deref(),
+        };
         term.context.update(agent, &look);
         (look.args, look.title)
     };
+    let found = pid.zip(agent).map(|(pid, kind)| (pid, kind, args.as_slice()));
+    term.see_account(root, found, process::env);
     remember(config, term, agent.map(|agent| (agent.name(), args.as_slice())), now);
     if let Some((pid, agent)) = pid.zip(agent)
         && term.input_seen != Some(pid)
@@ -337,6 +348,7 @@ fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, 
         kind: agent.to_string(),
         conversation: conversation.to_string(),
         mode: agents::mode_of(agent, args, &agents::modes(config, agent)),
+        account: term.account().filter(|name| *name != accounts::CUSTOM).map(str::to_string),
     });
     if found.is_some() {
         term.resuming = None;

@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use super::{Fields, Ids, Response};
@@ -69,6 +71,8 @@ pub(crate) enum What {
         kind: Kind,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         parent: Option<u64>,
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        accounts: BTreeMap<String, String>,
     },
     Closed {
         kind: Kind,

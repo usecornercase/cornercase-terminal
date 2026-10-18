@@ -1,0 +1,112 @@
+use clap::{Args, Subcommand};
+
+use super::Print;
+
+#[derive(Debug, Args)]
+pub(crate) struct ProfileArg {
+    #[arg(
+        long,
+        value_name = "NAME",
+        help = "Start it with the accounts of this profile; an empty name is the system's own [default: the active \
+                profile]"
+    )]
+    pub(crate) profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct AccountArgs {
+    #[command(subcommand)]
+    pub(crate) action: AccountAction,
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum AccountAction {
+    #[command(about = "List the accounts of each agent, with their folders")]
+    List(Print),
+    #[command(about = "Add an account: a folder of its own the agent keeps its login in")]
+    Add(AccountAddArgs),
+    #[command(about = "Remove an account and its folder; profiles that used it fall back to the system's login")]
+    Remove(AccountRemoveArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct AccountAddArgs {
+    #[arg(value_name = "AGENT", help = "The agent: claude, codex or gemini")]
+    pub(crate) provider: String,
+    #[arg(value_name = "NAME", help = "The account's name: letters, digits, `.`, `_` and `-`")]
+    pub(crate) name: String,
+    #[arg(long, help = "Then open a tab that runs the agent's login with this account")]
+    pub(crate) login: bool,
+    #[arg(long, value_name = "ID", requires = "login", help = "The workspace of the login tab [default: here]")]
+    pub(crate) workspace: Option<u64>,
+    #[arg(long, requires = "login", help = "Also show the login tab in the window")]
+    pub(crate) focus: bool,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct AccountRemoveArgs {
+    #[arg(value_name = "AGENT", help = "The agent: claude, codex or gemini")]
+    pub(crate) provider: String,
+    #[arg(value_name = "NAME", help = "The account's name")]
+    pub(crate) name: String,
+    #[arg(short, long, help = "Remove it without asking")]
+    pub(crate) yes: bool,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct ProfileArgs {
+    #[command(subcommand)]
+    pub(crate) action: ProfileAction,
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum ProfileAction {
+    #[command(about = "List the profiles, the active one marked with *")]
+    List(Print),
+    #[command(about = "Make a profile: which account each agent uses")]
+    New {
+        #[arg(value_name = "NAME", help = "The profile's name")]
+        name: String,
+        #[arg(value_name = "AGENT=ACCOUNT", value_parser = pair, help = "An agent and its account, such as claude=work")]
+        accounts: Vec<(String, String)>,
+    },
+    #[command(about = "Change which account an agent uses in a profile, or rename it")]
+    Set {
+        #[arg(value_name = "NAME", help = "The profile's name")]
+        name: String,
+        #[arg(
+            long,
+            value_name = "AGENT",
+            required_unless_present = "rename",
+            help = "The agent to change; without --account it goes back to the system's login"
+        )]
+        provider: Option<String>,
+        #[arg(long, value_name = "ACCOUNT", requires = "provider", help = "The account it uses")]
+        account: Option<String>,
+        #[arg(long, value_name = "NEW", help = "A new name for the profile")]
+        rename: Option<String>,
+    },
+    #[command(about = "Make a profile the active one: new tabs and agents use its accounts")]
+    Use {
+        #[arg(value_name = "NAME", required_unless_present = "system", help = "The profile's name")]
+        name: Option<String>,
+        #[arg(long, conflicts_with = "name", help = "Use the system's own logins, with no profile")]
+        system: bool,
+    },
+    #[command(about = "Delete a profile; its accounts stay")]
+    Delete {
+        #[arg(value_name = "NAME", help = "The profile's name")]
+        name: String,
+    },
+}
+
+fn pair(text: &str) -> Result<(String, String), String> {
+    match text.split_once('=') {
+        Some((agent, account)) if !agent.is_empty() && !account.is_empty() => {
+            Ok((agent.to_string(), account.to_string()))
+        }
+        _ => Err(format!("`{text}` is not AGENT=ACCOUNT, such as claude=work")),
+    }
+}

@@ -77,6 +77,7 @@ mod spawn {
             shell: "/nonexistent/shell",
             args: &[],
             env: &[],
+            remove: &[],
             rows: 24,
             cols: 80,
             cwd: None,
@@ -86,6 +87,33 @@ mod spawn {
         let result = Term::spawn(opts, tx);
 
         assert_matches!(result, Err(Error::SpawnShell { .. }));
+    }
+
+    #[test]
+    fn a_removed_variable_never_reaches_the_shell() {
+        let dir = TempDir::new();
+        let out = dir.path().join("env.txt");
+        let (tx, _rx) = mpsc::channel::<Event>();
+        let env = [("CORNERCASE_KEPT".to_string(), "1".to_string()), ("CORNERCASE_GONE".to_string(), "1".to_string())];
+        let opts = SpawnOptions {
+            id: 1,
+            shell: "/bin/sh",
+            args: &[],
+            env: &env,
+            remove: &["CORNERCASE_GONE"],
+            rows: 24,
+            cols: 80,
+            cwd: Some(dir.path().to_path_buf()),
+            theme: &HostTheme::default(),
+        };
+        let mut term = Term::spawn(opts, tx).expect("spawn");
+
+        term.write(b"env > env.tmp && mv env.tmp env.txt\n");
+        wait_until("the shell wrote its environment", || out.exists());
+        let written = std::fs::read_to_string(&out).expect("read env");
+
+        assert!(written.lines().any(|line| line == "CORNERCASE_KEPT=1"), "{written}");
+        assert!(!written.lines().any(|line| line.starts_with("CORNERCASE_GONE=")), "{written}");
     }
 
     #[test]

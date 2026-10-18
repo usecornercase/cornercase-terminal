@@ -19,7 +19,7 @@ cornercase --version    # print the version
 cornercase --help       # list every command; cornercase COMMAND --help explains one
 ```
 
-The commands for scripts and agents, `status`, `stats`, `usage`, `open`, `new-workspace`, `new-tab`, `split`, `start`, `send`, `keys`, `read`, `wait`, `events`, `surface`, `changes`, `view`, `view-set`, `input`, `scroll`, `selection`, `resize`, `redraw`, `ratio`, `link`, `theme`, `config`, `issue`, `search`, `close`, `group`, `move`, `move-pane`, `collapse`, `expand`, `rename`, `focus`, `go`, `notify`, `todo`, `queue`, `away`, `mark`, `skill` and `contract`, have their own page: [Scripts and agents](../../guides/scripts-and-agents/). Among them, `status --follow` keeps running and prints the whole session as one JSON line each time it changes, for [another UI or a script that mirrors it](../../guides/scripts-and-agents/#follow-the-whole-state), and `status --app` prints (with `--follow`, keeps printing) the [TODO list, queue, away, update and keep awake](../../guides/scripts-and-agents/#follow-the-rest-of-the-app).
+The commands for scripts and agents, `status`, `stats`, `usage`, `open`, `new-workspace`, `new-tab`, `split`, `start`, `send`, `keys`, `read`, `wait`, `events`, `surface`, `changes`, `view`, `view-set`, `input`, `scroll`, `selection`, `resize`, `redraw`, `ratio`, `link`, `theme`, `config`, `account`, `profile`, `issue`, `search`, `close`, `group`, `move`, `move-pane`, `collapse`, `expand`, `rename`, `focus`, `go`, `notify`, `todo`, `queue`, `away`, `mark`, `skill` and `contract`, have their own page: [Scripts and agents](../../guides/scripts-and-agents/). Among them, `status --follow` keeps running and prints the whole session as one JSON line each time it changes, for [another UI or a script that mirrors it](../../guides/scripts-and-agents/#follow-the-whole-state), and `status --app` prints (with `--follow`, keeps printing) the [TODO list, queue, away, update and keep awake](../../guides/scripts-and-agents/#follow-the-rest-of-the-app).
 
 ### `cornercase`
 
@@ -139,6 +139,10 @@ cornercase logs --path       # print only where the log is
 ```
 
 When the log is short since it last [moved to `server.log.1`](../files-and-environment/#files), the lines before come from there. Without a log yet, it says so and exits with status 1.
+
+### `cornercase account` and `cornercase profile`
+
+Keep several logins of Claude Code, Codex or Gemini CLI and choose which ones new agents start with: `account add|list|remove`, `profile new|set|use|delete|list`, and `--profile NAME` on `start`, `new-tab` and `flow run`. See [Accounts and profiles](../../guides/accounts/).
 
 ### `cornercase contract`
 

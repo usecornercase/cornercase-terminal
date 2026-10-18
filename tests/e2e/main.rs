@@ -23,6 +23,7 @@ use ratatui::layout::{Position, Rect};
 use rstest::rstest;
 use sha2::{Digest, Sha256};
 
+mod accounts;
 mod agents;
 mod arranging;
 mod browser;
