@@ -82,7 +82,15 @@ pub(crate) fn is_repo_root(dir: &Path) -> bool {
 }
 
 pub(crate) fn linked_worktrees(repo: &Path) -> Vec<PathBuf> {
-    let Ok(entries) = std::fs::read_dir(repo.join(".git").join("worktrees")) else { return Vec::new() };
+    registered_worktrees(repo).unwrap_or_default()
+}
+
+pub(crate) fn registered_worktrees(repo: &Path) -> std::io::Result<Vec<PathBuf>> {
+    let entries = match std::fs::read_dir(repo.join(".git").join("worktrees")) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e),
+    };
     let mut worktrees: Vec<PathBuf> = entries
         .flatten()
         .filter_map(|entry| std::fs::read_to_string(entry.path().join("gitdir")).ok())
@@ -91,7 +99,7 @@ pub(crate) fn linked_worktrees(repo: &Path) -> Vec<PathBuf> {
         .map(|path| path.canonicalize().unwrap_or(path))
         .collect();
     worktrees.sort();
-    worktrees
+    Ok(worktrees)
 }
 
 fn git_dir(dir: &Path) -> Option<PathBuf> {

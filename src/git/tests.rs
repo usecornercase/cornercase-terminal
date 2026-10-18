@@ -68,6 +68,21 @@ mod linked_worktrees {
         let repo = git_repo(&[]);
         assert_eq!(linked_worktrees(repo.path()), Vec::<PathBuf>::new());
     }
+
+    #[test]
+    fn is_an_error_when_the_registry_cannot_be_read() {
+        let repo = git_repo(&[]);
+        std::fs::write(repo.path().join(".git/worktrees"), "").expect("a file where the registry goes");
+
+        assert!(registered_worktrees(repo.path()).is_err());
+        assert_eq!(linked_worktrees(repo.path()), Vec::<PathBuf>::new());
+    }
+
+    #[test]
+    fn is_empty_and_readable_without_worktrees() {
+        let repo = git_repo(&[]);
+        assert_eq!(registered_worktrees(repo.path()).expect("no registry is an empty one"), Vec::<PathBuf>::new());
+    }
 }
 
 mod branch {

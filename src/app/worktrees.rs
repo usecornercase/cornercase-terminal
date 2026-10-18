@@ -16,7 +16,7 @@ use crate::flows::run::RoleWorktree;
 use crate::git;
 use crate::git::upstream;
 use crate::git::worktree::{self, setup};
-use crate::log::{Job, Level};
+use crate::log::{self, Job, Level};
 use crate::project::{Hierarchy, Phase, Tab, Workspace};
 use crate::pull_request::PullRequest;
 use crate::ui::{self};
@@ -26,6 +26,7 @@ pub(super) struct Upstream {
     pub(super) fetched: HashMap<u64, Instant>,
     pub(super) counting: HashSet<u64>,
     pub(super) counted: Option<Instant>,
+    pub(super) unlisted: HashSet<u64>,
 }
 
 pub(super) const UNCOMMITTED: &str = "It has changes that are not committed; removing it deletes them.";
@@ -156,7 +157,23 @@ impl App {
             if !git::is_repo_root(&project.path) {
                 continue;
             }
-            let linked = git::linked_worktrees(&project.path);
+            let linked = match git::registered_worktrees(&project.path) {
+                Ok(linked) => {
+                    self.upstream.unlisted.remove(&project.id);
+                    linked
+                }
+                Err(e) => {
+                    if self.upstream.unlisted.insert(project.id) {
+                        log::warning!(
+                            "worktree",
+                            "cannot list the linked worktrees, keeping the workspaces",
+                            project = project.id,
+                            error = e,
+                        );
+                    }
+                    continue;
+                }
+            };
             let gone: Vec<usize> = (0..project.workspaces.len())
                 .rev()
                 .filter(|&w| {

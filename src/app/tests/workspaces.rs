@@ -137,6 +137,18 @@ fn checkouts_git_no_longer_knows_go_away_once_their_shells_stop() {
     assert!(path.is_dir());
 }
 
+#[test]
+fn checkouts_stay_while_git_cannot_be_read() {
+    let (repo, mut app, _rx, _tmp, _path) = external_checkout();
+    let registry = repo.path().join(".git/worktrees");
+    std::fs::remove_dir_all(&registry).expect("drop the registry");
+    std::fs::write(&registry, "").expect("a file where the registry was");
+
+    app.sync_worktrees();
+
+    assert_eq!(app.projects[0].workspaces.len(), 2);
+}
+
 mod behind {
     use super::*;
     use crate::test_util::git;
