@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.148
+
+- **A flow's agents are named by their role in the agents section.** A run's team already hangs under its orchestrator there; now each member's row says the role it plays (`coder`, `reviewer`, `security`) instead of repeating the run's project and workspace, so two members on the same agent can be told apart. The orchestrator keeps its project and workspace and adds `· orchestrator` when the column has room; a member whose orchestrator is no longer listed shows its place and its role. Agents outside a flow look as before.
+  - Scripts and other apps get the role too: `role` in `status --json`, `status --follow` and view lines, a new last column `role` in `status --panes`, and `(role coder)` in `status`.
+
 ## 0.12.147
 
 - **A flow's end lights up once its pull request exists, and shows its checks.** In the Flow panel, `◆ open a pull request` used to turn purple only while the orchestrator rested with its review mark, so it went grey again as soon as the orchestrator kept working, asked you something or got one more change to make, even with the pull request open. Now it turns purple as soon as the run's branch has a pull request (open, a draft or merged), and once the orchestrator has marked its pane for review the run remembers it, also after a restart. A flow that leaves the commits lights from that mark.
