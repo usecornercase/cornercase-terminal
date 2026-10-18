@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.144
+
+- **Other apps and scripts can follow the TODO list, the queue, away, updates and keep awake.** `cornercase status --app` prints them as JSON, and `status --app --follow` prints them again each time one of them changes. See Scripts and agents → Follow the rest of the app.
+- **`cornercase todo` does what the TODO panel does**: `todo edit`, `todo undone`, `todo move` (before another item, or `--last`), `todo clear-done`, and `todo restore` to undo `rm` or `clear-done`, whose number they now print. Removing the item the panel is editing now closes the panel's field.
+- **Other apps can check for an update and install it through the server**, as the update dialog does (`update-check` and `update-install`); the restart stays `cornercase restart`. The update dialog now shows `downloading…` for an install another client started.
+
 ## 0.12.142
 
 - **A worktree git has forgotten can be closed again.** When git no longer knows a worktree (after `git worktree prune`, or a removal that failed half way) but its folder is still there, its workspace used to stay in the sidebar for good: removing it failed with `is not a working tree` and closing it did nothing. Now it goes away as soon as its tabs are closed, like a worktree whose folder was deleted. The leftover folder stays on disk for you to delete. If cornercase cannot read git's list of worktrees, it keeps every workspace rather than guess.
