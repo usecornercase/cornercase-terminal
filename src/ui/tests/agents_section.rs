@@ -19,6 +19,9 @@ fn agent(status: Status, agent: &str, project: &str, workspace: Option<&str>, de
         depth: 0,
         last: true,
         rails: Vec::new(),
+        fold: None,
+        hidden: 0,
+        attention: None,
     }
 }
 
@@ -402,4 +405,110 @@ fn the_role_separator_is_muted_and_the_role_takes_the_rows_colour() {
     let buffer = t.backend().buffer();
     let dot = (0..width).find(|x| buffer[(*x, 0)].symbol() == "·").expect("separator");
     assert_eq!((buffer[(dot, 0)].fg, buffer[(dot + 2, 0)].fg), (v.muted, v.soft));
+}
+
+fn folding(entry: AgentEntry, fold: bool, hidden: usize, attention: Option<Status>) -> AgentEntry {
+    AgentEntry { fold: Some(fold), hidden, attention, ..entry }
+}
+
+fn expanded_family() -> Vec<AgentEntry> {
+    let mut rows = family();
+    rows[0] = folding(rows[0].clone(), false, 0, None);
+    rows[1] = folding(rows[1].clone(), false, 0, None);
+    rows
+}
+
+fn collapsed_family() -> Vec<AgentEntry> {
+    let mut rows = family();
+    let parent = folding(rows.remove(0), true, 3, Some(Status::Done));
+    vec![parent, rows.remove(3)]
+}
+
+#[test]
+fn renders_an_expanded_parent() {
+    let v = roomy(Widths::default().projects, expanded_family());
+    insta::assert_snapshot!(render_sized(&v, W, ROOMY).backend());
+}
+
+#[test]
+fn renders_a_collapsed_parent() {
+    let v = roomy(Widths::default().projects, collapsed_family());
+    insta::assert_snapshot!(render_sized(&v, W, ROOMY).backend());
+}
+
+#[test]
+fn renders_a_collapsed_parent_in_a_narrow_column() {
+    let v = roomy(MIN_COLUMN_WIDTH + 2, collapsed_family());
+    insta::assert_snapshot!(render_sized(&v, W, ROOMY).backend());
+}
+
+#[test]
+fn renders_a_collapsed_parent_in_the_compact_agents_menu() {
+    let v = View { nav: Some(Nav::Agents), ..shown(Sidebar::ProjectsOnTop, collapsed_family()) };
+    insta::assert_snapshot!(render_sized(&v, SMALL.width, SMALL.height).backend());
+}
+
+fn drawn(entry: &AgentEntry, width: u16) -> Terminal<TestBackend> {
+    let r = Rect::new(0, 0, width, 2);
+    let mut t = Terminal::new(TestBackend::new(width, 2)).expect("test backend");
+    let v = shown(Sidebar::ProjectsOnTop, Vec::new());
+    t.draw(|f| draw_agent(f, &v, r, 1, entry)).expect("draw");
+    t
+}
+
+#[rstest]
+#[case::root(0)]
+#[case::child(1)]
+#[case::grandchild(3)]
+fn the_arrow_sits_in_the_blank_cell_before_the_icon(#[case] depth: usize) {
+    let entry = AgentEntry {
+        depth,
+        ..folding(agent(Status::Working, "claude", "api", None, Details::default()), false, 0, None)
+    };
+    let r = Rect::new(0, 0, 40, 2);
+    let t = drawn(&entry, 40);
+    let x = agent_fold(r, depth).right() - 1;
+    let v = shown(Sidebar::ProjectsOnTop, Vec::new());
+    let cell = &t.backend().buffer()[(x, 0)];
+    assert_eq!((cell.symbol(), cell.fg), ("▾", v.muted));
+    assert_eq!(t.backend().buffer()[(u16::try_from(2 * depth + 2).expect("small"), 0)].symbol(), "◐");
+}
+
+#[test]
+fn a_row_without_children_has_no_arrow() {
+    let t = drawn(&agent(Status::Working, "claude", "api", None, Details::default()), 40);
+    assert!(["▾", "▸"].iter().all(|arrow| !row_text(&t, Rect::new(0, 0, 40, 1)).contains(arrow)));
+}
+
+#[rstest]
+#[case::whole(30, "▸○ web-shop › fix/empty-… +4")]
+#[case::cut_before_the_count(14, "▸○ web-s… +4")]
+#[case::count_dropped(8, "▸○ we…")]
+fn a_collapsed_row_counts_what_it_hides_after_its_place(#[case] width: u16, #[case] expected: &str) {
+    let entry = folding(
+        agent(Status::Idle, "claude", "web-shop", Some("fix/empty-address"), Details::default()),
+        true,
+        4,
+        None,
+    );
+    assert_eq!(first_line(width, &entry), expected);
+}
+
+#[test]
+fn a_collapsed_row_shows_the_attention_of_what_it_hides() {
+    let entry =
+        folding(agent(Status::Idle, "claude", "web-shop", None, Details::default()), true, 4, Some(Status::Waiting));
+    assert!(first_line(30, &entry).ends_with("! +4"));
+}
+
+#[test]
+fn an_expanded_row_shows_no_count() {
+    let entry =
+        folding(agent(Status::Idle, "claude", "web-shop", None, Details::default()), false, 4, Some(Status::Waiting));
+    assert!(!first_line(30, &entry).contains("+4"));
+}
+
+#[test]
+fn the_fold_target_is_the_lead_over_the_whole_row() {
+    assert_eq!(agent_fold(Rect::new(0, 5, 30, 3), 1), Rect::new(0, 5, 4, 3));
 }

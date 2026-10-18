@@ -638,6 +638,17 @@ mod output {
     }
 
     #[test]
+    fn a_collapsed_agent_says_so() {
+        let mut report = report();
+        report.projects[0].workspaces[0].tabs[0].panes[1].parent = Some(4);
+        report.projects[0].workspaces[0].tabs[0].panes[1].collapsed = true;
+
+        let text = render(&report, Some(Path::new("/home/ana")));
+
+        assert!(text.contains("~/shop  (parent 4, collapsed, you)\n"), "{text}");
+    }
+
+    #[test]
     fn a_flow_member_names_its_role() {
         let mut report = report();
         report.projects[0].workspaces[0].tabs[0].panes[1].parent = Some(4);

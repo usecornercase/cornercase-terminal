@@ -187,6 +187,7 @@ impl App {
             parent: Self::live_parent(term, live),
             subagents: u32::try_from(term.context.subagents()).unwrap_or(u32::MAX),
             role: self.seat(term.id).map(|(_, role)| role.to_string()),
+            collapsed: term.collapsed,
         }
     }
 

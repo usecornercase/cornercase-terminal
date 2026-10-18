@@ -36,6 +36,7 @@ mod describing {
         assert!(descriptor.features.iter().any(|feature| feature == "notices"));
         assert!(descriptor.features.iter().any(|feature| feature == "todo-panel"));
         assert!(descriptor.features.iter().any(|feature| feature == "close-unlock"));
+        assert!(descriptor.features.iter().any(|feature| feature == "agent-folds"));
         assert!(descriptor.features.iter().any(|feature| feature == "issues"));
         assert!(descriptor.features.iter().any(|feature| feature == "todo-panel"));
         assert!(descriptor.features.iter().any(|feature| feature == "changes"));

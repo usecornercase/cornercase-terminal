@@ -299,4 +299,6 @@ pub struct PaneInfo {
     pub(crate) parent: Option<u64>,
     pub(crate) subagents: u32,
     pub(crate) role: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) collapsed: bool,
 }

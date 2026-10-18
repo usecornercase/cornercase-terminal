@@ -36,6 +36,7 @@ import {
   layout,
   mainWidth,
   sidebarDrop,
+  agentLayout,
   sidebarLayout,
   sidebarRows,
   type Details,
@@ -71,6 +72,7 @@ import {
   type Target,
   type TreeSpot,
   type Workspace,
+  MAX_AGENT_DEPTH,
   NOTIFY_AFTER,
   NOTIFY_CHOICES,
   activePane,
@@ -286,6 +288,8 @@ export interface AgentRow extends TreeSpot {
   place: boolean;
   details: Details;
   active: boolean;
+  hiddenCount: number;
+  badge: Status | null;
 }
 
 export type RowDragView =
@@ -755,6 +759,14 @@ export class App {
   }
 
   agentRows(): AgentRow[] {
+    return this.agentList(false);
+  }
+
+  agentShown(): AgentRow[] {
+    return this.agentList(true);
+  }
+
+  private agentList(folds: boolean): AgentRow[] {
     const order = sidebarRows(
       this.projects.map((p) => this.groupIndex(p.group)),
       this.groups.map(() => false),
@@ -781,6 +793,8 @@ export class App {
                 place: true,
                 details: { model: c.model ? (pane.context?.model ?? null) : null, percent: c.context ? (pane.context?.percent ?? null) : null, subagents: pane.subagents ?? 0, memory: null },
                 active: t === focused && t.active === pane.id,
+                hiddenCount: 0,
+                badge: null as Status | null,
               },
             ];
           }),
@@ -795,17 +809,45 @@ export class App {
       }
       return null;
     };
-    return agentTree(flat, (row) => row.pane, (row) => row.parent).map((row) => {
+    const folded = (row: { pane: number }) => folds && !!this.findPane(row.pane)?.pane.collapsed;
+    return agentTree(flat, (row) => row.pane, (row) => row.parent, MAX_AGENT_DEPTH, folded).map((row) => {
       const own = seat(row.pane);
       const theirs = seat(row.parent);
       const under = row.depth > 0 && own !== null && own.role !== ORCHESTRATOR && theirs !== null && theirs.run === own.run;
-      return { ...row, role: own?.role ?? null, place: !under };
+      const hidden = row.hidden as AgentRow[];
+      const active = row.active || hidden.some((h) => h.active);
+      return { ...row, role: own?.role ?? null, place: !under, active, hiddenCount: hidden.length, badge: attention(hidden.map((h) => h.status)) };
     });
+  }
+
+  private revealAgent(id: number): void {
+    const listed = new Map(this.agentRows().map((row) => [row.pane, row]));
+    const seen = new Set([id]);
+    for (let row = listed.get(id); row && row.parent !== null && listed.has(row.parent) && !seen.has(row.parent); row = listed.get(row.parent)) {
+      seen.add(row.parent);
+      const ancestor = this.findPane(row.parent)?.pane;
+      if (ancestor) ancestor.collapsed = false;
+    }
+  }
+
+  setAgentFold(id: number, collapsed: boolean): void {
+    const pane = this.findPane(id)?.pane;
+    if (!pane) return;
+    pane.collapsed = collapsed;
+    const list = this.areas().agentsList;
+    this.agentsScroll = agentLayout(list, this.areas().pitch, this.agentShown().length, this.agentsScroll).scrolled(0);
+    this.dirty();
+  }
+
+  toggleAgentFold(id: number): void {
+    const pane = this.findPane(id)?.pane;
+    if (pane) this.setAgentFold(id, !pane.collapsed);
   }
 
   jumpToPane(id: number): void {
     const found = this.findPane(id);
     if (!found) return;
+    this.revealAgent(id);
     const p = this.projects.indexOf(found.p);
     this.goto(p, found.p.workspaces.indexOf(found.w), found.w.tabs.indexOf(found.t));
     found.t.active = id;
@@ -2071,8 +2113,10 @@ export class App {
   openAgentMenu(at: Pos, id: number): void {
     const pane = this.findPane(id)?.pane;
     const mark = pane && this.markAction([pane]);
-    if (!mark) return;
-    this.overlay = { kind: 'menu', at, actions: [mark] };
+    const row = this.agentShown().find((r) => r.pane === id);
+    const actions: MenuAction[] = [...(mark ? [mark] : []), ...(row && row.fold !== null ? [{ kind: 'agentFold' as const, pane: id, collapsed: !row.fold }] : [])];
+    if (!actions.length) return;
+    this.overlay = { kind: 'menu', at, actions };
     this.dirty();
   }
 
@@ -2116,6 +2160,7 @@ export class App {
     if (a.kind === 'base') return a.branch;
     if (a.kind === 'sendTodo') return this.todoAgent(a.pane)?.label ?? '';
     if (a.kind === 'mark') return a.pending ? 'mark as pending review' : 'mark as reviewed';
+    if (a.kind === 'agentFold') return a.collapsed ? 'collapse' : 'expand';
     if (a.kind === 'showFlow') return 'show flow';
     if (a.kind === 'newWorkspace') return 'new workspace';
     if (a.kind === 'startFlow') return 'start a flow…';
@@ -2177,6 +2222,7 @@ export class App {
       this.overlay = { kind: 'newGroup', input: '' };
       this.emit('narrate', this.narration.group);
     } else if (a.kind === 'mark') this.mark(a);
+    else if (a.kind === 'agentFold') this.setAgentFold(a.pane, a.collapsed);
     else if (a.kind === 'sendTodo') this.sendTodo(a.todo, a.pane);
     else if (a.kind === 'showFlow') return this.showFlowOf(a.workspace);
     else if (a.kind === 'newWorkspace') {

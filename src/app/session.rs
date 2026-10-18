@@ -91,6 +91,7 @@ impl App {
             let apart = role.is_some_and(Role::own_worktree) && pane.cwd.as_ref().is_none_or(|cwd| !cwd.is_dir());
             let run = role.and(run);
             let mut term = self.spawn_with(area, cwd, run)?;
+            term.collapsed = pane.collapsed;
             if apart {
                 log::warning!("server", "a role's worktree is gone, so its agent does not resume", pane = term.id);
                 let name = role.map(|role| role.name.as_str()).unwrap_or_default();

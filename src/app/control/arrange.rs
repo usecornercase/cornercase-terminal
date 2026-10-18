@@ -326,8 +326,18 @@ impl App {
                 let (p, _) = self.usable_workspace(id)?;
                 Target::Workspace(self.projects[p].id, id)
             }
-            Item::Tab(_) | Item::Pane(_) => {
-                return Err(malformed(format!("`{command}` takes a group, project or workspace")));
+            Item::Pane(id) => {
+                let term = self.projects.pane_by(id).ok_or_else(|| none("pane", id))?;
+                if term.agent.status().is_none() {
+                    return Err(conflict(format!(
+                        "pane {id} runs no agent cornercase lists, so it has no agents to fold"
+                    )));
+                }
+                self.set_agent_fold(id, collapsed);
+                return Ok(Some(json(&Done::default())));
+            }
+            Item::Tab(_) => {
+                return Err(malformed(format!("`{command}` takes a group, project, workspace or pane")));
             }
         };
         self.set_collapsed(target, collapsed);

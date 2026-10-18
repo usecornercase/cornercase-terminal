@@ -204,9 +204,9 @@ pub(crate) enum Control {
         after_help = MOVE_PANE_HELP
     )]
     MovePane(arrange::MovePaneArgs),
-    #[command(about = "Collapse a group, project or workspace in the sidebar", after_help = FOLD_HELP)]
+    #[command(about = "Collapse a group, project, workspace or agent in the sidebar", after_help = FOLD_HELP)]
     Collapse(arrange::FoldArgs),
-    #[command(about = "Expand a group, project or workspace in the sidebar", after_help = FOLD_HELP)]
+    #[command(about = "Expand a group, project, workspace or agent in the sidebar", after_help = FOLD_HELP)]
     Expand(arrange::FoldArgs),
     #[command(about = "Create a group, change its icon and colour, or delete it", after_help = GROUP_HELP)]
     Group(arrange::GroupArgs),

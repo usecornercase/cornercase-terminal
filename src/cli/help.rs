@@ -35,6 +35,7 @@ refuses too (`survey` in the JSON): `cornercase keys --pane N 0` dismisses it.
 `(resuming)` is a pane whose agent is coming back in its conversation after a restart: until it
 is back, it takes no input and `cornercase send` refuses it (`resuming` in the JSON).
 `(role coder)` marks a flow member and the role it plays (`role` in the JSON).
+`(collapsed)` is an agent whose children are hidden in the agents section (`collapsed` in the JSON).
 
 With --panes it prints one line per pane instead, for scripts, in the sidebar's order: a header
 line naming the columns, then one row per pane, its columns separated by tabs. The columns are
@@ -626,10 +627,12 @@ Examples:
   cornercase move-pane --pane 4 --target 7 --place below --json";
 pub(super) const FOLD_HELP: &str =
     "Sets it, whatever it was: a group shows or hides its projects, a project its workspaces and a
-workspace its tabs. Its shells keep running.
+workspace its tabs; an agent's pane (--pane) hides the agents it started in the agents section.
+Its shells keep running.
 
 Examples:
   cornercase collapse --group 12
+  cornercase collapse --pane 12
   cornercase expand --worktree fix/login";
 pub(super) const GROUP_HELP: &str =
     "`new` takes the next icon and colour, as + New › new group does, and prints the group's id. `style`

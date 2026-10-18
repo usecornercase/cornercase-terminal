@@ -141,6 +141,7 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
                 marked.extend(parent.as_deref());
                 let role = pane.role.as_deref().map(|role| format!("role {role}"));
                 marked.extend(role.as_deref());
+                marked.extend(pane.collapsed.then_some("collapsed"));
                 marked.extend(pane.caller.then_some("you"));
                 lines.push(line(depth + 3, "pane", pane.id, &parts, &marked));
             }

@@ -874,7 +874,7 @@ export class Painter {
     if (areas.compact) this.back(areas, AGENTS_TITLE);
     else this.title(areas.agentsTitle, AGENTS_TITLE);
     const list = areas.agentsList;
-    const entries = shapeTree(app.agentRows(), list.w < MIN_MENU_ROW_WIDTH ? NARROW_AGENT_DEPTH : MAX_AGENT_DEPTH);
+    const entries = shapeTree(app.agentShown(), list.w < MIN_MENU_ROW_WIDTH ? NARROW_AGENT_DEPTH : MAX_AGENT_DEPTH);
     const rows = agentLayout(list, areas.pitch, entries.length, app.agentsScroll);
     if (!entries.length) {
       const first = middle(rect(list.x, list.y, list.w, Math.min(areas.pitch, list.h)));
@@ -886,7 +886,10 @@ export class Painter {
       if (isEmpty(r)) return;
       this.agentRow(r, areas.pitch, entry);
       const right = (x: number, y: number) => app.openAgentMenu({ x, y }, entry.pane);
-      this.region({ r, click: () => app.jumpToPane(entry.pane), right, hold: true, cursor: 'pointer' });
+      const lead = rect(r.x, r.y, 2 * entry.depth + 2, r.h);
+      const click = (x: number, y: number) =>
+        entry.fold !== null && contains(lead, x, y) ? app.toggleAgentFold(entry.pane) : app.jumpToPane(entry.pane);
+      this.region({ r, click, right, hold: true, cursor: 'pointer' });
     });
     this.more(list, rows, entries, () => true);
   }
@@ -897,8 +900,12 @@ export class Painter {
     const line: Line = [marker(entry.active), seg(' '.repeat(2 * depth)), statusIcon(entry.status, spinAt(this.app)), seg(' ')];
     const indent = width(line);
     const room = Math.max(0, r.w - indent - 1);
-    line.push(...agentPlace(entry, room, { fg: entry.active ? DEFAULT : 7 }));
+    const tags = fitTags(foldTags(entry, spinAt(this.app)), room);
+    const place = agentPlace(entry, room - tags.reserved, { fg: entry.active ? DEFAULT : 7 });
+    line.push(...place);
+    pushTags(line, tags, width(place), room);
     this.band(r, line, bg);
+    if (entry.fold !== null) this.span(r.x + 2 * depth + 1, middle(r).y, entry.fold ? '▸' : '▾', DARK, 1);
     this.details(r, pitch, entry.details, indent, entry.agent);
     if (depth > 0) {
       for (const level of entry.bars) this.guide(r.x + 2 * level, r, 'bar');
@@ -1532,6 +1539,11 @@ export class Painter {
     this.span(b.x, b.y, ` ${label} `, this.hovered(b) ? PRESSED : { fg: 6, add: BOLD });
     this.region({ r: b, click: act, cursor: 'pointer' });
   }
+}
+
+function foldTags(entry: AgentRow, now: number | null): Seg[] {
+  if (entry.fold !== true) return [];
+  return [...(entry.badge ? [statusIcon(entry.badge, now)] : []), ...(entry.hiddenCount > 0 ? [seg(`+${entry.hiddenCount}`, DARK)] : [])];
 }
 
 function agentPlace(entry: AgentRow, room: number, name: Style): Line {

@@ -1,9 +1,14 @@
+use std::collections::HashSet;
+
 use rstest::rstest;
 
 use super::*;
 
 fn shape(rows: &[(u64, Option<u64>)], narrow: bool) -> Vec<(u64, usize, bool, Vec<bool>)> {
-    order(rows, narrow).into_iter().map(|node| (rows[node.index].0, node.depth, node.last, node.rails)).collect()
+    order(rows, &HashSet::new(), narrow)
+        .into_iter()
+        .map(|node| (rows[node.index].0, node.depth, node.last, node.rails))
+        .collect()
 }
 
 mod order {
@@ -56,7 +61,7 @@ mod depth {
     #[case::narrow(true, &[0, 1, 1, 1, 1, 1])]
     fn is_capped(#[case] narrow: bool, #[case] expected: &[usize]) {
         let rows = [(1, None), (2, Some(1)), (3, Some(2)), (4, Some(3)), (5, Some(4)), (6, Some(5))];
-        let depths: Vec<_> = order(&rows, narrow).into_iter().map(|node| node.depth).collect();
+        let depths: Vec<_> = order(&rows, &HashSet::new(), narrow).into_iter().map(|node| node.depth).collect();
         assert_eq!(depths, expected);
     }
 }
@@ -115,5 +120,84 @@ mod rails {
     fn narrow_rows_have_none() {
         let rows = [(1, None), (2, Some(1)), (3, Some(2)), (4, Some(1))];
         assert!(shape(&rows, true).into_iter().all(|(.., rails)| rails.is_empty()));
+    }
+}
+
+mod folds {
+    use super::*;
+
+    type Row = (u64, usize, bool, bool, Vec<u64>);
+
+    fn fold(rows: &[(u64, Option<u64>)], folded: &[u64], narrow: bool) -> Vec<Row> {
+        let folded: HashSet<u64> = folded.iter().copied().collect();
+        order(rows, &folded, narrow)
+            .into_iter()
+            .map(|node| {
+                let hidden = node.hidden.iter().map(|&i| rows[i].0).collect();
+                (rows[node.index].0, node.depth, node.last, node.has_children, hidden)
+            })
+            .collect()
+    }
+
+    const FAMILY: [(u64, Option<u64>); 4] = [(1, None), (2, Some(1)), (3, Some(2)), (4, Some(1))];
+
+    #[test]
+    fn a_folded_parent_hides_every_level() {
+        assert_eq!(fold(&FAMILY, &[1], false), [(1, 0, true, true, vec![2, 3, 4])]);
+    }
+
+    #[test]
+    fn a_folded_child_hides_only_its_own() {
+        assert_eq!(
+            fold(&FAMILY, &[2], false),
+            [(1, 0, true, true, vec![]), (2, 1, false, true, vec![3]), (4, 1, true, false, vec![])]
+        );
+    }
+
+    #[test]
+    fn hidden_rows_are_not_taken_as_roots() {
+        let rows = [(5, Some(7)), (6, None), (7, None)];
+        assert_eq!(fold(&rows, &[7], false), [(6, 0, false, false, vec![]), (7, 0, true, true, vec![5])]);
+    }
+
+    #[rstest]
+    #[case::the_first(&[1])]
+    #[case::the_second(&[2])]
+    fn a_cycle_with_a_fold_ends(#[case] folded: &[u64]) {
+        let rows = [(1, Some(2)), (2, Some(1)), (3, None)];
+        let ids: Vec<u64> = fold(&rows, folded, false).into_iter().map(|row| row.0).collect();
+        assert_eq!(ids.len() + fold(&rows, folded, false).iter().map(|row| row.4.len()).sum::<usize>(), 3);
+    }
+
+    #[test]
+    fn a_leaf_has_nothing_to_fold() {
+        assert_eq!(fold(&[(1, None), (2, Some(1))], &[2], false)[1], (2, 1, true, false, vec![]));
+    }
+
+    #[test]
+    fn nested_folds_hide_once() {
+        let shown = fold(&FAMILY, &[1, 2], false);
+        assert_eq!(shown, [(1, 0, true, true, vec![2, 3, 4])]);
+    }
+
+    #[test]
+    fn a_fold_at_the_narrow_cap_makes_its_row_the_last() {
+        let rows = [(1, None), (2, Some(1)), (3, Some(2))];
+        assert_eq!(fold(&rows, &[2], true), [(1, 0, true, true, vec![]), (2, 1, true, true, vec![3])]);
+        assert!(!fold(&rows, &[], true)[1].2);
+    }
+
+    #[test]
+    fn a_fold_at_the_wide_cap_makes_its_row_the_last() {
+        let rows = [(1, None), (2, Some(1)), (3, Some(2)), (4, Some(3)), (5, Some(4))];
+        let shown = fold(&rows, &[4], false);
+        assert_eq!((shown[3].0, shown[3].1, shown[3].2), (4, 3, true));
+        assert!(!fold(&rows, &[], false)[3].2);
+    }
+
+    #[test]
+    fn has_children_marks_parents_only() {
+        let flags: Vec<bool> = fold(&FAMILY, &[], false).into_iter().map(|row| row.3).collect();
+        assert_eq!(flags, [true, true, false, false]);
     }
 }
