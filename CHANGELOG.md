@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.140
+
+- **`cornercase remote` no longer starts a second server.** The server's socket now sits next to your session, in `~/.local/state/cornercase/` (or `$XDG_STATE_HOME/cornercase/`), instead of a folder that depends on the login. An SSH session without `XDG_RUNTIME_DIR`, a script run from cron or another login now reach the same server instead of starting a second one that restored an old copy of your session, resumed the same agents again and overwrote your saved session and stats.
+  - That folder is made private to you (`0700`), and cornercase never asks you to remove it.
+  - A server started by an earlier version is still found where it was, and offered a restart as after any update.
+  - If the socket's path is too long, or your home folder is on a network disk that cannot hold a socket, cornercase says so right away: set `XDG_STATE_HOME` to a folder on a local disk, or `CORNERCASE_SOCKET`.
+
 ## 0.12.139
 
 - **An agent stays working while its subagents run.** When Claude Code or GitHub Copilot CLI ends its turn while subagents it started in the background are still at work, its tab keeps showing it as working, with how many are left under its name (`2 subagents`), and normally turns `✓`, with one notification, only once the last of them has ended (a subagent silent for 10 minutes stops counting, so then it can turn `✓` early and notify again when it really ends). Before, the tab could show `✓` and tell you it finished as soon as the agent's own turn ended, then tell you again when it really did.

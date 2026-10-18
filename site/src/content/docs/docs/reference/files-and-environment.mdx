@@ -37,7 +37,7 @@ Stats contains only numbers and counting times: no prompts, replies, models, pro
 
 The folders follow the XDG base directory variables: `config.json` goes in `$XDG_CONFIG_HOME/cornercase/` when it is set, and `session.json`, `runs/`, `issues.json`, `todos.json`, `queue.json`, `stats.json`, `star.json` `server.log`, `server.sock` and `server.lock` in `$XDG_STATE_HOME/cornercase/`. Without `XDG_STATE_HOME` they go in `~/.local/state/cornercase/`. Set it where every shell reads it, not only in an interactive rc file, or an SSH session without it looks for another server.
 
-Versions before 0.12.137 kept the socket in `$XDG_RUNTIME_DIR/cornercase/` or `$TMPDIR/cornercase-<uid>/`. cornercase still looks there for a server started by such a version, so an update doesn't hide it; restart it as after any update.
+Versions before 0.12.140 kept the socket in `$XDG_RUNTIME_DIR/cornercase/` or `$TMPDIR/cornercase-<uid>/`. cornercase still looks there for a server started by such a version, so an update doesn't hide it; restart it as after any update.
 
 ### With `CORNERCASE_SOCKET`
 
@@ -113,7 +113,7 @@ A build from source (`cargo run`) keeps to folders of its own, one set per sourc
 | `TMUX`, `TMUX_PANE`, `STY`, `ZELLIJ` | Inside tmux, screen or Zellij, desktop notifications are a bell, and images take the way the multiplexer lets through; inside tmux on the same machine, cornercase asks tmux whether it [passes images through](../../guides/files/#inside-tmux). |
 | `XDG_CONFIG_HOME` | Folder for `config.json` and `secrets.json`. |
 | `XDG_STATE_HOME` | Folder for `session.json`, `issues.json`, `todos.json`, the socket, the lock and the log. |
-| `XDG_RUNTIME_DIR`, `TMPDIR` | Only to find a server started by a version before 0.12.137. |
+| `XDG_RUNTIME_DIR`, `TMPDIR` | Only to find a server started by a version before 0.12.140. |
 | `CORNERCASE_RELEASES_URL` | Where the update check asks for the latest release. Meant for testing; the default is `https://api.github.com/repos/usecornercase/cornercase-terminal/releases/latest`. |
 | `CORNERCASE_SHORTCUT_API`, `CORNERCASE_LINEAR_API`, `CORNERCASE_JIRA_API`, `CORNERCASE_PLANE_API`, `CORNERCASE_ASANA_API` | Base URL of the Shortcut REST API, of the Linear GraphQL API, of the Jira REST API, of the Plane REST API and of the Asana REST API. Meant for testing; the defaults are `https://api.app.shortcut.com/api/v3`, `https://api.linear.app/graphql`, `https://<your Jira site>` and `https://api.plane.so` (or your Plane URL, when set) and `https://app.asana.com/api/1.0`. |
 
