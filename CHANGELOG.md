@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.147
+
+- **Other apps and scripts can follow a flow run.** `cornercase flow runs` prints where each run stands: its stage, the rounds of its loops, the last step and the last one outside the plan, each role's pane and status, and whether the orchestrator marked the end; `--follow` prints it again as it changes. `cornercase flow messages` prints what the orchestrator and the roles sent each other, as the Flow panel's arrows show it, and `cornercase flow files` lists the run's folder, also after the run ended.
+- **Flows can be managed from scripts.** `cornercase flow hide NAME` deletes a built-in flow and `flow restore NAME` brings it back, as Settings › Flows does; restoring a built-in you edited deletes your version. `flow delete NAME` deletes yours or the project's.
+- `flow list --json` gives each flow whole (stages, loops, prompts, arguments, variables and worktrees) and the deleted built-ins, and an app with its own editor saves a flow as JSON with the `flow-save` request, after the editor's own checks.
+
 ## 0.12.146
 
 - **Scripts and other apps can read your plan limits.** `cornercase usage` prints what the Usage dialog's Limits tab shows: for Claude Code and Codex, how much of each limit you have used and when it resets, extra usage or credits, and how old the numbers are. Like the tab, it asks the agents on the server's machine, which sends no prompt and costs no tokens, and waits for a probe already on its way rather than asking twice; `--cached` prints the last answer without asking. Nothing is asked between requests.
