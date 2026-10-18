@@ -12,6 +12,8 @@ fn agent(status: Status, agent: &str, project: &str, workspace: Option<&str>, de
         agent: agent.into(),
         project: project.into(),
         workspace: workspace.map(String::from),
+        role: None,
+        place: true,
         details,
         active: false,
         depth: 0,
@@ -315,4 +317,89 @@ fn the_guides_take_the_line_colour() {
         (cell.symbol().to_string(), cell.fg)
     });
     assert_eq!(cells, [("├".to_string(), v.line()), ("│".to_string(), v.line())]);
+}
+
+fn member(role: &str, status: Status, agent_name: &str, last: bool) -> AgentEntry {
+    AgentEntry {
+        role: Some(role.into()),
+        place: false,
+        ..child(agent(status, agent_name, "web-shop", Some("fix/empty-address"), Details::default()), 1, last, &[])
+    }
+}
+
+fn orchestrator() -> AgentEntry {
+    AgentEntry {
+        role: Some("orchestrator".into()),
+        ..agent(Status::Working, "claude", "web-shop", Some("fix/empty-address"), details("Opus 5.5", Some(23)))
+    }
+}
+
+fn run() -> Vec<AgentEntry> {
+    vec![
+        orchestrator(),
+        member("coder", Status::Working, "claude", false),
+        member("reviewer", Status::Idle, "codex", false),
+        member("security", Status::Idle, "gemini", false),
+        member("tester", Status::Done, "claude", true),
+    ]
+}
+
+#[test]
+fn renders_a_run_by_its_roles() {
+    let v = roomy(Widths::default().projects, run());
+    insta::assert_snapshot!(render_sized(&v, W, ROOMY).backend());
+}
+
+#[test]
+fn renders_a_run_in_a_wide_column() {
+    let v = roomy(50, run());
+    insta::assert_snapshot!(render_sized(&v, W, ROOMY).backend());
+}
+
+#[test]
+fn renders_a_run_in_the_compact_agents_menu() {
+    let v = View { nav: Some(Nav::Agents), ..shown(Sidebar::ProjectsOnTop, run()) };
+    insta::assert_snapshot!(render_sized(&v, SMALL.width, SMALL.height).backend());
+}
+
+fn first_line(width: u16, entry: &AgentEntry) -> String {
+    let r = Rect::new(0, 0, width, 2);
+    let mut t = Terminal::new(TestBackend::new(width, 2)).expect("test backend");
+    let v = shown(Sidebar::ProjectsOnTop, Vec::new());
+    t.draw(|f| draw_agent(f, &v, r, 1, entry)).expect("draw");
+    row_text(&t, Rect { height: 1, ..r }).trim().to_string()
+}
+
+#[rstest]
+#[case::whole(48, "◐ web-shop › fix/empty-address · orchestrator")]
+#[case::role_cut(41, "◐ web-shop › fix/empty-address · orch…")]
+#[case::role_dropped(39, "◐ web-shop › fix/empty-address")]
+#[case::place_cut(30, "◐ web-shop › fix/empty-add…")]
+fn the_orchestrator_adds_its_role_to_its_place_when_it_fits(#[case] width: u16, #[case] expected: &str) {
+    assert_eq!(first_line(width, &orchestrator()), expected);
+}
+
+#[rstest]
+#[case::whole(20, "└ ○ reviewer")]
+#[case::cut(12, "└ ○ revi…")]
+fn a_member_shows_only_its_role_cut_at_the_end(#[case] width: u16, #[case] expected: &str) {
+    assert_eq!(first_line(width, &member("reviewer", Status::Idle, "codex", true)), expected);
+}
+
+#[test]
+fn a_member_without_a_listed_orchestrator_shows_its_place_and_its_role() {
+    let root = AgentEntry { depth: 0, place: true, ..member("coder", Status::Working, "claude", true) };
+    assert_eq!(first_line(60, &root), "◐ web-shop › fix/empty-address · coder");
+}
+
+#[test]
+fn the_role_separator_is_muted_and_the_role_takes_the_rows_colour() {
+    let v = shown(Sidebar::ProjectsOnTop, Vec::new());
+    let width = 48;
+    let r = Rect::new(0, 0, width, 2);
+    let mut t = Terminal::new(TestBackend::new(width, 2)).expect("test backend");
+    t.draw(|f| draw_agent(f, &v, r, 1, &orchestrator())).expect("draw");
+    let buffer = t.backend().buffer();
+    let dot = (0..width).find(|x| buffer[(*x, 0)].symbol() == "·").expect("separator");
+    assert_eq!((buffer[(dot, 0)].fg, buffer[(dot + 2, 0)].fg), (v.muted, v.soft));
 }

@@ -148,6 +148,7 @@ impl App {
                     (tab.id, tab.status().map(Status::name)).hash(&mut hash);
                     for term in &tab.panes {
                         let parent = Self::live_parent(term, &live);
+                        self.seat(term.id).map(|(_, role)| role).hash(&mut hash);
                         Self::pane_refreshed(term, self.resume_holds(term.id), parent, &mut hash);
                     }
                 }
@@ -190,6 +191,7 @@ impl App {
             title: Some(term.emulator.title()).filter(|title| !title.is_empty()),
             parent: Self::live_parent(term, live),
             subagents: u32::try_from(term.context.subagents()).unwrap_or(u32::MAX),
+            role: self.seat(term.id).map(|(_, role)| role.to_string()),
         }
     }
 

@@ -282,6 +282,8 @@ export interface AgentRow extends TreeSpot {
   agent: string;
   project: string;
   workspace: string | null;
+  role: string | null;
+  place: boolean;
   details: Details;
   active: boolean;
 }
@@ -775,6 +777,8 @@ export class App {
                 agent: pane.agent ?? '',
                 project: projectLabel(p),
                 workspace: p.workspaces.length > 1 ? workspaceLabel(w) : null,
+                role: null,
+                place: true,
                 details: { model: c.model ? (pane.context?.model ?? null) : null, percent: c.context ? (pane.context?.percent ?? null) : null, subagents: pane.subagents ?? 0, memory: null },
                 active: t === focused && t.active === pane.id,
               },
@@ -783,7 +787,20 @@ export class App {
         ),
       );
     });
-    return agentTree(flat, (row) => row.pane, (row) => row.parent);
+    const seat = (pane: number | null) => {
+      if (pane === null) return null;
+      for (const run of this.runs) {
+        const member = run.members.find((m) => m.pane === pane);
+        if (member) return { run, role: member.role };
+      }
+      return null;
+    };
+    return agentTree(flat, (row) => row.pane, (row) => row.parent).map((row) => {
+      const own = seat(row.pane);
+      const theirs = seat(row.parent);
+      const under = row.depth > 0 && own !== null && own.role !== ORCHESTRATOR && theirs !== null && theirs.run === own.run;
+      return { ...row, role: own?.role ?? null, place: !under };
+    });
   }
 
   jumpToPane(id: number): void {
