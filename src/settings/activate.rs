@@ -77,6 +77,16 @@ impl Settings {
             Row::Tabs => self.pick_from(row, Tabs::choices()),
             Row::WorkingIcon => self.pick_from(row, WorkingIcon::choices()),
             Row::Notifications => self.pick_from(row, notify::choices()),
+            Row::Sound => self.flip(
+                |c| &mut c.sound,
+                ["a sound plays when an agent needs you or finishes", "agents no longer play a sound"],
+            ),
+            Row::SoundWaiting => self.start_edit(row, self.config.sound_waiting.clone()),
+            Row::SoundDone => self.start_edit(row, self.config.sound_done.clone()),
+            Row::SoundSubagents => self.flip(
+                |c| &mut c.sound_subagents,
+                ["agents started by other agents play a sound too", "only agents you started play a sound"],
+            ),
             Row::Updates => self.flip(
                 |c| &mut c.check_updates,
                 ["cornercase looks for new versions", "cornercase no longer looks for new versions"],

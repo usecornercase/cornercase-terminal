@@ -42,6 +42,10 @@ pub(crate) enum Row {
     DimPanes,
     Detail(Detail),
     Notifications,
+    Sound,
+    SoundWaiting,
+    SoundDone,
+    SoundSubagents,
     Updates,
     StarPrompt,
     Prefix,
@@ -92,6 +96,10 @@ impl Row {
             | Self::DimPanes
             | Self::Detail(_)
             | Self::Notifications
+            | Self::Sound
+            | Self::SoundWaiting
+            | Self::SoundDone
+            | Self::SoundSubagents
             | Self::Updates
             | Self::StarPrompt
             | Self::Prefix => "",
@@ -140,6 +148,10 @@ impl Row {
             | Self::DimPanes
             | Self::Detail(_)
             | Self::Notifications
+            | Self::Sound
+            | Self::SoundWaiting
+            | Self::SoundDone
+            | Self::SoundSubagents
             | Self::Updates
             | Self::StarPrompt
             | Self::Prefix => Page::Ui,
@@ -434,6 +446,10 @@ impl Settings {
             Row::Detail(Detail::Context),
             Row::Detail(Detail::Memory),
             Row::Notifications,
+            Row::Sound,
+            Row::SoundWaiting,
+            Row::SoundDone,
+            Row::SoundSubagents,
             Row::Updates,
             Row::StarPrompt,
             Row::Prefix,

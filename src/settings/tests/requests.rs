@@ -154,6 +154,41 @@ mod applying {
     }
 
     #[test]
+    fn the_sound_settings_are_on_the_ui_page() {
+        let keys: Vec<(String, String, Kind)> = full()
+            .describe()
+            .into_iter()
+            .map(|s| (s.key, s.page, s.kind))
+            .filter(|(k, ..)| k.starts_with("sound"))
+            .collect();
+        let ui = |key: &str, kind| (key.to_string(), "UI".to_string(), kind);
+        assert_eq!(
+            keys,
+            [
+                ui("sound", Kind::Switch),
+                ui("sound_waiting", Kind::Text),
+                ui("sound_done", Kind::Text),
+                ui("sound_subagents", Kind::Switch)
+            ]
+        );
+    }
+
+    #[test]
+    fn the_sound_settings_are_set_through_the_modal() {
+        let mut s = full();
+        assert!(s.apply("sound", &json!(true)).is_ok());
+        assert!(s.apply("sound_subagents", &json!(true)).is_ok());
+        assert!(s.apply("sound_done", &json!("/tmp/done.wav")).is_ok());
+        assert!(matches!(s.apply("sound_waiting", &json!("bad\u{7}.wav")), Err(Refused::Invalid(_))));
+        let c = &s.config;
+        assert_eq!(
+            (c.sound, c.sound_subagents, c.sound_done.as_str(), c.sound_waiting.as_str()),
+            (true, true, "/tmp/done.wav", "")
+        );
+        assert_eq!(value_of(&s, "sound_done"), json!("/tmp/done.wav"));
+    }
+
+    #[test]
     fn an_unknown_key_is_not_found() {
         assert!(matches!(apply("nonsense", &json!(1)).1, Err(Refused::Unknown(_))));
     }

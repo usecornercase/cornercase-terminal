@@ -289,6 +289,7 @@ impl Harness {
         cmd.env("PS1", "$ ");
         cmd.env(SOCKET_ENV, session.socket());
         cmd.env(CLAUDE_DIR_ENV, session.claude_dir());
+        cmd.env("SSH_CONNECTION", "e2e");
         cmd.env_remove(NESTED_ENV);
         cmd.env_remove(PANE_ENV);
         cmd.env_remove("CORNERCASE_SERVER");

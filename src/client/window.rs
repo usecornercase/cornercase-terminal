@@ -1,4 +1,5 @@
 use std::io::{self, Read, Write, stdin, stdout};
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -19,6 +20,7 @@ use crate::error::{Error, Result};
 use crate::graphics::Support;
 use crate::graphics::detect::{self, Facts, Outer};
 use crate::host::notify::{self, Channel};
+use crate::host::sound::{self, Cue, Player};
 use crate::host::theme::HostTheme;
 use crate::paths;
 use crate::plugins::{Kind, Places, Supervisor};
@@ -47,6 +49,7 @@ enum Next {
     Show(Vec<u8>),
     End(Ending),
     Reconnect,
+    Sound(Cue),
     Nothing,
 }
 
@@ -58,6 +61,7 @@ fn next(received: Received, reconnects: bool) -> Result<Next> {
         Received::Message(ServerMessage::Restart(_)) | Received::Ended if reconnects => Next::Reconnect,
         Received::Message(ServerMessage::Restart(_)) => Next::End(Ending::Restart),
         Received::Message(ServerMessage::Response(_)) => Next::Nothing,
+        Received::Message(ServerMessage::Sound(cue)) => Next::Sound(cue),
         Received::Message(ServerMessage::Detached | ServerMessage::Shutdown) | Received::Ended => {
             Next::End(Ending::Detached)
         }
@@ -137,6 +141,7 @@ struct Window<'a> {
     guard: Option<Guard>,
     lost: Option<Lost>,
     retries: Retries,
+    player: Option<Player>,
 }
 
 impl Window<'_> {
@@ -202,6 +207,11 @@ impl Window<'_> {
                     }
                     Next::End(ending) => return Ok(Some(ending)),
                     Next::Reconnect => self.lose()?,
+                    Next::Sound(cue) => {
+                        if let Some(player) = &mut self.player {
+                            player.play(&cue, Instant::now());
+                        }
+                    }
                     Next::Nothing => {}
                 }
                 Ok(None)
@@ -379,6 +389,8 @@ pub(super) fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal
         guard: None,
         lost: None,
         retries: Retries::default(),
+        player: sound::local_machine(|name| std::env::var(name).ok())
+            .then(|| Player::detect(paths::session().parent().map(Path::to_path_buf).unwrap_or_default())),
     };
     window.link(link)?;
     let _threads = Threads::spawn(tx, probe_timed_out)?;

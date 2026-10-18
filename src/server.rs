@@ -24,6 +24,7 @@ use crate::control::{self, Ids, What};
 use crate::error::{Error, Result};
 use crate::host::notify::{self, Channel};
 use crate::host::pointer;
+use crate::host::sound;
 use crate::host::theme::HostTheme;
 use crate::log::{self, Level};
 use crate::panics;
@@ -217,6 +218,7 @@ struct Client {
     zone: String,
     used: u64,
     notify: Channel,
+    browser: bool,
     sent: notify::Sent,
     pointer: Option<pointer::Terminal>,
     shape: Option<pointer::Shape>,
@@ -669,6 +671,13 @@ impl Server {
                 client.send(ServerMessage::Frame(notification.encode(client.notify)));
             }
         }
+        if let Some(cue) = sound::loudest(&app.take_sounds()) {
+            for client in clients.iter().filter(|c| c.screen.is_some() && !c.browser) {
+                log::info!("server", "sound sent", client = client.id, kind = cue.kind.id());
+                log::debug!("server", "sound path", client = client.id, path = cue.path);
+                client.send(ServerMessage::Sound(cue.clone()));
+            }
+        }
     }
 
     fn due(&self, now: Instant) -> bool {
@@ -782,6 +791,7 @@ impl Server {
             zone: "UTC".into(),
             used: 0,
             notify,
+            browser: false,
             sent: notify::Sent::default(),
             pointer: None,
             shape: None,

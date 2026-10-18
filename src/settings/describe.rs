@@ -32,6 +32,8 @@ fn switch(row: &Row) -> Option<&'static str> {
         Row::Detail(Detail::Model) => "model",
         Row::Detail(Detail::Context) => "context",
         Row::Detail(Detail::Memory) => "memory",
+        Row::Sound => "sound",
+        Row::SoundSubagents => "sound_subagents",
         Row::Updates => "check_updates",
         Row::StarPrompt => "star_prompt",
         Row::Remote => "remote",
@@ -51,6 +53,8 @@ fn text(row: &Row) -> Option<&'static str> {
         Row::PlaneFilter => "plane_filter",
         Row::AsanaWorkspace => "asana_workspace",
         Row::AsanaProjects => "asana_projects",
+        Row::SoundWaiting => "sound_waiting",
+        Row::SoundDone => "sound_done",
         _ => return None,
     })
 }

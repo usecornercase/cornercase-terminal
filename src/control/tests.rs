@@ -401,7 +401,7 @@ mod events_v1 {
         Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) }
     }
 
-    fn samples() -> [(Event, &'static str); 9] {
+    fn samples() -> [(Event, &'static str); 10] {
         [
             (
                 event(What::Opened { kind: Kind::Tab, parent: None }, Ids { pane: None, ..pane() }),
@@ -431,6 +431,7 @@ mod events_v1 {
                         place: "shop › default".into(),
                         message: "claude needs you in shop › default".into(),
                         panes: vec![4],
+                        sound: None,
                     },
                     Ids { pane: None, tab: None, ..pane() },
                 ),
@@ -439,6 +440,21 @@ mod events_v1 {
             (
                 event(What::Opened { kind: Kind::Pane, parent: Some(2) }, pane()),
                 fixture!("control/events/v1/opened-parent.json"),
+            ),
+            (
+                event(
+                    What::Notice {
+                        token: "cc-ab12cd-4".into(),
+                        agent: "claude".into(),
+                        status: "done".into(),
+                        place: "shop › default".into(),
+                        message: "claude finished in shop › default".into(),
+                        panes: vec![4],
+                        sound: Some("finished".into()),
+                    },
+                    Ids { pane: None, tab: None, ..pane() },
+                ),
+                fixture!("control/events/v1/notice-sound.json"),
             ),
         ]
     }
@@ -458,6 +474,7 @@ mod events_v1 {
     #[case::bell(6)]
     #[case::opened_from_a_pane(8)]
     #[case::notice(7)]
+    #[case::notice_with_a_sound(9)]
     fn an_event_is_written_as_its_fixture(#[case] index: usize) {
         let (event, fixture) = &samples()[index];
 
@@ -474,6 +491,7 @@ mod events_v1 {
     #[case::bell(6)]
     #[case::opened_from_a_pane(8)]
     #[case::notice(7)]
+    #[case::notice_with_a_sound(9)]
     fn a_fixture_reads_back_as_its_event(#[case] index: usize) {
         let (event, fixture) = &samples()[index];
 

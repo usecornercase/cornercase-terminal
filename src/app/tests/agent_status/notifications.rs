@@ -9,7 +9,7 @@ fn go(app: &App) -> String {
 
 fn notify_for(app: &mut App, p: usize, panes: Vec<u64>) {
     let (project, workspace) = (app.projects[p].id, app.projects[p].workspaces[0].id);
-    app.notify("claude", Status::Waiting, (project, workspace), panes);
+    app.notify("claude", Status::Waiting, (project, workspace), panes, true);
 }
 
 fn pane_of(app: &App, p: usize, t: usize) -> u64 {

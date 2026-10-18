@@ -48,6 +48,24 @@ test('g p in the keys menu says pull requests need a real cornercase', () => {
   app.destroy();
 });
 
+test('the UI tab lists the sound rows after desktop notifications, which need a real cornercase', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openSettings();
+  app.settingsPage(4);
+  const ids = app.settingsRows(4).map((row) => row.id);
+  const at = ids.indexOf('notify');
+  assert.deepEqual(ids.slice(at, at + 5), ['notify', 'sound', 'soundWaiting', 'soundDone', 'soundSubagents']);
+  const value = (id: string) => app.settingsRows(4).find((row) => row.id === id)?.value;
+  assert.equal(value('sound'), '[x] on');
+  assert.equal(value('soundSubagents'), '[ ] off');
+  for (const id of ['sound', 'soundWaiting', 'soundDone', 'soundSubagents']) {
+    app.settingsClick(ids.indexOf(id));
+    app.render();
+    assert.ok(app.textAt('the demo plays no sound'));
+  }
+  app.destroy();
+});
+
 test('the star prompt is a switch on the UI tab', () => {
   const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
   app.openSettings();

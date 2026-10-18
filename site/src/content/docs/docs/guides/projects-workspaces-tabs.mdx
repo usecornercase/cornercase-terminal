@@ -244,6 +244,12 @@ The toast has a **go** button that does the same, in any terminal and also insid
 
 When you quit, restart or stop the server, cornercase closes the notifications it sent, where the terminal can, so a click later doesn't type anything into your shell. Each attached cornercase gets what its own terminal understands. To choose one yourself, or to turn them off, use **settings → UI → desktop notifications**; the toast and the marks stay either way. If none shows up, see [No desktop notification shows up](../../help/troubleshooting/#no-desktop-notification-shows-up).
 
+#### A sound
+
+cornercase also plays a sound at those moments, one for an agent that needs you (or failed) and another for one that finished, so you can tell them apart without looking. It is played on the computer the window is on, not through the terminal, so you hear it while Ghostty on macOS is focused, when it hides the notification, and inside tmux, screen or Zellij. With [`cornercase remote`](../remote/) it plays on your laptop. A window opened in a plain SSH session (`ssh -t host cornercase`) plays none: that cornercase runs on the other computer.
+
+**sound when it needs you** and **sound when it finishes** take a file of your own; empty plays the built-in one. By default only the agents you started make a sound: those started by another agent or by a [flow](../flows/) stay quiet, with their toast and notification, unless you turn on **sound for subagents**. To stop it, turn off **settings → UI → sound**. See [`sound`](../../reference/configuration/#sound) for the players it uses and the formats they read.
+
 ### Usage and stats
 
 The dialog opens on **Stats** and remembers your last tab until the server restarts. Switch to **Limits** to read your plan limits. Claude Code and Codex plans have a five-hour session limit and a weekly limit. To see how close you are without opening `/usage` or `/status` in one of your agents, click **`Usage`** at the bottom of the projects column. Gemini CLI has no section: API keys have no plan limits, and its Google-login quota has no usable CLI probe; use Gemini's `/stats` or `/usage`. opencode has no section: it uses whichever providers you set up, its own Zen and Go subscriptions among them, and cornercase doesn't ask any of them for your usage.

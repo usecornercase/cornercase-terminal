@@ -97,6 +97,8 @@ pub(crate) enum What {
         place: String,
         message: String,
         panes: Vec<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sound: Option<String>,
     },
 }
 

@@ -218,8 +218,8 @@ fn notices_reach_only_the_readers_that_asked_and_a_pane_reader_gets_those_naming
     let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
     let _ = app.take_events();
 
-    app.notify("claude", activity::Status::Waiting, (project, workspace), vec![other]);
-    app.notify("claude", activity::Status::Waiting, (project, workspace), vec![pane]);
+    app.notify("claude", activity::Status::Waiting, (project, workspace), vec![other], true);
+    app.notify("claude", activity::Status::Waiting, (project, workspace), vec![pane], true);
 
     let tokens: Vec<_> = app
         .take_events()
@@ -232,4 +232,44 @@ fn notices_reach_only_the_readers_that_asked_and_a_pane_reader_gets_those_naming
     assert_eq!(tokens.len(), 1, "{tokens:?}");
     assert_eq!(tokens[0].0, CLIENT);
     assert!(tokens[0].1.contains("\"panes\":[") && tokens[0].1.contains(&format!("{pane}")), "{tokens:?}");
+}
+
+#[rstest::rstest]
+#[case::when_it_plays(true)]
+#[case::left_out_when_it_does_not(false)]
+fn a_notice_says_whether_it_plays_a_sound(#[case] sound: bool) {
+    let (mut app, _rx, _dirs) = app_with(1);
+    app.config.sound = sound;
+    let pane = term(&app, 0).id;
+    app.events.subscribe(CLIENT, Vec::new(), false, true);
+    let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
+    let _ = app.take_events();
+
+    app.notify("claude", activity::Status::Waiting, (project, workspace), vec![pane], true);
+
+    let notice = app
+        .take_events()
+        .into_iter()
+        .find_map(|(_, streamed)| match streamed {
+            Streamed::Event(text) if text.contains("\"event\":\"notice\"") => Some(text),
+            _ => None,
+        })
+        .expect("a notice");
+    assert_eq!(notice.contains("\"sound\":\"needs-you\""), sound, "{notice}");
+    assert_eq!(notice.contains("\"sound\""), sound, "{notice}");
+}
+
+#[test]
+fn a_subagents_notice_plays_no_sound_unless_asked() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    app.config.sound = true;
+    let pane = term(&app, 0).id;
+    let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
+
+    app.notify("claude", activity::Status::Waiting, (project, workspace), vec![pane], false);
+    app.config.sound_subagents = true;
+    app.notify("claude", activity::Status::Failed, (project, workspace), vec![pane], false);
+
+    let kinds: Vec<_> = app.take_sounds().into_iter().map(|cue| cue.kind).collect();
+    assert_eq!(kinds, [crate::host::sound::Kind::NeedsYou]);
 }

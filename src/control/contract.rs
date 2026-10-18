@@ -8,7 +8,7 @@ pub(crate) const EVENTS_VERSION: u32 = 1;
 pub(crate) const WATCH_VERSION: u32 = 1;
 pub(crate) const SURFACE_VERSION: u32 = 1;
 pub(crate) const VIEW_VERSION: u32 = 1;
-pub(crate) const FEATURES: [&str; 10] = [
+pub(crate) const FEATURES: [&str; 11] = [
     "boot",
     "structured-errors",
     "strict-fields",
@@ -19,6 +19,7 @@ pub(crate) const FEATURES: [&str; 10] = [
     "surface-patches",
     "config",
     "close-unlock",
+    "sound",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

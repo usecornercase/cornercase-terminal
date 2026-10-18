@@ -8,6 +8,8 @@ use super::{NO_PLUGINS, Page, Row, RowText, Settings, Status};
 
 const RESUME_NOTE: &str = "Claude, Codex, Gemini, Grok, Cursor, Copilot, in their tabs";
 
+const SOUND_FILE_NOTE: &str = "an absolute or ~/ path on the window's computer; empty: built-in";
+
 const ICON_BAR_NOTE: &str = "the buttons under the lists, as icons; needs a Nerd Font";
 
 impl Settings {
@@ -130,6 +132,7 @@ impl Settings {
                 "when an agent in another tab needs you or finishes".into(),
                 false,
             ),
+            Row::Sound | Row::SoundWaiting | Row::SoundDone | Row::SoundSubagents => sound_row(config, row),
             Row::Updates => {
                 let value = if config.check_updates { "[x] every hour" } else { "[ ] never" };
                 ("check for updates".into(), value.into(), "asks GitHub for the latest release".into(), false)
@@ -232,6 +235,8 @@ impl Settings {
             Row::AsanaProjects => {
                 "Asana projects, IDs or links separated by spaces (empty lists your tasks)".to_string()
             }
+            Row::SoundWaiting => format!("sound when it needs you ({SOUND_FILE_NOTE})"),
+            Row::SoundDone => format!("sound when it finishes ({SOUND_FILE_NOTE})"),
             Row::Kind(kind) => format!("{kind} extra arguments"),
             Row::Bot(via) => via.token_field().to_string(),
             _ => String::new(),
@@ -299,6 +304,18 @@ fn layout_row(config: &Config, row: &Row) -> (String, String, String, bool) {
         _ => ("sidebar", Sidebar::from_setting(&config.sidebar).id(), "how projects, workspaces and tabs are laid out"),
     };
     (label.into(), value.into(), note.into(), false)
+}
+
+fn sound_row(config: &Config, row: &Row) -> (String, String, String, bool) {
+    let switch = |on: bool| if on { "[x] on" } else { "[ ] off" }.to_string();
+    let file = |path: &str| if path.is_empty() { "built-in".to_string() } else { path.to_string() };
+    let (label, value, note) = match row {
+        Row::Sound => ("sound", switch(config.sound), "also while you look at cornercase, on the window's computer"),
+        Row::SoundWaiting => ("sound when it needs you", file(&config.sound_waiting), SOUND_FILE_NOTE),
+        Row::SoundDone => ("sound when it finishes", file(&config.sound_done), SOUND_FILE_NOTE),
+        _ => ("sound for subagents", switch(config.sound_subagents), "agents started by another agent or by a flow"),
+    };
+    (label.into(), value, note.into(), false)
 }
 
 fn tracker_row(config: &Config, row: &Row) -> (String, String, String, bool) {

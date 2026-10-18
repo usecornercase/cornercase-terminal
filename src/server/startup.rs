@@ -57,6 +57,7 @@ impl Server {
         let Some(client) = self.client_mut(id) else { return };
         client.size = Some((hello.cols, hello.rows));
         client.notify = hello.notify;
+        client.browser = hello.terminal.as_deref() == Some(protocol::BROWSER);
         client.zone = hello.zone;
         client.pointer = hello.pointer;
         let background = hello.theme.background.map(|c| (c.r, c.g, c.b));

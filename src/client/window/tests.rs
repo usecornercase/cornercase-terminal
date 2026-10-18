@@ -54,6 +54,25 @@ mod connection {
     }
 }
 
+mod sound {
+    use super::*;
+    use crate::host::sound::Kind;
+
+    fn sound() -> Received {
+        Received::Message(ServerMessage::Sound(Cue { kind: Kind::Finished, path: String::new() }))
+    }
+
+    #[test]
+    fn plays_without_ending_a_local_window() {
+        assert!(matches!(next(sound(), false), Ok(Next::Sound(cue)) if cue.kind == Kind::Finished));
+    }
+
+    #[test]
+    fn plays_without_ending_a_remote_window() {
+        assert!(matches!(next(sound(), true), Ok(Next::Sound(_))));
+    }
+}
+
 mod reconnecting {
     use super::*;
 

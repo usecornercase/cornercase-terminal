@@ -113,6 +113,20 @@ impl Settings {
         }
     }
 
+    fn submit_sound(&mut self, row: &Row) -> Action {
+        if *row == Row::SoundWaiting {
+            self.submit_checked(config::check_sound_file, |config, value| {
+                let notice = sound_notice("needs you", &value);
+                (Config { sound_waiting: value, ..config.clone() }, notice)
+            })
+        } else {
+            self.submit_checked(config::check_sound_file, |config, value| {
+                let notice = sound_notice("finishes", &value);
+                (Config { sound_done: value, ..config.clone() }, notice)
+            })
+        }
+    }
+
     pub(super) fn submit_edit(&mut self) -> Action {
         let Some(edit) = &mut self.edit else { return Action::None };
         match edit.row.clone() {
@@ -190,6 +204,7 @@ impl Settings {
             Row::PlaneFilter => self
                 .submit_filter("Plane", "work item", |config, plane_filter| Config { plane_filter, ..config.clone() }),
             row @ (Row::AsanaWorkspace | Row::AsanaProjects) => self.submit_asana(&row),
+            row @ (Row::SoundWaiting | Row::SoundDone) => self.submit_sound(&row),
             Row::JiraJql => {
                 self.submit_filter("Jira", "issue", |config, jira_jql| Config { jira_jql, ..config.clone() })
             }
@@ -223,6 +238,14 @@ fn gitlab_url(config: &Config, value: String) -> (Config, String) {
         url => format!("GitLab server: {url}"),
     };
     (Config { gitlab_url: value, ..config.clone() }, notice)
+}
+
+fn sound_notice(when: &str, file: &str) -> String {
+    if file.is_empty() {
+        format!("an agent that {when} plays the built-in sound")
+    } else {
+        format!("an agent that {when} plays {file}")
+    }
 }
 
 fn starts_with(kind: &str, args: &[String]) -> String {

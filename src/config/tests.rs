@@ -64,6 +64,10 @@ mod file {
             context: false,
             memory: true,
             desktop_notifications: "off".into(),
+            sound: true,
+            sound_waiting: "~/sounds/ping.wav".into(),
+            sound_done: "/usr/share/sounds/done.oga".into(),
+            sound_subagents: true,
             check_updates: false,
             star_prompt: false,
             remote: true,
@@ -159,6 +163,19 @@ mod file {
         std::fs::write(&path, r#"{"worktrees_dir": "/srv/w"}"#).expect("write");
 
         assert_eq!(load(&path), Config { worktrees_dir: "/srv/w".into(), ..Config::default() });
+    }
+
+    #[test]
+    fn a_config_from_before_sounds_plays_them_for_the_agents_you_started() {
+        let tmp = TempDir::new();
+        let path = tmp.path().join("config.json");
+        std::fs::write(&path, r#"{"desktop_notifications": "osc9"}"#).expect("write");
+
+        let c = load(&path);
+        assert_eq!(
+            (c.sound, c.sound_waiting.as_str(), c.sound_done.as_str(), c.sound_subagents),
+            (true, "", "", false)
+        );
     }
 
     #[test]
@@ -279,6 +296,24 @@ mod check_worktrees_dir {
     #[case::relative("worktrees", Err("use an absolute path or one starting with ~/"))]
     fn accepts_only_absolute_folders(#[case] input: &str, #[case] expected: Result<String, &'static str>) {
         assert_eq!(check_worktrees_dir(input, Some(Path::new("/home/ana"))), expected);
+    }
+}
+
+mod check_sound_file {
+    use super::*;
+
+    const ABSOLUTE: &str = "use an absolute path or one starting with ~/";
+
+    #[rstest]
+    #[case::empty("", Ok(String::new()))]
+    #[case::tilde("~/ding.wav", Ok("~/ding.wav".to_string()))]
+    #[case::absolute("/usr/share/sounds/done.oga", Ok("/usr/share/sounds/done.oga".to_string()))]
+    #[case::relative("ding.wav", Err(ABSOLUTE))]
+    #[case::like_an_option("-q", Err(ABSOLUTE))]
+    #[case::another_home("~ana/ding.wav", Err(ABSOLUTE))]
+    #[case::control("bad\u{7}.wav", Err("a file's path cannot hold control or invisible characters"))]
+    fn accepts_only_absolute_files(#[case] input: &str, #[case] expected: Result<String, &'static str>) {
+        assert_eq!(check_sound_file(input), expected);
     }
 }
 

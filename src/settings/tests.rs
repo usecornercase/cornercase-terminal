@@ -449,6 +449,10 @@ mod sidebar {
                 Row::Detail(Detail::Context),
                 Row::Detail(Detail::Memory),
                 Row::Notifications,
+                Row::Sound,
+                Row::SoundWaiting,
+                Row::SoundDone,
+                Row::SoundSubagents,
                 Row::Updates,
                 Row::StarPrompt,
                 Row::Prefix
@@ -519,6 +523,50 @@ mod notifications {
         go_to(&mut s, &Row::Notifications);
         press(&mut s, KeyCode::Enter);
         assert_eq!(s.pick_selected().map(|i| s.pick_choices()[i].value.as_str()), Some("osc9"));
+    }
+}
+
+mod sound {
+    use super::*;
+
+    #[test]
+    fn the_sound_starts_on_and_the_subagents_off() {
+        let mut s = settings();
+        go_to(&mut s, &Row::Sound);
+        assert!(!saved(press(&mut s, KeyCode::Enter)).sound);
+        go_to(&mut s, &Row::SoundSubagents);
+        assert!(saved(press(&mut s, KeyCode::Enter)).sound_subagents);
+    }
+
+    #[test]
+    fn an_empty_file_shows_the_built_in_one() {
+        let mut s = settings();
+        s.config.sound_done = "~/done.wav".into();
+        let shown = |s: &Settings, row| s.row_text(row).value;
+        assert_eq!(
+            (shown(&s, &Row::SoundWaiting), shown(&s, &Row::SoundDone)),
+            ("built-in".to_string(), "~/done.wav".to_string())
+        );
+    }
+
+    #[test]
+    fn a_file_is_typed_and_saved_as_it_is() {
+        let mut s = settings();
+        go_to(&mut s, &Row::SoundWaiting);
+        press(&mut s, KeyCode::Enter);
+        type_text(&mut s, "~/ping.wav");
+        assert_eq!(saved(press(&mut s, KeyCode::Enter)).sound_waiting, "~/ping.wav");
+    }
+
+    #[test]
+    fn a_file_with_a_control_character_is_refused() {
+        let mut s = settings();
+        go_to(&mut s, &Row::SoundDone);
+        press(&mut s, KeyCode::Enter);
+        s.edit.as_mut().expect("editing").input = "a\u{1b}[2Jb.wav".into();
+        assert_eq!(press(&mut s, KeyCode::Enter), Action::None);
+        assert!(s.edit.as_ref().and_then(|edit| edit.error.as_ref()).is_some());
+        assert_eq!(s.config.sound_done, "");
     }
 }
 

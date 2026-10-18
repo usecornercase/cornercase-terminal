@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -13,7 +14,7 @@ use crate::agents::context::Look;
 use crate::agents::launch::Launch;
 use crate::agents::tree;
 use crate::config::Config;
-use crate::host::notify;
+use crate::host::{notify, sound};
 use crate::log::{self};
 use crate::process;
 use crate::project::Hierarchy;
@@ -140,8 +141,18 @@ impl App {
             self.agents.stats.sample(clock, elapsed, &samples);
             self.agents.stats.prune(clock);
         }
+        self.send_notices(notices);
+    }
+
+    fn send_notices(&mut self, notices: Vec<(NoticeKey, Vec<u64>)>) {
+        let subagents = if !notices.is_empty() && self.config.sound && !self.config.sound_subagents {
+            self.subagent_panes()
+        } else {
+            HashSet::new()
+        };
         for ((agent, status, project, workspace), panes) in notices {
-            self.notify(&agent, status, (project, workspace), panes);
+            let principal = panes.iter().any(|pane| !subagents.contains(pane));
+            self.notify(&agent, status, (project, workspace), panes, principal);
         }
     }
 
@@ -155,7 +166,22 @@ impl App {
         }
     }
 
-    pub(super) fn notify(&mut self, agent: &str, status: activity::Status, at: (u64, u64), panes: Vec<u64>) {
+    fn subagent_panes(&self) -> HashSet<u64> {
+        self.agent_tree(false)
+            .into_iter()
+            .filter(|(_, node)| node.depth > 0)
+            .map(|((p, w, t, i), _)| self.projects[p].workspaces[w].tabs[t].panes[i].id)
+            .collect()
+    }
+
+    pub(super) fn notify(
+        &mut self,
+        agent: &str,
+        status: activity::Status,
+        at: (u64, u64),
+        panes: Vec<u64>,
+        principal: bool,
+    ) {
         let (project, workspace) = at;
         let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return };
         let what = match status {
@@ -163,6 +189,11 @@ impl App {
             activity::Status::Failed => "failed",
             _ => "finished",
         };
+        let kind = match status {
+            activity::Status::Waiting | activity::Status::Failed => sound::Kind::NeedsYou,
+            _ => sound::Kind::Finished,
+        };
+        let sound = (self.config.sound && (principal || self.config.sound_subagents)).then_some(kind);
         let project = &self.projects[p];
         let place = format!("{} › {}", self.project_label(project), project.workspaces[w].label());
         let message = notify::clean(&format!("{agent} {what} in {place}"));
@@ -173,7 +204,8 @@ impl App {
             status = status.name(),
             project = project.id,
             workspace = project.workspaces[w].id,
-            panes = panes.len()
+            panes = panes.len(),
+            sound = sound.map_or("none", sound::Kind::id)
         );
         self.tell(Said {
             agent,
@@ -183,6 +215,7 @@ impl App {
             project: project.id,
             workspace: project.workspaces[w].id,
             panes,
+            sound,
         });
     }
 

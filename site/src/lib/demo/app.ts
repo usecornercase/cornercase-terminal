@@ -102,6 +102,7 @@ const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neith
 const ICON_BAR_NEEDS = 'this needs cornercase in your terminal: the demo has no Nerd Font';
 
 const MERGED_NEED = 'this needs cornercase on your computer: the demo has no GitHub or GitLab';
+const SOUND_NEEDS = 'this needs cornercase on your computer: the demo plays no sound';
 
 const PULL_REQUESTS_NEED = 'this needs cornercase on your computer: the demo has no GitHub';
 
@@ -2780,6 +2781,10 @@ export class App {
       { id: 'dim', section: '', label: 'inactive panes', value: c.dim ? '[x] dimmed' : '[ ] as bright as the active one', note: 'in a split tab' },
       ...DETAILS.map(([id, note]) => ({ id, section: '', label: id, value: c[id] ? '[x] shown' : '[ ] hidden', note })),
       { id: 'notify', section: '', label: 'desktop notifications', value: c.notify, note: 'when an agent in another tab needs you or finishes' },
+      { id: 'sound', section: '', label: 'sound', value: '[x] on', note: "also while you look at cornercase, on the window's computer" },
+      { id: 'soundWaiting', section: '', label: 'sound when it needs you', value: 'built-in', note: "an absolute or ~/ path on the window's computer; empty: built-in" },
+      { id: 'soundDone', section: '', label: 'sound when it finishes', value: 'built-in', note: "an absolute or ~/ path on the window's computer; empty: built-in" },
+      { id: 'soundSubagents', section: '', label: 'sound for subagents', value: '[ ] off', note: 'agents started by another agent or by a flow' },
       { id: 'updates', section: '', label: 'check for updates', value: c.updates ? '[x] every hour' : '[ ] never', note: 'asks GitHub for the latest release' },
       { id: 'starPrompt', section: '', label: 'star prompt', value: c.starPrompt ? '[x] now and then' : '[ ] never', note: 'asks for a GitHub star after two weeks of use' },
       this.prefixRow(),
@@ -2888,6 +2893,8 @@ export class App {
       o.notice = REMOTE_NEEDS;
     } else if (row.id === 'iconBar') {
       o.notice = ICON_BAR_NEEDS;
+    } else if (row.id.startsWith('sound')) {
+      o.notice = SOUND_NEEDS;
     } else if (row.id === 'pulls') {
       o.notice = PULL_REQUESTS_NEED;
     } else if (row.id === 'merged') {

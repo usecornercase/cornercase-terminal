@@ -94,7 +94,7 @@ fn hello(cols: u16, rows: u16, theme: &Theme) -> Hello {
         rows,
         theme: host_theme(theme),
         notify: Channel::Bell,
-        terminal: Some("browser".into()),
+        terminal: Some(protocol::BROWSER.into()),
         pointer: None,
         graphics: Support { missing: Some(Missing::Cannot { name: "this browser".into() }), ..Support::default() },
         probe: "web".into(),
@@ -243,7 +243,7 @@ fn pump(
                         return "connection lost";
                     }
                 }
-                Ok(Some(ServerMessage::Response(_))) => {}
+                Ok(Some(ServerMessage::Response(_) | ServerMessage::Sound(_))) => {}
                 Ok(Some(ServerMessage::Rejected(why))) => return finish(ws, "rejected", &why),
                 Ok(Some(ServerMessage::Detached)) => return finish(ws, "detached", ""),
                 Ok(Some(ServerMessage::Shutdown)) => return finish(ws, "shutdown", ""),

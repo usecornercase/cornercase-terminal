@@ -129,16 +129,9 @@ pub(super) mod a_bug {
         }
     }
 
-    fn connect(
-        server: &mut Server,
-        tx: Sender<ServerEvent>,
-        id: u64,
-        graphics: Support,
-        pointer: Option<pointer::Terminal>,
-    ) -> Client {
+    fn connect(server: &mut Server, tx: Sender<ServerEvent>, id: u64, hello: Hello) -> Client {
         let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
         let _ = server.handle(ServerEvent::Accepted(ours));
-        let hello = Hello { pointer, graphics, ..hello(HostTheme::default()) };
         let _ = server.handle(ServerEvent::Message(id, ClientMessage::Hello(Box::new(hello))));
         let (frames_tx, frames) = mpsc::channel();
         thread::spawn(move || {
@@ -175,7 +168,7 @@ pub(super) mod a_bug {
             let app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), app_tx);
             let todo_saver = Saver::new(dir.path().join("todos.json"), None);
             let mut server = Server::new(app, session, todo_saver, tx.clone());
-            let client = connect(&mut server, tx, 1, graphics, None);
+            let client = connect(&mut server, tx, 1, Hello { graphics, ..hello(HostTheme::default()) });
             Self { server, rx, client, dir }
         }
 
@@ -188,8 +181,12 @@ pub(super) mod a_bug {
         }
 
         pub(super) fn join_with(&mut self, graphics: Support, pointer: Option<pointer::Terminal>) -> Client {
+            self.join_hello(Hello { pointer, graphics, ..hello(HostTheme::default()) })
+        }
+
+        pub(super) fn join_hello(&mut self, hello: Hello) -> Client {
             let id = self.server.next_client;
-            connect(&mut self.server, self.client.tx.clone(), id, graphics, pointer)
+            connect(&mut self.server, self.client.tx.clone(), id, hello)
         }
 
         pub(super) fn shows_frame(&self, bytes: &[u8]) {
@@ -203,12 +200,7 @@ pub(super) mod a_bug {
         }
 
         pub(super) fn received(&self, last: impl Fn(&ServerMessage) -> bool) -> Vec<ServerMessage> {
-            let mut got = Vec::new();
-            wait_until("the message arrives", || {
-                got.extend(std::iter::from_fn(|| self.client.frames.try_recv().ok()));
-                got.iter().any(&last)
-            });
-            got
+            self.client.received(last)
         }
 
         pub(super) fn serve(
@@ -229,6 +221,15 @@ pub(super) mod a_bug {
     }
 
     impl Client {
+        pub(super) fn received(&self, last: impl Fn(&ServerMessage) -> bool) -> Vec<ServerMessage> {
+            let mut got = Vec::new();
+            wait_until("the message arrives", || {
+                got.extend(std::iter::from_fn(|| self.frames.try_recv().ok()));
+                got.iter().any(&last)
+            });
+            got
+        }
+
         fn send(&self, ev: ServerEvent) {
             self.tx.send(ev).expect("the server listens");
         }
@@ -354,6 +355,7 @@ mod streaming {
                 id: 1,
                 size: None,
                 notify: Channel::Bell,
+                browser: false,
                 sent: notify::Sent::default(),
                 used: 0,
                 pointer: None,
@@ -667,6 +669,72 @@ mod pointing {
     }
 }
 
+mod sounding {
+    use super::a_bug::{Attached, hello};
+    use super::*;
+    use crate::graphics::Support;
+    use crate::host::clipboard;
+    use crate::host::sound::{Cue, Kind};
+
+    fn sounds(attached: &Attached) -> Vec<Cue> {
+        let messages = attached.messages();
+        messages.into_iter().filter_map(|m| if let ServerMessage::Sound(cue) = m { Some(cue) } else { None }).collect()
+    }
+
+    #[test]
+    fn two_cues_in_one_flush_play_the_one_that_needs_you_once_per_window() {
+        let mut attached = Attached::new();
+        let window = attached.join(Support::default());
+        let server = &mut attached.server;
+        server.app.queue_sound(Cue { kind: Kind::Finished, path: String::new() });
+        server.app.queue_sound(Cue { kind: Kind::NeedsYou, path: "~/needs.wav".into() });
+
+        server.flush();
+        server.flush();
+
+        let cue = Cue { kind: Kind::NeedsYou, path: "~/needs.wav".into() };
+        let is_sound = |m: &ServerMessage| matches!(m, ServerMessage::Sound(_));
+        for got in [attached.received(is_sound), window.received(is_sound)] {
+            let heard: Vec<_> = got.into_iter().filter(is_sound).collect();
+            assert!(matches!(heard.as_slice(), [ServerMessage::Sound(c)] if *c == cue));
+        }
+        assert_eq!(sounds(&attached), [], "one sound per window");
+    }
+
+    #[test]
+    fn a_browser_hears_no_sound() {
+        let mut attached = Attached::new();
+        let pane = drawing::shown_pane(&mut attached);
+        let browser =
+            attached.join_hello(Hello { terminal: Some(protocol::BROWSER.into()), ..hello(HostTheme::default()) });
+        attached.server.app.queue_sound(Cue { kind: Kind::NeedsYou, path: String::new() });
+        attached.server.flush();
+        let copy = b"\x1b]52;c;aGVsbG8=\x07".to_vec();
+        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, copy)));
+        attached.server.flush();
+
+        let copied = clipboard::osc52("hello");
+        let got = browser.received(|m| matches!(m, ServerMessage::Frame(frame) if *frame == copied));
+        assert!(!got.iter().any(|m| matches!(m, ServerMessage::Sound(_))), "the browser got a sound");
+        assert!(
+            attached
+                .received(|m| matches!(m, ServerMessage::Sound(_)))
+                .iter()
+                .any(|m| matches!(m, ServerMessage::Sound(_)))
+        );
+    }
+
+    #[test]
+    fn a_flush_without_cues_plays_nothing() {
+        let mut attached = Attached::new();
+        attached.server.flush();
+        attached.server.draw();
+        attached.server.flush();
+
+        assert_eq!(sounds(&attached), []);
+    }
+}
+
 mod drawing {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -680,7 +748,7 @@ mod drawing {
         attached.server.drawn.expect("a frame was drawn")
     }
 
-    fn shown_pane(attached: &mut Attached) -> u64 {
+    pub(super) fn shown_pane(attached: &mut Attached) -> u64 {
         let server = &mut attached.server;
         server.app.request(1, r#"{"command":"status","args":{}}"#, server.area, Instant::now());
         let (_, text) = server.app.take_answers().pop().expect("an answer");

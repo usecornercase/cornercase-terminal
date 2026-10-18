@@ -114,6 +114,17 @@ mod compatibility {
         Restart(PathBuf),
     }
 
+    #[derive(Debug, Deserialize)]
+    #[expect(dead_code, reason = "decoded only, the way a client from before Sound reads it")]
+    enum BeforeSound {
+        Rejected(String),
+        Frame(Vec<u8>),
+        Detached,
+        Shutdown,
+        Restart(PathBuf),
+        Response(String),
+    }
+
     fn read_as<T: DeserializeOwned + std::fmt::Debug>(msg: &impl Serialize) -> io::ErrorKind {
         let mut frame = Vec::new();
         send(&mut frame, msg).expect("encode");
@@ -167,6 +178,25 @@ mod compatibility {
     #[test]
     fn a_client_without_responses_reads_one_as_invalid_data() {
         assert_eq!(read_as::<BeforeResponse>(&ServerMessage::Response("{}".into())), io::ErrorKind::InvalidData);
+    }
+
+    fn cue() -> Cue {
+        Cue { kind: crate::host::sound::Kind::NeedsYou, path: "~/ding.wav".into() }
+    }
+
+    #[test]
+    fn a_sound_comes_after_every_older_server_variant() {
+        assert_eq!(postcard::to_stdvec(&ServerMessage::Sound(cue())).expect("encode")[0], 6);
+    }
+
+    #[test]
+    fn a_client_without_sounds_reads_one_as_invalid_data() {
+        assert_eq!(read_as::<BeforeSound>(&ServerMessage::Sound(cue())), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn a_sound_round_trips() {
+        assert!(matches!(round_trip(&ServerMessage::Sound(cue())), ServerMessage::Sound(c) if c == cue()));
     }
 
     fn framed(msg: &impl Serialize) -> String {

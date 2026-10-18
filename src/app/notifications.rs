@@ -7,6 +7,7 @@ use super::toast::Toast;
 use crate::agents::activity::Status;
 use crate::control::{Event, Ids, Item, What};
 use crate::host::notify::{self, Notification};
+use crate::host::sound::{self, Cue};
 use crate::log;
 use crate::project::Hierarchy;
 use crate::project::search::Goto;
@@ -62,6 +63,7 @@ pub(super) struct Said<'a> {
     pub(super) project: u64,
     pub(super) workspace: u64,
     pub(super) panes: Vec<u64>,
+    pub(super) sound: Option<sound::Kind>,
 }
 
 impl App {
@@ -92,6 +94,13 @@ impl App {
                 window.missed = Some(token.clone());
             }
         }
+        if let Some(kind) = said.sound {
+            let path = match kind {
+                sound::Kind::NeedsYou => &self.config.sound_waiting,
+                sound::Kind::Finished => &self.config.sound_done,
+            };
+            self.outbox.sounds.push(Cue { kind, path: path.clone() });
+        }
         let event = Event {
             time: crate::time::Stamp(std::time::SystemTime::now()).to_string(),
             what: What::Notice {
@@ -101,6 +110,7 @@ impl App {
                 place: notify::clean(&notice.place),
                 message: notice.message.clone(),
                 panes: notice.panes.clone(),
+                sound: said.sound.map(|kind| kind.id().to_string()),
             },
             ids: Ids { project: Some(notice.project), workspace: Some(notice.workspace), ..Ids::default() },
         };

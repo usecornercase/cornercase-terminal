@@ -162,6 +162,14 @@ Over SSH, it's your local terminal that needs to allow it.
 - Ghostty on macOS, foot, Konsole and Warp don't show one while their window is in front, and kitty, Contour, VS Code, foot 1.18 or later and Konsole 24.12 or later are asked not to: look for the toast.
 - Inside tmux, screen or Zellij, cornercase only rings the bell, which your multiplexer decides what to do with.
 
+### No sound plays
+
+- Check that **settings → UI → sound** is on. Only a tab you aren't looking at plays one, a second after the agent needs you or finishes.
+- Agents started by another agent or by a flow play none unless **sound for subagents** is on.
+- It plays on the computer the window is on, with `afplay` on macOS and the first of `pw-play`, `paplay` and `aplay` on Linux; with none of them installed, nothing plays. A window opened in a plain SSH session plays none: use [`cornercase remote`](../../guides/remote/).
+- A tmux session started over SSH keeps `SSH_CONNECTION` when you reattach to it on the computer itself, so a window opened in it still counts as remote and plays none. Open cornercase outside that session, or run `tmux set-environment -gu SSH_CONNECTION` and `tmux set-environment -gu SSH_TTY`, then open a new pane.
+- A file of your own that is missing or can't be read plays the built-in sound, and so does a path that is neither absolute nor starts with `~/`; `aplay` reads only WAV.
+
 ### A click on a notification doesn't take me to the agent
 
 Only kitty, VS Code, Contour, foot 1.18 or later and Konsole 24.12 or later report a click; Ghostty, iTerm2, WezTerm and Warp only bring the window forward. Use the **go** button of the toast, which comes back when you return to the window, in any terminal. Inside tmux, screen or Zellij cornercase only rings the bell, so there is nothing to click. If text like `99;i=cc-…` appears in a shell, a notification was clicked after its window was killed or lost its connection, so cornercase could not close it first; it is harmless.

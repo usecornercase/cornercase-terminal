@@ -18,6 +18,7 @@ mod flows;
 mod notifications;
 mod osc;
 mod resuming;
+mod sound;
 mod tree;
 mod views;
 

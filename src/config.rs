@@ -192,6 +192,10 @@ pub(crate) struct Config {
     pub(crate) context: bool,
     pub(crate) memory: bool,
     pub(crate) desktop_notifications: String,
+    pub(crate) sound: bool,
+    pub(crate) sound_waiting: String,
+    pub(crate) sound_done: String,
+    pub(crate) sound_subagents: bool,
     pub(crate) check_updates: bool,
     pub(crate) star_prompt: bool,
     pub(crate) remote: bool,
@@ -242,6 +246,10 @@ impl Default for Config {
             context: true,
             memory: false,
             desktop_notifications: notify::AUTO.into(),
+            sound: true,
+            sound_waiting: String::new(),
+            sound_done: String::new(),
+            sound_subagents: false,
             check_updates: true,
             star_prompt: true,
             remote: false,
@@ -413,6 +421,17 @@ pub(crate) fn check_worktrees_dir(input: &str, home: Option<&Path>) -> Result<St
 
 pub(crate) fn check_fetch_minutes(input: &str) -> Result<u64, &'static str> {
     input.trim().parse().map_err(|_| "use a whole number of minutes, 0 turns it off")
+}
+
+pub(crate) fn check_sound_file(input: &str) -> Result<String, &'static str> {
+    if input.chars().any(crate::text::hidden) {
+        return Err("a file's path cannot hold control or invisible characters");
+    }
+    let path = input.trim();
+    if !(path.is_empty() || path.starts_with('/') || path == "~" || path.starts_with("~/")) {
+        return Err("use an absolute path or one starting with ~/");
+    }
+    Ok(input.to_string())
 }
 
 #[cfg(test)]
