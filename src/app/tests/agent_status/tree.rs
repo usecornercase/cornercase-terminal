@@ -1,4 +1,6 @@
 use super::*;
+use crate::flows::run::{Member, Run};
+use crate::flows::{Flow, ORCHESTRATOR};
 
 const TALL: Rect = Rect { x: 0, y: 0, width: 100, height: 30 };
 
@@ -113,4 +115,114 @@ fn the_key_for_the_next_agent_follows_the_tree() {
     }
 
     assert_eq!(visited, [f.child, f.other, f.parent]);
+}
+
+fn in_a_run(f: &mut Family) {
+    let workspace = f.app.projects[0].workspaces[0].id;
+    let mut run = Run::new(workspace, Flow::default(), "fix it".into());
+    run.members.push(Member { role: ORCHESTRATOR.into(), pane: f.parent });
+    run.members.push(Member { role: "coder".into(), pane: f.child });
+    f.app.runs.push(run);
+}
+
+fn labels(app: &App) -> Vec<(Option<String>, bool)> {
+    app.agents_view().entries.into_iter().map(|e| (e.role, e.place)).collect()
+}
+
+fn named(role: &str, place: bool) -> (Option<String>, bool) {
+    (Some(role.to_string()), place)
+}
+
+#[test]
+fn members_are_named_by_their_role_and_the_orchestrator_keeps_its_place() {
+    let mut f = family(Activity::Idle);
+    in_a_run(&mut f);
+
+    assert_eq!(labels(&f.app), [named(ORCHESTRATOR, true), named("coder", false), (None, true)]);
+}
+
+#[rstest]
+#[case::its_agent_exited(false)]
+#[case::its_tab_closed(true)]
+fn a_member_whose_orchestrator_is_not_listed_shows_its_place_and_its_role(#[case] close: bool) {
+    let mut f = family(Activity::Idle);
+    in_a_run(&mut f);
+
+    if close {
+        f.app.close_tab(0, 0, 0);
+        wait_until("the parent's tab closes", || {
+            drain(&mut f.app, &f.rx);
+            f.app.projects[0].workspaces[0].tabs.len() == 2
+        });
+    } else {
+        f.app.projects.pane_by_mut(f.parent).expect("the orchestrator").agent.follow(None);
+    }
+
+    let coder = f.app.agents_view().entries.into_iter().map(|e| (e.role, e.place)).find(|(role, _)| role.is_some());
+    assert_eq!(coder, Some(named("coder", true)));
+}
+
+#[test]
+fn a_renamed_tab_does_not_change_the_role() {
+    let mut f = family(Activity::Idle);
+    in_a_run(&mut f);
+    f.app.projects[0].workspaces[0].tabs[2].name = Some("tester".into());
+    f.app.projects[0].workspaces[0].tabs[1].name = Some("coder".into());
+
+    assert_eq!(labels(&f.app), [named(ORCHESTRATOR, true), named("coder", false), (None, true)]);
+}
+
+#[test]
+fn an_agent_a_member_starts_keeps_its_line() {
+    let mut f = family(Activity::Idle);
+    in_a_run(&mut f);
+    f.app.push_tab(0, 0, TALL, None).expect("a fourth tab");
+    let term = f.app.projects[0].workspaces[0].tabs[3].pane_mut().expect("a pane");
+    term.agent.follow(Some(agents::Known::Claude.name()));
+    term.agent.update(Some(Activity::Idle), true, Instant::now());
+    term.parent = Some(f.child);
+
+    let view = f.app.agents_view().entries;
+
+    assert_eq!(
+        view.iter().map(|e| (e.depth, e.role.clone(), e.place)).collect::<Vec<_>>(),
+        [(0, Some(ORCHESTRATOR.to_string()), true), (1, Some("coder".into()), false), (2, None, true), (0, None, true)]
+    );
+}
+
+#[test]
+fn a_pane_keeps_its_seat_when_another_agent_runs_in_it() {
+    let mut f = family(Activity::Idle);
+    in_a_run(&mut f);
+
+    let term = f.app.projects.pane_by_mut(f.child).expect("the coder");
+    term.agent.follow(Some(agents::Known::Codex.name()));
+    term.agent.update(Some(Activity::Idle), true, Instant::now());
+
+    assert_eq!(labels(&f.app)[1], named("coder", false));
+}
+
+#[test]
+fn status_gives_each_member_its_role() {
+    let mut f = family(Activity::Idle);
+    in_a_run(&mut f);
+
+    let rows = f.app.report(None).panes();
+    let role = |pane: u64| rows.iter().find(|row| row.pane == pane).map(|row| row.role.clone());
+
+    assert_eq!(
+        (role(f.parent), role(f.child), role(f.other)),
+        (Some(Some(ORCHESTRATOR.to_string())), Some(Some("coder".to_string())), Some(None))
+    );
+}
+
+#[test]
+fn a_role_that_goes_changes_what_watchers_see() {
+    let mut f = family(Activity::Idle);
+    in_a_run(&mut f);
+    let before = f.app.refreshed();
+
+    f.app.runs[0].members.retain(|member| member.role != "coder");
+
+    assert_ne!(f.app.refreshed(), before);
 }

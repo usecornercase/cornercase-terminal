@@ -61,7 +61,14 @@ Starting a flow:
 3. Starts each agent with its model, its effort, its arguments and its role prompt, which tells it to wait for the orchestrator's first message, and answers its question about trusting the new folder. A role that may not edit the worktree's files is told so in its prompt, and every role is told where to put its answers (see [The run's folder](#the-runs-folder)).
 4. Starts the orchestrator last, once its team is up, with a brief cornercase writes: the task, the team with each role's pane id, the stages in words, the flow's notes, the rules for driving agents (wait before sending, one self-contained message at a time, read the last message rather than the screen, never answer another agent's permission prompt), the run's folder, the final action, and `cornercase mark` on its own pane when it is done, so the run shows as [pending review](../projects-workspaces-tabs/#pending-review).
 
-The whole team starts at once, so the tabs and the diagram are complete from the first second; an agent waiting for its first message costs nothing. The roles' turns ending don't notify you or leave a `✓` on their tabs, since the orchestrator reads them; the orchestrator does when the run is done, and any agent still does when it [waits for you](../projects-workspaces-tabs/#notifications).
+The whole team starts at once, so the tabs and the diagram are complete from the first second; with the [agents section](../projects-workspaces-tabs/#the-agents-section) on, the team hangs under its orchestrator there, each member listed by its role; an agent waiting for its first message costs nothing. The roles' turns ending don't notify you or leave a `✓` on their tabs, since the orchestrator reads them; the orchestrator does when the run is done, and any agent still does when it [waits for you](../projects-workspaces-tabs/#notifications).
+
+<Screen
+  name="flow-agents"
+  alt="The agents section of the sidebar during a flow run: the run's orchestrator, web-shop › issue-482-retu…, with claude and Opus 5.5 at 7% under it, and below it, indented with ├ and └, the roles coder (claude, working), reviewer (codex, working), security (claude, idle) and tester (claude, idle); the other agents, web-shop › feat/gift-cards and orders-api › fix/pagination, keep their project and workspace"
+  caption="With the agents section on, a flow's team hangs under its orchestrator, each member by its role."
+  crop={[0, 21, 32, 17]}
+/>
 
 <Aside type="caution" title="Every agent runs without asking for permission">
 A team that stops to ask defeats the point, and the orchestrator must not answer another agent's permission prompt. So every role starts in its agent's mode that skips permission prompts: Claude Code with `--dangerously-skip-permissions`, Codex with `--dangerously-bypass-approvals-and-sandbox`, Gemini CLI with `--yolo --skip-trust`, opencode with `--auto`, Grok Build with `--always-approve` Cursor CLI with `--force --trust` and GitHub Copilot CLI with `--allow-all --no-ask-user` (never its autopilot mode, which keeps sending itself continuation messages). Start flows in repositories you trust, and read what they did before you merge it.

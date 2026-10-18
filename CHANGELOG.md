@@ -2,10 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.148
+## 0.12.149
 
 - **Other apps and scripts can list and run plugin actions.** `cornercase plugin actions` lists the entries your plugins add to the row and pane menus, for one kind of row or all of them, and `cornercase plugin run PLUGIN ACTION --pane ID` (or `--tab`, `--workspace`, `--project`) runs one as its menu entry does: in the workspace's folder, with the ids of what you name, stopped after 5 minutes, its output in the plugin's log. It waits for the action, prints how it ended and exits with 1 when it failed. An action listed before the plugins changed is refused rather than run.
   - Other apps can also read the plugins as Settings › Plugins shows them, including what each service is doing, with the `plugin-list` request. See Scripts and agents → Plugins.
+
+## 0.12.148
+
+- **A flow's agents are named by their role in the agents section.** A run's team already hangs under its orchestrator there; now each member's row says the role it plays (`coder`, `reviewer`, `security`) instead of repeating the run's project and workspace, so two members on the same agent can be told apart. The orchestrator keeps its project and workspace and adds `· orchestrator` when the column has room; a member whose orchestrator is no longer listed shows its place and its role. Agents outside a flow look as before.
+  - Scripts and other apps get the role too: `role` in `status --json`, `status --follow` and view lines, a new last column `role` in `status --panes`, and `(role coder)` in `status`.
 
 ## 0.12.147
 
