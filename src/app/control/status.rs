@@ -6,8 +6,8 @@ use crate::agents::activity::Status;
 use crate::agents::awake;
 use crate::app::App;
 use crate::control::{
-    self, AppState, ConfigInfo, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, PullRequestInfo, Report, TabInfo,
-    WorkspaceInfo,
+    self, AppState, ConfigInfo, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, PullRequestInfo, Report, RunStatus,
+    TabInfo, WorkspaceInfo,
 };
 use crate::git;
 use crate::log::{self, Level};
@@ -62,6 +62,7 @@ impl App {
                 .find(|run| run.workspace == ws.id)
                 .and_then(|run| run.dir.clone())
                 .or_else(|| ws.run_dirs.last().cloned()),
+            run: self.run_status(ws.id),
             active: w == active,
             tabs: ws.tabs.iter().enumerate().map(|(t, tab)| tab_info(t, tab, ws.active)).collect(),
             custom_name: ws.name.clone(),
@@ -117,6 +118,11 @@ impl App {
         }
     }
 
+    fn run_status(&self, workspace: u64) -> Option<RunStatus> {
+        let run = self.run_of(workspace)?;
+        Some(RunStatus { end: run.flow.end.name().into(), reached: run.reached(self.pull_request(workspace)) })
+    }
+
     pub(in crate::app) fn refreshed(&self) -> u64 {
         let mut hash = DefaultHasher::new();
         let live = self.pane_ids();
@@ -137,6 +143,7 @@ impl App {
                         .hash(&mut hash);
                     pull.failed().for_each(|check| check.name.hash(&mut hash));
                 }
+                self.run_status(workspace.id).hash(&mut hash);
                 for tab in &workspace.tabs {
                     (tab.id, tab.status().map(Status::name)).hash(&mut hash);
                     for term in &tab.panes {

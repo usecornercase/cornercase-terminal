@@ -686,6 +686,17 @@ mod commands {
     }
 }
 
+mod ends {
+    use super::*;
+
+    #[test]
+    fn a_name_is_what_the_json_calls_it() {
+        for end in End::ALL {
+            assert_eq!(serde_json::to_value(end).expect("json"), serde_json::json!(end.name()));
+        }
+    }
+}
+
 mod runs {
     use super::*;
 

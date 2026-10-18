@@ -229,12 +229,21 @@ pub struct WorkspaceInfo {
     pub(crate) pull_request: Option<PullRequestInfo>,
     pub(crate) setup: Option<String>,
     pub(crate) run_dir: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) run: Option<RunStatus>,
     pub(crate) active: bool,
     pub tabs: Vec<TabInfo>,
     pub(crate) custom_name: Option<String>,
     pub(crate) collapsed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) changes: Option<super::ChangesCount>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct RunStatus {
+    pub(crate) end: String,
+    pub(crate) reached: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

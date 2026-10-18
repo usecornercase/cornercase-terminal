@@ -8,9 +8,11 @@ use super::*;
 use crate::agents::Known;
 use crate::flows::builtin;
 use crate::flows::run::{Kind, Message};
-use crate::ui::theme::line_colour;
+use crate::pull_request::{Ci, Mark, State as Pull};
+use crate::ui::theme::{WAITING_COLOR, line_colour};
 
 const MUTED: Color = Color::DarkGray;
+const BRAND: Color = Color::Indexed(99);
 
 fn flows() -> Vec<Flow> {
     builtin::flows(&[Known::Claude, Known::Codex, Known::Gemini, Known::Opencode], Some(Known::Claude))
@@ -202,7 +204,7 @@ mod live {
         let start = Instant::now();
         let progress = progress(&flow, sends, start);
         let at = start + Duration::from_secs(sends.len().saturating_sub(1) as u64) + now;
-        (Diagram::plan(&flow, MUTED, false).live(&progress, working, at), start)
+        (Diagram::plan(&flow, MUTED, false).live(&progress, working, Ending::default(), at), start)
     }
 
     #[test]
@@ -249,18 +251,19 @@ mod live {
     }
 
     #[test]
-    fn the_end_lights_once_the_orchestrator_marks_the_run_for_review() {
+    fn the_end_lights_from_what_it_is_given_not_from_the_orchestrator() {
         let flow = full_issue();
-        let state = |role: &str| {
-            if role == ORCHESTRATOR { State::Agent(Some(Status::Pending)) } else { State::Agent(Some(Status::Idle)) }
+        let state = |status| move |_: &str| State::Agent(Some(status));
+        let end = |reached| Ending { reached, pull: None };
+        let colour = |state: &dyn Fn(&str) -> State, reached| {
+            let d = Diagram::plan(&flow, MUTED, false).live(&Progress::default(), state, end(reached), Instant::now());
+            let t = render(&d, 46);
+            let (x, y) = find(&t, "◆").expect("the end");
+            cell(&t, x, y).fg
         };
-        let d = Diagram::plan(&flow, MUTED, false).live(&Progress::default(), state, Instant::now());
-        let t = render(&d, 46);
-        let (x, y) = find(&t, "◆").expect("the end");
-        assert_eq!(cell(&t, x, y).fg, BRAND);
+        assert_eq!(colour(&state(Status::Pending), false), MUTED);
+        assert_eq!(colour(&state(Status::Working), true), BRAND);
     }
-
-    const BRAND: Color = Color::Indexed(99);
 }
 
 mod hits {
@@ -297,7 +300,12 @@ mod hits {
         let flow = full_issue();
         let start = Instant::now();
         let progress = progress(&flow, &["coder", "reviewer", "coder"], start);
-        let d = Diagram::plan(&flow, MUTED, false).live(&progress, working, start + Duration::from_secs(9));
+        let d = Diagram::plan(&flow, MUTED, false).live(
+            &progress,
+            working,
+            Ending::default(),
+            start + Duration::from_secs(9),
+        );
         let view = panel(d);
         let exit = position(&view, "┃─╯");
         assert_eq!(hit(AREA, &view, Position { x: exit.x + 1, ..exit }), Some(Hit::Edge(Edge::Loop(1), None)));
@@ -311,7 +319,12 @@ mod hits {
         let flow = full_issue();
         let start = Instant::now();
         let progress = progress(&flow, &["coder", "reviewer"], start);
-        let d = Diagram::plan(&flow, MUTED, false).live(&progress, working, start + Duration::from_secs(9));
+        let d = Diagram::plan(&flow, MUTED, false).live(
+            &progress,
+            working,
+            Ending::default(),
+            start + Duration::from_secs(9),
+        );
         let view = panel(d);
         let reviewer = position(&view, "▼");
         let security = Position { x: reviewer.x + 22, ..reviewer };
@@ -327,7 +340,12 @@ mod hits {
         let flow = full_issue();
         let start = Instant::now();
         let progress = progress(&flow, &["coder", "reviewer", "security"], start);
-        let d = Diagram::plan(&flow, MUTED, false).live(&progress, working, start + Duration::from_secs(9));
+        let d = Diagram::plan(&flow, MUTED, false).live(
+            &progress,
+            working,
+            Ending::default(),
+            start + Duration::from_secs(9),
+        );
         let view = panel(d);
         let reviewer = position(&view, "▼");
         let security = Position { x: reviewer.x + 22, ..reviewer };
@@ -427,7 +445,7 @@ mod limits {
         flow
     }
 
-    fn shown(t: &Terminal<TestBackend>, y: u16) -> String {
+    pub(super) fn shown(t: &Terminal<TestBackend>, y: u16) -> String {
         let buf = t.backend().buffer();
         let mut row = String::new();
         let mut x = 0;
@@ -460,5 +478,127 @@ mod limits {
         let area = Rect::new(0, 0, 46, diagram_height(&d, 46));
         let owners: Vec<_> = (x..=end).map(|x| diagram_hit(area, &d, 0, Position::new(x, y))).collect();
         assert!(owners.iter().all(|hit| *hit == Some(Hit::Role("编码实现角色审查员".into()))), "{owners:?}");
+    }
+}
+
+mod end {
+    use super::*;
+
+    fn ended(pull: Option<Mark>, reached: bool) -> Diagram {
+        Diagram::plan(&full_issue(), MUTED, false).live(
+            &Progress::default(),
+            |_| State::Agent(Some(Status::Idle)),
+            Ending { reached, pull },
+            Instant::now(),
+        )
+    }
+
+    fn mark(state: Pull, ci: Option<Ci>, conflicts: bool) -> Mark {
+        Mark { number: 485, state, ci, conflicts }
+    }
+
+    fn last_rows(t: &Terminal<TestBackend>, n: u16) -> String {
+        let height = t.backend().buffer().area.height;
+        (height - n..height).map(|y| limits::shown(t, y).trim_end().to_string()).collect::<Vec<_>>().join("\n")
+    }
+
+    #[rstest]
+    #[case::failing(mark(Pull::Open, Some(Ci::Failing), false), "#485✗", Color::Red, Modifier::empty())]
+    #[case::pending(mark(Pull::Open, Some(Ci::Pending), false), "#485•", Color::Yellow, Modifier::empty())]
+    #[case::passing(mark(Pull::Open, Some(Ci::Passing), false), "#485✓", Color::Green, Modifier::empty())]
+    #[case::conflict(mark(Pull::Open, Some(Ci::Passing), true), "#485!", WAITING_COLOR, Modifier::empty())]
+    #[case::merged(mark(Pull::Merged, None, false), "#485", BRAND, Modifier::empty())]
+    #[case::closed(mark(Pull::Closed, None, false), "#485", MUTED, Modifier::CROSSED_OUT)]
+    #[case::no_checks(mark(Pull::Open, None, false), "#485", MUTED, Modifier::empty())]
+    fn the_end_shows_the_pull_requests_tag_as_the_row_does(
+        #[case] mark: Mark,
+        #[case] text: &str,
+        #[case] fg: Color,
+        #[case] modifier: Modifier,
+    ) {
+        let t = render(&ended(Some(mark), true), 46);
+        let (x, y) = find(&t, "#485").expect("the tag");
+        assert_eq!(cell(&t, x, y).fg, fg);
+        assert!(cell(&t, x, y).modifier.contains(modifier));
+        assert!(limits::shown(&t, y).trim_end().ends_with(&format!("open a pull request · {text}")));
+        assert_eq!((cell(&t, x - 2, y).symbol(), cell(&t, x - 2, y).fg), ("·", MUTED));
+    }
+
+    #[rstest]
+    #[case::failing(mark(Pull::Open, Some(Ci::Failing), false))]
+    #[case::pending(mark(Pull::Open, Some(Ci::Pending), false))]
+    #[case::passing(mark(Pull::Open, Some(Ci::Passing), false))]
+    #[case::conflict(mark(Pull::Open, Some(Ci::Passing), true))]
+    #[case::merged(mark(Pull::Merged, None, false))]
+    #[case::closed(mark(Pull::Closed, None, false))]
+    #[case::none(mark(Pull::Open, None, false))]
+    fn the_end_rows_hold_the_label_and_the_tag(#[case] mark: Mark) {
+        let t = render(&ended(Some(mark), true), 46);
+        let rows = last_rows(&t, 2);
+        assert!(rows.contains("open a pull request") && rows.contains("#485"), "{rows}");
+    }
+
+    #[test]
+    fn a_narrow_panel_cuts_the_label_first_and_keeps_the_tag() {
+        let t = render(&ended(Some(mark(Pull::Open, Some(Ci::Passing), false)), true), 24);
+        let rows = last_rows(&t, 2);
+        assert!(rows.contains('…') && rows.trim_end().ends_with("· #485✓"), "{rows}");
+        assert!(rows.lines().all(|row| text::cells(row) <= 24), "{rows}");
+    }
+
+    #[test]
+    fn a_panel_too_narrow_for_the_label_keeps_only_the_tag() {
+        let t = render(&ended(Some(mark(Pull::Open, Some(Ci::Passing), false)), true), 9);
+        let rows = last_rows(&t, 2);
+        assert!(rows.contains("#485✓") && !rows.contains('·'), "{rows}");
+    }
+
+    #[test]
+    fn a_panel_too_narrow_for_the_tag_drops_it() {
+        let t = render(&ended(Some(mark(Pull::Open, Some(Ci::Passing), false)), true), 4);
+        assert!(find(&t, "#").is_none());
+    }
+
+    #[test]
+    fn a_wide_diagram_has_room_beside_the_end() {
+        let flow = flows().remove(4);
+        let d = Diagram::plan(&flow, MUTED, false).live(
+            &Progress::default(),
+            |_| State::Agent(None),
+            Ending { reached: true, pull: Some(mark(Pull::Open, Some(Ci::Passing), false)) },
+            Instant::now(),
+        );
+        let t = render(&d, 100);
+        let (_, y) = find(&t, "◆").expect("the end");
+        let row = limits::shown(&t, y);
+        assert!(row.contains("open a pull request · #485✓"), "{row}");
+    }
+
+    #[test]
+    fn the_tag_does_not_widen_the_diagram() {
+        let with = ended(Some(mark(Pull::Open, Some(Ci::Passing), false)), true);
+        assert_eq!(with.natural_width(), ended(None, true).natural_width());
+    }
+
+    #[test]
+    fn the_tag_is_a_hit_and_hovering_it_underlines_it() {
+        let d = ended(Some(mark(Pull::Open, Some(Ci::Passing), false)), true);
+        let t = render(&d, 46);
+        let (x, y) = find(&t, "#485").expect("the tag");
+        let area = Rect::new(0, 0, 46, diagram_height(&d, 46));
+        for dx in 0..5 {
+            assert_eq!(diagram_hit(area, &d, 0, Position::new(x + dx, y)), Some(Hit::Pull));
+        }
+        let (lx, ly) = find(&t, "open a").expect("the label");
+        assert_eq!(diagram_hit(area, &d, 0, Position::new(lx, ly)), None);
+        let mut buf = Terminal::new(TestBackend::new(46, area.height)).expect("terminal");
+        buf.draw(|f| draw_diagram(f.buffer_mut(), area, &d, 0, Some(Position::new(x, y)))).expect("draw");
+        assert!(cell(&buf, x, y).modifier.contains(Modifier::UNDERLINED));
+    }
+
+    #[test]
+    fn a_plan_has_no_tag() {
+        let t = render(&Diagram::plan(&full_issue(), MUTED, false), 46);
+        assert!(find(&t, "#").is_none());
     }
 }

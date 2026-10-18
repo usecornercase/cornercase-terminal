@@ -456,6 +456,7 @@ impl App {
             self.list_running(now);
         }
         self.drive_launches(now);
+        self.latch_run_ends();
         self.watch_agents(now);
         self.keep_awake(now);
         self.offer_star(now, clock);
@@ -481,6 +482,7 @@ impl App {
         self.synced = Some(now);
         self.sync_worktrees();
         self.forget_runs();
+        self.forget_moved_run_ends();
         self.forget_files();
         self.count_behind(now);
         self.ask_pull_requests(now);

@@ -66,3 +66,16 @@ fn the_plan_goes_on_where_it_stood_after_a_restart() {
     assert_eq!(progress.last.as_ref().map(|step| step.edge), Some(Edge::Forward(1)));
     assert_eq!(progress.outside, None);
 }
+
+#[test]
+fn a_restored_run_keeps_its_latched_end() {
+    let (mut app, _rx, _dir) = team();
+    app.runs[0].ended = Some("feat/x".into());
+    let (mut again, _rx2) = new_app(no_config());
+
+    assert!(again.restore(&app.state(), AREA));
+
+    assert_eq!(again.runs[0].ended.as_deref(), Some("feat/x"));
+    let end = again.flow_view(Instant::now(), None).and_then(|view| view.diagram.live).expect("live").end;
+    assert!(end.reached);
+}

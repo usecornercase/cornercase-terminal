@@ -521,6 +521,7 @@ mod output {
             pull_request: None,
             setup: None,
             run_dir: None,
+            run: None,
             active: true,
             custom_name: None,
             collapsed: false,
