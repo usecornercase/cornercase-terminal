@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.139
 
-- **An agent stays working while its subagents run.** When Claude Code or GitHub Copilot CLI ends its turn while subagents it started in the background are still at work, its tab keeps showing it as working, with how many are left under its name (`2 subagents`), and turns `✓`, with one notification, only once the last of them has ended. Before, the tab could show `✓` and tell you it finished as soon as the agent's own turn ended, then tell you again when it really did.
+- **An agent stays working while its subagents run.** When Claude Code or GitHub Copilot CLI ends its turn while subagents it started in the background are still at work, its tab keeps showing it as working, with how many are left under its name (`2 subagents`), and normally turns `✓`, with one notification, only once the last of them has ended (a subagent silent for 10 minutes stops counting, so then it can turn `✓` early and notify again when it really ends). Before, the tab could show `✓` and tell you it finished as soon as the agent's own turn ended, then tell you again when it really did.
   - A question from the agent still shows `!` first. A subagent that has written nothing for 10 minutes stops counting, so one that crashed can't keep the tab working.
   - `cornercase wait` (`--until turn-over` included), `restart --when-idle` and the Telegram and Discord notices wait for the subagents too.
   - Scripts see the count as `subagents` in `status --json`, `status --follow` and `view`, as `(2 subagents)` in `cornercase status`, and as the last column of `status --panes`.
