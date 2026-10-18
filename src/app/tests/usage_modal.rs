@@ -1,10 +1,10 @@
 use super::*;
 use crate::test_util::write_executable;
 
-const ANSWER: &str = r#"{"type":"control_response","response":{"subtype":"success","request_id":"usage","response":{"subscription_type":"max","rate_limits_available":true,"rate_limits":{"limits":[{"kind":"session","percent":42,"severity":"normal","resets_at":null}]}}}}"#;
-const CODEX_ANSWER: &str = r#"{"id":2,"result":{"rateLimits":{"limitId":"codex","planType":"plus","primary":{"usedPercent":17,"windowDurationMins":300,"resetsAt":null}}}}"#;
+pub(super) const ANSWER: &str = r#"{"type":"control_response","response":{"subtype":"success","request_id":"usage","response":{"subscription_type":"max","rate_limits_available":true,"rate_limits":{"limits":[{"kind":"session","percent":42,"severity":"normal","resets_at":null}]}}}}"#;
+pub(super) const CODEX_ANSWER: &str = r#"{"id":2,"result":{"rateLimits":{"limitId":"codex","planType":"plus","primary":{"usedPercent":17,"windowDurationMins":300,"resetsAt":null}}}}"#;
 
-fn with_agents(scripts: &[(&str, &str)]) -> (App, Receiver<AppEvent>, TempDir) {
+pub(super) fn with_agents(scripts: &[(&str, &str)]) -> (App, Receiver<AppEvent>, TempDir) {
     let dir = TempDir::new();
     let (mut app, rx) = empty_app();
     for kind in [agents::Known::Claude.name(), agents::Known::Codex.name()] {

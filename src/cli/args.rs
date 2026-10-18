@@ -5,6 +5,7 @@ pub(crate) mod plugin;
 pub(crate) mod queue;
 pub(crate) mod terminal;
 pub(crate) mod theme;
+pub(crate) mod usage;
 pub(crate) mod view;
 
 use std::path::PathBuf;
@@ -19,7 +20,7 @@ use super::help::{
     PLUGIN_HELP, RATIO_HELP, READ_HELP, REDRAW_HELP, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP,
     RESTART_TIMEOUT, SCROLL_HELP, SEARCH_HELP, SELECTION_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP,
     START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, TODO_SEND_HELP, UNTIL_AFTER, UPDATE_HELP,
-    VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
+    USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -210,6 +211,11 @@ pub(crate) enum Control {
         after_help = ISSUE_HELP
     )]
     Issue(issue::IssueArgs),
+    #[command(
+        about = "Print your Claude Code and Codex plan limits, as the Usage dialog's Limits tab shows them",
+        after_help = USAGE_HELP
+    )]
+    Usage(usage::UsageArgs),
 }
 
 impl Control {

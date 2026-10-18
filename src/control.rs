@@ -18,6 +18,7 @@ pub(crate) mod surface;
 pub(crate) mod terminal;
 pub(crate) mod theme;
 mod todo;
+pub(crate) mod usage;
 pub(crate) mod view;
 mod watch;
 
@@ -39,6 +40,7 @@ pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, Work
 pub(crate) use surface::Surface;
 pub(crate) use terminal::{Input, Link, Ratio, Redraw, Resize, Scroll, Selection};
 pub(crate) use theme::{Theme, ThemeInfo};
+pub(crate) use usage::{Plans, Usage};
 pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
 
@@ -142,6 +144,7 @@ pub(crate) enum Command {
     IssueList(IssueList),
     IssueRead(IssueRead),
     IssuePeople(IssuePeople),
+    Usage(Usage),
 }
 
 impl Command {
@@ -205,6 +208,7 @@ impl Command {
             Self::IssueList(_) => 55,
             Self::IssueRead(_) => 56,
             Self::IssuePeople(_) => 57,
+            Self::Usage(_) => 58,
         }]
     }
 
@@ -324,11 +328,12 @@ impl Command {
             Self::IssueList(list) => list.fields(&mut fields),
             Self::IssueRead(read) => read.fields(&mut fields),
             Self::IssuePeople(people) => people.fields(&mut fields),
+            Self::Usage(usage) => usage.fields(&mut fields),
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 58] = [
+    pub(crate) const NAMES: [&str; 59] = [
         "status",
         "open",
         "new-workspace",
@@ -387,6 +392,7 @@ impl Command {
         "issue-list",
         "issue-read",
         "issue-people",
+        "usage",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

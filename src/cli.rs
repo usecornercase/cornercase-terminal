@@ -32,6 +32,7 @@ mod status;
 mod terminal;
 mod theme;
 mod update;
+mod usage;
 mod view;
 
 pub use args::Cli;
@@ -270,6 +271,7 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Theme(args) => theme::run(&args),
         Control::Config(args) => config::run(args),
         Control::Issue(args) => return issue::run(args.action),
+        Control::Usage(args) => return usage::run(&args),
     }?;
     Ok(true)
 }

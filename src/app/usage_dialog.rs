@@ -24,7 +24,7 @@ impl App {
         }
     }
 
-    fn probe_usage(&mut self) {
+    pub(super) fn usage_agents(&self) -> Vec<agents::Known> {
         let supported: Vec<agents::Known> =
             agents::Known::ALL.into_iter().filter(|agent| agent.usage().is_some()).collect();
         let installed: Vec<agents::Known> = supported
@@ -32,8 +32,16 @@ impl App {
             .copied()
             .filter(|agent| agents::installed(&agents::command(&self.config, agent.name())))
             .collect();
-        let shown = if installed.is_empty() { supported } else { installed };
-        for agent in self.usage.start(shown) {
+        if installed.is_empty() { supported } else { installed }
+    }
+
+    fn probe_usage(&mut self) {
+        let agents = self.usage_agents();
+        self.start_probes(agents);
+    }
+
+    pub(super) fn start_probes(&mut self, agents: Vec<agents::Known>) {
+        for agent in self.usage.start(agents) {
             let command = agents::command(&self.config, agent.name());
             let timeout = self.usage_timeout;
             let job = Job::new(Level::Info, "usage", "probe").with("agent", agent.name());
@@ -121,8 +129,7 @@ fn section(agent: agents::Known, probe: &usage::Probe, now: Instant, clock: i64)
                 resets: w.resets_at.map(|at| usage::until(at - clock)).unwrap_or_default(),
             })
             .collect(),
-        empty: report
-            .and_then(|r| r.notice.or_else(|| agent.usage().filter(|_| !r.limited).map(|spec| spec.no_limits))),
+        empty: report.and_then(|r| r.notice_for(agent)),
         extra: report.and_then(|r| r.extra.clone()),
     }
 }

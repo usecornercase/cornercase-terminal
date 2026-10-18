@@ -77,3 +77,25 @@ fn a_missing_agent_fails() {
     let error = probe(Known::Codex, "/nonexistent/codex", TIMEOUT).expect_err("no report");
     assert!(error.to_string().starts_with("could not run /nonexistent/codex"), "{error}");
 }
+
+#[test]
+fn each_answer_counts_once_and_a_running_probe_is_not_restarted() {
+    let mut state = State::default();
+    assert_eq!(state.start(vec![Known::Claude]), [Known::Claude]);
+    assert_eq!(state.probe(Known::Claude).answers(), 0);
+    assert_eq!(state.start(vec![Known::Claude]), []);
+    state.answered(Known::Claude, Ok(Report::default()), Instant::now());
+    assert_eq!(state.probe(Known::Claude).answers(), 1);
+    assert_eq!(state.start(vec![Known::Claude]), [Known::Claude]);
+    state.answered(Known::Claude, Err(Error::Usage("no".into())), Instant::now());
+    assert_eq!(state.probe(Known::Claude).answers(), 2);
+    assert_eq!(state.probe(Known::Codex).answers(), 0);
+}
+
+#[rstest]
+#[case::normal(10, "normal")]
+#[case::warning(80, "warning")]
+#[case::critical(95, "critical")]
+fn severities_have_names(#[case] percent: u16, #[case] name: &str) {
+    assert_eq!(Severity::of(percent).name(), name);
+}

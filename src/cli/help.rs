@@ -753,3 +753,18 @@ Examples:
   cornercase view-set --view 41 --cols 100 --rows 30
   cornercase view-set --view 41 --claim
   cornercase view-set --view 41 --hidden";
+pub(super) const USAGE_HELP: &str =
+    "Asks Claude Code and Codex for your plan limits as the Limits tab of the Usage dialog does, and
+prints each limit with how much of it is used and when it resets, then extra usage or credits. It
+runs `claude` and `codex` on the server's machine (the ones agent_commands names): the installed
+ones, or both when neither is, each saying why it could not run. That sends no prompt and costs no
+tokens, and each waits at most ten seconds. A probe already running, from the dialog or another
+`cornercase usage`, is waited for rather than started again. With --cached it asks nothing and
+prints the last answers with their age. With --json it prints {\"agents\": [...]}: each agent's
+plan, its limits (label, kind, scope, percent, severity, resets_at in UTC), extra, notice, error,
+and when it was read (read_at, and age in seconds). It exits with 1 when an agent could not be
+asked, after printing the others.
+
+Examples:
+  cornercase usage
+  cornercase usage --cached --json";

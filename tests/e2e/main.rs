@@ -41,6 +41,7 @@ mod sidebar;
 mod socket;
 mod startup;
 mod updates;
+mod usage;
 mod views;
 
 const ROWS: u16 = 24;

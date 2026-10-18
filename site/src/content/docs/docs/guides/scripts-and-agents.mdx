@@ -83,6 +83,7 @@ group 9  personal  collapsed
 | `todo` | Adds to, lists, checks off and removes items of the [TODO list](../todo/), and sends one to an agent as `send --enter` would. |
 | `config` | Reads every setting, connection and project's commands, and changes them with the Settings dialog's own checks: [settings for a program that draws its own preferences](#settings). |
 | `away` | Has agents message you [on Telegram](../telegram/) or [Discord](../discord/); `--off` stops it. |
+| `usage` | Prints your Claude Code and Codex [plan limits](#plan-usage) as the Usage dialog's Limits tab shows them; `--cached` prints the last answer without asking the agents again. |
 | `skill` | Prints the instructions that teach coding agents these commands. |
 | `contract` | Says what the running server supports: its version, the [contract](#contract-and-compatibility) it speaks, its boot and its operations and streams. |
 
@@ -611,6 +612,33 @@ cornercase restart --when-idle --yes
 The pane the command runs in doesn't hold the restart, so an agent can run it as its last step: the restart stops it too, and its conversation [resumes](../sessions/#agents-resume-their-conversations). Until then every window says a restart is pending, with a button that cancels it. [`cornercase restart`](../../reference/command-line/#once-no-agent-is-working) has the details.
 
 
+### Plan usage
+
+```sh
+cornercase usage
+cornercase usage --json
+cornercase usage --cached
+```
+
+`usage` prints what the Limits tab of the [Usage dialog](../projects-workspaces-tabs/#usage-and-stats) shows, so a script or another app can read how much of your plan is left:
+
+```text
+Claude Code · max plan  updated just now
+  session (5h)   34% · resets in 2h 14m
+  week           81% · resets in 3d 4h
+  week · Opus    12% · resets in 3d 4h
+  extra usage: 12.34 USD of 50.00 USD
+
+Codex
+  usage unavailable: codex did not answer in time
+```
+
+It asks the installed agents (Claude Code and Codex; both when neither is installed, each saying why it could not run) by running `claude` and `codex` on the server's machine, the ones [`agent_commands`](../../reference/agents/#your-own-agents) names. That sends no prompt and costs no tokens, and each agent gets at most ten seconds. A probe already running, started by the dialog or by another `usage`, is waited for rather than started again. Nothing is asked between requests: a program that polls should use `--cached`, which answers at once with the last answer and its age and asks nothing. The command needs a running server, since the probes and their last answers live there. It exits 1, after printing every agent, when one could not be asked.
+
+With `--json` it prints `{"agents": [...]}`, one entry per agent with every key present (`null` when it has no value): `agent` and `title`, `loading` (a probe is running now), `read_at` (UTC) and `age` (seconds) of the last answer with numbers, `plan`, `limited` (`false` means the account has no plan limits, `null` that nothing was read yet), `limits`, `extra` (Claude Code's extra usage or Codex's credits, as text), `notice` (what the dialog shows instead of bars, such as `not signed in · run codex login`) and `error`. After a failed probe, `plan`, `limits` and the rest are from the answer before it, as old as `age` says. A limit has `label` (the dialog's text), `kind` (the agent's own name for it: Claude Code's `session`, `weekly_all` or `weekly_scoped`, or Codex's `primary` or `secondary`), `scope` (the model or bucket it applies to, `null` for the whole plan), `percent`, `severity` (`normal`, `warning` or `critical`; read it leniently) and `resets_at` (UTC, or `null`). `kind` and `scope` together name a limit from one answer to the next.
+
+It is the request `{"command": "usage", "args": {"cached": false}}`. An older server answers that it has no `usage` command.
+
 ### Stats
 
 ```sh
@@ -677,6 +705,7 @@ A refusal has a code: `not-found` for a key that names no setting or connection,
 | `focus --view` | `project`, `workspace`, `tab`, `pane` the view shows now, and its `projection`. |
 | `send`, `wait` | `pane`, and, once a wait ended, `ended` (`idle`, `done`, `pending`, `waiting`, `working`, `shell`, `text` or `quiet`) and `line` for a `--text` match. `start --wait` adds `ended` and `line` too. |
 | `wait --any`, `wait --all` | `panes`: one entry per line of text, each with `pane`, `tab` when it was given as a `--tab`, `ended` (as above, or `closed`) and `line` for a `--text` match. |
+| `usage` | `agents`: `agent`, `title`, `loading`, `read_at`, `age`, `plan`, `limited`, `limits` (`label`, `kind`, `scope`, `percent`, `severity`, `resets_at`), `extra`, `notice`, `error`. See [Plan usage](#plan-usage). |
 | `search` | `matches`: `pane`, `tab`, `workspace`, `project`, `place`, `who`, `source` (`prompt`, `reply` or `screen`), `line`, `text`, `written`; and `capped`. See [Find where something was said](#find-where-something-was-said). |
 | `read` | `pane` and `text`. With `--last-message`, also `agent` (`claude`, `codex`, `gemini` or `opencode`), `written` (when the agent wrote it, in UTC, such as `2026-10-08T19:56:37.241Z`) and `turn_over` (`true` once the agent stopped working, as [`--until turn-over`](#wait) sees it; missing while cornercase doesn't know yet). |
 | `read --last-message` with several targets | `panes`: the individual `read --last-message` answers above, or entries with `error` and the requested `pane` or `tab` id. |
@@ -744,7 +773,7 @@ cornercase contract --json
 cornercase 0.12.137
 contract 1
 boot 4242-1700000000
-commands 58 (58 available)
+commands 59 (59 available)
 stream events 1
 stream watch 1
 stream surface 1

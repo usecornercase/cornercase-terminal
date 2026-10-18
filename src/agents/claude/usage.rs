@@ -102,8 +102,12 @@ fn time(text: Option<&str>) -> Option<i64> {
     text.and_then(time::parse_time)
 }
 
+fn model(limit: &Limit) -> Option<&str> {
+    limit.scope.as_ref().and_then(|s| s.model.as_ref()).and_then(|m| m.display_name.as_deref())
+}
+
 fn label(limit: &Limit) -> String {
-    let model = limit.scope.as_ref().and_then(|s| s.model.as_ref()).and_then(|m| m.display_name.as_deref());
+    let model = model(limit);
     match (limit.kind.as_str(), model) {
         ("session", _) => "session (5h)".into(),
         ("weekly_all", _) => "week".into(),
@@ -118,13 +122,23 @@ fn windows(limits: &Limits) -> Vec<Window> {
         return limits
             .list
             .iter()
-            .map(|l| window(label(l), l.percent, l.severity.as_deref(), time(l.resets_at.as_deref())))
+            .map(|l| {
+                window(
+                    label(l),
+                    l.kind.clone(),
+                    model(l).map(str::to_string),
+                    l.percent,
+                    l.severity.as_deref(),
+                    time(l.resets_at.as_deref()),
+                )
+            })
             .collect();
     }
-    [("session (5h)", &limits.five_hour), ("week", &limits.seven_day)]
+    [("session (5h)", "session", &limits.five_hour), ("week", "weekly_all", &limits.seven_day)]
         .into_iter()
-        .filter_map(|(name, u)| {
-            u.as_ref().map(|u| window(name.into(), u.utilization, None, time(u.resets_at.as_deref())))
+        .filter_map(|(name, kind, u)| {
+            u.as_ref()
+                .map(|u| window(name.into(), kind.into(), None, u.utilization, None, time(u.resets_at.as_deref())))
         })
         .collect()
 }

@@ -75,7 +75,7 @@ fn snapshot_windows(id: &str, snapshot: &Snapshot) -> impl Iterator<Item = Windo
         let limit = limit.as_ref()?;
         let label = duration(limit.window_duration_mins, slot);
         let label = scope.as_ref().map_or_else(|| label.clone(), |scope| format!("{label} · {scope}"));
-        Some(window(label, Some(limit.used_percent), None, limit.resets_at))
+        Some(window(label, slot.into(), scope.clone(), Some(limit.used_percent), None, limit.resets_at))
     })
 }
 

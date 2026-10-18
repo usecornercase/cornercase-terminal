@@ -53,6 +53,7 @@ fn contract_describes_the_running_server_and_its_boot() {
         "group-style",
         "group-delete",
         "removal-check",
+        "usage",
     ] {
         assert!(operations.iter().any(|op| op["name"] == name && op["available"] == true), "{name}: {contract}");
     }

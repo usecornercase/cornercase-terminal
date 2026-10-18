@@ -11,6 +11,7 @@ mod search;
 mod status;
 mod talk;
 mod terminal;
+mod usage;
 mod wait;
 
 use std::collections::{HashMap, HashSet};
@@ -108,6 +109,7 @@ enum Stage {
     Setup(u64),
     Restart { caller: Option<u64> },
     Issue(Box<Asking>),
+    Usage(Vec<(agents::Known, u64)>),
 }
 
 impl Stage {
@@ -294,6 +296,7 @@ impl App {
                         | Stage::Restart { .. }
                         | Stage::Check
                         | Stage::Issue(_)
+                        | Stage::Usage(_)
                 )
         });
     }
@@ -441,6 +444,7 @@ impl App {
             Command::IssueList(list) => self.issue_list_request(client, asker, &list),
             Command::IssueRead(read) => self.issue_read_request(client, asker, &read),
             Command::IssuePeople(people) => self.issue_people_request(client, asker, &people),
+            Command::Usage(usage) => Ok(self.usage_request(client, &usage, now)),
             Command::LastMessage(last) => self.last_message_request(client, asker, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),

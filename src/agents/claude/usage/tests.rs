@@ -22,18 +22,24 @@ fn a_recorded_answer_gives_one_window_per_limit() {
         windows: vec![
             Window {
                 label: "session (5h)".into(),
+                kind: "session".into(),
+                scope: None,
                 percent: 7,
                 severity: Severity::Normal,
                 resets_at: at("2026-10-04T13:59:59"),
             },
             Window {
                 label: "week".into(),
+                kind: "weekly_all".into(),
+                scope: None,
                 percent: 74,
                 severity: Severity::Normal,
                 resets_at: at("2026-10-04T15:59:59"),
             },
             Window {
                 label: "week · Fable".into(),
+                kind: "weekly_scoped".into(),
+                scope: Some("Fable".into()),
                 percent: 0,
                 severity: Severity::Normal,
                 resets_at: at("2026-10-04T16:00:00"),
@@ -76,7 +82,14 @@ fn unknown_fields_and_kinds_are_tolerated() {
     let expected = Report {
         plan: Some("max".into()),
         limited: true,
-        windows: vec![Window { label: "daily burst".into(), percent: 13, severity: Severity::Normal, resets_at: None }],
+        windows: vec![Window {
+            label: "daily burst".into(),
+            kind: "daily_burst".into(),
+            scope: None,
+            percent: 13,
+            severity: Severity::Normal,
+            resets_at: None,
+        }],
         extra: Some("extra usage: 12.34 USD of 50.00 USD".into()),
         notice: None,
     };
@@ -92,6 +105,17 @@ fn without_a_limits_list_the_five_hour_and_weekly_fields_are_used() {
     let found: Vec<(String, Severity)> =
         parse(body).expect("a report").windows.into_iter().map(|w| (w.label, w.severity)).collect();
     assert_eq!(found, [("session (5h)".into(), Severity::Critical), ("week".into(), Severity::Warning)]);
+}
+
+#[test]
+fn the_fallback_fields_take_the_kinds_of_the_list() {
+    let body = json!({"rate_limits_available": true, "rate_limits": {
+        "five_hour": {"utilization": 5.0, "resets_at": null},
+        "seven_day": {"utilization": 6.0, "resets_at": null}
+    }});
+    let found: Vec<(String, Option<String>)> =
+        parse(body).expect("a report").windows.into_iter().map(|w| (w.kind, w.scope)).collect();
+    assert_eq!(found, [("session".into(), None), ("weekly_all".into(), None)]);
 }
 
 #[rstest]

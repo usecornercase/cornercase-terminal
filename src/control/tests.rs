@@ -106,6 +106,7 @@ fn every_command_is_listed_by_name() {
         Command::IssueList(IssueList::default()),
         Command::IssueRead(IssueRead::default()),
         Command::IssuePeople(IssuePeople::default()),
+        Command::Usage(Usage::default()),
     ];
 
     let names: Vec<String> = commands

@@ -28,11 +28,20 @@ fn a_recorded_answer_gives_the_session_and_the_week() {
         windows: vec![
             Window {
                 label: "session (5h)".into(),
+                kind: "primary".into(),
+                scope: None,
                 percent: 53,
                 severity: Severity::Normal,
                 resets_at: Some(1_791_218_970),
             },
-            Window { label: "week".into(), percent: 8, severity: Severity::Normal, resets_at: Some(1_791_805_770) },
+            Window {
+                label: "week".into(),
+                kind: "secondary".into(),
+                scope: None,
+                percent: 8,
+                severity: Severity::Normal,
+                resets_at: Some(1_791_805_770),
+            },
         ],
         extra: None,
         notice: None,
@@ -76,6 +85,29 @@ fn other_buckets_follow_the_codex_one_with_their_name() {
             ("week".into(), 20),
             ("session (5h) · Spark".into(), 40),
             ("week · b_model".into(), 30),
+        ]
+    );
+}
+
+#[test]
+fn a_window_is_named_by_its_slot_and_bucket() {
+    let result = json!({
+        "rateLimits": {"limitId": "codex", "primary": limit(10, Some(300))},
+        "rateLimitsByLimitId": {
+            "a_model": {"limitId": "a_model", "limitName": "Spark", "primary": limit(40, Some(300))},
+            "codex": {"limitId": "codex", "primary": limit(10, Some(300)), "secondary": limit(20, Some(10_080))},
+            "b_model": {"limitId": "b_model", "secondary": limit(30, Some(10_080))}
+        }
+    });
+    let found: Vec<(String, Option<String>)> =
+        parse(result).expect("a report").windows.into_iter().map(|w| (w.kind, w.scope)).collect();
+    assert_eq!(
+        found,
+        [
+            ("primary".into(), None),
+            ("secondary".into(), None),
+            ("primary".into(), Some("Spark".into())),
+            ("secondary".into(), Some("b_model".into())),
         ]
     );
 }

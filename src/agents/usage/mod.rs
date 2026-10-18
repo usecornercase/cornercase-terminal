@@ -46,6 +46,14 @@ impl Severity {
         }
     }
 
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Warning => "warning",
+            Self::Critical => "critical",
+        }
+    }
+
     fn parse(text: Option<&str>, percent: u16) -> Self {
         match text {
             Some("normal") => Self::Normal,
@@ -58,6 +66,8 @@ impl Severity {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Window {
     pub(crate) label: String,
+    pub(crate) kind: String,
+    pub(crate) scope: Option<String>,
     pub(crate) percent: u16,
     pub(crate) severity: Severity,
     pub(crate) resets_at: Option<i64>,
@@ -70,6 +80,12 @@ pub(crate) struct Report {
     pub(crate) windows: Vec<Window>,
     pub(crate) extra: Option<String>,
     pub(crate) notice: Option<&'static str>,
+}
+
+impl Report {
+    pub(crate) fn notice_for(&self, agent: Known) -> Option<&'static str> {
+        self.notice.or_else(|| agent.usage().filter(|_| !self.limited).map(|spec| spec.no_limits))
+    }
 }
 
 pub(crate) struct Spec {
@@ -90,12 +106,14 @@ fn whole(percent: Option<f64>) -> u16 {
 
 pub(in crate::agents) fn window(
     label: String,
+    kind: String,
+    scope: Option<String>,
     percent: Option<f64>,
     severity: Option<&str>,
     resets_at: Option<i64>,
 ) -> Window {
     let percent = whole(percent);
-    Window { label, percent, severity: Severity::parse(severity, percent), resets_at }
+    Window { label, kind, scope, percent, severity: Severity::parse(severity, percent), resets_at }
 }
 
 type Answer = fn(&str) -> Option<Result<Report>>;
@@ -178,6 +196,7 @@ pub(crate) struct Probe {
     last: Option<(Report, Instant)>,
     loading: bool,
     error: Option<String>,
+    answers: u64,
 }
 
 impl Probe {
@@ -192,6 +211,7 @@ impl Probe {
 
     fn answered(&mut self, result: Result<Report>, now: Instant) {
         self.loading = false;
+        self.answers += 1;
         match result {
             Ok(report) => self.last = Some((report, now)),
             Err(e) => self.error = Some(e.to_string()),
@@ -199,6 +219,10 @@ impl Probe {
     }
     pub(crate) fn last(&self) -> Option<&(Report, Instant)> {
         self.last.as_ref()
+    }
+
+    pub(crate) fn answers(&self) -> u64 {
+        self.answers
     }
 
     pub(crate) fn loading(&self) -> bool {
@@ -224,6 +248,10 @@ impl State {
 
     pub(crate) fn answered(&mut self, agent: Known, result: Result<Report>, now: Instant) {
         self.probes[index(agent)].answered(result, now);
+    }
+
+    pub(crate) fn probe(&self, agent: Known) -> &Probe {
+        &self.probes[index(agent)]
     }
 
     pub(crate) fn shown(&self) -> impl Iterator<Item = (Known, &Probe)> {

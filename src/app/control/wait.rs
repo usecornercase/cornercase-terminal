@@ -155,6 +155,11 @@ impl App {
                 _ => return Some(Ok(json(&pending.done))),
             }
         }
+        if let Stage::Usage(waiting) = &pending.stage
+            && let Some(plans) = self.usage_read(waiting, now)
+        {
+            return Some(Ok(json(&plans)));
+        }
         if let Stage::Setup(workspace) = pending.stage
             && !self.workspace_setting_up(workspace)
         {
@@ -228,6 +233,7 @@ impl App {
             Stage::Removing { .. } => return "git is still removing the worktree".into(),
             Stage::Check => return "git is still checking the worktree".into(),
             Stage::Issue(asking) => return format!("{} is still looking the issue up", asking.source().name()),
+            Stage::Usage(_) => return "the agents have not said their usage yet".into(),
             Stage::Launch { .. } => return format!("pane {pane} is still starting"),
             Stage::Setup(workspace) => {
                 return format!("workspace {workspace} is still running its setup in pane {pane}");
