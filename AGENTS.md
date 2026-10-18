@@ -9,7 +9,7 @@ These rules apply to every contributor and coding agent, in `src/`, `tests/` and
 ```sh
 cargo run                                   # attach to the server (starts it if none is running)
 cargo run -- --help                         # every command, including the ones for scripts and agents
-cargo run -- kill-server                    # stop the server and every shell in it
+cargo run -- kill-server                    # stop this tree's dev server and its shells
 cargo test --locked                         # unit + snapshot + e2e tests
 cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo fmt
@@ -20,7 +20,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 - **Building needs Zig 0.15.2 on the PATH**: `libghostty-vt-sys` runs `zig build` on Ghostty's sources, and Ghostty pins the Zig minor version. The first build per profile clones Ghostty (network, ~100 s, ~530 MB in `target/`); `GHOSTTY_SOURCE_DIR` can point at a local checkout.
 - **The toolchain is pinned** in `rust-toolchain.toml` (version and components), and CI installs exactly that one, so a new Rust release cannot break CI with new lints. Bump it by hand: change the version, then fix what clippy reports.
 - `.cargo/config.toml` sets `LIBGHOSTTY_VT_SYS_OPTIMIZE=ReleaseFast`; a Zig Debug build of Ghostty is too slow to use.
-- **After rebuilding, run `cargo run -- kill-server`**: the client refuses to attach to a server from another build. **Never run a plain `kill-server` from inside a cornercase pane** (you may be in the real server): give a dev build its own absolute `CORNERCASE_SOCKET`. Inside its own server the command asks first, or refuses without a terminal or `--yes`.
+- **A debug build has its own server and folders per source tree** (DESIGN.md, Client / server): after a rebuild, `cargo run -- kill-server` stops only this tree's (a client refuses a server from another build), asking first inside its own server. In a cornercase pane, open the window with `env -u CORNERCASE cargo run`, and never run the installed `cornercase kill-server`.
 - Snapshots (`insta`): a changed render writes its `.snap.new` in the `snapshots/` folder next to the test's file (`src/ui/tests/snapshots/` for the `ui` tests) and fails. Check it, then accept with `INSTA_UPDATE=always cargo test`. Delete snapshots of renamed or removed tests by hand.
 - **Before calling a task done, run fmt, clippy, tests, `cargo-machete` and jscpd, and fix what fails.** If one cannot pass, say so.
 - **A change that adds, removes or changes a feature updates the website in the same change** (see Website below).
@@ -154,7 +154,7 @@ skills/cornercase/SKILL.md  the agent skill, embedded for `cornercase skill`
 
 ```sh
 T() { tmux -L cctest "$@"; }
-T new-session -d -s t -x 100 -y 20 env CORNERCASE_SOCKET=/tmp/cc-dev/server.sock ./target/debug/cornercase
+T new-session -d -s t -x 100 -y 20 env -u CORNERCASE ./target/debug/cornercase
 T send-keys -t t 'echo hi' Enter
 T send-keys -t t -l $'\e[<0;6;5M'         # mouse press at col 6, row 5 (1-based)
 T capture-pane -p -t t

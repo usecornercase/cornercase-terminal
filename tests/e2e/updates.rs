@@ -38,10 +38,7 @@ fn fake_release(version: &str, script: &str) -> String {
     assert!(tar.success(), "tar failed");
     let archive = std::fs::read(build.join("release.tar.gz")).expect("read the archive");
     let _ = std::fs::remove_dir_all(&build);
-    let digest = Sha256::digest(&archive).iter().fold(String::new(), |mut hex, b| {
-        let _ = write!(hex, "{b:02x}");
-        hex
-    });
+    let digest = sha256_hex(&archive);
     let url = serve(|url| {
         let latest = serde_json::json!({"tag_name": format!("v{version}"), "assets": [
             {"name": format!("{name}.tar.gz"), "browser_download_url": format!("{url}/download")},

@@ -98,3 +98,14 @@ fn are_named_after_their_program() {
     let (app, _rx, _dirs) = app_with(1);
     wait_until("the shell runs", || is_sh(&app.projects[0].workspaces[0].tabs[0].label(&app.config)));
 }
+
+#[test]
+fn shells_of_a_debug_server_name_its_socket_for_cornercase_in_them() {
+    let (mut app, rx, _dirs) = app_with(1);
+    app.set_pane_socket(Path::new("/run/cc-test/own.sock"));
+    click_row(&mut app, WorkspaceRow::NewTab(0));
+    type_line(&mut app, "echo \"sock=$CORNERCASE_SOCKET\"");
+    pump_until(&mut app, &rx, "the new shell names the server's socket", |a| {
+        tab_term(a, 0, 1).emulator.screen_text().is_ok_and(|text| text.contains("sock=/run/cc-test/own.sock"))
+    });
+}

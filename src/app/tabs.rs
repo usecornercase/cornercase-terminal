@@ -6,13 +6,18 @@ use super::App;
 use crate::control;
 use crate::error::Result;
 use crate::flows::folder;
+use crate::paths;
 use crate::project::split::Dir;
 use crate::project::{Hierarchy, Project, Tab, Workspace};
 use crate::protocol;
 use crate::term::{SpawnOptions, Term};
 
 impl App {
-    pub(super) fn pane_env(id: u64, run: Option<&Path>) -> Vec<(String, String)> {
+    pub(crate) fn set_pane_socket(&mut self, socket: &Path) {
+        self.pane_socket = socket.to_str().map(str::to_owned);
+    }
+
+    pub(super) fn pane_env(&self, id: u64, run: Option<&Path>) -> Vec<(String, String)> {
         let mut env = vec![
             (protocol::NESTED_ENV.to_string(), "1".to_string()),
             (control::PANE_ENV.to_string(), id.to_string()),
@@ -20,6 +25,9 @@ impl App {
         ];
         if let Some(dir) = run.and_then(Path::to_str) {
             env.push((folder::ENV.to_string(), dir.to_string()));
+        }
+        if let Some(socket) = &self.pane_socket {
+            env.push((paths::SOCKET_ENV.to_string(), socket.clone()));
         }
         env
     }
@@ -31,7 +39,7 @@ impl App {
     pub(super) fn spawn_with(&mut self, area: Rect, cwd: PathBuf, run: Option<&Path>) -> Result<Term> {
         let (rows, cols) = self.pane_size(area);
         let id = self.take_id();
-        let env = Self::pane_env(id, run);
+        let env = self.pane_env(id, run);
         let opts = SpawnOptions {
             id,
             shell: &self.shell,

@@ -271,7 +271,12 @@ fn a_bare_socket_name_is_checked_in_the_folder_it_runs_in() {
 #[test]
 fn cornercases_own_socket_folder_may_be_removed() {
     let session = Session::new();
-    let own = session.dir.join(format!("cornercase-{}", cornercase::protocol::own_uid()));
+    let uid = cornercase::protocol::own_uid();
+    let own = session.dir.join(if cfg!(debug_assertions) {
+        format!("cornercase-dev-{uid}-{}", tree_key())
+    } else {
+        format!("cornercase-{uid}")
+    });
     std::fs::create_dir(&own).expect("create the folder");
     std::fs::set_permissions(&own, std::fs::Permissions::from_mode(0o777)).expect("open the folder to all");
     let mut cmd = session.command();
@@ -280,6 +285,31 @@ fn cornercases_own_socket_folder_may_be_removed() {
     let out = cmd.output().expect("run cornercase");
 
     assert!(refused_with(&out, REMOVE_THE_FOLDER), "{out:?}");
+}
+
+#[test]
+fn a_debug_build_keeps_to_the_folders_of_its_source_tree() {
+    let session = Session::new();
+    let (home, run) = (session.dir.join("home"), session.dir.join("run"));
+    let own = |args: &[&str]| {
+        let mut cmd = session.command();
+        cmd.args(args)
+            .env_remove(SOCKET_ENV)
+            .env_remove("XDG_STATE_HOME")
+            .env_remove("XDG_CONFIG_HOME")
+            .env("HOME", &home)
+            .env("XDG_RUNTIME_DIR", &run);
+        cmd.output().expect("run cornercase")
+    };
+
+    let logs = own(&["logs", "--path"]);
+    let status = own(&["status"]);
+
+    let expected = home.join(".local/state").join(own_folder()).join("server.log");
+    assert_eq!(String::from_utf8_lossy(&logs.stdout).trim(), expected.to_string_lossy());
+    assert!(!status.status.success(), "{status:?}");
+    assert!(String::from_utf8_lossy(&status.stderr).contains("no cornercase server is running"), "{status:?}");
+    assert!(run.join(own_folder()).is_dir());
 }
 
 const KEEP_THE_FOLDER: &str = "Point CORNERCASE_SOCKET at a socket in a folder only you can write to";

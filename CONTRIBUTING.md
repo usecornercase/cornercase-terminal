@@ -20,11 +20,15 @@ cargo run                  # build and attach
 cargo run -- kill-server   # needed after every rebuild: a client never attaches to a server from another build
 ```
 
-To experiment without touching your real session, use a separate socket:
+`cargo run` builds and attaches to this checkout's own server, so `kill-server` stops only that one. Each checkout and worktree gets its own server, session, log, stats, TODOs and queue in `~/.local/state/cornercase-dev/<key>/` (8 hex digits from the checkout's path; a `source` file names the checkout). Settings, tokens, flows and plugins live in `~/.config/cornercase-dev/`, shared by every checkout and empty at first: copy your `config.json` there. Release builds (`cargo run --release`, `cargo install --path .`) use your usual folders and server.
+
+`CORNERCASE_SOCKET` still overrides all of it, for a second server from one checkout:
 
 ```sh
 CORNERCASE_SOCKET=/tmp/cc-dev/server.sock cargo run
 ```
+
+From a terminal inside cornercase, start the window with `env -u CORNERCASE cargo run`, and never run your installed `cornercase kill-server` there.
 
 ## Checks
 

@@ -27,7 +27,7 @@ impl App {
         let id = self.take_id();
         let file = target.dir.join(path).display().to_string();
         let args = ["-c".to_string(), EDIT_SCRIPT.to_string(), "sh".to_string(), line.max(1).to_string(), file];
-        let env = [Self::pane_env(id, None), self.editor_env.clone()].concat();
+        let env = [self.pane_env(id, None), self.editor_env.clone()].concat();
         let opts = SpawnOptions {
             id,
             shell: "/bin/sh",

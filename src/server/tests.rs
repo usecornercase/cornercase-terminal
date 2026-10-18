@@ -828,3 +828,18 @@ mod queue_persistence {
         ));
     }
 }
+
+mod source_file {
+    use super::*;
+
+    #[test]
+    fn names_the_tree_a_debug_builds_folder_belongs_to() {
+        let tmp = TempDir::new();
+        let session = tmp.path().join("cornercase-dev").join("ecddcea2").join("session.json");
+
+        name_the_source(&session, "/home/me/src/cornercase");
+
+        let written = std::fs::read_to_string(session.with_file_name("source")).expect("the source file");
+        assert_eq!(written, "/home/me/src/cornercase\n");
+    }
+}

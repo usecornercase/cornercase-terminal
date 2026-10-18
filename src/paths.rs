@@ -1,31 +1,75 @@
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+
+use sha2::{Digest, Sha256};
+
+use crate::text::hex;
 
 pub const SOCKET_ENV: &str = "CORNERCASE_SOCKET";
 pub(crate) const TODOS_FILE: &str = "todos.json";
 const SECRETS_FILE: &str = "secrets.json";
 const LOG_FILE: &str = "server.log";
 const ISSUE_CACHE_FILE: &str = "issues.json";
+const SOURCE_FILE: &str = "source";
+const RELEASE: &str = "cornercase";
+const DEV: &str = "cornercase-dev";
 
-pub(crate) fn custom_socket() -> Option<PathBuf> {
-    std::env::var_os(SOCKET_ENV).map(PathBuf::from)
+type Var<'a> = &'a dyn Fn(&str) -> Option<OsString>;
+
+fn process_var(name: &str) -> Option<OsString> {
+    std::env::var_os(name)
 }
 
-fn user_file(home_var: &str, fallback: &[&str], name: &str) -> PathBuf {
-    let base = std::env::var_os(home_var)
+fn this_tree() -> Option<&'static str> {
+    cfg!(debug_assertions).then_some(env!("CARGO_MANIFEST_DIR"))
+}
+
+fn this_key() -> Option<String> {
+    this_tree().map(dev_key)
+}
+
+fn dev_key(tree: &str) -> String {
+    hex(&Sha256::digest(tree.as_bytes())[..4])
+}
+
+pub(crate) fn dev_source() -> Option<&'static str> {
+    this_tree().filter(|_| custom_socket().is_none())
+}
+
+pub(crate) fn custom_socket() -> Option<PathBuf> {
+    custom(&process_var)
+}
+
+fn custom(var: Var) -> Option<PathBuf> {
+    var(SOCKET_ENV).map(PathBuf::from)
+}
+
+fn user_file(var: Var, home_var: &str, fallback: &[&str], folder: &Path, name: &str) -> PathBuf {
+    let base = var(home_var)
         .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| fallback.iter().fold(PathBuf::from(home), |p, s| p.join(s))))
+        .or_else(|| var("HOME").map(|home| fallback.iter().fold(PathBuf::from(home), |p, s| p.join(s))))
         .unwrap_or_else(std::env::temp_dir);
-    base.join("cornercase").join(name)
+    base.join(folder).join(name)
+}
+
+fn state_folder(dev: Option<&str>) -> PathBuf {
+    dev.map_or_else(|| PathBuf::from(RELEASE), |key| Path::new(DEV).join(key))
 }
 
 pub(crate) fn socket() -> PathBuf {
-    if let Some(path) = custom_socket() {
+    socket_in(&process_var, &std::env::temp_dir(), rustix::process::getuid().as_raw(), this_key().as_deref())
+}
+
+fn socket_in(var: Var, temp: &Path, uid: u32, dev: Option<&str>) -> PathBuf {
+    if let Some(path) = custom(var) {
         return path;
     }
-    let dir = std::env::var_os("XDG_RUNTIME_DIR").map_or_else(
-        || std::env::temp_dir().join(format!("cornercase-{}", rustix::process::getuid().as_raw())),
-        |dir| PathBuf::from(dir).join("cornercase"),
-    );
+    let dir = match (var("XDG_RUNTIME_DIR"), dev) {
+        (Some(dir), None) => PathBuf::from(dir).join(RELEASE),
+        (Some(dir), Some(key)) => PathBuf::from(dir).join(DEV).join(key),
+        (None, None) => temp.join(format!("{RELEASE}-{uid}")),
+        (None, Some(key)) => temp.join(format!("{DEV}-{uid}-{key}")),
+    };
     dir.join("server.sock")
 }
 
@@ -34,10 +78,15 @@ pub(crate) fn lock(socket: &Path) -> PathBuf {
 }
 
 pub(crate) fn config() -> PathBuf {
-    match custom_socket() {
-        Some(socket) => socket.with_file_name("config.json"),
-        None => user_file("XDG_CONFIG_HOME", &[".config"], "config.json"),
+    config_in(&process_var, this_key().as_deref())
+}
+
+fn config_in(var: Var, dev: Option<&str>) -> PathBuf {
+    if let Some(socket) = custom(var) {
+        return socket.with_file_name("config.json");
     }
+    let folder = if dev.is_some() { DEV } else { RELEASE };
+    user_file(var, "XDG_CONFIG_HOME", &[".config"], Path::new(folder), "config.json")
 }
 
 pub(crate) fn secrets(config_path: &Path) -> PathBuf {
@@ -77,10 +126,18 @@ pub(crate) fn plugin_installs(session: &Path) -> PathBuf {
 }
 
 pub(crate) fn session() -> PathBuf {
-    match custom_socket() {
+    session_in(&process_var, this_key().as_deref())
+}
+
+fn session_in(var: Var, dev: Option<&str>) -> PathBuf {
+    match custom(var) {
         Some(socket) => socket.with_extension("json"),
-        None => user_file("XDG_STATE_HOME", &[".local", "state"], "session.json"),
+        None => user_file(var, "XDG_STATE_HOME", &[".local", "state"], &state_folder(dev), "session.json"),
     }
+}
+
+pub(crate) fn source(session: &Path) -> PathBuf {
+    session.with_file_name(SOURCE_FILE)
 }
 
 pub(crate) fn todos(state: &Path) -> PathBuf {
@@ -112,9 +169,13 @@ pub(crate) fn star(session: &Path) -> PathBuf {
 }
 
 pub(crate) fn log() -> PathBuf {
-    match custom_socket() {
+    log_in(&process_var, this_key().as_deref())
+}
+
+fn log_in(var: Var, dev: Option<&str>) -> PathBuf {
+    match custom(var) {
         Some(socket) => socket.with_extension("log"),
-        None => session().with_file_name(LOG_FILE),
+        None => session_in(var, dev).with_file_name(LOG_FILE),
     }
 }
 

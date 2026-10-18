@@ -347,6 +347,10 @@ pub(crate) fn run() -> Result<()> {
         session = session.display(),
         level = format!("{level:?}").to_lowercase(),
     );
+    if let Some(tree) = paths::dev_source() {
+        name_the_source(&session, tree);
+        app.set_pane_socket(&path);
+    }
     app.set_issue_cache(paths::issue_cache(&session));
     app.set_plugin_places(crate::plugins::Places::new(&paths::config(), &session));
     let todos = todo::load(&paths::todos(&session));
@@ -385,6 +389,15 @@ fn lock(path: &Path) -> Result<File> {
     protocol::try_lock(path)
         .map_err(|source| Error::Listen { path: path.to_path_buf(), source })?
         .ok_or_else(|| Error::ServerRunning(path.to_path_buf()))
+}
+
+fn name_the_source(session: &Path, tree: &str) {
+    let path = paths::source(session);
+    let written =
+        path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::write(&path, format!("{tree}\n")));
+    if let Err(error) = written {
+        log::warning!("server", "cannot name the source tree", path = path.display(), error = error);
+    }
 }
 
 fn spawn_acceptor(listener: UnixListener, tx: Sender<ServerEvent>) {

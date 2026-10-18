@@ -470,6 +470,21 @@ fn pane() -> Rect {
     areas().pane
 }
 
+fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes).iter().fold(String::new(), |mut hex, b| {
+        let _ = write!(hex, "{b:02x}");
+        hex
+    })
+}
+
+fn tree_key() -> String {
+    sha256_hex(env!("CARGO_MANIFEST_DIR").as_bytes())[..8].to_string()
+}
+
+fn own_folder() -> String {
+    if cfg!(debug_assertions) { format!("cornercase-dev/{}", tree_key()) } else { "cornercase".into() }
+}
+
 fn git(dir: &std::path::Path, args: &[&str]) {
     let out = std::process::Command::new("git")
         .arg("-C")

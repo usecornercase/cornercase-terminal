@@ -39,3 +39,84 @@ fn run_folders_follow_the_session_without_colliding(#[case] session: &str, #[cas
 fn the_star_state_sits_next_to_the_session() {
     assert_eq!(star(Path::new("/c/session.json")), PathBuf::from("/c/star.json"));
 }
+
+type Vars = &'static [(&'static str, &'static str)];
+
+fn vars(vars: Vars) -> impl Fn(&str) -> Option<OsString> {
+    move |name| vars.iter().find(|(key, _)| *key == name).map(|(_, value)| OsString::from(value))
+}
+
+const KEY: Option<&str> = Some("ecddcea2");
+const OTHER_KEY: Option<&str> = Some("24fcc040");
+const HOME: (&str, &str) = ("HOME", "/home/me");
+const CUSTOM: (&str, &str) = (SOCKET_ENV, "/s/dev.sock");
+const RUNTIME: (&str, &str) = ("XDG_RUNTIME_DIR", "/run/user/501");
+
+mod the_key_of_a_source_tree {
+    use super::*;
+
+    #[test]
+    fn is_the_first_eight_hex_digits_of_the_sha256_of_its_path() {
+        assert_eq!(dev_key("/home/me/src/cornercase"), "ecddcea2");
+    }
+
+    #[test]
+    fn differs_for_another_worktree() {
+        assert_eq!(dev_key("/home/me/src/cornercase-2"), "24fcc040");
+    }
+}
+
+#[rstest::rstest]
+#[case::release(None, &[HOME, RUNTIME], "/run/user/501/cornercase/server.sock")]
+#[case::release_without_runtime_folder(None, &[HOME], "/tmp/t/cornercase-501/server.sock")]
+#[case::debug(KEY, &[HOME, RUNTIME], "/run/user/501/cornercase-dev/ecddcea2/server.sock")]
+#[case::debug_without_runtime_folder(KEY, &[HOME], "/tmp/t/cornercase-dev-501-ecddcea2/server.sock")]
+#[case::custom_in_release(None, &[HOME, CUSTOM, RUNTIME], "/s/dev.sock")]
+#[case::custom_in_debug(KEY, &[HOME, CUSTOM, RUNTIME], "/s/dev.sock")]
+fn sockets(#[case] dev: Option<&str>, #[case] env: Vars, #[case] expected: &str) {
+    assert_eq!(socket_in(&vars(env), Path::new("/tmp/t"), 501, dev), PathBuf::from(expected));
+}
+
+#[rstest::rstest]
+#[case::release(None, &[HOME], "/home/me/.config/cornercase/config.json")]
+#[case::release_xdg(None, &[HOME, ("XDG_CONFIG_HOME", "/c")], "/c/cornercase/config.json")]
+#[case::debug(KEY, &[HOME], "/home/me/.config/cornercase-dev/config.json")]
+#[case::debug_xdg(KEY, &[HOME, ("XDG_CONFIG_HOME", "/c")], "/c/cornercase-dev/config.json")]
+#[case::custom_in_debug(KEY, &[HOME, CUSTOM], "/s/config.json")]
+fn configs(#[case] dev: Option<&str>, #[case] env: Vars, #[case] expected: &str) {
+    assert_eq!(config_in(&vars(env), dev), PathBuf::from(expected));
+}
+
+#[rstest::rstest]
+#[case::release(None, &[HOME], "/home/me/.local/state/cornercase/session.json")]
+#[case::release_xdg(None, &[HOME, ("XDG_STATE_HOME", "/st")], "/st/cornercase/session.json")]
+#[case::debug(KEY, &[HOME], "/home/me/.local/state/cornercase-dev/ecddcea2/session.json")]
+#[case::debug_xdg(KEY, &[HOME, ("XDG_STATE_HOME", "/st")], "/st/cornercase-dev/ecddcea2/session.json")]
+#[case::custom_in_debug(KEY, &[HOME, CUSTOM], "/s/dev.json")]
+fn sessions(#[case] dev: Option<&str>, #[case] env: Vars, #[case] expected: &str) {
+    assert_eq!(session_in(&vars(env), dev), PathBuf::from(expected));
+}
+
+#[rstest::rstest]
+#[case::release(None, &[HOME], "/home/me/.local/state/cornercase/server.log")]
+#[case::debug(KEY, &[HOME], "/home/me/.local/state/cornercase-dev/ecddcea2/server.log")]
+#[case::custom_in_debug(KEY, &[HOME, CUSTOM], "/s/dev.log")]
+fn logs(#[case] dev: Option<&str>, #[case] env: Vars, #[case] expected: &str) {
+    assert_eq!(log_in(&vars(env), dev), PathBuf::from(expected));
+}
+
+#[test]
+fn two_trees_share_the_config_and_nothing_else() {
+    let env = vars(&[HOME, RUNTIME]);
+    assert_eq!(config_in(&env, KEY), config_in(&env, OTHER_KEY));
+    assert_ne!(session_in(&env, KEY), session_in(&env, OTHER_KEY));
+    assert_ne!(socket_in(&env, Path::new("/tmp/t"), 501, KEY), socket_in(&env, Path::new("/tmp/t"), 501, OTHER_KEY));
+}
+
+#[test]
+fn the_source_file_sits_in_the_state_folder() {
+    assert_eq!(
+        source(Path::new("/st/cornercase-dev/ecddcea2/session.json")),
+        PathBuf::from("/st/cornercase-dev/ecddcea2/source")
+    );
+}

@@ -56,7 +56,7 @@ impl App {
         let _ = std::fs::remove_file(&status);
         let branch = git::branch(&path).unwrap_or_default();
         let args = setup::args(script, &status, &self.shell, &self.projects[p].path, &branch);
-        let env = Self::pane_env(id, run);
+        let env = self.pane_env(id, run);
         let opts = SpawnOptions {
             id,
             shell: "/bin/sh",
