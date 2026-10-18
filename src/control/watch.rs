@@ -9,13 +9,13 @@ pub(crate) struct Watch {}
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub(crate) struct Snapshot {
+pub(crate) struct Snapshot<T = Report> {
     pub(crate) revision: u64,
     #[serde(flatten)]
-    pub(crate) report: Report,
+    pub(crate) report: T,
 }
 
-impl Snapshot {
+impl<T: Serialize> Snapshot<T> {
     pub(crate) fn streamed(&self) -> Option<String> {
         let value = serde_json::to_value(self).ok()?;
         serde_json::to_string(&super::Response::Ok(value)).ok()

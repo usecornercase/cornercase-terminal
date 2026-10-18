@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant, SystemTime};
 
+use serde::Serialize;
+
 use super::App;
 use crate::control::{Event, Ids, Kind, Report, Snapshot, What};
 use crate::log;
@@ -24,9 +26,9 @@ pub(super) struct Events {
     pub(super) snapshots: Snapshots,
 }
 
-pub(super) struct Snapshots {
+pub(super) struct Snapshots<T = Report> {
     watchers: Vec<u64>,
-    last: Option<Report>,
+    last: Option<T>,
     revision: u64,
     pub(super) built: Option<Instant>,
     due: bool,
@@ -36,7 +38,7 @@ pub(super) struct Snapshots {
     pub(super) every: Duration,
 }
 
-impl Default for Snapshots {
+impl<T> Default for Snapshots<T> {
     fn default() -> Self {
         Self {
             watchers: Vec::new(),
@@ -52,12 +54,12 @@ impl Default for Snapshots {
     }
 }
 
-impl Snapshots {
+impl<T: Clone + PartialEq + Serialize + Default> Snapshots<T> {
     pub(super) fn revision(&self) -> u64 {
         self.revision
     }
 
-    fn take(&mut self, report: Report, now: Instant) -> Option<Snapshot> {
+    fn take(&mut self, report: T, now: Instant) -> Option<Snapshot<T>> {
         self.built = Some(now);
         self.due = false;
         self.changed = false;
@@ -69,13 +71,34 @@ impl Snapshots {
         Some(Snapshot { revision: self.revision, report })
     }
 
-    fn offer(&mut self, report: Report, now: Instant, out: &mut Vec<(u64, Streamed)>) {
+    fn offer(&mut self, report: T, now: Instant, out: &mut Vec<(u64, Streamed)>, stream: &str) {
         let Some(text) = self.take(report, now).and_then(|snapshot| snapshot.streamed()) else { return };
-        log::debug!("control", "snapshot", revision = self.revision, bytes = text.len());
+        log::debug!("control", "snapshot", stream = stream, revision = self.revision, bytes = text.len());
         out.extend(self.watchers.iter().map(|watcher| (*watcher, Streamed::Snapshot(text.clone()))));
     }
 
-    fn current(&self) -> Option<Snapshot> {
+    fn join(
+        &mut self,
+        client: u64,
+        report: T,
+        now: Instant,
+        out: &mut Vec<(u64, Streamed)>,
+        stream: &str,
+    ) -> Snapshot<T> {
+        self.offer(report, now, out, stream);
+        self.watchers.push(client);
+        self.current().unwrap_or_default()
+    }
+
+    fn forget(&mut self, client: u64) {
+        self.watchers.retain(|watcher| *watcher != client);
+        if self.watchers.is_empty() {
+            self.last = None;
+            self.due = false;
+        }
+    }
+
+    fn current(&self) -> Option<Snapshot<T>> {
         self.last.clone().map(|report| Snapshot { revision: self.revision, report })
     }
 
@@ -177,11 +200,7 @@ impl Events {
         if !self.hosting() {
             self.bells.panes.clear();
         }
-        self.snapshots.watchers.retain(|watcher| *watcher != client);
-        if self.snapshots.watchers.is_empty() {
-            self.snapshots.last = None;
-            self.snapshots.due = false;
-        }
+        self.snapshots.forget(client);
     }
 
     pub(super) fn publish(&mut self, events: &[Event]) {
@@ -263,10 +282,9 @@ impl App {
     pub(super) fn watch_snapshots(&mut self, client: u64, now: Instant) -> Snapshot {
         let report = self.report(None);
         let Events { snapshots, out, .. } = &mut self.events;
-        snapshots.offer(report, now, out);
-        snapshots.watchers.push(client);
-        log::info!("control", "watching", client = client, revision = snapshots.revision);
-        snapshots.current().unwrap_or_default()
+        let snapshot = snapshots.join(client, report, now, out, "session");
+        log::info!("control", "watching", client = client, revision = snapshot.revision);
+        snapshot
     }
 
     pub(super) fn publish_snapshot(&mut self, now: Instant) {
@@ -300,7 +318,7 @@ impl App {
         }
         if watching {
             let Events { snapshots, out, .. } = &mut self.events;
-            snapshots.offer(report.clone(), now, out);
+            snapshots.offer(report.clone(), now, out, "session");
         } else {
             let snapshots = &mut self.events.snapshots;
             snapshots.built = Some(now);
