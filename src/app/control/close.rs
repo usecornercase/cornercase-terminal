@@ -114,11 +114,11 @@ impl App {
         workspace: u64,
         status: &worktree::Status,
     ) {
-        let stage = self.requests.pending.iter().find(|p| p.key == key).map(|p| &p.stage);
+        let Some(stage) = self.requests.pending.iter().find(|p| p.key == key).map(|p| &p.stage) else { return };
         let (force, unlock, check) = match stage {
-            Some(Stage::Removing { force, unlock }) => (*force, *unlock, false),
-            Some(Stage::Check) => (false, false, true),
-            _ => (false, false, false),
+            Stage::Removing { force, unlock } => (*force, *unlock, false),
+            Stage::Check => (false, false, true),
+            _ => return,
         };
         if check {
             let Some(pending) = self.requests.take(key) else { return };

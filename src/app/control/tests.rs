@@ -69,6 +69,30 @@ mod checks {
     }
 }
 
+mod forgotten_checks {
+    use super::*;
+    use crate::git::worktree::Status;
+    use crate::test_util::git_repo;
+
+    #[test]
+    fn a_check_whose_client_left_starts_no_removal() {
+        let repo = git_repo(&[("README", "hi")]);
+        let (tx, _rx) = mpsc::channel();
+        let mut app = App::new("/bin/sh".into(), HostTheme::default(), repo.path().join("config.json"), tx);
+        app.open_here(Rect::new(0, 0, 120, 40)).expect("open the project");
+        let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
+        let checking = Pending { client: Some(1), key: 1, timeout: None, done: Done::default(), stage: Stage::Check };
+        app.requests.pending.push(checking);
+        app.requests.open.push(1);
+        app.forget(1);
+
+        app.removal_checked(1, project, workspace, &Status::default());
+
+        assert_eq!(app.projects[0].workspaces[0].phase, Phase::Open);
+        assert_eq!(app.take_answers(), Vec::new());
+    }
+}
+
 mod unavailable_operations {
     use super::*;
     use crate::control::contract::{self as wire_contract, Code, Refusal};
