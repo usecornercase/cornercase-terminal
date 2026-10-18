@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 use crossterm::event::{KeyEvent, MouseEvent};
 use ratatui::layout::{Position, Rect};
@@ -18,68 +17,13 @@ use crate::host::clipboard;
 use crate::issues::browser::{
     self, Action, Browser, Connection, IssuesHit, Listing, Pick, Place, Room, Screen, Step, Tab, TokenForm,
 };
-use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
 use crate::issues::secrets;
-use crate::issues::{
-    self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, asana, gitlab, jira, linear,
-    plane, shortcut,
-};
+use crate::issues::{self, Account, Detail, Issue, Listed, Person, Query, Secret, Source, gitlab};
 use crate::list::Search;
 use crate::log::{self, Job, Level};
 use crate::project::Hierarchy;
 use crate::time;
 use crate::ui;
-
-pub(super) struct IssueConnections {
-    pub(super) cache: IssueCache,
-    pub(super) closed: bool,
-    pub(super) people: People,
-    pub(super) people_cache: HashMap<(Source, Option<u64>), Vec<Person>>,
-    pub(super) accounts: HashMap<Source, Account>,
-    pub(super) epochs: HashMap<Source, u64>,
-    pub(super) tab: Option<Tab>,
-    pub(super) apis: Apis,
-    pub(super) env_tokens: HashMap<Source, String>,
-    pub(super) secrets_path: PathBuf,
-}
-
-impl IssueConnections {
-    pub(super) fn new(secrets_path: PathBuf) -> Self {
-        Self {
-            cache: IssueCache::new(None),
-            closed: false,
-            people: People::default(),
-            people_cache: HashMap::new(),
-            accounts: HashMap::new(),
-            epochs: HashMap::new(),
-            tab: None,
-            apis: Apis::from_env(),
-            env_tokens: env_tokens(),
-            secrets_path,
-        }
-    }
-}
-
-pub(super) struct Apis {
-    pub(super) shortcut: String,
-    pub(super) linear: String,
-    pub(super) jira: Option<String>,
-    pub(super) plane: Option<String>,
-    pub(super) asana: String,
-}
-
-impl Apis {
-    pub(super) fn from_env() -> Self {
-        let var = |name: &str, default: &str| std::env::var(name).unwrap_or_else(|_| default.into());
-        Self {
-            shortcut: var(shortcut::API_ENV, shortcut::DEFAULT_API),
-            linear: var(linear::API_ENV, linear::DEFAULT_API),
-            jira: std::env::var(jira::API_ENV).ok(),
-            plane: std::env::var(plane::API_ENV).ok(),
-            asana: var(asana::API_ENV, asana::DEFAULT_API),
-        }
-    }
-}
 
 #[derive(Debug)]
 pub(crate) enum IssueEvent {
@@ -138,103 +82,6 @@ impl App {
 
     pub(super) fn issues_available(&self) -> bool {
         self.project().is_some()
-    }
-
-    pub(super) fn token(&self, source: Source) -> Option<(String, bool)> {
-        if let Some(token) = self.issues.env_tokens.get(&source) {
-            return Some((token.clone(), true));
-        }
-        source.secret_key().and_then(|key| secrets::read(&self.issues.secrets_path, key)).map(|token| (token, false))
-    }
-
-    fn jira(&self, token: String) -> Option<jira::Api> {
-        let config = &self.config;
-        if config.jira_site.is_empty() || config.jira_email.is_empty() {
-            return None;
-        }
-        Some(jira::Api {
-            base: self.issues.apis.jira.clone().unwrap_or_else(|| format!("https://{}", config.jira_site)),
-            site: config.jira_site.clone(),
-            email: config.jira_email.clone(),
-            token,
-            jql: config.jira_jql.clone(),
-        })
-    }
-
-    fn plane(&self, token: String) -> Option<plane::Api> {
-        let config = &self.config;
-        if config.plane_workspace.is_empty() {
-            return None;
-        }
-        let (base, app) = plane::endpoints(&config.plane_url, self.issues.apis.plane.as_deref());
-        Some(plane::Api { base, app, slug: config.plane_workspace.clone(), token, filter: config.plane_filter.clone() })
-    }
-
-    fn asana(&self, token: String) -> asana::Api {
-        let config = &self.config;
-        asana::Api {
-            base: self.issues.apis.asana.clone(),
-            token,
-            workspace: config.asana_workspace.clone(),
-            projects: asana::project_gids(&config.asana_projects),
-        }
-    }
-
-    fn gitlab(&self, token: String, project: Option<u64>) -> gitlab::Api {
-        let dir = project.and_then(|id| self.projects.project_index(id)).map(|p| self.projects[p].path.clone());
-        gitlab::Api { base: gitlab::server(&self.config.gitlab_url), token, dir: dir.unwrap_or_default() }
-    }
-
-    fn connected(&self, source: Source) -> Option<bool> {
-        let (token, from_env) = self.token(source)?;
-        let configured = match source {
-            Source::Jira => self.jira(token).is_some(),
-            Source::Plane => self.plane(token).is_some(),
-            _ => true,
-        };
-        configured.then_some(from_env)
-    }
-
-    pub(super) fn client(&self, source: Source, project: u64) -> Option<Client> {
-        match source {
-            Source::Github => {
-                let dir = self.projects.get(self.projects.project_index(project)?)?.path.clone();
-                Some(Client::Github { gh: self.config.gh(self.home.as_deref()), dir })
-            }
-            Source::Shortcut => {
-                Some(Client::Shortcut { base: self.issues.apis.shortcut.clone(), token: self.token(source)?.0 })
-            }
-            Source::Linear => {
-                Some(Client::Linear { url: self.issues.apis.linear.clone(), token: self.token(source)?.0 })
-            }
-            Source::Jira => self.jira(self.token(source)?.0).map(Client::Jira),
-            Source::Plane => self.plane(self.token(source)?.0).map(Client::Plane),
-            Source::Asana => Some(Client::Asana(self.asana(self.token(source)?.0))),
-            Source::Gitlab => Some(Client::Gitlab(self.gitlab(self.token(source)?.0, Some(project)))),
-        }
-    }
-
-    fn places(&self) -> (Vec<Place>, usize) {
-        let mut places = Vec::new();
-        let mut here = 0;
-        for (p, project) in self.projects.iter().enumerate().filter(|(_, p)| !p.closing) {
-            let name = self.project_label(project);
-            if git::is_repo_root(&project.path) {
-                if p == self.active {
-                    here = places.len();
-                }
-                places.push(Place { project: project.id, workspace: None, label: name, worktree: true });
-                continue;
-            }
-            for (w, workspace) in project.workspaces.iter().enumerate().filter(|(_, w)| w.open()) {
-                if p == self.active && w == project.active {
-                    here = places.len();
-                }
-                let label = format!("{name} › {}", workspace.label());
-                places.push(Place { project: project.id, workspace: Some(workspace.id), label, worktree: false });
-            }
-        }
-        (places, here)
     }
 
     pub(super) fn open_issues(&mut self, area: Rect) -> Result<()> {
@@ -387,14 +234,6 @@ impl App {
         Ok(())
     }
 
-    pub(super) fn cache_key(&self, source: Source, project: u64, query: &Query) -> CacheKey {
-        let project = source
-            .in_repository()
-            .then(|| self.projects.project_index(project).map(|p| self.projects[p].path.clone()))
-            .flatten();
-        CacheKey { source, project, query: query.clone() }
-    }
-
     fn browser_project(&self) -> Option<u64> {
         match &self.overlay {
             Some(Overlay::Issues(b)) => Some(b.project),
@@ -506,62 +345,6 @@ impl App {
         b.connected(source, Connection { from_env, account: None });
         let action = b.needs_load();
         self.act(action, area)
-    }
-
-    pub(super) fn epoch(&self, source: Source) -> u64 {
-        self.issues.epochs.get(&source).copied().unwrap_or(0)
-    }
-
-    pub(super) fn learn_account(&mut self, source: Source, account: &Account) {
-        if self.issues.accounts.insert(source, account.clone()).as_ref() != Some(account) {
-            self.settings_changed();
-        }
-    }
-
-    pub(super) fn forget_issues(&mut self, source: Source) {
-        self.issues.accounts.remove(&source);
-        self.issues.cache.forget(source);
-        self.issues.people_cache.retain(|(s, _), _| *s != source);
-        *self.issues.epochs.entry(source).or_default() += 1;
-    }
-
-    pub(super) fn check_token(&mut self, source: Source, token: Secret) {
-        self.check_token_for(source, token, None);
-    }
-
-    pub(super) fn check_token_for(&mut self, source: Source, token: Secret, request: Option<u64>) {
-        let client = match source {
-            Source::Github => return,
-            Source::Shortcut => {
-                Ok(Client::Shortcut { base: self.issues.apis.shortcut.clone(), token: token.0.clone() })
-            }
-            Source::Linear => Ok(Client::Linear { url: self.issues.apis.linear.clone(), token: token.0.clone() }),
-            Source::Jira => self.jira(token.0.clone()).map(Client::Jira).ok_or("set the Jira site and email first"),
-            Source::Plane => self.plane(token.0.clone()).map(Client::Plane).ok_or("set the Plane workspace first"),
-            Source::Asana => Ok(Client::Asana(self.asana(token.0.clone()))),
-            Source::Gitlab => Ok(Client::Gitlab(self.gitlab(token.0.clone(), None))),
-        };
-        let client = match client {
-            Ok(client) => client,
-            Err(message) => {
-                let epoch = self.epoch(source);
-                let _ = self.tx.send(AppEvent::Issues(IssueEvent::TokenChecked {
-                    source,
-                    epoch,
-                    token,
-                    result: Err(Error::Api(message.into())),
-                    request,
-                }));
-                return;
-            }
-        };
-        let epoch = self.epoch(source);
-        let job = Job::new(Level::Info, "issues", "token check").with("source", source.name());
-        self.spawn_job(
-            job,
-            move || client.whoami(),
-            move |result, _| Some(AppEvent::Issues(IssueEvent::TokenChecked { source, epoch, token, result, request })),
-        );
     }
 
     pub(super) fn token_checked(
@@ -724,17 +507,6 @@ pub(super) fn room(area: Rect) -> Room {
         detail_width: usize::from(detail.width),
         buttons: usize::from(ui::issue_buttons_width(issues)),
     }
-}
-
-pub(super) fn env_tokens() -> HashMap<Source, String> {
-    Source::REMOTE
-        .into_iter()
-        .filter_map(|source| {
-            let token = std::env::var(source.token_env()?).ok()?;
-            let token = token.trim();
-            (!token.is_empty()).then(|| (source, token.to_string()))
-        })
-        .collect()
 }
 
 fn picker_view(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) {

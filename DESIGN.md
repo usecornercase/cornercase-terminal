@@ -19,7 +19,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 
   | Field | Type and owner | State |
   |---|---|---|
-  | `issues` | `IssueConnections`, `app/issues_dialog.rs` | Issue and people caches, accounts, connection epochs, API endpoints, token variables and secrets path, remembered browser tab, closed switch and people filters. |
+  | `issues` | `IssueConnections`, `app/trackers.rs` | Issue and people caches, accounts, connection epochs, API endpoints, token variables and secrets path, remembered browser tab, closed switch and people filters. |
   | `update` | `UpdateState`, `app/update_dialog.rs` | `updates`, changelog `scroll`, `restart_list` and when it was `listed`. |
   | `agents` | `AgentRuntime`, `app/agent_watch.rs` | Pending launches, cached trust pattern, last `watched` time, awake lock, `claude_dir` and stats. |
   | `outbox` | `Outbox`, `app.rs` | Host writes, notifications, detach and restart requests taken by the server. |

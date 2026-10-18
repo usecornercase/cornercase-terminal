@@ -50,7 +50,7 @@ use interaction::AUTO_SCROLL_EVERY;
 use interaction::Drag;
 use interaction::Grab;
 use interaction::LINES_SCROLL_EVERY;
-use issues_dialog::{IssueConnections, IssueEvent};
+use issues_dialog::IssueEvent;
 use launches::LAUNCH_EVERY;
 #[cfg(test)]
 use layout::Focus;
@@ -66,6 +66,7 @@ use search_dialog::SearchEvent;
 use session::not_restored;
 use star_prompt::StarPrompt;
 use toast::Toast;
+use trackers::IssueConnections;
 use update_dialog::{UpdateEvent, UpdateState};
 use worktrees::{SYNC_EVERY, Upstream, WorktreeEvent};
 
@@ -117,6 +118,7 @@ mod theme;
 mod toast;
 mod todo_panel;
 mod trace;
+mod trackers;
 mod update_dialog;
 mod usage_dialog;
 mod view;
