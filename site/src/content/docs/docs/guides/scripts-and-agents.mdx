@@ -409,7 +409,7 @@ These read the trackers through the connections the server already holds, the on
 `issue sources` says, for the project (`--project ID`, default the one the command runs in, else the shown one), which trackers are connected and as whom, in the order of the dialog's tabs, then the others. Each is one of:
 
 - `connected`, with its account and where its token comes from (`through gh`, saved, or `from LINEAR_API_KEY`).
-- `missing`, with what is missing: `token` (connect it with `cornercase config secret SOURCE`, the token on standard input), `site` and `email` for Jira (`cornercase config set jira_site …`), `workspace` for Plane and Asana (`plane_workspace`, `asana_workspace`), or `repository` (the project isn't a git repository, or for GitLab none of its remotes is on `gitlab_url`).
+- `missing`, with what is missing: `token` (connect it with `cornercase config secret SOURCE`, the token on standard input), `site` and `email` for Jira (`cornercase config set jira_site …`), `workspace` for Plane (`plane_workspace`), or `repository` (the project isn't a git repository, or for GitLab none of its remotes is on `gitlab_url`). An Asana token with several workspaces shows as `failing` until `asana_workspace` is set.
 - `failing`, with the reason the last list failed (a rejected token, a rate limit, an Asana token that belongs to several workspaces). It is a list's failure only, and the next good list or a change to that tracker's token or settings clears it.
 
 It ends with the places an issue that isn't tied to a repository can be worked on: a repository-root project is `a new worktree`, an open workspace of any other project `a new tab`, and the one you are in is marked.

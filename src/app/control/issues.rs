@@ -83,10 +83,6 @@ impl App {
         Ok((p, self.projects[p].id))
     }
 
-    fn listable(&self, source: Source, git: bool) -> bool {
-        (source == Source::Github || self.connected(source).is_some()) && (git || !source.in_repository())
-    }
-
     pub(super) fn issue_sources_request(&self, asker: Asker, request: &IssueSources) -> Handled {
         let (p, project) = self.issue_project(asker, request.project)?;
         let git = git::branch(&self.projects[p].path).is_some();
@@ -182,7 +178,7 @@ impl App {
         let git = git::branch(&self.projects[p].path).is_some();
         let sources: Vec<Source> = match chosen {
             Some(source) => vec![source],
-            None => Source::ALL.into_iter().filter(|source| self.listable(*source, git)).collect(),
+            None => self.issue_sources(project),
         };
         let (mut clients, mut epochs, mut unavailable) = (Vec::new(), Vec::new(), Vec::new());
         for source in sources {

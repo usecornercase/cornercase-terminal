@@ -27,7 +27,7 @@ fn the_issues_are_read_and_started_through_the_server_and_never_logged() {
         agent.display()
     );
     std::fs::write(session.dir.join("config.json"), config).expect("write config");
-    let repo = std::env::temp_dir().join(format!("cciss-{}", std::process::id()));
+    let repo = session.dir.join("repo");
     std::fs::create_dir_all(&repo).expect("create repo dir");
     let repo_name = repo.file_name().and_then(|n| n.to_str()).expect("repo name").to_string();
     git(&repo, &["init", "--quiet"]);
@@ -50,11 +50,9 @@ fn the_issues_are_read_and_started_through_the_server_and_never_logged() {
     assert!(pane.parse::<u64>().is_ok(), "{pane}");
     let checkout = worktrees.join(&repo_name).join("issue-7-fix-the-login");
     let got = checkout.join("got");
-    let deadline = Instant::now() + TIMEOUT;
-    while std::fs::read_to_string(&got).ok().as_deref() != Some("https://github.com/acme/shop/issues/7") {
-        assert!(Instant::now() < deadline, "the agent never got the prompt");
-        thread::sleep(POLL);
-    }
+    session.wait_for_file(&got.display().to_string(), "the agent got the prompt", |text| {
+        text == "https://github.com/acme/shop/issues/7"
+    });
 
     let log = session.says(&["logs", "-n", "1000"]);
     assert!(log.contains("issues: "), "the log tells nothing of the issues:\n{log}");
@@ -63,5 +61,4 @@ fn the_issues_are_read_and_started_through_the_server_and_never_logged() {
     for line in log.lines().filter(own) {
         assert!(!line.contains("Fix the login"), "a request or a job logs the title: {line}");
     }
-    let _ = std::fs::remove_dir_all(&repo);
 }
