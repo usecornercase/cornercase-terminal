@@ -459,7 +459,7 @@ Whether the sound also plays for agents started by another agent (with `cornerca
 
 #### `check_updates`
 
-Whether cornercase asks GitHub for the latest release, when the server starts and then every hour, to offer an [update](../../installation/#update). Only a request for the latest release is sent, and, once a newer one is out, a download of its changelog for the update dialog; nothing about you. Builds made with `cargo run` never check.
+Whether cornercase asks GitHub for the latest release, when the server starts and then every hour, to offer an [update](../../installation/#update). Only a request for the latest release is sent, and, once a newer one is out, a download of its changelog for the update dialog; nothing about you. Builds made with `cargo run` never check. An explicit check, `cornercase update --check` or a program's [`update-check`](../../guides/scripts-and-agents/#updates-from-a-program), asks GitHub whatever this setting says.
 
 #### `star_prompt`
 

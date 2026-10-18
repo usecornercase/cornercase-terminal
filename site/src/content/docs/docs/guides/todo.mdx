@@ -46,7 +46,7 @@ An item is often the next thing to tell an agent. Hover an item left to do and c
 
 What `send` refuses, the button refuses too: an agent waiting for your answer to a question or a permission prompt, one still resuming its conversation after a restart, a Claude Code showing a dialog, a panel, its shell mode or its feedback survey instead of its input box, or a program that stopped reading its input. The message says why and the item stays to do; sort the agent out and send again. The item also stays to do when the agent did not record the prompt within ten seconds: read its pane before sending again. For an agent whose prompts cornercase cannot confirm (a `/` command, an agent it does not read), the text is sent but the item stays to do, and the message says `sent to claude in web-shop › feat/dark-mode, not confirmed: stays to do`. An item you edit while it is being sent is not checked off. With no agent running, the message says `no agent is running`.
 
-Done items and the item being edited have no button; to send an item again, uncheck it first. In the [compact layout](../small-terminals/) the button always shows, dimmed, since there is no hover. A script or an agent can do the same with [`cornercase todo send`](../scripts-and-agents/#leave-notes).
+Done items and the item being edited have no button; to send an item again, uncheck it first. In the [compact layout](../small-terminals/) the button always shows, dimmed, since there is no hover. A script or an agent can do the same with [`cornercase todo send`](../scripts-and-agents/#leave-notes), and `cornercase todo` also edits, unchecks, reorders, clears done items and undoes a removal.
 
 ## Delete items, and undo
 
