@@ -1,5 +1,5 @@
 import { LAYOUTS, focusPoint, pathD, pointAt, type EdgeId, type Layout, type NodeId } from './graph';
-import { frameAt, type Frame } from './timeline';
+import { FINAL, frameAt, type Frame } from './timeline';
 
 type Writer = (el: Element | null, name: string, value: string | null) => void;
 
@@ -93,11 +93,8 @@ function view(svg: SVGSVGElement, layout: Layout): View {
 }
 
 export function mount(root: HTMLElement): void {
-  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (still) {
-    root.dataset.still = '';
-    return;
-  }
+  const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  const narrow = matchMedia('(max-width: 999px)');
   const views = [...root.querySelectorAll<SVGSVGElement>('svg[data-layout]')].map((svg) => view(svg, LAYOUTS[svg.dataset.layout as 'wide' | 'tall']));
   const says = [...root.querySelectorAll<HTMLElement>('[data-say]')];
   let mood = '';
@@ -110,8 +107,6 @@ export function mount(root: HTMLElement): void {
       for (const s of says) s.classList.toggle('on', s.dataset.say === f.caption);
     }
   };
-  root.dataset.ready = '';
-  show(frameAt(0));
   const toggle = root.querySelector<HTMLButtonElement>('[data-toggle]');
   let elapsed = 0;
   let last = 0;
@@ -119,13 +114,13 @@ export function mount(root: HTMLElement): void {
   let visible = false;
   let paused = false;
   const tick = (now: number): void => {
-    elapsed += Math.min(100, now - last);
+    elapsed += Math.min(100, Math.max(0, now - last));
     last = now;
     show(frameAt(elapsed));
     raf = requestAnimationFrame(tick);
   };
   const run = (): void => {
-    if (raf || !visible || paused || document.hidden) return;
+    if (raf || !visible || paused || document.hidden || motion.matches) return;
     root.dataset.live = '';
     last = performance.now();
     raf = requestAnimationFrame(tick);
@@ -134,18 +129,36 @@ export function mount(root: HTMLElement): void {
     cancelAnimationFrame(raf);
     raf = 0;
   };
+  const settle = (): void => {
+    stop();
+    if (motion.matches) {
+      delete root.dataset.ready;
+      delete root.dataset.live;
+      root.dataset.still = '';
+      show(FINAL);
+      return;
+    }
+    delete root.dataset.still;
+    root.dataset.ready = '';
+    if (!visible) delete root.dataset.live;
+    show(frameAt(elapsed));
+    run();
+  };
+  settle();
   new IntersectionObserver(
     ([e]) => {
-      visible = e.isIntersecting;
+      visible = e.intersectionRatio >= (narrow.matches ? 0.1 : 0.3);
       if (visible) run();
       else stop();
     },
-    { threshold: 0.3 },
+    { threshold: [0.1, 0.3] },
   ).observe(root);
+  motion.addEventListener('change', settle);
   document.addEventListener('visibilitychange', () => (document.hidden ? stop() : run()));
   toggle?.addEventListener('click', () => {
     paused = !paused;
     root.toggleAttribute('data-paused', paused);
+    toggle.setAttribute('aria-pressed', String(paused));
     toggle.textContent = (paused ? toggle.dataset.play : toggle.dataset.pause) ?? '';
     if (paused) stop();
     else run();
