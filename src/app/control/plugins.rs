@@ -48,10 +48,12 @@ impl App {
             )));
         }
         let key = self.requests.key();
+        if !self.start_plugin_action(spot, plugin, action, Some(key)) {
+            return Err(not_found(format!("{} is gone", request.item)));
+        }
         let pending =
             Pending { client: Some(client), key, timeout: None, done: Done::default(), stage: Stage::Reading };
         self.requests.pending.push(pending);
-        self.start_plugin_action(spot, plugin, action, Some(key));
         Ok(None)
     }
 

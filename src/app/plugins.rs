@@ -217,8 +217,8 @@ impl App {
         self.start_plugin_action(spot, plugin, action, None);
     }
 
-    pub(super) fn start_plugin_action(&self, spot: Spot, plugin: Plugin, action: Action, request: Option<u64>) {
-        let Some((ids, cwd)) = self.spot_env(spot) else { return };
+    pub(super) fn start_plugin_action(&self, spot: Spot, plugin: Plugin, action: Action, request: Option<u64>) -> bool {
+        let Some((ids, cwd)) = self.spot_env(spot) else { return false };
         let context = spot.context();
         let env = action_env(&ids, &action, context);
         let places = self.plugins.places.clone();
@@ -253,6 +253,7 @@ impl App {
                 Some(AppEvent::Plugin(PluginEvent::Failed { plugin: name, title, reason }))
             },
         );
+        true
     }
 
     pub(super) fn plugin_answered(&mut self, event: PluginEvent) {
