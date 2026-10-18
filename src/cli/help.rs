@@ -706,6 +706,23 @@ Examples:
   cornercase group style 12 --json
   cornercase group delete 12 --close-projects";
 
+pub(super) const CHANGES_HELP: &str =
+    "`list` prints the changed files of a workspace (the one you are in, or the one --workspace or --worktree names), or of \
+every project with --every, and with --follow keeps printing them as JSON lines each time they change. `file` prints one \
+file's diff, `gap` the unchanged lines before one of its hunks, `base` the branches the Commits and All modes can compare \
+with (naming one sets it, --default goes back to following the default branch), and `viewed` marks a file as viewed or clears \
+the mark. The modes are uncommitted (the default), \
+commits and all. The base and the viewed marks are shared with the window's changes panel; the mode of a stream is its own.
+
+Examples:
+  cornercase changes list
+  cornercase changes list --every --follow
+  cornercase changes list --worktree fix/login --mode commits --json
+  cornercase changes file src/main.rs --json
+  cornercase changes gap src/main.rs --hunk 1
+  cornercase changes base origin/main
+  cornercase changes viewed src/main.rs";
+
 #[cfg(test)]
 mod tests;
 

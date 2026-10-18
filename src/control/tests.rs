@@ -109,6 +109,12 @@ fn every_command_is_listed_by_name() {
         Command::UpdateCheck(UpdateCheck::default()),
         Command::UpdateInstall(UpdateInstall::default()),
         Command::App(AppWatch::default()),
+        Command::Changes(Changes::default()),
+        Command::ChangesMode(ChangesMode::default()),
+        Command::ChangesFile(ChangesFile::default()),
+        Command::ChangesGap(ChangesGap::default()),
+        Command::ChangesBase(ChangesBase::default()),
+        Command::ChangesViewed(ChangesViewed::default()),
     ];
 
     let names: Vec<String> = commands

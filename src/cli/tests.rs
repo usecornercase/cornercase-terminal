@@ -520,6 +520,7 @@ mod output {
             active: true,
             custom_name: None,
             collapsed: false,
+            changes: None,
             tabs: vec![tab],
         };
         let project = |id, name: &str, group| ProjectInfo {

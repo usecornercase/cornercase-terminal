@@ -77,6 +77,11 @@ fn contract_describes_the_running_server_and_its_boot() {
         contract["streams"].as_array().expect("streams").iter().any(|s| s["name"] == "app" && s["version"] == 1),
         "{contract}"
     );
+    assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "changes"), "{contract}");
+    assert!(
+        contract["streams"].as_array().expect("streams").iter().any(|s| s["name"] == "changes" && s["version"] == 1),
+        "{contract}"
+    );
     assert!(
         contract["streams"].as_array().expect("streams").iter().any(|s| s["name"] == "view" && s["version"] == 1),
         "{contract}"

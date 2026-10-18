@@ -49,6 +49,29 @@ fn the_changes_panel_shows_what_changed_in_the_repo() {
     let _ = std::fs::remove_dir_all(&repo);
 }
 
+#[test]
+fn scripts_see_the_changes_of_a_workspace() {
+    let repo = std::env::temp_dir().join(format!("ccsc-{}", std::process::id()));
+    std::fs::create_dir_all(&repo).expect("create repo dir");
+    let repo_name = repo.file_name().and_then(|n| n.to_str()).expect("repo name").to_string();
+    git(&repo, &["init", "--quiet"]);
+    std::fs::write(repo.join("notes.txt"), "one\ntwo\n").expect("write file");
+    git(&repo, &["add", "notes.txt"]);
+    git(&repo, &["commit", "--quiet", "-m", "init"]);
+    std::fs::write(repo.join("notes.txt"), "one\nTWO\n").expect("edit file");
+    let mut app = Harness::start();
+    app.open_project(1, &repo);
+    app.wait_for("the repo opens as project 2", |s| s.contains(&entry(&repo_name)));
+
+    let list = app.session.says(&["changes", "list", "--json"]);
+    let summary: serde_json::Value = serde_json::from_str(&list).expect("a summary");
+    let diff = app.session.says(&["changes", "file", "notes.txt"]);
+
+    assert_eq!(summary["workspaces"][0]["files"][0]["path"], "notes.txt", "{list}");
+    assert!(diff.contains("-two") && diff.contains("+TWO"), "{diff}");
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
 fn showing_an_image(reply: &[u8], name: &str) -> Harness {
     let name = format!("{name}-{}", std::process::id());
     let dir = temp_dir_named(&name);

@@ -350,7 +350,7 @@ impl Underline {
 }
 
 impl Style {
-    fn of(look: Look, decor: Decor) -> Self {
+    pub(super) fn of(look: Look, decor: Decor) -> Self {
         let has = |modifier| look.add_modifier.contains(modifier) && !look.sub_modifier.contains(modifier);
         let underline = has(Modifier::UNDERLINED);
         Self {
@@ -378,7 +378,7 @@ pub(crate) struct Table<T> {
 }
 
 impl<T: Clone + Eq + Hash> Table<T> {
-    fn seeded(first: Option<T>) -> Self {
+    pub(super) fn seeded(first: Option<T>) -> Self {
         let mut table = Self { entries: Vec::new(), index: HashMap::new() };
         if let Some(first) = first {
             table.of(first);
@@ -386,7 +386,7 @@ impl<T: Clone + Eq + Hash> Table<T> {
         table
     }
 
-    fn of(&mut self, entry: T) -> usize {
+    pub(super) fn of(&mut self, entry: T) -> usize {
         if let Some(at) = self.index.get(&entry) {
             return *at;
         }

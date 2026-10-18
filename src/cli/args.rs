@@ -1,4 +1,5 @@
 pub(crate) mod arrange;
+pub(crate) mod changes;
 pub(crate) mod config;
 pub(crate) mod issue;
 pub(crate) mod plugin;
@@ -12,6 +13,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+use super::help::CHANGES_HELP;
 use super::help::{
     ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, CONFIG_HELP, CONTRACT_HELP, EVENTS_HELP,
     FLOW_EXPORT_HELP, FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP,
@@ -211,6 +213,8 @@ pub(crate) enum Control {
         after_help = ISSUE_HELP
     )]
     Issue(issue::IssueArgs),
+    #[command(about = "List, read and mark the changes of a workspace, as the changes panel shows them", after_help = CHANGES_HELP)]
+    Changes(changes::ChangesArgs),
 }
 
 impl Control {

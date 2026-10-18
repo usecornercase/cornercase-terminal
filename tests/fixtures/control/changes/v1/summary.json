@@ -1,0 +1,50 @@
+{
+  "boot": "4242-1700000000",
+  "stream": 1,
+  "revision": 2,
+  "scope": "project",
+  "mode": "commits",
+  "state": "ready",
+  "error": null,
+  "workspaces": [
+    {
+      "project": 1,
+      "workspace": 2,
+      "base": "main",
+      "added": 12,
+      "removed": 9,
+      "files": [
+        {
+          "path": "Cargo.lock",
+          "old_path": null,
+          "status": "modified",
+          "added": 4,
+          "removed": 3,
+          "fold": "lockfile",
+          "viewed": true,
+          "digest": "00c0ffee12345678"
+        },
+        {
+          "path": "src/new.rs",
+          "old_path": "src/old.rs",
+          "status": "renamed",
+          "added": 4,
+          "removed": 3,
+          "fold": "open",
+          "viewed": false,
+          "digest": "00c0ffee12345678"
+        },
+        {
+          "path": "notes.txt",
+          "old_path": null,
+          "status": "untracked",
+          "added": 4,
+          "removed": 3,
+          "fold": "open",
+          "viewed": false,
+          "digest": "00c0ffee12345678"
+        }
+      ]
+    }
+  ]
+}

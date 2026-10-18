@@ -322,6 +322,19 @@ fn streamed(app: &mut App) -> Vec<Streamed> {
     streamed.into_iter().map(|(_, streamed)| streamed).collect()
 }
 
+fn lines(app: &mut App) -> Vec<Value> {
+    streamed(app)
+        .into_iter()
+        .filter_map(|streamed| match streamed {
+            Streamed::Snapshot(text) => match serde_json::from_str(&text) {
+                Ok(Response::Ok(value)) => Some(value),
+                other => panic!("not a snapshot: {other:?}"),
+            },
+            Streamed::Event(_) | Streamed::End => None,
+        })
+        .collect()
+}
+
 fn told(streamed: &[Streamed]) -> Vec<(wire::What, wire::Ids)> {
     streamed
         .iter()
@@ -488,6 +501,7 @@ fn reacted(message: i64) -> impl Fn(&Order) -> bool {
 
 mod agents;
 mod arranging;
+mod changes;
 mod config;
 mod contract;
 mod copilot;

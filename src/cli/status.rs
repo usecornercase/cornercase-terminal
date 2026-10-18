@@ -91,6 +91,10 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
             _ => "setup failed".to_string(),
         }));
         parts.extend((workspace.behind > 0).then(|| format!("{} behind", workspace.behind)));
+        parts.extend(workspace.changes.filter(|c| c.files > 0).map(|c| {
+            let noun = if c.files == 1 { "file" } else { "files" };
+            format!("{} {noun} changed", c.files)
+        }));
         parts.extend(workspace.pull_request.as_ref().map(|pull| {
             let mut said = vec![format!("pull request #{} {}", pull.number, pull.state)];
             if pull.conflicts {

@@ -7,6 +7,7 @@ use serde_json::Value;
 
 mod app_state;
 pub(crate) mod arrange;
+pub(crate) mod changes;
 pub(crate) mod config;
 pub(crate) mod contract;
 mod events;
@@ -28,6 +29,7 @@ pub(crate) use app_state::{
     AppState, AppWatch, AwayInfo, InstallInfo, NoUpdate, Notes, ReleaseInfo, UpdateCheck, UpdateInfo, UpdateInstall,
 };
 pub(crate) use arrange::{Fold, GroupDelete, GroupNew, GroupStyle, Move, MovePane, RemovalCheck};
+pub(crate) use changes::{Changes, ChangesBase, ChangesCount, ChangesFile, ChangesGap, ChangesMode, ChangesViewed};
 pub(crate) use config::{ConfigInfo, Configure};
 pub(crate) use contract::Contract;
 pub(crate) use events::{Event, Events, Go, Kind, What};
@@ -149,6 +151,12 @@ pub(crate) enum Command {
     UpdateCheck(UpdateCheck),
     UpdateInstall(UpdateInstall),
     App(AppWatch),
+    Changes(Changes),
+    ChangesMode(ChangesMode),
+    ChangesFile(ChangesFile),
+    ChangesGap(ChangesGap),
+    ChangesBase(ChangesBase),
+    ChangesViewed(ChangesViewed),
 }
 
 impl Command {
@@ -215,6 +223,12 @@ impl Command {
             Self::UpdateCheck(_) => 58,
             Self::UpdateInstall(_) => 59,
             Self::App(_) => 60,
+            Self::Changes(_) => 61,
+            Self::ChangesMode(_) => 62,
+            Self::ChangesFile(_) => 63,
+            Self::ChangesGap(_) => 64,
+            Self::ChangesBase(_) => 65,
+            Self::ChangesViewed(_) => 66,
         }]
     }
 
@@ -341,11 +355,17 @@ impl Command {
             Self::IssueList(list) => list.fields(&mut fields),
             Self::IssueRead(read) => read.fields(&mut fields),
             Self::IssuePeople(people) => people.fields(&mut fields),
+            Self::Changes(changes) => changes.fields(&mut fields),
+            Self::ChangesMode(mode) => mode.fields(&mut fields),
+            Self::ChangesFile(file) => file.fields(&mut fields),
+            Self::ChangesGap(gap) => gap.fields(&mut fields),
+            Self::ChangesBase(base) => base.fields(&mut fields),
+            Self::ChangesViewed(viewed) => viewed.fields(&mut fields),
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 61] = [
+    pub(crate) const NAMES: [&str; 67] = [
         "status",
         "open",
         "new-workspace",
@@ -407,10 +427,16 @@ impl Command {
         "update-check",
         "update-install",
         "app",
+        "changes",
+        "changes-mode",
+        "changes-file",
+        "changes-gap",
+        "changes-base",
+        "changes-viewed",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
-        matches!(name, "input" | "scroll" | "selection" | "resize" | "ratio" | "link")
+        matches!(name, "input" | "scroll" | "selection" | "resize" | "ratio" | "link" | "changes-file" | "changes-gap")
     }
 }
 

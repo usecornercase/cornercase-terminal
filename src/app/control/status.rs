@@ -21,6 +21,8 @@ impl App {
     pub(in crate::app) fn report(&self, caller: Option<u64>) -> Report {
         let caller = caller.filter(|id| self.projects.tab_of_pane(*id).is_some());
         let live = self.pane_ids();
+        let counted = self.changes_target().map(|t| t.workspace);
+        let sweeping = self.change_streams.wants_every();
         let tab_info = |t: usize, tab: &Tab, active: usize| TabInfo {
             id: tab.id,
             name: tab.label(&self.config),
@@ -64,6 +66,7 @@ impl App {
             tabs: ws.tabs.iter().enumerate().map(|(t, tab)| tab_info(t, tab, ws.active)).collect(),
             custom_name: ws.name.clone(),
             collapsed: ws.collapsed,
+            changes: self.changes_count(ws.id, counted, sweeping),
         };
         let projects = self.projects.iter().enumerate().filter(|(_, p)| !p.closing).map(|(p, project)| ProjectInfo {
             id: project.id,

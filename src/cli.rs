@@ -18,6 +18,7 @@ use crate::{log, server};
 
 mod args;
 mod arrange;
+mod changes;
 mod config;
 mod contract;
 mod flow;
@@ -271,6 +272,7 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Theme(args) => theme::run(&args),
         Control::Config(args) => config::run(args),
         Control::Issue(args) => return issue::run(args.action),
+        Control::Changes(args) => changes::run(args),
     }?;
     Ok(true)
 }

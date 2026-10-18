@@ -123,6 +123,10 @@ In the project scope, while the panel is open it asks git for changes every seco
 
 While **Every project** is shown, one background job visits the workspaces in turn, no more often than every three seconds per workspace. Collapsed files need only status and line counts; patches are read and refreshed for expanded files. Closing the panel or returning to the project scope stops that sweep. If a git job takes more than 30 seconds, refreshing can continue with another job.
 
+## From scripts and other apps
+
+The same data is there for programs: `cornercase changes list` prints a workspace's changed files (`--every` for every project, `--follow` to keep printing them as they change), `changes file` a file's diff, `changes base` the branches to compare with and `changes viewed` marks a file. A program that draws its own changes panel reads them over the socket, as [Follow a workspace's changes](../scripts-and-agents/#follow-a-workspaces-changes) describes.
+
 <Aside type="tip">
 The green and red backgrounds are mixed from your terminal's own background and palette when your terminal supports 24-bit colour and says so in `COLORTERM` (most modern terminals set `COLORTERM=truecolor`). Without it, cornercase uses palette colours: on dark themes the changed lines get only the coloured bar and numbers, with the changed words highlighted.
 </Aside>
