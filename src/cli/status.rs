@@ -11,6 +11,10 @@ use crate::control::{self, PaneRow, PaneRows, ProjectInfo, Report};
 use crate::error::{Error, Result};
 
 pub(super) fn run_status(status: &StatusArgs) -> Result<()> {
+    if status.app {
+        let command = control::Command::App(control::AppWatch {});
+        return if status.follow { super::stream_json("app", command) } else { print_json(&ask("app", command)?) };
+    }
     if status.follow {
         return follow();
     }
@@ -87,6 +91,10 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
             _ => "setup failed".to_string(),
         }));
         parts.extend((workspace.behind > 0).then(|| format!("{} behind", workspace.behind)));
+        parts.extend(workspace.changes.filter(|c| c.files > 0).map(|c| {
+            let noun = if c.files == 1 { "file" } else { "files" };
+            format!("{} {noun} changed", c.files)
+        }));
         parts.extend(workspace.pull_request.as_ref().map(|pull| {
             let mut said = vec![format!("pull request #{} {}", pull.number, pull.state)];
             if pull.conflicts {

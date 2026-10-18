@@ -1,5 +1,6 @@
 pub(crate) mod editor;
 
+use std::collections::VecDeque;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -7,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use editor::Editor;
 
 pub(crate) const VERSION: u32 = 1;
+pub(crate) const UNDOS: usize = 16;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Item {
@@ -44,6 +46,29 @@ pub(crate) struct Panel {
     pub(crate) field: Option<Field>,
     pub(crate) next_client: u64,
     pub(crate) sending: std::collections::HashMap<u64, String>,
+    pub(crate) undos: Undos,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Undos {
+    next: u64,
+    kept: VecDeque<(u64, Removed)>,
+}
+
+impl Undos {
+    pub(crate) fn keep(&mut self, removed: Removed) -> u64 {
+        self.next += 1;
+        self.kept.push_back((self.next, removed));
+        if self.kept.len() > UNDOS {
+            self.kept.pop_front();
+        }
+        self.next
+    }
+
+    pub(crate) fn take(&mut self, undo: u64) -> Option<Removed> {
+        let at = self.kept.iter().position(|(n, _)| *n == undo)?;
+        self.kept.remove(at).map(|(_, removed)| removed)
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -118,6 +143,17 @@ impl Todos {
         crate::project::move_before(&mut self.items, from, before.clamp(low, high), None);
     }
 
+    pub(crate) fn move_to(&mut self, id: u64, before: Option<u64>) {
+        let Some(item) = self.item(id) else { return };
+        let done = item.done;
+        let at = match before.and_then(|b| self.find(b)) {
+            Some(at) => at,
+            None if done => self.items.len(),
+            None => self.pending(),
+        };
+        self.move_before(id, at);
+    }
+
     pub(crate) fn remove(&mut self, id: u64) -> Option<Removed> {
         let i = self.find(id)?;
         Some(Removed(vec![(i, self.items.remove(i))]))
@@ -132,6 +168,9 @@ impl Todos {
 
     pub(crate) fn restore(&mut self, removed: Removed) {
         for (at, item) in removed.0 {
+            if self.find(item.id).is_some() {
+                continue;
+            }
             let split = self.pending();
             let at = if item.done { at.clamp(split, self.items.len()) } else { at.min(split) };
             self.items.insert(at, item);
@@ -147,6 +186,10 @@ impl Todos {
 impl Removed {
     pub(crate) fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub(crate) fn items(&self) -> impl Iterator<Item = &Item> {
+        self.0.iter().map(|(_, item)| item)
     }
 }
 

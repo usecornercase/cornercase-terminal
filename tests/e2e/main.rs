@@ -40,6 +40,7 @@ mod settings;
 mod sidebar;
 mod socket;
 mod startup;
+mod todos;
 mod updates;
 mod usage;
 mod views;

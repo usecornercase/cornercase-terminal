@@ -1,10 +1,12 @@
 pub(crate) mod arrange;
+pub(crate) mod changes;
 pub(crate) mod config;
 pub(crate) mod issue;
 pub(crate) mod plugin;
 pub(crate) mod queue;
 pub(crate) mod terminal;
 pub(crate) mod theme;
+pub(crate) mod todo;
 pub(crate) mod usage;
 pub(crate) mod view;
 
@@ -12,6 +14,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+use super::help::CHANGES_HELP;
 use super::help::{
     ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, CONFIG_HELP, CONTRACT_HELP, EVENTS_HELP,
     FLOW_EXPORT_HELP, FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP,
@@ -19,8 +22,8 @@ use super::help::{
     LONG_ABOUT, MARK_HELP, MOVE_HELP, MOVE_PANE_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP,
     PLUGIN_HELP, RATIO_HELP, READ_HELP, REDRAW_HELP, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP,
     RESTART_TIMEOUT, SCROLL_HELP, SEARCH_HELP, SELECTION_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP,
-    START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, TODO_SEND_HELP, UNTIL_AFTER, UPDATE_HELP,
-    USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
+    START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, USAGE_HELP,
+    VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -139,7 +142,7 @@ pub(crate) enum Control {
     #[command(about = "Find the panes where some text was said: agent transcripts and every pane's history", after_help = SEARCH_HELP)]
     Search(SearchArgs),
     #[command(about = "Add, list, check off and remove items of the TODO list", after_help = TODO_HELP)]
-    Todo(TodoArgs),
+    Todo(todo::TodoArgs),
     #[command(about = "Schedule issues or prompts for later; queued agents accept folder trust prompts")]
     Queue(queue::QueueArgs),
     #[command(about = "Follow agents, programs, panes and tabs as they change, one line per event", after_help = EVENTS_HELP)]
@@ -211,6 +214,8 @@ pub(crate) enum Control {
         after_help = ISSUE_HELP
     )]
     Issue(issue::IssueArgs),
+    #[command(about = "List, read and mark the changes of a workspace, as the changes panel shows them", after_help = CHANGES_HELP)]
+    Changes(changes::ChangesArgs),
     #[command(
         about = "Print your Claude Code and Codex plan limits, as the Usage dialog's Limits tab shows them",
         after_help = USAGE_HELP
@@ -264,6 +269,13 @@ pub(crate) struct StatusArgs {
         help = "Keep running and print the whole state as one JSON line each time it changes (`cornercase view` does it for a view)"
     )]
     pub(crate) follow: bool,
+    #[arg(
+        long,
+        conflicts_with_all = ["panes", "view"],
+        help = "Print the TODO list, the queue, away, the update found and keep awake as JSON; with --follow, again \
+                each time they change"
+    )]
+    pub(crate) app: bool,
     #[command(flatten)]
     pub(crate) view: ViewArg,
     #[command(flatten)]
@@ -678,50 +690,6 @@ pub(crate) struct AwayArgs {
 pub(crate) struct NotifyArgs {
     #[arg(required = true, value_name = "TEXT", help = "The message")]
     pub(crate) text: Vec<String>,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct TodoArgs {
-    #[command(subcommand)]
-    pub(crate) action: TodoAction,
-}
-
-#[derive(Debug, Subcommand)]
-pub(crate) enum TodoAction {
-    #[command(about = "Add an item and print its id")]
-    Add {
-        #[arg(required = true, value_name = "TEXT", help = "What to do")]
-        text: Vec<String>,
-    },
-    #[command(about = "List the items with their ids, pending ones first")]
-    List(Print),
-    #[command(about = "Check an item off, or back on")]
-    Done {
-        #[arg(value_name = "ID", help = "The item")]
-        id: u64,
-    },
-    #[command(about = "Send an item's text to an agent, like `send --enter`, and check it off", after_help = TODO_SEND_HELP)]
-    Send {
-        #[arg(value_name = "ID", help = "The item")]
-        id: u64,
-        #[arg(long, value_name = "ID", help = HERE_PANE)]
-        pane: Option<u64>,
-        #[arg(long, value_name = "ID", conflicts_with = "pane", help = "A tab: its agent's pane, else its active one")]
-        tab: Option<u64>,
-        #[arg(
-            long,
-            help = "Send even when the agent shows a dialog, a panel or its shell mode instead of its input box, or \
-                    its feedback survey"
-        )]
-        force: bool,
-        #[command(flatten)]
-        print: Print,
-    },
-    #[command(about = "Remove an item")]
-    Rm {
-        #[arg(value_name = "ID", help = "The item")]
-        id: u64,
-    },
 }
 
 #[derive(Debug, Args)]

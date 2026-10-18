@@ -5,7 +5,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod app_state;
 pub(crate) mod arrange;
+pub(crate) mod changes;
 pub(crate) mod config;
 pub(crate) mod contract;
 mod events;
@@ -24,7 +26,11 @@ mod watch;
 
 pub(crate) use todo::{Todo, TodoSend};
 
+pub(crate) use app_state::{
+    AppState, AppWatch, AwayInfo, InstallInfo, NoUpdate, Notes, ReleaseInfo, UpdateCheck, UpdateInfo, UpdateInstall,
+};
 pub(crate) use arrange::{Fold, GroupDelete, GroupNew, GroupStyle, Move, MovePane, RemovalCheck};
+pub(crate) use changes::{Changes, ChangesBase, ChangesCount, ChangesFile, ChangesGap, ChangesMode, ChangesViewed};
 pub(crate) use config::{ConfigInfo, Configure};
 pub(crate) use contract::Contract;
 pub(crate) use events::{Event, Events, Go, Kind, What};
@@ -144,6 +150,15 @@ pub(crate) enum Command {
     IssueList(IssueList),
     IssueRead(IssueRead),
     IssuePeople(IssuePeople),
+    UpdateCheck(UpdateCheck),
+    UpdateInstall(UpdateInstall),
+    App(AppWatch),
+    Changes(Changes),
+    ChangesMode(ChangesMode),
+    ChangesFile(ChangesFile),
+    ChangesGap(ChangesGap),
+    ChangesBase(ChangesBase),
+    ChangesViewed(ChangesViewed),
     Usage(Usage),
 }
 
@@ -208,7 +223,16 @@ impl Command {
             Self::IssueList(_) => 55,
             Self::IssueRead(_) => 56,
             Self::IssuePeople(_) => 57,
-            Self::Usage(_) => 58,
+            Self::UpdateCheck(_) => 58,
+            Self::UpdateInstall(_) => 59,
+            Self::App(_) => 60,
+            Self::Changes(_) => 61,
+            Self::ChangesMode(_) => 62,
+            Self::ChangesFile(_) => 63,
+            Self::ChangesGap(_) => 64,
+            Self::ChangesBase(_) => 65,
+            Self::ChangesViewed(_) => 66,
+            Self::Usage(_) => 67,
         }]
     }
 
@@ -217,7 +241,14 @@ impl Command {
         let mut fields = Fields::default();
         match self {
             Self::Queue(_) => drop(fields.add("queue", true)),
-            Self::Status(_) | Self::Stats(_) | Self::Contract(_) | Self::Watch(_) | Self::Go(_) => {}
+            Self::Status(_)
+            | Self::Stats(_)
+            | Self::Contract(_)
+            | Self::Watch(_)
+            | Self::Go(_)
+            | Self::UpdateCheck(_)
+            | Self::UpdateInstall(_)
+            | Self::App(_) => {}
             Self::Open(open) => {
                 fields.add("path", open.path.display()).add("focus", open.focus);
             }
@@ -328,12 +359,18 @@ impl Command {
             Self::IssueList(list) => list.fields(&mut fields),
             Self::IssueRead(read) => read.fields(&mut fields),
             Self::IssuePeople(people) => people.fields(&mut fields),
+            Self::Changes(changes) => changes.fields(&mut fields),
+            Self::ChangesMode(mode) => mode.fields(&mut fields),
+            Self::ChangesFile(file) => file.fields(&mut fields),
+            Self::ChangesGap(gap) => gap.fields(&mut fields),
+            Self::ChangesBase(base) => base.fields(&mut fields),
+            Self::ChangesViewed(viewed) => viewed.fields(&mut fields),
             Self::Usage(usage) => usage.fields(&mut fields),
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 59] = [
+    pub(crate) const NAMES: [&str; 68] = [
         "status",
         "open",
         "new-workspace",
@@ -392,11 +429,20 @@ impl Command {
         "issue-list",
         "issue-read",
         "issue-people",
+        "update-check",
+        "update-install",
+        "app",
+        "changes",
+        "changes-mode",
+        "changes-file",
+        "changes-gap",
+        "changes-base",
+        "changes-viewed",
         "usage",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
-        matches!(name, "input" | "scroll" | "selection" | "resize" | "ratio" | "link")
+        matches!(name, "input" | "scroll" | "selection" | "resize" | "ratio" | "link" | "changes-file" | "changes-gap")
     }
 }
 
@@ -674,6 +720,8 @@ pub(crate) struct Done {
 #[serde(default)]
 pub(crate) struct TodoList {
     pub(crate) todos: Vec<TodoItem>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) undo: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

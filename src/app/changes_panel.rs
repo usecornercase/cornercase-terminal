@@ -5,11 +5,12 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::{Position, Rect};
 
 use super::App;
+use super::control::BaseChange;
 use super::event::AppEvent;
 use super::input::wheel;
 use super::layout::Side;
 use crate::changes::diff::File as ChangedFile;
-use crate::changes::{self, Checkout, Tints, every};
+use crate::changes::{self, Checkout, Mode, Tints, every};
 use crate::error::Result;
 use crate::git;
 use crate::log::{Job, Level};
@@ -18,8 +19,13 @@ use crate::ui::changes::{self as panel, Action as HunkAction, Hit as PanelHit};
 use crate::ui::{self};
 
 mod branches;
+pub(super) mod streams;
+
+pub(super) use streams::Streams;
 
 const CHANGES_LABEL: &str = "Changes";
+
+pub(crate) type Gapped = Option<(std::sync::Arc<ChangedFile>, Option<Vec<changes::GapLine>>)>;
 
 #[derive(Debug)]
 pub(crate) enum ChangesEvent {
@@ -40,6 +46,26 @@ pub(crate) enum ChangesEvent {
         hunk: usize,
         lines: Vec<changes::GapLine>,
     },
+    File {
+        request: u64,
+        workspace: u64,
+        mode: Mode,
+        path: String,
+        result: Result<Option<std::sync::Arc<ChangedFile>>>,
+    },
+    GapRead {
+        request: u64,
+        workspace: u64,
+        path: String,
+        hunk: usize,
+        result: Result<Gapped>,
+    },
+    Base {
+        request: u64,
+        workspace: u64,
+        change: BaseChange,
+        listed: Result<(Vec<String>, Option<String>)>,
+    },
 }
 
 impl ChangesEvent {
@@ -48,6 +74,9 @@ impl ChangesEvent {
             Self::Loaded { .. } => "changes",
             Self::Branches { .. } => "branches",
             Self::Gap { .. } => "gap",
+            Self::File { .. } => "changes file",
+            Self::GapRead { .. } => "changes gap",
+            Self::Base { .. } => "changes base",
         }
     }
 }
@@ -57,7 +86,9 @@ impl App {
         match event {
             ChangesEvent::Loaded { workspace, generation, request, result } => {
                 self.changes.loaded(workspace, generation, &request, result);
-                if self.changes_shown() && self.changes.scope == changes::Scope::Every {
+                if (self.changes_shown() && self.changes.scope == changes::Scope::Every)
+                    || !self.change_streams.is_empty()
+                {
                     self.refresh_changes(Instant::now());
                 }
             }
@@ -65,6 +96,15 @@ impl App {
                 self.branches_listed(workspace, branches, default);
             }
             ChangesEvent::Gap { workspace, file, hunk, lines } => self.gap_loaded(workspace, &file, hunk, lines),
+            ChangesEvent::File { request, workspace, mode, path, result } => {
+                self.changes_file_replied(request, workspace, mode, &path, result);
+            }
+            ChangesEvent::GapRead { request, workspace, path, hunk, result } => {
+                self.changes_gap_replied(request, workspace, &path, hunk, result);
+            }
+            ChangesEvent::Base { request, workspace, change, listed } => {
+                self.changes_base_replied(request, workspace, &change, listed);
+            }
         }
     }
 
@@ -80,8 +120,11 @@ impl App {
     }
 
     pub(super) fn refresh_changes(&mut self, now: Instant) {
-        let request = if self.changes.scope == changes::Scope::Every && self.changes_shown() {
-            let targets = self.every_targets();
+        self.end_gone_streams();
+        let tui_every = self.changes.scope == changes::Scope::Every && self.changes_shown();
+        let every = tui_every || self.change_streams.wants_every();
+        let targets = if every { self.every_targets() } else { Vec::new() };
+        let request = if tui_every {
             self.changes.request_every(&targets, now)
         } else {
             self.changes_target().and_then(|target| {
@@ -92,7 +135,30 @@ impl App {
                 self.changes.request(&target, now).map(|(generation, request)| (target.workspace, generation, request))
             })
         };
-        let Some((workspace, generation, request)) = request else { return };
+        let request = request
+            .or_else(|| self.feed_request(now))
+            .or_else(|| if every && !tui_every { self.changes.request_sweep(&targets, now, false) } else { None });
+        if let Some((workspace, generation, request)) = request {
+            self.spawn_changes(workspace, generation, request);
+        }
+        self.publish_change_streams(&targets, now);
+    }
+
+    fn feed_request(&mut self, now: Instant) -> Option<(u64, u64, changes::git::Request)> {
+        let mut followed: Vec<_> = self.change_streams.followed().into_iter().collect();
+        followed.sort_by_key(|(workspace, mode)| (*workspace, mode.name()));
+        let wanted: Vec<(Checkout, Mode)> = followed
+            .into_iter()
+            .filter_map(|(workspace, mode)| {
+                let (p, w) = self.projects.workspace_index(workspace)?;
+                let ws = &self.projects[p].workspaces[w];
+                Some((Checkout { workspace, dir: ws.path.clone(), base: ws.base.clone() }, mode))
+            })
+            .collect();
+        self.changes.request_followed(&wanted, now)
+    }
+
+    fn spawn_changes(&mut self, workspace: u64, generation: u64, request: changes::git::Request) {
         let kind = if request.expanded.is_some() { "summary" } else { "diff" };
         let job = Job::new(Level::Debug, "changes", kind).with("workspace", workspace);
         let loading = request.clone();
@@ -221,7 +287,7 @@ impl App {
             project,
             owners,
             headers,
-            mode: if every { changes::Mode::Uncommitted } else { self.changes.mode },
+            mode: if every { Mode::Uncommitted } else { self.changes.mode },
             base: target.and_then(|t| self.changes.label(t.workspace).or(t.base)).filter(|_| !every),
             body,
             folded,
@@ -310,14 +376,12 @@ impl App {
                 if let Some((target, f)) = selected {
                     let (mode, workspace, dir) = (view.mode, target.workspace, target.dir);
                     let job = Job::new(Level::Debug, "changes", "unchanged lines").with("workspace", workspace);
-                    let path = f.path.clone();
                     self.spawn_job(
                         job,
-                        move || Ok(changes::git::new_side(&dir, mode, &path)),
-                        move |new_side, _| {
-                            let new_side = new_side.ok().flatten()?;
-                            let lines = changes::gap_lines(&f, h, &new_side);
-                            Some(AppEvent::Changes(ChangesEvent::Gap { workspace, file: f, hunk: h, lines }))
+                        move || Ok(changes::gap(&dir, mode, &f, h).map(|lines| (f, lines))),
+                        move |found, _| {
+                            let (file, lines) = found.ok().flatten()?;
+                            Some(AppEvent::Changes(ChangesEvent::Gap { workspace, file, hunk: h, lines }))
                         },
                     );
                 }

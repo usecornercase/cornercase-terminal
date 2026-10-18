@@ -17,19 +17,6 @@ fn watching(app: &mut App) -> Snapshot {
     watch(app)
 }
 
-fn lines(app: &mut App) -> Vec<Value> {
-    streamed(app)
-        .into_iter()
-        .filter_map(|streamed| match streamed {
-            Streamed::Snapshot(text) => match serde_json::from_str(&text) {
-                Ok(Response::Ok(value)) => Some(value),
-                other => panic!("not a snapshot: {other:?}"),
-            },
-            Streamed::Event(_) | Streamed::End => None,
-        })
-        .collect()
-}
-
 fn published(app: &mut App) -> Vec<Snapshot> {
     let parse = |text: &str| match serde_json::from_str(text) {
         Ok(Response::Ok(value)) => serde_json::from_value(value).expect("a snapshot"),

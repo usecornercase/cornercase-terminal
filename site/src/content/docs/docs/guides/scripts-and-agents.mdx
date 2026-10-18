@@ -69,6 +69,7 @@ group 9  personal  collapsed
 | `wait` | Waits until an agent stops working, a program ends, a line shows up or the output stops, in one pane or in the first or every one of several. |
 | `events` | Prints what happens as it happens: agents changing state, programs ending, panes, tabs, workspaces and projects opening and closing, with `--host` programs' clipboard writes and bells, and with `--notices` the notices about agents. |
 | `surface` | Streams a tab's terminals as cells with their panes and dividers, for [a program that draws them](#stream-a-tabs-terminals), optionally [as patches](#patches). |
+| `changes` | Lists, reads and marks the changes of a workspace, as the changes panel shows them, [for a program that draws it](#follow-a-workspaces-changes). |
 | `view` | Opens a [view of your own](#a-view-of-your-own): its own tab and size, for a program that draws cornercase itself. |
 | `view-set` | Changes a view: its size, whether it is active, or takes back the tab it shows. |
 | `input --pane ID EVENT…` | Types keys with modifiers, text, pastes and mouse events into a pane, for [a program that draws it](#drive-a-tabs-terminals). |
@@ -80,7 +81,7 @@ group 9  personal  collapsed
 | `focus` | Shows a pane, tab, workspace or project in the window. |
 | `go TOKEN` | Goes to the agent a notice is about, as a click on its desktop notification does, in the window or with `--view` in a view. |
 | `notify TEXT` | Shows a message in the window, with a desktop notification. |
-| `todo` | Adds to, lists, checks off and removes items of the [TODO list](../todo/), and sends one to an agent as `send --enter` would. |
+| `todo` | Adds, lists, edits, checks off and back, reorders and removes items of the [TODO list](../todo/) (with undo), and sends one to an agent as `send --enter` would. |
 | `config` | Reads every setting, connection and project's commands, and changes them with the Settings dialog's own checks: [settings for a program that draws its own preferences](#settings). |
 | `away` | Has agents message you [on Telegram](../telegram/) or [Discord](../discord/); `--off` stops it. |
 | `usage` | Prints your Claude Code and Codex [plan limits](#plan-usage) as the Usage dialog's Limits tab shows them; `--cached` prints the last answer without asking the agents again. |
@@ -97,6 +98,8 @@ cornercase status --json           # the same, as JSON
 cornercase status --panes          # one line per pane, for scripts
 cornercase status --panes --json   # the same, as JSON
 cornercase status --follow         # the whole state as JSON, again after each change
+cornercase status --app            # the TODO list, queue, away, update and keep awake as JSON
+cornercase status --app --follow   # the same, again after each change
 ```
 
 Each pane shows its program and folder. Recognised agents that emit [OSC 7501](../../reference/agents/#program-status-protocol) show their reported status, including when no session reader exists. A pane running Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI or GitHub Copilot CLI also shows what the agent is doing (`working`, `waiting` for an answer, `pending` review, `done` while you were elsewhere, `failed`, `idle`; without OSC 7501, opencode is never `waiting`), its model and how full its context is, as the [tab icons](../projects-workspaces-tabs/#what-your-agents-are-doing) do. `working (background shell)` is a Claude Code agent whose turn is over while a shell it started in the background (a test watcher, a dev server) still runs: its tab keeps showing it as working, since Claude wakes up when that shell ends, but a script can tell it apart and stop waiting with [`--until turn-over`](#wait). `working (2 subagents)` is an agent whose own turn is over while subagents it started (Claude Code, GitHub Copilot CLI) still run: it goes on when they report back, so it stays working, and the default, `--until idle` and `--until turn-over` [waits](#wait) keep waiting for them. `(dialog open)` is a Claude Code agent showing something else where its input box should be (a picker, the transcript view, a background shell's details, its `!` shell mode), which [`send`](#talk-to-a-pane) refuses. `(survey open)` is Claude Code's feedback survey above its input box, which `send` refuses too. A workspace shows its branch, `worktree` when it has one of its own, the commits it is behind, and its [pull request](../worktrees/#pull-requests-and-their-checks) with the state of its checks, such as `pull request #485 open, checks failing`, or `pull request #486 open, conflicts with main, checks passing` when it has merge conflicts.
@@ -161,6 +164,43 @@ cornercase status --follow | while read -r state; do echo "$state" > /tmp/corner
 - `revision` only compares within one `boot`, the start of the server it came from. It ends, with status 0, when the server stops or restarts; to go on, run it again: its first line is the state at that moment, so nothing is missed. The same goes for a connection that ended (status 1).
 - A line comes shortly after a change, not for every change: several changes close together give one line with all of them. Output alone (a program printing in a pane) gives none, but what `status --json` shows moves too, such as an agent's status, its context or a pane's folder, and each of those gives a line, so a working agent can bring one every few seconds.
 - A reader that falls behind isn't disconnected for it: the server keeps up to four lines waiting for it, which it still reads, older ones first; past those it keeps only the latest, so once it has read them it reads the state as it is now, with a jump in `revision`. One that stops reading altogether is disconnected once the server has waited a second to write to it, like any client.
+
+#### Follow a workspace's changes
+
+The changes panel's data is there for another UI too: the changed files with their status and counts, each file's diff with the words that changed and its highlighting, the unchanged lines between two hunks, the branch it compares with and the files you marked as viewed.
+
+```sh
+cornercase changes list                      # the workspace you are in, uncommitted
+cornercase changes list --every --follow     # every project's uncommitted changes, as JSON lines
+cornercase changes list --worktree fix/login --mode commits --json
+cornercase changes file src/main.rs --json   # one file's diff
+cornercase changes gap src/main.rs --hunk 1  # the unchanged lines before its second hunk
+cornercase changes base origin/main          # compare Commits and All with another branch
+cornercase changes viewed src/main.rs        # mark it viewed; --clear clears it
+```
+
+- `changes` (`cornercase changes list --follow`) is a stream, one per connection. It answers a first summary at once, which may say `"state": "loading"` while git reads, then sends a whole new one each time the files change, with a higher `revision`; a line is only sent when its content differs from the last. Each summary replaces the one before it, and a reader that falls behind reads the latest, as with `status --follow`.
+- A summary has `boot`, `stream` (its number, for `changes-mode`), `revision`, `scope` (`project` or `every`), `mode` (`uncommitted`, `commits` or `all`), `state` (`loading`, `ready` or `failed`, with `error`) and `workspaces`: each with `project`, `workspace`, `base` (what Commits and All compare with, `null` in Uncommitted), `added`, `removed` and `files`. A file has `path`, `old_path` (for a rename), `status` (`modified`, `added`, `deleted`, `renamed` or `untracked`), `added`, `removed`, `fold` (`open`, `lockfile`, `binary` or `large`: lockfiles show their lines, binary and large files have none), `viewed` and `digest`. Summaries have ids only; the names are in `status`.
+- A project stream has one workspace entry, with no files when there are none. An Every project stream (`--every`, only for Uncommitted) has one entry per workspace with changes, in the sidebar's order, and never ends by itself. A project stream ends when its workspace or project closes. A workspace nobody follows costs nothing: git runs only for what a stream or the window shows.
+- **The mode belongs to the stream**: `changes-mode` changes a running stream's mode, and the window's tabs don't move. It only reaches a stream the same connection opened, so it is a request for a program holding the stream's connection open over the socket: a separate command invocation uses a new connection and gets `not-found`, which is why `cornercase changes` has no command for it (start another `changes list --mode …` instead). A second `changes` on one connection is refused with `conflict`. **The base and the viewed marks are shared** with the window: choosing a base here changes what its panel compares with, and a mark set here shows as its `✓`.
+- `changes-file` answers a file's `hunks`: `old_start`, `new_start`, `context` and `lines`, each with `kind` (`context`, `removed` or `added`), `old` and `new` numbers (`null` where the line is not on that side), `text` (tabs as four spaces), `emphasis` (the words that changed, as `[start, end)` pairs in characters of `text`) and `syntax` (runs of `style` and `text`, left out where the line isn't highlighted). `styles` is the table the runs point into, in the same shape as a [surface](#stream-a-tabs-terminals)'s: palette indices, never RGB, so the client's own theme and tints apply; entry 0 is plain.
+- `changes-gap` answers `lines` with their `old` and `new` numbers and `syntax`, for the lines before hunk `hunk` (counted from 1: hunk 0 has no gap before it). `changes-base` without arguments lists `branches`, the `default` branch and the current `base`; with `base` it sets it (the default branch goes back to following the default) and with `clear` it clears it. `changes-viewed` sets a mark with the file's `digest`, or clears it with `clear`: a mark set with the digest of a version the file no longer has does not apply, as when the file changes under the window's mark.
+- `digest` is a string of 16 hexadecimal digits that changes whenever the file's change does. `status --json` also gives each workspace `changes` (`files`, `added`, `removed` and `mode`), for a badge like the button's, while cornercase keeps it current: the window's workspace, one a stream follows, or any while a stream follows every project; it is left out otherwise.
+
+#### Follow the rest of the app
+
+The session is not all of cornercase's state. The [TODO list](../todo/), the [queue](../issues/), whether you are [away](#away-on-telegram-or-discord) on each chat app, the update found and [keep awake](../../reference/agents/#keep-the-computer-awake) live outside it, and another UI needs them too. `status --app` prints them as one JSON object, and `--follow` prints it again each time one of them changes:
+
+```sh
+cornercase status --app
+cornercase status --app --follow | jq -c '[.revision, (.todos | length)]'
+```
+
+- `todos`: the items as `todo list --json` has them, in the panel's order. `queue`: the entries `queue list --json` has, prompts included.
+- `away`: one row per chat app, `telegram` then `discord`, each with `ready` (paired, and the bot's token not refused) and `away`.
+- `update`: `release` (`version` and its `notes`, each with a `version` and `text`), or `none` saying why there is no release: `disabled` (a development build), `off` (`check_updates` is off and nothing was checked), `unchecked`, `up-to-date` or `failed`. Also `checking`, `checked` (UTC time of the last answer), `error` (why the last check failed), `install` (`{"method": "replace", "path": …}` when cornercase can replace itself, `{"method": "command", "command": …}` when you must run a command, as with Homebrew), `installing`, `installed` (restart to use it) and `install_error`. [`update-check` and `update-install`](#updates-from-a-program) drive it.
+- `keep_awake`: as in `status --json`, or `null` while the setting is off. `version` and `boot` are the server's, as in `status`.
+- It follows the rules of [`status --follow`](#follow-the-whole-state): every line is the whole state and carries a `revision` that grows by one per line, `revision` only compares within one `boot`, a reader that falls behind reads at most four older lines and then the latest, and it ends when the server stops or restarts. A line is built at most twice a second, and only while someone follows. It is a stream of its own so that the session's lines do not carry the queue's prompts and the release notes every half second.
 
 #### Stream a tab's terminals
 
@@ -583,9 +623,16 @@ cornercase notify 'the release build is ready'
 cornercase todo add review the login fix    # prints the item's id
 cornercase todo list
 cornercase todo done 3                      # checks it off, or back on
+cornercase todo undone 3                    # puts a done item back among the ones to do
+cornercase todo edit 3 review the login fix again
+cornercase todo move 3 --before 5           # or --last
 cornercase todo send 3 --pane 5             # types it into the agent and checks it off
-cornercase todo rm 3
+cornercase todo rm 3                        # prints a number that restore takes
+cornercase todo clear-done                  # the same, for every done item
+cornercase todo restore 7
 ```
+
+`todo` does what the TODO panel does. An item moves among its kind: before an item of the other kind it stops at the end of the ones to do (or becomes the first done one). `done` checks an item off or back on; `undone` only puts a done item back, and does nothing for one still to do. `rm` and `clear-done` print an `undo` number (`--json` prints the removed items with it); `restore` puts that removal back where it was. The server keeps the last 16 removals until it stops, and `clear-done` with nothing done removes nothing and prints no number. Over the socket these are the `todo` request's `edit`, `undone`, `move`, `clear-done` and `restore`, listed as the `todo-panel` [feature](#contract-and-compatibility).
 
 `notify` shows a toast in the window and sends a [desktop notification](../projects-workspaces-tabs/#notifications) through the terminal of every open window, like the one for an agent that needs you.
 
@@ -599,6 +646,21 @@ cornercase away --off    # they stop
 ```
 
 `away` turns on the away mode of every chat app paired, [Telegram](../telegram/) and [Discord](../discord/), as **Remote › continue on Telegram** (or **on Discord**) does: while it is on, an agent that needs you or finishes its turn sends you its question or its last message, and what you reply goes to it, until you turn it off. It succeeds when at least one of them went away, and fails when none could, saying where to set it up. An agent can run it for you when you tell it you are leaving.
+
+### Updates from a program
+
+`cornercase update` checks and installs from its own process. A program that drives the server's own update flow, such as a GUI's update button, uses the requests `update-check` and `update-install`, the dialog's own check and install, whose state is the `update` of [`status --app`](#follow-the-rest-of-the-app):
+
+```json
+{"command": "update-check", "args": {}}
+{"command": "update-install", "args": {}}
+```
+
+- `update-check` asks GitHub whatever `check_updates` says, and answers the `update` object when it ends. A check already running is joined. A failure is `failed` with the reason, and the release found before is kept.
+- `update-install` installs the release found, and answers the `update` object when it ends, with `installed` true: restart to use it ([`restart`](#restart-without-cutting-an-agent-off) or `restart --when-idle`). It is `conflict` when there is no release (ask for `update-check` first) or when cornercase can't replace itself here (the message names the command to run). An install already running is joined, one done answers at once, and a failure is `failed` and can be asked again.
+- A development build, which never looks for updates, lists both as unavailable in [`contract`](#contract-and-compatibility) and refuses them with `unavailable`.
+
+There is no command for them: `cornercase update` does the same from a shell, and works without a server.
 
 ### Restart without cutting an agent off
 
@@ -700,6 +762,7 @@ A refusal has a code: `not-found` for a key that names no setting or connection,
 | --- | --- |
 | `status` | `version`, `boot` (which start of the server this is, see [Contract and compatibility](#contract-and-compatibility)), `caller` (your pane's id, or `null`), `shown` (the ids of what the window shows), `groups` (`id`, `name`, `collapsed`, `icon`, `colour`), `projects` (`id`, `name`, `custom_name`, `path`, `group`, `active`, `collapsed`, `workspaces`), each workspace (`id`, `name`, `custom_name`, `path`, `branch`, `worktree`, `behind`, `pull_request`, `run_dir`, `active`, `collapsed`, `tabs`), each tab (`id`, `name`, `custom_name`, `status`, `active`, `layout`, `panes`), each pane (`id`, `path`, `program`, `agent`, `status`, `background_shell`, `dialog`, `survey`, `at_prompt`, `model`, `context`, `active`, `caller`, `resumes`, `resuming`, `title`, `parent`, `subagents`). `subagents` is how many subagents the agent started that still run (a number, `0` for shells and agents without a reader); `title` is what the program last set as its title (OSC 0 or 2), as a terminal tab shows it, or `null`; it can change several times a second while an agent works, and `status --follow` sends it at most every half second. `pull_request` is `null`, or the pull request of the workspace's branch: `number`, `title`, `url`, `state` (`open`, `draft`, `merged` or `closed`), `checks` (`failing`, `pending`, `passing`, or `null` without checks) and `failed`, the names of the checks that failed, `conflicts` (`true` while GitHub says it has merge conflicts with its base; its `pull_request` workflows don't run until they are resolved, so `checks` covers only what ran) and `base`, the branch it merges into, or `null`. Groups, projects, workspaces and tabs come in the order of the sidebar. `colour` is a group's palette index (0-255) and `icon` its symbol; `custom_name` is the name given in cornercase, or `null` when the item takes its folder's, branch's or program's; `collapsed` is whether a project or workspace is folded. `layout` is how the tab's panes are split: `{"leaf": PANE}`, or `{"split": {"dir": D, "ratio": R, "first": …, "second": …}}`, where `dir` is `right` (side by side) or `down` (one above the other) and `ratio` is the share of the first side, from 0 to 1. `active` is whether it is the active one of its parent; `status` is `working`, `waiting`, `pending`, `done`, `idle` or `null`; `background_shell` is `true` while the agent's turn is over but a shell it started in the background still runs (its `status` stays `working`); `dialog` is `true` while a Claude Code agent shows a dialog, a panel or its shell mode instead of its input box; `survey` is `true` while it shows its feedback survey above its input box; `resumes` is `true` when the pane's agent conversation comes back after a restart; `resuming` is `true` while it is coming back, and the pane takes no input; `parent` is the id of the pane it was started from (by `start`, `new-tab` or `split` run inside that pane, or a flow's orchestrator), or `null` when it has none or that pane closed; `at_prompt` is whether the pane's shell sits at its prompt, with nothing else running in it, so it is `false` whenever an agent runs, whatever the agent shows. While **keep awake** is on, `keep_awake` has `held` (whether the computer is being kept awake now), `by` (the tool holding it) and `unavailable` (why it can't be, on this machine); see [Keep the computer awake](../../reference/agents/#keep-the-computer-awake). `theme` says where the colours of the terminals' programs come from: `from` and `scheme` (see [Colours for programs](#colours-for-programs)). `config` is `{"revision": N}`, which goes up whenever [a setting changes](#settings). |
 | `status --follow` | One object per line: what `status` prints, plus `revision`. |
+| `status --app` | `revision` (with `--follow`), `version`, `boot`, `todos`, `queue`, `away`, `update` and `keep_awake`, see [Follow the rest of the app](#follow-the-rest-of-the-app). |
 | `status --panes` | `panes`: one object per pane, with the [columns of `--panes`](#one-line-per-pane) as keys, in their order: `pane`, `tab`, `workspace`, `project`, `program`, `agent`, `status`, `background_shell`, `dialog`, `at_prompt`, `model`, `context`, `caller`, `shown`, `active`, `tab_name`, `workspace_name`, `branch`, `worktree`, `project_name`, `path`, `survey`, `resuming`, `parent`, `subagents`. Every object has every key, `null` where there is no value. |
 | `open`, `new-workspace`, `new-tab`, `split`, `start` | `project`, `workspace`, `tab`, `pane`: the ids of what was made (for `open`, the project's shown workspace, tab and pane), and `projection` when `--focus --view` moved a view. |
 | `focus --view` | `project`, `workspace`, `tab`, `pane` the view shows now, and its `projection`. |
@@ -710,6 +773,12 @@ A refusal has a code: `not-found` for a key that names no setting or connection,
 | `read` | `pane` and `text`. With `--last-message`, also `agent` (`claude`, `codex`, `gemini` or `opencode`), `written` (when the agent wrote it, in UTC, such as `2026-10-08T19:56:37.241Z`) and `turn_over` (`true` once the agent stopped working, as [`--until turn-over`](#wait) sees it; missing while cornercase doesn't know yet). |
 | `read --last-message` with several targets | `panes`: the individual `read --last-message` answers above, or entries with `error` and the requested `pane` or `tab` id. |
 | `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind`, `parent` (for an `opened` pane started from another pane), `token`, `status`, `place`, `message`, `panes` (for `notice`), `text` (for `clipboard`) or `count` (for `bell` and `dropped`) depending on the event. |
+| `changes` | One object per line, see [Follow a workspace's changes](#follow-a-workspaces-changes): `boot`, `stream`, `revision`, `scope`, `mode`, `state`, `error` and `workspaces`. |
+| `changes-mode` | `stream`, `scope`, `workspace` and `mode`. |
+| `changes-file` | `workspace`, `mode`, the file (`path`, `old_path`, `status`, `added`, `removed`, `fold`, `viewed`, `digest`), `styles` and `hunks`. |
+| `changes-gap` | `workspace`, `path`, `hunk`, `styles` and `lines`. |
+| `changes-base` | `workspace`, `base`, `default` and `branches`. |
+| `changes-viewed` | `workspace`, `path` and `viewed`. |
 | `surface` | One object per line, see [Stream a tab's terminals](#stream-a-tabs-terminals): `boot`, `session`, `surface`, `revision`, `tab`, `cols`, `rows`, `layout`, `dividers`, `styles`, `hyperlinks` and `panes`; for `--view`, also `view` and `projection`. With `--patches`, later lines carry `base` and only the changed panes. |
 | `view` | One object per line, see [A view of your own](#a-view-of-your-own): what `status --follow` prints, plus `view` (`id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`, `visible`) and each tab's `controller`. |
 | `view-set` | The view: `id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`, `visible`. |
@@ -725,6 +794,7 @@ A refusal has a code: `not-found` for a key that names no setting or connection,
 | `group-style` | `group`, `icon`, `colour`, and `icons` and `colours`, the sets to choose from. |
 | `removal-check` | `workspace`, `path`, `branch`, `changed`, `lock`, `roles` and `teardown`, as `close --check --json` prints them. |
 | `todo list` | `todos`: `id`, `text`, `done`. |
+| `todo rm`, `todo clear-done` | `todos`: the items removed, and `undo`, the number `todo restore` takes (none when nothing was removed). |
 | `todo send` | `pane`, as `send` gives it, `todo`, the item checked off, and `checked` (whether the item was checked off) and `unconfirmed` (`true` when it was sent but stays pending). |
 | `config` | `revision`, `path`, `problem`, `settings`, `connections`, `projects` and `notices`: see [Settings](#settings). |
 | `contract` | `version`, `contract`, `boot`, `operations` (`name`, `available`, and `reason` when it is not), `features` and `streams` (`name`, `version`). See [Contract and compatibility](#contract-and-compatibility). |
@@ -773,11 +843,14 @@ cornercase contract --json
 cornercase 0.12.137
 contract 1
 boot 4242-1700000000
-commands 59 (59 available)
+commands 68 (68 available)
 stream events 1
 stream watch 1
 stream surface 1
-features boot, structured-errors, strict-fields, views, host-events, theme, notices, surface-patches, config, close-unlock, sound, issues
+stream view 1
+stream app 1
+stream changes 1
+features boot, structured-errors, strict-fields, views, host-events, theme, notices, surface-patches, config, close-unlock, sound, issues, todo-panel, changes
 ```
 
 `--json` prints an object with:
@@ -786,8 +859,8 @@ features boot, structured-errors, strict-fields, views, host-events, theme, noti
 - `contract`: the version of the rules on this page, an integer starting at 1. It goes up only when something that was there changes meaning or shape, never when something is added.
 - `boot`: which start of the server this is. It changes on every start, `cornercase restart` included, since ids start again from 1. It is the same value as `CORNERCASE_SERVER` in the panes and `boot` in `status --json`.
 - `operations`: every request the server takes, by name, with `available`. A server with `start-server` among them can be started without a window; one without it needs a window before it opens terminals. One that is not available on this server has `available: false` and a `reason`; the others keep working.
-- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours), `notices` (a view's `visible`, the `notices` field of `events` and the `go` request; check it before sending them), `surface-patches` (the `patches` field of `surface`; an older server ignores it and sends complete lines, so check it before asking) `config` (the `config` request and `config.revision`) `close-unlock` (the `unlock` field of `close`, which an older server ignores and then refuses with the lock's message; check it before sending it) and `sound` (a notice's `sound` field: an older server never sends it) and `issues` (the `issue` and `source` fields of `start` and `flow-run`, which an older server ignores and then starts the agent without the issue; check it before sending them).
-- `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals) and `{"name": "view", "version": 1}` for [`view`](#a-view-of-your-own), whose lines are `watch` format 1 plus `view`.
+- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours), `notices` (a view's `visible`, the `notices` field of `events` and the `go` request; check it before sending them), `surface-patches` (the `patches` field of `surface`; an older server ignores it and sends complete lines, so check it before asking) `config` (the `config` request and `config.revision`) `close-unlock` (the `unlock` field of `close`, which an older server ignores and then refuses with the lock's message; check it before sending it), `sound` (a notice's `sound` field: an older server never sends it), `issues` (the `issue` and `source` fields of `start` and `flow-run`, which an older server ignores and then starts the agent without the issue; check it before sending them) and `todo-panel` (the `todo` request's `edit`, `undone`, `move`, `clear-done` and `restore`; an older server refuses them as malformed, so check it before sending them) and `changes` (the `changes` requests and the `changes` count of `status`).
+- `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals) and `{"name": "view", "version": 1}` for [`view`](#a-view-of-your-own), whose lines are `watch` format 1 plus `view`, and `{"name": "app", "version": 1}` for [`status --app`](#follow-the-rest-of-the-app), and `{"name": "changes", "version": 1}` for [`changes`](#follow-a-workspaces-changes).
 
 A server from before `contract` says `the running cornercase server (…) has no contract command`, or that it is too old: it knows none of the rest of this section, so don't send it ids you kept from before.
 
@@ -796,7 +869,7 @@ A server from before `contract` says `the running cornercase server (…) has no
 - Fields are only added, never renamed or removed. Read answers leniently: ignore keys you don't know, and don't depend on their order (`events` lines come out with their keys sorted).
 - A new behaviour that must not be ignored gets a new request name, which an older server refuses with `has no … command` rather than doing something else.
 - `contract` goes up when something that was there changes. Additions show in `operations`, `features` and `streams` instead.
-- The format of each stream has its own version. Format 1 of `events` is the one described in [Follow events](#follow-events), format 1 of `watch` the one in [Follow the whole state](#follow-the-whole-state), format 1 of `surface` the one in [Stream a tab's terminals](#stream-a-tabs-terminals).
+- The format of each stream has its own version. Format 1 of `events` is the one described in [Follow events](#follow-events), format 1 of `watch` the one in [Follow the whole state](#follow-the-whole-state), format 1 of `surface` the one in [Stream a tab's terminals](#stream-a-tabs-terminals), format 1 of `app` the one in [Follow the rest of the app](#follow-the-rest-of-the-app), format 1 of `changes` the one in [Follow a workspace's changes](#follow-a-workspaces-changes).
 
 ### Errors with a code
 
@@ -811,11 +884,11 @@ A request through the socket is JSON: `{"command": "status", "args": {}}`, its `
 | `unsupported` | The server has no such request, or the request's `contract` is newer than the server's. Nothing was done. |
 | `malformed` | The request is not one: its arguments don't have the expected types, a setting's value is of the wrong type or one the Settings dialog refuses, or it names a `view` and takes none (`` `stats` takes no view ``). |
 | `stale-boot` | The request's `boot` is not this server's: it restarted since, and the ids you hold may name other panes now. Nothing was done. |
-| `not-found` | No group, project, workspace, tab, pane, view or surface has that id, no setting or connection has that key, or the tab has no divider at that path. A view is gone once the connection that opened it closes. |
+| `not-found` | No group, project, workspace, tab, pane, view, surface or changes stream has that id, a file has no change or a hunk no gap, `changes-mode` names a stream another connection opened, a branch doesn't exist, no setting or connection has that key, or the tab has no divider at that path. A view is gone once the connection that opened it closes. |
 | `unknown-field` | A field this server doesn't know, named by its path, such as `args.bogus`. Nothing was done. |
-| `unavailable` | The request is listed in `operations` with `available: false`, with the `reason` as its message. No request is turned off today, so no server sends this code yet. |
+| `unavailable` | The request is listed in `operations` with `available: false`, with the `reason` as its message. A development build turns off `update-check` and `update-install`; a release turns off none. |
 | `busy` | The pane's program isn't reading its input: 16 MiB are waiting for it. Only `input` answers this; `send` and `keys` keep answering `failed`. Nothing was sent. |
-| `conflict` | The request doesn't fit the current state: the pane's terminal has another size, a cell is outside it, the program scrolls itself, nothing is selected to copy, or, for `config`, a token set by an environment variable, a project folder that isn't a repository or a `config.json` that cannot be read; or a row moved before one of another workspace or project, a pane moved to another tab, or where its tab has no room; or an issue of a tracker that is not connected, a place to choose for an issue that isn't tied to a repository, or tracker settings that changed during the lookup. Read the latest state and try again. Nothing was done. |
+| `conflict` | The request doesn't fit the current state: the pane's terminal has another size, a cell is outside it, the program scrolls itself, nothing is selected to copy, or, for `update-install`, no release found or a cornercase that can't replace itself, a workspace for `changes` isn't in a git repository, a connection already follows changes, or, for `config`, a token set by an environment variable, a project folder that isn't a repository or a `config.json` that cannot be read; or a row moved before one of another workspace or project, a pane moved to another tab, or where its tab has no room; or an issue of a tracker that is not connected, a place to choose for an issue that isn't tied to a repository, or tracker settings that changed during the lookup. Read the latest state and try again. Nothing was done. |
 | `failed` | Anything else. |
 
 The `message` is the text the command would print. Text that is not JSON at all gets the plain form, `{"error": "…"}`, since the server can't tell what the request asked for. Without `contract` or `boot`, a field the server doesn't know is ignored, as it always was; with them it is refused, so a newer option never passes for done on an older server. Either one set to `null` counts as not sent. A `contract` newer than the server's is refused with `unsupported`, so a client written for later rules learns it at once instead of being read under older ones. The `cornercase` commands themselves send neither, so what they print doesn't change.
@@ -824,7 +897,7 @@ With `boot` set to the value from `contract` or `status`, a request kept across 
 
 ### Talking to the socket directly
 
-The [socket](../../reference/command-line/#the-socket) takes one request per connection. Each message is framed as its length, 4 bytes little-endian, then its [postcard](https://postcard.jamesmunns.com/) encoding: a request is variant 4 followed by the JSON text (its length as a varint, then its UTF-8 bytes), an answer variant 5 in the same form. `events` sends one answer per event and ends with variant 2, 3 or 4 (its panes closed, the server stopped, or it restarted); `watch`, the request behind `status --follow`, answers with the state and then sends it again in the same form after each change, until variant 3 or 4; `surface` does the same with a tab's frame, and ends with variant 2 when the tab closes (or its view does); `view` sends the state, with the view in it, and holds the view open until the connection closes. A request for a view carries its id as `view` next to `command`, once `contract` lists the feature `views`. Only your own user can connect. Nothing needs to be sent before the request.
+The [socket](../../reference/command-line/#the-socket) takes one request per connection. Each message is framed as its length, 4 bytes little-endian, then its [postcard](https://postcard.jamesmunns.com/) encoding: a request is variant 4 followed by the JSON text (its length as a varint, then its UTF-8 bytes), an answer variant 5 in the same form. `events` sends one answer per event and ends with variant 2, 3 or 4 (its panes closed, the server stopped, or it restarted); `watch`, the request behind `status --follow`, answers with the state and then sends it again in the same form after each change, until variant 3 or 4, and `app`, the request behind `status --app --follow`, does the same with the rest of the app's state; `surface` does the same with a tab's frame, and ends with variant 2 when the tab closes (or its view does); `view` sends the state, with the view in it, and holds the view open until the connection closes. A request for a view carries its id as `view` next to `command`, once `contract` lists the feature `views`. Only your own user can connect. Nothing needs to be sent before the request.
 
 ## Teach your agents
 

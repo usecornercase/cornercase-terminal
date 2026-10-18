@@ -1,0 +1,68 @@
+{
+  "boot": "4242-1700000000",
+  "stream": 2,
+  "revision": 5,
+  "scope": "every",
+  "mode": "uncommitted",
+  "state": "ready",
+  "error": null,
+  "workspaces": [
+    {
+      "project": 1,
+      "workspace": 2,
+      "base": null,
+      "added": 4,
+      "removed": 3,
+      "files": [
+        {
+          "path": "src/a.rs",
+          "old_path": null,
+          "status": "modified",
+          "added": 4,
+          "removed": 3,
+          "fold": "open",
+          "viewed": false,
+          "digest": "00c0ffee12345678"
+        }
+      ]
+    },
+    {
+      "project": 1,
+      "workspace": 3,
+      "base": null,
+      "added": 4,
+      "removed": 3,
+      "files": [
+        {
+          "path": "src/b.rs",
+          "old_path": null,
+          "status": "modified",
+          "added": 4,
+          "removed": 3,
+          "fold": "open",
+          "viewed": false,
+          "digest": "00c0ffee12345678"
+        }
+      ]
+    },
+    {
+      "project": 4,
+      "workspace": 5,
+      "base": null,
+      "added": 4,
+      "removed": 3,
+      "files": [
+        {
+          "path": "lib.rs",
+          "old_path": null,
+          "status": "modified",
+          "added": 4,
+          "removed": 3,
+          "fold": "open",
+          "viewed": false,
+          "digest": "00c0ffee12345678"
+        }
+      ]
+    }
+  ]
+}

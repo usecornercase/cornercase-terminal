@@ -41,11 +41,7 @@ mod every_project {
 
     #[test]
     fn groups_projects_and_changed_worktrees_and_leaves_out_clean_and_plain_folders() {
-        let shop = repo_with_edit();
-        let worktree = TempDir::new();
-        let checkout = worktree.path().join("topic");
-        git(shop.path(), &["worktree", "add", "--quiet", "-b", "topic", checkout.to_str().expect("path")]);
-        std::fs::write(checkout.join("new.txt"), "new\n").expect("edit worktree");
+        let (shop, _worktree) = shop_with_topic_worktree();
         let api = repo_with_edit();
         let clean = git_repo(&[]);
         let plain = TempDir::new();
@@ -305,12 +301,6 @@ fn open_changes() -> (TempDir, App, Receiver<AppEvent>) {
     app.side = Some(Side::Changes);
     refresh_until_loaded(&mut app, &rx);
     (repo, app, rx)
-}
-
-fn repo_with_edit() -> TempDir {
-    let repo = git_repo(&[("a.txt", "one\ntwo\n")]);
-    std::fs::write(repo.path().join("a.txt"), "one\nTWO\n").expect("edit");
-    repo
 }
 
 fn loaded(app: &mut App, rx: &Receiver<AppEvent>) {

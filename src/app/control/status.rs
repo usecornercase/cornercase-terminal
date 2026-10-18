@@ -6,7 +6,7 @@ use crate::agents::activity::Status;
 use crate::agents::awake;
 use crate::app::App;
 use crate::control::{
-    self, ConfigInfo, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, PullRequestInfo, Report, TabInfo,
+    self, AppState, ConfigInfo, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, PullRequestInfo, Report, TabInfo,
     WorkspaceInfo,
 };
 use crate::git;
@@ -21,6 +21,8 @@ impl App {
     pub(in crate::app) fn report(&self, caller: Option<u64>) -> Report {
         let caller = caller.filter(|id| self.projects.tab_of_pane(*id).is_some());
         let live = self.pane_ids();
+        let counted = self.changes_target().map(|t| t.workspace);
+        let sweeping = self.change_streams.wants_every();
         let tab_info = |t: usize, tab: &Tab, active: usize| TabInfo {
             id: tab.id,
             name: tab.label(&self.config),
@@ -64,6 +66,7 @@ impl App {
             tabs: ws.tabs.iter().enumerate().map(|(t, tab)| tab_info(t, tab, ws.active)).collect(),
             custom_name: ws.name.clone(),
             collapsed: ws.collapsed,
+            changes: self.changes_count(ws.id, counted, sweeping),
         };
         let projects = self.projects.iter().enumerate().filter(|(_, p)| !p.closing).map(|(p, project)| ProjectInfo {
             id: project.id,
@@ -99,6 +102,18 @@ impl App {
             view: None,
             theme: Some(self.theme_info()),
             config: Some(ConfigInfo { revision: self.config_file.revision }),
+        }
+    }
+
+    pub(in crate::app) fn app_state(&self) -> AppState {
+        AppState {
+            version: version::CURRENT.to_string(),
+            boot: control::server_token().to_string(),
+            todos: self.todo_items(),
+            queue: self.queued.queue.entries.clone(),
+            away: self.away_info(),
+            update: self.update_info(),
+            keep_awake: self.keep_awake_info(),
         }
     }
 

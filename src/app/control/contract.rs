@@ -4,7 +4,9 @@ use crate::control::contract::{self, CONTRACT, Code, Descriptor, Refusal};
 use crate::control::{self, Command, Request};
 use crate::version;
 
-const UNAVAILABLE: &[(&str, &str)] = &[];
+const DEVELOPMENT: &str = "this is a development build, which never looks for updates";
+
+pub(super) const NOT_LOOKING: &[(&str, &str)] = &[("update-check", DEVELOPMENT), ("update-install", DEVELOPMENT)];
 
 const OPT_IN: [&str; 2] = ["contract", "boot"];
 
@@ -19,7 +21,7 @@ fn opted_in(value: &Value) -> bool {
     OPT_IN.iter().any(|key| value.get(key).is_some_and(|v| !v.is_null()))
 }
 
-pub(super) fn parse(text: &str) -> Parsed {
+pub(super) fn parse(text: &str, unavailable: &[(&str, &str)]) -> Parsed {
     let value: Value = match serde_json::from_str(text) {
         Ok(value) => value,
         Err(e) => {
@@ -28,7 +30,7 @@ pub(super) fn parse(text: &str) -> Parsed {
         }
     };
     let structured = opted_in(&value);
-    Parsed { structured, request: read(&value, structured, UNAVAILABLE) }
+    Parsed { structured, request: read(&value, structured, unavailable) }
 }
 
 fn without_null_opt_in(value: &Value) -> Value {
@@ -68,6 +70,6 @@ pub(super) fn read(value: &Value, structured: bool, unavailable: &[(&str, &str)]
     }
 }
 
-pub(super) fn descriptor() -> Descriptor {
-    contract::describe(control::server_token(), UNAVAILABLE)
+pub(super) fn descriptor(unavailable: &[(&str, &str)]) -> Descriptor {
+    contract::describe(control::server_token(), unavailable)
 }

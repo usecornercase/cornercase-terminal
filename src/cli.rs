@@ -6,18 +6,19 @@ use clap::CommandFactory;
 use serde_json::Value;
 
 use self::args::{
-    Command, Control, EventsArgs, LogsArgs, Renamed, StartArgs, StatsArgs, SurfaceArgs, Target, TodoAction, WaitArgs,
-    WhenArgs, Which,
+    Command, Control, EventsArgs, LogsArgs, Renamed, StartArgs, StatsArgs, SurfaceArgs, Target, WaitArgs, WhenArgs,
+    Which,
 };
 use self::status::run_status;
 use crate::client::{self, answer, ask};
-use crate::control::{self, Done, Event, Item, Report, TodoList, Until, What};
+use crate::control::{self, Done, Event, Item, Report, Until, What};
 use crate::error::{Error, Result};
 use crate::remote::{self, Remote};
 use crate::{log, server};
 
 mod args;
 mod arrange;
+mod changes;
 mod config;
 mod contract;
 mod flow;
@@ -31,6 +32,7 @@ mod start_server;
 mod status;
 mod terminal;
 mod theme;
+mod todo;
 mod update;
 mod usage;
 mod view;
@@ -254,7 +256,7 @@ fn run_control(command: Control) -> Result<bool> {
             let value = ask("away", control::Command::Away(control::Away { off: away.off }))?;
             print_out(&away_line(&value))
         }
-        Control::Todo(todo) => run_todo(todo.action),
+        Control::Todo(todo) => todo::run(todo.action),
         Control::Events(events) => follow_events(events),
         Control::Flow(flow) => flow::run(flow.action),
         Control::Contract(contract) => contract::run(contract.print.json),
@@ -271,6 +273,7 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Theme(args) => theme::run(&args),
         Control::Config(args) => config::run(args),
         Control::Issue(args) => return issue::run(args.action),
+        Control::Changes(args) => changes::run(args),
         Control::Usage(args) => return usage::run(&args),
     }?;
     Ok(true)
@@ -430,43 +433,6 @@ fn several(wait: &WaitArgs) -> std::result::Result<bool, clap::Error> {
         return Err(command.error(clap::error::ErrorKind::MissingRequiredArgument, "several panes need --any or --all"));
     }
     Ok(false)
-}
-
-fn run_todo(action: TodoAction) -> Result<()> {
-    match action {
-        TodoAction::Add { text } => {
-            let value = ask("todo", control::Command::Todo(control::Todo::Add(text.join(" "))))?;
-            say(value, false, |done| id(done.todo))
-        }
-        TodoAction::List(print) => {
-            let value = ask("todo", control::Command::Todo(control::Todo::List))?;
-            if print.json {
-                return print_json(&value);
-            }
-            let list: TodoList = answer(value)?;
-            for item in list.todos {
-                println!("{} [{}] {}", item.id, if item.done { 'x' } else { ' ' }, item.text);
-            }
-            Ok(())
-        }
-        TodoAction::Done { id } => ask("todo", control::Command::Todo(control::Todo::Done(id))).map(drop),
-        TodoAction::Send { id, pane, tab, force, print } => {
-            let send = control::TodoSend { id, pane, tab, force };
-            say(ask("todo-send", control::Command::TodoSend(send))?, print.json, |done| {
-                let pane = done.ids.pane.map_or_else(String::new, |pane| format!(" to pane {pane}"));
-                if done.unconfirmed == Some(true) {
-                    return vec![format!(
-                        "sent todo {id}{pane}, but cornercase cannot tell whether the agent took it, so it stays to do"
-                    )];
-                }
-                if done.checked == Some(false) {
-                    return vec![format!("sent todo {id}{pane}, but it changed while it was sent, so it stays to do")];
-                }
-                vec![format!("sent todo {id}{pane}")]
-            })
-        }
-        TodoAction::Rm { id } => ask("todo", control::Command::Todo(control::Todo::Rm(id))).map(drop),
-    }
 }
 
 fn print_json(value: &impl serde::Serialize) -> Result<()> {

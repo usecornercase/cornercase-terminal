@@ -1,0 +1,71 @@
+{
+  "workspace": 2,
+  "mode": "uncommitted",
+  "path": "src/a.rs",
+  "old_path": null,
+  "status": "modified",
+  "added": 1,
+  "removed": 1,
+  "fold": "open",
+  "viewed": false,
+  "digest": "00c0ffee12345678",
+  "styles": [
+    {},
+    {
+      "fg": {
+        "index": 5
+      }
+    }
+  ],
+  "hunks": [
+    {
+      "old_start": 1,
+      "new_start": 1,
+      "context": "fn main() {",
+      "lines": [
+        {
+          "kind": "context",
+          "old": 1,
+          "new": 1,
+          "text": "fn main() {",
+          "syntax": [
+            {
+              "style": 1,
+              "text": "fn main() {"
+            }
+          ]
+        },
+        {
+          "kind": "removed",
+          "old": 2,
+          "new": null,
+          "text": "    say(1);",
+          "emphasis": [
+            [
+              8,
+              9
+            ]
+          ],
+          "syntax": [
+            {
+              "style": 1,
+              "text": "    say(1);"
+            }
+          ]
+        },
+        {
+          "kind": "added",
+          "old": null,
+          "new": 2,
+          "text": "    say(2);",
+          "emphasis": [
+            [
+              8,
+              9
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}

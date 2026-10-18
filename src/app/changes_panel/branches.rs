@@ -83,8 +83,12 @@ impl App {
             self.overlay = Some(Overlay::Branches(picker));
             return;
         };
-        let base = (picker.default() != Some(branch.as_str())).then_some(branch);
-        if let Some((p, w)) = self.projects.workspace_index(picker.workspace) {
+        self.set_changes_base(picker.workspace, Some(branch), picker.default());
+    }
+
+    pub(in crate::app) fn set_changes_base(&mut self, workspace: u64, branch: Option<String>, default: Option<&str>) {
+        let base = branch.filter(|b| default != Some(b.as_str()));
+        if let Some((p, w)) = self.projects.workspace_index(workspace) {
             self.projects[p].workspaces[w].base = base;
         }
         self.changes.scroll = 0;

@@ -203,3 +203,86 @@ mod saving {
         assert_eq!(load(&path), Todos::default());
     }
 }
+
+mod moving {
+    use super::*;
+
+    #[test]
+    fn before_another_item() {
+        let (mut todos, ids) = with(&["a", "b", "c"]);
+        todos.move_to(ids[2], Some(ids[0]));
+        assert_eq!(texts(&todos), ["c", "a", "b"]);
+    }
+
+    #[rstest]
+    #[case::pending(false, &["b", "c", "a", "[x] d", "[x] e"])]
+    #[case::done(true, &["a", "b", "c", "[x] e", "[x] d"])]
+    fn with_no_place_to_the_end_of_its_kind(#[case] done: bool, #[case] expected: &[&str]) {
+        let (mut todos, ids) = with(&["a", "b", "c", "d", "e"]);
+        todos.toggle(ids[3]);
+        todos.toggle(ids[4]);
+        todos.move_to(if done { ids[3] } else { ids[0] }, None);
+        assert_eq!(texts(&todos), expected);
+    }
+
+    #[test]
+    fn before_a_done_item_stops_at_the_end_of_the_pending_ones() {
+        let (mut todos, ids) = with(&["a", "b", "c"]);
+        todos.toggle(ids[2]);
+        todos.move_to(ids[0], Some(ids[2]));
+        assert_eq!(texts(&todos), ["b", "a", "[x] c"]);
+    }
+
+    #[test]
+    fn before_a_pending_item_becomes_the_first_done_one() {
+        let (mut todos, ids) = with(&["a", "b", "c"]);
+        todos.toggle(ids[1]);
+        todos.toggle(ids[2]);
+        todos.move_to(ids[2], Some(ids[0]));
+        assert_eq!(texts(&todos), ["a", "[x] c", "[x] b"]);
+    }
+
+    #[test]
+    fn an_unknown_place_goes_to_the_end() {
+        let (mut todos, ids) = with(&["a", "b", "c"]);
+        todos.move_to(ids[0], Some(99));
+        assert_eq!(texts(&todos), ["b", "c", "a"]);
+    }
+}
+
+mod undoing {
+    use super::*;
+
+    #[test]
+    fn a_kept_removal_is_taken_once() {
+        let (mut todos, ids) = with(&["a", "b"]);
+        let mut undos = Undos::default();
+        let undo = undos.keep(todos.remove(ids[0]).expect("removed"));
+        assert!(undos.take(undo).is_some());
+        assert!(undos.take(undo).is_none());
+    }
+
+    #[test]
+    fn only_the_last_16_are_kept() {
+        let mut todos = Todos::default();
+        let mut undos = Undos::default();
+        let first = todos.add("first").expect("added");
+        let first = undos.keep(todos.remove(first).expect("removed"));
+        let mut last = 0;
+        for i in 0..UNDOS {
+            let id = todos.add(&format!("item {i}")).expect("added");
+            last = undos.keep(todos.remove(id).expect("removed"));
+        }
+        assert!(undos.take(first).is_none());
+        assert!(undos.take(last).is_some());
+    }
+
+    #[test]
+    fn restoring_twice_adds_nothing() {
+        let (mut todos, ids) = with(&["a", "b"]);
+        let removed = todos.remove(ids[0]).expect("removed");
+        todos.restore(removed.clone());
+        todos.restore(removed);
+        assert_eq!(texts(&todos), ["a", "b"]);
+    }
+}

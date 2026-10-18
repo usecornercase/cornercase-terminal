@@ -8,7 +8,10 @@ pub(crate) const EVENTS_VERSION: u32 = 1;
 pub(crate) const WATCH_VERSION: u32 = 1;
 pub(crate) const SURFACE_VERSION: u32 = 1;
 pub(crate) const VIEW_VERSION: u32 = 1;
-pub(crate) const FEATURES: [&str; 12] = [
+pub(crate) const APP_VERSION: u32 = 1;
+
+pub(crate) const CHANGES_VERSION: u32 = 1;
+pub(crate) const FEATURES: [&str; 14] = [
     "boot",
     "structured-errors",
     "strict-fields",
@@ -21,6 +24,8 @@ pub(crate) const FEATURES: [&str; 12] = [
     "close-unlock",
     "sound",
     "issues",
+    "todo-panel",
+    "changes",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -131,6 +136,8 @@ pub(crate) fn describe(boot: &str, unavailable: &[(&str, &str)]) -> Descriptor {
             Stream { name: "watch".into(), version: WATCH_VERSION },
             Stream { name: "surface".into(), version: SURFACE_VERSION },
             Stream { name: "view".into(), version: VIEW_VERSION },
+            Stream { name: "app".into(), version: APP_VERSION },
+            Stream { name: "changes".into(), version: CHANGES_VERSION },
         ],
     }
 }

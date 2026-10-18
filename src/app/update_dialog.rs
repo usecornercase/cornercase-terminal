@@ -1,15 +1,18 @@
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 use ratatui::text::Line;
 
 use super::App;
+use super::control::conflict;
 use super::event::AppEvent;
 use super::input::wheel;
 use super::overlay::Overlay;
 use super::overlay::RESTART_SUBMIT;
 use super::toast::Toast;
+use crate::control::contract::Refusal;
+use crate::control::{InstallInfo, NoUpdate, Notes, ReleaseInfo, UpdateInfo};
 use crate::error::Result;
 use crate::highlight::markdown;
 use crate::log::{self, Job, Level};
@@ -23,11 +26,20 @@ pub(super) struct UpdateState {
     pub(super) scroll: usize,
     pub(super) restart_list: Vec<restart::Running>,
     pub(super) listed: Option<Instant>,
+    pub(super) checks: Vec<u64>,
+    pub(super) installs: Vec<u64>,
 }
 
 impl UpdateState {
     pub(super) fn from_env() -> Self {
-        Self { updates: Updates::from_env(), scroll: 0, restart_list: Vec::new(), listed: None }
+        Self {
+            updates: Updates::from_env(),
+            scroll: 0,
+            restart_list: Vec::new(),
+            listed: None,
+            checks: Vec::new(),
+            installs: Vec::new(),
+        }
     }
 }
 
@@ -77,7 +89,15 @@ impl App {
         if !self.config.check_updates || !self.update.updates.due(now) {
             return;
         }
+        self.start_update_check(now);
+    }
+
+    pub(in crate::app) fn start_update_check(&mut self, now: Instant) {
+        if self.update.updates.checking {
+            return;
+        }
         self.update.updates.checked = Some(now);
+        self.update.updates.checking = true;
         let url = self.update.updates.url.clone();
         let check = move || {
             let found = update::check(&url, version::CURRENT)?;
@@ -88,16 +108,30 @@ impl App {
     }
 
     pub(super) fn update_checked(&mut self, result: Result<Option<Release>>) {
-        match result {
-            Ok(Some(release)) if !self.update.updates.installed => {
-                log::info!("update", "release found", version = release.version);
-                if self.update.updates.available.as_ref().is_none_or(|known| known.version != release.version) {
-                    self.toast = Some(Toast::new(UPDATE_AVAILABLE, ui::ToastIcon::Check));
-                }
-                self.update.updates.available = Some(release);
+        let updates = &mut self.update.updates;
+        updates.checking = false;
+        updates.answered = Some(SystemTime::now());
+        let outcome = match &result {
+            Ok(_) => {
+                updates.error = None;
+                Ok(())
             }
-            _ => {}
+            Err(e) => {
+                updates.error = Some(e.to_string());
+                Err(e.to_string())
+            }
+        };
+        if let Ok(Some(release)) = result
+            && !self.update.updates.installed
+            && !self.update.updates.installing
+        {
+            log::info!("update", "release found", version = release.version);
+            if self.update.updates.available.as_ref().is_none_or(|known| known.version != release.version) {
+                self.toast = Some(Toast::new(UPDATE_AVAILABLE, ui::ToastIcon::Check));
+            }
+            self.update.updates.available = Some(release);
         }
+        self.answer_update_checks(&outcome);
     }
 
     pub(super) fn running(&self) -> Vec<restart::Running> {
@@ -119,6 +153,7 @@ impl App {
     pub(super) fn open_update(&mut self) {
         let step = match &self.update.updates.install {
             _ if self.update.updates.installed => UpdateStep::Installed,
+            _ if self.update.updates.installing => UpdateStep::Updating,
             Install::Replace(_) => UpdateStep::Ask,
             Install::Command(command) => UpdateStep::Manual(command),
         };
@@ -175,17 +210,7 @@ impl App {
     pub(super) fn submit_update(&mut self, step: UpdateStep) -> Option<Overlay> {
         match step {
             UpdateStep::Ask | UpdateStep::Failed(_) => {
-                let (Some(release), Install::Replace(exe), Some(target)) =
-                    (self.update.updates.available.clone(), self.update.updates.install.clone(), update::target())
-                else {
-                    return None;
-                };
-                let job = Job::new(Level::Info, "update", "install").with("version", &release.version);
-                self.spawn_job(
-                    job,
-                    move || update::update(&release, target, &exe),
-                    |result, _| Some(AppEvent::Update(UpdateEvent::Installed(result))),
-                );
+                self.install_update().ok()?;
                 Some(Overlay::Update(UpdateStep::Updating))
             }
             UpdateStep::Installed => {
@@ -200,18 +225,92 @@ impl App {
         }
     }
 
+    pub(in crate::app) fn install_update(&mut self) -> std::result::Result<(), Refusal> {
+        let updates = &self.update.updates;
+        if updates.installing {
+            return Ok(());
+        }
+        let Some(release) = updates.available.clone() else {
+            return Err(conflict("there is no release found to install; ask for `update-check` first"));
+        };
+        let exe = match updates.install.on(update::target()) {
+            Install::Replace(exe) => exe,
+            Install::Command(command) => {
+                return Err(conflict(format!("this cornercase cannot replace itself here; update it with: {command}")));
+            }
+        };
+        let Some(target) = update::target() else { return Err(conflict("this platform has no release to install")) };
+        self.update.updates.installing = true;
+        self.update.updates.install_error = None;
+        let job = Job::new(Level::Info, "update", "install").with("version", &release.version);
+        self.spawn_job(
+            job,
+            move || update::update(&release, target, &exe),
+            |result, _| Some(AppEvent::Update(UpdateEvent::Installed(result))),
+        );
+        Ok(())
+    }
+
     pub(super) fn updated(&mut self, result: Result<()>) {
+        self.update.updates.installing = false;
+        let outcome = match &result {
+            Ok(()) => Ok(()),
+            Err(e) => Err(e.to_string()),
+        };
         let step = match result {
             Ok(()) => {
                 self.update.updates.installed = true;
+                self.update.updates.install_error = None;
                 self.update.scroll = 0;
                 self.list_running(Instant::now());
                 UpdateStep::Installed
             }
-            Err(e) => UpdateStep::Failed(e.to_string()),
+            Err(e) => {
+                self.update.updates.install_error = Some(e.to_string());
+                UpdateStep::Failed(e.to_string())
+            }
         };
         if let Some(Overlay::Update(current)) = &mut self.overlay {
             *current = step;
+        }
+        self.answer_update_installs(&outcome);
+    }
+
+    pub(in crate::app) fn update_info(&self) -> UpdateInfo {
+        let updates = &self.update.updates;
+        let release = updates.available.as_ref().map(|release| ReleaseInfo {
+            version: release.version.clone(),
+            notes: release
+                .notes
+                .iter()
+                .map(|(version, text)| Notes { version: version.clone(), text: text.clone() })
+                .collect(),
+        });
+        let none = release.is_none().then(|| {
+            if !updates.enabled {
+                NoUpdate::Disabled
+            } else if updates.answered.is_some() {
+                if updates.error.is_some() { NoUpdate::Failed } else { NoUpdate::UpToDate }
+            } else if !self.config.check_updates {
+                NoUpdate::Off
+            } else {
+                NoUpdate::Unchecked
+            }
+        });
+        let install = match updates.install.on(update::target()) {
+            Install::Replace(path) => InstallInfo::Replace { path },
+            Install::Command(command) => InstallInfo::Command { command: command.into() },
+        };
+        UpdateInfo {
+            release,
+            none,
+            checking: updates.checking,
+            checked: updates.answered.map(|at| crate::time::Stamp(at).to_string()),
+            error: updates.error.clone(),
+            install,
+            installing: updates.installing,
+            installed: updates.installed,
+            install_error: updates.install_error.clone(),
         }
     }
 

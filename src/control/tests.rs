@@ -106,6 +106,15 @@ fn every_command_is_listed_by_name() {
         Command::IssueList(IssueList::default()),
         Command::IssueRead(IssueRead::default()),
         Command::IssuePeople(IssuePeople::default()),
+        Command::UpdateCheck(UpdateCheck::default()),
+        Command::UpdateInstall(UpdateInstall::default()),
+        Command::App(AppWatch::default()),
+        Command::Changes(Changes::default()),
+        Command::ChangesMode(ChangesMode::default()),
+        Command::ChangesFile(ChangesFile::default()),
+        Command::ChangesGap(ChangesGap::default()),
+        Command::ChangesBase(ChangesBase::default()),
+        Command::ChangesViewed(ChangesViewed::default()),
         Command::Usage(Usage::default()),
     ];
 
@@ -161,6 +170,7 @@ fn the_fields_to_log_leave_out_what_is_typed() {
         Command::Notify(Notify { text: secret.into() }),
         Command::Search(Search { query: secret.into() }),
         Command::Todo(Todo::Add(secret.into())),
+        Command::Todo(Todo::Edit { id: 3, text: secret.into() }),
         Command::FlowRun(FlowRun { name: "Quick".into(), prompt: secret.into(), ..FlowRun::default() }),
         Command::Input(Input {
             events: vec![terminal::InputEvent::Text(secret.into()), terminal::InputEvent::Paste(secret.into())],
@@ -779,4 +789,21 @@ fn a_close_from_an_older_command_does_not_unlock() {
         request.command,
         Command::Close(Close { item: Item::Workspace(4), remove_worktree: true, force: false, unlock: false })
     );
+}
+
+#[rstest::rstest]
+#[case::add(r#"{"add": "write"}"#, Todo::Add("write".into()))]
+#[case::list(r#""list""#, Todo::List)]
+#[case::done(r#"{"done": 3}"#, Todo::Done(3))]
+#[case::rm(r#"{"rm": 3}"#, Todo::Rm(3))]
+#[case::edit(r#"{"edit": {"id": 3, "text": "again"}}"#, Todo::Edit { id: 3, text: "again".into() })]
+#[case::undone(r#"{"undone": 3}"#, Todo::Undone(3))]
+#[case::move_before(r#"{"move": {"id": 3, "before": 5}}"#, Todo::Move { id: 3, before: Some(5) })]
+#[case::move_last(r#"{"move": {"id": 3}}"#, Todo::Move { id: 3, before: None })]
+#[case::clear_done(r#""clear-done""#, Todo::ClearDone)]
+#[case::restore(r#"{"restore": 7}"#, Todo::Restore(7))]
+fn todo_actions_read_by_name(#[case] text: &str, #[case] expected: Todo) {
+    let todo: Todo = serde_json::from_str(text).expect("a todo action");
+    assert_eq!(todo, expected);
+    assert_eq!(serde_json::from_str::<Todo>(&serde_json::to_string(&todo).expect("json")).expect("back"), expected);
 }

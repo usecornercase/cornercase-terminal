@@ -2,6 +2,24 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.146
+
+- **Scripts and other apps can read your plan limits.** `cornercase usage` prints what the Usage dialog's Limits tab shows: for Claude Code and Codex, how much of each limit you have used and when it resets, extra usage or credits, and how old the numbers are. Like the tab, it asks the agents on the server's machine, which sends no prompt and costs no tokens, and waits for a probe already on its way rather than asking twice; `--cached` prints the last answer without asking. Nothing is asked between requests.
+  - `--json` gives each limit's kind, model, percentage, severity and reset time in UTC, for another app to draw. See Scripts and agents → Plan usage.
+
+## 0.12.145
+
+- **Other apps and scripts can show the changes panel.** `cornercase changes list` prints a workspace's changed files, or every project's with `--every`, and `--follow` keeps printing them as they change, using the same git options that never take the index lock while an agent commits.
+  - `changes file PATH` prints a file's diff; with `--json` each line has its numbers, the words that changed and its highlighting.
+  - `changes gap` prints the unchanged lines between two hunks, `changes base` the branches it can compare with (naming one picks it), and `changes viewed` marks a file as viewed, as the panel's `✓` does. The base and the marks are shared with the window; the mode of a followed list is its own, so the panel's tabs don't move.
+  - `status --json` gives each workspace its count of changed files, for a badge.
+
+## 0.12.144
+
+- **Other apps and scripts can follow the TODO list, the queue, away, updates and keep awake.** `cornercase status --app` prints them as JSON, and `status --app --follow` prints them again each time one of them changes. See Scripts and agents → Follow the rest of the app.
+- **`cornercase todo` does what the TODO panel does**: `todo edit`, `todo undone`, `todo move` (before another item, or `--last`), `todo clear-done`, and `todo restore` to undo `rm` or `clear-done`, whose number they now print. Removing the item the panel is editing now closes the panel's field.
+- **Other apps can check for an update and install it through the server**, as the update dialog does (`update-check` and `update-install`); the restart stays `cornercase restart`. The update dialog now shows `downloading…` for an install another client started.
+
 ## 0.12.142
 
 - **A worktree git has forgotten can be closed again.** When git no longer knows a worktree (after `git worktree prune`, or a removal that failed half way) but its folder is still there, its workspace used to stay in the sidebar for good: removing it failed with `is not a working tree` and closing it did nothing. Now it goes away as soon as its tabs are closed, like a worktree whose folder was deleted. The leftover folder stays on disk for you to delete. If cornercase cannot read git's list of worktrees, it keeps every workspace rather than guess.
@@ -926,8 +944,3 @@ Every pull request that changes the app adds a section here for its new version.
 - First release with prebuilt binaries for Linux and macOS: install with `curl -fsSL https://usecornercase.dev/install.sh | sh` or `brew install usecornercase/tap/cornercase`.
 - cornercase checks for new versions once a day and updates itself from the sidebar; turn it off in settings → TUI.
 - `cornercase --version` prints the version.
-
-## 0.12.144
-
-- **Scripts and other apps can read your plan limits.** `cornercase usage` prints what the Usage dialog's Limits tab shows: for Claude Code and Codex, how much of each limit you have used and when it resets, extra usage or credits, and how old the numbers are. Like the tab, it asks the agents on the server's machine, which sends no prompt and costs no tokens, and waits for a probe already on its way rather than asking twice; `--cached` prints the last answer without asking. Nothing is asked between requests.
-  - `--json` gives each limit's kind, model, percentage, severity and reset time in UTC, for another app to draw. See Scripts and agents → Plan usage.

@@ -182,6 +182,24 @@ fn app_in(dir: &Path, config_path: PathBuf) -> (App, Receiver<AppEvent>) {
     (app, rx)
 }
 
+fn repo_with_edit() -> TempDir {
+    let repo = git_repo(&[("a.txt", "one\ntwo\n")]);
+    std::fs::write(repo.path().join("a.txt"), "one\nTWO\n").expect("edit");
+    repo
+}
+
+fn shop_with_topic_worktree() -> (TempDir, TempDir) {
+    let shop = repo_with_edit();
+    let worktree = TempDir::new();
+    let checkout = worktree.path().join("topic");
+    crate::test_util::git(
+        shop.path(),
+        &["worktree", "add", "--quiet", "-b", "topic", checkout.to_str().expect("path")],
+    );
+    std::fs::write(checkout.join("new.txt"), "new\n").expect("edit worktree");
+    (shop, worktree)
+}
+
 fn term(app: &App, p: usize) -> &Term {
     app.projects[p].workspace().and_then(Workspace::tab).and_then(Tab::pane).expect("the project has a pane")
 }

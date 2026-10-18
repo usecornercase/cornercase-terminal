@@ -1,4 +1,5 @@
 mod arrange;
+mod changes;
 mod close;
 mod config;
 mod contract;
@@ -11,6 +12,7 @@ mod search;
 mod status;
 mod talk;
 mod terminal;
+mod updates;
 mod usage;
 mod wait;
 
@@ -35,6 +37,7 @@ use crate::log::{self, Level};
 use crate::project::search::Goto;
 use crate::project::{Hierarchy, Phase, Tab, Workspace};
 use crate::term::Term;
+pub(in crate::app) use changes::BaseChange;
 use create::Then;
 use issues::Asking;
 use wait::{Condition, Confirm, Watch};
@@ -203,11 +206,15 @@ fn pane_ids(pane: u64) -> Done {
 
 impl App {
     pub(crate) fn request(&mut self, client: u64, text: &str, area: Option<Rect>, now: Instant) {
-        let parsed = contract::parse(text);
+        let parsed = contract::parse(text, self.unavailable());
         if parsed.structured {
             self.requests.structured.insert(client);
         }
         self.run_request(client, parsed.request, text.len(), area, now);
+    }
+
+    fn unavailable(&self) -> &'static [(&'static str, &'static str)] {
+        if self.update.updates.enabled { &[] } else { contract::NOT_LOOKING }
     }
 
     pub(in crate::app) fn run_request(
@@ -278,6 +285,7 @@ impl App {
             );
         }
         self.events.forget(client);
+        self.forget_change_streams(client);
         self.forget_surfaces(client);
         self.forget_views(client);
         self.notices.forget(client);
@@ -400,10 +408,21 @@ impl App {
                 None => json(&self.report(caller)),
             })),
             Command::Stats(_) => Ok(Some(json(&self.stats_view(SystemTime::now())))),
-            Command::Contract(_) => Ok(Some(json(&contract::descriptor()))),
+            Command::Contract(_) => Ok(Some(json(&contract::descriptor(self.unavailable())))),
+            Command::UpdateCheck(_) => {
+                self.update_check_request(client, now);
+                Ok(None)
+            }
+            Command::UpdateInstall(_) => self.update_install_request(client),
             Command::Theme(theme) => self.theme_request(&theme),
             Command::Go(go) => self.go_request(asker, &go),
             Command::Config(config) => self.config_request(client, config),
+            Command::Changes(changes) => self.changes_request(client, asker, &changes),
+            Command::ChangesMode(mode) => self.changes_mode_request(client, &mode),
+            Command::ChangesFile(file) => self.changes_file_request(client, asker, &file, now),
+            Command::ChangesGap(gap) => self.changes_gap_request(client, asker, &gap, now),
+            Command::ChangesBase(base) => self.changes_base_request(client, asker, &base),
+            Command::ChangesViewed(viewed) => self.changes_viewed_request(asker, &viewed),
             Command::StartServer(start) => self.start_server_request(client, &start),
             Command::Open(open) => self.open_request(asker, &open, area),
             Command::NewWorkspace(new) => self.new_workspace_request(client, asker, new, area),
@@ -425,6 +444,7 @@ impl App {
             Command::Events(events) => self.events_request(client, events),
             Command::Surface(surface) => self.surface_request(client, asker.view, &surface, now),
             Command::Watch(_) => Ok(Some(json(&self.watch_snapshots(client, now)))),
+            Command::App(_) => Ok(Some(json(&self.app_snapshots(client, now)))),
             Command::Input(input) => self.input_request(&input),
             Command::Scroll(scroll) => self.scroll_request(&scroll),
             Command::Selection(selection) => self.selection_request(&selection),

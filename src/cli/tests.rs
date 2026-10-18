@@ -4,7 +4,8 @@ use clap::{CommandFactory, Parser};
 use rstest::rstest;
 
 use super::args::issue::IssueAction;
-use super::args::{KillServerArgs, RestartArgs, StartServerArgs, TodoAction, UpdateArgs};
+use super::args::todo::TodoAction;
+use super::args::{KillServerArgs, RestartArgs, StartServerArgs, UpdateArgs};
 use super::status::cell;
 use super::*;
 use crate::control::{GroupInfo, Ids, PaneInfo, PaneRows, ProjectInfo, PullRequestInfo, TabInfo, WorkspaceInfo};
@@ -336,6 +337,20 @@ mod parsing {
         assert_eq!(refused.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
 
+    #[test]
+    fn status_app_follows_but_never_with_panes_or_a_view() {
+        for args in [&["status", "--app"][..], &["status", "--app", "--follow"]] {
+            let Some(Command::Control(Control::Status(status))) = parse(args).expect("parse").command else {
+                panic!("not status")
+            };
+            assert!(status.app && !status.panes);
+        }
+        for args in [&["status", "--app", "--panes"][..], &["status", "--app", "--view", "2"]] {
+            let refused = parse(args).expect_err("conflict");
+            assert_eq!(refused.kind(), clap::error::ErrorKind::ArgumentConflict);
+        }
+    }
+
     #[rstest]
     #[case::status(&["status", "--view", "41"])]
     #[case::focus(&["focus", "--tab", "3", "--view", "41"])]
@@ -505,6 +520,7 @@ mod output {
             active: true,
             custom_name: None,
             collapsed: false,
+            changes: None,
             tabs: vec![tab],
         };
         let project = |id, name: &str, group| ProjectInfo {

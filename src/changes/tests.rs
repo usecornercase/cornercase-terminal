@@ -271,9 +271,9 @@ fn forgetting_a_workspace_releases_all_its_caches_and_ignores_an_in_flight_answe
     panel.forget(1);
     assert_eq!(panel.workspace, None);
     for keys in [
-        panel.models.keys().copied().collect::<Vec<_>>(),
+        panel.models.keys().map(|k| k.0).collect::<Vec<_>>(),
         panel.summaries.keys().copied().collect(),
-        panel.requested.keys().copied().collect(),
+        panel.requested.keys().map(|k| k.0).collect(),
         panel.summary_requested.keys().copied().collect(),
     ] {
         assert_eq!(keys, [2]);
@@ -344,4 +344,136 @@ fn tints_blend_with_the_background_in_truecolor() {
     let background = Some(libghostty_vt::style::RgbColor { r: 0, g: 0, b: 0 });
     let tints = Tints::of(&HostTheme { background, truecolor: true, ..HostTheme::default() });
     assert_eq!(tints.added, Some(Color::Rgb(2, 26, 17)));
+}
+
+mod modes {
+    use super::*;
+
+    fn load(panel: &mut Panel, request: Option<(u64, git::Request)>, workspace: u64, digest: u64) {
+        let (generation, request) = request.expect("a request");
+        panel.loaded(workspace, generation, &request, Ok(loaded(Some(Diff::default()), digest)));
+    }
+
+    #[test]
+    fn a_followed_mode_keeps_its_model_beside_the_windows() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        panel.follow(HashSet::from([(1, Mode::Commits)]));
+        let uncommitted = panel.request(&target(1), now);
+        load(&mut panel, uncommitted, 1, 1);
+        let wanted = [(target(1), Mode::Commits)];
+        let commits = panel.request_followed(&wanted, now).map(|(_, g, r)| (g, r));
+        load(&mut panel, commits, 1, 2);
+
+        assert!(panel.model_in(1, Mode::Uncommitted, None).is_some());
+        assert!(panel.model_in(1, Mode::Commits, None).is_some());
+    }
+
+    #[test]
+    fn an_unfollowed_mode_s_model_goes_when_the_window_s_loads() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        panel.follow(HashSet::from([(1, Mode::Commits)]));
+        let wanted = [(target(1), Mode::Commits)];
+        let commits = panel.request_followed(&wanted, now).map(|(_, g, r)| (g, r));
+        load(&mut panel, commits, 1, 1);
+
+        panel.follow(HashSet::new());
+
+        assert!(panel.model_in(1, Mode::Commits, None).is_none());
+    }
+
+    #[test]
+    fn unfollowing_ignores_a_late_answer() {
+        let mut panel = Panel::default();
+        panel.follow(HashSet::from([(1, Mode::All)]));
+        let wanted = [(target(1), Mode::All)];
+        let (_, generation, request) = panel.request_followed(&wanted, Instant::now()).expect("a request");
+
+        panel.follow(HashSet::new());
+        panel.loaded(1, generation, &request, Ok(loaded(Some(Diff::default()), 1)));
+
+        assert!(panel.model_in(1, Mode::All, None).is_none());
+    }
+
+    #[test]
+    fn each_mode_waits_its_own_pacing() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        let first = panel.request_in(&target(1), Mode::Uncommitted, OPEN_EVERY, now);
+        load(&mut panel, first, 1, 1);
+        panel.follow(HashSet::from([(1, Mode::Commits)]));
+
+        assert!(panel.request_in(&target(1), Mode::Uncommitted, OPEN_EVERY, now).is_none());
+        assert!(panel.request_in(&target(1), Mode::Commits, OPEN_EVERY, now).is_some());
+    }
+
+    #[test]
+    fn followed_pairs_take_turns() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        panel.follow(HashSet::from([(1, Mode::Uncommitted), (2, Mode::Uncommitted)]));
+        let wanted = [(target(1), Mode::Uncommitted), (target(2), Mode::Uncommitted)];
+        let mut asked = Vec::new();
+        for turn in 0..4_u32 {
+            let at = now + OPEN_EVERY * turn;
+            let (workspace, generation, request) = panel.request_followed(&wanted, at).expect("a request");
+            panel.loaded(workspace, generation, &request, Ok(loaded(Some(Diff::default()), 1)));
+            asked.push(workspace);
+        }
+
+        assert_eq!(asked, [1, 2, 1, 2]);
+    }
+
+    #[test]
+    fn a_sweep_without_expanding_asks_for_counts_only() {
+        let mut panel = Panel { scope: Scope::Project, ..Panel::default() };
+        let now = Instant::now();
+        let (_, generation, request) = panel.request_sweep(&[(target(1), false)], now, false).expect("a sweep");
+        panel.loaded(1, generation, &request, Ok(loaded(Some(diff(vec![file("a", 1, 1)])), 1)));
+
+        let (_, _, request) = panel.request_sweep(&[(target(1), false)], now + CLOSED_EVERY, false).expect("again");
+
+        assert_eq!(request.expanded, Some(Vec::new()));
+    }
+}
+
+mod viewed {
+    use super::*;
+
+    #[test]
+    fn a_mark_set_with_an_old_digest_does_not_mark_the_new_file() {
+        let mut panel = Panel::default();
+        panel.set_viewed(1, "a", Some(1));
+
+        assert!(!panel.viewed(1, &file("a", 2, 1)));
+        assert!(panel.viewed(1, &file("a", 1, 1)));
+    }
+
+    #[test]
+    fn clearing_a_mark_lets_the_file_fold_by_its_rules() {
+        let mut panel = Panel::default();
+        let marked = file("a", 1, 1);
+        panel.set_viewed(1, "a", Some(1));
+        assert!(panel.folded(1, &diff(vec![marked.clone()]), &marked));
+
+        panel.set_viewed(1, "a", None);
+
+        assert!(!panel.folded(1, &diff(vec![marked.clone()]), &marked));
+    }
+
+    #[test]
+    fn forgetting_a_workspace_drops_every_mode() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        panel.follow(HashSet::from([(1, Mode::Commits)]));
+        let first = panel.request_in(&target(1), Mode::Uncommitted, OPEN_EVERY, now);
+        let (generation, request) = first.expect("a request");
+        panel.loaded(1, generation, &request, Ok(loaded(Some(Diff::default()), 1)));
+
+        panel.forget(1);
+
+        assert!(panel.model_in(1, Mode::Uncommitted, None).is_none());
+        assert!(panel.models.is_empty() && panel.requested.is_empty());
+    }
 }

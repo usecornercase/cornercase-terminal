@@ -17,7 +17,7 @@ use crate::error::Result;
 use crate::host::theme::HostTheme;
 use crate::list::Cursor;
 
-const OPEN_EVERY: Duration = Duration::from_secs(1);
+pub(crate) const OPEN_EVERY: Duration = Duration::from_secs(1);
 const CLOSED_EVERY: Duration = Duration::from_secs(3);
 const LIVE_FOR: Duration = Duration::from_secs(5);
 const GIVE_UP_AFTER: Duration = Duration::from_secs(30);
@@ -35,6 +35,14 @@ pub(crate) enum Mode {
 impl Mode {
     pub(crate) const ALL: [Self; 3] = [Self::Uncommitted, Self::Commits, Self::All];
 
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Uncommitted => "uncommitted",
+            Self::Commits => "commits",
+            Self::All => "all",
+        }
+    }
+
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Uncommitted => "Uncommitted",
@@ -50,6 +58,15 @@ pub(crate) enum Scope {
     #[default]
     Project,
     Every,
+}
+
+impl Scope {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Project => "project",
+            Self::Every => "every",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -101,7 +118,8 @@ pub(crate) struct Panel {
     pub(crate) scroll: usize,
     pub(crate) workspace: Option<u64>,
     pub(crate) filter: Option<filter::Filter>,
-    models: HashMap<u64, Model>,
+    models: HashMap<(u64, Mode), Model>,
+    followed: HashSet<(u64, Mode)>,
     summaries: HashMap<u64, Model>,
     every_folded: HashMap<FileKey, bool>,
     pub(crate) headers: HashSet<u64>,
@@ -112,7 +130,7 @@ pub(crate) struct Panel {
     gaps: HashMap<(FileKey, u64, usize), Arc<Vec<GapLine>>>,
     loading: Option<(u64, u64, Instant)>,
     generation: u64,
-    requested: HashMap<u64, Instant>,
+    requested: HashMap<(u64, Mode), Instant>,
 }
 
 pub(crate) struct Checkout {
@@ -127,22 +145,36 @@ fn key(workspace: u64, file: &File) -> FileKey {
 
 impl Panel {
     pub(crate) fn model(&self, workspace: u64, base: Option<&str>) -> Option<&Model> {
-        self.models.get(&workspace).filter(|m| m.mode == self.mode && m.base.as_deref() == base)
+        self.model_in(workspace, self.mode, base)
+    }
+
+    pub(crate) fn model_in(&self, workspace: u64, mode: Mode, base: Option<&str>) -> Option<&Model> {
+        self.models.get(&(workspace, mode)).filter(|m| m.base.as_deref() == base)
     }
 
     pub(crate) fn request(&mut self, target: &Checkout, now: Instant) -> Option<(u64, git::Request)> {
+        let every = if self.watched { OPEN_EVERY } else { CLOSED_EVERY };
+        self.request_in(target, self.mode, every, now)
+    }
+
+    pub(crate) fn request_in(
+        &mut self,
+        target: &Checkout,
+        mode: Mode,
+        every: Duration,
+        now: Instant,
+    ) -> Option<(u64, git::Request)> {
         if self.busy(now) {
             return None;
         }
-        let every = if self.watched { OPEN_EVERY } else { CLOSED_EVERY };
-        let current = self.model(target.workspace, target.base.as_deref());
-        let recent = self.requested.get(&target.workspace).is_some_and(|at| now.duration_since(*at) < every);
+        let current = self.model_in(target.workspace, mode, target.base.as_deref());
+        let recent = self.requested.get(&(target.workspace, mode)).is_some_and(|at| now.duration_since(*at) < every);
         if current.is_some() && recent {
             return None;
         }
         let request = git::Request {
             dir: target.dir.clone(),
-            mode: self.mode,
+            mode,
             base: target.base.clone(),
             last: current.and_then(|m| m.digest),
             previous: current.and_then(Model::diff).map(|d| d.files.clone()).unwrap_or_default(),
@@ -150,8 +182,36 @@ impl Panel {
         };
         self.generation += 1;
         self.loading = Some((target.workspace, self.generation, now));
-        self.requested.insert(target.workspace, now);
+        self.requested.insert((target.workspace, mode), now);
         Some((self.generation, request))
+    }
+
+    pub(crate) fn request_followed(
+        &mut self,
+        wanted: &[(Checkout, Mode)],
+        now: Instant,
+    ) -> Option<(u64, u64, git::Request)> {
+        if self.busy(now) {
+            return None;
+        }
+        let due = wanted
+            .iter()
+            .filter(|(target, mode)| {
+                let current = self.model_in(target.workspace, *mode, target.base.as_deref());
+                let at = self.requested.get(&(target.workspace, *mode));
+                current.is_none() || at.is_none_or(|at| now.duration_since(*at) >= OPEN_EVERY)
+            })
+            .min_by_key(|(target, mode)| self.requested.get(&(target.workspace, *mode)).copied())?;
+        self.request_in(&due.0, due.1, OPEN_EVERY, now)
+            .map(|(generation, request)| (due.0.workspace, generation, request))
+    }
+
+    pub(crate) fn follow(&mut self, wanted: HashSet<(u64, Mode)>) {
+        let mode = self.mode;
+        let gone = |key: &(u64, Mode)| key.1 != mode && !wanted.contains(key);
+        self.models.retain(|key, _| !gone(key));
+        self.requested.retain(|key, _| !gone(key));
+        self.followed = wanted;
     }
 
     pub(crate) fn loaded(
@@ -164,17 +224,24 @@ impl Panel {
         if self.loading.is_some_and(|(w, g, _)| (w, g) == (workspace, generation)) {
             self.loading = None;
         }
-        let models = if request.expanded.is_some() { &mut self.summaries } else { &mut self.models };
-        let requested = if request.expanded.is_some() { &self.summary_requested } else { &self.requested };
-        if !requested.contains_key(&workspace) && !models.contains_key(&workspace) {
+        let summary = request.expanded.is_some();
+        let key = (workspace, request.mode);
+        if !summary && request.mode != self.mode && !self.followed.contains(&key) {
+            return;
+        }
+        let known = if summary {
+            self.summary_requested.contains_key(&workspace) || self.summaries.contains_key(&workspace)
+        } else {
+            self.requested.contains_key(&key) || self.models.contains_key(&key)
+        };
+        if !known {
             return;
         }
         let now = Instant::now();
+        let current = if summary { self.summaries.get_mut(&workspace) } else { self.models.get_mut(&key) };
         let model = match result {
             Ok(git::Loaded { diff: None, base, digest }) => {
-                if let Some(model) =
-                    models.get_mut(&workspace).filter(|m| m.mode == request.mode && m.base == request.base)
-                {
+                if let Some(model) = current.filter(|m| m.mode == request.mode && m.base == request.base) {
                     model.at = now;
                     model.label = base;
                     model.digest = Some(digest);
@@ -198,7 +265,14 @@ impl Panel {
                 at: now,
             },
         };
-        models.insert(workspace, model);
+        if summary {
+            self.summaries.insert(workspace, model);
+        } else {
+            self.models.insert(key, model);
+            let (mode, followed) = (self.mode, &self.followed);
+            self.models
+                .retain(|&(w, m), _| w != workspace || m == request.mode || m == mode || followed.contains(&(w, m)));
+        }
     }
 
     pub(crate) fn summary(&self, workspace: u64) -> Option<&Model> {
@@ -217,6 +291,15 @@ impl Panel {
         targets: &[(Checkout, bool)],
         now: Instant,
     ) -> Option<(u64, u64, git::Request)> {
+        self.request_sweep(targets, now, true)
+    }
+
+    pub(crate) fn request_sweep(
+        &mut self,
+        targets: &[(Checkout, bool)],
+        now: Instant,
+        expand: bool,
+    ) -> Option<(u64, u64, git::Request)> {
         if self.busy(now) || targets.is_empty() {
             return None;
         }
@@ -232,7 +315,9 @@ impl Panel {
             let query = filter::Query::parse(self.filter.as_ref().map_or("", |f| f.query()));
             let expanded = previous
                 .iter()
-                .filter(|file| !hidden && !self.folded(workspace, &Diff::default(), file) && query.keeps(file))
+                .filter(|file| {
+                    expand && !hidden && !self.folded(workspace, &Diff::default(), file) && query.keeps(file)
+                })
                 .map(|file| file.path.clone())
                 .collect();
             let request = git::Request {
@@ -261,9 +346,9 @@ impl Panel {
     }
 
     pub(crate) fn forget(&mut self, workspace: u64) {
-        self.models.remove(&workspace);
+        self.models.retain(|(w, _), _| *w != workspace);
         self.summaries.remove(&workspace);
-        self.requested.remove(&workspace);
+        self.requested.retain(|(w, _), _| *w != workspace);
         self.summary_requested.remove(&workspace);
         self.folded.retain(|k, _| k.workspace != workspace);
         self.every_folded.retain(|k, _| k.workspace != workspace);
@@ -282,7 +367,11 @@ impl Panel {
     }
 
     pub(crate) fn label(&self, workspace: u64) -> Option<String> {
-        self.models.get(&workspace).filter(|m| m.mode != Mode::Uncommitted).and_then(|m| m.label.clone())
+        self.label_in(workspace, self.mode)
+    }
+
+    pub(crate) fn label_in(&self, workspace: u64, mode: Mode) -> Option<String> {
+        self.models.get(&(workspace, mode)).filter(|m| m.mode != Mode::Uncommitted).and_then(|m| m.label.clone())
     }
 
     pub(crate) fn set_mode(&mut self, mode: Mode) {
@@ -297,11 +386,15 @@ impl Panel {
     }
 
     pub(crate) fn toggle_viewed(&mut self, workspace: u64, file: &File) {
-        let key = key(workspace, file);
-        if self.viewed.get(&key) == Some(&file.viewed_digest) {
-            self.viewed.remove(&key);
-        } else {
-            self.viewed.insert(key.clone(), file.viewed_digest);
+        let digest = (!self.viewed(workspace, file)).then_some(file.viewed_digest);
+        self.set_viewed(workspace, &file.path, digest);
+    }
+
+    pub(crate) fn set_viewed(&mut self, workspace: u64, path: &str, digest: Option<u64>) {
+        let key = FileKey { workspace, path: path.to_string() };
+        match digest {
+            Some(digest) => drop(self.viewed.insert(key.clone(), digest)),
+            None => drop(self.viewed.remove(&key)),
         }
         self.folded.remove(&key);
         self.every_folded.remove(&key);
@@ -366,6 +459,10 @@ impl Panel {
         self.gaps.retain(|(k, digest, _), _| k.workspace != workspace || k.path != file.path || *digest == file.digest);
         self.gaps.insert((key(workspace, file), file.digest, hunk), Arc::new(lines));
     }
+}
+
+pub(crate) fn gap(dir: &std::path::Path, mode: Mode, file: &File, hunk: usize) -> Option<Vec<GapLine>> {
+    git::new_side(dir, mode, &file.path).map(|side| gap_lines(file, hunk, &side))
 }
 
 pub(crate) fn gap_lines(file: &File, hunk: usize, new_side: &[String]) -> Vec<GapLine> {

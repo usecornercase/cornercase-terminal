@@ -126,7 +126,16 @@ mod unavailable_operations {
     }
 
     #[test]
-    fn this_server_turns_no_operation_off() {
-        assert!(contract::descriptor().operations.iter().all(|op| op.available));
+    fn a_server_that_looks_for_updates_turns_none_off() {
+        assert!(contract::descriptor(&[]).operations.iter().all(|op| op.available));
+    }
+
+    #[test]
+    fn a_development_build_turns_the_update_requests_off() {
+        let described = contract::descriptor(contract::NOT_LOOKING);
+
+        let off: Vec<_> = described.operations.iter().filter(|op| !op.available).map(|op| op.name.as_str()).collect();
+
+        assert_eq!(off, ["update-check", "update-install"]);
     }
 }

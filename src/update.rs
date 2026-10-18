@@ -4,7 +4,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use rustix::fs::{Access, access};
 use serde_json::Value;
@@ -51,6 +51,15 @@ pub(crate) enum Install {
     Command(&'static str),
 }
 
+impl Install {
+    pub(crate) fn on(&self, target: Option<&str>) -> Self {
+        match (self, target) {
+            (Self::Replace(_), None) => Self::Command(INSTALLER),
+            _ => self.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Outcome {
     UpToDate,
@@ -59,6 +68,7 @@ pub(crate) enum Outcome {
 }
 
 #[derive(Debug)]
+#[expect(clippy::struct_excessive_bools, reason = "independent facts of a check and an install")]
 pub(crate) struct Updates {
     pub(crate) enabled: bool,
     pub(crate) url: String,
@@ -66,6 +76,11 @@ pub(crate) struct Updates {
     pub(crate) checked: Option<Instant>,
     pub(crate) available: Option<Release>,
     pub(crate) installed: bool,
+    pub(crate) checking: bool,
+    pub(crate) answered: Option<SystemTime>,
+    pub(crate) error: Option<String>,
+    pub(crate) installing: bool,
+    pub(crate) install_error: Option<String>,
 }
 
 impl Updates {
@@ -78,6 +93,11 @@ impl Updates {
             checked: None,
             available: None,
             installed: false,
+            checking: false,
+            answered: None,
+            error: None,
+            installing: false,
+            install_error: None,
         }
     }
 
@@ -238,4 +258,4 @@ fn check_binary(binary: &Path, version: &str) -> Result<()> {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

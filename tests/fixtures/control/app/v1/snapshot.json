@@ -1,0 +1,82 @@
+{
+  "revision": 4,
+  "version": "0.12.141",
+  "boot": "4242-1760600000",
+  "todos": [
+    {
+      "id": 1,
+      "text": "write the docs",
+      "done": false
+    },
+    {
+      "id": 2,
+      "text": "review the login fix",
+      "done": true
+    }
+  ],
+  "queue": [
+    {
+      "id": 3,
+      "at": 1760000000,
+      "zone": "UTC",
+      "label": "Fix the login",
+      "agent": "claude",
+      "command": "claude",
+      "program": "claude",
+      "mode": null,
+      "prompt": "Fix the login",
+      "submit": true,
+      "place": {
+        "project": "/home/me/web-shop",
+        "workspace": null,
+        "workspace_name": null,
+        "workspace_id": null,
+        "server": "",
+        "branch": null
+      },
+      "state": "pending"
+    }
+  ],
+  "away": [
+    {
+      "platform": "telegram",
+      "ready": true,
+      "away": true
+    },
+    {
+      "platform": "discord",
+      "ready": false,
+      "away": false
+    }
+  ],
+  "update": {
+    "release": {
+      "version": "9.0.0",
+      "notes": [
+        {
+          "version": "9.0.0",
+          "text": "- Faster."
+        },
+        {
+          "version": "8.0.0",
+          "text": "- Skipped one."
+        }
+      ]
+    },
+    "none": null,
+    "checking": false,
+    "checked": "2026-10-18T10:00:00.000Z",
+    "error": null,
+    "install": {
+      "method": "replace",
+      "path": "/home/me/.local/bin/cornercase"
+    },
+    "installing": false,
+    "installed": false,
+    "install_error": null
+  },
+  "keep_awake": {
+    "held": true,
+    "by": "caffeinate"
+  }
+}

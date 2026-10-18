@@ -55,12 +55,21 @@ one before. It ends when the server stops or restarts; to go on, run it again, a
 is the state then, so nothing is missed. A reader that falls behind reads at most four older
 lines, then the latest state.
 
+With --app it prints, as JSON, what is outside the session: `todos` (as `todo list --json`), `queue`
+(the entries of `queue list --json`), `away` (one row per chat app: `platform`, `ready`, `away`),
+`update` (the release found and its notes, why there is none, whether a check or an install runs,
+and how installing works here) and `keep_awake` (null while the setting is off), with the server's
+`version` and `boot`. With --follow it keeps running and prints one such line first and again each
+time one of them changes, each with a `revision` that grows by one per line, built at most twice a
+second while someone follows; rules for ending and for slow readers are --follow's.
+
 Examples:
   cornercase status
   cornercase status --json
   cornercase status --panes | awk -F'\\t' '$7 == \"waiting\" { print $1 }'
   cornercase status --panes --json | jq '.panes[] | select(.agent) | .pane'
-  cornercase status --follow | jq -c '[.revision, (.projects | length)]'";
+  cornercase status --follow | jq -c '[.revision, (.projects | length)]'
+  cornercase status --app --follow | jq -c '[.revision, (.todos | length)]'";
 pub(super) const OPEN_HELP: &str = "Examples:
   cornercase open ~/src/shop
   cornercase open . --focus";
@@ -339,7 +348,19 @@ pub(super) const TODO_HELP: &str = "Examples:
   cornercase todo add review the login fix
   cornercase todo list
   cornercase todo done 3
-  cornercase todo send 3 --pane 5";
+  cornercase todo undone 3
+  cornercase todo edit 3 review the login fix again
+  cornercase todo move 3 --before 5
+  cornercase todo move 3 --last
+  cornercase todo rm 3
+  cornercase todo clear-done
+  cornercase todo restore 7
+  cornercase todo send 3 --pane 5
+
+`rm` and `clear-done` print a number that `restore` takes to put back what they removed, where it was;
+the server keeps the last 16 removals until it stops. An item moves among its kind: before an item of
+the other kind it stops at the end of the ones to do, or at the first done one. `done` checks an item
+off, or back on; `undone` only puts a done item back.";
 pub(super) const TODO_SEND_HELP: &str = "Types the item's text into the agent and presses Enter, as
 `cornercase send --enter` does, with the same target, refusals and confirmation that the agent took
 the prompt. Once it did, the item is checked off. A refused or unconfirmed send leaves it pending,
@@ -684,6 +705,23 @@ Examples:
   cornercase group style 12 --icon '★' --colour 99
   cornercase group style 12 --json
   cornercase group delete 12 --close-projects";
+
+pub(super) const CHANGES_HELP: &str =
+    "`list` prints the changed files of a workspace (the one you are in, or the one --workspace or --worktree names), or of \
+every project with --every, and with --follow keeps printing them as JSON lines each time they change. `file` prints one \
+file's diff, `gap` the unchanged lines before one of its hunks, `base` the branches the Commits and All modes can compare \
+with (naming one sets it, --default goes back to following the default branch), and `viewed` marks a file as viewed or clears \
+the mark. The modes are uncommitted (the default), \
+commits and all. The base and the viewed marks are shared with the window's changes panel; the mode of a stream is its own.
+
+Examples:
+  cornercase changes list
+  cornercase changes list --every --follow
+  cornercase changes list --worktree fix/login --mode commits --json
+  cornercase changes file src/main.rs --json
+  cornercase changes gap src/main.rs --hunk 1
+  cornercase changes base origin/main
+  cornercase changes viewed src/main.rs";
 
 #[cfg(test)]
 mod tests;
