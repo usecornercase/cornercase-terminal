@@ -2,9 +2,9 @@ use crate::agents;
 use crate::app::App;
 use crate::control::QueueAdd;
 use crate::git;
+use crate::issues::locate::{self as issue, Locator};
 use crate::issues::{Client, Source, gitlab};
 use crate::project::Hierarchy;
-use crate::queue::issue::{self, Locator};
 use crate::queue::{Entry, Place, Task};
 
 impl App {

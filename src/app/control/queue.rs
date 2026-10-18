@@ -121,7 +121,7 @@ impl App {
             job,
             move || {
                 if let Some((api, locator)) = issue {
-                    let issue = queue::issue::find(&api, &locator)?;
+                    let issue = issues::locate::find(&api, &locator)?;
                     let branch = issues::branch(&issue);
                     task.prompt = issues::prompt(&template, &issue, &branch);
                     if !named {

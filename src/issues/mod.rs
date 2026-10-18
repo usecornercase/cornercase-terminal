@@ -6,6 +6,7 @@ pub(crate) mod gitlab;
 pub(crate) mod html;
 pub(crate) mod jira;
 pub(crate) mod linear;
+pub(crate) mod locate;
 pub(crate) mod md;
 pub(crate) mod plane;
 pub(crate) mod secrets;

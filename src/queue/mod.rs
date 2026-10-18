@@ -1,6 +1,5 @@
 pub(crate) mod clock;
 pub(crate) mod form;
-pub(crate) mod issue;
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
