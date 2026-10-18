@@ -2,6 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.150
+
+- **A message sent to an agent waits while you are typing to it.** When another agent or a script ran `cornercase send --enter` into the pane you were typing in, its text joined your half-written prompt and both went out as one, broken. Now `send` (and `todo send`) waits until you are done: while you have text in the input you have not sent, while you typed in the last 2 seconds, or while an earlier message to that pane has not gone out. Your prompt goes first and the message follows right after. It works for every agent cornercase runs and for plain shells.
+  - The pane shows `1 message waiting from pane 40` with **send now** and **discard**. Discarding tells the sender its message never arrived.
+  - A draft ends with Enter, Esc, Ctrl+C or Ctrl+U, when the program in the pane changes, or after a minute without typing; in Claude Code also as soon as its input box is empty again (its grey suggestion does not count).
+  - While a message sits between its paste and its Enter, keys typed into that pane are dropped with a toast, so nothing lands in the middle.
+  - `send --timeout` bounds the wait and says what held it; `--force` sends at once; `keys` never waits. Scripts see `held_sends` and `draft` for each pane in `status --json`, `status --panes`, `status --follow` and views.
+
 ## 0.12.148
 
 - **A flow's agents are named by their role in the agents section.** A run's team already hangs under its orchestrator there; now each member's row says the role it plays (`coder`, `reviewer`, `security`) instead of repeating the run's project and workspace, so two members on the same agent can be told apart. The orchestrator keeps its project and workspace and adds `· orchestrator` when the column has room; a member whose orchestrator is no longer listed shows its place and its role. Agents outside a flow look as before.
