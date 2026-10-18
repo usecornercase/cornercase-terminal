@@ -132,7 +132,7 @@ An icon before the tab's name tells you what a recognised agent is doing when it
 
 | Icon | Means |
 | --- | --- |
-| `◐` yellow | The agent is working. With **working icon** set to *spinner* in [settings → UI](../../reference/configuration/#ui), it is a spinner instead, `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`, turning about ten times a second. For Claude and GitHub Copilot CLI, also while it waits for a command it started in the background (a build, a test run); [`cornercase status`](../scripts-and-agents/#look) tells scripts that case apart. |
+| `◐` yellow | The agent is working. With **working icon** set to *spinner* in [settings → UI](../../reference/configuration/#ui), it is a spinner instead, `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`, turning about ten times a second. For Claude and GitHub Copilot CLI, also while it waits for a command it started in the background (a build, a test run); [`cornercase status`](../scripts-and-agents/#look) tells scripts that case apart. Also while it waits for [subagents](#subagents-still-running) it started. |
 | `!` orange | The agent needs you: it asks for permission or asks you a question. Any recognised agent reporting OSC 7501; otherwise Claude Code, Codex, Gemini CLI, Grok Build, Cursor CLI and GitHub Copilot CLI (Cursor only with `/status-indicators` turned on; Copilot for a permission prompt, a question or a plan awaiting approval). |
 | `!` red | The agent reported a failure through OSC 7501. It stays until the agent reports another state or clears it. |
 | `●` purple | You marked the agent as pending review. It stays until you mark it as reviewed, send the agent a new prompt or answer its question; opening the tab does not take it off. |
@@ -200,6 +200,12 @@ The numbers come from the end of the conversation's transcript, which Claude Cod
 
 The variables are read from the running `claude` and from the `env` of its settings. After switching models with `/model`, the percentage can be off until the new model is also in one of those places.
 
+### Subagents still running
+
+Claude Code and GitHub Copilot CLI can end their own turn while subagents they started in the background are still at work, and carry on when those report back. Until the last one ends, the tab keeps showing the agent as working (`◐`), and its second line says how many are left, such as `Opus 5.5 · 23% · 2 subagents`. Only then does the tab turn `✓` and notify you, once; before, it could show `✓` and tell you the agent had finished when it hadn't. A question from the agent still shows `!` first, and a program that reports its status with [OSC 7501](../../reference/agents/#program-status-protocol) decides on its own.
+
+[`cornercase wait`](../scripts-and-agents/#wait) (`--until turn-over` included), `restart --when-idle` and the [Telegram and Discord](../telegram/) notices wait for the subagents too, and `status` shows `working (2 subagents)` and a `subagents` count. A subagent that has written nothing for 10 minutes stops counting, so one that crashed can't hold the tab for good; and after you interrupt the agent with `Esc`, the subagents that stopped at that moment don't count. Claude Code's teammates and workflows are not counted (Claude Code reports those itself). Codex, Gemini CLI, opencode, Grok Build and Cursor CLI are not covered: see [Limitations](../../help/limitations/).
+
 ### How much memory a tab uses
 
 Turn on **settings → UI → memory** and every tab also shows how much memory it uses: at the end of an agent's line, `Opus 5.5 · 23% · 1.2 GB`, and on a second line of its own in a shell tab, `412 MB`, or just `1.2 GB` with the model and the context off.
@@ -262,7 +268,7 @@ Stats counts **only Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor
 | --- | --- |
 | agents started | Each agent process you start, including a manual resume. A conversation restored after a server restart counts no new start. |
 | prompts | Prompts the agent recorded, including scripts, issues, queued input and Claude's slash commands. Claude's `!` shell input is excluded. |
-| turns | Transitions from working or waiting to idle, done, pending review or a background shell. |
+| turns | Transitions from working or waiting to idle, done, pending review or a background shell. A turn whose subagents still run ends when the last of them does. |
 | agent time | Time working, summed over agents. Background shells left running do not count. |
 | most at once | The largest number working at one read. |
 | waited for you | Time waiting for an answer or done in a tab you have not seen. opencode reports no waiting, so only its unseen done time counts. |
