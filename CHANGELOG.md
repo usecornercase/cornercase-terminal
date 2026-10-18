@@ -2,6 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.138
+
+- **A pull request with merge conflicts says so.** When a workspace's pull request conflicts with its base branch, its number on the row turns orange with a `!` (`#486!`) whatever its checks say. GitHub runs no `pull_request` workflows until the conflict is resolved, so the few checks it had (often only a review bot's) made it look green before.
+  - The pull request dialog says it at the top (`open · conflicts with main · 1 passed`) and why its list of checks may be missing some.
+  - **ask agent** is offered for a conflict too: it pastes `pull request #486 has merge conflicts with main` into the workspace's agent, with the failed checks when some failed.
+  - GitHub works out whether a pull request conflicts in the background, so a new conflict can take up to a minute to show.
+  - Scripts see it too: in `status --json` each pull request has `conflicts` and `base`, and `status` says `pull request #486 open, conflicts with main, checks passing`.
+
 ## 0.12.137
 
 - **Scripts and other apps can arrange the session.** `cornercase group new`, `group style` and `group delete` create a group (with the next icon and colour), change its icon and colour, or delete it, keeping or closing its projects. `cornercase move` puts a group, project, workspace or tab before another or at the end, or moves a project into or out of a group; `cornercase collapse` and `expand` fold groups, projects and workspaces; and `cornercase move-pane` swaps two panes or moves one to an edge of another, as the right-button drag does.
