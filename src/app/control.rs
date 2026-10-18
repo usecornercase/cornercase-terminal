@@ -11,6 +11,7 @@ mod search;
 mod status;
 mod talk;
 mod terminal;
+mod updates;
 mod wait;
 
 use std::collections::{HashMap, HashSet};
@@ -201,11 +202,15 @@ fn pane_ids(pane: u64) -> Done {
 
 impl App {
     pub(crate) fn request(&mut self, client: u64, text: &str, area: Option<Rect>, now: Instant) {
-        let parsed = contract::parse(text);
+        let parsed = contract::parse(text, self.unavailable());
         if parsed.structured {
             self.requests.structured.insert(client);
         }
         self.run_request(client, parsed.request, text.len(), area, now);
+    }
+
+    fn unavailable(&self) -> &'static [(&'static str, &'static str)] {
+        if self.update.updates.enabled { &[] } else { contract::NOT_LOOKING }
     }
 
     pub(in crate::app) fn run_request(
@@ -397,7 +402,9 @@ impl App {
                 None => json(&self.report(caller)),
             })),
             Command::Stats(_) => Ok(Some(json(&self.stats_view(SystemTime::now())))),
-            Command::Contract(_) => Ok(Some(json(&contract::descriptor()))),
+            Command::Contract(_) => Ok(Some(json(&contract::descriptor(self.unavailable())))),
+            Command::UpdateCheck(_) => self.update_check_request(client, now),
+            Command::UpdateInstall(_) => self.update_install_request(client),
             Command::Theme(theme) => self.theme_request(&theme),
             Command::Go(go) => self.go_request(asker, &go),
             Command::Config(config) => self.config_request(client, config),

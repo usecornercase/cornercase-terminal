@@ -198,6 +198,8 @@ mod finding_unknown_fields {
     #[case::queue_list(json!({"command": "queue", "args": {"action": "list"}}))]
     #[case::todo_add(json!({"command": "todo", "args": {"add": "write the docs"}}))]
     #[case::todo_list(json!({"command": "todo", "args": "list"}))]
+    #[case::update_check(json!({"command": "update-check", "args": {}}))]
+    #[case::update_install(json!({"command": "update-install", "args": {}}))]
     #[case::todo_edit(json!({"command": "todo", "args": {"edit": {"id": 3, "text": "again"}}}))]
     #[case::todo_move(json!({"command": "todo", "args": {"move": {"id": 3, "before": 5}}}))]
     #[case::todo_move_last(json!({"command": "todo", "args": {"move": {"id": 3}}}))]

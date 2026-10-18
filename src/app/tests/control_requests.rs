@@ -516,6 +516,7 @@ mod telegram;
 mod theme;
 mod todo_sending;
 mod todos;
+mod updating;
 mod views;
 mod watching;
 mod worktrees;

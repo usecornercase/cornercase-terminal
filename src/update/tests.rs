@@ -164,13 +164,17 @@ mod install {
     }
 }
 
-mod replace {
+pub(crate) mod replace {
     use super::*;
 
-    const NEW: &str = "#!/bin/sh\necho 'cornercase 9.0.0'\n";
+    pub(crate) const NEW: &str = "#!/bin/sh\necho 'cornercase 9.0.0'\n";
 
     fn archive(tmp: &TempDir, script: &str) -> Vec<u8> {
-        let dir = tmp.path().join("build").join("cornercase-x86_64-unknown-linux-gnu");
+        archive_for(tmp, "x86_64-unknown-linux-gnu", script)
+    }
+
+    fn archive_for(tmp: &TempDir, target: &str, script: &str) -> Vec<u8> {
+        let dir = tmp.path().join("build").join(format!("cornercase-{target}"));
         fs::create_dir_all(&dir).expect("archive folder");
         write_executable(&dir.join("cornercase"), script);
         let file = tmp.path().join("build.tar.gz");
@@ -179,7 +183,7 @@ mod replace {
             .arg(&file)
             .arg("-C")
             .arg(tmp.path().join("build"))
-            .arg("cornercase-x86_64-unknown-linux-gnu")
+            .arg(format!("cornercase-{target}"))
             .status()
             .expect("run tar");
         assert!(status.success());
@@ -187,11 +191,15 @@ mod replace {
     }
 
     fn sums(bytes: &[u8]) -> String {
-        let hex = hex(&Sha256::digest(bytes));
-        format!("{hex} *cornercase-x86_64-unknown-linux-gnu.tar.gz\n")
+        sums_for("x86_64-unknown-linux-gnu", bytes)
     }
 
-    fn installed(tmp: &TempDir) -> PathBuf {
+    pub(crate) fn sums_for(target: &str, bytes: &[u8]) -> String {
+        let hex = hex(&Sha256::digest(bytes));
+        format!("{hex} *cornercase-{target}.tar.gz\n")
+    }
+
+    pub(crate) fn installed(tmp: &TempDir) -> PathBuf {
         let bin = tmp.path().join("bin");
         fs::create_dir_all(&bin).expect("bin folder");
         let exe = bin.join("cornercase");
@@ -229,10 +237,14 @@ mod replace {
     }
 
     fn publish(tmp: &TempDir, sums: impl FnOnce(&[u8]) -> String) -> (FakeHttp, FakeHttp) {
-        let bytes = archive(tmp, NEW);
+        publish_for(tmp, "x86_64-unknown-linux-gnu", sums)
+    }
+
+    pub(crate) fn publish_for(tmp: &TempDir, target: &str, sums: impl FnOnce(&[u8]) -> String) -> (FakeHttp, FakeHttp) {
+        let bytes = archive_for(tmp, target, NEW);
         let checksums = sums(&bytes);
         let files = FakeHttp::start(vec![("GET /a.tar.gz", 200, bytes), ("GET /a.sha256", 200, checksums.into())]);
-        let name = "cornercase-x86_64-unknown-linux-gnu.tar.gz";
+        let name = format!("cornercase-{target}.tar.gz");
         let json = serde_json::json!({"tag_name": "v9.0.0", "assets": [
             {"name": name, "browser_download_url": format!("{}/a.tar.gz", files.url())},
             {"name": format!("{name}.sha256"), "browser_download_url": format!("{}/a.sha256", files.url())},

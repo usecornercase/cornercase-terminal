@@ -56,6 +56,14 @@ fn contract_describes_the_running_server_and_its_boot() {
     ] {
         assert!(operations.iter().any(|op| op["name"] == name && op["available"] == true), "{name}: {contract}");
     }
+    for name in ["update-check", "update-install"] {
+        let operation = operations.iter().find(|op| op["name"] == name).unwrap_or_else(|| panic!("{name}: {contract}"));
+        assert_eq!(operation["available"], !cfg!(debug_assertions), "{name}: {contract}");
+        if cfg!(debug_assertions) {
+            let reason = operation["reason"].as_str().unwrap_or_default();
+            assert!(reason.contains("development build"), "{name}: {contract}");
+        }
+    }
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "views"), "{contract}");
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "host-events"), "{contract}");
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "theme"), "{contract}");
