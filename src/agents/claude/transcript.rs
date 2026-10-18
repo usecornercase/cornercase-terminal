@@ -20,6 +20,7 @@ pub(in crate::agents) const ASSISTANT: &str = r#""type":"assistant""#;
 const COMPACT_BOUNDARY: &str = r#""compact_boundary""#;
 const COMMAND: &str = "<command-name>";
 const SHELL_INPUT: &str = "<bash-input>";
+const USER: &str = r#""type":"user""#;
 const INTERRUPTED: &str = "[Request interrupted by user";
 const NOT_TYPED: [&str; 2] = ["<task-notification>", "<agent-message"];
 const MODEL_ENV: &str = "ANTHROPIC_MODEL";
@@ -95,7 +96,11 @@ impl Subagents {
                     child.replied = false;
                 }
                 let mut records = Vec::new();
-                for entry in batch.bytes.split(|b| *b == b'\n').filter_map(claude_entry) {
+                for line in batch.bytes.split(|b| *b == b'\n') {
+                    if line.windows(USER.len()).any(|w| w == USER.as_bytes()) {
+                        child.replied = false;
+                    }
+                    let Some(entry) = claude_entry(line) else { continue };
                     if entry["type"] == "assistant" {
                         child.replied =
                             matches!(entry["message"]["stop_reason"].as_str(), Some("end_turn" | "stop_sequence"));

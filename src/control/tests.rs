@@ -587,7 +587,7 @@ mod watch_v1 {
             name: "agents".into(),
             status: Some("working".into()),
             active: true,
-            panes: vec![pane(4, true), PaneInfo { parent: Some(4), ..pane(5, false) }],
+            panes: vec![pane(4, true), PaneInfo { parent: Some(4), subagents: 2, ..pane(5, false) }],
             custom_name: Some("agents".into()),
             layout: Some(split()),
             controller: None,

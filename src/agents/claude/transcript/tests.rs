@@ -743,6 +743,16 @@ mod subagents {
         assert_eq!(count(&running(temp.path()), false), 1);
     }
 
+    #[test]
+    fn a_subagent_resumed_with_a_user_line_runs_again_before_it_replies() {
+        let temp = TempDir::new();
+        let user = r#"{"type":"user","isSidechain":true,"agentId":"a1","message":{"role":"user","content":"more"}}"#;
+        let text = format!("{}\n{}\n{user}\n", line(None), line(Some("end_turn")));
+        write(temp.path(), &text, Some(BACKGROUND));
+
+        assert_eq!(count(&running(temp.path()), false), 1);
+    }
+
     #[rstest]
     #[case::foreground(Some(r#"{"requestShape":"foreground"}"#))]
     #[case::no_meta(None)]
