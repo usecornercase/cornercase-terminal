@@ -174,7 +174,7 @@ Prints the version, such as `cornercase 0.1.0`, and exits. It doesn't touch the 
 
 ## The socket
 
-The commands find the server through the same socket: `CORNERCASE_SOCKET` if it is set, otherwise `$XDG_RUNTIME_DIR/cornercase/server.sock` or `$TMPDIR/cornercase-<uid>/server.sock`. Set `CORNERCASE_SOCKET` on every command to work with a [separate server](../../guides/sessions/#a-separate-server):
+The commands find the server through the same socket: `CORNERCASE_SOCKET` if it is set, otherwise `server.sock` in `$XDG_STATE_HOME/cornercase/` (`~/.local/state/cornercase/` without it), next to your session. Set `CORNERCASE_SOCKET` on every command to work with a [separate server](../../guides/sessions/#a-separate-server):
 
 ```sh
 CORNERCASE_SOCKET=/tmp/cc-demo/server.sock cornercase

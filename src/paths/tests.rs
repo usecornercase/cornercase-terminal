@@ -67,14 +67,30 @@ mod the_key_of_a_source_tree {
 }
 
 #[rstest::rstest]
-#[case::release(None, &[HOME, RUNTIME], "/run/user/501/cornercase/server.sock")]
-#[case::release_without_runtime_folder(None, &[HOME], "/tmp/t/cornercase-501/server.sock")]
-#[case::debug(KEY, &[HOME, RUNTIME], "/run/user/501/cornercase-dev/ecddcea2/server.sock")]
-#[case::debug_without_runtime_folder(KEY, &[HOME], "/tmp/t/cornercase-dev-501-ecddcea2/server.sock")]
+#[case::release(None, &[HOME], "/home/me/.local/state/cornercase/server.sock")]
+#[case::release_xdg(None, &[HOME, ("XDG_STATE_HOME", "/st")], "/st/cornercase/server.sock")]
+#[case::runtime_and_temp_do_not_matter(None, &[HOME, RUNTIME, ("TMPDIR", "/t")], "/home/me/.local/state/cornercase/server.sock")]
+#[case::debug(KEY, &[HOME, RUNTIME], "/home/me/.local/state/cornercase-dev/ecddcea2/server.sock")]
 #[case::custom_in_release(None, &[HOME, CUSTOM, RUNTIME], "/s/dev.sock")]
 #[case::custom_in_debug(KEY, &[HOME, CUSTOM, RUNTIME], "/s/dev.sock")]
 fn sockets(#[case] dev: Option<&str>, #[case] env: Vars, #[case] expected: &str) {
-    assert_eq!(socket_in(&vars(env), Path::new("/tmp/t"), 501, dev), PathBuf::from(expected));
+    assert_eq!(socket_in(&vars(env), dev), PathBuf::from(expected));
+}
+
+#[rstest::rstest]
+#[case::empty(&[("XDG_STATE_HOME", ""), HOME])]
+#[case::relative(&[("XDG_STATE_HOME", "rel"), HOME])]
+fn relative_or_empty_xdg_folders_are_ignored(#[case] env: Vars) {
+    assert_eq!(socket_in(&vars(env), None), PathBuf::from("/home/me/.local/state/cornercase/server.sock"));
+}
+
+#[rstest::rstest]
+#[case::runtime_set(&[RUNTIME], true, &["/run/user/501/cornercase/server.sock", "/t/cornercase-501/server.sock"])]
+#[case::linux_guesses_the_runtime_folder(&[], true, &["/run/user/501/cornercase/server.sock", "/t/cornercase-501/server.sock"])]
+#[case::macos_has_none(&[], false, &["/t/cornercase-501/server.sock"])]
+fn earlier_sockets(#[case] env: Vars, #[case] linux: bool, #[case] expected: &[&str]) {
+    let found = earlier_sockets_from(&vars(env), 501, Path::new("/t"), linux);
+    assert_eq!(found, expected.iter().map(PathBuf::from).collect::<Vec<_>>());
 }
 
 #[rstest::rstest]
@@ -110,7 +126,7 @@ fn two_trees_share_the_config_and_nothing_else() {
     let env = vars(&[HOME, RUNTIME]);
     assert_eq!(config_in(&env, KEY), config_in(&env, OTHER_KEY));
     assert_ne!(session_in(&env, KEY), session_in(&env, OTHER_KEY));
-    assert_ne!(socket_in(&env, Path::new("/tmp/t"), 501, KEY), socket_in(&env, Path::new("/tmp/t"), 501, OTHER_KEY));
+    assert_ne!(socket_in(&env, KEY), socket_in(&env, OTHER_KEY));
 }
 
 #[test]

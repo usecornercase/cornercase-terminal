@@ -218,7 +218,7 @@ mod socket_dir {
         let tmp = TempDir::new();
         let socket = tmp.path().join("nested").join("server.sock");
 
-        check_socket_dir(&socket).expect("a new folder is fine");
+        check_socket_dir(&socket, Folder::Given).expect("a new folder is fine");
 
         let mode = std::fs::metadata(tmp.path().join("nested")).expect("metadata").permissions().mode();
         assert_eq!(mode & 0o777, 0o700);
@@ -231,7 +231,7 @@ mod socket_dir {
         let tmp = TempDir::new();
         let dir = folder(&tmp, permissions);
 
-        assert!(check_socket_dir(&dir.join("server.sock")).is_ok());
+        assert!(check_socket_dir(&dir.join("server.sock"), Folder::Given).is_ok());
     }
 
     #[rstest]
@@ -241,7 +241,7 @@ mod socket_dir {
         let tmp = TempDir::new();
         let dir = folder(&tmp, permissions);
 
-        let result = check_socket_dir(&dir.join("server.sock"));
+        let result = check_socket_dir(&dir.join("server.sock"), Folder::Given);
 
         assert!(matches!(result, Err(Error::UnsafeSocketDir { reason: "can be written by other users", .. })));
     }
@@ -253,9 +253,86 @@ mod socket_dir {
         let link = tmp.path().join("link");
         std::os::unix::fs::symlink(&dir, &link).expect("symlink");
 
-        let result = check_socket_dir(&link.join("server.sock"));
+        let result = check_socket_dir(&link.join("server.sock"), Folder::Given);
 
         assert!(matches!(result, Err(Error::UnsafeSocketDir { reason: "is a symbolic link", .. })));
+    }
+
+    #[rstest]
+    #[case::group_writable(0o775)]
+    #[case::world_writable(0o777)]
+    #[case::group_only(0o770)]
+    #[case::readable_by_others(0o755)]
+    fn cornercases_own_folder_is_made_private(#[case] permissions: u32) {
+        let tmp = TempDir::new();
+        let dir = folder(&tmp, permissions);
+
+        check_socket_dir(&dir.join("server.sock"), Folder::Own).expect("tightened");
+
+        let mode = std::fs::metadata(&dir).expect("metadata").permissions().mode();
+        assert_eq!(mode & 0o777, 0o700);
+    }
+
+    #[test]
+    fn a_given_folder_keeps_its_permissions() {
+        let tmp = TempDir::new();
+        let dir = folder(&tmp, 0o755);
+
+        check_socket_dir(&dir.join("server.sock"), Folder::Given).expect("accepted");
+
+        assert_eq!(std::fs::metadata(&dir).expect("metadata").permissions().mode() & 0o777, 0o755);
+    }
+
+    #[test]
+    fn own_folder_refusals_never_ask_to_remove_it() {
+        let tmp = TempDir::new();
+        let dir = folder(&tmp, 0o700);
+        let link = tmp.path().join("link");
+        std::os::unix::fs::symlink(&dir, &link).expect("symlink");
+
+        let error = check_socket_dir(&link.join("server.sock"), Folder::Own).expect_err("refused").to_string();
+
+        assert!(error.contains("CORNERCASE_SOCKET"), "{error}");
+        assert!(!error.contains("remove"), "{error}");
+    }
+
+    #[test]
+    fn a_socket_path_too_long_is_refused_before_anything_is_created() {
+        let tmp = TempDir::new();
+        let nested = tmp.path().join("missing");
+        let name = "x".repeat(MAX_SOCKET_PATH);
+        let socket = nested.join(name);
+
+        let result = check_socket_dir(&socket, Folder::Own);
+
+        assert!(matches!(result, Err(Error::SocketTooLong { .. })));
+        assert!(!nested.exists());
+    }
+
+    #[test]
+    fn the_longest_socket_path_allowed_can_listen() {
+        let tmp = TempDir::new();
+        let dir = tmp.path().join("s");
+        let pad = MAX_SOCKET_PATH - dir.as_os_str().len() - 1;
+        let socket = dir.join("x".repeat(pad));
+        assert_eq!(socket.as_os_str().len(), MAX_SOCKET_PATH);
+        std::fs::create_dir_all(tmp.path().join("s")).expect("folder");
+
+        std::os::unix::net::UnixListener::bind(&socket).expect("a path of the maximum length binds");
+    }
+
+    #[test]
+    fn the_folder_probe_never_creates_or_changes_anything() {
+        let tmp = TempDir::new();
+        let missing = tmp.path().join("missing").join("server.sock");
+        let open = folder(&tmp, 0o777);
+
+        assert!(!socket_dir_is_safe(&missing));
+        assert!(!tmp.path().join("missing").exists());
+        assert!(!socket_dir_is_safe(&open.join("server.sock")));
+        assert_eq!(std::fs::metadata(&open).expect("metadata").permissions().mode() & 0o777, 0o777);
+        std::fs::set_permissions(&open, std::fs::Permissions::from_mode(0o700)).expect("chmod");
+        assert!(socket_dir_is_safe(&open.join("server.sock")));
     }
 
     #[rstest]

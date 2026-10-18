@@ -29,7 +29,7 @@ use crate::log::{self, Level};
 use crate::panics;
 use crate::paths;
 use crate::persist::{self, Saver};
-use crate::protocol::{self, ClientMessage, ServerMessage};
+use crate::protocol::{self, ClientMessage, Folder, ServerMessage};
 use crate::queue;
 use crate::state;
 use crate::todo;
@@ -378,8 +378,9 @@ pub(crate) fn run() -> Result<()> {
 }
 
 fn bind(path: &Path) -> Result<(UnixListener, File)> {
-    let listen_error = |source| Error::Listen { path: path.to_path_buf(), source };
-    protocol::check_socket_dir(path)?;
+    let listen_error =
+        |cause| Error::Listen { path: path.to_path_buf(), cause, custom: Folder::current() == Folder::Given };
+    protocol::check_socket_dir(path, Folder::current())?;
     let lock = lock(path)?;
     let _ = std::fs::remove_file(path);
     Ok((UnixListener::bind(path).map_err(listen_error)?, lock))
@@ -387,7 +388,7 @@ fn bind(path: &Path) -> Result<(UnixListener, File)> {
 
 fn lock(path: &Path) -> Result<File> {
     protocol::try_lock(path)
-        .map_err(|source| Error::Listen { path: path.to_path_buf(), source })?
+        .map_err(|cause| Error::Listen { path: path.to_path_buf(), cause, custom: Folder::current() == Folder::Given })?
         .ok_or_else(|| Error::ServerRunning(path.to_path_buf()))
 }
 

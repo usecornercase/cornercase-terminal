@@ -1,16 +1,15 @@
 use std::fs;
 use std::io::{self, IsTerminal, Write, stdin, stdout};
-use std::os::unix::net::UnixStream;
 
 use crate::client::{
-    RESTART, answer, answered, confirm, connect, kill_server, report_now, request, restart_server, running_now,
+    Found, RESTART, answer, answered, confirm, find, kill_server, report_now, request, restart_server, running_now,
     wait_for_exit,
 };
 use crate::error::{Error, Result};
 use crate::protocol::{self, ServerMessage};
 use crate::update::{self, Install, Outcome};
 use crate::version::CURRENT;
-use crate::{control, paths, update::restart};
+use crate::{control, update::restart};
 
 const RESTART_WHEN_IDLE: &str = "Restart it once no agent is working? [y/N] ";
 const WAITING: &str = "the server restarts once no agent is working; Ctrl+C cancels the restart";
@@ -129,9 +128,7 @@ pub(super) fn restart(yes: bool, when: When) -> Result<()> {
 }
 
 fn server_running() -> Result<bool> {
-    let path = paths::socket();
-    protocol::check_socket_dir(&path)?;
-    Ok(UnixStream::connect(&path).is_ok())
+    Ok(find()?.is_some())
 }
 
 fn restart_if_confirmed(intro: Option<&str>, yes: bool, when: When) -> Result<bool> {
@@ -166,7 +163,7 @@ fn restart_if_confirmed(intro: Option<&str>, yes: bool, when: When) -> Result<bo
 }
 
 fn restart_when_idle(timeout: Option<f64>, inside: bool) -> Result<()> {
-    let mut stream = connect()?;
+    let Found { socket, mut stream } = find()?.ok_or(Error::NoServer)?;
     request(&mut stream, control::Command::RestartWhenIdle(control::RestartWhenIdle { timeout }))?;
     println!("{WAITING}");
     let _ = stdout().flush();
@@ -188,7 +185,7 @@ fn restart_when_idle(timeout: Option<f64>, inside: bool) -> Result<()> {
             Ok(None) | Err(_) => return Err(Error::ServerGone),
         }
     }
-    wait_for_exit(&paths::socket());
+    wait_for_exit(&socket);
     println!("{RESTARTED}");
     if let Some(line) = report.as_ref().map(restart::from_report).as_deref().and_then(restart::stopped) {
         println!("{line}");

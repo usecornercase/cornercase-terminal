@@ -75,7 +75,7 @@ pub fn run(cli: Cli) -> Result<bool> {
         Command::Stats(args) => return print_stats(&args),
         Command::Plugin(args) => return plugin::run(args.action),
         Command::Server => server::run()?,
-        Command::Proxy => remote::proxy(client::connect_or_start)?,
+        Command::Proxy => remote::proxy(|| client::find_or_start().map(|found| found.stream))?,
     }
     Ok(true)
 }

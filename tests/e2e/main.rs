@@ -37,6 +37,7 @@ mod remote;
 mod server;
 mod settings;
 mod sidebar;
+mod socket;
 mod startup;
 mod updates;
 mod views;
@@ -94,31 +95,8 @@ impl Session {
         format!("{SOCKET_ENV}={}", self.socket().display())
     }
 
-    #[cfg(target_os = "linux")]
     fn servers(&self) -> usize {
-        let socket = self.socket_var();
-        let Ok(procs) = std::fs::read_dir("/proc") else { return 0 };
-        procs
-            .flatten()
-            .filter(|entry| {
-                let cmdline = std::fs::read(entry.path().join("cmdline")).unwrap_or_default();
-                let environ = std::fs::read(entry.path().join("environ")).unwrap_or_default();
-                cmdline.split(|b| *b == 0).nth(1) == Some(b"server".as_slice())
-                    && environ.split(|b| *b == 0).any(|var| var == socket.as_bytes())
-            })
-            .count()
-    }
-
-    #[cfg(target_os = "macos")]
-    fn servers(&self) -> usize {
-        let socket = self.socket_var();
-        let ps = std::process::Command::new("ps").args(["-xEww", "-o", "command="]).output().expect("run ps");
-        String::from_utf8_lossy(&ps.stdout)
-            .lines()
-            .filter(|line| {
-                line.split_whitespace().nth(1) == Some("server") && line.split_whitespace().any(|word| word == socket)
-            })
-            .count()
+        servers_with(&self.socket_var())
     }
 
     fn wait_for_saved(&self, what: &str, cond: impl Fn(&str) -> bool) {
@@ -204,6 +182,31 @@ impl Session {
     fn wait_for_program(&self, program: &str) {
         self.wait_for_report(program, |report| panes(report).any(|p| p.program.as_deref() == Some(program)));
     }
+}
+
+#[cfg(target_os = "linux")]
+fn servers_with(var: &str) -> usize {
+    let Ok(procs) = std::fs::read_dir("/proc") else { return 0 };
+    procs
+        .flatten()
+        .filter(|entry| {
+            let cmdline = std::fs::read(entry.path().join("cmdline")).unwrap_or_default();
+            let environ = std::fs::read(entry.path().join("environ")).unwrap_or_default();
+            cmdline.split(|b| *b == 0).nth(1) == Some(b"server".as_slice())
+                && environ.split(|b| *b == 0).any(|word| word == var.as_bytes())
+        })
+        .count()
+}
+
+#[cfg(target_os = "macos")]
+fn servers_with(var: &str) -> usize {
+    let ps = std::process::Command::new("ps").args(["-xEww", "-o", "command="]).output().expect("run ps");
+    String::from_utf8_lossy(&ps.stdout)
+        .lines()
+        .filter(|line| {
+            line.split_whitespace().nth(1) == Some("server") && line.split_whitespace().any(|word| word == var)
+        })
+        .count()
 }
 
 fn panes(report: Report) -> impl Iterator<Item = PaneInfo> {

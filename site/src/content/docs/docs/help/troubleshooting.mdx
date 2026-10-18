@@ -76,7 +76,7 @@ You ran `cornercase` from a pane of cornercase itself, where `CORNERCASE=1` is s
 
 ### "no cornercase server is running"
 
-The [commands for scripts and agents](../../guides/scripts-and-agents/) talk to a running server and never start one, except `cornercase start-server`. Run `cornercase` first, or `cornercase start-server` without a window. If cornercase is running, check that the command uses the same socket: a different `CORNERCASE_SOCKET`, `XDG_RUNTIME_DIR` or `TMPDIR` points it at another server.
+The [commands for scripts and agents](../../guides/scripts-and-agents/) talk to a running server and never start one, except `cornercase start-server`. Run `cornercase` first, or `cornercase start-server` without a window. If cornercase is running, check that the command uses the same socket: a different `CORNERCASE_SOCKET`, `XDG_STATE_HOME` or `HOME` points it at another server. Set `XDG_STATE_HOME` where every shell reads it, not only in an interactive rc file.
 
 ### "the running cornercase server is too old for `cornercase …`"
 
@@ -89,20 +89,32 @@ cornercase
 
 ### "failed to start the cornercase server"
 
-The server didn't come up within five seconds. The message names its log file; open it to see why. If you use `CORNERCASE_SOCKET`, check that the folder can be created and that the path is short: Unix socket paths are limited to about 100 bytes.
+The server didn't come up within five seconds. The message names its log file; open it to see why. If you use `CORNERCASE_SOCKET`, check that the folder can be created and that the path is short: Unix socket paths are limited to about 100 bytes. If your home folder is on a network disk, see "cannot listen on …" below.
 
 ### "refusing to use `…`: it can be written by other users"
 
-cornercase keeps its socket in a folder only you can use: `$XDG_RUNTIME_DIR/cornercase`, or `cornercase-<your uid>` in your temporary folder. It refuses a folder that belongs to another user, that other users can write to, or that is a symbolic link, because whoever controls that folder could pose as the cornercase server and see what you type. The message names the folder and what is wrong with it.
+cornercase keeps its socket in a folder only you can use, next to your session: `~/.local/state/cornercase` (or `$XDG_STATE_HOME/cornercase`). It refuses a folder that belongs to another user or that is a symbolic link, because whoever controls that folder could pose as the cornercase server and see what you type. A folder only you own that is too open (the usual `0775`) is not refused: cornercase makes it private itself. The message names the folder and what is wrong with it.
 
 What to do depends on where the folder comes from.
 
-**cornercase's own folder** (you didn't set `CORNERCASE_SOCKET`). Check who owns it with `ls -ld` on that path:
+**cornercase's own folder** (you didn't set `CORNERCASE_SOCKET`). It holds your session, stats, TODOs and logs, so **never remove it**. Check who owns it with `ls -ld` on that path:
 
-- **It is yours** (other users can write to it, or it is a symbolic link): remove it and start cornercase again. It creates a new one that only you can use. If it is a symbolic link, remove only the link (`rm` on the path, without a trailing `/`), never the folder it points to.
-- **It belongs to another user**: you can't remove it, and someone may be trying to pose as cornercase. Tell whoever runs the machine. Until it is gone, point `CORNERCASE_SOCKET` at a socket in a folder only you can write to, for example `export CORNERCASE_SOCKET=~/.cornercase/server.sock`. With it set, cornercase keeps its settings and session next to that socket, so it starts with default settings and a new session (see [Files and environment](../../reference/files-and-environment/)).
+- **It is a symbolic link**: put the real folder there instead of the link (move the link's target to that path), or point `XDG_STATE_HOME` at the folder you want.
+- **It belongs to another user**: someone may be trying to pose as cornercase, or it was created with `sudo`. If you own the machine, fix it with `sudo chown -R "$USER" ~/.local/state/cornercase`; otherwise tell whoever runs it. Until then, point `CORNERCASE_SOCKET` at a socket in a folder only you can write to, for example `export CORNERCASE_SOCKET=~/.cornercase/server.sock`. With it set, cornercase keeps its settings and session next to that socket, so it starts with default settings and a new session (see [Files and environment](../../reference/files-and-environment/)).
 
 **The folder of your own `CORNERCASE_SOCKET`**: don't remove it, since it may hold your other files. Point `CORNERCASE_SOCKET` at a socket in a folder only you can write to instead. A `CORNERCASE_SOCKET` without a folder, such as `server.sock`, uses the folder you start cornercase from.
+
+### "the cornercase socket `…` is … bytes long"
+
+A Unix socket path can have at most 107 bytes (103 on macOS). Set `XDG_STATE_HOME` to a shorter folder, or `CORNERCASE_SOCKET` to a shorter path. With either, cornercase keeps its settings and session next to the socket.
+
+### "cannot listen on `…`"
+
+The disk holding that folder cannot hold a socket or a lock, as some network disks cannot. Set `XDG_STATE_HOME` to a folder on a local disk, or `CORNERCASE_SOCKET` to a socket on one.
+
+### "a cornercase server holds the lock … but does not answer there"
+
+A server that uses the same folder is stuck, or runs on another machine that shares your home folder. Stop it there, or give this machine its own socket with `CORNERCASE_SOCKET` on a local disk.
 
 ### "the other end of the cornercase socket belongs to another user"
 

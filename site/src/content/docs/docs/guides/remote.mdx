@@ -19,7 +19,7 @@ cornercase remote devbox
  cornercase remote ── ssh ───────────▶ cornercase proxy ──▶ cornercase server ── shells, agents
 ```
 
-On the other machine, `ssh` runs `cornercase proxy`, which starts the server if none is running and passes the window's keys and the server's screens back and forth. It is the same server that `cornercase` on that machine attaches to, so you can also open it from a terminal there: the windows mirror each other, as described in [Sessions and the server](../sessions/#several-terminals-at-once).
+On the other machine, `ssh` runs `cornercase proxy`, which finds the server (or starts one if none is running), whatever environment the SSH session has, and passes the window's keys and the server's screens back and forth. It is the same server that `cornercase` on that machine attaches to, so you can also open it from a terminal there: the windows mirror each other, as described in [Sessions and the server](../sessions/#several-terminals-at-once).
 
 ## What you need
 

@@ -19,12 +19,21 @@ pub enum Error {
     AttachPty(#[source] BoxError),
     #[error("failed to create the terminal emulator")]
     Emulator(#[source] BoxError),
-    #[error("failed to listen on `{path}`")]
-    Listen {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
+    #[error("cannot listen on `{}`: {cause}. {}", path.display(), listen_advice(*custom))]
+    Listen { path: PathBuf, cause: std::io::Error, custom: bool },
+    #[error(
+        "the cornercase socket `{}` is {length} bytes long, more than the {max} a socket path may have. {}",
+        path.display(),
+        too_long_advice(*custom)
+    )]
+    SocketTooLong { path: PathBuf, length: usize, max: usize, custom: bool },
+    #[error(
+        "a cornercase server holds the lock next to `{}` but does not answer there: it may be stuck, or run on \
+         another machine that shares this home folder. Stop it, or set CORNERCASE_SOCKET to a socket on this \
+         machine's disk {KEEPS_NEXT_TO_IT}",
+        .0.display()
+    )]
+    ServerUnreachable(PathBuf),
     #[error("a cornercase server is already running on `{0}`")]
     ServerRunning(PathBuf),
     #[error("refusing to use `{}`: it {reason}. {}", path.display(), unsafe_dir_advice(*custom))]
@@ -114,11 +123,36 @@ pub enum Error {
 
 pub(crate) type Result<T> = std::result::Result<T, Error>;
 
-fn unsafe_dir_advice(custom: bool) -> &'static str {
+const KEEPS_NEXT_TO_IT: &str = "(cornercase then keeps its settings, session and log next to it)";
+
+fn unsafe_dir_advice(custom: bool) -> String {
     if custom {
-        "Point CORNERCASE_SOCKET at a socket in a folder only you can write to"
+        "Point CORNERCASE_SOCKET at a socket in a folder only you can write to".into()
     } else {
-        "If that folder is yours, remove it and start cornercase again; \
-         if not, set CORNERCASE_SOCKET to a socket in a folder only you can write to"
+        format!(
+            "cornercase keeps its session there, so it must be a real folder that belongs to you: fix it, or set \
+             CORNERCASE_SOCKET to a socket in a folder only you can write to {KEEPS_NEXT_TO_IT}"
+        )
+    }
+}
+
+fn too_long_advice(custom: bool) -> String {
+    if custom {
+        "Point CORNERCASE_SOCKET at a shorter path".into()
+    } else {
+        format!(
+            "Set XDG_STATE_HOME to a shorter folder, or CORNERCASE_SOCKET to a shorter socket path {KEEPS_NEXT_TO_IT}"
+        )
+    }
+}
+
+fn listen_advice(custom: bool) -> String {
+    if custom {
+        "Point CORNERCASE_SOCKET at a socket on a local disk".into()
+    } else {
+        format!(
+            "Its folder may be on a network disk that cannot hold a socket: set XDG_STATE_HOME to a folder on a \
+             local disk, or CORNERCASE_SOCKET to a socket on one {KEEPS_NEXT_TO_IT}"
+        )
     }
 }

@@ -2,7 +2,6 @@ use std::collections::VecDeque;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
-use std::path::Path;
 use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -11,9 +10,9 @@ use std::thread::{self, JoinHandle};
 use parking_lot::Mutex;
 
 use crate::error::{Error, Result};
+use crate::process;
 use crate::protocol::{self, ClientMessage};
 use crate::version::{self, CURRENT};
-use crate::{paths, process};
 
 const SSH: &str = "ssh";
 const BANNER: &str = "cornercase-proxy";
@@ -239,15 +238,12 @@ fn rebuilt(message: ClientMessage, build: String) -> ClientMessage {
     }
 }
 
-pub(crate) fn proxy(connect: impl FnOnce(&Path) -> Result<UnixStream>) -> Result<()> {
+pub(crate) fn proxy(connect: impl FnOnce() -> Result<UnixStream>) -> Result<()> {
     let mut out = io::stdout().lock();
     writeln!(out, "{}", banner())?;
     out.flush()?;
     let Some(first) = protocol::recv::<ClientMessage>(&mut io::stdin().lock())? else { return Ok(()) };
-    let path = paths::socket();
-    protocol::check_socket_dir(&path)?;
-    let stream = connect(&path)?;
-    protocol::check_peer(&stream, protocol::own_uid())?;
+    let stream = connect()?;
     let mut to_server = stream.try_clone()?;
     protocol::send(&mut to_server, &rebuilt(first, version::build_id()))?;
     thread::spawn(move || {

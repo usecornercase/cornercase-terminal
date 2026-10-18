@@ -1,6 +1,6 @@
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
-use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
@@ -92,18 +92,59 @@ pub(crate) fn try_lock(socket: &Path) -> io::Result<Option<File>> {
     }
 }
 
-pub(crate) fn check_socket_dir(socket: &Path) -> Result<(), Error> {
-    let dir = match socket.parent().filter(|dir| !dir.as_os_str().is_empty()) {
-        Some(dir) => dir.to_path_buf(),
-        None => std::env::current_dir()?,
-    };
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Folder {
+    Own,
+    Given,
+}
+
+impl Folder {
+    pub(crate) fn current() -> Self {
+        if paths::custom_socket().is_some() { Self::Given } else { Self::Own }
+    }
+}
+
+pub(crate) const MAX_SOCKET_PATH: usize = if cfg!(target_os = "macos") { 103 } else { 107 };
+
+fn socket_folder(socket: &Path) -> io::Result<PathBuf> {
+    match socket.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        Some(dir) => Ok(dir.to_path_buf()),
+        None => std::env::current_dir(),
+    }
+}
+
+pub(crate) fn check_socket_dir(socket: &Path, folder: Folder) -> Result<(), Error> {
+    let length = socket.as_os_str().len();
+    if length > MAX_SOCKET_PATH {
+        return Err(Error::SocketTooLong {
+            path: socket.to_path_buf(),
+            length,
+            max: MAX_SOCKET_PATH,
+            custom: folder == Folder::Given,
+        });
+    }
+    let dir = socket_folder(socket)?;
     std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir)?;
     let meta = std::fs::symlink_metadata(&dir)?;
     let kind = meta.file_type();
-    match unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), meta.uid(), meta.mode(), own_uid()) {
-        Some(reason) => Err(Error::UnsafeSocketDir { path: dir, reason, custom: paths::custom_socket().is_some() }),
+    let reason = unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), meta.uid(), meta.mode(), own_uid());
+    let refuse = |reason| Error::UnsafeSocketDir { path: dir.clone(), reason, custom: folder == Folder::Given };
+    let tighten = || std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+    match reason {
+        Some("can be written by other users") if folder == Folder::Own => {
+            tighten().map_err(|_| refuse("can be written by other users"))
+        }
+        Some(reason) => Err(refuse(reason)),
+        None if folder == Folder::Own && meta.mode() & 0o077 != 0 => Ok(tighten()?),
         None => Ok(()),
     }
+}
+
+pub(crate) fn socket_dir_is_safe(socket: &Path) -> bool {
+    let Ok(dir) = socket_folder(socket) else { return false };
+    let Ok(meta) = std::fs::symlink_metadata(&dir) else { return false };
+    let kind = meta.file_type();
+    unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), meta.uid(), meta.mode(), own_uid()).is_none()
 }
 
 fn unsafe_dir_reason(is_symlink: bool, is_dir: bool, owner: u32, mode: u32, uid: u32) -> Option<&'static str> {

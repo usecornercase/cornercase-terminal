@@ -31,9 +31,9 @@ mod window;
 
 pub(crate) use requests::{answer, ask, ask_starting, follow, follow_all, report_now, running_now};
 pub(crate) use requests::{
-    answered, connect, request, use_close_unlock, use_host_events, use_notices, use_surface_patches, use_view,
+    answered, request, use_close_unlock, use_host_events, use_notices, use_surface_patches, use_view,
 };
-pub(crate) use server_process::{connect_or_start, wait_for_exit};
+pub(crate) use server_process::{Found, find, find_or_start, wait_for_exit};
 pub(crate) use server_process::{kill_server, restart_server};
 
 const OTHER_BUILD: &str = "The running cornercase server comes from another build; cornercase was probably updated.";
@@ -113,11 +113,8 @@ impl Target {
     fn connect(&self, again: bool) -> Result<Link> {
         match self {
             Self::Local => {
-                let path = paths::socket();
-                protocol::check_socket_dir(&path)?;
-                let stream = connect_or_start(&path)?;
-                protocol::check_peer(&stream, protocol::own_uid())?;
-                Link::socket(stream)
+                let found = find_or_start()?;
+                Link::socket(found.stream)
             }
             Self::Remote(remote) => {
                 let piped = remote.connect(again)?;

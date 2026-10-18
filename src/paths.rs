@@ -11,6 +11,7 @@ const SECRETS_FILE: &str = "secrets.json";
 const LOG_FILE: &str = "server.log";
 const ISSUE_CACHE_FILE: &str = "issues.json";
 const SOURCE_FILE: &str = "source";
+const SOCKET_FILE: &str = "server.sock";
 const RELEASE: &str = "cornercase";
 const DEV: &str = "cornercase-dev";
 
@@ -44,10 +45,13 @@ fn custom(var: Var) -> Option<PathBuf> {
     var(SOCKET_ENV).map(PathBuf::from)
 }
 
+fn absolute(value: Option<OsString>) -> Option<PathBuf> {
+    value.map(PathBuf::from).filter(|path| path.is_absolute())
+}
+
 fn user_file(var: Var, home_var: &str, fallback: &[&str], folder: &Path, name: &str) -> PathBuf {
-    let base = var(home_var)
-        .map(PathBuf::from)
-        .or_else(|| var("HOME").map(|home| fallback.iter().fold(PathBuf::from(home), |p, s| p.join(s))))
+    let base = absolute(var(home_var))
+        .or_else(|| absolute(var("HOME")).map(|home| fallback.iter().fold(home, |p, s| p.join(s))))
         .unwrap_or_else(std::env::temp_dir);
     base.join(folder).join(name)
 }
@@ -57,20 +61,35 @@ fn state_folder(dev: Option<&str>) -> PathBuf {
 }
 
 pub(crate) fn socket() -> PathBuf {
-    socket_in(&process_var, &std::env::temp_dir(), rustix::process::getuid().as_raw(), this_key().as_deref())
+    socket_in(&process_var, this_key().as_deref())
 }
 
-fn socket_in(var: Var, temp: &Path, uid: u32, dev: Option<&str>) -> PathBuf {
-    if let Some(path) = custom(var) {
-        return path;
+fn socket_in(var: Var, dev: Option<&str>) -> PathBuf {
+    match custom(var) {
+        Some(path) => path,
+        None => session_in(var, dev).with_file_name(SOCKET_FILE),
     }
-    let dir = match (var("XDG_RUNTIME_DIR"), dev) {
-        (Some(dir), None) => PathBuf::from(dir).join(RELEASE),
-        (Some(dir), Some(key)) => PathBuf::from(dir).join(DEV).join(key),
-        (None, None) => temp.join(format!("{RELEASE}-{uid}")),
-        (None, Some(key)) => temp.join(format!("{DEV}-{uid}-{key}")),
-    };
-    dir.join("server.sock")
+}
+
+pub(crate) fn earlier_sockets() -> Vec<PathBuf> {
+    if custom_socket().is_some() || this_tree().is_some() {
+        return Vec::new();
+    }
+    earlier_sockets_from(
+        &process_var,
+        rustix::process::getuid().as_raw(),
+        &std::env::temp_dir(),
+        cfg!(target_os = "linux"),
+    )
+}
+
+fn earlier_sockets_from(var: Var, uid: u32, temp: &Path, linux: bool) -> Vec<PathBuf> {
+    let runtime = absolute(var("XDG_RUNTIME_DIR")).or_else(|| linux.then(|| PathBuf::from(format!("/run/user/{uid}"))));
+    runtime
+        .map(|dir| dir.join(RELEASE).join(SOCKET_FILE))
+        .into_iter()
+        .chain([temp.join(format!("{RELEASE}-{uid}")).join(SOCKET_FILE)])
+        .collect()
 }
 
 pub(crate) fn lock(socket: &Path) -> PathBuf {

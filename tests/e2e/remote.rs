@@ -2,15 +2,15 @@ use super::*;
 
 const SSH_PID: &str = "ssh.pid";
 
-fn fake_ssh(session: &Session) -> String {
-    let bin = session.dir.join("bin");
+pub(super) fn fake_ssh(dir: &std::path::Path, prefix: &str) -> String {
+    let bin = dir.join("bin");
     std::fs::create_dir_all(&bin).expect("create the fake ssh's folder");
-    let pid = session.dir.join(SSH_PID);
+    let pid = dir.join(SSH_PID);
     write_executable(
         &bin.join("ssh"),
         &format!(
             "#!/bin/sh\necho $$ > '{}'\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    -o) shift 2 ;;\n    --) shift; break ;;\n    \
-             -*) shift ;;\n    *) break ;;\n  esac\ndone\nshift\nexec /bin/sh -c \"exec $*\"\n",
+             -*) shift ;;\n    *) break ;;\n  esac\ndone\nshift\nexec /bin/sh -c \"exec {prefix} $*\"\n",
             pid.display()
         ),
     );
@@ -23,7 +23,7 @@ fn ssh_pid(session: &Session) -> String {
 
 fn remote_refusal(command: &str) -> std::process::Output {
     let session = Session::new();
-    let path = fake_ssh(&session);
+    let path = fake_ssh(&session.dir, "");
     session
         .command()
         .args(["remote", "devbox", "--command", command])
@@ -35,7 +35,7 @@ fn remote_refusal(command: &str) -> std::process::Output {
 #[test]
 fn a_remote_window_comes_back_after_the_connection_drops() {
     let session = Session::new();
-    let path = fake_ssh(&session);
+    let path = fake_ssh(&session.dir, "");
     let exe = env!("CARGO_BIN_EXE_cornercase");
     let args = ["remote", "devbox", "--command", exe];
     let mut app = Harness::run(exe.as_ref(), &args, Arc::clone(&session), (ROWS, COLS), &[("PATH", &path)]);

@@ -9,7 +9,7 @@ use serde_json::Value;
 use crate::control::{self, Request, Response};
 use crate::error::{Error, Result};
 use crate::protocol::{self, ClientMessage, ServerMessage};
-use crate::{paths, update::restart};
+use crate::update::restart;
 
 static VIEW: OnceLock<u64> = OnceLock::new();
 
@@ -48,11 +48,7 @@ fn require(feature: &str, lacks: &str) -> Result<()> {
 }
 
 pub(crate) fn connect() -> Result<UnixStream> {
-    let path = paths::socket();
-    protocol::check_socket_dir(&path)?;
-    let stream = UnixStream::connect(&path).map_err(|_| Error::NoServer)?;
-    protocol::check_peer(&stream, protocol::own_uid())?;
-    Ok(stream)
+    super::find()?.map(|found| found.stream).ok_or(Error::NoServer)
 }
 
 pub(crate) fn ask(name: &'static str, command: control::Command) -> Result<Value> {
@@ -60,11 +56,7 @@ pub(crate) fn ask(name: &'static str, command: control::Command) -> Result<Value
 }
 
 pub(crate) fn ask_starting(name: &'static str, command: control::Command) -> Result<Value> {
-    let path = paths::socket();
-    protocol::check_socket_dir(&path)?;
-    let stream = super::connect_or_start(&path)?;
-    protocol::check_peer(&stream, protocol::own_uid())?;
-    ask_on(stream, name, command)
+    ask_on(super::find_or_start()?.stream, name, command)
 }
 
 fn ask_on(mut stream: UnixStream, name: &'static str, command: control::Command) -> Result<Value> {
