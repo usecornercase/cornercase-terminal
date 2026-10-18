@@ -271,7 +271,8 @@ fn a_bare_socket_name_is_checked_in_the_folder_it_runs_in() {
 #[test]
 fn a_debug_build_keeps_to_the_folders_of_its_source_tree() {
     let session = Session::new();
-    let (home, run) = (session.dir.join("home"), session.dir.join("run"));
+    let home = std::path::PathBuf::from(format!("/tmp/cch-{}-home", std::process::id()));
+    let run = session.dir.join("run");
     let own = |args: &[&str]| {
         let mut cmd = session.command();
         cmd.args(args)
@@ -291,6 +292,7 @@ fn a_debug_build_keeps_to_the_folders_of_its_source_tree() {
     assert!(!status.status.success(), "{status:?}");
     assert!(String::from_utf8_lossy(&status.stderr).contains("no cornercase server is running"), "{status:?}");
     assert!(home.join(".local/state").join(own_folder()).is_dir());
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 const KEEP_THE_FOLDER: &str = "Point CORNERCASE_SOCKET at a socket in a folder only you can write to";
