@@ -55,6 +55,16 @@ fn contract_describes_the_running_server_and_its_boot() {
         "removal-check",
         "app",
         "usage",
+        "plugin-list",
+        "plugin-actions",
+        "plugin-run",
+        "flow-save",
+        "flow-delete",
+        "flow-hide",
+        "flow-restore",
+        "flow-runs",
+        "flow-messages",
+        "flow-files",
     ] {
         assert!(operations.iter().any(|op| op["name"] == name && op["available"] == true), "{name}: {contract}");
     }
@@ -74,6 +84,7 @@ fn contract_describes_the_running_server_and_its_boot() {
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "close-unlock"), "{contract}");
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "issues"), "{contract}");
     assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "todo-panel"), "{contract}");
+    assert!(contract["features"].as_array().expect("features").iter().any(|f| f == "agent-folds"), "{contract}");
     assert!(
         contract["streams"].as_array().expect("streams").iter().any(|s| s["name"] == "app" && s["version"] == 1),
         "{contract}"
@@ -83,6 +94,12 @@ fn contract_describes_the_running_server_and_its_boot() {
         contract["streams"].as_array().expect("streams").iter().any(|s| s["name"] == "changes" && s["version"] == 1),
         "{contract}"
     );
+    for stream in ["flow-runs", "flow-messages"] {
+        assert!(
+            contract["streams"].as_array().expect("streams").iter().any(|s| s["name"] == stream && s["version"] == 1),
+            "{stream}: {contract}"
+        );
+    }
     assert!(
         contract["streams"].as_array().expect("streams").iter().any(|s| s["name"] == "view" && s["version"] == 1),
         "{contract}"

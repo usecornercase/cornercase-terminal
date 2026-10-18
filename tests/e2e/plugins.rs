@@ -15,6 +15,18 @@ command = ["./run", "service"]
 [[window]]
 id = "panel"
 command = ["./run", "window"]
+
+[[actions]]
+id = "note"
+title = "take a note"
+contexts = ["pane", "tab"]
+command = ["/bin/sh", "-c", "echo $$ > \"$CORNERCASE_PLUGIN_STATE/note\""]
+
+[[actions]]
+id = "fail"
+title = "break"
+contexts = ["pane"]
+command = ["/bin/sh", "-c", "exit 3"]
 "#;
 
 fn plugin_folder(name: &str) -> PathBuf {
@@ -126,4 +138,39 @@ fn a_plugin_installs_from_a_repository_after_its_preview_updates_and_goes() {
     assert!(removed.starts_with("removed acme.e2e"), "{removed}");
     assert!(!app.session.dir.join("plugins/installed/acme.e2e").exists());
     let _ = std::fs::remove_dir_all(&base);
+}
+
+#[test]
+fn another_client_lists_and_runs_the_actions_as_the_menu_does() {
+    let app = Harness::start();
+    let folder = plugin_folder(&format!("ccact-{}", std::process::id()));
+    let path = folder.display().to_string();
+    app.session.says(&["plugin", "link", &path]);
+    app.session.says(&["plugin", "enable", "acme.e2e"]);
+
+    let listed: serde_json::Value =
+        serde_json::from_str(&app.session.says(&["plugin", "actions", "--context", "pane", "--json"])).expect("json");
+    assert_eq!(listed["actions"][0]["action"], "note");
+    assert_eq!(listed["actions"][1]["action"], "fail");
+    assert!(listed["revision"].as_u64().is_some_and(|revision| revision > 0), "{listed}");
+    let text = app.session.says(&["plugin", "actions"]);
+    assert!(text.starts_with("plugin\taction\tcontexts\ttitle\nacme.e2e\tnote\tpane,tab\ttake a note"), "{text}");
+
+    let rows: serde_json::Value =
+        serde_json::from_str(&app.session.says(&["status", "--panes", "--json"])).expect("rows");
+    let pane = rows["panes"][0]["pane"].as_u64().expect("a pane").to_string();
+    let ran = app.session.says(&["plugin", "run", "acme.e2e", "note", "--pane", &pane]);
+    assert_eq!(ran, format!("ran acme.e2e note on pane {pane}: exit status: 0"));
+    let written = std::fs::read_to_string(app.session.dir.join("plugins/state/acme.e2e/note")).expect("its file");
+    assert!(written.trim().parse::<i32>().is_ok(), "{written}");
+
+    let failed = app.session.cli(&["plugin", "run", "acme.e2e", "fail", "--pane", &pane]);
+    assert_eq!(failed.status.code(), Some(1), "{failed:?}");
+    let said = String::from_utf8_lossy(&failed.stdout);
+    assert!(said.contains("exit status: 3") && said.contains("cornercase plugin logs acme.e2e"), "{said}");
+
+    let stale = app.session.cli(&["plugin", "run", "acme.e2e", "note", "--pane", &pane, "--revision", "0"]);
+    assert!(!stale.status.success());
+    assert!(String::from_utf8_lossy(&stale.stderr).contains("changed"), "{stale:?}");
+    let _ = std::fs::remove_dir_all(&folder);
 }

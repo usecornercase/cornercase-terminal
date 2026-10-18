@@ -700,6 +700,20 @@ mod ends {
 mod runs {
     use super::*;
 
+    fn send(to: &str, n: usize) -> Message {
+        Message {
+            from: ORCHESTRATOR.into(),
+            to: to.into(),
+            kind: Kind::Send,
+            text: Some(n.to_string()),
+            bytes: 1,
+            at: Instant::now(),
+            time: std::time::SystemTime::UNIX_EPOCH,
+            seq: 0,
+            edge: None,
+        }
+    }
+
     #[test]
     fn a_run_maps_roles_to_panes_and_keeps_the_last_messages() {
         let mut run = Run::new(7, sample(), "fix it".into());
@@ -708,19 +722,26 @@ mod runs {
         assert_eq!(run.role_of(11), Some("coder"));
         assert_eq!(run.pane_of(ORCHESTRATOR), Some(10));
         assert_eq!(run.role_of(99), None);
-        let now = Instant::now();
         for n in 0..=MAX_MESSAGES {
-            run.record(Message {
-                from: ORCHESTRATOR.into(),
-                to: "coder".into(),
-                kind: Kind::Send,
-                text: Some(n.to_string()),
-                bytes: 1,
-                at: now,
-            });
+            run.record(send("coder", n));
         }
         assert_eq!(run.messages.len(), MAX_MESSAGES);
         assert_eq!(run.messages.front().and_then(|m| m.text.as_deref()), Some("1"));
+    }
+
+    #[test]
+    fn recorded_messages_are_numbered_and_keep_their_edge() {
+        let mut run = Run::new(7, sample(), "fix it".into());
+        let first = run.record(send("coder", 0)).clone();
+        let second = run.record(send("coder", 1)).clone();
+        for n in 2..=MAX_MESSAGES {
+            run.record(send("coder", n));
+        }
+
+        assert_eq!((first.seq, first.edge, second.seq, second.edge), (1, None, 2, None));
+        assert_eq!(run.recorded, u64::try_from(MAX_MESSAGES).expect("small") + 1);
+        assert_eq!(run.messages.back().map(|m| m.seq), Some(run.recorded));
+        assert_eq!(run.messages.front().map(|m| m.seq), Some(2));
     }
 }
 

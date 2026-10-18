@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crossterm::event::{MouseButton, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
@@ -10,13 +12,23 @@ use super::menus::MenuAction;
 use super::menus::Target;
 use super::overlay::Overlay;
 use super::plugins::Spot;
+use crate::agents::activity;
 use crate::error::Result;
+use crate::flows;
 use crate::git;
-use crate::project::Workspace;
+use crate::project::{Hierarchy, Workspace};
+use crate::term::Term;
 use crate::ui::{self, SidebarHit, SidebarRow, WorkspaceHit, WorkspaceRow};
 
 mod drag;
 mod tree;
+
+struct AgentAt {
+    pane: u64,
+    row: Rect,
+    fold: Option<bool>,
+    on_fold: bool,
+}
 
 impl App {
     pub(super) fn sidebar_rows(&self) -> Vec<SidebarRow> {
@@ -87,40 +99,76 @@ impl App {
         });
     }
 
+    fn seated(&self, term: &Term, depth: usize) -> (Option<String>, bool) {
+        let Some((run, role)) = self.seat(term.id) else { return (None, true) };
+        let under = depth > 0
+            && role != flows::ORCHESTRATOR
+            && term.parent.and_then(|parent| self.seat(parent)).is_some_and(|(theirs, _)| theirs.id == run.id);
+        (Some(role.to_string()), !under)
+    }
+
     pub(super) fn agents_view(&self) -> ui::AgentsView {
         let focus = self.focus();
+        let focused = self.term().map(|term| term.id);
         let narrow = self.drawn.agents_list.width < ui::MIN_MENU_ROW_WIDTH;
-        let entries = self.agent_tree(narrow).into_iter().map(|((p, w, t, i), node)| {
+        let (places, nodes) = self.shown_agents(narrow);
+        let entries = nodes.into_iter().map(|node| {
+            let (p, w, t, i) = places[node.index];
             let project = &self.projects[p];
             let workspace = &project.workspaces[w];
             let tab = &workspace.tabs[t];
             let term = &tab.panes[i];
+            let hidden: Vec<&Term> = node
+                .hidden
+                .iter()
+                .map(|&h| {
+                    let (p, w, t, i) = places[h];
+                    &self.projects[p].workspaces[w].tabs[t].panes[i]
+                })
+                .collect();
             let context = term.context.context();
+            let (role, place) = self.seated(term, node.depth);
             ui::AgentEntry {
                 status: term.agent.status(),
                 agent: term.agent.agent().unwrap_or_default().to_string(),
                 project: self.project_label(project),
                 workspace: (project.workspaces.len() > 1).then(|| workspace.label()),
+                role,
+                place,
                 details: self.details(context, None, term.context.subagents()),
-                active: focus.tab == Some(tab.id) && tab.active == i,
+                active: (focus.tab == Some(tab.id) && tab.active == i)
+                    || hidden.iter().any(|term| Some(term.id) == focused),
                 depth: node.depth,
                 last: node.last,
                 rails: node.rails,
+                fold: node.has_children.then_some(term.collapsed),
+                hidden: hidden.len(),
+                attention: activity::attention(hidden.iter().map(|term| term.agent.status())),
             }
         });
         ui::AgentsView { entries: entries.collect(), scroll: self.scroll.agents }
     }
 
     pub(super) fn agent_layout(&self, areas: &ui::Areas) -> ui::Rows {
-        ui::agent_rows(areas.agents_list, areas.pitch, self.agent_count(), self.scroll.agents)
+        ui::agent_rows(areas.agents_list, areas.pitch, self.shown_agents(false).1.len(), self.scroll.agents)
     }
 
-    fn agent_row_at(&self, areas: &ui::Areas, pos: Position) -> Option<(usize, usize, u64)> {
-        let places = self.agent_places();
+    fn agent_row_at(&self, areas: &ui::Areas, pos: Position) -> Option<AgentAt> {
+        let narrow = areas.agents_list.width < ui::MIN_MENU_ROW_WIDTH;
+        let (places, nodes) = self.shown_agents(narrow);
         let (list, pitch, scroll) = (areas.agents_list, areas.pitch, self.scroll.agents);
-        let i = ui::agent_hit(list, pitch, places.len(), scroll, pos)?;
-        let (p, w, t, pane) = places[i];
-        Some((i, places.len(), self.projects[p].workspaces[w].tabs[t].panes[pane].id))
+        let i = ui::agent_hit(list, pitch, nodes.len(), scroll, pos)?;
+        let node = &nodes[i];
+        let (p, w, t, pane) = places[node.index];
+        let term = &self.projects[p].workspaces[w].tabs[t].panes[pane];
+        let row = ui::agent_row(list, pitch, nodes.len(), scroll, i);
+        let fold = node.has_children.then_some(term.collapsed);
+        Some(AgentAt {
+            pane: term.id,
+            row,
+            fold,
+            on_fold: fold.is_some() && ui::agent_fold(row, node.depth).contains(pos),
+        })
     }
 
     pub(super) fn agents_mouse(&mut self, areas: &ui::Areas, pos: Position, kind: MouseEventKind, area: Rect) {
@@ -133,24 +181,63 @@ impl App {
     }
 
     fn open_agent_menu(&mut self, areas: &ui::Areas, pos: Position) {
-        let Some((_, _, pane)) = self.agent_row_at(areas, pos) else { return };
-        if let Some(mark) = self.mark_action(Marked::Pane(pane)) {
-            self.overlay = Some(Overlay::Menu { at: pos, actions: vec![mark] });
+        let Some(at) = self.agent_row_at(areas, pos) else { return };
+        let actions: Vec<MenuAction> = self
+            .mark_action(Marked::Pane(at.pane))
+            .into_iter()
+            .chain(at.fold.map(|collapsed| MenuAction::AgentFold(at.pane, !collapsed)))
+            .collect();
+        if !actions.is_empty() {
+            self.overlay = Some(Overlay::Menu { at: pos, actions });
         }
     }
 
     fn press_agent(&mut self, areas: &ui::Areas, pos: Position, area: Rect) {
-        let (list, pitch, scroll) = (areas.agents_list, areas.pitch, self.scroll.agents);
-        let Some((i, count, pane)) = self.agent_row_at(areas, pos) else { return };
-        let row = ui::agent_row(list, pitch, count, scroll, i);
+        let Some(at) = self.agent_row_at(areas, pos) else { return };
         self.drag = Some(Drag::Row(RowDrag {
-            target: Grab::Agent(pane),
-            row,
+            target: Grab::Agent(at.pane),
+            row: at.row,
             moved: false,
             area,
             scrolled: None,
-            fold: false,
+            fold: at.on_fold,
         }));
+    }
+
+    pub(super) fn set_agent_fold(&mut self, pane: u64, collapsed: bool) -> bool {
+        let Some(term) = self.projects.pane_by_mut(pane) else { return false };
+        term.collapsed = collapsed;
+        self.scroll.agents = self.agent_layout(&self.drawn).scrolled(0);
+        true
+    }
+
+    fn toggle_agent_fold(&mut self, pane: u64) {
+        if let Some(term) = self.projects.pane_by(pane) {
+            self.set_agent_fold(pane, !term.collapsed);
+        }
+    }
+
+    pub(super) fn reveal_agent(&mut self, pane: u64) -> bool {
+        let live = self.pane_ids();
+        let mut seen = HashSet::from([pane]);
+        let mut at = pane;
+        let mut changed = false;
+        while let Some(term) = self.projects.pane_by(at) {
+            if term.agent.status().is_none() {
+                break;
+            }
+            let Some(parent) = Self::live_parent(term, &live) else { break };
+            if !seen.insert(parent) {
+                break;
+            }
+            let Some(ancestor) = self.projects.pane_by_mut(parent) else { break };
+            if ancestor.agent.status().is_none() {
+                break;
+            }
+            changed |= std::mem::take(&mut ancestor.collapsed);
+            at = parent;
+        }
+        changed
     }
 
     pub(super) fn tab_lines(&self) -> ui::TabLines {

@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use super::*;
 use crate::agents::Known;
@@ -22,7 +22,18 @@ impl Script {
     fn with(mut self, kind: Kind, from: &str, to: &str) -> Self {
         let at = self.start + Duration::from_secs(u64::try_from(self.messages.len()).expect("few messages"));
         let text = Some(format!("{from} to {to}"));
-        self.messages.push(Message { from: from.into(), to: to.into(), kind, text, bytes: 0, at });
+        let time = SystemTime::UNIX_EPOCH + Duration::from_secs(self.messages.len() as u64);
+        self.messages.push(Message {
+            from: from.into(),
+            to: to.into(),
+            kind,
+            text,
+            bytes: 0,
+            at,
+            time,
+            seq: 0,
+            edge: None,
+        });
         self
     }
 
@@ -32,6 +43,11 @@ impl Script {
 
     fn progress(&self) -> Progress {
         Progress::of(&self.flow, &self.messages)
+    }
+
+    fn edges(&self) -> Vec<Option<Edge>> {
+        let mut progress = Progress::default();
+        self.messages.iter().map(|message| progress.step(&self.flow, message)).collect()
     }
 }
 
@@ -197,5 +213,54 @@ mod outside_the_plan {
     fn the_last_step_outside_the_plan_stays_after_the_work_goes_on() {
         let p = Script::new().send("coder").send("tester").send("coder").progress();
         assert_eq!((p.outside, p.rounds(2)), (Some(Edge::Outside { from: Some(0), to: 2 }), 1));
+    }
+}
+
+mod the_edge_a_step_returns {
+    use super::*;
+
+    #[test]
+    fn a_step_returns_the_edge_it_moved_along() {
+        let script = Script::new()
+            .send("coder")
+            .send("reviewer")
+            .send("security")
+            .send("security")
+            .send("coder")
+            .send("reviewer")
+            .send("tester")
+            .with(Kind::Send, "coder", "tester")
+            .with(Kind::Read, ORCHESTRATOR, "coder");
+
+        assert_eq!(
+            script.edges(),
+            [
+                None,
+                Some(Edge::Forward(0)),
+                Some(Edge::Forward(0)),
+                None,
+                Some(Edge::Loop(1)),
+                Some(Edge::Forward(0)),
+                Some(Edge::Forward(1)),
+                None,
+                None,
+            ]
+        );
+    }
+
+    #[test]
+    fn a_jump_outside_the_plan_returns_its_stages() {
+        let script = Script::new().send("coder").send("tester");
+
+        assert_eq!(script.edges(), [None, Some(Edge::Outside { from: Some(0), to: 2 })]);
+    }
+
+    #[test]
+    fn a_step_keeps_the_time_of_its_message() {
+        let script = Script::new().send("coder").send("reviewer");
+
+        let last = script.progress().last.expect("a step");
+
+        assert_eq!(last.time, SystemTime::UNIX_EPOCH + Duration::from_secs(1));
     }
 }

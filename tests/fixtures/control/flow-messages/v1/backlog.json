@@ -1,0 +1,46 @@
+{
+  "boot": "123-456",
+  "run": 7,
+  "workspace": 3,
+  "messages": [
+    {
+      "run": 7,
+      "workspace": 3,
+      "seq": 1,
+      "time": "2026-10-18T09:21:00.000Z",
+      "from": "orchestrator",
+      "to": "coder",
+      "kind": "send",
+      "text": "Write it.",
+      "bytes": 9,
+      "edge": null
+    },
+    {
+      "run": 7,
+      "workspace": 3,
+      "seq": 2,
+      "time": "2026-10-18T09:22:00.000Z",
+      "from": "orchestrator",
+      "to": "reviewer",
+      "kind": "send",
+      "text": "Review it.",
+      "bytes": 10,
+      "edge": {
+        "kind": "forward",
+        "stage": 0
+      }
+    },
+    {
+      "run": 7,
+      "workspace": 3,
+      "seq": 3,
+      "time": "2026-10-18T09:23:00.000Z",
+      "from": "orchestrator",
+      "to": "reviewer",
+      "kind": "read",
+      "text": null,
+      "bytes": 0,
+      "edge": null
+    }
+  ]
+}

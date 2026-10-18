@@ -21,6 +21,10 @@ use crate::project::Hierarchy;
 use crate::project::search::Goto;
 use crate::term::Term;
 
+pub(super) type AgentPlace = (usize, usize, usize, usize);
+
+type Listed = (Vec<AgentPlace>, Vec<(u64, Option<u64>)>, HashSet<u64>);
+
 pub(super) struct AgentRuntime {
     pub(super) launches: Vec<Launch>,
     pub(super) trust_prompt: agents::TrustPrompt,
@@ -242,17 +246,24 @@ impl App {
         panes.len()
     }
 
-    pub(super) fn agent_places(&self) -> Vec<(usize, usize, usize, usize)> {
+    pub(super) fn agent_places(&self) -> Vec<AgentPlace> {
         self.agent_tree(false).into_iter().map(|(place, _)| place).collect()
     }
 
-    pub(super) fn agent_count(&self) -> usize {
-        self.projects.terms().filter(|term| term.agent.status().is_some()).count()
+    pub(super) fn agent_tree(&self, narrow: bool) -> Vec<(AgentPlace, tree::Node)> {
+        let (places, rows, _) = self.listed_agents();
+        tree::order(&rows, &HashSet::new(), narrow).into_iter().map(|node| (places[node.index], node)).collect()
     }
 
-    pub(super) fn agent_tree(&self, narrow: bool) -> Vec<((usize, usize, usize, usize), tree::Node)> {
+    pub(super) fn shown_agents(&self, narrow: bool) -> (Vec<AgentPlace>, Vec<tree::Node>) {
+        let (places, rows, folded) = self.listed_agents();
+        (places, tree::order(&rows, &folded, narrow))
+    }
+
+    fn listed_agents(&self) -> Listed {
         let mut places = Vec::new();
         let mut rows = Vec::new();
+        let mut folded = HashSet::new();
         let live = self.pane_ids();
         for p in crate::project::sidebar_order(&self.projects, &self.groups) {
             for (w, workspace) in self.projects[p].workspaces.iter().enumerate() {
@@ -260,11 +271,14 @@ impl App {
                     for (i, term) in tab.panes.iter().enumerate().filter(|(_, term)| term.agent.status().is_some()) {
                         places.push((p, w, t, i));
                         rows.push((term.id, Self::live_parent(term, &live)));
+                        if term.collapsed {
+                            folded.insert(term.id);
+                        }
                     }
                 }
             }
         }
-        tree::order(&rows, narrow).into_iter().map(|node| (places[node.index], node)).collect()
+        (places, rows, folded)
     }
 
     pub(super) fn jump_to_pane(&mut self, pane: u64) {

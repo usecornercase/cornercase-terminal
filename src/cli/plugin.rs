@@ -5,9 +5,12 @@ use std::path::Path;
 use serde_json::json;
 
 use super::args::PluginAction;
+use super::args::plugin::RunArgs;
 use super::print_log;
-use crate::client::confirm;
+use crate::client::{answer, ask, confirm};
 use crate::config;
+use crate::control::plugins::{ActionRan, ActionsInfo};
+use crate::control::{Command, Item, PluginActions, PluginRun};
 use crate::error::{Error, Result};
 use crate::paths;
 use crate::plugins::install::{self, Fetched, Removed, Update};
@@ -17,6 +20,11 @@ use crate::plugins::supervise;
 use crate::plugins::{Places, Plugin, Registry};
 
 pub(super) fn run(action: PluginAction) -> Result<bool> {
+    let action = match action {
+        PluginAction::Actions { context, print } => return actions(context.as_deref(), print.json),
+        PluginAction::Run(args) => return run_action(&args),
+        action => action,
+    };
     let places = Places::new(&paths::config(), &paths::session());
     let mut registry = Registry::open(&places.registry).map_err(Error::Plugin)?;
     match action {
@@ -59,6 +67,7 @@ pub(super) fn run(action: PluginAction) -> Result<bool> {
                 return Ok(true);
             }
         }
+        PluginAction::Actions { .. } | PluginAction::Run(_) => {}
         PluginAction::Enable { id } => {
             let plugin = registry.set_enabled(&id, true).map_err(Error::Plugin)?;
             registry.save()?;
@@ -82,6 +91,65 @@ pub(super) fn run(action: PluginAction) -> Result<bool> {
         }
     }
     Ok(true)
+}
+
+fn actions(context: Option<&str>, json: bool) -> Result<bool> {
+    let context = context
+        .map(|name| serde_json::from_value(json!(name)))
+        .transpose()
+        .map_err(|e| Error::WrongUsage(e.to_string()))?;
+    let value = ask("plugin-actions", Command::PluginActions(PluginActions { context }))?;
+    if json {
+        super::print_json(&value)?;
+    } else {
+        super::print_out(&actions_text(&answer(value)?))?;
+    }
+    Ok(true)
+}
+
+fn actions_text(info: &ActionsInfo) -> String {
+    let cell = |text: &str| crate::text::escape_hidden(&text.replace(|c: char| c.is_control(), " "));
+    let mut text = String::from("plugin\taction\tcontexts\ttitle\n");
+    for action in &info.actions {
+        let _ = writeln!(
+            text,
+            "{}\t{}\t{}\t{}",
+            cell(&action.plugin),
+            cell(&action.action),
+            action.contexts.join(","),
+            cell(&action.title)
+        );
+    }
+    text
+}
+
+fn run_action(args: &RunArgs) -> Result<bool> {
+    let item = args.which.item("plugin run")?.ok_or_else(|| Error::WrongUsage("say what to run it on".into()))?;
+    let revision = if let Some(revision) = args.revision {
+        revision
+    } else {
+        let info: ActionsInfo = answer(ask("plugin-actions", Command::PluginActions(PluginActions::default()))?)?;
+        info.revision
+    };
+    let request = PluginRun { plugin: args.plugin.clone(), action: args.action.clone(), revision, item };
+    let value = ask("plugin-run", Command::PluginRun(request))?;
+    let ran: ActionRan = answer(value.clone())?;
+    if args.print.json {
+        super::print_json(&value)?;
+    } else {
+        super::print_out(&ran_text(&ran, item))?;
+    }
+    Ok(ran.error.is_none())
+}
+
+fn ran_text(ran: &ActionRan, item: Item) -> String {
+    let (kind, id) = item.to_string().split_once('-').map(|(k, i)| (k.to_string(), i.to_string())).unwrap_or_default();
+    let name = |text: &str| crate::text::escape_hidden(text);
+    let head = format!("ran {} {} on {kind} {id}", name(&ran.plugin), name(&ran.action));
+    match &ran.error {
+        None => format!("{head}: exit status: 0\n"),
+        Some(error) => format!("{head}: {error}; `cornercase plugin logs {}` says more\n", name(&ran.plugin)),
+    }
 }
 
 fn install_from(places: &Places, spec: &str, yes: bool) -> Result<()> {

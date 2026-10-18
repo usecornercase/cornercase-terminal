@@ -19,6 +19,8 @@ pub(super) struct Scrolls {
     pub(super) agents: usize,
     pub(super) tab_bar: usize,
     pub(super) followed: Focus,
+    pub(super) followed_pane: Option<u64>,
+    pub(super) pane_followed: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,6 +90,15 @@ impl App {
         }
     }
 
+    fn follow_pane(&mut self) {
+        let pane = self.term().map(|term| term.id);
+        let before = std::mem::replace(&mut self.scroll.followed_pane, pane);
+        let seen = std::mem::replace(&mut self.scroll.pane_followed, true);
+        if seen && before != pane && pane.is_some_and(|pane| self.reveal_agent(pane)) {
+            self.events.snapshots.changed = true;
+        }
+    }
+
     pub(super) fn follow(&mut self, area: Rect) {
         self.queued.area = Some(area);
         if self.focus() != self.scroll.followed {
@@ -96,6 +107,7 @@ impl App {
         let areas = self.layout(area);
         let relayout = areas.tree != self.drawn.tree || areas.tab_bar.is_empty() != self.drawn.tab_bar.is_empty();
         self.drawn = areas;
+        self.follow_pane();
         let focus = self.focus();
         let before = std::mem::replace(&mut self.scroll.followed, focus);
         if focus == before && !relayout {

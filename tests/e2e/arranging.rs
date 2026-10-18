@@ -28,6 +28,11 @@ fn the_sidebar_is_arranged_from_the_command_line() {
     let moved = report["projects"].as_array().expect("projects").iter().find(|p| p["id"] == project_id);
     assert_eq!(moved.map(|p| p["group"].clone()), Some(group_id.into()));
 
+    let pane = report["projects"][0]["workspaces"][0]["tabs"][0]["panes"][0]["id"].to_string();
+    let refused = app.session.cli(&["collapse", "--pane", &pane]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("no agent"), "{refused:?}");
+
     app.session.says(&["expand", "--group", &group]);
     app.session.says(&["move", "--project", &project, "--ungroup"]);
     app.session.says(&["group", "delete", &group]);

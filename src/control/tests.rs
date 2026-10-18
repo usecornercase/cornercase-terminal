@@ -116,6 +116,16 @@ fn every_command_is_listed_by_name() {
         Command::ChangesBase(ChangesBase::default()),
         Command::ChangesViewed(ChangesViewed::default()),
         Command::Usage(Usage::default()),
+        Command::PluginList(PluginList::default()),
+        Command::PluginActions(PluginActions::default()),
+        Command::PluginRun(PluginRun { plugin: "a".into(), action: "b".into(), revision: 0, item: Item::Pane(1) }),
+        Command::FlowSave(FlowSave::default()),
+        Command::FlowDelete(FlowDelete::default()),
+        Command::FlowHide(FlowHide::default()),
+        Command::FlowRestore(FlowRestore::default()),
+        Command::FlowRuns(FlowRunsWatch::default()),
+        Command::FlowMessages(FlowMessages::default()),
+        Command::FlowFiles(FlowFiles::default()),
     ];
 
     let names: Vec<String> = commands
@@ -326,7 +336,7 @@ fn the_columns_of_a_pane_row_are_its_keys_in_order() {
 fn new_columns_of_a_pane_row_go_after_the_released_ones() {
     let released = "pane tab workspace project program agent status background_shell dialog at_prompt model \
                         context caller shown active tab_name workspace_name branch worktree project_name path survey \
-                        resuming";
+                        resuming parent subagents";
 
     assert!(PaneRow::COLUMNS.join(" ").starts_with(released), "{:?}", PaneRow::COLUMNS);
 }
@@ -614,13 +624,26 @@ mod watch_v1 {
         }
     }
 
+    #[test]
+    fn a_pane_leaves_collapsed_out_unless_it_is_true() {
+        let plain = serde_json::to_value(pane(4, false)).expect("a pane");
+        let folded = serde_json::to_value(PaneInfo { collapsed: true, ..pane(4, false) }).expect("a pane");
+
+        assert!(plain.get("collapsed").is_none(), "{plain}");
+        assert_eq!(folded["collapsed"], true);
+        assert!(!serde_json::from_value::<PaneInfo>(plain).expect("a pane").collapsed);
+    }
+
     fn snapshot() -> Snapshot {
         let tab = TabInfo {
             id: 3,
             name: "agents".into(),
             status: Some("working".into()),
             active: true,
-            panes: vec![pane(4, true), PaneInfo { parent: Some(4), subagents: 2, ..pane(5, false) }],
+            panes: vec![
+                pane(4, true),
+                PaneInfo { parent: Some(4), subagents: 2, role: Some("coder".into()), ..pane(5, false) },
+            ],
             custom_name: Some("agents".into()),
             layout: Some(split()),
             controller: None,

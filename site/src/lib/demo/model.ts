@@ -22,12 +22,15 @@ export interface Pane {
   since?: number;
   notified?: boolean;
   parent?: number | null;
+  collapsed?: boolean;
 }
 
 export interface TreeSpot {
   depth: number;
   last: boolean;
   bars: number[];
+  fold: boolean | null;
+  hidden: unknown[];
 }
 
 export const MAX_AGENT_DEPTH = 3;
@@ -38,6 +41,7 @@ export function agentTree<T>(
   id: (row: T) => number,
   parent: (row: T) => number | null | undefined,
   cap = MAX_AGENT_DEPTH,
+  folded: (row: T) => boolean = () => false,
 ): (T & TreeSpot)[] {
   const listed = new Set(rows.map(id));
   const children = new Map<number | null, T[]>();
@@ -48,20 +52,40 @@ export function agentTree<T>(
   }
   const out: (T & TreeSpot)[] = [];
   const seen = new Set<number>();
+  const hide = (key: number): T[] => {
+    const gone: T[] = [];
+    const stack = (children.get(key) ?? []).filter((row) => !seen.has(id(row))).reverse();
+    for (const row of stack) seen.add(id(row));
+    while (stack.length) {
+      const row = stack.pop() as T;
+      gone.push(row);
+      for (const child of (children.get(id(row)) ?? []).filter((kid) => !seen.has(id(kid))).reverse()) {
+        seen.add(id(child));
+        stack.push(child);
+      }
+    }
+    return gone;
+  };
+  const place = (row: T, depth: number): void => {
+    seen.add(id(row));
+    const spot = { ...row, depth, last: true, bars: [] as number[], fold: null as boolean | null, hidden: [] as unknown[] };
+    out.push(spot);
+    const kids = (children.get(id(row)) ?? []).filter((kid) => !seen.has(id(kid)));
+    if (!kids.length) return;
+    spot.fold = folded(row);
+    if (spot.fold) spot.hidden = hide(id(row));
+    else walk(id(row), depth + 1);
+  };
   const walk = (key: number | null, depth: number): void => {
-    const kids = (children.get(key) ?? []).filter((row) => !seen.has(id(row)));
-    for (const row of kids) {
-      seen.add(id(row));
-      out.push({ ...row, depth: Math.min(depth, cap), last: true, bars: [] });
-      walk(id(row), depth + 1);
+    for (const row of (children.get(key) ?? []).filter((kid) => !seen.has(id(kid)))) {
+      if (seen.has(id(row))) continue;
+      place(row, Math.min(depth, cap));
     }
   };
   walk(null, 0);
   for (const row of rows) {
     if (seen.has(id(row))) continue;
-    seen.add(id(row));
-    out.push({ ...row, depth: 0, last: true, bars: [] });
-    walk(id(row), 1);
+    place(row, 0);
   }
   return shapeTree(out);
 }
@@ -147,6 +171,7 @@ export type MenuAction =
   | { kind: 'openProject' }
   | { kind: 'newGroup' }
   | { kind: 'mark'; panes: number[]; pending: boolean }
+  | { kind: 'agentFold'; pane: number; collapsed: boolean }
   | { kind: 'pane'; pane: number; action: PaneAction }
   | { kind: 'base'; branch: string }
   | { kind: 'showFlow'; workspace: number }

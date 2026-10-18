@@ -129,6 +129,8 @@ mod worktrees;
 pub(crate) use event::AppEvent;
 pub(crate) use events::Streamed;
 pub(crate) use images::{Placed, Sight};
+#[cfg(test)]
+pub(crate) use surfaces::FRAME_EVERY;
 pub(crate) use surfaces::Surfaced;
 
 #[derive(Default)]
@@ -426,6 +428,7 @@ impl App {
             self.next_pairing(now),
             self.events.snapshots.wake(now, !self.views.is_empty()),
             self.events.app.wake(now, false),
+            self.events.runs.wake(now, false),
             self.change_streams.wake(now),
             self.events.bell_wake(now),
             self.surface_wake(now),
@@ -612,6 +615,7 @@ impl App {
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
             AppEvent::Encoded { key, result } => self.encoded(key, result),
             AppEvent::RunFiles(run, result) => self.run_files_listed(run, result),
+            AppEvent::FlowFiles { request, result } => self.flow_files_listed(request, result),
             AppEvent::Web(event) => self.web_event(event),
             AppEvent::Tailscale(answer) => self.tailscale_answered(answer),
             AppEvent::Messenger(event) => self.messenger_event(event, area),

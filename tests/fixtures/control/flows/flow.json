@@ -1,0 +1,63 @@
+{
+  "name": "Pair",
+  "description": "",
+  "notes": "Keep it small.",
+  "end": "pull_request",
+  "orchestrator": {
+    "name": "orchestrator",
+    "agent": "claude",
+    "model": "opus",
+    "effort": null,
+    "args": [],
+    "env": {},
+    "edits": false,
+    "worktree": "shared",
+    "prompt": "Be brief."
+  },
+  "roles": [
+    {
+      "name": "coder",
+      "agent": "claude",
+      "model": null,
+      "effort": "high",
+      "args": [
+        "--verbose"
+      ],
+      "env": {
+        "NODE_ENV": "test"
+      },
+      "edits": true,
+      "worktree": "own",
+      "prompt": "Write it."
+    },
+    {
+      "name": "reviewer",
+      "agent": "claude",
+      "model": "sonnet",
+      "effort": null,
+      "args": [],
+      "env": {},
+      "edits": false,
+      "worktree": "shared",
+      "prompt": "Review it."
+    }
+  ],
+  "stages": [
+    {
+      "roles": [
+        "coder"
+      ],
+      "back": null
+    },
+    {
+      "roles": [
+        "reviewer"
+      ],
+      "back": {
+        "to": 1,
+        "when": "findings",
+        "at_most": 2
+      }
+    }
+  ]
+}

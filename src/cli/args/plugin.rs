@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
 
-use super::{LogsArgs, Print};
+use super::{LogsArgs, Print, Which};
 
 #[derive(Debug, Args)]
 pub(crate) struct PluginArgs {
@@ -49,6 +49,22 @@ pub(crate) enum PluginAction {
     },
     #[command(about = "List the plugins, whether they are on, and what they run")]
     List(Print),
+    #[command(about = "List the actions plugins add to the menus, for one kind of row or every one; asks the server")]
+    Actions {
+        #[arg(
+            long,
+            value_name = "KIND",
+            value_parser = ["project", "workspace", "tab", "pane"],
+            help = "Only the actions offered for a project, workspace, tab or pane"
+        )]
+        context: Option<String>,
+        #[command(flatten)]
+        print: Print,
+    },
+    #[command(
+        about = "Run a plugin's action on a project, workspace, tab or pane as its menu entry does; asks the server"
+    )]
+    Run(RunArgs),
     #[command(about = "Turn a plugin on: it runs as you, with access to every terminal")]
     Enable {
         #[arg(value_name = "ID")]
@@ -66,4 +82,22 @@ pub(crate) enum PluginAction {
         #[command(flatten)]
         logs: LogsArgs,
     },
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct RunArgs {
+    #[arg(value_name = "PLUGIN", help = "The plugin's id")]
+    pub(crate) plugin: String,
+    #[arg(value_name = "ACTION", help = "The action's id, as `plugin actions` lists it")]
+    pub(crate) action: String,
+    #[command(flatten)]
+    pub(crate) which: Which,
+    #[arg(
+        long,
+        value_name = "N",
+        help = "The revision `plugin actions --json` printed; refused once the plugins changed. Left out, the current one"
+    )]
+    pub(crate) revision: Option<u32>,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }

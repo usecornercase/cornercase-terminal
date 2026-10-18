@@ -390,3 +390,37 @@ fn a_theme_change_sends_the_whole_session_with_the_next_revision() {
     let snapshot = next(&mut app, first.revision);
     assert_eq!(snapshot.report.theme.map(|t| t.from), Some(ThemeFrom::Client));
 }
+
+#[test]
+fn a_fold_of_an_agents_children_reaches_watchers() {
+    let (mut app, rx, _dirs) = app_with(1);
+    let revision = watching(&mut app).revision;
+    let revision = settled(&mut app, &rx, revision);
+    click_row(&mut app, WorkspaceRow::NewTab(0));
+    let ids: Vec<u64> = (0..2).map(|t| tab_term(&app, 0, t).id).collect();
+    for tab in &mut app.projects[0].workspaces[0].tabs {
+        let term = tab.pane_mut().expect("a pane");
+        term.agent.follow(Some("claude"));
+        term.agent.update(Some(activity::Activity::Idle), true, Instant::now());
+    }
+    app.projects[0].workspaces[0].tabs[1].pane_mut().expect("the child").parent = Some(ids[0]);
+    render(&mut app, AREA);
+    app.jump_to_pane(ids[0]);
+    render(&mut app, AREA);
+    app.trace();
+    let revision = snapshots(&mut app).last().map_or(revision, |snapshot| snapshot.revision);
+    let collapsed = |snapshot: &Snapshot| {
+        let panes =
+            snapshot.report.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs).flat_map(|t| &t.panes);
+        panes.filter(|pane| pane.collapsed).map(|pane| pane.id).collect::<Vec<_>>()
+    };
+
+    ok(&mut app, "collapse", &json!({"item": {"pane": ids[0]}}));
+    let folded = next(&mut app, revision);
+    ok(&mut app, "focus", &json!({"item": {"pane": ids[1]}}));
+    render(&mut app, AREA);
+    app.trace();
+    let opened = next(&mut app, folded.revision);
+
+    assert_eq!((collapsed(&folded), collapsed(&opened)), (vec![ids[0]], Vec::<u64>::new()));
+}

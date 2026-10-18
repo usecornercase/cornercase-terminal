@@ -7,7 +7,7 @@ use ratatui::widgets::Paragraph;
 use super::View;
 use super::chrome::{draw_back, draw_border};
 use super::layout::{Areas, Border};
-use super::rows::{Rows, draw_hidden, draw_rail, marker, row_close_button};
+use super::rows::{Rows, Tags, draw_hidden, draw_rail, marker, row_close_button};
 use super::theme::status_icon;
 use super::widgets::{button_style, dim, draw_band, draw_button, draw_separator, draw_title, middle};
 use super::workspaces::{Details, Guide, draw_details, draw_guide};
@@ -24,7 +24,20 @@ const AGENT_LINES: u16 = 2;
 
 const MIN_WORKSPACE_WIDTH: usize = 4;
 
+const MIN_ROLE_WIDTH: usize = 4;
+
+const ROLE_SEPARATOR: &str = " · ";
+
 const GUIDE_STEP: usize = 2;
+
+const COLLAPSED: &str = "▸";
+
+const EXPANDED: &str = "▾";
+
+pub(crate) fn agent_fold(row: Rect, depth: usize) -> Rect {
+    let width = u16::try_from(GUIDE_STEP * depth + 2).unwrap_or(u16::MAX);
+    Rect { width, ..row }.intersection(row)
+}
 
 pub(crate) fn agent_rows(list: Rect, pitch: u16, agents: usize, scroll: usize) -> Rows {
     Rows { list, heights: vec![pitch.max(AGENT_LINES); agents], button: 0, scroll }
@@ -44,11 +57,16 @@ pub(crate) struct AgentEntry {
     pub(crate) agent: String,
     pub(crate) project: String,
     pub(crate) workspace: Option<String>,
+    pub(crate) role: Option<String>,
+    pub(crate) place: bool,
     pub(crate) details: Details,
     pub(crate) active: bool,
     pub(crate) depth: usize,
     pub(crate) last: bool,
     pub(crate) rails: Vec<bool>,
+    pub(crate) fold: Option<bool>,
+    pub(crate) hidden: usize,
+    pub(crate) attention: Option<Status>,
 }
 
 pub(crate) struct AgentsView {
@@ -96,12 +114,36 @@ pub(super) fn draw_agent(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry:
     let indent = line.iter().map(Span::width).sum::<usize>();
     let room = usize::from(r.width).saturating_sub(indent + 1);
     let colour = if entry.active { Color::Reset } else { view.soft };
-    line.extend(agent_place(entry, room, Style::default().fg(colour), dim(view.muted)));
+    let tags = Tags::fit(fold_tags(entry, view), room);
+    let place = agent_place(entry, room.saturating_sub(tags.reserved()), Style::default().fg(colour), dim(view.muted));
+    let used: usize = place.iter().map(Span::width).sum();
+    line.extend(place);
+    tags.push_onto(&mut line, used, room);
     draw_band(f, r, Line::from(line), bg);
+    draw_fold(f, view.muted, r, entry);
     draw_details(f, view.muted, (r, row_close_button(r, pitch)), &entry.details, Some(&entry.agent), indent);
     draw_guides(f, view.line(), r, entry);
     if entry.active {
         draw_rail(f, r);
+    }
+}
+
+fn fold_tags(entry: &AgentEntry, view: &View) -> Vec<Span<'static>> {
+    if entry.fold != Some(true) {
+        return Vec::new();
+    }
+    let attention = entry.attention.map(|status| status_icon(view.muted, status, view.spin));
+    let count = (entry.hidden > 0).then(|| Span::styled(format!("+{}", entry.hidden), Style::default().fg(view.muted)));
+    attention.into_iter().chain(count).collect()
+}
+
+fn draw_fold(f: &mut Frame, muted: Color, r: Rect, entry: &AgentEntry) {
+    let Some(collapsed) = entry.fold else { return };
+    let x = agent_fold(r, entry.depth).right().saturating_sub(1);
+    let y = middle(r).y;
+    let glyph = if collapsed { COLLAPSED } else { EXPANDED };
+    if let Some(cell) = f.buffer_mut().cell_mut((x, y)).filter(|cell| cell.symbol() == " ") {
+        cell.set_symbol(glyph).set_fg(muted);
     }
 }
 
@@ -118,14 +160,26 @@ fn draw_guides(f: &mut Frame, colour: Color, r: Rect, entry: &AgentEntry) {
 }
 
 fn agent_place(entry: &AgentEntry, room: usize, name: Style, separator: Style) -> Vec<Span<'static>> {
+    if let Some(role) = entry.role.as_deref().filter(|_| !entry.place) {
+        return vec![Span::styled(truncate_right(role, room), name)];
+    }
     let project = entry.project.chars().count();
     let rest = room.saturating_sub(project + CRUMB_SEPARATOR.chars().count());
-    match entry.workspace.as_deref().filter(|_| rest >= MIN_WORKSPACE_WIDTH) {
+    let mut spans = match entry.workspace.as_deref().filter(|_| rest >= MIN_WORKSPACE_WIDTH) {
         Some(workspace) => vec![
             Span::styled(entry.project.clone(), name),
             Span::styled(CRUMB_SEPARATOR, separator),
             Span::styled(truncate_right(workspace, rest), name),
         ],
         None => vec![Span::styled(truncate_right(&entry.project, room), name)],
+    };
+    if let Some(role) = &entry.role {
+        let used: usize = spans.iter().map(|span| span.content.chars().count()).sum();
+        let left = room.saturating_sub(used + ROLE_SEPARATOR.chars().count());
+        if left >= MIN_ROLE_WIDTH {
+            spans.push(Span::styled(ROLE_SEPARATOR, separator));
+            spans.push(Span::styled(truncate_right(role, left), name));
+        }
     }
+    spans
 }

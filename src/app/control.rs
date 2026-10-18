@@ -7,6 +7,7 @@ mod create;
 mod flow;
 mod idle_restart;
 mod issues;
+mod plugins;
 mod queue;
 mod search;
 mod status;
@@ -465,6 +466,9 @@ impl App {
             Command::IssueRead(read) => self.issue_read_request(client, asker, &read),
             Command::IssuePeople(people) => self.issue_people_request(client, asker, &people),
             Command::Usage(usage) => Ok(self.usage_request(client, &usage, now)),
+            Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),
+            Command::PluginActions(actions) => Ok(Some(self.plugin_actions_request(&actions))),
+            Command::PluginRun(run) => self.plugin_run_request(client, &run),
             Command::LastMessage(last) => self.last_message_request(client, asker, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),
@@ -473,6 +477,13 @@ impl App {
             Command::FlowRun(run) => self.flow_run_request(client, caller, run, area),
             Command::FlowExport(export) => self.flow_export_request(caller, &export),
             Command::FlowImport(import) => self.flow_import_request(caller, &import),
+            Command::FlowSave(save) => self.flow_save_request(caller, &save),
+            Command::FlowDelete(delete) => self.flow_delete_request(caller, &delete),
+            Command::FlowHide(hide) => self.flow_hide_request(&hide),
+            Command::FlowRestore(restore) => self.flow_restore_request(&restore),
+            Command::FlowRuns(_) => Ok(Some(json(&self.flow_runs_snapshots(client, now)))),
+            Command::FlowMessages(messages) => self.flow_messages_request(client, caller, &messages),
+            Command::FlowFiles(files) => self.flow_files_request(client, caller, &files),
             Command::Search(search) => self.search_request(client, &search.query),
             Command::View(open) => self.view_request(client, &open, area),
             Command::ViewSet(set) => match asker.view {
@@ -513,6 +524,11 @@ impl App {
             Some(agent) if agents::Known::of(&agent).is_some() => Ok(()),
             other => Err(other),
         }
+    }
+
+    pub(in crate::app) fn pend_reading(&mut self, client: u64, key: u64) {
+        let done = Done::default();
+        self.requests.pending.push(Pending { client: Some(client), key, timeout: None, done, stage: Stage::Reading });
     }
 
     fn here(&self, asker: impl Into<Asker>) -> Here {

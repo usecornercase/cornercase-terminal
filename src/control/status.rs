@@ -105,6 +105,7 @@ impl Report {
                         resuming: pane.resuming,
                         parent: pane.parent,
                         subagents: pane.subagents,
+                        role: pane.role.clone(),
                     }));
                 }
             }
@@ -148,10 +149,11 @@ pub struct PaneRow {
     pub(crate) resuming: bool,
     pub(crate) parent: Option<u64>,
     pub(crate) subagents: u32,
+    pub(crate) role: Option<String>,
 }
 
 impl PaneRow {
-    pub const COLUMNS: [&str; 25] = [
+    pub const COLUMNS: [&str; 26] = [
         "pane",
         "tab",
         "workspace",
@@ -177,6 +179,7 @@ impl PaneRow {
         "resuming",
         "parent",
         "subagents",
+        "role",
     ];
 }
 
@@ -295,4 +298,7 @@ pub struct PaneInfo {
     pub(crate) title: Option<String>,
     pub(crate) parent: Option<u64>,
     pub(crate) subagents: u32,
+    pub(crate) role: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) collapsed: bool,
 }

@@ -57,7 +57,7 @@ Tabs where Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI or G
 
 For Claude Code, cornercase also reads the subagents it started in the background (the `subagents/agent-<id>.jsonl` files and their `.meta.json` beside the session's transcript), and for GitHub Copilot CLI its `subagent.started`, `subagent.completed` and `subagent.failed` events: while some still run, the agent counts as working even when its own turn is over, and its second line says how many (see [Subagents still running](../../guides/projects-workspaces-tabs/#subagents-still-running)).
 
-An agent started from another agent's pane (with `cornercase start`, `new-tab` or `split`, or as a member of a [flow](../../guides/flows/)) remembers that pane as its parent: the [agents section](../../guides/projects-workspaces-tabs/#the-agents-section) lists it under its parent, and `status` gives the parent's id (see [Ids and where commands act](../../guides/scripts-and-agents/#ids-and-where-commands-act)).
+An agent started from another agent's pane (with `cornercase start`, `new-tab` or `split`, or as a member of a [flow](../../guides/flows/)) remembers that pane as its parent: the [agents section](../../guides/projects-workspaces-tabs/#the-agents-section) lists it under its parent (a flow's members by their role; click the `▾` before the parent's icon to collapse them), and `status` gives the parent's id and a member's role (see [Ids and where commands act](../../guides/scripts-and-agents/#ids-and-where-commands-act)).
 
 ### Program Status Protocol
 

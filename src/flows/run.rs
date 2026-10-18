@@ -1,10 +1,10 @@
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
-use super::progress::Progress;
+use super::progress::{Edge, Progress};
 use super::{End, Flow};
 use crate::pull_request::{self, PullRequest};
 
@@ -26,6 +26,9 @@ pub(crate) struct Message {
     pub(crate) text: Option<String>,
     pub(crate) bytes: usize,
     pub(crate) at: Instant,
+    pub(crate) time: SystemTime,
+    pub(crate) seq: u64,
+    pub(crate) edge: Option<Edge>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,6 +54,7 @@ pub(crate) struct Run {
     pub(crate) messages: VecDeque<Message>,
     pub(crate) progress: Progress,
     pub(crate) dir: Option<PathBuf>,
+    pub(crate) recorded: u64,
     pub(crate) ended: Option<String>,
 }
 
@@ -65,6 +69,7 @@ impl Run {
             messages: VecDeque::new(),
             progress: Progress::default(),
             dir: None,
+            recorded: 0,
             ended: None,
         }
     }
@@ -77,12 +82,15 @@ impl Run {
         self.members.iter().find(|member| member.role == role).map(|member| member.pane)
     }
 
-    pub(crate) fn record(&mut self, message: Message) {
-        self.progress.step(&self.flow, &message);
+    pub(crate) fn record(&mut self, mut message: Message) -> &Message {
+        self.recorded += 1;
+        message.seq = self.recorded;
+        message.edge = self.progress.step(&self.flow, &message);
         if self.messages.len() == MAX_MESSAGES {
             self.messages.pop_front();
         }
         self.messages.push_back(message);
+        self.messages.back().unwrap_or_else(|| unreachable!("a message was just pushed"))
     }
 
     pub(crate) fn pull<'a>(&self, pull: Option<&'a PullRequest>) -> Option<&'a PullRequest> {

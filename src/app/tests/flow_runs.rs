@@ -1,6 +1,7 @@
 use super::flow_panel::team;
 use super::*;
 use crate::agents::AgentState;
+use crate::agents::activity::Activity;
 use crate::flows::ORCHESTRATOR;
 use crate::flows::progress::Edge;
 use crate::flows::run::{Kind, Message};
@@ -13,6 +14,9 @@ fn send(app: &mut App, to: &str) {
         text: None,
         bytes: 0,
         at: Instant::now(),
+        time: SystemTime::now(),
+        seq: 0,
+        edge: None,
     };
     app.runs[0].record(message);
 }
@@ -78,4 +82,28 @@ fn a_restored_run_keeps_its_latched_end() {
     assert_eq!(again.runs[0].ended.as_deref(), Some("feat/x"));
     let end = again.flow_view(Instant::now(), None).and_then(|view| view.diagram.live).expect("live").end;
     assert!(end.reached);
+}
+
+#[test]
+fn the_roles_come_back_after_a_restart() {
+    let (app, _rx, _dir) = team();
+    let (mut again, _rx) = new_app(no_config());
+
+    assert!(again.restore(&app.state(), AREA));
+    for tab in &mut again.projects[0].workspaces[0].tabs {
+        for term in &mut tab.panes {
+            term.agent.follow(Some(agents::Known::Claude.name()));
+            term.agent.update(Some(Activity::Idle), true, Instant::now());
+        }
+    }
+    again.runs[0].members.iter().for_each(|member| assert!(again.projects.pane_by(member.pane).is_some()));
+
+    let seated: Vec<(Option<String>, bool)> =
+        again.agents_view().entries.into_iter().map(|e| (e.role, e.place)).collect();
+    let (orchestrators, members): (Vec<_>, Vec<_>) =
+        seated.iter().filter(|(role, _)| role.is_some()).partition(|(role, _)| role.as_deref() == Some(ORCHESTRATOR));
+    assert_eq!(
+        (orchestrators, members.iter().all(|(_, place)| !place)),
+        (vec![&(Some(ORCHESTRATOR.to_string()), true)], true)
+    );
 }

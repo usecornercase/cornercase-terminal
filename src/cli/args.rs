@@ -1,6 +1,7 @@
 pub(crate) mod arrange;
 pub(crate) mod changes;
 pub(crate) mod config;
+pub(crate) mod flow;
 pub(crate) mod issue;
 pub(crate) mod plugin;
 pub(crate) mod queue;
@@ -17,17 +18,18 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use super::help::CHANGES_HELP;
 use super::help::{
     ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, CONFIG_HELP, CONTRACT_HELP, EVENTS_HELP,
-    FLOW_EXPORT_HELP, FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP,
-    HERE_PANE, HERE_WORKSPACE, INPUT_HELP, ISSUE_HELP, KEY_NAMES, KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP,
-    LONG_ABOUT, MARK_HELP, MOVE_HELP, MOVE_PANE_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP,
-    PLUGIN_HELP, RATIO_HELP, READ_HELP, REDRAW_HELP, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP,
-    RESTART_TIMEOUT, SCROLL_HELP, SEARCH_HELP, SELECTION_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP,
-    START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, USAGE_HELP,
-    VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
+    FLOW_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP, HERE_PANE, HERE_WORKSPACE, INPUT_HELP, ISSUE_HELP,
+    KEY_NAMES, KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, MOVE_HELP, MOVE_PANE_HELP,
+    NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP, RATIO_HELP, READ_HELP, REDRAW_HELP,
+    REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP, RESTART_TIMEOUT, SCROLL_HELP, SEARCH_HELP, SELECTION_HELP,
+    SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP,
+    UNTIL_AFTER, UPDATE_HELP, USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB,
+    WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
 
+pub(crate) use flow::*;
 pub(crate) use plugin::{PluginAction, PluginArgs};
 
 #[derive(Debug, Parser)]
@@ -38,7 +40,6 @@ pub struct Cli {
 }
 
 #[derive(Debug, Subcommand)]
-#[expect(clippy::large_enum_variant, reason = "parsed once per process")]
 pub(crate) enum Command {
     #[command(flatten)]
     Control(Control),
@@ -147,7 +148,7 @@ pub(crate) enum Control {
     Queue(queue::QueueArgs),
     #[command(about = "Follow agents, programs, panes and tabs as they change, one line per event", after_help = EVENTS_HELP)]
     Events(EventsArgs),
-    #[command(about = "List, start, export or import flows: teams of agents in a worktree, run by an orchestrator agent", after_help = FLOW_HELP)]
+    #[command(about = "List, start, follow, share and manage flows: teams of agents in a worktree, run by an orchestrator agent", after_help = FLOW_HELP)]
     Flow(FlowArgs),
     #[command(
         about = "Print what this server offers to scripts: its version, contract, boot, commands and streams",
@@ -203,9 +204,9 @@ pub(crate) enum Control {
         after_help = MOVE_PANE_HELP
     )]
     MovePane(arrange::MovePaneArgs),
-    #[command(about = "Collapse a group, project or workspace in the sidebar", after_help = FOLD_HELP)]
+    #[command(about = "Collapse a group, project, workspace or agent in the sidebar", after_help = FOLD_HELP)]
     Collapse(arrange::FoldArgs),
-    #[command(about = "Expand a group, project or workspace in the sidebar", after_help = FOLD_HELP)]
+    #[command(about = "Expand a group, project, workspace or agent in the sidebar", after_help = FOLD_HELP)]
     Expand(arrange::FoldArgs),
     #[command(about = "Create a group, change its icon and colour, or delete it", after_help = GROUP_HELP)]
     Group(arrange::GroupArgs),
@@ -690,126 +691,6 @@ pub(crate) struct AwayArgs {
 pub(crate) struct NotifyArgs {
     #[arg(required = true, value_name = "TEXT", help = "The message")]
     pub(crate) text: Vec<String>,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct FlowArgs {
-    #[command(subcommand)]
-    pub(crate) action: FlowAction,
-}
-
-#[derive(Debug, Subcommand)]
-pub(crate) enum FlowAction {
-    #[command(about = "List the flows, built in, yours and the project's, with their agents and their problems")]
-    List(FlowListArgs),
-    #[command(
-        about = "Start a flow in a worktree, and print its workspace's id and each role's pane id",
-        after_help = FLOW_RUN_HELP
-    )]
-    Run(FlowRunArgs),
-    #[command(
-        about = "Print a flow as text to share it: a file to send to a teammate, or to commit",
-        after_help = FLOW_EXPORT_HELP
-    )]
-    Export(FlowExportArgs),
-    #[command(
-        about = "Add a flow someone shared, from a file or from standard input with -",
-        after_help = FLOW_IMPORT_HELP
-    )]
-    Import(FlowImportArgs),
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct FlowExportArgs {
-    #[arg(value_name = "NAME", help = "The flow, as `cornercase flow list` names it")]
-    pub(crate) name: String,
-    #[arg(long, value_name = "ID", help = "The project whose flows to look in [default: the one this runs in]")]
-    pub(crate) project: Option<u64>,
-    #[command(flatten)]
-    pub(crate) print: Print,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub(crate) enum ImportTo {
-    #[value(help = "Your flows, in flows/ next to config.json")]
-    Yours,
-    #[value(help = "The project's, in .cornercase/flows/ in its repository")]
-    Project,
-}
-
-impl ImportTo {
-    pub(crate) fn name(self) -> &'static str {
-        match self {
-            Self::Yours => "yours",
-            Self::Project => "project",
-        }
-    }
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct FlowImportArgs {
-    #[arg(
-        value_name = "SOURCE",
-        help = "A file `flow export` made, - for standard input, an https:// address, or OWNER/REPO on GitHub (usecornercase.dev/flows)"
-    )]
-    pub(crate) source: String,
-    #[arg(long, value_enum, default_value = "yours", help = "Where the flow goes")]
-    pub(crate) to: ImportTo,
-    #[arg(long, value_name = "ID", help = "The project, for --to project [default: the one this runs in]")]
-    pub(crate) project: Option<u64>,
-    #[arg(long, value_name = "NAME", help = "Import it under another name")]
-    pub(crate) name: Option<String>,
-    #[arg(long, help = "Overwrite the flow that has its name")]
-    pub(crate) replace: bool,
-    #[arg(
-        short = 'y',
-        long,
-        help = "Import without asking, though the flow comes from the web or sets variables or arguments"
-    )]
-    pub(crate) yes: bool,
-    #[command(flatten)]
-    pub(crate) print: Print,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct FlowListArgs {
-    #[arg(
-        long,
-        value_name = "ID",
-        help = "The project whose flows to list too [default: the one this runs in, else the shown one]"
-    )]
-    pub(crate) project: Option<u64>,
-    #[command(flatten)]
-    pub(crate) print: Print,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct FlowRunArgs {
-    #[arg(value_name = "NAME", help = "The flow, as `cornercase flow list` names it")]
-    pub(crate) name: String,
-    #[arg(
-        long,
-        value_name = "TEXT",
-        conflicts_with = "prompt_file",
-        required_unless_present_any = ["prompt_file", "issue"],
-        help = "The task: what the team should do"
-    )]
-    pub(crate) prompt: Option<String>,
-    #[arg(long, value_name = "FILE", help = "Read the task from a file, or from standard input with -")]
-    pub(crate) prompt_file: Option<PathBuf>,
-    #[arg(
-        long,
-        value_name = "BRANCH",
-        value_parser = branch,
-        help = "The worktree's branch, made when missing [default: from the task's first words, made unique]"
-    )]
-    pub(crate) worktree: Option<String>,
-    #[arg(long, value_name = "ID", help = "The project [default: the one this runs in, else the shown one]")]
-    pub(crate) project: Option<u64>,
-    #[command(flatten)]
-    pub(crate) issue: issue::IssueArg,
-    #[command(flatten)]
-    pub(crate) create: Create,
 }
 
 #[derive(Debug, Args)]

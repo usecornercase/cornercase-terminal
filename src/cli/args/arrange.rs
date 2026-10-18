@@ -44,7 +44,7 @@ pub(crate) struct MoveArgs {
 }
 
 #[derive(Debug, Args)]
-#[command(group(ArgGroup::new("row").required(true).multiple(false).args(["group", "project", "workspace", "worktree"])))]
+#[command(group(ArgGroup::new("row").required(true).multiple(false).args(["group", "project", "workspace", "worktree", "pane"])))]
 pub(crate) struct FoldArgs {
     #[arg(long, value_name = "ID", help = "A group and its projects")]
     pub(crate) group: Option<u64>,
@@ -54,6 +54,8 @@ pub(crate) struct FoldArgs {
     pub(crate) workspace: Option<u64>,
     #[arg(long, value_name = "BRANCH", value_parser = branch, help = BY_BRANCH)]
     pub(crate) worktree: Option<String>,
+    #[arg(long, value_name = "ID", help = "An agent's pane and the agents it started, in the agents section")]
+    pub(crate) pane: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]

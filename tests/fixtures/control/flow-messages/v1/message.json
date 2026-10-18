@@ -1,0 +1,15 @@
+{
+  "run": 7,
+  "workspace": 3,
+  "seq": 4,
+  "time": "2026-10-18T09:24:00.000Z",
+  "from": "orchestrator",
+  "to": "coder",
+  "kind": "send",
+  "text": "Fix the findings.",
+  "bytes": 17,
+  "edge": {
+    "kind": "loop",
+    "stage": 1
+  }
+}

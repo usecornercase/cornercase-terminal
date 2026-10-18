@@ -292,8 +292,15 @@ impl App {
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
         run.id = self.take_id();
-        let mut info =
-            RunInfo { project: self.projects[p].id, workspace: id, branch, members: Vec::new(), note, run_dir: None };
+        let mut info = RunInfo {
+            run: run.id,
+            project: self.projects[p].id,
+            workspace: id,
+            branch,
+            members: Vec::new(),
+            note,
+            run_dir: None,
+        };
         let path = self.projects[p].workspaces[w].path.clone();
         let dir = folder::make(&self.runs_dir, &path, time::now() * 1000)
             .map_err(|e| format!("could not make the run's folder: {e}"))?;
@@ -444,6 +451,7 @@ impl App {
             kept
         });
         self.forget_flow_reads(None);
+        self.end_flow_messages();
     }
 
     pub(super) fn resume_line(

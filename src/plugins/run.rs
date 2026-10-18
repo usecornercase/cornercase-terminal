@@ -140,5 +140,50 @@ pub(crate) fn finish(mut child: Child, within: Duration) -> io::Result<Option<Ex
     }
 }
 
+#[derive(Debug)]
+pub(crate) enum Ended {
+    Status(ExitStatus),
+    Timeout(Duration),
+    Failed(String),
+}
+
+#[derive(Debug)]
+pub(crate) struct Ran {
+    pub(crate) ended: Ended,
+    pub(crate) took: Duration,
+}
+
+impl Ran {
+    pub(crate) fn failure(&self) -> Option<String> {
+        match &self.ended {
+            Ended::Status(status) if status.success() => None,
+            Ended::Status(status) => Some(status.to_string()),
+            Ended::Timeout(within) => Some(format!("stopped after {} s", within.as_secs())),
+            Ended::Failed(why) => Some(why.clone()),
+        }
+    }
+}
+
+pub(crate) fn run_to_end(
+    places: &Places,
+    plugin: &Plugin,
+    argv: &[String],
+    env: &[(String, String)],
+    cwd: Option<&Path>,
+    within: Duration,
+) -> Ran {
+    let started = Instant::now();
+    let child = places.command(plugin, argv, env, cwd).and_then(|mut c| c.spawn());
+    let ended = match child {
+        Err(e) => Ended::Failed(format!("cannot start {}: {e}", argv.first().map_or("", String::as_str))),
+        Ok(child) => match finish(child, within) {
+            Ok(Some(status)) => Ended::Status(status),
+            Ok(None) => Ended::Timeout(within),
+            Err(e) => Ended::Failed(e.to_string()),
+        },
+    };
+    Ran { ended, took: started.elapsed() }
+}
+
 #[cfg(test)]
 mod tests;

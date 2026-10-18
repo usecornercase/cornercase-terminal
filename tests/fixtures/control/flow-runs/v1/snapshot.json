@@ -1,0 +1,128 @@
+{
+  "revision": 3,
+  "version": "0.12.147",
+  "boot": "123-456",
+  "runs": [
+    {
+      "run": 7,
+      "project": 1,
+      "workspace": 3,
+      "flow": {
+        "name": "Pair",
+        "description": "",
+        "notes": "Keep it small.",
+        "end": "pull_request",
+        "orchestrator": {
+          "name": "orchestrator",
+          "agent": "claude",
+          "model": "opus",
+          "effort": null,
+          "args": [],
+          "env": {},
+          "edits": false,
+          "worktree": "shared",
+          "prompt": "Be brief."
+        },
+        "roles": [
+          {
+            "name": "coder",
+            "agent": "claude",
+            "model": null,
+            "effort": "high",
+            "args": [
+              "--verbose"
+            ],
+            "env": {
+              "NODE_ENV": "test"
+            },
+            "edits": true,
+            "worktree": "own",
+            "prompt": "Write it."
+          },
+          {
+            "name": "reviewer",
+            "agent": "claude",
+            "model": "sonnet",
+            "effort": null,
+            "args": [],
+            "env": {},
+            "edits": false,
+            "worktree": "shared",
+            "prompt": "Review it."
+          }
+        ],
+        "stages": [
+          {
+            "roles": [
+              "coder"
+            ],
+            "back": null
+          },
+          {
+            "roles": [
+              "reviewer"
+            ],
+            "back": {
+              "to": 1,
+              "when": "findings",
+              "at_most": 2
+            }
+          }
+        ]
+      },
+      "task": "Fix the login form",
+      "dir": "/state/runs/2026-10-18-fix",
+      "roles": [
+        {
+          "role": "orchestrator",
+          "pane": 10,
+          "tab": 20,
+          "status": "pending",
+          "closed": false,
+          "worktree": null,
+          "branch": null
+        },
+        {
+          "role": "coder",
+          "pane": 11,
+          "tab": 21,
+          "status": "working",
+          "closed": false,
+          "worktree": "/w/fix--coder",
+          "branch": "fix--coder"
+        },
+        {
+          "role": "reviewer",
+          "pane": 12,
+          "tab": null,
+          "status": null,
+          "closed": true,
+          "worktree": null,
+          "branch": null
+        }
+      ],
+      "stage": 0,
+      "rounds": [
+        0,
+        1
+      ],
+      "holder": "coder",
+      "last": {
+        "edge": {
+          "kind": "loop",
+          "stage": 1
+        },
+        "from": "reviewer",
+        "to": "coder",
+        "time": "2026-10-18T09:30:00.000Z"
+      },
+      "outside": {
+        "kind": "outside",
+        "from": 0,
+        "to": 1
+      },
+      "ended": true,
+      "messages": 4
+    }
+  ]
+}
