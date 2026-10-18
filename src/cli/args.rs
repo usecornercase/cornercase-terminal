@@ -259,6 +259,13 @@ pub(crate) struct StatusArgs {
         help = "Keep running and print the whole state as one JSON line each time it changes (`cornercase view` does it for a view)"
     )]
     pub(crate) follow: bool,
+    #[arg(
+        long,
+        conflicts_with_all = ["panes", "view"],
+        help = "Print the TODO list, the queue, away, the update found and keep awake as JSON; with --follow, again \
+                each time they change"
+    )]
+    pub(crate) app: bool,
     #[command(flatten)]
     pub(crate) view: ViewArg,
     #[command(flatten)]

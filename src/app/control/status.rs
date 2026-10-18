@@ -6,7 +6,7 @@ use crate::agents::activity::Status;
 use crate::agents::awake;
 use crate::app::App;
 use crate::control::{
-    self, ConfigInfo, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, PullRequestInfo, Report, TabInfo,
+    self, AppState, ConfigInfo, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, PullRequestInfo, Report, TabInfo,
     WorkspaceInfo,
 };
 use crate::git;
@@ -99,6 +99,18 @@ impl App {
             view: None,
             theme: Some(self.theme_info()),
             config: Some(ConfigInfo { revision: self.config_file.revision }),
+        }
+    }
+
+    pub(in crate::app) fn app_state(&self) -> AppState {
+        AppState {
+            version: version::CURRENT.to_string(),
+            boot: control::server_token().to_string(),
+            todos: self.todo_items(),
+            queue: self.queued.queue.entries.clone(),
+            away: self.away_info(),
+            update: self.update_info(),
+            keep_awake: self.keep_awake_info(),
         }
     }
 

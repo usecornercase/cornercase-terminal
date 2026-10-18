@@ -7,7 +7,7 @@ use ratatui::layout::{Position, Rect};
 use serde_json::Value;
 
 use super::{App, AppEvent, Overlay, Toast};
-use crate::control::{Command, Done, Request};
+use crate::control::{AwayInfo, Command, Done, Request};
 use crate::error::Error;
 use crate::issues::{Secret, secrets};
 use crate::log::{self, Job, Level};
@@ -698,6 +698,16 @@ impl App {
             self.toast = Some(Toast::new(back, ui::ToastIcon::Check));
         }
         self.refresh_messenger_note(via);
+    }
+
+    pub(in crate::app) fn away_info(&self) -> Vec<AwayInfo> {
+        Via::ALL
+            .into_iter()
+            .map(|via| {
+                let messenger = self.messenger(via);
+                AwayInfo { platform: via.target().to_string(), ready: messenger.ready(), away: messenger.away }
+            })
+            .collect()
     }
 
     pub(super) fn away_anywhere(&self) -> bool {

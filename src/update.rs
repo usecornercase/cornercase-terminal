@@ -68,6 +68,7 @@ pub(crate) enum Outcome {
 }
 
 #[derive(Debug)]
+#[expect(clippy::struct_excessive_bools, reason = "independent facts of a check and an install")]
 pub(crate) struct Updates {
     pub(crate) enabled: bool,
     pub(crate) url: String,

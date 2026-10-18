@@ -515,6 +515,7 @@ mod keeping_awake {
         let _fakes = holding(&mut agent);
         let id = working(&mut agent, "next step");
         let held = (agent.app.agents.awake.state(), agent.app.report(None).keep_awake);
+        assert_eq!(agent.app.app_state().keep_awake, held.1);
         agent.finish();
         agent.refreshing("the turn ends", |a| pane(a, id).agent.status() != Some(activity::Status::Working));
 

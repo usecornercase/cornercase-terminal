@@ -423,6 +423,7 @@ impl App {
             self.next_request(now),
             self.next_pairing(now),
             self.events.snapshots.wake(now, !self.views.is_empty()),
+            self.events.app.wake(now, false),
             self.events.bell_wake(now),
             self.surface_wake(now),
             self.queued.area.and_then(|_| self.queued.queue.next(clock)),

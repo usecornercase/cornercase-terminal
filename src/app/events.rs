@@ -4,7 +4,7 @@ use std::time::{Duration, Instant, SystemTime};
 use serde::Serialize;
 
 use super::App;
-use crate::control::{Event, Ids, Kind, Report, Snapshot, What};
+use crate::control::{AppState, Event, Ids, Kind, Report, Snapshot, What};
 use crate::log;
 use crate::project::Hierarchy as _;
 
@@ -24,6 +24,7 @@ pub(super) struct Events {
     bells: Bells,
     out: Vec<(u64, Streamed)>,
     pub(super) snapshots: Snapshots,
+    pub(super) app: Snapshots<AppState>,
 }
 
 pub(super) struct Snapshots<T = Report> {
@@ -201,6 +202,7 @@ impl Events {
             self.bells.panes.clear();
         }
         self.snapshots.forget(client);
+        self.app.forget(client);
     }
 
     pub(super) fn publish(&mut self, events: &[Event]) {
@@ -285,6 +287,27 @@ impl App {
         let snapshot = snapshots.join(client, report, now, out, "session");
         log::info!("control", "watching", client = client, revision = snapshot.revision);
         snapshot
+    }
+
+    pub(super) fn app_snapshots(&mut self, client: u64, now: Instant) -> Snapshot<AppState> {
+        let state = self.app_state();
+        let Events { app, out, .. } = &mut self.events;
+        let snapshot = app.join(client, state, now, out, "app");
+        log::info!("control", "following the app", client = client, revision = snapshot.revision);
+        snapshot
+    }
+
+    pub(super) fn publish_app(&mut self, now: Instant) {
+        if self.events.app.watchers.is_empty() {
+            return;
+        }
+        if self.events.app.waits(now) {
+            self.events.app.due = true;
+            return;
+        }
+        let state = self.app_state();
+        let Events { app, out, .. } = &mut self.events;
+        app.offer(state, now, out, "app");
     }
 
     pub(super) fn publish_snapshot(&mut self, now: Instant) {

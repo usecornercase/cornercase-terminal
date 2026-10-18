@@ -37,11 +37,11 @@ mod describing {
         assert!(descriptor.features.iter().any(|feature| feature == "todo-panel"));
         assert!(descriptor.features.iter().any(|feature| feature == "close-unlock"));
         assert!(descriptor.features.iter().any(|feature| feature == "issues"));
-        assert_eq!(descriptor.features.last().map(String::as_str), Some("issues"));
+        assert_eq!(descriptor.features.last().map(String::as_str), Some("todo-panel"));
     }
 
     #[test]
-    fn the_events_watch_surface_and_view_streams_are_version_one() {
+    fn the_events_watch_surface_view_and_app_streams_are_version_one() {
         let descriptor = describe("1-2", &[]);
 
         let streams = vec![
@@ -49,6 +49,7 @@ mod describing {
             Stream { name: "watch".into(), version: 1 },
             Stream { name: "surface".into(), version: 1 },
             Stream { name: "view".into(), version: 1 },
+            Stream { name: "app".into(), version: 1 },
         ];
         assert_eq!(descriptor.streams, streams);
     }
@@ -75,7 +76,7 @@ mod describing {
         assert_eq!(keys, ["boot", "contract", "features", "operations", "streams", "version"]);
         assert_eq!(
             sent["streams"],
-            json!([{"name": "events", "version": 1}, {"name": "watch", "version": 1}, {"name": "surface", "version": 1}, {"name": "view", "version": 1}])
+            json!([{"name": "events", "version": 1}, {"name": "watch", "version": 1}, {"name": "surface", "version": 1}, {"name": "view", "version": 1}, {"name": "app", "version": 1}])
         );
         assert_eq!(sent["operations"][0], json!({"name": "status", "available": true}));
         let search = sent["operations"].as_array().expect("a list").iter().find(|o| o["name"] == "search").cloned();
@@ -198,6 +199,7 @@ mod finding_unknown_fields {
     #[case::queue_list(json!({"command": "queue", "args": {"action": "list"}}))]
     #[case::todo_add(json!({"command": "todo", "args": {"add": "write the docs"}}))]
     #[case::todo_list(json!({"command": "todo", "args": "list"}))]
+    #[case::app(json!({"command": "app", "args": {}}))]
     #[case::update_check(json!({"command": "update-check", "args": {}}))]
     #[case::update_install(json!({"command": "update-install", "args": {}}))]
     #[case::todo_edit(json!({"command": "todo", "args": {"edit": {"id": 3, "text": "again"}}}))]

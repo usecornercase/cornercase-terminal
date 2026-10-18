@@ -11,6 +11,10 @@ use crate::control::{self, PaneRow, PaneRows, ProjectInfo, Report};
 use crate::error::{Error, Result};
 
 pub(super) fn run_status(status: &StatusArgs) -> Result<()> {
+    if status.app {
+        let command = control::Command::App(control::AppWatch {});
+        return if status.follow { super::stream_json("app", command) } else { print_json(&ask("app", command)?) };
+    }
     if status.follow {
         return follow();
     }

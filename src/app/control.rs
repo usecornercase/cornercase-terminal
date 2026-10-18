@@ -403,7 +403,10 @@ impl App {
             })),
             Command::Stats(_) => Ok(Some(json(&self.stats_view(SystemTime::now())))),
             Command::Contract(_) => Ok(Some(json(&contract::descriptor(self.unavailable())))),
-            Command::UpdateCheck(_) => self.update_check_request(client, now),
+            Command::UpdateCheck(_) => {
+                self.update_check_request(client, now);
+                Ok(None)
+            }
             Command::UpdateInstall(_) => self.update_install_request(client),
             Command::Theme(theme) => self.theme_request(&theme),
             Command::Go(go) => self.go_request(asker, &go),
@@ -429,6 +432,7 @@ impl App {
             Command::Events(events) => self.events_request(client, events),
             Command::Surface(surface) => self.surface_request(client, asker.view, &surface, now),
             Command::Watch(_) => Ok(Some(json(&self.watch_snapshots(client, now)))),
+            Command::App(_) => Ok(Some(json(&self.app_snapshots(client, now)))),
             Command::Input(input) => self.input_request(&input),
             Command::Scroll(scroll) => self.scroll_request(&scroll),
             Command::Selection(selection) => self.selection_request(&selection),

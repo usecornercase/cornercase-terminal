@@ -24,7 +24,9 @@ mod watch;
 
 pub(crate) use todo::{Todo, TodoSend};
 
-pub(crate) use app_state::{InstallInfo, NoUpdate, Notes, ReleaseInfo, UpdateCheck, UpdateInfo, UpdateInstall};
+pub(crate) use app_state::{
+    AppState, AppWatch, AwayInfo, InstallInfo, NoUpdate, Notes, ReleaseInfo, UpdateCheck, UpdateInfo, UpdateInstall,
+};
 pub(crate) use arrange::{Fold, GroupDelete, GroupNew, GroupStyle, Move, MovePane, RemovalCheck};
 pub(crate) use config::{ConfigInfo, Configure};
 pub(crate) use contract::Contract;
@@ -146,6 +148,7 @@ pub(crate) enum Command {
     IssuePeople(IssuePeople),
     UpdateCheck(UpdateCheck),
     UpdateInstall(UpdateInstall),
+    App(AppWatch),
 }
 
 impl Command {
@@ -211,6 +214,7 @@ impl Command {
             Self::IssuePeople(_) => 57,
             Self::UpdateCheck(_) => 58,
             Self::UpdateInstall(_) => 59,
+            Self::App(_) => 60,
         }]
     }
 
@@ -219,8 +223,14 @@ impl Command {
         let mut fields = Fields::default();
         match self {
             Self::Queue(_) => drop(fields.add("queue", true)),
-            Self::Status(_) | Self::Stats(_) | Self::Contract(_) | Self::Watch(_) | Self::Go(_) => {}
-            Self::UpdateCheck(_) | Self::UpdateInstall(_) => {}
+            Self::Status(_)
+            | Self::Stats(_)
+            | Self::Contract(_)
+            | Self::Watch(_)
+            | Self::Go(_)
+            | Self::UpdateCheck(_)
+            | Self::UpdateInstall(_)
+            | Self::App(_) => {}
             Self::Open(open) => {
                 fields.add("path", open.path.display()).add("focus", open.focus);
             }
@@ -335,7 +345,7 @@ impl Command {
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 60] = [
+    pub(crate) const NAMES: [&str; 61] = [
         "status",
         "open",
         "new-workspace",
@@ -396,6 +406,7 @@ impl Command {
         "issue-people",
         "update-check",
         "update-install",
+        "app",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

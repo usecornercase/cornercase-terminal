@@ -498,6 +498,7 @@ mod driving;
 mod events;
 mod flow_sharing;
 mod flows;
+mod following_the_app;
 mod gemini;
 mod grok;
 mod groups;

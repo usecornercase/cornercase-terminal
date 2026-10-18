@@ -266,7 +266,9 @@ impl App {
             self.publish(logged);
         }
         self.settle_views();
-        self.publish_snapshot(Instant::now());
+        let now = Instant::now();
+        self.publish_snapshot(now);
+        self.publish_app(now);
     }
 
     pub(super) fn publish(&mut self, logged: bool) {

@@ -4,11 +4,10 @@ use super::{App, Done, Handled, Pending, Stage, json};
 use crate::control::contract::{Code, Refusal};
 
 impl App {
-    pub(super) fn update_check_request(&mut self, client: u64, now: Instant) -> Handled {
+    pub(super) fn update_check_request(&mut self, client: u64, now: Instant) {
         let key = self.waiting(client);
         self.update.checks.push(key);
         self.start_update_check(now);
-        Ok(None)
     }
 
     pub(super) fn update_install_request(&mut self, client: u64) -> Handled {

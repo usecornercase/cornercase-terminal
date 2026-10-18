@@ -2,6 +2,33 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use super::{KeepAwake, TodoItem};
+use crate::queue::Entry;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct AppWatch {}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct AppState {
+    pub(crate) version: String,
+    pub(crate) boot: String,
+    pub(crate) todos: Vec<TodoItem>,
+    pub(crate) queue: Vec<Entry>,
+    pub(crate) away: Vec<AwayInfo>,
+    pub(crate) update: UpdateInfo,
+    pub(crate) keep_awake: Option<KeepAwake>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct AwayInfo {
+    pub(crate) platform: String,
+    pub(crate) ready: bool,
+    pub(crate) away: bool,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct UpdateCheck {}
@@ -60,3 +87,6 @@ impl Default for InstallInfo {
         Self::Command { command: String::new() }
     }
 }
+
+#[cfg(test)]
+mod tests;

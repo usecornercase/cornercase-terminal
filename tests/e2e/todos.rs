@@ -1,3 +1,4 @@
+use super::commands::Followed;
 use super::*;
 
 #[test]
@@ -25,4 +26,28 @@ fn the_todo_list_is_edited_reordered_removed_and_restored_by_commands() {
     assert_eq!(after_rm, format!("{c} [ ] third one\n{a} [ ] first"));
     assert_eq!(kept, format!("{b} [ ] second\n{c} [ ] third one"));
     assert_eq!(restored, format!("{b} [ ] second\n{c} [ ] third one\n{a} [x] first"));
+}
+
+#[test]
+fn the_app_state_is_printed_and_followed() {
+    let app = Harness::start();
+    let first = app.session.says(&["todo", "add", "first"]);
+
+    let printed: serde_json::Value =
+        serde_json::from_str(&app.session.says(&["status", "--app"])).expect("one JSON document");
+    let mut following = app.session.spawn(&["status", "--app", "--follow"]);
+    let mut followed = Followed::of(&mut following);
+    followed.until("the first line", |line| line["todos"][0]["text"] == "first");
+    let revision = followed.seen[0]["revision"].as_u64().expect("a revision");
+    let second = app.session.says(&["todo", "add", "second"]);
+    followed.until("the next line", |line| line["todos"].as_array().is_some_and(|todos| todos.len() == 2));
+
+    assert_eq!(printed["todos"][0]["id"].to_string(), first);
+    assert_eq!(printed["boot"], followed.seen[0]["boot"]);
+    assert_eq!(followed.seen[0]["away"].as_array().map(Vec::len), Some(2));
+    assert!(followed.seen.last().expect("a line")["revision"].as_u64() > Some(revision));
+    assert_eq!(followed.seen.last().expect("a line")["todos"][1]["id"].to_string(), second);
+    app.session.says(&["kill-server"]);
+    let status = following.wait().expect("the command ends");
+    assert!(status.success(), "{status:?}");
 }
