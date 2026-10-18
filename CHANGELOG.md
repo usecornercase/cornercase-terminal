@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.147
+
+- **A flow's end lights up once its pull request exists, and shows its checks.** In the Flow panel, `◆ open a pull request` used to turn purple only while the orchestrator rested with its review mark, so it went grey again as soon as the orchestrator kept working, asked you something or got one more change to make, even with the pull request open. Now it turns purple as soon as the run's branch has a pull request (open, a draft or merged), and once the orchestrator has marked its pane for review the run remembers it, also after a restart. A flow that leaves the commits lights from that mark.
+  - Next to it, the pull request's number coloured by its checks, as on the workspace's row (`#485✓`, `#485•`, `#485✗`, `#486!` for merge conflicts). Click it to open the pull request dialog, where **ask agent** sends the failed checks to an agent.
+  - Scripts see it as `run` in each workspace of `status --json`, `status --follow` and `view`: the flow's `end` and whether it was `reached`.
+
 ## 0.12.146
 
 - **Scripts and other apps can read your plan limits.** `cornercase usage` prints what the Usage dialog's Limits tab shows: for Claude Code and Codex, how much of each limit you have used and when it resets, extra usage or credits, and how old the numbers are. Like the tab, it asks the agents on the server's machine, which sends no prompt and costs no tokens, and waits for a probe already on its way rather than asking twice; `--cached` prints the last answer without asking. Nothing is asked between requests.
