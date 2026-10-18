@@ -4,7 +4,8 @@ use clap::{CommandFactory, Parser};
 use rstest::rstest;
 
 use super::args::issue::IssueAction;
-use super::args::{KillServerArgs, RestartArgs, StartServerArgs, TodoAction, UpdateArgs};
+use super::args::todo::TodoAction;
+use super::args::{KillServerArgs, RestartArgs, StartServerArgs, UpdateArgs};
 use super::status::cell;
 use super::*;
 use crate::control::{GroupInfo, Ids, PaneInfo, PaneRows, ProjectInfo, PullRequestInfo, TabInfo, WorkspaceInfo};
