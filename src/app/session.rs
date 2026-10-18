@@ -168,9 +168,9 @@ impl App {
     pub(super) fn press_held_notice(&mut self, area: Rect, pos: Position) -> bool {
         let Some(tab) = self.tab() else { return false };
         let pressed = tab.shown(area).into_iter().find_map(|(id, rect)| {
-            let label = self.held_label(id).filter(|_| !self.resume_holds(id))?;
-            let (_, send, discard) = ui::held_notice(rect, &label)?;
-            match (send.contains(pos), discard.contains(pos)) {
+            self.held_label(id).filter(|_| !self.resume_holds(id))?;
+            let bar = ui::held_notice(rect, tab.pane_by(id)?.emulator.below())?;
+            match (bar.send.contains(pos), bar.hide.is_some_and(|hide| hide.contains(pos))) {
                 (true, _) => Some((id, true)),
                 (_, true) => Some((id, false)),
                 _ => None,
@@ -178,7 +178,7 @@ impl App {
         });
         match pressed {
             Some((pane, true)) => self.send_held_now(pane),
-            Some((pane, false)) => self.discard_held(pane),
+            Some((pane, false)) => self.hide_held(pane),
             None => return false,
         }
         true

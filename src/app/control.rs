@@ -70,6 +70,7 @@ pub(super) struct Requests {
     answers: Vec<(u64, String)>,
     launched: Vec<(u64, bool)>,
     todo_sends: HashMap<u64, Sending>,
+    hidden: HashMap<u64, u64>,
     next: u64,
 }
 

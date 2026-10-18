@@ -122,63 +122,74 @@ pub(crate) fn scrollback_badge(pane: Rect, below: usize) -> Option<Rect> {
 
 const RESUME_CANCEL: &str = " cancel ";
 const HELD_SEND: &str = " send now ";
-const HELD_DISCARD: &str = " discard ";
-const HELD_MIN: usize = 8;
+const HELD_HIDE: &str = " hide ";
+const HELD_TEXT_MIN: u16 = 6;
 
 fn resume_label(agent: &str) -> String {
     format!(" resuming {agent}… ")
 }
 
-fn band(pane: Rect, parts: &[&str]) -> Option<Vec<Rect>> {
-    let widths: Vec<u16> = parts.iter().map(|p| u16::try_from(p.chars().count()).unwrap_or(u16::MAX)).collect();
-    let width = widths.iter().fold(0u16, |sum, w| sum.saturating_add(*w).saturating_add(1)).saturating_sub(1);
+pub(crate) fn resume_notice(pane: Rect, agent: &str) -> Option<(Rect, Rect)> {
+    let label = u16::try_from(resume_label(agent).chars().count()).unwrap_or(u16::MAX);
+    let button = u16::try_from(RESUME_CANCEL.chars().count()).unwrap_or(u16::MAX);
+    let width = label.saturating_add(button).saturating_add(1);
     if pane.height == 0 || width > pane.width {
         return None;
     }
-    let (mut x, y) = (pane.x + (pane.width - width) / 2, pane.y + pane.height / 2);
-    let rects = widths.into_iter().map(|w| {
-        let r = Rect::new(x, y, w, 1);
-        x = x.saturating_add(w).saturating_add(1);
-        r
-    });
-    Some(rects.collect())
+    let (x, y) = (pane.x + (pane.width - width) / 2, pane.y + pane.height / 2);
+    Some((Rect::new(x, y, label, 1), Rect::new(x + label + 1, y, button, 1)))
 }
 
-pub(crate) fn resume_notice(pane: Rect, agent: &str) -> Option<(Rect, Rect)> {
-    let rects = band(pane, &[&resume_label(agent), RESUME_CANCEL])?;
-    Some((rects[0], rects[1]))
+pub(crate) struct HeldBar {
+    pub(crate) text: Rect,
+    pub(crate) send: Rect,
+    pub(crate) hide: Option<Rect>,
 }
 
-fn held_text(pane: Rect, label: &str) -> Option<String> {
-    let buttons = HELD_SEND.chars().count() + HELD_DISCARD.chars().count() + 4;
-    let room = usize::from(pane.width).saturating_sub(buttons);
-    (room >= HELD_MIN).then(|| format!(" {} ", truncate_right(label, room)))
+fn width_of(text: &str) -> u16 {
+    u16::try_from(text.chars().count()).unwrap_or(u16::MAX)
 }
 
-pub(crate) fn held_notice(pane: Rect, label: &str) -> Option<(Rect, Rect, Rect)> {
-    let rects = band(pane, &[&held_text(pane, label)?, HELD_SEND, HELD_DISCARD])?;
-    Some((rects[0], rects[1], rects[2]))
-}
-
-fn draw_band(f: &mut Frame, view: &View, pane: Rect, (label, text): (Rect, String), buttons: &[(Rect, &str, bool)]) {
-    let band = Rect { y: label.y, height: 1, ..pane };
-    f.buffer_mut().set_style(band, Style::default().bg(view.surface()));
-    let bold = Style::default().bg(view.surface()).add_modifier(Modifier::BOLD);
-    f.render_widget(Paragraph::new(Span::styled(text, bold)), label);
-    for &(button, name, primary) in buttons {
-        let style = dialog_button_style(view, button, primary);
-        f.render_widget(Paragraph::new(Span::styled(name, style)), button);
+pub(crate) fn held_notice(pane: Rect, below: usize) -> Option<HeldBar> {
+    let room = match scrollback_badge(pane, below) {
+        Some(badge) => badge.x.saturating_sub(pane.x).saturating_sub(1),
+        None => pane.width,
+    };
+    let (send_w, hide_w) = (width_of(HELD_SEND), width_of(HELD_HIDE));
+    if pane.height == 0 || room < send_w {
+        return None;
     }
+    let y = pane.bottom() - 1;
+    let hide = (room >= send_w + 1 + hide_w).then(|| Rect::new(pane.x + room - hide_w, y, hide_w, 1));
+    let send_x = hide.map_or(pane.x + room - send_w, |hide| hide.x - 1 - send_w);
+    let space = send_x.saturating_sub(pane.x).saturating_sub(1);
+    let text = Rect::new(pane.x, y, if space >= HELD_TEXT_MIN { space } else { 0 }, 1);
+    Some(HeldBar { text, send: Rect::new(send_x, y, send_w, 1), hide })
 }
 
 fn draw_resume_notice(f: &mut Frame, view: &View, pane: Rect, agent: &str) {
     let Some((label, button)) = resume_notice(pane, agent) else { return };
-    draw_band(f, view, pane, (label, resume_label(agent)), &[(button, RESUME_CANCEL, false)]);
+    let band = Rect { y: label.y, height: 1, ..pane };
+    f.buffer_mut().set_style(band, Style::default().bg(view.surface()));
+    let text = Style::default().bg(view.surface()).add_modifier(Modifier::BOLD);
+    f.render_widget(Paragraph::new(Span::styled(resume_label(agent), text)), label);
+    let style = dialog_button_style(view, button, false);
+    f.render_widget(Paragraph::new(Span::styled(RESUME_CANCEL, style)), button);
 }
 
-fn draw_held_notice(f: &mut Frame, view: &View, pane: Rect, text: &str) {
-    let (Some((label, send, discard)), Some(text)) = (held_notice(pane, text), held_text(pane, text)) else { return };
-    draw_band(f, view, pane, (label, text), &[(send, HELD_SEND, true), (discard, HELD_DISCARD, false)]);
+fn draw_held_notice(f: &mut Frame, view: &View, pane: Rect, below: usize, label: &str) {
+    let Some(bar) = held_notice(pane, below) else { return };
+    let end = bar.hide.unwrap_or(bar.send).right();
+    let row = Rect::new(pane.x, bar.send.y, end - pane.x, 1);
+    f.buffer_mut().set_style(row, Style::default().bg(view.surface()));
+    let room = usize::from(bar.text.width.saturating_sub(2));
+    let text = format!(" {}", truncate_right(label, room));
+    f.render_widget(Paragraph::new(Span::styled(text, Style::default().fg(view.muted).bg(view.surface()))), bar.text);
+    let send = dialog_button_style(view, bar.send, true);
+    f.render_widget(Paragraph::new(Span::styled(HELD_SEND, send)), bar.send);
+    if let Some(hide) = bar.hide {
+        f.render_widget(Paragraph::new(Span::styled(HELD_HIDE, dialog_button_style(view, hide, false))), hide);
+    }
 }
 
 fn draw_scrollback_badge(f: &mut Frame, view: &View, pane: Rect, below: usize) {
@@ -206,7 +217,7 @@ pub(super) fn draw_tab(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
         draw_scrollback_badge(f, view, pane, screen.below);
         match tab.bands.get(i) {
             Some(Some(PaneBand::Resuming(agent))) => draw_resume_notice(f, view, pane, agent),
-            Some(Some(PaneBand::Held(label))) => draw_held_notice(f, view, pane, label),
+            Some(Some(PaneBand::Held(label))) => draw_held_notice(f, view, pane, screen.below, label),
             _ => {}
         }
     }

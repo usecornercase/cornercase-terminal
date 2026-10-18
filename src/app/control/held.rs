@@ -51,15 +51,12 @@ pub(super) fn waiting(pane: u64, why: Option<Why>) -> String {
 
 pub(crate) fn label(count: usize, from: Option<u64>) -> String {
     let from = from.map(|pane| format!(" from pane {pane}")).unwrap_or_default();
-    match count {
+    let waiting = match count {
         1 => format!("1 message waiting{from}"),
         n if from.is_empty() => format!("{n} messages waiting"),
         n => format!("{n} messages waiting, the first{from}"),
-    }
-}
-
-fn discarded(pane: u64) -> String {
-    format!("the person in pane {pane} discarded this message before it was sent; it never reached the pane")
+    };
+    format!("{waiting} · goes after yours")
 }
 
 impl App {
@@ -73,7 +70,23 @@ impl App {
 
     pub(in crate::app) fn held_label(&self, pane: u64) -> Option<String> {
         let first = self.held(pane).next()?;
+        let newest = self.held_keys(pane).max()?;
+        if self.requests.hidden.get(&pane).is_some_and(|hidden| *hidden >= newest) {
+            return None;
+        }
         Some(label(self.held_sends(pane), first.from))
+    }
+
+    fn held_keys(&self, pane: u64) -> impl Iterator<Item = u64> {
+        let held = self.requests.pending.iter().filter(move |p| p.done.ids.pane == Some(pane));
+        held.filter(|p| matches!(p.stage, Stage::Held(_))).map(|p| p.key)
+    }
+
+    pub(in crate::app) fn hide_held(&mut self, pane: u64) {
+        if let Some(newest) = self.held_keys(pane).max() {
+            log::info!("control", "held sends hidden", pane = pane);
+            self.requests.hidden.insert(pane, newest);
+        }
     }
 
     pub(in crate::app) fn held_labels(&self) -> HashMap<u64, String> {
@@ -127,6 +140,14 @@ impl App {
     }
 
     pub(super) fn release_held(&mut self, now: Instant) {
+        let held: HashSet<u64> = self
+            .requests
+            .pending
+            .iter()
+            .filter(|p| matches!(p.stage, Stage::Held(_)))
+            .filter_map(|p| p.done.ids.pane)
+            .collect();
+        self.requests.hidden.retain(|pane, _| held.contains(pane));
         let mut seen = HashSet::new();
         let mut i = 0;
         while let Some(pending) = self.requests.pending.get(i) {
@@ -183,18 +204,6 @@ impl App {
             held.force = true;
             self.release_held(Instant::now());
         }
-    }
-
-    pub(in crate::app) fn discard_held(&mut self, pane: u64) {
-        let found = self
-            .requests
-            .pending
-            .iter()
-            .position(|p| p.done.ids.pane == Some(pane) && matches!(p.stage, Stage::Held(_)));
-        let Some(i) = found else { return };
-        let pending = self.requests.pending.remove(i);
-        log::info!("control", "send discarded", pane = pane);
-        self.answer(pending.client, Err(discarded(pane)));
     }
 
     pub(super) fn held_due(&self, pane: u64) -> Vec<Instant> {

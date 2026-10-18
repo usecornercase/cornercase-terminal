@@ -5,7 +5,7 @@ Every pull request that changes the app adds a section here for its new version.
 ## 0.12.150
 
 - **A message sent to an agent waits while you are typing to it.** When another agent or a script ran `cornercase send --enter` into the pane you were typing in, its text joined your half-written prompt and both went out as one, broken. Now `send` (and `todo send`) waits until you are done: while you have text in the input you have not sent, while you typed in the last 2 seconds, or while an earlier message to that pane has not gone out. Your prompt goes first and the message follows right after. It works for every agent cornercase runs and for plain shells.
-  - The pane shows `1 message waiting from pane 40` with **send now** and **discard**. Discarding tells the sender its message never arrived.
+  - A bar on the pane's bottom row says `1 message waiting from pane 40 · goes after yours`, with **send now** to send it at once and **hide** to hide the bar (the message still goes out after your prompt; a new one shows the bar again).
   - A draft ends with Enter, Esc, Ctrl+C or Ctrl+U, when the program in the pane changes, or after a minute without typing; in Claude Code also as soon as its input box is empty again (its grey suggestion does not count).
   - While a message sits between its paste and its Enter, keys typed into that pane are dropped with a toast, so nothing lands in the middle.
   - `send --timeout` bounds the wait and says what held it; `--force` sends at once; `keys` never waits. Scripts see `held_sends` and `draft` for each pane in `status --json`, `status --panes`, `status --follow` and views.

@@ -29,25 +29,32 @@ fn a_pane_that_is_not_resuming_has_no_notice() {
 }
 
 #[test]
-fn a_pane_with_a_held_message_shows_the_band_with_its_two_buttons() {
+fn a_held_message_is_a_bar_on_the_panes_last_row_with_its_buttons_at_the_right() {
     let pane = areas().pane;
-    let label = "1 message waiting";
+    let label = "1 message waiting · goes after yours";
     let tab = TabView { bands: vec![Some(PaneBand::Held(label.into()))], ..single(screen(b"$ ")) };
-    let (text, send, discard) = held_notice(pane, label).expect("the band fits");
+    let bar = held_notice(pane, 0).expect("the bar fits");
+    let hide = bar.hide.expect("a hide button");
     let t = render(&View { tab: Some(tab), ..view(&["~"]) });
 
-    assert_eq!(text.y, pane.y + pane.height / 2);
-    assert_eq!(
-        (row_text(&t, text), row_text(&t, send), row_text(&t, discard)),
-        (format!(" {label} "), " send now ".into(), " discard ".into())
-    );
-    assert_eq!((send.x, discard.x), (text.right() + 1, send.right() + 1));
+    assert_eq!((bar.text.y, bar.text.x, hide.right()), (pane.bottom() - 1, pane.x, pane.right()));
+    assert_eq!((row_text(&t, bar.send), row_text(&t, hide)), (" send now ".into(), " hide ".into()));
+    assert!(row_text(&t, bar.text).starts_with(" 1 message waiting"), "{}", row_text(&t, bar.text));
 }
 
 #[test]
-fn a_narrow_pane_cuts_the_bands_text_and_keeps_its_buttons() {
-    let pane = Rect::new(0, 0, 40, 5);
-    let (label, send, discard) = held_notice(pane, "1 message waiting from pane 40").expect("the band fits");
-    assert_eq!((label.width, send.width, discard.width, discard.right()), (19, 10, 9, 40));
-    assert_eq!(held_notice(Rect::new(0, 0, 28, 5), "1 message waiting"), None);
+fn the_bar_leaves_the_scrollback_badge_its_cells() {
+    let pane = Rect::new(0, 0, 60, 10);
+    let badge = scrollback_badge(pane, 12).expect("a badge");
+    let bar = held_notice(pane, 12).expect("the bar fits");
+    assert_eq!(bar.hide.expect("a hide button").right() + 1, badge.x);
+}
+
+#[test]
+fn a_narrow_pane_drops_the_text_then_hide_and_keeps_send_now() {
+    let bar = |width| held_notice(Rect::new(0, 0, width, 5), 0).expect("the bar fits");
+    assert_eq!((bar(40).text.width, bar(40).send.width), (22, 10));
+    assert_eq!((bar(20).text.width, bar(20).hide.is_some()), (0, true));
+    assert_eq!((bar(12).hide, bar(12).send.x), (None, 2));
+    assert!(held_notice(Rect::new(0, 0, 9, 5), 0).is_none());
 }

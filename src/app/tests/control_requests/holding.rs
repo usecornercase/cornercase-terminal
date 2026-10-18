@@ -30,11 +30,10 @@ fn claude_shown() -> (Agent, u64) {
     (agent, id)
 }
 
-fn notice(app: &App) -> (Rect, Rect) {
+fn notice(app: &App) -> (Position, Option<Position>) {
     let pane = app.tab().and_then(|t| t.shown(app.layout(AREA).pane).first().map(|(_, r)| *r)).expect("a pane");
-    let label = app.held_label(first(app)).expect("a held message");
-    let (_, send, discard) = ui::held_notice(pane, &label).expect("the band fits");
-    (send, discard)
+    let bar = ui::held_notice(pane, 0).expect("the bar fits");
+    (bar.send.as_position(), bar.hide.map(Rect::as_position))
 }
 
 fn screen_lines(app: &App, id: u64) -> Vec<String> {
@@ -89,7 +88,7 @@ fn held_sends_go_out_one_at_a_time_in_the_order_they_came() {
     ask(&mut app, None, send_text(id, "first-", false, false));
     ask(&mut app, None, send_text(id, "second", false, false));
     held_now(&mut app);
-    assert_eq!(app.held_label(id).as_deref(), Some("2 messages waiting"));
+    assert_eq!(app.held_label(id).as_deref(), Some("2 messages waiting · goes after yours"));
     send_key(&mut app, KeyCode::Char('u'), KeyModifiers::CONTROL);
 
     done(answered(&mut app, &rx, "the first goes out"));
@@ -159,27 +158,32 @@ fn send_now_in_the_band_sends_the_first_message_over_the_draft() {
     held_now(&mut app);
 
     let (send, _) = notice(&app);
-    click(&mut app, send.as_position());
+    click(&mut app, send);
 
     done(answers(&mut app).remove(0));
     pump_until(&mut app, &rx, "it reaches cat", |a| pane_screen(a, id).contains("minenow"));
 }
 
 #[test]
-fn discard_in_the_band_tells_the_sender_it_never_arrived() {
-    let (mut app, _rx, id) = drafting();
-    ask(&mut app, Some(id), send_text(id, "lost", true, false));
+fn hide_in_the_bar_hides_it_until_another_message_is_held_and_still_sends() {
+    let (mut app, rx, id) = drafting();
+    ask(&mut app, Some(id), send_text(id, "first-", false, false));
     held_now(&mut app);
-    assert_eq!(app.held_label(id).as_deref(), Some(format!("1 message waiting from pane {id}").as_str()));
+    let label = format!("1 message waiting from pane {id} · goes after yours");
+    assert_eq!(app.held_label(id).as_deref(), Some(label.as_str()));
 
-    let (_, discard) = notice(&app);
-    click(&mut app, discard.as_position());
+    let hide = notice(&app).1.expect("a hide button");
+    click(&mut app, hide);
+    assert_eq!((app.held_label(id), app.held_sends(id)), (None, 1));
 
-    let message = error(answers(&mut app).remove(0));
-    assert!(message.contains("discarded this message"), "{message}");
-    send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
-    app.refresh(Instant::now());
-    assert!(!pane_screen(&app, id).contains("lost"));
+    ask(&mut app, Some(id), send_text(id, "second", false, false));
+    held_now(&mut app);
+    assert!(app.held_label(id).is_some(), "a new message shows the bar again");
+
+    send_key(&mut app, KeyCode::Char('u'), KeyModifiers::CONTROL);
+    done(answered(&mut app, &rx, "the hidden message still goes out"));
+    done(answered(&mut app, &rx, "the second follows"));
+    pump_until(&mut app, &rx, "both reach cat", |a| pane_screen(a, id).contains("first-second"));
 }
 
 #[test]
