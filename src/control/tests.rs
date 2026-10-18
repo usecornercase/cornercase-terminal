@@ -807,3 +807,14 @@ fn todo_actions_read_by_name(#[case] text: &str, #[case] expected: Todo) {
     assert_eq!(todo, expected);
     assert_eq!(serde_json::from_str::<Todo>(&serde_json::to_string(&todo).expect("json")).expect("back"), expected);
 }
+
+#[test]
+fn a_workspace_says_whether_its_flow_run_reached_its_end() {
+    let run = RunStatus { end: "pull_request".into(), reached: true };
+    let with = WorkspaceInfo { run: Some(run), ..WorkspaceInfo::default() };
+
+    let sent = serde_json::to_value(&with).expect("json");
+
+    assert_eq!(sent["run"], json!({"end": "pull_request", "reached": true}));
+    assert!(serde_json::to_value(WorkspaceInfo::default()).expect("json").get("run").is_none());
+}

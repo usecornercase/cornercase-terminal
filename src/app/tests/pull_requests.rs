@@ -4,22 +4,22 @@ use crate::pull_request::State;
 use crate::state;
 use crate::test_util::{clone_of, fake_gh, fixture, git};
 
-const VIEW: &str = fixture!("gh/2.101.0/pr-view.json");
+pub(super) const VIEW: &str = fixture!("gh/2.101.0/pr-view.json");
 
 const CONFLICTING: &str = fixture!("gh/2.101.0/pr-view-conflicting.json");
 
 const URL: &str = "https://github.com/acme/web-shop/pull/482";
 
-struct Repo {
-    app: App,
-    rx: Receiver<AppEvent>,
-    tmp: TempDir,
+pub(super) struct Repo {
+    pub(super) app: App,
+    pub(super) rx: Receiver<AppEvent>,
+    pub(super) tmp: TempDir,
     _remote: TempDir,
     _clone: TempDir,
 }
 
 impl Repo {
-    fn worktree(&self) -> u64 {
+    pub(super) fn worktree(&self) -> u64 {
         self.app.projects[0].workspaces[1].id
     }
 
@@ -28,7 +28,7 @@ impl Repo {
         calls.lines().map(str::to_string).collect()
     }
 
-    fn ask(&mut self, what: &str) {
+    pub(super) fn ask(&mut self, what: &str) {
         self.app.ask_pull_requests(Instant::now());
         pump_until(&mut self.app, &self.rx, what, |a| a.pulls.asking.is_empty());
     }
@@ -52,7 +52,7 @@ fn printing() -> String {
     printing_json(VIEW)
 }
 
-fn repo_with(found: &str, configure: impl FnOnce(&mut Config)) -> Repo {
+pub(super) fn repo_with(found: &str, configure: impl FnOnce(&mut Config)) -> Repo {
     let remote = git_repo(&[("README", "hi")]);
     let (clone_dir, clone) = clone_of(remote.path());
     let tmp = TempDir::new();

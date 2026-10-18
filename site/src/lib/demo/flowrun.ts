@@ -21,6 +21,7 @@ export interface Run {
   progress: Progress;
   messages: Message[];
   files: RunFile[];
+  ended: boolean;
 }
 
 export interface RunFile {
@@ -74,7 +75,7 @@ function agentOf(app: App, run: Run, role: string): Agent | null {
 
 export function startRun(app: App, p: Project): Run {
   const w = app.addWorkspace(p, RUN_BRANCH, true);
-  const run: Run = { workspace: w.id, flow: FULL_ISSUE, task: RUN_TASK, members: [], progress: new Progress(), messages: [], files: [] };
+  const run: Run = { workspace: w.id, flow: FULL_ISSUE, task: RUN_TASK, members: [], progress: new Progress(), messages: [], files: [], ended: false };
   for (const role of [FULL_ISSUE.orchestrator, ...FULL_ISSUE.roles]) {
     const pane = app.newPane(p, w);
     if (run.members.length) pane.parent = run.members[0].pane;
@@ -145,6 +146,7 @@ function play(app: App, run: Run): void {
         () => {
           if (own) markPane(own, false);
           run.progress = new Progress();
+          run.ended = false;
           run.messages = [];
           run.files = [];
           begin();

@@ -591,4 +591,21 @@ mod mapping {
         assert_eq!(serde_json::from_str::<WorkspaceState>(&text).expect("read back"), saved);
         assert_eq!(WorkspaceState::of(&workspace, None, &HashSet::new()).run, None);
     }
+
+    #[test]
+    fn a_run_keeps_its_latched_end_in_the_session() {
+        use crate::flows::run::Run;
+
+        let workspace = Workspace::new(2, "/p/w".into(), None, true);
+        let flow = crate::flows::builtin::flows(&[crate::agents::Known::Claude], None).remove(0);
+        let mut run = Run::new(2, flow, "fix it".into());
+        let plain = serde_json::to_string(&WorkspaceState::of(&workspace, Some(&run), &HashSet::new())).expect("json");
+        assert!(!plain.contains("\"ended\""));
+
+        run.ended = Some("fix-login".into());
+        let saved = WorkspaceState::of(&workspace, Some(&run), &HashSet::new());
+        assert_eq!(saved.run.as_ref().and_then(|run| run.ended.as_deref()), Some("fix-login"));
+        let text = serde_json::to_string(&saved).expect("json");
+        assert_eq!(serde_json::from_str::<WorkspaceState>(&text).expect("read back"), saved);
+    }
 }

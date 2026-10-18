@@ -116,6 +116,8 @@ pub(crate) struct RunState {
     pub(crate) rounds: Vec<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) dir: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) ended: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,6 +148,7 @@ impl RunState {
             stage: run.progress.active,
             rounds: run.progress.all_rounds().to_vec(),
             dir: run.dir.as_deref().and_then(folder_name),
+            ended: run.ended.clone(),
         }
     }
 

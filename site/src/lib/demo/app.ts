@@ -10,7 +10,7 @@ import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from '
 import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, workspaceDiff } from './changes';
 import { TodoPanel, todoWidth } from './todo';
 import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
-import { RUN_DIR, type Run } from './flowrun';
+import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
 import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, fileMax, foundRows, lineEdge, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
@@ -1400,7 +1400,9 @@ export class App {
       if (!found) return id === undefined ? 'none' : 'closed';
       return paneStatus(found.pane) ?? 'none';
     };
-    const diagram = live(plan(run.flow), run.progress, state, this.now());
+    const own = run.members.find((m) => m.role === ORCHESTRATOR)?.pane;
+    if (own !== undefined && this.findPane(own)?.pane.pending) run.ended = true;
+    const diagram = live(plan(run.flow), run.progress, state, run.ended, this.now());
     const files = run.files.map((f) => ({ name: f.name, age: fileAge(this.now() - f.at) })).reverse();
     return { name: run.flow.name, task: run.task, diagram, files, scroll: this.flowScroll };
   }
@@ -2042,7 +2044,10 @@ export class App {
   private mark(a: Extract<MenuAction, { kind: 'mark' }>): void {
     for (const id of a.panes) {
       const found = this.findPane(id);
-      if (found) markPane(found.pane, a.pending);
+      if (!found) continue;
+      markPane(found.pane, a.pending);
+      if (!a.pending) continue;
+      for (const run of this.runs) if (run.members.some((m) => m.role === ORCHESTRATOR && m.pane === id)) run.ended = true;
     }
   }
 

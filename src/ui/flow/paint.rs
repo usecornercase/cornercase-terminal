@@ -1,9 +1,10 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::Span;
 
 use super::geometry::{At, Cell, E, Geometry, N, Place, Placed, S, W};
-use super::{Diagram, Hit, Node, State};
+use super::{Diagram, Hit, Node, State, TAG_GAP};
 use crate::agents::activity::Status;
 use crate::flows::progress::Edge;
 use crate::text;
@@ -89,6 +90,10 @@ fn arrow_cells(g: &Geometry, (edge, branch): Arrow) -> Option<Vec<At>> {
     Some(trunk.chain(gap.entries.get(j).into_iter().flatten()).copied().collect())
 }
 
+fn tag_cells(d: &Diagram, g: &Geometry) -> Option<(At, Span<'static>)> {
+    Some((g.end_tag?, d.tag()?))
+}
+
 fn text_width(text: &str) -> u16 {
     u16::try_from(text::cells(text)).unwrap_or(u16::MAX)
 }
@@ -102,6 +107,12 @@ pub(super) fn hit(area: Rect, d: &Diagram, g: &Geometry, scroll: u16, pos: Posit
     let inside = |b: &&Placed| b.rect.contains(Position::new(at.0, at.1));
     if let Some(node) = g.boxes.iter().find(inside).and_then(|b| d.node(b.place)) {
         return Some(Hit::Role(node.role.clone()));
+    }
+    if let Some(((x, y), tag)) = tag_cells(d, g)
+        && at.1 == y
+        && (x..x.saturating_add(text_width(&tag.content))).contains(&at.0)
+    {
+        return Some(Hit::Pull);
     }
     let (edge, branch) = hovered_edge(d, g, Some(at))?;
     Some(Hit::Edge(edge, branch.and_then(|j| d.branch_role(edge, j)).map(str::to_string)))
@@ -142,18 +153,7 @@ pub(super) fn paint(buf: &mut Buffer, area: Rect, d: &Diagram, g: &Geometry, scr
             draw_box(&mut frame, d, node, placed, lit);
         }
     }
-    if let Some(end) = g.end {
-        let ended = d.live.as_ref().is_some_and(|live| live.ended);
-        let (mark, words) = if ended {
-            (Style::default().fg(BRAND_COLOR).add_modifier(Modifier::BOLD), Style::default())
-        } else {
-            (Style::default().fg(d.muted), Style::default().fg(d.muted))
-        };
-        frame.put(end, "◆", mark);
-        let at = g.below.unwrap_or((end.0 + 2, end.1));
-        let room = usize::from(area.width.saturating_sub(at.0));
-        frame.put(at, &text::truncate_cells(d.end, room), words);
-    }
+    draw_end(&mut frame, d, g, at);
     if let Some(lit) = lit
         && let Some(done) = lit.dot
     {
@@ -170,6 +170,26 @@ pub(super) fn paint(buf: &mut Buffer, area: Rect, d: &Diagram, g: &Geometry, scr
             frame.put(spot, "●", Style::default().fg(lit.colour).add_modifier(Modifier::BOLD));
         }
     }
+}
+
+fn draw_end(frame: &mut Canvas, d: &Diagram, g: &Geometry, hover: Option<At>) {
+    let Some(end) = g.end else { return };
+    let reached = d.live.as_ref().is_some_and(|live| live.end.reached);
+    let (mark, words) = if reached {
+        (Style::default().fg(BRAND_COLOR).add_modifier(Modifier::BOLD), Style::default())
+    } else {
+        (Style::default().fg(d.muted), Style::default().fg(d.muted))
+    };
+    frame.put(end, "◆", mark);
+    let at = g.below.unwrap_or((end.0 + 2, end.1));
+    frame.put(at, &g.end_label, words);
+    let Some(((x, y), tag)) = tag_cells(d, g) else { return };
+    if !g.end_label.is_empty() {
+        frame.put((x.saturating_sub(text_width(TAG_GAP)), y), TAG_GAP, Style::default().fg(d.muted));
+    }
+    let under = hover.is_some_and(|(hx, hy)| hy == y && (x..x.saturating_add(text_width(&tag.content))).contains(&hx));
+    let style = if under { tag.style.add_modifier(Modifier::UNDERLINED) } else { tag.style };
+    frame.put((x, y), &tag.content, style);
 }
 
 struct Borders {

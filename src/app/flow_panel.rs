@@ -21,6 +21,7 @@ use crate::flows::run::{Kind, Message, Run};
 use crate::log::{Job, Level};
 use crate::project::search::Goto;
 use crate::project::{Hierarchy, Project};
+use crate::pull_request::PullRequest;
 use crate::time;
 use crate::todo::editor::wrap;
 use crate::ui::{self, flow};
@@ -138,7 +139,9 @@ impl App {
         let run = self.shown_run()?;
         let (muted, light) = (ui::muted(&self.theme), self.theme.is_light() == Some(true));
         let plan = flow::Diagram::plan(&run.flow, muted, light);
-        let mut diagram = plan.live(&run.progress, |role| self.role_state(run, role), now);
+        let pull = run.pull(self.pull_request(run.workspace));
+        let end = flow::Ending { reached: run.reached(pull), pull: pull.map(PullRequest::mark) };
+        let mut diagram = plan.live(&run.progress, |role| self.role_state(run, role), end, now);
         diagram.spin = spin;
         let files = self.flow.files.as_ref().filter(|(id, _)| *id == run.id).map(|(_, listing)| {
             let now = std::time::SystemTime::now();
@@ -232,6 +235,11 @@ impl App {
                 }
             }
             Some(flow::Hit::File(index)) => self.open_run_file(index),
+            Some(flow::Hit::Pull) => {
+                if let Some(workspace) = self.shown_run().map(|run| run.workspace) {
+                    self.open_pull_request(workspace);
+                }
+            }
             Some(flow::Hit::Edge(edge, to)) => {
                 let Some(workspace) = self.shown_run().map(|run| run.workspace) else { return };
                 self.overlay = Some(Overlay::FlowMessage { workspace, edge, to, scroll: 0 });

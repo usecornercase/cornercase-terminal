@@ -393,6 +393,46 @@ impl App {
         members.filter(|m| (m.role == flows::ORCHESTRATOR) == orchestrators).map(|m| m.pane).collect()
     }
 
+    pub(super) fn latch_run_ends(&mut self) {
+        let projects = &self.projects;
+        for run in &mut self.runs {
+            let marked = run
+                .pane_of(flows::ORCHESTRATOR)
+                .and_then(|pane| projects.pane_by(pane))
+                .is_some_and(|term| term.agent.pending());
+            let id = run.workspace;
+            let branch = || {
+                let (p, w) = projects.workspace_index(id)?;
+                git::checked_out(&projects[p].workspaces[w].path)
+            };
+            if run.latch(marked, branch) {
+                log::info!("flow", "end marked", workspace = id, branch = run.ended.as_deref().unwrap_or_default());
+            }
+        }
+    }
+
+    pub(super) fn forget_moved_run_ends(&mut self) {
+        for run in self.runs.iter_mut().filter(|run| run.ended.is_some()) {
+            let id = run.workspace;
+            let projects = &mut self.projects;
+            let branch =
+                projects.workspace_index(id).and_then(|(p, w)| git::checked_out(&projects[p].workspaces[w].path));
+            if let Some(ended) = run.moved_to(branch.as_deref()) {
+                let pane = run.pane_of(flows::ORCHESTRATOR);
+                if let Some(term) = pane.and_then(|pane| projects.pane_by_mut(pane)) {
+                    term.agent.mark(false);
+                }
+                log::info!(
+                    "flow",
+                    "end forgotten on another branch",
+                    workspace = id,
+                    ended = ended,
+                    branch = branch.unwrap_or_default()
+                );
+            }
+        }
+    }
+
     pub(super) fn forget_runs(&mut self) {
         let projects = &self.projects;
         let open = |id: u64| projects.workspace_index(id).is_some_and(|(p, w)| projects[p].workspaces[w].open());
@@ -429,6 +469,7 @@ impl App {
     ) {
         let mut run = Run::new(workspace, saved.flow.clone(), saved.task.clone());
         run.dir = dir.map(Path::to_path_buf);
+        run.ended.clone_from(&saved.ended);
         run.id = self.take_id();
         run.progress = Progress::resumed(&run.flow, saved.stage, &saved.rounds);
         for seat in &saved.members {
