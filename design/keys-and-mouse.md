@@ -1,0 +1,10 @@
+# Keys and mouse
+
+Code: `term/keys.rs`, `term/mouse.rs`, `app/input.rs`, `app/panes.rs`
+
+- The client owns its byte decoder (`client/input.rs`, `client/input/parse.rs`), adapted from crossterm 0.29's Unix parser under its MIT licence (`LICENSE-CROSSTERM`), and still sends crossterm `Event`s, plus `Activated` for a notification clicked. Crossterm's public input reader provides neither a raw-reply filter nor a parser reset: catching its panic alone can leave the offending bytes buffered, and a private CSI can buffer clicks forever. Owning the decoder makes filtering and recovery possible without vendoring the entire dependency or changing key encodings. Zero mouse and cursor coordinates are rejected with checked arithmetic in both debug and release. A decode panic is contained per sequence; its bytes are cleared before the next byte is decoded, including the rest of the same read. Bracketed paste bypasses the reply filter so pasted escape sequences stay text.
+- Special keys, and all keys once the program enabled kitty, go through Ghostty's encoder; a legacy encoder handles the rest. The client asks the outer terminal for kitty's disambiguate level, so `Ctrl+Enter` / `Shift+Enter` keep their modifiers.
+- **Keys from `input`** reuse these encoders (`term::keys::event` builds a key from the vocabulary of `keys`), and a release is encoded only when the program asked for event types; see Driving a tab's terminals.
+- Pane mouse events are forwarded only when the program enabled a mouse mode, in its encoding, relative to the pane, clamped to its edges.
+- **Paths**: a simple click on a path in the active pane opens it in the files panel, even in a program that reads the mouse (see Files panel); a drag that starts on one still reaches the program.
+- **Selection:** when the program did not ask for the mouse, press-drag-release selects with Ghostty's selection and copies via OSC 52, with a toast. Programs' own OSC 52 writes are forwarded to the outer terminal too (reads and primary-clipboard writes are dropped), and to readers of `events --host` as `clipboard` events (see Commands for scripts and agents).
