@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.161
+
+- **A guided tour for your first steps.** The first time you run cornercase, a card at the bottom right shows you around: projects, workspaces, tabs and panes, then your first prompt to an agent (an idea you can edit, and a button that starts the agent with it), the status icons, and the settings worth a look. It points at the part of the window it talks about, and a step that asks you to do something moves on as soon as you do it. Skip any step, or end the tour; it never takes the keys from your shell. If you already use cornercase, it does not pop up: a toast says it is in Help.
+- **Help, beside Quit.** The new ` Help ` button (in the icon bar too, and `h` in the keys menu) opens the tour again, a catalogue of short tours (issues to agents, reviewing changes, files, flows, TODO, the queue, search, your phone, Telegram and Discord, accounts, keys, scripts and plugins), and copies the link to the docs or to report a bug.
+- Settings › UI has **guided tour** (whether it shows by itself on a new install), **start the tour** and **reset tour progress**. `cornercase tour` opens it from a shell; `tour list --json` gives every step as data for other apps, and the app feed (`status --app`) carries where you are.
+
 ## 0.12.159
 
 - **Switch accounts from the window.** Settings has a new **Accounts** tab: add an account of Claude Code, Codex or Gemini CLI (it opens a tab to log in there), see whether each one, and the agent's own login, is logged in and as whom, and remove an account (it asks first, and reminds you to log out before). Once you have an account, a status bar at the bottom of the window shows a button per agent, such as ` claude: work ▾ `: click it and pick the account its new tabs use. Open tabs keep theirs, so a work agent and a personal one can run side by side.
