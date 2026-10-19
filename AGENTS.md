@@ -40,6 +40,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 - No `unwrap()` outside tests (`clippy::unwrap_used`); in tests prefer `expect("what")`.
 - Mutexes are `parking_lot::Mutex`.
 - Lints live in `Cargo.toml` (clippy `all` deny, `pedantic` warn). Silence one only locally with `#[expect(clippy::x, reason = "...")]`.
+- **Small functions**: `clippy.toml` limits a function to 40 lines, 5 arguments (`self` counts), two levels of nesting inside a method (`excessive-nesting-threshold = 4`) and a cognitive complexity of 10 (`cognitive_complexity`, turned on in `Cargo.toml`). Split the function; never silence these four (`design/code-layout.md`).
 - Imports in three groups: `std`, external crates, then `super`/`crate`.
 - `rustfmt.toml`: `max_width = 120`.
 - **Where code goes** (the reasons are in `design/code-layout.md`): by domain; `impl App` only in `app.rs` and under `src/app/`; only `app` and `server` use `crate::app`, and only `ui`, `app`, `server` and `client` use `crate::ui`; the tests of `foo.rs` in `foo/tests.rs`; at most 1,000 lines per file. `tests/layers.rs` checks the imports and the sizes, and its lists of exceptions only shrink.
