@@ -201,57 +201,13 @@ fn pump(
     let mut parser = Parser::default();
     let (mut heard, mut pinged) = (Instant::now(), Instant::now());
     loop {
-        match ws.read() {
-            Ok(Message::Binary(bytes)) => {
-                heard = Instant::now();
-                let mut sent = true;
-                parser.feed(&bytes, false, &mut |input| {
-                    sent = protocol::send(socket, &ClientMessage::from(input)).is_ok();
-                    sent
-                });
-                if !sent {
-                    return "server gone";
-                }
-            }
-            Ok(Message::Text(text)) => {
-                heard = Instant::now();
-                if let Ok(FromPage::Resize { cols, rows }) = serde_json::from_str(&text) {
-                    let (cols, rows) = size(cols, rows);
-                    let resize = Input::Resize(cols, rows);
-                    if protocol::send(socket, &ClientMessage::Event(resize)).is_err() {
-                        return "server gone";
-                    }
-                }
-            }
-            Ok(Message::Close(_)) => return "closed by the page",
-            Ok(_) => heard = Instant::now(),
-            Err(e) if waiting(&e) => {
-                let mut sent = true;
-                parser.idle(&mut |input| {
-                    sent = protocol::send(socket, &ClientMessage::from(input)).is_ok();
-                    sent
-                });
-                if !sent {
-                    return "server gone";
-                }
-            }
-            Err(_) => return "connection lost",
+        match from_page(ws, socket, &mut parser) {
+            Ok(true) => heard = Instant::now(),
+            Ok(false) => {}
+            Err(reason) => return reason,
         }
-        loop {
-            match from_server.try_recv() {
-                Ok(Some(ServerMessage::Frame(bytes))) => {
-                    if ws.write(Message::binary(bytes)).is_err() {
-                        return "connection lost";
-                    }
-                }
-                Ok(Some(ServerMessage::Response(_) | ServerMessage::Sound(_) | ServerMessage::Open(_))) => {}
-                Ok(Some(ServerMessage::Rejected(why))) => return finish(ws, "rejected", &why),
-                Ok(Some(ServerMessage::Detached)) => return finish(ws, "detached", ""),
-                Ok(Some(ServerMessage::Shutdown)) => return finish(ws, "shutdown", ""),
-                Ok(Some(ServerMessage::Restart(_))) => return finish(ws, "restart", ""),
-                Ok(None) | Err(TryRecvError::Disconnected) => return finish(ws, "gone", ""),
-                Err(TryRecvError::Empty) => break,
-            }
+        if let Some(reason) = to_page(ws, from_server) {
+            return reason;
         }
         if pinged.elapsed() >= PING_EVERY {
             pinged = Instant::now();
@@ -264,6 +220,61 @@ fn pump(
         }
         if heard.elapsed() >= SILENT_FOR {
             return "silent";
+        }
+    }
+}
+
+fn from_page(
+    ws: &mut WebSocket<TcpStream>,
+    socket: &mut UnixStream,
+    parser: &mut Parser,
+) -> Result<bool, &'static str> {
+    match ws.read() {
+        Ok(Message::Binary(bytes)) => {
+            let mut sent = true;
+            parser.feed(&bytes, false, &mut |input| {
+                sent = protocol::send(socket, &ClientMessage::from(input)).is_ok();
+                sent
+            });
+            if sent { Ok(true) } else { Err("server gone") }
+        }
+        Ok(Message::Text(text)) => {
+            if let Ok(FromPage::Resize { cols, rows }) = serde_json::from_str(&text) {
+                let (cols, rows) = size(cols, rows);
+                let resize = Input::Resize(cols, rows);
+                protocol::send(socket, &ClientMessage::Event(resize)).map_err(|_| "server gone")?;
+            }
+            Ok(true)
+        }
+        Ok(Message::Close(_)) => Err("closed by the page"),
+        Ok(_) => Ok(true),
+        Err(e) if waiting(&e) => {
+            let mut sent = true;
+            parser.idle(&mut |input| {
+                sent = protocol::send(socket, &ClientMessage::from(input)).is_ok();
+                sent
+            });
+            if sent { Ok(false) } else { Err("server gone") }
+        }
+        Err(_) => Err("connection lost"),
+    }
+}
+
+fn to_page(ws: &mut WebSocket<TcpStream>, from_server: &Receiver<Option<ServerMessage>>) -> Option<&'static str> {
+    loop {
+        match from_server.try_recv() {
+            Ok(Some(ServerMessage::Frame(bytes))) => {
+                if ws.write(Message::binary(bytes)).is_err() {
+                    return Some("connection lost");
+                }
+            }
+            Ok(Some(ServerMessage::Response(_) | ServerMessage::Sound(_) | ServerMessage::Open(_))) => {}
+            Ok(Some(ServerMessage::Rejected(why))) => return Some(finish(ws, "rejected", &why)),
+            Ok(Some(ServerMessage::Detached)) => return Some(finish(ws, "detached", "")),
+            Ok(Some(ServerMessage::Shutdown)) => return Some(finish(ws, "shutdown", "")),
+            Ok(Some(ServerMessage::Restart(_))) => return Some(finish(ws, "restart", "")),
+            Ok(None) | Err(TryRecvError::Disconnected) => return Some(finish(ws, "gone", "")),
+            Err(TryRecvError::Empty) => return None,
         }
     }
 }

@@ -128,30 +128,38 @@ impl ThemeProbe {
         self.pending.extend_from_slice(bytes);
         let mut start = 0;
         while !self.done && start < self.pending.len() {
-            match parse_reply(&self.pending[start..]) {
-                Reply::Incomplete => break,
-                Reply::Osc(body, len) => {
-                    self.theme.apply_osc(&body);
-                    start += len;
-                }
-                Reply::Dcs(body, len) => {
-                    if let Some(name) = body.strip_prefix(">|") {
-                        self.replies.terminal = Some(name.to_string());
-                    }
-                    start += len;
-                }
-                Reply::Apc(body, len) => {
-                    self.replies.kitty = kitty_reply(&body).or(self.replies.kitty.take());
-                    start += len;
-                }
-                Reply::Csi(csi, len) => {
-                    self.apply_csi(&csi);
-                    start += len;
-                }
-                Reply::Other(len) => start += len,
+            let reply = parse_reply(&self.pending[start..]);
+            if matches!(reply, Reply::Incomplete) {
+                break;
             }
+            start += self.take(reply);
         }
         self.pending.drain(..start);
+    }
+
+    fn take(&mut self, reply: Reply) -> usize {
+        match reply {
+            Reply::Incomplete => 0,
+            Reply::Osc(body, len) => {
+                self.theme.apply_osc(&body);
+                len
+            }
+            Reply::Dcs(body, len) => {
+                if let Some(name) = body.strip_prefix(">|") {
+                    self.replies.terminal = Some(name.to_string());
+                }
+                len
+            }
+            Reply::Apc(body, len) => {
+                self.replies.kitty = kitty_reply(&body).or(self.replies.kitty.take());
+                len
+            }
+            Reply::Csi(csi, len) => {
+                self.apply_csi(&csi);
+                len
+            }
+            Reply::Other(len) => len,
+        }
     }
 
     fn apply_csi(&mut self, csi: &Csi) {
@@ -166,15 +174,16 @@ impl ThemeProbe {
                 [Some(2), Some(0), Some(width), Some(height), ..] => self.replies.geometry = Some((*width, *height)),
                 _ => {}
             },
-            (None, false, b't') => {
-                if let [Some(6), Some(height), Some(width), ..] = params.as_slice() {
-                    let (width, height) = (u16::try_from(*width), u16::try_from(*height));
-                    if let (Ok(width), Ok(height)) = (width, height) {
-                        self.replies.cell = Some(CellSize { width, height });
-                    }
-                }
-            }
+            (None, false, b't') => self.apply_cell(&params),
             _ => {}
+        }
+    }
+
+    fn apply_cell(&mut self, params: &[Option<u32>]) {
+        if let [Some(6), Some(height), Some(width), ..] = params
+            && let (Ok(width), Ok(height)) = (u16::try_from(*width), u16::try_from(*height))
+        {
+            self.replies.cell = Some(CellSize { width, height });
         }
     }
 

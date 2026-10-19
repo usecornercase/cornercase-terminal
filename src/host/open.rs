@@ -182,11 +182,6 @@ impl Openers {
         }
         let target = OsString::from(&open.path);
         let launcher = self.launcher.as_deref().ok_or("there is no launcher")?;
-        let step = |program: &Path, args: &[OsString]| {
-            let mut step = vec![program.as_os_str().to_os_string()];
-            step.extend_from_slice(args);
-            step
-        };
         match (open.opener, reach) {
             (Opener::Default, _) => Ok(vec![step(launcher, &[target])]),
             (Opener::Finder, _) => {
@@ -195,29 +190,23 @@ impl Openers {
                 Ok(vec![step(launcher, &args)])
             }
             (Opener::Files, _) if kind == Kind::Folder => Ok(vec![step(launcher, &[target])]),
-            (Opener::Files, _) => {
-                let parent = path.parent().map_or_else(|| target.clone(), |parent| parent.as_os_str().to_os_string());
-                let mut steps = Vec::new();
-                if let Some(dbus) = &self.dbus {
-                    steps.push(step(dbus, &reveal_args(&open.path)));
-                }
-                steps.push(step(launcher, &[parent]));
-                Ok(steps)
-            }
+            (Opener::Files, _) => Ok(self.reveal_steps(open, launcher)),
             (_, Reach::App(app)) => Ok(vec![step(launcher, &["-a".into(), app.as_os_str().to_os_string(), target])]),
-            (opener, Reach::Command(command)) => {
-                let at_line = open.line.filter(|_| kind != Kind::Folder);
-                let args = match (at_line, opener) {
-                    (Some(line), Opener::Vscode | Opener::Cursor) => {
-                        vec!["-g".into(), format!("{}:{line}", open.path).into()]
-                    }
-                    (Some(line), _) => vec![format!("{}:{line}", open.path).into()],
-                    (None, _) => vec![target],
-                };
-                Ok(vec![step(command, &args)])
-            }
+            (opener, Reach::Command(command)) => Ok(vec![command_step(command, opener, open, kind, target)]),
             (_, Reach::Launcher) => Err("it has no command".into()),
         }
+    }
+
+    fn reveal_steps(&self, open: &Open, launcher: &Path) -> Vec<Step> {
+        let parent = Path::new(&open.path)
+            .parent()
+            .map_or_else(|| OsString::from(&open.path), |parent| parent.as_os_str().to_os_string());
+        let mut steps = Vec::new();
+        if let Some(dbus) = &self.dbus {
+            steps.push(step(dbus, &reveal_args(&open.path)));
+        }
+        steps.push(step(launcher, &[parent]));
+        steps
     }
 
     pub(crate) fn open(&self, open: &Open, failed: impl FnOnce(Failed) + Send + 'static) {
@@ -234,6 +223,22 @@ impl Openers {
             }
         });
     }
+}
+
+fn step(program: &Path, args: &[OsString]) -> Step {
+    let mut step = vec![program.as_os_str().to_os_string()];
+    step.extend_from_slice(args);
+    step
+}
+
+fn command_step(command: &Path, opener: Opener, open: &Open, kind: Kind, target: OsString) -> Step {
+    let at_line = open.line.filter(|_| kind != Kind::Folder);
+    let args = match (at_line, opener) {
+        (Some(line), Opener::Vscode | Opener::Cursor) => vec!["-g".into(), format!("{}:{line}", open.path).into()],
+        (Some(line), _) => vec![format!("{}:{line}", open.path).into()],
+        (None, _) => vec![target],
+    };
+    step(command, &args)
 }
 
 const BUNDLES: [&str; 10] =

@@ -39,132 +39,120 @@ fn state(dirs: &[&str]) -> State {
 
 mod file {
     use super::*;
+    use crate::issues::Who;
+    use crate::project::split::Dir;
+
+    fn bare_pane() -> PaneState {
+        PaneState {
+            cwd: None,
+            right_clicks: false,
+            agent: None,
+            done: false,
+            pending: false,
+            id: None,
+            parent: None,
+            collapsed: false,
+            accounts: BTreeMap::new(),
+        }
+    }
+
+    fn agent_pane(cwd: &str, right_clicks: bool, agent: AgentState, done: bool) -> PaneState {
+        PaneState { cwd: Some(cwd.into()), right_clicks, agent: Some(agent), done, pending: !done, ..bare_pane() }
+    }
+
+    fn loose_project() -> ProjectState {
+        ProjectState {
+            path: "projects/loose".into(),
+            name: Some("Notes".into()),
+            group: None,
+            workspaces: vec![WorkspaceState {
+                path: "projects/loose".into(),
+                name: Some("planning".into()),
+                worktree: false,
+                tabs: vec![TabState { name: Some("notes".into()), panes: vec![bare_pane()], active: 0, layout: None }],
+                active: 0,
+                base: Some("main".into()),
+                collapsed: true,
+                run: None,
+                role_worktrees: Vec::new(),
+                run_dirs: Vec::new(),
+            }],
+            active: 0,
+            collapsed: false,
+        }
+    }
+
+    fn shop_tab() -> TabState {
+        let plan = AgentState {
+            kind: "claude".into(),
+            conversation: "conversation-plan".into(),
+            mode: Some("plan".into()),
+            account: None,
+        };
+        let default =
+            AgentState { kind: "codex".into(), conversation: "conversation-default".into(), mode: None, account: None };
+        TabState {
+            name: Some("agent and shell".into()),
+            panes: vec![
+                agent_pane("worktrees/returns", true, plan, false),
+                agent_pane("worktrees/returns/src", false, default, true),
+            ],
+            active: 1,
+            layout: Some(Node::Split {
+                dir: Dir::Right,
+                ratio: 0.375,
+                first: Box::new(Node::Leaf(0)),
+                second: Box::new(Node::Leaf(1)),
+            }),
+        }
+    }
+
+    fn shop_project() -> ProjectState {
+        ProjectState {
+            path: "projects/shop".into(),
+            name: Some("Shop".into()),
+            group: Some(0),
+            workspaces: vec![WorkspaceState {
+                path: "worktrees/returns".into(),
+                name: Some("returns".into()),
+                worktree: true,
+                tabs: vec![shop_tab()],
+                active: 0,
+                base: None,
+                collapsed: false,
+                run: None,
+                role_worktrees: Vec::new(),
+                run_dirs: Vec::new(),
+            }],
+            active: 0,
+            collapsed: true,
+        }
+    }
+
+    fn people() -> People {
+        People {
+            github: [Who::Me, Who::Person("ana".into())],
+            gitlab: [Who::Person("luis".into()), Who::Me],
+            shortcut: [Who::User { id: "u-1".into(), name: "Bo".into() }, Who::Anyone],
+            linear: [Who::Anyone, Who::Me],
+            jira: [Who::Person("zoe".into()), Who::Anyone],
+            plane: [Who::Anyone, Who::User { id: "u-2".into(), name: "Kai".into() }],
+            asana: [Who::Anyone, Who::Anyone],
+        }
+    }
 
     #[test]
-    #[expect(clippy::too_many_lines, reason = "pin every version 5 field explicitly against the fixture")]
     fn version_five_matches_the_saved_format() {
-        use crate::issues::Who;
-        use crate::project::split::Dir;
-
         let expected = State {
             version: 5,
             groups: vec![
                 GroupEntry { name: "work".into(), icon: '●', colour: 99, collapsed: false },
                 GroupEntry { name: "archive".into(), icon: '◆', colour: 33, collapsed: true },
             ],
-            projects: vec![
-                ProjectState {
-                    path: "projects/loose".into(),
-                    name: Some("Notes".into()),
-                    group: None,
-                    workspaces: vec![WorkspaceState {
-                        path: "projects/loose".into(),
-                        name: Some("planning".into()),
-                        worktree: false,
-                        tabs: vec![TabState {
-                            name: Some("notes".into()),
-                            panes: vec![PaneState {
-                                cwd: None,
-                                right_clicks: false,
-                                agent: None,
-                                done: false,
-                                pending: false,
-                                id: None,
-                                parent: None,
-                                collapsed: false,
-                                accounts: BTreeMap::new(),
-                            }],
-                            active: 0,
-                            layout: None,
-                        }],
-                        active: 0,
-                        base: Some("main".into()),
-                        collapsed: true,
-                        run: None,
-                        role_worktrees: Vec::new(),
-                        run_dirs: Vec::new(),
-                    }],
-                    active: 0,
-                    collapsed: false,
-                },
-                ProjectState {
-                    path: "projects/shop".into(),
-                    name: Some("Shop".into()),
-                    group: Some(0),
-                    workspaces: vec![WorkspaceState {
-                        path: "worktrees/returns".into(),
-                        name: Some("returns".into()),
-                        worktree: true,
-                        tabs: vec![TabState {
-                            name: Some("agent and shell".into()),
-                            panes: vec![
-                                PaneState {
-                                    cwd: Some("worktrees/returns".into()),
-                                    right_clicks: true,
-                                    agent: Some(AgentState {
-                                        kind: "claude".into(),
-                                        conversation: "conversation-plan".into(),
-                                        mode: Some("plan".into()),
-                                        account: None,
-                                    }),
-                                    done: false,
-                                    pending: true,
-                                    id: None,
-                                    parent: None,
-                                    collapsed: false,
-                                    accounts: BTreeMap::new(),
-                                },
-                                PaneState {
-                                    cwd: Some("worktrees/returns/src".into()),
-                                    right_clicks: false,
-                                    agent: Some(AgentState {
-                                        kind: "codex".into(),
-                                        conversation: "conversation-default".into(),
-                                        mode: None,
-                                        account: None,
-                                    }),
-                                    done: true,
-                                    pending: false,
-                                    id: None,
-                                    parent: None,
-                                    collapsed: false,
-                                    accounts: BTreeMap::new(),
-                                },
-                            ],
-                            active: 1,
-                            layout: Some(Node::Split {
-                                dir: Dir::Right,
-                                ratio: 0.375,
-                                first: Box::new(Node::Leaf(0)),
-                                second: Box::new(Node::Leaf(1)),
-                            }),
-                        }],
-                        active: 0,
-                        base: None,
-                        collapsed: false,
-                        run: None,
-                        role_worktrees: Vec::new(),
-                        run_dirs: Vec::new(),
-                    }],
-                    active: 0,
-                    collapsed: true,
-                },
-            ],
+            projects: vec![loose_project(), shop_project()],
             active: 1,
             widths: Some(Widths { projects: 35, workspaces: 24, changes: Some(42), stack: Some(11), agents: Some(7) }),
-            issues: Some(IssuesState {
-                tab: Some("shortcut".into()),
-                closed: true,
-                people: People {
-                    github: [Who::Me, Who::Person("ana".into())],
-                    gitlab: [Who::Person("luis".into()), Who::Me],
-                    shortcut: [Who::User { id: "u-1".into(), name: "Bo".into() }, Who::Anyone],
-                    linear: [Who::Anyone, Who::Me],
-                    jira: [Who::Person("zoe".into()), Who::Anyone],
-                    plane: [Who::Anyone, Who::User { id: "u-2".into(), name: "Kai".into() }],
-                    asana: [Who::Anyone, Who::Anyone],
-                },
-            }),
+            issues: Some(IssuesState { tab: Some("shortcut".into()), closed: true, people: people() }),
             changes: Some(ChangesState { open: true, mode: Mode::All, scope: Some(Scope::Every) }),
             todo: true,
             files: true,

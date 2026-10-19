@@ -195,18 +195,23 @@ mod removing {
     #[test]
     fn never_runs_the_keychain_tool() {
         let needle = ["\"", "secur", "ity", "\""].concat();
-        let mut folders = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("accounts")];
-        while let Some(folder) = folders.pop() {
-            for entry in fs::read_dir(&folder).expect("read src/accounts") {
-                let path = entry.expect("entry").path();
-                if path.is_dir() {
-                    folders.push(path);
-                    continue;
-                }
-                let text = fs::read_to_string(&path).expect("read");
-                assert!(!text.contains(&needle), "{} names the keychain tool", path.display());
-            }
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("accounts");
+        for path in files_under(root) {
+            let text = fs::read_to_string(&path).expect("read");
+            assert!(!text.contains(&needle), "{} names the keychain tool", path.display());
         }
+    }
+
+    fn files_under(root: PathBuf) -> Vec<PathBuf> {
+        let mut folders = vec![root];
+        let mut files = Vec::new();
+        while let Some(folder) = folders.pop() {
+            let paths = fs::read_dir(&folder).expect("read src/accounts").map(|entry| entry.expect("entry").path());
+            let (dirs, found): (Vec<_>, Vec<_>) = paths.partition(|path| path.is_dir());
+            folders.extend(dirs);
+            files.extend(found);
+        }
+        files
     }
 }
 

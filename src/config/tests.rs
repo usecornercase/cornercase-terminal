@@ -20,39 +20,8 @@ mod file {
         );
     }
 
-    #[test]
-    fn every_key_matches_the_saved_format() {
-        let expected = Config {
-            worktrees_dir: "worktrees".into(),
-            fetch_minutes: 12,
-            pull_requests: false,
-            merged_pull_requests: false,
-            issue_tabs: vec!["shortcut".into(), "github".into(), "gitlab".into()],
-            gitlab_url: "https://gitlab.acme.dev".into(),
-            jira_site: "acme.atlassian.net".into(),
-            jira_email: "ana@acme.dev".into(),
-            jira_jql: "project = SHOP".into(),
-            plane_url: "https://plane.example".into(),
-            plane_workspace: "shop".into(),
-            plane_filter: "state:todo".into(),
-            asana_workspace: "Acme".into(),
-            asana_projects: "1200000000000001 1200000000000002".into(),
-            agent: "codex".into(),
-            agent_args: [("codex".into(), vec!["--sandbox".into(), "workspace-write".into()])].into(),
-            agent_modes: [("claude".into(), [("plan".into(), vec!["--permission-mode".into(), "plan".into()])].into())]
-                .into(),
-            agent_commands: [("codex".into(), "fake-codex".into())].into(),
-            prompt: "Fix {url}".into(),
-            submit: true,
-            accept_trust_prompts: true,
-            resume_agents: false,
-            keep_awake: true,
-            hidden_flows: vec!["Arena".into()],
-            trust_prompt_pattern: "Allow this folder".into(),
-            gh: "fake-gh".into(),
-            glab: "fake-glab".into(),
-            sidebar: "tree".into(),
-            tabs: "top".into(),
+    fn interface_keys() -> Config {
+        Config {
             icon_bar: true,
             agents_section: true,
             working_icon: "spinner".into(),
@@ -88,6 +57,44 @@ mod file {
             )]
             .into(),
             active_accounts: [("claude".into(), "home".into())].into(),
+            ..Config::default()
+        }
+    }
+
+    #[test]
+    fn every_key_matches_the_saved_format() {
+        let expected = Config {
+            worktrees_dir: "worktrees".into(),
+            fetch_minutes: 12,
+            pull_requests: false,
+            merged_pull_requests: false,
+            issue_tabs: vec!["shortcut".into(), "github".into(), "gitlab".into()],
+            gitlab_url: "https://gitlab.acme.dev".into(),
+            jira_site: "acme.atlassian.net".into(),
+            jira_email: "ana@acme.dev".into(),
+            jira_jql: "project = SHOP".into(),
+            plane_url: "https://plane.example".into(),
+            plane_workspace: "shop".into(),
+            plane_filter: "state:todo".into(),
+            asana_workspace: "Acme".into(),
+            asana_projects: "1200000000000001 1200000000000002".into(),
+            agent: "codex".into(),
+            agent_args: [("codex".into(), vec!["--sandbox".into(), "workspace-write".into()])].into(),
+            agent_modes: [("claude".into(), [("plan".into(), vec!["--permission-mode".into(), "plan".into()])].into())]
+                .into(),
+            agent_commands: [("codex".into(), "fake-codex".into())].into(),
+            prompt: "Fix {url}".into(),
+            submit: true,
+            accept_trust_prompts: true,
+            resume_agents: false,
+            keep_awake: true,
+            hidden_flows: vec!["Arena".into()],
+            trust_prompt_pattern: "Allow this folder".into(),
+            gh: "fake-gh".into(),
+            glab: "fake-glab".into(),
+            sidebar: "tree".into(),
+            tabs: "top".into(),
+            ..interface_keys()
         };
         matches_fixture(crate::test_util::fixture!("config/config.json"), &expected);
     }

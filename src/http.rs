@@ -100,14 +100,16 @@ pub(crate) enum Method {
     Delete,
 }
 
-pub(crate) fn call_within(
-    service: &Service,
-    method: Method,
-    url: &str,
-    headers: &[(&str, &str)],
-    body: Option<&Value>,
-    timeout: Duration,
-) -> Result<Answer> {
+#[derive(Clone, Copy)]
+pub(crate) struct Call<'a> {
+    pub(crate) method: Method,
+    pub(crate) url: &'a str,
+    pub(crate) headers: &'a [(&'a str, &'a str)],
+    pub(crate) body: Option<&'a Value>,
+}
+
+pub(crate) fn call_within(service: &Service, call: Call, timeout: Duration) -> Result<Answer> {
+    let Call { method, url, headers, body } = call;
     let agent = agent(timeout);
     let result = match method {
         Method::Get => headed(agent.get(url), headers).call(),
