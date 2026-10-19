@@ -13,7 +13,8 @@ use super::pane::wordmark;
 use super::remote_access;
 use super::theme::status_icon;
 use super::widgets::{
-    button_style, centered, draw_band, draw_button, draw_separator, middle, sidebar_hovered, update_button,
+    button_style, button_width, centered, draw_band, draw_button, draw_separator, middle, sidebar_hovered,
+    update_button,
 };
 use crate::agents::activity::Status;
 use crate::text::{CRUMB_SEPARATOR, truncate_left, truncate_right};
@@ -32,6 +33,10 @@ pub(super) const BACK_LABEL: &str = "‹ Projects";
 pub(super) const ISSUES_LABEL: &str = "Issues";
 
 pub(super) const USAGE_LABEL: &str = "Usage";
+
+pub(super) const HELP_LABEL: &str = "Help";
+
+const QUIT_LABEL: &str = "Quit";
 
 pub(crate) const TODO_LABEL: &str = "TODO";
 
@@ -62,7 +67,27 @@ pub(super) fn draw_footer(f: &mut Frame, view: &View, areas: &Areas) {
         }
     }
     draw_usage_button(f, view, usage);
-    draw_quit_button(f, view, areas.quit);
+    let help = help_button(areas.quit);
+    let mut quit = areas.quit;
+    if !help.is_empty() {
+        let style = button_style(view, help, Style::default().fg(view.muted), Color::Cyan);
+        draw_button(f, help, "", HELP_LABEL, style);
+        quit.width = help.x - quit.x;
+    }
+    draw_quit_button(f, view, quit);
+}
+
+pub(crate) fn help_button(quit: Rect) -> Rect {
+    let width = button_width(HELP_LABEL);
+    if quit.width < button_width(QUIT_LABEL) + width + 2 {
+        return Rect::default();
+    }
+    Rect { x: quit.right() - width - 1, width, ..quit }
+}
+
+pub(crate) fn quit_button(quit: Rect) -> Rect {
+    let help = help_button(quit);
+    if help.is_empty() { quit } else { Rect { width: help.x - quit.x, ..quit } }
 }
 
 pub(super) fn draw_column_border(f: &mut Frame, colour: Color, r: Rect) {
@@ -287,5 +312,5 @@ fn draw_usage_button(f: &mut Frame, view: &View, r: Rect) {
 
 fn draw_quit_button(f: &mut Frame, view: &View, r: Rect) {
     let style = button_style(view, r, Style::default().fg(view.muted), Color::Red);
-    draw_button(f, r, " ", "Quit", style);
+    draw_button(f, r, " ", QUIT_LABEL, style);
 }

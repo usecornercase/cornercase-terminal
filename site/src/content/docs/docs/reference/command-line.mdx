@@ -144,6 +144,10 @@ When the log is short since it last [moved to `server.log.1`](../files-and-envir
 
 Keep several logins of Claude Code, Codex or Gemini CLI and choose which ones new agents start with: `account add|list|remove` (`list --check` asks each account whether it is logged in), `account use AGENT ACCOUNT|--system` (what new tabs use), `account rename AGENT ACCOUNT|--system NAME|--clear` (a name for the window; the folder stays), `profile new|set|use|delete|list` (a set of accounts to switch at once, for scripts), `--account AGENT=ACCOUNT` on `start`, `new-tab`, `flow run` and `queue add|edit`, and `--profile NAME` on `start`, `new-tab` and `flow run`. See [Accounts and profiles](../../guides/accounts/).
 
+### `cornercase tour`
+
+Shows the [guided tour](../../first-steps/#the-guided-tour-and-help) in the window, where it stopped. `tour start TOUR` starts another one (`--step` at a step), `next`, `back`, `skip` and `end` move it, `complete TOUR STEP` marks a step done, and `reset [TOUR]` forgets the progress. `tour list` prints every tour and its steps with your progress; with `--json` the steps come as data (ids, texts, what each points at and what completes it), so another UI can draw the same tour, and `start --no-card` keeps the window's card hidden for it.
+
 ### `cornercase contract`
 
 Prints what the running server supports: its version, the version of the contract it speaks, which start of the server it is (`boot`), and its requests and streams. `--json` prints it as an object, for programs that talk to cornercase. A server too old to have it says so. See [Contract and compatibility](../../guides/scripts-and-agents/#contract-and-compatibility).

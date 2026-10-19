@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/agents_section.rs
-assertion_line: 8385
 expression: "render_sized(&v, SMALL.width, SMALL.height).backend()"
 ---
 "                                                                                "
@@ -31,5 +30,5 @@ expression: "render_sized(&v, SMALL.width, SMALL.height).backend()"
 "                                                                                "
 " ────────────────────────────────────────────────────────────────────────────── "
 "                                                                                "
-"  Settings                   Usage                     Quit                     "
+"  Settings                   Usage                     Quit               Help  "
 "                                                                                "

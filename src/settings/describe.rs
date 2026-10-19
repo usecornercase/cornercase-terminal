@@ -39,6 +39,7 @@ fn switch(row: &Row) -> Option<&'static str> {
         Row::SoundSubagents => "sound_subagents",
         Row::Updates => "check_updates",
         Row::StarPrompt => "star_prompt",
+        Row::Tour => "tour",
         Row::Remote => "remote",
         _ => return None,
     })

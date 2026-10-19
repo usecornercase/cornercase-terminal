@@ -141,6 +141,17 @@ impl Settings {
                 let value = if config.star_prompt { "[x] now and then" } else { "[ ] never" };
                 ("star prompt".into(), value.into(), "asks for a GitHub star after two weeks of use".into(), false)
             }
+            Row::Tour => {
+                let value = if config.tour { "[x] on a new install" } else { "[ ] only from Help" };
+                ("guided tour".into(), value.into(), "the first steps, shown once on a new install".into(), false)
+            }
+            Row::TourStart => ("start the tour".into(), String::new(), "it also opens from Help".into(), false),
+            Row::TourReset => (
+                "reset tour progress".into(),
+                String::new(),
+                "every tour starts again from its first step".into(),
+                false,
+            ),
             Row::Trust => {
                 let value = if config.accept_trust_prompts { "[x] accepted for you" } else { "[ ] left to you" };
                 ("trust prompts".into(), value.into(), "saying yes runs the repo's agent config".into(), false)

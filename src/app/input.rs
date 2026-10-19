@@ -28,6 +28,10 @@ impl App {
         if key.code == KeyCode::Esc && dragging(self) {
             return Ok(());
         }
+        if self.tour_typing() && self.overlay.is_none() {
+            self.tour_key(key, area);
+            return Ok(());
+        }
         match &self.overlay {
             Some(Overlay::Keys(group)) => return self.keys_key(*group, key, area),
             Some(Overlay::Menu { .. }) | None if self.is_prefix(key) => {
@@ -80,7 +84,7 @@ impl App {
         if self.continue_drag(ev, &areas, area) {
             return Ok(());
         }
-        if self.star_mouse(ev, pos, area) {
+        if self.star_mouse(ev, pos, area) || self.tour_mouse(ev, pos, area) {
             return Ok(());
         }
         if self.toast_mouse(ev, pos, area) {
@@ -301,6 +305,7 @@ impl App {
             ui::ActivityItem::Flow => self.toggle_flow(),
             ui::ActivityItem::Update => self.open_update(),
             ui::ActivityItem::Remote => self.open_remote_menu(pos),
+            ui::ActivityItem::Help => self.open_help(pos),
             ui::ActivityItem::Usage => self.open_usage(),
             ui::ActivityItem::Settings => self.open_settings(),
             ui::ActivityItem::Quit => self.outbox.detach = true,
@@ -318,10 +323,13 @@ impl App {
         let update = self.update_label().is_some_and(|label| ui::update_button(areas.settings, &label).contains(pos));
         let remote = self.remote_button().is_some_and(|on| ui::remote_button(areas.usage, on).contains(pos));
         let pill = ui::account_pill_hit(areas, &self.account_pills(), pos);
+        let help = ui::help_button(areas.quit).contains(pos);
+        let quit = ui::quit_button(areas.quit);
         let hit = update
             || remote
+            || help
             || pill.is_some()
-            || [areas.quit, areas.usage, areas.settings].iter().any(|r| r.contains(pos));
+            || [quit, areas.usage, areas.settings].iter().any(|r| r.contains(pos));
         if hit && left {
             self.nav = None;
             if update {
@@ -330,7 +338,9 @@ impl App {
                 self.open_remote_menu(pos);
             } else if let Some(index) = pill {
                 self.open_pill_menu(index, pos);
-            } else if areas.quit.contains(pos) {
+            } else if help {
+                self.open_help(pos);
+            } else if quit.contains(pos) {
                 self.outbox.detach = true;
             } else if areas.usage.contains(pos) {
                 self.open_usage();
@@ -342,6 +352,10 @@ impl App {
     }
 
     pub(super) fn handle_paste(&mut self, text: &str, area: Rect) {
+        if self.tour_typing() && self.overlay.is_none() {
+            self.tour_paste(text);
+            return;
+        }
         if matches!(self.overlay, Some(Overlay::Keys(_))) {
             self.overlay = None;
         }

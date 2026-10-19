@@ -19,4 +19,4 @@ expression: render(&card()).backend()
 " ───────────────────────────── │    │ Enjoying cornercase? A star on GitHub helps others find it. │ "
 "  Settings                     │    │                  don't show again   later   star on GitHub  │ "
 "  Usage                        │    ╰─────────────────────────────────────────────────────────────╯ "
-"  Quit                         │                         │                                          "
+"  Quit                   Help  │                         │                                          "

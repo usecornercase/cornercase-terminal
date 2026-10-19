@@ -19,4 +19,4 @@ expression: "render(&folded(&[Some(Status::Working), Some(Status::Waiting)])).ba
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │  Files            TODO  │                                          "
-"  Quit                         │                         │                                          "
+"  Quit                   Help  │                         │                                          "

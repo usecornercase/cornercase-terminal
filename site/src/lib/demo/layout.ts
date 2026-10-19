@@ -1049,3 +1049,9 @@ export class Strip {
     return i < first ? i : this.fittingBefore(i + 1);
   }
 }
+
+export function helpButton(quit: Rect): Rect {
+  const w = buttonWidth('Help');
+  if (quit.w < buttonWidth('Quit') + w + 2) return EMPTY;
+  return { ...quit, x: quit.x + quit.w - w - 1, w };
+}

@@ -4,7 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Clear, Paragraph};
 
-use super::chrome::{ISSUES_LABEL, TODO_LABEL, USAGE_LABEL, draw_column_border};
+use super::chrome::{HELP_LABEL, ISSUES_LABEL, TODO_LABEL, USAGE_LABEL, draw_column_border};
 use super::widgets::{put, sidebar_hovered};
 use super::{Overlay, View, files, flow, icons, remote_access};
 
@@ -23,6 +23,7 @@ pub(crate) enum Item {
     Flow,
     Update,
     Remote,
+    Help,
     Usage,
     Settings,
     Quit,
@@ -62,6 +63,7 @@ impl Item {
             Self::Flow => icons::FLOW,
             Self::Update => icons::UPDATE,
             Self::Remote => icons::REMOTE,
+            Self::Help => icons::HELP,
             Self::Usage => icons::USAGE,
             Self::Settings => icons::SETTINGS,
             Self::Quit => icons::QUIT,
@@ -77,6 +79,7 @@ impl Item {
             Self::Flow => flow::LABEL.into(),
             Self::Update => view.update.clone().unwrap_or_default(),
             Self::Remote => remote_access::LABEL.into(),
+            Self::Help => HELP_LABEL.into(),
             Self::Usage => USAGE_LABEL.into(),
             Self::Settings => "Settings".into(),
             Self::Quit => "Quit".into(),
@@ -92,6 +95,7 @@ impl Item {
             Self::Flow => view.flow.is_some(),
             Self::Remote => matches!(view.overlay, Some(Overlay::Remote(_))),
             Self::Usage => matches!(view.overlay, Some(Overlay::Usage(_))),
+            Self::Help => view.tour.is_some(),
             Self::Settings => matches!(view.overlay, Some(Overlay::Settings(_) | Overlay::Flows(_))),
             Self::Update | Self::Quit => false,
         }
@@ -123,6 +127,7 @@ pub(crate) fn items(bar: Rect, shown: Shown) -> Vec<(Item, Rect)> {
         (Item::Quit, true),
         (Item::Settings, true),
         (Item::Usage, true),
+        (Item::Help, true),
         (Item::Remote, shown.remote),
         (Item::Update, shown.update),
     ];

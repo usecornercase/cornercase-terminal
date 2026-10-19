@@ -35,6 +35,7 @@ pub mod state;
 pub(crate) mod telegram;
 pub(crate) mod term;
 pub(crate) mod todo;
+pub(crate) mod tour;
 pub mod update;
 
 pub mod ui;

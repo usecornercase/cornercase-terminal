@@ -20,6 +20,7 @@ pub(crate) struct AppState {
     pub(crate) away: Vec<AwayInfo>,
     pub(crate) update: UpdateInfo,
     pub(crate) keep_awake: Option<KeepAwake>,
+    pub(crate) tour: super::tour::TourState,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) profile: Option<String>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]

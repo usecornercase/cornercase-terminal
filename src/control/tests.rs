@@ -137,6 +137,7 @@ fn every_command_is_listed_by_name() {
         Command::ProfileDelete(ProfileDelete::default()),
         Command::AccountRename(AccountRename::default()),
         Command::AccountUse(AccountUse::default()),
+        Command::Tour(crate::control::tour::TourRequest::default()),
     ];
 
     let names: Vec<String> = commands

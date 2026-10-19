@@ -153,6 +153,11 @@ impl App {
                 self.nav = None;
                 self.open_usage();
             }
+            Action::Help => {
+                self.nav = None;
+                let pane = self.layout(area).pane;
+                self.open_help(Position::new(pane.x + 1, pane.y + 1));
+            }
             Action::Away => self.toggle_away_everywhere(),
             Action::Quit => self.outbox.detach = true,
         }

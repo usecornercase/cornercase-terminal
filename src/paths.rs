@@ -200,6 +200,10 @@ pub(crate) fn star(session: &Path) -> PathBuf {
     session.with_file_name("star.json")
 }
 
+pub(crate) fn tour(session: &Path) -> PathBuf {
+    session.with_file_name("tour.json")
+}
+
 pub(crate) fn log() -> PathBuf {
     log_in(&process_var, this_key().as_deref())
 }

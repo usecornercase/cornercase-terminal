@@ -23,6 +23,7 @@ pub(crate) mod surface;
 pub(crate) mod terminal;
 pub(crate) mod theme;
 mod todo;
+pub(crate) mod tour;
 pub(crate) mod usage;
 pub(crate) mod view;
 mod watch;
@@ -192,6 +193,7 @@ pub(crate) enum Command {
     ProfileDelete(ProfileDelete),
     AccountRename(AccountRename),
     AccountUse(AccountUse),
+    Tour(tour::TourRequest),
 }
 
 impl Command {
@@ -285,6 +287,7 @@ impl Command {
             Self::ProfileDelete(_) => 85,
             Self::AccountRename(_) => 86,
             Self::AccountUse(_) => 87,
+            Self::Tour(_) => 88,
         }]
     }
 
@@ -437,6 +440,7 @@ impl Command {
             Self::ProfileSet(set) => set.fields(&mut fields),
             Self::AccountRename(rename) => rename.fields(&mut fields),
             Self::AccountUse(chosen) => chosen.fields(&mut fields),
+            Self::Tour(tour) => tour.fields(&mut fields),
             Self::ProfileNew(ProfileNew { name, .. })
             | Self::ProfileUse(ProfileUse { name })
             | Self::ProfileDelete(ProfileDelete { name }) => {
@@ -446,7 +450,7 @@ impl Command {
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 88] = [
+    pub(crate) const NAMES: [&str; 89] = [
         "status",
         "open",
         "new-workspace",
@@ -535,6 +539,7 @@ impl Command {
         "profile-delete",
         "account-rename",
         "account-use",
+        "tour",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

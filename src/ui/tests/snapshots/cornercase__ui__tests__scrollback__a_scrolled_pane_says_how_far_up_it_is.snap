@@ -19,4 +19,4 @@ expression: render(&scrolled_view()).backend()
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                         │                         │                               ↓ 42 more  "
+"  Quit                   Help  │                         │                               ↓ 42 more  "

@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/dialogs.rs
-assertion_line: 6637
 expression: "render(&with(Overlay::Form(new_workspace_form(true)))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -20,4 +19,4 @@ expression: "render(&with(Overlay::Form(new_workspace_form(true)))).backend()"
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                         │                         │                                          "
+"  Quit                   Help  │                         │                                          "

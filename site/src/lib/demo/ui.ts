@@ -26,6 +26,7 @@ import {
   DONE,
   bottom,
   buttonWidth,
+  helpButton,
   closeButton,
   formArea,
   inner,
@@ -930,8 +931,14 @@ export class Painter {
     this.region({ r: areas.settings, click: () => app.openSettings(), cursor: 'pointer' });
     this.button(areas.usage, ' ', 'Usage', this.buttonStyle(areas.usage, DARK, 6));
     this.region({ r: areas.usage, click: () => app.openUsage(), cursor: 'pointer' });
-    this.button(areas.quit, ' ', 'Quit', this.buttonStyle(areas.quit, DARK, 1));
-    this.region({ r: areas.quit, click: () => app.quit(), cursor: 'pointer' });
+    const help = helpButton(areas.quit);
+    const quit = isEmpty(help) ? areas.quit : { ...areas.quit, w: help.x - areas.quit.x };
+    if (!isEmpty(help)) {
+      this.button(help, '', 'Help', this.buttonStyle(help, DARK, 6));
+      this.region({ r: help, click: (x, y) => app.openHelp({ x, y }), cursor: 'pointer' });
+    }
+    this.button(quit, ' ', 'Quit', this.buttonStyle(quit, DARK, 1));
+    this.region({ r: quit, click: () => app.quit(), cursor: 'pointer' });
   }
 
   private workspaces(areas: Areas): void {

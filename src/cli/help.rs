@@ -746,6 +746,20 @@ Examples:
   cornercase view-set --view 41 --cols 100 --rows 30
   cornercase view-set --view 41 --claim
   cornercase view-set --view 41 --hidden";
+pub(super) const TOUR_HELP: &str =
+    "Shows the guided tour in the window: a card that points at a part of the screen and moves on
+when you do what it asks. Without an action it starts the core tour where it stopped. A new
+install shows it once by itself; `tour` in Settings › UI turns that off. `list` prints every tour
+and its steps as data (ids, titles, texts, what each step points at and what completes it) with
+your progress, so another UI can draw the same tour; --json prints it as {\"state\", \"tours\"}.
+`start --no-card` moves the tour without drawing the window's card.
+
+Examples:
+  cornercase tour
+  cornercase tour start todo
+  cornercase tour list --json
+  cornercase tour reset";
+
 pub(super) const USAGE_HELP: &str =
     "Asks Claude Code and Codex for your plan limits as the Limits tab of the Usage dialog does, and
 prints each limit with how much of it is used and when it resets, then extra usage or credits. It

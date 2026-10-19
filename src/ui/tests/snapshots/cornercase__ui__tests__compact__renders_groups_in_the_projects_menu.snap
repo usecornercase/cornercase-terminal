@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/compact.rs
-assertion_line: 5771
 expression: "render_small(&with_groups(in_a_project(Some(Nav::Projects)))).backend()"
 ---
 "                                                                                "
@@ -31,5 +30,5 @@ expression: "render_small(&with_groups(in_a_project(Some(Nav::Projects)))).backe
 "                                                                                "
 " ────────────────────────────────────────────────────────────────────────────── "
 "                                                                                "
-"  Settings                   Usage                     Quit                     "
+"  Settings                   Usage                     Quit               Help  "
 "                                                                                "

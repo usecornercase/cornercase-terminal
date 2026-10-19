@@ -18,7 +18,7 @@ pub const COMPACT_PITCH: u16 = 3;
 
 const STACK_FOOTER: u16 = 6;
 
-pub(super) const COMPACT_BUTTON_WIDTH: u16 = 7;
+pub(crate) const COMPACT_BUTTON_WIDTH: u16 = 7;
 
 pub(super) const HEADER_HEIGHT: u16 = 2;
 

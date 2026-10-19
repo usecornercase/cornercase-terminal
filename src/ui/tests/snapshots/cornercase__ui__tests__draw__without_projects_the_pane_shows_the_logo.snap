@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/draw.rs
-assertion_line: 6846
 expression: "render_sized(&view(&[]), W, 24).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -26,4 +25,4 @@ expression: "render_sized(&view(&[]), W, 24).backend()"
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                         │                         │                                          "
+"  Quit                   Help  │                         │                                          "

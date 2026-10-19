@@ -19,4 +19,4 @@ expression: render(&with_agents()).backend()
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │  Files            TODO  │                                          "
-"  Quit                         │                         │                                          "
+"  Quit                   Help  │                         │                                          "

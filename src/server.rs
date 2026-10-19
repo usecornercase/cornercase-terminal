@@ -365,6 +365,8 @@ pub(crate) fn run() -> Result<()> {
     app.set_setup_dir(path.parent().unwrap_or(Path::new(".")));
     app.set_runs_dir(&paths::runs(&session));
     app.set_accounts_dir(&paths::accounts_of(&session));
+    let first_run =
+        crate::tour::first_run(&session, &paths::stats(&session), &crate::star::load(&paths::star(&session)));
     let stats = crate::agents::stats::load(&paths::stats(&session), SystemTime::now());
     log::info!(
         "stats",
@@ -374,6 +376,7 @@ pub(crate) fn run() -> Result<()> {
     );
     app.set_stats(stats);
     app.set_star(paths::star(&session));
+    app.set_tour(paths::tour(&session), first_run);
     let mut server = Server::new(app, session, todo_saver, tx);
     server.serve(&rx);
     let _ = std::fs::remove_file(&path);

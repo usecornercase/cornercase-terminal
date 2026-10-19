@@ -23,6 +23,7 @@ pub(crate) mod remote_access;
 mod rows;
 mod sidebar;
 mod star;
+mod tour;
 mod stats;
 pub(crate) mod tab_bar;
 mod theme;
@@ -36,11 +37,11 @@ mod workspaces;
 #[cfg(test)]
 pub(crate) use accounts_bar::pills as pill_rects;
 pub(crate) use accounts_bar::{Pill as AccountPill, hit as account_pill_hit};
-#[cfg(test)]
 pub(crate) use activity::items as activity_items;
 pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as activity_hit};
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_fold, agent_hit, agent_row, agent_rows};
 pub(crate) use chrome::ChangesButton;
+pub(crate) use chrome::{help_button, quit_button};
 pub(crate) use dialog::flows::{
     FlowPreview, Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_text, flows_wide, preview_body,
 };
@@ -93,6 +94,7 @@ pub(crate) use dialog::{CANCEL_LABEL, Note, Overlay};
 pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
 pub(crate) use icons::glyphs;
 pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, layout, layout_with};
+pub(crate) use layout::COMPACT_BUTTON_WIDTH;
 pub(crate) use layout::{Nav, full_layout, status_split, window_layout};
 pub(crate) use pane::{PaneBand, TabView, held_notice, resume_notice, scrollback_badge};
 pub(crate) use remote_access::{RemoteAccess, button as remote_button, done as remote_done};
@@ -105,6 +107,7 @@ pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, projec
 #[cfg(test)]
 pub(crate) use star::star_buttons;
 pub(crate) use star::{StarButton, star_area, star_hit};
+pub(crate) use tour::{FIELD_ROWS as TOUR_FIELD_ROWS, TourButton, TourCard, tour_hit, tour_layout};
 pub(crate) use theme::{muted, outcome_icon, soft};
 #[cfg(test)]
 pub(crate) use toast::toast_area;
@@ -150,6 +153,7 @@ use pane::{draw_no_tab, draw_tab, draw_welcome};
 use rows::{GAP, Zone, draw_more};
 use sidebar::draw_sidebar;
 use star::draw_star;
+use tour::{draw_pointer, draw_tour};
 use theme::{BRAND_COLOR, hover_colour, line_colour, surface_colour};
 use toast::draw_toast;
 use tree::draw_tree;
@@ -182,6 +186,7 @@ pub(crate) struct View<'a> {
     pub(crate) overlay: Option<Overlay>,
     pub(crate) toast: Option<Toast<'a>>,
     pub(crate) star: bool,
+    pub(crate) tour: Option<TourCard>,
     pub(crate) nav: Option<Nav>,
     pub(crate) update: Option<String>,
     pub(crate) remote: Option<bool>,
@@ -349,6 +354,9 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
         }
     }
     accounts_bar::draw(f, view, &areas);
+    if let Some(card) = &view.tour {
+        draw_pointer(f, card);
+    }
     if !full {
         activity::draw_tooltip(f, view, areas.activity);
     }
@@ -377,6 +385,9 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
     }
     if view.star {
         draw_star(f, view);
+    }
+    if let Some(card) = &view.tour {
+        draw_tour(f, view, card);
     }
     if let Some(toast) = view.toast {
         draw_toast(f, view, toast);

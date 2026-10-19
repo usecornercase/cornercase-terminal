@@ -31,4 +31,4 @@ expression: "render_sized(&shown(Sidebar::SideBySide, entries()), W, TALL.height
 " ───────────────────────────── │ ─────────────────────── │                                          "
 "  Settings                     │  Issues                 │                                          "
 "  Usage                        │  Files            TODO  │                                          "
-"  Quit                         │                         │                                          "
+"  Quit                   Help  │                         │                                          "

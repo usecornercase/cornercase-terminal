@@ -19,4 +19,4 @@ expression: render(&with_workspaces(Some(0))).backend()
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │  Files            TODO  │                                          "
-"  Quit                         │                         │                                          "
+"  Quit                   Help  │                         │                                          "

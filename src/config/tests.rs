@@ -73,6 +73,7 @@ mod file {
             sound_subagents: true,
             check_updates: false,
             star_prompt: false,
+            tour: false,
             remote: true,
             remote_port: 47682,
             projects: [(

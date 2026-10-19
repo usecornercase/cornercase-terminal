@@ -1,0 +1,84 @@
+{
+  "active": {
+    "tour": "core",
+    "step": "tabs",
+    "index": 2,
+    "card": true
+  },
+  "offered": true,
+  "progress": [
+    {
+      "tour": "core",
+      "done": [
+        "projects",
+        "workspaces"
+      ],
+      "finished": false
+    },
+    {
+      "tour": "issues",
+      "done": [],
+      "finished": false
+    },
+    {
+      "tour": "changes",
+      "done": [],
+      "finished": false
+    },
+    {
+      "tour": "files",
+      "done": [],
+      "finished": false
+    },
+    {
+      "tour": "flows",
+      "done": [],
+      "finished": false
+    },
+    {
+      "tour": "todo",
+      "done": [],
+      "finished": false
+    },
+    {
+      "tour": "queue",
+      "done": [],
+      "finished": false
+    },
+    {
+      "tour": "search",
+      "done": [],
+      "finished": false
+    },
+    {
+      "tour": "phone",
+      "done": [],
+      "finished": false
+    },
+    {
+      "tour": "chats",
+      "done": [],
+      "finished": false
+    },
+    {
+      "tour": "accounts",
+      "done": [],
+      "finished": false
+    },
+    {
+      "tour": "keys",
+      "done": [],
+      "finished": false
+    },
+    {
+      "tour": "scripts",
+      "done": [],
+      "finished": false
+    },
+    {
+      "tour": "plugins",
+      "done": [],
+      "finished": false
+    }
+  ]
+}

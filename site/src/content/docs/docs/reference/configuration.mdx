@@ -131,6 +131,9 @@ Your [agent accounts](../../guides/accounts/). One section per agent that takes 
 | **sound when it finishes** | The file played when an agent finishes. Empty plays the built-in one. |
 | **sound for subagents** | Also play it for agents started by another agent or by a flow. Off by default, so only the agents you started make a sound. |
 | **check for updates** | *Every hour*: ask GitHub for the latest release when the server starts and then hourly, and offer to [update](../../installation/#update) when there is a newer one. *Never*: don't ask. |
+| **guided tour** | *On a new install*: the [guided tour](../../first-steps/#the-guided-tour-and-help) shows once by itself, the first time cornercase runs. *Only from Help*: it never shows by itself. See [`tour`](#tour). |
+| **start the tour** | Opens the guided tour. |
+| **reset tour progress** | Every tour starts again from its first step. |
 | **star prompt** | *Now and then*: after about two weeks of use, a small card at the bottom right asks for a star on GitHub. *Never*: it never asks. See [`star_prompt`](#star_prompt). |
 | **prefix key** | The key that opens the menu of [keyboard shortcuts](../keyboard-and-mouse/#keyboard-shortcuts). Select the row, then press the combination you want; `Backspace` turns it off, `Esc` keeps the current one. Off by default. |
 
@@ -233,6 +236,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "sound_subagents": false,
   "check_updates": true,
   "star_prompt": true,
+  "tour": true,
   "remote": false,
   "remote_port": 47681,
   "projects": {}
@@ -292,6 +296,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`sound_subagents`](#sound_subagents) | boolean | `false` |
 | [`check_updates`](#check_updates) | boolean | `true` |
 | [`star_prompt`](#star_prompt) | boolean | `true` |
+| [`tour`](#tour) | boolean | `true` |
 | [`remote`](#remote) | boolean | `false` |
 | [`remote_port`](#remote_port) | number | `47681` |
 | [`projects`](#projects) | object | `{}` |
@@ -499,6 +504,10 @@ Whether cornercase asks GitHub for the latest release, when the server starts an
 #### `star_prompt`
 
 Whether cornercase may ask for a star on GitHub. After about 14 days on which a window was open and an agent ran (not calendar days since you installed it), a small card appears at the bottom right of the window: **star on GitHub** copies the repository's link to your clipboard and never asks again, **later** asks again in about 90 days, and **don't show again** never asks again. If you don't answer, it counts as **later**. It never appears while an agent is working or waiting for you, while a dialog, the search or a panel's field has the keys, or in the compact layout (below 90 columns), and it never takes the keys from the pane. Nothing is sent anywhere and cornercase doesn't check whether you starred; what it remembers (the days counted, when it last asked and your answer) is in `star.json` next to `session.json`. Set it to `false` to turn it off for good.
+
+#### `tour`
+
+Whether the guided tour shows by itself on a new install: the first time cornercase runs, with no `session.json`, `stats.json` or `star.json` yet. It shows once; an install from before the tour gets a toast saying it is in **`Help`** instead. Whatever this says, **`Help`**, the keys menu's `h`, **settings → UI → start the tour** and `cornercase tour` open it. Your progress is in `tour.json` next to `session.json`.
 
 [Agents](../agents/) explains `agent`, `agent_args`, `agent_modes`, `agent_commands` and the trust prompt in depth.
 

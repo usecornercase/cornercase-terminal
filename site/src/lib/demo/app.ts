@@ -59,6 +59,7 @@ import {
   type ConfirmView,
   type Group,
   type IssuesOverlay,
+  type HelpItem,
   type MenuAction,
   type Overlay,
   type Pane,
@@ -119,6 +120,10 @@ const ACCOUNT_SWITCHES = [
 const PULL_REQUESTS_NEED = 'this needs cornercase on your computer: the demo has no GitHub';
 
 const OPEN_IN_NEEDS = 'this needs cornercase on your computer: the demo opens no other apps';
+const TOUR_NEEDS = 'the guided tour needs a real cornercase: cornercase tour starts it';
+export const DOCS_URL = 'https://usecornercase.dev/docs/';
+export const BUG_URL = 'https://github.com/usecornercase/cornercase-terminal/issues/new';
+const HELP_LABELS: Record<HelpItem, string> = { tour: 'tour', catalogue: 'catalogue…', docs: 'docs', bug: 'report a bug' };
 const SETUP_NEEDS = 'this needs cornercase on your computer: the demo runs no setup scripts';
 
 const BUILT_IN_FLOWS: [string, number, string][] = [
@@ -1225,6 +1230,21 @@ export class App {
     this.dirty();
   }
 
+  openHelp(at: Pos): void {
+    this.nav = null;
+    const items: HelpItem[] = ['tour', 'catalogue', 'docs', 'bug'];
+    this.overlay = { kind: 'menu', at, actions: items.map((item) => ({ kind: 'help', item })) };
+    this.dirty();
+  }
+
+  private helpAction(item: HelpItem): void {
+    if (item === 'docs' || item === 'bug') {
+      const url = item === 'docs' ? DOCS_URL : BUG_URL;
+      this.emit('copy', url);
+      this.notify(`copied ${url}`);
+    } else this.bug(TOUR_NEEDS);
+  }
+
   openNewMenu(at: Pos): void {
     this.overlay = { kind: 'menu', at, actions: [{ kind: 'openProject' }, { kind: 'newGroup' }] };
     this.dirty();
@@ -2179,6 +2199,7 @@ export class App {
     if (a.kind === 'startFlow') return 'start a flow…';
     if (a.kind === 'projectSettings') return 'project settings';
     if (a.kind === 'openIn') return 'open in…';
+    if (a.kind === 'help') return HELP_LABELS[a.item];
     return a.action;
   }
 
@@ -2245,6 +2266,7 @@ export class App {
     } else if (a.kind === 'startFlow') this.bug(FLOWS_NEED);
     else if (a.kind === 'projectSettings') this.bug(SETUP_NEEDS);
     else if (a.kind === 'openIn') this.bug(OPEN_IN_NEEDS);
+    else if (a.kind === 'help') this.helpAction(a.item);
     else this.paneAction(a.pane, a.action);
     this.dirty();
   }
@@ -2739,6 +2761,7 @@ export class App {
       if (opening) this.addTodo();
     } else if (a.kind === 'settings') this.openSettings();
     else if (a.kind === 'usage') this.openUsage();
+    else if (a.kind === 'help') this.openHelp({ x: 2, y: 2 });
     else if (a.kind === 'away') this.openSettingsOn(PAGE.remote, 'telegram');
     else if (a.kind === 'pullRequest') this.bug(PULL_REQUESTS_NEED);
     else if (a.kind === 'flow') this.toggleFlow();

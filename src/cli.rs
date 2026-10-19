@@ -34,6 +34,7 @@ mod status;
 mod terminal;
 mod theme;
 mod todo;
+mod tour;
 mod update;
 mod usage;
 mod view;
@@ -279,6 +280,7 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Issue(args) => return issue::run(args.action),
         Control::Changes(args) => changes::run(args),
         Control::Usage(args) => return usage::run(&args),
+        Control::Tour(args) => tour::run(&args),
         Control::Account(args) => accounts::account(args.action),
         Control::Profile(args) => accounts::profile(args.action),
     }?;

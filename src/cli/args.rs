@@ -9,6 +9,7 @@ pub(crate) mod queue;
 pub(crate) mod terminal;
 pub(crate) mod theme;
 pub(crate) mod todo;
+pub(crate) mod tour;
 pub(crate) mod usage;
 pub(crate) mod view;
 
@@ -24,7 +25,7 @@ use super::help::{
     MOVE_PANE_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP, PROFILE_HELP, RATIO_HELP,
     READ_HELP, REDRAW_HELP, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP, RESTART_TIMEOUT, SCROLL_HELP,
     SEARCH_HELP, SELECTION_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP, STATUS_HELP,
-    SURFACE_HELP, THEME_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP,
+    SURFACE_HELP, THEME_HELP, TODO_HELP, TOUR_HELP, UNTIL_AFTER, UPDATE_HELP, USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP,
     WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
@@ -223,6 +224,8 @@ pub(crate) enum Control {
         after_help = USAGE_HELP
     )]
     Usage(usage::UsageArgs),
+    #[command(about = "Show the guided tour in the window, or move, end or reset it", after_help = TOUR_HELP)]
+    Tour(tour::TourArgs),
     #[command(about = "Add, list and remove the accounts agents log in with", after_help = ACCOUNT_HELP)]
     Account(accounts::AccountArgs),
     #[command(about = "Make, change and switch profiles: which account each agent uses", after_help = PROFILE_HELP)]

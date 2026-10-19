@@ -15,6 +15,7 @@ mod search;
 mod status;
 mod talk;
 mod terminal;
+mod tour;
 mod updates;
 mod usage;
 mod wait;
@@ -389,7 +390,7 @@ impl App {
         if self.queue_answered(client, &reply) {
             return;
         }
-        if self.todo_answered(client, &reply) {
+        if self.todo_answered(client, &reply) || self.tour_answered(client, &reply) {
             return;
         }
         if client >= MESSENGER_CLIENTS {
@@ -475,6 +476,7 @@ impl App {
             Command::IssueRead(read) => self.issue_read_request(client, asker, &read),
             Command::IssuePeople(people) => self.issue_people_request(client, asker, &people),
             Command::Usage(usage) => Ok(self.usage_request(client, &usage, now)),
+            Command::Tour(tour) => self.tour_request(&tour),
             Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),
             Command::PluginActions(actions) => Ok(Some(self.plugin_actions_request(&actions))),
             Command::PluginRun(run) => self.plugin_run_request(client, &run),

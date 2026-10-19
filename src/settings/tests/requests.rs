@@ -51,6 +51,8 @@ mod describing {
                     | Row::AddAgent
                     | Row::Plugin(_)
                     | Row::NoPlugins
+                    | Row::TourStart
+                    | Row::TourReset
             ) || row.page() == Page::Accounts;
             assert!(skipped || rows.contains(&row), "{row:?} has no key");
         }

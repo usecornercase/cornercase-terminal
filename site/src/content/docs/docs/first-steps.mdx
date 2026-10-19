@@ -6,7 +6,9 @@ description: A ten-minute tour of cornercase. Open projects, start a workspace, 
 import { Steps, Aside } from '@astrojs/starlight/components';
 import Screen from '../../../components/Screen.astro';
 
-This tour takes you through a normal session: opening projects, starting a line of work, splitting a tab and leaving everything running. You only need the mouse; keys always go to the shell in front of you.
+The first time you run cornercase it shows a short guided tour of its own: a card at the bottom right that points at a part of the window, and moves on when you do what it says. It follows this page. You can skip any step or end the tour, and reopen it any time from **`Help`**.
+
+This page takes you through a normal session: opening projects, starting a line of work, splitting a tab and leaving everything running. You only need the mouse; keys always go to the shell in front of you.
 
 ## Start in a project folder
 
@@ -30,7 +32,7 @@ On the left are your projects and the workspaces of the active one, in one colum
 | Area | What it holds |
 | --- | --- |
 | Top left | The **search bar**: click it to jump to any project, workspace or tab. |
-| **Projects** | Every project you opened, with its number of workspaces, optionally in [groups](../guides/projects-workspaces-tabs/#groups). `+ New` at the end of the list; `Settings`, [`Usage`](../guides/projects-workspaces-tabs/#usage-and-stats) and `Quit` at the bottom, with an [update](../installation/#update) button next to `Settings` when a new version is out. |
+| **Projects** | Every project you opened, with its number of workspaces, optionally in [groups](../guides/projects-workspaces-tabs/#groups). `+ New` at the end of the list; `Settings`, [`Usage`](../guides/projects-workspaces-tabs/#usage-and-stats) and `Quit` at the bottom, with `Help` next to `Quit` and an [update](../installation/#update) button next to `Settings` when a new version is out. |
 | **Workspaces** | The workspaces of the active project, each with its tabs. `+ Tab` adds a tab to a workspace, `+ New` starts a new one (**new workspace**) or a [flow](../guides/flows/) (**start a flow…**), `Issues` opens the issue browser, `Files` the [files panel](../guides/files/), `TODO` your [TODO list](../guides/todo/). |
 | The pane | The active tab: one shell, or several in splits. |
 
@@ -127,8 +129,24 @@ cornercase kill-server  # stop the server and every shell in it
 
 After `kill-server` or a reboot, the next `cornercase` brings back your projects, workspaces, tabs and splits, each pane with a fresh shell in its folder. See [Sessions and the server](../guides/sessions/).
 
+## The guided tour and Help
+
+**`Help`**, at the right of the `Quit` row, opens a menu:
+
+- **tour** shows the guided tour again, where you left it (**continue the tour**), or from the start once you finished it. Its steps follow this page, then show you your first prompt to an agent, the status icons and the settings that matter most.
+- **catalogue…** lists short tours of the rest of cornercase: issues to agents, reviewing changes, files and paths, flows, TODO, the queue, search, your phone, Telegram and Discord, accounts, keys, scripts and plugins. A tour you finished gets a `✓`, one you started shows how far you got.
+- **docs** and **report a bug** copy the address of these docs or of a new GitHub issue.
+- **keys menu** opens the [keys menu](../reference/keyboard-and-mouse/#keyboard-shortcuts), once you set a prefix key.
+
+A step that asks you to do something, such as opening a project or a tab, completes as soon as you do it; **skip** goes past it. **docs** on the card copies the page of that tour, and **end tour** closes it; its progress stays. The card never takes the keys from your shell, and clicks around it reach the window as usual.
+
+In the first-prompt step the card shows an idea for a prompt, which you can click to edit, and a button that starts the agent with it in the current workspace. If the agent asks whether to trust the folder, that answer is yours.
+
+The tour shows by itself only once, on a new install. **settings → UI → guided tour** turns that off, **start the tour** opens it, and **reset tour progress** starts every tour again from its first step. `cornercase tour` opens it from a shell (see [Command line](../reference/command-line/#cornercase-tour)).
+
 ## Where to go next
 
+- Look around with the short tours in **`Help` → catalogue…**.
 - Let an agent work on an issue: [Issues and agents](../guides/issues-and-agents/), or a whole team of them: [Flows](../guides/flows/).
 - Tune cornercase in **Settings**: [Settings and config.json](../reference/configuration/).
 - Every click and key, in one place: [Keyboard and mouse](../reference/keyboard-and-mouse/).

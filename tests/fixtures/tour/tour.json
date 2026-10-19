@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "offered": true,
+  "announced": false,
+  "tours": {
+    "core": {
+      "done": [
+        "projects",
+        "workspaces"
+      ],
+      "finished": false
+    },
+    "todo": {
+      "done": [
+        "open"
+      ],
+      "finished": true
+    }
+  }
+}

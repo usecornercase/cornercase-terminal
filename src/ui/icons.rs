@@ -52,6 +52,8 @@ pub(crate) const REMOTE: &str = "\u{eb3a}";
 
 pub(crate) const USAGE: &str = "\u{eb03}";
 
+pub(crate) const HELP: &str = "\u{eb32}";
+
 pub(crate) const SETTINGS: &str = "\u{eb51}";
 
 pub(crate) const QUIT: &str = "\u{ea6e}";

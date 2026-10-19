@@ -31,4 +31,4 @@ expression: "render_sized(&shown(Sidebar::Tree, entries()), W, TALL.height).back
 "  Files                  TODO  │                                                                    "
 "  Settings                     │                                                                    "
 "  Usage                        │                                                                    "
-"  Quit                         │                                                                    "
+"  Quit                   Help  │                                                                    "

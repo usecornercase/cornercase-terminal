@@ -535,6 +535,7 @@ mod telegram;
 mod theme;
 mod todo_sending;
 mod todos;
+mod tours;
 mod updating;
 mod usage;
 mod views;

@@ -22,7 +22,7 @@ TestBackend { buffer: Buffer {
         " ───────────────────────────── │                         │                     │                    ",
         "  Settings                     │                         │                     │                    ",
         "  Usage                        │                         │                     │                    ",
-        "  Quit                         │                         │                     │                    ",
+        "  Quit                   Help  │                         │                     │                    ",
     ],
     styles: [
         x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
@@ -176,6 +176,8 @@ TestBackend { buffer: Buffer {
         x: 0, y: 17, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 1, y: 17, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
         x: 7, y: 17, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 24, y: 17, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 30, y: 17, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 31, y: 17, fg: Indexed(239), bg: Reset, underline: Reset, modifier: NONE,
         x: 32, y: 17, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 57, y: 17, fg: Indexed(239), bg: Reset, underline: Reset, modifier: NONE,

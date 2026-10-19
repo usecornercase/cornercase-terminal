@@ -179,7 +179,10 @@ export type MenuAction =
   | { kind: 'startFlow'; project: number }
   | { kind: 'projectSettings'; project: number }
   | { kind: 'openIn' }
-  | { kind: 'sendTodo'; todo: number; pane: number };
+  | { kind: 'sendTodo'; todo: number; pane: number }
+  | { kind: 'help'; item: HelpItem };
+
+export type HelpItem = 'tour' | 'catalogue' | 'docs' | 'bug';
 
 export interface PickItem {
   value: string;

@@ -456,6 +456,9 @@ pub(crate) fn ui_rows() -> Vec<Row> {
         Row::SoundSubagents,
         Row::Updates,
         Row::StarPrompt,
+        Row::Tour,
+        Row::TourStart,
+        Row::TourReset,
         Row::Prefix,
     ]
 }

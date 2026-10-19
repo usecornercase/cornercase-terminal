@@ -31,4 +31,4 @@ expression: t.backend()
 " ───────────────────────────── │ ─────────────────────── │                                          "
 "  Settings                     │  Issues                 │                                          "
 "  Usage                        │  Files            TODO  │                                          "
-"  Quit                         │                         │                                          "
+"  Quit                   Help  │                         │                                          "

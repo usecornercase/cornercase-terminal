@@ -55,6 +55,20 @@ fn snapshot() -> Snapshot<AppState> {
                 install_error: None,
             },
             keep_awake: Some(KeepAwake { held: true, by: Some("caffeinate".into()), unavailable: None }),
+            tour: crate::control::tour::TourState {
+                active: Some(crate::control::tour::ActiveInfo {
+                    tour: "core".into(),
+                    step: "tabs".into(),
+                    index: 2,
+                    card: true,
+                }),
+                offered: true,
+                progress: vec![crate::control::tour::ProgressInfo {
+                    tour: "core".into(),
+                    done: vec!["projects".into(), "workspaces".into()],
+                    finished: false,
+                }],
+            },
             profile: None,
             accounts: BTreeMap::new(),
         },
@@ -85,7 +99,7 @@ fn every_key_is_there_when_there_is_nothing() {
     let value = serde_json::to_value(AppState::default()).expect("json");
 
     let keys: Vec<&str> = value.as_object().expect("an object").keys().map(String::as_str).collect();
-    assert_eq!(keys, ["away", "boot", "keep_awake", "queue", "todos", "update", "version"]);
+    assert_eq!(keys, ["away", "boot", "keep_awake", "queue", "todos", "tour", "update", "version"]);
     assert_eq!(value["keep_awake"], Value::Null);
     let update = &value["update"];
     assert_eq!(

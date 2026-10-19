@@ -57,6 +57,7 @@ fn view(names: &[&str]) -> View<'static> {
         overlay: None,
         toast: None,
         star: false,
+        tour: None,
         nav: None,
         update: None,
         remote: None,
@@ -181,6 +182,7 @@ mod tab_bar_drawing;
 mod tab_context;
 mod tall_rows;
 mod toast;
+mod tour;
 mod tree_drawing;
 mod tree_drop;
 mod tree_layout;

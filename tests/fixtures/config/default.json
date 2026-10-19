@@ -57,6 +57,7 @@
   "sound_subagents": false,
   "check_updates": true,
   "star_prompt": true,
+  "tour": true,
   "remote": false,
   "remote_port": 47681,
   "projects": {}

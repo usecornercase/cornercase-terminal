@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/picker.rs
-assertion_line: 7223
 expression: render(&with(p)).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -20,4 +19,4 @@ expression: render(&with(p)).backend()
 " ─────────────│                                                                      │              "
 "  Settings    │                                                       open   cancel  │              "
 "  Usage       ╰──────────────────────────────────────────────────────────────────────╯              "
-"  Quit                         │                         │                                          "
+"  Quit                   Help  │                         │                                          "

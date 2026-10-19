@@ -50,6 +50,9 @@ pub(crate) enum Row {
     SoundSubagents,
     Updates,
     StarPrompt,
+    Tour,
+    TourStart,
+    TourReset,
     Prefix,
     Token(Source),
     GitlabUrl,
@@ -109,6 +112,9 @@ impl Row {
             | Self::SoundSubagents
             | Self::Updates
             | Self::StarPrompt
+            | Self::Tour
+            | Self::TourStart
+            | Self::TourReset
             | Self::Prefix
             | Self::ServerTokens => "",
             Self::Remote | Self::Browsers => "Browser",
@@ -165,6 +171,9 @@ impl Row {
             | Self::SoundSubagents
             | Self::Updates
             | Self::StarPrompt
+            | Self::Tour
+            | Self::TourStart
+            | Self::TourReset
             | Self::Prefix => Page::Ui,
             Self::Remote | Self::Browsers | Self::Bot(_) | Self::Chat(_) => Page::Remote,
             Self::Plugin(_) | Self::NoPlugins => Page::Plugins,
@@ -321,6 +330,8 @@ pub(crate) enum Action {
     Plugin(String, bool),
     Accounts(Order),
     RemoveAccount(Known, String),
+    StartTour,
+    ResetTour,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -507,6 +518,9 @@ impl Settings {
             Row::SoundSubagents,
             Row::Updates,
             Row::StarPrompt,
+            Row::Tour,
+            Row::TourStart,
+            Row::TourReset,
             Row::Prefix,
             Row::Remote,
         ]);

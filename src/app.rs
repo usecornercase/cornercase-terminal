@@ -67,6 +67,7 @@ use search_dialog::SearchEvent;
 use session::not_restored;
 use star_prompt::StarPrompt;
 use toast::Toast;
+use tour_card::TourRuntime;
 use trackers::IssueConnections;
 use update_dialog::{UpdateEvent, UpdateState};
 use worktrees::{SYNC_EVERY, Upstream, WorktreeEvent};
@@ -85,6 +86,7 @@ mod files_panel;
 mod flow_panel;
 mod flow_runs;
 mod flows_dialog;
+mod help_menu;
 mod hierarchy;
 mod images;
 mod input;
@@ -121,6 +123,7 @@ mod tabs;
 mod theme;
 mod toast;
 mod todo_panel;
+mod tour_card;
 mod trace;
 mod trackers;
 mod update_dialog;
@@ -173,6 +176,7 @@ pub(crate) struct App {
     divider_click: Option<(u64, Vec<bool>, Instant)>,
     toast: Option<Toast>,
     star: StarPrompt,
+    tour: TourRuntime,
     notices: Notices,
     overlay: Option<Overlay>,
     config: Config,
@@ -255,6 +259,7 @@ impl App {
             divider_click: None,
             toast: None,
             star: StarPrompt::default(),
+            tour: TourRuntime::default(),
             notices: Notices::default(),
             overlay: None,
             config,
@@ -478,6 +483,7 @@ impl App {
         self.watch_agents(now);
         self.keep_awake(now);
         self.offer_star(now, clock);
+        self.offer_tour(now);
         self.watch_messengers(now);
         self.sync_remote();
         self.sync_messengers();
@@ -797,6 +803,7 @@ impl App {
             overlay,
             toast: self.toast.as_ref().map(Toast::view),
             star: self.star.card,
+            tour: self.tour_card(area),
             nav: self.nav,
             update: self.update_label(),
             remote: self.remote_button(),

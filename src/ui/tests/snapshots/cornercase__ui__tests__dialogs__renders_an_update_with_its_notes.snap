@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/dialogs.rs
-assertion_line: 6782
 expression: "render(&with(Overlay::Update(update))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -20,4 +19,4 @@ expression: "render(&with(Overlay::Update(update))).backend()"
 " ─────────────│ downloading…                                                         │              "
 "  Settings    │                                                     update   cancel  │              "
 "  Usage       ╰──────────────────────────────────────────────────────────────────────╯              "
-"  Quit                         │                         │                                          "
+"  Quit                   Help  │                         │                                          "

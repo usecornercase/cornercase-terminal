@@ -3,6 +3,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::account_menu::AccountItem;
+use super::help_menu::HelpItem;
 use super::opening::Subject;
 use super::overlay::Overlay;
 use super::plugins::Spot;
@@ -107,6 +108,8 @@ pub(super) enum MenuAction {
     Plugin { spot: Spot, index: u16, revision: u32 },
     Account(AccountItem, (u64, u64)),
     ManageAccounts,
+    Help(HelpItem),
+    Tour(u8),
 }
 
 impl App {
@@ -167,6 +170,8 @@ impl App {
             MenuAction::Plugin { index, .. } => self.plugin_label(index),
             MenuAction::Account(item, _) => self.account_item_label(item),
             MenuAction::ManageAccounts => "manage accounts…".into(),
+            MenuAction::Help(item) => self.help_label(item),
+            MenuAction::Tour(index) => self.tour_label(index),
         }
     }
 
@@ -271,6 +276,8 @@ impl App {
             MenuAction::Plugin { spot, index, revision } => self.run_plugin_action(spot, index, revision),
             MenuAction::Account(item, revision) => self.account_item(item, revision),
             MenuAction::ManageAccounts => self.manage_accounts(),
+            MenuAction::Help(item) => self.help_action(item, at),
+            MenuAction::Tour(index) => self.start_tour(usize::from(index), None, true),
         }
         Ok(())
     }

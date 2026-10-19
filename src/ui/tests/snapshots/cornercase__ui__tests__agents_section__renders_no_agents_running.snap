@@ -31,4 +31,4 @@ expression: "render_sized(&shown(Sidebar::ProjectsOnTop, Vec::new()), W,\nTALL.h
 "  Files                  TODO  │                                                                    "
 "  Settings                     │                                                                    "
 "  Usage                        │                                                                    "
-"  Quit                         │                                                                    "
+"  Quit                   Help  │                                                                    "

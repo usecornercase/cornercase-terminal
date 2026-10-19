@@ -78,5 +78,24 @@
   "keep_awake": {
     "held": true,
     "by": "caffeinate"
+  },
+  "tour": {
+    "active": {
+      "tour": "core",
+      "step": "tabs",
+      "index": 2,
+      "card": true
+    },
+    "offered": true,
+    "progress": [
+      {
+        "tour": "core",
+        "done": [
+          "projects",
+          "workspaces"
+        ],
+        "finished": false
+      }
+    ]
   }
 }

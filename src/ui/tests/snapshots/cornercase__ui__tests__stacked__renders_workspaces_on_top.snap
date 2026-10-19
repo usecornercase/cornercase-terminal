@@ -31,4 +31,4 @@ expression: "render_sized(&with_lists(Sidebar::WorkspacesOnTop), W, TALL.height)
 "  Files                  TODO  │                                                                    "
 "  Settings                     │                                                                    "
 "  Usage                        │                                                                    "
-"  Quit                         │                                                                    "
+"  Quit                   Help  │                                                                    "

@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/dialogs.rs
-assertion_line: 6765
 expression: "render(&with(Overlay::Confirm(confirm))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -20,4 +19,4 @@ expression: "render(&with(Overlay::Confirm(confirm))).backend()"
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                         │                         │                                          "
+"  Quit                   Help  │                         │                                          "
