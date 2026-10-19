@@ -26,31 +26,7 @@ const sizes: Weight[] = t.stats.sizes.map((m, i) => ({ ...m, values: weighed[i] 
 <section class="section stats" id="speed" aria-labelledby="speed-title">
   <div class="wrap">
     <div class="head reveal">
-      <h2 class="h2 stretch" id="speed-title" aria-label={t.stats.label}>
-        <span aria-hidden="true">
-          {
-            t.stats.title.map((line, i) => {
-              const parts = line.map((w, j) => (
-                <Fragment>
-                  {j > 0 && ' '}
-                  {typeof w === 'string' ? (
-                    <span class="word">{w}</span>
-                  ) : (
-                    <span class="word">
-                      {w.pre}
-                      <span class="a">{w.a}</span>
-                      <span class="x" style="--k: 1">{w.a}</span>
-                      <span class="x" style="--k: 2">{w.a}</span>
-                      <span class="tail">{w.tail}</span>
-                    </span>
-                  )}
-                </Fragment>
-              ));
-              return i === 0 ? parts : <Fragment>{' '}<span class="second">{parts}</span></Fragment>;
-            })
-          }
-        </span>
-      </h2>
+      <h2 class="h2" id="speed-title">{t.stats.title}</h2>
       <p class="lead">{t.stats.lead}</p>
     </div>
     <Race measures={times} />
@@ -61,118 +37,14 @@ const sizes: Weight[] = t.stats.sizes.map((m, i) => ({ ...m, values: weighed[i] 
   </div>
 </section>
 
-<script>
-  for (const title of document.querySelectorAll<HTMLElement>('.stretch')) {
-    const measure = () => {
-      const a = title.querySelector<HTMLElement>('.x')?.offsetWidth ?? 0;
-      title.style.setProperty('--a', `${a}px`);
-      let line = Number.NaN;
-      let carry = 0;
-      for (const word of title.querySelectorAll<HTMLElement>('.word')) {
-        if (word.offsetTop !== line) {
-          line = word.offsetTop;
-          carry = 0;
-        }
-        word.style.setProperty('--carry', String(carry));
-        carry += word.querySelectorAll('.x').length;
-      }
-    };
-    measure();
-    document.fonts.ready.then(measure);
-    window.addEventListener('resize', measure, { passive: true });
-  }
-</script>
-
 <style>
   .section.stats {
-    padding-top: clamp(24px, 3vw, 40px);
+    padding-top: 0;
     padding-bottom: clamp(48px, 6vw, 80px);
   }
 
   .head {
     max-width: 900px;
-  }
-
-  .h2 {
-    font-size: clamp(34px, 4.6vw, 64px);
-  }
-
-  .stretch .word,
-  .stretch .x,
-  .stretch .tail {
-    display: inline-block;
-  }
-
-  :global(.js) .stretch .word {
-    transform: translateX(calc(var(--carry, 0) * var(--a, 0.55em) * -1));
-  }
-
-  :global(.js) .stretch .x {
-    transform: translateX(calc(var(--k) * var(--a, 0.55em) * -1));
-    opacity: 0;
-  }
-
-  :global(.js) .stretch .tail {
-    transform: translateX(calc(var(--a, 0.55em) * -2));
-  }
-
-  :global(.js) .head.in .stretch .word,
-  :global(.js) .head.in .stretch .x,
-  :global(.js) .head.in .stretch .tail {
-    transform: none;
-    opacity: 1;
-    transition:
-      transform 0.9s cubic-bezier(0.34, 1.4, 0.64, 1) 0.35s,
-      opacity 0.4s ease 0.35s;
-    transition-timing-function:
-      linear(
-        0,
-        0.06,
-        0.202,
-        0.38,
-        0.561,
-        0.723,
-        0.856,
-        0.955,
-        1.023,
-        1.062,
-        1.081,
-        1.083,
-        1.075,
-        1.062,
-        1.047,
-        1.032,
-        1.019,
-        1.009,
-        1.002,
-        0.997,
-        0.994,
-        0.993,
-        0.993,
-        0.994,
-        0.995,
-        0.996,
-        0.998,
-        0.999,
-        0.999,
-        1
-      ),
-      ease;
-  }
-
-  :global(.js) .head.in .stretch .second .x,
-  :global(.js) .head.in .stretch .second .tail {
-    transition-delay: 0.6s;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    :global(.js) .stretch .word,
-    :global(.js) .stretch .x,
-    :global(.js) .stretch .tail {
-      transform: none;
-      opacity: 1;
-      transition: none;
-    }
   }
 
   .note {

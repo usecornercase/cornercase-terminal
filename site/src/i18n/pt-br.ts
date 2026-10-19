@@ -1,18 +1,19 @@
 import type { Demo, Page } from './en';
 
 export const page: Page = {
-  title: 'cornercase · o mais rápido para agentes em paralelo',
+  title: 'cornercase · um multiplexador de terminal com tudo incluído',
   description:
-    'Um multiplexador de terminal rápido para agentes de programação. Cada agente ganha seu próprio worktree do git e sua própria aba, e eles continuam trabalhando quando você fecha o terminal. Tudo funciona com cliques. Linux e macOS.',
+    'Um multiplexador de terminal com tudo incluído: projetos e worktrees do git, agentes de programação, issues, diffs ao vivo, arquivos, flows e acesso remoto, sem nada para configurar. Gratuito e de código aberto, para Linux e macOS.',
   skip: 'Pular para o conteúdo',
   home: 'cornercase, início',
   nav: {
     label: 'Seções',
     demo: 'Simulação',
+    features: 'Recursos',
     speed: 'Velocidade',
     why: 'Por quê',
     flows: 'Flows',
-    more: 'Recursos',
+    more: 'Todo o resto',
     plugins: 'Plugins (EN)',
     docs: 'Docs (EN)',
     github: 'cornercase no GitHub',
@@ -22,8 +23,8 @@ export const page: Page = {
     language: 'Idioma',
   },
   hero: {
-    title: ['O mais rápido para', 'agentes em paralelo.'],
-    pitch: 'Cada agente no seu canto. Tudo a um clique. E quando você fecha o terminal, eles continuam trabalhando.',
+    title: ['Um multiplexador de terminal', 'com tudo incluído.'],
+    pitch: 'Projetos, worktrees, agentes de programação, issues, diffs ao vivo e acesso remoto, prontos assim que você instala. Nada para configurar.',
     strip: 'Gratuito e de código aberto, para Linux e macOS.',
   },
   demo: {
@@ -43,12 +44,23 @@ export const page: Page = {
     copy: 'copiar',
     copied: 'copiado',
   },
-  stats: {
-    title: [
-      [{ pre: 'Rápid', a: 'o', tail: '.' }],
-      ['Muito', { pre: 'rápid', a: 'o', tail: '.' }],
+  features: {
+    title: ['Abra uma pasta.', 'O resto já está lá.'],
+    lead: 'Pense no LazyVim, mas para multiplexadores de terminal: tudo o que você teria que programar, adicionar com plugins e manter configurado já vem incluído, e tudo se encaixa desde o início.',
+    items: [
+      ['Projetos e worktrees', 'Suas pastas numa barra lateral, em grupos se quiser. Cada frente de trabalho ganha seu próprio worktree do git e seu branch, com abas e divisões dentro.'],
+      ['Agentes de programação', 'Claude Code, Codex, Gemini, Copilot e outros, cada um no seu canto, com status, modelo e contexto na própria aba.'],
+      ['Suas issues', 'GitHub, GitLab, Linear, Jira, Plane, Asana e Shortcut. Escolha uma, aperte start e um agente assume, no seu próprio branch.'],
+      ['Diffs ao vivo', 'O que um agente mudou, ao lado dele, enquanto ele digita. Abra um hunk no seu editor ou devolva com um comentário.'],
+      ['Arquivos e busca', 'Navegue e leia o código com as cores do seu terminal, imagens incluídas. Ache qualquer arquivo, qualquer linha ou o que um agente disse.'],
+      ['Flows', 'Uma equipe de agentes numa issue: um planeja, outro programa, outros revisam, e um orquestrador faz o trabalho andar.'],
+      ['Sessões que não param', 'Feche a janela, perca o Wi-Fi: shells e agentes continuam rodando. Abra de novo em qualquer terminal e está tudo lá.'],
+      ['De qualquer lugar', 'No navegador do celular, por SSH de qualquer máquina, ou no Telegram e no Discord, onde seus agentes te escrevem.'],
+      ['Scripts e plugins', 'Cada ação também é um comando, então seus scripts e agentes podem comandar tudo. Os plugins acrescentam o resto.'],
     ],
-    label: 'Rápido. Muito rápido.',
+  },
+  stats: {
+    title: 'Tudo isso, e continua rápido.',
     lead: 'Abre antes de você piscar, e mostra o que seus agentes mudaram, abre um arquivo ou encontra um antes de você clicar de novo. Os outros apps que testamos? Até 8,5 segundos, e quase 2 GB.',
     how: 'Como medimos →',
     times: [
@@ -205,7 +217,7 @@ export const page: Page = {
     first: 'Primeiros passos',
     star: 'Dê uma estrela no GitHub',
     discord: 'Entre no Discord',
-    tagline: 'Cada agente no seu canto. No seu terminal, a um clique.',
+    tagline: 'Tudo incluído. Cada agente no seu canto.',
     product: 'Produto',
     docs: 'Documentação (em inglês)',
     project: 'Projeto',

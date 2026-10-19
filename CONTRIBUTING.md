@@ -9,7 +9,7 @@ For anything bigger than a small fix, open an issue first so we can agree on the
 - **Mouse first.** Every key goes to the program in the active pane. The only keyboard shortcuts live in the menu behind the optional prefix key, which is off by default; please do not add others, or a default prefix, without discussing it first.
 - **The server owns the shells.** The UI is a thin client that only writes frames, so behaviour belongs in the server (`App`), not in `client.rs`.
 
-The rules for every change are in [AGENTS.md](AGENTS.md), and the design and the reasons behind it in [DESIGN.md](DESIGN.md). Read the section for the area you touch.
+The rules for every change are in [AGENTS.md](AGENTS.md), and the design and the reasons behind it in [`design/`](design/), one file per area, listed in [DESIGN.md](DESIGN.md). Read the file for the area you touch.
 
 ## Setup
 
@@ -47,11 +47,11 @@ UI changes usually change a snapshot. `cargo test` then writes its `.snap.new` i
 ## Code style
 
 - Everything in English: identifiers, test names, messages, UI text.
-- No code comments, including doc comments. If a decision needs explaining, add it to `DESIGN.md`.
+- No code comments, including doc comments. If a decision needs explaining, add it to its area's file in `design/`.
 - No `unwrap()` outside tests. Errors use `crate::error::Error`.
 - Tests are named as sentences (`close_button_closes_its_entry`) and test one behaviour each. A test added as a safety net must fail without the code it protects.
 
-- **Where code goes** is in the Code layout section of `DESIGN.md`: by domain, with tests in files of their own and at most 1,000 lines per file. Agent-specific rules, readers, probes and test fakes live in `src/agents/{claude,codex,gemini,opencode}/`; shared agent infrastructure stays in `src/agents/` and `src/agents/context/`. `cargo test` checks the imports and sizes through `tests/layers.rs`; its exception lists only shrink.
+- **Where code goes** is in [`design/code-layout.md`](design/code-layout.md): by domain, with tests in files of their own and at most 1,000 lines per file. Agent-specific rules, readers, probes and test fakes live in `src/agents/{claude,codex,gemini,opencode}/`; shared agent infrastructure stays in `src/agents/` and `src/agents/context/`. `cargo test` checks the imports and sizes through `tests/layers.rs`; its exception lists only shrink.
 - **`pub` only for what `src/main.rs` or the end-to-end tests use**; everything else is `pub(crate)` or narrower. The `unreachable_pub` lint enforces it, so the compiler's `dead_code` warnings then point at code nothing uses: delete it, or put it under `#[cfg(test)]` when only tests use it.
 
 ## Pull requests

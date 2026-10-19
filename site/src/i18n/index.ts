@@ -1,9 +1,9 @@
 import * as en from './en';
 import * as es from './es';
 import * as ptBr from './pt-br';
-import type { Page, Stretch } from './en';
+import type { Page } from './en';
 
-export type { Page, Stretch };
+export type { Page };
 
 export const LOCALES = {
   en: { path: '', lang: 'en', og: 'en_US', short: 'EN', name: 'English', page: en.page },

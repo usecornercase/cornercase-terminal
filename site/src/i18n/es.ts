@@ -1,18 +1,19 @@
 import type { Demo, Page } from './en';
 
 export const page: Page = {
-  title: 'cornercase · lo más rápido para agentes en paralelo',
+  title: 'cornercase · un multiplexor de terminal con todo incluido',
   description:
-    'Un multiplexor de terminal rápido para agentes de programación. Cada agente tiene su propio worktree de git y su propia pestaña, y siguen trabajando cuando cierras la terminal. Todo funciona con clics. Linux y macOS.',
+    'Un multiplexor de terminal con todo incluido: proyectos y worktrees de git, agentes de programación, issues, diffs en vivo, archivos, flows y acceso remoto, sin nada que configurar. Gratis y de código abierto, para Linux y macOS.',
   skip: 'Saltar al contenido',
   home: 'cornercase, inicio',
   nav: {
     label: 'Secciones',
     demo: 'Simulación',
+    features: 'Funciones',
     speed: 'Velocidad',
     why: 'Por qué',
     flows: 'Flows',
-    more: 'Funciones',
+    more: 'Todo lo demás',
     plugins: 'Plugins (EN)',
     docs: 'Docs (EN)',
     github: 'cornercase en GitHub',
@@ -22,8 +23,8 @@ export const page: Page = {
     language: 'Idioma',
   },
   hero: {
-    title: ['Lo más rápido para', 'agentes en paralelo.'],
-    pitch: 'Cada agente en su propio rincón. Todo a un clic. Y cuando cierras la terminal, siguen trabajando.',
+    title: ['Un multiplexor de terminal', 'con todo incluido.'],
+    pitch: 'Proyectos, worktrees, agentes de programación, issues, diffs en vivo y acceso remoto, listos en cuanto lo instalas. Nada que configurar.',
     strip: 'Gratis y de código abierto, para Linux y macOS.',
   },
   demo: {
@@ -43,12 +44,23 @@ export const page: Page = {
     copy: 'copiar',
     copied: 'copiado',
   },
-  stats: {
-    title: [
-      [{ pre: 'Rápid', a: 'o', tail: '.' }],
-      ['Muy', { pre: 'rápid', a: 'o', tail: '.' }],
+  features: {
+    title: ['Abre una carpeta.', 'Lo demás ya está ahí.'],
+    lead: 'Piensa en LazyVim, pero para multiplexores de terminal: todo lo que de otro modo tendrías que programar, añadir con plugins y mantener configurado viene incluido, y todo encaja desde el principio.',
+    items: [
+      ['Proyectos y worktrees', 'Tus carpetas en una barra lateral, en grupos si quieres. Cada línea de trabajo tiene su propio worktree de git y su rama, con pestañas y divisiones dentro.'],
+      ['Agentes de programación', 'Claude Code, Codex, Gemini, Copilot y más, cada uno en su propio rincón, con su estado, su modelo y su contexto en su pestaña.'],
+      ['Tus issues', 'GitHub, GitLab, Linear, Jira, Plane, Asana y Shortcut. Elige una, pulsa start y un agente se encarga, en su propia rama.'],
+      ['Diffs en vivo', 'Lo que cambió un agente, a su lado, mientras escribe. Abre un hunk en tu editor o devuélveselo con una nota.'],
+      ['Archivos y búsqueda', 'Explora y lee el código con los colores de tu terminal, imágenes incluidas. Encuentra cualquier archivo, cualquier línea o lo que dijo un agente.'],
+      ['Flows', 'Un equipo de agentes sobre una issue: uno planifica, otro programa, otros revisan, y un orquestador hace que el trabajo avance.'],
+      ['Sesiones que no se detienen', 'Cierra la ventana o quédate sin wifi: las shells y los agentes siguen en marcha. Vuelve a abrirlo desde cualquier terminal y estará todo ahí.'],
+      ['Desde cualquier sitio', 'En el navegador de tu teléfono, por SSH desde cualquier máquina, o en Telegram y Discord, donde tus agentes te escriben.'],
+      ['Scripts y plugins', 'Cada acción es también un comando, así que tus scripts y tus agentes pueden manejarlo todo. Los plugins añaden el resto.'],
     ],
-    label: 'Rápido. Muy rápido.',
+  },
+  stats: {
+    title: 'Todo eso, y sigue siendo rápido.',
     lead: 'Se abre antes de que parpadees, y te enseña lo que cambiaron tus agentes, abre un archivo o lo encuentra antes de que vuelvas a hacer clic. ¿Las otras apps que probamos? Hasta 8,5 segundos y casi 2 GB.',
     how: 'Cómo lo medimos →',
     times: [
@@ -205,7 +217,7 @@ export const page: Page = {
     first: 'Primeros pasos',
     star: 'Dale una estrella en GitHub',
     discord: 'Únete al Discord',
-    tagline: 'Cada agente en su propio rincón. En tu terminal, a un clic.',
+    tagline: 'Todo incluido. Cada agente en su propio rincón.',
     product: 'Producto',
     docs: 'Documentación (en inglés)',
     project: 'Proyecto',
