@@ -175,7 +175,7 @@ Over SSH, it's your local terminal that needs to allow it.
 - It opens on the computer the window is on, so only a local window offers it. A window from [`cornercase remote`](../../guides/remote/), your [phone's browser](../../guides/phone/) or a plain SSH session shows **copy path**, since the folders are on the other computer.
 - A tmux session started over SSH keeps `SSH_CONNECTION` when you reattach to it on the computer itself, so a window opened in it still counts as remote. Open cornercase outside that session, or run `tmux set-environment -gu SSH_CONNECTION` and `tmux set-environment -gu SSH_TTY`, then open a new pane.
 - An editor appears when its command is on the `PATH` (`code`, `cursor`, `zed`, `subl`), or on macOS when its app is in `/Applications` or `~/Applications`. On Linux Zed's command is often `zeditor`; a `zed` outside a `zed.app` folder is ignored, since on some systems that name is ZFS's daemon.
-- On Linux the menu needs `xdg-open` and a graphical session (`WAYLAND_DISPLAY` or `DISPLAY`); on a text console it shows **copy path**.
+- On Linux every choice needs a graphical session (`WAYLAND_DISPLAY` or `DISPLAY`); on a text console the menu shows **copy path**. The file manager and **default app** also need `xdg-open`; the editors only need their own command.
 - **default app** is offered for plain files only, never for a folder or a program you could run.
 - When an app can't start, a toast says `could not open in …` with the reason.
 

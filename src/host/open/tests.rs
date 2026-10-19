@@ -227,36 +227,21 @@ mod uris {
 mod running {
     use super::*;
 
-    fn run_one(script: &str) -> Option<Failed> {
+    fn run_one(script: &str) -> Result<(), String> {
         let tmp = TempDir::new();
-        write_executable(&tmp.path().join("xdg-open"), script);
-        let openers = Openers {
-            found: vec![(Opener::Files, Reach::Launcher)],
-            launcher: Some(tmp.path().join("xdg-open")),
-            dbus: None,
-        };
-        let (tx, rx) = mpsc::channel();
-        let dir = tmp.path().display().to_string();
-        let done = tx.clone();
-        openers.open(&open(Opener::Files, &dir, None), move |failed| {
-            let _ = tx.send(Some(failed));
-        });
-        thread::spawn(move || {
-            thread::sleep(Duration::from_millis(1500));
-            let _ = done.send(None);
-        });
-        rx.recv_timeout(Duration::from_secs(10)).expect("an answer")
+        let program = tmp.path().join("xdg-open");
+        write_executable(&program, script);
+        run(&[vec![program.into_os_string()]])
     }
 
     #[test]
     fn a_failing_opener_reports_its_exit_status() {
-        let failed = run_one("#!/bin/sh\nexit 3\n").expect("failed");
-        assert_eq!(failed, Failed { opener: Opener::Files, reason: "exit status 3".into() });
+        assert_eq!(run_one("#!/bin/sh\nexit 3\n"), Err("exit status 3".to_string()));
     }
 
     #[test]
     fn a_working_opener_reports_nothing() {
-        assert_eq!(run_one("#!/bin/sh\nexit 0\n"), None);
+        assert_eq!(run_one("#!/bin/sh\nexit 0\n"), Ok(()));
     }
 
     #[test]
