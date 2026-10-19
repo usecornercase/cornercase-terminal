@@ -23,10 +23,10 @@
 [38;5;6m  [0m[38;5;8m│[39m [38;5;6m  [39msound for subagents       [ ] off  [38;5;8magents started by another agent or by a flow[39m                      [38;5;8m│[2m[39m  
   [0m[38;5;8m│[39m [38;5;6m  [39mcheck for updates         [x] every hour  [38;5;8masks GitHub for the latest release[39m                         [38;5;8m│[2m[39m  
   [0m[38;5;8m│[39m [38;5;6m  [39mstar prompt               [x] now and then  [38;5;8masks for a GitHub star after two weeks of use[39m            [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m [38;5;6m  [39mguided tour               [x] on a new install  [38;5;8mthe first steps, shown once on a new install[39m         [38;5;8m│[2m[39m  
+[38;5;6m  [0m[38;5;8m│[39m [38;5;6m  [39mstart the tour            [38;5;8mit also opens from Help[39m                                                    [38;5;8m│[2m[39m  
+[38;5;6m  [0m[38;5;8m│[39m [38;5;6m  [39mreset tour progress       [38;5;8mevery tour starts again from its first step[39m                                [38;5;8m│[2m[39m  
   [0m[38;5;8m│[39m [38;5;6m  [39mprefix key                off  [38;5;8mopens a menu of keyboard shortcuts[39m                                    [38;5;8m│[2m[39m  
-[38;5;6m  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
-[38;5;6m  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
-  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
   [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
   [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
  [38;5;6m [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
@@ -35,4 +35,4 @@
  [38;5;8m [0m[38;5;8m│[39m [38;5;8menter changes the selected setting · tab or ←→ switches tabs · every change is saved at once[39m           [38;5;8m│[2m[39m  
  [38;5;8m [0m[38;5;8m│[39m                                                                                       [38;5;7m[48;5;236m restart [39m[49m [1m[38;5;6m[48;5;236m done [0m [38;5;8m│[2m[39m  
  [38;5;8m [0m[38;5;8m╰────────────────────────────────────────────────────────────────────────────────────────────────────────╯[2m[39m  
- [38;5;8m Quit [39m                        [38;5;239m│[39m                                                                              
+ [38;5;8m Quit [39m                 [38;5;8m Help [39m [38;5;239m│[39m                                                                              
