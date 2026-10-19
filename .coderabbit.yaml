@@ -32,7 +32,7 @@ reviews:
   path_instructions:
     - path: "src/**/*.rs"
       instructions: |
-        Follow AGENTS.md and DESIGN.md. Never suggest adding comments or doc comments: the project has none on purpose.
+        Follow AGENTS.md and the design notes in design/ (DESIGN.md is their index). Never suggest adding comments or doc comments: the project has none on purpose.
         Flag `unwrap()` outside tests, `std::sync::Mutex` instead of `parking_lot::Mutex`, and new keyboard shortcuts.
         If the PR changes the app (src/, Cargo.toml, Cargo.lock, rust-toolchain.toml, .cargo/), check that it bumps
         `version` in Cargo.toml and adds a matching `## <version>` section to CHANGELOG.md written for users.
@@ -41,6 +41,10 @@ reviews:
       instructions: |
         Tests must not sleep; they wait with `test_util::wait_until` or for output that proves the previous step finished.
         They must never call real `gh`, Shortcut or Linear, nor use the user's shell or config.
+    - path: "{DESIGN.md,design/**/*.md}"
+      instructions: |
+        DESIGN.md is the index of design/, one line per area. Check new notes against its
+        "What goes in an area file".
     - path: "site/**"
       instructions: |
         The site must match the app. Internal doc links are relative with a trailing slash.
@@ -76,3 +80,4 @@ knowledge_base:
     filePatterns:
       - AGENTS.md
       - DESIGN.md
+      - design/**/*.md
