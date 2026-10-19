@@ -41,7 +41,7 @@ dir=\"$COPILOT_HOME/session-state/$id\"
 mkdir -p \"$dir\"
 hold() {{ printf '%s' \"$$\" > \"$dir/inuse.$$.lock\"; exec 3>\"$dir/inuse.$$.hold\"; }}
 [ -n \"$resumed\" ] || hold
-while [ ! -e \"$signals/quit\" ]; do
+while [ -d \"$signals\" ] && [ ! -e \"$signals/quit\" ]; do
   if [ -n \"$resumed\" ] && [ -e \"$signals/prompted\" ]; then hold; resumed=; fi
   if mv \"$signals/clear\" \"$signals/.cleared\" 2>/dev/null; then
     exec 3>&-
