@@ -3,6 +3,7 @@ use ratatui::layout::Rect;
 use super::App;
 use super::toast::NOT_READING;
 use super::toast::Toast;
+use crate::accounts::Accounts;
 use crate::agents;
 use crate::changes::Checkout;
 use crate::error::Result;
@@ -29,12 +30,13 @@ impl App {
         let id = self.take_id();
         let file = target.dir.join(path).display().to_string();
         let args = ["-c".to_string(), EDIT_SCRIPT.to_string(), "sh".to_string(), line.max(1).to_string(), file];
-        let env = [self.pane_env(id, None), self.editor_env.clone()].concat();
+        let env = [self.pane_env(id, None, &Accounts::default()), self.editor_env.clone()].concat();
         let opts = SpawnOptions {
             id,
             shell: "/bin/sh",
             args: &args,
             env: &env,
+            remove: &[],
             rows,
             cols,
             cwd: Some(target.dir.clone()),

@@ -54,6 +54,7 @@ fn snapshot() -> Snapshot<AppState> {
                 install_error: None,
             },
             keep_awake: Some(KeepAwake { held: true, by: Some("caffeinate".into()), unavailable: None }),
+            profile: None,
         },
     }
 }

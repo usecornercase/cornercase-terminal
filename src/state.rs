@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -187,6 +187,8 @@ pub(crate) struct PaneState {
     pub(crate) parent: Option<u64>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) collapsed: bool,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) accounts: BTreeMap<String, String>,
 }
 
 impl WorkspaceState {
@@ -223,6 +225,7 @@ impl PaneState {
             id: None,
             parent: None,
             collapsed: false,
+            accounts: BTreeMap::new(),
         }
     }
 }
@@ -314,6 +317,7 @@ impl TabState {
                     id: parents.contains(&term.id).then_some(term.id),
                     parent: term.parent.filter(|parent| parents.contains(parent)),
                     collapsed: term.collapsed,
+                    accounts: term.accounts().chosen(),
                 })
                 .collect(),
             active: tab.active,

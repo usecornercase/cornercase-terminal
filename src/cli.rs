@@ -16,6 +16,7 @@ use crate::error::{Error, Result};
 use crate::remote::{self, Remote};
 use crate::{log, server};
 
+mod accounts;
 mod args;
 mod arrange;
 mod changes;
@@ -167,11 +168,13 @@ fn run_control(command: Control) -> Result<bool> {
             say(value, new.create.print.json, |done| id(done.ids.workspace))
         }
         Control::NewTab(new) => {
+            let profile = accounts::profile_arg(new.profile)?;
             let request = control::NewTab {
                 workspace: workspace("new-tab", new.workspace, new.worktree.as_deref())?,
                 name: new.name,
                 command: typed(&new.command),
                 focus: new.create.focus,
+                profile,
             };
             say(ask("new-tab", control::Command::NewTab(request))?, new.create.print.json, |done| id(done.ids.pane))
         }
@@ -275,6 +278,8 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Issue(args) => return issue::run(args.action),
         Control::Changes(args) => changes::run(args),
         Control::Usage(args) => return usage::run(&args),
+        Control::Account(args) => accounts::account(args.action),
+        Control::Profile(args) => accounts::profile(args.action),
     }?;
     Ok(true)
 }
@@ -328,7 +333,7 @@ fn event_line(value: &Value) -> String {
     let named = |kind: control::Kind| kind.id(&event.ids).map(|id| format!("{} {id}", kind.name()));
     let subject = event.kind().and_then(named);
     match (subject, &event.what) {
-        (Some(subject), What::Opened { kind, parent: opener }) => {
+        (Some(subject), What::Opened { kind, parent: opener, .. }) => {
             let parent = kind.parent().and_then(named).map(|parent| format!(" in {parent}")).unwrap_or_default();
             let opener = opener.map(|pane| format!(" from pane {pane}")).unwrap_or_default();
             format!("{subject}  opened{parent}{opener}")
@@ -379,6 +384,7 @@ fn run_start(start: StartArgs) -> Result<()> {
     if start.issue.key.is_some() {
         client::use_issues()?;
     }
+    let profile = accounts::profile_arg(start.profile)?;
     let request = control::Start {
         agent: start.agent,
         model: start.model,
@@ -395,6 +401,7 @@ fn run_start(start: StartArgs) -> Result<()> {
         until: start.until.map_or(Until::Stops, Until::from),
         timeout: start.timeout,
         focus: start.create.focus,
+        profile,
     };
     let command = if name == "start" { control::Command::Start(request) } else { control::Command::StartWith(request) };
     say(ask(name, command)?, start.create.print.json, |done| {

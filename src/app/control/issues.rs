@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 
 use super::create::Within;
 use super::{Asker, Handled, NO_PROJECT, Pending, Stage, conflict, json, malformed, none};
+use crate::accounts::Accounts;
 use crate::agents;
 use crate::app::App;
 use crate::app::event::AppEvent;
@@ -34,7 +35,7 @@ pub(super) struct Asking {
 }
 
 enum AfterIssue {
-    Start(Box<Start>),
+    Start(Box<Start>, Accounts),
     Flow { project: u64, starting: Box<Starting> },
 }
 
@@ -486,8 +487,9 @@ impl App {
         client: u64,
         asker: Asker,
         mut start: Start,
-        timeout: Option<(Instant, f64)>,
+        within: Within,
     ) -> Handled {
+        let Within { timeout, accounts, .. } = within;
         let kind = self.agent_kind(asker, start.agent.clone())?;
         let (mode, model, effort) = (start.mode.as_deref(), start.model.as_deref(), start.effort.as_deref());
         agents::start_line(&self.config, &kind, mode, model, effort)?;
@@ -507,7 +509,7 @@ impl App {
         self.issue_places(asker, source, &mut start, scope)?;
         let epoch = self.epoch(source);
         let key = self.requests.key();
-        let then = AfterIssue::Start(Box::new(start));
+        let then = AfterIssue::Start(Box::new(start), accounts);
         let asking = Box::new(Asking { asker, source, epoch, then });
         let pending =
             Pending { client: Some(client), key, timeout, done: Done::default(), stage: Stage::Issue(asking) };
@@ -532,6 +534,7 @@ impl App {
         };
         let p = self.projects.project_index(project).ok_or_else(|| none("project", project))?;
         let (flow, note) = super::flow::pick(&self.flow_listing(Some(&self.projects[p].path)), &run.name)?;
+        let accounts = self.profile_accounts(run.profile.as_deref())?;
         let mut starting = Starting {
             flow,
             task: "issue".into(),
@@ -540,6 +543,7 @@ impl App {
             note,
             trees: Vec::new(),
             parent: caller,
+            accounts,
         };
         self.run_refusal(p, &starting)?;
         starting.task.clear();
@@ -599,7 +603,7 @@ impl App {
     ) -> Handled {
         let name = issues::workspace_name(issue);
         match then {
-            AfterIssue::Start(start) => {
+            AfterIssue::Start(start, accounts) => {
                 let mut start = *start;
                 let branch = start
                     .worktree
@@ -634,7 +638,7 @@ impl App {
                     branch = branch,
                     in_a_tab = !root,
                 );
-                self.start_within(client, asker, start, Some(area), Instant::now(), Within { timeout, named })
+                self.start_within(client, asker, start, Some(area), Instant::now(), Within { timeout, named, accounts })
             }
             AfterIssue::Flow { project, starting } => {
                 let mut starting = *starting;

@@ -79,6 +79,18 @@ impl Known {
         }
     }
 
+    pub(crate) fn account(self) -> Option<super::AccountHome> {
+        match self {
+            Self::Claude => claude::ACCOUNT,
+            Self::Codex => codex::ACCOUNT,
+            Self::Gemini => gemini::ACCOUNT,
+            Self::Opencode => opencode::ACCOUNT,
+            Self::Grok => grok::ACCOUNT,
+            Self::Cursor => cursor::ACCOUNT,
+            Self::Copilot => copilot::ACCOUNT,
+        }
+    }
+
     pub(crate) fn effort(self) -> Option<super::Effort> {
         match self {
             Self::Claude => claude::EFFORT,

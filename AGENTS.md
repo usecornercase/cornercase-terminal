@@ -72,6 +72,7 @@ src/text.rs       truncation, displayed paths, folder names, breadcrumbs, one-li
 src/time.rs       timestamps, calendar dates and ages
 src/version.rs    the binary version, version comparison and build id
 
+src/accounts/     agents' login folders (links.rs: the settings they share) and a pane's Accounts from a profile
 src/agents.rs     launch catalogue, shared modes and arguments, which agent takes an issue, detection, trust prompt, AgentState for resuming a pane
                   agents/known.rs Known, the supported identities and exhaustive dispatch to each agent folder
                   agents/activity.rs shared activity and status, done-but-unseen, pending marks, notifications, rollups; agents/launch.rs starting an agent in a new tab (pure state machine)
@@ -121,9 +122,9 @@ src/cli.rs        `run` and the dispatcher of every command; the commands for sc
 src/client.rs     the UI process: entry points, terminal setup/teardown; client/window.rs the attached window, client/probe.rs the colour query and what the outer terminal can show, client/requests.rs a command talking to the server, client/server_process.rs starting and stopping the server; client/input.rs reads input and filters late replies; client/input/parse.rs decodes keys, mouse and paste
 src/control.rs    the JSON of those requests and answers, shared by the commands and the server; CORNERCASE_PANE; control/contract.rs the versioned contract and error codes
 src/protocol.rs   messages and length-prefixed postcard framing
-src/remote.rs     `cornercase remote`: the ssh command and the pipes it connects (`remote::Piped`), the proxy's banner and version check, failures; `cornercase proxy` (stdio <-> the socket)
+src/remote.rs     `cornercase remote` (ssh, its pipes, the proxy's banner and version check) and `cornercase proxy` (stdio <-> the socket)
 src/server.rs     the daemon: owns App and every Term, accepts clients on a Unix socket, draws a ratatui frame per client; server/images.rs each client's image state (kitty ids, iTerm2/sixel re-sends); server/startup.rs the restore
-src/web/          browser access: mod.rs (listener, routes, pairing), bridge.rs (one WebSocket as a client of the server's socket), http.rs, auth.rs (pairing tokens, browsers.json), page.rs and assets/ (the page, vendored xterm.js), web/tailscale.rs (`tailscale status --json` and `tailscale serve` for browser access)
+src/web/          browser access: mod.rs (listener, routes, pairing), bridge.rs (a WebSocket as a socket client), http.rs, auth.rs (pairing tokens, browsers.json), page.rs and assets/ (the page, vendored xterm.js), web/tailscale.rs (`tailscale serve`)
 
 skills/cornercase/SKILL.md  the agent skill, embedded for `cornercase skill`
 ```

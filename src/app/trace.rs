@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::time::{Instant, SystemTime};
 
@@ -220,9 +221,10 @@ impl Change {
 
     fn event(&self, time: &str) -> Option<control::Event> {
         let (place, what) = match self {
-            Self::Opened { place, .. } => {
-                (place, What::Opened { kind: place.key.kind.followed()?, parent: place.opener })
-            }
+            Self::Opened { place, .. } => (
+                place,
+                What::Opened { kind: place.key.kind.followed()?, parent: place.opener, accounts: BTreeMap::new() },
+            ),
             Self::Closed { place, .. } => (place, What::Closed { kind: place.key.kind.followed()? }),
             Self::Status { place, agent, from, to } => {
                 let (from, to) = (from.map(str::to_string), to.map(str::to_string));
@@ -290,7 +292,15 @@ impl App {
             return (notes, Vec::new());
         }
         let time = crate::time::Stamp(SystemTime::now()).to_string();
-        (notes, changes.iter().filter_map(|change| change.event(&time)).collect())
+        let mut events: Vec<control::Event> = changes.iter().filter_map(|change| change.event(&time)).collect();
+        for event in &mut events {
+            if let What::Opened { kind: control::Kind::Pane, accounts, .. } = &mut event.what
+                && let Some(term) = event.ids.pane.and_then(|pane| self.projects.pane_by(pane))
+            {
+                accounts.extend(term.accounts().iter().map(|a| (a.kind.name().to_string(), a.name.clone())));
+            }
+        }
+        (notes, events)
     }
 
     fn traced_places(&self) -> Vec<(Place, Option<PaneNow<'_>>)> {

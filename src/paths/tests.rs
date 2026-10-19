@@ -136,3 +136,14 @@ fn the_source_file_sits_in_the_state_folder() {
         PathBuf::from("/st/cornercase-dev/ecddcea2/source")
     );
 }
+
+#[rstest::rstest]
+#[case::release(None, &[HOME], "/home/me/.local/state/cornercase/accounts")]
+#[case::release_xdg(None, &[HOME, ("XDG_STATE_HOME", "/st")], "/st/cornercase/accounts")]
+#[case::debug(KEY, &[HOME], "/home/me/.local/state/cornercase-dev/ecddcea2/accounts")]
+#[case::another_tree(OTHER_KEY, &[HOME], "/home/me/.local/state/cornercase-dev/24fcc040/accounts")]
+#[case::custom_in_release(None, &[HOME, CUSTOM], "/s/dev.accounts")]
+#[case::custom_in_debug(KEY, &[HOME, CUSTOM], "/s/dev.accounts")]
+fn accounts_sit_beside_the_session(#[case] dev: Option<&str>, #[case] env: Vars, #[case] expected: &str) {
+    assert_eq!(accounts_in(&vars(env), dev), PathBuf::from(expected));
+}

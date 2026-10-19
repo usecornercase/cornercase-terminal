@@ -201,6 +201,10 @@ pub(crate) struct Config {
     pub(crate) remote: bool,
     pub(crate) remote_port: u16,
     pub(crate) projects: BTreeMap<String, ProjectSettings>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) profiles: BTreeMap<String, BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub(crate) profile: String,
 }
 
 impl Default for Config {
@@ -255,6 +259,8 @@ impl Default for Config {
             remote: false,
             remote_port: DEFAULT_PORT,
             projects: BTreeMap::new(),
+            profiles: BTreeMap::new(),
+            profile: String::new(),
         }
     }
 }
@@ -296,6 +302,14 @@ impl Config {
         }
     }
 
+    pub(crate) fn active_profile(&self) -> Option<(&str, &BTreeMap<String, String>)> {
+        self.profiles.get_key_value(&self.profile).map(|(name, accounts)| (name.as_str(), accounts))
+    }
+
+    pub(crate) fn unknown_profile(&self) -> Option<&str> {
+        (!self.profile.is_empty() && !self.profiles.contains_key(&self.profile)).then_some(self.profile.as_str())
+    }
+
     pub(crate) fn fetch_every(&self) -> Option<Duration> {
         (self.fetch_minutes > 0).then(|| Duration::from_secs(self.fetch_minutes.saturating_mul(60)))
     }
@@ -335,7 +349,7 @@ pub(crate) fn read(path: &Path) -> Result<Option<Config>, String> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct Changes(Vec<(String, Value)>);
+pub(crate) struct Changes(Vec<(String, Option<Value>)>);
 
 impl Changes {
     pub(crate) fn between(old: &Config, new: &Config) -> Self {
@@ -344,7 +358,16 @@ impl Changes {
         else {
             return Self(Vec::new());
         };
-        Self(new.into_iter().filter(|(key, value)| old.get(key) != Some(value)).collect())
+        let gone: Vec<(String, Option<Value>)> =
+            old.keys().filter(|key| !new.contains_key(*key)).map(|key| (key.clone(), None)).collect();
+        let mut changed: Vec<(String, Option<Value>)> = new
+            .into_iter()
+            .filter(|(key, value)| old.get(key) != Some(value))
+            .map(|(key, value)| (key, Some(value)))
+            .collect();
+        changed.extend(gone);
+        changed.sort_by(|a, b| a.0.cmp(&b.0));
+        Self(changed)
     }
 
     pub(crate) fn keys(&self) -> Vec<&str> {
@@ -357,7 +380,12 @@ impl Changes {
 
     pub(crate) fn apply(&self, config: &Config) -> Config {
         let Ok(Value::Object(mut keys)) = serde_json::to_value(config) else { return config.clone() };
-        keys.extend(self.0.iter().cloned());
+        for (key, value) in &self.0 {
+            match value {
+                Some(value) => keys.insert(key.clone(), value.clone()),
+                None => keys.remove(key),
+            };
+        }
         serde_json::from_value(Value::Object(keys)).unwrap_or_else(|e| {
             crate::log::warning!("config", "a change could not be applied", why = e.to_string());
             config.clone()

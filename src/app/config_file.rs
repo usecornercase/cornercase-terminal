@@ -27,8 +27,17 @@ impl ConfigFile {
                 (Config::default(), Some(why))
             }
         };
+        warn_unknown_profile(None, &config);
         (config, Self { mark, checked: None, problem, revision: 1 })
     }
+}
+
+fn warn_unknown_profile(old: Option<&Config>, new: &Config) {
+    let Some(name) = new.unknown_profile() else { return };
+    if old.is_some_and(|old| old.unknown_profile() == Some(name)) {
+        return;
+    }
+    log::warning!("app", "the active profile does not exist, so agents use the system accounts", profile = name);
 }
 
 fn unreadable(why: &str) -> String {
@@ -56,6 +65,7 @@ impl App {
                     if let Some(read) = read.filter(|read| *read != self.config) {
                         let changes = config::Changes::between(&self.config, &read);
                         log::info!("app", "config.json changed outside", keys = changes.keys().join(","));
+                        warn_unknown_profile(Some(&self.config), &read);
                         self.set_config(read);
                     }
                 }
@@ -85,6 +95,7 @@ impl App {
         }
         self.config_file.mark =
             config::save(&self.config_path, &next).map_err(|e| format!("failed to save the settings: {e}"))?;
+        warn_unknown_profile(Some(&self.config), &next);
         self.set_config(next);
         Ok(())
     }

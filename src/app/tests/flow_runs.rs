@@ -34,7 +34,7 @@ fn a_pane_where_another_agent_ran_resumes_that_agent_and_its_orchestrator_is_not
         workspace.run.as_ref().expect("the run").members.iter().map(|s| (s.role.clone(), s.tab, s.pane)).collect();
     for (role, tab, pane) in &seats {
         let kind = if role == ORCHESTRATOR || role == "coder" { "codex" } else { "claude" };
-        let agent = AgentState { kind: kind.into(), conversation: format!("c-{role}"), mode: None };
+        let agent = AgentState { kind: kind.into(), conversation: format!("c-{role}"), mode: None, account: None };
         workspace.tabs[*tab].panes[*pane].agent = Some(agent);
     }
     let (mut again, rx) = new_app(no_config());

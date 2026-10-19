@@ -1,3 +1,4 @@
+mod accounts;
 mod arrange;
 mod changes;
 mod close;
@@ -401,6 +402,7 @@ impl App {
         }
     }
 
+    #[expect(clippy::too_many_lines, reason = "one arm per request")]
     fn handle_request(&mut self, client: u64, request: Request, area: Option<Rect>, now: Instant) -> Handled {
         if let Some(boot) = request.boot.as_deref().filter(|boot| *boot != control::server_token()) {
             return Err(stale_boot(boot));
@@ -476,6 +478,13 @@ impl App {
             Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),
             Command::PluginActions(actions) => Ok(Some(self.plugin_actions_request(&actions))),
             Command::PluginRun(run) => self.plugin_run_request(client, &run),
+            Command::AccountList(_) | Command::ProfileList(_) => Ok(Some(json(&self.accounts_info(None)))),
+            Command::AccountAdd(add) => self.account_add_request(asker, &add, area, now),
+            Command::AccountRemove(remove) => self.account_remove_request(&remove),
+            Command::ProfileNew(new) => self.profile_new_request(&new),
+            Command::ProfileSet(set) => self.profile_set_request(&set),
+            Command::ProfileUse(wanted) => self.profile_use_request(&wanted),
+            Command::ProfileDelete(delete) => self.profile_delete_request(&delete),
             Command::LastMessage(last) => self.last_message_request(client, asker, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),

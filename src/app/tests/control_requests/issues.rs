@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-use super::super::issue_list::{Setup, checkout, listing, secrets_file, setup, shortcut};
+use super::super::issue_list::{Setup, VIEW, checkout, listing, secrets_file, setup, shortcut};
 use super::*;
 use crate::control::issues::{Lists, PeopleInfo, ReadIssue, SourceInfo, SourceState, Sources};
 use crate::issues::secrets;
@@ -346,6 +346,29 @@ fn a_client_that_leaves_during_the_lookup_opens_nothing() {
     s.app.handle_event(event, AREA).expect("handle event");
     drain(&mut s.app, &s.rx);
     assert_eq!((s.app.projects[0].workspaces.len(), s.app.take_answers().len()), (1, 0));
+}
+
+#[test]
+fn a_profile_changed_during_the_lookup_still_gives_the_tab_its_accounts() {
+    let mut s = setup(true, &format!("sleep 1\ncat <<'EOF'\n{VIEW}\nEOF"));
+    let root = s.config.path().join("accounts");
+    crate::accounts::add(&root, crate::agents::Known::Claude, "work", None).expect("add the account");
+    let chosen = [("claude".to_string(), "work".to_string())].into_iter().collect();
+    s.app.config.profiles.insert("Work".into(), chosen);
+    let text = json!({"command": "start", "args": {"issue": "#7", "profile": "Work"}}).to_string();
+    s.app.request(CLIENT, &text, Some(AREA), Instant::now());
+    s.app.config.profiles.clear();
+    let event = s.rx.recv_timeout(Duration::from_secs(20)).expect("the lookup answers");
+    s.app.handle_event(event, AREA).expect("handle event");
+    let mut answers = Vec::new();
+    wait_until("the worktree's tab opens", || {
+        drain(&mut s.app, &s.rx);
+        answers.extend(s.app.take_answers());
+        s.app.projects[0].workspaces.len() == 2
+    });
+    assert!(answers.iter().all(|(_, answer)| !answer.contains("error")), "{answers:?}");
+    let term = s.app.projects[0].workspaces[1].tabs[0].pane().expect("the tab's pane");
+    assert_eq!(term.accounts().name(crate::agents::Known::Claude), Some("work"));
 }
 
 #[test]

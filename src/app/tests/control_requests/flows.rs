@@ -550,6 +550,7 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         note: None,
         trees: Vec::new(),
         parent: None,
+        accounts: crate::accounts::Accounts::default(),
     };
 
     let refused = team.app.open_run(0, 0, starting, AREA, false).expect_err("refused");
@@ -611,7 +612,8 @@ fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_tol
     assert_eq!(seats, [(ORCHESTRATOR, 0, 0), ("coder", 1, 0), ("reviewer", 2, 0)]);
     assert_eq!((state.flow.name.as_str(), state.task.as_str()), ("Pair", "Fix the login form"));
     for (i, tab) in workspace.tabs.iter_mut().enumerate() {
-        tab.panes[0].agent = Some(AgentState { kind: "claude".into(), conversation: format!("c{i}"), mode: None });
+        tab.panes[0].agent =
+            Some(AgentState { kind: "claude".into(), conversation: format!("c{i}"), mode: None, account: None });
     }
     std::fs::write(team.log.path().join("order"), "").expect("empty the log");
     let (mut again, rx) = new_app(team.config.path().join("config.json"));
@@ -648,6 +650,7 @@ fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_tol
     assert!(told.contains(&format!("coder is pane {coder}")), "{told}");
 }
 
+mod accounts;
 mod feed;
 mod manage;
 mod own_worktrees;

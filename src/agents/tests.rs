@@ -325,7 +325,7 @@ mod resuming {
     use super::*;
 
     fn agent(kind: &str, mode: Option<&str>) -> AgentState {
-        AgentState { kind: kind.into(), conversation: "4f2c-91".into(), mode: mode.map(str::to_string) }
+        AgentState { kind: kind.into(), conversation: "4f2c-91".into(), mode: mode.map(str::to_string), account: None }
     }
 
     #[rstest]

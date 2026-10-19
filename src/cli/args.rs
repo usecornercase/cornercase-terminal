@@ -1,3 +1,4 @@
+pub(crate) mod accounts;
 pub(crate) mod arrange;
 pub(crate) mod changes;
 pub(crate) mod config;
@@ -17,14 +18,14 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::help::CHANGES_HELP;
 use super::help::{
-    ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, CONFIG_HELP, CONTRACT_HELP, EVENTS_HELP,
-    FLOW_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP, HERE_PANE, HERE_WORKSPACE, INPUT_HELP, ISSUE_HELP,
-    KEY_NAMES, KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, MOVE_HELP, MOVE_PANE_HELP,
-    NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP, RATIO_HELP, READ_HELP, REDRAW_HELP,
-    REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP, RESTART_TIMEOUT, SCROLL_HELP, SEARCH_HELP, SELECTION_HELP,
-    SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP,
-    UNTIL_AFTER, UPDATE_HELP, USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB,
-    WHEN_IDLE,
+    ABOUT, ACCOUNT_HELP, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, CONFIG_HELP, CONTRACT_HELP,
+    EVENTS_HELP, FLOW_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP, HERE_PANE, HERE_WORKSPACE, INPUT_HELP,
+    ISSUE_HELP, KEY_NAMES, KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, MOVE_HELP,
+    MOVE_PANE_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP, PROFILE_HELP, RATIO_HELP,
+    READ_HELP, REDRAW_HELP, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP, RESTART_TIMEOUT, SCROLL_HELP,
+    SEARCH_HELP, SELECTION_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP, STATUS_HELP,
+    SURFACE_HELP, THEME_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP,
+    WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -222,6 +223,10 @@ pub(crate) enum Control {
         after_help = USAGE_HELP
     )]
     Usage(usage::UsageArgs),
+    #[command(about = "Add, list and remove the accounts agents log in with", after_help = ACCOUNT_HELP)]
+    Account(accounts::AccountArgs),
+    #[command(about = "Make, change and switch profiles: which account each agent uses", after_help = PROFILE_HELP)]
+    Profile(accounts::ProfileArgs),
 }
 
 impl Control {
@@ -332,6 +337,8 @@ pub(crate) struct NewTabArgs {
     #[arg(long, help = "The tab's name [default: the name of the program it runs]")]
     pub(crate) name: Option<String>,
     #[command(flatten)]
+    pub(crate) profile: accounts::ProfileArg,
+    #[command(flatten)]
     pub(crate) create: Create,
     #[arg(last = true, value_name = "COMMAND", help = "What to type into its shell")]
     pub(crate) command: Vec<String>,
@@ -401,6 +408,8 @@ pub(crate) struct StartArgs {
     pub(crate) timeout: Option<f64>,
     #[command(flatten)]
     pub(crate) issue: issue::IssueArg,
+    #[command(flatten)]
+    pub(crate) profile: accounts::ProfileArg,
     #[command(flatten)]
     pub(crate) create: Create,
 }

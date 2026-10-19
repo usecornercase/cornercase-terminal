@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use super::{Handled, Pending, Stage, json};
 use crate::app::App;
-use crate::config::{self, ProjectSettings};
+use crate::config::{self, Config, ProjectSettings};
 use crate::control::Done;
 use crate::control::config::{Configure, Described, ProjectChange, ProjectEntry, SecretChange};
 use crate::control::contract::{Code, Refusal};
@@ -84,7 +84,7 @@ impl App {
     }
 
     fn config_set(&mut self, values: &std::collections::BTreeMap<String, serde_json::Value>) -> Handled {
-        self.reload_config().map_err(|e| Refusal::new(Code::Conflict, e))?;
+        self.readable_config()?;
         let mut model = self.settings_model(Page::default());
         let mut notices = Vec::new();
         for (key, value) in values {
@@ -94,6 +94,15 @@ impl App {
             self.write_config(&model.config).map_err(|e| self.config_refusal(e))?;
         }
         Ok(Some(json(&self.described(notices))))
+    }
+
+    pub(super) fn readable_config(&mut self) -> Result<(), Refusal> {
+        self.reload_config().map_err(|e| Refusal::new(Code::Conflict, e))
+    }
+
+    pub(super) fn change_config_for(&mut self, change: impl FnOnce(&mut Config)) -> Result<(), Refusal> {
+        self.readable_config()?;
+        self.change_config(change).map_err(|e| self.config_refusal(e))
     }
 
     fn config_refusal(&self, message: String) -> Refusal {

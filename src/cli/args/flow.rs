@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use clap::{Args, Subcommand, ValueEnum};
 
 use super::changes::Where;
-use super::issue;
 use super::{Create, Print, branch};
+use super::{accounts, issue};
 use crate::cli::help::{
     FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP, FLOW_HIDE_HELP, FLOW_IMPORT_HELP, FLOW_MESSAGES_HELP,
     FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP,
@@ -214,6 +214,8 @@ pub(crate) struct FlowRunArgs {
     pub(crate) project: Option<u64>,
     #[command(flatten)]
     pub(crate) issue: issue::IssueArg,
+    #[command(flatten)]
+    pub(crate) profile: accounts::ProfileArg,
     #[command(flatten)]
     pub(crate) create: Create,
 }

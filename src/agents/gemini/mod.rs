@@ -7,6 +7,14 @@ use crate::agents::context::discovery::Job;
 use crate::agents::context::{Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "gemini";
+pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = Some(crate::agents::AccountHome {
+    env: "GEMINI_CLI_HOME",
+    default: &[],
+    subdir: Some(".gemini"),
+    links: &["settings.json", "GEMINI.md", "commands", "extensions", "skills", "policies", "trustedFolders.json"],
+    remove: &[],
+    login: &[],
+});
 pub(in crate::agents) const TITLE: &str = "Gemini CLI";
 pub(in crate::agents) const COMMAND: &str = "gemini";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";

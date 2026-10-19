@@ -49,6 +49,7 @@ pub(crate) fn spawn_term(
         shell: "/bin/sh",
         args,
         env: &[],
+        remove: &[],
         rows: 24,
         cols: 80,
         cwd,

@@ -19,6 +19,8 @@ pub(crate) struct AppState {
     pub(crate) away: Vec<AwayInfo>,
     pub(crate) update: UpdateInfo,
     pub(crate) keep_awake: Option<KeepAwake>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) profile: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

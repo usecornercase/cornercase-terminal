@@ -761,3 +761,29 @@ asked, after printing the others.
 Examples:
   cornercase usage
   cornercase usage --cached --json";
+
+pub(super) const ACCOUNT_HELP: &str =
+    "An account is a folder of its own under cornercase's state folder in which an agent keeps its
+login: CLAUDE_CONFIG_DIR for Claude Code, CODEX_HOME for Codex, GEMINI_CLI_HOME for Gemini CLI.
+A profile picks one account per agent, and the tabs and agents started under it get those
+folders. A new account links the settings it shares from the agent's own folder (settings,
+instructions, skills); `account list` names the ones that stopped being links. Log in once per
+account, with --login or by running the agent in a tab of that profile. Removing an account
+deletes its folder, never the system's keychain, and its profiles fall back to the system's login.
+
+Examples:
+  cornercase account add claude work --login
+  cornercase account list
+  cornercase account remove claude work";
+
+pub(super) const PROFILE_HELP: &str =
+    "A profile says which account each agent uses. The active profile applies to every new tab and
+agent; tabs already open keep the accounts they started with. `start`, `new-tab` and `flow run`
+take --profile to use another one once, without changing the active one. `profile use --system`
+goes back to each agent's own login.
+
+Examples:
+  cornercase profile new Work claude=work codex=work
+  cornercase profile set Work --provider codex --account personal
+  cornercase profile use Work
+  cornercase start claude --profile Home --prompt \"fix the tests\"";

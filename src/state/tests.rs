@@ -72,6 +72,7 @@ mod file {
                                 id: None,
                                 parent: None,
                                 collapsed: false,
+                                accounts: BTreeMap::new(),
                             }],
                             active: 0,
                             layout: None,
@@ -104,12 +105,14 @@ mod file {
                                         kind: "claude".into(),
                                         conversation: "conversation-plan".into(),
                                         mode: Some("plan".into()),
+                                        account: None,
                                     }),
                                     done: false,
                                     pending: true,
                                     id: None,
                                     parent: None,
                                     collapsed: false,
+                                    accounts: BTreeMap::new(),
                                 },
                                 PaneState {
                                     cwd: Some("worktrees/returns/src".into()),
@@ -118,12 +121,14 @@ mod file {
                                         kind: "codex".into(),
                                         conversation: "conversation-default".into(),
                                         mode: None,
+                                        account: None,
                                     }),
                                     done: true,
                                     pending: false,
                                     id: None,
                                     parent: None,
                                     collapsed: false,
+                                    accounts: BTreeMap::new(),
                                 },
                             ],
                             active: 1,
@@ -166,13 +171,17 @@ mod file {
             flow: false,
         };
         let fixture = crate::test_util::fixture!("session/v5.json");
+        round_trip(fixture, &expected);
+    }
+
+    fn round_trip(fixture: &str, expected: &State) {
         let dir = TempDir::new();
         let path = dir.path().join("session.json");
         std::fs::write(&path, fixture).expect("write the session fixture");
 
-        assert_eq!(load(&path), Some(expected.clone()));
+        assert_eq!(load(&path).as_ref(), Some(expected));
 
-        persist::save(&path, &expected).expect("save the session");
+        persist::save(&path, expected).expect("save the session");
         assert_eq!(
             std::fs::read_to_string(&path).expect("read the saved session"),
             fixture.strip_suffix('\n').expect("fixture newline")
@@ -193,17 +202,22 @@ mod file {
             .map(|pane| TabState { name: None, panes: vec![pane], active: 0, layout: None })
             .collect();
         let fixture = crate::test_util::fixture!("session/parents.json");
-        let dir = TempDir::new();
-        let path = dir.path().join("session.json");
-        std::fs::write(&path, fixture).expect("write the session fixture");
+        round_trip(fixture, &saved);
+    }
 
-        assert_eq!(load(&path), Some(saved.clone()));
-
-        persist::save(&path, &saved).expect("save the session");
-        assert_eq!(
-            std::fs::read_to_string(&path).expect("read the saved session"),
-            fixture.strip_suffix('\n').expect("fixture newline")
-        );
+    #[test]
+    fn accounts_round_trip_through_their_own_fixture() {
+        let mut saved = state(&["projects/team"]);
+        let agent =
+            AgentState { kind: "claude".into(), conversation: "s1".into(), mode: None, account: Some("work".into()) };
+        let accounts = [("claude".to_string(), "work".to_string()), ("codex".to_string(), "home".to_string())];
+        saved.projects[0].workspaces[0].tabs[0].panes = vec![PaneState {
+            agent: Some(agent),
+            accounts: accounts.into_iter().collect(),
+            ..PaneState::at(Some("projects/team".into()))
+        }];
+        let fixture = crate::test_util::fixture!("session/accounts.json");
+        round_trip(fixture, &saved);
     }
 
     #[test]
@@ -272,7 +286,12 @@ mod file {
         let tmp = TempDir::new();
         let path = tmp.path().join("session.json");
         let mut saved = state(&["/a"]);
-        let agent = AgentState { kind: "claude".into(), conversation: "4f2c-91".into(), mode: Some("plan".into()) };
+        let agent = AgentState {
+            kind: "claude".into(),
+            conversation: "4f2c-91".into(),
+            mode: Some("plan".into()),
+            account: None,
+        };
         saved.projects[0].workspaces[0].tabs[0].panes[0].agent = Some(agent);
 
         persist::save(&path, &saved).expect("save");
@@ -481,6 +500,7 @@ mod mapping {
             id: None,
             parent: None,
             collapsed: false,
+            accounts: BTreeMap::new(),
         };
         TabState { name: None, panes: vec![pane; panes], active, layout: None }
     }

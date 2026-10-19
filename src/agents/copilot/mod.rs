@@ -8,6 +8,7 @@ use crate::agents::context::discovery::Follower;
 use crate::agents::context::{Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "copilot";
+pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = None;
 pub(in crate::agents) const TITLE: &str = "GitHub Copilot CLI";
 pub(in crate::agents) const UNFOUND: &str = "GitHub Copilot CLI has no conversation for this pane yet";
 pub(in crate::agents) const COMMAND: &str = "copilot";

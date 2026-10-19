@@ -9,6 +9,14 @@ use crate::agents::context::{Context, Look, Record};
 const ACTION_REQUIRED: [&str; 2] = ["[ ! ] Action Required", "[ . ] Action Required"];
 
 pub(in crate::agents) const NAME: &str = "codex";
+pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = Some(crate::agents::AccountHome {
+    env: "CODEX_HOME",
+    default: &[".codex"],
+    subdir: None,
+    links: &["config.toml", "AGENTS.md", "prompts", "skills", "rules"],
+    remove: &[],
+    login: &["login"],
+});
 pub(in crate::agents) const TITLE: &str = "Codex";
 pub(in crate::agents) const COMMAND: &str = "codex";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";

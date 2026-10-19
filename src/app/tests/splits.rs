@@ -506,6 +506,7 @@ fn a_tab_saved_without_a_layout_puts_its_panes_side_by_side() {
         id: None,
         parent: None,
         collapsed: false,
+        accounts: std::collections::BTreeMap::new(),
     };
     let tab = TabState { name: None, panes: vec![pane_state.clone(), pane_state], active: 1, layout: None };
     let workspace = WorkspaceState {

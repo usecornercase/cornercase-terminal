@@ -132,7 +132,11 @@ mod start {
             .into_iter()
             .filter(|(what, _)| matches!(what, wire::What::Opened { kind: wire::Kind::Pane, .. }))
             .collect();
-        let what = wire::What::Opened { kind: wire::Kind::Pane, parent: Some(caller) };
+        let what = wire::What::Opened {
+            kind: wire::Kind::Pane,
+            parent: Some(caller),
+            accounts: std::collections::BTreeMap::new(),
+        };
         assert_eq!(opened.iter().map(|(what, ids)| (what, ids.pane)).collect::<Vec<_>>(), [(&what, Some(made))]);
     }
 

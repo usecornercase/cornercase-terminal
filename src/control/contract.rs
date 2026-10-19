@@ -13,7 +13,7 @@ pub(crate) const APP_VERSION: u32 = 1;
 pub(crate) const CHANGES_VERSION: u32 = 1;
 pub(crate) const FLOW_RUNS_VERSION: u32 = 1;
 pub(crate) const FLOW_MESSAGES_VERSION: u32 = 1;
-pub(crate) const FEATURES: [&str; 15] = [
+pub(crate) const FEATURES: [&str; 16] = [
     "boot",
     "structured-errors",
     "strict-fields",
@@ -29,6 +29,7 @@ pub(crate) const FEATURES: [&str; 15] = [
     "todo-panel",
     "changes",
     "agent-folds",
+    "accounts",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

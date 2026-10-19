@@ -46,6 +46,7 @@ fn fields_an_older_command_lacks_take_their_defaults() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "one entry per request")]
 fn every_command_is_listed_by_name() {
     let commands = vec![
         Command::Status(Status::default()),
@@ -126,6 +127,14 @@ fn every_command_is_listed_by_name() {
         Command::FlowRuns(FlowRunsWatch::default()),
         Command::FlowMessages(FlowMessages::default()),
         Command::FlowFiles(FlowFiles::default()),
+        Command::AccountList(AccountList::default()),
+        Command::AccountAdd(AccountAdd::default()),
+        Command::AccountRemove(AccountRemove::default()),
+        Command::ProfileList(ProfileList::default()),
+        Command::ProfileNew(ProfileNew::default()),
+        Command::ProfileSet(ProfileSet::default()),
+        Command::ProfileUse(ProfileUse::default()),
+        Command::ProfileDelete(ProfileDelete::default()),
     ];
 
     let names: Vec<String> = commands
@@ -426,10 +435,13 @@ mod events_v1 {
         Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) }
     }
 
-    fn samples() -> [(Event, &'static str); 10] {
+    fn samples() -> [(Event, &'static str); 11] {
         [
             (
-                event(What::Opened { kind: Kind::Tab, parent: None }, Ids { pane: None, ..pane() }),
+                event(
+                    What::Opened { kind: Kind::Tab, parent: None, accounts: std::collections::BTreeMap::new() },
+                    Ids { pane: None, ..pane() },
+                ),
                 fixture!("control/events/v1/opened.json"),
             ),
             (event(What::Closed { kind: Kind::Pane }, pane()), fixture!("control/events/v1/closed.json")),
@@ -463,7 +475,10 @@ mod events_v1 {
                 fixture!("control/events/v1/notice.json"),
             ),
             (
-                event(What::Opened { kind: Kind::Pane, parent: Some(2) }, pane()),
+                event(
+                    What::Opened { kind: Kind::Pane, parent: Some(2), accounts: std::collections::BTreeMap::new() },
+                    pane(),
+                ),
                 fixture!("control/events/v1/opened-parent.json"),
             ),
             (
@@ -480,6 +495,20 @@ mod events_v1 {
                     Ids { pane: None, tab: None, ..pane() },
                 ),
                 fixture!("control/events/v1/notice-sound.json"),
+            ),
+            (
+                event(
+                    What::Opened {
+                        kind: Kind::Pane,
+                        parent: Some(2),
+                        accounts: [("claude", "work"), ("codex", "personal")]
+                            .into_iter()
+                            .map(|(agent, account)| (agent.to_string(), account.to_string()))
+                            .collect(),
+                    },
+                    pane(),
+                ),
+                fixture!("control/events/v1/opened-accounts.json"),
             ),
         ]
     }
@@ -500,6 +529,7 @@ mod events_v1 {
     #[case::opened_from_a_pane(8)]
     #[case::notice(7)]
     #[case::notice_with_a_sound(9)]
+    #[case::opened_with_accounts(10)]
     fn an_event_is_written_as_its_fixture(#[case] index: usize) {
         let (event, fixture) = &samples()[index];
 
@@ -517,6 +547,7 @@ mod events_v1 {
     #[case::opened_from_a_pane(8)]
     #[case::notice(7)]
     #[case::notice_with_a_sound(9)]
+    #[case::opened_with_accounts(10)]
     fn a_fixture_reads_back_as_its_event(#[case] index: usize) {
         let (event, fixture) = &samples()[index];
 

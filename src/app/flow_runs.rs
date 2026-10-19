@@ -7,6 +7,7 @@ use super::App;
 use super::event::AppEvent;
 use super::toast::Toast;
 use super::worktrees::WorktreeEvent;
+use crate::accounts::Accounts;
 use crate::agents;
 use crate::agents::activity;
 use crate::agents::launch::{self, Launch};
@@ -34,6 +35,7 @@ pub(super) struct Starting {
     pub(super) note: Option<String>,
     pub(super) trees: Vec<(RoleWorktree, bool)>,
     pub(super) parent: Option<u64>,
+    pub(super) accounts: Accounts,
 }
 
 #[derive(Debug)]
@@ -146,14 +148,9 @@ impl App {
         area: Rect,
     ) -> Result<(), String> {
         let branch = if branch.trim() == flows::branch(&task) { String::new() } else { branch };
-        self.run_flow(
-            None,
-            project,
-            Starting { flow, task, branch, focus, note: None, trees: Vec::new(), parent: None },
-            area,
-        )
-        .map(drop)
-        .map_err(String::from)
+        let accounts = self.active_accounts();
+        let starting = Starting { flow, task, branch, focus, note: None, trees: Vec::new(), parent: None, accounts };
+        self.run_flow(None, project, starting, area).map(drop).map_err(String::from)
     }
 
     pub(super) fn spawn_run_worktrees(
@@ -239,7 +236,7 @@ impl App {
         roles: &[Role],
         trees: &[(RoleWorktree, bool)],
         setup: bool,
-        dir: &Path,
+        (dir, accounts): (&Path, &Accounts),
     ) -> Result<Vec<Term>, String> {
         let (id, path) = (self.projects[p].workspaces[w].id, self.projects[p].workspaces[w].path.clone());
         let mut terms = Vec::with_capacity(roles.len());
@@ -248,12 +245,14 @@ impl App {
         let run_dir = Some(dir);
         for (i, role) in roles.iter().enumerate() {
             let tree = own(role);
+            let given = (run_dir, accounts.clone());
             let term = match (&script, tree) {
-                (Some(script), _) if i == 0 && setup => self.spawn_setup(area, (p, id), path.clone(), script, run_dir),
-                (Some(script), Some((tree, true))) => {
-                    self.spawn_setup(area, (p, id), tree.path.clone(), script, run_dir)
+                (Some(script), _) if i == 0 && setup => self.spawn_setup(area, (p, id), path.clone(), script, given),
+                (Some(script), Some((tree, true))) => self.spawn_setup(area, (p, id), tree.path.clone(), script, given),
+                _ => {
+                    let cwd = tree.map_or_else(|| path.clone(), |(tree, _)| tree.path.clone());
+                    self.spawn_in(area, cwd, run_dir, given.1)
                 }
-                _ => self.spawn_with(area, tree.map_or_else(|| path.clone(), |(tree, _)| tree.path.clone()), run_dir),
             };
             match term {
                 Ok(term) => terms.push(term),
@@ -288,7 +287,7 @@ impl App {
         if self.runs.iter().any(|run| run.workspace == id) {
             return Err(format!("workspace {id} already runs a flow, and a workspace runs one at a time"));
         }
-        let Starting { flow, task, branch, focus, note, trees, parent } = starting;
+        let Starting { flow, task, branch, focus, note, trees, parent, accounts } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
         run.id = self.take_id();
@@ -305,7 +304,7 @@ impl App {
         let dir = folder::make(&self.runs_dir, &path, time::now() * 1000)
             .map_err(|e| format!("could not make the run's folder: {e}"))?;
         self.projects[p].workspaces[w].run_dirs.push(dir.clone());
-        let terms = self.spawn_run_panes(area, (p, w), &roles, &trees, setup, &dir)?;
+        let terms = self.spawn_run_panes(area, (p, w), &roles, &trees, setup, (&dir, &accounts))?;
         let seats: Vec<RoleWorktree> = trees.iter().map(|(tree, _)| tree.clone()).collect();
         log::info!("flow", "run folder made", workspace = id, path = dir.display());
         run.dir = Some(dir.clone());

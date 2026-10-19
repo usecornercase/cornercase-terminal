@@ -6,14 +6,15 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::toast::Toast;
-use crate::agents::AgentState;
+use crate::accounts::Accounts;
 use crate::agents::activity::Status;
 use crate::agents::launch::Launch;
+use crate::agents::{AgentState, Known};
 use crate::error::Result;
 use crate::flows::{Role, folder};
 use crate::log::{self};
 use crate::project::{Hierarchy, Tab, Workspace};
-use crate::state::{TabState, WorkspaceState};
+use crate::state::{PaneState, TabState, WorkspaceState};
 use crate::term::Term;
 use crate::ui;
 
@@ -92,14 +93,16 @@ impl App {
             let role = roles(i);
             let apart = role.is_some_and(Role::own_worktree) && pane.cwd.as_ref().is_none_or(|cwd| !cwd.is_dir());
             let run = role.and(run);
-            let mut term = self.spawn_with(area, cwd, run)?;
+            let (accounts, gone) = self.saved_accounts(pane);
+            let mut term = self.spawn_in(area, cwd, run, accounts)?;
             term.collapsed = pane.collapsed;
+            let lost = self.account_gone(term.id, pane.agent.as_ref(), &gone);
             if apart {
                 log::warning!("server", "a role's worktree is gone, so its agent does not resume", pane = term.id);
                 let name = role.map(|role| role.name.as_str()).unwrap_or_default();
                 let message = format!("the worktree of {name} is gone: it works in the run's worktree now");
                 self.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
-            } else if self.resume(&mut term, pane.agent.as_ref(), role, run) {
+            } else if !lost && self.resume(&mut term, pane.agent.as_ref(), role, run) {
                 term.agent.restore(pane.done, pane.pending);
             }
             if let Some(old) = pane.id {
@@ -111,6 +114,35 @@ impl App {
             panes.push(term);
         }
         Ok(saved.restore(self.take_id(), panes))
+    }
+
+    fn saved_accounts(&self, pane: &PaneState) -> (Accounts, Vec<(String, String)>) {
+        let mut wanted = pane.accounts.clone();
+        if let Some(agent) = &pane.agent
+            && let Some(name) = &agent.account
+            && Known::of(&agent.kind).is_some_and(|kind| kind.account().is_some())
+        {
+            wanted.entry(agent.kind.clone()).or_insert_with(|| name.clone());
+        }
+        let accounts = Accounts::of(&self.accounts_dir, &wanted);
+        let gone = wanted
+            .into_iter()
+            .filter(|(provider, name)| Known::of(provider).and_then(|kind| accounts.name(kind)) != Some(name.as_str()))
+            .collect();
+        (accounts, gone)
+    }
+
+    fn account_gone(&mut self, pane: u64, agent: Option<&AgentState>, gone: &[(String, String)]) -> bool {
+        let missing = agent.and_then(|agent| {
+            gone.iter().find(|(provider, name)| *provider == agent.kind && agent.account.as_ref() == Some(name))
+        });
+        let lost = missing.is_some();
+        let Some((provider, name)) = missing.or_else(|| gone.first()) else { return false };
+        log::warning!("accounts", "a saved account is gone", pane = pane, provider = provider, account = name);
+        let what = if lost { "its conversation does not resume" } else { "the pane opens without it" };
+        let message = format!("the {provider} account `{name}` is gone: {what}");
+        self.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
+        lost
     }
 
     pub(super) fn adopt_saved(&mut self, parents: Parents) {

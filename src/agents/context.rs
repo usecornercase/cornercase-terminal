@@ -70,6 +70,7 @@ pub(crate) struct Look<'a> {
     pub(crate) title: String,
     pub(crate) screen: &'a dyn Fn() -> String,
     pub(crate) claude_dir: Option<&'a Path>,
+    pub(crate) account_dir: Option<&'a Path>,
 }
 
 #[derive(Debug)]

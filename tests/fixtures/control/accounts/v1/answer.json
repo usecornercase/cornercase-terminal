@@ -1,0 +1,52 @@
+{
+  "providers": [
+    {
+      "provider": "claude",
+      "title": "Claude Code",
+      "env": "CLAUDE_CONFIG_DIR",
+      "accounts": [
+        {
+          "name": "personal",
+          "path": "/home/me/.local/state/cornercase/accounts/claude/personal",
+          "unshared": []
+        },
+        {
+          "name": "work",
+          "path": "/home/me/.local/state/cornercase/accounts/claude/work",
+          "unshared": [
+            "settings.json"
+          ]
+        }
+      ]
+    },
+    {
+      "provider": "codex",
+      "title": "Codex",
+      "env": "CODEX_HOME",
+      "accounts": []
+    }
+  ],
+  "profiles": [
+    {
+      "name": "Personal",
+      "accounts": {
+        "claude": "personal"
+      },
+      "active": false
+    },
+    {
+      "name": "Work",
+      "accounts": {
+        "claude": "work"
+      },
+      "active": true
+    }
+  ],
+  "profile": "Work",
+  "login": {
+    "project": 1,
+    "workspace": 2,
+    "tab": 7,
+    "pane": 8
+  }
+}

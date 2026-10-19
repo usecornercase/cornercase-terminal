@@ -16,9 +16,9 @@ pub(crate) mod usage;
 
 pub use known::Known;
 
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +30,8 @@ pub(crate) struct AgentState {
     pub(crate) conversation: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) account: Option<String>,
 }
 
 pub(crate) const AUTO: &str = "auto";
@@ -163,6 +165,27 @@ pub(crate) fn without_model(kind: &str, args: &[String]) -> Vec<String> {
         }
     }
     out
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AccountHome {
+    pub(crate) env: &'static str,
+    pub(crate) default: &'static [&'static str],
+    pub(crate) subdir: Option<&'static str>,
+    pub(crate) links: &'static [&'static str],
+    pub(crate) remove: &'static [&'static str],
+    pub(crate) login: &'static [&'static str],
+}
+
+impl AccountHome {
+    pub(crate) fn default_home(self, var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
+        let absolute = |name: &str| var(name).map(PathBuf::from).filter(|path| path.is_absolute());
+        absolute(self.env).or_else(|| absolute("HOME").map(|home| self.default.iter().fold(home, |p, s| p.join(s))))
+    }
+
+    pub(crate) fn config(self, home: &Path) -> PathBuf {
+        self.subdir.map_or_else(|| home.to_path_buf(), |subdir| home.join(subdir))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

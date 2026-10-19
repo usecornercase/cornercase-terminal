@@ -172,11 +172,24 @@ pub(crate) fn queue(session: &Path) -> PathBuf {
 }
 
 pub(crate) fn runs(session: &Path) -> PathBuf {
-    if session.file_name().is_some_and(|name| name == "session.json") {
-        session.with_file_name("runs")
+    beside_session(session, "runs")
+}
+
+fn beside_session(session: &Path, name: &str) -> PathBuf {
+    if session.file_name().is_some_and(|file| file == "session.json") {
+        session.with_file_name(name)
     } else {
-        session.with_extension("runs")
+        session.with_extension(name)
     }
+}
+
+#[cfg(test)]
+fn accounts_in(var: Var, dev: Option<&str>) -> PathBuf {
+    accounts_of(&session_in(var, dev))
+}
+
+pub(crate) fn accounts_of(session: &Path) -> PathBuf {
+    beside_session(session, "accounts")
 }
 
 pub(crate) fn stats(session: &Path) -> PathBuf {

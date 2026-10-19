@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 
 use super::wait::Condition;
 use super::{Asker, Handled, NO_PROJECT, Pending, Stage, deadline, json, name_of, none, sized};
+use crate::accounts::Accounts;
 use crate::agents;
 use crate::agents::launch::{self, Launch};
 use crate::app::App;
@@ -17,6 +18,7 @@ use crate::project::split::Dir;
 pub(super) struct Within {
     pub(super) timeout: Option<(Instant, f64)>,
     pub(super) named: Option<String>,
+    pub(super) accounts: Accounts,
 }
 
 pub(super) struct Then {
@@ -26,6 +28,7 @@ pub(super) struct Then {
     view: Option<u64>,
     parent: Option<u64>,
     named: Option<String>,
+    accounts: Accounts,
 }
 
 const NO_AGENT: &str = "say which agent to start, such as `cornercase start claude`: settings → agents is on auto \
@@ -66,7 +69,9 @@ impl App {
             if let Some(open) = self.workspace_on(p, &name) {
                 return Err(format!("branch {name} is already open in workspace {open}").into());
             }
-            let then = Then { start: None, wait: None, focus: new.focus, view: asker.view, parent: None, named: None };
+            let accounts = self.active_accounts();
+            let (focus, view) = (new.focus, asker.view);
+            let then = Then { start: None, wait: None, focus, view, parent: None, named: None, accounts };
             self.create_worktree(client, p, &name, then, None)?;
             return Ok(None);
         }
@@ -95,7 +100,8 @@ impl App {
             Some(id) => self.usable_workspace(id)?,
             None => self.here_workspace(asker)?,
         };
-        let t = self.push_tab(p, w, area, name_of(new.name)).map_err(|e| e.to_string())?;
+        let accounts = self.profile_accounts(new.profile.as_deref())?;
+        let t = self.push_tab_in(p, w, area, name_of(new.name), accounts).map_err(|e| e.to_string())?;
         let ids = self.ids(p, Some(w), Some(t));
         let pane = ids.pane.unwrap_or_default();
         self.adopt(pane, asker.caller);
@@ -148,16 +154,17 @@ impl App {
     ) -> Handled {
         let area = sized(area)?;
         let timeout = deadline(start.timeout, now)?;
+        let accounts = self.profile_accounts(start.profile.as_deref())?;
         if start.issue.is_some() {
             if start.wait {
                 Condition::of(start.until.clone())?;
             }
-            return self.start_issue_request(client, asker, start, timeout);
+            return self.start_issue_request(client, asker, start, Within { timeout, named: None, accounts });
         }
         if start.source.is_some() {
             return Err(super::malformed("--source needs --issue"));
         }
-        self.start_within(client, asker, start, Some(area), now, Within { timeout, named: None })
+        self.start_within(client, asker, start, Some(area), now, Within { timeout, named: None, accounts })
     }
 
     pub(super) fn start_within(
@@ -169,7 +176,7 @@ impl App {
         now: Instant,
         within: Within,
     ) -> Handled {
-        let Within { timeout, named } = within;
+        let Within { timeout, named, accounts } = within;
         let area = sized(area)?;
         let wait = start.wait.then(|| Condition::of(start.until)).transpose()?;
         let queued = self.queued_spec(client);
@@ -203,6 +210,7 @@ impl App {
                     view: asker.view,
                     parent: asker.caller,
                     named,
+                    accounts,
                 };
                 self.create_worktree(client, p, branch, then, timeout)?;
                 return Ok(None);
@@ -224,7 +232,7 @@ impl App {
         } else {
             self.here_workspace(asker)?
         };
-        let t = self.push_tab(p, w, area, name).map_err(|e| e.to_string())?;
+        let t = self.push_tab_in(p, w, area, name, accounts).map_err(|e| e.to_string())?;
         let ids = self.ids(p, Some(w), Some(t));
         let pane = ids.pane.unwrap_or_default();
         self.adopt(pane, asker.caller);
@@ -328,11 +336,11 @@ impl App {
         }
         let launch = match then.start {
             Some((spec, name)) => {
-                let t = self.push_setup_tab(p, w, area, name).map_err(|e| e.to_string())?;
+                let t = self.push_setup_tab_in(p, w, area, name, then.accounts.clone()).map_err(|e| e.to_string())?;
                 Some((spec, t))
             }
             None if self.projects[p].workspaces[w].tabs.is_empty() => {
-                self.push_setup_tab(p, w, area, None).map_err(|e| e.to_string())?;
+                self.push_setup_tab_in(p, w, area, None, then.accounts.clone()).map_err(|e| e.to_string())?;
                 None
             }
             None => None,

@@ -76,7 +76,8 @@ fn claude_comes_back_in_its_conversation_and_mode() {
 
     wait_resumed(&mut back, &rx, "--permission-mode plan --resume s1");
 
-    let expected = AgentState { kind: "claude".into(), conversation: "s1".into(), mode: Some("plan".into()) };
+    let expected =
+        AgentState { kind: "claude".into(), conversation: "s1".into(), mode: Some("plan".into()), account: None };
     assert_eq!(saved_agent(&saved), Some(&expected));
 }
 

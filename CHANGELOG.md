@@ -2,13 +2,19 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.154
+## 0.12.155
 
 - **A message sent to an agent waits while you are typing to it.** When another agent or a script ran `cornercase send --enter` into the pane you were typing in, its text joined your half-written prompt and both went out as one, broken. Now `send` (and `todo send`) waits until you are done: while you have text in the input you have not sent, while you typed in the last 2 seconds, or while an earlier message to that pane has not gone out. Your prompt goes first and the message follows right after. It works for every agent cornercase runs and for plain shells.
   - A bar on the pane's bottom row says `1 message waiting from pane 40 · goes after yours`, with **send now** to send it at once and **wait turn** to say you saw it: the bar then shows the working icon and `queued: goes right after yours` until it goes out. A new message shows the bar with **wait turn** again.
   - A draft ends with Enter, Esc, Ctrl+C or Ctrl+U, when the program in the pane changes, or after a minute without typing; in Claude Code also as soon as its input box is empty again (its grey suggestion does not count).
   - While a message sits between its paste and its Enter, keys typed into that pane are dropped with a toast, so nothing lands in the middle.
-  - `send --timeout` bounds the wait and says what held it; `--force` sends at once; `keys` never waits. Scripts see `held_sends` and `draft` for each pane in `status --json`, `status --panes`, `status --follow` and views.
+  - `send --timeout` bounds the wait and says what held it; `--force` does not wait for you (only for an earlier message's Enter); `keys` never waits. Scripts see `held_sends` and `draft` for each pane in `status --json`, `status --panes`, `status --follow` and views.
+
+## 0.12.154
+
+- **Keep two accounts of Claude Code, Codex or Gemini CLI and choose which one new agents start with.** An account is a folder of its own where the agent keeps its login (`cornercase account add claude work --login` makes one and opens a tab to log in there), and a profile picks one account per agent (`cornercase profile new Work claude=work codex=work`). `cornercase profile use Work` makes new tabs and agents start with those accounts, without logging out of anything; tabs already open keep theirs, so a work agent and a personal one can run side by side. `--profile NAME` on `start`, `new-tab` and `flow run` uses another profile once. See Accounts and profiles in the docs.
+  - Accounts share your settings, instructions, skills and commands through links to the agent's usual folder; the login, history and sessions stay with each account. cornercase never reads or copies a token.
+  - Agents resume their conversations with their account after a restart, and `status --json` names each agent's `account`. A button in the window comes in a later release.
 
 ## 0.12.153
 
