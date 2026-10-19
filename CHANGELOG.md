@@ -2,10 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.157
+## 0.12.158
 
 - **Open a project, a workspace or a file in Finder, the file manager or your editor.** Right-click a project or workspace row (or click its `⋯`) and choose **open in…**: it lists what your computer has, Finder on macOS or the file manager on Linux, then VS Code, Cursor, Zed and Sublime Text when they are installed. A workspace opens its own folder, so a worktree under `~/.cornercase/worktrees` is one click away. The pane menu opens the folder its program is in, following your `cd`. In the files panel, ` open in… ` next to ` open ` does the same for the file you are reading: an editor opens it at the first selected line, and **default app** opens it in Preview or your image viewer. A right-click on a file or folder in the tree opens the same menu.
   - It opens on the computer your window is on. A window from `cornercase remote`, your phone's browser or an SSH session shows **copy path** instead, since the folders are on the other computer.
+
+## 0.12.157
+
+- No changes you will notice: running the tests no longer leaves a fake agent behind that kept using the CPU.
 
 ## 0.12.156
 
