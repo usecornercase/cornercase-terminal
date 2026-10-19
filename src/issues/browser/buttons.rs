@@ -9,6 +9,7 @@ pub(super) enum Button {
     Flow,
     Agent,
     Where,
+    Account,
     Done,
     Clear,
     MakeDefault,
@@ -36,6 +37,7 @@ impl Button {
             Self::Flow => "start a flow",
             Self::Agent => "agent…",
             Self::Where => "where…",
+            Self::Account => "account…",
             Self::Done => "done",
             Self::Clear => "clear",
             Self::MakeDefault => "make default",
@@ -81,6 +83,9 @@ impl Browser {
                 let mut buttons = vec![Button::Start, Button::Schedule, Button::Flow, Button::Agent];
                 if !issue.source.in_repository() && self.places.len() > 1 {
                     buttons.push(Button::Where);
+                }
+                if self.agent_accounts().is_some() {
+                    buttons.push(Button::Account);
                 }
                 if self.agents.chosen.is_some() && self.agents.chosen != self.agents.default {
                     buttons.push(Button::MakeDefault);
@@ -188,18 +193,19 @@ impl Browser {
                     None => Action::None,
                 },
             },
-            Button::Agent => {
-                self.open_picker(Pick::Agent, After::Nothing);
+            Button::Agent | Button::Where | Button::Account => {
+                let pick = match button {
+                    Button::Agent => Pick::Agent,
+                    Button::Where => Pick::Place,
+                    _ => Pick::Account,
+                };
+                self.open_picker(pick, After::Nothing);
                 Action::None
             }
             Button::New => Action::QueueNew,
             Button::RunNow => self.selected_queued().map_or(Action::None, |queued| Action::QueueRun(queued.id)),
             Button::Remove => self.selected_queued().map_or(Action::None, |queued| Action::QueueRemove(queued.id)),
             Button::ClearStarted => Action::QueueClear,
-            Button::Where => {
-                self.open_picker(Pick::Place, After::Nothing);
-                Action::None
-            }
             Button::Done => self.close_people(),
             Button::Clear => {
                 for source in self.people_sources() {
@@ -267,6 +273,9 @@ impl Browser {
 
     pub(super) fn read(&mut self, issue: Issue) -> Action {
         self.place = None;
+        if let Some(accounts) = &mut self.accounts {
+            accounts.chosen = None;
+        }
         self.screen = Screen::Detail { issue: Box::new(issue.clone()), detail: None, scroll: 0, raw: false };
         Action::Read(issue)
     }
@@ -277,6 +286,10 @@ impl Browser {
             return Action::None;
         }
         if let Some(kind) = self.agents.pick() {
+            if self.needs_account(&kind) {
+                self.open_picker(Pick::Account, After::Start);
+                return Action::None;
+            }
             let place = self.place_for(&issue).cloned();
             if self.scheduling { Action::Schedule(issue, kind, place) } else { Action::Start(issue, kind, place) }
         } else {
@@ -299,7 +312,13 @@ impl Browser {
     }
 
     fn ready_to_start(&self, issue: &Issue) -> bool {
-        !self.needs_place(issue) && self.agents.pick().is_some()
+        !self.needs_place(issue) && self.agents.pick().is_some_and(|kind| !self.needs_account(&kind))
+    }
+
+    fn needs_account(&self, kind: &str) -> bool {
+        self.accounts.as_ref().is_some_and(|accounts| {
+            accounts.of(kind).is_some() && accounts.chosen.as_ref().is_none_or(|(chosen, _)| chosen != kind)
+        })
     }
 
     pub(crate) fn place_for(&self, issue: &Issue) -> Option<&Place> {

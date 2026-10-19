@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::Write;
 
 use serde::Deserialize;
@@ -20,6 +21,7 @@ struct Listed {
     pane: Option<u64>,
     server: Option<String>,
     reason: Option<String>,
+    accounts: BTreeMap<String, String>,
 }
 
 impl Listed {
@@ -39,7 +41,11 @@ fn lines(value: &Value, zone: &str) -> String {
     for entry in value["entries"].as_array().into_iter().flatten() {
         let entry = Listed::deserialize(entry).unwrap_or_default();
         let at = clock::display(entry.at, zone);
-        let _ = writeln!(out, "{} {at} {} {} · {}", entry.id, entry.status(), entry.label, entry.agent);
+        let _ = write!(out, "{} {at} {} {} · {}", entry.id, entry.status(), entry.label, entry.agent);
+        for (agent, account) in &entry.accounts {
+            let _ = write!(out, " · {agent}: {}", if account.is_empty() { "System" } else { account });
+        }
+        out.push('\n');
     }
     out
 }
@@ -59,6 +65,7 @@ pub(super) fn run(action: QueueAction) -> Result<()> {
                 return Err(Error::WrongUsage("queue add needs --prompt or --issue".into()));
             }
             let json = add.print.json;
+            let accounts = super::accounts::account_choices(add.accounts)?;
             let add = control::QueueAdd {
                 at: add.at.unwrap_or_default(),
                 zone: clock::local_zone(),
@@ -72,6 +79,7 @@ pub(super) fn run(action: QueueAction) -> Result<()> {
                 source: add.source,
                 label: add.name,
                 submit: None,
+                accounts,
             };
             (
                 match edit {

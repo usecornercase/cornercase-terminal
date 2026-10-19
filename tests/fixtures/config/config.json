@@ -58,6 +58,9 @@
   "model": false,
   "context": false,
   "memory": true,
+  "account_mark": false,
+  "account_switcher": false,
+  "account_picker": false,
   "desktop_notifications": "off",
   "sound": true,
   "sound_waiting": "~/sounds/ping.wav",
@@ -72,5 +75,14 @@
       "setup": "npm ci\ncp ../.env .env",
       "teardown": "docker compose down"
     }
+  },
+  "account_names": {
+    "claude": {
+      "": "work",
+      "home": "Personal"
+    }
+  },
+  "active_accounts": {
+    "claude": "home"
   }
 }

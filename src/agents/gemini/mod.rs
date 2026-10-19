@@ -14,6 +14,8 @@ pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = Some(c
     links: &["settings.json", "GEMINI.md", "commands", "extensions", "skills", "policies", "trustedFolders.json"],
     remove: &[],
     login: &[],
+    status: None,
+    tokens: &["GEMINI_API_KEY", "GOOGLE_API_KEY"],
 });
 pub(in crate::agents) const TITLE: &str = "Gemini CLI";
 pub(in crate::agents) const COMMAND: &str = "gemini";

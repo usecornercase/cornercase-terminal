@@ -1,7 +1,7 @@
 pub(crate) mod clock;
 pub(crate) mod form;
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -34,6 +34,8 @@ pub(crate) struct Task {
     pub(crate) prompt: String,
     pub(crate) submit: bool,
     pub(crate) place: Place,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) accounts: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -1,5 +1,6 @@
 [
   {"command": "account-list", "args": {}},
+  {"command": "account-list", "args": {"check": true}},
   {"command": "account-add", "args": {"provider": "claude", "name": "work", "login": true, "workspace": 2, "focus": false}},
   {"command": "account-remove", "args": {"provider": "claude", "name": "work"}},
   {"command": "profile-list", "args": {}},

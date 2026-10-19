@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::time::SystemTime;
 
+use crate::accounts::login::{Login, State};
 use crate::agents::activity::{Activity, BRAILLE, glyph};
 use crate::agents::context::counting::Ledger;
 use crate::agents::context::discovery::Job;
@@ -16,6 +17,8 @@ pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = Some(c
     links: &["config.toml", "AGENTS.md", "prompts", "skills", "rules"],
     remove: &[],
     login: &["login"],
+    status: Some(&["login", "status"]),
+    tokens: &["CODEX_API_KEY", "OPENAI_API_KEY"],
 });
 pub(in crate::agents) const TITLE: &str = "Codex";
 pub(in crate::agents) const COMMAND: &str = "codex";
@@ -49,6 +52,25 @@ pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = Some(cra
 });
 pub(in crate::agents) const UNFOUND: &str =
     "Codex writes its rollout from its first turn on, and two Codex in one folder hide each other";
+
+pub(in crate::agents) fn login(text: &str) -> Login {
+    let line =
+        text.lines().map(str::trim).find(|line| line.starts_with("Logged in") || line.starts_with("Not logged in"));
+    match line {
+        Some(line) if line.starts_with("Not") => Login::of(State::SignedOut),
+        Some(line) => {
+            let plan = if line.contains("ChatGPT") {
+                Some("chatgpt")
+            } else if line.contains("API key") {
+                Some("api key")
+            } else {
+                None
+            };
+            Login { state: State::SignedIn, email: None, plan: plan.map(str::to_string) }
+        }
+        None => Login::default(),
+    }
+}
 
 pub(in crate::agents) fn normalized(args: &[String]) -> Vec<String> {
     args.to_vec()

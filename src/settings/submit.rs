@@ -226,7 +226,7 @@ impl Settings {
                 let notice = starts_with(&kind, &args);
                 self.save(with_args(&self.config, &kind, args), notice)
             }
-            _ => Action::None,
+            _ => self.submit_account(),
         }
     }
 }

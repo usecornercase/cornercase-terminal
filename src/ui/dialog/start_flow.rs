@@ -9,15 +9,19 @@ use super::flows::{
     text_inside,
 };
 use super::issues::issue_buttons_in;
-use super::{Note, draw_input, form_inner, pick_background};
+use super::{INPUT_PROMPT, Note, draw_input, form_inner, pick_background};
 use crate::flows::Flow;
 use crate::flows::start::{Focus, Item, START};
+use crate::list::Combo;
 use crate::text::truncate_right;
 use crate::todo::editor::Editor;
 use crate::ui::View;
+use crate::ui::combo;
 use crate::ui::widgets::overlay_block;
 
 const HEADING: &str = "Flow templates";
+const ACCOUNT_LABEL: usize = 16;
+const ACCOUNT_FIELD: u16 = 28;
 const PLACEHOLDER: &str = "what the team should do: a feature, a bug, an issue's text…";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,22 +30,28 @@ pub(crate) struct Shape {
     pub(crate) preview: bool,
     pub(crate) diagram: bool,
     pub(crate) lines: usize,
+    pub(crate) accounts: usize,
 }
 
 impl Shape {
     pub(crate) fn new(items: usize, warnings: usize, preview: bool, diagram: bool) -> Self {
-        Self { warnings, preview, diagram, lines: 1 + 2 * items }
+        Self { warnings, preview, diagram, lines: 1 + 2 * items, accounts: 0 }
+    }
+
+    pub(crate) fn with_accounts(self, accounts: usize) -> Self {
+        Self { accounts, ..self }
     }
 }
 
-fn start_rows(area: Rect, shape: Shape) -> [Rect; 8] {
+fn start_rows(area: Rect, shape: Shape) -> [Rect; 9] {
     let shown = u16::try_from(shape.warnings.min(MAX_WARNINGS)).unwrap_or(0);
-    let [heading, _, body, _, branch, warnings, note, buttons] = Layout::vertical([
+    let [heading, _, body, _, branch, accounts, warnings, note, buttons] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Fill(1),
         Constraint::Length(1),
         Constraint::Length(1),
+        Constraint::Length(u16::try_from(shape.accounts).unwrap_or(u16::MAX)),
         Constraint::Length(shown),
         Constraint::Length(1),
         Constraint::Length(1),
@@ -54,7 +64,7 @@ fn start_rows(area: Rect, shape: Shape) -> [Rect; 8] {
     let on_top = shape.preview && shape.diagram && !flows_wide(area);
     let lines = u16::try_from(shape.lines).unwrap_or(u16::MAX).min(most.height);
     let [top, _, label, prompt] = if on_top { split(Constraint::Fill(2)) } else { split(Constraint::Length(lines)) };
-    [heading, top, label, prompt, branch, warnings, note, buttons]
+    [heading, top, label, prompt, branch, accounts, warnings, note, buttons]
 }
 
 fn columns(area: Rect, shape: Shape) -> (Rect, Option<Rect>) {
@@ -95,7 +105,30 @@ pub(crate) fn start_branch(area: Rect, shape: Shape) -> Rect {
 }
 
 pub(crate) fn start_buttons(area: Rect, shape: Shape, labels: &[&str]) -> Vec<Rect> {
-    issue_buttons_in(start_rows(area, shape)[7], labels)
+    issue_buttons_in(start_rows(area, shape)[8], labels)
+}
+
+fn account_row(area: Rect, shape: Shape, n: usize) -> Rect {
+    let rows = start_rows(area, shape)[5];
+    let y = rows.y.saturating_add(u16::try_from(n).unwrap_or(u16::MAX));
+    Rect { y, height: 1, ..rows }.intersection(rows)
+}
+
+pub(crate) fn start_account(area: Rect, shape: Shape, n: usize) -> Rect {
+    let row = account_row(area, shape, n);
+    let skip = u16::try_from(INPUT_PROMPT.chars().count() + ACCOUNT_LABEL).unwrap_or(u16::MAX);
+    let x = row.x.saturating_add(skip).min(row.right());
+    Rect { x, width: ACCOUNT_FIELD.min(row.right() - x), ..row }
+}
+
+pub(crate) fn start_account_list(area: Rect, shape: Shape, n: usize, combo: &Combo) -> Option<Rect> {
+    combo.is_open().then(|| combo::list(start_account(area, shape, n), combo, flows_area(area)))
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct AccountField {
+    pub(crate) kind: String,
+    pub(crate) combo: Combo,
 }
 
 pub(crate) struct StartFlow {
@@ -113,11 +146,14 @@ pub(crate) struct StartFlow {
     pub(crate) buttons: Vec<&'static str>,
     pub(crate) preview: Option<Flow>,
     pub(crate) diagram: bool,
+    pub(crate) accounts: Vec<AccountField>,
+    pub(crate) focused_account: Option<usize>,
 }
 
 impl StartFlow {
     pub(crate) fn shape(&self) -> Shape {
         Shape::new(self.items.len(), self.warnings.len(), self.preview.is_some(), self.diagram)
+            .with_accounts(self.accounts.len())
     }
 
     fn list_hidden(&self, area: Rect) -> bool {
@@ -138,11 +174,22 @@ pub(crate) enum StartHit {
     Row(usize),
     Prompt { line: usize, col: usize },
     Branch,
+    Account(usize),
+    Choose(usize),
+    Close,
     Button(usize),
 }
 
 pub(crate) fn start_hit(area: Rect, view: &StartFlow, pos: Position) -> Option<StartHit> {
     let shape = view.shape();
+    for (n, field) in view.accounts.iter().enumerate() {
+        if let Some(list) = start_account_list(area, shape, n, &field.combo) {
+            return Some(combo::hit(list, &field.combo, pos).map_or(StartHit::Close, StartHit::Choose));
+        }
+    }
+    if let Some(n) = (0..view.accounts.len()).find(|n| start_account(area, shape, *n).contains(pos)) {
+        return Some(StartHit::Account(n));
+    }
     if let Some(i) = start_buttons(area, shape, &view.buttons).iter().position(|r| r.contains(pos)) {
         return Some(StartHit::Button(i));
     }
@@ -218,7 +265,7 @@ pub(in crate::ui) fn draw_start_flow(f: &mut Frame, view: &View, start: &StartFl
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, &start.title), r);
     let shape = start.shape();
-    let [heading, _, _, _, branch, warning_rows, note, _] = start_rows(area, shape);
+    let [heading, _, _, _, branch, _, warning_rows, note, _] = start_rows(area, shape);
     let (label, prompt) = (prompt_label(area, shape), prompt_area(area, shape));
     let dim = Style::default().fg(view.muted);
     let heading_text = truncate_right(&start.heading, usize::from(heading.width));
@@ -244,6 +291,23 @@ pub(in crate::ui) fn draw_start_flow(f: &mut Frame, view: &View, start: &StartFl
     draw_warnings(f, &start.warnings, warning_rows);
     draw_hint(f, view, start.note.as_ref(), &start.hint, note);
     draw_buttons(f, view, &start_buttons(area, shape, &start.buttons), &start.buttons, START);
+    for (n, field) in start.accounts.iter().enumerate() {
+        let focused = start.focused_account == Some(n);
+        let name = format!("{:<ACCOUNT_LABEL$}", format!("{} account:", field.kind));
+        let lit = if focused { Style::default().fg(Color::Cyan) } else { dim };
+        let label =
+            Line::from(vec![Span::styled(INPUT_PROMPT, Style::default().fg(Color::Cyan)), Span::styled(name, lit)]);
+        f.render_widget(Paragraph::new(label), account_row(area, shape, n));
+        combo::draw_field(f, view, start_account(area, shape, n), &field.combo, "", focused);
+        if focused {
+            cursor = None;
+        }
+    }
+    for (n, field) in start.accounts.iter().enumerate() {
+        if let Some(list) = start_account_list(area, shape, n, &field.combo) {
+            combo::draw_list(f, view, list, &field.combo);
+        }
+    }
     if let Some(pos) = cursor {
         f.set_cursor_position(pos);
     }

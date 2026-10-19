@@ -34,8 +34,8 @@ fn window(label: &str, kind: &str, scope: Option<&str>, percent: u16, at: &str) 
 }
 
 fn read(state: &mut State, agent: Known, report: Report, at: Instant) {
-    state.start(vec![agent]);
-    state.answered(agent, Ok(report), at);
+    state.start(vec![(agent, None)]);
+    state.answered((agent, None), Ok(report), at);
 }
 
 fn example() -> Plans {
@@ -52,8 +52,8 @@ fn example() -> Plans {
         notice: None,
     };
     read(&mut state, Known::Claude, report, at);
-    state.start(vec![Known::Codex]);
-    state.answered(Known::Codex, Err(Error::Usage("could not run /nonexistent/codex".into())), at);
+    state.start(vec![(Known::Codex, None)]);
+    state.answered((Known::Codex, None), Err(Error::Usage("could not run /nonexistent/codex".into())), at);
     let now = at + Duration::from_secs(120);
     Plans {
         agents: [Known::Claude, Known::Codex]
@@ -116,7 +116,7 @@ fn nothing_read_gives_null_fields_and_a_start_says_loading() {
     let none = PlanInfo::of(Known::Claude, state.probe(Known::Claude), now, clock());
     assert_eq!(none, PlanInfo { agent: "claude".into(), title: "Claude Code".into(), ..PlanInfo::default() });
     assert_eq!(none.limited, None);
-    state.start(vec![Known::Claude]);
+    state.start(vec![(Known::Claude, None)]);
     assert!(PlanInfo::of(Known::Claude, state.probe(Known::Claude), now, clock()).loading);
 }
 
@@ -125,8 +125,8 @@ fn a_later_error_keeps_the_reading() {
     let mut state = State::default();
     let at = Instant::now();
     read(&mut state, Known::Claude, Report { plan: Some("max".into()), limited: true, ..Report::default() }, at);
-    state.start(vec![Known::Claude]);
-    state.answered(Known::Claude, Err(Error::Usage("late".into())), at);
+    state.start(vec![(Known::Claude, None)]);
+    state.answered((Known::Claude, None), Err(Error::Usage("late".into())), at);
     let info = PlanInfo::of(Known::Claude, state.probe(Known::Claude), at, clock());
     assert_eq!((info.plan.as_deref(), info.error.as_deref()), (Some("max"), Some("late")));
     assert!(info.read_at.is_some());
@@ -143,4 +143,15 @@ fn the_notice_is_the_tabs_text() {
     read(&mut state, Known::Codex, signed_out, at);
     let info = PlanInfo::of(Known::Codex, state.probe(Known::Codex), at, clock());
     assert_eq!(info.notice.as_deref(), Some("not signed in · run codex login"));
+}
+
+#[test]
+fn an_account_entry_is_written_as_its_fixture_and_reads_back() {
+    let mut plans = example();
+    plans.agents[0] = plans.agents[0].clone().for_account(Some("work"), Some("Work".into()), true);
+    assert_eq!(written(&plans), fixture!("control/usage/answer-accounts.json").trim_end());
+    let read: Plans = serde_json::from_str(fixture!("control/usage/answer-accounts.json")).expect("plans");
+    assert_eq!(read, plans);
+    let old: Plans = serde_json::from_str(fixture!("control/usage/answer.json")).expect("plans");
+    assert!(old.agents.iter().all(|plan| plan.account.is_none() && plan.label.is_none() && !plan.active));
 }

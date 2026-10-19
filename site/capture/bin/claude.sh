@@ -1,5 +1,13 @@
 #!/bin/bash
-dir=$CLAUDE_CONFIG_DIR
+if [ "${1:-}" = auth ] && [ "${2:-}" = status ]; then
+  case "$(basename "${CLAUDE_CONFIG_DIR:-.claude}")" in
+    .claude) printf '{"loggedIn":true,"authMethod":"claude.ai","email":"ana@acme.dev","orgName":"Acme","subscriptionType":"max"}\n' ;;
+    personal) printf '{"loggedIn":true,"authMethod":"claude.ai","email":"ana@example.com","subscriptionType":"pro"}\n' ;;
+    *) printf '{"loggedIn":false,"authMethod":"none","apiProvider":"firstParty"}\n' ;;
+  esac
+  exit 0
+fi
+dir=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
 mkdir -p "$dir/sessions"
 slug=$(printf '%s' "$PWD" | tr -c 'a-zA-Z0-9' '-')
 mkdir -p "$dir/projects/$slug"
@@ -7,7 +15,9 @@ if [ "${1:-}" = -p ]; then
   read -r _init
   read -r _usage
   printf '{"type":"system"}\n'
-  cat "$CC_DATA/usage/claude.json"
+  usage="$CC_DATA/usage/claude-$(basename "$dir").json"
+  [ -f "$usage" ] || usage="$CC_DATA/usage/claude.json"
+  cat "$usage"
   printf '\n'
   exec sleep 30
 fi

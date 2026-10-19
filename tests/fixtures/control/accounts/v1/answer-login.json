@@ -1,0 +1,59 @@
+{
+  "providers": [
+    {
+      "provider": "claude",
+      "title": "Claude Code",
+      "env": "CLAUDE_CONFIG_DIR",
+      "accounts": [
+        {
+          "name": "personal",
+          "path": "/home/me/.local/state/cornercase/accounts/claude/personal",
+          "unshared": [],
+          "login": {
+            "state": "signed-in",
+            "email": "me@home.dev",
+            "plan": "pro",
+            "checked": "2026-10-19T08:00:00.000Z"
+          }
+        },
+        {
+          "name": "work",
+          "path": "/home/me/.local/state/cornercase/accounts/claude/work",
+          "unshared": [
+            "settings.json"
+          ],
+          "login": {
+            "state": "signed-out",
+            "checked": "2026-10-19T08:00:01.250Z"
+          }
+        }
+      ]
+    },
+    {
+      "provider": "codex",
+      "title": "Codex",
+      "env": "CODEX_HOME",
+      "accounts": []
+    }
+  ],
+  "profiles": [
+    {
+      "name": "Personal",
+      "accounts": {
+        "claude": "personal"
+      },
+      "active": false
+    },
+    {
+      "name": "Work",
+      "accounts": {
+        "claude": "work"
+      },
+      "active": true
+    }
+  ],
+  "profile": "Work",
+  "tokens": [
+    "ANTHROPIC_API_KEY"
+  ]
+}

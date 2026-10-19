@@ -13,7 +13,7 @@ pub(super) fn accounts_with_linear(s: &mut Setup, source: Source, workspace: &st
     s.app.issues.accounts.insert(Source::Linear, Account { handle: "ana".into(), workspace: "b".into() });
 }
 
-fn shortcut_with_token(s: &mut Setup) -> FakeHttp {
+pub(super) fn shortcut_with_token(s: &mut Setup) -> FakeHttp {
     let server = shortcut(s, Vec::new());
     secrets::write(&secrets_file(s), "shortcut_token", "t0k").expect("save token");
     open_loaded(s, Source::Shortcut);
@@ -97,10 +97,11 @@ pub(super) fn loaded(app: &App, source: Source) -> bool {
 }
 
 pub(super) fn open_list(s: &mut Setup) {
-    click(&mut s.app, areas().issues.as_position());
+    let issues = app_areas(&s.app).issues;
+    click(&mut s.app, issues.as_position());
 }
 
-fn open_loaded(s: &mut Setup, source: Source) {
+pub(super) fn open_loaded(s: &mut Setup, source: Source) {
     open_list(s);
     pump_until(&mut s.app, &s.rx, "the issues load", |a| loaded(a, source));
 }

@@ -26,8 +26,8 @@ test('the Remote tab holds the browser, Telegram and Discord, which need a real 
   app.openSettings();
   inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
-  assert.equal(app.overlay?.kind === 'settings' && app.overlay.page, 5);
-  const rows = app.settingsRows(5);
+  assert.equal(app.overlay?.kind === 'settings' && app.overlay.page, 6);
+  const rows = app.settingsRows(6);
   assert.deepEqual(rows.map((row) => row.section), ['Browser', 'Telegram', 'Discord']);
   assert.equal(app.settingsRows(1).some((row) => row.section === 'Telegram'), false);
   app.settingsClick(1);

@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
@@ -79,6 +81,7 @@ impl App {
             *settings.messenger_mut(via) = self.messenger_settings(via);
         }
         settings.plugins = self.plugin_rows();
+        settings.accounts = self.accounts_listed();
         settings
     }
 
@@ -116,7 +119,7 @@ impl App {
             self.open_flows_tab();
             return;
         }
-        self.settings_act(action);
+        self.settings_act(action, area);
     }
 
     pub(super) fn settings_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
@@ -172,7 +175,7 @@ impl App {
             self.open_flows_tab();
             return;
         }
-        self.settings_act(action);
+        self.settings_act(action, area);
     }
 
     pub(super) fn remove_token(&mut self, source: Source) -> Result<String, String> {
@@ -188,7 +191,7 @@ impl App {
         Ok(format!("the {} {} was removed", source.name(), source.token_name()))
     }
 
-    fn settings_act(&mut self, action: settings::Action) {
+    fn settings_act(&mut self, action: settings::Action, area: Rect) {
         match action {
             settings::Action::None => {}
             settings::Action::Close => self.overlay = None,
@@ -230,7 +233,10 @@ impl App {
                     s.notice = Some(e);
                 }
             }
+            settings::Action::Accounts(order) => self.account_order(&order, area),
+            settings::Action::RemoveAccount(kind, name) => self.overlay = Some(Overlay::RemoveAccount { kind, name }),
         }
+        self.watch_accounts_page(Instant::now());
     }
 }
 

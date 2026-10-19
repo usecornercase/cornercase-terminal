@@ -25,7 +25,7 @@ pub(crate) enum AppEvent {
     Files(FilesEvent),
     Update(UpdateEvent),
     Search(SearchEvent),
-    Usage(crate::agents::Known, Result<usage::Report>),
+    Usage(usage::Key, Result<usage::Report>),
     FlowModels(crate::agents::Known, Vec<String>),
     FlowFetched(crate::flows::registry::Source, std::result::Result<String, String>),
     LastMessage { request: u64, result: Result<Option<context::Said>> },
@@ -37,6 +37,7 @@ pub(crate) enum AppEvent {
     Messenger(MessengerEvent),
     Merged(crate::pull_request::merged::Answer),
     Plugin(PluginEvent),
+    Login(crate::agents::Known, String, crate::accounts::login::Login),
 }
 
 impl AppEvent {
@@ -64,6 +65,7 @@ impl AppEvent {
             Self::Messenger(event) => event.name(),
             Self::Merged(_) => "merged pull requests",
             Self::Plugin(event) => event.name(),
+            Self::Login(..) => "login checked",
         }
     }
 }
@@ -87,4 +89,5 @@ impl From<web::Event> for AppEvent {
 pub(crate) struct Start {
     pub(super) name: String,
     pub(super) spec: launch::Spec,
+    pub(super) accounts: Option<crate::accounts::Accounts>,
 }

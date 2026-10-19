@@ -135,6 +135,8 @@ fn every_command_is_listed_by_name() {
         Command::ProfileSet(ProfileSet::default()),
         Command::ProfileUse(ProfileUse::default()),
         Command::ProfileDelete(ProfileDelete::default()),
+        Command::AccountRename(AccountRename::default()),
+        Command::AccountUse(AccountUse::default()),
     ];
 
     let names: Vec<String> = commands
@@ -439,7 +441,7 @@ mod events_v1 {
         [
             (
                 event(
-                    What::Opened { kind: Kind::Tab, parent: None, accounts: std::collections::BTreeMap::new() },
+                    What::Opened { kind: Kind::Tab, parent: None, accounts: BTreeMap::new() },
                     Ids { pane: None, ..pane() },
                 ),
                 fixture!("control/events/v1/opened.json"),
@@ -475,10 +477,7 @@ mod events_v1 {
                 fixture!("control/events/v1/notice.json"),
             ),
             (
-                event(
-                    What::Opened { kind: Kind::Pane, parent: Some(2), accounts: std::collections::BTreeMap::new() },
-                    pane(),
-                ),
+                event(What::Opened { kind: Kind::Pane, parent: Some(2), accounts: BTreeMap::new() }, pane()),
                 fixture!("control/events/v1/opened-parent.json"),
             ),
             (

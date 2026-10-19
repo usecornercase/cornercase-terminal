@@ -97,7 +97,9 @@ impl App {
     pub(super) fn open_tab_with(&mut self, p: usize, w: Option<usize>, start: Start, area: Rect) -> Result<()> {
         let active = self.ensure_workspace(p);
         let w = w.unwrap_or(active).min(self.projects[p].workspaces.len() - 1);
-        self.add_tab(p, w, area)?;
+        let accounts = self.start_accounts(Some(&start));
+        let t = self.push_tab_in(p, w, area, None, accounts)?;
+        self.show_tab(p, w, t);
         if let Some(tab) = self.projects[p].workspaces[w].tab_mut() {
             tab.name = Some(start.name);
             if let Some(term) = tab.pane() {

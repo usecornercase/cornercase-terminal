@@ -195,11 +195,17 @@ mod removing {
     #[test]
     fn never_runs_the_keychain_tool() {
         let needle = ["\"", "secur", "ity", "\""].concat();
-        let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("accounts");
-        for entry in fs::read_dir(&folder).expect("read src/accounts") {
-            let path = entry.expect("entry").path();
-            let text = fs::read_to_string(&path).expect("read");
-            assert!(!text.contains(&needle), "{} names the keychain tool", path.display());
+        let mut folders = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("accounts")];
+        while let Some(folder) = folders.pop() {
+            for entry in fs::read_dir(&folder).expect("read src/accounts") {
+                let path = entry.expect("entry").path();
+                if path.is_dir() {
+                    folders.push(path);
+                    continue;
+                }
+                let text = fs::read_to_string(&path).expect("read");
+                assert!(!text.contains(&needle), "{} names the keychain tool", path.display());
+            }
         }
     }
 }
@@ -402,5 +408,152 @@ mod seen {
         seen.update(root.path(), &Accounts::default(), None, |_| panic!("nothing to read"));
 
         assert_eq!(seen.name(), None);
+    }
+}
+
+mod login_status {
+    use std::ffi::OsString;
+
+    use super::*;
+    use crate::accounts::login::{self, Login, State};
+    use crate::test_util::write_executable;
+
+    const SIGNED_IN: &str = r#"{"loggedIn": true, "authMethod": "claude.ai", "email": "me@work.dev",
+        "orgName": "Acme", "subscriptionType": "max"}"#;
+
+    #[test]
+    fn claude_s_answer_gives_the_email_and_the_plan() {
+        let found = Known::Claude.login(SIGNED_IN);
+
+        assert_eq!(
+            found,
+            Login { state: State::SignedIn, email: Some("me@work.dev".into()), plan: Some("max".into()) }
+        );
+        assert_eq!(found.text(), "signed in as me@work.dev (max)");
+    }
+
+    #[test]
+    fn claude_signed_out_and_an_answer_it_cannot_read_are_told_apart() {
+        let out = r#"{"loggedIn": false, "authMethod": "none", "apiProvider": "firstParty"}"#;
+
+        assert_eq!(Known::Claude.login(out), Login::of(State::SignedOut));
+        assert_eq!(Known::Claude.login("error: unknown command"), Login::of(State::Unknown));
+    }
+
+    #[test]
+    fn codex_s_status_line_gives_the_state_and_how() {
+        let chatgpt = Known::Codex.login("Logged in using ChatGPT\n");
+        let key = Known::Codex.login("Logged in using an API key - sk-***abcd\n");
+
+        assert_eq!((chatgpt.state, chatgpt.plan.as_deref()), (State::SignedIn, Some("chatgpt")));
+        assert_eq!((key.state, key.plan.as_deref(), key.email), (State::SignedIn, Some("api key"), None));
+        assert_eq!(Known::Codex.login("Not logged in\n"), Login::of(State::SignedOut));
+        assert_eq!(Known::Gemini.login("anything"), Login::of(State::Unknown));
+    }
+
+    #[test]
+    fn only_the_names_of_the_token_variables_that_are_set_are_given() {
+        let env = |name: &str| match name {
+            "ANTHROPIC_API_KEY" => Some(OsString::from("sk-secret")),
+            "OPENAI_API_KEY" => Some(OsString::new()),
+            _ => None,
+        };
+
+        assert_eq!(login::tokens(env), ["ANTHROPIC_API_KEY"]);
+    }
+
+    #[test]
+    fn gemini_s_encrypted_storage_switch_is_no_token() {
+        let env = |name: &str| (name == "GEMINI_FORCE_ENCRYPTED_FILE_STORAGE").then(|| OsString::from("true"));
+
+        assert_eq!(login::tokens(env), Vec::<String>::new());
+    }
+
+    #[test]
+    fn the_check_drops_the_session_variables_of_an_agent_the_server_runs_in() {
+        let dir = TempDir::new();
+
+        let command = login::command(Known::Claude, "claude", dir.path()).expect("claude has a status command");
+
+        let removed: Vec<_> = command.get_envs().filter(|(_, value)| value.is_none()).map(|(key, _)| key).collect();
+        for name in crate::agents::claude::CLAUDE_SESSION_ENV.iter().chain(&crate::agents::copilot::SESSION_ENV) {
+            assert!(removed.contains(&std::ffi::OsStr::new(name)), "{name} is removed");
+        }
+        assert!(removed.contains(&std::ffi::OsStr::new("CLAUDE_SECURESTORAGE_CONFIG_DIR")));
+    }
+
+    #[test]
+    fn the_check_runs_the_agent_with_the_account_s_folder_and_reads_nothing_in_it() {
+        let dir = TempDir::new();
+        let account = dir.path().join("work");
+        fs::create_dir_all(&account).expect("the account");
+        let secret = account.join(".credentials.json");
+        fs::write(&secret, "secret").expect("credentials");
+        fs::set_permissions(&secret, fs::Permissions::from_mode(0o000)).expect("chmod");
+        let out = dir.path().join("out");
+        let fake = dir.path().join("claude");
+        let script = format!(
+            "#!/bin/sh\nprintf '%s|%s|%s' \"$*\" \"$CLAUDE_CONFIG_DIR\" \"$PWD\" > {}\necho '{}'\nexit 1\n",
+            out.display(),
+            SIGNED_IN.replace('\n', " ")
+        );
+        write_executable(&fake, &script);
+
+        let found = login::check(Known::Claude, &fake.display().to_string(), &account);
+
+        assert_eq!(found.state, State::SignedIn);
+        let home = account.display().to_string();
+        let pwd = account.canonicalize().expect("canonical").display().to_string();
+        assert_eq!(fs::read_to_string(&out).expect("recorded"), format!("auth status --json|{home}|{pwd}"));
+        let source =
+            fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/accounts/login.rs")).expect("login.rs");
+        assert!(!source.contains(".credentials") && !source.contains("auth.json"));
+    }
+
+    #[test]
+    fn the_system_login_is_checked_with_the_server_s_own_variable() {
+        let dir = TempDir::new();
+
+        let system = login::system(Known::Claude, "claude", Some(dir.path())).expect("claude has a status command");
+        let account = login::command(Known::Claude, "claude", dir.path()).expect("claude has a status command");
+
+        let set = |command: &std::process::Command| {
+            command.get_envs().any(|(key, value)| key == "CLAUDE_CONFIG_DIR" && value.is_some())
+        };
+        assert_eq!((set(&system), set(&account)), (false, true));
+        assert_eq!(system.get_current_dir(), Some(dir.path()));
+        let missing = dir.path().join("missing");
+        assert_eq!(
+            login::system(Known::Claude, "claude", Some(&missing))
+                .and_then(|c| c.get_current_dir().map(Path::to_path_buf)),
+            None
+        );
+    }
+
+    #[test]
+    fn a_check_that_cannot_run_failed() {
+        let dir = TempDir::new();
+
+        let found = login::check(Known::Codex, "/nonexistent/codex", dir.path());
+
+        assert_eq!(found, Login::of(State::Failed));
+        assert_eq!(login::check(Known::Gemini, "/nonexistent/gemini", dir.path()), Login::default());
+    }
+}
+
+mod credentials {
+    #[test]
+    fn the_accounts_code_never_runs_the_keychain_tool_or_opens_a_credentials_file() {
+        for (name, source) in [
+            ("mod.rs", include_str!("mod.rs")),
+            ("links.rs", include_str!("links.rs")),
+            ("login.rs", include_str!("login.rs")),
+            ("pick.rs", include_str!("pick.rs")),
+        ] {
+            let production = source.split("#[cfg(test)]").next().expect("source");
+            for forbidden in ["Command::new(\"security\"", "\"find-generic-password\"", ".credentials.json"] {
+                assert!(!production.contains(forbidden), "{name} mentions {forbidden}");
+            }
+        }
     }
 }

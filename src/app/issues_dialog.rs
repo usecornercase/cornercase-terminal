@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crossterm::event::{KeyEvent, MouseEvent};
 use ratatui::layout::{Position, Rect};
@@ -130,6 +130,7 @@ impl App {
             notice: None,
             secrets_path: crate::text::display_path(&self.issues.secrets_path, self.home.as_deref()),
             agents: self.agent_choices(),
+            accounts: self.account_choices(),
             picker: None,
             places,
             here,
@@ -172,6 +173,34 @@ impl App {
             prompt: config.prompt.clone(),
             submit: config.submit,
         }
+    }
+
+    pub(super) fn account_choices(&self) -> Option<browser::Accounts> {
+        if !(self.config.account_picker && self.has_accounts()) {
+            return None;
+        }
+        let selected = self.config.selected_accounts();
+        let agents = self
+            .listed_accounts()
+            .iter()
+            .filter(|(_, names)| !names.is_empty())
+            .map(|(kind, names)| {
+                let kind = kind.name();
+                let active = selected.get(kind).filter(|name| names.contains(name)).cloned().unwrap_or_default();
+                let labels = std::iter::once("")
+                    .chain(names.iter().map(String::as_str))
+                    .map(|name| self.config.account_label(kind, name).to_string())
+                    .collect();
+                (kind.to_string(), browser::AgentAccounts { names: names.clone(), labels, active })
+            })
+            .collect();
+        Some(browser::Accounts { agents, chosen: None })
+    }
+
+    pub(super) fn chosen_accounts(&self) -> BTreeMap<String, String> {
+        let Some(Overlay::Issues(b)) = &self.overlay else { return BTreeMap::new() };
+        let Some(accounts) = &b.accounts else { return BTreeMap::new() };
+        accounts.chosen.iter().cloned().collect()
     }
 
     fn act(&mut self, action: Action, area: Rect) -> Result<()> {
@@ -455,7 +484,16 @@ impl App {
         let Some(browsing) = self.browser_project() else { return };
         let project = place.map_or(browsing, |place| place.project);
         let (branch, prompt) = self.issue_task(issue);
-        let start = self.start_flow_in(project).map(|s| s.for_issue(issues::workspace_name(issue), &prompt, branch));
+        let chosen = self.chosen_accounts();
+        let gone = self.requested_accounts(None, &chosen).err();
+        let start = self.start_flow_in(project).map(|s| {
+            let mut s = s.for_issue(issues::workspace_name(issue), &prompt, branch);
+            match gone {
+                Some(why) => s.notice = Some(why.into()),
+                None => s.seed_accounts(&chosen),
+            }
+            s
+        });
         self.open_start_flow(start);
     }
 
@@ -467,6 +505,17 @@ impl App {
             return Ok(());
         };
         let (branch, prompt) = self.issue_task(issue);
+        let chosen = self.chosen_accounts();
+        let accounts = match self.requested_accounts(None, &chosen) {
+            Ok(accounts) => (!chosen.is_empty()).then_some(accounts),
+            Err(refusal) => {
+                if let Some(Overlay::Issues(b)) = &mut self.overlay {
+                    b.starting = false;
+                    b.error = Some(refusal.message);
+                }
+                return Ok(());
+            }
+        };
         let start = Start {
             name: issues::workspace_name(issue),
             spec: launch::Spec {
@@ -475,6 +524,7 @@ impl App {
                 submit: self.config.submit,
                 trusted: false,
             },
+            accounts,
         };
         let in_a_tab = match &place {
             Some(place) => !place.worktree,
@@ -486,6 +536,7 @@ impl App {
             source = issue.source.name(),
             key = issue.key,
             agent = agent,
+            account = chosen.get(agent).map_or("-", |name| if name.is_empty() { "system" } else { name }),
             project = project,
             branch = branch,
             in_a_tab = in_a_tab,
@@ -539,6 +590,13 @@ fn picker_view(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) 
         Some(Pick::Place) => {
             ("where should it be worked on? a repository gets a worktree, others a new tab".to_string(), None)
         }
+        Some(Pick::Account) => (
+            format!(
+                "which {} account should it start with? only this start: new tabs keep the one in use",
+                browser.agents.pick().unwrap_or_default()
+            ),
+            None,
+        ),
         Some(Pick::Person(source, field)) => {
             let note = match browser.members.get(&source) {
                 None => Some(ui::Note::Busy("loading people…")),

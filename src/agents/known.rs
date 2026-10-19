@@ -91,6 +91,16 @@ impl Known {
         }
     }
 
+    pub(crate) fn login(self, text: &str) -> crate::accounts::login::Login {
+        match self {
+            Self::Claude => claude::login(text),
+            Self::Codex => codex::login(text),
+            Self::Gemini | Self::Opencode | Self::Grok | Self::Cursor | Self::Copilot => {
+                crate::accounts::login::Login::default()
+            }
+        }
+    }
+
     pub(crate) fn effort(self) -> Option<super::Effort> {
         match self {
             Self::Claude => claude::EFFORT,

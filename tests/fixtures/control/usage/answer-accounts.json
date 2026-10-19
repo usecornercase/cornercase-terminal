@@ -1,0 +1,50 @@
+{
+  "agents": [
+    {
+      "agent": "claude",
+      "title": "Claude Code",
+      "loading": false,
+      "read_at": "2026-10-04T11:44:59.000Z",
+      "age": 120,
+      "plan": "team",
+      "limited": true,
+      "limits": [
+        {
+          "label": "session (5h)",
+          "kind": "session",
+          "scope": null,
+          "percent": 7,
+          "severity": "normal",
+          "resets_at": "2026-10-04T13:59:59.000Z"
+        },
+        {
+          "label": "week · Fable",
+          "kind": "weekly_scoped",
+          "scope": "Fable",
+          "percent": 0,
+          "severity": "normal",
+          "resets_at": "2026-10-04T16:00:00.000Z"
+        }
+      ],
+      "extra": "extra usage: 12.34 USD of 50.00 USD",
+      "notice": null,
+      "error": null,
+      "account": "work",
+      "label": "Work",
+      "active": true
+    },
+    {
+      "agent": "codex",
+      "title": "Codex",
+      "loading": false,
+      "read_at": null,
+      "age": null,
+      "plan": null,
+      "limited": null,
+      "limits": [],
+      "extra": null,
+      "notice": null,
+      "error": "could not run /nonexistent/codex"
+    }
+  ]
+}

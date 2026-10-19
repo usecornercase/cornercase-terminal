@@ -126,7 +126,7 @@ impl App {
         };
         let (flow, note) = pick(&self.flow_listing(Some(&self.projects[p].path)), &run.name)?;
         let branch = run.worktree.unwrap_or_default();
-        let accounts = self.profile_accounts(run.profile.as_deref())?;
+        let accounts = self.requested_accounts(run.profile.as_deref(), &run.accounts)?;
         let (task, focus, trees) = (run.prompt, run.focus, Vec::new());
         let starting = Starting { flow, task, branch, focus, note, trees, parent: caller, accounts };
         self.run_flow(Some(client), self.projects[p].id, starting, area)

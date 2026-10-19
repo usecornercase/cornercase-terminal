@@ -180,6 +180,11 @@ impl App {
         self.changes_files().map(changes_label)
     }
 
+    pub(super) fn changes_button_view(&self) -> Option<ui::ChangesButton> {
+        let open = self.side == Some(Side::Changes);
+        self.changes_files().map(|files| ui::ChangesButton { label: changes_label(files), files, open })
+    }
+
     pub(super) fn changes_files(&self) -> Option<usize> {
         let target = self.changes_target()?;
         let model = if self.changes.scope == changes::Scope::Every && self.changes_shown() {

@@ -1,7 +1,7 @@
 use super::*;
 
 fn opus(percent: u16) -> Details {
-    Details { model: Some("Opus 5.5".into()), percent: Some(percent), subagents: 0, memory: None }
+    Details { model: Some("Opus 5.5".into()), percent: Some(percent), subagents: 0, memory: None, account: None }
 }
 
 fn with_details(details: Details) -> View<'static> {
@@ -37,7 +37,8 @@ fn renders_the_model_and_the_context_under_the_tab() {
 }
 
 fn agent(name: &str, model: &str, percent: Option<u16>) -> View<'static> {
-    let mut view = with_details(Details { model: Some(model.into()), percent, subagents: 0, memory: None });
+    let mut view =
+        with_details(Details { model: Some(model.into()), percent, subagents: 0, memory: None, account: None });
     let tab = &mut view.workspaces[0].tabs[0];
     tab.name = name.into();
     tab.status = None;
@@ -216,4 +217,43 @@ fn a_compact_band_shows_it_on_its_last_row() {
             "▌ │   Opus 5.5 · 17%".into()
         )
     );
+}
+
+fn work(details: Details) -> Details {
+    Details { account: Some("work".into()), ..details }
+}
+
+#[test]
+fn renders_the_account_after_the_model() {
+    insta::assert_snapshot!(render(&with_details(work(opus(17)))).backend());
+}
+
+#[test]
+fn renders_the_account_in_the_compact_layout() {
+    let view = View { nav: Some(Nav::Workspaces), ..with_details(work(opus(17))) };
+
+    insta::assert_snapshot!(render_sized(&view, SMALL.width, SMALL.height).backend());
+}
+
+#[test]
+fn the_account_alone_takes_a_second_row() {
+    assert_eq!(work(Details::default()).lines(), 2);
+}
+
+#[rstest]
+#[case::fits(34, "work", "▌ │   Opus 5.5 · work · 17%")]
+#[case::cuts_the_model_first(26, "work", "▌ │   Opus… · work · 17%")]
+#[case::drops_the_model_first(24, "personal", "▌ │   personal · 17%")]
+#[case::cuts_the_account(19, "personal", "▌ │   pers… · 17%")]
+#[case::keeps_three_cells_of_the_account(17, "personal", "▌ │   pe… · 17%")]
+#[case::drops_the_account_below_three_cells(16, "personal", "▌ │   17%")]
+fn a_narrow_column_cuts_the_model_then_the_account(
+    #[case] workspaces: u16,
+    #[case] account: &str,
+    #[case] expected: &str,
+) {
+    let details = Details { account: Some(account.into()), ..opus(17) };
+    let v = View { widths: Widths { workspaces, ..Widths::default() }, ..with_details(details) };
+    let r = row(&v, AREA, WorkspaceRow::Tab(0, 0));
+    assert_eq!(line(&render(&v), r, 1), expected);
 }

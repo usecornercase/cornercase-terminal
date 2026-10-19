@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::Place;
+use crate::accounts::AgentAccounts;
 use crate::list::Combo;
 use crate::todo::editor::Editor;
 
@@ -16,6 +17,7 @@ pub(crate) enum Control {
     OpenIn,
     Branch,
     Agent,
+    Account,
     Mode,
 }
 
@@ -86,6 +88,7 @@ pub(crate) struct Form {
     pub(crate) open_in: Combo,
     pub(crate) branch: Editor,
     pub(crate) agent: Combo,
+    pub(crate) account: Option<AgentAccounts>,
     pub(crate) mode: Combo,
     pub(crate) focus: Control,
     pub(crate) zone: String,
@@ -116,12 +119,17 @@ impl Form {
             open_in: Combo::new(OPEN_IN.map(String::from).into(), Some(0)),
             branch: Editor::default(),
             agent: Combo::new(kinds, Some(agent)),
+            account: None,
             mode: Combo::new(vec!["default".into()], Some(0)),
             focus: Control::Prompt,
             zone,
             busy: false,
             error: None,
         }
+    }
+
+    pub(crate) fn chosen_account(&self) -> Option<(&str, &str)> {
+        self.account.as_ref().map(|account| (account.kind.as_str(), account.chosen()))
     }
 
     pub(crate) fn kind(&self) -> When {
@@ -170,7 +178,11 @@ impl Form {
         if self.worktree() {
             controls.push(Control::Branch);
         }
-        controls.extend([Control::Agent, Control::Mode]);
+        controls.push(Control::Agent);
+        if self.account.is_some() {
+            controls.push(Control::Account);
+        }
+        controls.push(Control::Mode);
         controls
     }
 
@@ -203,6 +215,7 @@ impl Form {
             Control::Place => Some(&self.place),
             Control::OpenIn => Some(&self.open_in),
             Control::Agent => Some(&self.agent),
+            Control::Account => self.account.as_ref().map(|account| &account.combo),
             Control::Mode => Some(&self.mode),
             _ => None,
         }
@@ -215,6 +228,7 @@ impl Form {
             Control::Place => Some(&mut self.place),
             Control::OpenIn => Some(&mut self.open_in),
             Control::Agent => Some(&mut self.agent),
+            Control::Account => self.account.as_mut().map(|account| &mut account.combo),
             Control::Mode => Some(&mut self.mode),
             _ => None,
         }
@@ -225,7 +239,15 @@ impl Form {
     }
 
     pub(crate) fn close_lists(&mut self) {
-        for control in [Control::When, Control::Unit, Control::Place, Control::OpenIn, Control::Agent, Control::Mode] {
+        for control in [
+            Control::When,
+            Control::Unit,
+            Control::Place,
+            Control::OpenIn,
+            Control::Agent,
+            Control::Account,
+            Control::Mode,
+        ] {
             self.combo(control).into_iter().for_each(Combo::close);
         }
     }

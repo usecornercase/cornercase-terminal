@@ -100,7 +100,7 @@ impl App {
             Some(id) => self.usable_workspace(id)?,
             None => self.here_workspace(asker)?,
         };
-        let accounts = self.profile_accounts(new.profile.as_deref())?;
+        let accounts = self.requested_accounts(new.profile.as_deref(), &new.accounts)?;
         let t = self.push_tab_in(p, w, area, name_of(new.name), accounts).map_err(|e| e.to_string())?;
         let ids = self.ids(p, Some(w), Some(t));
         let pane = ids.pane.unwrap_or_default();
@@ -154,7 +154,7 @@ impl App {
     ) -> Handled {
         let area = sized(area)?;
         let timeout = deadline(start.timeout, now)?;
-        let accounts = self.profile_accounts(start.profile.as_deref())?;
+        let accounts = self.requested_accounts(start.profile.as_deref(), &start.accounts)?;
         if start.issue.is_some() {
             if start.wait {
                 Condition::of(start.until.clone())?;

@@ -294,12 +294,13 @@ impl App {
             workspace.name = Some(start.name.clone());
         }
         if workspace.tabs.is_empty() {
-            if setup {
-                let t = self.push_setup_tab(p, w, area, None)?;
-                self.projects[p].workspaces[w].active = t;
+            let accounts = self.start_accounts(start.as_ref());
+            let t = if setup {
+                self.push_setup_tab_in(p, w, area, None, accounts)?
             } else {
-                self.add_tab(p, w, area)?;
-            }
+                self.push_tab_in(p, w, area, None, accounts)?
+            };
+            self.projects[p].workspaces[w].active = t;
             let term = self.projects[p].workspaces[w].tab().and_then(Tab::pane).map(|t| t.id);
             if let (Some(term), Some(start)) = (term, start) {
                 self.agents.launches.push(Launch::new(term, start.spec, Instant::now()));

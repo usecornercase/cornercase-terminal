@@ -8,6 +8,16 @@ const LOGIN: &str = r#"#!/bin/sh
 printf '%s|%s\n' "$*" "${CLAUDE_CONFIG_DIR:-system}" > OUT.tmp && mv OUT.tmp OUT
 "#;
 
+const STATUS: &str = r#"#!/bin/sh
+printf '%s|%s\n' "$*" "$CLAUDE_CONFIG_DIR" >> OUT
+case "$CLAUDE_CONFIG_DIR" in
+*/work) echo '{"loggedIn": true, "email": "me@work.dev", "subscriptionType": "max"}' ;;
+*) echo '{"loggedIn": false}'; exit 1 ;;
+esac
+"#;
+
+const CODEX_STATUS: &str = "#!/bin/sh\necho 'Logged in using ChatGPT' >&2\n";
+
 struct Setup {
     app: App,
     rx: Receiver<AppEvent>,
@@ -147,6 +157,48 @@ fn removing_an_account_takes_it_out_of_every_profile() {
     assert_eq!(chosen(&left, "Work"), BTreeMap::from([("codex".into(), "work".into())]));
     assert_eq!(s.saved()["profiles"]["Work"], json!({"codex": "work"}));
     assert_eq!(refused(&mut s.app, "account-remove", &json!({"provider": "claude", "name": "work"})).code, "not-found");
+}
+
+#[test]
+fn removing_an_account_forgets_its_label_and_its_selection() {
+    let mut s = setup();
+    s.add("claude", "work");
+    s.add("claude", "home");
+    s.app
+        .change_config(|config| {
+            config.active_accounts.insert("claude".into(), "work".into());
+            config.account_names.insert("claude".into(), BTreeMap::from([("work".into(), "Work".into())]));
+        })
+        .expect("a config change");
+
+    s.info("account-remove", &json!({"provider": "claude", "name": "work"}));
+
+    assert!(s.app.config.active_accounts.is_empty() && s.app.config.account_names.is_empty());
+    assert_eq!((s.saved().get("active_accounts"), s.saved().get("account_names")), (None, None));
+}
+
+#[test]
+fn without_a_profile_a_new_tab_takes_each_agent_s_chosen_account_until_system_is_used() {
+    let mut s = setup();
+    s.add("claude", "home");
+    s.app
+        .change_config(|config| drop(config.active_accounts.insert("claude".into(), "home".into())))
+        .expect("a change");
+
+    let chosen: Done = serde_json::from_value(ok(&mut s.app, "new-tab", &json!({}))).expect("done");
+    assert_eq!(pane(&s.app, chosen.ids.pane.expect("a pane")).accounts().name(Known::Claude), Some("home"));
+
+    s.profile("Work", &json!({}));
+    s.info("profile-use", &json!({"name": "Work"}));
+    let profiled: Done = serde_json::from_value(ok(&mut s.app, "new-tab", &json!({}))).expect("done");
+    assert!(pane(&s.app, profiled.ids.pane.expect("a pane")).accounts().is_empty());
+    assert_eq!(s.app.config.active_accounts.get("claude").map(String::as_str), Some("home"));
+
+    s.info("profile-use", &json!({"name": ""}));
+    assert!(s.app.config.active_accounts.is_empty());
+    assert_eq!(s.saved().get("active_accounts"), None);
+    let system: Done = serde_json::from_value(ok(&mut s.app, "new-tab", &json!({}))).expect("done");
+    assert!(pane(&s.app, system.ids.pane.expect("a pane")).accounts().is_empty());
 }
 
 #[test]
@@ -290,6 +342,47 @@ fn start_with_a_profile_uses_its_accounts_and_leaves_the_active_one() {
 }
 
 #[test]
+fn an_account_named_in_the_request_wins_over_the_profile_for_its_agent() {
+    let mut s = setup();
+    s.add("claude", "work");
+    s.add("claude", "home");
+    s.profile("Work", &json!({"claude": "work"}));
+    s.info("profile-use", &json!({"name": "Work"}));
+    let tab = |s: &mut Setup, args: Value| {
+        let done: Done = serde_json::from_value(ok(&mut s.app, "new-tab", &args)).expect("done");
+        pane(&s.app, done.ids.pane.expect("a pane")).accounts().clone()
+    };
+
+    let home = tab(&mut s, json!({"accounts": {"claude": "home"}}));
+    let system = tab(&mut s, json!({"accounts": {"claude": ""}}));
+    let over_system = tab(&mut s, json!({"profile": "", "accounts": {"claude": "work"}}));
+
+    let env = home.env();
+    let dir = env.iter().find(|(key, _)| key == "CLAUDE_CONFIG_DIR").map(|(_, dir)| PathBuf::from(dir));
+    assert_eq!(dir.and_then(|dir| dir.file_name().map(ToOwned::to_owned)), Some("home".into()));
+    assert!(system.is_empty());
+    assert_eq!(over_system.name(Known::Claude), Some("work"));
+    assert_eq!(s.app.config.profile, "Work", "the request leaves the active profile alone");
+}
+
+#[rstest::rstest]
+#[case::an_agent_without_accounts("new-tab", json!({"accounts": {"opencode": "work"}}))]
+#[case::an_unknown_agent("new-tab", json!({"accounts": {"nope": "work"}}))]
+#[case::an_unknown_account("new-tab", json!({"accounts": {"claude": "gone"}}))]
+#[case::a_start("start", json!({"agent": "claude", "accounts": {"claude": "gone"}}))]
+#[case::a_start_from_an_issue("start", json!({"issue": "#7", "accounts": {"claude": "gone"}}))]
+fn an_unknown_account_in_a_request_opens_nothing(#[case] command: &str, #[case] args: Value) {
+    let mut s = setup();
+    s.add("claude", "work");
+    let tabs = s.app.projects[0].workspaces.iter().map(|w| w.tabs.len()).sum::<usize>();
+
+    let refusal = refused(&mut s.app, command, &args);
+
+    assert_eq!(refusal.code, "not-found", "{}", refusal.message);
+    assert_eq!(s.app.projects[0].workspaces.iter().map(|w| w.tabs.len()).sum::<usize>(), tabs);
+}
+
+#[test]
 fn a_new_tab_with_the_system_profile_gets_no_account() {
     let mut s = setup();
     s.add("claude", "work");
@@ -302,6 +395,102 @@ fn a_new_tab_with_the_system_profile_gets_no_account() {
     assert!(pane(&s.app, system.ids.pane.expect("a pane")).accounts().is_empty());
     assert_eq!(pane(&s.app, active.ids.pane.expect("a pane")).accounts().name(Known::Claude), Some("work"));
     assert_eq!(refused(&mut s.app, "new-tab", &json!({"profile": "Gone"})).code, "not-found");
+}
+
+mod logins {
+    use super::*;
+    use crate::accounts::login::State;
+    use crate::control::accounts::LoginInfo;
+
+    fn login<'a>(info: &'a AccountsInfo, provider: &str, name: &str) -> Option<&'a LoginInfo> {
+        let found = info.providers.iter().find(|p| p.provider == provider).expect("the provider");
+        found.accounts.iter().find(|a| a.name == name).and_then(|a| a.login.as_ref())
+    }
+
+    fn fakes(s: &mut Setup) -> (TempDir, PathBuf) {
+        let bin = TempDir::new();
+        let out = bin.path().join("out");
+        write_executable(&bin.path().join("claude"), &STATUS.replace("OUT", &out.display().to_string()));
+        write_executable(&bin.path().join("codex"), CODEX_STATUS);
+        for agent in ["claude", "codex"] {
+            s.app.config.agent_commands.insert(agent.into(), bin.path().join(agent).display().to_string());
+        }
+        (bin, out)
+    }
+
+    fn checked(s: &mut Setup) -> AccountsInfo {
+        let reply = asked(&mut s.app, &s.rx, "account-list", &json!({"check": true})).expect("the accounts");
+        serde_json::from_value(reply).expect("the accounts")
+    }
+
+    #[test]
+    fn a_check_answers_once_every_account_s_agent_said_whether_it_is_signed_in() {
+        let mut s = setup();
+        let (_bin, out) = fakes(&mut s);
+        for (provider, name) in [("claude", "work"), ("claude", "home"), ("codex", "dev"), ("gemini", "me")] {
+            s.add(provider, name);
+        }
+
+        let info = checked(&mut s);
+
+        let work = login(&info, "claude", "work").expect("work was checked");
+        assert_eq!(
+            (work.state, work.email.as_deref(), work.plan.as_deref()),
+            (State::SignedIn, Some("me@work.dev"), Some("max"))
+        );
+        assert_eq!(login(&info, "claude", "home").map(|l| l.state), Some(State::SignedOut));
+        assert_eq!(
+            login(&info, "codex", "dev").map(|l| (l.state, l.plan.clone())),
+            Some((State::SignedIn, Some("chatgpt".into())))
+        );
+        assert_eq!(login(&info, "gemini", "me"), None);
+        let ran = std::fs::read_to_string(&out).expect("the checks ran");
+        let home = s.root().join("claude").join("work").canonicalize().expect("canonical");
+        assert!(ran.lines().any(|line| line == format!("auth status --json|{}", home.display())), "{ran}");
+        let listed = s.info("account-list", &json!({}));
+        assert_eq!(login(&listed, "claude", "work").map(|l| l.state), Some(State::SignedIn));
+    }
+
+    #[test]
+    fn a_check_with_nothing_to_ask_answers_at_once() {
+        let mut s = setup();
+        s.add("gemini", "me");
+
+        let info = s.info("account-list", &json!({"check": true}));
+
+        assert_eq!(login(&info, "gemini", "me"), None);
+    }
+
+    #[test]
+    fn an_agent_that_cannot_run_makes_the_check_fail_and_a_removed_account_forgets_it() {
+        let mut s = setup();
+        s.app.config.agent_commands.insert("claude".into(), "/nonexistent/claude".into());
+        s.add("claude", "work");
+
+        let info = checked(&mut s);
+
+        assert_eq!(login(&info, "claude", "work").map(|l| l.state), Some(State::Failed));
+        assert!(s.app.account_login(Known::Claude, "work").is_some());
+        ok(&mut s.app, "account-remove", &json!({"provider": "claude", "name": "work"}));
+        assert!(s.app.account_login(Known::Claude, "work").is_none());
+        assert!(!s.app.checking_login(Known::Claude, "work"));
+    }
+
+    #[test]
+    fn accounts_made_outside_are_seen_on_the_next_sync() {
+        let mut s = setup();
+        s.app.refresh(Instant::now());
+        assert!(!s.app.has_accounts());
+
+        std::fs::create_dir_all(s.root().join("codex").join("dev")).expect("an account made by hand");
+        s.app.refresh(Instant::now() + Duration::from_secs(2));
+
+        assert!(s.app.has_accounts());
+        assert_eq!(
+            s.app.listed_accounts().iter().find(|(k, _)| *k == Known::Codex).map(|(_, n)| n.clone()),
+            Some(vec!["dev".to_string()])
+        );
+    }
 }
 
 #[test]
@@ -323,7 +512,113 @@ fn the_contract_lists_the_accounts_feature_and_operations() {
         "profile-set",
         "profile-use",
         "profile-delete",
+        "account-rename",
+        "account-use",
     ] {
         assert!(operations.contains(&name), "{name}");
+    }
+    assert!(features.contains(&json!("account-switch")));
+}
+
+mod switching {
+    use super::*;
+
+    fn provider<'a>(info: &'a AccountsInfo, name: &str) -> &'a crate::control::accounts::ProviderInfo {
+        info.providers.iter().find(|p| p.provider == name).expect("the provider")
+    }
+
+    #[test]
+    fn an_account_and_the_system_login_get_a_name_the_window_shows_until_it_is_cleared() {
+        let mut s = setup();
+        s.add("claude", "home");
+        let before = s.app.config_file.revision;
+
+        s.info("account-rename", &json!({"provider": "claude", "account": "home", "label": " Personal "}));
+        let named = s.info("account-rename", &json!({"provider": "claude", "account": "", "label": "work"}));
+
+        let claude = provider(&named, "claude");
+        assert_eq!((claude.system_label.as_str(), claude.accounts[0].label.as_str()), ("work", "Personal"));
+        assert!(s.app.config_file.revision > before);
+        assert_eq!(s.saved()["account_names"], json!({"claude": {"": "work", "home": "Personal"}}));
+        assert!(s.root().join("claude/home").is_dir());
+
+        s.info("account-rename", &json!({"provider": "claude", "account": "", "label": ""}));
+        let cleared = s.info("account-rename", &json!({"provider": "claude", "account": "home", "label": ""}));
+        assert_eq!(provider(&cleared, "claude").system_label, "");
+        assert_eq!(s.saved().get("account_names"), None);
+    }
+
+    #[rstest::rstest]
+    #[case::an_unknown_account("account-rename", json!({"provider": "claude", "account": "gone", "label": "X"}), "not-found")]
+    #[case::an_agent_without_accounts("account-rename", json!({"provider": "opencode", "account": "", "label": "X"}), "malformed")]
+    #[case::a_name_too_long("account-rename", json!({"provider": "claude", "account": "home", "label": "x".repeat(33)}), "malformed")]
+    #[case::a_hidden_character("account-rename", json!({"provider": "claude", "account": "home", "label": "a\u{202e}b"}), "malformed")]
+    #[case::another_account_s_folder("account-rename", json!({"provider": "claude", "account": "home", "label": "WORK"}), "conflict")]
+    #[case::the_system_s_name("account-rename", json!({"provider": "claude", "account": "home", "label": "system"}), "conflict")]
+    #[case::using_an_unknown_account("account-use", json!({"provider": "claude", "account": "gone"}), "not-found")]
+    #[case::using_an_unknown_agent("account-use", json!({"provider": "nobody", "account": ""}), "malformed")]
+    fn a_bad_switch_is_refused_with_its_code(#[case] command: &str, #[case] args: Value, #[case] code: &str) {
+        let mut s = setup();
+        s.add("claude", "home");
+        s.add("claude", "work");
+        let (revision, config) = (s.app.config_file.revision, s.app.config.clone());
+
+        let refusal = refused(&mut s.app, command, &args);
+
+        assert_eq!(refusal.code, code, "{}", refusal.message);
+        assert_eq!((s.app.config_file.revision, &s.app.config), (revision, &config));
+    }
+
+    #[test]
+    fn a_name_taken_by_another_account_s_name_is_a_conflict() {
+        let mut s = setup();
+        s.add("claude", "home");
+        s.add("claude", "work");
+        s.info("account-rename", &json!({"provider": "claude", "account": "work", "label": "Office"}));
+
+        let refusal =
+            refused(&mut s.app, "account-rename", &json!({"provider": "claude", "account": "", "label": "office"}));
+
+        assert_eq!(refusal.code, "conflict", "{}", refusal.message);
+        let renamed = s.info("account-rename", &json!({"provider": "claude", "account": "work", "label": "OFFICE"}));
+        assert_eq!(provider(&renamed, "claude").accounts[1].label, "OFFICE");
+    }
+
+    #[test]
+    fn using_an_account_leaves_the_profile_and_keeps_the_other_agents_of_its_selection() {
+        let mut s = setup();
+        s.add("claude", "home");
+        s.add("codex", "me");
+        s.profile("Work", &json!({"codex": "me"}));
+        s.info("profile-use", &json!({"name": "Work"}));
+        let before = s.app.config_file.revision;
+
+        let used = s.info("account-use", &json!({"provider": "claude", "account": "home"}));
+
+        assert_eq!((used.profile.as_str(), provider(&used, "claude").active.as_str()), ("", "home"));
+        assert_eq!(provider(&used, "codex").active, "me");
+        assert!(s.app.config_file.revision > before);
+        assert_eq!(s.saved()["active_accounts"], json!({"claude": "home", "codex": "me"}));
+        assert_eq!(s.app.app_state().profile, None);
+        assert_eq!(
+            s.app.app_state().accounts,
+            BTreeMap::from([("claude".to_string(), "home".to_string()), ("codex".to_string(), "me".to_string())])
+        );
+        let tab: Done = serde_json::from_value(ok(&mut s.app, "new-tab", &json!({}))).expect("done");
+        assert_eq!(pane(&s.app, tab.ids.pane.expect("a pane")).accounts().name(Known::Claude), Some("home"));
+
+        let system = s.info("account-use", &json!({"provider": "claude", "account": ""}));
+        assert_eq!(provider(&system, "claude").active, "");
+        assert_eq!(s.saved()["active_accounts"], json!({"codex": "me"}));
+    }
+
+    #[test]
+    fn without_a_selection_the_app_feed_has_no_accounts() {
+        let mut s = setup();
+        s.add("claude", "home");
+
+        let feed = serde_json::to_value(s.app.app_state()).expect("json");
+
+        assert!(feed.get("accounts").is_none(), "{feed}");
     }
 }

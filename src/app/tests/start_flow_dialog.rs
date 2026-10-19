@@ -11,7 +11,7 @@ const START_FLOW: &str = "start a flow…";
 struct Setup {
     app: App,
     rx: Receiver<AppEvent>,
-    _config: TempDir,
+    config: TempDir,
     project: TempDir,
 }
 
@@ -24,7 +24,7 @@ fn setup(repo: bool) -> Setup {
     for kind in Known::ALL {
         app.config.agent_commands.insert(kind.name().into(), "/nonexistent/agent".into());
     }
-    Setup { app, rx, _config: config, project }
+    Setup { app, rx, config, project }
 }
 
 fn opened(repo: bool) -> Setup {
@@ -327,6 +327,147 @@ mod projects {
         let names: Vec<&str> = flows.flows.iter().map(|saved| saved.flow.name.as_str()).collect();
         assert!(names.contains(&"Other project's flow") && !names.contains(&"Shown project's flow"), "{names:?}");
         assert_eq!(flows.project, Some(id));
+    }
+}
+
+mod accounts {
+    use std::collections::BTreeMap;
+
+    use super::*;
+    use crate::accounts;
+
+    fn with_accounts(s: &mut Setup) {
+        let dir = s.config.path().join("accounts");
+        for name in ["home", "work"] {
+            accounts::add(&dir, Known::Claude, name, None).expect("the account");
+        }
+        s.app.config.active_accounts = BTreeMap::from([("claude".to_string(), "work".to_string())]);
+        s.app.config.account_names =
+            BTreeMap::from([("claude".to_string(), BTreeMap::from([("home".to_string(), "Personal".to_string())]))]);
+        s.app.set_accounts_dir(&dir);
+        s.app.relist_accounts();
+    }
+
+    fn opened_with_accounts() -> Setup {
+        let mut s = setup(true);
+        with_accounts(&mut s);
+        let new = new_workspace_pos(&s.app);
+        click(&mut s.app, new);
+        pick(&mut s.app, START_FLOW);
+        s
+    }
+
+    fn claude(app: &App) -> String {
+        start(app).accounts.iter().find(|agent| agent.kind == "claude").expect("claude's combo").chosen().into()
+    }
+
+    fn choose(app: &mut App, option: u16) {
+        let field = ui::start_account(WIDE, view(app, WIDE).shape(), 0);
+        click_in(app, field.as_position(), WIDE);
+        let view = view(app, WIDE);
+        let list = ui::start_account_list(WIDE, view.shape(), 0, &view.accounts[0].combo).expect("the list is open");
+        click_in(app, Position::new(list.x + 2, list.y + 1 + option), WIDE);
+    }
+
+    fn started(s: &mut Setup) -> Vec<Option<String>> {
+        let (worktrees, bin) = (TempDir::new(), TempDir::new());
+        let fake = bin.path().join("claude");
+        crate::test_util::write_executable(&fake, "#!/bin/sh\nexec sleep 60\n");
+        s.app.config.agent_commands.insert("claude".into(), fake.display().to_string());
+        s.app.config.worktrees_dir = worktrees.path().display().to_string();
+        let prompt = ui::start_prompt(WIDE, view(&s.app, WIDE).shape());
+        click_in(&mut s.app, prompt.as_position(), WIDE);
+        type_in(&mut s.app, "Fix the login form", WIDE);
+        button(&mut s.app, WIDE, START);
+        pump_until(&mut s.app, &s.rx, "the team's tabs open", |a| !a.runs.is_empty());
+        let workspace = s.app.project().and_then(Project::workspace).expect("the run's workspace");
+        workspace.terms().map(|t| t.accounts().name(Known::Claude).map(String::from)).collect()
+    }
+
+    #[test]
+    fn without_accounts_or_with_the_picker_off_there_is_no_combo() {
+        assert_eq!(start(&opened(true).app).accounts.len(), 0);
+        assert!(view(&opened(true).app, WIDE).accounts.is_empty());
+        let mut s = setup(true);
+        with_accounts(&mut s);
+        s.app.config.account_picker = false;
+        s.app.open_start_flow(s.app.start_flow_here());
+        assert_eq!(start(&s.app).accounts.len(), 0);
+    }
+
+    #[test]
+    fn the_combo_lists_the_accounts_by_their_names_and_starts_on_the_one_in_use() {
+        let s = opened_with_accounts();
+        let view = view(&s.app, WIDE);
+        let combo = &view.accounts[0].combo;
+        assert_eq!(view.accounts.len(), 1);
+        assert_eq!(
+            (combo.options(), combo.label()),
+            (&["System".into(), "Personal".into(), "work".into()][..], Some("work"))
+        );
+    }
+
+    #[test]
+    fn a_click_on_an_option_chooses_it() {
+        let mut s = opened_with_accounts();
+        choose(&mut s.app, 0);
+        assert_eq!(
+            (claude(&s.app), start(&s.app).accounts_open(), s.app.overlay.is_some()),
+            (String::new(), false, true)
+        );
+    }
+
+    #[test]
+    fn without_a_choice_the_team_starts_with_the_account_in_use() {
+        let mut s = opened_with_accounts();
+        assert_eq!(started(&mut s), vec![Some("work".to_string()); 5]);
+    }
+
+    #[test]
+    fn the_team_starts_with_the_chosen_account_and_new_tabs_keep_the_one_in_use() {
+        let mut s = opened_with_accounts();
+        choose(&mut s.app, 1);
+        assert_eq!(started(&mut s), vec![Some("home".to_string()); 5]);
+        assert_eq!(s.app.config.active_accounts.get("claude").map(String::as_str), Some("work"));
+    }
+
+    #[test]
+    fn the_system_login_chosen_starts_the_team_without_an_account() {
+        let mut s = opened_with_accounts();
+        choose(&mut s.app, 0);
+        assert_eq!(started(&mut s), vec![None; 5]);
+    }
+
+    #[test]
+    fn an_account_deleted_meanwhile_is_said_in_the_dialog_and_nothing_starts() {
+        let mut s = opened_with_accounts();
+        choose(&mut s.app, 1);
+        let dir = s.config.path().join("accounts");
+        std::fs::remove_dir_all(accounts::path(&dir, Known::Claude, "home")).expect("delete the account");
+        s.app.relist_accounts();
+        let prompt = ui::start_prompt(WIDE, view(&s.app, WIDE).shape());
+        click_in(&mut s.app, prompt.as_position(), WIDE);
+        type_in(&mut s.app, "Fix the login form", WIDE);
+        button(&mut s.app, WIDE, START);
+        let notice = start(&s.app).notice.clone().expect("the refusal");
+        assert!(notice.contains("home"), "{notice}");
+        assert!(s.app.runs.is_empty());
+        assert_eq!(s.app.projects[0].workspaces.len(), 1);
+    }
+
+    #[test]
+    fn with_an_account() {
+        let mut s = opened_with_accounts();
+        type_in(&mut s.app, "Add a dark mode to the settings page", WIDE);
+        insta::assert_snapshot!(format!("{}", render(&mut s.app, WIDE).backend()));
+    }
+
+    #[test]
+    fn with_the_account_list_open() {
+        let mut s = opened_with_accounts();
+        let field = ui::start_account(WIDE, view(&s.app, WIDE).shape(), 0);
+        click_in(&mut s.app, field.as_position(), WIDE);
+        insta::assert_snapshot!(format!("{}", render(&mut s.app, WIDE).backend()));
     }
 }
 

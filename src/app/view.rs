@@ -1,7 +1,10 @@
 use super::App;
-use crate::agents::activity;
+use crate::accounts;
 use crate::agents::context::Context;
+use crate::agents::{Known, activity};
+use crate::config::Config;
 use crate::project::{Tab, Workspace};
+use crate::term::Term;
 use crate::ui::{self};
 
 impl App {
@@ -19,12 +22,32 @@ impl App {
     }
 
     pub(super) fn tab_details(&self, tab: &Tab) -> ui::Details {
-        self.details(tab.context(), tab.memory(), tab.subagents())
+        let account = tab
+            .pane()
+            .and_then(|t| self.pane_account(t))
+            .or_else(|| tab.panes.iter().find_map(|t| self.pane_account(t)));
+        self.details(tab.context(), tab.memory(), tab.subagents(), account)
     }
 
-    pub(super) fn details(&self, context: Option<&Context>, memory: Option<u64>, subagents: usize) -> ui::Details {
+    pub(super) fn account_label(&self, kind: Known, name: Option<&str>) -> Option<String> {
+        let listed = self.listed_accounts().iter().any(|(listed, names)| *listed == kind && !names.is_empty());
+        label(&self.config, kind, name, listed)
+    }
+
+    pub(super) fn pane_account(&self, term: &Term) -> Option<String> {
+        term.agent_account().and_then(|(kind, name)| self.account_label(kind, name))
+    }
+
+    pub(super) fn details(
+        &self,
+        context: Option<&Context>,
+        memory: Option<u64>,
+        subagents: usize,
+        account: Option<String>,
+    ) -> ui::Details {
         ui::Details {
             model: context.filter(|_| self.config.model).map(|c| c.model.clone()),
+            account: account.filter(|_| self.config.account_mark && self.has_accounts()),
             percent: context.and_then(|c| c.percent).filter(|_| self.config.context),
             subagents,
             memory: memory.filter(|_| self.config.memory),
@@ -82,5 +105,13 @@ impl App {
             if open[p] { project.workspaces.iter().enumerate().map(entry).collect() } else { Vec::new() }
         });
         ui::TreeView { workspaces: workspaces.collect(), shape }
+    }
+}
+
+pub(super) fn label(config: &Config, kind: Known, name: Option<&str>, listed: bool) -> Option<String> {
+    match name {
+        Some(accounts::CUSTOM) => Some(accounts::CUSTOM.to_string()),
+        Some(name) => Some(config.account_label(kind.name(), name).to_string()),
+        None => listed.then(|| config.account_label(kind.name(), "").to_string()),
     }
 }

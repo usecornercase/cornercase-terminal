@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::super::usage_modal::{ANSWER, CODEX_ANSWER, with_agents};
+use super::super::usage_modal::{ANSWER, CODEX_ANSWER, with_agents, with_claude_accounts};
 use super::*;
 use crate::control::Plans;
 use crate::control::usage::PlanInfo;
@@ -142,4 +142,44 @@ fn a_client_that_leaves_drops_its_request_but_the_reading_is_kept() {
     assert_eq!(app.take_answers().len(), 0);
     let cached = plans(ok(&mut app, "usage", &json!({"cached": true})));
     assert_eq!(plan(&cached, CLAUDE).plan.as_deref(), Some("max"));
+}
+
+fn accounts_of(plans: &Plans) -> Vec<(Option<&str>, bool)> {
+    plans.agents.iter().map(|plan| (plan.account.as_deref(), plan.active)).collect()
+}
+
+#[test]
+fn each_account_is_asked_with_its_folder_and_the_active_profile_is_marked() {
+    let accounts = TempDir::new();
+    let (mut app, rx, dir) = with_claude_accounts(&accounts);
+    let answer = fresh(&mut app, &rx);
+    assert_eq!(accounts_of(&answer), [(None, false), (Some("home"), false), (Some("work"), true)]);
+    assert!(answer.agents.iter().all(|plan| plan.plan.as_deref() == Some("max") && plan.agent == CLAUDE));
+    let homes = std::fs::read_to_string(dir.path().join("claude.homes")).expect("the homes");
+    let mut homes: Vec<&str> = homes.lines().collect();
+    homes.sort_unstable();
+    let root = accounts.path().canonicalize().expect("canonical");
+    let expected = [root.join("claude/home"), root.join("claude/work")];
+    assert_eq!(homes[..2], expected.iter().map(|p| p.to_str().expect("utf-8")).collect::<Vec<_>>()[..]);
+    assert_eq!(homes[2], "system");
+}
+
+#[test]
+fn a_cached_request_lists_every_account_without_asking() {
+    let accounts = TempDir::new();
+    let (mut app, _rx, dir) = with_claude_accounts(&accounts);
+    app.config.profile.clear();
+    let cached = plans(ok(&mut app, "usage", &json!({"cached": true})));
+    assert_eq!(accounts_of(&cached), [(None, true), (Some("home"), false), (Some("work"), false)]);
+    assert_eq!(runs(&dir, CLAUDE), 0);
+}
+
+#[test]
+fn an_entry_of_an_account_names_it_and_one_without_leaves_both_out() {
+    let accounts = TempDir::new();
+    let (mut app, _rx, _dir) = with_claude_accounts(&accounts);
+    let cached = ok(&mut app, "usage", &json!({"cached": true}));
+    let entries = cached["agents"].as_array().expect("entries");
+    assert_eq!((entries[2]["account"].as_str(), entries[2]["active"].as_bool()), (Some("work"), Some(true)));
+    assert!(entries[0].get("account").is_none() && entries[0].get("active").is_none());
 }

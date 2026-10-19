@@ -174,6 +174,10 @@ impl Term {
         self.account.name()
     }
 
+    pub(crate) fn agent_account(&self) -> Option<(Known, Option<&str>)> {
+        self.account.of()
+    }
+
     pub(crate) fn see_account(
         &mut self,
         root: &Path,

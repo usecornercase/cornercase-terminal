@@ -63,6 +63,9 @@ mod file {
             model: false,
             context: false,
             memory: true,
+            account_mark: false,
+            account_switcher: false,
+            account_picker: false,
             desktop_notifications: "off".into(),
             sound: true,
             sound_waiting: "~/sounds/ping.wav".into(),
@@ -79,6 +82,12 @@ mod file {
             .into(),
             profiles: BTreeMap::new(),
             profile: String::new(),
+            account_names: [(
+                "claude".into(),
+                [(String::new(), "work".into()), ("home".into(), "Personal".into())].into(),
+            )]
+            .into(),
+            active_accounts: [("claude".into(), "home".into())].into(),
         };
         matches_fixture(crate::test_util::fixture!("config/config.json"), &expected);
     }
@@ -425,7 +434,7 @@ mod profiles {
         let path = dir.path().join("config.json");
         save(&path, &Config::default()).expect("save the config");
         let text = std::fs::read_to_string(&path).expect("read the saved config");
-        assert!(!text.contains("profile"), "{text}");
+        assert!(!text.contains("\"profile\":") && !text.contains("\"profiles\":"), "{text}");
     }
 
     #[test]
@@ -466,6 +475,56 @@ mod profiles {
         assert_eq!(changes.keys(), ["profile", "profiles"]);
         let merged = changes.apply(&Config { memory: true, ..work() });
         assert_eq!((merged.profile.as_str(), merged.profiles.is_empty(), merged.memory), ("", true, true));
+    }
+
+    #[test]
+    fn the_selection_is_the_active_profile_s_else_each_agent_s_own() {
+        let own = BTreeMap::from([("claude".to_string(), "home".to_string())]);
+        let config = Config { active_accounts: own.clone(), ..work() };
+        assert_eq!(config.selected_accounts().get("claude").map(String::as_str), Some("work"));
+        let gone = Config { profile: "Gone".into(), ..config.clone() };
+        assert_eq!(gone.selected_accounts(), &own);
+        let system = Config { profile: String::new(), ..config };
+        assert_eq!(system.selected_accounts(), &own);
+        assert!(Config::default().selected_accounts().is_empty());
+    }
+
+    #[test]
+    fn an_account_is_named_by_its_label_else_its_folder_and_the_system_by_system() {
+        let labels =
+            BTreeMap::from([(String::new(), "work".to_string()), ("home".to_string(), "Personal".to_string())]);
+        let config = Config { account_names: BTreeMap::from([("claude".to_string(), labels)]), ..Config::default() };
+        assert_eq!(config.account_label("claude", ""), "work");
+        assert_eq!(config.account_label("claude", "home"), "Personal");
+        assert_eq!(config.account_label("claude", "side"), "side");
+        assert_eq!(config.account_label("codex", ""), SYSTEM_ACCOUNT);
+    }
+
+    #[test]
+    fn forgetting_an_account_drops_it_from_profiles_selection_and_labels() {
+        let labels = BTreeMap::from([("work".to_string(), "Work".to_string())]);
+        let mut config = Config {
+            account_names: BTreeMap::from([("claude".to_string(), labels)]),
+            active_accounts: BTreeMap::from([("claude".to_string(), "work".to_string())]),
+            ..work()
+        };
+        config.forget_account("claude", "work");
+        assert!(config.profiles["Work"].is_empty());
+        assert!(config.active_accounts.is_empty() && config.account_names.is_empty());
+    }
+
+    #[test]
+    fn labels_and_the_selection_are_left_out_of_the_file_while_empty() {
+        let dir = TempDir::new();
+        let path = dir.path().join("config.json");
+        save(&path, &Config::default()).expect("save the config");
+        let text = std::fs::read_to_string(&path).expect("read the saved config");
+        assert!(!text.contains("account_names") && !text.contains("active_accounts"), "{text}");
+        let own = BTreeMap::from([("claude".to_string(), "home".to_string())]);
+        let chosen = Config { active_accounts: own, ..Config::default() };
+        assert_eq!(Changes::between(&Config::default(), &chosen).keys(), ["active_accounts"]);
+        save(&path, &chosen).expect("save the config");
+        assert_eq!(load(&path), chosen);
     }
 
     #[test]

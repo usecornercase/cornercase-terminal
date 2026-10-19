@@ -141,6 +141,10 @@ fn areas() -> ui::Areas {
     ui::layout(AREA, state::Widths::default())
 }
 
+fn app_areas(app: &App) -> ui::Areas {
+    app.layout(AREA)
+}
+
 fn no_config() -> PathBuf {
     std::env::temp_dir().join("cornercase-test-no-config").join("config.json")
 }
@@ -363,7 +367,8 @@ fn right_click_row(app: &mut App, row: WorkspaceRow) {
 }
 
 fn new_workspace_pos(app: &App) -> Position {
-    ui::new_workspace_button(areas().workspaces_list, areas().pitch, &app.tab_lines()).as_position()
+    let areas = app_areas(app);
+    ui::new_workspace_button(areas.workspaces_list, areas.pitch, &app.tab_lines()).as_position()
 }
 
 fn click_new_workspace(app: &mut App) {
@@ -445,7 +450,9 @@ fn with_worktrees_config() -> (TempDir, TempDir, PathBuf) {
     (worktrees, config, config_path)
 }
 
+mod account_pills;
 mod accounts;
+mod accounts_page;
 mod agent_status;
 mod click_outside;
 mod compact;
@@ -504,6 +511,7 @@ mod flow_end;
 mod flow_panel;
 mod flow_runs;
 mod flows_dialog;
+mod issue_account;
 mod issue_asana;
 mod issue_list;
 mod path_links;

@@ -9,6 +9,10 @@ use crate::error::Error;
 use crate::log;
 
 pub(crate) mod links;
+pub(crate) mod login;
+mod pick;
+
+pub(crate) use pick::AgentAccounts;
 
 pub(crate) const NAME_MAX: usize = 32;
 
@@ -219,12 +223,17 @@ pub(crate) fn named(root: &Path, kind: Known, dir: &Path) -> String {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Seen {
     key: Option<(i32, Vec<String>)>,
+    kind: Option<Known>,
     name: Option<String>,
 }
 
 impl Seen {
     pub(crate) fn name(&self) -> Option<&str> {
         self.name.as_deref()
+    }
+
+    pub(crate) fn of(&self) -> Option<(Known, Option<&str>)> {
+        self.kind.map(|kind| (kind, self.name.as_deref()))
     }
 
     pub(crate) fn update(
@@ -247,7 +256,7 @@ impl Seen {
             let dir = PathBuf::from(dir);
             dir.is_absolute().then(|| named(root, kind, &dir))
         });
-        *self = Self { key: Some((pid, args.to_vec())), name };
+        *self = Self { key: Some((pid, args.to_vec())), kind: Some(kind), name };
     }
 }
 

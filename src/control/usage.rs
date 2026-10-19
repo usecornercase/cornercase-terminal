@@ -39,6 +39,12 @@ pub(crate) struct PlanInfo {
     pub(crate) extra: Option<String>,
     pub(crate) notice: Option<String>,
     pub(crate) error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) account: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) label: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) active: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,7 +75,20 @@ impl PlanInfo {
             extra: report.and_then(|r| r.extra.clone()),
             notice: report.and_then(|r| r.notice_for(agent)).map(str::to_string),
             error: probe.error().map(str::to_string),
+            account: None,
+            label: None,
+            active: false,
         }
+    }
+
+    #[must_use]
+    pub(crate) fn for_account(self, account: Option<&str>, label: Option<String>, active: bool) -> Self {
+        Self { account: account.map(str::to_string), label, active, ..self }
+    }
+
+    pub(crate) fn heading(&self) -> String {
+        let shown = self.label.as_deref().or(self.account.as_deref());
+        crate::agents::usage::heading(&self.title, shown, self.active)
     }
 }
 

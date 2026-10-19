@@ -112,6 +112,7 @@ impl App {
             update: self.update_info(),
             keep_awake: self.keep_awake_info(),
             profile: self.config.active_profile().map(|(name, _)| name.to_string()),
+            accounts: self.config.selected_accounts().clone(),
         }
     }
 

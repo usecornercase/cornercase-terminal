@@ -1,17 +1,23 @@
+use std::collections::BTreeMap;
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::Flow;
 use super::dialog::{CANCEL, DIAGRAM, EDIT, FORM, agents_count, project_risks, scrolled};
 use super::store::{self, Listing, Origin, Saved};
+use crate::accounts::AgentAccounts;
+use crate::list::COMBO_ROWS;
 use crate::todo::editor::Editor;
 
 pub(crate) const START: &str = "start";
+const ACCOUNT_HINT: &str = "only this run: new tabs keep the one in use · enter opens the list";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Focus {
     List,
     Prompt,
     Branch,
+    Account(usize),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -19,7 +25,7 @@ pub(crate) enum Action {
     None,
     Close,
     Edit(Origin, String),
-    Start { flow: Box<Flow>, task: String, branch: String },
+    Start { flow: Box<Flow>, task: String, branch: String, accounts: BTreeMap<String, String> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,6 +33,9 @@ pub(crate) enum Hit {
     Row(usize),
     Prompt { line: usize, col: usize },
     Branch,
+    Account(usize),
+    Choose(usize),
+    Close,
     Button(&'static str),
 }
 
@@ -63,6 +72,7 @@ pub(crate) struct Start {
     pub(crate) prompt: Editor,
     pub(crate) branch: String,
     named: bool,
+    pub(crate) accounts: Vec<AgentAccounts>,
     pub(crate) focus: Focus,
     pub(crate) diagram: bool,
     pub(crate) notice: Option<String>,
@@ -83,6 +93,7 @@ impl Start {
             prompt: Editor::default(),
             branch: String::new(),
             named: false,
+            accounts: Vec::new(),
             focus: Focus::Prompt,
             diagram: false,
             notice: None,
@@ -107,6 +118,37 @@ impl Start {
         self.branch = branch;
         self.named = true;
         self
+    }
+
+    pub(crate) fn with_accounts(mut self, accounts: Vec<AgentAccounts>) -> Self {
+        self.accounts = accounts;
+        self
+    }
+
+    pub(crate) fn seed_accounts(&mut self, chosen: &BTreeMap<String, String>) {
+        for agent in &mut self.accounts {
+            if let Some(name) = chosen.get(&agent.kind) {
+                agent.choose_named(name);
+            }
+        }
+    }
+
+    pub(crate) fn shown_accounts(&self) -> Vec<usize> {
+        let Some(saved) = self.selected() else { return Vec::new() };
+        let flow = &saved.flow;
+        let team = |kind: &str| std::iter::once(&flow.orchestrator).chain(&flow.roles).any(|role| role.agent == kind);
+        (0..self.accounts.len()).filter(|i| team(&self.accounts[*i].kind)).collect()
+    }
+
+    fn chosen_accounts(&self) -> BTreeMap<String, String> {
+        self.shown_accounts()
+            .into_iter()
+            .map(|i| (self.accounts[i].kind.clone(), self.accounts[i].chosen().to_string()))
+            .collect()
+    }
+
+    fn open_account(&self) -> Option<usize> {
+        self.accounts.iter().position(|agent| agent.combo.is_open())
     }
 
     pub(crate) fn set_listing(&mut self, listing: Listing, select: Option<&Origin>) {
@@ -178,6 +220,10 @@ impl Start {
             Focus::List => "↑↓ picks a flow · tab moves to the prompt",
             Focus::Prompt => "what the team should do · enter starts a new line · tab moves to the branch",
             Focus::Branch => "the run's worktree and branch · enter starts the flow",
+            Focus::Account(i) => {
+                let kind = self.accounts.get(i).map_or("", |agent| agent.kind.as_str());
+                return format!("the {kind} account this team's {kind} agents start with · {ACCOUNT_HINT}");
+            }
         }
         .into()
     }
@@ -228,6 +274,7 @@ impl Start {
             flow: Box::new(saved.flow.clone()),
             task: self.prompt.text().trim().to_string(),
             branch: self.branch.trim().to_string(),
+            accounts: self.chosen_accounts(),
         }
     }
 
@@ -241,6 +288,10 @@ impl Start {
         if i < self.flows.len() && i != self.cursor {
             self.cursor = i;
             self.preview = 0;
+            self.close_accounts();
+            if matches!(self.focus, Focus::Account(n) if !self.shown_accounts().contains(&n)) {
+                self.focus = Focus::Branch;
+            }
         }
     }
 
@@ -249,11 +300,28 @@ impl Start {
     }
 
     fn step_focus(&mut self, back: bool) {
-        self.focus = match (self.focus, back) {
-            (Focus::List, false) | (Focus::Branch, true) => Focus::Prompt,
-            (Focus::Prompt, false) | (Focus::List, true) => Focus::Branch,
-            (Focus::Branch, false) | (Focus::Prompt, true) => Focus::List,
-        };
+        self.close_accounts();
+        let order: Vec<Focus> = [Focus::List, Focus::Prompt, Focus::Branch]
+            .into_iter()
+            .chain(self.shown_accounts().into_iter().map(Focus::Account))
+            .collect();
+        let at = order.iter().position(|focus| *focus == self.focus).unwrap_or_default();
+        let next = if back { at + order.len() - 1 } else { at + 1 };
+        self.focus = order[next % order.len()];
+    }
+
+    pub(crate) fn accounts_open(&self) -> bool {
+        self.open_account().is_some()
+    }
+
+    fn close_accounts(&mut self) {
+        self.accounts.iter_mut().for_each(|agent| agent.combo.close());
+    }
+
+    pub(crate) fn scroll_accounts(&mut self, delta: isize, rows: usize) {
+        if let Some(i) = self.open_account() {
+            self.accounts[i].combo.scroll_by(delta, rows);
+        }
     }
 
     pub(crate) fn key(&mut self, key: KeyEvent, room: Room) -> Action {
@@ -262,6 +330,14 @@ impl Start {
         }
         self.notice = None;
         let typing = !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+        if let Focus::Account(i) = self.focus
+            && !matches!(key.code, KeyCode::Tab | KeyCode::BackTab)
+            && let Some(agent) = self.accounts.get_mut(i)
+            && (agent.combo.is_open() || key.code != KeyCode::Esc)
+        {
+            agent.combo.key(key, COMBO_ROWS);
+            return Action::None;
+        }
         match key.code {
             KeyCode::Esc => return Action::Close,
             KeyCode::Tab => self.step_focus(false),
@@ -290,6 +366,7 @@ impl Start {
                     }
                     _ => {}
                 },
+                Focus::Account(_) => {}
             },
         }
         Action::None
@@ -300,6 +377,7 @@ impl Start {
             return;
         }
         match self.focus {
+            Focus::Account(_) => {}
             Focus::Prompt | Focus::List => {
                 self.focus = Focus::Prompt;
                 self.prompt.insert_lines(text);
@@ -318,7 +396,23 @@ impl Start {
             return Action::None;
         }
         self.notice = None;
+        let open = self.open_account();
+        if !matches!(hit, Hit::Choose(_)) && !matches!(hit, Hit::Account(i) if Some(i) == open) {
+            self.close_accounts();
+        }
         match hit {
+            Hit::Account(i) => {
+                if let Some(agent) = self.accounts.get_mut(i) {
+                    self.focus = Focus::Account(i);
+                    if agent.combo.is_open() { agent.combo.close() } else { agent.combo.open() }
+                }
+            }
+            Hit::Choose(i) => {
+                if let Some(at) = open {
+                    self.accounts[at].combo.choose(i);
+                }
+            }
+            Hit::Close => {}
             Hit::Row(i) => {
                 self.select(i);
                 self.focus = Focus::List;

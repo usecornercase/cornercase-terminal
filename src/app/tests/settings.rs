@@ -129,30 +129,7 @@ fn a_relative_folder_is_refused() {
 fn a_click_on_a_tab_shows_its_rows() {
     let mut s = open();
     show(&mut s.app, Page::Ui);
-    assert_eq!(
-        form(&s.app).rows(),
-        [
-            Row::Sidebar,
-            Row::Tabs,
-            Row::IconBar,
-            Row::AgentsSection,
-            Row::WorkingIcon,
-            Row::Counts,
-            Row::TodoDot,
-            Row::DimPanes,
-            Row::Detail(Detail::Model),
-            Row::Detail(Detail::Context),
-            Row::Detail(Detail::Memory),
-            Row::Notifications,
-            Row::Sound,
-            Row::SoundWaiting,
-            Row::SoundDone,
-            Row::SoundSubagents,
-            Row::Updates,
-            Row::StarPrompt,
-            Row::Prefix
-        ]
-    );
+    assert_eq!(form(&s.app).rows(), crate::settings::tests::ui_rows());
 }
 
 #[test]

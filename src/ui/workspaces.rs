@@ -36,6 +36,7 @@ const SETTING_UP_LABEL: &str = "setting up…";
 const CONTEXT_SEPARATOR: &str = " · ";
 
 const MIN_MODEL_WIDTH: usize = 4;
+const MIN_ACCOUNT_WIDTH: usize = 3;
 
 pub(super) const MB: u64 = 1 << 20;
 
@@ -225,6 +226,7 @@ impl TabEntry {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Details {
     pub(crate) model: Option<String>,
+    pub(crate) account: Option<String>,
     pub(crate) percent: Option<u16>,
     pub(crate) subagents: usize,
     pub(crate) memory: Option<u64>,
@@ -232,7 +234,13 @@ pub struct Details {
 
 impl Details {
     pub fn lines(&self) -> u16 {
-        1 + u16::from(self.model.is_some() || self.percent.is_some() || self.subagents > 0 || self.memory.is_some())
+        1 + u16::from(
+            self.model.is_some()
+                || self.account.is_some()
+                || self.percent.is_some()
+                || self.subagents > 0
+                || self.memory.is_some(),
+        )
     }
 }
 
@@ -492,13 +500,22 @@ pub(super) fn draw_details(
     let fixed_width = lead.iter().chain(&fixed).map(|s| s.width() + separator).sum::<usize>();
     let free = usize::from(r.width).saturating_sub(reserved + 1);
     let indent = indent.min(free.saturating_sub(fixed_width.saturating_sub(separator)));
-    let model_room = free.saturating_sub(indent + fixed_width);
+    let room = free.saturating_sub(indent + fixed_width);
+    let account_width = details.account.as_ref().map_or(0, |name| name.chars().count() + separator);
+    let model_room = room.saturating_sub(account_width);
+    let alone = fixed.is_empty() && lead.is_none() && details.account.is_none();
     let model = details
         .model
         .as_ref()
-        .filter(|_| (fixed.is_empty() && lead.is_none()) || model_room >= MIN_MODEL_WIDTH)
+        .filter(|_| alone || model_room >= MIN_MODEL_WIDTH)
         .map(|model| Span::styled(truncate_right(model, model_room), dim));
-    let parts = lead.into_iter().chain(model).chain(fixed);
+    let account_room = if model.is_some() { account_width.saturating_sub(separator) } else { room };
+    let account = details
+        .account
+        .as_ref()
+        .filter(|name| account_room >= name.chars().count().min(MIN_ACCOUNT_WIDTH))
+        .map(|name| Span::styled(truncate_right(name, account_room), dim));
+    let parts = lead.into_iter().chain(model).chain(account).chain(fixed);
     let mut line = vec![Span::raw(" ".repeat(indent))];
     line.extend(parts.flat_map(|part| [Span::styled(CONTEXT_SEPARATOR, dim), part]).skip(1));
     f.render_widget(Paragraph::new(Line::from(line)), r);

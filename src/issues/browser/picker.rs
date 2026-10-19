@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::{Action, After, Browser, Choice, Pick, Picker, Room, Screen};
+use super::{Action, After, AgentAccounts, Browser, Choice, Pick, Picker, Room, Screen};
 use crate::issues::{Source, Who};
 use crate::list::Search;
 
@@ -10,6 +10,10 @@ impl Browser {
         let current = match pick {
             Pick::Agent => self.agents.pick().and_then(|k| self.agents.kinds.iter().position(|kind| *kind == k)),
             Pick::Place => Some(self.place.unwrap_or(self.here)),
+            Pick::Account => self.agent_accounts().and_then(|(kind, agent)| {
+                let pick = self.accounts.as_ref().and_then(|a| a.pick(&kind)).unwrap_or_default();
+                agent.keys().position(|key| key == pick)
+            }),
             Pick::Person(source, field) => {
                 let who = &self.people.of(source)[field];
                 self.person_choices(source).iter().position(|(w, _)| w == who)
@@ -45,6 +49,7 @@ impl Browser {
                     who: None,
                 })
                 .collect(),
+            Pick::Account => self.agent_accounts().map(|(_, agent)| Self::account_choices(agent)).unwrap_or_default(),
             Pick::Person(source, _) => self
                 .person_choices(source)
                 .into_iter()
@@ -53,6 +58,18 @@ impl Browser {
         };
         all.into_iter()
             .filter(|c| c.key.to_lowercase().contains(&needle) || c.title.to_lowercase().contains(&needle))
+            .collect()
+    }
+
+    fn account_choices(agent: &AgentAccounts) -> Vec<Choice> {
+        agent
+            .keys()
+            .map(|key| Choice {
+                key: agent.label(key).to_string(),
+                title: if key.is_empty() { "the agent's own login".into() } else { String::new() },
+                meta: if key == agent.active { "in use".into() } else { String::new() },
+                who: None,
+            })
             .collect()
     }
 
@@ -76,8 +93,23 @@ impl Browser {
         let Some((key, who)) = choices.get(i).map(|c| (c.key.clone(), c.who.clone())) else { return Action::None };
         self.picker = None;
         match pick {
-            Pick::Agent => self.agents.chosen = Some(key),
+            Pick::Agent => {
+                if let Some(accounts) = &mut self.accounts
+                    && accounts.chosen.as_ref().is_some_and(|(kind, _)| *kind != key)
+                {
+                    accounts.chosen = None;
+                }
+                self.agents.chosen = Some(key);
+            }
             Pick::Place => self.place = self.places.iter().position(|p| p.label == key),
+            Pick::Account => {
+                let account = self.agent_accounts().and_then(|(kind, agent)| {
+                    agent.keys().find(|name| agent.label(name) == key).map(|name| (kind, name.to_string()))
+                });
+                if let (Some(accounts), Some(account)) = (&mut self.accounts, account) {
+                    accounts.chosen = Some(account);
+                }
+            }
             Pick::Person(source, field) => {
                 if let Some(who) = who {
                     self.set_person(source, field, who);

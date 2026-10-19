@@ -119,3 +119,49 @@ fn a_restored_agent_resumes_with_its_account() {
     assert!(env.lines().any(|line| line == dir), "{env}");
     assert!(back.projects.terms().any(|term| term.accounts().name(Known::Claude) == Some("work")));
 }
+
+#[test]
+fn a_pane_with_an_account_names_it_on_its_tab_row_unless_the_mark_is_off() {
+    let (mut agent, _elsewhere, id) = with_an_account();
+    agent.app.relist_accounts();
+    agent.refreshing("the account is seen", |a| pane(a, id).account().is_some());
+    let shown = |app: &App| {
+        let (_, tab) = app.projects.tab_with_pane(id).expect("the agent's tab");
+        let agents = app.agents_view().entries.into_iter().map(|entry| entry.details.account).collect::<Vec<_>>();
+        (app.tab_entry(tab).details.account, agents)
+    };
+    assert_eq!(shown(&agent.app), (None, vec![None]), "no account folder is listed yet");
+
+    let accounts = agent.config_dir.path().join("accounts").join(Known::Claude.name());
+    std::fs::create_dir(accounts.join("home")).expect("a listed account");
+    agent.app.relist_accounts();
+    assert_eq!(shown(&agent.app), (Some("work".into()), vec![Some("work".into())]));
+
+    let labels = [("work".to_string(), "Office".to_string())].into();
+    agent.app.config.account_names.insert(Known::Claude.name().into(), labels);
+    assert_eq!(shown(&agent.app), (Some("Office".into()), vec![Some("Office".into())]));
+
+    agent.app.config.account_mark = false;
+    assert_eq!(shown(&agent.app), (None, vec![None]));
+}
+
+#[test]
+fn the_system_login_is_named_only_while_its_agent_has_accounts() {
+    let (mut app, _rx) = empty_app();
+    let root = TempDir::new();
+    app.set_accounts_dir(root.path());
+    app.relist_accounts();
+    assert_eq!(app.account_label(Known::Claude, None), None);
+    assert_eq!(app.account_label(Known::Claude, Some("work")).as_deref(), Some("work"));
+
+    crate::accounts::add(root.path(), Known::Claude, "home", None).expect("an account");
+    app.relist_accounts();
+    assert_eq!(app.account_label(Known::Claude, None).as_deref(), Some(crate::config::SYSTEM_ACCOUNT));
+    assert_eq!(app.account_label(Known::Codex, None), None);
+
+    let labels = [(String::new(), "work".to_string()), ("home".to_string(), "Personal".to_string())].into();
+    app.config.account_names.insert(Known::Claude.name().into(), labels);
+    assert_eq!(app.account_label(Known::Claude, None).as_deref(), Some("work"));
+    assert_eq!(app.account_label(Known::Claude, Some("home")).as_deref(), Some("Personal"));
+    assert_eq!(app.account_label(Known::Claude, Some(crate::accounts::CUSTOM)).as_deref(), Some("custom"));
+}

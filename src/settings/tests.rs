@@ -53,6 +53,7 @@ mod pages {
     #[rstest]
     #[case::worktrees(Page::Worktrees, &[""])]
     #[case::agents(Page::Agents, &["Agent", "How each agent starts"])]
+    #[case::accounts(Page::Accounts, &["Claude Code", "Codex", "Gemini CLI"])]
     #[case::flows(Page::Flows, &[])]
     #[case::issues(Page::Issues, &["Accounts", "Sources shown"])]
     #[case::ui(Page::Ui, &[""])]
@@ -78,9 +79,9 @@ mod pages {
     }
 
     #[test]
-    fn the_flows_tab_comes_after_agents_and_has_no_rows() {
+    fn the_flows_tab_comes_after_accounts_and_has_no_rows() {
         let mut s = settings();
-        s.open_page(Page::Agents);
+        s.open_page(Page::Accounts);
         press(&mut s, KeyCode::Right);
         assert_eq!(s.page, Page::Flows);
         assert_eq!(s.rows().len(), 0);
@@ -93,7 +94,7 @@ mod pages {
         let mut s = settings();
         go_to(&mut s, &Row::Trust);
         press(&mut s, KeyCode::Tab);
-        assert_eq!((s.page, s.cursor), (Page::Flows, 0));
+        assert_eq!((s.page, s.cursor), (Page::Accounts, 0));
     }
 
     #[test]
@@ -174,6 +175,8 @@ mod fetch {
         assert!(s.edit.as_ref().is_some_and(|e| e.error.is_some()));
     }
 }
+
+mod accounts;
 
 mod messengers;
 
@@ -409,6 +412,9 @@ mod agent_tabs {
     #[case::model(Detail::Model, |c: &Config| c.model)]
     #[case::context(Detail::Context, |c: &Config| c.context)]
     #[case::memory(Detail::Memory, |c: &Config| c.memory)]
+    #[case::account(Detail::Account, |c: &Config| c.account_mark)]
+    #[case::account_switcher(Detail::AccountSwitcher, |c: &Config| c.account_switcher)]
+    #[case::account_picker(Detail::AccountPicker, |c: &Config| c.account_picker)]
     fn each_part_is_a_switch(#[case] detail: Detail, #[case] on: fn(&Config) -> bool) {
         let mut s = settings();
         let before = on(&s.config);
@@ -427,6 +433,33 @@ mod agent_tabs {
     }
 }
 
+pub(crate) fn ui_rows() -> Vec<Row> {
+    vec![
+        Row::Sidebar,
+        Row::Tabs,
+        Row::IconBar,
+        Row::AgentsSection,
+        Row::WorkingIcon,
+        Row::Counts,
+        Row::TodoDot,
+        Row::DimPanes,
+        Row::Detail(Detail::Model),
+        Row::Detail(Detail::Context),
+        Row::Detail(Detail::Memory),
+        Row::Detail(Detail::Account),
+        Row::Detail(Detail::AccountSwitcher),
+        Row::Detail(Detail::AccountPicker),
+        Row::Notifications,
+        Row::Sound,
+        Row::SoundWaiting,
+        Row::SoundDone,
+        Row::SoundSubagents,
+        Row::Updates,
+        Row::StarPrompt,
+        Row::Prefix,
+    ]
+}
+
 mod sidebar {
     use super::*;
 
@@ -434,30 +467,7 @@ mod sidebar {
     fn comes_first_on_the_ui_page() {
         let mut s = settings();
         s.open_page(Page::Ui);
-        assert_eq!(
-            s.rows(),
-            [
-                Row::Sidebar,
-                Row::Tabs,
-                Row::IconBar,
-                Row::AgentsSection,
-                Row::WorkingIcon,
-                Row::Counts,
-                Row::TodoDot,
-                Row::DimPanes,
-                Row::Detail(Detail::Model),
-                Row::Detail(Detail::Context),
-                Row::Detail(Detail::Memory),
-                Row::Notifications,
-                Row::Sound,
-                Row::SoundWaiting,
-                Row::SoundDone,
-                Row::SoundSubagents,
-                Row::Updates,
-                Row::StarPrompt,
-                Row::Prefix
-            ]
-        );
+        assert_eq!(s.rows(), ui_rows());
     }
 
     #[test]

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -29,8 +30,8 @@ mod watch;
 pub(crate) use todo::{Todo, TodoSend};
 
 pub(crate) use accounts::{
-    AccountAdd, AccountList, AccountRemove, AccountsInfo, ProfileDelete, ProfileList, ProfileNew, ProfileSet,
-    ProfileUse,
+    AccountAdd, AccountList, AccountRemove, AccountRename, AccountUse, AccountsInfo, ProfileDelete, ProfileList,
+    ProfileNew, ProfileSet, ProfileUse,
 };
 pub(crate) use app_state::{
     AppState, AppWatch, AwayInfo, InstallInfo, NoUpdate, Notes, ReleaseInfo, UpdateCheck, UpdateInfo, UpdateInstall,
@@ -189,6 +190,8 @@ pub(crate) enum Command {
     ProfileSet(ProfileSet),
     ProfileUse(ProfileUse),
     ProfileDelete(ProfileDelete),
+    AccountRename(AccountRename),
+    AccountUse(AccountUse),
 }
 
 impl Command {
@@ -280,6 +283,8 @@ impl Command {
             Self::ProfileSet(_) => 83,
             Self::ProfileUse(_) => 84,
             Self::ProfileDelete(_) => 85,
+            Self::AccountRename(_) => 86,
+            Self::AccountUse(_) => 87,
         }]
     }
 
@@ -298,7 +303,6 @@ impl Command {
             | Self::PluginList(_)
             | Self::FlowRuns(_)
             | Self::App(_)
-            | Self::AccountList(_)
             | Self::ProfileList(_) => {}
             Self::Open(open) => {
                 fields.add("path", open.path.display()).add("focus", open.focus);
@@ -310,7 +314,7 @@ impl Command {
             Self::NewTab(new) => {
                 fields.maybe("workspace", new.workspace).maybe("name", new.name.as_ref());
                 fields.add("command", new.command.is_some()).add("focus", new.focus);
-                fields.maybe("profile", new.profile.as_ref());
+                fields.maybe("profile", new.profile.as_ref()).maybe("accounts", chosen(&new.accounts));
             }
             Self::Split(split) => {
                 fields.maybe("pane", split.pane).add("down", split.down).add("command", split.command.is_some());
@@ -325,7 +329,7 @@ impl Command {
                 fields.add("issue", start.issue.is_some()).maybe("source", start.source.as_ref());
                 fields.add("wait", start.wait).maybe("until", start.wait.then(|| start.until.name()));
                 fields.maybe("timeout", start.timeout).add("focus", start.focus);
-                fields.maybe("profile", start.profile.as_ref());
+                fields.maybe("profile", start.profile.as_ref()).maybe("accounts", chosen(&start.accounts));
             }
             Self::Send(send) => {
                 fields.maybe("pane", send.pane).maybe("tab", send.tab);
@@ -427,9 +431,12 @@ impl Command {
             Self::FlowRestore(restore) => restore.fields(&mut fields),
             Self::FlowMessages(messages) => messages.fields(&mut fields),
             Self::FlowFiles(files) => files.fields(&mut fields),
+            Self::AccountList(list) => list.fields(&mut fields),
             Self::AccountAdd(add) => add.fields(&mut fields),
             Self::AccountRemove(remove) => remove.fields(&mut fields),
             Self::ProfileSet(set) => set.fields(&mut fields),
+            Self::AccountRename(rename) => rename.fields(&mut fields),
+            Self::AccountUse(chosen) => chosen.fields(&mut fields),
             Self::ProfileNew(ProfileNew { name, .. })
             | Self::ProfileUse(ProfileUse { name })
             | Self::ProfileDelete(ProfileDelete { name }) => {
@@ -439,7 +446,7 @@ impl Command {
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 86] = [
+    pub(crate) const NAMES: [&str; 88] = [
         "status",
         "open",
         "new-workspace",
@@ -526,6 +533,8 @@ impl Command {
         "profile-set",
         "profile-use",
         "profile-delete",
+        "account-rename",
+        "account-use",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
@@ -563,6 +572,11 @@ impl Fields {
         }
         self
     }
+}
+
+fn chosen(accounts: &BTreeMap<String, String>) -> Option<String> {
+    (!accounts.is_empty())
+        .then(|| accounts.iter().map(|(agent, account)| format!("{agent}={account}")).collect::<Vec<_>>().join(","))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -603,6 +617,7 @@ pub(crate) struct NewTab {
     pub(crate) command: Option<String>,
     pub(crate) focus: bool,
     pub(crate) profile: Option<String>,
+    pub(crate) accounts: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -633,6 +648,7 @@ pub(crate) struct Start {
     pub(crate) timeout: Option<f64>,
     pub(crate) focus: bool,
     pub(crate) profile: Option<String>,
+    pub(crate) accounts: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -874,4 +890,5 @@ pub(crate) struct QueueAdd {
     pub(crate) source: Option<String>,
     pub(crate) label: Option<String>,
     pub(crate) submit: Option<bool>,
+    pub(crate) accounts: BTreeMap<String, String>,
 }

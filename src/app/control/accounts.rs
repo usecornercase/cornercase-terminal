@@ -1,22 +1,44 @@
-use std::collections::BTreeMap;
-use std::time::Instant;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fs;
+use std::time::{Instant, SystemTime};
 
 use ratatui::layout::Rect;
 
 use super::{Asker, Handled, conflict, json, malformed, sized};
+use crate::accounts::login::{self, Login};
 use crate::accounts::{self, Accounts, links};
 use crate::agents::launch::Launch;
 use crate::agents::{self, Known};
 use crate::app::App;
-use crate::control::accounts::{AccountInfo, ProfileInfo, ProviderInfo};
+use crate::app::event::AppEvent;
+use crate::control::accounts::{AccountInfo, LoginInfo, ProfileInfo, ProviderInfo};
 use crate::control::contract::{Code, Refusal};
 use crate::control::{
-    AccountAdd, AccountRemove, AccountsInfo, Ids, Item, ProfileDelete, ProfileNew, ProfileSet, ProfileUse,
+    AccountAdd, AccountList, AccountRemove, AccountRename, AccountUse, AccountsInfo, Ids, Item, ProfileDelete,
+    ProfileNew, ProfileSet, ProfileUse,
 };
-use crate::log;
+use crate::log::{self, Job, Level};
+use crate::time::Stamp;
+
+type Key = (Known, String);
+
+#[derive(Debug, Default)]
+pub(in crate::app) struct Logins {
+    listed: Vec<(Known, Vec<String>)>,
+    marks: Vec<Option<SystemTime>>,
+    seen: HashMap<Key, LoginInfo>,
+    running: HashSet<Key>,
+    waiting: Vec<u64>,
+    pub(in crate::app) generation: u64,
+    pub(in crate::app) page_checked: Option<Instant>,
+}
 
 const PROFILE_MAX: usize = 32;
 const SYSTEM: &str = "system";
+
+fn known_login(listed: &[(Known, Vec<String>)], (kind, name): &Key) -> bool {
+    listed.iter().any(|(k, names)| k == kind && (names.contains(name) || name.is_empty() && !names.is_empty()))
+}
 
 fn provider(name: &str) -> Result<Known, Refusal> {
     Known::of(name).filter(|kind| kind.account().is_some()).ok_or_else(|| {
@@ -47,17 +69,32 @@ fn profile_name(name: &str) -> Result<String, Refusal> {
 }
 
 impl App {
-    pub(in crate::app) fn profile_accounts(&self, profile: Option<&str>) -> Result<Accounts, Refusal> {
-        match profile {
-            None => Ok(self.active_accounts()),
-            Some("") => Ok(Accounts::default()),
-            Some(name) => self
-                .config
-                .profiles
-                .get(name)
-                .map(|chosen| Accounts::of(&self.accounts_dir, chosen))
-                .ok_or_else(|| unknown_profile(name)),
+    pub(in crate::app) fn requested_accounts(
+        &self,
+        profile: Option<&str>,
+        chosen: &BTreeMap<String, String>,
+    ) -> Result<Accounts, Refusal> {
+        let mut picked = match profile {
+            None => self.config.selected_accounts().clone(),
+            Some("") => BTreeMap::new(),
+            Some(name) => self.config.profiles.get(name).cloned().ok_or_else(|| unknown_profile(name))?,
+        };
+        for (name, account) in chosen {
+            let kind = Known::of(name).filter(|kind| kind.account().is_some()).ok_or_else(|| {
+                let known: Vec<&str> = accounts::supported().map(Known::name).collect();
+                Refusal::new(
+                    Code::NotFound,
+                    format!("`{name}` has no accounts; the agents with accounts are {}", known.join(", ")),
+                )
+            })?;
+            self.known_account(kind, account)?;
+            if account.is_empty() {
+                picked.remove(kind.name());
+            } else {
+                picked.insert(kind.name().to_string(), account.clone());
+            }
         }
+        Ok(Accounts::of(&self.accounts_dir, &picked))
     }
 
     pub(in crate::app) fn accounts_info(&self, login: Option<Ids>) -> AccountsInfo {
@@ -72,7 +109,9 @@ impl App {
                         let path = path.canonicalize().unwrap_or(path);
                         let unshared =
                             default.as_deref().map(|default| links::status(kind, default, &path)).unwrap_or_default();
-                        AccountInfo { name, path, unshared }
+                        let login = self.logins.seen.get(&(kind, name.clone())).cloned();
+                        let label = self.saved_label(kind, &name).to_string();
+                        AccountInfo { name, path, unshared, login, label }
                     })
                     .collect();
                 ProviderInfo {
@@ -80,6 +119,10 @@ impl App {
                     title: kind.title().to_string(),
                     env: kind.account().map(|home| home.env.to_string()).unwrap_or_default(),
                     accounts,
+                    system_label: self.saved_label(kind, "").to_string(),
+                    active: self.config.selected_accounts().get(kind.name()).cloned().unwrap_or_default(),
+                    system_path: default.clone(),
+                    system_login: self.logins.seen.get(&(kind, String::new())).cloned(),
                 }
             })
             .collect();
@@ -94,7 +137,122 @@ impl App {
                 active: active == Some(name.as_str()),
             })
             .collect();
-        AccountsInfo { providers, profiles, profile: active.unwrap_or_default().to_string(), login }
+        let tokens = login::tokens(|name| std::env::var_os(name));
+        AccountsInfo { providers, profiles, profile: active.unwrap_or_default().to_string(), login, tokens }
+    }
+
+    fn account_marks(&self) -> Vec<Option<SystemTime>> {
+        let modified = |path: std::path::PathBuf| fs::metadata(path).and_then(|meta| meta.modified()).ok();
+        std::iter::once(modified(self.accounts_dir.clone()))
+            .chain(accounts::supported().map(|kind| modified(self.accounts_dir.join(kind.name()))))
+            .collect()
+    }
+
+    pub(in crate::app) fn watch_accounts(&mut self) {
+        let marks = self.account_marks();
+        if marks != self.logins.marks {
+            self.relist_accounts_with(marks);
+        }
+    }
+
+    pub(in crate::app) fn relist_accounts(&mut self) {
+        let marks = self.account_marks();
+        self.relist_accounts_with(marks);
+    }
+
+    fn relist_accounts_with(&mut self, marks: Vec<Option<SystemTime>>) {
+        let listed = accounts::list(&self.accounts_dir);
+        let known = |key: &Key| known_login(&listed, key);
+        self.logins.seen.retain(|key, _| known(key));
+        if listed != self.logins.listed {
+            self.logins.generation += 1;
+        }
+        self.logins.listed = listed;
+        self.logins.marks = marks;
+    }
+
+    pub(in crate::app) fn checking_logins(&self) -> Vec<(Known, String)> {
+        let mut running: Vec<(Known, String)> = self.logins.running.iter().cloned().collect();
+        running.sort_by(|a, b| (a.0.name(), &a.1).cmp(&(b.0.name(), &b.1)));
+        running
+    }
+
+    pub(in crate::app) fn check_logins(&mut self) -> bool {
+        let wanted: Vec<Key> = self
+            .logins
+            .listed
+            .iter()
+            .filter(|(kind, names)| !names.is_empty() && kind.account().is_some_and(|home| home.status.is_some()))
+            .flat_map(|(kind, names)| std::iter::once(String::new()).chain(names.iter().cloned()).map(|n| (*kind, n)))
+            .collect();
+        for key in wanted {
+            self.check_login(key);
+        }
+        !self.logins.running.is_empty()
+    }
+
+    fn check_login(&mut self, (kind, name): Key) {
+        if !self.logins.running.insert((kind, name.clone())) {
+            return;
+        }
+        let home = if name.is_empty() {
+            None
+        } else {
+            let chosen = BTreeMap::from([(kind.name().to_string(), name.clone())]);
+            let Some(account) = Accounts::of(&self.accounts_dir, &chosen).get(kind).cloned() else {
+                self.logins.running.remove(&(kind, name));
+                return;
+            };
+            Some(account.home)
+        };
+        let system = self.default_home(kind);
+        let program = agents::command(&self.config, kind.name());
+        let job =
+            Job::new(Level::Debug, "accounts", "login check").with("provider", kind.name()).with("account", &name);
+        self.spawn_job(
+            job,
+            move || {
+                Ok(match &home {
+                    Some(home) => login::check(kind, &program, home),
+                    None => login::check_system(kind, &program, system.as_deref()),
+                })
+            },
+            move |result, _| {
+                Some(AppEvent::Login(kind, name, result.unwrap_or_else(|_| Login::of(login::State::Failed))))
+            },
+        );
+    }
+
+    pub(in crate::app) fn login_checked(&mut self, kind: Known, name: String, found: Login) {
+        let key = (kind, name);
+        self.logins.running.remove(&key);
+        log::debug!("accounts", "login checked", provider = kind.name(), account = key.1, state = found.state.name());
+        if known_login(&self.logins.listed, &key) {
+            let checked = Stamp(SystemTime::now()).to_string();
+            let info = LoginInfo { state: found.state, email: found.email, plan: found.plan, checked };
+            self.logins.seen.insert(key, info);
+        }
+        self.refresh_accounts_page();
+        if !self.logins.running.is_empty() {
+            return;
+        }
+        let reply = Ok(json(&self.accounts_info(None)));
+        for key in std::mem::take(&mut self.logins.waiting) {
+            if let Some(pending) = self.requests.take(key) {
+                self.refuse_or_answer(pending.client, reply.clone());
+            }
+        }
+    }
+
+    pub(super) fn account_list_request(&mut self, client: u64, list: &AccountList) -> Option<serde_json::Value> {
+        self.relist_accounts();
+        if !list.check || !self.check_logins() {
+            return Some(json(&self.accounts_info(None)));
+        }
+        let key = self.requests.key();
+        self.pend_reading(client, key);
+        self.logins.waiting.push(key);
+        None
     }
 
     fn account_exists(&self, kind: Known, name: &str) -> Result<(), Refusal> {
@@ -107,7 +265,7 @@ impl App {
         ))
     }
 
-    pub(super) fn account_add_request(
+    pub(in crate::app) fn account_add_request(
         &mut self,
         asker: Asker,
         add: &AccountAdd,
@@ -122,8 +280,12 @@ impl App {
                 accounts::NAME_MAX
             )));
         }
-        if accounts::names(&self.accounts_dir, kind).contains(&add.name) {
-            return Err(conflict(format!("the {} account `{}` already exists", kind.name(), add.name)));
+        let names = accounts::names(&self.accounts_dir, kind);
+        if names.contains(&add.name) {
+            return Err(conflict(self.config.account_taken(kind.name(), &add.name)));
+        }
+        if let Some(taken) = self.config.label_taken(kind.name(), &add.name, &names, &add.name) {
+            return Err(conflict(taken));
         }
         let place = if add.login {
             let area = sized(area)?;
@@ -138,6 +300,7 @@ impl App {
         let default = self.default_home(kind);
         let dir = accounts::add(&self.accounts_dir, kind, &add.name, default.as_deref()).map_err(|e| e.to_string())?;
         log::info!("accounts", "account added", provider = kind.name(), account = add.name, path = dir.display());
+        self.relist_accounts();
         let Some((area, p, w)) = place else { return Ok(Some(json(&self.accounts_info(None)))) };
         let chosen = BTreeMap::from([(kind.name().to_string(), add.name.clone())]);
         let given = Accounts::of(&self.accounts_dir, &chosen);
@@ -158,24 +321,80 @@ impl App {
         Ok(Some(json(&self.accounts_info(Some(ids)))))
     }
 
-    pub(super) fn account_remove_request(&mut self, remove: &AccountRemove) -> Handled {
+    pub(in crate::app) fn account_remove_request(&mut self, remove: &AccountRemove) -> Handled {
         let kind = provider(&remove.provider)?;
         self.account_exists(kind, &remove.name)?;
         self.readable_config()?;
         accounts::remove(&self.accounts_dir, kind, &remove.name).map_err(|e| e.to_string())?;
         log::info!("accounts", "account removed", provider = kind.name(), account = remove.name);
+        self.relist_accounts();
         let (provider, name) = (kind.name(), remove.name.as_str());
+        self.change_config_for(|config| config.forget_account(provider, name))?;
+        Ok(Some(json(&self.accounts_info(None))))
+    }
+
+    fn saved_label(&self, kind: Known, name: &str) -> &str {
+        self.config.account_names.get(kind.name()).and_then(|labels| labels.get(name)).map_or("", String::as_str)
+    }
+
+    fn known_account(&self, kind: Known, name: &str) -> Result<(), Refusal> {
+        if name.is_empty() { Ok(()) } else { self.account_exists(kind, name) }
+    }
+
+    pub(in crate::app) fn account_rename_request(&mut self, rename: &AccountRename) -> Handled {
+        let kind = provider(&rename.provider)?;
+        self.readable_config()?;
+        self.known_account(kind, &rename.account)?;
+        let label = rename.label.trim().to_string();
+        if label.chars().count() > PROFILE_MAX || label.chars().any(crate::text::hidden) {
+            return Err(malformed(format!(
+                "`{label}` is not a valid account name: give one of at most {PROFILE_MAX} characters, without control \
+                 characters"
+            )));
+        }
+        let account = rename.account.clone();
+        if !label.is_empty() {
+            let names = accounts::names(&self.accounts_dir, kind);
+            if let Some(taken) = self.config.label_taken(kind.name(), &label, &names, &account) {
+                return Err(conflict(taken));
+            }
+        }
+        let provider = kind.name().to_string();
+        log::info!("accounts", "account renamed", provider = provider, account = account, cleared = label.is_empty());
         self.change_config_for(|config| {
-            for chosen in config.profiles.values_mut() {
-                if chosen.get(provider).is_some_and(|used| used == name) {
-                    chosen.remove(provider);
-                }
+            let labels = config.account_names.entry(provider.clone()).or_default();
+            if label.is_empty() {
+                labels.remove(&account);
+            } else {
+                labels.insert(account, label);
+            }
+            if labels.is_empty() {
+                config.account_names.remove(&provider);
             }
         })?;
         Ok(Some(json(&self.accounts_info(None))))
     }
 
-    pub(super) fn profile_new_request(&mut self, new: &ProfileNew) -> Handled {
+    pub(in crate::app) fn account_use_request(&mut self, chosen: &AccountUse) -> Handled {
+        let kind = provider(&chosen.provider)?;
+        self.readable_config()?;
+        self.known_account(kind, &chosen.account)?;
+        let (provider, account) = (kind.name().to_string(), chosen.account.clone());
+        log::info!("accounts", "account used", provider = provider, account = account);
+        self.change_config_for(|config| {
+            let mut selected = config.selected_accounts().clone();
+            if account.is_empty() {
+                selected.remove(&provider);
+            } else {
+                selected.insert(provider, account);
+            }
+            config.active_accounts = selected;
+            config.profile.clear();
+        })?;
+        Ok(Some(json(&self.accounts_info(None))))
+    }
+
+    pub(in crate::app) fn profile_new_request(&mut self, new: &ProfileNew) -> Handled {
         let name = profile_name(&new.name)?;
         self.readable_config()?;
         if self.config.profiles.contains_key(&name) {
@@ -189,7 +408,7 @@ impl App {
         Ok(Some(json(&self.accounts_info(None))))
     }
 
-    pub(super) fn profile_set_request(&mut self, set: &ProfileSet) -> Handled {
+    pub(in crate::app) fn profile_set_request(&mut self, set: &ProfileSet) -> Handled {
         self.readable_config()?;
         if !self.config.profiles.contains_key(&set.name) {
             return Err(unknown_profile(&set.name));
@@ -226,17 +445,22 @@ impl App {
         Ok(Some(json(&self.accounts_info(None))))
     }
 
-    pub(super) fn profile_use_request(&mut self, wanted: &ProfileUse) -> Handled {
+    pub(in crate::app) fn profile_use_request(&mut self, wanted: &ProfileUse) -> Handled {
         self.readable_config()?;
         if !wanted.name.is_empty() && !self.config.profiles.contains_key(&wanted.name) {
             return Err(unknown_profile(&wanted.name));
         }
         let name = wanted.name.clone();
-        self.change_config_for(|config| config.profile = name)?;
+        self.change_config_for(|config| {
+            if name.is_empty() {
+                config.active_accounts.clear();
+            }
+            config.profile = name;
+        })?;
         Ok(Some(json(&self.accounts_info(None))))
     }
 
-    pub(super) fn profile_delete_request(&mut self, delete: &ProfileDelete) -> Handled {
+    pub(in crate::app) fn profile_delete_request(&mut self, delete: &ProfileDelete) -> Handled {
         self.readable_config()?;
         if !self.config.profiles.contains_key(&delete.name) {
             return Err(unknown_profile(&delete.name));
@@ -249,5 +473,26 @@ impl App {
             }
         })?;
         Ok(Some(json(&self.accounts_info(None))))
+    }
+}
+
+impl App {
+    pub(in crate::app) fn has_accounts(&self) -> bool {
+        self.logins.listed.iter().any(|(_, names)| !names.is_empty())
+    }
+
+    pub(in crate::app) fn listed_accounts(&self) -> &[(Known, Vec<String>)] {
+        &self.logins.listed
+    }
+}
+
+#[cfg(test)]
+impl App {
+    pub(in crate::app) fn account_login(&self, kind: Known, name: &str) -> Option<&LoginInfo> {
+        self.logins.seen.get(&(kind, name.to_string()))
+    }
+
+    pub(in crate::app) fn checking_login(&self, kind: Known, name: &str) -> bool {
+        self.logins.running.contains(&(kind, name.to_string()))
     }
 }

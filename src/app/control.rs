@@ -1,4 +1,4 @@
-mod accounts;
+pub(in crate::app) mod accounts;
 mod arrange;
 mod changes;
 mod close;
@@ -120,7 +120,7 @@ enum Stage {
     Setup(u64),
     Restart { caller: Option<u64> },
     Issue(Box<Asking>),
-    Usage(Vec<(agents::Known, u64)>),
+    Usage(Vec<(agents::usage::Key, u64)>),
 }
 
 impl Stage {
@@ -478,13 +478,16 @@ impl App {
             Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),
             Command::PluginActions(actions) => Ok(Some(self.plugin_actions_request(&actions))),
             Command::PluginRun(run) => self.plugin_run_request(client, &run),
-            Command::AccountList(_) | Command::ProfileList(_) => Ok(Some(json(&self.accounts_info(None)))),
+            Command::AccountList(list) => Ok(self.account_list_request(client, &list)),
+            Command::ProfileList(_) => Ok(Some(json(&self.accounts_info(None)))),
             Command::AccountAdd(add) => self.account_add_request(asker, &add, area, now),
             Command::AccountRemove(remove) => self.account_remove_request(&remove),
             Command::ProfileNew(new) => self.profile_new_request(&new),
             Command::ProfileSet(set) => self.profile_set_request(&set),
             Command::ProfileUse(wanted) => self.profile_use_request(&wanted),
             Command::ProfileDelete(delete) => self.profile_delete_request(&delete),
+            Command::AccountRename(rename) => self.account_rename_request(&rename),
+            Command::AccountUse(chosen) => self.account_use_request(&chosen),
             Command::LastMessage(last) => self.last_message_request(client, asker, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),

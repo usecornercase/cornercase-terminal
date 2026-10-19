@@ -1,8 +1,10 @@
 use std::io::{BufRead, BufReader, Read, Write};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use crate::accounts::Account;
 use crate::agents::Known;
 use crate::error::{Error, Result};
 use crate::time;
@@ -95,10 +97,6 @@ pub(crate) struct Spec {
     pub(crate) no_limits: &'static str,
 }
 
-fn index(agent: Known) -> usize {
-    Known::ALL.iter().position(|kind| *kind == agent).unwrap_or(0)
-}
-
 #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "clamped to 0..=999 first")]
 fn whole(percent: Option<f64>) -> u16 {
     percent.unwrap_or(0.0).clamp(0.0, 999.0).round() as u16
@@ -166,9 +164,20 @@ fn run(agent: Known, mut command: Command, requests: &str, answer: Answer, timeo
     answer
 }
 
-pub(crate) fn probe(agent: Known, program: &str, timeout: Duration) -> Result<Report> {
+pub(crate) fn probe(agent: Known, program: &str, home: Option<&Path>, timeout: Duration) -> Result<Report> {
     let spec = agent.usage().ok_or_else(|| Error::Usage(format!("{} has no plan probe", agent.name())))?;
-    run(agent, (spec.command)(program), &(spec.requests)(), spec.answer, timeout)
+    run(agent, command(agent, &spec, program, home), &(spec.requests)(), spec.answer, timeout)
+}
+
+fn command(agent: Known, spec: &Spec, program: &str, home: Option<&Path>) -> Command {
+    let mut command = (spec.command)(program);
+    if let (Some(home), Some(account)) = (home, agent.account()) {
+        for key in account.remove {
+            command.env_remove(key);
+        }
+        command.env(account.env, home);
+    }
+    command
 }
 
 pub(crate) fn until(secs: i64) -> String {
@@ -234,29 +243,60 @@ impl Probe {
     }
 }
 
+pub(crate) type Key = (Known, Option<String>);
+
+static UNASKED: Probe = Probe { last: None, loading: false, error: None, answers: 0 };
+
 #[derive(Debug, Default)]
 pub(crate) struct State {
-    shown: Vec<Known>,
-    probes: [Probe; Known::ALL.len()],
+    shown: Vec<Key>,
+    probes: Vec<(Key, Probe)>,
 }
 
 impl State {
-    pub(crate) fn start(&mut self, shown: Vec<Known>) -> Vec<Known> {
-        self.shown = shown;
-        self.shown.iter().copied().filter(|agent| self.probes[index(*agent)].start()).collect()
+    pub(crate) fn start(&mut self, shown: Vec<(Known, Option<Account>)>) -> Vec<(Known, Option<Account>)> {
+        self.shown = shown.iter().map(|(agent, account)| key(*agent, account.as_ref())).collect();
+        shown.into_iter().filter(|(agent, account)| self.entry(key(*agent, account.as_ref())).start()).collect()
     }
 
-    pub(crate) fn answered(&mut self, agent: Known, result: Result<Report>, now: Instant) {
-        self.probes[index(agent)].answered(result, now);
+    pub(crate) fn answered(&mut self, key: Key, result: Result<Report>, now: Instant) {
+        self.entry(key).answered(result, now);
     }
 
+    #[cfg(test)]
     pub(crate) fn probe(&self, agent: Known) -> &Probe {
-        &self.probes[index(agent)]
+        self.probe_of(agent, None)
     }
 
-    pub(crate) fn shown(&self) -> impl Iterator<Item = (Known, &Probe)> {
-        self.shown.iter().map(|&agent| (agent, &self.probes[index(agent)]))
+    pub(crate) fn probe_of(&self, agent: Known, account: Option<&str>) -> &Probe {
+        self.probes
+            .iter()
+            .find(|((kind, name), _)| *kind == agent && name.as_deref() == account)
+            .map_or(&UNASKED, |(_, probe)| probe)
     }
+
+    pub(crate) fn shown(&self) -> impl Iterator<Item = (Known, Option<&str>, &Probe)> {
+        self.shown
+            .iter()
+            .map(|(agent, account)| (*agent, account.as_deref(), self.probe_of(*agent, account.as_deref())))
+    }
+
+    fn entry(&mut self, key: Key) -> &mut Probe {
+        let at = self.probes.iter().position(|(k, _)| *k == key).unwrap_or_else(|| {
+            self.probes.push((key, Probe::default()));
+            self.probes.len() - 1
+        });
+        &mut self.probes[at].1
+    }
+}
+
+pub(crate) fn heading(title: &str, account: Option<&str>, active: bool) -> String {
+    let mark = if active { "● " } else { "" };
+    account.map_or_else(|| format!("{mark}{title}"), |account| format!("{mark}{title} · {account}"))
+}
+
+pub(crate) fn key(agent: Known, account: Option<&Account>) -> Key {
+    (agent, account.map(|account| account.name.clone()))
 }
 
 #[cfg(test)]

@@ -25,7 +25,7 @@ pub(crate) fn text(plans: &Plans, clock: i64) -> String {
 }
 
 fn agent(plan: &PlanInfo, clock: i64) -> String {
-    let mut text = plan.title.clone();
+    let mut text = plan.heading();
     if let Some(name) = &plan.plan {
         let _ = write!(text, " · {name} plan");
     }

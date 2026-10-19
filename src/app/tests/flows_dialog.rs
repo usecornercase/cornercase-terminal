@@ -136,15 +136,15 @@ mod opening {
     }
 
     #[test]
-    fn the_flows_tab_comes_right_after_agents_and_shows_the_list() {
+    fn the_flows_tab_comes_right_after_accounts_and_shows_the_list() {
         let mut s = settings_tab(false);
         let d = dialog(&s.app);
         assert!(d.in_settings && d.edit.is_none());
         assert_eq!(d.entries(), 5);
         let v = view(&s.app, WIDE);
         assert_eq!(v.title, "Settings");
-        assert_eq!(v.tabs, ["Worktrees", "Agents", "Flows", "Issues", "UI", "Remote", "Plugins"]);
-        assert_eq!(v.tab, 2);
+        assert_eq!(v.tabs, ["Worktrees", "Agents", "Accounts", "Flows", "Issues", "UI", "Remote", "Plugins"]);
+        assert_eq!(v.tab, 3);
         button(&mut s.app, WIDE, dialog::DONE);
         assert!(s.app.overlay.is_none());
         s.app.open_settings();
@@ -161,14 +161,14 @@ mod opening {
         s.app.open_settings();
         key_in(&mut s.app, KeyCode::BackTab, WIDE);
         let Some(Overlay::Settings(settings)) = &s.app.overlay else { panic!("no settings") };
-        assert_eq!(settings.page, Page::Agents);
+        assert_eq!(settings.page, Page::Accounts);
     }
 
     #[test]
     fn a_click_on_another_settings_tab_leaves_the_flows_tab() {
         let mut s = settings_tab(false);
         let names = settings_tab_names();
-        click_in(&mut s.app, ui::flows_tabs(WIDE, &names)[4].as_position(), WIDE);
+        click_in(&mut s.app, ui::flows_tabs(WIDE, &names)[5].as_position(), WIDE);
         let Some(Overlay::Settings(settings)) = &s.app.overlay else { panic!("no settings") };
         assert_eq!(settings.page, Page::Ui);
     }
@@ -181,7 +181,7 @@ mod opening {
         assert!(view(&s.app, WIDE).tabs.iter().all(|tab| tab != "Issues"));
         button(&mut s.app, WIDE, dialog::DONE);
         let v = view(&s.app, WIDE);
-        assert_eq!((v.title.as_str(), v.tabs.len(), v.tab), ("Settings", 7, 2));
+        assert_eq!((v.title.as_str(), v.tabs.len(), v.tab), ("Settings", 8, 3));
     }
 
     #[test]

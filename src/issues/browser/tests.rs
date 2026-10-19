@@ -33,6 +33,7 @@ fn browser() -> Browser {
         notice: None,
         secrets_path: "~/.config/cornercase/secrets.json".into(),
         agents: agents(Some("claude")),
+        accounts: None,
         picker: None,
         places: vec![shop()],
         here: 0,
@@ -486,6 +487,7 @@ mod agent {
     }
 }
 
+mod account;
 mod list_flow;
 mod place;
 

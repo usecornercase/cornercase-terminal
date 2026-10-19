@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::time::{Instant, SystemTime};
 
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
@@ -7,8 +8,11 @@ use super::App;
 use super::event::AppEvent;
 use super::overlay::Overlay;
 use super::toast::Toast;
+use super::view::label;
+use crate::accounts::{self, Account};
 use crate::agents;
 use crate::agents::usage;
+use crate::config::Config;
 use crate::host::clipboard;
 use crate::log::{Job, Level};
 use crate::time;
@@ -35,20 +39,40 @@ impl App {
         if installed.is_empty() { supported } else { installed }
     }
 
-    fn probe_usage(&mut self) {
-        let agents = self.usage_agents();
-        self.start_probes(agents);
+    pub(super) fn usage_probes(&self) -> Vec<(agents::Known, Option<Account>)> {
+        let listed = accounts::list(&self.accounts_dir);
+        let mut probes = Vec::new();
+        for agent in self.usage_agents() {
+            probes.push((agent, None));
+            let names = listed.iter().find(|(kind, _)| *kind == agent).map(|(_, names)| names.as_slice());
+            for name in names.unwrap_or_default() {
+                let home = accounts::path(&self.accounts_dir, agent, name);
+                let home = home.canonicalize().unwrap_or(home);
+                probes.push((agent, Some(Account { kind: agent, name: name.clone(), home })));
+            }
+        }
+        probes
     }
 
-    pub(super) fn start_probes(&mut self, agents: Vec<agents::Known>) {
-        for agent in self.usage.start(agents) {
+    fn probe_usage(&mut self) {
+        let probes = self.usage_probes();
+        self.start_probes(probes);
+    }
+
+    pub(super) fn start_probes(&mut self, probes: Vec<(agents::Known, Option<Account>)>) {
+        for (agent, account) in self.usage.start(probes) {
             let command = agents::command(&self.config, agent.name());
             let timeout = self.usage_timeout;
-            let job = Job::new(Level::Info, "usage", "probe").with("agent", agent.name());
+            let key = usage::key(agent, account.as_ref());
+            let mut job = Job::new(Level::Info, "usage", "probe").with("agent", agent.name());
+            if let Some(account) = &account {
+                job = job.with("account", &account.name);
+            }
+            let home = account.map(|account| account.home);
             self.spawn_job(
                 job,
-                move || usage::probe(agent, &command, timeout),
-                move |result, _| Some(AppEvent::Usage(agent, result)),
+                move || usage::probe(agent, &command, home.as_deref(), timeout),
+                move |result, _| Some(AppEvent::Usage(key, result)),
             );
         }
     }
@@ -57,7 +81,7 @@ impl App {
         ui::Usage {
             page: self.usage_page,
             stats: self.stats_view(SystemTime::now()),
-            sections: sections(&self.usage, Instant::now(), time::now()),
+            sections: sections(&self.usage, &self.config, Instant::now(), time::now()),
         }
     }
 
@@ -107,7 +131,7 @@ impl App {
     }
 }
 
-fn section(agent: agents::Known, probe: &usage::Probe, now: Instant, clock: i64) -> ui::UsageSection {
+fn section(agent: agents::Known, title: &str, probe: &usage::Probe, now: Instant, clock: i64) -> ui::UsageSection {
     let report = probe.last().map(|(r, _)| r);
     let plan = report.and_then(|r| r.plan.as_deref()).map_or_else(String::new, |p| format!(" · {p} plan"));
     let windows = report.map(|r| r.windows.as_slice()).unwrap_or_default();
@@ -117,7 +141,7 @@ fn section(agent: agents::Known, probe: &usage::Probe, now: Instant, clock: i64)
         probe.last().map(|(_, at)| usage::updated(now.duration_since(*at).as_secs())).unwrap_or_default()
     };
     ui::UsageSection {
-        title: format!("{}{plan}", agent.title()),
+        title: format!("{title}{plan}"),
         status,
         error: probe.error().map(|e| format!("usage unavailable: {e}")),
         windows: windows
@@ -134,8 +158,40 @@ fn section(agent: agents::Known, probe: &usage::Probe, now: Instant, clock: i64)
     }
 }
 
-fn sections(state: &usage::State, now: Instant, clock: i64) -> Vec<ui::UsageSection> {
-    state.shown().map(|(agent, probe)| section(agent, probe, now, clock)).collect()
+pub(super) fn active(
+    keys: &[(agents::Known, Option<&str>)],
+    chosen: &BTreeMap<String, String>,
+    (agent, account): (agents::Known, Option<&str>),
+) -> bool {
+    let names = names(keys, agent);
+    let picked = chosen.get(agent.name()).map(String::as_str);
+    !names.is_empty() && picked.filter(|name| names.contains(name)) == account
+}
+
+pub(super) fn labelled(
+    config: &Config,
+    keys: &[(agents::Known, Option<&str>)],
+    (agent, account): (agents::Known, Option<&str>),
+) -> Option<String> {
+    label(config, agent, account, !names(keys, agent).is_empty())
+}
+
+fn names<'a>(keys: &[(agents::Known, Option<&'a str>)], agent: agents::Known) -> Vec<&'a str> {
+    keys.iter().filter(|(kind, _)| *kind == agent).filter_map(|(_, name)| *name).collect()
+}
+
+fn sections(state: &usage::State, config: &Config, now: Instant, clock: i64) -> Vec<ui::UsageSection> {
+    let keys: Vec<(agents::Known, Option<&str>)> = state.shown().map(|(agent, account, _)| (agent, account)).collect();
+    let chosen = config.selected_accounts();
+    state
+        .shown()
+        .map(|(agent, account, probe)| {
+            let key = (agent, account);
+            let title =
+                usage::heading(agent.title(), labelled(config, &keys, key).as_deref(), active(&keys, chosen, key));
+            section(agent, &title, probe, now, clock)
+        })
+        .collect()
 }
 
 #[cfg(test)]

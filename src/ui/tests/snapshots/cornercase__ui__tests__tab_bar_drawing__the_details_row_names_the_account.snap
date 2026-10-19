@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/tab_bar_drawing.rs
+expression: t.backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │  ◐ claude      › zsh      +              "
+"                                                         │  Opus 5.5 · work · 15%                   "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ cornercase (1)               │    main                 │                                          "
+"                               │                         │                                          "
+"  + New                        │  + New                  │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                no tab open               "
+"                               │                         │         + Tab opens a shell here         "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │  Files            TODO  │                                          "
+"  Quit                         │                         │                                          "

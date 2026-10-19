@@ -71,6 +71,8 @@ use trackers::IssueConnections;
 use update_dialog::{UpdateEvent, UpdateState};
 use worktrees::{SYNC_EVERY, Upstream, WorktreeEvent};
 
+mod account_menu;
+mod accounts_page;
 mod actions;
 mod agent_watch;
 mod changes_panel;
@@ -180,6 +182,7 @@ pub(crate) struct App {
     runs_dir: PathBuf,
     accounts_dir: PathBuf,
     default_homes: Option<PathBuf>,
+    logins: control::accounts::Logins,
     pane_socket: Option<String>,
     pending_run_dirs: Vec<(u64, Vec<PathBuf>)>,
     setups: std::collections::HashMap<u64, (u64, PathBuf)>,
@@ -261,6 +264,7 @@ impl App {
             runs_dir: config_path.with_file_name("runs"),
             accounts_dir: config_path.with_file_name("accounts"),
             default_homes: None,
+            logins: control::accounts::Logins::default(),
             pane_socket: None,
             pending_run_dirs: Vec::new(),
             config_path,
@@ -494,6 +498,8 @@ impl App {
             return;
         }
         self.synced = Some(now);
+        self.watch_accounts();
+        self.watch_accounts_page(now);
         self.sync_worktrees();
         self.forget_runs();
         self.forget_moved_run_ends();
@@ -620,7 +626,7 @@ impl App {
             AppEvent::Update(event) => self.update_answered(event),
             AppEvent::Search(event) => self.search_answered(event),
             AppEvent::Queue(event) => self.queue_prepared(*event),
-            AppEvent::Usage(agent, result) => self.usage.answered(agent, result, Instant::now()),
+            AppEvent::Usage(key, result) => self.usage.answered(key, result, Instant::now()),
             AppEvent::FlowModels(agent, models) => self.flow_models(agent, models),
             AppEvent::FlowFetched(source, result) => self.flow_fetched(&source, result),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
@@ -632,6 +638,7 @@ impl App {
             AppEvent::Messenger(event) => self.messenger_event(event, area),
             AppEvent::Merged(answer) => self.merged_answered(answer),
             AppEvent::Plugin(event) => self.plugin_answered(event),
+            AppEvent::Login(kind, name, login) => self.login_checked(kind, name, login),
         }
         Ok(())
     }
@@ -764,7 +771,6 @@ impl App {
         });
         let tree = self.drawn.tree.then(|| self.tree_view());
         let agents = self.config.agents_section.then(|| self.agents_view());
-        let changes_open = self.side == Some(Side::Changes);
         let view = ui::View {
             tree,
             agents,
@@ -794,12 +800,9 @@ impl App {
             nav: self.nav,
             update: self.update_label(),
             remote: self.remote_button(),
+            accounts: self.account_pills(),
             changes: if self.changes_shown() { self.panel_view() } else { None },
-            changes_button: self.changes_files().map(|files| ui::ChangesButton {
-                label: changes_panel::changes_label(files),
-                files,
-                open: changes_open,
-            }),
+            changes_button: self.changes_button_view(),
             todo: (self.side == Some(Side::Todo)).then(|| self.todo_view(self.layout(area).shown(self.nav).changes)),
             flow: (self.side == Some(Side::Flow)).then(|| self.flow_view(now, spin)).flatten(),
             flow_run: self.has_run(),

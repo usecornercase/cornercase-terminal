@@ -226,8 +226,9 @@ mod starting {
     fn start_hands_over_the_flow_the_prompt_and_the_branch() {
         let mut s = ready();
         s.select(2);
-        let Action::Start { flow, task, branch } = s.press(START) else { panic!("not started") };
+        let Action::Start { flow, task, branch, accounts } = s.press(START) else { panic!("not started") };
         assert_eq!((flow.name.as_str(), task.as_str(), branch.as_str()), ("Quick", "Add dark mode", "add-dark-mode"));
+        assert!(accounts.is_empty(), "without accounts the run takes the accounts in use");
     }
 
     #[test]
@@ -309,6 +310,123 @@ mod starting {
         s.select(4);
         s.set_listing(listing(), None);
         assert_eq!(s.cursor, 4);
+    }
+}
+
+mod accounts {
+    use super::*;
+
+    fn agent(kind: &str, active: &str) -> AgentAccounts {
+        let names = ["home".to_string(), "work".to_string()];
+        let labels = vec!["System".into(), "Personal".into(), "work".into()];
+        AgentAccounts::new(kind.into(), &names, labels, active)
+    }
+
+    fn with_accounts() -> Start {
+        let mut s = ready().with_accounts(vec![agent("claude", "work"), agent("codex", ""), agent("gemini", "home")]);
+        s.focus = Focus::Branch;
+        s
+    }
+
+    fn chosen(s: &mut Start) -> BTreeMap<String, String> {
+        match s.press(START) {
+            Action::Start { accounts, .. } => accounts,
+            other => panic!("not started: {other:?}"),
+        }
+    }
+
+    fn picked(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+        pairs.iter().map(|(kind, name)| ((*kind).to_string(), (*name).to_string())).collect()
+    }
+
+    fn team(s: &Start) -> Vec<&str> {
+        s.shown_accounts().into_iter().map(|i| s.accounts[i].kind.as_str()).collect()
+    }
+
+    #[test]
+    fn a_combo_per_agent_of_the_team_starts_on_the_account_in_use() {
+        let mut s = with_accounts();
+        assert_eq!(team(&s), ["claude", "codex"], "gemini is in no role of this flow");
+        assert_eq!(s.accounts[0].combo.options(), ["System", "Personal", "work"]);
+        assert_eq!(s.accounts[0].combo.label(), Some("work"));
+        assert_eq!(chosen(&mut s), picked(&[("claude", "work"), ("codex", "")]));
+    }
+
+    #[test]
+    fn an_account_in_use_that_is_gone_starts_on_the_system() {
+        let s = ready().with_accounts(vec![agent("claude", "gone")]);
+        assert_eq!(s.accounts[0].chosen(), "");
+    }
+
+    #[test]
+    fn the_issues_pick_seeds_the_combos_and_unknown_names_are_left_alone() {
+        let mut s = with_accounts();
+        s.seed_accounts(&picked(&[("claude", "home"), ("codex", "gone")]));
+        assert_eq!(chosen(&mut s), picked(&[("claude", "home"), ("codex", "")]));
+    }
+
+    #[test]
+    fn another_flow_shows_the_combos_of_its_own_team() {
+        let mut s = with_accounts();
+        let only_claude = s.flows.iter().position(|saved| {
+            std::iter::once(&saved.flow.orchestrator).chain(&saved.flow.roles).all(|role| role.agent == "claude")
+        });
+        let Some(i) = only_claude else { return };
+        s.focus = Focus::Account(1);
+        s.select(i);
+        assert_eq!((team(&s), s.focus), (vec!["claude"], Focus::Branch));
+    }
+
+    #[test]
+    fn tab_reaches_each_account_after_the_branch_and_goes_back_to_the_list() {
+        let mut s = with_accounts();
+        key(&mut s, KeyCode::Tab);
+        assert_eq!(s.focus, Focus::Account(0));
+        key(&mut s, KeyCode::Tab);
+        assert_eq!(s.focus, Focus::Account(1));
+        key(&mut s, KeyCode::Tab);
+        assert_eq!(s.focus, Focus::List);
+        key(&mut s, KeyCode::BackTab);
+        assert_eq!(s.focus, Focus::Account(1));
+        assert!(s.hint().starts_with("the codex account this team's codex agents start with"), "{}", s.hint());
+    }
+
+    #[test]
+    fn without_combos_tab_skips_them() {
+        let mut s = ready();
+        s.focus = Focus::Branch;
+        key(&mut s, KeyCode::Tab);
+        assert_eq!(s.focus, Focus::List);
+    }
+
+    #[test]
+    fn keys_pick_an_account_and_esc_closes_only_the_list() {
+        let mut s = with_accounts();
+        key(&mut s, KeyCode::Tab);
+        key(&mut s, KeyCode::Enter);
+        assert!(s.accounts_open());
+        assert_eq!(key(&mut s, KeyCode::Esc), Action::None);
+        assert!(!s.accounts_open());
+        key(&mut s, KeyCode::Down);
+        key(&mut s, KeyCode::Up);
+        key(&mut s, KeyCode::Enter);
+        assert_eq!(chosen(&mut s), picked(&[("claude", "home"), ("codex", "")]));
+        assert_eq!(key(&mut s, KeyCode::Esc), Action::Close);
+    }
+
+    #[test]
+    fn a_click_opens_one_list_and_a_choice_goes_to_that_combo() {
+        let mut s = with_accounts();
+        s.hit(Hit::Account(1), ROOM);
+        assert_eq!((s.focus, s.accounts[1].combo.is_open()), (Focus::Account(1), true));
+        s.hit(Hit::Choose(2), ROOM);
+        assert!(!s.accounts_open());
+        assert_eq!(chosen(&mut s), picked(&[("claude", "work"), ("codex", "work")]));
+        s.hit(Hit::Account(0), ROOM);
+        s.hit(Hit::Account(1), ROOM);
+        assert_eq!((s.accounts[0].combo.is_open(), s.accounts[1].combo.is_open()), (false, true));
+        s.hit(Hit::Branch, ROOM);
+        assert_eq!((s.focus, s.accounts_open()), (Focus::Branch, false));
     }
 }
 

@@ -47,11 +47,20 @@ impl Browser {
         };
         let prompt = crate::issues::prompt(&self.agents.prompt, issue, &branch(issue));
         let send = if self.agents.submit { "sent for you" } else { "typed, you press enter" };
-        vec![
-            row("start", vec![Span::raw(self.start_hint(issue))]),
-            row("agent", agent),
-            row("prompt", vec![Span::raw(crate::text::one_line(&prompt)), Span::styled(format!("  ({send})"), dim)]),
-        ]
+        let mut lines = vec![row("start", vec![Span::raw(self.start_hint(issue))]), row("agent", agent)];
+        if let Some((kind, agent)) = self.agent_accounts() {
+            let pick = self.accounts.as_ref().and_then(|a| a.pick(&kind)).unwrap_or_default();
+            let mut spans = vec![Span::raw(agent.label(pick).to_string())];
+            if pick == agent.active {
+                spans.push(Span::styled("  (in use)", dim));
+            }
+            lines.push(row("account", spans));
+        }
+        lines.push(row(
+            "prompt",
+            vec![Span::raw(crate::text::one_line(&prompt)), Span::styled(format!("  ({send})"), dim)],
+        ));
+        lines
     }
 
     pub(crate) fn detail_lines(&self, room: Room) -> Vec<Line<'static>> {

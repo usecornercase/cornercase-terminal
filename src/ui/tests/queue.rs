@@ -134,3 +134,31 @@ fn a_workspace_says_it_opens_a_new_tab_without_offering_a_choice() {
     let open_in = lines.iter().find(|l| l.contains("Open in")).expect("the open in row");
     assert!(open_in.contains("Open in   new tab") && !open_in.contains('▾'), "{open_in}");
 }
+
+fn accounts(active: &str) -> crate::accounts::AgentAccounts {
+    let labels = ["System", "home", "work"].map(String::from).into();
+    crate::accounts::AgentAccounts::new("claude".into(), &["home".into(), "work".into()], labels, active)
+}
+
+#[test]
+fn renders_the_account_beside_the_agent() {
+    let mut f = form("Fix the login form", None);
+    f.account = Some(accounts("work"));
+    insta::assert_snapshot!(shown(f, 100, 24).backend());
+}
+
+#[test]
+fn a_click_on_the_account_field_hits_it_and_its_open_list_chooses() {
+    let mut f = form("fix", None);
+    f.account = Some(accounts(""));
+    let screen = Rect::new(0, 0, 100, 24);
+    let field = queue_form::rect(screen, &f, Control::Account);
+    assert!(matches!(
+        queue_form::hit(screen, &f, field.as_position()),
+        Some(queue_form::Hit::Control(Control::Account, 0, _))
+    ));
+    f.account.as_mut().expect("combo").combo.open();
+    let list = queue_form::list(screen, &f).expect("the open list");
+    let home = Position::new(list.x + 2, list.y + 2);
+    assert!(matches!(queue_form::hit(screen, &f, home), Some(queue_form::Hit::Choose(1))));
+}

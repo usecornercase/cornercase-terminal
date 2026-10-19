@@ -105,6 +105,16 @@ const ICON_BAR_NEEDS = 'this needs cornercase in your terminal: the demo has no 
 
 const MERGED_NEED = 'this needs cornercase on your computer: the demo has no GitHub or GitLab';
 const SOUND_NEEDS = 'this needs cornercase on your computer: the demo plays no sound';
+const ACCOUNTS_NEED = 'this needs cornercase on your computer: the demo has no agent accounts';
+
+export const PAGE = { worktrees: 0, agents: 1, accounts: 2, flows: 3, issues: 4, ui: 5, remote: 6, plugins: 7 } as const;
+export const PAGE_NAMES = ['Worktrees', 'Agents', 'Accounts', 'Flows', 'Issues', 'UI', 'Remote', 'Plugins'];
+const ACCOUNT_AGENTS = [['Claude Code', 'claude'], ['Codex', 'codex'], ['Gemini CLI', 'gemini']] as const;
+const ACCOUNT_SWITCHES = [
+  ['account', 'account', 'the account an agent uses; only once you add an account'],
+  ['accountSwitcher', 'account switcher', "a bar at the bottom; only once you add an account"],
+  ['accountPicker', 'account picker', 'in issues, flows and the queue; only once you add an account'],
+] as const;
 
 const PULL_REQUESTS_NEED = 'this needs cornercase on your computer: the demo has no GitHub';
 
@@ -2729,7 +2739,7 @@ export class App {
       if (opening) this.addTodo();
     } else if (a.kind === 'settings') this.openSettings();
     else if (a.kind === 'usage') this.openUsage();
-    else if (a.kind === 'away') this.openSettingsOn(5, 'telegram');
+    else if (a.kind === 'away') this.openSettingsOn(PAGE.remote, 'telegram');
     else if (a.kind === 'pullRequest') this.bug(PULL_REQUESTS_NEED);
     else if (a.kind === 'flow') this.toggleFlow();
     else if (a.kind === 'startFlow') this.bug(FLOWS_NEED);
@@ -2773,7 +2783,7 @@ export class App {
 
   settingsRows(page: number): SettingsRow[] {
     const c = this.config;
-    if (page === 0) {
+    if (page === PAGE.worktrees) {
       return [
         { id: 'folder', section: '', label: 'worktrees folder', value: c.worktreesDir, note: 'new worktrees go in <folder>/<repo>/<branch>' },
         { id: 'fetch', section: '', label: 'fetch branches every', value: c.fetchMinutes ? `${c.fetchMinutes} min` : 'off', note: 'commits to pull show as ↓n' },
@@ -2781,7 +2791,7 @@ export class App {
         { id: 'merged', section: '', label: 'merged PRs in stats', value: '[ ] hidden', note: 'your merged pull requests, from gh and glab' },
       ];
     }
-    if (page === 1) {
+    if (page === PAGE.agents) {
       const rows: SettingsRow[] = [
         { id: 'agent', section: 'Agent', label: 'default agent', value: c.agent, note: c.agent === 'auto' ? 'the agent in your tab, otherwise ask' : '' },
         { id: 'submit', section: 'Agent', label: 'send the prompt', value: c.submit ? '[x] sent for you' : '[ ] typed, you press Enter', note: '' },
@@ -2803,20 +2813,27 @@ export class App {
       rows.push({ id: 'add', section: 'How each agent starts', label: '+ another agent…', value: '', note: '' });
       return rows;
     }
-    if (page === 2) {
+    if (page === PAGE.accounts) {
+      return ACCOUNT_AGENTS.flatMap(([agent, kind]) => [
+        { id: `account:${kind}:system`, section: agent, label: '● System', value: '', note: `${kind}'s own login` },
+        { id: `account:${kind}:rename`, section: agent, label: '    rename…', value: '', note: 'a name for the window; its folder stays' },
+        { id: `account:${kind}:add`, section: agent, label: '+ add account', value: '', note: 'makes its folder and opens a tab to log in' },
+      ]);
+    }
+    if (page === PAGE.flows) {
       return BUILT_IN_FLOWS.map(([name, agents, plan]) => ({ id: `flow:${name}`, section: '', label: name, value: `${agents} agents`, note: plan }));
     }
-    if (page === 6) {
+    if (page === PAGE.plugins) {
       return [{ id: 'plugins', section: 'Installed', label: 'no plugins yet', value: '', note: NO_PLUGINS }];
     }
-    if (page === 5) {
+    if (page === PAGE.remote) {
       return [
         { id: 'remote', section: 'Browser', label: 'remote access', value: '[ ] off', note: "open this computer's cornercase from your phone over Tailscale" },
         { id: 'telegram', section: 'Telegram', label: 'bot', value: 'not set', note: 'make a bot with @BotFather and paste its token here' },
         { id: 'discord', section: 'Discord', label: 'bot', value: 'not set', note: 'make a Discord app with User Install and paste its bot token' },
       ];
     }
-    if (page === 3) {
+    if (page === PAGE.issues) {
       const token = (s: Remote, section: string): SettingsRow => {
         const on = c.accounts[s];
         return { id: `token:${s}`, section, label: tokenName(s), value: on ? (s === 'asana' && !c.asanaWorkspaceName ? 'connected' : this.accountOf(s)) : 'not connected', note: on ? 'saved' : 'enter pastes one' };
@@ -2854,6 +2871,7 @@ export class App {
       { id: 'todoDot', section: '', label: 'TODO dot', value: c.todoDot ? '[x] shown' : '[ ] hidden', note: 'while items are pending' },
       { id: 'dim', section: '', label: 'inactive panes', value: c.dim ? '[x] dimmed' : '[ ] as bright as the active one', note: 'in a split tab' },
       ...DETAILS.map(([id, note]) => ({ id, section: '', label: id, value: c[id] ? '[x] shown' : '[ ] hidden', note })),
+      ...ACCOUNT_SWITCHES.map(([id, label, note]) => ({ id, section: '', label, value: '[x] shown', note })),
       { id: 'notify', section: '', label: 'desktop notifications', value: c.notify, note: 'when an agent in another tab needs you or finishes' },
       { id: 'sound', section: '', label: 'sound', value: '[x] on', note: "also while you look at cornercase, on the window's computer" },
       { id: 'soundWaiting', section: '', label: 'sound when it needs you', value: 'built-in', note: "an absolute or ~/ path on the window's computer; empty: built-in" },
@@ -2876,8 +2894,8 @@ export class App {
     if (o.capturing) return 'press the keys you want · backspace turns them off · esc cancels';
     if (o.edit) return 'enter saves · esc cancels';
     if (o.pick) return 'enter picks · type to filter · esc goes back';
-    if (o.page === 6) return 'plugins run as you and can do what you can; what they ask for is shown, not enforced';
-    if (o.page === 2) return 'enter or a click on the selected flow edits it · tab or ←→ switches tabs';
+    if (o.page === PAGE.plugins) return 'plugins run as you and can do what you can; what they ask for is shown, not enforced';
+    if (o.page === PAGE.flows) return 'enter or a click on the selected flow edits it · tab or ←→ switches tabs';
     return 'enter changes the selected setting · tab or ←→ switches tabs · every change is saved at once';
   }
 
@@ -2967,6 +2985,8 @@ export class App {
       o.notice = REMOTE_NEEDS;
     } else if (row.id === 'iconBar') {
       o.notice = ICON_BAR_NEEDS;
+    } else if (row.id.startsWith('account')) {
+      o.notice = ACCOUNTS_NEED;
     } else if (row.id.startsWith('sound')) {
       o.notice = SOUND_NEEDS;
     } else if (row.id === 'pulls') {
@@ -4466,8 +4486,8 @@ export class App {
     o.notice = undefined;
     if (k.key === 'Escape') this.closeOverlay();
     else if (k.key === 'Enter' || k.key === ' ') this.settingsActivate();
-    else if (k.key === 'Tab' || k.key === 'ArrowRight') this.settingsPage((o.page + (k.shift ? 6 : 1)) % 7);
-    else if (k.key === 'ArrowLeft') this.settingsPage((o.page + 6) % 7);
+    else if (k.key === 'Tab' || k.key === 'ArrowRight') this.settingsPage((o.page + (k.shift ? PAGE_NAMES.length - 1 : 1)) % PAGE_NAMES.length);
+    else if (k.key === 'ArrowLeft') this.settingsPage((o.page + PAGE_NAMES.length - 1) % PAGE_NAMES.length);
     else if (k.key === 'ArrowDown') o.cursor = Math.min(o.cursor + 1, rows.length - 1);
     else if (k.key === 'ArrowUp') o.cursor = Math.max(0, o.cursor - 1);
     else if ((k.key === 'Delete' || k.key === 'Backspace') && rows[o.cursor]?.id.startsWith('token:')) {

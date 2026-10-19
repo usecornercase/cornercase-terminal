@@ -1,9 +1,12 @@
+use std::collections::BTreeMap;
+
 use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::overlay::Overlay;
 use super::toast::Toast;
+use crate::accounts::AgentAccounts;
 use crate::agents;
 use crate::control::QueueAdd;
 use crate::git;
@@ -86,6 +89,7 @@ impl App {
         };
         self.overlay = Some(Overlay::Queue(Box::new(form)));
         self.queue_modes();
+        self.queue_accounts(entry.as_ref().map(|entry| &entry.task.accounts));
         if let Some(Overlay::Queue(form)) = &mut self.overlay
             && let Some(mode) = entry.as_ref().and_then(|entry| entry.task.mode.as_ref())
         {
@@ -158,6 +162,7 @@ impl App {
         });
         let branch = issues::branch(issue);
         let prompt = issues::prompt(&self.config.prompt, issue, &branch);
+        let chosen = self.chosen_accounts();
         self.new_queue_form(None);
         if let Some(Overlay::Queue(form)) = &mut self.overlay {
             form.label = Some(format!("{} {}", issue.key, issue.title));
@@ -183,12 +188,32 @@ impl App {
             form.open_in.choose(usize::from(worktree));
         }
         self.queue_modes();
+        self.queue_accounts(Some(&chosen));
+    }
+
+    fn queue_kind(&self) -> String {
+        let Some(Overlay::Queue(form)) = &self.overlay else { return String::new() };
+        let selected = form.agent.label().filter(|kind| *kind != agents::AUTO).map(str::to_string);
+        self.agent_kind(None, selected).unwrap_or_default()
+    }
+
+    fn queue_accounts(&mut self, saved: Option<&BTreeMap<String, String>>) {
+        let kind = self.queue_kind();
+        let account = self.account_choices().and_then(|choices| {
+            let agent = choices.of(&kind)?;
+            let saved = saved.and_then(|saved| saved.get(&kind)).map(String::as_str);
+            Some(AgentAccounts::new(kind.clone(), &agent.names, agent.labels.clone(), &agent.active).keeping(saved))
+        });
+        if let Some(Overlay::Queue(form)) = &mut self.overlay {
+            if let Some(gone) = account.as_ref().and_then(AgentAccounts::missing) {
+                form.error = Some(format!("the {kind} account `{gone}` is gone: pick another account"));
+            }
+            form.account = account;
+        }
     }
 
     fn queue_modes(&mut self) {
-        let Some(Overlay::Queue(form)) = &mut self.overlay else { return };
-        let selected = form.agent.label().map(str::to_string);
-        let kind = self.agent_kind(None, selected.filter(|kind| kind != agents::AUTO)).unwrap_or_default();
+        let kind = self.queue_kind();
         let Some(Overlay::Queue(form)) = &mut self.overlay else { return };
         let modes = std::iter::once("default".into())
             .chain(agents::modes(&self.config, &kind).into_iter().map(|(name, _)| name))
@@ -214,6 +239,7 @@ impl App {
     fn queue_chose(&mut self, control: Control) {
         if control == Control::Agent {
             self.queue_modes();
+            self.queue_accounts(None);
         }
     }
 
@@ -298,6 +324,7 @@ impl App {
                 .id
                 .and_then(|id| self.queued.queue.entry(id))
                 .is_some_and(|entry| agent.as_ref() == Some(&entry.task.agent) && entry.task.mode.is_none());
+        let accounts = self.queue_chosen_accounts(form);
         let add = QueueAdd {
             at: form.at(),
             zone: form.zone.clone(),
@@ -309,6 +336,7 @@ impl App {
             prompt: Some(form.prompt.text()),
             label: form.label.clone(),
             submit: form.id.is_none().then_some(true),
+            accounts,
             ..QueueAdd::default()
         };
         let id = form.id;
@@ -323,6 +351,18 @@ impl App {
             }
             Err(reason) => self.queue_form_done(Err(reason.into())),
         }
+    }
+
+    fn queue_chosen_accounts(&self, form: &Form) -> BTreeMap<String, String> {
+        let Some((kind, name)) = form.chosen_account() else { return BTreeMap::new() };
+        let entry = form.id.and_then(|id| self.queued.queue.entry(id));
+        if entry.is_some_and(|entry| !entry.task.accounts.contains_key(kind)) {
+            let active = self.account_choices().and_then(|choices| Some(choices.of(kind)?.active.clone()));
+            if active.as_deref() == Some(name) {
+                return BTreeMap::new();
+            }
+        }
+        BTreeMap::from([(kind.to_string(), name.to_string())])
     }
 
     pub(super) fn queue_form_done(&mut self, reply: Result<u64, String>) {

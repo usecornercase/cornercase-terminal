@@ -7,10 +7,18 @@ pub(crate) struct ProfileArg {
     #[arg(
         long,
         value_name = "NAME",
-        help = "Start it with the accounts of this profile; an empty name is the system's own [default: the active \
-                profile]"
+        help = "Start it with the accounts of this profile; an empty name is each agent's own login [default: the \
+                accounts in use]"
     )]
     pub(crate) profile: Option<String>,
+    #[arg(
+        long = "account",
+        value_name = "AGENT=ACCOUNT",
+        value_parser = choice,
+        help = "Start that agent with this account, over the ones in use; AGENT= is its own login. Give it once \
+                per agent"
+    )]
+    pub(crate) accounts: Vec<(String, String)>,
 }
 
 #[derive(Debug, Args)]
@@ -22,11 +30,54 @@ pub(crate) struct AccountArgs {
 #[derive(Debug, Subcommand)]
 pub(crate) enum AccountAction {
     #[command(about = "List the accounts of each agent, with their folders")]
-    List(Print),
+    List(AccountListArgs),
     #[command(about = "Add an account: a folder of its own the agent keeps its login in")]
     Add(AccountAddArgs),
-    #[command(about = "Remove an account and its folder; profiles that used it fall back to the system's login")]
+    #[command(about = "Remove an account and its folder; an agent that used it goes back to its own login")]
     Remove(AccountRemoveArgs),
+    #[command(about = "Give an account a name the window shows; its folder keeps its name")]
+    Rename(AccountRenameArgs),
+    #[command(about = "Use an account for an agent's new tabs; open tabs keep theirs")]
+    Use(AccountUseArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct AccountRenameArgs {
+    #[arg(value_name = "AGENT", help = "The agent: claude, codex or gemini")]
+    pub(crate) provider: String,
+    #[arg(
+        value_name = "ACCOUNT LABEL",
+        num_args = 0..=2,
+        help = "The account's folder name and the name to show; with --system only the name, with --clear only the \
+                account"
+    )]
+    pub(crate) names: Vec<String>,
+    #[arg(long, help = "Name the agent's own login, the one outside any account")]
+    pub(crate) system: bool,
+    #[arg(long, help = "Drop the name, so the folder's name (or System) shows again")]
+    pub(crate) clear: bool,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct AccountUseArgs {
+    #[arg(value_name = "AGENT", help = "The agent: claude, codex or gemini")]
+    pub(crate) provider: String,
+    #[arg(value_name = "ACCOUNT", required_unless_present = "system", help = "The account's folder name")]
+    pub(crate) account: Option<String>,
+    #[arg(long, conflicts_with = "account", help = "Use the agent's own login, outside any account")]
+    pub(crate) system: bool,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct AccountListArgs {
+    #[arg(long, help = "Also ask each agent whether its account is signed in, and as whom")]
+    pub(crate) check: bool,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]
@@ -108,5 +159,12 @@ fn pair(text: &str) -> Result<(String, String), String> {
             Ok((agent.to_string(), account.to_string()))
         }
         _ => Err(format!("`{text}` is not AGENT=ACCOUNT, such as claude=work")),
+    }
+}
+
+pub(super) fn choice(text: &str) -> Result<(String, String), String> {
+    match text.split_once('=') {
+        Some((agent, account)) if !agent.is_empty() => Ok((agent.to_string(), account.to_string())),
+        _ => Err(format!("`{text}` is not AGENT=ACCOUNT, such as claude=work, or claude= for its system login")),
     }
 }

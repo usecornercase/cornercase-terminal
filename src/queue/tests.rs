@@ -112,3 +112,29 @@ fn duplicate_or_zero_ids_make_a_saved_queue_corrupt() {
     persist::save(&path, &saved).expect("save zero");
     assert_eq!(load(&path, 0).entries, []);
 }
+
+mod accounts {
+    use std::collections::BTreeMap;
+
+    use super::*;
+
+    #[test]
+    fn an_entry_without_accounts_is_written_as_before() {
+        let text = serde_json::to_string(&task(100)).expect("json");
+        assert!(!text.contains("accounts"), "{text}");
+    }
+
+    #[test]
+    fn accounts_and_their_absence_round_trip() {
+        let dir = TempDir::new();
+        let path = dir.path().join("queue.json");
+        let chosen = BTreeMap::from([("claude".to_string(), "home".to_string()), ("codex".into(), String::new())]);
+        let mut queue = Queue::default();
+        queue.add(task(100)).expect("without");
+        queue.add(Task { accounts: chosen.clone(), ..task(200) }).expect("with");
+        persist::save(&path, &queue.saved()).expect("save");
+        let read = load(&path, 0);
+        let accounts: Vec<_> = read.entries.iter().map(|entry| entry.task.accounts.clone()).collect();
+        assert_eq!(accounts, [BTreeMap::new(), chosen]);
+    }
+}

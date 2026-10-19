@@ -1,6 +1,6 @@
 [2m [38;5;8m[48;5;236m ⌕ search projects, workspa…[39m [49m [38;5;239m│[39m   1 use serde::Deserialize;                                                  
   [0m[38;5;8m╭─[1m[39m Settings [0m[38;5;8m─────────────────────────────────────────────────────────────────────────────────────────────╮[2m[39m  
-[1m[38;5;8m P[0m[38;5;8m│[39m [38;5;7m Worktrees [39m [38;5;7m Agents [39m [38;5;7m Flows [39m [38;5;7m Issues [39m [1m[38;5;6m[48;5;236m UI [0m [38;5;7m Remote [39m [38;5;7m Plugins [39m                                          [38;5;8m│[2m[39m  
+[1m[38;5;8m P[0m[38;5;8m│[39m [38;5;7m Worktrees [39m [38;5;7m Agents [39m [38;5;7m Accounts [39m [38;5;7m Flows [39m [38;5;7m Issues [39m [1m[38;5;6m[48;5;236m UI [0m [38;5;7m Remote [39m [38;5;7m Plugins [39m                               [38;5;8m│[2m[39m  
   [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
 [38;5;6m  [0m[38;5;8m│[39m [38;5;6m[48;5;236m▌ [1m[39msidebar                   [0m[48;5;236mprojects_on_top  [38;5;8mhow projects, workspaces and tabs are laid out[39m           [49m [38;5;8m│[2m[39m  
 [38;5;6m[48;5;236m▌ [0m[38;5;8m│[39m [38;5;6m  [39mtabs                      sidebar  [38;5;8mwhere a workspace's tabs are listed[39m                               [38;5;8m│[2m[39m  
@@ -13,17 +13,17 @@
  [38;5;6m [0m[38;5;8m│[39m [38;5;6m  [39mmodel                     [x] shown  [38;5;8munder an agent's tab, such as Opus 5.5[39m                          [38;5;8m│[2m[39m  
 [38;5;239m ─[0m[38;5;8m│[39m [38;5;6m  [39mcontext                   [x] shown  [38;5;8mhow full its context is, such as 23%[39m                            [38;5;8m│[2m[39m  
 [1m[38;5;8m W[0m[38;5;8m│[39m [38;5;6m  [39mmemory                    [ ] hidden  [38;5;8mthe RAM its processes use, such as 1.2 GB[39m                      [38;5;8m│[2m[39m  
-  [0m[38;5;8m│[39m [38;5;6m  [39mdesktop notifications     auto  [38;5;8mwhen an agent in another tab needs you or finishes[39m                   [38;5;8m│[2m[39m  
-[38;5;6m  [0m[38;5;8m│[39m [38;5;6m  [39msound                     [x] on  [38;5;8malso while you look at cornercase, on the window's computer[39m        [38;5;8m│[2m[39m  
-[38;5;6m[48;5;236m▌ [0m[38;5;8m│[39m [38;5;6m  [39msound when it needs you   built-in  [38;5;8man absolute or ~/ path on the window's computer; empty: built-in[39m [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m [38;5;6m  [39maccount                   [x] shown  [38;5;8mthe account an agent uses; only once you add an account[39m         [38;5;8m│[2m[39m  
+[38;5;6m  [0m[38;5;8m│[39m [38;5;6m  [39maccount switcher          [x] shown  [38;5;8ma bar at the bottom; only once you add an account[39m               [38;5;8m│[2m[39m  
+[38;5;6m[48;5;236m▌ [0m[38;5;8m│[39m [38;5;6m  [39maccount picker            [x] shown  [38;5;8min issues, flows and the queue; only once you add an account[39m    [38;5;8m│[2m[39m  
+[38;5;6m  [0m[38;5;8m│[39m [38;5;6m  [39mdesktop notifications     auto  [38;5;8mwhen an agent in another tab needs you or finishes[39m                   [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m [38;5;6m  [39msound                     [x] on  [38;5;8malso while you look at cornercase, on the window's computer[39m        [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m [38;5;6m  [39msound when it needs you   built-in  [38;5;8man absolute or ~/ path on the window's computer; empty: built-in[39m [38;5;8m│[2m[39m  
 [38;5;6m  [0m[38;5;8m│[39m [38;5;6m  [39msound when it finishes    built-in  [38;5;8man absolute or ~/ path on the window's computer; empty: built-in[39m [38;5;8m│[2m[39m  
-  [0m[38;5;8m│[39m [38;5;6m  [39msound for subagents       [ ] off  [38;5;8magents started by another agent or by a flow[39m                      [38;5;8m│[2m[39m  
+[38;5;6m  [0m[38;5;8m│[39m [38;5;6m  [39msound for subagents       [ ] off  [38;5;8magents started by another agent or by a flow[39m                      [38;5;8m│[2m[39m  
   [0m[38;5;8m│[39m [38;5;6m  [39mcheck for updates         [x] every hour  [38;5;8masks GitHub for the latest release[39m                         [38;5;8m│[2m[39m  
-[38;5;6m  [0m[38;5;8m│[39m [38;5;6m  [39mstar prompt               [x] now and then  [38;5;8masks for a GitHub star after two weeks of use[39m            [38;5;8m│[2m[39m  
-[38;5;6m  [0m[38;5;8m│[39m [38;5;6m  [39mprefix key                off  [38;5;8mopens a menu of keyboard shortcuts[39m                                    [38;5;8m│[2m[39m  
-  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
-  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
-  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m [38;5;6m  [39mstar prompt               [x] now and then  [38;5;8masks for a GitHub star after two weeks of use[39m            [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m [38;5;6m  [39mprefix key                off  [38;5;8mopens a menu of keyboard shortcuts[39m                                    [38;5;8m│[2m[39m  
 [38;5;6m  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
 [38;5;6m  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
   [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  

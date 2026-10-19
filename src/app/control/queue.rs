@@ -66,6 +66,7 @@ impl App {
         }
         let old = edit.map(|id| self.queued.queue.entry(id).cloned().ok_or_else(|| queue::missing(id))).transpose()?;
         let mut task = self.queue_task(caller, add, old.as_ref())?;
+        self.requested_accounts(None, &task.accounts)?;
         let at = if add.at.is_empty() {
             old.as_ref().map(|entry| queue::clock::display(entry.task.at, &task.zone)).unwrap_or_default()
         } else {
@@ -133,7 +134,7 @@ impl App {
                 }
                 task.at = match probe {
                     Some((agent, command, timeout)) => {
-                        let report = usage::probe(agent, &command, timeout)?;
+                        let report = usage::probe(agent, &command, None, timeout)?;
                         reset_time(&report, clock).map_err(Error::Api)?
                     }
                     None => {
@@ -210,6 +211,7 @@ impl App {
             workspace: entry.task.place.workspace.as_ref().map(|_| self.projects[p].workspaces[w].id),
             worktree: entry.task.place.branch.clone(),
             name: Some(entry.task.label.clone()),
+            accounts: entry.task.accounts.clone(),
             ..control::Start::default()
         };
         self.queued.next_client += 1;

@@ -2,6 +2,7 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
+use super::account_menu::AccountItem;
 use super::opening::Subject;
 use super::overlay::Overlay;
 use super::plugins::Spot;
@@ -104,6 +105,8 @@ pub(super) enum MenuAction {
     CopyPath(Subject),
     SendTodo { todo: u64, pane: u64 },
     Plugin { spot: Spot, index: u16, revision: u32 },
+    Account(AccountItem, (u64, u64)),
+    ManageAccounts,
 }
 
 impl App {
@@ -162,6 +165,8 @@ impl App {
             MenuAction::Away(via) => format!("continue on {}", via.name()),
             MenuAction::SendTodo { pane, .. } => self.todo_agent_label(pane),
             MenuAction::Plugin { index, .. } => self.plugin_label(index),
+            MenuAction::Account(item, _) => self.account_item_label(item),
+            MenuAction::ManageAccounts => "manage accounts…".into(),
         }
     }
 
@@ -264,6 +269,8 @@ impl App {
             MenuAction::Away(via) => self.toggle_away(via),
             MenuAction::SendTodo { todo, pane } => self.send_todo_from_panel(todo, pane, std::time::Instant::now()),
             MenuAction::Plugin { spot, index, revision } => self.run_plugin_action(spot, index, revision),
+            MenuAction::Account(item, revision) => self.account_item(item, revision),
+            MenuAction::ManageAccounts => self.manage_accounts(),
         }
         Ok(())
     }

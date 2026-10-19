@@ -108,4 +108,18 @@ const codex = { id: 2, result: { ordinaryUsageAllowed: true, rateLimits: codexLi
 const usage = join(out, 'usage');
 mkdirSync(usage, { recursive: true });
 writeFileSync(join(usage, 'claude.json'), JSON.stringify(claude));
+const plan = (subscription, session, week, opus, sessionMinutes) => {
+  const response = structuredClone(claude);
+  const answer = response.response.response;
+  answer.subscription_type = subscription;
+  answer.rate_limits.five_hour = { utilization: session, resets_at: at(sessionMinutes) };
+  answer.rate_limits.seven_day = { utilization: week, resets_at: at(3 * 1440 + 240) };
+  answer.rate_limits.limits = [
+    limit('session', 'session', session, session >= 80 ? 'warning' : 'normal', sessionMinutes),
+    limit('weekly_all', 'weekly', week, week >= 80 ? 'warning' : 'normal', 3 * 1440 + 240),
+    limit('weekly_scoped', 'weekly', opus, 'normal', 3 * 1440 + 240, { model: { id: null, display_name: 'Opus' } }),
+  ];
+  return response;
+};
+writeFileSync(join(usage, 'claude-personal.json'), JSON.stringify(plan('pro', 8, 19, 0, 263)));
 writeFileSync(join(usage, 'codex.json'), JSON.stringify(codex));

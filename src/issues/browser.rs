@@ -159,6 +159,44 @@ impl Agents {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct AgentAccounts {
+    pub(crate) names: Vec<String>,
+    pub(crate) labels: Vec<String>,
+    pub(crate) active: String,
+}
+
+impl AgentAccounts {
+    pub(crate) fn label<'a>(&'a self, name: &'a str) -> &'a str {
+        let i = if name.is_empty() { Some(0) } else { self.names.iter().position(|n| n == name).map(|i| i + 1) };
+        i.and_then(|i| self.labels.get(i)).map_or(name, String::as_str)
+    }
+
+    fn keys(&self) -> impl Iterator<Item = &str> {
+        std::iter::once("").chain(self.names.iter().map(String::as_str))
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Accounts {
+    pub(crate) agents: HashMap<String, AgentAccounts>,
+    pub(crate) chosen: Option<(String, String)>,
+}
+
+impl Accounts {
+    pub(crate) fn of(&self, kind: &str) -> Option<&AgentAccounts> {
+        self.agents.get(kind)
+    }
+
+    pub(crate) fn pick(&self, kind: &str) -> Option<&str> {
+        let agent = self.of(kind)?;
+        Some(match &self.chosen {
+            Some((chosen, name)) if chosen == kind => name,
+            _ => &agent.active,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Place {
     pub(crate) project: u64,
@@ -171,6 +209,7 @@ pub(crate) struct Place {
 pub(crate) enum Pick {
     Agent,
     Place,
+    Account,
     Person(Source, usize),
 }
 
@@ -255,6 +294,7 @@ pub(crate) struct Browser {
     pub(crate) notice: Option<String>,
     pub(crate) secrets_path: String,
     pub(crate) agents: Agents,
+    pub(crate) accounts: Option<Accounts>,
     pub(crate) picker: Option<Picker>,
     pub(crate) places: Vec<Place>,
     pub(crate) here: usize,
@@ -265,6 +305,12 @@ pub(crate) struct Browser {
 }
 
 impl Browser {
+    pub(crate) fn agent_accounts(&self) -> Option<(String, &AgentAccounts)> {
+        let kind = self.agents.pick()?;
+        let agent = self.accounts.as_ref()?.of(&kind)?;
+        Some((kind, agent))
+    }
+
     pub(crate) fn current(&self) -> Tab {
         self.tabs.get(self.tab).copied().unwrap_or(Tab::All)
     }

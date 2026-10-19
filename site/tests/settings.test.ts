@@ -12,8 +12,8 @@ test('the UI tab lists the icon bar, which needs a real cornercase', () => {
   inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
-  assert.equal(app.overlay?.kind === 'settings' && app.overlay.page, 4);
-  const rows = app.settingsRows(4);
+  assert.equal(app.overlay?.kind === 'settings' && app.overlay.page, 5);
+  const rows = app.settingsRows(5);
   assert.deepEqual(rows.slice(0, 3).map((row) => row.id), ['sidebar', 'tabs', 'iconBar']);
   app.settingsClick(2);
   app.render();
@@ -51,11 +51,11 @@ test('g p in the keys menu says pull requests need a real cornercase', () => {
 test('the UI tab lists the sound rows after desktop notifications, which need a real cornercase', () => {
   const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
   app.openSettings();
-  app.settingsPage(4);
-  const ids = app.settingsRows(4).map((row) => row.id);
+  app.settingsPage(5);
+  const ids = app.settingsRows(5).map((row) => row.id);
   const at = ids.indexOf('notify');
   assert.deepEqual(ids.slice(at, at + 5), ['notify', 'sound', 'soundWaiting', 'soundDone', 'soundSubagents']);
-  const value = (id: string) => app.settingsRows(4).find((row) => row.id === id)?.value;
+  const value = (id: string) => app.settingsRows(5).find((row) => row.id === id)?.value;
   assert.equal(value('sound'), '[x] on');
   assert.equal(value('soundSubagents'), '[ ] off');
   for (const id of ['sound', 'soundWaiting', 'soundDone', 'soundSubagents']) {
@@ -72,7 +72,7 @@ test('the star prompt is a switch on the UI tab', () => {
   inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
-  const index = app.settingsRows(4).findIndex((row) => row.id === 'starPrompt');
+  const index = app.settingsRows(5).findIndex((row) => row.id === 'starPrompt');
   assert.ok(index > 0);
   assert.equal(app.config.starPrompt, true);
   app.settingsClick(index);
@@ -86,14 +86,14 @@ test('the Asana workspace row names the workspace with its saved ID in the note,
   const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
   app.config.asanaWorkspace = '1200000000000001';
   app.openSettings();
-  app.settingsPage(3);
-  const row = () => app.settingsRows(3).find((r) => r.id === 'asana-workspace');
-  const token = () => app.settingsRows(3).find((r) => r.id === 'token:asana');
+  app.settingsPage(4);
+  const row = () => app.settingsRows(4).find((r) => r.id === 'asana-workspace');
+  const token = () => app.settingsRows(4).find((r) => r.id === 'token:asana');
   assert.deepEqual([row()?.value, row()?.note], ['1200000000000001', 'name or ID']);
   app.config.accounts.asana = true;
   app.config.asanaWorkspaceName = 'Acme';
   assert.deepEqual([row()?.value, row()?.note, token()?.value], ['Acme', 'ID 1200000000000001', '@you in Acme']);
-  app.settingsClick(app.settingsRows(3).findIndex((r) => r.id === 'asana-workspace'));
+  app.settingsClick(app.settingsRows(4).findIndex((r) => r.id === 'asana-workspace'));
   for (let i = 0; i < 16; i++) inputKey(app, key('Backspace'));
   for (const ch of '1200000000000002') inputKey(app, key(ch));
   inputKey(app, key('Enter'));
@@ -113,8 +113,8 @@ test('connecting Asana names only the demo workspace, whatever ID is saved', () 
     app.advance(1500);
     app.closeOverlay();
     app.openSettings();
-    app.settingsPage(3);
-    const row = app.settingsRows(3).find((r) => r.id === 'asana-workspace');
+    app.settingsPage(4);
+    const row = app.settingsRows(4).find((r) => r.id === 'asana-workspace');
     app.destroy();
     return [row?.value, row?.note];
   };
@@ -122,4 +122,42 @@ test('connecting Asana names only the demo workspace, whatever ID is saved', () 
   assert.deepEqual(connect('1200'), ['Acme', 'ID 1200']);
   assert.deepEqual(connect('acme'), ['Acme', 'name or ID']);
   assert.deepEqual(connect('1300'), ['1300', 'name or ID']);
+});
+
+test('the Accounts tab and the account switches need a real cornercase, and nothing else shows them', () => {
+  const app = new App(); app.virtual = true; app.resize(140, 40); world(app, { scripted: true });
+  app.openSettings();
+  inputKey(app, key('ArrowRight'));
+  inputKey(app, key('ArrowRight'));
+  assert.equal(app.overlay?.kind === 'settings' && app.overlay.page, 2);
+  app.render();
+  assert.ok(app.textAt('Accounts'));
+  const rows = app.settingsRows(2);
+  const agents = ['Claude Code', 'Codex', 'Gemini CLI'];
+  assert.deepEqual(rows.map((row) => row.section), agents.flatMap((agent) => [agent, agent, agent]));
+  assert.deepEqual(rows.map((row) => row.label.trim()), agents.flatMap(() => ['● System', 'rename…', '+ add account']));
+  assert.ok(!rows.some((row) => row.section === 'Profiles' || row.label.includes('profile')));
+  for (let i = 0; i < rows.length; i++) {
+    if (app.overlay?.kind === 'settings') app.overlay.notice = undefined;
+    app.settingsClick(i);
+    app.render();
+    assert.ok(app.textAt('the demo has no agent accounts'));
+  }
+  const ui = app.settingsRows(5).map((row) => row.id);
+  const at = ui.indexOf('memory');
+  assert.deepEqual(ui.slice(at + 1, at + 4), ['account', 'accountSwitcher', 'accountPicker']);
+  app.settingsPage(5);
+  for (const id of ['account', 'accountSwitcher', 'accountPicker']) {
+    if (app.overlay?.kind === 'settings') app.overlay.notice = undefined;
+    app.settingsClick(app.settingsRows(5).findIndex((row) => row.id === id));
+    app.render();
+    assert.ok(app.textAt('the demo has no agent accounts'));
+  }
+  app.closeOverlay();
+  app.render();
+  assert.ok(!app.textAt('System ▾'));
+  assert.ok(!app.textAt('Profile:'));
+  assert.ok(!app.textAt('Accounts ▾'));
+  assert.ok(!app.textAt('claude: System'));
+  app.destroy();
 });

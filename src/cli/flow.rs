@@ -29,7 +29,7 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
             if run.issue.key.is_some() {
                 client::use_issues()?;
             }
-            let profile = super::accounts::profile_arg(run.profile)?;
+            let (profile, accounts) = super::accounts::profile_arg(run.profile)?;
             let request = control::FlowRun {
                 name: run.name,
                 prompt: read_prompt(run.prompt, run.prompt_file)?.unwrap_or_default(),
@@ -39,6 +39,7 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
                 source: run.issue.source,
                 focus: run.create.focus,
                 profile,
+                accounts,
             };
             let value = ask("flow run", control::Command::FlowRun(request))?;
             if run.create.print.json {

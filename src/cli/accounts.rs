@@ -1,24 +1,41 @@
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::io::{self, IsTerminal as _};
 
-use super::args::accounts::{AccountAction, ProfileAction, ProfileArg};
+use super::args::accounts::{AccountAction, AccountRenameArgs, ProfileAction, ProfileArg};
 use super::{print_json, print_out};
 use crate::client::{self, answer, ask, confirm};
 use crate::control::{self, AccountsInfo, Command};
 use crate::error::{Error, Result};
 
-pub(super) fn profile_arg(arg: ProfileArg) -> Result<Option<String>> {
+pub(super) fn profile_arg(arg: ProfileArg) -> Result<(Option<String>, BTreeMap<String, String>)> {
     if arg.profile.is_some() {
         client::use_accounts()?;
     }
-    Ok(arg.profile)
+    Ok((arg.profile, account_choices(arg.accounts)?))
+}
+
+pub(super) fn account_choices(given: Vec<(String, String)>) -> Result<BTreeMap<String, String>> {
+    let mut accounts = BTreeMap::new();
+    for (agent, account) in given {
+        if accounts.insert(agent.clone(), account).is_some() {
+            return Err(Error::WrongUsage(format!("--account names {agent} twice")));
+        }
+    }
+    if !accounts.is_empty() {
+        client::use_account_switch()?;
+    }
+    Ok(accounts)
 }
 
 pub(super) fn account(action: AccountAction) -> Result<()> {
     match action {
-        AccountAction::List(print) => {
-            let value = ask("account-list", Command::AccountList(control::AccountList {}))?;
-            if print.json {
+        AccountAction::List(list) => {
+            if list.check {
+                client::use_account_login()?;
+            }
+            let value = ask("account-list", Command::AccountList(control::AccountList { check: list.check }))?;
+            if list.print.json {
                 return print_json(&value);
             }
             print_out(&accounts_text(&answer(value)?))
@@ -46,7 +63,8 @@ pub(super) fn account(action: AccountAction) -> Result<()> {
             print_out(&(text + "\n"))
         }
         AccountAction::Remove(remove) => {
-            let info: AccountsInfo = answer(ask("account-list", Command::AccountList(control::AccountList {}))?)?;
+            let info: AccountsInfo =
+                answer(ask("account-list", Command::AccountList(control::AccountList::default()))?)?;
             let Some(path) = path_of(&info, &remove.provider, &remove.name) else {
                 return Err(Error::Control(format!(
                     "there is no {} account `{}`; `cornercase account list` lists them",
@@ -70,6 +88,37 @@ pub(super) fn account(action: AccountAction) -> Result<()> {
             ask("account-remove", Command::AccountRemove(request))?;
             print_out(&format!("removed the {} account {}\n", remove.provider, remove.name))
         }
+        AccountAction::Rename(rename) => {
+            let (account, label) = rename_target(&rename)?;
+            client::use_account_switch()?;
+            let json = rename.print.json;
+            let request = control::AccountRename { provider: rename.provider, account, label };
+            switched(ask("account-rename", Command::AccountRename(request))?, json)
+        }
+        AccountAction::Use(chosen) => {
+            client::use_account_switch()?;
+            let request =
+                control::AccountUse { provider: chosen.provider, account: chosen.account.unwrap_or_default() };
+            switched(ask("account-use", Command::AccountUse(request))?, chosen.print.json)
+        }
+    }
+}
+
+fn switched(value: serde_json::Value, json: bool) -> Result<()> {
+    if json {
+        return print_json(&value);
+    }
+    print_out(&accounts_text(&answer(value)?))
+}
+
+pub(super) fn rename_target(rename: &AccountRenameArgs) -> Result<(String, String)> {
+    let names = rename.names.as_slice();
+    match (rename.system, rename.clear, names) {
+        (true, true, []) => Ok((String::new(), String::new())),
+        (true, false, [label]) => Ok((String::new(), label.clone())),
+        (false, true, [account]) => Ok((account.clone(), String::new())),
+        (false, false, [account, label]) => Ok((account.clone(), label.clone())),
+        _ => Err(Error::WrongUsage("give ACCOUNT LABEL, --system LABEL, ACCOUNT --clear or --system --clear".into())),
     }
 }
 
@@ -105,16 +154,27 @@ fn path_of(info: &AccountsInfo, provider: &str, name: &str) -> Option<String> {
 
 pub(crate) fn accounts_text(info: &AccountsInfo) -> String {
     let mut text = String::new();
+    if !info.tokens.is_empty() {
+        let _ = writeln!(text, "set in the server, and they win over the accounts: {}", info.tokens.join(", "));
+    }
     for provider in &info.providers {
         let _ = writeln!(text, "{}  {}", provider.title, provider.env);
-        if provider.accounts.is_empty() {
+        let label = |label: &str| if label.is_empty() { String::new() } else { format!("  called {label}") };
+        let used = |name: &str| if provider.active == name { "  (in use)" } else { "" };
+        if provider.accounts.is_empty() && provider.system_label.is_empty() {
             let _ = writeln!(text, "  no accounts");
+        } else {
+            let _ = writeln!(text, "  system{}{}", label(&provider.system_label), used(""));
         }
         for account in &provider.accounts {
-            let _ = write!(text, "  {}  {}", account.name, account.path.display());
+            let _ = write!(text, "  {}{}  {}", account.name, label(&account.label), account.path.display());
+            if let Some(login) = &account.login {
+                let _ = write!(text, "  {}", login.text());
+            }
             if !account.unshared.is_empty() {
                 let _ = write!(text, "  (not shared: {})", account.unshared.join(", "));
             }
+            text.push_str(used(&account.name));
             text.push('\n');
         }
     }

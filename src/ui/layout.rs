@@ -95,6 +95,7 @@ pub struct Areas {
     pub todo_button: Rect,
     pub(crate) files_button: Rect,
     pub(crate) tab_bar: Rect,
+    pub(crate) accounts: Rect,
 }
 
 impl Areas {
@@ -141,6 +142,7 @@ impl Areas {
         if !shown || self.changes.is_empty() {
             return self;
         }
+        let area = Rect { height: area.height.saturating_sub(self.accounts.height), ..area };
         Self { changes: area, changes_border: Rect::default(), ..self }
     }
 
@@ -234,6 +236,19 @@ pub fn layout(area: Rect, widths: Widths) -> Areas {
 
 pub fn layout_with(area: Rect, widths: Widths, changes: bool, sidebar: Sidebar) -> Areas {
     full_layout(area, widths, changes, sidebar, false, false)
+}
+
+pub(crate) fn window_layout(area: Rect, accounts: bool, layout: impl FnOnce(Rect) -> Areas) -> Areas {
+    let (main, bar) = status_split(area, accounts);
+    Areas { accounts: bar, ..layout(main) }
+}
+
+pub(crate) fn status_split(area: Rect, shown: bool) -> (Rect, Rect) {
+    if !shown || area.height < 3 {
+        return (area, Rect::default());
+    }
+    let height = area.height - 2;
+    (Rect { height, ..area }, Rect { y: area.y + height, height: 2, ..area })
 }
 
 pub(crate) fn full_layout(
@@ -491,6 +506,7 @@ fn compact_layout(area: Rect, changes: bool, agents: bool) -> Areas {
         todo_button,
         files_button,
         tab_bar: Rect::default(),
+        accounts: Rect::default(),
     }
 }
 

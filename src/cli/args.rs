@@ -112,7 +112,7 @@ pub(crate) enum Control {
         about = "Start a coding agent in a new tab, give it a prompt, and print its pane's id",
         after_help = START_HELP
     )]
-    Start(StartArgs),
+    Start(Box<StartArgs>),
     #[command(about = "Paste text into a pane, and press Enter with --enter", after_help = SEND_HELP)]
     Send(SendArgs),
     #[command(about = "Press keys in a pane", after_help = KEYS_HELP)]

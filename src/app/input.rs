@@ -317,13 +317,19 @@ impl App {
     fn footer_mouse(&mut self, areas: &ui::Areas, pos: Position, left: bool) -> bool {
         let update = self.update_label().is_some_and(|label| ui::update_button(areas.settings, &label).contains(pos));
         let remote = self.remote_button().is_some_and(|on| ui::remote_button(areas.usage, on).contains(pos));
-        let hit = update || remote || [areas.quit, areas.usage, areas.settings].iter().any(|r| r.contains(pos));
+        let pill = ui::account_pill_hit(areas, &self.account_pills(), pos);
+        let hit = update
+            || remote
+            || pill.is_some()
+            || [areas.quit, areas.usage, areas.settings].iter().any(|r| r.contains(pos));
         if hit && left {
             self.nav = None;
             if update {
                 self.open_update();
             } else if remote {
                 self.open_remote_menu(pos);
+            } else if let Some(index) = pill {
+                self.open_pill_menu(index, pos);
             } else if areas.quit.contains(pos) {
                 self.outbox.detach = true;
             } else if areas.usage.contains(pos) {

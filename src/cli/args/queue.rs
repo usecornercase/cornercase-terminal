@@ -48,6 +48,14 @@ pub(crate) struct QueueAdd {
     pub(crate) worktree: Option<String>,
     #[arg(long, help = "Entry and tab name")]
     pub(crate) name: Option<String>,
+    #[arg(
+        long = "account",
+        value_name = "AGENT=ACCOUNT",
+        value_parser = super::accounts::choice,
+        help = "Start that agent with this account; AGENT= is its system login. Give it once per agent [default: the \
+                accounts chosen when it starts]"
+    )]
+    pub(crate) accounts: Vec<(String, String)>,
     #[command(flatten)]
     pub(crate) print: Print,
 }

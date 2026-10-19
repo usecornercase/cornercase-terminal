@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use ratatui::layout::Rect;
 
 use super::App;
+use super::event::Start;
 use crate::accounts::{self, Accounts};
 use crate::agents::Known;
 use crate::control;
@@ -36,7 +37,7 @@ impl App {
     }
 
     pub(super) fn active_accounts(&self) -> Accounts {
-        self.config.active_profile().map(|(_, chosen)| Accounts::of(&self.accounts_dir, chosen)).unwrap_or_default()
+        Accounts::of(&self.accounts_dir, self.config.selected_accounts())
     }
 
     pub(super) fn pane_env(&self, id: u64, run: Option<&Path>, accounts: &Accounts) -> Vec<(String, String)> {
@@ -146,11 +147,19 @@ impl App {
 
     pub(super) fn add_tab(&mut self, p: usize, w: usize, area: Rect) -> Result<()> {
         let t = self.push_tab(p, w, area, None)?;
+        self.show_tab(p, w, t);
+        Ok(())
+    }
+
+    pub(super) fn show_tab(&mut self, p: usize, w: usize, t: usize) {
         let project = &mut self.projects[p];
         project.workspaces[w].active = t;
         project.active = w;
         self.active = p;
-        Ok(())
+    }
+
+    pub(super) fn start_accounts(&self, start: Option<&Start>) -> Accounts {
+        start.and_then(|start| start.accounts.clone()).unwrap_or_else(|| self.active_accounts())
     }
 
     pub(super) fn push_tab(&mut self, p: usize, w: usize, area: Rect, name: Option<String>) -> Result<usize> {

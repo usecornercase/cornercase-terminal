@@ -21,6 +21,20 @@ pub(super) fn with_agents(scripts: &[(&str, &str)]) -> (App, Receiver<AppEvent>,
     (app, rx, dir)
 }
 
+pub(super) fn with_claude_accounts(dir: &TempDir) -> (App, Receiver<AppEvent>, TempDir) {
+    let claude = format!(
+        "echo run >> \"$0.runs\"\necho \"${{CLAUDE_CONFIG_DIR:-system}}\" >> \"$0.homes\"\nread -r a\nread -r b\necho '{ANSWER}'"
+    );
+    let (mut app, rx, scripts) = with_agents(&[(agents::Known::Claude.name(), &claude)]);
+    app.set_accounts_dir(dir.path());
+    for name in ["home", "work"] {
+        crate::accounts::add(dir.path(), agents::Known::Claude, name, None).expect("an account");
+    }
+    app.config.profiles.insert("Work".into(), std::collections::BTreeMap::from([("claude".into(), "work".into())]));
+    app.config.profile = "Work".into();
+    (app, rx, scripts)
+}
+
 fn with_claude(script: &str) -> (App, Receiver<AppEvent>, TempDir) {
     with_agents(&[(agents::Known::Claude.name(), script)])
 }
@@ -147,14 +161,16 @@ fn a_claude_that_hangs_shows_usage_unavailable() {
 #[test]
 fn reopening_while_loading_starts_no_second_probe() {
     let (mut app, rx, dir) = with_claude("echo run >> \"$(dirname \"$0\")/runs\"\nexec sleep 30");
-    app.usage_timeout = Duration::from_millis(300);
+    app.usage_timeout = Duration::from_secs(3);
+    let runs = dir.path().join("runs");
     click(&mut app, areas().usage.as_position());
     app.switch_usage(usage::Page::Limits);
+    wait_until("the probe runs", || runs.exists());
     send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
     click(&mut app, areas().usage.as_position());
     app.switch_usage(usage::Page::Limits);
     pump_until(&mut app, &rx, "the probe times out", |a| !errors(a).is_empty());
-    let runs = std::fs::read_to_string(dir.path().join("runs")).expect("the probe ran");
+    let runs = std::fs::read_to_string(runs).expect("the probe ran");
     assert_eq!(runs.lines().count(), 1);
 }
 
@@ -172,4 +188,18 @@ fn done_and_escape_close_it(#[case] button: bool) {
         send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
     }
     assert!(app.overlay.is_none());
+}
+
+#[test]
+fn each_account_has_a_section_and_the_active_one_is_marked() {
+    let accounts = TempDir::new();
+    let (mut app, rx, _dir) = with_claude_accounts(&accounts);
+    app.open_usage();
+    app.switch_usage(usage::Page::Limits);
+    pump_until(&mut app, &rx, "every account answers", |a| windows(a).len() == 3);
+    assert_eq!(
+        titles(&app),
+        ["Claude Code · System · max plan", "Claude Code · home · max plan", "● Claude Code · work · max plan"]
+    );
+    insta::assert_snapshot!(render(&mut app, AREA).backend());
 }

@@ -16,6 +16,7 @@ const HEIGHT: u16 = 23;
 const WHERE: u16 = 8;
 const OPEN_IN: u16 = 10;
 const AGENT: u16 = 12;
+const ACCOUNT: u16 = LABEL + COMBO + 2;
 const MODE: u16 = 14;
 const NOTICE: u16 = 16;
 const COMBO: u16 = 18;
@@ -76,6 +77,7 @@ pub(crate) fn rect(screen: Rect, form: &Form, control: Control) -> Rect {
             cell(screen, OPEN_IN, LABEL + COMBO + 1, rest(screen, LABEL + COMBO + 1).min(WIDE - COMBO - 1))
         }
         Control::Agent => cell(screen, AGENT, LABEL, COMBO),
+        Control::Account => cell(screen, AGENT, ACCOUNT + LABEL, COMBO),
         Control::Mode => cell(screen, MODE, LABEL, COMBO),
     }
 }
@@ -181,6 +183,9 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
     {
         f.render_widget(Paragraph::new(Span::styled(label, dim)), cell(screen, at, 0, LABEL));
     }
+    if controls.contains(&Control::Account) {
+        f.render_widget(Paragraph::new(Span::styled("Account", dim)), cell(screen, AGENT, ACCOUNT, LABEL));
+    }
     if !controls.contains(&Control::OpenIn) {
         let only = cell(screen, OPEN_IN, LABEL + 1, rest(screen, LABEL + 1));
         f.render_widget(Paragraph::new(Span::styled(crate::queue::form::OPEN_IN[0], dim)), only);
@@ -194,7 +199,12 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
             let placeholder = if *control == Control::Branch { "branch name" } else { "" };
             draw_editor(f, r, text(screen, form, *control), editor, focused, placeholder, view);
         } else if let Some(choices) = form.combo_of(*control) {
-            let empty = if *control == Control::Place { placeholder } else { "" };
+            let gone = form.account.as_ref().and_then(|account| account.missing()).map(|name| format!("{name} (gone)"));
+            let empty = match control {
+                Control::Place => placeholder,
+                Control::Account => gone.as_deref().unwrap_or_default(),
+                _ => "",
+            };
             combo::draw_field(f, view, r, choices, empty, form.focus == *control && !form.busy);
         }
     }

@@ -175,6 +175,8 @@ pub(crate) struct AccountHome {
     pub(crate) links: &'static [&'static str],
     pub(crate) remove: &'static [&'static str],
     pub(crate) login: &'static [&'static str],
+    pub(crate) status: Option<&'static [&'static str]>,
+    pub(crate) tokens: &'static [&'static str],
 }
 
 impl AccountHome {

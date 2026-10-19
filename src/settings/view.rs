@@ -162,6 +162,9 @@ impl Settings {
             Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),
             Row::Bot(via) | Row::Chat(via) => self.messenger_row(row, *via),
             Row::Plugin(_) | Row::NoPlugins => self.plugin_row(row),
+            Row::ServerTokens | Row::Account(..) | Row::AddAccount(_) | Row::System(_) | Row::RenameAccount(..) => {
+                self.account_row(row)
+            }
         };
         RowText { label, value, note, dangerous }
     }
@@ -239,6 +242,11 @@ impl Settings {
             Row::SoundDone => format!("sound when it finishes ({SOUND_FILE_NOTE})"),
             Row::Kind(kind) => format!("{kind} extra arguments"),
             Row::Bot(via) => via.token_field().to_string(),
+            Row::AddAccount(kind) => format!("name of the new {} account, such as work", kind.name()),
+            Row::RenameAccount(kind, name) if name.is_empty() => {
+                format!("name of {}'s own login, such as work (empty is System)", kind.name())
+            }
+            Row::RenameAccount(kind, name) => format!("name of the {} account {name} (empty is {name})", kind.name()),
             _ => String::new(),
         }
     }
@@ -283,6 +291,8 @@ impl Settings {
                 "enter saves · esc cancels".into()
             } else if self.pick.is_some() {
                 "enter picks · type to filter · esc goes back".into()
+            } else if self.page == Page::Accounts {
+                "enter uses an account for new tabs · backspace removes it · open tabs keep theirs".into()
             } else if self.page == Page::Plugins {
                 "plugins run as you and can do what you can; what they ask for is shown, not enforced".into()
             } else if self.page == Page::Issues {

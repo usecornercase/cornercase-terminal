@@ -3,6 +3,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::Clear;
 
+mod accounts_bar;
 mod activity;
 mod agents_section;
 pub(crate) mod changes;
@@ -32,6 +33,9 @@ mod widgets;
 mod widths;
 mod workspaces;
 
+#[cfg(test)]
+pub(crate) use accounts_bar::pills as pill_rects;
+pub(crate) use accounts_bar::{Pill as AccountPill, hit as account_pill_hit};
 #[cfg(test)]
 pub(crate) use activity::items as activity_items;
 pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as activity_hit};
@@ -76,9 +80,11 @@ pub(crate) use dialog::settings::{
     SettingsLine, line_rect, pick_list_in, settings_body, settings_done, settings_edit, settings_lines, settings_moves,
     settings_remove, settings_restart, settings_row, settings_scroll, settings_tabs,
 };
-pub(crate) use dialog::start_flow::{Shape as StartShape, StartFlow, StartHit, start_hit, start_preview, start_prompt};
+pub(crate) use dialog::start_flow::{
+    AccountField as StartAccount, Shape as StartShape, StartFlow, StartHit, start_hit, start_preview, start_prompt,
+};
 #[cfg(test)]
-pub(crate) use dialog::start_flow::{start_buttons, start_list};
+pub(crate) use dialog::start_flow::{start_account, start_account_list, start_buttons, start_list};
 pub(crate) use dialog::update::{Update, update_buttons, update_extra, update_notes, update_scroll};
 #[cfg(test)]
 pub(crate) use dialog::usage::usage_area;
@@ -87,7 +93,7 @@ pub(crate) use dialog::{CANCEL_LABEL, Note, Overlay};
 pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
 pub(crate) use icons::glyphs;
 pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, layout, layout_with};
-pub(crate) use layout::{Nav, full_layout};
+pub(crate) use layout::{Nav, full_layout, status_split, window_layout};
 pub(crate) use pane::{PaneBand, TabView, held_notice, resume_notice, scrollback_badge};
 pub(crate) use remote_access::{RemoteAccess, button as remote_button, done as remote_done};
 pub use rows::row_close_button;
@@ -179,6 +185,7 @@ pub(crate) struct View<'a> {
     pub(crate) nav: Option<Nav>,
     pub(crate) update: Option<String>,
     pub(crate) remote: Option<bool>,
+    pub(crate) accounts: Vec<AccountPill>,
     pub(crate) changes: Option<changes::View>,
     pub(crate) changes_button: Option<ChangesButton>,
     pub(crate) todo: Option<todo::View>,
@@ -318,7 +325,9 @@ fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
 pub(crate) fn draw(f: &mut Frame, view: &View) {
     let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some() || view.flow.is_some();
     let full = view.files.as_ref().is_some_and(files::View::full_screen);
-    let areas = full_layout(f.area(), view.widths, panel, view.sidebar, view.agents.is_some(), view.icons)
+    let (agents, icons) = (view.agents.is_some(), view.icons);
+    let columns = |main| full_layout(main, view.widths, panel, view.sidebar, agents, icons);
+    let areas = window_layout(f.area(), !view.accounts.is_empty(), columns)
         .with_tab_bar(view.tab_bar.is_some())
         .with_full_screen(full, f.area())
         .shown(view.nav);
@@ -339,6 +348,7 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
             (None, None, None, None) => {}
         }
     }
+    accounts_bar::draw(f, view, &areas);
     if !full {
         activity::draw_tooltip(f, view, areas.activity);
     }

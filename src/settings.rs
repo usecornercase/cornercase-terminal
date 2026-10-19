@@ -1,10 +1,12 @@
 use std::path::PathBuf;
 
-use crate::agents;
+use crate::agents::{self, Known};
 use crate::config::{Config, DEFAULT_ISSUE_TABS};
 use crate::issues::{Account, Secret, Source};
 use crate::list::Search;
 use crate::messenger::Via;
+
+pub(crate) use self::accounts::{Listed, Order};
 
 pub(crate) const DONE: &str = "done";
 pub(crate) const RESTART: &str = "restart";
@@ -73,6 +75,11 @@ pub(crate) enum Row {
     Chat(Via),
     Plugin(String),
     NoPlugins,
+    ServerTokens,
+    Account(Known, String),
+    AddAccount(Known),
+    System(Known),
+    RenameAccount(Known, String),
 }
 
 impl Row {
@@ -102,10 +109,14 @@ impl Row {
             | Self::SoundSubagents
             | Self::Updates
             | Self::StarPrompt
-            | Self::Prefix => "",
+            | Self::Prefix
+            | Self::ServerTokens => "",
             Self::Remote | Self::Browsers => "Browser",
             Self::Bot(via) | Self::Chat(via) => via.name(),
             Self::Plugin(_) | Self::NoPlugins => "Installed",
+            Self::Account(kind, _) | Self::AddAccount(kind) | Self::System(kind) | Self::RenameAccount(kind, _) => {
+                kind.title()
+            }
             Self::Token(Source::Jira) | Self::JiraSite | Self::JiraEmail | Self::JiraJql => "Jira",
             Self::Token(Source::Plane) | Self::PlaneWorkspace | Self::PlaneUrl | Self::PlaneFilter => "Plane",
             Self::Token(Source::Asana) | Self::AsanaWorkspace | Self::AsanaProjects => "Asana",
@@ -157,6 +168,11 @@ impl Row {
             | Self::Prefix => Page::Ui,
             Self::Remote | Self::Browsers | Self::Bot(_) | Self::Chat(_) => Page::Remote,
             Self::Plugin(_) | Self::NoPlugins => Page::Plugins,
+            Self::ServerTokens
+            | Self::Account(..)
+            | Self::AddAccount(_)
+            | Self::System(_)
+            | Self::RenameAccount(..) => Page::Accounts,
         }
     }
 }
@@ -166,6 +182,9 @@ pub(crate) enum Detail {
     Model,
     Context,
     Memory,
+    Account,
+    AccountSwitcher,
+    AccountPicker,
 }
 
 impl Detail {
@@ -174,6 +193,9 @@ impl Detail {
             Self::Model => config.model,
             Self::Context => config.context,
             Self::Memory => config.memory,
+            Self::Account => config.account_mark,
+            Self::AccountSwitcher => config.account_switcher,
+            Self::AccountPicker => config.account_picker,
         }
     }
 
@@ -182,6 +204,9 @@ impl Detail {
             Self::Model => &mut config.model,
             Self::Context => &mut config.context,
             Self::Memory => &mut config.memory,
+            Self::Account => &mut config.account_mark,
+            Self::AccountSwitcher => &mut config.account_switcher,
+            Self::AccountPicker => &mut config.account_picker,
         }
     }
 
@@ -190,6 +215,9 @@ impl Detail {
             Self::Model => "model",
             Self::Context => "context",
             Self::Memory => "memory",
+            Self::Account => "account",
+            Self::AccountSwitcher => "account switcher",
+            Self::AccountPicker => "account picker",
         }
     }
 
@@ -198,6 +226,9 @@ impl Detail {
             Self::Model => "under an agent's tab, such as Opus 5.5",
             Self::Context => "how full its context is, such as 23%",
             Self::Memory => "the RAM its processes use, such as 1.2 GB",
+            Self::Account => "the account an agent uses; only once you add an account",
+            Self::AccountSwitcher => "a bar at the bottom; only once you add an account",
+            Self::AccountPicker => "in issues, flows and the queue; only once you add an account",
         }
     }
 
@@ -209,6 +240,12 @@ impl Detail {
             (Self::Context, false) => "agent tabs hide their context",
             (Self::Memory, true) => "tabs show the memory they use",
             (Self::Memory, false) => "tabs hide their memory",
+            (Self::Account, true) => "agent tabs show their account",
+            (Self::Account, false) => "agent tabs hide their account",
+            (Self::AccountSwitcher, true) => "each agent's account shows at the bottom",
+            (Self::AccountSwitcher, false) => "the account switcher is hidden",
+            (Self::AccountPicker, true) => "starting an agent asks for its account",
+            (Self::AccountPicker, false) => "starting an agent uses its chosen account",
         }
     }
 }
@@ -218,6 +255,7 @@ pub(crate) enum Page {
     #[default]
     Worktrees,
     Agents,
+    Accounts,
     Flows,
     Issues,
     Ui,
@@ -226,13 +264,22 @@ pub(crate) enum Page {
 }
 
 impl Page {
-    pub(crate) const ALL: [Self; 7] =
-        [Self::Worktrees, Self::Agents, Self::Flows, Self::Issues, Self::Ui, Self::Remote, Self::Plugins];
+    pub(crate) const ALL: [Self; 8] = [
+        Self::Worktrees,
+        Self::Agents,
+        Self::Accounts,
+        Self::Flows,
+        Self::Issues,
+        Self::Ui,
+        Self::Remote,
+        Self::Plugins,
+    ];
 
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Worktrees => "Worktrees",
             Self::Agents => "Agents",
+            Self::Accounts => "Accounts",
             Self::Flows => "Flows",
             Self::Issues => "Issues",
             Self::Ui => "UI",
@@ -272,6 +319,8 @@ pub(crate) enum Action {
     Pair(Via),
     ForgetChat(Via),
     Plugin(String, bool),
+    Accounts(Order),
+    RemoveAccount(Known, String),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -341,6 +390,7 @@ pub(crate) struct Settings {
     pub(crate) browsers: usize,
     pub(crate) messengers: [Messenger; Via::ALL.len()],
     pub(crate) plugins: Vec<PluginRow>,
+    pub(crate) accounts: Listed,
 }
 
 impl Settings {
@@ -364,6 +414,7 @@ impl Settings {
             browsers: 0,
             messengers: Default::default(),
             plugins: Vec::new(),
+            accounts: Listed::default(),
         }
     }
 
@@ -432,6 +483,7 @@ impl Settings {
         rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
         rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust, Row::Resume, Row::KeepAwake]);
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
+        rows.extend(self.account_rows());
         rows.extend([
             Row::AddAgent,
             Row::Sidebar,
@@ -445,6 +497,9 @@ impl Settings {
             Row::Detail(Detail::Model),
             Row::Detail(Detail::Context),
             Row::Detail(Detail::Memory),
+            Row::Detail(Detail::Account),
+            Row::Detail(Detail::AccountSwitcher),
+            Row::Detail(Detail::AccountPicker),
             Row::Notifications,
             Row::Sound,
             Row::SoundWaiting,
@@ -516,6 +571,7 @@ impl Settings {
     }
 }
 
+mod accounts;
 mod activate;
 mod apply;
 mod describe;
@@ -525,4 +581,4 @@ mod trackers;
 mod view;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

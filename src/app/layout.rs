@@ -38,9 +38,19 @@ impl App {
 
     pub(super) fn layout(&self, area: Rect) -> ui::Areas {
         let (panel, sidebar) = (self.panel_shown(), self.sidebar());
-        ui::full_layout(area, self.widths, panel, sidebar, self.config.agents_section, self.config.icon_bar)
+        let (agents, icons) = (self.config.agents_section, self.config.icon_bar);
+        let columns = |main| ui::full_layout(main, self.widths, panel, sidebar, agents, icons);
+        ui::window_layout(area, self.status_bar(), columns)
             .with_tab_bar(config::Tabs::from_setting(&self.config.tabs) == config::Tabs::Top)
             .with_full_screen(self.file_full_screen(), area)
+    }
+
+    pub(super) fn status_bar(&self) -> bool {
+        !self.account_pills().is_empty()
+    }
+
+    pub(super) fn above_status_bar(&self, area: Rect) -> Rect {
+        ui::status_split(area, self.status_bar()).0
     }
 
     pub(super) fn panel_shown(&self) -> bool {

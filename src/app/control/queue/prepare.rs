@@ -77,6 +77,12 @@ impl App {
             prompt,
             submit: add.submit.unwrap_or_else(|| old.is_none_or(|entry| entry.task.submit)),
             place,
+            accounts: old
+                .map(|entry| entry.task.accounts.clone())
+                .unwrap_or_default()
+                .into_iter()
+                .chain(add.accounts.clone())
+                .collect(),
         })
     }
 

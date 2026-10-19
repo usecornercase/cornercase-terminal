@@ -144,12 +144,12 @@ impl App {
         flow: Flow,
         task: String,
         branch: String,
-        focus: bool,
+        accounts: Accounts,
         area: Rect,
     ) -> Result<(), String> {
         let branch = if branch.trim() == flows::branch(&task) { String::new() } else { branch };
-        let accounts = self.active_accounts();
-        let starting = Starting { flow, task, branch, focus, note: None, trees: Vec::new(), parent: None, accounts };
+        let starting =
+            Starting { flow, task, branch, focus: true, note: None, trees: Vec::new(), parent: None, accounts };
         self.run_flow(None, project, starting, area).map(drop).map_err(String::from)
     }
 

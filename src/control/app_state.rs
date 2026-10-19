@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -21,6 +22,8 @@ pub(crate) struct AppState {
     pub(crate) keep_awake: Option<KeepAwake>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) profile: Option<String>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) accounts: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

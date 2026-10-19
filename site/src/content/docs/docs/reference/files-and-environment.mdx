@@ -152,7 +152,7 @@ They are set only for the project's [setup and teardown](../../guides/worktrees/
 | `CORNERCASE_PANE` | The pane's id | Tells the [commands for scripts and agents](../../guides/scripts-and-agents/#ids-and-where-commands-act) which pane they run in. |
 | `CORNERCASE_SERVER` | A token of the server | Lets a server tell its own panes from another server's, which have the same ids. |
 | `CORNERCASE_RUN_DIR` | The run's folder | Only in the panes of a [flow](../../guides/flows/#the-runs-folder) run: where the team keeps its files. |
-| `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GEMINI_CLI_HOME` | An account's folder | Only for the agents the pane's [profile](../../guides/accounts/) gives an account; without one the server's value passes through. A pane with a Claude Code account also loses `CLAUDE_SECURESTORAGE_CONFIG_DIR`, which would point Claude Code at another login. |
+| `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GEMINI_CLI_HOME` | An account's folder | Only for the agents that start with an [account](../../guides/accounts/) in that pane (the one in use, a profile's, or one picked for that start); without one the server's value passes through. A pane with a Claude Code account also loses `CLAUDE_SECURESTORAGE_CONFIG_DIR`, which would point Claude Code at another login. |
 
 ### Removed by cornercase in every pane
 

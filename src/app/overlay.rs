@@ -12,6 +12,7 @@ use super::settings_dialog::settings_view;
 use super::start_flow_dialog::start_flow_view;
 use super::update_dialog::UpdateStep;
 use super::worktrees::Check;
+use crate::agents::Known;
 use crate::changes::BranchPicker;
 use crate::error::Result;
 use crate::flows::dialog::Dialog;
@@ -63,6 +64,7 @@ pub(super) enum Overlay {
     ClosePane { pane: u64 },
     NewWorkspace { project: u64, input: String, worktree: Option<bool>, error: Option<String>, creating: bool },
     Settings(Box<Settings>),
+    RemoveAccount { kind: Known, name: String },
     Flows { dialog: Box<Dialog>, back: Option<Box<Overlay>> },
     StartFlow { start: Box<Start>, back: Option<Box<Overlay>> },
     ProjectSettings(Box<crate::project::settings::Form>),
@@ -96,6 +98,7 @@ impl Overlay {
             Self::ClosePane { .. } => "close pane",
             Self::NewWorkspace { .. } => "new workspace",
             Self::Settings(_) => "settings",
+            Self::RemoveAccount { .. } => "remove account",
             Self::Flows { .. } => "flows",
             Self::StartFlow { .. } => "start flow",
             Self::ProjectSettings(_) => "project settings",
@@ -139,7 +142,7 @@ impl Overlay {
             Self::Rename { .. } => RENAME_SUBMIT,
             Self::RemoveWorkspace { lock: Some(_), .. } => UNLOCK_SUBMIT,
             Self::RemoveWorkspace { check: Check::Changed, .. } => FORCE_REMOVE_SUBMIT,
-            Self::RemoveWorkspace { .. } => REMOVE_SUBMIT,
+            Self::RemoveWorkspace { .. } | Self::RemoveAccount { .. } => REMOVE_SUBMIT,
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
             Self::CloseProject { .. }
             | Self::CloseWorkspace { .. }
@@ -218,6 +221,7 @@ impl App {
                 | Overlay::NewWorkspace { .. }
                 | Overlay::Rename { .. }
                 | Overlay::RemoveWorkspace { .. }
+                | Overlay::RemoveAccount { .. }
                 | Overlay::DeleteGroup { .. }
                 | Overlay::CloseProject { .. }
                 | Overlay::CloseWorkspace { .. }
@@ -239,6 +243,7 @@ impl App {
                 self.new_workspace_view(*project, input, *worktree, error.as_deref(), *creating)
             }
             Overlay::Settings(s) => ui::Overlay::Settings(settings_view(s)),
+            Overlay::RemoveAccount { kind, name } => Self::remove_account_view(*kind, name),
             Overlay::Flows { dialog, .. } => flows_view(dialog, area),
             Overlay::StartFlow { start, .. } => start_flow_view(start, area),
             Overlay::ProjectSettings(form) => super::project_settings_dialog::project_settings_overlay(form),

@@ -117,6 +117,9 @@ impl Settings {
             Row::Bot(_) => self.start_edit(row, String::new()),
             Row::Chat(via) => Action::Pair(via),
             Row::Plugin(_) | Row::NoPlugins => self.switch_plugin(row),
+            Row::ServerTokens | Row::Account(..) | Row::AddAccount(_) | Row::System(_) | Row::RenameAccount(..) => {
+                self.activate_account(row)
+            }
             Row::AddAgent => {
                 let listed = self.listed_kinds();
                 let items: Vec<PickItem> = agents::kinds(&self.config)
@@ -194,7 +197,7 @@ impl Settings {
         Action::None
     }
 
-    fn start_edit(&mut self, row: Row, input: String) -> Action {
+    pub(super) fn start_edit(&mut self, row: Row, input: String) -> Action {
         self.edit = Some(Edit { row, input, error: None });
         Action::None
     }
@@ -214,7 +217,7 @@ impl Settings {
         Action::None
     }
 
-    fn open_pick(&mut self, row: Row, items: Vec<PickItem>) {
+    pub(super) fn open_pick(&mut self, row: Row, items: Vec<PickItem>) {
         let current = match &row {
             Row::DefaultAgent => Some(self.config.agent.clone()),
             Row::Sidebar => Some(Sidebar::from_setting(&self.config.sidebar).id().to_string()),

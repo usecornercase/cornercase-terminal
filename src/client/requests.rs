@@ -51,6 +51,14 @@ pub(crate) fn use_accounts() -> Result<()> {
     require("accounts", "has no account profiles")
 }
 
+pub(crate) fn use_account_login() -> Result<()> {
+    require("account-login", "cannot check the accounts' logins")
+}
+
+pub(crate) fn use_account_switch() -> Result<()> {
+    require("account-switch", "cannot rename or switch accounts")
+}
+
 fn require(feature: &str, lacks: &str) -> Result<()> {
     require_on(connect(), feature, lacks)
 }

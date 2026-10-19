@@ -168,13 +168,14 @@ fn run_control(command: Control) -> Result<bool> {
             say(value, new.create.print.json, |done| id(done.ids.workspace))
         }
         Control::NewTab(new) => {
-            let profile = accounts::profile_arg(new.profile)?;
+            let (profile, accounts) = accounts::profile_arg(new.profile)?;
             let request = control::NewTab {
                 workspace: workspace("new-tab", new.workspace, new.worktree.as_deref())?,
                 name: new.name,
                 command: typed(&new.command),
                 focus: new.create.focus,
                 profile,
+                accounts,
             };
             say(ask("new-tab", control::Command::NewTab(request))?, new.create.print.json, |done| id(done.ids.pane))
         }
@@ -187,7 +188,7 @@ fn run_control(command: Control) -> Result<bool> {
             };
             say(ask("split", control::Command::Split(request))?, split.create.print.json, |done| id(done.ids.pane))
         }
-        Control::Start(start) => run_start(start),
+        Control::Start(start) => run_start(*start),
         Control::Queue(queue) => queue::run(queue.action),
         Control::Send(send) => {
             let text = send.text.map(|text| if text == "-" { stdin() } else { Ok(text) }).transpose()?;
@@ -384,7 +385,7 @@ fn run_start(start: StartArgs) -> Result<()> {
     if start.issue.key.is_some() {
         client::use_issues()?;
     }
-    let profile = accounts::profile_arg(start.profile)?;
+    let (profile, accounts) = accounts::profile_arg(start.profile)?;
     let request = control::Start {
         agent: start.agent,
         model: start.model,
@@ -402,6 +403,7 @@ fn run_start(start: StartArgs) -> Result<()> {
         timeout: start.timeout,
         focus: start.create.focus,
         profile,
+        accounts,
     };
     let command = if name == "start" { control::Command::Start(request) } else { control::Command::StartWith(request) };
     say(ask(name, command)?, start.create.print.json, |done| {

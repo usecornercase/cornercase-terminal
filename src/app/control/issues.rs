@@ -534,7 +534,7 @@ impl App {
         };
         let p = self.projects.project_index(project).ok_or_else(|| none("project", project))?;
         let (flow, note) = super::flow::pick(&self.flow_listing(Some(&self.projects[p].path)), &run.name)?;
-        let accounts = self.profile_accounts(run.profile.as_deref())?;
+        let accounts = self.requested_accounts(run.profile.as_deref(), &run.accounts)?;
         let mut starting = Starting {
             flow,
             task: "issue".into(),

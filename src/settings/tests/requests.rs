@@ -51,7 +51,7 @@ mod describing {
                     | Row::AddAgent
                     | Row::Plugin(_)
                     | Row::NoPlugins
-            );
+            ) || row.page() == Page::Accounts;
             assert!(skipped || rows.contains(&row), "{row:?} has no key");
         }
     }
@@ -123,6 +123,25 @@ mod applying {
         let (s, result) = apply("counts", &json!(false));
         assert_eq!(result, Ok(Some("rows no longer show how many they hold".into())));
         assert!(!s.config.counts);
+    }
+
+    #[test]
+    fn the_account_switches_are_on_the_ui_page_and_turn_off() {
+        for (key, notice) in [
+            ("account_mark", "agent tabs hide their account"),
+            ("account_switcher", "the account switcher is hidden"),
+            ("account_picker", "starting an agent uses its chosen account"),
+        ] {
+            let setting = full().describe().into_iter().find(|setting| setting.key == key).expect("a setting");
+            assert_eq!(
+                (setting.page.as_str(), setting.kind, setting.value),
+                ("UI", Kind::Switch, json!(true)),
+                "{key}"
+            );
+            assert!(setting.note.contains("only once you add an account"), "{key}");
+            let (s, result) = apply(key, &json!(false));
+            assert_eq!((result, value_of(&s, key)), (Ok(Some(notice.into())), json!(false)), "{key}");
+        }
     }
 
     #[test]

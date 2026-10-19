@@ -193,6 +193,7 @@ impl App {
             Some(overlay) if overlay.busy() => {}
             Some(Overlay::Queue(_)) => self.close_queue_form(false),
             Some(Overlay::Flows { .. }) => self.close_flows(),
+            Some(Overlay::RemoveAccount { .. }) => self.open_settings(),
             _ => self.overlay = None,
         }
     }
@@ -211,6 +212,7 @@ impl App {
                 self.confirm_removal(project, workspace, check, lock.is_some())
             }
             Overlay::DeleteGroup { group } => self.submit_delete_group(group),
+            Overlay::RemoveAccount { kind, name } => Some(self.submit_remove_account(kind, &name)),
             Overlay::CloseProject { project } => self.submit_close_project(project),
             Overlay::CloseWorkspace { project, workspace } => self.submit_close_workspace(project, workspace),
             Overlay::CloseTab { project, workspace, tab } => self.submit_close_tab(project, workspace, tab),

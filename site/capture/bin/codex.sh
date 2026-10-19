@@ -7,6 +7,7 @@ if [ "${1:-}" = app-server ]; then
   printf '\n'
   exec sleep 30
 fi
+CODEX_HOME=${CODEX_HOME:-$HOME/.codex}
 state="$CODEX_HOME/app-server-daemon"
 mkdir -p "$state" "$CODEX_HOME/sessions/2026/10/08"
 rollout="$CODEX_HOME/sessions/2026/10/08/rollout-2026-10-08T10-00-00-019a1234-5678-7000-8000-000000000001.jsonl"

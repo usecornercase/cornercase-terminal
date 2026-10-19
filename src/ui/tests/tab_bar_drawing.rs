@@ -1,7 +1,8 @@
 use super::*;
 
 fn with_bar() -> View<'static> {
-    let details = Details { model: Some("Opus 5.5".into()), percent: Some(15), subagents: 0, memory: None };
+    let details =
+        Details { model: Some("Opus 5.5".into()), percent: Some(15), subagents: 0, memory: None, account: None };
     let claude = TabEntry { status: Some(Status::Working), details: details.clone(), ..TabEntry::from("claude") };
     let tabs = vec![claude, TabEntry::from("zsh")];
     View {
@@ -86,4 +87,14 @@ fn without_a_project_there_is_no_bar() {
     let v = View { has_project: false, ..with_bar() };
     let t = render(&v);
     assert_eq!(row_text(&t, bar()).trim(), "");
+}
+
+#[test]
+fn the_details_row_names_the_account() {
+    let mut v = with_bar();
+    v.tab_bar.as_mut().expect("a bar").details.account = Some("work".into());
+    let t = render(&v);
+    let r = bar();
+    assert_eq!(row_text(&t, Rect { y: r.y + 1, height: 1, ..r }).trim(), "Opus 5.5 · work · 15%");
+    insta::assert_snapshot!(t.backend());
 }

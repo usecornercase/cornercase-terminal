@@ -16,6 +16,7 @@ cc_reset() {
   CC_BLOG_COMMAND='git log --oneline'
   CC_ISSUE_482=0
   CC_WINDOW="'$CC_BIN'"
+  CC_HOMES=1
   export CC_ISSUE_482
 }
 
@@ -73,9 +74,11 @@ cc_start() {
   CC_WHERE='SSH_CONNECTION=capture'
   [ -z "${CC_LOCAL:-}" ] || CC_WHERE='DISPLAY=:0'
   CC_LOCAL=
+  homes=
+  [ -z "$CC_HOMES" ] || homes="CLAUDE_CONFIG_DIR='$CC_HOME/.claude' CODEX_HOME='$CC_HOME/.codex'"
   tmux -L "$CC_TMUX" kill-server 2>/dev/null || true
   tmux -L "$CC_TMUX" -f /dev/null new-session -d -x "$1" -y "$2" -c "${3:-$CC_HOME}" \
-    "env -i HOME='$CC_HOME' CORNERCASE_SOCKET='$CC_RUN/server.sock' PATH='$CC_CAPTURE/bin:/usr/bin:/bin:/usr/sbin:/sbin' TERM=xterm-256color LANG=en_US.UTF-8 SHELL=/bin/bash $CC_WHERE PS1='\\W ❯ ' BASH_SILENCE_DEPRECATION_WARNING=1 XDG_CONFIG_HOME='$CC_HOME/.config' XDG_STATE_HOME='$CC_HOME/.local/state' XDG_RUNTIME_DIR='$CC_RUN' CLAUDE_CONFIG_DIR='$CC_HOME/.claude' CODEX_HOME='$CC_HOME/.codex' CC_CAPTURE='$CC_CAPTURE' CC_HOME='$CC_HOME' CC_DATA='$CC_DATA' $CC_WINDOW"
+    "env -i HOME='$CC_HOME' CORNERCASE_SOCKET='$CC_RUN/server.sock' PATH='$CC_CAPTURE/bin:/usr/bin:/bin:/usr/sbin:/sbin' TERM=xterm-256color LANG=en_US.UTF-8 SHELL=/bin/bash $CC_WHERE PS1='\\W ❯ ' BASH_SILENCE_DEPRECATION_WARNING=1 XDG_CONFIG_HOME='$CC_HOME/.config' XDG_STATE_HOME='$CC_HOME/.local/state' XDG_RUNTIME_DIR='$CC_RUN' $homes CC_CAPTURE='$CC_CAPTURE' CC_HOME='$CC_HOME' CC_DATA='$CC_DATA' $CC_WINDOW"
   tmux -L "$CC_TMUX" set-option -g status off
   tmux -L "$CC_TMUX" resize-window -x "$1" -y "$2"
 }

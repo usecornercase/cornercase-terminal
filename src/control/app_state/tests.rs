@@ -19,6 +19,7 @@ fn snapshot() -> Snapshot<AppState> {
             prompt: "Fix the login".into(),
             submit: true,
             place: Place { project: "/home/me/web-shop".into(), ..Place::default() },
+            accounts: BTreeMap::new(),
         },
         state: State::Pending,
     };
@@ -55,6 +56,7 @@ fn snapshot() -> Snapshot<AppState> {
             },
             keep_awake: Some(KeepAwake { held: true, by: Some("caffeinate".into()), unavailable: None }),
             profile: None,
+            accounts: BTreeMap::new(),
         },
     }
 }

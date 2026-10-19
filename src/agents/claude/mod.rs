@@ -5,6 +5,7 @@ use std::time::SystemTime;
 use serde::Deserialize;
 
 use self::transcript::{Limits, Running, Subagents, Transcript, live, transcript_path};
+use crate::accounts::login::{Login, State};
 use crate::agents::activity::{Activity, BRAILLE, glyph};
 use crate::agents::context::counting::Ledger;
 use crate::agents::context::discovery::Job;
@@ -30,6 +31,8 @@ pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = Some(c
     ],
     remove: &["CLAUDE_SECURESTORAGE_CONFIG_DIR"],
     login: &["auth", "login"],
+    status: Some(&["auth", "status", "--json"]),
+    tokens: &["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"],
 });
 pub(in crate::agents) const TITLE: &str = "Claude Code";
 pub(in crate::agents) const COMMAND: &str = "claude";
@@ -62,6 +65,34 @@ pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = Some(cra
     no_limits: "no plan limits for this account (API key, Bedrock or Vertex)",
 });
 pub(in crate::agents) const UNFOUND: &str = "Claude Code has not said yet which conversation it is in";
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Status {
+    logged_in: bool,
+    #[serde(default)]
+    email: Option<String>,
+    #[serde(default)]
+    subscription_type: Option<String>,
+}
+
+pub(in crate::agents) fn login(text: &str) -> Login {
+    let start = text.find('{').unwrap_or(0);
+    let Ok(status) = serde_json::Deserializer::from_str(&text[start..]).into_iter::<Status>().next().transpose() else {
+        return Login::default();
+    };
+    match status {
+        Some(Status { logged_in: true, email, subscription_type }) => {
+            Login { state: State::SignedIn, email: clean(email), plan: clean(subscription_type) }
+        }
+        Some(_) => Login::of(State::SignedOut),
+        None => Login::default(),
+    }
+}
+
+fn clean(text: Option<String>) -> Option<String> {
+    text.map(|text| crate::text::one_line(&text)).filter(|text| !text.is_empty())
+}
 
 pub(in crate::agents) fn normalized(args: &[String]) -> Vec<String> {
     args.to_vec()

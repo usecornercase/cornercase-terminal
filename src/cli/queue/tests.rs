@@ -34,3 +34,35 @@ fn lists_entries_from_another_release_without_failing() {
          6 1970-01-01 00:00  odd · \n"
     );
 }
+
+#[test]
+fn an_agent_named_twice_is_wrong_usage_before_asking_the_server() {
+    let args = ["add", "--at", "in 2h", "--prompt", "fix", "--account", "claude=home", "--account", "claude=work"];
+    assert!(matches!(run(action(&args)), Err(Error::WrongUsage(_))));
+}
+
+#[test]
+fn lists_the_accounts_an_entry_starts_with() {
+    let value = json!({"entries": [
+        {"id": 1, "at": 0, "label": "fix", "agent": "claude", "state": "pending", "accounts": {"claude": "home"}},
+        {"id": 2, "at": 0, "label": "docs", "agent": "codex", "state": "pending", "accounts": {"codex": ""}},
+    ]});
+
+    assert_eq!(
+        lines(&value, "UTC"),
+        "1 1970-01-01 00:00 pending fix · claude · claude: home\n\
+         2 1970-01-01 00:00 pending docs · codex · codex: System\n"
+    );
+}
+
+#[test]
+fn takes_accounts_for_add_and_edit() {
+    for args in [
+        &["add", "--at", "in 2h", "--prompt", "fix", "--account", "claude=home", "--account", "codex="][..],
+        &["edit", "3", "--account", "claude="],
+    ] {
+        let (QueueAction::Add(add) | QueueAction::Edit { add, .. }) = action(args) else { panic!("{args:?}") };
+        assert!(!add.accounts.is_empty(), "{args:?}");
+    }
+    assert!(Cli::try_parse_from(["cornercase", "queue", "edit", "3", "--account", "claude"]).is_err());
+}

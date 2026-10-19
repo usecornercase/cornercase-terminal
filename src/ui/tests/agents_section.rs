@@ -26,7 +26,7 @@ fn agent(status: Status, agent: &str, project: &str, workspace: Option<&str>, de
 }
 
 fn details(model: &str, percent: Option<u16>) -> Details {
-    Details { model: Some(model.into()), percent, subagents: 0, memory: None }
+    Details { model: Some(model.into()), percent, subagents: 0, memory: None, account: None }
 }
 
 fn entries() -> Vec<AgentEntry> {
@@ -511,4 +511,14 @@ fn an_expanded_row_shows_no_count() {
 #[test]
 fn the_fold_target_is_the_lead_over_the_whole_row() {
     assert_eq!(agent_fold(Rect::new(0, 5, 30, 3), 1), Rect::new(0, 5, 4, 3));
+}
+
+#[test]
+fn renders_the_account_on_the_second_line() {
+    let mut rows = entries();
+    rows[0].details.account = Some("work".into());
+    let t = render_sized(&shown(Sidebar::SideBySide, rows), W, TALL.height);
+    let text: Vec<String> = (0..TALL.height).map(|y| row_text(&t, Rect::new(0, y, 32, 1))).collect();
+    assert!(text.iter().any(|line| line.contains("claude · ") && line.contains("work · 23%")), "{text:#?}");
+    insta::assert_snapshot!(t.backend());
 }

@@ -38,6 +38,10 @@ mod features {
     use super::*;
 
     fn offering(features: &[&str]) -> (Result<()>, Vec<String>) {
+        asking(features, "accounts", "has no account profiles")
+    }
+
+    fn asking(features: &[&str], feature: &str, lacks: &str) -> (Result<()>, Vec<String>) {
         let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
         let mut descriptor = control::contract::describe("boot", &[]);
         descriptor.features.retain(|feature| features.contains(&feature.as_str()));
@@ -51,7 +55,7 @@ mod features {
             asked
         });
 
-        let checked = require_on(Ok(ours), "accounts", "has no account profiles");
+        let checked = require_on(Ok(ours), feature, lacks);
 
         (checked, server.join().expect("the fake server"))
     }
@@ -76,5 +80,23 @@ mod features {
 
         checked.expect("accepted");
         assert_eq!(asked.len(), 1);
+    }
+
+    #[test]
+    fn a_server_without_login_checks_is_refused_before_the_list_is_asked_for() {
+        let (checked, asked) = asking(&["accounts"], "account-login", "cannot check the accounts' logins");
+
+        let error = checked.expect_err("refused");
+        assert!(error.to_string().contains("cannot check the accounts' logins"), "{error}");
+        assert_eq!(asked.len(), 1, "{asked:?}");
+    }
+
+    #[test]
+    fn a_server_without_account_switching_is_refused_before_the_change_is_sent() {
+        let (checked, asked) = asking(&["accounts"], "account-switch", "cannot rename or switch accounts");
+
+        let error = checked.expect_err("refused");
+        assert!(error.to_string().contains("cannot rename or switch accounts"), "{error}");
+        assert_eq!(asked.len(), 1, "{asked:?}");
     }
 }

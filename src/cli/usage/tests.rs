@@ -80,3 +80,25 @@ fn the_flags_parse() {
         other => panic!("not usage: {other:?}"),
     }
 }
+
+#[test]
+fn an_account_is_named_and_the_active_one_marked() {
+    let plan = |account: Option<&str>, label: Option<&str>, active: bool| {
+        PlanInfo { title: "Claude Code".into(), ..PlanInfo::default() }.for_account(
+            account,
+            label.map(str::to_string),
+            active,
+        )
+    };
+    let plans = Plans {
+        agents: vec![
+            plan(None, Some("System"), false),
+            plan(Some("work"), None, false),
+            plan(Some("home"), Some("Personal"), true),
+        ],
+    };
+    assert_eq!(
+        text(&plans, clock()),
+        "Claude Code · System\n  not asked yet\n\nClaude Code · work\n  not asked yet\n\n● Claude Code · Personal\n  not asked yet\n"
+    );
+}

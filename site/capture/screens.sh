@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-full files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
+CC_SCREENS="first-run sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-full files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
 
 pane_in() {
   cc status --json | node -e '
@@ -743,6 +743,64 @@ screen_usage() {
   cc_wait 'max plan'
   cc_wait 'plus plan'
   cc_shot usage
+}
+
+accounts_knobs() {
+  CC_HOMES=
+}
+
+accounts_add() {
+  cc account add claude personal >/dev/null
+  cc account rename claude --system work >/dev/null
+  cc_wait ' claude: work ▾'
+}
+
+screen_usage_accounts() {
+  accounts_knobs
+  cc_s1_at 110 48
+  accounts_add
+  cc_click 'Usage'
+  cc_click 'Limits'
+  cc_wait '● Claude Code · work' 15
+  cc_wait 'pro plan' 15
+  cc_wait 'plus plan' 15
+  cc_shot usage-accounts
+}
+
+screen_settings_accounts() {
+  accounts_knobs
+  cc_s1
+  accounts_add
+  cc_click 'Settings'
+  cc_wait 'Worktrees'
+  cc_click 'Accounts'
+  cc_wait 'signed in as ana@acme.dev' 15
+  cc_wait 'signed in as ana@example.com' 15
+  cc_hover '╭─ Settings'
+  cc_shot settings-accounts
+}
+
+screen_account_pills() {
+  accounts_knobs
+  cc_s1
+  accounts_add
+  cc_click ' claude: work ▾'
+  cc_wait 'manage accounts'
+  cc_hover 'manage accounts'
+  cc_shot account-pills
+}
+
+screen_tab_account() {
+  accounts_knobs
+  cc_s1
+  accounts_add
+  cc account use claude personal >/dev/null
+  cc_wait ' claude: personal ▾'
+  cc new-tab --workspace "$(ws_in feat-dark-mode)" -- CC_AGENT_STATE=busy CC_AGENT_TASK=dark CC_AGENT_PERCENT=12 claude >/dev/null
+  cc_click 'feat/dark-mode'
+  cc_wait '· personal · 12%'
+  cc_hover 'Workspaces'
+  cc_shot tab-account
 }
 
 screen_keys_menu() {

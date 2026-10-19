@@ -39,6 +39,7 @@ impl App {
                 pane.and_then(|t| t.context.context()),
                 pane.and_then(|t| t.memory.bytes()),
                 pane.map_or(0, |t| t.context.subagents()),
+                pane.and_then(|t| self.pane_account(t)),
             ),
             scroll: self.scroll.tab_bar,
         }

@@ -67,6 +67,7 @@ fn view(names: &[&str]) -> View<'static> {
         flow_run: false,
         todo_dot: true,
         todo_pending: false,
+        accounts: Vec::new(),
         files: None,
         attention: None,
         spin: None,
@@ -146,6 +147,7 @@ fn close_x() -> u16 {
     list().right() - 2
 }
 
+mod accounts_bar;
 mod activity;
 mod agent_status;
 mod agents_section;

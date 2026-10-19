@@ -123,6 +123,7 @@ pub(crate) const DEFAULT_GLAB: &str = "glab";
 pub(crate) const DEFAULT_ISSUE_TABS: [&str; 8] =
     ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"];
 pub(crate) const DEFAULT_FETCH_MINUTES: u64 = 5;
+pub(crate) const SYSTEM_ACCOUNT: &str = "System";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -191,6 +192,9 @@ pub(crate) struct Config {
     pub(crate) model: bool,
     pub(crate) context: bool,
     pub(crate) memory: bool,
+    pub(crate) account_mark: bool,
+    pub(crate) account_switcher: bool,
+    pub(crate) account_picker: bool,
     pub(crate) desktop_notifications: String,
     pub(crate) sound: bool,
     pub(crate) sound_waiting: String,
@@ -205,6 +209,10 @@ pub(crate) struct Config {
     pub(crate) profiles: BTreeMap<String, BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub(crate) profile: String,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) account_names: BTreeMap<String, BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) active_accounts: BTreeMap<String, String>,
 }
 
 impl Default for Config {
@@ -249,6 +257,9 @@ impl Default for Config {
             model: true,
             context: true,
             memory: false,
+            account_mark: true,
+            account_switcher: true,
+            account_picker: true,
             desktop_notifications: notify::AUTO.into(),
             sound: true,
             sound_waiting: String::new(),
@@ -261,6 +272,8 @@ impl Default for Config {
             projects: BTreeMap::new(),
             profiles: BTreeMap::new(),
             profile: String::new(),
+            account_names: BTreeMap::new(),
+            active_accounts: BTreeMap::new(),
         }
     }
 }
@@ -304,6 +317,51 @@ impl Config {
 
     pub(crate) fn active_profile(&self) -> Option<(&str, &BTreeMap<String, String>)> {
         self.profiles.get_key_value(&self.profile).map(|(name, accounts)| (name.as_str(), accounts))
+    }
+
+    pub(crate) fn selected_accounts(&self) -> &BTreeMap<String, String> {
+        self.active_profile().map_or(&self.active_accounts, |(_, chosen)| chosen)
+    }
+
+    pub(crate) fn account_label<'a>(&'a self, kind: &str, name: &'a str) -> &'a str {
+        match self.account_names.get(kind).and_then(|labels| labels.get(name)) {
+            Some(label) => label,
+            None if name.is_empty() => SYSTEM_ACCOUNT,
+            None => name,
+        }
+    }
+
+    pub(crate) fn account_taken(&self, kind: &str, name: &str) -> String {
+        match self.account_label(kind, name) {
+            label if label == name => format!("the {kind} account `{name}` already exists"),
+            label => format!("the {kind} account `{name}` already exists (shown as `{label}`)"),
+        }
+    }
+
+    pub(crate) fn label_taken(&self, kind: &str, label: &str, accounts: &[String], except: &str) -> Option<String> {
+        std::iter::once("")
+            .chain(accounts.iter().map(String::as_str))
+            .filter(|other| *other != except)
+            .map(|other| self.account_label(kind, other).to_string())
+            .find(|taken| taken.eq_ignore_ascii_case(label))
+            .map(|taken| format!("another {kind} account is already called `{taken}`"))
+    }
+
+    pub(crate) fn forget_account(&mut self, kind: &str, name: &str) {
+        for chosen in self.profiles.values_mut() {
+            if chosen.get(kind).is_some_and(|used| used == name) {
+                chosen.remove(kind);
+            }
+        }
+        if self.active_accounts.get(kind).is_some_and(|used| used == name) {
+            self.active_accounts.remove(kind);
+        }
+        if let Some(labels) = self.account_names.get_mut(kind) {
+            labels.remove(name);
+            if labels.is_empty() {
+                self.account_names.remove(kind);
+            }
+        }
     }
 
     pub(crate) fn unknown_profile(&self) -> Option<&str> {
