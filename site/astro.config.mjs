@@ -17,7 +17,7 @@ export default defineConfig({
       title: 'cornercase',
       description:
         'A terminal multiplexer for projects, git worktrees and coding agents, driven by the mouse.',
-      logo: { src: './src/assets/logo.svg', alt: '' },
+      logo: { light: './src/assets/logo-light.svg', dark: './src/assets/logo-dark.svg', alt: '' },
       favicon: '/favicon.svg',
       social: [
         { icon: 'github', label: 'GitHub', href: repo },
@@ -27,22 +27,21 @@ export default defineConfig({
       expressiveCode: {
         themes: ['catppuccin-mocha', 'catppuccin-latte'],
         styleOverrides: {
-          borderRadius: '0.7rem',
+          borderRadius: '0',
           codeFontFamily: "'JetBrains Mono Variable', ui-monospace, monospace",
-          uiFontFamily: "'Geist Variable', ui-sans-serif, system-ui, sans-serif",
-          codeBackground: ({ theme }) => (theme.type === 'dark' ? '#0e0d14' : '#fbfaf7'),
+          uiFontFamily: "'Archivo Variable', ui-sans-serif, system-ui, sans-serif",
+          codeBackground: ({ theme }) => (theme.type === 'dark' ? '#111317' : '#f1f2f4'),
           frames: {
-            editorTabBarBackground: ({ theme }) => (theme.type === 'dark' ? '#15131f' : '#f1eff7'),
-            terminalTitlebarBackground: ({ theme }) => (theme.type === 'dark' ? '#15131f' : '#f1eff7'),
-            terminalBackground: ({ theme }) => (theme.type === 'dark' ? '#0e0d14' : '#fbfaf7'),
+            editorTabBarBackground: ({ theme }) => (theme.type === 'dark' ? '#16181d' : '#e6e8eb'),
+            terminalTitlebarBackground: ({ theme }) => (theme.type === 'dark' ? '#16181d' : '#e6e8eb'),
+            terminalBackground: ({ theme }) => (theme.type === 'dark' ? '#111317' : '#f1f2f4'),
             frameBoxShadowCssValue: 'none',
           },
         },
       },
       customCss: [
-        '@fontsource-variable/geist',
+        '@fontsource-variable/archivo/wdth.css',
         '@fontsource-variable/jetbrains-mono',
-        '@fontsource-variable/bricolage-grotesque',
         './src/styles/docs.css',
       ],
       head: [

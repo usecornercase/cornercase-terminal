@@ -1,6 +1,7 @@
 ---
 import { home, localeOf, words } from '../../i18n';
 import InstallBox from './InstallBox.astro';
+import Mark from './Mark.astro';
 
 interface Props {
   standalone?: boolean;
@@ -53,15 +54,20 @@ const columns: [string, [string, string, string?][]][] = [
   <div class="wrap">
     {
       !standalone && (
-      <div class="cta reveal">
-        <h2>{t.footer.cta[0]}<br />{t.footer.cta[1]}<span>{t.footer.cta[2]}</span>{t.footer.cta[3]}</h2>
-        <div class="get">
-          <InstallBox />
+      <div class="cta">
+        <div class="say reveal">
+          <h2>{t.footer.cta[0]}<br />{t.footer.cta[1]}{t.footer.cta[2]}{t.footer.cta[3]}</h2>
+          <div class="get">
+            <InstallBox />
+          </div>
+          <div class="actions">
+            <a class="btn btn-ghost" href={`${base}/docs/first-steps/`} hreflang={docsLang}>{t.footer.first}</a>
+            <a class="btn btn-ghost" href={repo}>{t.footer.star}</a>
+            <a class="btn btn-ghost" href={discord}>{t.footer.discord}</a>
+          </div>
         </div>
-        <div class="actions">
-          <a class="btn btn-ghost" href={`${base}/docs/first-steps/`} hreflang={docsLang}>{t.footer.first}</a>
-          <a class="btn btn-ghost" href={repo}>{t.footer.star}</a>
-          <a class="btn btn-ghost" href={discord}>{t.footer.discord}</a>
+        <div class="poster reveal" style="--i: 2" aria-hidden="true">
+          <Mark size={480} />
         </div>
       </div>
       )
@@ -69,7 +75,7 @@ const columns: [string, [string, string, string?][]][] = [
     <div class="grid">
       <div class="brand">
         <a class="logo" href={home(locale)} aria-label={t.home}>
-          <svg viewBox="0 0 4 4" aria-hidden="true" shape-rendering="crispEdges"><path d="M1 0h3v1H1zM0 1h1v3H0z"></path></svg>
+          <Mark size={24} />
           cornercase
         </a>
         <p>{t.footer.tagline}</p>
@@ -99,17 +105,13 @@ const columns: [string, [string, string, string?][]][] = [
 <style>
   .footer {
     position: relative;
-    padding: clamp(80px, 10vw, 140px) 0 40px;
-    border-top: 1px solid var(--line);
-    background:
-      radial-gradient(800px 360px at 50% 0%, rgb(135 95 255 / 0.16), transparent 70%),
-      var(--bg);
+    padding: clamp(80px, 10vw, 152px) 0 40px;
+    background: var(--bg);
     overflow: hidden;
   }
 
   .footer.standalone {
     padding-top: 0;
-    background: var(--bg);
   }
 
   .footer.standalone .grid {
@@ -117,80 +119,76 @@ const columns: [string, [string, string, string?][]][] = [
   }
 
   .cta {
-    text-align: center;
+    display: grid;
+    grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+    gap: clamp(32px, 5vw, 80px);
+    align-items: center;
   }
 
   .cta h2 {
     margin: 0;
-    font-family: var(--font-display);
+    font-stretch: var(--wide);
     font-weight: 780;
-    font-size: clamp(42px, 7vw, 96px);
-    line-height: 0.95;
+    font-size: clamp(38px, 5.2vw, 76px);
+    line-height: 0.98;
     letter-spacing: -0.045em;
   }
 
-  .cta h2 span {
-    color: transparent;
-    background: linear-gradient(100deg, var(--purple-2) 10%, #d8cbff 55%, var(--cyan) 110%);
-    -webkit-background-clip: text;
-    background-clip: text;
-  }
-
   .get {
-    display: flex;
-    justify-content: center;
-    margin-top: 34px;
-    text-align: left;
+    margin-top: clamp(28px, 3vw, 40px);
   }
 
   .actions {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
-    gap: 12px;
-    margin-top: 22px;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .poster {
+    justify-self: end;
+    width: min(100%, 340px);
+    color: var(--text);
+  }
+
+  .poster :global(.mark) {
+    width: 100%;
+    height: auto;
   }
 
   .grid {
     display: grid;
     grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr));
     gap: 32px;
-    margin-top: clamp(80px, 9vw, 130px);
+    margin-top: clamp(96px, 10vw, 152px);
     padding-top: 40px;
-    border-top: 1px solid var(--line);
+    border-top: 2px solid var(--text);
   }
 
   .logo {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
-    font-family: var(--font-mono);
-    font-weight: 700;
-    font-size: 16px;
+    gap: 11px;
+    color: var(--text);
+    font-stretch: var(--wide);
+    font-weight: 760;
+    font-size: 19px;
+    letter-spacing: -0.03em;
     text-decoration: none;
-  }
-
-  .logo svg {
-    width: 18px;
-    height: 18px;
-    fill: var(--purple);
   }
 
   .brand p {
     max-width: 320px;
-    margin: 14px 0 0;
-    color: var(--text-3);
-    font-size: 14.5px;
+    margin: 16px 0 0;
+    color: var(--text-2);
+    font-size: 15.5px;
   }
 
   h3 {
     margin: 0 0 14px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-3);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
   }
 
   ul {
@@ -205,12 +203,14 @@ const columns: [string, [string, string, string?][]][] = [
   .legal a {
     color: var(--text-2);
     text-decoration: none;
-    font-size: 14.5px;
+    font-size: 15px;
   }
 
   ul a:hover,
   .legal a:hover {
     color: var(--text);
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   .legal {
@@ -218,20 +218,28 @@ const columns: [string, [string, string, string?][]][] = [
     flex-wrap: wrap;
     justify-content: space-between;
     gap: 12px;
-    margin-top: 56px;
+    margin-top: 64px;
     padding-top: 22px;
     border-top: 1px solid var(--line);
-    font-size: 13px;
+    font-size: 13.5px;
     color: var(--text-3);
   }
 
   .legal a {
-    font-size: 13px;
+    font-size: 13.5px;
     text-decoration: underline;
     text-underline-offset: 3px;
   }
 
   @media (max-width: 860px) {
+    .cta {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .poster {
+      display: none;
+    }
+
     .grid {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }

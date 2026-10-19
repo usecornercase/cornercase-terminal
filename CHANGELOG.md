@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.156
+
+- **A new look.** cornercase's colour is now a cobalt blue instead of purple: the logo on the welcome screen, the `●` of an agent you marked for review, the groups of the keys menu, the end of a flow once it is reached, the card that asks for a star and the heatmap in Usage › Stats. Merged pull requests stay purple, as GitHub shows them. The website and the docs have the new look too, in light and dark.
+
 ## 0.12.155
 
 - **A message sent to an agent waits while you are typing to it.** When another agent or a script ran `cornercase send --enter` into the pane you were typing in, its text joined your half-written prompt and both went out as one, broken. Now `send` (and `todo send`) waits until you are done: while you have text in the input you have not sent, while you typed in the last 2 seconds, or while an earlier message to that pane has not gone out. Your prompt goes first and the message follows right after. It works for every agent cornercase runs and for plain shells.

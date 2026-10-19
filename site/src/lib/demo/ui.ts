@@ -112,7 +112,7 @@ const SPIN_EVERY = 100;
 const STATUS_ICONS: Record<Exclude<Status, 'working'>, Seg> = {
   idle: seg('○', { fg: 8 }),
   done: seg('✓', { fg: 2, add: BOLD }),
-  pending: seg('●', { fg: 99, add: BOLD }),
+  pending: seg('●', { fg: 27, add: BOLD }),
   failed: seg('!', { fg: 1, add: BOLD }),
   waiting: seg('!', { fg: 208, add: BOLD }),
 };
@@ -130,7 +130,7 @@ const tabIcon = (t: Tab, now: number | null): Seg => {
   const status = tabStatus(t);
   return status ? statusIcon(status, now) : tabRunning(t) ? PROGRAM_ICON : SHELL_ICON;
 };
-const BRAND = 99;
+const BRAND = 27;
 const UNDO = 'undo';
 const GO = 'go';
 const SEVERITY: Record<UsageWindow['severity'], number> = { normal: 2, warning: 208, critical: 1 };
@@ -310,7 +310,7 @@ export class Painter {
       [seg(NEW_BUTTON, CYAN), seg(WELCOME_HINT, DARK)],
     ];
     const size = Math.max(...LOGO.map(([c, k]) => [...c].length + [...k].length));
-    const logo: Line[] = LOGO.map(([c, k]) => [seg(c, { fg: BRAND }), seg(k, CYAN), seg(' '.repeat(size - [...c].length - [...k].length))]);
+    const logo: Line[] = LOGO.map(([c, k]) => [seg(c, { fg: BRAND }), seg(k), seg(' '.repeat(size - [...c].length - [...k].length))]);
     const all = [...logo, [], ...words];
     this.centered(area, all.length <= area.h ? all : words);
   }

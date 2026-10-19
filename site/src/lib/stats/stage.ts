@@ -6,7 +6,7 @@ import type { Face } from './ticket';
 type Ctx = CanvasRenderingContext2D;
 export interface Blur { pad: number; blur: number; colour: string; texel: number; at: (pose: Pose) => Matrix }
 export const SHADOW: Blur = { pad: 90, blur: 30, colour: 'rgba(3,2,8,0.8)', texel: 1, at: shadowMatrix };
-export const HALO: Blur = { pad: 220, blur: 90, colour: 'rgba(135,95,255,0.5)', texel: 0.5, at: haloMatrix };
+export const HALO: Blur = { pad: 220, blur: 90, colour: 'rgba(0,95,255,0.26)', texel: 0.5, at: haloMatrix };
 export const placed = (b: Blur, pose: Pose): Matrix => multiply(b.at(pose), translate(-b.pad, -b.pad));
 
 function canvas(w: number, h: number): [HTMLCanvasElement, Ctx] {
@@ -33,21 +33,7 @@ export function blurred(b: Blur): HTMLCanvasElement {
 }
 
 export function backdrop(ctx: Ctx, w: number, h: number): void {
-  ctx.fillStyle = '#07060b'; ctx.fillRect(0, 0, w, h);
-  const blob = (x: number, y: number, rx: number, ry: number, colour: string) => {
-    ctx.save(); ctx.translate(x, y); ctx.scale(rx / ry, 1);
-    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, ry); g.addColorStop(0, colour); g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.fillRect(-ry, -ry, ry * 2, ry * 2); ctx.restore();
-  };
-  blob(w * 0.16, h * 0.12, 620, 420, 'rgba(135,95,255,0.30)');
-  blob(w * 0.9, h * 0.32, 640, 430, 'rgba(69,217,232,0.12)');
-  blob(w * 0.52, h * 0.88, 820, 480, 'rgba(135,95,255,0.20)');
-  for (let y = 12; y < h; y += 24) for (let x = 12; x < w; x += 24) {
-    const dx = (x - w / 2) / (w * 0.62), dy = (y - h * 0.45) / (h * 0.7);
-    const fade = Math.max(0, 1 - Math.hypot(dx, dy));
-    if (fade <= 0) continue;
-    ctx.fillStyle = `rgba(255,255,255,${(0.09 * fade).toFixed(3)})`; ctx.beginPath(); ctx.arc(x, y, 1, 0, Math.PI * 2); ctx.fill();
-  }
+  ctx.fillStyle = '#0b0c0e'; ctx.fillRect(0, 0, w, h);
 }
 
 function affine(s: [number, number][], d: [number, number][]): [number, number, number, number, number, number] {

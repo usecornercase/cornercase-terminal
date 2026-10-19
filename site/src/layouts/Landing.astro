@@ -1,6 +1,5 @@
 ---
-import '@fontsource-variable/bricolage-grotesque';
-import '@fontsource-variable/geist';
+import '@fontsource-variable/archivo/wdth.css';
 import '@fontsource-variable/jetbrains-mono';
 import '../styles/landing.css';
 import { LOCALES, home, localeOf, locales, words } from '../i18n';
@@ -26,8 +25,9 @@ const canonical = new URL(Astro.url.pathname, Astro.site).toString();
     <link rel="alternate" hreflang="x-default" href={url('en')} />
     <link rel="icon" href={`${base}/favicon.svg`} type="image/svg+xml" />
     <link rel="sitemap" href={`${base}/sitemap-index.xml`} />
-    <meta name="theme-color" content="#07060b" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#f1f2f4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0c0e" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />

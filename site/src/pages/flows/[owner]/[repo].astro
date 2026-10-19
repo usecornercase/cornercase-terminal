@@ -28,7 +28,7 @@ const stages = flow.stages.map((stage) => {
     {flow.tags.length > 0 && <> · {flow.tags.join(', ')}</>}
   </p>
 
-  {flow.builtIn && <Aside type="note" title="Built in">{BUILT_IN_NOTE} <a href={`${base}docs/guides/flows/#the-built-in-flows`}>The built-in flows</a>.</Aside>}
+  {flow.builtIn && <Aside type="note" title="Built in">{BUILT_IN_NOTE}{' '}<a href={`${base}docs/guides/flows/#the-built-in-flows`}>The built-in flows</a>.</Aside>}
   {!flow.builtIn && <Aside type="caution" title="Nobody reviewed this flow">
     Its {everyone.length} agents run without asking for permission, and its prompts, below, tell them what to do on your machine. Read every prompt before you import it; what it does is your
     responsibility. <a href={`${base}docs/guides/flows/#trust-and-security`}>Trust and security</a>.
@@ -90,7 +90,7 @@ const stages = flow.stages.map((stage) => {
   }
   .diagram {
     background: #1a1b26;
-    border-radius: 0.7rem;
+    border-radius: 0;
     padding: 0.8rem 1rem;
     max-width: 34rem;
     line-height: 0;
@@ -102,7 +102,7 @@ const stages = flow.stages.map((stage) => {
   .code {
     background: var(--sl-color-black);
     border: 1px solid var(--sl-color-hairline);
-    border-radius: 0.7rem;
+    border-radius: 0;
     padding: 0.9rem 1.1rem;
     overflow-x: auto;
     font-size: var(--sl-text-sm);

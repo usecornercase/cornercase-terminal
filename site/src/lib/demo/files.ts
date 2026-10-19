@@ -620,7 +620,7 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
   const sel = viewer.selection && ordered(viewer.selection);
   const room = Math.max(0, Math.min(...buttons.map((b) => b.r.x)) - 1 - (inner.x + 1));
   const [a, b] = sel ?? [0, 0];
-  const options = pic ? described(pic) : !sel ? summary(viewer.path, text.length) : a === b ? [`line ${a}`, String(a)] : [`lines ${a}–${b}`, `${a}–${b}`];
+  const options = pic ? described(pic) : !sel ? summary(viewer.path, text.length) : a === b ? [`line ${a}`, String(a)] : [`lines ${a}-${b}`, `${a}-${b}`];
   const fit = options.find((o) => [...o].length <= room) ?? options[options.length - 1];
   p.span(inner.x + 1, info, truncateRight(fit, room), sel ? { fg: 6 } : DARK);
   for (const { action, r } of buttons) {

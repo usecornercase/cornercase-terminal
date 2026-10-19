@@ -1,6 +1,5 @@
 ---
-import '@fontsource-variable/bricolage-grotesque';
-import '@fontsource-variable/geist';
+import '@fontsource-variable/archivo/wdth.css';
 import '@fontsource-variable/jetbrains-mono';
 import '../../styles/landing.css';
 import { readFileSync } from 'node:fs';
@@ -34,8 +33,9 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     <meta name="description" content={description} />
     <link rel="canonical" href={new URL(`${base}plugins/`, origin)} />
     <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
-    <meta name="theme-color" content="#07060b" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#f1f2f4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0c0e" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="cornercase plugins" />
     <meta property="og:description" content={description} />
@@ -48,15 +48,13 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     <main id="main">
       <div class="wrap">
         <header class="intro">
-          <p class="eyebrow cmd-line" aria-hidden="true">$ cornercase plugin list</p>
           <h1>Extend your terminal.</h1>
           <p class="out">{headline(page.plugins, page.repos)}</p>
           <p class="lead">
             Small tools other people built on cornercase's commands. Install one with <code>cornercase plugin install</code>.
           </p>
           <p class="trust">
-            <span class="dot" aria-hidden="true"></span>
-            Listings aren't reviewed, so install at your own discretion.
+            Listings aren't reviewed, so install at your own discretion.{' '}
             <a href={`${guide}#trust-and-security`}>Trust guidance →</a>
           </p>
         </header>
@@ -66,7 +64,6 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
             <section class="shelf" id="shelf-trending" aria-labelledby="trending-title">
               <div class="shelf-head">
                 <div>
-                  <p class="eyebrow cmd-line" aria-hidden="true">$ sort --stars --since 7d</p>
                   <h2 id="trending-title">Rising this week</h2>
                 </div>
                 <button type="button" class="see" data-see="trending">see all →</button>
@@ -99,7 +96,6 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
             <section class="shelf" id="shelf-new" aria-labelledby="new-title">
               <div class="shelf-head">
                 <div>
-                  <p class="eyebrow cmd-line" aria-hidden="true">$ ls --newest</p>
                   <h2 id="new-title">Just landed</h2>
                 </div>
                 <button type="button" class="see" data-see="newest">see all →</button>
@@ -130,7 +126,6 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
             <section class="browse" aria-labelledby="browse-title">
               <div class="shelf-head">
                 <div>
-                  <p class="eyebrow cmd-line" aria-hidden="true">$ ls --all</p>
                   <h2 id="browse-title">Every plugin</h2>
                 </div>
               </div>
@@ -218,7 +213,6 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
         <section class="publish" aria-labelledby="publish-title">
           <div class="shelf-head">
             <div>
-              <p class="eyebrow cmd-line" aria-hidden="true">$ {topicCommand}</p>
               <h2 id="publish-title">{page.empty ? 'Publish the first one' : 'Publish yours'}</h2>
             </div>
           </div>
@@ -243,109 +237,88 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
 
 <style is:global>
   .plugins-page main {
-    padding: clamp(40px, 7vw, 84px) 0 clamp(56px, 8vw, 110px);
-  }
-  .plugins-page .eyebrow {
-    margin: 0 0 14px;
-    font-family: var(--font-mono);
-    font-size: 13px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--cyan);
+    padding: clamp(40px, 7vw, 88px) 0 clamp(56px, 8vw, 120px);
   }
   .plugins-page h1 {
     margin: 0;
-    font-family: var(--font-display);
-    font-weight: 750;
-    font-size: clamp(34px, 5.4vw, 60px);
-    line-height: 1.02;
-    letter-spacing: -0.035em;
+    font-stretch: var(--wide);
+    font-weight: 780;
+    font-size: clamp(36px, 5.6vw, 72px);
+    line-height: 1;
+    letter-spacing: -0.04em;
     text-wrap: balance;
   }
   .plugins-page .lead {
     max-width: 640px;
     margin: 18px 0 0;
-    font-size: clamp(16px, 1.4vw, 19px);
+    font-size: clamp(17px, 1.4vw, 19px);
     color: var(--text-2);
     text-wrap: pretty;
   }
   .plugins-page .lead code,
   .plugins-page .publish .after code {
     padding: 1px 6px;
-    border-radius: 6px;
-    background: rgb(255 255 255 / 0.07);
+    background: var(--surface-2);
     font-size: 0.88em;
     overflow-wrap: anywhere;
   }
   .plugins-page .out {
-    margin: 14px 0 0;
-    font-family: var(--font-mono);
-    font-size: 14px;
-    color: var(--text-3);
+    margin: 16px 0 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--brand-ink);
     overflow-wrap: anywhere;
   }
   .plugins-page .trust {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px 10px;
     margin: 20px 0 0;
-    font-size: 14.5px;
-    color: var(--text-3);
-  }
-  .plugins-page .trust .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--text-3);
+    max-width: 640px;
+    padding-left: 14px;
+    border-left: 3px solid var(--line-2);
+    font-size: 15.5px;
+    color: var(--text-2);
   }
   .plugins-page .trust a {
-    color: var(--purple-2);
+    color: var(--brand-ink);
+    font-weight: 600;
     text-decoration: none;
   }
   .plugins-page .trust a:hover {
     text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .plugins-page .shelf,
   .plugins-page .browse {
-    margin-top: clamp(44px, 6vw, 72px);
+    margin-top: clamp(56px, 7vw, 96px);
   }
   .plugins-page .shelf-head {
     display: flex;
     align-items: end;
     justify-content: space-between;
     gap: 16px;
-    margin-bottom: 18px;
+    margin-bottom: 20px;
   }
   .plugins-page h2 {
     margin: 0;
-    font-family: var(--font-display);
-    font-weight: 720;
-    font-size: clamp(24px, 3vw, 32px);
-    letter-spacing: -0.025em;
-  }
-  .plugins-page .cmd-line {
-    margin: 0 0 8px;
-    letter-spacing: 0.02em;
-    text-transform: none;
-    color: var(--text-3);
+    font-stretch: var(--wide);
+    font-weight: 760;
+    font-size: clamp(26px, 3vw, 38px);
+    letter-spacing: -0.03em;
   }
   .plugins-page .see,
   .plugins-page .more {
     border: 1px solid var(--line-2);
-    border-radius: 9px;
-    background: rgb(255 255 255 / 0.03);
-    color: var(--text-2);
+    background: transparent;
+    color: var(--text);
     font: inherit;
-    font-size: 14px;
-    padding: 6px 12px;
+    font-size: 14.5px;
+    font-weight: 600;
+    padding: 7px 14px;
     cursor: pointer;
     white-space: nowrap;
   }
   .plugins-page .see:hover,
   .plugins-page .more:hover {
-    color: var(--text);
-    border-color: rgb(168 141 255 / 0.6);
+    border-color: var(--text);
   }
   .plugins-page ul {
     list-style: none;
@@ -355,31 +328,27 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
   .plugins-page .trend-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
+    gap: 16px;
   }
   .plugins-page .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
-    gap: 14px;
+    gap: 16px;
   }
   .plugins-page .card {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
     min-width: 0;
-    padding: 16px 18px;
+    padding: 18px 20px;
     border: 1px solid var(--line);
-    border-radius: var(--radius);
-    background: var(--panel);
-    transition:
-      border-color 0.15s ease,
-      background-color 0.15s ease;
+    background: var(--surface);
+    transition: border-color 0.15s ease;
   }
   .plugins-page .card:hover,
   .plugins-page .card:focus-within,
   .plugins-page .row:hover {
-    border-color: rgb(168 141 255 / 0.5);
-    background: var(--panel-2);
+    border-color: var(--text-3);
   }
   .plugins-page .who {
     display: flex;
@@ -393,11 +362,9 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     flex: none;
     width: 32px;
     height: 32px;
-    border-radius: 8px;
     overflow: hidden;
-    background: var(--panel-2);
-    color: var(--purple-3);
-    font-family: var(--font-mono);
+    background: var(--surface-2);
+    color: var(--brand-ink);
     font-weight: 700;
     font-size: 15px;
   }
@@ -418,10 +385,11 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
   }
   .plugins-page .repo b {
     color: var(--text);
-    font-weight: 650;
+    font-weight: 700;
   }
   .plugins-page .repo:hover b {
-    color: var(--purple-3);
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .plugins-page .repo span[aria-hidden] {
     color: var(--text-3);
@@ -429,16 +397,16 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
   .plugins-page .badge {
     margin: 0;
     width: fit-content;
-    padding: 3px 10px;
-    border-radius: 999px;
-    background: rgb(88 230 160 / 0.12);
+    padding: 3px 9px;
+    background: color-mix(in srgb, var(--green) 14%, transparent);
     color: var(--green);
-    font-family: var(--font-mono);
-    font-size: 12.5px;
+    font-size: 13.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
   .plugins-page .desc {
     margin: 0;
-    font-size: 15px;
+    font-size: 15.5px;
     line-height: 1.5;
     color: var(--text-2);
     overflow-wrap: anywhere;
@@ -465,8 +433,7 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     gap: 14px;
     padding: 10px 16px;
     border: 1px solid var(--line);
-    border-radius: var(--radius);
-    background: var(--panel);
+    background: var(--surface);
   }
   .plugins-page .row .desc.line {
     overflow: hidden;
@@ -478,12 +445,12 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     align-items: center;
     gap: 14px;
     margin: 0;
-    font-size: 13.5px;
+    font-size: 14px;
     color: var(--text-3);
     white-space: nowrap;
   }
   .plugins-page .row .right time {
-    color: var(--purple-2);
+    color: var(--brand-ink);
   }
   .plugins-page .controls {
     display: flex;
@@ -502,7 +469,6 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     transform: translateY(-50%);
     padding: 0 6px;
     border: 1px solid var(--line-2);
-    border-radius: 5px;
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--text-3);
@@ -510,13 +476,16 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
   }
   .plugins-page .search input,
   .plugins-page .sort select {
-    height: 44px;
-    border: 1px solid var(--line-2);
-    border-radius: 11px;
-    background: var(--bg-2);
+    height: 46px;
+    border: 1px solid var(--line-field);
+    border-radius: 0;
+    background: var(--surface);
     color: var(--text);
     font: inherit;
-    font-size: 15px;
+    font-size: 16px;
+  }
+  .plugins-page .search input::placeholder {
+    color: var(--text-3);
   }
   .plugins-page .search input {
     width: 100%;
@@ -526,20 +495,16 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     display: flex;
     align-items: center;
     gap: 10px;
-    color: var(--text-3);
-    font-family: var(--font-mono);
-    font-size: 12.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    color: var(--text-2);
+    font-size: 15px;
+    font-weight: 600;
   }
   .plugins-page .sort select {
     padding: 0 12px;
-    text-transform: none;
-    letter-spacing: 0;
   }
   .plugins-page .line {
     margin: 14px 0 18px;
-    font-size: 14px;
+    font-size: 14.5px;
     color: var(--text-3);
   }
   .plugins-page .empty {
@@ -552,7 +517,7 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     align-items: center;
     gap: 4px 14px;
     margin: 0;
-    font-size: 13.5px;
+    font-size: 14px;
     color: var(--text-3);
   }
   .plugins-page .meta .pushed {
@@ -566,7 +531,6 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
   .plugins-page .lang-dot {
     width: 9px;
     height: 9px;
-    border-radius: 50%;
     background: var(--text-3);
   }
   .plugins-page .lang-dot[data-lang='TypeScript'] {
@@ -600,9 +564,7 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 8px 8px 8px 12px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
+    padding: 9px 9px 9px 12px;
     background: var(--term);
   }
   .plugins-page .cmd code {
@@ -610,24 +572,24 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     min-width: 0;
     font-size: 12.5px;
     line-height: 1.55;
-    color: var(--text);
+    color: #e4e7f2;
     overflow-wrap: anywhere;
     word-break: break-all;
   }
   .plugins-page .copy {
     flex: none;
-    border: 1px solid var(--line-2);
-    border-radius: 7px;
-    background: rgb(255 255 255 / 0.04);
-    color: var(--text-2);
+    border: 1px solid #3a3e52;
+    background: transparent;
+    color: #e4e7f2;
     font: inherit;
-    font-size: 12.5px;
+    font-size: 13px;
+    font-weight: 600;
     padding: 3px 10px;
     cursor: pointer;
   }
   .plugins-page .copy:hover {
-    color: var(--text);
-    border-color: rgb(168 141 255 / 0.6);
+    border-color: var(--brand);
+    background: var(--brand);
   }
   .plugins-page .many summary {
     display: flex;
@@ -636,19 +598,18 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     gap: 6px 10px;
     cursor: pointer;
     list-style: none;
-    font-size: 13.5px;
+    font-size: 14px;
     color: var(--text-3);
   }
   .plugins-page .many summary::-webkit-details-marker {
     display: none;
   }
   .plugins-page .many .pill {
-    padding: 3px 10px;
-    border-radius: 999px;
-    background: rgb(135 95 255 / 0.18);
-    color: var(--purple-3);
-    font-family: var(--font-mono);
-    font-size: 12.5px;
+    padding: 3px 9px;
+    background: var(--brand-soft);
+    color: var(--brand-ink);
+    font-size: 13.5px;
+    font-weight: 600;
   }
   .plugins-page .many .names {
     overflow-wrap: anywhere;
@@ -661,33 +622,52 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
   }
   .plugins-page .plugin-name {
     margin: 0 0 6px;
-    font-size: 14px;
+    font-size: 14.5px;
   }
   .plugins-page .plugin-name span {
     color: var(--text-3);
   }
   .plugins-page .more-wrap {
-    margin: 22px 0 0;
+    margin: 24px 0 0;
     text-align: center;
   }
   .plugins-page .publish {
-    margin-top: clamp(48px, 7vw, 88px);
-    max-width: 760px;
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-areas:
+      'head term'
+      'after term'
+      'guide term';
+    align-items: start;
+    gap: 0 clamp(28px, 5vw, 80px);
+    margin-top: clamp(56px, 8vw, 112px);
+    padding-top: clamp(28px, 3vw, 40px);
+    border-top: 2px solid var(--text);
+  }
+  .plugins-page .publish .shelf-head {
+    grid-area: head;
+  }
+  .plugins-page .publish .after {
+    grid-area: after;
+  }
+  .plugins-page .publish .guide-link {
+    grid-area: guide;
+  }
+  .plugins-page .publish .term {
+    grid-area: term;
+    align-self: center;
   }
   .plugins-page .term {
     display: flex;
     align-items: center;
     gap: 12px;
-    min-height: 54px;
+    min-height: 58px;
     padding: 8px 8px 8px 18px;
-    border-radius: 13px;
-    border: 1px solid rgb(135 95 255 / 0.45);
-    background: linear-gradient(180deg, rgb(135 95 255 / 0.1), rgb(135 95 255 / 0.03)), var(--term);
-    box-shadow: 0 18px 50px -24px rgb(135 95 255 / 0.65);
+    background: var(--term);
   }
   .plugins-page .term .ps {
     flex: none;
-    color: var(--purple-2);
+    color: #8088a6;
     font-family: var(--font-mono);
     font-size: 15px;
     user-select: none;
@@ -697,43 +677,44 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     min-width: 0;
     padding: 0;
     border: 0;
-    border-radius: 0;
     background: none;
-    font-size: 14px;
+    font-size: 14.5px;
     line-height: 1.5;
-    color: var(--text);
+    color: #e4e7f2;
     overflow-wrap: anywhere;
   }
   .plugins-page .term .copy {
-    height: 38px;
-    padding: 0 14px;
+    height: 42px;
+    padding: 0 16px;
     border: 0;
-    border-radius: 9px;
-    background: #7552f2;
-    color: #fff;
-    font-family: var(--font-body);
-    font-size: 14px;
-    font-weight: 600;
+    background: var(--brand);
+    color: var(--on-brand);
+    font-family: var(--font);
+    font-size: 14.5px;
+    font-weight: 620;
   }
   .plugins-page .term .copy:hover {
-    background: #6d48f5;
-    color: #fff;
+    background: var(--brand-hover);
+    color: var(--on-brand);
   }
   .plugins-page .after {
     margin: 0;
-    font-size: 15.5px;
+    font-size: 16.5px;
+    line-height: 1.55;
     color: var(--text-2);
   }
   .plugins-page .guide-link {
-    margin: 10px 0 22px;
-    font-size: 14.5px;
+    margin: 14px 0 0;
+    font-size: 16px;
   }
   .plugins-page .guide-link a {
-    color: var(--purple-2);
+    color: var(--brand-ink);
+    font-weight: 620;
     text-decoration: none;
   }
   .plugins-page .guide-link a:hover {
     text-decoration: underline;
+    text-underline-offset: 3px;
   }
   @media (max-width: 56rem) {
     .plugins-page .trend-grid {
@@ -744,6 +725,13 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     }
     .plugins-page .row .desc.line {
       display: none;
+    }
+    .plugins-page .publish {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: 'head' 'after' 'guide' 'term';
+    }
+    .plugins-page .publish .term {
+      margin-top: 22px;
     }
   }
   @media (max-width: 38rem) {

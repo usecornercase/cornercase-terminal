@@ -15,7 +15,7 @@ fn shade(line: Color, light: bool, level: u8) -> Color {
     if level == 0 {
         return line;
     }
-    let ramp = if light { [189, 141, 99, 55] } else { [60, 97, 141, 99] };
+    let ramp = if light { [153, 75, 27, 19] } else { [24, 26, 33, 75] };
     Color::Indexed(ramp[usize::from(level.saturating_sub(1).min(3))])
 }
 

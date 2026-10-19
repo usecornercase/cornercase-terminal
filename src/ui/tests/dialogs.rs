@@ -167,9 +167,9 @@ fn renders_stats_before_any_work_was_counted() {
     insta::assert_snapshot!(render_sized(&with(Overlay::Usage(stats_usage(true))), W, 38).backend());
 }
 #[rstest]
-#[case::dark(false, [60, 97, 141, 99])]
-#[case::light(true, [189, 141, 99, 55])]
-fn the_heatmap_has_a_purple_ramp_for_each_theme(#[case] light: bool, #[case] palette: [u8; 4]) {
+#[case::dark(false, [24, 26, 33, 75])]
+#[case::light(true, [153, 75, 27, 19])]
+fn the_heatmap_has_a_blue_ramp_for_each_theme(#[case] light: bool, #[case] palette: [u8; 4]) {
     let mut view = with(Overlay::Usage(stats_usage(false)));
     view.light = light;
     for (i, expected) in palette.iter().enumerate() {

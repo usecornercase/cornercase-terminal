@@ -44,7 +44,7 @@ export function tokens(number: number): string {
 }
 export function count(n: number): string { return n < 10_000 ? String(n) : n < 1e6 ? `${(n / 1e3).toFixed(1)}k` : tokens(n); }
 export function factor(numbers: Numbers): string { return numbers[3] < 60 ? 'no agent work' : `${(numbers[2] / numbers[3]).toFixed(1)}× in parallel`; }
-export const ramp = [239, 60, 97, 141, 99];
+export const ramp = [239, 24, 26, 33, 75];
 export const ROWS: [string, number, (n: number) => string][] = [
   ['agents started', 0, count], ['prompts', 1, count], ['turns', 6, count], ['agent time', 2, duration], ['most at once', 4, count],
   ['waited for you', 7, duration], ['tokens out', 5, tokens], ['tokens in', 8, tokens], ['tokens from cache', 9, tokens], ['merged PRs', 10, count],

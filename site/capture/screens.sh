@@ -561,7 +561,7 @@ screen_files_file() {
   cc_press 'first_line' 0 1 95
   cc_move 'lines.first()'
   cc_release 'lines.first()'
-  cc_wait 'lines 11–12'
+  cc_wait 'lines 11-12'
   cc_click '▎' 0 1 95
   cc_wait '-         self.lines.first().unw'
   cc_hover 'Workspaces'
@@ -575,10 +575,10 @@ screen_files_full() {
   cc_press 'first_line' 0 1 95
   cc_move 'lines.first()'
   cc_release 'lines.first()'
-  cc_wait 'lines 11–12'
+  cc_wait 'lines 11-12'
   cc_click '▢' 0 1 95
   cc_wait '❐'
-  cc_hover 'lines 11–12'
+  cc_hover 'lines 11-12'
   cc_shot files-full
 }
 

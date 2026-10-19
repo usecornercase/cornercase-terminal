@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: How cornercase is built — the client and the server, the event loop, rendering, terminal emulation and the module map.
+description: How cornercase is built. The client and the server, the event loop, rendering, terminal emulation and the module map.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -65,7 +65,7 @@ Geometry functions such as `ui::layout`, `entry_row`, `workspace_row`, `form_but
 
 Types saved in the session and choices read from the config belong to their models: `project/group.rs` owns groups and their styles, `config.rs` owns `Sidebar` and `Tabs`, `state.rs` owns the saved `Widths` fields, and `agents.rs` owns the `AgentState` a pane resumes. `ui/widths.rs` keeps width defaults and geometry. Callers import them from these owners.
 
-Colours are palette indices (cyan, the brand purple `99`, the surfaces `236` and `254`, the lines `239` and `250`), so the user's terminal theme applies. Grey text is `View::muted`: the theme's bright black, or the fixed greys `243` and `245` when that one would not show (`ui::muted`). Below 90 columns, `ui::layout::compact_layout` reuses the same areas with a top bar and three-row bands.
+Colours are palette indices (cyan, the brand blue `27`, the surfaces `236` and `254`, the lines `239` and `250`), so the user's terminal theme applies. Grey text is `View::muted`: the theme's bright black, or the fixed greys `243` and `245` when that one would not show (`ui::muted`). Below 90 columns, `ui::layout::compact_layout` reuses the same areas with a top bar and three-row bands.
 
 ## Terminal emulation
 
@@ -73,7 +73,7 @@ Panes are emulated with [libghostty-vt](https://github.com/ghostty-org/ghostty),
 
 - It answers the terminal queries programs wait for (DSR, DA, DECRQM, kitty keyboard queries…) and reflows text on resize.
 - Its types are `!Send`, so every emulator lives on the server's main thread; each PTY's reader thread only forwards bytes. Replies go out from `on_pty_write`, in order with the output that asked for them. Everything written to a PTY, keys, pastes and replies alike, goes through a writer thread per pane, so a program that stops reading never blocks the server.
-- Cells keep palette indices. The colours queried from the outer terminal (OSC 10 and 11, plus OSC 4 for ANSI colours 0–15, with DA1 as an end marker) become every emulator's defaults. The colour cube and greys at 16–255 keep the emulator's defaults; indexed cells still use the outer terminal's own palette. The small query fits the tty input queue. The same query asks for the terminal's name (XTVERSION), which decides how desktop notifications are written to it.
+- Cells keep palette indices. The colours queried from the outer terminal (OSC 10 and 11, plus OSC 4 for ANSI colours 0-15, with DA1 as an end marker) become every emulator's defaults. The colour cube and greys at 16-255 keep the emulator's defaults; indexed cells still use the outer terminal's own palette. The small query fits the tty input queue. The same query asks for the terminal's name (XTVERSION), which decides how desktop notifications are written to it.
 - `take_copied` hands over OSC 52 clipboard writes from programs; reads and primary-selection writes are dropped.
 
 Keys are encoded in `term/keys.rs`: Ghostty's encoder for special keys, and for every key once a program enables the kitty protocol; a legacy encoder for the rest. Mouse events are encoded in `term/mouse.rs`, in the mode and encoding the program asked for, relative to its pane.

@@ -7,7 +7,9 @@ use crate::agents::usage::Severity;
 use crate::host::theme::HostTheme;
 use crate::pull_request::{Ci, Mark, Outcome, State};
 
-pub(super) const BRAND_COLOR: Color = Color::Indexed(99);
+pub(super) const BRAND_COLOR: Color = Color::Indexed(27);
+
+const MERGED_COLOR: Color = Color::Indexed(99);
 
 pub(super) const DARK_SURFACE: Color = Color::Indexed(236);
 
@@ -104,7 +106,7 @@ pub(crate) fn outcome_icon(muted: Color, outcome: Outcome) -> Span<'static> {
 pub(super) fn pull_tag(muted: Color, mark: Mark) -> Span<'static> {
     let number = format!("#{}", mark.number);
     let (text, style) = match (mark.state, mark.ci) {
-        (State::Merged, _) => (number, Style::default().fg(BRAND_COLOR)),
+        (State::Merged, _) => (number, Style::default().fg(MERGED_COLOR)),
         (State::Closed, _) => (number, Style::default().fg(muted).add_modifier(Modifier::CROSSED_OUT)),
         _ if mark.conflicts => (format!("{number}!"), Style::default().fg(WAITING_COLOR)),
         (_, None) => (number, Style::default().fg(muted)),

@@ -12,7 +12,9 @@ use crate::pull_request::{Ci, Mark, State as Pull};
 use crate::ui::theme::{WAITING_COLOR, line_colour};
 
 const MUTED: Color = Color::DarkGray;
-const BRAND: Color = Color::Indexed(99);
+const BRAND: Color = Color::Indexed(27);
+
+const MERGED: Color = Color::Indexed(99);
 
 fn flows() -> Vec<Flow> {
     builtin::flows(&[Known::Claude, Known::Codex, Known::Gemini, Known::Opencode], Some(Known::Claude))
@@ -517,7 +519,7 @@ mod end {
     #[case::pending(mark(Pull::Open, Some(Ci::Pending), false), "#485•", Color::Yellow, Modifier::empty())]
     #[case::passing(mark(Pull::Open, Some(Ci::Passing), false), "#485✓", Color::Green, Modifier::empty())]
     #[case::conflict(mark(Pull::Open, Some(Ci::Passing), true), "#485!", WAITING_COLOR, Modifier::empty())]
-    #[case::merged(mark(Pull::Merged, None, false), "#485", BRAND, Modifier::empty())]
+    #[case::merged(mark(Pull::Merged, None, false), "#485", MERGED, Modifier::empty())]
     #[case::closed(mark(Pull::Closed, None, false), "#485", MUTED, Modifier::CROSSED_OUT)]
     #[case::no_checks(mark(Pull::Open, None, false), "#485", MUTED, Modifier::empty())]
     fn the_end_shows_the_pull_requests_tag_as_the_row_does(

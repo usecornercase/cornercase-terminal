@@ -570,7 +570,7 @@ fn draw_header(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover
     let (texts, style) = match file.selection {
         Some((a, b)) if a == b => (vec![format!("line {a}"), a.to_string()], Style::default().fg(Color::Cyan)),
         Some((a, b)) => {
-            let range = format!("{}–{}", a.min(b), a.max(b));
+            let range = format!("{}-{}", a.min(b), a.max(b));
             (vec![format!("lines {range}"), range], Style::default().fg(Color::Cyan))
         }
         None => (summary(file), dim(view.muted)),

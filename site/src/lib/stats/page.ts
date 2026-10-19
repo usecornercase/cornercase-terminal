@@ -15,7 +15,7 @@ let tilt: Tilt | null = null;
 let masks: string[] = [];
 
 async function fonts(): Promise<void> {
-  await Promise.all(['800 64px "Bricolage Grotesque Variable"', '400 20px "Geist Variable"', '600 20px "Geist Variable"', '400 20px "JetBrains Mono Variable"', '500 20px "JetBrains Mono Variable"'].map((font) => document.fonts.load(font)));
+  await Promise.all(['800 64px "Archivo Variable"', '400 20px "Archivo Variable"', '600 20px "Archivo Variable"', '400 20px "JetBrains Mono Variable"', '500 20px "JetBrains Mono Variable"'].map((font) => document.fonts.load(font)));
 }
 
 

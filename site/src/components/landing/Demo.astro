@@ -11,11 +11,9 @@ const tour = DEMO[locale].tour;
 
 <div class="demo" data-demo data-state="poster" data-locale={locale}>
   <div class="frame">
-    <div class="marks" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <div class="window">
       <div class="window-bar">
-        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span class="window-title">cornercase — ~/code/web-shop</span>
+        <span class="window-title">cornercase · ~/code/web-shop</span>
         <span class="themes" role="group" aria-label={t.themes}>
           {
             PICKER.map(([id, name]) => (
@@ -23,7 +21,7 @@ const tour = DEMO[locale].tour;
             ))
           }
         </span>
-        <span class="live" aria-hidden="true"><i></i>{t.live}</span>
+        <span class="live" aria-hidden="true">{t.live}</span>
       </div>
       <div class="screen">
         <Snapshot scene="poster" label={t.label} bare class="poster poster-wide poster-177" />
@@ -42,11 +40,13 @@ const tour = DEMO[locale].tour;
           autocorrect="off"
           spellcheck="false"></textarea>
         <div class="play">
+          <div class="play-card">
           <button type="button" class="play-button" data-play>
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.5v11.6l3.1-2.9 2 4.5 2-.9-2-4.4h4.3z" fill="currentColor" stroke="currentColor" stroke-width="0.8" stroke-linejoin="round"></path></svg>
             {t.play}
           </button>
           <p class="play-hint">{t.hint}</p>
+          </div>
         </div>
         <div class="spot" hidden aria-hidden="true"></div>
         <div class="lapse" hidden aria-hidden="true">
@@ -54,7 +54,7 @@ const tour = DEMO[locale].tour;
           <span data-lapse></span>
         </div>
         <div class="pointer" hidden aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 2.5v17.2l4.6-4.4 2.9 6.6 3-1.3-2.9-6.5h6.4z" fill="#fff" stroke="#0e0d14" stroke-width="1.4" stroke-linejoin="round"></path></svg>
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 2.5v17.2l4.6-4.4 2.9 6.6 3-1.3-2.9-6.5h6.4z" fill="#f7f8fa" stroke="#0c0e11" stroke-width="1.4" stroke-linejoin="round"></path></svg>
         </div>
       </div>
       <div class="strip">
@@ -81,6 +81,29 @@ const tour = DEMO[locale].tour;
     position: relative;
   }
 
+  .frame::before,
+  .frame::after {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    background: var(--brand);
+    pointer-events: none;
+  }
+
+  .frame::before {
+    left: 0;
+    top: -14px;
+    width: clamp(120px, 14vw, 220px);
+    height: 6px;
+  }
+
+  .frame::after {
+    left: -14px;
+    top: 0;
+    width: 6px;
+    height: clamp(120px, 14vw, 220px);
+  }
+
   .screen {
     position: relative;
     padding: 10px 12px 12px;
@@ -89,10 +112,6 @@ const tour = DEMO[locale].tour;
     justify-content: center;
     align-items: flex-start;
     overflow: hidden;
-  }
-
-  .demo[data-state='poster'] .screen {
-    border-radius: 0 0 var(--radius) var(--radius);
   }
 
   .screen :global(.poster) {
@@ -177,29 +196,44 @@ const tour = DEMO[locale].tour;
     align-items: center;
     justify-content: center;
     gap: 12px;
-    background: radial-gradient(ellipse at center, rgb(7 6 11 / 0.6), rgb(7 6 11 / 0.18));
     pointer-events: none;
+  }
+
+  .play-card {
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+    max-width: min(420px, calc(100% - 32px));
+    padding: 22px 24px 20px;
+    border: 1px solid #2c2f40;
+    background: #111219;
+    pointer-events: auto;
   }
 
   .play-button {
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    padding: 12px 22px;
+    height: 46px;
+    padding: 0 22px;
     border: 0;
-    border-radius: 999px;
-    background: var(--purple);
-    color: #fff;
-    font-family: var(--font-body);
-    font-size: 15px;
-    font-weight: 600;
+    background: var(--brand);
+    color: var(--on-brand);
+    font-family: var(--font);
+    font-size: 15.5px;
+    font-weight: 620;
     cursor: pointer;
-    pointer-events: auto;
-    box-shadow: 0 10px 30px -10px rgb(135 95 255 / 0.8);
+    transition:
+      background-color 0.15s ease,
+      transform 0.15s ease;
   }
 
   .play-button:hover {
-    background: var(--purple-2);
+    background: var(--brand-hover);
+  }
+
+  .play-button:active {
+    transform: translateY(1px);
   }
 
   .play-button svg {
@@ -208,13 +242,13 @@ const tour = DEMO[locale].tour;
   }
 
   .play-hint {
-    max-width: 32ch;
+    max-width: 34ch;
     margin: 0;
     text-align: center;
     text-wrap: balance;
-    font-size: 14px;
-    color: var(--text-2);
-    text-shadow: 0 1px 6px rgb(7 6 11 / 0.9);
+    font-size: 14.5px;
+    line-height: 1.45;
+    color: #c0c4d6;
   }
 
   .strip {
@@ -223,9 +257,8 @@ const tour = DEMO[locale].tour;
     justify-content: space-between;
     gap: 16px;
     padding: 11px 14px;
-    border-top: 1px solid var(--line);
-    background: var(--panel);
-    border-radius: 0 0 var(--radius) var(--radius);
+    border-top: 1px solid var(--term-line);
+    background: var(--term-bar);
   }
 
   .caption {
@@ -234,7 +267,7 @@ const tour = DEMO[locale].tour;
     font-size: 15px;
     line-height: 1.45;
     font-weight: 500;
-    color: var(--text);
+    color: #e4e7f2;
     text-wrap: pretty;
   }
 
@@ -245,7 +278,7 @@ const tour = DEMO[locale].tour;
     height: 1em;
     margin-right: 10px;
     vertical-align: -0.14em;
-    background: var(--cyan);
+    background: var(--brand);
   }
 
   .caption :global(code) {
@@ -258,19 +291,21 @@ const tour = DEMO[locale].tour;
     align-items: center;
     gap: 8px;
     padding: 7px 14px;
-    border: 1px solid rgb(69 217 232 / 0.45);
-    border-radius: 999px;
+    border: 1px solid #3a3e52;
     background: transparent;
-    color: var(--cyan);
-    font-family: var(--font-mono);
-    font-size: 13px;
+    color: #e4e7f2;
+    font-family: var(--font);
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease;
   }
 
   .replay:hover {
-    background: var(--cyan);
-    color: #07060b;
+    border-color: var(--brand);
+    background: var(--brand);
   }
 
   .replay svg {
@@ -281,9 +316,8 @@ const tour = DEMO[locale].tour;
   .spot {
     position: absolute;
     z-index: 2;
-    border-radius: 6px;
-    outline: 1px solid rgb(69 217 232 / 0.7);
-    box-shadow: 0 0 0 200vmax rgb(7 6 11 / 0.62);
+    outline: 2px solid #74a3ff;
+    box-shadow: 0 0 0 200vmax rgb(10 11 16 / 0.62);
     pointer-events: none;
     transition:
       left 0.45s cubic-bezier(0.3, 0.7, 0.2, 1),
@@ -308,10 +342,9 @@ const tour = DEMO[locale].tour;
     align-items: center;
     gap: 9px;
     padding: 8px 14px;
-    border-radius: 999px;
     border: 1px solid rgb(245 215 110 / 0.5);
-    background: rgb(20 18 30 / 0.92);
-    color: var(--yellow);
+    background: #111219;
+    color: #f5d76e;
     font-family: var(--font-mono);
     font-size: 14px;
     font-weight: 600;
@@ -342,7 +375,6 @@ const tour = DEMO[locale].tour;
     height: 14px;
     padding: 0;
     border: 1px solid rgb(255 255 255 / 0.22);
-    border-radius: 50%;
     background: linear-gradient(135deg, var(--sw) 0 58%, var(--sw-2) 58% 100%);
     cursor: pointer;
     transition: transform 0.15s ease;
@@ -353,37 +385,12 @@ const tour = DEMO[locale].tour;
   }
 
   .swatch[aria-pressed='true'] {
-    outline: 2px solid var(--cyan);
+    outline: 2px solid #74a3ff;
     outline-offset: 2px;
   }
 
   .live {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    color: var(--green);
-    letter-spacing: 0.04em;
-  }
-
-  .live i {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--green);
-    box-shadow: 0 0 0 0 rgb(88 230 160 / 0.6);
-    animation: pulse 2.2s infinite;
-  }
-
-  @keyframes pulse {
-    0% {
-      box-shadow: 0 0 0 0 rgb(88 230 160 / 0.55);
-    }
-    70% {
-      box-shadow: 0 0 0 7px rgb(88 230 160 / 0);
-    }
-    100% {
-      box-shadow: 0 0 0 0 rgb(88 230 160 / 0);
-    }
+    color: var(--term-text-2);
   }
 
   .pointer {
@@ -395,7 +402,7 @@ const tour = DEMO[locale].tour;
     height: 0;
     pointer-events: none;
     transition: transform 0.6s cubic-bezier(0.3, 0.7, 0.2, 1);
-    filter: drop-shadow(0 3px 6px rgb(0 0 0 / 0.55));
+    filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.45));
   }
 
   .pointer svg {
@@ -412,13 +419,13 @@ const tour = DEMO[locale].tour;
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    border: 2px solid var(--cyan);
+    border: 2px solid #74a3ff;
     opacity: 0;
     transform: scale(0.3);
   }
 
   .pointer.right::after {
-    border-color: var(--purple-2);
+    border-color: #f5d76e;
   }
 
   .pointer.tap::after {
@@ -465,7 +472,8 @@ const tour = DEMO[locale].tour;
       font-size: 12.5px;
     }
 
-    .marks {
+    .frame::before,
+    .frame::after {
       display: none;
     }
   }
@@ -483,8 +491,22 @@ const tour = DEMO[locale].tour;
       display: block;
     }
 
+    .play-card {
+      max-width: calc(100% - 24px);
+      padding: 18px 14px 16px;
+    }
+
+    .play-button {
+      height: auto;
+      min-height: 46px;
+      padding: 10px 14px;
+      gap: 8px;
+      font-size: 14.5px;
+      text-align: center;
+    }
+
     .play-hint {
-      padding: 0 24px;
+      padding: 0 10px;
       text-align: center;
     }
 

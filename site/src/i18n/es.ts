@@ -24,9 +24,7 @@ export const page: Page = {
   hero: {
     title: ['Lo más rápido para', 'agentes en paralelo.'],
     pitch: 'Cada agente en su propio rincón. Todo a un clic. Y cuando cierras la terminal, siguen trabajando.',
-    platforms: 'Linux y macOS',
-    open: 'gratis y de código abierto',
-    docs: 'documentación (en inglés)',
+    strip: 'Gratis y de código abierto, para Linux y macOS.',
   },
   demo: {
     label:
@@ -46,7 +44,6 @@ export const page: Page = {
     copied: 'copiado',
   },
   stats: {
-    eyebrow: 'Velocidad',
     title: [
       [{ pre: 'Rápid', a: 'o', tail: '.' }],
       ['Muy', { pre: 'rápid', a: 'o', tail: '.' }],
@@ -94,12 +91,10 @@ export const page: Page = {
     scale: 'áreas a escala',
   },
   why: {
-    eyebrow: 'Por qué cornercase',
     title: 'Lanzar diez agentes es fácil. Seguirles el ritmo, no tanto.',
     lead: 'cornercase le da a cada uno su propio rincón, te los muestra todos de un vistazo, pone la revisión junto al trabajo y lo mantiene todo en marcha cuando cierras la ventana.',
     steps: [
       {
-        num: '1 · Empieza',
         title: 'De una issue a un agente trabajando, en un clic.',
         text: 'Elige una issue de GitHub, GitLab, Linear, Jira, Plane, Asana o Shortcut y pulsa start. cornercase crea un worktree en una rama con el nombre de la issue, abre una pestaña en él y le pasa la issue a tu agente como primer prompt. Ninguna rama que nombrar, ninguna carpeta que crear, nada que pegar.',
         more: 'De issues a agentes →',
@@ -107,7 +102,6 @@ export const page: Page = {
           'El diálogo de issues de web-shop con la #482, Returns page crashes on empty address, seleccionada: start la abre en su propio worktree.',
       },
       {
-        num: '2 · En paralelo',
         title: 'Diez agentes, un vistazo.',
         text: 'Cada agente tiene su propia rama, carpeta y pestaña, así que dos de ellos nunca tocan el mismo archivo. La barra lateral te dice quién está trabajando {working}, quién te espera {waiting} y quién ha terminado {done}, con el modelo y cuánto contexto lleva usado. Cuando uno te necesita, tu terminal te toca el hombro. Incluso por SSH.',
         more: 'Funciona con Claude Code, Codex, Gemini, Grok, Cursor, Copilot y 9 más →',
@@ -115,7 +109,6 @@ export const page: Page = {
           'Una ventana estrecha de cornercase: arriba, los siete proyectos, donde orders-api te necesita y el agente de blog ha terminado; debajo, los tres worktrees de web-shop, cada uno con un Claude trabajando; y en el panel, la conversación sobre el modo oscuro, con la ruta que menciona subrayada.',
       },
       {
-        num: '3 · Revisa',
         title: 'Lee el diff mientras aún se está escribiendo.',
         text: 'Los cambios del espacio de trabajo están junto al agente y se actualizan mientras escribe: lo que no está en un commit, sus commits, todo desde la rama base, o lo que no está en un commit en todos los proyectos a la vez. Pon el cursor sobre un hunk para abrirlo en tu editor, copiarlo o devolvérselo al agente con una nota. Sin navegador, sin pull request, sin esperas.',
         more: 'El panel de cambios →',
@@ -123,7 +116,6 @@ export const page: Page = {
           'El panel de cambios del worktree de la #482: src/returns/address.rs y src/returns/mod.rs, con first_line() devolviendo ahora un Option.',
       },
       {
-        num: '4 · Vete y vuelve',
         title: 'Cierra la ventana. Nada se detiene.',
         text: 'Las shells son de un pequeño servidor, no de la ventana. Sal, cierra el portátil, quédate sin wifi: los agentes, los tests y los servidores de desarrollo siguen en marcha. Vuelve a abrir cornercase desde cualquier terminal, o desde el teléfono por SSH, y estará como lo dejaste, con un {done} en todos los que terminaron mientras no estabas.',
         more: 'Cómo funcionan las sesiones →',
@@ -139,7 +131,6 @@ export const page: Page = {
         'Tu terminal se conecta al servidor de cornercase, que ejecuta dos agentes de Claude Code, un agente de Codex y npm run dev. Cuando la terminal se cierra, esos programas siguen en marcha.',
     },
     band: {
-      num: 'Agentes que dirigen agentes',
       title: 'O déjaselo todo a un agente.',
       text: 'Todo lo anterior está a un comando de distancia. `cornercase` abre worktrees, lanza agentes, los espera y lee lo que escribieron, así que un agente puede dirigir a los demás: uno arregla el bug, otro revisa, otro escribe los tests.',
       more: 'Scripts y agentes →',
@@ -147,7 +138,6 @@ export const page: Page = {
     },
   },
   flows: {
-    eyebrow: 'Flows',
     title: ['Una issue.', 'Todo un equipo detrás.'],
     lead: 'Elige una issue y pulsa `start a flow`: cornercase lanza un equipo de agentes en un worktree nuevo, y un agente orquestador dirige el plan. Pasa el trabajo del planificador al programador y de ahí a los revisores, se lo devuelve cuando encuentran algo y, cuando todo está listo, abre la pull request.',
     label:

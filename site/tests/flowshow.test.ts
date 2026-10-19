@@ -178,6 +178,6 @@ test('the section sits between Stats and Why, and Why comes before More, and Mor
   const home = readFileSync('src/components/landing/Home.astro', 'utf8');
   assert.ok(home.indexOf('<Stats />') < home.indexOf('<Flows />') && home.indexOf('<Flows />') < home.indexOf('<Why />') && home.indexOf('<Why />') < home.indexOf('<More />'));
   assert.ok(!readFileSync('src/components/landing/More.astro', 'utf8').includes('guides/flows/'));
-  const links = readFileSync('src/components/landing/More.astro', 'utf8').split('\n  [\n')[1].split('\n  ],')[0].match(/\['/g)?.length;
+  const links = readFileSync('src/components/landing/More.astro', 'utf8').split('\n  [\n')[1].split('\n  ],')[0].match(/^    '/gm)?.length;
   assert.equal(links, en.page.more.groups[0].items.length);
 });

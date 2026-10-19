@@ -1,6 +1,6 @@
 ---
 title: Scripts and agents
-description: Drive a running cornercase from scripts, git hooks and coding agents — open tabs, type into panes, start agents in their own worktrees, wait for them and read what they wrote.
+description: Drive a running cornercase from scripts, git hooks and coding agents. Open tabs, type into panes, start agents in their own worktrees, wait for them and read what they wrote.
 ---
 
 Besides opening the window, the `cornercase` command drives the server that is already running. A script can open a tab and run the tests in it, a git hook can leave a note, and a coding agent in one tab can start others in their own worktrees, wait until they finish or need an answer, read what they wrote and send them the next step, or follow all of them at once as things happen.
@@ -193,7 +193,7 @@ cornercase changes viewed src/main.rs        # mark it viewed; --clear clears it
 
 #### Follow the rest of the app
 
-The session is not all of cornercase's state. The [TODO list](../todo/), the [queue](../issues/), whether you are [away](#away-on-telegram-or-discord) on each chat app, the update found and [keep awake](../../reference/agents/#keep-the-computer-awake) live outside it, and another UI needs them too. `status --app` prints them as one JSON object, and `--follow` prints it again each time one of them changes:
+The session is not all of cornercase's state. The [TODO list](../todo/), the [queue](../queue/), whether you are [away](#away-on-telegram-or-discord) on each chat app, the update found and [keep awake](../../reference/agents/#keep-the-computer-awake) live outside it, and another UI needs them too. `status --app` prints them as one JSON object, and `--follow` prints it again each time one of them changes:
 
 ```sh
 cornercase status --app
@@ -668,7 +668,7 @@ cornercase mark --pane 12 --reviewed
 - `move-pane --pane ID --target ID --place swap|left|right|above|below` swaps two panes of a tab or moves one to that side of the other, as dragging a pane with the right button does. It is refused (`conflict`) when the tab would have no room for every pane at the size it has, or when the panes are in different tabs; the moved pane becomes the tab's active one. `--json` prints the tab's new `layout`. Over the socket the requests are `group-new`, `group-style`, `group-delete`, `move`, `collapse`, `expand`, `move-pane` and `removal-check`, and `close` takes `unlock`; each change shows in the next `status --follow` snapshot.
 - `rename` renames the tab it runs in, or the `--tab`, `--workspace`, `--worktree`, `--project` or `--group` you name. An empty name goes back to the default one (a group always keeps a name).
 - `focus` shows a pane, tab, workspace or project, as picking it in the [search](../search/) does.
-- `mark` marks the agent in the pane it runs in, or in the `--pane` or `--tab` you name, as [pending review](../projects-workspaces-tabs/#pending-review): its tab shows a purple `●` until it is marked `--reviewed` or the agent starts working again on a new prompt or an answer, and `status` and `events` give it as `pending`. A pane without Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI or GitHub Copilot CLI is refused. An agent that ends its turn with work for you to check can run it on its own pane.
+- `mark` marks the agent in the pane it runs in, or in the `--pane` or `--tab` you name, as [pending review](../projects-workspaces-tabs/#pending-review): its tab shows a blue `●` until it is marked `--reviewed` or the agent starts working again on a new prompt or an answer, and `status` and `events` give it as `pending`. A pane without Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI or GitHub Copilot CLI is refused. An agent that ends its turn with work for you to check can run it on its own pane.
 
 ### Leave notes
 

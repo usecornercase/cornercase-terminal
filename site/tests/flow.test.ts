@@ -96,7 +96,7 @@ test('the run plays while its panel shows: working boxes, a round, then the end'
   app.render();
   const end = endOf(app);
   assert.ok(end);
-  assert.equal(app.render().grid.at(end.x, end.y)?.fg, 99);
+  assert.equal(app.render().grid.at(end.x, end.y)?.fg, 27);
   const run = app.runs[0];
   const done = () => run.members.slice(1).filter((m) => app.findPane(m.pane)?.pane.unseen).length;
   assert.equal(done(), 0);
@@ -269,10 +269,10 @@ test('the end stays lit once the orchestrator marked it, until the run starts ov
   assert.ok(end);
   const own = app.findPane(app.runs[0].members[0].pane)?.pane;
   assert.ok(own);
-  assert.equal(app.render().grid.at(end.x, end.y)?.fg, 99);
+  assert.equal(app.render().grid.at(end.x, end.y)?.fg, 27);
   markPane(own, false);
-  assert.equal(app.render().grid.at(end.x, end.y)?.fg, 99);
+  assert.equal(app.render().grid.at(end.x, end.y)?.fg, 27);
   playUntil(app, '┏━ coder', 60000);
-  assert.notEqual(app.render().grid.at(end.x, end.y)?.fg, 99);
+  assert.notEqual(app.render().grid.at(end.x, end.y)?.fg, 27);
   app.destroy();
 });

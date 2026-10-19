@@ -3,11 +3,11 @@ import { type Face, WEEKS, block } from './ticket';
 
 type Ctx = CanvasRenderingContext2D;
 
-const DISPLAY = '"Bricolage Grotesque Variable", "Geist Variable", sans-serif';
-const BODY = '"Geist Variable", ui-sans-serif, sans-serif';
+const DISPLAY = '"Archivo Variable", ui-sans-serif, sans-serif';
+const BODY = '"Archivo Variable", ui-sans-serif, sans-serif';
 const MONO = '"JetBrains Mono Variable", ui-monospace, monospace';
 const SHAPE = { radius: 30, stub: 790, notch: 18, pad: 52 };
-const LEVELS = ['rgba(255,255,255,0.065)', '#3b2a74', '#5d3fd6', '#8e6aff', '#cbb6ff'];
+const LEVELS = ['rgba(255,255,255,0.065)', '#12306e', '#0a47c2', '#2f74ff', '#a8c6ff'];
 
 export function outline(ctx: Ctx, inset = 0): void {
   const { w, h } = TICKET; const r = SHAPE.radius - inset, s = SHAPE.stub, n = SHAPE.notch + inset, i = inset;
@@ -76,9 +76,9 @@ function glow(ctx: Ctx, x: number, y: number, r: number, colour: string): void {
 }
 
 function logo(ctx: Ctx, x: number, y: number, size: number, corner: string, cursor: string): void {
-  ctx.save(); ctx.translate(x, y); ctx.scale(size / 32, size / 32);
-  ctx.fillStyle = corner; ctx.fill(new Path2D('M12 7h14v5H12zM7 12h5v14H7z'));
-  ctx.fillStyle = cursor; ctx.fillRect(17, 17, 3, 8);
+  ctx.save(); ctx.translate(x, y); ctx.scale(size / 32, size / 32); ctx.translate(7, 7); ctx.scale(19 / 12, 19 / 12);
+  ctx.fillStyle = corner; ctx.fill(new Path2D('M3 0h9v3H3zM0 3h3v9H0z'));
+  ctx.fillStyle = cursor; ctx.fill(new Path2D('M6 6h2v5H6z'));
   ctx.restore();
 }
 
@@ -120,13 +120,12 @@ export function drawFace(ctx: Ctx, f: Face): void {
   ctx.save();
   outline(ctx); ctx.clip();
   const base = ctx.createLinearGradient(0, 0, w, h);
-  base.addColorStop(0, '#22183c'); base.addColorStop(0.5, '#140f22'); base.addColorStop(1, '#0c0913');
+  base.addColorStop(0, '#171c28'); base.addColorStop(0.5, '#10131b'); base.addColorStop(1, '#0b0d12');
   ctx.fillStyle = base; ctx.fillRect(0, 0, w, h);
-  glow(ctx, 200, 210, 470, 'rgba(135,95,255,0.36)');
-  glow(ctx, 990, 20, 340, 'rgba(69,217,232,0.13)');
-  glow(ctx, 640, 560, 380, 'rgba(255,122,200,0.07)');
+  glow(ctx, 200, 210, 470, 'rgba(0,95,255,0.26)');
+  glow(ctx, 990, 20, 340, 'rgba(168,198,255,0.08)');
   guilloche(ctx);
-  ctx.fillStyle = 'rgba(8,6,14,0.32)'; ctx.fillRect(SHAPE.stub, 0, w - SHAPE.stub, h);
+  ctx.fillStyle = 'rgba(6,8,12,0.32)'; ctx.fillRect(SHAPE.stub, 0, w - SHAPE.stub, h);
   const sheen = ctx.createLinearGradient(0, 0, 0, 160);
   sheen.addColorStop(0, 'rgba(255,255,255,0.06)'); sheen.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = sheen; ctx.fillRect(0, 0, w, 160);
@@ -134,24 +133,24 @@ export function drawFace(ctx: Ctx, f: Face): void {
 
   ctx.save(); outline(ctx, 0.75); ctx.lineWidth = 1.5;
   const edge = ctx.createLinearGradient(0, 0, w, h);
-  edge.addColorStop(0, 'rgba(255,255,255,0.42)'); edge.addColorStop(0.45, 'rgba(200,184,255,0.14)'); edge.addColorStop(1, 'rgba(255,255,255,0.1)');
+  edge.addColorStop(0, 'rgba(255,255,255,0.42)'); edge.addColorStop(0.45, 'rgba(170,195,255,0.14)'); edge.addColorStop(1, 'rgba(255,255,255,0.1)');
   ctx.strokeStyle = edge; ctx.stroke(); ctx.restore();
 
   ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 7]);
   ctx.beginPath(); ctx.moveTo(SHAPE.stub, SHAPE.notch + 10); ctx.lineTo(SHAPE.stub, h - SHAPE.notch - 10); ctx.stroke(); ctx.restore();
 
-  logo(ctx, SHAPE.pad - 6, 44, 38, '#875fff', '#45d9e8');
-  ctx.fillStyle = '#f4f1ff'; ctx.font = `700 27px ${DISPLAY}`; ctx.textBaseline = 'alphabetic';
+  logo(ctx, SHAPE.pad - 6, 44, 38, '#2f74ff', '#f3f5f9');
+  ctx.fillStyle = '#f3f5f9'; ctx.font = `700 27px ${DISPLAY}`; ctx.textBaseline = 'alphabetic';
   ctx.fillText('cornercase', SHAPE.pad + 38, 73);
 
   const right = SHAPE.stub - SHAPE.pad;
-  ctx.fillStyle = f.example ? 'rgba(245,215,110,0.12)' : 'rgba(135,95,255,0.16)'; ctx.strokeStyle = f.example ? 'rgba(245,215,110,0.6)' : 'rgba(190,168,255,0.42)'; ctx.lineWidth = 1;
+  ctx.fillStyle = f.example ? 'rgba(245,215,110,0.12)' : 'rgba(0,95,255,0.18)'; ctx.strokeStyle = f.example ? 'rgba(245,215,110,0.6)' : 'rgba(150,185,255,0.42)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.roundRect(right - layout.pill, 50, layout.pill, 28, 14); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = f.example ? '#f5d76e' : '#ddd2ff'; ctx.font = `500 12px ${MONO}`;
+  ctx.fillStyle = f.example ? '#f5d76e' : '#d6e2ff'; ctx.font = `500 12px ${MONO}`;
   drawTracked(ctx, badge(f), right - layout.pill + 13, 68.5, 1.8);
 
   const silver = ctx.createLinearGradient(0, heroY(f) - layout.heroSize * 0.75, 0, heroY(f));
-  silver.addColorStop(0, '#ffffff'); silver.addColorStop(0.55, '#e9e2ff'); silver.addColorStop(1, '#a995f0');
+  silver.addColorStop(0, '#ffffff'); silver.addColorStop(0.55, '#dfe7fb'); silver.addColorStop(1, '#8fa9e8');
   ctx.fillStyle = silver; hero(ctx, f, layout);
 
   if (f.parallel) {
@@ -159,7 +158,7 @@ export function drawFace(ctx: Ctx, f: Face): void {
     ctx.fillStyle = '#ffffff'; ctx.font = `600 40px ${DISPLAY}`; ctx.fillText('in parallel', x, 196);
     const pair = (y: number, parts: [string, boolean][]) => {
       let at = x;
-      for (const [text, strong] of parts) { ctx.font = `${strong ? 600 : 400} 19px ${BODY}`; ctx.fillStyle = strong ? '#ffffff' : '#bdb3d4'; ctx.fillText(text, at, y); at += ctx.measureText(text).width; }
+      for (const [text, strong] of parts) { ctx.font = `${strong ? 600 : 400} 19px ${BODY}`; ctx.fillStyle = strong ? '#ffffff' : '#b4bccb'; ctx.fillText(text, at, y); at += ctx.measureText(text).width; }
     };
     pair(236, [[f.work, true], [' of agent work', false]]);
     pair(264, [['in ', false], [f.busy, true], [' of your time', false]]);
@@ -168,15 +167,15 @@ export function drawFace(ctx: Ctx, f: Face): void {
   ctx.fillStyle = 'rgba(255,255,255,0.09)'; ctx.fillRect(SHAPE.pad, 302, SHAPE.stub - SHAPE.pad * 2, 1);
   for (const cell of layout.cells) {
     const y = f.lines.length === 1 ? (LINE_Y[0] + LINE_Y[1]) / 2 : LINE_Y[cell.line];
-    ctx.fillStyle = '#958bad'; ctx.font = `400 12.5px ${MONO}`; ctx.fillText(cell.label, cell.x, y);
-    ctx.fillStyle = '#f4f1ff'; ctx.font = `700 ${layout.valueSize}px ${DISPLAY}`; ctx.fillText(cell.value, cell.x, y + 35);
+    ctx.fillStyle = '#8d95a6'; ctx.font = `400 12.5px ${MONO}`; ctx.fillText(cell.label, cell.x, y);
+    ctx.fillStyle = '#f3f5f9'; ctx.font = `700 ${layout.valueSize}px ${DISPLAY}`; ctx.fillText(cell.value, cell.x, y + 35);
   }
 
-  ctx.font = `400 12px ${MONO}`; ctx.fillStyle = '#8c83a3';
+  ctx.font = `400 12px ${MONO}`; ctx.fillStyle = '#8a91a1';
   ctx.fillText(f.days, SHAPE.pad, 484);
 
   const middle = SHAPE.stub + (w - SHAPE.stub) / 2;
-  ctx.fillStyle = '#9d93b8'; ctx.font = `500 11px ${MONO}`;
+  ctx.fillStyle = '#98a0b0'; ctx.font = `500 11px ${MONO}`;
   const label = 'AGENTS · 26 WEEKS';
   drawTracked(ctx, label, middle - tracked(ctx, label, 1.6) / 2, 60, 1.6);
   squares(ctx, f, (level) => LEVELS[level], true);
@@ -184,7 +183,7 @@ export function drawFace(ctx: Ctx, f: Face): void {
   ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = `500 9.5px ${MONO}`;
   const note = 'ONE BLOCK PER 24 H · NEWEST AT THE BOTTOM';
   drawTracked(ctx, note, -tracked(ctx, note, 1.3) / 2, 3, 1.3); ctx.restore();
-  ctx.textAlign = 'center'; ctx.fillStyle = '#c9b9ff'; ctx.font = `500 12.5px ${MONO}`;
+  ctx.textAlign = 'center'; ctx.fillStyle = '#9fbcff'; ctx.font = `500 12.5px ${MONO}`;
   ctx.fillText('usecornercase.dev', middle, 484);
   ctx.textAlign = 'left';
 }

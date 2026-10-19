@@ -5,8 +5,8 @@ type Gradient = [number, string][];
 
 export interface Foil { key: string; angle: number; period: number; colours: string[]; opacity: number; blend: GlobalCompositeOperation }
 export const FOILS: Foil[] = [
-  { key: 'iris', angle: 118, period: 520, colours: ['#9d86ff', '#ff7ac8', '#ffd59a', '#68dcff', '#7c9dff'], opacity: 0.78, blend: 'multiply' },
-  { key: 'edge', angle: 118, period: 520, colours: ['#ff7ac8', '#ffcf73', '#86ffb8', '#68dcff', '#9d86ff'], opacity: 0.9, blend: 'color-dodge' },
+  { key: 'iris', angle: 118, period: 520, colours: ['#7fa8ff', '#d3ddf5', '#ffffff', '#86d0ff', '#4f7dff'], opacity: 0.78, blend: 'multiply' },
+  { key: 'edge', angle: 118, period: 520, colours: ['#86d0ff', '#e8eefc', '#9fe7ff', '#7fa8ff', '#4f7dff'], opacity: 0.9, blend: 'color-dodge' },
 ];
 export const SWEEP = { x: 1100, y: 620 };
 export const GLARE = {

@@ -1,5 +1,6 @@
 ---
 import { LOCALES, home, localeOf, locales, words } from '../../i18n';
+import Mark from './Mark.astro';
 
 interface Props {
   standalone?: boolean;
@@ -17,7 +18,7 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
 <header class="nav" data-standalone={standalone ? '' : undefined}>
   <div class="wrap inner">
     <a class="brand" href={home(locale)} aria-label={t.home}>
-      <svg viewBox="0 0 4 4" aria-hidden="true" shape-rendering="crispEdges"><path d="M1 0h3v1H1zM0 1h1v3H0z"></path></svg>
+      <Mark size={24} />
       <span>cornercase</span>
     </a>
     <nav class="links" aria-label={t.nav.label}>
@@ -83,10 +84,6 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
       })
       .catch(() => {});
   }
-  const nav = document.querySelector('.nav');
-  const onScroll = () => nav?.classList.toggle('scrolled', window.scrollY > 8);
-  onScroll();
-  window.addEventListener('scroll', onScroll, { passive: true });
 </script>
 
 <style>
@@ -94,93 +91,86 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
     position: sticky;
     top: 0;
     z-index: 50;
-    border-bottom: 1px solid transparent;
-    transition:
-      background-color 0.25s ease,
-      border-color 0.25s ease;
-  }
-
-  .nav.scrolled {
-    background: rgb(7 6 11 / 0.78);
-    border-bottom-color: var(--line);
-    backdrop-filter: blur(14px) saturate(140%);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
   }
 
   .inner {
     display: flex;
     align-items: center;
-    gap: 28px;
-    height: 66px;
+    gap: 24px;
+    height: 64px;
   }
 
   .brand {
     display: inline-flex;
     align-items: center;
     gap: 11px;
-    text-decoration: none;
-    font-family: var(--font-mono);
-    font-weight: 700;
-    font-size: 17px;
-    letter-spacing: -0.02em;
-  }
-
-  .brand svg {
     flex: none;
-    width: 20px;
-    height: 20px;
-    fill: var(--purple);
+    color: var(--text);
+    text-decoration: none;
+    font-stretch: var(--wide);
+    font-weight: 760;
+    font-size: 19px;
+    letter-spacing: -0.03em;
   }
 
   .links {
     display: flex;
-    gap: 4px;
+    gap: 2px;
     margin-left: auto;
   }
 
   .links a {
-    padding: 7px 12px;
+    position: relative;
+    padding: 8px 11px;
     white-space: nowrap;
-    border-radius: 8px;
     color: var(--text-2);
-    font-size: 14.5px;
+    font-size: 15px;
     font-weight: 500;
     text-decoration: none;
-    transition:
-      color 0.15s ease,
-      background-color 0.15s ease;
+    transition: color 0.15s ease;
+  }
+
+  .links a::after {
+    content: '';
+    position: absolute;
+    left: 11px;
+    right: 11px;
+    bottom: 3px;
+    height: 2px;
+    background: var(--brand);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
   }
 
   .links a:hover {
     color: var(--text);
-    background: rgb(255 255 255 / 0.05);
+  }
+
+  .links a:hover::after {
+    transform: none;
   }
 
   .actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
 
   .langs {
     display: flex;
-    gap: 2px;
-    padding: 3px;
-    border-radius: 9px;
-    border: 1px solid var(--line-2);
+    margin-right: 6px;
   }
 
   .langs a {
-    padding: 4px 7px;
-    border-radius: 6px;
+    padding: 6px 7px;
     color: var(--text-3);
-    font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     text-decoration: none;
-    transition:
-      color 0.15s ease,
-      background-color 0.15s ease;
+    transition: color 0.15s ease;
   }
 
   .langs a:hover {
@@ -189,7 +179,7 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
 
   .langs a[aria-current] {
     color: var(--text);
-    background: rgb(255 255 255 / 0.08);
+    box-shadow: inset 0 -2px 0 var(--text);
   }
 
   .gh,
@@ -197,13 +187,13 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    height: 36px;
+    height: 38px;
     padding: 0 12px;
-    border-radius: 9px;
     border: 1px solid var(--line-2);
     color: var(--text-2);
-    font-family: var(--font-mono);
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
     text-decoration: none;
     transition:
       border-color 0.15s ease,
@@ -213,7 +203,7 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
   .gh:hover,
   .discord:hover {
     color: var(--text);
-    border-color: rgb(255 255 255 / 0.3);
+    border-color: var(--text);
   }
 
   .gh svg {
@@ -224,7 +214,7 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
 
   .discord {
     justify-content: center;
-    width: 36px;
+    width: 38px;
     padding: 0;
   }
 
@@ -235,30 +225,40 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
   }
 
   .actions .install {
-    --h: 36px;
-    padding: 0 15px;
-    font-size: 14px;
-    border-radius: 9px;
+    --h: 38px;
+    padding: 0 16px;
+    font-size: 14.5px;
   }
 
-  @media (max-width: 1160px) {
-    .links a:not(:last-child) {
+  @media (max-width: 1240px) {
+    .links a:nth-child(1),
+    .links a:nth-child(3) {
       display: none;
     }
   }
 
-  @media (max-width: 860px) {
-    .nav {
-      background: rgb(7 6 11 / 0.82);
-      border-bottom-color: var(--line);
-      backdrop-filter: blur(14px) saturate(140%);
-      -webkit-backdrop-filter: blur(14px) saturate(140%);
+  @media (max-width: 1000px) {
+    .links a:nth-child(2),
+    .links a:nth-child(4) {
+      display: none;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .links a:nth-child(5) {
+      display: none;
     }
   }
 
   @media (max-width: 600px) {
     .inner {
-      gap: 12px;
+      gap: 10px;
+      height: 58px;
+    }
+
+    .brand {
+      font-size: 17px;
+      gap: 9px;
     }
 
     .links {
@@ -267,21 +267,37 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
 
     .actions {
       margin-left: auto;
+      gap: 6px;
+    }
+
+    .langs {
+      margin-right: 0;
     }
 
     .langs a {
-      padding: 4px 5px;
+      padding: 6px 4px;
+      font-size: 12.5px;
+    }
+
+    .discord {
+      display: none;
     }
 
     .actions .install {
-      display: none;
+      --h: 34px;
+      padding: 0 12px;
+      font-size: 14px;
+    }
+
+    .gh {
+      height: 34px;
     }
   }
 
   @media (max-width: 420px) {
     .gh {
       justify-content: center;
-      width: 36px;
+      width: 34px;
       padding: 0;
     }
 

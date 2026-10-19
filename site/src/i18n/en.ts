@@ -22,9 +22,7 @@ export const page = {
   hero: {
     title: ['The fastest way to run', 'agents in parallel.'],
     pitch: 'Every agent in its own corner. Everything a click away. And when you close the terminal, they keep working.',
-    platforms: 'Linux & macOS',
-    open: 'free and open source',
-    docs: 'docs',
+    strip: 'Free and open source, for Linux and macOS.',
   },
   demo: {
     label:
@@ -44,7 +42,6 @@ export const page = {
     copied: 'copied',
   },
   stats: {
-    eyebrow: 'Speed',
     title: [
       [{ pre: 'F', a: 'a', tail: 'st.' }],
       ['Really', { pre: 'f', a: 'a', tail: 'st.' }],
@@ -92,12 +89,10 @@ export const page = {
     scale: 'areas to scale',
   },
   why: {
-    eyebrow: 'Why cornercase',
     title: "Starting ten agents is easy. Keeping up with them isn't.",
     lead: 'cornercase gives each one its own corner, shows all of them at a glance, puts the review next to the work, and keeps everything running after you close the window.',
     steps: [
       {
-        num: '1 · Start',
         title: 'From an issue to an agent at work, in one click.',
         text: 'Pick an issue from GitHub, GitLab, Linear, Jira, Plane, Asana or Shortcut and press start. cornercase creates a worktree on a branch named after the issue, opens a tab in it and hands the issue to your agent as its first prompt. No branch to name, no folder to make, nothing to paste.',
         more: 'Issues to agents →',
@@ -105,7 +100,6 @@ export const page = {
           'The issues dialog of web-shop with #482, Returns page crashes on empty address, selected: start opens it in its own worktree.',
       },
       {
-        num: '2 · In parallel',
         title: 'Ten agents, one glance.',
         text: 'Each agent gets its own branch, folder and tab, so two of them never touch the same file. The sidebar tells you who is working {working}, who is waiting for you {waiting} and who is done {done}, with the model and how full its context is. When one needs you, your terminal taps you on the shoulder. Even through SSH.',
         more: 'Works with Claude Code, Codex, Gemini, Grok, Cursor, Copilot and 9 more →',
@@ -113,7 +107,6 @@ export const page = {
           "A narrow cornercase window: the seven projects on top, where orders-api needs you and blog's agent is done; the three worktrees of web-shop below, each with a Claude working; and the conversation on dark mode in the pane, with the path it names underlined.",
       },
       {
-        num: '3 · Review',
         title: "Read the diff while it's still being written.",
         text: "The workspace's changes sit next to the agent and refresh as it types: uncommitted, its commits, or everything since the base branch, or what is uncommitted in every project at once. Hover a hunk to open it in your editor, copy it, or send it back to the agent with a note. No browser, no pull request, no waiting.",
         more: 'The changes panel →',
@@ -121,7 +114,6 @@ export const page = {
           'The changes panel of the #482 worktree: src/returns/address.rs and src/returns/mod.rs, with first_line() now returning an Option.',
       },
       {
-        num: '4 · Leave, come back',
         title: 'Close the window. Nothing stops.',
         text: "A small server owns the shells, not the window. Quit, close the laptop, lose the Wi-Fi: agents, tests and dev servers keep running. Open cornercase again from any terminal, or from your phone over SSH, and it's where you left it, with a {done} on everyone who finished while you were away.",
         more: 'How sessions work →',
@@ -137,7 +129,6 @@ export const page = {
         'Your terminal attaches to the cornercase server, which runs two Claude Code agents, a Codex agent and npm run dev. When the terminal closes, those programs keep running.',
     },
     band: {
-      num: 'Agents that run agents',
       title: 'Or hand all of it to an agent.',
       text: 'Everything above is one command away. `cornercase` opens worktrees, starts agents, waits for them and reads what they wrote, so an agent can run the others: one fixes the bug, one reviews, one writes the tests.',
       more: 'Scripts and agents →',
@@ -145,7 +136,6 @@ export const page = {
     },
   },
   flows: {
-    eyebrow: 'Flows',
     title: ['One issue.', 'A whole team on it.'],
     lead: "Pick an issue and click `start a flow`: cornercase starts a team of agents in a new worktree, and an orchestrator agent runs the plan. It hands the work from the planner to the coder to the reviewers, sends it back when they find something, and opens the pull request when it's done.",
     label:

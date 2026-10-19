@@ -26,7 +26,6 @@ const sizes: Weight[] = t.stats.sizes.map((m, i) => ({ ...m, values: weighed[i] 
 <section class="section stats" id="speed" aria-labelledby="speed-title">
   <div class="wrap">
     <div class="head reveal">
-      <p class="eyebrow">{t.stats.eyebrow}</p>
       <h2 class="h2 stretch" id="speed-title" aria-label={t.stats.label}>
         <span aria-hidden="true">
           {
@@ -47,7 +46,7 @@ const sizes: Weight[] = t.stats.sizes.map((m, i) => ({ ...m, values: weighed[i] 
                   )}
                 </Fragment>
               ));
-              return i === 0 ? parts : <Fragment>{' '}<em>{parts}</em></Fragment>;
+              return i === 0 ? parts : <Fragment>{' '}<span class="second">{parts}</span></Fragment>;
             })
           }
         </span>
@@ -91,11 +90,11 @@ const sizes: Weight[] = t.stats.sizes.map((m, i) => ({ ...m, values: weighed[i] 
   }
 
   .head {
-    max-width: 860px;
+    max-width: 900px;
   }
 
   .h2 {
-    font-size: clamp(32px, 4.2vw, 56px);
+    font-size: clamp(34px, 4.6vw, 64px);
   }
 
   .stretch .word,
@@ -111,7 +110,6 @@ const sizes: Weight[] = t.stats.sizes.map((m, i) => ({ ...m, values: weighed[i] 
   :global(.js) .stretch .x {
     transform: translateX(calc(var(--k) * var(--a, 0.55em) * -1));
     opacity: 0;
-    filter: blur(6px);
   }
 
   :global(.js) .stretch .tail {
@@ -123,11 +121,9 @@ const sizes: Weight[] = t.stats.sizes.map((m, i) => ({ ...m, values: weighed[i] 
   :global(.js) .head.in .stretch .tail {
     transform: none;
     opacity: 1;
-    filter: none;
     transition:
       transform 0.9s cubic-bezier(0.34, 1.4, 0.64, 1) 0.35s,
-      opacity 0.4s ease 0.35s,
-      filter 0.7s ease 0.35s;
+      opacity 0.4s ease 0.35s;
     transition-timing-function:
       linear(
         0,
@@ -161,12 +157,11 @@ const sizes: Weight[] = t.stats.sizes.map((m, i) => ({ ...m, values: weighed[i] 
         0.999,
         1
       ),
-      ease,
       ease;
   }
 
-  :global(.js) .head.in .stretch em .x,
-  :global(.js) .head.in .stretch em .tail {
+  :global(.js) .head.in .stretch .second .x,
+  :global(.js) .head.in .stretch .second .tail {
     transition-delay: 0.6s;
   }
 
@@ -176,24 +171,23 @@ const sizes: Weight[] = t.stats.sizes.map((m, i) => ({ ...m, values: weighed[i] 
     :global(.js) .stretch .tail {
       transform: none;
       opacity: 1;
-      filter: none;
       transition: none;
     }
   }
 
   .note {
-    margin: 22px 0 0;
-    color: var(--text-3);
-    font-size: 14.5px;
+    margin: 24px 0 0;
+    font-size: 15.5px;
   }
 
   .note a {
-    color: var(--text);
-    font-weight: 600;
+    color: var(--brand-ink);
+    font-weight: 620;
     text-decoration: none;
   }
 
   .note a:hover {
-    color: var(--purple-3);
+    text-decoration: underline;
+    text-underline-offset: 4px;
   }
 </style>

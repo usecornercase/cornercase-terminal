@@ -83,7 +83,7 @@ fn welcome_text(muted: Color) -> Vec<Line<'static>> {
 
 pub(super) fn draw_welcome(f: &mut Frame, muted: Color, pane: Rect) {
     let corner = Style::default().fg(BRAND_COLOR);
-    let cursor = Style::default().fg(Color::Cyan);
+    let cursor = Style::default();
     let width = LOGO.iter().map(|(c, k)| c.chars().count() + k.chars().count()).max().unwrap_or(0);
     let mut lines: Vec<Line<'static>> = LOGO
         .iter()

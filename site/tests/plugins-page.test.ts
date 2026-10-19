@@ -106,22 +106,22 @@ test('duplicate plugins never render, and a card left with none is dropped by th
 const footer = readFileSync('src/components/landing/Footer.astro', 'utf8');
 
 test('the standalone footer leaves out the landing\'s call to action, and the landing keeps it', () => {
-  assert.match(footer, /!standalone && \(\s*<div class="cta reveal">/);
+  assert.match(footer, /!standalone && \(\s*<div class="cta">/);
   assert.ok(footer.includes('class:list={[\'footer\', { standalone }]}'));
   assert.ok(astro.includes('<Footer standalone />'));
   assert.ok(readFileSync('src/components/landing/Home.astro', 'utf8').includes('<Footer />'));
 });
 
-test('the sections have command lines above their titles, and none of herdr\'s titles or subtitles remain', () => {
-  const sections: [string, string, string][] = [
-    ['trending-title', '$ sort --stars --since 7d', 'Rising this week'],
-    ['new-title', '$ ls --newest', 'Just landed'],
-    ['browse-title', '$ ls --all', 'Every plugin'],
+test('the sections have plain titles with no labels above them, and none of herdr\'s titles or subtitles remain', () => {
+  const sections: [string, string][] = [
+    ['trending-title', 'Rising this week'],
+    ['new-title', 'Just landed'],
+    ['browse-title', 'Every plugin'],
   ];
-  for (const [id, command, title] of sections) {
+  assert.ok(!astro.includes('cmd-line') && !astro.includes('class="eyebrow'), 'no label above a title');
+  for (const [id, title] of sections) {
     const at = astro.indexOf(`id="${id}"`);
     assert.ok(at > 0, id);
-    assert.ok(astro.slice(Math.max(0, at - 160), at).includes(`<p class="eyebrow cmd-line" aria-hidden="true">${command}</p>`), command);
     assert.ok(astro.slice(at, at + 80).includes(`>${title}</h2>`), title);
     assert.ok(astro.includes(`aria-labelledby="${id}"`));
   }
@@ -144,7 +144,6 @@ test('the publish block is a terminal line built from the topic and manifest con
 test('the publish block has a visible title, a paragraph, its own guide link and a plain command box', () => {
   const block = astro.slice(astro.indexOf('<section class="publish"'), astro.indexOf('</section>', astro.indexOf('<section class="publish"')));
   const order = [
-    '<p class="eyebrow cmd-line" aria-hidden="true">$ {topicCommand}</p>',
     "<h2 id=\"publish-title\">{page.empty ? 'Publish the first one' : 'Publish yours'}</h2>",
     'Add a <code>{MANIFEST}</code> to a public repository, then tag it with the topic.',
     'with no submission and no review.',
@@ -160,10 +159,9 @@ test('the publish block has a visible title, a paragraph, its own guide link and
   assert.ok(/padding: 0;/.test(rule) && /border: 0;/.test(rule) && /background: none;/.test(rule), 'the command sits on the box, not in a field');
 });
 
-test('the header is a command, a title, its output and one sentence, in one column', () => {
+test('the header is a title, its count and one sentence, in one column', () => {
   const header = astro.slice(astro.indexOf('<header class="intro">'), astro.indexOf('</header>'));
-  assert.ok(header.includes('<p class="eyebrow cmd-line" aria-hidden="true">$ cornercase plugin list</p>'));
-  assert.ok(header.includes('<h1>Extend your terminal.</h1>'));
+  assert.match(header, /^<header class="intro">\s*<h1>Extend your terminal\.<\/h1>/, 'the title comes first');
   assert.ok(header.includes('<p class="out">{headline(page.plugins, page.repos)}</p>'));
   assert.ok(header.includes("Small tools other people built on cornercase's commands. Install one with <code>cornercase plugin install</code>."));
   assert.ok(header.includes("Listings aren't reviewed, so install at your own discretion.") && header.includes('Trust guidance →'));
@@ -174,7 +172,7 @@ test('the header is a command, a title, its output and one sentence, in one colu
   assert.ok(!/\.intro \{\s*display: grid/.test(astro), 'the header has no second column');
 });
 
-test('the header count is the command\'s output with singular and plural forms', () => {
+test('the header count has singular and plural forms', () => {
   assert.equal(headline(page.plugins, page.repos), '13 plugins · 10 repositories · refreshed every hour');
   assert.equal(headline(1, 1), '1 plugin · 1 repository · refreshed every hour');
   assert.equal(headline(0, 0), 'no plugins yet · be the first');

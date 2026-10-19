@@ -1,6 +1,7 @@
 ---
 import { localeOf, words } from '../../i18n';
 import Rich from './Rich.astro';
+import Mark from './Mark.astro';
 import Snapshot from './Snapshot.astro';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -13,14 +14,14 @@ const [start, parallel, review, leave] = t.steps;
 
 <section class="section why" id="why" aria-labelledby="why-title">
   <div class="wrap">
-    <p class="eyebrow">{t.eyebrow}</p>
-    <h2 class="h2" id="why-title">{t.title}</h2>
-    <p class="lead">{t.lead}</p>
+    <div class="head reveal">
+      <h2 class="h2" id="why-title">{t.title}</h2>
+      <p class="lead">{t.lead}</p>
+    </div>
 
     <ol class="steps">
       <li class="step reveal">
         <div class="text">
-          <span class="num">{start.num}</span>
           <h3>{start.title}</h3>
           <p><Rich text={start.text} /></p>
           <a class="more" href={docs('guides/issues-and-agents/')} hreflang={docsLang}>{start.more}</a>
@@ -30,7 +31,6 @@ const [start, parallel, review, leave] = t.steps;
 
       <li class="step reveal flip">
         <div class="text">
-          <span class="num">{parallel.num}</span>
           <h3>{parallel.title}</h3>
           <p><Rich text={parallel.text} /></p>
           <a class="more" href={docs('reference/agents/')} hreflang={docsLang}>{parallel.more}</a>
@@ -38,9 +38,8 @@ const [start, parallel, review, leave] = t.steps;
         <Snapshot scene="status" label={parallel.label} class="shot" />
       </li>
 
-      <li class="step reveal">
+      <li class="step reveal half">
         <div class="text">
-          <span class="num">{review.num}</span>
           <h3>{review.title}</h3>
           <p><Rich text={review.text} /></p>
           <a class="more" href={docs('guides/changes/')} hreflang={docsLang}>{review.more}</a>
@@ -48,9 +47,8 @@ const [start, parallel, review, leave] = t.steps;
         <Snapshot scene="changes" label={review.label} class="shot" />
       </li>
 
-      <li class="step reveal flip">
+      <li class="step reveal half" style="--i: 1">
         <div class="text">
-          <span class="num">{leave.num}</span>
           <h3>{leave.title}</h3>
           <p><Rich text={leave.text} /></p>
           <a class="more" href={docs('guides/sessions/')} hreflang={docsLang}>{leave.more}</a>
@@ -64,7 +62,7 @@ const [start, parallel, review, leave] = t.steps;
           <svg class="wire" viewBox="0 0 20 48" preserveAspectRatio="none" aria-hidden="true"><path d="M10 0V48"></path></svg>
           <div class="server">
             <span class="title">
-              <svg viewBox="0 0 4 4" aria-hidden="true" shape-rendering="crispEdges"><path d="M1 0h3v1H1zM0 1h1v3H0z"></path></svg>
+              <Mark size={12} />
               {t.diagram.server}
             </span>
             <ul>
@@ -78,7 +76,6 @@ const [start, parallel, review, leave] = t.steps;
 
     <div class="band reveal">
       <div class="text">
-        <span class="num">{t.band.num}</span>
         <h3>{t.band.title}</h3>
         <p><Rich text={t.band.text} /></p>
         <a class="more" href={docs('guides/scripts-and-agents/')} hreflang={docsLang}>{t.band.more}</a>
@@ -100,24 +97,18 @@ balance is applied after coupons and before tax.</pre>
 
 <style>
   .section.why {
-    padding-top: clamp(24px, 3vw, 40px);
-    padding-bottom: clamp(56px, 7vw, 96px);
+    padding-top: clamp(80px, 9vw, 136px);
   }
 
-  .h2 {
-    max-width: 22ch;
-    font-size: clamp(30px, 3.6vw, 48px);
-  }
-
-  .lead {
-    margin: 14px 0 0;
-    max-width: 62ch;
-    color: var(--text-2);
-    font-size: 17px;
+  .head {
+    max-width: 920px;
   }
 
   .steps {
-    margin: clamp(28px, 4vw, 48px) 0 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(72px, 9vw, 136px) clamp(28px, 4.5vw, 72px);
+    margin: clamp(48px, 6vw, 88px) 0 0;
     padding: 0;
     list-style: none;
   }
@@ -125,20 +116,29 @@ balance is applied after coupons and before tax.</pre>
   .step,
   .band {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-    gap: clamp(24px, 4vw, 56px);
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: clamp(28px, 4.5vw, 72px);
     align-items: center;
-    padding-block: clamp(36px, 5vw, 60px);
-    border-top: 1px solid var(--line);
   }
 
-  .step:first-child {
-    border-top: 0;
-    padding-top: 0;
+  .step:not(.half) {
+    grid-column: 1 / -1;
+  }
+
+  .step.flip {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
   }
 
   .step.flip .text {
     order: 1;
+  }
+
+  .step.half {
+    grid-row: span 2;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: subgrid;
+    align-items: start;
+    gap: clamp(24px, 3vw, 36px);
   }
 
   .text {
@@ -148,66 +148,54 @@ balance is applied after coupons and before tax.</pre>
     min-width: 0;
   }
 
-  .num {
-    font-family: var(--font-mono);
-    font-size: 12.5px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--cyan);
-  }
-
   h3 {
     margin: 0;
-    font-family: var(--font-display);
-    font-size: clamp(26px, 2.6vw, 38px);
-    font-weight: 750;
-    letter-spacing: -0.025em;
-    line-height: 1.05;
+    font-stretch: var(--wide);
+    font-size: clamp(26px, 2.7vw, 40px);
+    font-weight: 760;
+    letter-spacing: -0.03em;
+    line-height: 1.04;
     text-wrap: balance;
   }
 
   .text p {
     margin: 0;
-    max-width: 46ch;
+    max-width: 50ch;
     color: var(--text-2);
-    font-size: 16.5px;
+    font-size: 17px;
     line-height: 1.6;
   }
 
   .more {
-    color: var(--text);
-    font-weight: 600;
-    font-size: 15px;
+    align-self: flex-start;
+    color: var(--brand-ink);
+    font-weight: 620;
+    font-size: 16px;
     text-decoration: none;
   }
 
   .more:hover {
-    color: var(--purple-3);
-  }
-
-  .shot {
-    box-shadow: 0 20px 50px -30px rgb(0 0 0 / 0.9);
+    text-decoration: underline;
+    text-underline-offset: 4px;
   }
 
   .diagram {
     display: grid;
     justify-items: center;
     margin: 0;
-    padding: 18px 16px;
-    border-radius: 12px;
-    border: 1px solid var(--line);
-    background: radial-gradient(70% 60% at 50% 70%, rgb(135 95 255 / 0.12), transparent 75%), var(--term);
+    padding: clamp(24px, 3vw, 40px) clamp(16px, 2vw, 28px);
+    background: var(--term);
+    color: #e4e7f2;
   }
 
   .client {
     display: grid;
     justify-items: center;
     gap: 4px;
-    width: min(100%, 230px);
-    padding: 10px 12px;
-    border-radius: 10px;
-    border: 1px solid var(--line-2);
-    background: var(--bg-2);
+    width: min(100%, 240px);
+    padding: 12px;
+    border: 1px solid #3a3e52;
+    background: #111219;
     animation: detach 8s ease-in-out infinite;
   }
 
@@ -216,31 +204,33 @@ balance is applied after coupons and before tax.</pre>
     align-items: center;
     gap: 8px;
     font-family: var(--font-mono);
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 700;
-    color: var(--text);
+    color: #e4e7f2;
   }
 
-  .title svg {
-    width: 12px;
-    height: 12px;
-    fill: var(--purple);
+  .title :global(.mark .k) {
+    fill: #e4e7f2;
+  }
+
+  .title :global(.mark .c) {
+    fill: #74a3ff;
   }
 
   .state {
     grid-area: 2 / 1;
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 12.5px;
     font-weight: 600;
   }
 
   .state.on {
-    color: var(--green);
+    color: #58e6a0;
     animation: show 8s infinite;
   }
 
   .state.off {
-    color: var(--yellow);
+    color: #f5d76e;
     opacity: 0;
     animation: hide 8s infinite;
   }
@@ -248,13 +238,13 @@ balance is applied after coupons and before tax.</pre>
   .wire {
     display: block;
     width: 20px;
-    height: 40px;
+    height: 44px;
     overflow: visible;
   }
 
   .wire path {
     fill: none;
-    stroke: var(--purple);
+    stroke: #74a3ff;
     stroke-width: 2;
     stroke-dasharray: 5 6;
     vector-effect: non-scaling-stroke;
@@ -266,13 +256,11 @@ balance is applied after coupons and before tax.</pre>
   .server {
     display: grid;
     justify-items: center;
-    gap: 12px;
+    gap: 14px;
     width: 100%;
-    padding: 14px 12px;
-    border-radius: 12px;
-    border: 1px solid rgb(135 95 255 / 0.55);
-    background: linear-gradient(180deg, rgb(135 95 255 / 0.14), rgb(135 95 255 / 0.04)), var(--panel);
-    box-shadow: 0 0 50px -20px rgb(135 95 255 / 0.6);
+    padding: 16px 12px;
+    border: 2px solid #3d6dff;
+    background: #13141c;
   }
 
   .server ul {
@@ -288,22 +276,20 @@ balance is applied after coupons and before tax.</pre>
   .server li {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 4px 9px;
-    border-radius: 7px;
-    border: 1px solid var(--line-2);
+    gap: 8px;
+    padding: 5px 10px;
+    border: 1px solid #2c2f40;
     background: var(--term);
     font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--text);
+    font-size: 12.5px;
+    color: #e4e7f2;
     white-space: nowrap;
   }
 
   .server li i {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--green);
+    width: 7px;
+    height: 7px;
+    background: #58e6a0;
     animation: alive 1.8s ease-in-out infinite;
   }
 
@@ -325,12 +311,10 @@ balance is applied after coupons and before tax.</pre>
     85%,
     100% {
       opacity: 1;
-      filter: none;
     }
     45%,
     75% {
-      opacity: 0.35;
-      filter: grayscale(1);
+      opacity: 0.3;
     }
   }
 
@@ -371,7 +355,7 @@ balance is applied after coupons and before tax.</pre>
     38%,
     82%,
     100% {
-      opacity: 0.85;
+      opacity: 0.9;
     }
     42%,
     78% {
@@ -381,46 +365,54 @@ balance is applied after coupons and before tax.</pre>
 
   @keyframes alive {
     50% {
-      opacity: 0.3;
+      opacity: 0.35;
     }
+  }
+
+  .band {
+    margin-top: clamp(80px, 10vw, 152px);
   }
 
   .transcript {
     margin: 0;
-    border: 1px solid var(--line);
-    border-radius: 12px;
     background: var(--term);
+    color: #e4e7f2;
     overflow: hidden;
   }
 
   .transcript figcaption {
-    padding: 9px 14px;
-    border-bottom: 1px solid var(--line);
-    font-size: 12px;
-    color: var(--text-3);
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--term-line);
+    background: var(--term-bar);
+    font-size: 13.5px;
+    color: #9aa1bd;
   }
 
   .transcript pre {
     margin: 0;
-    padding: 14px 16px;
+    padding: 18px 20px 20px;
     font-family: var(--font-mono);
-    font-size: 12.5px;
-    line-height: 1.55;
-    color: var(--text);
+    font-size: 13.5px;
+    line-height: 1.6;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
 
   .transcript .d {
-    color: var(--text-3);
+    color: #8088a6;
   }
 
   .transcript .g {
-    color: var(--green);
+    color: #58e6a0;
   }
 
-  @media (max-width: 820px) {
+  @media (max-width: 860px) {
+    .steps {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
     .step,
+    .step.flip,
     .band {
       grid-template-columns: minmax(0, 1fr);
       gap: 20px;
