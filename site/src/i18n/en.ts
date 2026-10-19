@@ -1,16 +1,17 @@
 export const page = {
-  title: 'cornercase · the fastest way to run agents in parallel',
+  title: 'cornercase · a terminal multiplexer, batteries included',
   description:
-    'A fast terminal multiplexer for coding agents. Each agent gets its own git worktree and tab, and they keep working when you close the terminal. Everything works with clicks. Linux and macOS.',
+    'A terminal multiplexer, batteries included: projects and git worktrees, coding agents, issues, live diffs, files, flows and remote access, with nothing to configure. Free and open source, for Linux and macOS.',
   skip: 'Skip to content',
   home: 'cornercase, home',
   nav: {
     label: 'Sections',
     demo: 'Live simulation',
+    features: 'Features',
     speed: 'Speed',
     why: 'Why cornercase',
     flows: 'Flows',
-    more: 'Features',
+    more: 'Everything else',
     plugins: 'Plugins',
     docs: 'Docs',
     github: 'cornercase on GitHub',
@@ -20,8 +21,8 @@ export const page = {
     language: 'Language',
   },
   hero: {
-    title: ['The fastest way to run', 'agents in parallel.'],
-    pitch: 'Every agent in its own corner. Everything a click away. And when you close the terminal, they keep working.',
+    title: ['A terminal multiplexer,', 'batteries included.'],
+    pitch: 'Projects, worktrees, coding agents, issues, live diffs and remote access, ready the moment you install it. Nothing to configure.',
     strip: 'Free and open source, for Linux and macOS.',
   },
   demo: {
@@ -41,12 +42,23 @@ export const page = {
     copy: 'copy',
     copied: 'copied',
   },
+  features: {
+    title: ['Open a folder.', 'The rest is already there.'],
+    lead: 'Think LazyVim, but for terminal multiplexers: everything you would otherwise script, plug in and keep configured comes built in, and it all works together from the start.',
+    items: [
+      ['Projects and worktrees', 'Your folders in a sidebar, in groups if you like. Each line of work gets its own git worktree and branch, with tabs and splits inside.'],
+      ['Coding agents', 'Claude Code, Codex, Gemini, Copilot and more, each in its own corner, with its status, model and context on its tab.'],
+      ['Your issues', 'GitHub, GitLab, Linear, Jira, Plane, Asana and Shortcut. Pick one, press start, and an agent takes it on its own branch.'],
+      ['Live diffs', 'What an agent changed, right next to it, as it types. Open a hunk in your editor or send it back with a note.'],
+      ['Files and search', "Browse and read the code in your terminal's colours, images included. Find any file, any line, or anything an agent said."],
+      ['Flows', 'A team of agents on one issue: one plans, one codes, others review, and an orchestrator keeps the work moving.'],
+      ['Sessions that stay', "Close the window, lose the Wi-Fi: shells and agents keep running. Open it again from any terminal and it's all there."],
+      ['From anywhere', "In your phone's browser, over SSH from any machine, or on Telegram and Discord, where your agents message you."],
+      ['Scripts and plugins', 'Every action is also a command, so your scripts and agents can drive all of it. Plugins add the rest.'],
+    ] as [string, string][],
+  },
   stats: {
-    title: [
-      [{ pre: 'F', a: 'a', tail: 'st.' }],
-      ['Really', { pre: 'f', a: 'a', tail: 'st.' }],
-    ] as Stretch[][],
-    label: 'Faaast. Really faaast.',
+    title: 'All of that, and still fast.',
     lead: 'It opens before you can blink, and shows what your agents changed, opens a file or finds one before you can click again. The other apps we tried? Up to 8.5 seconds, and nearly 2 GB.',
     how: 'How we measured →',
     times: [
@@ -203,7 +215,7 @@ export const page = {
     first: 'First steps',
     star: 'Star on GitHub',
     discord: 'Join the Discord',
-    tagline: 'Every agent in its own corner. In your terminal, a click away.',
+    tagline: 'Everything built in. Every agent in its own corner.',
     product: 'Product',
     docs: 'Docs',
     project: 'Project',
@@ -218,8 +230,6 @@ export const page = {
     built: 'Built with Rust, ratatui and libghostty-vt',
   },
 };
-
-export type Stretch = string | { pre: string; a: string; tail: string };
 
 export const demo = {
   tour: {

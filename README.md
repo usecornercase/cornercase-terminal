@@ -8,7 +8,7 @@
 
 A terminal multiplexer built for running coding agents in parallel. Every agent gets its own git worktree and tab, the sidebar shows which ones are working, waiting or done, the diff sits next to the agent, and a background server keeps everything running when you close the window. Everything is a click: your keyboard stays with the program in the pane.
 
-![cornercase: the fastest way to run agents in parallel. Every agent in its own corner, everything a click away, and when you close the terminal they keep working. A cornercase window shows seven projects in two groups, the three worktrees of web-shop with a Claude Code agent working in each, and a Claude Code conversation about dark mode.](site/public/readme.png)
+![cornercase: a terminal multiplexer, batteries included. Projects, worktrees, coding agents, issues, live diffs and remote access, ready the moment you install it. A cornercase window shows seven projects in two groups, the three worktrees of web-shop with a Claude Code agent working in each, and a Claude Code conversation about dark mode.](site/public/readme.png)
 
 **[usecornercase.dev](https://usecornercase.dev)** · [First steps](https://usecornercase.dev/docs/first-steps/) · [Try the live simulation](https://usecornercase.dev/#demo) · [Discord](https://discord.gg/aYqCa4xC4R)
 
