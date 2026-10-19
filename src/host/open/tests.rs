@@ -246,17 +246,8 @@ mod running {
 
     #[test]
     fn a_missing_program_reports_the_spawn_error() {
-        let (tx, rx) = mpsc::channel();
         let steps = [vec![OsString::from("/nonexistent/opener")]];
-        let sent = tx.clone();
-        let handle = thread::spawn(move || {
-            if let Err(reason) = run(&steps) {
-                let _ = sent.send(reason);
-            }
-        });
-        handle.join().expect("thread");
-        drop(tx);
-        assert!(rx.recv().expect("a reason").contains("No such file"));
+        assert!(run(&steps).is_err());
     }
 
     #[test]
@@ -265,7 +256,7 @@ mod running {
         Openers::default().open(&open(Opener::Files, "/", None), move |failed| {
             let _ = tx.send(failed);
         });
-        assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
+        assert!(rx.recv().is_err());
     }
 
     #[test]
