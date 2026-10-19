@@ -5,7 +5,7 @@ description: How cornercase is built. The client and the server, the event loop,
 
 import { Aside } from '@astrojs/starlight/components';
 
-cornercase is a single Rust binary that plays two roles: a **server** that owns every terminal and all the state, and a thin **client** that only shows frames and forwards input. This page explains how the pieces fit, for contributors. The reasons behind each decision are kept in [`DESIGN.md`](https://github.com/usecornercase/cornercase-terminal/blob/main/DESIGN.md) in the repository.
+cornercase is a single Rust binary that plays two roles: a **server** that owns every terminal and all the state, and a thin **client** that only shows frames and forwards input. This page explains how the pieces fit, for contributors. The reasons behind each decision are kept in [`design/`](https://github.com/usecornercase/cornercase-terminal/tree/main/design) in the repository, one file per area, listed in [`DESIGN.md`](https://github.com/usecornercase/cornercase-terminal/blob/main/DESIGN.md).
 
 ## The big picture
 
@@ -34,7 +34,7 @@ The accept thread, one reader thread per client, the signal thread and a forward
 
 Each step (the refresh, sending the answers to commands, the draw, the save and every event) runs under `catch_unwind`. A step that panics is dropped, the loop goes on, and the user sees `cornercase hit a bug, see server.log`; a command for scripts that the panic left without an answer fails with the same message instead of waiting forever; a panic in input or drawing also closes the open dialog or menu and ends any drag, and one while drawing starts every client's screen over. Otherwise a single bug would end the process and every shell in it. Background jobs that the UI waits for turn a panic into an error answer (`panics::job`), so no dialog stays busy forever. That is why every profile must keep `panic = "unwind"`.
 
-After every step that can change the app (a refresh, input, a command, a background job's answer), `App::trace` compares the projects, workspaces, tabs and panes, the focus and the open dialog with what it saw before and writes what changed to `server.log`, so each code path doesn't have to log on its own. Lines are formatted on the thread that logs them and written by a thread of their own, so a slow disk never holds up the loop. When you debug cornercase, start with `cornercase logs`, and restart the server with `CORNERCASE_LOG=debug` to see every event it handled. What the log may and may not contain is in `DESIGN.md`, under Log.
+After every step that can change the app (a refresh, input, a command, a background job's answer), `App::trace` compares the projects, workspaces, tabs and panes, the focus and the open dialog with what it saw before and writes what changed to `server.log`, so each code path doesn't have to log on its own. Lines are formatted on the thread that logs them and written by a thread of their own, so a slow disk never holds up the loop. When you debug cornercase, start with `cornercase logs`, and restart the server with `CORNERCASE_LOG=debug` to see every event it handled. What the log may and may not contain is in [`design/log.md`](https://github.com/usecornercase/cornercase-terminal/blob/main/design/log.md).
 
 Each client has its own writer thread, so a slow client never blocks the loop. All window clients share one size, that of the client that attached, typed or clicked last (a smaller client gets the frame cropped); a program that opened a view sizes the tabs it claims instead. They see the same `App`, which is why hover, menus and scroll positions are mirrored.
 
@@ -181,5 +181,5 @@ Each holds a model and its own I/O jobs, and never uses `app` or `ui`.
 | `web/` | Browser access: the loopback listener, pairing, one WebSocket per browser as a client of the server, the vendored page, and `tailscale serve` (`web/tailscale.rs`). |
 
 <Aside type="note">
-Design rules that keep the code honest, such as "mouse first" and "the server owns the shells", are explained in [CONTRIBUTING.md](https://github.com/usecornercase/cornercase-terminal/blob/main/CONTRIBUTING.md). Read the section of `DESIGN.md` for the area you change before you change it.
+Design rules that keep the code honest, such as "mouse first" and "the server owns the shells", are explained in [CONTRIBUTING.md](https://github.com/usecornercase/cornercase-terminal/blob/main/CONTRIBUTING.md). Read the area's file in `design/` before you change it.
 </Aside>

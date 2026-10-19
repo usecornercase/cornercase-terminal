@@ -23,9 +23,9 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
     </a>
     <nav class="links" aria-label={t.nav.label}>
       <a href={anchor('demo')}>{t.nav.demo}</a>
-      <a href={anchor('speed')}>{t.nav.speed}</a>
+      <a href={anchor('features')}>{t.nav.features}</a>
       <a href={anchor('why')}>{t.nav.why}</a>
-      <a href={anchor('more')}>{t.nav.more}</a>
+      <a href={anchor('flows')}>{t.nav.flows}</a>
       <a href={`${base}/plugins/`} hreflang={locale === 'en' ? undefined : 'en'}>{t.nav.plugins}</a>
       <a href={`${base}/docs/`} hreflang={locale === 'en' ? undefined : 'en'}>{t.nav.docs}</a>
     </nav>
