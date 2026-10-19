@@ -53,6 +53,17 @@ impl Setup {
     }
 }
 
+fn restore_pane(setup: &mut Setup, pane: PaneState) {
+    let path = setup.project.path().to_path_buf();
+    let mut workspace = WorkspaceState::plain(path.clone(), vec![None], 0);
+    workspace.tabs[0].panes = vec![pane];
+    let project =
+        ProjectState { path, name: None, group: None, workspaces: vec![workspace], active: 0, collapsed: false };
+    let saved = State { version: state::VERSION, projects: vec![project], ..State::default() };
+    setup.app.config.resume_agents = true;
+    setup.app.restore(&saved, AREA);
+}
+
 fn value<'a>(env: &'a [String], key: &str) -> Option<&'a str> {
     env.iter().find_map(|line| line.strip_prefix(key)?.strip_prefix('='))
 }
@@ -128,15 +139,7 @@ fn a_pane_whose_account_is_gone_comes_back_as_a_shell() {
         accounts: [("claude".to_string(), "work".to_string())].into_iter().collect(),
         ..PaneState::at(Some(setup.project.path().to_path_buf()))
     };
-    let path = setup.project.path().to_path_buf();
-    let mut workspace = WorkspaceState::plain(path.clone(), vec![None], 0);
-    workspace.tabs[0].panes = vec![pane];
-    let project =
-        ProjectState { path, name: None, group: None, workspaces: vec![workspace], active: 0, collapsed: false };
-    let saved = State { version: state::VERSION, projects: vec![project], ..State::default() };
-    setup.app.config.resume_agents = true;
-
-    setup.app.restore(&saved, AREA);
+    restore_pane(&mut setup, pane);
 
     let term = setup.pane(0);
     let id = term.id;
@@ -147,4 +150,23 @@ fn a_pane_whose_account_is_gone_comes_back_as_a_shell() {
     assert!(toast.contains("`work`"), "{toast}");
     let env = setup.env_of(id);
     assert_eq!(value(&env, "CLAUDE_CONFIG_DIR"), None);
+}
+
+#[test]
+fn the_toast_names_the_account_of_the_agent_that_does_not_resume() {
+    let mut setup = Setup::new();
+    let agent =
+        AgentState { kind: "codex".into(), conversation: "s1".into(), mode: None, account: Some("work".into()) };
+    let accounts = [("claude", "home"), ("codex", "work")];
+    let pane = PaneState {
+        agent: Some(agent),
+        accounts: accounts.iter().map(|(p, a)| ((*p).to_string(), (*a).to_string())).collect(),
+        ..PaneState::at(Some(setup.project.path().to_path_buf()))
+    };
+
+    restore_pane(&mut setup, pane);
+
+    assert!(setup.pane(0).resume.is_none());
+    let toast = setup.app.toast.as_ref().map(|toast| toast.message.clone()).unwrap_or_default();
+    assert_eq!(toast, "the codex account `work` is gone: its conversation does not resume");
 }

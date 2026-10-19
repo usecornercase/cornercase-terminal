@@ -18,6 +18,7 @@ use crate::project::split::Dir;
 pub(super) struct Within {
     pub(super) timeout: Option<(Instant, f64)>,
     pub(super) named: Option<String>,
+    pub(super) accounts: Accounts,
 }
 
 pub(super) struct Then {
@@ -153,17 +154,17 @@ impl App {
     ) -> Handled {
         let area = sized(area)?;
         let timeout = deadline(start.timeout, now)?;
-        self.profile_accounts(start.profile.as_deref())?;
+        let accounts = self.profile_accounts(start.profile.as_deref())?;
         if start.issue.is_some() {
             if start.wait {
                 Condition::of(start.until.clone())?;
             }
-            return self.start_issue_request(client, asker, start, timeout);
+            return self.start_issue_request(client, asker, start, Within { timeout, named: None, accounts });
         }
         if start.source.is_some() {
             return Err(super::malformed("--source needs --issue"));
         }
-        self.start_within(client, asker, start, Some(area), now, Within { timeout, named: None })
+        self.start_within(client, asker, start, Some(area), now, Within { timeout, named: None, accounts })
     }
 
     pub(super) fn start_within(
@@ -175,10 +176,9 @@ impl App {
         now: Instant,
         within: Within,
     ) -> Handled {
-        let Within { timeout, named } = within;
+        let Within { timeout, named, accounts } = within;
         let area = sized(area)?;
         let wait = start.wait.then(|| Condition::of(start.until)).transpose()?;
-        let accounts = self.profile_accounts(start.profile.as_deref())?;
         let queued = self.queued_spec(client);
         let kind =
             if queued.is_some() { start.agent.unwrap_or_default() } else { self.agent_kind(asker, start.agent)? };

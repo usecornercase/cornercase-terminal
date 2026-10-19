@@ -131,10 +131,11 @@ impl App {
     }
 
     fn account_gone(&mut self, pane: u64, agent: Option<&AgentState>, gone: &[(String, String)]) -> bool {
-        let Some((provider, name)) = gone.first() else { return false };
-        let lost = agent.is_some_and(|agent| {
-            gone.iter().any(|(provider, name)| *provider == agent.kind && agent.account.as_ref() == Some(name))
+        let missing = agent.and_then(|agent| {
+            gone.iter().find(|(provider, name)| *provider == agent.kind && agent.account.as_ref() == Some(name))
         });
+        let lost = missing.is_some();
+        let Some((provider, name)) = missing.or_else(|| gone.first()) else { return false };
         log::warning!("accounts", "a saved account is gone", pane = pane, provider = provider, account = name);
         let what = if lost { "its conversation does not resume" } else { "the pane opens without it" };
         let message = format!("the {provider} account `{name}` is gone: {what}");
