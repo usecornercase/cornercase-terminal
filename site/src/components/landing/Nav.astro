@@ -305,4 +305,29 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
       display: none;
     }
   }
+
+  @media (max-width: 400px) {
+    .gh {
+      display: none;
+    }
+  }
+
+  @media (max-width: 359px) {
+    .inner {
+      gap: 8px;
+    }
+
+    .brand {
+      gap: 7px;
+      font-size: 15.5px;
+    }
+
+    .langs a {
+      padding: 6px 3px;
+    }
+
+    .actions .install {
+      padding: 0 10px;
+    }
+  }
 </style>

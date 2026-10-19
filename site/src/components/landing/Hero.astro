@@ -10,8 +10,7 @@ const t = words(Astro.url);
   <div class="wrap top">
     <p class="strip">{t.hero.strip}</p>
     <h1 id="hero-title">
-      <span class="line">{t.hero.title[0]}</span>
-      <span class="line">{t.hero.title[1]}</span>
+      <span class="line">{t.hero.title[0]}</span>{' '}<span class="line">{t.hero.title[1]}</span>
     </h1>
     <div class="get">
       <p class="pitch">{t.hero.pitch}</p>
@@ -107,6 +106,12 @@ const t = words(Astro.url);
     .strip {
       font-size: 14px;
       margin-bottom: 14px;
+    }
+  }
+
+  @media (max-width: 359px) {
+    h1 {
+      font-size: 8.4vw;
     }
   }
 </style>
