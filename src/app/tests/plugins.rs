@@ -91,7 +91,7 @@ mod menus {
     fn a_project_lists_none_when_no_action_is_for_projects() {
         let mut p = plugged(true);
         right_click(&mut p.app, entry_pos());
-        assert_eq!(menu_labels(&p.app), ["rename project"]);
+        assert_eq!(menu_labels(&p.app), ["rename project", "copy path"]);
     }
 
     #[test]

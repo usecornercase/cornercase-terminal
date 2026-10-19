@@ -18,8 +18,7 @@ use crate::log::{self, Job, Level};
 use crate::panics;
 use crate::project::Hierarchy;
 use crate::ui;
-use crate::ui::changes::Action;
-use crate::ui::files::{self as panel, Bar, FileView, Found, Hit, Screen, SearchView, TreeRow, TreeView};
+use crate::ui::files::{self as panel, Action, Bar, FileView, Found, Hit, Screen, SearchView, TreeRow, TreeView};
 
 fn plural(n: usize, what: &str) -> String {
     match (n, what) {
@@ -331,6 +330,15 @@ impl App {
             }
             return Ok(());
         }
+        if ev.kind == MouseEventKind::Down(MouseButton::Right) {
+            if let Some(Hit::Row(i)) = panel::hit(panel_area, &view, pos)
+                && let Screen::Tree(tree) = &view.screen
+                && let Some(row) = tree.rows.get(i)
+            {
+                self.open_row_menu(workspace, &row.path, pos);
+            }
+            return Ok(());
+        }
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
             return Ok(());
         }
@@ -365,7 +373,7 @@ impl App {
                     viewer.unfolded.insert(key);
                 }
             }
-            Some(Hit::Action(action)) => return self.file_action(workspace, root, action, area),
+            Some(Hit::Action(action)) => return self.file_action(workspace, root, action, pos, area),
             None => {}
         }
         Ok(())
@@ -534,7 +542,7 @@ impl App {
         }
     }
 
-    fn file_action(&mut self, workspace: u64, root: PathBuf, action: Action, area: Rect) -> Result<()> {
+    fn file_action(&mut self, workspace: u64, root: PathBuf, action: Action, pos: Position, area: Rect) -> Result<()> {
         let Some(viewer) = self.files.viewer(workspace) else { return Ok(()) };
         let path = viewer.path.clone();
         let image = viewer.content.as_ref().is_some_and(|c| c.is_image());
@@ -545,6 +553,7 @@ impl App {
                 let target = Checkout { workspace, dir: root, base: None };
                 return self.open_in_editor(&target, &path, line, area);
             }
+            Action::OpenIn => self.open_file_menu(workspace, pos),
             Action::Ask => {
                 let reference = match selected {
                     Some((a, b)) if a == b => format!("{path}:{a} "),

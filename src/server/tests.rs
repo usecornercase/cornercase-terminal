@@ -107,7 +107,7 @@ pub(super) mod a_bug {
     }
 
     pub(super) struct Client {
-        id: u64,
+        pub(super) id: u64,
         tx: Sender<ServerEvent>,
         frames: Receiver<ServerMessage>,
         screen: vt100::Parser,
@@ -128,6 +128,7 @@ pub(super) mod a_bug {
             graphics: Support::default(),
             probe: String::new(),
             zone: "UTC".into(),
+            openers: Vec::new(),
         }
     }
 
@@ -232,7 +233,7 @@ pub(super) mod a_bug {
             got
         }
 
-        fn send(&self, ev: ServerEvent) {
+        pub(super) fn send(&self, ev: ServerEvent) {
             self.tx.send(ev).expect("the server listens");
         }
 
@@ -267,7 +268,7 @@ pub(super) mod a_bug {
             line.chars().map(KeyCode::Char).chain([KeyCode::Enter]).for_each(|code| self.key(code));
         }
 
-        fn right_click_in_the_pane(&self) {
+        pub(super) fn right_click_in_the_pane(&self) {
             for kind in [MouseEventKind::Down(MouseButton::Right), MouseEventKind::Up(MouseButton::Right)] {
                 let ev = MouseEvent { kind, column: COLS - 10, row: 3, modifiers: KeyModifiers::NONE };
                 self.input(Event::Mouse(ev));
@@ -341,6 +342,8 @@ pub(super) mod a_bug {
     }
 }
 
+mod opening;
+
 mod streaming {
     use super::a_bug::Attached;
     use super::*;
@@ -354,6 +357,7 @@ mod streaming {
         (
             Client {
                 zone: "UTC".into(),
+                openers: Vec::new(),
                 id: 1,
                 size: None,
                 notify: Channel::Bell,

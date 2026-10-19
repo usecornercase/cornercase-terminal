@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::*;
+use crate::host::open::Opener;
 
 fn round_trip<T: Serialize + DeserializeOwned>(msg: &T) -> T {
     let mut buf = Vec::new();
@@ -125,6 +126,30 @@ mod compatibility {
         Response(String),
     }
 
+    #[derive(Debug, Deserialize)]
+    #[expect(dead_code, reason = "decoded only, the way a server from before OpenFailed reads it")]
+    enum BeforeOpenFailed {
+        KillServer,
+        Hello(Box<Hello>),
+        Event(Event),
+        Restart,
+        Request(String),
+        Graphics(Support),
+        Activated(String),
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[expect(dead_code, reason = "decoded only, the way a client from before Open reads it")]
+    enum BeforeOpen {
+        Rejected(String),
+        Frame(Vec<u8>),
+        Detached,
+        Shutdown,
+        Restart(PathBuf),
+        Response(String),
+        Sound(Cue),
+    }
+
     fn read_as<T: DeserializeOwned + std::fmt::Debug>(msg: &impl Serialize) -> io::ErrorKind {
         let mut frame = Vec::new();
         send(&mut frame, msg).expect("encode");
@@ -197,6 +222,62 @@ mod compatibility {
     #[test]
     fn a_sound_round_trips() {
         assert!(matches!(round_trip(&ServerMessage::Sound(cue())), ServerMessage::Sound(c) if c == cue()));
+    }
+
+    fn order() -> Open {
+        Open { opener: Opener::Vscode, path: "/work/web".into(), line: Some(3) }
+    }
+
+    fn failure() -> Failed {
+        Failed { opener: Opener::Files, reason: "exit status 1".into() }
+    }
+
+    #[test]
+    fn an_open_comes_after_every_older_server_variant() {
+        assert_eq!(postcard::to_stdvec(&ServerMessage::Open(order())).expect("encode")[0], 7);
+    }
+
+    #[test]
+    fn a_client_without_opening_reads_an_open_as_invalid_data() {
+        assert_eq!(read_as::<BeforeOpen>(&ServerMessage::Open(order())), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn an_open_failure_comes_after_every_older_client_variant() {
+        assert_eq!(postcard::to_stdvec(&ClientMessage::OpenFailed(failure())).expect("encode")[0], 7);
+    }
+
+    #[test]
+    fn a_server_without_opening_reads_a_failure_as_invalid_data() {
+        assert_eq!(read_as::<BeforeOpenFailed>(&ClientMessage::OpenFailed(failure())), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn opens_and_failures_round_trip() {
+        assert!(matches!(round_trip(&ServerMessage::Open(order())), ServerMessage::Open(o) if o == order()));
+        assert!(
+            matches!(round_trip(&ClientMessage::OpenFailed(failure())), ClientMessage::OpenFailed(f) if f == failure())
+        );
+    }
+
+    #[test]
+    fn a_hello_carries_its_openers() {
+        let hello = Hello {
+            version: VERSION,
+            build: "b".into(),
+            cols: 80,
+            rows: 24,
+            theme: HostTheme::default(),
+            notify: Channel::Bell,
+            terminal: None,
+            pointer: None,
+            graphics: Support::default(),
+            probe: String::new(),
+            zone: "UTC".into(),
+            openers: vec![Opener::Files, Opener::Vscode],
+        };
+        let back = round_trip(&ClientMessage::Hello(Box::new(hello)));
+        assert!(matches!(back, ClientMessage::Hello(h) if h.openers.len() == 2));
     }
 
     fn framed(msg: &impl Serialize) -> String {

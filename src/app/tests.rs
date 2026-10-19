@@ -456,6 +456,7 @@ mod keys;
 mod lock_text;
 mod merged_pull_requests;
 mod muted_text;
+mod opening;
 mod picker;
 mod plugins;
 mod project_settings;

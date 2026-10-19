@@ -63,7 +63,7 @@ A paired phone can type into every terminal, like you at your keyboard. Keep it 
 ## Limits
 
 - The computer must be awake and the cornercase server running: if the computer sleeps, nothing answers. [Keep awake](../../reference/agents/#keep-the-computer-awake) keeps it awake while an agent works; closing the lid of a laptop still puts it to sleep.
-- The page shows no pictures from the [files panel](../files/#images) and sends no desktop notifications; the toast in cornercase still shows.
+- The page shows no pictures from the [files panel](../files/#images) and sends no desktop notifications; the toast in cornercase still shows. **open in…** can't open anything on your phone, so the menus show **copy path**.
 - The pairing cookie belongs to your computer's Tailscale name, not to the port, so another web service on that same name (another `tailscale serve`) receives it too. Serve only things you trust next to cornercase.
 - If your computer is itself a tagged device in Tailscale, it has no owner to compare with and phones are refused; use a computer logged in as you.
 - Port 8443 of your computer's Tailscale address is used for cornercase; if something else already uses it with `tailscale serve`, cornercase replaces it.

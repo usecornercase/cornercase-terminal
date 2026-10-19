@@ -9,6 +9,7 @@ use super::interaction::{DOUBLE_CLICK, Drag, LinkPress, PaneDrag};
 use super::menus::Marked;
 use super::menus::MenuAction;
 use super::menus::PaneAction;
+use super::opening::Subject;
 use super::overlay::Overlay;
 use super::plugins::Spot;
 use super::toast::NOT_READING;
@@ -263,6 +264,7 @@ impl App {
             .map(|a| MenuAction::Pane(pane, a))
             .collect();
         actions.extend(self.mark_action(Marked::Pane(pane)));
+        actions.push(self.open_entry(Subject::Pane(pane)));
         actions.push(MenuAction::Pane(pane, PaneAction::Close));
         actions.extend(self.plugin_menu(Spot::Pane(pane)));
         self.overlay = Some(Overlay::Menu { at, actions });

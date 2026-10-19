@@ -122,7 +122,7 @@ fn the_menu_button_of_a_project_opens_its_menu() {
     let (mut app, _rx, _dirs) = tree(2);
     let menu = ui::row_menu_button(row(&app, TreeRow::Project(1)), 1);
     click_at(&mut app, menu.as_position());
-    assert_eq!(menu_labels(&app), ["rename project"]);
+    assert_eq!(menu_labels(&app), ["rename project", "copy path"]);
 }
 
 #[test]

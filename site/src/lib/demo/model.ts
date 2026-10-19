@@ -178,6 +178,7 @@ export type MenuAction =
   | { kind: 'newWorkspace'; project: number }
   | { kind: 'startFlow'; project: number }
   | { kind: 'projectSettings'; project: number }
+  | { kind: 'openIn' }
   | { kind: 'sendTodo'; todo: number; pane: number };
 
 export interface PickItem {

@@ -232,6 +232,7 @@ fn rebuilt(message: ClientMessage, build: String) -> ClientMessage {
     match message {
         ClientMessage::Hello(mut hello) => {
             hello.build = build;
+            hello.openers.clear();
             ClientMessage::Hello(hello)
         }
         message => message,

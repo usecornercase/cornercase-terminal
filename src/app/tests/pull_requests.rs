@@ -414,7 +414,7 @@ mod dialog {
 
         right_click_row(&mut repo.app, WorkspaceRow::Workspace(0));
 
-        assert_eq!(menu_labels(&repo.app), ["rename workspace"]);
+        assert_eq!(menu_labels(&repo.app), ["rename workspace", "copy path"]);
     }
 }
 

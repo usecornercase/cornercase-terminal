@@ -57,13 +57,13 @@ pub(crate) struct Cue {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Os {
+pub(super) enum Os {
     Macos,
     Linux,
 }
 
 impl Os {
-    fn current() -> Self {
+    pub(super) fn current() -> Self {
         if cfg!(target_os = "macos") { Self::Macos } else { Self::Linux }
     }
 
@@ -79,7 +79,7 @@ fn player(os: Os, lookup: impl Fn(&str) -> Option<PathBuf>) -> Option<PathBuf> {
     os.players().iter().find_map(|name| lookup(name))
 }
 
-fn on_path(path: Option<&OsStr>) -> impl Fn(&str) -> Option<PathBuf> + '_ {
+pub(super) fn on_path(path: Option<&OsStr>) -> impl Fn(&str) -> Option<PathBuf> + '_ {
     move |name| {
         std::env::split_paths(path?)
             .filter(|dir| dir.is_absolute())
@@ -88,7 +88,7 @@ fn on_path(path: Option<&OsStr>) -> impl Fn(&str) -> Option<PathBuf> + '_ {
     }
 }
 
-fn executable(path: &Path) -> bool {
+pub(super) fn executable(path: &Path) -> bool {
     path.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
 

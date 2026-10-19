@@ -4,14 +4,14 @@ use super::*;
 fn a_project_offers_rename_project() {
     let (mut app, _rx, _dirs) = app_with(1);
     right_click(&mut app, entry_pos());
-    assert_eq!(menu_labels(&app), ["rename project"]);
+    assert_eq!(menu_labels(&app), ["rename project", "copy path"]);
 }
 
 #[test]
 fn a_workspace_offers_rename_workspace() {
     let (mut app, _rx, _dirs) = app_with(1);
     right_click_row(&mut app, WorkspaceRow::Workspace(0));
-    assert_eq!(menu_labels(&app), ["rename workspace"]);
+    assert_eq!(menu_labels(&app), ["rename workspace", "copy path"]);
 }
 
 #[test]
@@ -26,17 +26,17 @@ fn the_menu_button_of_a_project_opens_its_menu() {
     let (mut app, _rx, _dirs) = app_with(1);
     let row = ui::entry_row(list(), 1, &app.sidebar_rows(), 0, SidebarRow::Project(0));
     click(&mut app, ui::row_menu_button(row, 1).as_position());
-    assert_eq!(menu_labels(&app), ["rename project"]);
+    assert_eq!(menu_labels(&app), ["rename project", "copy path"]);
 }
 
 #[rstest::rstest]
-#[case::a_workspace(WorkspaceRow::Workspace(0), "rename workspace")]
-#[case::a_tab(WorkspaceRow::Tab(0, 0), "rename tab")]
-fn the_menu_button_of_a_row_opens_its_menu(#[case] row: WorkspaceRow, #[case] label: &str) {
+#[case::a_workspace(WorkspaceRow::Workspace(0), vec!["rename workspace", "copy path"])]
+#[case::a_tab(WorkspaceRow::Tab(0, 0), vec!["rename tab"])]
+fn the_menu_button_of_a_row_opens_its_menu(#[case] row: WorkspaceRow, #[case] labels: Vec<&str>) {
     let (mut app, _rx, _dirs) = app_with(1);
     let menu = ui::row_menu_button(row_rect(&app, row), areas().pitch);
     click(&mut app, menu.as_position());
-    assert_eq!(menu_labels(&app), [label]);
+    assert_eq!(menu_labels(&app), labels);
 }
 
 #[test]

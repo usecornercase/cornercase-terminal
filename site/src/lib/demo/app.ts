@@ -108,6 +108,7 @@ const SOUND_NEEDS = 'this needs cornercase on your computer: the demo plays no s
 
 const PULL_REQUESTS_NEED = 'this needs cornercase on your computer: the demo has no GitHub';
 
+const OPEN_IN_NEEDS = 'this needs cornercase on your computer: the demo opens no other apps';
 const SETUP_NEEDS = 'this needs cornercase on your computer: the demo runs no setup scripts';
 
 const BUILT_IN_FLOWS: [string, number, string][] = [
@@ -1871,7 +1872,8 @@ export class App {
     if (!p || !w || !viewer) return;
     const sel = viewer.selection && ordered(viewer.selection);
     const files = this.filesMap();
-    if (action === 'open') this.openInEditor(p, w, viewer.path, files.get(viewer.path) ?? '', sel ? sel[0] : 1);
+    if (action === 'open in…') this.bug(OPEN_IN_NEEDS);
+    else if (action === 'open') this.openInEditor(p, w, viewer.path, files.get(viewer.path) ?? '', sel ? sel[0] : 1);
     else if (action === 'ask agent') this.askAgent(w, !sel ? viewer.path : sel[0] === sel[1] ? `${viewer.path}:${sel[0]}` : `${viewer.path}:${sel[0]}-${sel[1]}`);
     else {
       this.emit('copy', selectedText(files, viewer));
@@ -2128,6 +2130,7 @@ export class App {
     const mark = tab && this.markAction(tab.panes);
     if (mark) actions.push(mark);
     if (target.kind === 'workspace' && this.runOf(target.workspace)) actions.push({ kind: 'showFlow', workspace: target.workspace });
+    if (target.kind === 'project' || target.kind === 'workspace') actions.push({ kind: 'openIn' });
     this.overlay = { kind: 'menu', at, actions };
     this.dirty();
   }
@@ -2165,6 +2168,7 @@ export class App {
     if (a.kind === 'newWorkspace') return 'new workspace';
     if (a.kind === 'startFlow') return 'start a flow…';
     if (a.kind === 'projectSettings') return 'project settings';
+    if (a.kind === 'openIn') return 'open in…';
     return a.action;
   }
 
@@ -2230,6 +2234,7 @@ export class App {
       this.openNewWorkspace(this.projects.findIndex((x) => x.id === a.project));
     } else if (a.kind === 'startFlow') this.bug(FLOWS_NEED);
     else if (a.kind === 'projectSettings') this.bug(SETUP_NEEDS);
+    else if (a.kind === 'openIn') this.bug(OPEN_IN_NEEDS);
     else this.paneAction(a.pane, a.action);
     this.dirty();
   }
@@ -2257,6 +2262,7 @@ export class App {
     const items: MenuAction[] = actions.map((action) => ({ kind: 'pane', pane: pane.id, action }));
     const mark = this.markAction([pane]);
     if (mark) items.push(mark);
+    items.push({ kind: 'openIn' });
     items.push({ kind: 'pane', pane: pane.id, action: 'close pane' });
     this.overlay = { kind: 'menu', at, actions: items };
     this.dirty();

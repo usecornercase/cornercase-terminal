@@ -44,11 +44,11 @@ fn press(app: &mut App, label: &str) {
 fn only_a_repository_root_offers_project_settings() {
     let mut plain = setup(false);
     right_click(&mut plain.app, entry_pos());
-    assert_eq!(menu_labels(&plain.app), ["rename project"]);
+    assert_eq!(menu_labels(&plain.app), ["rename project", "copy path"]);
 
     let mut repo = setup(true);
     right_click(&mut repo.app, entry_pos());
-    assert_eq!(menu_labels(&repo.app), ["rename project", "project settings"]);
+    assert_eq!(menu_labels(&repo.app), ["rename project", "project settings", "copy path"]);
 }
 
 #[test]

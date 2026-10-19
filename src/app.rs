@@ -23,6 +23,7 @@ use crate::control::theme::{ThemeFrom, ThemeInfo};
 use crate::error::{Error, Result};
 use crate::files;
 use crate::host::notify::Notification;
+use crate::host::open::Open;
 use crate::host::pointer;
 use crate::host::sound::Cue;
 use crate::host::theme::HostTheme;
@@ -95,6 +96,7 @@ mod menus;
 mod merged_pull_requests;
 mod messenger;
 mod notifications;
+mod opening;
 mod overlay;
 mod panes;
 mod picker_dialog;
@@ -138,6 +140,7 @@ struct Outbox {
     host_writes: Vec<Vec<u8>>,
     notifications: Vec<Notification>,
     sounds: Vec<Cue>,
+    opens: Vec<(u64, Open)>,
     detach: bool,
     restart: bool,
     start: Option<(u64, (u16, u16))>,
@@ -149,6 +152,7 @@ pub(crate) struct App {
     merged: MergedPulls,
     scroll: Scrolls,
     outbox: Outbox,
+    opening: opening::Opening,
     agents: AgentRuntime,
     update: UpdateState,
     issues: IssueConnections,
@@ -228,6 +232,7 @@ impl App {
             merged: MergedPulls::default(),
             scroll: Scrolls::default(),
             outbox: Outbox::default(),
+            opening: opening::Opening::default(),
             agents: AgentRuntime::new(home.as_deref()),
             home,
             update: UpdateState::from_env(),

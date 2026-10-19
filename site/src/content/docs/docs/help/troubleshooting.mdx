@@ -170,6 +170,15 @@ Over SSH, it's your local terminal that needs to allow it.
 - A tmux session started over SSH keeps `SSH_CONNECTION` when you reattach to it on the computer itself, so a window opened in it still counts as remote and plays none. Open cornercase outside that session, or run `tmux set-environment -gu SSH_CONNECTION` and `tmux set-environment -gu SSH_TTY`, then open a new pane.
 - A file of your own that is missing or can't be read plays the built-in sound, and so does a path that is neither absolute nor starts with `~/`; `aplay` reads only WAV.
 
+### open in… shows copy path, or misses an app
+
+- It opens on the computer the window is on, so only a local window offers it. A window from [`cornercase remote`](../../guides/remote/), your [phone's browser](../../guides/phone/) or a plain SSH session shows **copy path**, since the folders are on the other computer.
+- A tmux session started over SSH keeps `SSH_CONNECTION` when you reattach to it on the computer itself, so a window opened in it still counts as remote. Open cornercase outside that session, or run `tmux set-environment -gu SSH_CONNECTION` and `tmux set-environment -gu SSH_TTY`, then open a new pane.
+- An editor appears when its command is on the `PATH` (`code`, `cursor`, `zed`, `subl`), or on macOS when its app is in `/Applications` or `~/Applications`. On Linux Zed's command is often `zeditor`; a `zed` outside a `zed.app` folder is ignored, since on some systems that name is ZFS's daemon.
+- On Linux the menu needs `xdg-open` and a graphical session (`WAYLAND_DISPLAY` or `DISPLAY`); on a text console it shows **copy path**.
+- **default app** is offered for plain files only, never for a folder or a program you could run.
+- When an app can't start, a toast says `could not open in …` with the reason.
+
 ### A click on a notification doesn't take me to the agent
 
 Only kitty, VS Code, Contour, foot 1.18 or later and Konsole 24.12 or later report a click; Ghostty, iTerm2, WezTerm and Warp only bring the window forward. Use the **go** button of the toast, which comes back when you return to the window, in any terminal. Inside tmux, screen or Zellij cornercase only rings the bell, so there is nothing to click. If text like `99;i=cc-…` appears in a shell, a notification was clicked after its window was killed or lost its connection, so cornercase could not close it first; it is harmless.

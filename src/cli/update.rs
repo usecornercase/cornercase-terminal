@@ -180,7 +180,9 @@ fn restart_when_idle(timeout: Option<f64>, inside: bool) -> Result<()> {
             Ok(Some(ServerMessage::Shutdown)) => return Err(Error::Control(STOPPED_INSTEAD.into())),
             Ok(Some(ServerMessage::Rejected(_))) => return Err(Error::OldServer("restart --when-idle")),
             Err(e) if e.kind() == io::ErrorKind::InvalidData => return Err(Error::OldServer("restart --when-idle")),
-            Ok(Some(ServerMessage::Frame(_) | ServerMessage::Detached | ServerMessage::Sound(_))) => {}
+            Ok(Some(
+                ServerMessage::Frame(_) | ServerMessage::Detached | ServerMessage::Sound(_) | ServerMessage::Open(_),
+            )) => {}
             Ok(None) | Err(_) if report.is_some() => break,
             Ok(None) | Err(_) => return Err(Error::ServerGone),
         }

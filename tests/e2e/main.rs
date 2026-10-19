@@ -32,6 +32,7 @@ mod contract;
 mod flows;
 mod input;
 mod issues;
+mod opening;
 mod panels;
 mod panes;
 mod plugins;

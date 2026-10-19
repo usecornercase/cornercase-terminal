@@ -53,12 +53,18 @@ impl Server {
             missing = hello.graphics.why_not(),
             id_hi = hello.graphics.id_hi,
             probe = hello.probe,
+            openers = if hello.openers.is_empty() {
+                "none".into()
+            } else {
+                hello.openers.iter().map(|opener| opener.id()).collect::<Vec<_>>().join(",")
+            },
         );
         let Some(client) = self.client_mut(id) else { return };
         client.size = Some((hello.cols, hello.rows));
         client.notify = hello.notify;
         client.browser = hello.terminal.as_deref() == Some(protocol::BROWSER);
         client.zone = hello.zone;
+        client.openers = if client.browser { Vec::new() } else { hello.openers };
         client.pointer = hello.pointer;
         let background = hello.theme.background.map(|c| (c.r, c.g, c.b));
         client.graphics = Graphics::new(id, hello.graphics, background);

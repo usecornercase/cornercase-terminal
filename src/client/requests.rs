@@ -86,7 +86,9 @@ fn ask_on(mut stream: UnixStream, name: &'static str, command: control::Command)
             Ok(Some(ServerMessage::Response(text))) => return answered(&text),
             Ok(Some(ServerMessage::Rejected(_))) => return Err(Error::OldServer(name)),
             Err(e) if e.kind() == io::ErrorKind::InvalidData => return Err(Error::OldServer(name)),
-            Ok(Some(ServerMessage::Frame(_) | ServerMessage::Detached | ServerMessage::Sound(_))) => {}
+            Ok(Some(
+                ServerMessage::Frame(_) | ServerMessage::Detached | ServerMessage::Sound(_) | ServerMessage::Open(_),
+            )) => {}
             Ok(Some(ServerMessage::Shutdown | ServerMessage::Restart(_)) | None) | Err(_) => {
                 return Err(Error::ServerGone);
             }
@@ -154,7 +156,9 @@ fn follow_from(
                 }
             }
             Ok(Some(ServerMessage::Detached | ServerMessage::Shutdown | ServerMessage::Restart(_))) => return Ok(()),
-            Ok(Some(ServerMessage::Frame(_) | ServerMessage::Rejected(_) | ServerMessage::Sound(_))) => {}
+            Ok(Some(
+                ServerMessage::Frame(_) | ServerMessage::Rejected(_) | ServerMessage::Sound(_) | ServerMessage::Open(_),
+            )) => {}
             Ok(None) | Err(_) => return Err(Error::Control(LOST.into())),
         }
     }

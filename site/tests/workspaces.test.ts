@@ -59,3 +59,29 @@ test('A tab shows how many subagents its agent still runs on its second line', (
   assert.ok(screen().includes('2 subagents'));
   app.destroy();
 });
+
+for (const target of ['project', 'workspace'] as const) {
+  test(`a ${target} menu ends with open in…, which needs a real cornercase`, () => {
+    const app = demo();
+    const p = app.project()!;
+    const workspace = p.workspaces[0].id;
+    app.openMenu({ x: 2, y: 2 }, target === 'project' ? { kind: 'project', project: p.id } : { kind: 'workspace', project: p.id, workspace });
+    if (app.overlay?.kind !== 'menu') return assert.fail('no menu');
+    const last = app.overlay.actions.length - 1;
+    assert.equal(app.menuLabel(app.overlay.actions[last]), 'open in…');
+    app.chooseMenu(last);
+    app.render();
+    assert.ok(app.textAt('the demo opens no other apps'));
+    app.destroy();
+  });
+}
+
+test('a tab menu has no open in…', () => {
+  const app = demo();
+  const p = app.project()!;
+  const w = p.workspaces[0];
+  app.openMenu({ x: 2, y: 2 }, { kind: 'tab', project: p.id, workspace: w.id, tab: w.tabs[0].id });
+  if (app.overlay?.kind !== 'menu') return assert.fail('no menu');
+  assert.ok(!app.overlay.actions.some((a) => a.kind === 'openIn'));
+  app.destroy();
+});

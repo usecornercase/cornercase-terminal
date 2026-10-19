@@ -204,7 +204,10 @@ fn the_project_menu_offers_moving_only_once_there_are_groups() {
     right_click_sidebar(&mut app, SidebarRow::Project(0));
     assert_eq!(
         (before, menu_labels(&app)),
-        (vec!["rename project".to_string()], vec!["rename project".to_string(), "move to group".to_string()])
+        (
+            vec!["rename project".to_string(), "copy path".to_string()],
+            vec!["rename project".to_string(), "move to group".to_string(), "copy path".to_string()]
+        )
     );
 }
 

@@ -84,7 +84,10 @@ fn esc_ends_a_divider_drag() {
 fn a_right_click_in_a_pane_opens_its_menu() {
     let (mut app, _rx) = app();
     right_click(&mut app, inside(pane()));
-    assert_eq!(menu_labels(&app), ["split right", "split down", "send right-clicks to the pane", "close pane"]);
+    assert_eq!(
+        menu_labels(&app),
+        ["split right", "split down", "send right-clicks to the pane", "copy path", "close pane"]
+    );
 }
 
 #[test]
@@ -137,7 +140,7 @@ fn a_split_that_would_not_fit_is_not_offered() {
     let (mut app, _rx) = split_right();
     let at = inside(rects(&app)[1]);
     right_click(&mut app, at);
-    assert_eq!(menu_labels(&app), ["split down", "send right-clicks to the pane", "close pane"]);
+    assert_eq!(menu_labels(&app), ["split down", "send right-clicks to the pane", "copy path", "close pane"]);
 }
 
 #[test]
@@ -431,7 +434,7 @@ fn a_pane_shown_alone_for_lack_of_room_cannot_be_split() {
     mouse_in(&mut app, MouseEventKind::Down(MouseButton::Right), at, LOW);
     mouse_in(&mut app, MouseEventKind::Up(MouseButton::Right), at, LOW);
 
-    assert_eq!(menu_labels(&app), ["send right-clicks to the pane", "close pane"]);
+    assert_eq!(menu_labels(&app), ["send right-clicks to the pane", "copy path", "close pane"]);
 }
 
 #[rstest::rstest]

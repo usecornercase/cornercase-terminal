@@ -32,7 +32,7 @@ In a git workspace, a changed file gets its status in its colour: `M` for modifi
 
 <Screen
   name="files-file"
-  alt="The viewer on src/returns/address.rs: lines 11 and 12 selected and marked with a blue bar as changed, the two lines they replaced shown in red above them, and open, ask agent and copy at the top"
+  alt="The viewer on src/returns/address.rs: lines 11 and 12 selected and marked with a blue bar as changed, the two lines they replaced shown in red above them, and open, open in…, ask agent and copy at the top"
   caption="Lines 11 and 12 changed; the lines they replaced are shown above them."
   crop={[95, 0, 45, 20]}
 />
@@ -63,6 +63,7 @@ Click a line to select it, or press and drag over several. Hold the pointer on t
 | Button | Does |
 | --- | --- |
 | **open** | Opens the file in a new tab with your `$VISUAL` or `$EDITOR` (or `vi`), at the first selected line. The tab closes when you quit the editor. |
+| **open in…** | A menu of your apps: **file manager** or **Finder**, **VS Code**, **Cursor**, **Zed**, **Sublime Text** when installed, and **default app**. An editor opens the file at the first selected line; **default app** opens it with the app your system picks, such as Preview for an image. It shows only on this computer (a remote window offers **copy path**), and a narrow panel leaves it out; the tree's right-click still has it. |
 | **ask agent** | Types a reference such as `src/returns/address.rs:11-12 ` into the agent running in this workspace and switches to its tab, so you can write your question after it. With nothing selected it types the file's path. Without an agent in the workspace, it copies the reference to your clipboard instead. |
 | **copy** | Copies the selected lines to your clipboard, or the whole file when nothing is selected, exactly as it is on disk (tabs included). |
 
@@ -74,7 +75,7 @@ Click a PNG, JPEG, GIF, WebP, BMP or ICO file and the viewer shows the picture i
 - The picture sits under the header, centred, made smaller to fit the panel and never larger than it is, so an icon stays small. Drag the panel's border, or click **`▢`**, to see it bigger.
 - An animated GIF or WebP shows its first frame.
 - The viewer follows the file: when an agent saves a new screenshot over it, you see the new picture within a second.
-- **ask agent** types the image's path, such as `docs/returns-page.png `, into the agent running in the workspace, which can open the image itself; **copy** copies the path. An image has no **open** and no lines to select.
+- **ask agent** types the image's path, such as `docs/returns-page.png `, into the agent running in the workspace, which can open the image itself; **copy** copies the path. An image has no **open** and no lines to select, but it has **open in…**, where **default app** shows it in Preview or your image viewer.
 - While a dialog is open, such as the settings, the picture is hidden: a terminal can't dim a picture the way it dims text. Menus and the search show over it as usual.
 - A file cornercase can't decode says why instead, such as `cannot read this image: …`.
 

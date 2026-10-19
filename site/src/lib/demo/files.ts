@@ -11,12 +11,13 @@ import { type Line, truncateLeft, truncateRight } from './text';
 import type { Painter } from './ui';
 
 export type FilesMode = 'text' | 'name';
-export type FileAction = 'open' | 'ask agent' | 'copy';
+export type FileAction = 'open' | 'open in…' | 'ask agent' | 'copy';
 type Mark = 'added' | 'modified' | 'deleted' | 'above';
 type Lines = [number, number];
 
-const ACTIONS: FileAction[] = ['open', 'ask agent', 'copy'];
-const IMAGE_ACTIONS: FileAction[] = ['ask agent', 'copy'];
+const ACTIONS: FileAction[] = ['open', 'open in…', 'ask agent', 'copy'];
+const IMAGE_ACTIONS: FileAction[] = ['open in…', 'ask agent', 'copy'];
+const MIN_INFO = 11;
 const CELL = { w: 9, h: 9 * ASPECT };
 const DARK: Style = { fg: 8 };
 const LIT: Style = { fg: 0, bg: 3 };
@@ -609,13 +610,18 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
   const info = inner.y + 1;
   const content = f.files.get(viewer.path);
   const pic = picture(content);
-  let bx = right(inner) - 1;
-  const buttons = [...(pic ? IMAGE_ACTIONS : ACTIONS)].reverse().map((action) => {
-    const w = action.length + 2;
-    const r = rect(bx - w, info, w, 1);
-    bx -= w + 1;
-    return { action, r };
-  });
+  const place = (actions: FileAction[]) => {
+    let bx = right(inner) - 1;
+    return [...actions].reverse().map((action) => {
+      const w = action.length + 2;
+      const r = rect(bx - w, info, w, 1);
+      bx -= w + 1;
+      return { action, r };
+    });
+  };
+  const all = pic ? IMAGE_ACTIONS : ACTIONS;
+  const wide = place(all);
+  const buttons = Math.min(...wide.map((b) => b.r.x)) - inner.x - 2 >= MIN_INFO ? wide : place(all.filter((a) => a !== 'open in…'));
   const text = pic ? [] : textLines(content ?? '');
   const sel = viewer.selection && ordered(viewer.selection);
   const room = Math.max(0, Math.min(...buttons.map((b) => b.r.x)) - 1 - (inner.x + 1));

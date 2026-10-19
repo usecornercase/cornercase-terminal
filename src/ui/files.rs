@@ -8,7 +8,7 @@ use ratatui::buffer::CellDiffOption;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 
-use super::changes::{Action, buttons, close};
+use super::changes::{buttons, close};
 use super::icons::Glyphs;
 use super::{action_style, dim, draw_close, hovered_at as hovered, put};
 use crate::changes::diff::Status;
@@ -33,8 +33,29 @@ const NAME_PLACEHOLDER: &str = "file names";
 const TEXT_PLACEHOLDER: &str = "text in the files";
 const UNREADABLE: &str = "cannot read this image";
 const LIT: Style = Style::new().fg(Color::Black).bg(Color::Yellow);
-const IMAGE_ACTIONS: [Action; 2] = [Action::Ask, Action::Copy];
+const FILE_ACTIONS: [Action; 4] = [Action::Open, Action::OpenIn, Action::Ask, Action::Copy];
+const IMAGE_ACTIONS: [Action; 3] = [Action::OpenIn, Action::Ask, Action::Copy];
+const MIN_INFO: u16 = 11;
 pub(crate) const MARKER: &str = "\u{10FFFD}";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Action {
+    Open,
+    OpenIn,
+    Ask,
+    Copy,
+}
+
+impl Action {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Open => "open",
+            Self::OpenIn => "open in…",
+            Self::Ask => "ask agent",
+            Self::Copy => "copy",
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct View {
@@ -133,7 +154,14 @@ impl FileView {
     }
 
     fn actions(&self, row: Rect) -> Vec<(Action, Rect)> {
-        buttons(row, if self.is_image() { &IMAGE_ACTIONS } else { &Action::ALL })
+        let all: &[Action] = if self.is_image() { &IMAGE_ACTIONS } else { &FILE_ACTIONS };
+        let full = buttons(row, all, Action::label);
+        let room = full.first().map_or(0, |(_, r)| r.x.saturating_sub(row.x + 2));
+        if room >= MIN_INFO {
+            return full;
+        }
+        let rest: Vec<Action> = all.iter().copied().filter(|a| *a != Action::OpenIn).collect();
+        buttons(row, &rest, Action::label)
     }
 
     fn count(&self) -> usize {

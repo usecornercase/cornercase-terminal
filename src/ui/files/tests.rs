@@ -204,6 +204,27 @@ fn hits_rows_lines_and_marks() {
     assert_eq!(hit(AREA, &file, action(AREA, f, Action::Ask).as_position()), Some(Hit::Action(Action::Ask)));
 }
 
+mod open_in {
+    use super::*;
+
+    const WIDE: Rect = Rect { x: 0, y: 0, width: 64, height: 12 };
+
+    #[test]
+    fn a_text_file_offers_it_when_the_panel_has_room() {
+        let file = opened(None, &[]);
+        let Screen::File(f) = &file.screen else { unreachable!() };
+        assert_eq!(hit(WIDE, &file, action(WIDE, f, Action::OpenIn).as_position()), Some(Hit::Action(Action::OpenIn)));
+    }
+
+    #[test]
+    fn a_narrow_panel_leaves_it_out_to_keep_room_for_the_line_info() {
+        let file = opened(None, &[]);
+        let Screen::File(f) = &file.screen else { unreachable!() };
+        assert_eq!(action(AREA, f, Action::OpenIn), Rect::default());
+        assert_ne!(action(AREA, f, Action::Open), Rect::default());
+    }
+}
+
 #[test]
 fn a_removed_line_folds_its_block_back() {
     let view = opened(None, &[2]);

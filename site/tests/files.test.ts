@@ -141,3 +141,19 @@ test('the wheel scrolls a selection and moves its end, as the app does', () => {
   app.pointerUp();
   app.destroy();
 });
+
+test('the viewer offers open in… when it has room for it, and a click says it needs a real cornercase', () => {
+  const app = demo(140);
+  click(app, '▢');
+  assert.ok(app.textAt('open in…'));
+  click(app, 'open in…');
+  assert.ok(app.textAt('the demo opens no other apps'));
+  app.destroy();
+});
+
+test('a narrow viewer leaves open in… out so the line info keeps its room', () => {
+  const app = demo(100);
+  assert.equal(app.textAt('open in…'), null);
+  assert.ok(app.textAt('ask agent'));
+  app.destroy();
+});

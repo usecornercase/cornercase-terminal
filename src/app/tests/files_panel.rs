@@ -2,8 +2,8 @@ use super::*;
 use crate::changes::diff::Status;
 use crate::files::Mark;
 use crate::state;
-use crate::ui::changes::{Action, close};
-use crate::ui::files::{self as panel, Screen};
+use crate::ui::changes::close;
+use crate::ui::files::{self as panel, Action, Screen};
 
 fn pressed_lines() -> (TempDir, App, Receiver<AppEvent>, Position) {
     let repo = repo();

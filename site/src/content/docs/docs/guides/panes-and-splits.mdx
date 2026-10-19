@@ -21,7 +21,7 @@ Every tab holds one or more **panes**. Each pane is a real terminal running its 
 
 <Screen
   name="pane-menu"
-  alt="The pane menu: split right, split down, send right-clicks to the pane, close pane"
+  alt="The pane menu: split right, split down, send right-clicks to the pane, open in…, close pane"
   crop={[37, 15, 33, 6]}
 />
 
@@ -30,6 +30,7 @@ Every tab holds one or more **panes**. Each pane is a real terminal running its 
 | **split right** | Opens a new shell to the right of the pane. |
 | **split down** | Opens a new shell below the pane. |
 | **send right-clicks to the pane** | Lets the program in this pane have right-clicks; see [below](#right-clicks-inside-programs). |
+| **open in…** | Opens the folder the program in this pane is in, following your `cd`, in Finder or your file manager, or in an editor; see [Open in another app](../projects-workspaces-tabs/#open-in-another-app). A window that can't open anything shows **copy path**. |
 | **close pane** | Ends the program in this pane and removes it. |
 
 The new pane starts in the folder the pane you split is currently in, and becomes the active one. A split is only offered when both halves would still be usable: at least 10 columns wide or 3 rows tall each.

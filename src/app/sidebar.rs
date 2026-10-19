@@ -321,6 +321,7 @@ impl App {
         if git::is_repo_root(&self.projects[p].path) {
             actions.push(MenuAction::ProjectSettings(id));
         }
+        actions.push(self.open_entry(super::opening::Subject::Project(id)));
         actions.extend(self.plugin_menu(Spot::Project(id)));
         actions
     }

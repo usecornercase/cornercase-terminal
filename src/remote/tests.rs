@@ -212,6 +212,7 @@ mod proxy {
     fn hands_the_server_its_own_build() {
         let hello = Hello {
             zone: "UTC".into(),
+            openers: vec![crate::host::open::Opener::Files],
             version: protocol::VERSION,
             build: "the laptop's".into(),
             cols: 80,
@@ -226,7 +227,9 @@ mod proxy {
 
         let message = rebuilt(ClientMessage::Hello(Box::new(hello)), "the server's".into());
 
-        assert!(matches!(message, ClientMessage::Hello(hello) if hello.build == "the server's"));
+        assert!(
+            matches!(message, ClientMessage::Hello(hello) if hello.build == "the server's" && hello.openers.is_empty())
+        );
     }
 
     #[test]

@@ -99,6 +99,7 @@ fn hello(cols: u16, rows: u16, theme: &Theme) -> Hello {
         graphics: Support { missing: Some(Missing::Cannot { name: "this browser".into() }), ..Support::default() },
         probe: "web".into(),
         zone: if theme.zone.is_empty() { "UTC".into() } else { theme.zone.clone() },
+        openers: Vec::new(),
     }
 }
 
@@ -243,7 +244,7 @@ fn pump(
                         return "connection lost";
                     }
                 }
-                Ok(Some(ServerMessage::Response(_) | ServerMessage::Sound(_))) => {}
+                Ok(Some(ServerMessage::Response(_) | ServerMessage::Sound(_) | ServerMessage::Open(_))) => {}
                 Ok(Some(ServerMessage::Rejected(why))) => return finish(ws, "rejected", &why),
                 Ok(Some(ServerMessage::Detached)) => return finish(ws, "detached", ""),
                 Ok(Some(ServerMessage::Shutdown)) => return finish(ws, "shutdown", ""),

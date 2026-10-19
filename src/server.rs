@@ -23,6 +23,7 @@ use crate::control::start_server::SizeFrom;
 use crate::control::{self, Ids, What};
 use crate::error::{Error, Result};
 use crate::host::notify::{self, Channel};
+use crate::host::open::Opener;
 use crate::host::pointer;
 use crate::host::sound;
 use crate::host::theme::HostTheme;
@@ -216,6 +217,7 @@ struct Client {
     id: u64,
     size: Option<(u16, u16)>,
     zone: String,
+    openers: Vec<Opener>,
     used: u64,
     notify: Channel,
     browser: bool,
@@ -679,6 +681,12 @@ impl Server {
                 client.send(ServerMessage::Sound(cue.clone()));
             }
         }
+        for (id, open) in app.take_opens() {
+            if let Some(client) = clients.iter().find(|c| c.id == id && c.screen.is_some() && !c.browser) {
+                log::info!("server", "open sent", client = id, opener = open.opener.id());
+                client.send(ServerMessage::Open(open));
+            }
+        }
     }
 
     fn due(&self, now: Instant) -> bool {
@@ -734,6 +742,7 @@ impl Server {
             ServerEvent::Message(id, ClientMessage::Hello(hello)) => self.hello(id, *hello),
             ServerEvent::Message(id, ClientMessage::Event(ev)) => self.input(id, ev),
             ServerEvent::Message(_, ClientMessage::Activated(token)) => self.app.notification_clicked(&token),
+            ServerEvent::Message(id, ClientMessage::OpenFailed(failed)) => self.app.open_failed(id, &failed),
             ServerEvent::Message(id, ClientMessage::Restart) => {
                 log::info!("server", "restart requested", client = id);
                 self.restart = Some(std::env::current_exe().unwrap_or_default());
@@ -790,6 +799,7 @@ impl Server {
             id,
             size: None,
             zone: "UTC".into(),
+            openers: Vec::new(),
             used: 0,
             notify,
             browser: false,
@@ -826,12 +836,10 @@ impl Server {
             self.fit(None);
         }
         let Some(area) = self.area else { return };
-        let zone = self
-            .clients
-            .iter()
-            .find(|client| client.id == id)
-            .map_or_else(|| "UTC".into(), |client| client.zone.clone());
-        self.app.set_queue_zone(zone);
+        if let Some(client) = self.clients.iter().find(|client| client.id == id) {
+            self.app.set_queue_zone(client.zone.clone());
+            self.app.set_window(id, &client.openers);
+        }
         if let Err(e) = self.app.handle_event(AppEvent::Input(ev), area) {
             log::warning!("app", "input failed", error = e);
         }

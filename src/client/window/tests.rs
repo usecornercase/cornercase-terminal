@@ -73,6 +73,25 @@ mod sound {
     }
 }
 
+mod opening {
+    use super::*;
+    use crate::host::open::{Open, Opener};
+
+    fn open() -> Received {
+        Received::Message(ServerMessage::Open(Open { opener: Opener::Vscode, path: "/work".into(), line: None }))
+    }
+
+    #[test]
+    fn opens_without_ending_a_local_window() {
+        assert!(matches!(next(open(), false), Ok(Next::Open(order)) if order.opener == Opener::Vscode));
+    }
+
+    #[test]
+    fn opens_without_ending_a_remote_window() {
+        assert!(matches!(next(open(), true), Ok(Next::Open(_))));
+    }
+}
+
 mod reconnecting {
     use super::*;
 

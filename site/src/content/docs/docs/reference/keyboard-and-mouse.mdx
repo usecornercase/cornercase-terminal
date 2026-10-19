@@ -25,7 +25,7 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Drag | A project, group, workspace or tab | Moves it within its list; a project also into or out of a group. `Esc` cancels. See [Reorder](../../guides/projects-workspaces-tabs/#reorder). |
 | Hover, then click `×` | Any project, workspace or tab row | Closes it. A project, and a workspace with its own worktree, ask first. In the [compact layout](../../guides/small-terminals/) the `×` always shows, and a tab or workspace asks first too. |
 | Hover, then click `×` | A group header | Asks, then deletes the group: **keep projects** leaves them open, ungrouped; **close projects** closes them too. |
-| Right-click, or hover and click `⋯` | A project, workspace or tab | Opens its menu, to **rename** it; a project's menu can also **move to group** and, for a repository, **project settings** (the [setup and teardown](../../guides/worktrees/#set-up-each-new-worktree) of its worktrees), a worktree workspace with a setup shows **run setup**, a workspace with a pull request shows **pull request #n**, its [checks](../../guides/worktrees/#pull-requests-and-their-checks), and a workspace running a flow shows **show flow**, its [Flow panel](../../guides/flows/#the-flow-panel). In the compact layout the `⋯` always shows. |
+| Right-click, or hover and click `⋯` | A project, workspace or tab | Opens its menu, to **rename** it; a project's menu can also **move to group** and, for a repository, **project settings** (the [setup and teardown](../../guides/worktrees/#set-up-each-new-worktree) of its worktrees), a worktree workspace with a setup shows **run setup**, a workspace with a pull request shows **pull request #n**, its [checks](../../guides/worktrees/#pull-requests-and-their-checks), and a workspace running a flow shows **show flow**, its [Flow panel](../../guides/flows/#the-flow-panel). A project and a workspace also end with **open in…** (or **copy path** where the window can open nothing), see [Open in another app](../../guides/projects-workspaces-tabs/#open-in-another-app). In the compact layout the `⋯` always shows. |
 | Right-click, or hover and click `⋯` | A group header | Opens its menu: **add project**, **rename group**, **icon and colour**, **delete group** (which asks first). |
 | Click | `▸` / `▾` beside a workspace, or in the [tree](../../guides/projects-workspaces-tabs/#the-tree) | Collapses or expands a workspace (or, in the tree, a project). A click on the rest of its row opens it and expands it. |
 | Wheel | The projects, workspaces or tree list | Scrolls the list. |
@@ -57,7 +57,7 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Gesture | Where | Does |
 | --- | --- | --- |
 | Click | An inactive pane | Makes it active. The click isn't passed to the program. |
-| Right-click | Any pane | Opens the pane menu on release: split right, split down, right-clicks, close. |
+| Right-click | Any pane | Opens the pane menu on release: split right, split down, right-clicks, open in…, close. |
 | Right-button drag | From a pane onto another pane | Near an edge, moves the pane to that side of the other one; in the middle, swaps them. See [Move and swap panes](../../guides/panes-and-splits/#move-and-swap-panes). |
 | Drag | A divider between panes | Resizes the panes. `Esc` ends the drag where it is. |
 | Double-click | A divider | Splits the space in half again. |
@@ -97,11 +97,12 @@ See [Changes panel](../../guides/changes/).
 | Click | `‹` | Goes back to the tree, or to the search results. |
 | Click, or press and drag | The lines of a file | Selects a line, or several. Held on the first or last line shown, or past it, the file scrolls with the selection. |
 | Click | A change mark (`▎`, `▁`, `▔`) | Shows or hides the lines it replaced or deleted. |
-| Click | `open`, `ask agent`, `copy` | Opens the file in your editor, types its path and selected lines into the workspace's agent, copies the selected lines, or the whole file when none is selected. |
+| Click | `open`, `open in…`, `ask agent`, `copy` | Opens the file in your editor, opens it in an app you pick (an editor at the first selected line, or the default app), types its path and selected lines into the workspace's agent, copies the selected lines, or the whole file when none is selected. |
 | Click | The search bar | Gives it the keys. |
 | Click | `▤` | Searches file names instead of the text, or the text again. |
 | Click | `×` in the search bar | Clears the search. |
 | Click | A result | Opens the file, at the line of a text match. |
+| Right-click | A file or folder in the tree | Opens the **open in…** menu for it: your file manager, editors and, for a file, the default app. |
 | Click | `▢`, then `❐` | Shows the open file full screen, then puts it back in the panel. |
 | Click | `×` | Closes the panel. |
 | Wheel | The panel | Scrolls the tree, the results or the file. |

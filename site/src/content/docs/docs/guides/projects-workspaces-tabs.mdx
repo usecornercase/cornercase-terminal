@@ -318,7 +318,7 @@ Click the `⋯` at the end of a project, group, workspace or tab row (it shows w
 
 <Screen
   name="rename-menu"
-  alt="Right-clicking the orders-api project opens a small menu with two items: rename project and move to group"
+  alt="Right-clicking the orders-api project opens a small menu with three items: rename project, move to group and open in…"
   crop={[0, 3, 32, 10]}
 />
 
@@ -329,6 +329,21 @@ Type the new name and press `Enter`. Leave the name empty to go back to the auto
   alt="The Rename project dialog with the current name orders-api and the hint leave it empty to use the folder name"
   crop={[23, 14, 64, 10]}
 />
+
+## Open in another app
+
+The menu of a project or a workspace row (` ⋯ ` or right-click, in every layout) ends with **open in…**. It opens a second menu with what your computer has: **Finder** on macOS or your **file manager** on Linux, then **VS Code**, **Cursor**, **Zed** and **Sublime Text**, each only when it is installed:
+
+<Screen
+  name="open-in"
+  alt="The submenu of open in… on the orders-api project, listing file manager and VS Code"
+  crop={[0, 3, 40, 10]}
+/>
+
+- A **project** opens its folder. A **workspace** opens its own folder, so for a worktree that is the checkout under `~/.cornercase/worktrees`, one click away instead of a path to type.
+- The [pane menu](../panes-and-splits/) has the same entry for the folder the program in that pane is in, following your `cd`; the [files panel](../files/#pick-lines-and-act-on-them) opens the file you are reading, and a right-click on a file or folder in its tree opens the same menu.
+- A command on your `PATH` is enough for an editor (`code`, `cursor`, `zed`, `subl`; on Linux Zed's command is often `zeditor`). On macOS an app in `/Applications` or `~/Applications` works without its command.
+- It opens on the computer your window is on. In a window from [`cornercase remote`](../remote/), your [phone's browser](../phone/) or an `ssh` session, the folders are on the other computer, so the menus show **copy path** instead, which copies the folder's path to your clipboard. If an app can't start, the toast says `could not open in VS Code: exit status 1`; see [troubleshooting](../../help/troubleshooting/#open-in-shows-copy-path-or-misses-an-app).
 
 ## Close
 

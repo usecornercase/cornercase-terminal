@@ -89,8 +89,8 @@ fn an_outside_path_is_underlined_and_opens_in_the_viewer(
             panic!("a file shows")
         };
         let panel = app.layout(area).changes;
-        assert_eq!(ui::files::action(panel, &file, ui::changes::Action::Open), Rect::default());
-        for action in [ui::changes::Action::Ask, ui::changes::Action::Copy] {
+        assert_eq!(ui::files::action(panel, &file, ui::files::Action::Open), Rect::default());
+        for action in [ui::files::Action::Ask, ui::files::Action::Copy] {
             click_in(&mut app, ui::files::action(panel, &file, action).as_position(), area);
         }
         assert_eq!(app.take_host_writes(), [clipboard::osc52(&path), clipboard::osc52(&path)]);

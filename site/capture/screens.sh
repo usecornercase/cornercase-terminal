@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-full files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
+CC_SCREENS="first-run sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-full files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
 
 pane_in() {
   cc status --json | node -e '
@@ -270,9 +270,10 @@ screen_new_workspace_plain() {
 }
 
 screen_pane_menu() {
+  CC_LOCAL=1
   cc_s1
   cc_rclick '~' 4
-  cc_wait 'split right'
+  cc_wait 'open in…'
   cc_shot pane-menu
 }
 
@@ -284,10 +285,20 @@ screen_group_style() {
   cc_shot group-style
 }
 
-screen_rename_menu() {
+screen_open_in() {
+  CC_LOCAL=1
   cc_s1
   cc_rclick 'orders-api'
-  cc_wait 'rename project'
+  cc_click 'open in…'
+  cc_wait 'file manager'
+  cc_shot open-in
+}
+
+screen_rename_menu() {
+  CC_LOCAL=1
+  cc_s1
+  cc_rclick 'orders-api'
+  cc_wait 'open in…'
   cc_shot rename-menu
 }
 

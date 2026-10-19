@@ -2,9 +2,11 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
+use super::opening::Subject;
 use super::overlay::Overlay;
 use super::plugins::Spot;
 use crate::error::Result;
+use crate::host::open::Opener;
 use crate::log::{self};
 use crate::messenger::Via;
 use crate::project::Hierarchy;
@@ -97,6 +99,9 @@ pub(super) enum MenuAction {
     StartFlow(u64),
     ProjectSettings(u64),
     RunSetup(u64),
+    OpenIn(Subject),
+    OpenWith(Subject, Opener),
+    CopyPath(Subject),
     SendTodo { todo: u64, pane: u64 },
     Plugin { spot: Spot, index: u16, revision: u32 },
 }
@@ -138,6 +143,9 @@ impl App {
             MenuAction::StartFlow(_) => "start a flow…".into(),
             MenuAction::ProjectSettings(_) => "project settings".into(),
             MenuAction::RunSetup(_) => "run setup".into(),
+            MenuAction::OpenIn(_) => "open in…".into(),
+            MenuAction::OpenWith(_, opener) => opener.name().into(),
+            MenuAction::CopyPath(_) => "copy path".into(),
             MenuAction::Pane(_, action) => action.label().into(),
             MenuAction::Mark(_, true) => "mark as pending review".into(),
             MenuAction::Mark(_, false) => "mark as reviewed".into(),
@@ -177,10 +185,15 @@ impl App {
             Target::Workspace(project, workspace) => self.setup_action(project, workspace),
             _ => None,
         };
+        let open = match target {
+            Target::Workspace(_, workspace) => Some(self.open_entry(Subject::Workspace(workspace))),
+            _ => None,
+        };
         std::iter::once(MenuAction::Rename(target))
             .chain(more)
             .chain(flow)
             .chain(setup)
+            .chain(open)
             .chain(spot.map(|spot| self.plugin_menu(spot)).unwrap_or_default())
             .collect()
     }
@@ -234,6 +247,9 @@ impl App {
             MenuAction::StartFlow(project) => self.open_start_flow(self.start_flow_in(project)),
             MenuAction::ProjectSettings(project) => self.open_project_settings(project),
             MenuAction::RunSetup(workspace) => self.run_setup(workspace, area),
+            MenuAction::OpenIn(subject) => self.open_in_menu(subject, at),
+            MenuAction::OpenWith(subject, opener) => self.open_with(subject, opener),
+            MenuAction::CopyPath(subject) => self.copy_path(subject),
             MenuAction::Pane(pane, action) => return self.pane_action(pane, action, area),
             MenuAction::Mark(marked, pending) => {
                 self.mark(marked, pending);
