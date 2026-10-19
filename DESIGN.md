@@ -17,6 +17,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 
 ## Areas
 
+- [Architecture](design/architecture.md): what each file and folder of `src/` holds, the server loop, the client.
 - [Code layout](design/code-layout.md) (`src/`, `tests/layers.rs`): domains, `pub`, the files of `App`, 1,000 lines per file, `tests/layers.rs`.
 - [Layout](design/layout.md) (`config.rs`, `state.rs`, `ui.rs`, `ui/`, `app/layout.rs`, `app/sidebar.rs`, `app/tab_bar.rs`, `app/interaction.rs`): the sidebar layouts, the agents section, borders, bars, text colours, compact mode.
 - [Dialogs](design/dialogs.md) (`ui/dialog.rs`, `ui/dialog/`, `ui/combo.rs`, `list.rs`, `app/overlay.rs`, `app/dialogs.rs`): borders, dimming, buttons, a click outside, comboboxes.
