@@ -1,7 +1,7 @@
 use super::*;
 use crate::list::Combo;
 use crate::queue::Place;
-use crate::queue::form::{Choice, Control, Form, When};
+use crate::queue::form::{Choice, Choices, Control, Form, When};
 use crate::todo::editor::Editor;
 
 fn queue_tab() -> View<'static> {
@@ -48,8 +48,8 @@ fn form(prompt: &str, note: Option<&str>) -> Form {
         Choice { label: "shop · root".into(), place: Place::default(), worktree: true },
         Choice { label: "shop › main".into(), place: Place::default(), worktree: false },
     ];
-    let mut form =
-        Form::new(places, Some(0), vec!["auto".into(), "claude".into()], 1, "Europe/Madrid".into(), "2026-10-14");
+    let choices = Choices { places, place: Some(0), kinds: vec!["auto".into(), "claude".into()], agent: 1 };
+    let mut form = Form::new(choices, "Europe/Madrid".into(), "2026-10-14");
     form.prompt = Editor::new(prompt);
     form.open_in.choose(1);
     form.branch = Editor::new("fix-login");

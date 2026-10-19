@@ -12,7 +12,7 @@ use crate::error::Error;
 use crate::issues::{Secret, secrets};
 use crate::log::{self, Job, Level};
 use crate::messenger::link::{self, Link};
-use crate::messenger::{Advice, Chat, Identity, Key, Keyboard, Message, Order, Owned, Saved, Tap, Via};
+use crate::messenger::{Account, Advice, Chat, Identity, Key, Keyboard, Message, Order, Owned, Saved, Tap, Via};
 use crate::settings;
 use crate::ui;
 use crate::web::auth::{Pairing, random_hex};
@@ -272,7 +272,7 @@ impl App {
         };
         messenger.links += 1;
         let id = messenger.links;
-        let link = via.start_link(id, &messenger.api, &token, &self.tx, unix_now() - RECENT);
+        let link = via.start_link(id, Account { api: &messenger.api, token: &token }, &self.tx, unix_now() - RECENT);
         link.send(Order::Commands);
         log::info!(via.target(), "listening", link = id, paired = messenger.paired());
         messenger.link = Some(link);

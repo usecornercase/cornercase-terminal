@@ -15,7 +15,7 @@ use crate::issues::{self, Issue};
 use crate::list::{COMBO_ROWS, Combo};
 use crate::project::Hierarchy;
 use crate::queue;
-use crate::queue::form::{Choice, Control, Form, Step, When};
+use crate::queue::form::{Choice, Choices, Control, Form, Step, When};
 use crate::todo::editor::Editor;
 use crate::ui;
 
@@ -69,7 +69,8 @@ impl App {
         let at = entry.as_ref().map_or_else(crate::time::now, |entry| entry.task.at);
         let shown = queue::clock::display(at, &zone);
         let (date, clock) = shown.split_once(' ').unwrap_or((&shown, "09:00"));
-        let mut form = Form::new(places, confirmed.then_some(place), kinds, agent, zone.clone(), date);
+        let choices = Choices { places, place: confirmed.then_some(place), kinds, agent };
+        let mut form = Form::new(choices, zone.clone(), date);
         if let Some(entry) = &entry {
             form.id = id;
             form.label = (entry.task.label != entry.task.prompt.lines().next().unwrap_or_default())

@@ -65,7 +65,10 @@ impl Link {
         let send_tx = tx.clone();
         let (listen_stop, send_stop) = (Arc::clone(&stop), Arc::clone(&stop));
         thread::spawn(move || listen(&listen_stop));
-        thread::spawn(move || deliver(id, via, &transport, &received, &send_tx, &send_stop));
+        thread::spawn(move || {
+            let delivery = Delivery { id, via, tx: &send_tx, stop: &send_stop };
+            deliver(&delivery, &transport, &received);
+        });
         Self { id, orders, stop }
     }
 
@@ -116,30 +119,38 @@ fn perform<T: Transport>(transport: &T, order: &Order, stop: &AtomicBool) -> Res
     sent(done, &attempt)
 }
 
-fn deliver<E: From<(Via, Event)>, T: Transport>(
+struct Delivery<'a, E> {
     id: u64,
     via: Via,
-    transport: &T,
-    orders: &Receiver<Order>,
-    tx: &Sender<E>,
-    stop: &AtomicBool,
-) {
+    tx: &'a Sender<E>,
+    stop: &'a AtomicBool,
+}
+
+impl<E: From<(Via, Event)>> Delivery<'_, E> {
+    fn sent(&self, tag: u64, messages: Vec<i64>) -> bool {
+        messages.into_iter().all(|message| {
+            let event = Event::Sent { link: self.id, tag, message };
+            self.tx.send((self.via, event).into()).is_ok()
+        })
+    }
+}
+
+fn deliver<E: From<(Via, Event)>, T: Transport>(delivery: &Delivery<E>, transport: &T, orders: &Receiver<Order>) {
     for order in orders {
-        if stop.load(Ordering::Relaxed) {
+        if delivery.stop.load(Ordering::Relaxed) {
             return;
         }
-        let done = panics::job(|| Ok(perform(transport, &order, stop)))
+        let done = panics::job(|| Ok(perform(transport, &order, delivery.stop)))
             .unwrap_or_else(|e| Err(T::Failure::from(e.to_string())));
         match done {
             Ok(messages) => {
-                let Some(tag) = order.tag() else { continue };
-                for message in messages {
-                    if tx.send((via, Event::Sent { link: id, tag, message }).into()).is_err() {
-                        return;
-                    }
+                if order.tag().is_some_and(|tag| !delivery.sent(tag, messages)) {
+                    return;
                 }
             }
-            Err(failure) => log::warning!(via.target(), "not delivered", method = T::method(&order), error = failure),
+            Err(failure) => {
+                log::warning!(delivery.via.target(), "not delivered", method = T::method(&order), error = failure);
+            }
         }
     }
 }

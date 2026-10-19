@@ -16,6 +16,49 @@ enum Act {
     Close(u16),
 }
 
+fn serve(
+    listener: &TcpListener,
+    heartbeat: u64,
+    stopped: &AtomicBool,
+    heard: &Sender<(usize, Value)>,
+    acts: &Receiver<Act>,
+) {
+    for (n, stream) in listener.incoming().enumerate() {
+        if stopped.load(Ordering::Relaxed) {
+            return;
+        }
+        let Ok(stream) = stream else { continue };
+        let Ok(mut socket) = tungstenite::accept(stream) else { continue };
+        let _ = socket.get_ref().set_read_timeout(Some(Duration::from_millis(10)));
+        let hello = json!({ "op": 10, "d": { "heartbeat_interval": heartbeat } });
+        let _ = socket.send(Message::text(hello.to_string()));
+        converse(&mut socket, n, heard, acts);
+    }
+}
+
+fn converse(socket: &mut WebSocket<TcpStream>, n: usize, heard: &Sender<(usize, Value)>, acts: &Receiver<Act>) {
+    loop {
+        match socket.read() {
+            Ok(Message::Text(text)) => {
+                let _ = heard.send((n, serde_json::from_str(text.as_str()).unwrap_or(Value::Null)));
+            }
+            Ok(Message::Close(frame)) => {
+                let code = frame.map(|frame| u16::from(frame.code));
+                let _ = heard.send((n, json!({ "closed": code })));
+            }
+            Ok(_) => {}
+            Err(e) if waiting(&e) => {}
+            Err(_) => return,
+        }
+        while let Ok(act) = acts.try_recv() {
+            let _ = match act {
+                Act::Send(payload) => socket.send(Message::text(payload.to_string())),
+                Act::Close(code) => socket.close(Some(CloseFrame { code: code.into(), reason: "".into() })),
+            };
+        }
+    }
+}
+
 struct FakeGateway {
     url: String,
     heard: Receiver<(usize, Value)>,
@@ -31,38 +74,7 @@ impl FakeGateway {
         let (acts, acts_rx) = mpsc::channel::<Act>();
         let stop = Arc::new(AtomicBool::new(false));
         let stopped = Arc::clone(&stop);
-        thread::spawn(move || {
-            for (n, stream) in listener.incoming().enumerate() {
-                if stopped.load(Ordering::Relaxed) {
-                    return;
-                }
-                let Ok(stream) = stream else { continue };
-                let Ok(mut socket) = tungstenite::accept(stream) else { continue };
-                let _ = socket.get_ref().set_read_timeout(Some(Duration::from_millis(10)));
-                let hello = json!({ "op": 10, "d": { "heartbeat_interval": heartbeat } });
-                let _ = socket.send(Message::text(hello.to_string()));
-                loop {
-                    match socket.read() {
-                        Ok(Message::Text(text)) => {
-                            let _ = heard_tx.send((n, serde_json::from_str(text.as_str()).unwrap_or(Value::Null)));
-                        }
-                        Ok(Message::Close(frame)) => {
-                            let code = frame.map(|frame| u16::from(frame.code));
-                            let _ = heard_tx.send((n, json!({ "closed": code })));
-                        }
-                        Ok(_) => {}
-                        Err(e) if waiting(&e) => {}
-                        Err(_) => break,
-                    }
-                    while let Ok(act) = acts_rx.try_recv() {
-                        let _ = match act {
-                            Act::Send(payload) => socket.send(Message::text(payload.to_string())),
-                            Act::Close(code) => socket.close(Some(CloseFrame { code: code.into(), reason: "".into() })),
-                        };
-                    }
-                }
-            }
-        });
+        thread::spawn(move || serve(&listener, heartbeat, &stopped, &heard_tx, &acts_rx));
         Self { url, heard, acts, stop }
     }
 

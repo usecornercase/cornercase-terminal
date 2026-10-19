@@ -29,6 +29,12 @@ pub(crate) enum Via {
     Discord,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct Account<'a> {
+    pub(crate) api: &'a str,
+    pub(crate) token: &'a str,
+}
+
 impl Via {
     pub(crate) const ALL: [Self; 2] = [Self::Telegram, Self::Discord];
 
@@ -119,11 +125,11 @@ impl Via {
     pub(crate) fn start_link<E: From<(Self, link::Event)> + Send + 'static>(
         self,
         id: u64,
-        api: &str,
-        token: &str,
+        account: Account,
         tx: &std::sync::mpsc::Sender<E>,
         since: i64,
     ) -> link::Link {
+        let Account { api, token } = account;
         match self {
             Self::Telegram => {
                 telegram::link::start(id, &telegram::Bot::new(api, token), tx, telegram::link::POLL, since)
