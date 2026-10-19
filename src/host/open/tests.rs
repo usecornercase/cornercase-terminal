@@ -181,6 +181,8 @@ mod commands {
     #[rstest]
     #[case::folder("/work/web", Kind::Folder, &["open", "/work/web"])]
     #[case::a_package_folder_is_revealed("/work/Tool.app", Kind::Folder, &["open", "-R", "/work/Tool.app"])]
+    #[case::a_folder_named_like_a_site_is_opened("/work/usecornercase.dev", Kind::Folder, &["open", "/work/usecornercase.dev"])]
+    #[case::an_xcode_project_is_revealed("/work/Shop.xcodeproj", Kind::Folder, &["open", "-R", "/work/Shop.xcodeproj"])]
     #[case::file("/work/web/a.rs", Kind::File, &["open", "-R", "/work/web/a.rs"])]
     #[case::program("/work/web/run", Kind::Program, &["open", "-R", "/work/web/run"])]
     fn finder(#[case] path: &str, #[case] kind: Kind, #[case] expected: &[&str]) {

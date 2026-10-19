@@ -116,7 +116,7 @@ enum Reach {
 
 type Step = Vec<OsString>;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct Openers {
     found: Vec<(Opener, Reach)>,
     launcher: Option<PathBuf>,
@@ -190,7 +190,7 @@ impl Openers {
         match (open.opener, reach) {
             (Opener::Default, _) => Ok(vec![step(launcher, &[target])]),
             (Opener::Finder, _) => {
-                let reveal = kind != Kind::Folder || path.extension().is_some();
+                let reveal = kind != Kind::Folder || is_bundle(path);
                 let args = if reveal { vec!["-R".into(), target] } else { vec![target] };
                 Ok(vec![step(launcher, &args)])
             }
@@ -224,20 +224,23 @@ impl Openers {
         if self.found.is_empty() {
             return;
         }
-        let opener = open.opener;
-        let path = Path::new(&open.path);
-        let kind = path.is_absolute().then(|| Kind::of(path)).flatten();
-        match self.steps(open, kind) {
-            Err(reason) => failed(Failed { opener, reason }),
-            Ok(steps) => {
-                thread::spawn(move || {
-                    if let Err(reason) = run(&steps) {
-                        failed(Failed { opener, reason });
-                    }
-                });
+        let (this, open) = (self.clone(), open.clone());
+        thread::spawn(move || {
+            let path = Path::new(&open.path);
+            let kind = path.is_absolute().then(|| Kind::of(path)).flatten();
+            let done = this.steps(&open, kind).and_then(|steps| run(&steps));
+            if let Err(reason) = done {
+                failed(Failed { opener: open.opener, reason });
             }
-        }
+        });
     }
+}
+
+const BUNDLES: [&str; 10] =
+    ["app", "appex", "bundle", "framework", "pkg", "playground", "plugin", "prefpane", "xcodeproj", "xcworkspace"];
+
+fn is_bundle(path: &Path) -> bool {
+    path.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| BUNDLES.iter().any(|b| ext.eq_ignore_ascii_case(b)))
 }
 
 fn in_zed_app(path: &Path) -> bool {
