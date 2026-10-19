@@ -2,6 +2,16 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.159
+
+- **Switch accounts from the window.** Settings has a new **Accounts** tab: add an account of Claude Code, Codex or Gemini CLI (it opens a tab to log in there), see whether each one, and the agent's own login, is logged in and as whom, and remove an account (it asks first, and reminds you to log out before). Once you have an account, a status bar at the bottom of the window shows a button per agent, such as ` claude: work ▾ `: click it and pick the account its new tabs use. Open tabs keep theirs, so a work agent and a personal one can run side by side.
+- **Name your accounts.** **rename…** gives an account, or the agent's own login in `~/.claude`, the name the window shows, such as `work`; the folder stays where it is, so nothing logs out. `cornercase account rename` and `cornercase account use` do the same from a shell.
+- **See which account an agent uses.** Its tab names the account after the model, such as `Opus 5.5 · work · 12%`, in the tab bar and the agents section too.
+- **Start with another account once.** Starting an issue, starting a flow (one list per agent of the team) and scheduling one each offer an account list, set to the one in use; your choice applies to that start only. `--account claude=personal` on `start`, `new-tab`, `flow run` and `queue add` does it from a shell.
+- **Plan usage per account.** Usage › Limits shows a section for each Claude Code and Codex account, by its name, and marks the one in use.
+- The three new switches in Settings › UI (**account**, **account switcher**, **account picker**) turn each of these off; none of it shows until you add an account.
+- Scripts and other apps: `cornercase account list --check` asks each account whether it is logged in, `usage --json` names each entry's `account` and `label`, the queue's entries take `accounts`, and profiles keep working from the command line.
+
 ## 0.12.158
 
 - **Open a project, a workspace or a file in Finder, the file manager or your editor.** Right-click a project or workspace row (or click its `⋯`) and choose **open in…**: it lists what your computer has, Finder on macOS or the file manager on Linux, then VS Code, Cursor, Zed and Sublime Text when they are installed. A workspace opens its own folder, so a worktree under `~/.cornercase/worktrees` is one click away. The pane menu opens the folder its program is in, following your `cd`. In the files panel, ` open in… ` next to ` open ` does the same for the file you are reading: an editor opens it at the first selected line, and **default app** opens it in Preview or your image viewer. A right-click on a file or folder in the tree opens the same menu.
