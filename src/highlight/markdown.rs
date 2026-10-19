@@ -113,74 +113,98 @@ impl Renderer {
                 self.text(&text);
             }
             Event::SoftBreak | Event::HardBreak => self.push("\n".into(), Style::default()),
-            Event::Rule => {
-                self.flush();
-                self.gap();
-                let prefix = self.prefix(false);
-                let room = self.width.saturating_sub(spans_width(&prefix));
-                let mut spans = prefix;
-                spans.push(Span::styled("─".repeat(room), DIM));
-                self.lines.push(Line::from(spans));
+            Event::Rule => self.rule(),
+            Event::TaskListMarker(done) => self.task_marker(done),
+            _ => {}
+        }
+    }
+
+    fn rule(&mut self) {
+        self.flush();
+        self.gap();
+        let prefix = self.prefix(false);
+        let room = self.width.saturating_sub(spans_width(&prefix));
+        let mut spans = prefix;
+        spans.push(Span::styled("─".repeat(room), DIM));
+        self.lines.push(Line::from(spans));
+    }
+
+    fn task_marker(&mut self, done: bool) {
+        if let Some(item) = self.items.last_mut() {
+            let (mark, style) = if done { ("[x] ", DONE) } else { ("[ ] ", Style::default()) };
+            item.marker.get_or_insert_with(Vec::new).push((mark.into(), style));
+            item.indent += mark.chars().count();
+        }
+    }
+
+    fn start(&mut self, tag: Tag) {
+        match tag {
+            Tag::Paragraph
+            | Tag::Heading { .. }
+            | Tag::BlockQuote(_)
+            | Tag::CodeBlock(_)
+            | Tag::HtmlBlock
+            | Tag::Table(_) => self.start_block(tag),
+            Tag::List(_) | Tag::Item => self.start_list(&tag),
+            Tag::TableHead | Tag::TableRow | Tag::TableCell => self.start_table_part(&tag),
+            Tag::Emphasis | Tag::Strong | Tag::Strikethrough | Tag::Link { .. } | Tag::Image { .. } => {
+                self.start_inline(tag);
             }
-            Event::TaskListMarker(done) => {
-                if let Some(item) = self.items.last_mut() {
-                    let (mark, style) = if done { ("[x] ", DONE) } else { ("[ ] ", Style::default()) };
-                    item.marker.get_or_insert_with(Vec::new).push((mark.into(), style));
-                    item.indent += mark.chars().count();
+            _ => {}
+        }
+    }
+
+    fn start_block(&mut self, tag: Tag) {
+        self.flush();
+        match tag {
+            Tag::Paragraph => {
+                if self.items.last().is_none_or(|i| i.marker.is_none()) {
+                    self.gap();
+                }
+            }
+            Tag::Heading { .. } => {
+                self.gap();
+                self.push_style(Style::new().add_modifier(Modifier::BOLD));
+            }
+            Tag::BlockQuote(_) => {
+                self.gap();
+                self.quote += 1;
+            }
+            Tag::CodeBlock(kind) => self.start_code(&kind),
+            Tag::HtmlBlock | Tag::Table(_) => {
+                self.gap();
+                if matches!(tag, Tag::Table(_)) {
+                    self.table = Some(Table::default());
                 }
             }
             _ => {}
         }
     }
 
-    fn start(&mut self, tag: Tag) {
+    fn start_code(&mut self, kind: &CodeBlockKind) {
+        self.gap();
+        let language = match kind {
+            CodeBlockKind::Fenced(info) => info.trim().to_string(),
+            CodeBlockKind::Indented => String::new(),
+        };
+        if !language.is_empty() {
+            let mut spans = self.prefix(false);
+            spans.push(Span::styled(language.clone(), DIM));
+            self.lines.push(Line::from(spans));
+        }
+        self.code = Some((language, String::new()));
+    }
+
+    fn start_list(&mut self, tag: &Tag) {
+        self.flush();
         match tag {
-            Tag::Paragraph => {
-                self.flush();
-                if self.items.last().is_none_or(|i| i.marker.is_none()) {
-                    self.gap();
-                }
-            }
-            Tag::Heading { .. } => {
-                self.flush();
-                self.gap();
-                self.push_style(Style::new().add_modifier(Modifier::BOLD));
-            }
-            Tag::BlockQuote(_) => {
-                self.flush();
-                self.gap();
-                self.quote += 1;
-            }
-            Tag::CodeBlock(kind) => {
-                self.flush();
-                self.gap();
-                let language = match kind {
-                    CodeBlockKind::Fenced(info) => info.trim().to_string(),
-                    CodeBlockKind::Indented => String::new(),
-                };
-                if !language.is_empty() {
-                    let mut spans = self.prefix(false);
-                    spans.push(Span::styled(language.clone(), DIM));
-                    self.lines.push(Line::from(spans));
-                }
-                self.code = Some((language, String::new()));
-            }
-            Tag::HtmlBlock | Tag::Table(_) => {
-                self.flush();
-                self.gap();
-                if matches!(tag, Tag::Table(_)) {
-                    self.table = Some(Table::default());
-                }
-            }
             Tag::List(first) => {
-                self.flush();
                 if self.items.is_empty() {
                     self.gap();
                 }
-                self.lists.push(first);
+                self.lists.push(*first);
             }
             Tag::Item => {
-                self.flush();
                 let base = self.items.last().map_or(0, |i| i.indent);
                 let marker = match self.lists.last_mut() {
                     Some(Some(n)) => {
@@ -193,20 +217,33 @@ impl Renderer {
                 let indent = base + marker.chars().count();
                 self.items.push(Item { indent, marker: Some(vec![(marker, Style::default())]) });
             }
-            Tag::TableHead | Tag::TableRow => {
-                if let Some(table) = &mut self.table {
-                    table.rows.push(Vec::new());
-                    if matches!(tag, Tag::TableHead) {
-                        table.header_rows = table.rows.len();
-                        self.push_style(Style::new().add_modifier(Modifier::BOLD));
-                    }
-                }
-            }
+            _ => {}
+        }
+    }
+
+    fn start_table_part(&mut self, tag: &Tag) {
+        match tag {
+            Tag::TableHead | Tag::TableRow => self.start_row(matches!(tag, Tag::TableHead)),
             Tag::TableCell => {
                 if let Some(row) = self.table.as_mut().and_then(|t| t.rows.last_mut()) {
                     row.push(Vec::new());
                 }
             }
+            _ => {}
+        }
+    }
+
+    fn start_row(&mut self, head: bool) {
+        let Some(table) = &mut self.table else { return };
+        table.rows.push(Vec::new());
+        if head {
+            table.header_rows = table.rows.len();
+            self.push_style(Style::new().add_modifier(Modifier::BOLD));
+        }
+    }
+
+    fn start_inline(&mut self, tag: Tag) {
+        match tag {
             Tag::Emphasis => self.push_style(Style::new().add_modifier(Modifier::ITALIC)),
             Tag::Strong => self.push_style(Style::new().add_modifier(Modifier::BOLD)),
             Tag::Strikethrough => self.push_style(Style::new().add_modifier(Modifier::CROSSED_OUT)),
@@ -235,32 +272,34 @@ impl Renderer {
                 self.flush();
                 self.lists.pop();
             }
-            TagEnd::Item => {
-                self.flush();
-                if self.items.last().is_some_and(|i| i.marker.is_some()) {
-                    let spans = self.prefix(true);
-                    self.lines.push(Line::from(spans));
-                }
-                self.items.pop();
-            }
+            TagEnd::Item => self.end_item(),
             TagEnd::Table => self.table_block(),
             TagEnd::TableHead | TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough => {
                 self.styles.pop();
             }
-            TagEnd::Link => {
-                if let Some((start, url)) = self.links.pop() {
-                    let text: String =
-                        self.inline.get(start..).unwrap_or_default().iter().map(|(t, _)| t.as_str()).collect();
-                    if !url.is_empty() && text.trim() != url {
-                        self.push(format!(" ({url})"), DIM);
-                    }
-                }
-            }
+            TagEnd::Link => self.end_link(),
             TagEnd::Image => {
                 self.styles.pop();
                 self.push("]".into(), DIM);
             }
             _ => {}
+        }
+    }
+
+    fn end_item(&mut self) {
+        self.flush();
+        if self.items.last().is_some_and(|i| i.marker.is_some()) {
+            let spans = self.prefix(true);
+            self.lines.push(Line::from(spans));
+        }
+        self.items.pop();
+    }
+
+    fn end_link(&mut self) {
+        let Some((start, url)) = self.links.pop() else { return };
+        let text: String = self.inline.get(start..).unwrap_or_default().iter().map(|(t, _)| t.as_str()).collect();
+        if !url.is_empty() && text.trim() != url {
+            self.push(format!(" ({url})"), DIM);
         }
     }
 
@@ -348,37 +387,12 @@ impl Renderer {
 
     fn table_block(&mut self) {
         let Some(table) = self.table.take() else { return };
-        let columns = table.rows.iter().map(Vec::len).max().unwrap_or(0);
-        if columns == 0 {
-            return;
-        }
         let prefix = self.prefix(false);
         let room = self.width.saturating_sub(spans_width(&prefix));
-        let mut widths = vec![0; columns];
-        for row in &table.rows {
-            for (c, cell) in row.iter().enumerate() {
-                widths[c] = widths[c].max(segments_width(cell));
-            }
-        }
-        let separators = CELL_SEPARATOR.chars().count() * (columns - 1);
-        while widths.iter().sum::<usize>() + separators > room {
-            let Some(widest) = (0..columns).filter(|&c| widths[c] > MIN_CELL).max_by_key(|&c| widths[c]) else {
-                break;
-            };
-            widths[widest] -= 1;
-        }
+        let widths = column_widths(&table.rows, room);
         for (r, row) in table.rows.iter().enumerate() {
             let mut spans = prefix.clone();
-            for (c, width) in widths.iter().enumerate() {
-                if c > 0 {
-                    spans.push(Span::styled(CELL_SEPARATOR, DIM));
-                }
-                let cell = row.get(c).map(Vec::as_slice).unwrap_or_default();
-                let cut = cut_segments(cell, *width);
-                let used = segments_width(&cut);
-                spans.extend(cut.into_iter().map(|(t, s)| Span::styled(t, s)));
-                spans.push(Span::raw(" ".repeat(width - used)));
-            }
+            spans.extend(table_row(row, &widths));
             self.lines.push(Line::from(spans));
             if r + 1 == table.header_rows {
                 let rule: Vec<String> = widths.iter().map(|w| "─".repeat(*w)).collect();
@@ -394,9 +408,10 @@ impl Renderer {
         let mut rest = html;
         loop {
             if self.in_comment {
-                let Some(end) = rest.find("-->") else { return out };
-                rest = &rest[end + 3..];
-                self.in_comment = false;
+                match self.end_comment(rest) {
+                    Some(after) => rest = after,
+                    None => return out,
+                }
             }
             let Some(start) = rest.find('<') else {
                 out.push_str(rest);
@@ -423,6 +438,12 @@ impl Renderer {
         }
     }
 
+    fn end_comment<'a>(&mut self, rest: &'a str) -> Option<&'a str> {
+        let end = rest.find("-->")?;
+        self.in_comment = false;
+        Some(&rest[end + 3..])
+    }
+
     fn finish(mut self) -> Vec<Line<'static>> {
         self.flush();
         while self.lines.last().is_some_and(is_blank) {
@@ -430,6 +451,42 @@ impl Renderer {
         }
         self.lines
     }
+}
+
+fn column_widths(rows: &[Vec<Vec<Segment>>], room: usize) -> Vec<usize> {
+    let columns = rows.iter().map(Vec::len).max().unwrap_or(0);
+    if columns == 0 {
+        return Vec::new();
+    }
+    let mut widths = vec![0; columns];
+    for row in rows {
+        for (c, cell) in row.iter().enumerate() {
+            widths[c] = widths[c].max(segments_width(cell));
+        }
+    }
+    let separators = CELL_SEPARATOR.chars().count() * (columns - 1);
+    while widths.iter().sum::<usize>() + separators > room {
+        let Some(widest) = (0..columns).filter(|&c| widths[c] > MIN_CELL).max_by_key(|&c| widths[c]) else {
+            break;
+        };
+        widths[widest] -= 1;
+    }
+    widths
+}
+
+fn table_row(row: &[Vec<Segment>], widths: &[usize]) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    for (c, width) in widths.iter().enumerate() {
+        if c > 0 {
+            spans.push(Span::styled(CELL_SEPARATOR, DIM));
+        }
+        let cell = row.get(c).map(Vec::as_slice).unwrap_or_default();
+        let cut = cut_segments(cell, *width);
+        let used = segments_width(&cut);
+        spans.extend(cut.into_iter().map(|(t, s)| Span::styled(t, s)));
+        spans.push(Span::raw(" ".repeat(width - used)));
+    }
+    spans
 }
 
 fn is_blank(line: &Line) -> bool {
@@ -548,65 +605,81 @@ fn tokens(segments: &[Segment]) -> Vec<Token> {
     out
 }
 
-fn wrap(segments: &[Segment], width: usize, first: Vec<Span<'static>>, rest: &[Span<'static>]) -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
-    let mut spans = first;
-    let mut used = spans_width(&spans);
-    let mut empty = true;
-    let mut breaks = 0;
-    let new_line = |spans: &mut Vec<Span<'static>>, used: &mut usize, lines: &mut Vec<Line<'static>>| {
-        lines.push(Line::from(std::mem::replace(spans, rest.to_vec())));
-        *used = spans_width(rest);
-    };
-    for token in tokens(segments) {
-        let (parts, word_width) = match token {
-            Token::Break => {
-                if !(empty && lines.is_empty()) {
-                    breaks += 1;
-                }
-                continue;
+struct Wrap<'a> {
+    width: usize,
+    rest: &'a [Span<'static>],
+    lines: Vec<Line<'static>>,
+    spans: Vec<Span<'static>>,
+    used: usize,
+    empty: bool,
+    breaks: usize,
+}
+
+impl Wrap<'_> {
+    fn new_line(&mut self) {
+        self.lines.push(Line::from(std::mem::replace(&mut self.spans, self.rest.to_vec())));
+        self.used = spans_width(self.rest);
+    }
+
+    fn word(&mut self, parts: Vec<Segment>, word_width: usize) {
+        if self.breaks > 0 {
+            self.new_line();
+            for _ in 1..self.breaks {
+                self.lines.push(Line::from(self.rest.to_vec()));
             }
-            Token::Word(parts, w) => (parts, w),
-        };
-        if breaks > 0 {
-            new_line(&mut spans, &mut used, &mut lines);
-            for _ in 1..breaks {
-                lines.push(Line::from(rest.to_vec()));
-            }
-            breaks = 0;
-            empty = true;
+            self.breaks = 0;
+            self.empty = true;
         }
-        if !empty && used + 1 + word_width > width {
-            new_line(&mut spans, &mut used, &mut lines);
-            empty = true;
+        if !self.empty && self.used + 1 + word_width > self.width {
+            self.new_line();
+            self.empty = true;
         }
-        if !empty {
-            spans.push(Span::raw(" "));
-            used += 1;
+        if !self.empty {
+            self.spans.push(Span::raw(" "));
+            self.used += 1;
         }
-        empty = false;
-        if word_width <= width.saturating_sub(used) {
-            spans.extend(parts.into_iter().map(|(t, s)| Span::styled(t, s)));
-            used += word_width;
-            continue;
+        self.empty = false;
+        if word_width <= self.width.saturating_sub(self.used) {
+            self.spans.extend(parts.into_iter().map(|(t, s)| Span::styled(t, s)));
+            self.used += word_width;
+            return;
         }
         for (text, style) in parts {
-            let mut chars = text.chars().peekable();
-            while chars.peek().is_some() {
-                if used >= width {
-                    new_line(&mut spans, &mut used, &mut lines);
-                }
-                let room = width.saturating_sub(used).max(1);
-                let chunk: String = chars.by_ref().take(room).collect();
-                used += chunk.chars().count();
-                spans.push(Span::styled(chunk, style));
-            }
+            self.chop(&text, style);
         }
     }
-    if !empty {
-        lines.push(Line::from(spans));
+
+    fn chop(&mut self, text: &str, style: Style) {
+        let mut chars = text.chars().peekable();
+        while chars.peek().is_some() {
+            if self.used >= self.width {
+                self.new_line();
+            }
+            let room = self.width.saturating_sub(self.used).max(1);
+            let chunk: String = chars.by_ref().take(room).collect();
+            self.used += chunk.chars().count();
+            self.spans.push(Span::styled(chunk, style));
+        }
     }
-    lines
+}
+
+fn wrap(segments: &[Segment], width: usize, first: Vec<Span<'static>>, rest: &[Span<'static>]) -> Vec<Line<'static>> {
+    let used = spans_width(&first);
+    let mut wrap = Wrap { width, rest, lines: Vec::new(), spans: first, used, empty: true, breaks: 0 };
+    for token in tokens(segments) {
+        match token {
+            Token::Break => {
+                if !(wrap.empty && wrap.lines.is_empty()) {
+                    wrap.breaks += 1;
+                }
+            }
+            Token::Word(parts, word_width) => wrap.word(parts, word_width),
+        }
+    }
+    if !wrap.empty {
+        wrap.lines.push(Line::from(wrap.spans));
+    }
+    wrap.lines
 }
 
 #[cfg(test)]

@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use self::disk::{Content, Entry, Stamp};
-use crate::changes::diff::{Diff, File as Changed, Kind, Status};
+use crate::changes::diff::{Diff, File as Changed, Hunk, Kind, Status};
 
 pub(crate) const LIST_EVERY: Duration = Duration::from_secs(2);
 pub(crate) const CHECK_EVERY: Duration = Duration::from_secs(1);
@@ -55,6 +55,18 @@ impl<T> Answer<T> {
 pub(crate) struct Search {
     pub(crate) query: String,
     pub(crate) index: Arc<Vec<String>>,
+}
+
+struct Walk<'a> {
+    workspace: u64,
+    expanded: Option<&'a HashSet<String>>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct Reading<'a> {
+    pub(crate) workspace: u64,
+    pub(crate) generation: u64,
+    pub(crate) path: &'a str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -169,18 +181,18 @@ impl Panel {
     pub(crate) fn rows(&self, workspace: u64) -> Vec<Row> {
         let mut rows = Vec::new();
         let expanded = self.places.get(&workspace).map(|p| &p.expanded);
-        self.walk(workspace, "", 0, expanded, &mut rows);
+        self.walk(&Walk { workspace, expanded }, "", 0, &mut rows);
         rows
     }
 
-    fn walk(&self, workspace: u64, folder: &str, depth: u16, expanded: Option<&HashSet<String>>, rows: &mut Vec<Row>) {
-        let Some(entries) = self.listings.get(&(workspace, folder.to_string())) else { return };
+    fn walk(&self, walk: &Walk, folder: &str, depth: u16, rows: &mut Vec<Row>) {
+        let Some(entries) = self.listings.get(&(walk.workspace, folder.to_string())) else { return };
         for entry in entries.iter() {
             let path = child(folder, &entry.name);
-            let open = entry.dir && expanded.is_some_and(|e| e.contains(&path));
+            let open = entry.dir && walk.expanded.is_some_and(|e| e.contains(&path));
             rows.push(Row { path: path.clone(), name: entry.name.clone(), depth, dir: entry.dir, open });
             if open {
-                self.walk(workspace, &path, depth + 1, expanded, rows);
+                self.walk(walk, &path, depth + 1, rows);
             }
         }
     }
@@ -401,14 +413,16 @@ impl Panel {
                 Some(entries) if self.listings.get(&key).is_some_and(|known| **known == entries) => {}
                 Some(entries) => _ = self.listings.insert(key, Arc::new(entries)),
                 None if key.1.is_empty() => _ = self.listings.insert(key, Arc::default()),
-                None => {
-                    if let Some(place) = self.places.get_mut(&workspace) {
-                        place.expanded.remove(&key.1);
-                    }
-                    self.listings.remove(&key);
-                }
+                None => self.drop_folder(&key),
             }
         }
+    }
+
+    fn drop_folder(&mut self, key: &(u64, String)) {
+        if let Some(place) = self.places.get_mut(&key.0) {
+            place.expanded.remove(&key.1);
+        }
+        self.listings.remove(key);
     }
 
     pub(crate) fn load(&mut self, workspace: u64, root: &Path, now: Instant) -> Option<(u64, Load)> {
@@ -430,7 +444,8 @@ impl Panel {
         Some((self.generation, load))
     }
 
-    pub(crate) fn read(&mut self, workspace: u64, generation: u64, path: &str, content: Option<Content>, done: bool) {
+    pub(crate) fn read(&mut self, which: Reading, content: Option<Content>, done: bool) {
+        let Reading { workspace, generation, path } = which;
         if self.reading.is_none_or(|(g, _)| g != generation) {
             return;
         }
@@ -506,44 +521,46 @@ impl Gutter {
     }
 }
 
+fn mark_hunk(gutter: &mut Gutter, hunk: &Hunk) {
+    let mut next = hunk.new_start.max(1);
+    let mut i = 0;
+    while let Some(line) = hunk.lines.get(i) {
+        if line.kind == Kind::Context {
+            next = line.new.map_or(next, |n| n + 1);
+            i += 1;
+            continue;
+        }
+        let mut gone = Vec::new();
+        while let Some(l) = hunk.lines.get(i).filter(|l| l.kind == Kind::Removed) {
+            gone.push(l.text.clone());
+            i += 1;
+        }
+        let mut added = Vec::new();
+        while let Some(l) = hunk.lines.get(i).filter(|l| l.kind == Kind::Added) {
+            added.extend(l.new);
+            i += 1;
+        }
+        let key = added.first().copied().unwrap_or(next);
+        match (gone.is_empty(), added.is_empty()) {
+            (true, _) => added.iter().for_each(|&n| gutter.set(n, Mark::Added, key)),
+            (false, false) => added.iter().for_each(|&n| gutter.set(n, Mark::Modified, key)),
+            (false, true) if next > 1 => gutter.set(next - 1, Mark::Deleted, key),
+            (false, true) => gutter.set(1, Mark::DeletedAbove, key),
+        }
+        if !gone.is_empty() {
+            gutter.removed.insert(key, gone);
+        }
+        next = added.last().map_or(next, |n| n + 1);
+    }
+}
+
 pub(crate) fn gutter(file: &Changed, lines: usize) -> Gutter {
     let mut gutter = Gutter { marks: vec![None; lines], removed: BTreeMap::new() };
     if matches!(file.status, Status::Added | Status::Untracked) {
         gutter.marks.iter_mut().zip(1..).for_each(|(m, n)| *m = Some((Mark::Added, n)));
         return gutter;
     }
-    for hunk in &file.hunks {
-        let mut next = hunk.new_start.max(1);
-        let mut i = 0;
-        while let Some(line) = hunk.lines.get(i) {
-            if line.kind == Kind::Context {
-                next = line.new.map_or(next, |n| n + 1);
-                i += 1;
-                continue;
-            }
-            let mut gone = Vec::new();
-            while let Some(l) = hunk.lines.get(i).filter(|l| l.kind == Kind::Removed) {
-                gone.push(l.text.clone());
-                i += 1;
-            }
-            let mut added = Vec::new();
-            while let Some(l) = hunk.lines.get(i).filter(|l| l.kind == Kind::Added) {
-                added.extend(l.new);
-                i += 1;
-            }
-            let key = added.first().copied().unwrap_or(next);
-            match (gone.is_empty(), added.is_empty()) {
-                (true, _) => added.iter().for_each(|&n| gutter.set(n, Mark::Added, key)),
-                (false, false) => added.iter().for_each(|&n| gutter.set(n, Mark::Modified, key)),
-                (false, true) if next > 1 => gutter.set(next - 1, Mark::Deleted, key),
-                (false, true) => gutter.set(1, Mark::DeletedAbove, key),
-            }
-            if !gone.is_empty() {
-                gutter.removed.insert(key, gone);
-            }
-            next = added.last().map_or(next, |n| n + 1);
-        }
-    }
+    file.hunks.iter().for_each(|hunk| mark_hunk(&mut gutter, hunk));
     gutter
 }
 

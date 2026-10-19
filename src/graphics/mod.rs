@@ -149,6 +149,22 @@ impl Missing {
 
     pub(crate) fn lines(&self) -> Vec<String> {
         match self {
+            Self::Off | Self::Unknown { .. } | Self::Cannot { .. } => self.basic_lines(),
+            Self::VsCode | Self::Tabby | Self::Xterm | Self::Foot | Self::OldKonsole { .. } | Self::OldKitty { .. } => {
+                self.terminal_lines()
+            }
+            Self::GhosttyStorage | Self::WezTermPixels | Self::NoCellSize => self.unreported_lines(),
+            Self::TmuxPassthrough
+            | Self::TmuxSilent
+            | Self::TmuxOuter { .. }
+            | Self::TmuxNoSixel { .. }
+            | Self::TmuxNested => self.tmux_lines(),
+            Self::Zellij | Self::OldZellij { .. } | Self::Screen | Self::Multiplexer { .. } => self.multiplexer_lines(),
+        }
+    }
+
+    fn basic_lines(&self) -> Vec<String> {
+        match self {
             Self::Off => vec![
                 "images are turned off in this window".into(),
                 "CORNERCASE_IMAGES=off was set when cornercase started: start it without it to see them".into(),
@@ -162,6 +178,12 @@ impl Missing {
                 "if yours can, start cornercase with CORNERCASE_IMAGES=kitty, iterm or sixel".into(),
             ],
             Self::Cannot { name } => vec![format!("{name} cannot show images"), CAN.into()],
+            _ => Vec::new(),
+        }
+    }
+
+    fn terminal_lines(&self) -> Vec<String> {
+        match self {
             Self::VsCode => vec![
                 "VS Code's terminal shows images only with terminal.integrated.enableImages on".into(),
                 "turn it on in Settings (it also needs terminal.integrated.gpuAcceleration), open a new terminal \
@@ -191,6 +213,12 @@ impl Missing {
                     "update kitty to 0.28 or later".into(),
                 ]
             }
+            _ => Vec::new(),
+        }
+    }
+
+    fn unreported_lines(&self) -> Vec<String> {
+        match self {
             Self::GhosttyStorage => vec![
                 "Ghostty did not answer the image query: its image-storage-limit is 0".into(),
                 "remove image-storage-limit from Ghostty's config (the default is 320000000), reload it \
@@ -206,19 +234,11 @@ impl Missing {
                 "run cornercase directly in the terminal: mosh and some multiplexers hide the window's size in pixels"
                     .into(),
             ],
-            Self::TmuxPassthrough
-            | Self::TmuxSilent
-            | Self::TmuxOuter { .. }
-            | Self::TmuxNoSixel { .. }
-            | Self::TmuxNested
-            | Self::Zellij
-            | Self::OldZellij { .. }
-            | Self::Screen
-            | Self::Multiplexer { .. } => self.multiplexer_lines(),
+            _ => Vec::new(),
         }
     }
 
-    fn multiplexer_lines(&self) -> Vec<String> {
+    fn tmux_lines(&self) -> Vec<String> {
         match self {
             Self::TmuxPassthrough => {
                 vec!["images need tmux to pass them through".into(), PASSTHROUGH.into(), ALL.into()]
@@ -246,6 +266,12 @@ impl Missing {
                 "images do not pass through tmux inside tmux".into(),
                 "run cornercase in the outer tmux, or outside tmux".into(),
             ],
+            _ => Vec::new(),
+        }
+    }
+
+    fn multiplexer_lines(&self) -> Vec<String> {
+        match self {
             Self::Zellij => vec![
                 "cornercase shows images in Zellij only as sixel, and this terminal has no sixel".into(),
                 "run cornercase outside Zellij, or in a terminal with sixel such as foot, WezTerm or Konsole".into(),

@@ -96,6 +96,54 @@ mod fit {
         assert_eq!(fit(size.0, size.1, Some(cell(10, 20)), room, Protocol::Kitty), None);
     }
 
+    #[derive(Clone, Copy)]
+    struct Case {
+        width: u32,
+        height: u32,
+        cell: CellSize,
+        room: (u16, u16),
+        protocol: Protocol,
+    }
+
+    impl Case {
+        fn check(&self) {
+            let Self { width, height, cell, room, protocol } = *self;
+            let fit = fit(width, height, Some(cell), room, protocol).expect("room");
+            let (cw, ch) = (u32::from(cell.width), u32::from(cell.height));
+            let name = format!("{width}×{height} in {room:?} at {cw}×{ch} for {protocol:?}: {fit:?}");
+
+            self.assert_limits(&fit, &name);
+            self.assert_shape(&fit, &name);
+        }
+
+        fn assert_limits(&self, fit: &Fit, name: &str) {
+            let (room, protocol) = (self.room, self.protocol);
+            assert!(fit.cols >= 1 && fit.cols <= room.0 && fit.rows >= 1 && fit.rows <= room.1, "{name}");
+            assert!(protocol != Protocol::Kitty || fit.cols.max(fit.rows) <= kitty::MAX_CELLS, "{name}");
+            assert!(protocol != Protocol::Iterm || fit.rows <= ITERM_ROWS, "{name}");
+            assert!(protocol != SIXEL || fit.height.is_multiple_of(sixel::BAND) || fit.height < sixel::BAND, "{name}");
+        }
+
+        fn assert_shape(&self, fit: &Fit, name: &str) {
+            let Self { width, height, cell, .. } = *self;
+            let (cw, ch) = (u32::from(cell.width), u32::from(cell.height));
+            assert!(fit.width <= width && fit.height <= height, "{name}");
+            assert!(fit.width <= u32::from(fit.cols) * cw && fit.width > u32::from(fit.cols - 1) * cw, "{name}");
+            assert!(fit.height <= u32::from(fit.rows) * ch && fit.height > u32::from(fit.rows - 1) * ch, "{name}");
+            self.assert_skew(fit, name);
+        }
+
+        fn assert_skew(&self, fit: &Fit, name: &str) {
+            let Self { width, height, protocol, .. } = *self;
+            if fit.width > 1 && fit.height > 1 {
+                let skew =
+                    (u64::from(fit.width) * u64::from(height)).abs_diff(u64::from(fit.height) * u64::from(width));
+                let banded = u64::from(height) / 2 * u64::from(protocol == SIXEL);
+                assert!(skew <= u64::from(width + height) / 2 + banded + 1, "{name}");
+            }
+        }
+    }
+
     #[test]
     fn never_enlarges_never_overflows_and_keeps_the_shape() {
         let sizes = [1, 7, 16, 99, 640, 1000, 2047, 4096, 16_384];
@@ -103,23 +151,7 @@ mod fit {
         let rooms = [(1, 1), (3, 40), (80, 24), (500, 400)];
         let protocols = [Protocol::Kitty, Protocol::Iterm, SIXEL];
         for (&width, &height, &cell, &room, &protocol) in itertools(&sizes, &cells, &rooms, &protocols) {
-            let fit = fit(width, height, Some(cell), room, protocol).expect("room");
-            let (cw, ch) = (u32::from(cell.width), u32::from(cell.height));
-            let case = format!("{width}×{height} in {room:?} at {cw}×{ch} for {protocol:?}: {fit:?}");
-
-            assert!(fit.cols >= 1 && fit.cols <= room.0 && fit.rows >= 1 && fit.rows <= room.1, "{case}");
-            assert!(protocol != Protocol::Kitty || fit.cols.max(fit.rows) <= kitty::MAX_CELLS, "{case}");
-            assert!(protocol != Protocol::Iterm || fit.rows <= ITERM_ROWS, "{case}");
-            assert!(protocol != SIXEL || fit.height.is_multiple_of(sixel::BAND) || fit.height < sixel::BAND, "{case}");
-            assert!(fit.width <= width && fit.height <= height, "{case}");
-            assert!(fit.width <= u32::from(fit.cols) * cw && fit.width > u32::from(fit.cols - 1) * cw, "{case}");
-            assert!(fit.height <= u32::from(fit.rows) * ch && fit.height > u32::from(fit.rows - 1) * ch, "{case}");
-            if fit.width > 1 && fit.height > 1 {
-                let skew =
-                    (u64::from(fit.width) * u64::from(height)).abs_diff(u64::from(fit.height) * u64::from(width));
-                let banded = if protocol == SIXEL { u64::from(height) / 2 } else { 0 };
-                assert!(skew <= u64::from(width + height) / 2 + banded + 1, "{case}");
-            }
+            Case { width, height, cell, room, protocol }.check();
         }
     }
 
@@ -129,19 +161,12 @@ mod fit {
         c: &'a [C],
         d: &'a [D],
     ) -> Vec<(&'a A, &'a A, &'a B, &'a C, &'a D)> {
-        let mut out = Vec::new();
-        for x in a {
-            for y in a {
-                for z in b {
-                    for w in c {
-                        for v in d {
-                            out.push((x, y, z, w, v));
-                        }
-                    }
-                }
-            }
-        }
-        out
+        a.iter()
+            .flat_map(|x| a.iter().map(move |y| (x, y)))
+            .flat_map(|(x, y)| b.iter().map(move |z| (x, y, z)))
+            .flat_map(|(x, y, z)| c.iter().map(move |w| (x, y, z, w)))
+            .flat_map(|(x, y, z, w)| d.iter().map(move |v| (x, y, z, w, v)))
+            .collect()
     }
 }
 

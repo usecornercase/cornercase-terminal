@@ -13,7 +13,7 @@ use super::{App, AppEvent};
 use crate::changes::{Checkout, Tints};
 use crate::error::Result;
 use crate::files::search::{self, MAX_MATCHES, MAX_NAMES};
-use crate::files::{self, Mode, Query, disk};
+use crate::files::{self, Mode, Query, Reading, disk};
 use crate::log::{self, Job, Level};
 use crate::panics;
 use crate::project::Hierarchy;
@@ -56,7 +56,7 @@ impl App {
                 self.files.listed(workspace, generation, folders);
             }
             FilesEvent::Read { workspace, generation, path, content, done } => {
-                self.files.read(workspace, generation, &path, content, done);
+                self.files.read(Reading { workspace, generation, path: &path }, content, done);
             }
             FilesEvent::Indexed { workspace, generation, paths } => self.files.indexed(workspace, generation, paths),
             FilesEvent::Names { workspace, generation, search, found } => {

@@ -86,10 +86,10 @@ mod viewer {
         let (first, load) = panel.load(1, Path::new("/repo"), now).expect("a read");
         assert_eq!(load.file, Path::new("/repo/a.rs"));
         panel.open_file(1, "b.rs");
-        panel.read(1, first, "a.rs", Some(content(&["old"])), true);
+        panel.read(Reading { workspace: 1, generation: first, path: "a.rs" }, Some(content(&["old"])), true);
         assert!(panel.viewer(1).and_then(|v| v.content.as_ref()).is_none());
         let (second, _) = panel.load(1, Path::new("/repo"), now).expect("b is read");
-        panel.read(1, second, "b.rs", Some(content(&["new"])), true);
+        panel.read(Reading { workspace: 1, generation: second, path: "b.rs" }, Some(content(&["new"])), true);
         assert_eq!(
             panel.viewer(1).and_then(|v| v.content.as_ref()).map(|c| c.lines().to_vec()),
             Some(vec!["new".to_string()])
@@ -102,9 +102,9 @@ mod viewer {
         let now = Instant::now();
         panel.open_file(1, "a.rs");
         let (generation, _) = panel.load(1, Path::new("/repo"), now).expect("a read");
-        panel.read(1, generation, "a.rs", Some(content(&["a"])), false);
+        panel.read(Reading { workspace: 1, generation, path: "a.rs" }, Some(content(&["a"])), false);
         assert!(panel.load(1, Path::new("/repo"), now + CHECK_EVERY).is_none(), "the highlighting is still on its way");
-        panel.read(1, generation, "a.rs", None, true);
+        panel.read(Reading { workspace: 1, generation, path: "a.rs" }, None, true);
         assert!(panel.load(1, Path::new("/repo"), now + CHECK_EVERY / 2).is_none());
         let (_, load) = panel.load(1, Path::new("/repo"), now + CHECK_EVERY).expect("checked again");
         assert!(load.previous.is_some());
