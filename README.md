@@ -87,7 +87,7 @@ cornercase read --pane "$pane" --last-message   # what it said, from its own tra
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Questions and ideas are welcome on [Discord](https://discord.gg/aYqCa4xC4R). The rules for contributors and coding agents are in [AGENTS.md](AGENTS.md), and the design decisions with their reasons in [DESIGN.md](DESIGN.md). The website and its documentation live in [`site/`](site).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Questions and ideas are welcome on [Discord](https://discord.gg/aYqCa4xC4R). The rules for contributors and coding agents are in [AGENTS.md](AGENTS.md), and the design decisions with their reasons in [`design/`](design/), one file per area, listed in [DESIGN.md](DESIGN.md). The website and its documentation live in [`site/`](site).
 
 ## License
 
