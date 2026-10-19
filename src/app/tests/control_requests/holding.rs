@@ -12,6 +12,7 @@ fn cat_with(app: &mut App, rx: &Receiver<AppEvent>, before: &str) -> u64 {
     let id = first(app);
     type_line(app, &format!("{before}echo cat-\"\"starts; cat -v"));
     pump_until(app, rx, "cat runs", |a| pane_screen(a, id).contains("cat-starts"));
+    pump_until(app, rx, "cat is in the foreground", |a| pane(a, id).program(&a.config).as_deref() == Some("cat"));
     id
 }
 
