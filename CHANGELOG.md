@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.157
+
+- No changes you will notice: running the tests no longer leaves a fake agent behind that kept using the CPU.
+
 ## 0.12.156
 
 - **A new look.** cornercase's colour is now a cobalt blue instead of purple: the logo on the welcome screen, the `●` of an agent you marked for review, the groups of the keys menu, the end of a flow once it is reached, the card that asks for a star and the heatmap in Usage › Stats. Merged pull requests stay purple, as GitHub shows them. The website and the docs have the new look too, in light and dark.
