@@ -97,6 +97,8 @@ Click **`+ New`** under the workspaces, then **new workspace**, to start another
 - **With its own worktree** (the default in a repository): the name is a branch, and the workspace is a separate checkout of the repository in `~/.cornercase/worktrees/<repo>/<branch>`. Its files, builds and agents don't touch your other work. See [Git worktrees](../worktrees/).
 - **Without**: the workspace uses the project folder itself, under the name you chose. This is handy to keep a group of tabs together, for example a `servers` workspace next to `main`.
 
+Workspaces are listed in the order they were created, or the order you [dragged them](#reorder) into, never sorted by name or branch: a new one goes at the end.
+
 <Screen
   name="new-workspace-plain"
   alt="The New workspace dialog with the worktree box unticked: the workspace feat/login will live in ~/code/web-shop"

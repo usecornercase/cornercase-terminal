@@ -1,6 +1,6 @@
 use crate::agents;
 use crate::config::{self, Config};
-use crate::issues::{Secret, Source, asana, gitlab, jira, plane};
+use crate::issues::{Secret, Source, asana, gitlab, jira, naming, plane};
 
 use super::{Action, EXTRA_ARGS, PickItem, Row, Settings};
 
@@ -127,20 +127,45 @@ impl Settings {
         }
     }
 
+    fn submit_folder(&mut self) -> Action {
+        let Some(edit) = &mut self.edit else { return Action::None };
+        match config::check_worktrees_dir(&edit.input, self.home.as_deref()) {
+            Ok(worktrees_dir) => {
+                self.edit = None;
+                let notice = format!("new worktrees go in {worktrees_dir}/<repo>/<branch>");
+                self.save(Config { worktrees_dir, ..self.config.clone() }, notice)
+            }
+            Err(message) => {
+                edit.error = Some(message.into());
+                Action::None
+            }
+        }
+    }
+
+    fn submit_issue_branch(&mut self) -> Action {
+        let Some(edit) = &mut self.edit else { return Action::None };
+        match naming::check(&edit.input) {
+            Ok(issue_branch) => {
+                self.edit = None;
+                let notice = if issue_branch.is_empty() {
+                    "issue branches follow each tracker's own name".into()
+                } else {
+                    format!("issue branches are named {issue_branch}")
+                };
+                self.save(Config { issue_branch, ..self.config.clone() }, notice)
+            }
+            Err(message) => {
+                edit.error = Some(message);
+                Action::None
+            }
+        }
+    }
+
     pub(super) fn submit_edit(&mut self) -> Action {
         let Some(edit) = &mut self.edit else { return Action::None };
         match edit.row.clone() {
-            Row::Folder => match config::check_worktrees_dir(&edit.input, self.home.as_deref()) {
-                Ok(worktrees_dir) => {
-                    self.edit = None;
-                    let notice = format!("new worktrees go in {worktrees_dir}/<repo>/<branch>");
-                    self.save(Config { worktrees_dir, ..self.config.clone() }, notice)
-                }
-                Err(message) => {
-                    edit.error = Some(message.into());
-                    Action::None
-                }
-            },
+            Row::Folder => self.submit_folder(),
+            Row::IssueBranch => self.submit_issue_branch(),
             Row::Fetch => match config::check_fetch_minutes(&edit.input) {
                 Ok(fetch_minutes) => {
                     self.edit = None;

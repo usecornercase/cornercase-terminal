@@ -223,3 +223,27 @@ mod remote_urls {
         assert_eq!(remote_urls(git_repo(&[]).path()), []);
     }
 }
+
+mod user_name {
+    use super::*;
+
+    #[rstest]
+    #[case::plain("[user]\n\tname = Ada Lovelace\n", Some("Ada Lovelace"))]
+    #[case::quoted("[core]\n\tname = x\n[User]\n  Name = \"Ada\"\n", Some("Ada"))]
+    #[case::last_wins("[user]\nname = a\n[user]\nname = b\n", Some("b"))]
+    #[case::other_section("[remote \"origin\"]\n\tname = x\n", None)]
+    #[case::empty("[user]\n\tname =\n", None)]
+    fn reads_the_user_section(#[case] config: &str, #[case] expected: Option<&str>) {
+        assert_eq!(config_user(config).as_deref(), expected);
+    }
+
+    #[test]
+    fn the_first_file_that_names_one_wins() {
+        let dir = TempDir::new();
+        let (repo, global) = (dir.path().join("repo"), dir.path().join("global"));
+        std::fs::write(&repo, "[core]\n").expect("write repo config");
+        std::fs::write(&global, "[user]\nname = Grace\n").expect("write global config");
+        let missing = dir.path().join("missing");
+        assert_eq!(user_name_in(&[missing, repo, global]).as_deref(), Some("Grace"));
+    }
+}

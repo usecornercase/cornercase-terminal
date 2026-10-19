@@ -216,6 +216,7 @@ export interface IssuesOverlay {
   token: { input: string; checking: boolean; error?: string; step?: 'site' | 'email' | 'workspace' | 'server' | 'token' };
   agentPick: { selected: number; filter: string } | null;
   chosen: string | null;
+  naming: { issue: string; branch: string; name: string; field: 0 | 1; error?: string } | null;
 }
 
 export interface ConfirmView {

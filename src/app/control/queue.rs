@@ -87,6 +87,7 @@ impl App {
             return Err("a queue entry needs --prompt or --issue".into());
         }
         let template = self.config.prompt.clone();
+        let naming = (self.config.issue_branch.clone(), self.branch_user(Some(&task.place.project)));
         let reset = reset_agent(&at)?;
         let probe = reset.map(|agent| (agent, agents::command(&self.config, agent.name()), self.usage_timeout));
         let clock = crate::time::now();
@@ -123,7 +124,7 @@ impl App {
             move || {
                 if let Some((api, locator)) = issue {
                     let issue = issues::locate::find(&api, &locator)?;
-                    let branch = issues::branch(&issue);
+                    let branch = issues::naming::branch(&issue, &naming.0, &naming.1);
                     task.prompt = issues::prompt(&template, &issue, &branch);
                     if !named {
                         task.label = format!("{} {}", issue.key, issue.title);

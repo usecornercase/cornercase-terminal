@@ -16,7 +16,8 @@ use crate::git;
 use crate::highlight::markdown;
 use crate::host::clipboard;
 use crate::issues::browser::{
-    self, Action, Browser, Connection, IssuesHit, Listing, Pick, Place, Room, Screen, Step, Tab, TokenForm,
+    self, Action, Browser, Connection, Field, IssuesHit, Listing, Naming, Pick, Place, Room, Screen, Step, Tab,
+    TokenForm,
 };
 use crate::issues::secrets;
 use crate::issues::{self, Account, Detail, Issue, Listed, Person, Query, Secret, Source, gitlab};
@@ -132,6 +133,7 @@ impl App {
             agents: self.agent_choices(),
             accounts: self.account_choices(),
             picker: None,
+            naming: None,
             places,
             here,
             place: None,
@@ -172,6 +174,8 @@ impl App {
             starts,
             prompt: config.prompt.clone(),
             submit: config.submit,
+            branch: config.issue_branch.clone(),
+            user: self.branch_user(self.project().map(|p| p.path.as_path())),
         }
     }
 
@@ -224,7 +228,12 @@ impl App {
             Action::QueueRun(id) => self.run_queued_now(id),
             Action::QueueRemove(id) => self.remove_queued(id),
             Action::QueueClear => self.clear_queued(),
-            Action::Start(issue, agent, place) => return self.start_issue(&issue, &agent, place, area),
+            Action::Start(issue, agent, place) => return self.start_issue(&issue, &agent, place, None, area),
+            Action::Name(issue, kind, place) => self.name_issue_start(issue, kind, place),
+            Action::StartNamed(naming) => {
+                let Naming { issue, kind, place, branch, name, .. } = *naming;
+                return self.start_issue(&issue, &kind, place, Some((branch, name)), area);
+            }
             Action::StartFlow(issue, place) => self.start_issue_flow(&issue, place),
             Action::LoadPeople(sources) => {
                 for source in sources {
@@ -461,6 +470,7 @@ impl App {
         let ui::Overlay::Issues(view) = view(b, room, time::now()) else { return Ok(()) };
         let hit = match &view.body {
             ui::IssuesBody::Detail { .. } => ui::issue_button_hit(area, &view.buttons, pos).map(IssuesHit::Button),
+            ui::IssuesBody::Name { .. } => ui::issue_name_hit(area, &view.buttons, pos),
             body => {
                 let (items, scroll) = match body {
                     ui::IssuesBody::List { items, scroll, .. } => (items.len(), *scroll),
@@ -474,8 +484,8 @@ impl App {
         self.act(action, area)
     }
 
-    fn issue_task(&self, issue: &Issue) -> (String, String) {
-        let branch = issues::branch(issue);
+    fn issue_task(&self, issue: &Issue, project: u64) -> (String, String) {
+        let branch = self.issue_branch(issue, project);
         let prompt = issues::prompt(&self.config.prompt, issue, &branch);
         (branch, prompt)
     }
@@ -483,7 +493,7 @@ impl App {
     fn start_issue_flow(&mut self, issue: &Issue, place: Option<Place>) {
         let Some(browsing) = self.browser_project() else { return };
         let project = place.map_or(browsing, |place| place.project);
-        let (branch, prompt) = self.issue_task(issue);
+        let (branch, prompt) = self.issue_task(issue, project);
         let chosen = self.chosen_accounts();
         let gone = self.requested_accounts(None, &chosen).err();
         let start = self.start_flow_in(project).map(|s| {
@@ -497,14 +507,36 @@ impl App {
         self.open_start_flow(start);
     }
 
-    fn start_issue(&mut self, issue: &Issue, agent: &str, place: Option<Place>, area: Rect) -> Result<()> {
+    fn name_issue_start(&mut self, issue: Issue, kind: String, place: Option<Place>) {
+        let Some(browsing) = self.browser_project() else { return };
+        let project = place.as_ref().map_or(browsing, |place| place.project);
+        let branch = self.issue_branch(&issue, project);
+        let name = issues::workspace_name(&issue);
+        let naming =
+            Naming { issue, kind, place, branch, name: name.clone(), default_name: name, field: Field::default() };
+        if let Some(Overlay::Issues(b)) = &mut self.overlay {
+            b.name_start(naming);
+        }
+    }
+
+    fn start_issue(
+        &mut self,
+        issue: &Issue,
+        agent: &str,
+        place: Option<Place>,
+        names: Option<(String, String)>,
+        area: Rect,
+    ) -> Result<()> {
         let Some(browsing) = self.browser_project() else { return Ok(()) };
         let project = place.as_ref().map_or(browsing, |place| place.project);
         let Some(p) = self.projects.project_index(project) else {
             self.overlay = None;
             return Ok(());
         };
-        let (branch, prompt) = self.issue_task(issue);
+        let (branch, prompt) = match &names {
+            Some((branch, _)) => (branch.clone(), issues::prompt(&self.config.prompt, issue, branch)),
+            None => self.issue_task(issue, project),
+        };
         let chosen = self.chosen_accounts();
         let accounts = match self.requested_accounts(None, &chosen) {
             Ok(accounts) => (!chosen.is_empty()).then_some(accounts),
@@ -517,7 +549,7 @@ impl App {
             }
         };
         let start = Start {
-            name: issues::workspace_name(issue),
+            name: names.map_or_else(|| issues::workspace_name(issue), |(_, name)| name),
             spec: launch::Spec {
                 command: agents::command_line(&self.config, agent),
                 prompt: Some(prompt),
@@ -641,6 +673,7 @@ fn people_view(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) 
 pub(super) fn view(browser: &Browser, room: Room, now: i64) -> ui::Overlay {
     let (body, note, hint) = match &browser.screen {
         _ if browser.picker.is_some() => picker_view(browser),
+        _ if let Some(naming) = &browser.naming => naming_view(naming),
         _ if browser.filtering.is_some() => people_view(browser),
         Screen::Detail { detail, scroll, .. } => {
             let lines = browser.detail_lines(room);
@@ -685,6 +718,21 @@ pub(super) fn view(browser: &Browser, room: Room, now: i64) -> ui::Overlay {
         hint,
         buttons: browser.labels(room.buttons),
     })
+}
+
+fn naming_view(naming: &Naming) -> (ui::IssuesBody, Option<ui::Note>, String) {
+    let issue = &naming.issue;
+    let heading = format!("Start {} {} in a new worktree", issue.key, issue.title);
+    let fields = [("branch   ", naming.branch.clone()), ("workspace", naming.name.clone())];
+    let help = vec![
+        "A branch that exists is checked out; one a workspace has open gets a new tab there.".into(),
+        "Settings → Worktrees → issue branches sets the name it starts with.".into(),
+    ];
+    let (focus, hint) = match naming.field {
+        Field::Branch => (0, "the worktree's branch · tab moves to its name · enter starts"),
+        Field::Name => (1, "the workspace's name in the sidebar · tab moves to the branch · enter starts"),
+    };
+    (ui::IssuesBody::Name { heading, fields, focus, help }, None, hint.into())
 }
 
 fn token_view(browser: &Browser, source: Source) -> (ui::IssuesBody, Option<ui::Note>, String) {

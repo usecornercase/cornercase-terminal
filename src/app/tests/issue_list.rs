@@ -110,8 +110,9 @@ pub(super) fn enter(s: &mut Setup) {
     send_key(&mut s.app, KeyCode::Enter, KeyModifiers::NONE);
 }
 
-fn start(s: &mut Setup) {
+pub(super) fn start(s: &mut Setup) {
     open_loaded(s, Source::Github);
+    enter(s);
     enter(s);
     enter(s);
     pump_until(&mut s.app, &s.rx, "the issue workspace opens", |a| a.projects[0].workspaces.len() == 2);
@@ -393,6 +394,7 @@ mod starting {
         let start =
             ui::issue_buttons(ui::issues_area(AREA), &browser(&s.app).labels(issues_dialog::room(AREA).buttons))[0];
         click(&mut s.app, start.as_position());
+        enter(&mut s);
         pump_until(&mut s.app, &s.rx, "the issue workspace opens", |a| a.projects[0].workspaces.len() == 2);
         assert_eq!(s.app.projects[0].workspaces[1].label(), "#3 Dark mode");
     }
@@ -482,6 +484,7 @@ mod starting {
         open_loaded(&mut s, Source::Github);
         enter(&mut s);
         enter(&mut s);
+        enter(&mut s);
 
         let project = &s.app.projects[0];
         assert_eq!((s.app.overlay.is_none(), project.workspaces.len(), project.active), (true, 2, 1));
@@ -492,6 +495,7 @@ mod starting {
         let mut s = listing();
         std::fs::create_dir_all(checkout(&s)).expect("create the checkout folder");
         open_loaded(&mut s, Source::Github);
+        enter(&mut s);
         enter(&mut s);
         enter(&mut s);
 
@@ -873,6 +877,7 @@ mod gitlab {
         let mut s = setup(true, "echo '[]'");
         let _server = connected(&mut s);
 
+        enter(&mut s);
         enter(&mut s);
         enter(&mut s);
 

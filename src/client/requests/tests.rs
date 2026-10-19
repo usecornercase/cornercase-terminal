@@ -99,4 +99,13 @@ mod features {
         assert!(error.to_string().contains("cannot rename or switch accounts"), "{error}");
         assert_eq!(asked.len(), 1, "{asked:?}");
     }
+
+    #[test]
+    fn a_server_that_cannot_name_the_workspace_is_refused_before_the_start_is_sent() {
+        let (checked, asked) = asking(&["issues"], "issue-names", "cannot name the workspace an issue starts in");
+
+        let error = checked.expect_err("refused");
+        assert!(error.to_string().contains("cannot name the workspace an issue starts in"), "{error}");
+        assert_eq!(asked.len(), 1, "{asked:?}");
+    }
 }

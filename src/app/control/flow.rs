@@ -128,7 +128,10 @@ impl App {
         let branch = run.worktree.unwrap_or_default();
         let accounts = self.requested_accounts(run.profile.as_deref(), &run.accounts)?;
         let (task, focus, trees) = (run.prompt, run.focus, Vec::new());
-        let starting = Starting { flow, task, branch, focus, note, trees, parent: caller, accounts };
+        if run.workspace_name.is_some() {
+            return Err(super::malformed("--workspace-name needs --issue"));
+        }
+        let starting = Starting { flow, task, branch, focus, note, trees, parent: caller, accounts, name: None };
         self.run_flow(Some(client), self.projects[p].id, starting, area)
     }
 

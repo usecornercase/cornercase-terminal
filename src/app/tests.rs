@@ -514,6 +514,7 @@ mod flows_dialog;
 mod issue_account;
 mod issue_asana;
 mod issue_list;
+mod issue_naming;
 mod path_links;
 mod pull_requests;
 mod queue;

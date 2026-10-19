@@ -75,6 +75,9 @@ impl Browser {
         if self.picker.is_some() {
             return vec![Button::Choose, Button::Back];
         }
+        if self.naming.is_some() {
+            return vec![Button::Start, Button::Back];
+        }
         if self.filtering.is_some() {
             return vec![Button::Done, Button::Clear];
         }
@@ -160,6 +163,7 @@ impl Browser {
 
     pub(super) fn press(&mut self, button: Button) -> Action {
         match button {
+            Button::Start if self.naming.is_some() => self.start_named(),
             Button::Start | Button::Schedule => {
                 self.scheduling = button == Button::Schedule;
                 match &self.screen {
@@ -242,6 +246,11 @@ impl Browser {
                 self.picker = None;
                 Action::None
             }
+            Button::Back if self.naming.is_some() => {
+                self.naming = None;
+                self.error = None;
+                Action::None
+            }
             Button::Back if self.token_form().is_some() => {
                 self.step_back();
                 Action::None
@@ -291,7 +300,13 @@ impl Browser {
                 return Action::None;
             }
             let place = self.place_for(&issue).cloned();
-            if self.scheduling { Action::Schedule(issue, kind, place) } else { Action::Start(issue, kind, place) }
+            if self.scheduling {
+                Action::Schedule(issue, kind, place)
+            } else if place.as_ref().map_or(self.worktrees, |place| place.worktree) {
+                Action::Name(issue, kind, place)
+            } else {
+                Action::Start(issue, kind, place)
+            }
         } else {
             self.open_picker(Pick::Agent, After::Start);
             Action::None

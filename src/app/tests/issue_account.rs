@@ -36,6 +36,7 @@ fn chosen(term: &Term) -> BTreeMap<String, String> {
 
 fn started(s: &mut Setup) -> BTreeMap<String, String> {
     enter(s);
+    enter(s);
     pump_until(&mut s.app, &s.rx, "the issue workspace opens", |a| a.projects[0].workspaces.len() == 2);
     chosen(s.app.projects[0].workspaces[1].tab().and_then(Tab::pane).expect("the new pane"))
 }
@@ -173,6 +174,7 @@ fn home_picked_then_deleted() -> Setup {
 fn an_issue_whose_picked_account_was_deleted_says_so_and_starts_nothing() {
     let mut s = home_picked_then_deleted();
 
+    enter(&mut s);
     enter(&mut s);
 
     let b = browser(&s.app);

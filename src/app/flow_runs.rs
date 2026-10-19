@@ -36,6 +36,7 @@ pub(super) struct Starting {
     pub(super) trees: Vec<(RoleWorktree, bool)>,
     pub(super) parent: Option<u64>,
     pub(super) accounts: Accounts,
+    pub(super) name: Option<String>,
 }
 
 #[derive(Debug)]
@@ -143,13 +144,13 @@ impl App {
         project: u64,
         flow: Flow,
         task: String,
-        branch: String,
+        (branch, name): (String, Option<String>),
         accounts: Accounts,
         area: Rect,
     ) -> Result<(), String> {
         let branch = if branch.trim() == flows::branch(&task) { String::new() } else { branch };
-        let starting =
-            Starting { flow, task, branch, focus: true, note: None, trees: Vec::new(), parent: None, accounts };
+        let (focus, note, trees, parent) = (true, None, Vec::new(), None);
+        let starting = Starting { flow, task, branch, focus, note, trees, parent, accounts, name };
         self.run_flow(None, project, starting, area).map(drop).map_err(String::from)
     }
 
@@ -287,7 +288,7 @@ impl App {
         if self.runs.iter().any(|run| run.workspace == id) {
             return Err(format!("workspace {id} already runs a flow, and a workspace runs one at a time"));
         }
-        let Starting { flow, task, branch, focus, note, trees, parent, accounts } = starting;
+        let Starting { flow, task, branch, focus, note, trees, parent, accounts, name } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
         run.id = self.take_id();
@@ -305,6 +306,10 @@ impl App {
             .map_err(|e| format!("could not make the run's folder: {e}"))?;
         self.projects[p].workspaces[w].run_dirs.push(dir.clone());
         let terms = self.spawn_run_panes(area, (p, w), &roles, &trees, setup, (&dir, &accounts))?;
+        let workspace = &mut self.projects[p].workspaces[w];
+        if workspace.name.is_none() {
+            workspace.name = name;
+        }
         let seats: Vec<RoleWorktree> = trees.iter().map(|(tree, _)| tree.clone()).collect();
         log::info!("flow", "run folder made", workspace = id, path = dir.display());
         run.dir = Some(dir.clone());

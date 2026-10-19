@@ -26,9 +26,7 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
             print_out(&listing(&answer(value)?))
         }
         FlowAction::Run(run) => {
-            if run.issue.key.is_some() {
-                client::use_issues()?;
-            }
+            super::issue_features(&run.issue)?;
             let (profile, accounts) = super::accounts::profile_arg(run.profile)?;
             let request = control::FlowRun {
                 name: run.name,
@@ -37,6 +35,7 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
                 project: run.project,
                 issue: run.issue.key,
                 source: run.issue.source,
+                workspace_name: run.issue.workspace_name,
                 focus: run.create.focus,
                 profile,
                 accounts,

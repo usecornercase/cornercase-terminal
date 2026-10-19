@@ -2,6 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.160
+
+- **Name the branch before an issue's worktree is made.** **start** in the Issues tab now shows the branch and the workspace's name, filled in as before: change them to follow your team's convention, or press `Enter` to keep them. A branch that already exists is checked out, and one a workspace has open gets a new tab there, as before. Starting in a new tab asks nothing.
+- **Set your team's convention once.** Settings › Worktrees › **issue branches** takes a template such as `feat/{key}-{slug}` or `{user}/{key}`, with `{key}`, `{number}`, `{slug}`, `{source}` and `{user}` (your git `user.name`). It names the branch everywhere an issue starts: the Issues tab, scheduled issues, flows and `cornercase start --issue`. Empty keeps each tracker's own names, and the setting warns when a template would stop GitLab from closing its issues by itself.
+- **The same for a flow started from an issue.** **start a flow**'s dialog fills its branch from the same template, and now also has the workspace's name under it; both can be changed, and a branch git would refuse is pointed out before the team starts.
+- Scripts and other apps: `cornercase start --issue` and `cornercase flow run --issue` take `--workspace-name`, and `--worktree` names the branch; the template is the `issue_branch` setting of `cornercase config`.
+- The docs now say that workspaces are listed in the order you made or dragged them, not by name.
+
 ## 0.12.159
 
 - **Switch accounts from the window.** Settings has a new **Accounts** tab: add an account of Claude Code, Codex or Gemini CLI (it opens a tab to log in there), see whether each one, and the agent's own login, is logged in and as whom, and remove an account (it asks first, and reminds you to log out before). Once you have an account, a status bar at the bottom of the window shows a button per agent, such as ` claude: work ▾ `: click it and pick the account its new tabs use. Open tabs keep theirs, so a work agent and a personal one can run side by side.

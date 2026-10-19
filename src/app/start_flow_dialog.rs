@@ -88,6 +88,7 @@ impl App {
             Some(StartHit::Row(i)) => Hit::Row(i),
             Some(StartHit::Prompt { line, col }) => Hit::Prompt { line, col },
             Some(StartHit::Branch) => Hit::Branch,
+            Some(StartHit::Workspace) => Hit::Workspace,
             Some(StartHit::Account(n)) => Hit::Account(start.shown_accounts()[n]),
             Some(StartHit::Choose(i)) => Hit::Choose(i),
             Some(StartHit::Close) => Hit::Close,
@@ -128,11 +129,12 @@ impl App {
                 let project = self.start_flow().map(|start| start.project);
                 self.open_flows(project, Some((&origin, &name)));
             }
-            Action::Start { flow, task, branch, accounts } => {
+            Action::Start { flow, task, branch, workspace, accounts } => {
                 let Some(project) = self.start_flow().map(|start| start.project) else { return };
                 let accounts = self.requested_accounts(None, &accounts).map_err(String::from);
-                let started =
-                    accounts.and_then(|accounts| self.start_run(project, *flow, task, branch.clone(), accounts, area));
+                let started = accounts.and_then(|accounts| {
+                    self.start_run(project, *flow, task, (branch.clone(), workspace), accounts, area)
+                });
                 let opened = started.is_ok() && self.run_open_on(project, &branch);
                 match (started, self.start_flow()) {
                     (Ok(()), _) if opened => self.overlay = None,
@@ -148,6 +150,7 @@ impl App {
 fn shape(start: &Start) -> ui::StartShape {
     ui::StartShape::new(start.flows.len(), start.warnings().len(), start.selected().is_some(), start.diagram)
         .with_accounts(start.shown_accounts().len())
+        .with_workspace(start.issue.is_some())
 }
 
 fn room(start: &Start, area: Rect) -> Room {
@@ -166,6 +169,7 @@ pub(super) fn start_flow_view(start: &Start, area: Rect) -> ui::Overlay {
         preview_scroll: start.preview,
         prompt: start.prompt.clone(),
         branch: start.branch.clone(),
+        workspace: start.issue.is_some().then(|| start.workspace.clone()),
         focus: start.focus,
         warnings: start.warnings(),
         note: if start.waiting {

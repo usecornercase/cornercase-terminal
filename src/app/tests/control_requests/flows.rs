@@ -551,6 +551,7 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         trees: Vec::new(),
         parent: None,
         accounts: crate::accounts::Accounts::default(),
+        name: None,
     };
 
     let refused = team.app.open_run(0, 0, starting, AREA, false).expect_err("refused");

@@ -250,7 +250,8 @@ impl App {
         if entries.len() > 1 {
             issues::sort_by_updated(&mut merged);
         }
-        Lists { project, issues: merged.into_iter().map(IssueInfo::from).collect(), sources }
+        let info = |issue: &Issue| IssueInfo { branch: self.issue_branch(issue, project), ..IssueInfo::from(issue) };
+        Lists { project, issues: merged.into_iter().map(info).collect(), sources }
     }
 
     pub(super) fn issue_read_request(&mut self, client: u64, asker: Asker, read: &IssueRead) -> Handled {
@@ -317,7 +318,7 @@ impl App {
             IssueReply::Lists { query, lists, unavailable } => {
                 self.lists_replied(key, project, epochs, &query, lists, unavailable);
             }
-            IssueReply::Read(result) => self.read_replied(key, epochs, result),
+            IssueReply::Read(result) => self.read_replied(key, project, epochs, result),
             IssueReply::People(source, result) => self.people_replied(key, project, epochs, source, result),
             IssueReply::Found(result) => self.found_replied(key, result, area),
         }
@@ -372,14 +373,14 @@ impl App {
         }
     }
 
-    fn read_replied(&mut self, key: u64, epochs: &[(Source, u64)], result: Result<(Issue, Detail)>) {
+    fn read_replied(&mut self, key: u64, project: u64, epochs: &[(Source, u64)], result: Result<(Issue, Detail)>) {
         let Some(pending) = self.requests.take(key) else { return };
         let reply = match result {
             Ok((issue, _)) if self.epoch_moved(epochs, issue.source) => {
                 Err(conflict(stale(issue.source, "it was read")))
             }
             Ok((issue, detail)) => {
-                let branch = issues::branch(&issue);
+                let branch = self.issue_branch(&issue, project);
                 let comments = detail
                     .comments
                     .into_iter()
@@ -387,7 +388,7 @@ impl App {
                     .collect();
                 Ok(json(&ReadIssue {
                     prompt: issues::prompt(&self.config.prompt, &issue, &branch),
-                    issue: IssueInfo::from(&issue),
+                    issue: IssueInfo { branch: branch.clone(), ..IssueInfo::from(&issue) },
                     info: detail.info,
                     body: detail.body,
                     comments,
@@ -544,6 +545,7 @@ impl App {
             trees: Vec::new(),
             parent: caller,
             accounts,
+            name: run.workspace_name.clone(),
         };
         self.run_refusal(p, &starting)?;
         starting.task.clear();
@@ -601,16 +603,23 @@ impl App {
         area: Rect,
         timeout: Option<(Instant, f64)>,
     ) -> Handled {
-        let name = issues::workspace_name(issue);
         match then {
             AfterIssue::Start(start, accounts) => {
                 let mut start = *start;
-                let branch = start
-                    .worktree
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|branch| !branch.is_empty())
-                    .map_or_else(|| issues::branch(issue), String::from);
+                let project = start.project.or_else(|| {
+                    let (p, _) = self.projects.workspace_index(start.workspace?)?;
+                    Some(self.projects[p].id)
+                });
+                let branch = start.worktree.as_deref().map(str::trim).filter(|branch| !branch.is_empty()).map_or_else(
+                    || project.map_or_else(|| issues::branch(issue), |p| self.issue_branch(issue, p)),
+                    String::from,
+                );
+                let name = start
+                    .workspace_name
+                    .take()
+                    .map(|name| name.trim().to_string())
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or_else(|| issues::workspace_name(issue));
                 start.prompt = Some(issues::prompt(&self.config.prompt, issue, &branch));
                 start.issue = None;
                 start.source = None;
@@ -643,8 +652,10 @@ impl App {
             AfterIssue::Flow { project, starting } => {
                 let mut starting = *starting;
                 if starting.branch.trim().is_empty() {
-                    starting.branch = issues::branch(issue);
+                    starting.branch = self.issue_branch(issue, project);
                 }
+                let name = starting.name.take().map(|name| name.trim().to_string()).filter(|name| !name.is_empty());
+                starting.name = Some(name.unwrap_or_else(|| issues::workspace_name(issue)));
                 starting.task = issues::prompt(&self.config.prompt, issue, &starting.branch);
                 self.run_flow(Some(client), project, starting, area)
             }

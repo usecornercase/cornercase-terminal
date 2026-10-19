@@ -226,8 +226,9 @@ mod starting {
     fn start_hands_over_the_flow_the_prompt_and_the_branch() {
         let mut s = ready();
         s.select(2);
-        let Action::Start { flow, task, branch, accounts } = s.press(START) else { panic!("not started") };
+        let Action::Start { flow, task, branch, workspace, accounts } = s.press(START) else { panic!("not started") };
         assert_eq!((flow.name.as_str(), task.as_str(), branch.as_str()), ("Quick", "Add dark mode", "add-dark-mode"));
+        assert_eq!(workspace, None, "only a flow from an issue names its workspace");
         assert!(accounts.is_empty(), "without accounts the run takes the accounts in use");
     }
 
@@ -491,5 +492,72 @@ mod mouse {
         s.scroll_prompt(-3, ROOM);
         s.scroll_list(1);
         assert_eq!((s.prompt.scroll(), s.cursor), (3, 1));
+    }
+}
+
+mod from_an_issue {
+    use super::*;
+
+    fn issue() -> Start {
+        let mut s = start().for_issue("#482 Returns".into(), "https://x/482", "issue-482-returns".into());
+        key(&mut s, KeyCode::Tab);
+        s
+    }
+
+    fn started(action: Action) -> (String, Option<String>) {
+        let Action::Start { branch, workspace, .. } = action else { panic!("not started: {action:?}") };
+        (branch, workspace)
+    }
+
+    #[test]
+    fn the_workspace_is_named_after_the_issue_and_tab_reaches_it_after_the_branch() {
+        let mut s = issue();
+        assert_eq!((s.focus, s.workspace.as_str()), (Focus::Branch, "#482 Returns"));
+        key(&mut s, KeyCode::Tab);
+        assert_eq!(s.focus, Focus::Workspace);
+        assert_eq!(started(key(&mut s, KeyCode::Enter)), ("issue-482-returns".into(), Some("#482 Returns".into())));
+    }
+
+    #[test]
+    fn both_names_can_be_edited() {
+        let mut s = issue();
+        for _ in 0.."returns".len() {
+            key(&mut s, KeyCode::Backspace);
+        }
+        type_text(&mut s, "fix");
+        key(&mut s, KeyCode::Tab);
+        for _ in 0.."Returns".len() {
+            key(&mut s, KeyCode::Backspace);
+        }
+        s.paste("Fix", ROOM);
+        assert_eq!(started(key(&mut s, KeyCode::Enter)), ("issue-482-fix".into(), Some("#482 Fix".into())));
+    }
+
+    #[test]
+    fn an_empty_name_keeps_the_issue_s() {
+        let mut s = issue();
+        s.hit(Hit::Workspace, ROOM);
+        for _ in 0..20 {
+            key(&mut s, KeyCode::Backspace);
+        }
+        assert_eq!(started(s.press(START)).1.as_deref(), Some("#482 Returns"));
+    }
+
+    #[test]
+    fn a_branch_git_would_refuse_is_not_started() {
+        let mut s = issue();
+        type_text(&mut s, " x");
+        assert_eq!(s.press(START), Action::None);
+        assert!(s.notice.as_deref().is_some_and(|n| n.contains("cannot be a branch")), "{:?}", s.notice);
+    }
+
+    #[test]
+    fn a_flow_without_an_issue_has_no_workspace_field() {
+        let mut s = ready();
+        key(&mut s, KeyCode::Tab);
+        key(&mut s, KeyCode::Tab);
+        assert_ne!(s.focus, Focus::Workspace);
+        s.hit(Hit::Workspace, ROOM);
+        assert_ne!(s.focus, Focus::Workspace);
     }
 }

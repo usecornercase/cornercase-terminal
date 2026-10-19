@@ -24,6 +24,7 @@ pub(crate) struct FlowRun {
     pub(crate) project: Option<u64>,
     pub(crate) issue: Option<String>,
     pub(crate) source: Option<String>,
+    pub(crate) workspace_name: Option<String>,
     pub(crate) focus: bool,
     pub(crate) profile: Option<String>,
     pub(crate) accounts: BTreeMap<String, String>,

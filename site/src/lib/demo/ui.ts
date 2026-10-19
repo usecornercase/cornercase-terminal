@@ -1104,14 +1104,14 @@ export class Painter {
     this.region({ r, click: onClick, cursor: 'pointer' });
   }
 
-  private input(row: Rect, label: string, value: string): void {
+  private input(row: Rect, label: string, value: string, focused = true): void {
     const lbl = label ? `${label} ` : '';
     const max = Math.max(0, row.w - INPUT_PROMPT.length - [...lbl].length - 1);
     const v = truncateLeft(value, max);
     let x = this.span(row.x, row.y, INPUT_PROMPT, CYAN);
     x = this.span(x, row.y, lbl, DARK);
     x = this.span(x, row.y, v, { add: BOLD });
-    if (x < right(row)) this.cursor = { x, y: row.y, shape: 'block' };
+    if (focused && x < right(row)) this.cursor = { x, y: row.y, shape: 'block' };
   }
 
   private form(): void {
@@ -1410,7 +1410,17 @@ export class Painter {
     const noteRow = rect(c.x, bottom(c) - 2, c.w, 1);
     const buttonsRow = rect(c.x, bottom(c) - 1, c.w, 1);
     const view = app.issuesView(o);
-    if (view.detail) {
+    if (view.naming) {
+      const naming = view.naming;
+      this.span(tabsRow.x, tabsRow.y, truncateRight(naming.heading, tabsRow.w), { add: BOLD });
+      [inputRow, rect(list.x, list.y, list.w, 1)].forEach((row, i) => {
+        const [label, value] = naming.fields[i];
+        this.input(row, label, value, i === naming.focus);
+        this.region({ r: row, click: () => app.issuesNamingField(i as 0 | 1), cursor: 'text' });
+      });
+      const help = wrapAll(naming.help.map((h) => [seg(h)]), list.w - 2);
+      help.slice(0, Math.max(0, list.h - 2)).forEach((row, i) => row.forEach((cell, x) => this.g.put(list.x + 1 + x, list.y + 2 + i, cell.ch, DARK)));
+    } else if (view.detail) {
       const area = rect(c.x, c.y, c.w, noteRow.y - c.y);
       const lines = view.detail;
       lines.slice(o.detailScroll, o.detailScroll + area.h).forEach((line, i) => drawLine(this.g, area.x, area.y + i, line, area.w));

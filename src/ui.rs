@@ -54,11 +54,12 @@ pub(crate) use dialog::group_style::{StyleHit, style_hit};
 #[cfg(test)]
 pub(crate) use dialog::group_style::{style_colour, style_done, style_icon};
 pub(crate) use dialog::issues::{
-    IssueRow, Issues, IssuesBody, issue_button_hit, issue_buttons_width, issue_detail, issues_hit, issues_list,
+    IssueRow, Issues, IssuesBody, issue_button_hit, issue_buttons_width, issue_detail, issue_name_hit, issues_hit,
+    issues_list,
 };
 pub use dialog::issues::{issue_buttons, issues_area};
 #[cfg(test)]
-pub(crate) use dialog::issues::{issue_tabs, issue_toggles};
+pub(crate) use dialog::issues::{issue_name_fields, issue_tabs, issue_toggles};
 pub(crate) use dialog::menu::menu_hit;
 pub use dialog::menu::{menu_area, menu_item};
 pub(crate) use dialog::picker::{Entry, Picker, PickerHit, picker_hit, picker_list};
@@ -84,7 +85,9 @@ pub(crate) use dialog::start_flow::{
     AccountField as StartAccount, Shape as StartShape, StartFlow, StartHit, start_hit, start_preview, start_prompt,
 };
 #[cfg(test)]
-pub(crate) use dialog::start_flow::{start_account, start_account_list, start_buttons, start_list};
+pub(crate) use dialog::start_flow::{
+    start_account, start_account_list, start_branch, start_buttons, start_list, start_workspace,
+};
 pub(crate) use dialog::update::{Update, update_buttons, update_extra, update_notes, update_scroll};
 #[cfg(test)]
 pub(crate) use dialog::usage::usage_area;

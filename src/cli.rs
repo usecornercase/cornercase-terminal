@@ -378,13 +378,21 @@ fn read_prompt(prompt: Option<String>, file: Option<PathBuf>) -> Result<Option<S
     })
 }
 
+fn issue_features(issue: &args::issue::IssueArg) -> Result<()> {
+    if issue.key.is_some() {
+        client::use_issues()?;
+    }
+    if issue.workspace_name.is_some() {
+        client::use_issue_names()?;
+    }
+    Ok(())
+}
+
 fn run_start(start: StartArgs) -> Result<()> {
     let prompt = read_prompt(start.prompt, start.prompt_file)?;
     let chosen = start.model.is_some() || start.mode.is_some() || start.effort.is_some();
     let name = if chosen { "start-with" } else { "start" };
-    if start.issue.key.is_some() {
-        client::use_issues()?;
-    }
+    issue_features(&start.issue)?;
     let (profile, accounts) = accounts::profile_arg(start.profile)?;
     let request = control::Start {
         agent: start.agent,
@@ -398,6 +406,7 @@ fn run_start(start: StartArgs) -> Result<()> {
         prompt,
         issue: start.issue.key,
         source: start.issue.source,
+        workspace_name: start.issue.workspace_name,
         wait: start.wait,
         until: start.until.map_or(Until::Stops, Until::from),
         timeout: start.timeout,
