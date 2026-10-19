@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use super::Flow;
 use super::run::{Kind, Message};
@@ -18,6 +18,7 @@ pub(crate) struct Step {
     pub(crate) from: Option<String>,
     pub(crate) to: String,
     pub(crate) at: Instant,
+    pub(crate) time: SystemTime,
 }
 
 impl Step {
@@ -79,11 +80,11 @@ impl Progress {
         step.travelled(now).map(|done| (step, done))
     }
 
-    pub(crate) fn step(&mut self, flow: &Flow, message: &Message) {
+    pub(crate) fn step(&mut self, flow: &Flow, message: &Message) -> Option<Edge> {
         if message.kind != Kind::Send || message.from != super::ORCHESTRATOR {
-            return;
+            return None;
         }
-        let Some(target) = flow.stage_of(&message.to) else { return };
+        let target = flow.stage_of(&message.to)?;
         let moved = match self.active {
             Some(active) if active == target => self.again(&message.to),
             Some(active) if target == active + 1 => Some((Edge::Forward(active), self.holder.clone())),
@@ -100,16 +101,18 @@ impl Progress {
         if self.active != Some(target) {
             self.entry.clone_from(&moved);
         }
+        let edge = moved.as_ref().map(|(edge, _)| *edge);
         if let Some((edge, from)) = moved {
             if matches!(edge, Edge::Outside { .. }) {
                 self.outside = Some(edge);
             }
             self.along.retain(|(e, m)| *e != edge || m.to != message.to);
             self.along.push((edge, message.clone()));
-            self.last = Some(Step { edge, from, to: message.to.clone(), at: message.at });
+            self.last = Some(Step { edge, from, to: message.to.clone(), at: message.at, time: message.time });
         }
         self.active = Some(target);
         self.holder = Some(message.to.clone());
+        edge
     }
 
     fn again(&self, to: &str) -> Option<(Edge, Option<String>)> {

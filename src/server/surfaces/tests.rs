@@ -2,6 +2,7 @@ use serde_json::Value;
 
 use super::super::tests::a_bug::Attached;
 use super::*;
+use crate::app::FRAME_EVERY;
 use crate::protocol::ClientMessage;
 use crate::server::{ServerEvent, Step};
 use crate::test_util::wait_until;
@@ -91,7 +92,8 @@ fn a_reader_with_frames_queued_gets_none_until_it_has_room() {
 
     split(&mut attached, pane);
     attached.server.app.touch_surfaces();
-    attached.server.surfaces();
+    let ready = attached.server.with_room();
+    attached.server.app.render_surfaces(&ready, Instant::now() + FRAME_EVERY);
     let blocked_ids = attached.server.with_room();
     let blocked = attached.messages();
     attached.server.clients[0].out.queued.store(0, std::sync::atomic::Ordering::Relaxed);
@@ -116,8 +118,8 @@ fn a_reader_with_frames_queued_gets_a_complete_frame_once_it_has_room() {
         .app
         .handle_event(crate::app::AppEvent::Output(pane, b"held".to_vec()), ratatui::layout::Rect::new(0, 0, 80, 24))
         .expect("output");
-    attached.server.surfaces();
-    attached.server.with_room();
+    let ready = attached.server.with_room();
+    attached.server.app.render_surfaces(&ready, Instant::now() + FRAME_EVERY);
     attached.server.clients[0].out.queued.store(0, std::sync::atomic::Ordering::Relaxed);
     let got = until_frame(&mut attached, 2);
 

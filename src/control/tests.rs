@@ -116,6 +116,16 @@ fn every_command_is_listed_by_name() {
         Command::ChangesBase(ChangesBase::default()),
         Command::ChangesViewed(ChangesViewed::default()),
         Command::Usage(Usage::default()),
+        Command::PluginList(PluginList::default()),
+        Command::PluginActions(PluginActions::default()),
+        Command::PluginRun(PluginRun { plugin: "a".into(), action: "b".into(), revision: 0, item: Item::Pane(1) }),
+        Command::FlowSave(FlowSave::default()),
+        Command::FlowDelete(FlowDelete::default()),
+        Command::FlowHide(FlowHide::default()),
+        Command::FlowRestore(FlowRestore::default()),
+        Command::FlowRuns(FlowRunsWatch::default()),
+        Command::FlowMessages(FlowMessages::default()),
+        Command::FlowFiles(FlowFiles::default()),
     ];
 
     let names: Vec<String> = commands
@@ -612,6 +622,16 @@ mod watch_v1 {
             title: active.then(|| "✳ Claude Code".into()),
             ..PaneInfo::default()
         }
+    }
+
+    #[test]
+    fn a_pane_leaves_collapsed_out_unless_it_is_true() {
+        let plain = serde_json::to_value(pane(4, false)).expect("a pane");
+        let folded = serde_json::to_value(PaneInfo { collapsed: true, ..pane(4, false) }).expect("a pane");
+
+        assert!(plain.get("collapsed").is_none(), "{plain}");
+        assert_eq!(folded["collapsed"], true);
+        assert!(!serde_json::from_value::<PaneInfo>(plain).expect("a pane").collapsed);
     }
 
     fn snapshot() -> Snapshot {

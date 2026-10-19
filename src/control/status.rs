@@ -307,4 +307,6 @@ pub struct PaneInfo {
     pub(crate) role: Option<String>,
     pub(crate) held_sends: u32,
     pub(crate) draft: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) collapsed: bool,
 }

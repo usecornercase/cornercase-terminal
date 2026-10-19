@@ -38,6 +38,7 @@ impl App {
                     Grab::Todo(id) if dropped => self.drop_todo(id, pos, area),
                     Grab::Todo(id) => self.click_todo(id, drag.row, pos, area),
                     Grab::Agent(_) if dropped => {}
+                    Grab::Agent(pane) if drag.fold => self.toggle_agent_fold(pane),
                     Grab::Agent(pane) => self.jump_to_pane(pane),
                 }
             }

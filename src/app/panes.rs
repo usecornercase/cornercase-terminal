@@ -110,7 +110,10 @@ impl App {
     }
 
     fn wheel_pane(&mut self, area: Rect, pos: Position, delta: isize) -> bool {
-        let held = self.tab().and_then(|tab| tab.pane_at(area, pos)).is_some_and(|id| self.resume_holds(id));
+        let held = self
+            .tab()
+            .and_then(|tab| tab.pane_at(area, pos))
+            .is_some_and(|id| self.resume_holds(id) || self.sending(id));
         let Some(tab) = self.tab_mut() else { return true };
         let Some(id) = tab.pane_at(area, pos) else { return true };
         let Some(term) = tab.pane_by_mut(id) else { return true };

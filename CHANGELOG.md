@@ -2,13 +2,37 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.150
+## 0.12.154
 
 - **A message sent to an agent waits while you are typing to it.** When another agent or a script ran `cornercase send --enter` into the pane you were typing in, its text joined your half-written prompt and both went out as one, broken. Now `send` (and `todo send`) waits until you are done: while you have text in the input you have not sent, while you typed in the last 2 seconds, or while an earlier message to that pane has not gone out. Your prompt goes first and the message follows right after. It works for every agent cornercase runs and for plain shells.
   - A bar on the pane's bottom row says `1 message waiting from pane 40 · goes after yours`, with **send now** to send it at once and **wait turn** to say you saw it: the bar then shows the working icon and `queued: goes right after yours` until it goes out. A new message shows the bar with **wait turn** again.
   - A draft ends with Enter, Esc, Ctrl+C or Ctrl+U, when the program in the pane changes, or after a minute without typing; in Claude Code also as soon as its input box is empty again (its grey suggestion does not count).
   - While a message sits between its paste and its Enter, keys typed into that pane are dropped with a toast, so nothing lands in the middle.
   - `send --timeout` bounds the wait and says what held it; `--force` sends at once; `keys` never waits. Scripts see `held_sends` and `draft` for each pane in `status --json`, `status --panes`, `status --follow` and views.
+
+## 0.12.153
+
+- No changes you will notice: a test that failed now and then is fixed.
+
+## 0.12.152
+
+- No changes you will notice: a test that failed now and then is fixed.
+
+## 0.12.151
+
+- **Collapse an agent's team in the agents section.** An agent that started others (with `cornercase start`, `new-tab` or `split`, or a flow's orchestrator) now has a `▾` before its icon: click it to fold the agents under it into its row, and `▸` to show them again, or right-click the row for **collapse** and **expand**. A click on the rest of the row still jumps to the agent. A collapsed row says how many agents it hides (`+4`) and shows `!`, `●` or `✓` when one of them needs you, so a team you put away can still call you. Jumping to an agent hidden in it, with `a`, a notification or **go**, opens the way to it, and what you collapsed is saved with your session.
+  - Scripts and other apps: `cornercase collapse --pane ID` and `expand --pane ID`, and `collapsed: true` on the pane in `status --json`, `status --follow` and view lines (`(collapsed)` in `status`).
+
+## 0.12.150
+
+- **Other apps and scripts can follow a flow run.** `cornercase flow runs` prints where each run stands: its stage, the rounds of its loops, the last step and the last one outside the plan, each role's pane and status, and whether the orchestrator marked the end; `--follow` prints it again as it changes. `cornercase flow messages` prints what the orchestrator and the roles sent each other, as the Flow panel's arrows show it, and `cornercase flow files` lists the run's folder, also after the run ended.
+- **Flows can be managed from scripts.** `cornercase flow hide NAME` deletes a built-in flow and `flow restore NAME` brings it back, as Settings › Flows does; restoring a built-in you edited deletes your version. `flow delete NAME` deletes yours or the project's.
+- `flow list --json` gives each flow whole (stages, loops, prompts, arguments, variables and worktrees) and the deleted built-ins, and an app with its own editor saves a flow as JSON with the `flow-save` request, after the editor's own checks.
+
+## 0.12.149
+
+- **Other apps and scripts can list and run plugin actions.** `cornercase plugin actions` lists the entries your plugins add to the row and pane menus, for one kind of row or all of them, and `cornercase plugin run PLUGIN ACTION --pane ID` (or `--tab`, `--workspace`, `--project`) runs one as its menu entry does: in the workspace's folder, with the ids of what you name, stopped after 5 minutes, its output in the plugin's log. It waits for the action, prints how it ended and exits with 1 when it failed. An action listed before the plugins changed is refused rather than run.
+  - Other apps can also read the plugins as Settings › Plugins shows them, including what each service is doing, with the `plugin-list` request. See Scripts and agents → Plugins.
 
 ## 0.12.148
 

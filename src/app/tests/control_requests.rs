@@ -522,6 +522,7 @@ mod one_folder;
 mod ordering;
 mod pane_moves;
 mod parents;
+mod plugins;
 mod searching;
 mod setup;
 mod start_server;

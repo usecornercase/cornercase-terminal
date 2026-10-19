@@ -118,7 +118,8 @@ impl App {
             return Err(Refusal::new(
                 Code::Busy,
                 format!(
-                    "a message sent with `cornercase send` is between its paste and its Enter in pane {pane}, and                      what you type would join it; nothing was sent: send again in a moment"
+                    "a message sent with `cornercase send` is between its paste and its Enter in pane {pane}, and \
+                     what you type would join it; nothing was sent: send again in a moment"
                 ),
             ));
         }

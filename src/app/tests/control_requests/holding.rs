@@ -140,6 +140,33 @@ fn force_skips_the_hold() {
 }
 
 #[test]
+fn force_still_waits_for_an_earlier_sends_enter_and_passes_held_ones() {
+    let (mut app, rx) = app();
+    let id = quiet_cat_pane(&mut app, &rx);
+
+    ask(&mut app, None, send_text(id, "one", true, false));
+    app.projects.pane_by_mut(id).expect("the pane").typed_text("mine");
+    ask(&mut app, None, send_text(id, "late", true, false));
+    let forced = wire::SendText {
+        pane: Some(id),
+        text: Some("two".into()),
+        enter: true,
+        force: true,
+        ..wire::SendText::default()
+    };
+    ask(&mut app, None, Command::Send(forced));
+    assert_eq!(app.held_sends(id), 2, "the forced send waits for the first's Enter");
+
+    done(answered(&mut app, &rx, "the first is entered"));
+    done(answered(&mut app, &rx, "the forced one is entered"));
+    assert_eq!(app.held_sends(id), 1, "the send behind the draft still waits");
+    pump_until(&mut app, &rx, "both lines echo", |a| {
+        let lines = screen_lines(a, id);
+        lines.iter().any(|l| l == "one") && lines.iter().any(|l| l == "two")
+    });
+}
+
+#[test]
 fn a_timeout_says_the_person_has_a_draft_and_nothing_was_sent() {
     let (mut app, rx, id) = drafting();
 

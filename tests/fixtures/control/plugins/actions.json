@@ -1,0 +1,15 @@
+{
+  "revision": 3,
+  "actions": [
+    {
+      "plugin": "acme.notes",
+      "name": "Notes",
+      "action": "note",
+      "title": "take a note",
+      "contexts": [
+        "pane",
+        "tab"
+      ]
+    }
+  ]
+}

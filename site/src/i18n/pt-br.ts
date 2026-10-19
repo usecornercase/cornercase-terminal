@@ -11,6 +11,7 @@ export const page: Page = {
     demo: 'Simulação',
     speed: 'Velocidade',
     why: 'Por quê',
+    flows: 'Flows',
     more: 'Recursos',
     plugins: 'Plugins (EN)',
     docs: 'Docs (EN)',
@@ -145,6 +146,32 @@ export const page: Page = {
       session: 'uma sessão do Claude Code',
     },
   },
+  flows: {
+    eyebrow: 'Flows',
+    title: ['Uma issue.', 'Uma equipe inteira nela.'],
+    lead: 'Escolha uma issue e aperte `start a flow`: o cornercase inicia uma equipe de agentes num worktree novo, e um agente orquestrador conduz o plano. Ele passa o trabalho do planejador para o programador e dali para os revisores, devolve quando eles encontram algo e, quando tudo fica pronto, abre o pull request.',
+    label:
+      'Um diagrama animado de um flow na issue #482. O agente orquestrador passa a issue para um planejador e depois para um programador. Um revisor e um revisor de segurança revisam a mudança ao mesmo tempo. O revisor encontra um problema, então o trabalho volta para o programador. Depois de uma segunda revisão os dois aprovam, e o orquestrador abre o pull request #487, cujos checks passam.',
+    steps: {
+      issue: 'Entregue uma issue. O orquestrador a lê e conduz o plano.',
+      plan: 'O planejador lê o código e escreve o plano.',
+      code: 'O programador escreve a correção e faz o commit.',
+      review: 'Um revisor e um de segurança revisam ao mesmo tempo, com outros modelos.',
+      back: 'Um problema encontrado. Volta para o programador, no máximo três vezes.',
+      again: 'Corrigido e revisado de novo, em paralelo. Tudo certo.',
+      pr: 'O orquestrador abre o pull request. Os checks passam.',
+    },
+    pause: 'pausar',
+    play: 'continuar',
+    points: [
+      ['Qualquer agente, em qualquer papel', 'O Claude planeja, o Codex programa, o Gemini revisa a segurança. Cada papel escolhe seu agente, modelo e esforço, então o código é revisado por um modelo que não o escreveu.'],
+      ['Em paralelo, e de volta', 'Os revisores trabalham ao mesmo tempo, e o que eles encontram devolve o trabalho ao programador, quantas vezes você permitir.'],
+      ['Veja o trabalho andar', 'O painel Flow acende cada papel enquanto ele trabalha. Clique numa seta para ler o que passou por ela.'],
+      ['Cinco prontos, ou os seus', 'O cornercase traz cinco flows, de uma revisão rápida a uma arena de programadores competindo. Edite, escreva os seus ou importe um da comunidade.'],
+    ],
+    more: 'Como os flows funcionam →',
+    community: 'Flows da comunidade →',
+  },
   more: {
     title: 'Todo o resto, a um clique.',
     groups: [
@@ -152,7 +179,6 @@ export const page: Page = {
         name: 'Para seus agentes',
         items: [
           ['Status, modelo e contexto', 'Trabalhando, precisa de você ou pronto, embaixo de cada aba. E o modelo e quanto do contexto já foi usado.'],
-          ['Flows, uma equipe por tarefa', 'Um agente programa, outros revisam e testam, e um orquestrador os dirige, a partir de um modelo. O painel Flow mostra o trabalho andando.'],
           ['Notificações', 'O Claude precisa de você? Seu terminal te cutuca no ombro. Até por SSH.'],
           ['Uso e estatísticas', 'Os limites dos seus planos e o trabalho dos seus agentes em paralelo.'],
           ['No Telegram ou Discord', 'Longe da mesa? Seus agentes te escrevem lá. Você responde e chega até eles.'],

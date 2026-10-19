@@ -88,6 +88,18 @@ fn desktop_notifications_off_keep_the_sound_and_the_toast() {
     assert_eq!(kinds(&mut w), [Kind::NeedsYou]);
 }
 
+#[test]
+fn a_collapsed_parent_hides_no_subagent_from_the_sound_rule() {
+    let mut w = with_a_subagent(false);
+    let parent = tab_term(&w.app, 0, 0).id;
+    w.app.projects.pane_by_mut(parent).expect("the parent").collapsed = true;
+
+    w.report("waiting", 6);
+
+    assert_eq!(w.told().1.len(), 2);
+    assert_eq!(w.app.take_sounds().len(), 1);
+}
+
 #[rstest]
 #[case::only_the_agent_that_started_it(false, 1)]
 #[case::both_with_subagents_on(true, 2)]

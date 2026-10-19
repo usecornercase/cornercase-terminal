@@ -162,7 +162,7 @@ impl App {
             let pane = pending.done.ids.pane.unwrap_or_default();
             let gone = self.projects.pane_by(pane).is_none();
             let blocked = if held.force { self.sending(pane).then_some(Why::Earlier) } else { self.blocked(pane, now) };
-            if !seen.insert(pane) || (blocked.is_some() && !gone) {
+            if (!held.force && !seen.insert(pane)) || (blocked.is_some() && !gone) {
                 i += 1;
                 continue;
             }

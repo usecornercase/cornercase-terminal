@@ -57,12 +57,7 @@ impl App {
                 base: Some(pull.base.clone()).filter(|base| !base.is_empty()),
             }),
             setup: ws.setup().map(|(_, state)| if state.running() { "running" } else { "failed" }.to_string()),
-            run_dir: self
-                .runs
-                .iter()
-                .find(|run| run.workspace == ws.id)
-                .and_then(|run| run.dir.clone())
-                .or_else(|| ws.run_dirs.last().cloned()),
+            run_dir: self.workspace_run_dir(ws),
             run: self.run_status(ws.id),
             active: w == active,
             tabs: ws.tabs.iter().enumerate().map(|(t, tab)| tab_info(t, tab, ws.active)).collect(),
@@ -196,6 +191,7 @@ impl App {
             role: self.seat(term.id).map(|(_, role)| role.to_string()),
             held_sends: u32::try_from(self.held_sends(term.id)).unwrap_or(u32::MAX),
             draft: term.draft(Instant::now()),
+            collapsed: term.collapsed,
         }
     }
 

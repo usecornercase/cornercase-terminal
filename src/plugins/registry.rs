@@ -86,6 +86,25 @@ impl Plugin {
     pub(crate) fn name(&self) -> String {
         self.manifest.as_ref().map_or_else(|_| text::escape_hidden(&self.entry.id), |m| m.name.clone())
     }
+
+    pub(crate) fn label(&self) -> String {
+        self.manifest.as_ref().map_or_else(|_| self.name(), |m| format!("{} {}", m.name, m.version))
+    }
+
+    pub(crate) fn note(&self, running: Option<&str>) -> String {
+        match &self.manifest {
+            Err(e) => e.clone(),
+            Ok(manifest) => {
+                let windows =
+                    if manifest.window.is_empty() { "" } else { " · its window process runs in local windows" };
+                match running {
+                    Some(running) if self.entry.enabled => running.to_string(),
+                    _ if self.entry.enabled => format!("{}{windows}", manifest.description),
+                    _ => format!("{} · runs as you", manifest.asks()),
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug)]

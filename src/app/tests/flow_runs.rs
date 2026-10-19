@@ -14,6 +14,9 @@ fn send(app: &mut App, to: &str) {
         text: None,
         bytes: 0,
         at: Instant::now(),
+        time: SystemTime::now(),
+        seq: 0,
+        edge: None,
     };
     app.runs[0].record(message);
 }

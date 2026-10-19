@@ -184,4 +184,11 @@ mod job {
         job.note("files", 3);
         assert_eq!(job.fields.len(), 0);
     }
+
+    #[test]
+    fn keeps_no_failure_while_nothing_logs() {
+        let mut job = Job::new(Level::Info, "plugins", "action");
+        job.fail("exit status: 3");
+        assert_eq!(job.failed, None);
+    }
 }

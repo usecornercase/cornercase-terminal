@@ -32,6 +32,8 @@ mod parsing {
     #[case::a_collapsed_group(&["collapse", "--group", "3"])]
     #[case::an_expanded_workspace(&["expand", "--workspace", "4"])]
     #[case::a_folded_branch(&["collapse", "--worktree", "fix/login"])]
+    #[case::a_collapsed_agent(&["collapse", "--pane", "5"])]
+    #[case::an_expanded_agent(&["expand", "--pane", "5"])]
     #[case::a_new_group(&["group", "new", "side", "projects"])]
     #[case::a_style(&["group", "style", "3", "--icon", "★", "--colour", "99"])]
     #[case::a_style_read(&["group", "style", "3", "--json"])]
@@ -47,6 +49,13 @@ mod parsing {
         let Control::Move(args) = control(&["move", "--project", "5", "--into", "12"]) else { panic!("not move") };
 
         assert_eq!((args.project, args.into, args.before, args.last), (Some(5), Some(12), None, false));
+    }
+
+    #[test]
+    fn a_fold_carries_its_pane() {
+        let Control::Collapse(args) = control(&["collapse", "--pane", "5"]) else { panic!("not collapse") };
+
+        assert_eq!((args.pane, args.group), (Some(5), None));
     }
 
     #[test]
@@ -66,6 +75,7 @@ mod parsing {
     #[case::a_pane_on_a_diagonal(&["move-pane", "--pane", "1", "--target", "2", "--place", "diagonal"])]
     #[case::folding_nothing(&["collapse"])]
     #[case::folding_a_tab(&["collapse", "--tab", "1"])]
+    #[case::folding_a_pane_and_a_group(&["collapse", "--pane", "1", "--group", "2"])]
     #[case::a_style_without_a_group(&["group", "style"])]
     #[case::a_group_without_a_name(&["group", "new"])]
     #[case::unlocking_without_removing(&["close", "--workspace", "1", "--unlock"])]

@@ -54,7 +54,7 @@ impl App {
             return Err("nothing to send: give a text, - to read it from stdin, or --enter".into());
         }
         let held = Held { text, enter: send.enter, wait, from: asker.caller, force: send.force };
-        if !send.force && self.holding_back(pane, now).is_some() {
+        if (!send.force && self.holding_back(pane, now).is_some()) || (send.force && self.sending(pane)) {
             return Ok(self.hold(client, pane, held, timeout, now));
         }
         Ok(match self.put_through(pane, held, now)? {

@@ -64,8 +64,8 @@ fn the_last_message_is_the_reply_and_not_the_thinking_or_the_tools() {
     running.fake.tool("Reading src/login.rs");
     running.fake.thinking("let me check");
     running.fake.end("success");
-    refreshing(&mut running.app, &running.rx, "the pane knows its conversation", |a| {
-        a.term().and_then(|t| t.context.conversation()).is_some()
+    refreshing(&mut running.app, &running.rx, "the pane knows its conversation and the turn is over", |a| {
+        a.term().is_some_and(|t| t.context.conversation().is_some() && t.agent.status() == Some(activity::Status::Idle))
     });
 
     let message = last_message(&mut running.app, &running.rx, id);

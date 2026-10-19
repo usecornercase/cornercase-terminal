@@ -4,7 +4,7 @@ use std::time::{Duration, Instant, SystemTime};
 use serde::Serialize;
 
 use super::App;
-use crate::control::{AppState, Event, Ids, Kind, Report, Snapshot, What};
+use crate::control::{AppState, Event, FlowRuns, Ids, Kind, Report, Snapshot, What};
 use crate::log;
 use crate::project::Hierarchy as _;
 
@@ -25,6 +25,8 @@ pub(super) struct Events {
     out: Vec<(u64, Streamed)>,
     pub(super) snapshots: Snapshots,
     pub(super) app: Snapshots<AppState>,
+    pub(super) runs: Snapshots<FlowRuns>,
+    pub(super) flow_messages: Vec<(u64, u64)>,
 }
 
 pub(super) struct Snapshots<T = Report> {
@@ -105,6 +107,17 @@ impl<T: Clone + PartialEq + Serialize + Default> Snapshots<T> {
 
     fn waits(&self, now: Instant) -> bool {
         self.built.is_some_and(|at| now.saturating_duration_since(at) < self.every)
+    }
+
+    fn ready(&mut self, now: Instant) -> bool {
+        if self.watchers.is_empty() {
+            return false;
+        }
+        if self.waits(now) {
+            self.due = true;
+            return false;
+        }
+        true
     }
 
     pub(super) fn wake(&self, now: Instant, viewing: bool) -> Option<Duration> {
@@ -203,6 +216,8 @@ impl Events {
         }
         self.snapshots.forget(client);
         self.app.forget(client);
+        self.runs.forget(client);
+        self.flow_messages.retain(|(follower, _)| *follower != client);
     }
 
     pub(super) fn publish(&mut self, events: &[Event]) {
@@ -298,16 +313,27 @@ impl App {
     }
 
     pub(super) fn publish_app(&mut self, now: Instant) {
-        if self.events.app.watchers.is_empty() {
-            return;
+        if self.events.app.ready(now) {
+            let state = self.app_state();
+            let Events { app, out, .. } = &mut self.events;
+            app.offer(state, now, out, "app");
         }
-        if self.events.app.waits(now) {
-            self.events.app.due = true;
-            return;
+    }
+
+    pub(super) fn flow_runs_snapshots(&mut self, client: u64, now: Instant) -> Snapshot<FlowRuns> {
+        let state = self.flow_runs_state();
+        let Events { runs, out, .. } = &mut self.events;
+        let snapshot = runs.join(client, state, now, out, "flow-runs");
+        log::info!("control", "following flow runs", client = client, revision = snapshot.revision);
+        snapshot
+    }
+
+    pub(super) fn publish_flow_runs(&mut self, now: Instant) {
+        if self.events.runs.ready(now) {
+            let state = self.flow_runs_state();
+            let Events { runs, out, .. } = &mut self.events;
+            runs.offer(state, now, out, "flow-runs");
         }
-        let state = self.app_state();
-        let Events { app, out, .. } = &mut self.events;
-        app.offer(state, now, out, "app");
     }
 
     pub(super) fn publish_snapshot(&mut self, now: Instant) {

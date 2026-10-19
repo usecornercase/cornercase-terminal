@@ -28,6 +28,7 @@ mod arranging;
 mod browser;
 mod commands;
 mod contract;
+mod flows;
 mod input;
 mod issues;
 mod panels;

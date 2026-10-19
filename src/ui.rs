@@ -35,7 +35,7 @@ mod workspaces;
 #[cfg(test)]
 pub(crate) use activity::items as activity_items;
 pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as activity_hit};
-pub(crate) use agents_section::{AgentEntry, AgentsView, agent_hit, agent_row, agent_rows};
+pub(crate) use agents_section::{AgentEntry, AgentsView, agent_fold, agent_hit, agent_row, agent_rows};
 pub(crate) use chrome::ChangesButton;
 pub(crate) use dialog::flows::{
     FlowPreview, Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_text, flows_wide, preview_body,

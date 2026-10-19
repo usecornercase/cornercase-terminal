@@ -69,6 +69,7 @@ pub(super) mod a_bug {
                 pending: false,
                 id: None,
                 parent: None,
+                collapsed: false,
             }],
             active: 0,
             layout: None,
