@@ -17,7 +17,9 @@ fn the_list_marks_what_was_done() {
         ..TourState::default()
     };
     let printed = text(&TourAnswer { state, tours: tours() }, true);
-    assert!(printed.starts_with("no tour on screen\ncore  Get started 1/7  https://usecornercase.dev/docs/first-steps/\n"));
+    assert!(
+        printed.starts_with("no tour on screen\ncore  Get started 1/7  https://usecornercase.dev/docs/first-steps/\n")
+    );
     assert!(printed.contains("  ✓ projects  Projects\n  · workspaces  Workspaces\n"));
 }
 

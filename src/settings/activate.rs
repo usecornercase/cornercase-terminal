@@ -95,10 +95,8 @@ impl Settings {
                 |c| &mut c.star_prompt,
                 ["cornercase may ask for a star on GitHub", "cornercase never asks for a star"],
             ),
-            Row::Tour => self.flip(
-                |c| &mut c.tour,
-                ["the tour shows by itself on a new install", "the tour shows only from Help"],
-            ),
+            Row::Tour => self
+                .flip(|c| &mut c.tour, ["the tour shows by itself on a new install", "the tour shows only from Help"]),
             Row::TourStart => Action::StartTour,
             Row::TourReset => {
                 self.notice = Some("the tours start from their first step again".into());

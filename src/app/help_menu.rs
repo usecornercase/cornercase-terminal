@@ -26,7 +26,9 @@ fn label_cells(r: Rect, label: &str) -> Rect {
 
 impl App {
     pub(super) fn open_help(&mut self, at: Position) {
-        let keys = crate::shortcuts::Prefix::parse(&self.config.prefix_key).is_some().then_some(MenuAction::Help(HelpItem::Keys));
+        let keys = crate::shortcuts::Prefix::parse(&self.config.prefix_key)
+            .is_some()
+            .then_some(MenuAction::Help(HelpItem::Keys));
         let actions = [HelpItem::Tour, HelpItem::Catalogue, HelpItem::Docs]
             .into_iter()
             .map(MenuAction::Help)
@@ -91,14 +93,13 @@ impl App {
         let region = |r: Rect| (r, false);
         let found = match target {
             Target::None => region(Rect::default()),
-            Target::NewProject if areas.tree => region(areas.list),
-            Target::NewProject => button(ui::new_project_button(areas.list, areas.pitch, &self.sidebar_rows())),
-            Target::Projects => region(areas.list),
-            Target::Workspaces if areas.tree => region(areas.list),
-            Target::Workspaces => region(areas.workspaces_list),
+            Target::NewProject if !areas.tree => {
+                button(ui::new_project_button(areas.list, areas.pitch, &self.sidebar_rows()))
+            }
+            Target::NewProject | Target::Projects => region(areas.list),
             Target::Tabs if !areas.tab_bar.is_empty() => region(areas.tab_bar),
-            Target::Tabs if areas.tree => region(areas.list),
-            Target::Tabs => region(areas.workspaces_list),
+            Target::Workspaces | Target::Tabs if areas.tree => region(areas.list),
+            Target::Workspaces | Target::Tabs => region(areas.workspaces_list),
             Target::Pane if areas.pane.x > 0 && !areas.compact() => {
                 region(Rect { x: areas.pane.x - 1, width: 1, ..areas.pane })
             }
@@ -122,7 +123,9 @@ impl App {
             Target::Usage if icons => button(icon(ActivityItem::Usage)),
             Target::Usage => button(label_cells(areas.usage, "Usage")),
             Target::Remote if icons => button(icon(ActivityItem::Remote)),
-            Target::Remote => button(self.remote_button().map(|on| ui::remote_button(areas.usage, on)).unwrap_or_default()),
+            Target::Remote => {
+                button(self.remote_button().map(|on| ui::remote_button(areas.usage, on)).unwrap_or_default())
+            }
             Target::Help if icons => button(icon(ActivityItem::Help)),
             Target::Help => button(ui::help_button(areas.quit)),
         };

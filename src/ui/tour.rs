@@ -208,7 +208,9 @@ pub(super) fn draw_tour(f: &mut Frame, view: &View, card: &TourCard) {
         let chars: Vec<char> = note.chars().collect();
         let muted = Style::default().fg(view.muted);
         text.extend(
-            lines(note, w).into_iter().map(|range| Line::from(Span::styled(chars[range].iter().collect::<String>(), muted))),
+            lines(note, w)
+                .into_iter()
+                .map(|range| Line::from(Span::styled(chars[range].iter().collect::<String>(), muted))),
         );
     }
     f.render_widget(Paragraph::new(text), layout.text);

@@ -77,8 +77,9 @@ mod places {
                 (Item::Quit, 22),
                 (Item::Settings, 20),
                 (Item::Usage, 18),
-                (Item::Remote, 16),
-                (Item::Update, 14),
+                (Item::Help, 16),
+                (Item::Remote, 14),
+                (Item::Update, 12),
                 (Item::Issues, 1),
                 (Item::Changes, 3),
                 (Item::Files, 5),
@@ -100,7 +101,7 @@ mod places {
         let shown = Shown::default();
         assert_eq!(
             places(Rect::new(0, 0, WIDTH, 9), shown),
-            [(Item::Quit, 7), (Item::Settings, 5), (Item::Usage, 3), (Item::Todo, 1)]
+            [(Item::Quit, 7), (Item::Settings, 5), (Item::Usage, 3), (Item::Help, 1)]
         );
     }
 
@@ -144,7 +145,7 @@ mod drawing {
         let t = render_sized(&with_bar(None), W, 24);
         let buffer = t.backend().buffer();
         let corner = |y: u16| buffer[(2, y + 1)].symbol().to_string();
-        assert_eq!([corner(3), corner(7), corner(16)], [icons::count(3), icons::DOT, icons::DOT]);
+        assert_eq!([corner(3), corner(7), corner(14)], [icons::count(3), icons::DOT, icons::DOT]);
     }
 
     #[test]
@@ -182,6 +183,7 @@ mod drawing {
                 icons::NERD.todo,
                 icons::UPDATE,
                 icons::REMOTE,
+                icons::HELP,
                 icons::USAGE,
                 icons::SETTINGS,
                 icons::QUIT

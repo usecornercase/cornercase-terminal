@@ -166,7 +166,7 @@ mod completing {
         assert_eq!(t.step(), Some((CORE, "workspaces")));
         t.press(TourButton::Back);
         assert_eq!(t.step(), Some((CORE, "projects")));
-        assert!(t.saved().progress(CORE).done.is_empty());
+        assert_eq!(t.saved().progress(CORE).done, Vec::<String>::new());
     }
 
     #[test]
@@ -320,7 +320,7 @@ mod first_prompt {
         t.app.start_tour(0, Some(3), true);
         let card = t.card();
         if card.agent.is_none() {
-            assert!(card.actions.is_empty());
+            assert_eq!(card.actions, Vec::<TourButton>::new());
             assert!(card.note.is_some_and(|n| n.contains("No agent")));
         }
     }

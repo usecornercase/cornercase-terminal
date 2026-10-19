@@ -111,7 +111,6 @@ pub(crate) fn find(id: &str) -> Option<(usize, &'static Tour)> {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[expect(clippy::struct_excessive_bools, reason = "each flag is one thing the app shows")]
 pub(crate) struct Facts {
     pub(crate) projects: usize,
     pub(crate) workspaces: usize,

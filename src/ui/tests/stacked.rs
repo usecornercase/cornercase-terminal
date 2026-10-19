@@ -141,8 +141,8 @@ fn a_short_terminal_still_shows_the_footer(#[case] sidebar: Sidebar, #[case] hei
     let t = render_sized(&with_lists(sidebar), W, height);
     let text = |r: Rect| row_text(&t, r).trim().to_string();
     assert_eq!(
-        [text(a.issues), text(a.settings), text(a.usage), text(a.quit)],
-        ["Issues", "Settings", "Usage", "Quit"]
+        [text(a.issues), text(a.settings), text(a.usage), text(quit_button(a.quit)), text(help_button(a.quit))],
+        ["Issues", "Settings", "Usage", "Quit", "Help"]
     );
 }
 

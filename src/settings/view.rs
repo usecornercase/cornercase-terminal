@@ -141,17 +141,7 @@ impl Settings {
                 let value = if config.star_prompt { "[x] now and then" } else { "[ ] never" };
                 ("star prompt".into(), value.into(), "asks for a GitHub star after two weeks of use".into(), false)
             }
-            Row::Tour => {
-                let value = if config.tour { "[x] on a new install" } else { "[ ] only from Help" };
-                ("guided tour".into(), value.into(), "the first steps, shown once on a new install".into(), false)
-            }
-            Row::TourStart => ("start the tour".into(), String::new(), "it also opens from Help".into(), false),
-            Row::TourReset => (
-                "reset tour progress".into(),
-                String::new(),
-                "every tour starts again from its first step".into(),
-                false,
-            ),
+            Row::Tour | Row::TourStart | Row::TourReset => tour_row(config, row),
             Row::Trust => {
                 let value = if config.accept_trust_prompts { "[x] accepted for you" } else { "[ ] left to you" };
                 ("trust prompts".into(), value.into(), "saying yes runs the repo's agent config".into(), false)
@@ -323,6 +313,19 @@ fn layout_row(config: &Config, row: &Row) -> (String, String, String, bool) {
             ("icon bar", value, ICON_BAR_NOTE)
         }
         _ => ("sidebar", Sidebar::from_setting(&config.sidebar).id(), "how projects, workspaces and tabs are laid out"),
+    };
+    (label.into(), value.into(), note.into(), false)
+}
+
+fn tour_row(config: &Config, row: &Row) -> (String, String, String, bool) {
+    let (label, value, note) = match row {
+        Row::Tour => (
+            "guided tour",
+            if config.tour { "[x] on a new install" } else { "[ ] only from Help" },
+            "the first steps, shown once on a new install",
+        ),
+        Row::TourStart => ("start the tour", "", "it also opens from Help"),
+        _ => ("reset tour progress", "", "every tour starts again from its first step"),
     };
     (label.into(), value.into(), note.into(), false)
 }

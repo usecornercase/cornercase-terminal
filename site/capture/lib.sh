@@ -55,6 +55,7 @@ cc_home_fresh() {
   rm -rf "$CC_HOME" "$CC_RUN"
   mkdir -p "$CC_RUN"
   chmod 700 "$CC_RUN"
+  printf '%s\n' '{"version":1,"offered":true,"announced":true}' > "$CC_RUN/tour.json"
   sh "$CC_CAPTURE/home.sh"
 }
 

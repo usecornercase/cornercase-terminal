@@ -81,7 +81,6 @@ impl App {
 
     pub(super) fn tour_facts(&self) -> Facts {
         let open = || self.projects.iter().filter(|p| !p.closing);
-        let panes = self.projects.terms();
         let panel = match self.side.filter(|_| self.panel_shown()) {
             Some(Side::Changes) => Some(Panel::Changes),
             Some(Side::Files) => Some(Panel::Files),
@@ -106,7 +105,7 @@ impl App {
             tabs: self.projects.tabs().count(),
             panes: self.projects.terms().count(),
             agents: self.projects.terms().filter(|t| t.agent.status().is_some()).count(),
-            prompted: panes.filter_map(|t| t.context.prompted()).max(),
+            prompted: self.projects.terms().filter_map(|t| t.context.prompted()).max(),
             panel,
             dialog,
             todos: self.todos.items().len(),
@@ -193,7 +192,8 @@ impl App {
         active.start = facts;
         active.note = None;
         active.focused = false;
-        active.field = (active.step().offer == Some(Offer::Prompt)).then(|| Editor::new(IDEAS[active.idea % IDEAS.len()]));
+        active.field =
+            (active.step().offer == Some(Offer::Prompt)).then(|| Editor::new(IDEAS[active.idea % IDEAS.len()]));
     }
 
     pub(super) fn move_tour(&mut self, to: Move) {
@@ -208,7 +208,8 @@ impl App {
                 self.save_tour();
                 log::info!("tour", "finished", tour = tour.id);
                 self.tour.active = None;
-                self.toast = Some(Toast::new(format!("{} done: Help has more tours", tour.title), ui::ToastIcon::Check));
+                self.toast =
+                    Some(Toast::new(format!("{} done: Help has more tours", tour.title), ui::ToastIcon::Check));
                 return;
             }
         }
@@ -255,9 +256,10 @@ impl App {
             _ => Vec::new(),
         };
         let note = active.note.clone().or_else(|| match step.offer {
-            Some(Offer::Prompt) if agent.is_none() => {
-                Some("No agent is installed here. Install Claude Code, Codex or another agent, then start it in a tab.".into())
-            }
+            Some(Offer::Prompt) if agent.is_none() => Some(
+                "No agent is installed here. Install Claude Code, Codex or another agent, then start it in a tab."
+                    .into(),
+            ),
             Some(Offer::Prompt) if self.project().is_none() => Some("Open a project first.".into()),
             _ => None,
         });
@@ -378,7 +380,8 @@ impl App {
             active.focused = false;
             active.note = Some(format!("starting {agent}…"));
         }
-        let start = control::Start { agent: Some(agent), workspace, prompt: Some(prompt), focus: true, ..Default::default() };
+        let start =
+            control::Start { agent: Some(agent), workspace, prompt: Some(prompt), focus: true, ..Default::default() };
         let command = Command::Start(start);
         let request = Request { caller: None, server: None, contract: None, boot: None, view: None, command };
         self.run_request(client, Ok(request), 0, Some(area), Instant::now());
@@ -406,8 +409,7 @@ impl App {
     pub(super) fn tour_key(&mut self, key: KeyEvent, area: Rect) {
         let width = self
             .tour_card(area)
-            .map(|card| usize::from(ui::tour_layout(area, &card).field.width.saturating_sub(1)).max(1))
-            .unwrap_or(1);
+            .map_or(1, |card| usize::from(ui::tour_layout(area, &card).field.width.saturating_sub(1)).max(1));
         let Some(active) = &mut self.tour.active else { return };
         if key.code == KeyCode::Esc {
             active.focused = false;

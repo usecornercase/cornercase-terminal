@@ -55,8 +55,8 @@ mod steps {
 mod completion {
     use super::*;
 
-    fn later(by: u64) -> Option<SystemTime> {
-        Some(SystemTime::UNIX_EPOCH + Duration::from_secs(by))
+    fn later(by: u64) -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_secs(by)
     }
 
     #[rstest]
@@ -65,7 +65,7 @@ mod completion {
     #[case::a_tab(Done::TabOpened, Facts { tabs: 1, ..Facts::default() })]
     #[case::a_split(Done::TabOpened, Facts { panes: 2, ..Facts::default() })]
     #[case::an_agent(Done::AgentStarted, Facts { agents: 1, ..Facts::default() })]
-    #[case::a_prompt(Done::PromptConfirmed, Facts { prompted: later(5), ..Facts::default() })]
+    #[case::a_prompt(Done::PromptConfirmed, Facts { prompted: Some(later(5)), ..Facts::default() })]
     #[case::a_panel(Done::Panel { panel: Panel::Todo }, Facts { panel: Some(Panel::Todo), ..Facts::default() })]
     #[case::a_dialog(Done::Opened { dialog: Dialog::Issues }, Facts { dialog: Some(Dialog::Issues), ..Facts::default() })]
     #[case::a_todo(Done::TodoAdded, Facts { todos: 1, ..Facts::default() })]
@@ -83,9 +83,9 @@ mod completion {
 
     #[test]
     fn a_prompt_before_the_step_does_not_count() {
-        let start = Facts { prompted: later(10), ..Facts::default() };
-        assert!(!Done::PromptConfirmed.met(&start, &Facts { prompted: later(10), ..Facts::default() }));
-        assert!(Done::PromptConfirmed.met(&start, &Facts { prompted: later(11), ..Facts::default() }));
+        let start = Facts { prompted: Some(later(10)), ..Facts::default() };
+        assert!(!Done::PromptConfirmed.met(&start, &Facts { prompted: Some(later(10)), ..Facts::default() }));
+        assert!(Done::PromptConfirmed.met(&start, &Facts { prompted: Some(later(11)), ..Facts::default() }));
     }
 
     #[test]
@@ -101,7 +101,11 @@ mod completion {
     #[case::a_plain_folder(Done::WorkspaceMade, Facts::default(), false)]
     #[case::the_section_on(Done::AgentsSection, Facts { agents_section: true, ..Facts::default() }, false)]
     #[case::reading(Done::Next, Facts::default(), false)]
-    fn a_step_asks_for_its_action_only_when_it_can_happen(#[case] done: Done, #[case] facts: Facts, #[case] asks: bool) {
+    fn a_step_asks_for_its_action_only_when_it_can_happen(
+        #[case] done: Done,
+        #[case] facts: Facts,
+        #[case] asks: bool,
+    ) {
         assert_eq!(done.asks(&facts), asks);
     }
 }

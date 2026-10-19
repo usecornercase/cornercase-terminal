@@ -23,12 +23,12 @@ pub(crate) mod remote_access;
 mod rows;
 mod sidebar;
 mod star;
-mod tour;
 mod stats;
 pub(crate) mod tab_bar;
 mod theme;
 mod toast;
 pub mod todo;
+mod tour;
 mod tree;
 mod widgets;
 mod widths;
@@ -93,8 +93,8 @@ pub(crate) use dialog::usage::{Usage, UsageSection, UsageWindow, usage_done, usa
 pub(crate) use dialog::{CANCEL_LABEL, Note, Overlay};
 pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
 pub(crate) use icons::glyphs;
-pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, layout, layout_with};
 pub(crate) use layout::COMPACT_BUTTON_WIDTH;
+pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, layout, layout_with};
 pub(crate) use layout::{Nav, full_layout, status_split, window_layout};
 pub(crate) use pane::{PaneBand, TabView, held_notice, resume_notice, scrollback_badge};
 pub(crate) use remote_access::{RemoteAccess, button as remote_button, done as remote_done};
@@ -107,11 +107,11 @@ pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, projec
 #[cfg(test)]
 pub(crate) use star::star_buttons;
 pub(crate) use star::{StarButton, star_area, star_hit};
-pub(crate) use tour::{FIELD_ROWS as TOUR_FIELD_ROWS, TourButton, TourCard, tour_hit, tour_layout};
 pub(crate) use theme::{muted, outcome_icon, soft};
 #[cfg(test)]
 pub(crate) use toast::toast_area;
 pub(crate) use toast::{Toast, ToastButton, ToastIcon, toast_button};
+pub(crate) use tour::{FIELD_ROWS as TOUR_FIELD_ROWS, TourButton, TourCard, tour_hit, tour_layout};
 pub(crate) use tree::{
     ProjectShape, TreeHit, TreeRow, TreeShape, TreeView, WorkspaceShape, tree_active_row, tree_hit, tree_layout_rows,
     tree_pull, tree_row, tree_rows,
@@ -153,9 +153,9 @@ use pane::{draw_no_tab, draw_tab, draw_welcome};
 use rows::{GAP, Zone, draw_more};
 use sidebar::draw_sidebar;
 use star::draw_star;
-use tour::{draw_pointer, draw_tour};
 use theme::{BRAND_COLOR, hover_colour, line_colour, surface_colour};
 use toast::draw_toast;
+use tour::{draw_pointer, draw_tour};
 use tree::draw_tree;
 use widgets::{
     action_style, button_style, button_width, centered, dim, draw_band, draw_close, draw_separator, hovered,
