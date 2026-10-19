@@ -4,7 +4,7 @@ use super::*;
 use crate::changes::{Checkout, Mode, Panel, Scope};
 use crate::test_util::{TempDir, git, git_repo};
 
-fn request(dir: &std::path::Path, paths: &[&str]) -> Request {
+fn request(dir: &Path, paths: &[&str]) -> Request {
     Request {
         dir: dir.to_path_buf(),
         mode: Mode::Uncommitted,

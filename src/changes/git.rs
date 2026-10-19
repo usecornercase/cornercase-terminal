@@ -133,6 +133,25 @@ pub(crate) fn load(request: &Request) -> Result<Loaded> {
         return super::summary::load(request, expanded);
     }
     let dir = request.dir.as_path();
+    let (base, from) = comparison(request, dir)?;
+    let mut args = vec!["diff", from.as_str()];
+    if request.mode == Mode::Commits {
+        args.push("HEAD");
+    }
+    args.extend(DIFF);
+    let patch = run(dir, &args)?;
+    let untracked = if request.mode == Mode::Commits { Vec::new() } else { untracked(dir)? };
+    let mut hasher = DefaultHasher::new();
+    (&base, &patch, &untracked).hash(&mut hasher);
+    let digest = hasher.finish();
+    if request.last == Some(digest) {
+        return Ok(Loaded { base, digest, diff: None });
+    }
+    let files = files_of(request, &from, &patch, &untracked);
+    Ok(Loaded { base, digest, diff: Some(Diff { files }) })
+}
+
+fn comparison(request: &Request, dir: &Path) -> Result<(Option<String>, String)> {
     let base = match request.mode {
         Mode::Uncommitted => None,
         Mode::Commits | Mode::All => Some(
@@ -147,30 +166,22 @@ pub(crate) fn load(request: &Request) -> Result<Loaded> {
         (Some(base), Mode::Commits | Mode::All) => merge_base(dir, base)?,
         _ => head(dir)?,
     };
-    let mut args = vec!["diff", from.as_str()];
-    if request.mode == Mode::Commits {
-        args.push("HEAD");
-    }
-    args.extend(DIFF);
-    let patch = run(dir, &args)?;
-    let untracked = if request.mode == Mode::Commits { Vec::new() } else { untracked(dir)? };
-    let mut hasher = DefaultHasher::new();
-    (&base, &patch, &untracked).hash(&mut hasher);
-    let digest = hasher.finish();
-    if request.last == Some(digest) {
-        return Ok(Loaded { base, digest, diff: None });
-    }
+    Ok((base, from))
+}
+
+fn files_of(request: &Request, from: &str, patch: &[u8], untracked: &[Untracked]) -> Vec<Arc<File>> {
+    let dir = request.dir.as_path();
     let previous = request.previous.iter().map(|f| (f.path.as_str(), f)).collect();
     let reviewed = |mut file: File| {
         if request.mode == Mode::Uncommitted {
-            file.viewed_digest = fingerprint(dir, &from, &file);
+            file.viewed_digest = fingerprint(dir, from, &file);
         }
         reuse(file, &previous)
     };
-    let mut files: Vec<Arc<File>> = diff::parse(&String::from_utf8_lossy(&patch)).into_iter().map(reviewed).collect();
+    let mut files: Vec<Arc<File>> = diff::parse(&String::from_utf8_lossy(patch)).into_iter().map(reviewed).collect();
     files.extend(untracked.iter().map(|u| reviewed(diff::untracked(&u.path, u.size, u.bytes.as_deref()))));
     files.sort_by(|a, b| a.path.cmp(&b.path));
-    Ok(Loaded { base, digest, diff: Some(Diff { files }) })
+    files
 }
 
 pub(super) fn reuse(mut file: File, previous: &HashMap<&str, &Arc<File>>) -> Arc<File> {

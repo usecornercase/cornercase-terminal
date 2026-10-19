@@ -226,45 +226,11 @@ impl Panel {
         }
         let summary = request.expanded.is_some();
         let key = (workspace, request.mode);
-        if !summary && request.mode != self.mode && !self.followed.contains(&key) {
+        if !self.expects(key, request, summary) {
             return;
         }
-        let known = if summary {
-            self.summary_requested.contains_key(&workspace) || self.summaries.contains_key(&workspace)
-        } else {
-            self.requested.contains_key(&key) || self.models.contains_key(&key)
-        };
-        if !known {
-            return;
-        }
-        let now = Instant::now();
         let current = if summary { self.summaries.get_mut(&workspace) } else { self.models.get_mut(&key) };
-        let model = match result {
-            Ok(git::Loaded { diff: None, base, digest }) => {
-                if let Some(model) = current.filter(|m| m.mode == request.mode && m.base == request.base) {
-                    model.at = now;
-                    model.label = base;
-                    model.digest = Some(digest);
-                }
-                return;
-            }
-            Ok(loaded) => Model {
-                mode: request.mode,
-                base: request.base.clone(),
-                label: loaded.base,
-                result: Ok(Arc::new(loaded.diff.unwrap_or_default())),
-                digest: Some(loaded.digest),
-                at: now,
-            },
-            Err(e) => Model {
-                mode: request.mode,
-                base: request.base.clone(),
-                label: request.base.clone(),
-                result: Err(e.to_string()),
-                digest: None,
-                at: now,
-            },
-        };
+        let Some(model) = model_from(result, request, current, Instant::now()) else { return };
         if summary {
             self.summaries.insert(workspace, model);
         } else {
@@ -272,6 +238,18 @@ impl Panel {
             let (mode, followed) = (self.mode, &self.followed);
             self.models
                 .retain(|&(w, m), _| w != workspace || m == request.mode || m == mode || followed.contains(&(w, m)));
+        }
+    }
+
+    fn expects(&self, key: (u64, Mode), request: &git::Request, summary: bool) -> bool {
+        let workspace = key.0;
+        if !summary && request.mode != self.mode && !self.followed.contains(&key) {
+            return false;
+        }
+        if summary {
+            self.summary_requested.contains_key(&workspace) || self.summaries.contains_key(&workspace)
+        } else {
+            self.requested.contains_key(&key) || self.models.contains_key(&key)
         }
     }
 
@@ -458,6 +436,40 @@ impl Panel {
     pub(crate) fn set_gap(&mut self, workspace: u64, file: &File, hunk: usize, lines: Vec<GapLine>) {
         self.gaps.retain(|(k, digest, _), _| k.workspace != workspace || k.path != file.path || *digest == file.digest);
         self.gaps.insert((key(workspace, file), file.digest, hunk), Arc::new(lines));
+    }
+}
+
+fn model_from(
+    result: Result<git::Loaded>,
+    request: &git::Request,
+    current: Option<&mut Model>,
+    now: Instant,
+) -> Option<Model> {
+    match result {
+        Ok(git::Loaded { diff: None, base, digest }) => {
+            if let Some(model) = current.filter(|m| m.mode == request.mode && m.base == request.base) {
+                model.at = now;
+                model.label = base;
+                model.digest = Some(digest);
+            }
+            None
+        }
+        Ok(loaded) => Some(Model {
+            mode: request.mode,
+            base: request.base.clone(),
+            label: loaded.base,
+            result: Ok(Arc::new(loaded.diff.unwrap_or_default())),
+            digest: Some(loaded.digest),
+            at: now,
+        }),
+        Err(e) => Some(Model {
+            mode: request.mode,
+            base: request.base.clone(),
+            label: request.base.clone(),
+            result: Err(e.to_string()),
+            digest: None,
+            at: now,
+        }),
     }
 }
 

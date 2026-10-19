@@ -107,63 +107,66 @@ fn list(gh_path: &Path, dir: &Path, account: &Login, since: SystemTime, now: Sys
     let day =
         |at: SystemTime| at.duration_since(UNIX_EPOCH).map_or(0, |d| i64::try_from(d.as_secs() / 86_400).unwrap_or(0));
     let mut listed = Listed::default();
-    fetch(gh_path, dir, &env, account, (day(since), day(now)), 0, since, &mut listed).map_err(|e| match &token {
+    let search = Search { gh_path, dir, env: &env, account, since };
+    search.fetch((day(since), day(now)), 0, &mut listed).map_err(|e| match &token {
         Some(token) => e.replace(token.as_str(), "…"),
         None => e,
     })?;
     Ok(listed)
 }
 
-#[expect(clippy::too_many_arguments, reason = "one recursive step carries its whole query")]
-fn fetch(
-    gh_path: &Path,
-    dir: &Path,
-    env: &[(&str, &str)],
-    account: &Login,
-    (from, to): (i64, i64),
-    depth: u32,
+struct Search<'a> {
+    gh_path: &'a Path,
+    dir: &'a Path,
+    env: &'a [(&'a str, &'a str)],
+    account: &'a Login,
     since: SystemTime,
-    listed: &mut Listed,
-) -> Result<(), String> {
-    let date = |days: i64| {
-        Stamp(UNIX_EPOCH + std::time::Duration::from_hours(days.unsigned_abs() * 24)).to_string()[..10].to_string()
-    };
-    let search = format!("is:pr is:merged author:{} merged:{}..{}", account.login, date(from), date(to));
-    let query = format!("query={QUERY}");
-    let q = format!("q={search}");
-    let out = gh::run_raw_env(
-        gh_path,
-        dir,
-        &["api", "graphql", "--hostname", &account.host, "--paginate", "-f", &query, "-f", &q],
-        env,
-    )
-    .map_err(|e| e.to_string())?;
-    let mut merged = Vec::new();
-    let mut count = 0;
-    for page in serde_json::Deserializer::from_slice(&out).into_iter::<Value>() {
-        let page = page.map_err(|e| Error::GhOutput(e).to_string())?;
-        if let Some(errors) = page.get("errors").and_then(Value::as_array).filter(|e| !e.is_empty()) {
-            let message = errors[0]["message"].as_str().unwrap_or("GitHub refused the search");
-            return Err(message.to_string());
-        }
-        let search = &page["data"]["search"];
-        count = count.max(search["issueCount"].as_u64().unwrap_or(0));
-        for node in search["nodes"].as_array().into_iter().flatten() {
-            merged.extend(node_of(node, &account.host));
-        }
-    }
-    if count > LIMIT && from < to {
-        if depth < DEPTH {
+}
+
+impl Search<'_> {
+    fn fetch(&self, (from, to): (i64, i64), depth: u32, listed: &mut Listed) -> Result<(), String> {
+        let (merged, count) = self.page_through(from, to)?;
+        if count > LIMIT && from < to && depth < DEPTH {
             let middle = from + (to - from) / 2;
-            fetch(gh_path, dir, env, account, (from, middle), depth + 1, since, listed)?;
-            return fetch(gh_path, dir, env, account, (middle + 1, to), depth + 1, since, listed);
+            self.fetch((from, middle), depth + 1, listed)?;
+            return self.fetch((middle + 1, to), depth + 1, listed);
         }
-        listed.truncated = true;
-    } else if count > LIMIT {
-        listed.truncated = true;
+        listed.truncated |= count > LIMIT;
+        listed.merged.extend(merged.into_iter().filter(|m: &Merged| m.at >= self.since));
+        Ok(())
     }
-    listed.merged.extend(merged.into_iter().filter(|m: &Merged| m.at >= since));
-    Ok(())
+
+    fn page_through(&self, from: i64, to: i64) -> Result<(Vec<Merged>, u64), String> {
+        let date = |days: i64| {
+            Stamp(UNIX_EPOCH + std::time::Duration::from_hours(days.unsigned_abs() * 24)).to_string()[..10].to_string()
+        };
+        let account = self.account;
+        let search = format!("is:pr is:merged author:{} merged:{}..{}", account.login, date(from), date(to));
+        let query = format!("query={QUERY}");
+        let q = format!("q={search}");
+        let out = gh::run_raw_env(
+            self.gh_path,
+            self.dir,
+            &["api", "graphql", "--hostname", &account.host, "--paginate", "-f", &query, "-f", &q],
+            self.env,
+        )
+        .map_err(|e| e.to_string())?;
+        let mut merged = Vec::new();
+        let mut count = 0;
+        for page in serde_json::Deserializer::from_slice(&out).into_iter::<Value>() {
+            let page = page.map_err(|e| Error::GhOutput(e).to_string())?;
+            if let Some(errors) = page.get("errors").and_then(Value::as_array).filter(|e| !e.is_empty()) {
+                let message = errors[0]["message"].as_str().unwrap_or("GitHub refused the search");
+                return Err(message.to_string());
+            }
+            let search = &page["data"]["search"];
+            count = count.max(search["issueCount"].as_u64().unwrap_or(0));
+            for node in search["nodes"].as_array().into_iter().flatten() {
+                merged.extend(node_of(node, &account.host));
+            }
+        }
+        Ok((merged, count))
+    }
 }
 
 fn node_of(node: &Value, host: &str) -> Option<Merged> {
