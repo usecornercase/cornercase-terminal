@@ -181,3 +181,22 @@ test('a branch git would refuse is not started', () => {
   assert.equal(app.overlay?.kind, 'issues');
   app.destroy();
 });
+
+test('back on the names goes back to the issue on a connected GitLab tab', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openIssues();
+  app.advance(500);
+  app.issuesTab(app.config.sources.indexOf('gitlab'));
+  inputKey(app, key('Enter'));
+  type(app, 'glpat');
+  inputKey(app, key('Enter'));
+  app.advance(1500);
+  inputKey(app, key('Enter'));
+  inputKey(app, key('Enter'));
+  const o = app.overlay;
+  assert.ok(o?.kind === 'issues' && o.naming, 'the names are asked');
+  app.issuesButton('back');
+  assert.ok(o.kind === 'issues' && !o.naming && o.detail);
+  assert.equal(o.token.step, 'server');
+  app.destroy();
+});

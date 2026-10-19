@@ -293,6 +293,19 @@ mod running {
     }
 
     #[test]
+    fn a_flow_from_an_issue_keeps_its_branch_when_the_prompt_would_name_the_same_one() {
+        let mut s = setup(true);
+        let _dirs = with_claude(&mut s);
+        s.app.config.prompt = "{branch}".into();
+        crate::test_util::git(&s.app.projects[0].path, &["branch", "issue-7-fix-the-login"]);
+        from_issue(&mut s);
+        button(&mut s.app, WIDE, START);
+        pump_until(&mut s.app, &s.rx, "the team's tabs open", |a| !a.runs.is_empty());
+        let workspace = s.app.project().and_then(Project::workspace).expect("the run's workspace");
+        assert_eq!(git::branch(&workspace.path).as_deref(), Some("issue-7-fix-the-login"));
+    }
+
+    #[test]
     fn a_flow_from_an_issue_refuses_a_branch_git_would_refuse() {
         let mut s = setup(true);
         from_issue(&mut s);

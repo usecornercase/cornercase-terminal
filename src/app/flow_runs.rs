@@ -148,7 +148,8 @@ impl App {
         accounts: Accounts,
         area: Rect,
     ) -> Result<(), String> {
-        let branch = if branch.trim() == flows::branch(&task) { String::new() } else { branch };
+        let derived = name.is_none() && branch.trim() == flows::branch(&task);
+        let branch = if derived { String::new() } else { branch };
         let (focus, note, trees, parent) = (true, None, Vec::new(), None);
         let starting = Starting { flow, task, branch, focus, note, trees, parent, accounts, name };
         self.run_flow(None, project, starting, area).map(drop).map_err(String::from)

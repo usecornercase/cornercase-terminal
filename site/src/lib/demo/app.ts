@@ -3683,6 +3683,10 @@ export class App {
       else if (label === 'clear started') this.removeQueued((item) => item.state === 'started', 'cleared {n} started');
       return;
     }
+    if (label === 'back' && o.naming) {
+      o.naming = null;
+      return this.dirty();
+    }
     if (label === 'back' && !o.agentPick && !o.detail && o.token.step === 'token' && this.issuesSource(o) === 'plane') {
       o.token = { input: this.config.planeWorkspace, checking: false, step: 'workspace' };
       return this.dirty();
@@ -3694,10 +3698,6 @@ export class App {
     if (label === 'back' && !o.agentPick && !o.detail && o.token.step && o.token.step !== 'site' && o.token.step !== 'workspace') {
       const email = o.token.step === 'token';
       o.token = { input: email ? this.config.jiraEmail : this.config.jiraSite, checking: false, step: email ? 'email' : 'site' };
-      return this.dirty();
-    }
-    if (label === 'back' && o.naming) {
-      o.naming = null;
       return this.dirty();
     }
     if (label === 'back') {
