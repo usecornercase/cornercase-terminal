@@ -54,7 +54,8 @@ pub(crate) use dialog::group_style::{StyleHit, style_hit};
 #[cfg(test)]
 pub(crate) use dialog::group_style::{style_colour, style_done, style_icon};
 pub(crate) use dialog::issues::{
-    IssueRow, Issues, IssuesBody, issue_button_hit, issue_buttons_width, issue_detail, issues_hit, issues_list,
+    IssueRow, Issues, IssuesBody, Labels, Shown, issue_button_hit, issue_buttons_width, issue_detail, issues_hit,
+    issues_list,
 };
 pub use dialog::issues::{issue_buttons, issues_area};
 #[cfg(test)]

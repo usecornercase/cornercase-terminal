@@ -467,7 +467,8 @@ impl App {
                     _ => (0, b.search.scroll()),
                 };
                 let toggles: Vec<&str> = view.toggles.iter().map(String::as_str).collect();
-                ui::issues_hit(area, &view.tabs, &toggles, &view.buttons, items, scroll, pos)
+                let labels = ui::Labels { tabs: &view.tabs, toggles: &toggles, buttons: &view.buttons };
+                ui::issues_hit(area, labels, ui::Shown { items, scroll }, pos)
             }
         };
         let action = b.mouse(ev.kind, hit, room);

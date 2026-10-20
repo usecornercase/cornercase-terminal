@@ -130,7 +130,15 @@ fn an_error_replaces_the_hint() {
 #[case::start(issue_buttons(issues_area(AREA), &["start", "cancel"])[0].as_position(), Some(IssuesHit::Button(0)))]
 #[case::cancel(issue_buttons(issues_area(AREA), &["start", "cancel"])[1].as_position(), Some(IssuesHit::Button(1)))]
 fn maps_clicks(#[case] pos: Position, #[case] expected: Option<IssuesHit>) {
-    assert_eq!(issues_hit(AREA, &TABS, &TOGGLES, &["start", "cancel"], 2, 0, pos), expected);
+    assert_eq!(
+        issues_hit(
+            AREA,
+            Labels { tabs: &TABS, toggles: &TOGGLES, buttons: &["start", "cancel"] },
+            Shown { items: 2, scroll: 0 },
+            pos
+        ),
+        expected
+    );
 }
 
 #[test]

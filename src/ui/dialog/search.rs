@@ -87,33 +87,14 @@ pub(in crate::ui) fn draw_results(f: &mut Frame, view: &View, search: &Search, r
         let bg = pick_background(view, selected, row);
         let base = if selected { bg.add_modifier(Modifier::BOLD) } else { bg };
         let matched = base.fg(Color::Cyan).add_modifier(Modifier::BOLD);
+        let paint = Paint { selected, bg, base, matched };
         let width = usize::from(row.width);
-        if search.sessions {
-            let snippet = truncate_right(&result.name, width.saturating_sub(3));
-            let mut first = vec![rail(selected, bg), Span::styled(" ", bg)];
-            first.extend(highlight(&snippet, result.hit.clone(), &search.query, base, matched));
-            let detail = truncate_right(&result.detail, width.saturating_sub(4));
-            let room = width.saturating_sub(detail.chars().count() + 4);
-            let context = truncate_left(&result.context, room);
-            let gap = room.saturating_sub(context.chars().count());
-            let second = vec![
-                rail(selected, bg),
-                Span::styled(format!(" {detail}"), bg.fg(view.muted)),
-                Span::styled(" ".repeat(gap), bg),
-                Span::styled(format!("{context} "), bg.fg(view.muted)),
-            ];
-            f.render_widget(Paragraph::new(vec![Line::from(first), Line::from(second)]).style(bg), row);
-            continue;
-        }
-        let context = truncate_left(&result.context, width / 2);
-        let context_width = context.chars().count();
-        let name = truncate_right(&result.name, width.saturating_sub(context_width + 5));
-        let gap = width.saturating_sub(name.chars().count() + context_width + 3);
-        let mut spans = vec![rail(selected, bg), Span::styled(" ", bg)];
-        spans.extend(highlight(&name, None, &search.query, base, matched));
-        spans.push(Span::styled(" ".repeat(gap), bg));
-        spans.push(Span::styled(format!("{context} "), bg.fg(view.muted)));
-        f.render_widget(Paragraph::new(Line::from(spans)).style(bg), row);
+        let lines = if search.sessions {
+            session_lines(view, search, result, width, &paint)
+        } else {
+            vec![name_line(view, search, result, width, &paint)]
+        };
+        f.render_widget(Paragraph::new(lines).style(bg), row);
     }
     f.render_widget(
         Paragraph::new(Span::styled(
@@ -122,6 +103,44 @@ pub(in crate::ui) fn draw_results(f: &mut Frame, view: &View, search: &Search, r
         )),
         hint,
     );
+}
+
+struct Paint {
+    selected: bool,
+    bg: Style,
+    base: Style,
+    matched: Style,
+}
+
+fn session_lines(view: &View, search: &Search, result: &ResultRow, width: usize, paint: &Paint) -> Vec<Line<'static>> {
+    let Paint { selected, bg, base, matched } = *paint;
+    let snippet = truncate_right(&result.name, width.saturating_sub(3));
+    let mut first = vec![rail(selected, bg), Span::styled(" ", bg)];
+    first.extend(highlight(&snippet, result.hit.clone(), &search.query, base, matched));
+    let detail = truncate_right(&result.detail, width.saturating_sub(4));
+    let room = width.saturating_sub(detail.chars().count() + 4);
+    let context = truncate_left(&result.context, room);
+    let gap = room.saturating_sub(context.chars().count());
+    let second = vec![
+        rail(selected, bg),
+        Span::styled(format!(" {detail}"), bg.fg(view.muted)),
+        Span::styled(" ".repeat(gap), bg),
+        Span::styled(format!("{context} "), bg.fg(view.muted)),
+    ];
+    vec![Line::from(first), Line::from(second)]
+}
+
+fn name_line(view: &View, search: &Search, result: &ResultRow, width: usize, paint: &Paint) -> Line<'static> {
+    let Paint { selected, bg, base, matched } = *paint;
+    let context = truncate_left(&result.context, width / 2);
+    let context_width = context.chars().count();
+    let name = truncate_right(&result.name, width.saturating_sub(context_width + 5));
+    let gap = width.saturating_sub(name.chars().count() + context_width + 3);
+    let mut spans = vec![rail(selected, bg), Span::styled(" ", bg)];
+    spans.extend(highlight(&name, None, &search.query, base, matched));
+    spans.push(Span::styled(" ".repeat(gap), bg));
+    spans.push(Span::styled(format!("{context} "), bg.fg(view.muted)));
+    Line::from(spans)
 }
 
 fn highlight(name: &str, hit: Option<Range<usize>>, query: &str, base: Style, matched: Style) -> Vec<Span<'static>> {

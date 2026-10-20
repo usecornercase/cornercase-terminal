@@ -70,15 +70,7 @@ pub(crate) fn style_hit(area: Rect, pos: Position) -> Option<StyleHit> {
         .or_else(|| cell(colours, COLOURS_PER_ROW, COLOUR_CELL, GROUP_COLOURS.len()).map(StyleHit::Colour))
 }
 
-pub(in crate::ui) fn draw_group_style(f: &mut Frame, view: &View, group: &GroupEntry) {
-    let area = f.area();
-    let r = form_area(area);
-    f.render_widget(Clear, r);
-    f.render_widget(overlay_block(view.muted, &group.name), r);
-    let [icon_label, icons, colour_label, colours, last] = style_rows(area);
-    let dim = Style::default().fg(view.muted);
-    f.render_widget(Paragraph::new(Span::styled("icon", dim)), icon_label);
-    f.render_widget(Paragraph::new(Span::styled("colour", dim)), colour_label);
+fn draw_icons(f: &mut Frame, view: &View, group: &GroupEntry, icons: Rect) {
     let selected = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
     for (i, &icon) in GROUP_ICONS.iter().enumerate() {
         let cell = grid_cell(icons, ICONS_PER_ROW, ICON_CELL, i);
@@ -91,6 +83,10 @@ pub(in crate::ui) fn draw_group_style(f: &mut Frame, view: &View, group: &GroupE
         };
         f.render_widget(Paragraph::new(Span::styled(format!(" {icon} "), style)), cell);
     }
+}
+
+fn draw_colours(f: &mut Frame, view: &View, group: &GroupEntry, colours: Rect) {
+    let dim = Style::default().fg(view.muted);
     for (i, &colour) in GROUP_COLOURS.iter().enumerate() {
         let cell = grid_cell(colours, COLOURS_PER_ROW, COLOUR_CELL, i);
         let (open, close, edge) = if colour == group.colour {
@@ -107,6 +103,19 @@ pub(in crate::ui) fn draw_group_style(f: &mut Frame, view: &View, group: &GroupE
         ]);
         f.render_widget(Paragraph::new(line), cell);
     }
+}
+
+pub(in crate::ui) fn draw_group_style(f: &mut Frame, view: &View, group: &GroupEntry) {
+    let area = f.area();
+    let r = form_area(area);
+    f.render_widget(Clear, r);
+    f.render_widget(overlay_block(view.muted, &group.name), r);
+    let [icon_label, icons, colour_label, colours, last] = style_rows(area);
+    let dim = Style::default().fg(view.muted);
+    f.render_widget(Paragraph::new(Span::styled("icon", dim)), icon_label);
+    f.render_widget(Paragraph::new(Span::styled("colour", dim)), colour_label);
+    draw_icons(f, view, group, icons);
+    draw_colours(f, view, group, colours);
     let done = update_button(last, crate::settings::DONE);
     let max = usize::from(last.width.saturating_sub(done.width)).saturating_sub(5);
     let preview = Line::from(vec![Span::styled("▾ ", dim), group_header(group, max)]);

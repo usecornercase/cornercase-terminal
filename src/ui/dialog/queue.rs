@@ -133,7 +133,16 @@ pub(crate) fn hit(screen: Rect, form: &Form, pos: Position) -> Option<Hit> {
     })
 }
 
-fn draw_editor(f: &mut Frame, field: Rect, r: Rect, editor: &Editor, focused: bool, placeholder: &str, view: &View) {
+#[derive(Clone, Copy)]
+struct EditorField<'a> {
+    field: Rect,
+    text: Rect,
+    focused: bool,
+    placeholder: &'a str,
+}
+
+fn draw_editor(f: &mut Frame, view: &View, editor: &Editor, at: EditorField) {
+    let EditorField { field, text: r, focused, placeholder } = at;
     let bg = Style::default().bg(view.surface());
     f.render_widget(Paragraph::new("").style(bg), field);
     let width = usize::from(r.width.max(1));
@@ -171,11 +180,7 @@ fn hint(form: &Form) -> &'static str {
     }
 }
 
-pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
-    let screen = f.area();
-    let area = area(screen);
-    f.render_widget(Clear, area);
-    f.render_widget(overlay_block(view.muted, "Schedule an agent"), area);
+fn draw_labels(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
     let dim = Style::default().fg(view.muted);
     let controls = form.controls();
     for (at, label) in
@@ -190,14 +195,18 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
         let only = cell(screen, OPEN_IN, LABEL + 1, rest(screen, LABEL + 1));
         f.render_widget(Paragraph::new(Span::styled(crate::queue::form::OPEN_IN[0], dim)), only);
     }
+}
+
+fn draw_controls(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
     let typing = !form.busy && form.opened().is_none();
     let placeholder = if form.places.is_empty() { "no open project" } else { "choose an open place…" };
-    for control in &controls {
+    for control in &form.controls() {
         let r = rect(screen, form, *control);
         let focused = typing && form.focus == *control;
         if let Some(editor) = form.editor_of(*control) {
             let placeholder = if *control == Control::Branch { "branch name" } else { "" };
-            draw_editor(f, r, text(screen, form, *control), editor, focused, placeholder, view);
+            let at = EditorField { field: r, text: text(screen, form, *control), focused, placeholder };
+            draw_editor(f, view, editor, at);
         } else if let Some(choices) = form.combo_of(*control) {
             let gone = form.account.as_ref().and_then(|account| account.missing()).map(|name| format!("{name} (gone)"));
             let empty = match control {
@@ -209,9 +218,15 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
             combo::draw_field(f, view, r, combo::Field { combo: choices, placeholder: empty, focused });
         }
     }
-    let values =
-        controls.iter().filter(|c| matches!(c, Control::Clock | Control::Date | Control::Amount | Control::Unit));
-    let end = values.map(|c| rect(screen, form, *c).right()).max().unwrap_or(inner(screen).x + LABEL);
+}
+
+fn draw_notes(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
+    let dim = Style::default().fg(view.muted);
+    let values = form
+        .controls()
+        .into_iter()
+        .filter(|c| matches!(c, Control::Clock | Control::Date | Control::Amount | Control::Unit));
+    let end = values.map(|c| rect(screen, form, c).right()).max().unwrap_or(inner(screen).x + LABEL);
     let r = row(screen, 6, 1);
     let tip = Rect::new(end.saturating_add(1), r.y, r.right().saturating_sub(end.saturating_add(1)), r.height);
     f.render_widget(Paragraph::new(Span::styled(hint(form), dim)), tip);
@@ -221,13 +236,19 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
     if let Some(note) = note {
         let r = self::note(screen);
         f.render_widget(Clear, r);
-        f.render_widget(
-            Paragraph::new(note)
-                .style(Style::default().fg(if form.busy { view.muted } else { Color::Red }))
-                .wrap(Wrap { trim: true }),
-            r,
-        );
+        let style = Style::default().fg(if form.busy { view.muted } else { Color::Red });
+        f.render_widget(Paragraph::new(note).style(style).wrap(Wrap { trim: true }), r);
     }
+}
+
+pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
+    let screen = f.area();
+    let area = area(screen);
+    f.render_widget(Clear, area);
+    f.render_widget(overlay_block(view.muted, "Schedule an agent"), area);
+    draw_labels(f, view, screen, form);
+    draw_controls(f, view, screen, form);
+    draw_notes(f, view, screen, form);
     draw_dialog_buttons(f, view, buttons(screen), "schedule", "cancel");
     if let (Some(open), Some(list)) = (form.opened(), list(screen, form))
         && let Some(choices) = form.combo_of(open)
