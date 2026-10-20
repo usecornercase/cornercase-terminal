@@ -88,7 +88,7 @@ impl App {
         }
         let dir = match (to, &path) {
             (To::Project, Some(path)) => store::project_dir(path),
-            _ => paths::flows(&self.paths.config_path),
+            _ => paths::flows(&self.config_file.path),
         };
         let saved =
             store::save(&dir, &flow, replaced.as_deref()).map_err(|e| format!("could not save the flow: {e}"))?;
@@ -172,7 +172,7 @@ impl App {
         let path = self.projects[p].path.clone();
         let made = existing
             .is_none()
-            .then(|| worktree::checkout_path(&self.config.worktrees_dir(self.paths.home.as_deref()), &path, &branch));
+            .then(|| worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &path, &branch));
         self.spawn_run_worktrees(p, RunTrees { run: made, branch, roles }, key);
         let stage = Stage::Run(project, Box::new(starting));
         self.clients.requests.pending.push(Pending { client, key, timeout: None, done: Done::default(), stage });

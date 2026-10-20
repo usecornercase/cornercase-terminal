@@ -61,7 +61,7 @@ impl App {
     }
 
     pub(super) fn project_label(&self, project: &Project) -> String {
-        project.label(self.paths.home.as_deref())
+        project.label(self.home.as_deref())
     }
 
     pub(super) fn remove(&mut self, id: u64) {

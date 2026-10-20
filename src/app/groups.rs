@@ -1,5 +1,4 @@
 use ratatui::layout::Position;
-use std::path::PathBuf;
 
 use crate::changes;
 use crate::files;
@@ -49,15 +48,4 @@ pub(super) struct Panels {
     pub(super) todos: Todos,
     pub(super) flow: flow_panel::FlowPanel,
     pub(super) queued: QueueRuntime,
-}
-
-pub(super) struct Paths {
-    pub(super) config_path: PathBuf,
-    pub(super) home: Option<PathBuf>,
-}
-
-impl Paths {
-    pub(super) fn new(config_path: PathBuf, home: Option<PathBuf>) -> Self {
-        Self { config_path, home }
-    }
 }

@@ -237,7 +237,7 @@ impl App {
 
     pub(super) fn every_body(&self, targets: &[(Checkout, bool)]) -> (changes::Body, Vec<u64>, Vec<every::Header>) {
         let order = crate::project::sidebar_order(&self.projects, &self.groups);
-        every::group(&self.projects, &order, &self.panels.changes, targets, self.paths.home.as_deref())
+        every::group(&self.projects, &order, &self.panels.changes, targets, self.home.as_deref())
     }
 
     pub(super) fn panel_view(&self) -> Option<panel::View> {

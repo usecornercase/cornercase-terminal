@@ -225,14 +225,8 @@ impl App {
             let mode = if every { Mode::Uncommitted } else { self.panels.changes.mode };
             return model.and_then(changes::Model::diff).map(|d| counted(d, mode));
         }
-        let mut modes: Vec<Mode> = self
-            .clients
-            .change_streams
-            .open
-            .iter()
-            .filter(|s| s.workspace == Some(workspace))
-            .map(|s| s.mode)
-            .collect();
+        let open = &self.clients.change_streams.open;
+        let mut modes: Vec<Mode> = open.iter().filter(|s| s.workspace == Some(workspace)).map(|s| s.mode).collect();
         modes.sort_by_key(|m| *m != Mode::Uncommitted);
         if let Some(mode) = modes.first() {
             return self

@@ -315,7 +315,7 @@ impl App {
             },
         };
         Some(panel::View {
-            root: crate::text::display_path(&root, self.paths.home.as_deref()),
+            root: crate::text::display_path(&root, self.home.as_deref()),
             bar: self.bar(workspace),
             screen,
             light: self.themes.theme.is_light() == Some(true),

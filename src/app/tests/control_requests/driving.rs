@@ -387,7 +387,7 @@ mod link {
         let (repo, other) = (repo(), TempDir::new());
         std::fs::write(other.path().join("plan.md"), "# Plan").expect("write");
         let (mut app, _rx, id) = showing(repo.path(), "~/plan.md");
-        app.paths.home = Some(other.path().to_path_buf());
+        app.home = Some(other.path().to_path_buf());
 
         let answer = at(&mut app, id, 2, 0);
 

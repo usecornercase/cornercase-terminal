@@ -216,7 +216,7 @@ impl App {
     pub(super) fn spawn_worktree(&self, p: usize, branch: String, start: Option<Start>, request: Option<u64>) {
         let project = &self.projects[p];
         let (id, repo) = (project.id, project.path.clone());
-        let path = worktree::checkout_path(&self.config.worktrees_dir(self.paths.home.as_deref()), &repo, &branch);
+        let path = worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &repo, &branch);
         let job = Job::new(Level::Info, "worktree", "add").with("project", id).with("branch", &branch);
         let job = job.with("path", path.display()).with("issue", start.is_some());
         self.spawn_job(
@@ -502,7 +502,7 @@ impl App {
     fn remove_question(&self, found: Option<(usize, usize)>, teardown: bool) -> String {
         let label = self.found_label(found);
         let path = found
-            .map(|(p, w)| crate::text::display_path(&self.projects[p].workspaces[w].path, self.paths.home.as_deref()))
+            .map(|(p, w)| crate::text::display_path(&self.projects[p].workspaces[w].path, self.home.as_deref()))
             .unwrap_or_default();
         let roles = found.map_or(0, |(p, w)| {
             self.projects[p].workspaces[w].role_worktrees.iter().filter(|tree| tree.path.is_dir()).count()

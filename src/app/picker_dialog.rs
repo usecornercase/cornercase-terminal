@@ -20,7 +20,7 @@ const VSCODE_TAG: &str = "vs code";
 
 impl App {
     pub(super) fn open_picker(&mut self, group: Option<u64>) {
-        let home = self.paths.home.as_deref();
+        let home = self.home.as_deref();
         let in_group = group.and_then(|g| self.projects.iter().find(|p| p.group == Some(g)));
         let near = in_group.or_else(|| self.project()).and_then(|p| p.path.parent().map(Path::to_path_buf));
         let picker = near

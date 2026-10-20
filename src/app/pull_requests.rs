@@ -107,7 +107,7 @@ impl App {
         self.git.pulls.found.retain(|id, _| workspaces.contains(id));
         self.git.pulls.answered.retain(|id, _| self.projects.project_index(*id).is_some());
         self.close_gone_pull_request();
-        let gh = self.config.gh(self.paths.home.as_deref());
+        let gh = self.config.gh(self.home.as_deref());
         for p in 0..self.projects.len() {
             let project = &self.projects[p];
             if project.closing || self.git.pulls.waiting(project.id, now) {

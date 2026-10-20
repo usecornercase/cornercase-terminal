@@ -237,7 +237,7 @@ impl App {
     }
 
     pub(super) fn overlay_view(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
-        let home = self.paths.home.as_deref();
+        let home = self.home.as_deref();
         Some(match overlay {
             Overlay::Menu { at, actions } => self.menu_view(*at, actions),
             Overlay::GroupStyle { group } => self.group_style_view(*group)?,

@@ -141,7 +141,7 @@ impl App {
         match source {
             Source::Github => {
                 let dir = self.projects.get(self.projects.project_index(project)?)?.path.clone();
-                Some(Client::Github { gh: self.config.gh(self.paths.home.as_deref()), dir })
+                Some(Client::Github { gh: self.config.gh(self.home.as_deref()), dir })
             }
             Source::Shortcut => {
                 Some(Client::Shortcut { base: self.issues.apis.shortcut.clone(), token: self.token(source)?.0 })

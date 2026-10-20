@@ -165,7 +165,6 @@ pub(crate) struct App {
     setups: worktree_setup::Setups,
     messages: groups::Messages,
     panels: groups::Panels,
-    paths: groups::Paths,
     themes: theme::Themes,
     clients: control::Clients,
     usages: usage_dialog::Usages,
@@ -187,6 +186,7 @@ pub(crate) struct App {
     shells: tabs::Shells,
     tx: Sender<AppEvent>,
     clock: Clock,
+    home: Option<PathBuf>,
     settings_page: Page,
     remote: remote_access::Remote,
     messengers: Vec<Messenger>,
@@ -199,13 +199,13 @@ pub(crate) struct App {
 
 impl App {
     pub(crate) fn new(shell: String, theme: HostTheme, config_path: PathBuf, tx: Sender<AppEvent>) -> Self {
-        let secrets_path = paths::secrets(&config_path);
         let home = std::env::var_os("HOME").map(PathBuf::from);
-        let (config, config_file) = config_file::ConfigFile::open(&config_path);
+        let (config, config_file) = config_file::ConfigFile::open(config_path);
+        let config_path = &config_file.path;
         Self {
             screen: groups::Screen::default(),
             git: groups::Git::default(),
-            setups: worktree_setup::Setups::new(&config_path),
+            setups: worktree_setup::Setups::new(config_path),
             messages: groups::Messages::default(),
             panels: groups::Panels::default(),
             clients: control::Clients::default(),
@@ -216,27 +216,27 @@ impl App {
             opening: opening::Opening::default(),
             agents: AgentRuntime::new(home.as_deref()),
             update: UpdateState::from_env(),
-            issues: IssueConnections::new(secrets_path.clone()),
+            issues: IssueConnections::new(paths::secrets(config_path)),
             groups: Vec::new(),
             projects: Vec::new(),
             active: 0,
             deleting_groups: Vec::new(),
             next_id: 1,
             overlay: None,
-            config,
-            config_file,
-            accounts: control::accounts::AccountState::new(&config_path),
+            accounts: control::accounts::AccountState::new(config_path),
             shells: tabs::Shells::new(shell),
             clock: Clock::new(),
             settings_page: Page::default(),
-            remote: remote_access::Remote::new(Web::new(paths::browsers(&config_path), paths::socket(), tx.clone())),
-            messengers: messenger::messengers(&config_path, &secrets_path),
-            runs: flow_runs::Runs::new(&config_path),
+            remote: remote_access::Remote::new(Web::new(paths::browsers(config_path), paths::socket(), tx.clone())),
+            messengers: messenger::messengers(config_path, &paths::secrets(config_path)),
+            runs: flow_runs::Runs::new(config_path),
             sessions: said::Sessions::default(),
             seen: trace::Seen::default(),
             images: images::Payloads::default(),
-            plugins: Plugins::new(crate::plugins::Places::new(&config_path, &config_path)),
-            paths: groups::Paths::new(config_path, home),
+            plugins: Plugins::new(crate::plugins::Places::new(config_path, config_path)),
+            config,
+            config_file,
+            home,
             tx,
         }
     }
@@ -355,8 +355,7 @@ impl App {
     }
 
     pub(crate) fn open_here(&mut self, area: Rect) -> Result<()> {
-        let here =
-            std::env::current_dir().ok().or_else(|| self.paths.home.clone()).unwrap_or_else(|| PathBuf::from("/"));
+        let here = std::env::current_dir().ok().or_else(|| self.home.clone()).unwrap_or_else(|| PathBuf::from("/"));
         self.open_project(here, area)
     }
 

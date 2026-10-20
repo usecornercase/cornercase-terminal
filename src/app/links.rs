@@ -21,7 +21,7 @@ pub(super) struct Resolving<'a> {
 impl App {
     fn link_at(&mut self, at: Position) -> Option<Target> {
         let root = self.project()?.workspace()?.path.clone();
-        let home = self.paths.home.clone();
+        let home = self.home.clone();
         let term = self.term_mut()?;
         let screen = term.emulator.snapshot().ok()?;
         link::under(screen.rows.get(usize::from(at.y))?, at.x, term.cwd().as_deref(), &root, home.as_deref())

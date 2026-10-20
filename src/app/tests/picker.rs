@@ -158,7 +158,7 @@ fn starts_next_to_the_active_project() {
 fn starts_at_home_with_no_projects() {
     let (mut app, _rx) = empty_app();
     let home = TempDir::new();
-    app.paths.home = Some(home.path().to_path_buf());
+    app.home = Some(home.path().to_path_buf());
 
     click_new_project(&mut app);
 

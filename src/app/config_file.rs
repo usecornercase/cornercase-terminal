@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use super::App;
@@ -11,6 +12,7 @@ const CHECK_EVERY: Duration = Duration::from_secs(1);
 
 #[derive(Default)]
 pub(super) struct ConfigFile {
+    pub(super) path: PathBuf,
     pub(super) mark: persist::Mark,
     checked: Option<Instant>,
     pub(super) problem: Option<String>,
@@ -18,9 +20,9 @@ pub(super) struct ConfigFile {
 }
 
 impl ConfigFile {
-    pub(super) fn open(path: &std::path::Path) -> (Config, Self) {
-        let mark = persist::mark(path);
-        let (config, problem) = match config::read(path) {
+    pub(super) fn open(path: PathBuf) -> (Config, Self) {
+        let mark = persist::mark(&path);
+        let (config, problem) = match config::read(&path) {
             Ok(config) => (config.unwrap_or_default(), None),
             Err(why) => {
                 log::warning!("app", "config.json cannot be read, using the defaults", why = why.as_str());
@@ -28,7 +30,7 @@ impl ConfigFile {
             }
         };
         warn_unknown_profile(None, &config);
-        (config, Self { mark, checked: None, problem, revision: 1 })
+        (config, Self { path, mark, checked: None, problem, revision: 1 })
     }
 }
 
@@ -50,16 +52,16 @@ impl App {
             return;
         }
         self.config_file.checked = Some(now);
-        if persist::mark(&self.paths.config_path) != self.config_file.mark {
+        if persist::mark(&self.config_file.path) != self.config_file.mark {
             let _ = self.reload_config();
         }
     }
 
     pub(super) fn reload_config(&mut self) -> Result<(), String> {
-        let mark = persist::mark(&self.paths.config_path);
+        let mark = persist::mark(&self.config_file.path);
         if mark != self.config_file.mark {
             self.config_file.mark = mark;
-            match config::read(&self.paths.config_path) {
+            match config::read(&self.config_file.path) {
                 Ok(read) => self.config_read(read),
                 Err(why) => self.config_unreadable(why),
             }
@@ -98,7 +100,7 @@ impl App {
             return Ok(());
         }
         self.config_file.mark =
-            config::save(&self.paths.config_path, &next).map_err(|e| format!("failed to save the settings: {e}"))?;
+            config::save(&self.config_file.path, &next).map_err(|e| format!("failed to save the settings: {e}"))?;
         warn_unknown_profile(Some(&self.config), &next);
         self.set_config(next);
         Ok(())

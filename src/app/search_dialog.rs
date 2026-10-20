@@ -46,7 +46,7 @@ fn pitch(mode: Mode) -> u16 {
 
 impl App {
     pub(super) fn search_candidates(&self) -> Vec<Candidate> {
-        search::candidates(&self.groups, &self.projects, &self.config, self.paths.home.as_deref())
+        search::candidates(&self.groups, &self.projects, &self.config, self.home.as_deref())
     }
 
     pub(super) fn search_results(&self, query: &str) -> Vec<Candidate> {

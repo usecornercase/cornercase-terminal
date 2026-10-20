@@ -96,7 +96,7 @@ fn quit_button_asks_to_detach_once() {
 fn new_project_button_works_with_no_projects() {
     let (mut app, rx) = app();
     let home = TempDir::new();
-    app.paths.home = Some(home.path().to_path_buf());
+    app.home = Some(home.path().to_path_buf());
     confirm_close(&mut app, 0);
     pump_until(&mut app, &rx, "the project closes", App::is_empty);
 

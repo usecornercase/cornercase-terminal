@@ -162,14 +162,14 @@ impl App {
 
     fn queued_place(&self, place: &queue::Place) -> String {
         let project = self.projects.iter().find(|project| project.path == place.project).map_or_else(
-            || crate::text::folder_name(&place.project, self.paths.home.as_deref()),
+            || crate::text::folder_name(&place.project, self.home.as_deref()),
             |project| self.project_label(project),
         );
         match (&place.branch, &place.workspace_name, &place.workspace) {
             (Some(branch), ..) => format!("{project} › {branch}"),
             (None, Some(name), _) => format!("{project} › {name}"),
             (None, None, Some(path)) if *path != place.project => {
-                format!("{project} › {}", crate::text::folder_name(path, self.paths.home.as_deref()))
+                format!("{project} › {}", crate::text::folder_name(path, self.home.as_deref()))
             }
             _ => project,
         }

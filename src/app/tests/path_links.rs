@@ -63,7 +63,7 @@ fn an_outside_path_is_underlined_and_opens_in_the_viewer(
     let (mut app, rx) = app_in(repo.path(), no_config());
     app.resize(area);
     app.term_mut().expect("a pane").feed(format!("\x1b[2J\x1b[H{mode}{printed}:2-3").as_bytes());
-    app.paths.home = Some(other.path().to_path_buf());
+    app.home = Some(other.path().to_path_buf());
     app.term_mut().expect("a pane").input_at = None;
     let pane = app.layout(area).pane;
     let pos = Position::new(pane.x + 2, pane.y);

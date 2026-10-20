@@ -44,7 +44,7 @@ impl App {
     }
 
     pub(super) fn setup_script(&self, p: usize) -> Option<String> {
-        let text = self.config.project(&self.projects[p].path, self.paths.home.as_deref()).setup;
+        let text = self.config.project(&self.projects[p].path, self.home.as_deref()).setup;
         (!text.trim().is_empty()).then_some(text)
     }
 
@@ -56,7 +56,7 @@ impl App {
     }
 
     pub(super) fn teardown_script(&self, p: usize) -> Option<String> {
-        let text = self.config.project(&self.projects[p].path, self.paths.home.as_deref()).teardown;
+        let text = self.config.project(&self.projects[p].path, self.home.as_deref()).teardown;
         (!text.trim().is_empty()).then_some(text)
     }
 

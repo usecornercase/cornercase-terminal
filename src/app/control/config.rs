@@ -40,7 +40,7 @@ impl App {
         let model = self.settings_model(Page::default());
         Described {
             revision: self.config_file.revision,
-            path: self.paths.config_path.clone(),
+            path: self.config_file.path.clone(),
             problem: self.config_file.problem.clone(),
             settings: model.describe(),
             connections: model.connections(),
@@ -50,7 +50,7 @@ impl App {
     }
 
     fn project_settings_entries(&self) -> Vec<ProjectEntry> {
-        let home = self.paths.home.as_deref();
+        let home = self.home.as_deref();
         let open =
             |folder: &std::path::Path| self.projects.iter().find(|p| !p.closing && p.path == folder).map(|p| p.id);
         let mut entries: Vec<ProjectEntry> = self
@@ -119,7 +119,7 @@ impl App {
             }
             (None, Some(path)) => {
                 let given = path.to_str().ok_or_else(|| Refusal::new(Code::Malformed, "the path is not text"))?;
-                let folder = config::expand_home(given, self.paths.home.as_deref());
+                let folder = config::expand_home(given, self.home.as_deref());
                 if !folder.is_absolute() {
                     return Err(Refusal::new(Code::Malformed, "use an absolute path or one starting with ~/"));
                 }
@@ -131,7 +131,7 @@ impl App {
 
     fn config_project(&mut self, change: ProjectChange) -> Handled {
         let folder = self.project_folder(&change)?;
-        let home = self.paths.home.clone();
+        let home = self.home.clone();
         let current = self.config.project(&folder, home.as_deref());
         let settings = ProjectSettings {
             setup: change.setup.unwrap_or(current.setup),

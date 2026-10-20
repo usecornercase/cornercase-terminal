@@ -155,7 +155,7 @@ impl App {
             scheduling: false,
             error: None,
             notice: None,
-            secrets_path: crate::text::display_path(&self.issues.secrets_path, self.paths.home.as_deref()),
+            secrets_path: crate::text::display_path(&self.issues.secrets_path, self.home.as_deref()),
             agents: self.agent_choices(),
             accounts: self.account_choices(),
             picker: None,

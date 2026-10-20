@@ -97,9 +97,9 @@ impl App {
     }
 
     fn spawn_merged(&self) {
-        let gh = self.config.gh(self.paths.home.as_deref());
-        let glab = self.config.glab(self.paths.home.as_deref());
-        let dir = self.paths.home.clone().unwrap_or_else(|| PathBuf::from("/"));
+        let gh = self.config.gh(self.home.as_deref());
+        let glab = self.config.glab(self.home.as_deref());
+        let dir = self.home.clone().unwrap_or_else(|| PathBuf::from("/"));
         let since = self.agents.stats.since();
         let job = Job::new(Level::Debug, "pr", "merged").slow_after(SLOW);
         self.spawn_job(

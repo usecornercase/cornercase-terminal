@@ -184,7 +184,7 @@ mod settings_page {
         let mut p = plugged(false);
         open_plugins(&mut p.app);
         send_key(&mut p.app, KeyCode::Enter, KeyModifiers::NONE);
-        let registry = Registry::load(&paths::plugins(&p.app.paths.config_path));
+        let registry = Registry::load(&paths::plugins(&p.app.config_file.path));
         assert!(registry.entries[0].enabled);
         let Some(Overlay::Settings(s)) = &p.app.overlay else { panic!("settings stay open") };
         assert_eq!(s.notice.as_deref(), Some("Notes is on: it runs as you"));

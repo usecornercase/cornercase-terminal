@@ -17,8 +17,8 @@ impl App {
     pub(in crate::app) fn build_sources(&mut self, cached: bool) -> Vec<Source> {
         let mut sources = Vec::new();
         for (project, workspace, tab) in open_tabs(&self.projects, &self.groups) {
-            let label = [project.label(self.paths.home.as_deref()), workspace.label(), tab.label(&self.config)]
-                .join(CRUMB_SEPARATOR);
+            let label =
+                [project.label(self.home.as_deref()), workspace.label(), tab.label(&self.config)].join(CRUMB_SEPARATOR);
             for term in &tab.panes {
                 let kind = term.agent.agent().map(str::to_string);
                 let who = kind.clone().or_else(|| term.program(&self.config)).unwrap_or_else(|| "shell".into());

@@ -182,7 +182,7 @@ impl App {
         store::list(
             builtin::for_config(&self.config),
             &self.config.hidden_flows,
-            &paths::flows(&self.paths.config_path),
+            &paths::flows(&self.config_file.path),
             project.as_deref(),
         )
     }
@@ -198,7 +198,7 @@ impl App {
         let RunTrees { run, branch, roles } = trees;
         let project = &self.projects[p];
         let (id, repo) = (project.id, project.path.clone());
-        let dir = self.config.worktrees_dir(self.paths.home.as_deref());
+        let dir = self.config.worktrees_dir(self.home.as_deref());
         let job = Job::new(Level::Info, "worktree", "add for a flow").with("project", id).with("branch", &branch);
         let job = job.with("roles", roles.len()).with("run", run.is_some());
         self.spawn_job(
