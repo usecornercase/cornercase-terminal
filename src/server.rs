@@ -21,6 +21,7 @@ use crate::app::{App, AppEvent, Streamed};
 use crate::control::start_server::SizeFrom;
 use crate::control::{self, Ids, What};
 use crate::error::{Error, Result};
+use crate::graphics::Support;
 use crate::host::notify::{self, Channel};
 use crate::host::open::Opener;
 use crate::host::pointer;
@@ -237,6 +238,48 @@ struct Server {
     observed: Option<Instant>,
 }
 
+fn log_started(path: &Path, session: &Path, level: Level) {
+    log::info!(
+        "server",
+        "started",
+        version = version::CURRENT,
+        build = version::build_id(),
+        pid = std::process::id(),
+        os = std::env::consts::OS,
+        arch = std::env::consts::ARCH,
+        socket = path.display(),
+        session = session.display(),
+        level = format!("{level:?}").to_lowercase(),
+    );
+}
+
+fn prepare_app(app: &mut App, path: &Path, session: &Path) -> Saver<todo::Saved> {
+    if let Some(tree) = paths::dev_source() {
+        name_the_source(session, tree);
+        app.set_pane_socket(path);
+    }
+    app.set_issue_cache(paths::issue_cache(session));
+    app.set_plugin_places(crate::plugins::Places::new(&paths::config(), session));
+    let todos = todo::load(&paths::todos(session));
+    let todo_saver = Saver::new(paths::todos(session), Some(todos.saved()));
+    app.set_todos(todos);
+    app.set_queue(queue::load(&paths::queue(session), crate::time::now()));
+    app.set_queue_path(paths::queue(session));
+    app.set_setup_dir(path.parent().unwrap_or(Path::new(".")));
+    app.set_runs_dir(&paths::runs(session));
+    app.set_accounts_dir(&paths::accounts_of(session));
+    let stats = crate::agents::stats::load(&paths::stats(session), SystemTime::now());
+    log::info!(
+        "stats",
+        "loaded",
+        since = stats.view(SystemTime::now()).since,
+        hours = stats.saved(SystemTime::now()).hours.len()
+    );
+    app.set_stats(stats);
+    app.set_star(paths::star(session));
+    todo_saver
+}
+
 pub(crate) fn run() -> Result<()> {
     panics::log_to_stderr();
     let _ = rustix::process::setsid();
@@ -255,41 +298,8 @@ pub(crate) fn run() -> Result<()> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
     let mut app = App::new(shell, HostTheme::default(), paths::config(), app_tx);
     let session = paths::session();
-    log::info!(
-        "server",
-        "started",
-        version = version::CURRENT,
-        build = version::build_id(),
-        pid = std::process::id(),
-        os = std::env::consts::OS,
-        arch = std::env::consts::ARCH,
-        socket = path.display(),
-        session = session.display(),
-        level = format!("{level:?}").to_lowercase(),
-    );
-    if let Some(tree) = paths::dev_source() {
-        name_the_source(&session, tree);
-        app.set_pane_socket(&path);
-    }
-    app.set_issue_cache(paths::issue_cache(&session));
-    app.set_plugin_places(crate::plugins::Places::new(&paths::config(), &session));
-    let todos = todo::load(&paths::todos(&session));
-    let todo_saver = Saver::new(paths::todos(&session), Some(todos.saved()));
-    app.set_todos(todos);
-    app.set_queue(queue::load(&paths::queue(&session), crate::time::now()));
-    app.set_queue_path(paths::queue(&session));
-    app.set_setup_dir(path.parent().unwrap_or(Path::new(".")));
-    app.set_runs_dir(&paths::runs(&session));
-    app.set_accounts_dir(&paths::accounts_of(&session));
-    let stats = crate::agents::stats::load(&paths::stats(&session), SystemTime::now());
-    log::info!(
-        "stats",
-        "loaded",
-        since = stats.view(SystemTime::now()).since,
-        hours = stats.saved(SystemTime::now()).hours.len()
-    );
-    app.set_stats(stats);
-    app.set_star(paths::star(&session));
+    log_started(&path, &session, level);
+    let todo_saver = prepare_app(&mut app, &path, &session);
     let mut server = Server::new(app, session, todo_saver, tx);
     server.serve(&rx);
     let _ = std::fs::remove_file(&path);
@@ -371,19 +381,24 @@ fn spawn_client_writer(
 
 fn spawn_client_reader(id: u64, mut stream: UnixStream, tx: Sender<ServerEvent>) {
     thread::spawn(move || {
-        let last = loop {
-            match protocol::recv::<ClientMessage>(&mut stream) {
-                Ok(Some(msg)) => {
-                    if tx.send(ServerEvent::Message(id, msg)).is_err() {
-                        return;
-                    }
-                }
-                Err(e) if e.kind() == io::ErrorKind::InvalidData => break ServerEvent::Incompatible(id),
-                Ok(None) | Err(_) => break ServerEvent::Gone(id),
-            }
-        };
-        let _ = tx.send(last);
+        if let Some(last) = forward_messages(id, &mut stream, &tx) {
+            let _ = tx.send(last);
+        }
     });
+}
+
+fn forward_messages(id: u64, stream: &mut UnixStream, tx: &Sender<ServerEvent>) -> Option<ServerEvent> {
+    loop {
+        match protocol::recv::<ClientMessage>(stream) {
+            Ok(Some(msg)) => {
+                if tx.send(ServerEvent::Message(id, msg)).is_err() {
+                    return None;
+                }
+            }
+            Err(e) if e.kind() == io::ErrorKind::InvalidData => return Some(ServerEvent::Incompatible(id)),
+            Ok(None) | Err(_) => return Some(ServerEvent::Gone(id)),
+        }
+    }
 }
 
 impl Server {
@@ -422,31 +437,54 @@ impl Server {
 
     fn serve_with(&mut self, rx: &Receiver<ServerEvent>, run: impl Fn(&mut Self, Step) -> ControlFlow<()>) {
         loop {
-            for step in [Step::Refresh, Step::Answer, Step::Flush] {
-                if self.contain(step, &run) == Some(ControlFlow::Break(())) {
-                    return;
-                }
+            if self.run_steps(&run).is_break() {
+                return;
             }
-            if self.due(Instant::now()) {
-                self.contain(Step::Draw, &run);
+            let ControlFlow::Continue(first) = self.next_event(rx) else { return };
+            if self.run_events(first, rx, &run).is_break() {
+                return;
             }
-            self.contain(Step::Surfaces, &run);
-            self.contain(Step::Save, &run);
-            let now = Instant::now();
-            let tick = [self.app.tick(now), self.next_frame(now)].into_iter().flatten().fold(TICK, Duration::min);
-            let first = match rx.recv_timeout(tick) {
-                Ok(ev) => Some(ev),
-                Err(RecvTimeoutError::Timeout) => {
-                    self.changed = true;
-                    None
-                }
-                Err(RecvTimeoutError::Disconnected) => return,
-            };
-            for ev in first.into_iter().chain(std::iter::from_fn(|| rx.try_recv().ok())) {
-                if self.contain(Step::Event(ev), &run) == Some(ControlFlow::Break(())) {
-                    return;
-                }
+        }
+    }
+
+    fn run_events(
+        &mut self,
+        first: Option<ServerEvent>,
+        rx: &Receiver<ServerEvent>,
+        run: &impl Fn(&mut Self, Step) -> ControlFlow<()>,
+    ) -> ControlFlow<()> {
+        for ev in first.into_iter().chain(std::iter::from_fn(|| rx.try_recv().ok())) {
+            if self.contain(Step::Event(ev), run) == Some(ControlFlow::Break(())) {
+                return ControlFlow::Break(());
             }
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn run_steps(&mut self, run: &impl Fn(&mut Self, Step) -> ControlFlow<()>) -> ControlFlow<()> {
+        for step in [Step::Refresh, Step::Answer, Step::Flush] {
+            if self.contain(step, run) == Some(ControlFlow::Break(())) {
+                return ControlFlow::Break(());
+            }
+        }
+        if self.due(Instant::now()) {
+            self.contain(Step::Draw, run);
+        }
+        self.contain(Step::Surfaces, run);
+        self.contain(Step::Save, run);
+        ControlFlow::Continue(())
+    }
+
+    fn next_event(&mut self, rx: &Receiver<ServerEvent>) -> ControlFlow<(), Option<ServerEvent>> {
+        let now = Instant::now();
+        let tick = [self.app.tick(now), self.next_frame(now)].into_iter().flatten().fold(TICK, Duration::min);
+        match rx.recv_timeout(tick) {
+            Ok(ev) => ControlFlow::Continue(Some(ev)),
+            Err(RecvTimeoutError::Timeout) => {
+                self.changed = true;
+                ControlFlow::Continue(None)
+            }
+            Err(RecvTimeoutError::Disconnected) => ControlFlow::Break(()),
         }
     }
 
@@ -494,19 +532,23 @@ impl Server {
         }
         if done.is_none() {
             log::error!("server", "step panicked", step = name, interacting = interacting);
-            if interacting {
-                self.app.reset_interaction();
-            }
-            if drawing && let Some(area) = self.area {
-                self.changed = true;
-                for client in &mut self.clients {
-                    client.reset_screen(area);
-                }
-            }
-            self.app.answer_lost_requests();
-            self.app.report_bug();
+            self.recover(interacting, drawing);
         }
         done
+    }
+
+    fn recover(&mut self, interacting: bool, drawing: bool) {
+        if interacting {
+            self.app.reset_interaction();
+        }
+        if drawing && let Some(area) = self.area {
+            self.changed = true;
+            for client in &mut self.clients {
+                client.reset_screen(area);
+            }
+        }
+        self.app.answer_lost_requests();
+        self.app.report_bug();
     }
 
     fn answer(&mut self) {
@@ -545,43 +587,46 @@ impl Server {
                 Err(e) => log::error!("server", "failed to save the session", error = e),
             }
         }
-        match self.stats_saver.observe(self.app.stats(), SystemTime::now(), now) {
-            Ok(true) => log::debug!("stats", "saved"),
-            Ok(false) => {}
-            Err(e) => log::error!("stats", "failed to save", error = e),
-        }
-        match self.queue_saver.observe(self.app.queue_saved(), now) {
-            Ok(true) => log::debug!("server", "queue saved"),
-            Ok(false) => {}
-            Err(e) => log::error!("server", "failed to save the queue", error = e),
-        }
-        match self.todo_saver.observe(self.app.todos_saved(), now) {
-            Ok(true) => log::debug!("server", "todo list saved"),
-            Ok(false) => {}
-            Err(e) => log::error!("server", "failed to save the todo list", error = e),
-        }
+        let stats = self.stats_saver.observe(self.app.stats(), SystemTime::now(), now);
+        logged_save(stats, "stats", ("saved", "failed to save"));
+        let queue = self.queue_saver.observe(self.app.queue_saved(), now);
+        logged_save(queue, "server", ("queue saved", "failed to save the queue"));
+        let todos = self.todo_saver.observe(self.app.todos_saved(), now);
+        logged_save(todos, "server", ("todo list saved", "failed to save the todo list"));
     }
 
     fn flush(&mut self) {
-        let Self { app, clients, area, .. } = self;
-        if let Some(area) = *area
-            && clients.iter().any(|c| c.pointer.is_some())
-        {
-            let shape = app.pointer(area);
-            for client in clients.iter_mut().filter(|c| c.screen.is_some()) {
-                if let Some(terminal) = client.pointer
-                    && client.shape != Some(shape)
-                {
-                    client.shape = Some(shape);
-                    client.send(ServerMessage::Frame(terminal.encode(shape)));
-                }
-            }
-        }
+        self.flush_pointer();
+        let Self { app, clients, .. } = self;
         for bytes in app.take_host_writes() {
             for client in clients.iter().filter(|c| c.screen.is_some()) {
                 client.send(ServerMessage::Frame(bytes.clone()));
             }
         }
+        self.flush_notifications();
+        self.flush_sounds();
+        self.flush_opens();
+    }
+
+    fn flush_pointer(&mut self) {
+        let Self { app, clients, area, .. } = self;
+        let Some(area) = *area else { return };
+        if !clients.iter().any(|c| c.pointer.is_some()) {
+            return;
+        }
+        let shape = app.pointer(area);
+        for client in clients.iter_mut().filter(|c| c.screen.is_some()) {
+            if let Some(terminal) = client.pointer
+                && client.shape != Some(shape)
+            {
+                client.shape = Some(shape);
+                client.send(ServerMessage::Frame(terminal.encode(shape)));
+            }
+        }
+    }
+
+    fn flush_notifications(&mut self) {
+        let Self { app, clients, .. } = self;
         for notification in app.take_notifications() {
             for client in clients.iter_mut().filter(|c| c.screen.is_some()) {
                 let channel = notification.channel_for(client.notify).id();
@@ -590,6 +635,10 @@ impl Server {
                 client.send(ServerMessage::Frame(notification.encode(client.notify)));
             }
         }
+    }
+
+    fn flush_sounds(&mut self) {
+        let Self { app, clients, .. } = self;
         if let Some(cue) = sound::loudest(&app.take_sounds()) {
             for client in clients.iter().filter(|c| c.screen.is_some() && !c.browser) {
                 log::info!("server", "sound sent", client = client.id, kind = cue.kind.id());
@@ -597,6 +646,10 @@ impl Server {
                 client.send(ServerMessage::Sound(cue.clone()));
             }
         }
+    }
+
+    fn flush_opens(&mut self) {
+        let Self { app, clients, .. } = self;
         for (id, open) in app.take_opens() {
             if let Some(client) = clients.iter().find(|c| c.id == id && c.screen.is_some() && !c.browser) {
                 log::info!("server", "open sent", client = id, opener = open.opener.id());
@@ -644,51 +697,67 @@ impl Server {
             self.changed = true;
             self.app.touch_surfaces();
         }
+        self.dispatch(ev)?;
+        if self.restart.is_some() {
+            return ControlFlow::Break(());
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn dispatch(&mut self, ev: ServerEvent) -> ControlFlow<()> {
         match ev {
-            ServerEvent::Message(id, ClientMessage::KillServer) => {
-                log::info!("server", "kill-server received", client = id);
-                return ControlFlow::Break(());
-            }
             ServerEvent::Shutdown => {
                 log::info!("server", "stopping on a signal");
                 return ControlFlow::Break(());
             }
             ServerEvent::App(ev) => self.handle_app(ev),
             ServerEvent::Accepted(stream) => self.accept(stream),
-            ServerEvent::Message(id, ClientMessage::Hello(hello)) => self.hello(id, *hello),
-            ServerEvent::Message(id, ClientMessage::Event(ev)) => self.input(id, ev),
-            ServerEvent::Message(_, ClientMessage::Activated(token)) => self.app.notification_clicked(&token),
-            ServerEvent::Message(id, ClientMessage::OpenFailed(failed)) => self.app.open_failed(id, &failed),
-            ServerEvent::Message(id, ClientMessage::Restart) => {
-                log::info!("server", "restart requested", client = id);
-                self.restart = Some(std::env::current_exe().unwrap_or_default());
-            }
-            ServerEvent::Message(id, ClientMessage::Request(text)) => {
-                self.app.request(id, &text, self.area, Instant::now());
-                if let Some((client, size)) = self.app.take_start() {
-                    self.start_server(client, size);
-                }
-            }
-            ServerEvent::Message(id, ClientMessage::Graphics(graphics)) => {
-                log::info!(
-                    "server",
-                    "client images changed",
-                    client = id,
-                    images = graphics.images(),
-                    cell = graphics.cell_size(),
-                    missing = graphics.why_not()
-                );
-                if let Some(client) = self.client_mut(id) {
-                    client.graphics.update(graphics);
-                }
-            }
+            ServerEvent::Message(id, message) => return self.message(id, message),
             ServerEvent::Incompatible(id) => self.reject(id, OTHER_BUILD),
             ServerEvent::Gone(id) => self.remove(id),
         }
-        if self.restart.is_some() {
-            return ControlFlow::Break(());
+        ControlFlow::Continue(())
+    }
+
+    fn message(&mut self, id: u64, message: ClientMessage) -> ControlFlow<()> {
+        match message {
+            ClientMessage::KillServer => {
+                log::info!("server", "kill-server received", client = id);
+                return ControlFlow::Break(());
+            }
+            ClientMessage::Hello(hello) => self.hello(id, *hello),
+            ClientMessage::Event(ev) => self.input(id, ev),
+            ClientMessage::Activated(token) => self.app.notification_clicked(&token),
+            ClientMessage::OpenFailed(failed) => self.app.open_failed(id, &failed),
+            ClientMessage::Restart => {
+                log::info!("server", "restart requested", client = id);
+                self.restart = Some(std::env::current_exe().unwrap_or_default());
+            }
+            ClientMessage::Request(text) => self.request(id, &text),
+            ClientMessage::Graphics(graphics) => self.images_changed(id, graphics),
         }
         ControlFlow::Continue(())
+    }
+
+    fn request(&mut self, id: u64, text: &str) {
+        self.app.request(id, text, self.area, Instant::now());
+        if let Some((client, size)) = self.app.take_start() {
+            self.start_server(client, size);
+        }
+    }
+
+    fn images_changed(&mut self, id: u64, graphics: Support) {
+        log::info!(
+            "server",
+            "client images changed",
+            client = id,
+            images = graphics.images(),
+            cell = graphics.cell_size(),
+            missing = graphics.why_not()
+        );
+        if let Some(client) = self.client_mut(id) {
+            client.graphics.update(graphics);
+        }
     }
 
     fn handle_app(&mut self, ev: AppEvent) {
@@ -731,6 +800,12 @@ impl Server {
         });
     }
 
+    fn send_to(&mut self, id: u64, msg: ServerMessage) {
+        if let Some(client) = self.client_mut(id) {
+            client.send(msg);
+        }
+    }
+
     fn client_mut(&mut self, id: u64) -> Option<&mut Client> {
         self.clients.iter_mut().find(|c| c.id == id)
     }
@@ -762,6 +837,10 @@ impl Server {
         if used {
             self.app.window_used();
         }
+        self.after_input(id);
+    }
+
+    fn after_input(&mut self, id: u64) {
         self.restart = self.app.take_restart();
         if self.restart.is_some() {
             log::info!("server", "restart chosen in the window", client = id);
@@ -835,6 +914,14 @@ impl Server {
             drop((out, screen));
             let _ = writer.join();
         }
+    }
+}
+
+fn logged_save(saved: io::Result<bool>, target: &str, (done, failed): (&str, &str)) {
+    match saved {
+        Ok(true) => log::debug!(target, done),
+        Ok(false) => {}
+        Err(e) => log::error!(target, failed, error = e),
     }
 }
 

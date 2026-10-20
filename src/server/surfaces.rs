@@ -19,18 +19,12 @@ impl Server {
         let mut ended = Vec::new();
         for (id, surfaced) in self.app.render_surfaces(&ready, Instant::now()) {
             match surfaced {
-                Surfaced::Frame(text) => {
-                    if let Some(client) = self.client_mut(id) {
-                        client.send(ServerMessage::Response(text));
-                    }
-                }
+                Surfaced::Frame(text) => self.send_to(id, ServerMessage::Response(text)),
                 Surfaced::End => ended.push(id),
             }
         }
         for id in ended {
-            if let Some(client) = self.client_mut(id) {
-                client.send(ServerMessage::Detached);
-            }
+            self.send_to(id, ServerMessage::Detached);
             self.remove(id);
         }
     }

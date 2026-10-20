@@ -140,11 +140,9 @@ pub(super) mod a_bug {
         let _ = server.handle(ServerEvent::Message(id, ClientMessage::Hello(Box::new(hello))));
         let (frames_tx, frames) = mpsc::channel();
         thread::spawn(move || {
-            while let Ok(Some(msg)) = protocol::recv::<ServerMessage>(&mut theirs) {
-                if frames_tx.send(msg).is_err() {
-                    return;
-                }
-            }
+            while let Ok(Some(msg)) = protocol::recv::<ServerMessage>(&mut theirs)
+                && frames_tx.send(msg).is_ok()
+            {}
         });
         Client { id, tx, frames, screen: vt100::Parser::new(ROWS, COLS, 0), raw: Vec::new(), clears: 0 }
     }
@@ -283,15 +281,23 @@ pub(super) mod a_bug {
 
         pub(super) fn until(&mut self, what: &str, cond: impl Fn(&Self) -> bool) {
             wait_until(what, || {
-                while let Ok(msg) = self.frames.try_recv() {
-                    if let ServerMessage::Frame(bytes) = msg {
-                        self.clears += usize::from(bytes == CLEAR_SCREEN);
-                        self.screen.process(&bytes);
-                        self.raw.extend_from_slice(&bytes);
-                    }
-                }
+                self.drain();
                 cond(self)
             });
+        }
+
+        fn drain(&mut self) {
+            let frames: Vec<Vec<u8>> = std::iter::from_fn(|| self.frames.try_recv().ok())
+                .filter_map(|msg| match msg {
+                    ServerMessage::Frame(bytes) => Some(bytes),
+                    _ => None,
+                })
+                .collect();
+            for bytes in frames {
+                self.clears += usize::from(bytes == CLEAR_SCREEN);
+                self.screen.process(&bytes);
+                self.raw.extend_from_slice(&bytes);
+            }
         }
 
         pub(super) fn count(&self, needle: &[u8]) -> usize {
