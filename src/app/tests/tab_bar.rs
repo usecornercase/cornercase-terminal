@@ -109,10 +109,10 @@ fn dragging_a_tab_moves_it() {
 fn the_wheel_scrolls_tabs_that_do_not_fit() {
     let (mut app, _rx, _dirs) = on_top(12);
     app.projects[0].workspaces[0].active = 0;
-    app.scroll.tab_bar = 0;
+    app.scroll.set(List::TabBar, 0);
     let at = app.layout(AREA).tab_bar.as_position();
     mouse(&mut app, MouseEventKind::ScrollDown, at);
-    assert_eq!(app.scroll.tab_bar, 1);
+    assert_eq!(app.scroll.of(List::TabBar), 1);
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn the_active_tab_is_scrolled_into_view() {
     assert!(!strip(&app).item(11).is_empty());
     app.projects[0].workspaces[0].active = 0;
     drawn_in(&mut app, AREA);
-    assert_eq!(app.scroll.tab_bar, 0);
+    assert_eq!(app.scroll.of(List::TabBar), 0);
 }
 
 #[test]

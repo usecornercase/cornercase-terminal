@@ -4,7 +4,7 @@ use ratatui::layout::Rect;
 
 use super::App;
 use super::interaction::{Drag, Grab};
-use super::layout::Side;
+use super::layout::{List, Side};
 use super::links::Resolving;
 use super::toast::Toast;
 use crate::accounts;
@@ -87,7 +87,8 @@ impl App {
     pub(super) fn tree_view(&self) -> ui::TreeView {
         let shape = self.tree_shape();
         let rows = ui::tree_rows(&shape);
-        let (above, below) = ui::tree_layout_rows(self.screen.drawn.list, &shape, &rows, self.scroll.projects).hidden();
+        let (above, below) =
+            ui::tree_layout_rows(self.screen.drawn.list, &shape, &rows, self.scroll.of(List::Projects)).hidden();
         let shown = &rows[above.end..below.start];
         let open = self.tree_open();
         let workspaces = self.projects.iter().enumerate().map(|(p, project)| {
@@ -154,12 +155,12 @@ impl App {
             groups: self.groups.iter().map(|g| g.entry.clone()).collect(),
             projects: self.project_entries(),
             active: self.active,
-            projects_scroll: self.scroll.projects,
+            projects_scroll: self.scroll.of(List::Projects),
             has_project: project.is_some(),
             workspaces: workspaces.unwrap_or_default(),
             active_workspace: project.map_or(0, |p| p.active),
             active_tab: project.and_then(Project::workspace).filter(|w| !w.tabs.is_empty()).map(|w| w.active),
-            workspaces_scroll: self.scroll.workspaces,
+            workspaces_scroll: self.scroll.of(List::Workspaces),
             issues: self.issues_available(),
             ..self.chrome_view(area, now)
         }

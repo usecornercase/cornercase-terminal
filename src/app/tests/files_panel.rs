@@ -664,10 +664,10 @@ mod full_screen {
     fn the_wheel_scrolls_the_file_anywhere() {
         let (_repo, mut app, _rx) = with_file();
         toggle(&mut app);
-        let projects = app.scroll.projects;
+        let projects = app.scroll.of(List::Projects);
         let at = app.layout(AREA).sidebar.as_position();
         mouse(&mut app, MouseEventKind::ScrollDown, at);
-        assert_eq!((app.scroll.projects, file(&app).full_screen), (projects, true));
+        assert_eq!((app.scroll.of(List::Projects), file(&app).full_screen), (projects, true));
     }
 
     #[test]

@@ -42,7 +42,7 @@ fn shape(app: &App) -> Vec<(usize, bool, Vec<bool>)> {
 
 fn row_pos(app: &App, i: usize) -> Position {
     let a = app.layout(TALL).shown(app.screen.nav);
-    let r = ui::agent_row(a.agents_list, a.pitch, app.agent_places().len(), app.scroll.agents, i);
+    let r = ui::agent_row(a.agents_list, a.pitch, app.agent_places().len(), app.scroll.of(List::Agents), i);
     Position::new(r.x + 4, r.y + r.height / 2)
 }
 
@@ -244,7 +244,7 @@ mod folds {
 
     fn row_at(app: &App, i: usize, on_arrow: bool) -> Position {
         let a = app.layout(TALL).shown(app.screen.nav);
-        let r = ui::agent_row(a.agents_list, a.pitch, app.shown_agents(false).1.len(), app.scroll.agents, i);
+        let r = ui::agent_row(a.agents_list, a.pitch, app.shown_agents(false).1.len(), app.scroll.of(List::Agents), i);
         let depth = app.agents_view().entries[i].depth;
         let x = if on_arrow { ui::agent_fold(r, depth).right() - 1 } else { r.x + 4 };
         Position::new(x, r.y + r.height / 2)
@@ -372,7 +372,7 @@ mod folds {
     fn a_focus_that_lands_after_none_was_open_still_opens_the_way() {
         let mut f = family(Activity::Idle);
         f.app.set_agent_fold(f.parent, true);
-        f.app.scroll.followed_pane = None;
+        f.app.scroll.forget_followed_pane();
 
         f.app.jump_to_pane(f.child);
         render(&mut f.app, TALL);
@@ -384,7 +384,7 @@ mod folds {
     fn the_first_follow_unfolds_nothing() {
         let mut f = family(Activity::Idle);
         f.app.set_agent_fold(f.parent, true);
-        f.app.scroll.pane_followed = false;
+        f.app.scroll.before_first_follow();
 
         render(&mut f.app, TALL);
 
@@ -450,14 +450,14 @@ mod folds {
         f.app.screen.widths.agents = Some(6);
         render(&mut f.app, TALL);
         let areas = f.app.layout(TALL);
-        f.app.scroll.agents = f.app.agent_layout(&areas).scrolled(100);
-        let high = f.app.scroll.agents;
+        f.app.scroll.set(List::Agents, f.app.agent_layout(&areas).scrolled(100));
+        let high = f.app.scroll.of(List::Agents);
 
         f.app.set_agent_fold(f.parent, true);
 
         assert!(high > 0);
-        assert_eq!(f.app.scroll.agents, f.app.agent_layout(&f.app.screen.drawn).scrolled(0));
-        assert!(f.app.scroll.agents < high);
+        assert_eq!(f.app.scroll.of(List::Agents), f.app.agent_layout(&f.app.screen.drawn).scrolled(0));
+        assert!(f.app.scroll.of(List::Agents) < high);
     }
 
     #[test]

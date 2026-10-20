@@ -9,7 +9,7 @@ fn statuses(app: &App) -> Vec<Option<Status>> {
 
 fn agent_pos(app: &App, area: Rect, i: usize) -> Position {
     let a = app.layout(area).shown(app.screen.nav);
-    let r = ui::agent_row(a.agents_list, a.pitch, app.agent_places().len(), app.scroll.agents, i);
+    let r = ui::agent_row(a.agents_list, a.pitch, app.agent_places().len(), app.scroll.of(List::Agents), i);
     Position::new(r.x + 4, r.y + r.height / 2)
 }
 
@@ -105,7 +105,7 @@ fn the_wheel_scrolls_it() {
     let at = app.layout(area).agents_list.as_position();
 
     mouse_in(&mut app, MouseEventKind::ScrollDown, at, area);
-    let scroll = app.scroll.agents;
+    let scroll = app.scroll.of(List::Agents);
     claude.signal("quit");
     codex.signal("quit", "");
     drop(rx);

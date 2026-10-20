@@ -1,6 +1,7 @@
 use ratatui::layout::{Position, Rect};
 
 use crate::app::App;
+use crate::app::layout::List;
 use crate::app::menus::Target;
 use crate::error::Result;
 use crate::project::Hierarchy;
@@ -16,7 +17,10 @@ impl App {
         let shown =
             [rows.iter().position(|r| *r == ui::TreeRow::Project(p)), ui::tree_active_row(&rows, &shape, (p, w, t))];
         for i in shown.into_iter().flatten() {
-            self.scroll.projects = ui::tree_layout_rows(list, &shape, &rows, self.scroll.projects).reveal(i);
+            self.scroll.set(
+                List::Projects,
+                ui::tree_layout_rows(list, &shape, &rows, self.scroll.of(List::Projects)).reveal(i),
+            );
         }
     }
 
@@ -48,7 +52,7 @@ impl App {
 
     pub(in crate::app) fn tree_layout(&self, list: Rect) -> ui::Rows {
         let shape = self.tree_shape();
-        ui::tree_layout_rows(list, &shape, &ui::tree_rows(&shape), self.scroll.projects)
+        ui::tree_layout_rows(list, &shape, &ui::tree_rows(&shape), self.scroll.of(List::Projects))
     }
 
     pub(in crate::app) fn tree_target(&self, row: ui::TreeRow) -> Option<Target> {
@@ -86,7 +90,7 @@ impl App {
 
     pub(in crate::app) fn click_tree(&mut self, list: Rect, pos: Position, area: Rect) -> Result<()> {
         let shape = self.tree_shape();
-        let scroll = self.scroll.projects;
+        let scroll = self.scroll.of(List::Projects);
         let hit = self.tree_hit(list, &shape, pos);
         if let Some(ui::TreeHit::Select(ui::TreeRow::Workspace(p, w))) = hit
             && let Some(id) = self.pull_in_tree(list, &shape, (p, w), pos)
@@ -112,7 +116,7 @@ impl App {
     }
 
     pub(in crate::app) fn tree_hit(&self, list: Rect, shape: &ui::TreeShape, pos: Position) -> Option<ui::TreeHit> {
-        ui::tree_hit(list, shape, self.scroll.projects, pos)
+        ui::tree_hit(list, shape, self.scroll.of(List::Projects), pos)
             .filter(|hit| !hit.workspace().is_some_and(|(p, w)| self.removing(p, w)))
     }
 }

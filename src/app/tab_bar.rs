@@ -2,6 +2,7 @@ use crossterm::event::{MouseButton, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
+use super::layout::List;
 use super::menus::Target;
 use super::overlay::Overlay;
 use crate::error::Result;
@@ -11,17 +12,17 @@ use crate::ui::{self};
 impl App {
     pub(super) fn reveal_in_tab_bar(&mut self, areas: &ui::Areas, moved: bool) {
         if moved {
-            self.scroll.tab_bar = 0;
+            self.scroll.set(List::TabBar, 0);
         }
         let Some(t) = self.project().and_then(Project::workspace).filter(|w| !w.tabs.is_empty()).map(|w| w.active)
         else {
             return;
         };
-        self.scroll.tab_bar = self.tab_strip(areas).reveal(t);
+        self.scroll.set(List::TabBar, self.tab_strip(areas).reveal(t));
     }
 
     pub(super) fn tab_strip(&self, areas: &ui::Areas) -> ui::tab_bar::Strip {
-        ui::tab_bar::Strip::new(areas.tab_bar, &self.bar_tabs(), self.scroll.tab_bar)
+        ui::tab_bar::Strip::new(areas.tab_bar, &self.bar_tabs(), self.scroll.of(List::TabBar))
     }
 
     fn bar_tabs(&self) -> Vec<ui::TabEntry> {
@@ -41,7 +42,7 @@ impl App {
                 pane.map_or(0, |t| t.context.subagents()),
                 pane.and_then(|t| self.pane_account(t)),
             ),
-            scroll: self.scroll.tab_bar,
+            scroll: self.scroll.of(List::TabBar),
         }
     }
 
@@ -65,7 +66,7 @@ impl App {
             (MouseEventKind::Down(MouseButton::Left), ui::tab_bar::Hit::Close(t)) => self.close_tab(p, w, t),
             (MouseEventKind::Down(MouseButton::Left), ui::tab_bar::Hit::New) => self.add_tab(p, w, area)?,
             (MouseEventKind::Down(MouseButton::Left), ui::tab_bar::Hit::Scroll(delta)) => {
-                self.scroll.tab_bar = strip.scrolled(delta);
+                self.scroll.set(List::TabBar, strip.scrolled(delta));
             }
             (MouseEventKind::Down(MouseButton::Left), ui::tab_bar::Hit::Menu(t))
             | (

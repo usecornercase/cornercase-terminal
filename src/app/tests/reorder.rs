@@ -222,14 +222,14 @@ fn holding_a_drag_on_the_more_line_scrolls_the_list() {
     app.active = 0;
     app.follow(SHORT);
     let short = ui::layout(SHORT, state::Widths::default());
-    let rows = ui::project_rows(short.list, short.pitch, &app.sidebar_rows(), app.scroll.projects);
+    let rows = ui::project_rows(short.list, short.pitch, &app.sidebar_rows(), app.scroll.of(List::Projects));
 
     mouse_in(&mut app, MouseEventKind::Down(MouseButton::Left), short.list.as_position(), SHORT);
     mouse_in(&mut app, MouseEventKind::Drag(MouseButton::Left), rows.more_below().as_position(), SHORT);
-    let dragged = app.scroll.projects;
+    let dragged = app.scroll.of(List::Projects);
     app.refresh(Instant::now() + AUTO_SCROLL_EVERY);
 
-    assert_eq!((dragged, app.scroll.projects), (1, 2));
+    assert_eq!((dragged, app.scroll.of(List::Projects)), (1, 2));
 }
 
 #[test]

@@ -18,7 +18,13 @@ fn open_menu(app: &mut App) {
 }
 
 fn row(app: &App, row: WorkspaceRow) -> Position {
-    let r = ui::workspace_row(small().workspaces_list, small().pitch, &app.tab_lines(), app.scroll.workspaces, row);
+    let r = ui::workspace_row(
+        small().workspaces_list,
+        small().pitch,
+        &app.tab_lines(),
+        app.scroll.of(List::Workspaces),
+        row,
+    );
     Position::new(r.x + 3, r.y)
 }
 
@@ -58,8 +64,9 @@ fn picking_a_project_shows_its_workspaces() {
     let (mut app, _rx, _dirs) = app_with(2);
     open_menu(&mut app);
     press(&mut app, small().back.as_position());
-    let first = ui::entry_row(small().list, small().pitch, &plain(2), app.scroll.projects, SidebarRow::Project(0))
-        .as_position();
+    let first =
+        ui::entry_row(small().list, small().pitch, &plain(2), app.scroll.of(List::Projects), SidebarRow::Project(0))
+            .as_position();
     press(&mut app, first);
     assert_eq!((app.active, app.screen.nav), (0, Some(ui::Nav::Workspaces)));
 }
@@ -146,7 +153,13 @@ fn with_workspace(worktree: bool) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
 }
 
 fn click_close(app: &mut App, row: WorkspaceRow) {
-    let r = ui::workspace_row(small().workspaces_list, small().pitch, &app.tab_lines(), app.scroll.workspaces, row);
+    let r = ui::workspace_row(
+        small().workspaces_list,
+        small().pitch,
+        &app.tab_lines(),
+        app.scroll.of(List::Workspaces),
+        row,
+    );
     press(app, ui::row_close_button(r, small().pitch).as_position());
 }
 

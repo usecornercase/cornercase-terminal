@@ -63,7 +63,7 @@ use interaction::LINES_SCROLL_EVERY;
 use issues_dialog::IssueEvent;
 use launches::LAUNCH_EVERY;
 #[cfg(test)]
-use layout::Focus;
+use layout::List;
 use layout::{Scrolls, Side};
 use messenger::{Messenger, MessengerEvent};
 use overlay::Overlay;

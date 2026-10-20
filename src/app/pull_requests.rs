@@ -10,6 +10,7 @@ use ratatui::text::{Line, Span};
 use super::App;
 use super::event::AppEvent;
 use super::input::wheel;
+use super::layout::List;
 use super::overlay::Overlay;
 use super::toast::Toast;
 use super::worktrees::WorktreeEvent;
@@ -204,7 +205,7 @@ impl App {
     pub(super) fn pull_in_list(&self, list: Rect, pitch: u16, tabs: &ui::TabLines, w: usize) -> Option<(Rect, u64)> {
         let workspace = self.projects.get(self.active)?.workspaces.get(w)?;
         let entry = self.workspace_entry(workspace);
-        let layout = ui::workspace_layout(list, pitch, tabs, self.scroll.workspaces);
+        let layout = ui::workspace_layout(list, pitch, tabs, self.scroll.of(List::Workspaces));
         ui::workspace_pull(&layout, pitch, tabs, w, &entry).map(|rect| (rect, workspace.id))
     }
 
@@ -217,7 +218,7 @@ impl App {
     ) -> Option<u64> {
         let workspace = self.projects.get(p)?.workspaces.get(w)?;
         let entry = self.workspace_entry(workspace);
-        ui::tree_pull(list, shape, self.scroll.projects, (p, w), &entry)
+        ui::tree_pull(list, shape, self.scroll.of(List::Projects), (p, w), &entry)
             .filter(|rect| rect.contains(pos))
             .map(|_| workspace.id)
     }

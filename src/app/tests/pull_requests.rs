@@ -508,7 +508,7 @@ mod badge {
         render(&mut repo.app, area);
         let list = ui::layout_with(area, state::Widths::default(), false, config::Sidebar::Tree).list;
         let shape = repo.app.tree_shape();
-        let r = ui::tree_row(list, &shape, repo.app.scroll.projects, ui::TreeRow::Workspace(0, 1));
+        let r = ui::tree_row(list, &shape, repo.app.scroll.of(List::Projects), ui::TreeRow::Workspace(0, 1));
         let pos = find_in(&mut repo.app, r, area, '#');
 
         click_in(&mut repo.app, pos, area);
@@ -528,7 +528,7 @@ mod badge {
             areas.workspaces_list,
             areas.pitch,
             &repo.app.tab_lines(),
-            repo.app.scroll.workspaces,
+            repo.app.scroll.of(List::Workspaces),
             WorkspaceRow::Workspace(1),
         );
         let pos = find_in(&mut repo.app, r, small, '#');

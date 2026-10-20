@@ -9,6 +9,7 @@ use crate::app::interaction::AUTO_SCROLL_EVERY;
 use crate::app::interaction::Drag;
 use crate::app::interaction::Grab;
 use crate::app::interaction::RowDrag;
+use crate::app::layout::List;
 use crate::app::menus::Target;
 use crate::log::{self};
 use crate::project::Hierarchy;
@@ -90,16 +91,19 @@ impl App {
         }
         if areas.tree {
             let shape = self.tree_shape();
-            return Some(ui::Drag::Tree(row, ui::tree_drop(areas.list, &shape, self.scroll.projects, row, pos)));
+            return Some(ui::Drag::Tree(
+                row,
+                ui::tree_drop(areas.list, &shape, self.scroll.of(List::Projects), row, pos),
+            ));
         }
         let sidebar = |row: SidebarRow| {
             let rows = self.sidebar_rows();
-            let layout = ui::project_rows(areas.list, areas.pitch, &rows, self.scroll.projects);
+            let layout = ui::project_rows(areas.list, areas.pitch, &rows, self.scroll.of(List::Projects));
             ui::Drag::Sidebar(row, ui::sidebar_drop(&layout, &rows, row, pos))
         };
         let workspaces = |row: WorkspaceRow| {
             let (list, tabs) = (areas.workspaces_list, self.tab_lines());
-            let layout = ui::workspace_layout(list, areas.pitch, &tabs, self.scroll.workspaces);
+            let layout = ui::workspace_layout(list, areas.pitch, &tabs, self.scroll.of(List::Workspaces));
             ui::Drag::Workspaces(row, ui::workspace_drop(&layout, &tabs, row, pos))
         };
         match row {
@@ -155,7 +159,7 @@ impl App {
         };
         if matches!(target, Target::Tab(..)) && !areas.tab_bar.is_empty() {
             if let Some(delta) = self.tab_strip(&areas).edge(pos) {
-                self.scroll.tab_bar = self.tab_strip(&areas).scrolled(delta);
+                self.scroll.set(List::TabBar, self.tab_strip(&areas).scrolled(delta));
                 self.screen.drag = Some(Drag::Row(RowDrag { scrolled: Some(now), ..drag }));
             }
             return;
@@ -164,11 +168,16 @@ impl App {
         let rows = if sidebar {
             self.sidebar_layout(&areas)
         } else {
-            ui::workspace_layout(areas.workspaces_list, areas.pitch, &self.tab_lines(), self.scroll.workspaces)
+            ui::workspace_layout(
+                areas.workspaces_list,
+                areas.pitch,
+                &self.tab_lines(),
+                self.scroll.of(List::Workspaces),
+            )
         };
         let Some(delta) = rows.edge(pos) else { return };
-        let scroll = if sidebar { &mut self.scroll.projects } else { &mut self.scroll.workspaces };
-        *scroll = rows.scrolled(delta);
+        let list = if sidebar { List::Projects } else { List::Workspaces };
+        self.scroll.set(list, rows.scrolled(delta));
         self.screen.drag = Some(Drag::Row(RowDrag { scrolled: Some(now), ..drag }));
     }
 }

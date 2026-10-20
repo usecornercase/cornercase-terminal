@@ -7,6 +7,7 @@ use super::App;
 use super::interaction::Drag;
 use super::interaction::Grab;
 use super::interaction::RowDrag;
+use super::layout::List;
 use super::menus::Marked;
 use super::menus::MenuAction;
 use super::menus::Target;
@@ -43,8 +44,8 @@ impl App {
 
     pub(super) fn click_projects(&mut self, list: Rect, pitch: u16, pos: Position, area: Rect) {
         let rows = self.sidebar_rows();
-        let rect = |row: SidebarRow| ui::entry_row(list, pitch, &rows, self.scroll.projects, row);
-        match ui::sidebar_hit(list, pitch, &rows, self.scroll.projects, pos) {
+        let rect = |row: SidebarRow| ui::entry_row(list, pitch, &rows, self.scroll.of(List::Projects), row);
+        match ui::sidebar_hit(list, pitch, &rows, self.scroll.of(List::Projects), pos) {
             Some(SidebarHit::Select(i)) => {
                 self.grab(Target::Project(self.projects[i].id), rect(SidebarRow::Project(i)), area, false);
             }
@@ -73,7 +74,7 @@ impl App {
         if areas.tree {
             self.tree_layout(areas.list)
         } else {
-            ui::project_rows(areas.list, areas.pitch, &self.sidebar_rows(), self.scroll.projects)
+            ui::project_rows(areas.list, areas.pitch, &self.sidebar_rows(), self.scroll.of(List::Projects))
         }
     }
 
@@ -146,17 +147,17 @@ impl App {
                 attention: activity::attention(hidden.iter().map(|term| term.agent.status())),
             }
         });
-        ui::AgentsView { entries: entries.collect(), scroll: self.scroll.agents }
+        ui::AgentsView { entries: entries.collect(), scroll: self.scroll.of(List::Agents) }
     }
 
     pub(super) fn agent_layout(&self, areas: &ui::Areas) -> ui::Rows {
-        ui::agent_rows(areas.agents_list, areas.pitch, self.shown_agents(false).1.len(), self.scroll.agents)
+        ui::agent_rows(areas.agents_list, areas.pitch, self.shown_agents(false).1.len(), self.scroll.of(List::Agents))
     }
 
     fn agent_row_at(&self, areas: &ui::Areas, pos: Position) -> Option<AgentAt> {
         let narrow = areas.agents_list.width < ui::MIN_MENU_ROW_WIDTH;
         let (places, nodes) = self.shown_agents(narrow);
-        let (list, pitch, scroll) = (areas.agents_list, areas.pitch, self.scroll.agents);
+        let (list, pitch, scroll) = (areas.agents_list, areas.pitch, self.scroll.of(List::Agents));
         let i = ui::agent_hit(list, pitch, nodes.len(), scroll, pos)?;
         let node = &nodes[i];
         let (p, w, t, pane) = places[node.index];
@@ -207,7 +208,7 @@ impl App {
     pub(super) fn set_agent_fold(&mut self, pane: u64, collapsed: bool) -> bool {
         let Some(term) = self.projects.pane_by_mut(pane) else { return false };
         term.collapsed = collapsed;
-        self.scroll.agents = self.agent_layout(&self.screen.drawn).scrolled(0);
+        self.scroll.set(List::Agents, self.agent_layout(&self.screen.drawn).scrolled(0));
         true
     }
 
@@ -265,7 +266,7 @@ impl App {
         }
         let Some(hit) = hit else { return Ok(()) };
         let (p, ask) = (self.active, pitch > 1);
-        let rect = |row: WorkspaceRow| ui::workspace_row(list, pitch, &tabs, self.scroll.workspaces, row);
+        let rect = |row: WorkspaceRow| ui::workspace_row(list, pitch, &tabs, self.scroll.of(List::Workspaces), row);
         match hit {
             WorkspaceHit::Workspace(w) => {
                 self.grab(self.workspace_target(p, w), rect(WorkspaceRow::Workspace(w)), area, false);
@@ -316,7 +317,7 @@ impl App {
     }
 
     pub(super) fn open_project_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
-        let actions = match ui::sidebar_hit(list, pitch, &self.sidebar_rows(), self.scroll.projects, pos) {
+        let actions = match ui::sidebar_hit(list, pitch, &self.sidebar_rows(), self.scroll.of(List::Projects), pos) {
             Some(SidebarHit::Select(i) | SidebarHit::Close(i) | SidebarHit::Menu(i)) => self.project_menu(i),
             Some(SidebarHit::Group(g) | SidebarHit::CloseGroup(g) | SidebarHit::GroupMenu(g)) => self.group_menu(g),
             _ => return,
@@ -383,7 +384,7 @@ impl App {
     }
 
     fn workspace_hit(&self, list: Rect, pitch: u16, tabs: &ui::TabLines, pos: Position) -> Option<WorkspaceHit> {
-        ui::workspace_hit(list, pitch, tabs, self.scroll.workspaces, pos)
+        ui::workspace_hit(list, pitch, tabs, self.scroll.of(List::Workspaces), pos)
             .filter(|hit| !hit.workspace().is_some_and(|w| self.removing(self.active, w)))
     }
 }

@@ -331,16 +331,16 @@ fn entry_pos() -> Position {
 }
 
 fn sidebar_pos(app: &App, row: SidebarRow) -> Position {
-    let r = ui::entry_row(list(), 1, &app.sidebar_rows(), app.scroll.projects, row);
+    let r = ui::entry_row(list(), 1, &app.sidebar_rows(), app.scroll.of(List::Projects), row);
     Position::new(r.x + 3, r.y)
 }
 
 fn sidebar_close(app: &App, row: SidebarRow) -> Position {
-    ui::close_button(list(), 1, &app.sidebar_rows(), app.scroll.projects, row).as_position()
+    ui::close_button(list(), 1, &app.sidebar_rows(), app.scroll.of(List::Projects), row).as_position()
 }
 
 fn row_rect(app: &App, row: WorkspaceRow) -> Rect {
-    ui::workspace_row(areas().workspaces_list, areas().pitch, &app.tab_lines(), app.scroll.workspaces, row)
+    ui::workspace_row(areas().workspaces_list, areas().pitch, &app.tab_lines(), app.scroll.of(List::Workspaces), row)
 }
 
 fn row_pos(app: &App, row: WorkspaceRow) -> Position {

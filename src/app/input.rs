@@ -6,7 +6,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::interaction::Drag;
-use super::layout::{Focus, Side};
+use super::layout::{List, Side};
 use super::overlay::Overlay;
 use super::toast::NOT_READING;
 use super::toast::Toast;
@@ -302,18 +302,19 @@ impl App {
     pub(super) fn scroll_column(&mut self, areas: &ui::Areas, pos: Position, delta: isize) -> bool {
         let items = if areas.pitch > 1 { delta.signum() } else { delta };
         if areas.tab_bar.contains(pos) {
-            self.scroll.tab_bar = self.tab_strip(areas).scrolled(delta.signum());
+            self.scroll.set(List::TabBar, self.tab_strip(areas).scrolled(delta.signum()));
             true
         } else if areas.agents.contains(pos) {
-            self.scroll.agents = self.agent_layout(areas).scrolled(items);
+            self.scroll.set(List::Agents, self.agent_layout(areas).scrolled(items));
             true
         } else if areas.sidebar.contains(pos) {
-            self.scroll.projects = self.sidebar_layout(areas).scrolled(items);
+            self.scroll.set(List::Projects, self.sidebar_layout(areas).scrolled(items));
             true
         } else if areas.workspaces.contains(pos) {
             let tabs = self.tab_lines();
-            let layout = ui::workspace_layout(areas.workspaces_list, areas.pitch, &tabs, self.scroll.workspaces);
-            self.scroll.workspaces = layout.scrolled(items);
+            let layout =
+                ui::workspace_layout(areas.workspaces_list, areas.pitch, &tabs, self.scroll.of(List::Workspaces));
+            self.scroll.set(List::Workspaces, layout.scrolled(items));
             true
         } else {
             false
@@ -329,7 +330,7 @@ impl App {
             None if self.project().is_some() => Some(ui::Nav::Workspaces),
             None => Some(ui::Nav::Projects),
         };
-        self.scroll.followed = Focus::default();
+        self.scroll.follow_again();
     }
 
     pub(super) fn activity_shown(&self) -> ui::ActivityShown {
