@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.162
+
+- No changes in the app. The app's state is kept with the part of the app that uses it.
+
 ## 0.12.161
 
 - No changes in the app. Its functions are split into smaller ones.
