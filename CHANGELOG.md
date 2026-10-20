@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.163
+
+- **Clean up your worktrees in one place.** The new **Worktrees** dialog lists every worktree on disk, those of projects you have closed too, with the project, branch, folder, how long ago it last changed and what it has: `●n` changed files, `↑n` commits no remote has, `merged`, `no commits` for a branch never pushed that has nothing of its own yet, `upstream gone`, `locked`, the program running in it (`claude`, or `2 running`), `n outside` for processes using its folder from another terminal or another tab, `open`, and `prunable`, `repository gone` or `unknown to git` for leftovers. Leftovers come first, then the merged ones, then the oldest. Open it from **Settings → Worktrees → worktrees on disk**, or from a project's `⋯` menu → **worktrees** for that project alone. On a row of an open project, **changes** opens that workspace's changes panel.
+- **Remove several at once, safely.** Tick the rows and click **remove n**: the confirmation checks them again, then names for each what it would lose (uncommitted files, unpushed commits, a lock, agents and shells that stop, processes outside cornercase or in another tab using the folder). Nothing stops before you confirm. Removal runs in the background. Branches are only deleted if you tick **also delete the branch**, the ones with commits nobody has are listed in red first, and a branch is kept if the worktree switched to another one since the confirmation.
+
 ## 0.12.162
 
 - No changes in the app. The app's state is kept with the part of the app that uses it.
