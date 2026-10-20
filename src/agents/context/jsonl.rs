@@ -39,6 +39,18 @@ impl Tail {
         self.read_since(path, None)
     }
 
+    fn skip_to_end(&mut self, path: &Path, len: u64) -> std::io::Result<()> {
+        self.read = len;
+        if len > 0 {
+            let mut file = File::open(path)?;
+            file.seek(SeekFrom::End(-1))?;
+            let mut last = [0];
+            file.read_exact(&mut last)?;
+            self.skipping = last[0] != b'\n';
+        }
+        Ok(())
+    }
+
     pub(in crate::agents) fn read_since(&mut self, path: &Path, since: Option<SystemTime>) -> std::io::Result<Batch> {
         let info = std::fs::metadata(path)?;
         let stamp = (info.ino(), info.len(), info.modified()?);
@@ -48,14 +60,7 @@ impl Tail {
         }
         let mut batch = Batch { reset, skipped: false, bytes: Vec::new() };
         if self.stamp.is_none() && since.is_some_and(|since| stamp.2 < since) {
-            self.read = info.len();
-            if self.read > 0 {
-                let mut file = File::open(path)?;
-                file.seek(SeekFrom::End(-1))?;
-                let mut last = [0];
-                file.read_exact(&mut last)?;
-                self.skipping = last[0] != b'\n';
-            }
+            self.skip_to_end(path, info.len())?;
             self.stamp = Some(stamp);
             return Ok(batch);
         }

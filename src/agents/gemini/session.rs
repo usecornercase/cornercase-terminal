@@ -94,15 +94,15 @@ impl Session {
     }
 
     fn apply(&mut self, entry: &Value) {
-        if let Some(set) = entry.get("$set") {
-            if let Some(messages) = set.get("messages") {
-                self.replies.clear();
-                for message in messages.as_array().into_iter().flatten() {
-                    self.message(message);
-                }
-            }
-        } else {
+        let Some(set) = entry.get("$set") else {
             self.message(entry);
+            return;
+        };
+        if let Some(messages) = set.get("messages") {
+            self.replies.clear();
+            for message in messages.as_array().into_iter().flatten() {
+                self.message(message);
+            }
         }
     }
 
@@ -202,13 +202,7 @@ fn look_among(
     let holder = family.iter().rev().copied().find(|&pid| named(&process::args(pid), NAME)).unwrap_or(pid);
     let dir = home(holder, "GEMINI_CLI_HOME", ".gemini", ".gemini")?;
     let cwd = folder(holder)?;
-    if others.into_iter().any(|other| {
-        !family.contains(&other)
-            && named(&process::args(other), NAME)
-            && folder(other).as_ref() == Some(&cwd)
-            && home(other, "GEMINI_CLI_HOME", ".gemini", ".gemini").as_ref() == Some(&dir)
-            && !process::descendants(other).contains(&pid)
-    }) {
+    if taken_by_another(others, &family, pid, &cwd, &dir) {
         return None;
     }
     let projects: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("projects.json")).ok()?).ok()?;
@@ -224,7 +218,24 @@ fn look_among(
     {
         return None;
     }
-    let (path, id) = std::fs::read_dir(project.join("chats"))
+    let (path, id) = newest_chat(&project.join("chats"), since)?;
+    let mut session = previous.filter(|s| s.path == path && s.id == id).unwrap_or_else(|| Session::new(path, id));
+    session.update(footer)?;
+    Some(session)
+}
+
+fn taken_by_another(others: Vec<i32>, family: &[i32], pid: i32, cwd: &Path, dir: &Path) -> bool {
+    others.into_iter().any(|other| {
+        !family.contains(&other)
+            && named(&process::args(other), NAME)
+            && folder(other).as_deref() == Some(cwd)
+            && home(other, "GEMINI_CLI_HOME", ".gemini", ".gemini").as_deref() == Some(dir)
+            && !process::descendants(other).contains(&pid)
+    })
+}
+
+fn newest_chat(chats: &Path, since: SystemTime) -> Option<(PathBuf, String)> {
+    std::fs::read_dir(chats)
         .ok()?
         .flatten()
         .filter_map(|entry| {
@@ -236,10 +247,7 @@ fn look_among(
             (modified >= since).then(|| Some((modified, path.clone(), metadata(&path)?))).flatten()
         })
         .max_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)))
-        .map(|(_, path, id)| (path, id))?;
-    let mut session = previous.filter(|s| s.path == path && s.id == id).unwrap_or_else(|| Session::new(path, id));
-    session.update(footer)?;
-    Some(session)
+        .map(|(_, path, id)| (path, id))
 }
 
 fn metadata(path: &Path) -> Option<String> {
@@ -292,11 +300,7 @@ pub(in crate::agents) fn said_all(path: &Path, each: Each) -> Result<()> {
         let line = line.map_err(failed)?;
         let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };
         if let Some(messages) = entry["$set"].get("messages") {
-            for entry in messages.as_array().into_iter().flatten().rev() {
-                if !spoken(entry, &mut seen, each) {
-                    return Ok(());
-                }
-            }
+            spoken_messages(messages, &mut seen, each);
             return Ok(());
         }
         if !spoken(&entry, &mut seen, each) {
@@ -304,6 +308,14 @@ pub(in crate::agents) fn said_all(path: &Path, each: Each) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn spoken_messages(messages: &Value, seen: &mut HashSet<String>, each: Each) {
+    for entry in messages.as_array().into_iter().flatten().rev() {
+        if !spoken(entry, seen, each) {
+            return;
+        }
+    }
 }
 
 fn spoken(entry: &Value, seen: &mut HashSet<String>, each: Each) -> bool {

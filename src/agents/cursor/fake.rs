@@ -73,6 +73,27 @@ pub(crate) struct FakeCursor {
     state: Mutex<State>,
 }
 
+fn create_store(store: &Path) {
+    Connection::open(store)
+        .and_then(|db| {
+            db.execute_batch(
+                "CREATE TABLE blobs (id TEXT PRIMARY KEY, data BLOB); CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);",
+            )
+        })
+        .expect("create the store");
+}
+
+fn write_script(dir: &Path) -> PathBuf {
+    let script = dir.join("cursor-agent");
+    write_executable(
+        &script,
+        &format!(
+            "#!/bin/sh\nexec 3< \"$1\"\nwhile [ -d \"$2\" ] && [ ! -e \"$2/quit\" ]; do\n  {TITLE_SIGNAL}\n  sleep 0.02\ndone\n"
+        ),
+    );
+    script
+}
+
 impl FakeCursor {
     pub(crate) fn new(cwd: &Path) -> Self {
         let dir = TempDir::new();
@@ -89,20 +110,8 @@ impl FakeCursor {
         )
         .expect("write meta.json");
         let store = chat.join("store.db");
-        Connection::open(&store)
-            .and_then(|db| {
-                db.execute_batch(
-                    "CREATE TABLE blobs (id TEXT PRIMARY KEY, data BLOB); CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);",
-                )
-            })
-            .expect("create the store");
-        let script = dir.path().join("cursor-agent");
-        write_executable(
-            &script,
-            &format!(
-                "#!/bin/sh\nexec 3< \"$1\"\nwhile [ -d \"$2\" ] && [ ! -e \"$2/quit\" ]; do\n  {TITLE_SIGNAL}\n  sleep 0.02\ndone\n"
-            ),
-        );
+        create_store(&store);
+        let script = write_script(dir.path());
         let fake = Self {
             dir,
             script,
@@ -146,19 +155,7 @@ impl FakeCursor {
         let db = Connection::open(&self.store).expect("open the store");
         let mut root = Vec::new();
         for turn in &state.turns {
-            let blob = if turn.shell {
-                bytes(2, &bytes(1, turn.message.as_bytes()))
-            } else {
-                let mut inner = bytes(1, &Self::insert(&db, &turn.user));
-                for step in &turn.steps {
-                    inner.extend(bytes(2, &Self::insert(&db, step)));
-                }
-                if let Some(name) = &turn.routed {
-                    inner.extend(bytes(7, name.as_bytes()));
-                }
-                inner.extend(bytes(10, turn.message.as_bytes()));
-                bytes(1, &inner)
-            };
+            let blob = Self::turn_blob(&db, turn);
             root.extend(bytes(8, &Self::insert(&db, &blob)));
         }
         if let Some((used, window)) = state.tokens {
@@ -176,6 +173,21 @@ impl FakeCursor {
             serde_json::json!({"schemaVersion": 1, "cwd": self.cwd(), "hasConversation": has}).to_string(),
         )
         .expect("write meta.json");
+    }
+
+    fn turn_blob(db: &Connection, turn: &Turn) -> Vec<u8> {
+        if turn.shell {
+            return bytes(2, &bytes(1, turn.message.as_bytes()));
+        }
+        let mut inner = bytes(1, &Self::insert(db, &turn.user));
+        for step in &turn.steps {
+            inner.extend(bytes(2, &Self::insert(db, step)));
+        }
+        if let Some(name) = &turn.routed {
+            inner.extend(bytes(7, name.as_bytes()));
+        }
+        inner.extend(bytes(10, turn.message.as_bytes()));
+        bytes(1, &inner)
     }
 
     fn cwd(&self) -> String {
