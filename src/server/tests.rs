@@ -1,3 +1,5 @@
+use ratatui::layout::Position;
+
 use super::*;
 use crate::config;
 use crate::protocol::Hello;

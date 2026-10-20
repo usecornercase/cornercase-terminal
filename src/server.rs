@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{self, Write};
+use std::io;
 use std::net::Shutdown;
 use std::ops::ControlFlow;
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -11,9 +11,8 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime};
 
 use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
-use ratatui::backend::{Backend, ClearType, CrosstermBackend, WindowSize};
-use ratatui::buffer::Cell;
-use ratatui::layout::{Position, Rect, Size};
+use ratatui::backend::CrosstermBackend;
+use ratatui::layout::Rect;
 use ratatui::{Terminal, TerminalOptions, Viewport};
 use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
@@ -37,10 +36,12 @@ use crate::state;
 use crate::todo;
 use crate::version;
 
+mod backend;
 mod images;
 mod startup;
 mod surfaces;
 
+use backend::{CropBackend, FrameWriter};
 use images::Graphics;
 use startup::Startup;
 
@@ -123,91 +124,6 @@ impl Outbox {
 
     fn queued(&self) -> usize {
         self.queued.load(Ordering::Relaxed)
-    }
-}
-
-struct FrameWriter {
-    buf: Vec<u8>,
-    out: Outbox,
-}
-
-impl Write for FrameWriter {
-    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        self.buf.extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        if !self.buf.is_empty() {
-            self.out.send(ServerMessage::Frame(std::mem::take(&mut self.buf)));
-        }
-        Ok(())
-    }
-}
-
-struct CropBackend {
-    inner: CrosstermBackend<FrameWriter>,
-    area: Rect,
-    visible: Rect,
-    watched: Option<Rect>,
-    damaged: bool,
-}
-
-impl Backend for CropBackend {
-    type Error = io::Error;
-
-    fn draw<'a, I>(&mut self, content: I) -> io::Result<()>
-    where
-        I: Iterator<Item = (u16, u16, &'a Cell)>,
-    {
-        let (visible, watched) = (self.visible, self.watched);
-        let mut damaged = false;
-        let shown = content.filter(|&(x, y, _)| visible.contains(Position::new(x, y)));
-        let drawn = self.inner.draw(shown.inspect(|&(x, y, _)| {
-            damaged |= watched.is_some_and(|r| r.contains(Position::new(x, y)));
-        }));
-        self.damaged |= damaged;
-        drawn
-    }
-
-    fn hide_cursor(&mut self) -> io::Result<()> {
-        self.inner.hide_cursor()
-    }
-
-    fn show_cursor(&mut self) -> io::Result<()> {
-        self.inner.show_cursor()
-    }
-
-    fn get_cursor_position(&mut self) -> io::Result<Position> {
-        self.inner.get_cursor_position()
-    }
-
-    fn set_cursor_position<P: Into<Position>>(&mut self, position: P) -> io::Result<()> {
-        let position = position.into();
-        if !self.visible.contains(position) {
-            return self.inner.hide_cursor();
-        }
-        self.inner.set_cursor_position(position)
-    }
-
-    fn clear(&mut self) -> io::Result<()> {
-        self.inner.clear()
-    }
-
-    fn clear_region(&mut self, clear_type: ClearType) -> io::Result<()> {
-        self.inner.clear_region(clear_type)
-    }
-
-    fn size(&self) -> io::Result<Size> {
-        Ok(self.area.as_size())
-    }
-
-    fn window_size(&mut self) -> io::Result<WindowSize> {
-        Ok(WindowSize { columns_rows: self.area.as_size(), pixels: Size::default() })
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Backend::flush(&mut self.inner)
     }
 }
 

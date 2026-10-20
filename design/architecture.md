@@ -68,7 +68,7 @@ src/client.rs     the UI process: entry points, terminal setup/teardown; client/
 src/control.rs    the JSON of those requests and answers, shared by the commands and the server; CORNERCASE_PANE; control/contract.rs the versioned contract and error codes
 src/protocol.rs   messages and length-prefixed postcard framing
 src/remote.rs     `cornercase remote` (ssh, its pipes, the proxy's banner and version check) and `cornercase proxy` (stdio <-> the socket)
-src/server.rs     the daemon: owns App and every Term, accepts clients on a Unix socket, draws a ratatui frame per client; server/images.rs each client's image state (kitty ids, iTerm2/sixel re-sends); server/startup.rs the restore
+src/server.rs     the daemon: owns App and every Term, accepts clients on a Unix socket, draws a ratatui frame per client; server/backend.rs the ratatui backend that writes a client's frame, cropped to what it shows; server/images.rs each client's image state (kitty ids, iTerm2/sixel re-sends); server/startup.rs the restore
 src/web/          browser access: mod.rs (listener, routes, pairing), bridge.rs (a WebSocket as a socket client), http.rs, auth.rs (pairing tokens, browsers.json), page.rs and assets/ (the page, vendored xterm.js), web/tailscale.rs (`tailscale serve`)
 
 skills/cornercase/SKILL.md  the agent skill, embedded for `cornercase skill`
