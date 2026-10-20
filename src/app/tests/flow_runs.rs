@@ -18,7 +18,7 @@ fn send(app: &mut App, to: &str) {
         seq: 0,
         edge: None,
     };
-    app.runs[0].record(message);
+    app.runs.list[0].record(message);
 }
 
 fn screen(app: &App, pane: u64) -> String {
@@ -41,7 +41,7 @@ fn a_pane_where_another_agent_ran_resumes_that_agent_and_its_orchestrator_is_not
 
     assert!(again.restore(&saved, AREA));
 
-    let pane = |role: &str| again.runs[0].pane_of(role).expect("a member");
+    let pane = |role: &str| again.runs.list[0].pane_of(role).expect("a member");
     let (orchestrator, coder, tester) = (pane(ORCHESTRATOR), pane("coder"), pane("tester"));
     let briefed = again.agents.launches.iter().find(|launch| launch.term == orchestrator).map(|l| !l.after.is_empty());
     assert_eq!(briefed, Some(false), "an orchestrator pane that ran Codex gets no brief");
@@ -65,7 +65,7 @@ fn the_plan_goes_on_where_it_stood_after_a_restart() {
     assert!(again.restore(&app.state(), AREA));
     send(&mut again, "tester");
 
-    let progress = &again.runs[0].progress;
+    let progress = &again.runs.list[0].progress;
     assert_eq!((progress.active, progress.rounds(1)), (Some(2), 1));
     assert_eq!(progress.last.as_ref().map(|step| step.edge), Some(Edge::Forward(1)));
     assert_eq!(progress.outside, None);
@@ -74,12 +74,12 @@ fn the_plan_goes_on_where_it_stood_after_a_restart() {
 #[test]
 fn a_restored_run_keeps_its_latched_end() {
     let (mut app, _rx, _dir) = team();
-    app.runs[0].ended = Some("feat/x".into());
+    app.runs.list[0].ended = Some("feat/x".into());
     let (mut again, _rx2) = new_app(no_config());
 
     assert!(again.restore(&app.state(), AREA));
 
-    assert_eq!(again.runs[0].ended.as_deref(), Some("feat/x"));
+    assert_eq!(again.runs.list[0].ended.as_deref(), Some("feat/x"));
     let end = again.flow_view(Instant::now(), None).and_then(|view| view.diagram.live).expect("live").end;
     assert!(end.reached);
 }
@@ -96,7 +96,7 @@ fn the_roles_come_back_after_a_restart() {
             term.agent.update(Some(Activity::Idle), true, Instant::now());
         }
     }
-    again.runs[0].members.iter().for_each(|member| assert!(again.projects.pane_by(member.pane).is_some()));
+    again.runs.list[0].members.iter().for_each(|member| assert!(again.projects.pane_by(member.pane).is_some()));
 
     let seated: Vec<(Option<String>, bool)> =
         again.agents_view().entries.into_iter().map(|e| (e.role, e.place)).collect();

@@ -190,7 +190,7 @@ pub(crate) struct App {
     settings_page: Page,
     remote: remote_access::Remote,
     messengers: Vec<Messenger>,
-    runs: Vec<crate::flows::run::Run>,
+    runs: flow_runs::Runs,
     sessions: said::Sessions,
     seen: trace::Seen,
     images: images::Payloads,
@@ -231,7 +231,7 @@ impl App {
             settings_page: Page::default(),
             remote: remote_access::Remote::new(Web::new(paths::browsers(&config_path), paths::socket(), tx.clone())),
             messengers: messenger::messengers(&config_path, &secrets_path),
-            runs: Vec::new(),
+            runs: flow_runs::Runs::new(&config_path),
             sessions: said::Sessions::default(),
             seen: trace::Seen::default(),
             images: images::Payloads::default(),
@@ -474,7 +474,7 @@ impl App {
             .projects
             .iter()
             .zip(crate::project::group_indices(&self.projects, &self.groups))
-            .map(|(p, group)| ProjectState::of(p, group, &self.runs, &parents))
+            .map(|(p, group)| ProjectState::of(p, group, &self.runs.list, &parents))
             .collect();
         let chosen = self.issues.tab.is_some() || self.issues.closed || self.issues.people != People::default();
         let issues = chosen.then(|| IssuesState {

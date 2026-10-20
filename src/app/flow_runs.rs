@@ -28,6 +28,18 @@ use crate::term::Term;
 use crate::time;
 use crate::ui;
 
+pub(super) struct Runs {
+    pub(super) list: Vec<Run>,
+    pub(super) dir: PathBuf,
+    pub(super) pending_dirs: Vec<(u64, Vec<PathBuf>)>,
+}
+
+impl Runs {
+    pub(super) fn new(config_path: &Path) -> Self {
+        Self { list: Vec::new(), dir: config_path.with_file_name("runs"), pending_dirs: Vec::new() }
+    }
+}
+
 pub(super) struct Starting {
     pub(super) flow: Flow,
     pub(super) task: String,
@@ -138,21 +150,21 @@ fn discard(repo: &Path, paths: &[PathBuf]) {
 
 impl App {
     pub(crate) fn set_runs_dir(&mut self, dir: &Path) {
-        self.paths.runs_dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
+        self.runs.dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
     }
 
     pub(super) fn defer_run_dirs(&mut self, workspace: u64, dirs: Vec<PathBuf>) {
         if !dirs.is_empty() {
-            self.spawn.pending_run_dirs.push((workspace, dirs));
+            self.runs.pending_dirs.push((workspace, dirs));
         }
     }
 
     pub(super) fn flush_run_dirs(&mut self) {
         let projects = &self.projects;
-        let (gone, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.spawn.pending_run_dirs)
+        let (gone, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.runs.pending_dirs)
             .into_iter()
             .partition(|(id, _)| projects.workspace_index(*id).is_none());
-        self.spawn.pending_run_dirs = kept;
+        self.runs.pending_dirs = kept;
         for (_, dirs) in gone {
             self.remove_run_dirs(dirs);
         }
@@ -299,7 +311,7 @@ impl App {
             Phase::Removing(_) => return Err(format!("workspace {id} is being removed")),
             Phase::Closing => return Err(format!("workspace {id} is closing")),
         }
-        if self.runs.iter().any(|run| run.workspace == id) {
+        if self.runs.list.iter().any(|run| run.workspace == id) {
             return Err(format!("workspace {id} already runs a flow, and a workspace runs one at a time"));
         }
         Ok(id)
@@ -322,7 +334,7 @@ impl App {
         let mut info =
             RunInfo { run: run.id, project, workspace: id, branch, members: Vec::new(), note, run_dir: None };
         let path = self.projects[p].workspaces[w].path.clone();
-        let dir = folder::make(&self.paths.runs_dir, &path, time::now() * 1000)
+        let dir = folder::make(&self.runs.dir, &path, time::now() * 1000)
             .map_err(|e| format!("could not make the run's folder: {e}"))?;
         self.projects[p].workspaces[w].run_dirs.push(dir.clone());
         let panes = RunPanes { roles: &roles, trees: &trees, setup, dir: &dir, accounts: &accounts };
@@ -336,7 +348,7 @@ impl App {
         self.remember_role_trees(place, &seats);
         self.adopt_members(&run, parent);
         self.launch_run(&run, &roles, &seats, &info.branch);
-        self.runs.push(run);
+        self.runs.list.push(run);
         if focus && let Some(first) = info.members.first() {
             self.goto(Goto::Place { project: info.project, workspace: Some(id), tab: Some(first.tab) });
             self.show_flow();
@@ -421,7 +433,7 @@ impl App {
     }
 
     pub(super) fn member_waits(&mut self, pane: u64) {
-        let Some((run, role)) = self.runs.iter().find_map(|run| Some((run, run.role_of(pane)?))) else { return };
+        let Some((run, role)) = self.runs.list.iter().find_map(|run| Some((run, run.role_of(pane)?))) else { return };
         let (workspace, role) = (run.workspace, role.to_string());
         let Some((p, w)) = self.projects.workspace_index(workspace) else { return };
         let project = &self.projects[p];
@@ -447,13 +459,13 @@ impl App {
     }
 
     pub(super) fn run_panes(&self, orchestrators: bool) -> Vec<u64> {
-        let members = self.runs.iter().flat_map(|run| &run.members);
+        let members = self.runs.list.iter().flat_map(|run| &run.members);
         members.filter(|m| (m.role == flows::ORCHESTRATOR) == orchestrators).map(|m| m.pane).collect()
     }
 
     pub(super) fn latch_run_ends(&mut self) {
         let projects = &self.projects;
-        for run in &mut self.runs {
+        for run in &mut self.runs.list {
             let marked = run
                 .pane_of(flows::ORCHESTRATOR)
                 .and_then(|pane| projects.pane_by(pane))
@@ -470,7 +482,7 @@ impl App {
     }
 
     pub(super) fn forget_moved_run_ends(&mut self) {
-        for run in self.runs.iter_mut().filter(|run| run.ended.is_some()) {
+        for run in self.runs.list.iter_mut().filter(|run| run.ended.is_some()) {
             forget_moved_end(&mut self.projects, run);
         }
     }
@@ -478,7 +490,7 @@ impl App {
     pub(super) fn forget_runs(&mut self) {
         let projects = &self.projects;
         let open = |id: u64| projects.workspace_index(id).is_some_and(|(p, w)| projects[p].workspaces[w].open());
-        self.runs.retain(|run| {
+        self.runs.list.retain(|run| {
             let kept = open(run.workspace) && run.members.iter().any(|m| projects.pane_by(m.pane).is_some());
             if !kept {
                 log::info!("flow", "run ended", workspace = run.workspace, flow = run.flow.name);
@@ -532,7 +544,7 @@ impl App {
         if let Some(term) = tabs.iter().flat_map(|(_, tab)| &tab.panes).find(|term| Some(term.id) == own) {
             self.brief_again(&run, term);
         }
-        self.runs.push(run);
+        self.runs.list.push(run);
     }
 
     fn brief_again(&mut self, run: &Run, term: &Term) {

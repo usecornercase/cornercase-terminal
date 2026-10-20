@@ -38,7 +38,6 @@ pub(super) struct Git {
 #[derive(Default)]
 pub(super) struct Spawn {
     pub(super) setups: HashMap<u64, (u64, PathBuf)>,
-    pub(super) pending_run_dirs: Vec<(u64, Vec<PathBuf>)>,
 }
 
 #[derive(Default)]
@@ -61,17 +60,11 @@ pub(super) struct Panels {
 pub(super) struct Paths {
     pub(super) config_path: PathBuf,
     pub(super) setup_dir: PathBuf,
-    pub(super) runs_dir: PathBuf,
     pub(super) home: Option<PathBuf>,
 }
 
 impl Paths {
     pub(super) fn new(config_path: PathBuf, home: Option<PathBuf>) -> Self {
-        Self {
-            setup_dir: config_path.parent().map(Path::to_path_buf).unwrap_or_default(),
-            runs_dir: config_path.with_file_name("runs"),
-            config_path,
-            home,
-        }
+        Self { setup_dir: config_path.parent().map(Path::to_path_buf).unwrap_or_default(), config_path, home }
     }
 }

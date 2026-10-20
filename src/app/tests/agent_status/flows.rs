@@ -18,7 +18,7 @@ fn in_a_flow_a_member_finishing_a_turn_tells_no_one_and_leaves_no_mark(
         let pane = tab_term(&w.app, 0, 0).id;
         let mut run = Run::new(w.app.projects[0].workspaces[0].id, Flow::default(), "fix it".into());
         run.members.push(Member { role: role.into(), pane });
-        w.app.runs.push(run);
+        w.app.runs.list.push(run);
     }
 
     w.report(status, 6);
@@ -34,7 +34,7 @@ fn a_run_that_ends_marked_for_review_says_it_finished() {
     let pane = tab_term(&w.app, 0, 0).id;
     let mut run = Run::new(w.app.projects[0].workspaces[0].id, Flow::default(), "fix it".into());
     run.members.push(Member { role: ORCHESTRATOR.into(), pane });
-    w.app.runs.push(run);
+    w.app.runs.list.push(run);
     w.app.projects.pane_by_mut(pane).expect("the orchestrator").agent.mark(true);
 
     w.report("idle", 6);

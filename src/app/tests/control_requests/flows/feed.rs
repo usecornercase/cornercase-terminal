@@ -30,7 +30,7 @@ fn role<'a>(fed: &'a Fed, name: &str) -> &'a wire::RoleState {
 }
 
 fn pane_of(app: &App, role: &str) -> u64 {
-    app.runs[0].pane_of(role).expect("a member")
+    app.runs.list[0].pane_of(role).expect("a member")
 }
 
 fn tell(app: &mut App, from: &str, to: &str, text: &str) {
@@ -111,7 +111,7 @@ fn a_run_with_the_fake_claude_is_followed_from_its_start_to_its_end() {
     for tab in tabs {
         ok(&mut team.app, "close", &json!({"item": {"tab": tab}}));
     }
-    refreshing(&mut team.app, &team.rx, "the run ends", |app| app.runs.is_empty());
+    refreshing(&mut team.app, &team.rx, "the run ends", |app| app.runs.list.is_empty());
     let ended = last(&mut team.app);
     assert_eq!(ended.report.runs, Vec::new());
     assert!(ended.revision > stood.revision);
@@ -170,13 +170,16 @@ fn a_member_whose_tab_closed_is_closed_and_the_rest_are_not() {
 #[test]
 fn a_run_restored_with_its_stage_and_rounds_has_no_messages_and_a_new_id() {
     let (mut app, _rx, _dir) = lightweight();
-    let flow = app.runs[0].flow.clone();
-    app.runs[0].progress = Progress::resumed(&flow, Some(1), &[0, 2, 0]);
-    app.runs[0].id += 100;
+    let flow = app.runs.list[0].flow.clone();
+    app.runs.list[0].progress = Progress::resumed(&flow, Some(1), &[0, 2, 0]);
+    app.runs.list[0].id += 100;
 
     let run = &follow(&mut app).report.runs[0];
 
-    assert_eq!((run.run, run.stage, run.rounds.clone(), run.messages), (app.runs[0].id, Some(1), vec![0, 2, 0], 0));
+    assert_eq!(
+        (run.run, run.stage, run.rounds.clone(), run.messages),
+        (app.runs.list[0].id, Some(1), vec![0, 2, 0], 0)
+    );
     assert_eq!(run.last, None);
     assert_eq!(backlog(&mut app).messages.len(), 0);
 }
@@ -191,7 +194,7 @@ fn the_messages_of_a_run_come_with_what_was_sent_before() {
 
     assert_eq!(
         (kept.boot.as_str(), kept.run, kept.workspace),
-        (wire::server_token(), app.runs[0].id, app.runs[0].workspace)
+        (wire::server_token(), app.runs.list[0].id, app.runs.list[0].workspace)
     );
     let shown: Vec<Shown> = kept
         .messages
@@ -217,7 +220,7 @@ fn the_messages_of_a_run_come_with_what_was_sent_before() {
     let told: Vec<(u64, &str, &str)> = live.iter().map(|m| (m.seq, m.kind.as_str(), m.to.as_str())).collect();
     assert_eq!(told, [(3, "send", "coder"), (4, "read", "coder")]);
     assert_eq!(live[0].edge, Some(RunEdge::Loop { stage: 1 }));
-    assert_eq!((live[1].text.clone(), live[0].run), (None, app.runs[0].id));
+    assert_eq!((live[1].text.clone(), live[0].run), (None, app.runs.list[0].id));
 }
 
 #[test]
@@ -236,7 +239,7 @@ fn a_messages_stream_ends_when_its_run_does() {
     let (mut app, _rx, _dir) = lightweight();
     backlog(&mut app);
 
-    app.runs.clear();
+    app.runs.list.clear();
     app.forget_runs();
 
     let ended: Vec<Streamed> = streamed(&mut app);
@@ -277,7 +280,7 @@ mod files {
             let at = SystemTime::now() - Duration::from_secs(100 * (age as u64 + 1));
             std::fs::File::options().write(true).open(&path).expect("open").set_modified(at).expect("a time");
         }
-        app.runs[0].dir = Some(dir.path().to_path_buf());
+        app.runs.list[0].dir = Some(dir.path().to_path_buf());
         dir
     }
 
@@ -294,7 +297,10 @@ mod files {
 
         let names: Vec<&str> = files.files.iter().map(|f| f.name.as_str()).collect();
         assert_eq!(names, ["newest.md", "older.md", "oldest.md"]);
-        assert_eq!((files.run, files.workspace, files.more), (Some(app.runs[0].id), app.runs[0].workspace, false));
+        assert_eq!(
+            (files.run, files.workspace, files.more),
+            (Some(app.runs.list[0].id), app.runs.list[0].workspace, false)
+        );
         assert_eq!(files.dir, dir.path());
         assert_eq!(files.files[0].path, dir.path().join("newest.md"));
         assert_eq!(files.files[0].bytes, 9);
@@ -316,10 +322,10 @@ mod files {
     fn the_last_folder_is_listed_after_the_run_ended() {
         let (mut app, rx, _dir) = lightweight();
         let dir = folder(&mut app, &["answer.md"]);
-        let workspace = app.runs[0].workspace;
+        let workspace = app.runs.list[0].workspace;
         let (p, w) = app.projects.workspace_index(workspace).expect("the workspace");
         app.projects[p].workspaces[w].run_dirs.push(dir.path().to_path_buf());
-        app.runs.clear();
+        app.runs.list.clear();
 
         let files = listed(&mut app, &rx);
 

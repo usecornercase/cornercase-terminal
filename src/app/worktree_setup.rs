@@ -175,8 +175,8 @@ impl App {
         for key in dropped.iter().flatten() {
             self.clients.requests.launched(*key, false);
         }
-        let ended = self.runs.iter().filter(|r| r.workspace == workspace).count();
-        self.runs.retain(|r| r.workspace != workspace);
+        let ended = self.runs.list.iter().filter(|r| r.workspace == workspace).count();
+        self.runs.list.retain(|r| r.workspace != workspace);
         if ended > 0 {
             log::info!("flow", "run ended", workspace = workspace, reason = reason);
         }

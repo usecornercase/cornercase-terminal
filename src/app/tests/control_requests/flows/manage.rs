@@ -391,7 +391,7 @@ fn a_running_flow_keeps_its_plan_when_its_flow_is_deleted() {
     removed(ok(&mut team.app, "flow-delete", &json!({"name": "Pair"})));
 
     assert_eq!(files(&yours(&team)), Vec::<String>::new());
-    assert_eq!(team.app.runs.len(), 1);
-    assert_eq!(team.app.runs[0].flow.name, "Pair");
-    assert_eq!(team.app.runs[0].workspace, run.workspace);
+    assert_eq!(team.app.runs.list.len(), 1);
+    assert_eq!(team.app.runs.list[0].flow.name, "Pair");
+    assert_eq!(team.app.runs.list[0].workspace, run.workspace);
 }

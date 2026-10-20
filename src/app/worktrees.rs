@@ -330,7 +330,7 @@ impl App {
         let project = &self.projects[p];
         project.workspaces.iter().filter(|owner| owner.open()).find_map(|owner| {
             let tree = owner.role_worktrees.iter().find(|tree| &tree.path == path)?;
-            self.runs.iter().any(|run| run.workspace == owner.id).then(|| {
+            self.runs.list.iter().any(|run| run.workspace == owner.id).then(|| {
                 format!(
                     "this worktree belongs to `{}` in the flow running in {} › {}: it is removed with that workspace",
                     tree.role,

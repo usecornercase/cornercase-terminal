@@ -208,7 +208,7 @@ mod agents {
         if member {
             let mut run = Run::new(agent.app.projects[0].workspaces[0].id, crate::flows::Flow::default(), "x".into());
             run.members.push(Member { role: "coder".into(), pane: id });
-            agent.app.runs.push(run);
+            agent.app.runs.list.push(run);
         }
         let term = agent.app.projects.pane_by_mut(id).expect("agent's pane");
         term.feed(format!("\x1b]7501;state={state}\x07").as_bytes());
