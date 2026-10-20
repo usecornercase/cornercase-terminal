@@ -68,13 +68,14 @@ use session::not_restored;
 use toast::Toast;
 use trackers::IssueConnections;
 use update_dialog::{UpdateEvent, UpdateState};
-use worktrees::{SYNC_EVERY, WorktreeEvent};
+use worktrees::WorktreeEvent;
 
 mod account_menu;
 mod accounts_page;
 mod actions;
 mod agent_watch;
 mod changes_panel;
+mod clock;
 mod config_file;
 mod control;
 mod dialogs;
@@ -149,17 +150,6 @@ struct Outbox {
     start: Option<(u64, (u16, u16))>,
 }
 
-struct Clock {
-    booted: Instant,
-    synced: Option<Instant>,
-}
-
-impl Clock {
-    fn new() -> Self {
-        Self { booted: Instant::now(), synced: None }
-    }
-}
-
 pub(crate) struct App {
     screen: groups::Screen,
     git: groups::Git,
@@ -186,7 +176,7 @@ pub(crate) struct App {
     accounts: control::accounts::AccountState,
     shells: tabs::Shells,
     tx: Sender<AppEvent>,
-    clock: Clock,
+    clock: clock::Clock,
     home: Option<PathBuf>,
     settings_page: Page,
     remote: remote_access::Remote,
@@ -226,7 +216,7 @@ impl App {
             overlay: None,
             accounts: control::accounts::AccountState::new(config_path),
             shells: tabs::Shells::new(shell),
-            clock: Clock::new(),
+            clock: clock::Clock::new(),
             settings_page: Page::default(),
             remote: remote_access::Remote::new(Web::new(paths::browsers(config_path), paths::socket(), tx.clone())),
             messengers: messenger::messengers(config_path, &paths::secrets(config_path)),
@@ -362,7 +352,7 @@ impl App {
         let launch =
             self.agents.launches.iter().any(|l| !l.waits_for_you() && !held.contains(&l.term)).then_some(LAUNCH_EVERY);
         let spin = (self.config.spinner() && self.agent_working())
-            .then(|| activity::spin_wait(now.saturating_duration_since(self.clock.booted)));
+            .then(|| activity::spin_wait(self.clock.since_boot(now)));
         [
             drag,
             lines,
@@ -396,11 +386,9 @@ impl App {
         self.refresh_sources(now, clock);
         self.refresh_agents(now, clock);
         self.refresh_panels(now);
-        if self.clock.synced.is_some_and(|at| now.duration_since(at) < SYNC_EVERY) {
-            return;
+        if self.clock.sync_due(now) {
+            self.refresh_slowly(now);
         }
-        self.clock.synced = Some(now);
-        self.refresh_slowly(now);
     }
 
     fn refresh_sources(&mut self, now: Instant, clock: i64) {
