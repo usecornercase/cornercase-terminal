@@ -19,6 +19,7 @@ use crate::control::{
     ProfileNew, ProfileSet, ProfileUse,
 };
 use crate::log::{self, Job, Level};
+use crate::project::Hierarchy;
 use crate::time::Stamp;
 
 type Key = (Known, String);
@@ -129,8 +130,19 @@ impl App {
         profile: Option<&str>,
         chosen: &BTreeMap<String, String>,
     ) -> Result<Accounts, Refusal> {
+        self.requested_accounts_from(None, profile, chosen)
+    }
+
+    pub(in crate::app) fn requested_accounts_from(
+        &self,
+        caller: Option<u64>,
+        profile: Option<&str>,
+        chosen: &BTreeMap<String, String>,
+    ) -> Result<Accounts, Refusal> {
         let mut picked = match profile {
-            None => self.config.selected_accounts().clone(),
+            None => caller
+                .and_then(|pane| self.projects.pane_by(pane))
+                .map_or_else(|| self.config.selected_accounts().clone(), |term| term.accounts().chosen()),
             Some("") => BTreeMap::new(),
             Some(name) => self.config.profiles.get(name).cloned().ok_or_else(|| unknown_profile(name))?,
         };

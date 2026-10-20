@@ -87,7 +87,7 @@ cornercase account use claude personal   # new claude tabs use personal
 cornercase account use claude --system   # back to its own login
 ```
 
-Choosing changes only what starts afterwards, and only for that agent. Tabs that are open keep the account they started with, so you can have a work agent and a personal agent side by side. A split takes the accounts of the pane it splits. Typing `claude` in a new tab uses the account in use too: the folder is in the tab's environment.
+Choosing changes only what starts afterwards, and only for that agent. Tabs that are open keep the account they started with, so you can have a work agent and a personal agent side by side. A split takes the accounts of the pane it splits, and so does `cornercase start` or `cornercase new-tab` run inside a pane (by you or by an agent there) without `--profile`: an agent on `personal` starts its helpers on `personal` too, whatever is in use now. `--account` still changes the agent it names. Run from outside cornercase, and for `cornercase flow run`, they use the account in use. Typing `claude` in a tab you open in the window uses the account in use too: the folder is in the tab's environment.
 
 ### Another account once
 

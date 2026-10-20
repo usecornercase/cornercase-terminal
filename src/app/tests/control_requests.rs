@@ -66,8 +66,21 @@ fn send_waiting(
     args: &Value,
 ) -> Vec<(u64, String)> {
     let server = caller.map(|_| wire::server_token());
-    let text = json!({"contract": 1, "caller": caller, "server": server, "command": command, "args": args}).to_string();
-    app.request(CLIENT, &text, Some(AREA), Instant::now());
+    send_headed(app, rx, &json!({"caller": caller, "server": server}), command, args)
+}
+
+fn send_headed(
+    app: &mut App,
+    rx: &Receiver<AppEvent>,
+    head: &Value,
+    command: &str,
+    args: &Value,
+) -> Vec<(u64, String)> {
+    let mut text = head.clone();
+    text["contract"] = json!(1);
+    text["command"] = json!(command);
+    text["args"] = args.clone();
+    app.request(CLIENT, &text.to_string(), Some(AREA), Instant::now());
     let mut got = Vec::new();
     wait_until("the answer", || {
         drain(app, rx);

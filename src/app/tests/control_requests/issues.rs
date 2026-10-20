@@ -372,6 +372,23 @@ fn a_profile_changed_during_the_lookup_still_gives_the_tab_its_accounts() {
 }
 
 #[test]
+fn an_issue_started_from_a_pane_takes_that_pane_s_accounts() {
+    let mut s = listing();
+    let root = s.config.path().join("accounts");
+    for name in ["personal", "work"] {
+        crate::accounts::add(&root, crate::agents::Known::Claude, name, None).expect("add the account");
+    }
+    let opened: Done = good(&mut s, "new-tab", &json!({"accounts": {"claude": "personal"}}));
+    s.app.config.active_accounts.insert("claude".into(), "work".into());
+
+    let started = asked_by(&mut s.app, &s.rx, opened.ids.pane, "start", &json!({"issue": "#7"}));
+
+    let done: Done = serde_json::from_value(started.expect("started")).expect("done");
+    let term = pane(&s.app, done.ids.pane.expect("the new pane"));
+    assert_eq!(term.accounts().name(crate::agents::Known::Claude), Some("personal"));
+}
+
+#[test]
 fn the_contract_lists_the_issues_feature() {
     let mut s = listing();
     let described = good::<Value>(&mut s, "contract", &json!({}));

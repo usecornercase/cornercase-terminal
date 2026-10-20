@@ -26,7 +26,11 @@ struct Setup {
 }
 
 fn setup() -> Setup {
-    let (config, folder) = (TempDir::new(), TempDir::new());
+    setup_on(TempDir::new())
+}
+
+fn setup_on(folder: TempDir) -> Setup {
+    let config = TempDir::new();
     let (app, rx) = app_in(folder.path(), config.path().join("config.json"));
     Setup { app, rx, config, _folder: folder }
 }
@@ -619,5 +623,157 @@ mod switching {
         let feed = serde_json::to_value(s.app.app_state()).expect("json");
 
         assert!(feed.get("accounts").is_none(), "{feed}");
+    }
+}
+
+mod a_pane_that_starts_agents {
+    use super::*;
+    use crate::test_util::git_repo;
+
+    const AGENT: &str = "#!/bin/sh\nprintf 'ready> '\nread line\n";
+
+    struct Caller {
+        s: Setup,
+        pane: u64,
+        _dirs: Vec<TempDir>,
+    }
+
+    fn from(account: &str) -> Caller {
+        from_in(TempDir::new(), account)
+    }
+
+    fn from_in(folder: TempDir, account: &str) -> Caller {
+        let mut s = setup_on(folder);
+        let (bin, worktrees) = (TempDir::new(), TempDir::new());
+        let fake = bin.path().join("claude");
+        write_executable(&fake, AGENT);
+        for (provider, name) in [("claude", "personal"), ("claude", "work"), ("codex", "team")] {
+            s.add(provider, name);
+        }
+        s.profile("Work", &json!({"claude": "work"}));
+        let (agent, trees) = (fake.display().to_string(), worktrees.path().display().to_string());
+        s.app
+            .change_config(|config| {
+                config.agent_commands.insert("claude".into(), agent);
+                config.worktrees_dir = trees;
+            })
+            .expect("a config change");
+        let opened = ok(&mut s.app, "new-tab", &json!({"accounts": {"claude": account}}));
+        let opened: Done = serde_json::from_value(opened).expect("done");
+        s.info("account-use", &json!({"provider": "claude", "account": "work"}));
+        Caller { pane: opened.ids.pane.expect("a pane"), s, _dirs: vec![bin, worktrees] }
+    }
+
+    impl Caller {
+        fn mine(&self) -> Value {
+            json!({"caller": self.pane, "server": wire::server_token()})
+        }
+
+        fn made(&mut self, head: &Value, command: &str, args: &Value) -> u64 {
+            let mut answers = send_headed(&mut self.s.app, &self.s.rx, head, command, args);
+            let reply = reply_of(&answers.remove(0).1)
+                .unwrap_or_else(|e| panic!("{command} refused: {} {}", e.code, e.message));
+            let done: Done = serde_json::from_value(reply).expect("done");
+            done.ids.pane.expect("the new pane")
+        }
+
+        fn claude(&self, id: u64) -> (Option<String>, Option<String>) {
+            let accounts = pane(&self.s.app, id).accounts();
+            let env = accounts.env();
+            let dir = env.iter().find(|(key, _)| key == "CLAUDE_CONFIG_DIR").map(|(_, dir)| PathBuf::from(dir));
+            let folder = dir.and_then(|dir| dir.file_name().and_then(|name| name.to_str()).map(str::to_string));
+            (accounts.name(Known::Claude).map(str::to_string), folder)
+        }
+    }
+
+    #[rstest::rstest]
+    #[case::a_new_tab("new-tab", json!({}), Some("personal"))]
+    #[case::an_agent("start", json!({"agent": "claude", "prompt": "go"}), Some("personal"))]
+    #[case::an_account_named_for_its_agent("new-tab", json!({"accounts": {"claude": "work"}}), Some("work"))]
+    #[case::the_system_login_named_for_its_agent(
+        "start",
+        json!({"agent": "claude", "prompt": "go", "accounts": {"claude": ""}}),
+        None
+    )]
+    #[case::a_profile("start", json!({"agent": "claude", "prompt": "go", "profile": "Work"}), Some("work"))]
+    #[case::the_system_profile("new-tab", json!({"profile": ""}), None)]
+    #[case::an_account_over_the_system_profile(
+        "new-tab",
+        json!({"profile": "", "accounts": {"claude": "work"}}),
+        Some("work")
+    )]
+    #[case::an_account_for_another_agent(
+        "start",
+        json!({"agent": "claude", "prompt": "go", "accounts": {"codex": "team"}}),
+        Some("personal")
+    )]
+    fn takes_the_pane_s_accounts_unless_the_request_names_others(
+        #[case] command: &str,
+        #[case] args: Value,
+        #[case] expected: Option<&str>,
+    ) {
+        let mut c = from("personal");
+
+        let made = c.made(&c.mine(), command, &args);
+
+        let expected = expected.map(str::to_string);
+        assert_eq!(c.claude(made), (expected.clone(), expected));
+        assert_eq!(c.s.app.config.active_accounts.get("claude").map(String::as_str), Some("work"));
+    }
+
+    #[rstest::rstest]
+    #[case::outside_any_pane(|_: &Caller| json!({}))]
+    #[case::from_a_pane_of_another_server(|c: &Caller| json!({"caller": c.pane, "server": "another"}))]
+    #[case::from_a_pane_that_is_gone(|c: &Caller| json!({"caller": c.pane + 1000, "server": wire::server_token()}))]
+    fn takes_the_selection_without_a_live_caller_of_this_server(#[case] head: fn(&Caller) -> Value) {
+        let mut c = from("personal");
+
+        let made = c.made(&head(&c), "new-tab", &json!({}));
+
+        assert_eq!(c.claude(made), (Some("work".into()), Some("work".into())));
+    }
+
+    #[rstest::rstest]
+    #[case::a_new_tab("new-tab", json!({}))]
+    #[case::an_agent("start", json!({"agent": "claude", "prompt": "go"}))]
+    fn on_the_system_login_starts_them_on_it(#[case] command: &str, #[case] args: Value) {
+        let mut c = from("");
+
+        let made = c.made(&c.mine(), command, &args);
+
+        assert!(pane(&c.s.app, made).accounts().is_empty());
+    }
+
+    #[test]
+    fn whose_account_was_removed_starts_them_on_the_system_login() {
+        let mut c = from("personal");
+        c.s.info("account-remove", &json!({"provider": "claude", "name": "personal"}));
+
+        let made = c.made(&c.mine(), "new-tab", &json!({}));
+
+        assert_eq!(c.claude(made), (None, None));
+    }
+
+    #[test]
+    fn starts_one_in_a_new_worktree_on_its_accounts() {
+        let mut c = from_in(git_repo(&[("README", "hi")]), "personal");
+        let args = json!({"agent": "claude", "prompt": "go", "worktree": "feat/x"});
+
+        let made = c.made(&c.mine(), "start", &args);
+
+        assert_eq!(c.claude(made), (Some("personal".into()), Some("personal".into())));
+    }
+
+    #[test]
+    fn names_the_accounts_it_passed_on_in_the_opened_event() {
+        let mut c = from("personal");
+        follow(&mut c.s.app, &[]);
+
+        let made = c.made(&c.mine(), "new-tab", &json!({}));
+
+        let opened = told(&streamed(&mut c.s.app));
+        let accounts = BTreeMap::from([("claude".to_string(), "personal".to_string())]);
+        let what = wire::What::Opened { kind: wire::Kind::Pane, parent: Some(c.pane), accounts };
+        assert!(opened.iter().any(|(told, ids)| *told == what && ids.pane == Some(made)), "{opened:?}");
     }
 }
