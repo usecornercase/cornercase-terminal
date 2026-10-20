@@ -458,6 +458,7 @@ mod agent_status;
 mod click_outside;
 mod compact;
 mod context_menu;
+mod dispatch;
 mod groups;
 mod icon_bar;
 mod keys;

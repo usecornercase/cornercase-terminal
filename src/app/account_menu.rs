@@ -9,8 +9,8 @@ use crate::{settings, ui};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct AccountItem {
-    kind: Known,
-    index: u16,
+    pub(super) kind: Known,
+    pub(super) index: u16,
 }
 
 impl App {

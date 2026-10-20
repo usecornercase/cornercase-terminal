@@ -148,9 +148,13 @@ fn last_commands() -> Vec<Command> {
     ]
 }
 
+pub(crate) fn every_command() -> Vec<Command> {
+    [first_commands(), middle_commands(), last_commands()].concat()
+}
+
 #[test]
 fn every_command_is_listed_by_name() {
-    let commands = [first_commands(), middle_commands(), last_commands()].concat();
+    let commands = every_command();
 
     let names: Vec<String> = commands
         .iter()

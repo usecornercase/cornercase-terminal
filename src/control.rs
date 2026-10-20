@@ -745,7 +745,7 @@ pub(crate) fn command_name(request: &Value) -> Option<&str> {
 pub(crate) struct Stats {}
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "action", content = "entry", rename_all = "kebab-case")]

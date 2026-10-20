@@ -347,3 +347,28 @@ mod secrets {
         assert!(matches!(s.removal_of("shortcut"), Err(Refused::Blocked(_))));
     }
 }
+
+mod activating {
+    use super::*;
+
+    #[test]
+    fn every_row_does_something_on_its_page() {
+        let rows = full().every_row();
+        let mut idle = Vec::new();
+        for row in rows {
+            let mut s = full();
+            s.open_page(row.page());
+            s.cursor = s.rows().iter().position(|r| *r == row).expect("the row is on its page");
+            let action = s.activate();
+            if matches!(action, Action::None)
+                && s.notice.is_none()
+                && s.edit.is_none()
+                && s.pick.is_none()
+                && !s.capturing
+            {
+                idle.push(row);
+            }
+        }
+        assert_eq!(idle, [], "rows that activate nothing");
+    }
+}

@@ -80,7 +80,7 @@ impl App {
         }
     }
 
-    fn go_shortcut(&mut self, action: Action, area: Rect) -> Option<Action> {
+    pub(in crate::app) fn go_shortcut(&mut self, action: Action, area: Rect) -> Option<Action> {
         match action {
             Action::NextTab => self.step_tab(1),
             Action::PreviousTab => self.step_tab(-1),
@@ -101,7 +101,7 @@ impl App {
         None
     }
 
-    fn panel_shortcut(&mut self, action: Action) -> Option<Action> {
+    pub(in crate::app) fn panel_shortcut(&mut self, action: Action) -> Option<Action> {
         match action {
             Action::Files => self.toggle_files(),
             Action::Changes => self.changes_by_key(),
@@ -117,7 +117,7 @@ impl App {
         None
     }
 
-    fn edit_shortcut(&mut self, action: Action) -> Option<Action> {
+    pub(in crate::app) fn edit_shortcut(&mut self, action: Action) -> Option<Action> {
         match action {
             Action::ClosePane => self.ask_close_pane(),
             Action::RenameTab => self.rename_tab_by_key(),

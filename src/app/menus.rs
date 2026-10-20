@@ -214,7 +214,7 @@ impl App {
         }
     }
 
-    fn group_action(&mut self, action: MenuAction, at: Position) -> Option<MenuAction> {
+    pub(in crate::app) fn group_action(&mut self, action: MenuAction, at: Position) -> Option<MenuAction> {
         match action {
             MenuAction::Rename(target) => {
                 self.overlay = self.current_name(target).map(|input| Overlay::Rename { target, input });
@@ -265,7 +265,12 @@ impl App {
         self.open_picker(group);
     }
 
-    fn project_action(&mut self, action: MenuAction, at: Position, area: Rect) -> Option<MenuAction> {
+    pub(in crate::app) fn project_action(
+        &mut self,
+        action: MenuAction,
+        at: Position,
+        area: Rect,
+    ) -> Option<MenuAction> {
         match action {
             MenuAction::StartFlow(project) => self.open_start_flow(self.start_flow_in(project)),
             MenuAction::ProjectSettings(project) => self.open_project_settings(project),
@@ -280,7 +285,7 @@ impl App {
         None
     }
 
-    fn agent_action(&mut self, action: MenuAction) -> Option<MenuAction> {
+    pub(in crate::app) fn agent_action(&mut self, action: MenuAction) -> Option<MenuAction> {
         match action {
             MenuAction::Mark(marked, pending) => {
                 self.mark(marked, pending);
