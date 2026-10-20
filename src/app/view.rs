@@ -205,7 +205,7 @@ impl App {
     }
 
     fn spin(&self, now: Instant) -> Option<u8> {
-        let elapsed = now.saturating_duration_since(self.booted);
+        let elapsed = now.saturating_duration_since(self.clock.booted);
         self.config.spinner().then(|| if self.agent_working() { activity::spin_frame(elapsed) } else { 0 })
     }
 

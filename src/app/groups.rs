@@ -1,8 +1,6 @@
+use ratatui::layout::Position;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
-
-use ratatui::layout::Position;
 
 use crate::changes;
 use crate::files;
@@ -35,7 +33,6 @@ pub(super) struct Git {
     pub(super) upstream: Upstream,
     pub(super) pulls: pull_requests::PullRequests,
     pub(super) merged: merged_pull_requests::MergedPulls,
-    pub(super) synced: Option<Instant>,
 }
 
 #[derive(Default)]

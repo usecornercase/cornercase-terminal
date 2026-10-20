@@ -148,6 +148,17 @@ struct Outbox {
     start: Option<(u64, (u16, u16))>,
 }
 
+struct Clock {
+    booted: Instant,
+    synced: Option<Instant>,
+}
+
+impl Clock {
+    fn new() -> Self {
+        Self { booted: Instant::now(), synced: None }
+    }
+}
+
 pub(crate) struct App {
     screen: groups::Screen,
     git: groups::Git,
@@ -175,7 +186,7 @@ pub(crate) struct App {
     logins: control::accounts::Logins,
     shell: String,
     tx: Sender<AppEvent>,
-    booted: Instant,
+    clock: Clock,
     settings_page: Page,
     remote: remote_access::Remote,
     messengers: Vec<Messenger>,
@@ -216,7 +227,7 @@ impl App {
             config_file,
             logins: control::accounts::Logins::default(),
             shell,
-            booted: Instant::now(),
+            clock: Clock::new(),
             settings_page: Page::default(),
             remote: remote_access::Remote::new(Web::new(paths::browsers(&config_path), paths::socket(), tx.clone())),
             messengers: messenger::messengers(&config_path, &secrets_path),
@@ -360,7 +371,7 @@ impl App {
         let launch =
             self.agents.launches.iter().any(|l| !l.waits_for_you() && !held.contains(&l.term)).then_some(LAUNCH_EVERY);
         let spin = (self.config.spinner() && self.agent_working())
-            .then(|| activity::spin_wait(now.saturating_duration_since(self.booted)));
+            .then(|| activity::spin_wait(now.saturating_duration_since(self.clock.booted)));
         [
             drag,
             lines,
@@ -394,10 +405,10 @@ impl App {
         self.refresh_sources(now, clock);
         self.refresh_agents(now, clock);
         self.refresh_panels(now);
-        if self.git.synced.is_some_and(|at| now.duration_since(at) < SYNC_EVERY) {
+        if self.clock.synced.is_some_and(|at| now.duration_since(at) < SYNC_EVERY) {
             return;
         }
-        self.git.synced = Some(now);
+        self.clock.synced = Some(now);
         self.refresh_slowly(now);
     }
 
