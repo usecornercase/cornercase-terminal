@@ -3,9 +3,9 @@ use std::ops::Range;
 use ratatui::layout::{Position, Rect};
 
 use super::rows::{Rows, Zone, more_above};
-use super::sidebar::{SidebarRow, project_rows};
+use super::sidebar::SidebarRow;
 use super::tree::{TreeRow, TreeShape, tree_layout_rows, tree_rows};
-use super::workspaces::{TabLines, WorkspaceRow, workspace_layout, workspace_rows};
+use super::workspaces::{TabLines, WorkspaceRow, workspace_rows};
 
 pub(crate) fn tree_drop(
     list: Rect,
@@ -20,14 +20,20 @@ pub(crate) fn tree_drop(
     match dragged {
         TreeRow::Group(_) => {
             let header = |r| if let TreeRow::Group(g) = r { Some(g) } else { None };
-            let (at, g) = block_drop(&rows, &layout, zone, dragged, TreeRow::Gap, header)?;
+            let (at, g) = block_drop(&rows, Over { layout: &layout, zone }, dragged, TreeRow::Gap, header)?;
             Some(Landing { at, spot: Spot::Group(g) })
         }
         TreeRow::Project(_) => tree_project_drop(&rows, &layout, zone, rows.iter().position(|r| *r == dragged)?),
         TreeRow::Workspace(p, w) => tree_workspace_drop(&rows, &layout, zone, p, w),
         TreeRow::Tab(p, w, t) => {
             let tab = |r| if let TreeRow::Tab(q, v, u) = r { (q == p && v == w).then_some(u) } else { None };
-            sibling_drop(&rows, &layout, zone, (TreeRow::Workspace(p, w), TreeRow::NewTab(p, w)), tab, t)
+            sibling_drop(
+                &rows,
+                Over { layout: &layout, zone },
+                (TreeRow::Workspace(p, w), TreeRow::NewTab(p, w)),
+                tab,
+                t,
+            )
         }
         _ => None,
     }
@@ -113,8 +119,20 @@ fn project_spot<R: ListRow>(rows: &[R], dragged: Range<usize>, at: usize) -> Spo
     Spot::Project { group, before: None }
 }
 
-fn project_drop(rows: &[SidebarRow], layout: &Rows, zone: Zone, dragged: usize) -> Option<Landing> {
-    let at = layout.boundary(zone, |i| match rows[i] {
+#[derive(Clone, Copy)]
+struct Over<'a> {
+    layout: &'a Rows,
+    zone: Zone,
+}
+
+impl Over<'_> {
+    fn boundary(self, place: impl Fn(usize) -> Option<usize>) -> Option<usize> {
+        self.layout.boundary(self.zone, place)
+    }
+}
+
+fn project_drop(rows: &[SidebarRow], over: Over, dragged: usize) -> Option<Landing> {
+    let at = over.boundary(|i| match rows[i] {
         _ if i == dragged => None,
         SidebarRow::Project(_) if i < dragged => Some(i),
         SidebarRow::Project(_) | SidebarRow::Group(_) => Some(i + 1),
@@ -125,8 +143,7 @@ fn project_drop(rows: &[SidebarRow], layout: &Rows, zone: Zone, dragged: usize) 
 
 fn block_drop<R: Copy + PartialEq>(
     rows: &[R],
-    layout: &Rows,
-    zone: Zone,
+    over: Over,
     dragged: R,
     gap: R,
     header: impl Fn(R) -> Option<usize>,
@@ -135,7 +152,7 @@ fn block_drop<R: Copy + PartialEq>(
     let len = rows.len();
     let is_header = |j: usize| header(rows[j]).is_some();
     let block = |i: usize| (0..=i).rev().take_while(|&j| rows[j] != gap).find(|&j| is_header(j));
-    let at = layout.boundary(zone, |i| match block(i) {
+    let at = over.boundary(|i| match block(i) {
         Some(h) if h == d => None,
         Some(h) if h < d => Some(h),
         Some(h) => Some((h..len).find(|&j| rows[j] == gap).unwrap_or(len)),
@@ -147,15 +164,14 @@ fn block_drop<R: Copy + PartialEq>(
 
 fn sibling_drop<R: Copy + PartialEq>(
     rows: &[R],
-    layout: &Rows,
-    zone: Zone,
+    over: Over,
     (header, end): (R, R),
     tab: impl Fn(R) -> Option<usize>,
     t: usize,
 ) -> Option<Landing> {
     let header = rows.iter().position(|r| *r == header)?;
     let end = rows.iter().position(|r| *r == end)?;
-    let at = layout.boundary(zone, |i| match tab(rows[i]) {
+    let at = over.boundary(|i| match tab(rows[i]) {
         Some(u) if u == t => None,
         Some(u) if u < t => Some(i),
         Some(_) => Some(i + 1),
@@ -166,9 +182,9 @@ fn sibling_drop<R: Copy + PartialEq>(
     Some(Landing { at, spot: Spot::Tab(at - header - 1) })
 }
 
-fn tab_drop(rows: &[WorkspaceRow], layout: &Rows, zone: Zone, w: usize, t: usize) -> Option<Landing> {
+fn tab_drop(rows: &[WorkspaceRow], over: Over, w: usize, t: usize) -> Option<Landing> {
     let tab = |r| if let WorkspaceRow::Tab(v, u) = r { (v == w).then_some(u) } else { None };
-    sibling_drop(rows, layout, zone, (WorkspaceRow::Workspace(w), WorkspaceRow::NewTab(w)), tab, t)
+    sibling_drop(rows, over, (WorkspaceRow::Workspace(w), WorkspaceRow::NewTab(w)), tab, t)
 }
 
 fn inside(parent: TreeRow, row: TreeRow) -> bool {
@@ -229,45 +245,29 @@ fn tree_workspace_drop(rows: &[TreeRow], layout: &Rows, zone: Zone, p: usize, w:
     Some(Landing { at, spot: Spot::Workspace(before) })
 }
 
-pub(crate) fn sidebar_drop(
-    list: Rect,
-    pitch: u16,
-    rows: &[SidebarRow],
-    scroll: usize,
-    dragged: SidebarRow,
-    pos: Position,
-) -> Option<Landing> {
-    let layout = project_rows(list, pitch, rows, scroll);
-    let zone = layout.zone(pos)?;
+pub(crate) fn sidebar_drop(layout: &Rows, rows: &[SidebarRow], dragged: SidebarRow, pos: Position) -> Option<Landing> {
+    let over = Over { layout, zone: layout.zone(pos)? };
     match dragged {
-        SidebarRow::Project(_) => project_drop(rows, &layout, zone, rows.iter().position(|r| *r == dragged)?),
+        SidebarRow::Project(_) => project_drop(rows, over, rows.iter().position(|r| *r == dragged)?),
         SidebarRow::Group(_) => {
             let header = |r| if let SidebarRow::Group(g) = r { Some(g) } else { None };
-            let (at, g) = block_drop(rows, &layout, zone, dragged, SidebarRow::Gap, header)?;
+            let (at, g) = block_drop(rows, over, dragged, SidebarRow::Gap, header)?;
             Some(Landing { at, spot: Spot::Group(g) })
         }
         SidebarRow::Gap | SidebarRow::Landing => None,
     }
 }
 
-pub(crate) fn workspace_drop(
-    list: Rect,
-    pitch: u16,
-    tabs: &TabLines,
-    scroll: usize,
-    dragged: WorkspaceRow,
-    pos: Position,
-) -> Option<Landing> {
-    let layout = workspace_layout(list, pitch, tabs, scroll);
-    let zone = layout.zone(pos)?;
+pub(crate) fn workspace_drop(layout: &Rows, tabs: &TabLines, dragged: WorkspaceRow, pos: Position) -> Option<Landing> {
+    let over = Over { layout, zone: layout.zone(pos)? };
     let rows = workspace_rows(tabs);
     match dragged {
         WorkspaceRow::Workspace(_) => {
             let header = |r| if let WorkspaceRow::Workspace(w) = r { Some(w) } else { None };
-            let (at, w) = block_drop(&rows, &layout, zone, dragged, WorkspaceRow::Gap, header)?;
+            let (at, w) = block_drop(&rows, over, dragged, WorkspaceRow::Gap, header)?;
             Some(Landing { at, spot: Spot::Workspace(w) })
         }
-        WorkspaceRow::Tab(w, t) => tab_drop(&rows, &layout, zone, w, t),
+        WorkspaceRow::Tab(w, t) => tab_drop(&rows, over, w, t),
         WorkspaceRow::Gap | WorkspaceRow::NewTab(_) | WorkspaceRow::Landing => None,
     }
 }

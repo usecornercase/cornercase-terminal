@@ -33,50 +33,16 @@ const SMALL: Rect = Rect { x: 0, y: 0, width: 80, height: 30 };
 
 fn view(names: &[&str]) -> View<'static> {
     View {
-        groups: Vec::new(),
         projects: names
             .iter()
             .map(|n| ProjectEntry { name: (*n).to_string(), workspaces: 1, group: None, status: None })
             .collect(),
-        active: 0,
-        has_project: false,
-        workspaces: Vec::new(),
-        active_workspace: 0,
-        active_tab: None,
-        issues: false,
-        hover: None,
-        widths: Widths::default(),
         sidebar: Sidebar::SideBySide,
-        resizing: None,
-        light: false,
         muted: Color::DarkGray,
         soft: Color::Gray,
-        projects_scroll: 0,
-        workspaces_scroll: 0,
-        tab: None,
-        overlay: None,
-        toast: None,
-        star: false,
-        nav: None,
-        update: None,
-        remote: None,
-        changes: None,
-        changes_button: None,
-        todo: None,
-        flow: None,
-        flow_run: false,
         todo_dot: true,
-        todo_pending: false,
-        accounts: Vec::new(),
-        files: None,
-        attention: None,
-        spin: None,
-        drag: None,
-        tree: None,
-        agents: None,
         counts: true,
-        icons: false,
-        tab_bar: None,
+        ..View::default()
     }
 }
 

@@ -1,5 +1,5 @@
 use super::*;
-use crate::ui::layout::{full_layout, window_layout};
+use crate::ui::layout::{Screen, full_layout, window_layout};
 
 fn pill(agent: &str, account: &str) -> AccountPill {
     AccountPill { agent: agent.into(), account: account.into() }
@@ -18,7 +18,13 @@ fn snapshot(t: &Terminal<TestBackend>) -> String {
 }
 
 fn areas_of(view: &View, area: Rect) -> Areas {
-    let columns = |main| full_layout(main, view.widths, false, view.sidebar, false, view.icons);
+    let columns = |main| {
+        full_layout(
+            main,
+            view.widths,
+            Screen { changes: false, sidebar: view.sidebar, agents: false, icons: view.icons },
+        )
+    };
     window_layout(area, !view.accounts.is_empty(), columns).shown(view.nav)
 }
 
@@ -44,7 +50,7 @@ fn the_window_ends_with_a_status_bar_of_accounts(
     let areas = areas_of(&view, area);
     assert_eq!(areas.accounts, Rect { y: area.bottom() - 2, height: 2, ..area });
     let above = Rect { height: area.height - 2, ..area };
-    let rest = full_layout(above, view.widths, false, sidebar, false, icons).shown(nav);
+    let rest = full_layout(above, view.widths, Screen { changes: false, sidebar, agents: false, icons }).shown(nav);
     assert_eq!(Areas { accounts: Rect::default(), ..areas }, rest);
     let name = format!("status_bar_{sidebar:?}_{icons}_{}_{}", area.width, nav.map_or("closed", |_| "menu"));
     insta::assert_snapshot!(name, snapshot(&render_sized(&view, area.width, area.height)));

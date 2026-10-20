@@ -93,11 +93,13 @@ impl App {
         }
         let sidebar = |row: SidebarRow| {
             let rows = self.sidebar_rows();
-            ui::Drag::Sidebar(row, ui::sidebar_drop(areas.list, areas.pitch, &rows, self.scroll.projects, row, pos))
+            let layout = ui::project_rows(areas.list, areas.pitch, &rows, self.scroll.projects);
+            ui::Drag::Sidebar(row, ui::sidebar_drop(&layout, &rows, row, pos))
         };
         let workspaces = |row: WorkspaceRow| {
             let (list, tabs) = (areas.workspaces_list, self.tab_lines());
-            ui::Drag::Workspaces(row, ui::workspace_drop(list, areas.pitch, &tabs, self.scroll.workspaces, row, pos))
+            let layout = ui::workspace_layout(list, areas.pitch, &tabs, self.scroll.workspaces);
+            ui::Drag::Workspaces(row, ui::workspace_drop(&layout, &tabs, row, pos))
         };
         match row {
             ui::TreeRow::Group(g) => Some(sidebar(SidebarRow::Group(g))),

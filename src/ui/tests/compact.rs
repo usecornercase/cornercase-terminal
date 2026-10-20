@@ -155,7 +155,7 @@ fn renders_the_landing_line_between_tabs() {
     let (list, tabs) = (small().workspaces_list, v.tab_lines());
     let nvim = workspace_row(list, COMPACT_PITCH, &tabs, 0, WorkspaceRow::Tab(0, 1));
     let dragged = WorkspaceRow::Tab(0, 0);
-    let landing = workspace_drop(list, COMPACT_PITCH, &tabs, 0, dragged, nvim.as_position());
+    let landing = workspace_drop(&workspace_layout(list, COMPACT_PITCH, &tabs, 0), &tabs, dragged, nvim.as_position());
     insta::assert_snapshot!(render_small(&View { drag: Some(Drag::Workspaces(dragged, landing)), ..v }).backend());
 }
 

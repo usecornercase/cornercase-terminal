@@ -224,7 +224,10 @@ fn without_accounts_the_window_is_drawn_as_before(
 
     let (panel, agents) = (app.panel_shown(), app.config.agents_section);
     assert!(!app.status_bar());
-    assert_eq!(app.layout(area), ui::full_layout(area, app.widths, panel, sidebar, agents, icons));
+    assert_eq!(
+        app.layout(area),
+        ui::full_layout(area, app.widths, ui::Screen { changes: panel, sidebar, agents, icons })
+    );
     assert!(app.layout(area).accounts.is_empty());
     let with_switcher = screen(&mut app, area);
     app.config.account_switcher = false;

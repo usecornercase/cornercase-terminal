@@ -236,7 +236,7 @@ impl App {
     ) -> Option<u64> {
         let workspace = self.projects.get(self.active)?.workspaces.get(w)?;
         let entry = self.workspace_entry(workspace);
-        ui::workspace_pull(list, pitch, tabs, self.scroll.workspaces, w, &entry)
+        ui::workspace_pull(&ui::workspace_layout(list, pitch, tabs, self.scroll.workspaces), pitch, tabs, w, &entry)
             .filter(|rect| rect.contains(pos))
             .map(|_| workspace.id)
     }

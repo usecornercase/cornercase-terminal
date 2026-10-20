@@ -10,7 +10,7 @@ use super::layout::{Areas, Border};
 use super::rows::{Rows, Tags, draw_hidden, draw_rail, marker, row_close_button};
 use super::theme::status_icon;
 use super::widgets::{button_style, dim, draw_band, draw_button, draw_separator, draw_title, middle};
-use super::workspaces::{Details, Guide, draw_details, draw_guide};
+use super::workspaces::{DetailLine, Details, Guide, draw_details, draw_guide};
 use crate::agents::activity::Status;
 use crate::text::{CRUMB_SEPARATOR, truncate_right};
 
@@ -121,7 +121,14 @@ pub(super) fn draw_agent(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry:
     tags.push_onto(&mut line, used, room);
     draw_band(f, r, Line::from(line), bg);
     draw_fold(f, view.muted, r, entry);
-    draw_details(f, view.muted, (r, row_close_button(r, pitch)), &entry.details, Some(&entry.agent), indent);
+    let line = DetailLine {
+        row: r,
+        buttons: row_close_button(r, pitch),
+        details: &entry.details,
+        agent: Some(&entry.agent),
+        indent,
+    };
+    draw_details(f, view.muted, line);
     draw_guides(f, view.line(), r, entry);
     if entry.active {
         draw_rail(f, r);

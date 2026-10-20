@@ -15,7 +15,6 @@ use super::theme::status_icon;
 use super::widgets::{
     button_style, centered, draw_band, draw_button, draw_separator, middle, sidebar_hovered, update_button,
 };
-use crate::agents::activity::Status;
 use crate::text::{CRUMB_SEPARATOR, truncate_left, truncate_right};
 
 #[cfg(test)]
@@ -152,7 +151,7 @@ pub(super) fn draw_bar(f: &mut Frame, view: &View, areas: &Areas) {
     let icon = Rect { width: COMPACT_BUTTON_WIDTH.min(menu.width), ..menu };
     let lit = view.nav.is_some() || sidebar_hovered(view, menu);
     let style = if lit { pressed } else { surface.fg(Color::Cyan) };
-    let label = menu_label(glyphs, view.muted, view.attention, view.spin, icon.width, (style, lit));
+    let label = menu_label(glyphs, view, icon.width, (style, lit));
     draw_band(f, icon, label, style);
     let crumbs = Rect { x: icon.right() + 2, width: menu.width.saturating_sub(icon.width + 2), ..middle(menu) };
     f.render_widget(Paragraph::new(Line::from(breadcrumb(view, usize::from(crumbs.width)))), crumbs);
@@ -254,19 +253,12 @@ fn todo_icon(glyphs: &Glyphs, pending: bool, width: u16, style: Style) -> Line<'
     ))
 }
 
-fn menu_label(
-    glyphs: &Glyphs,
-    muted: Color,
-    attention: Option<Status>,
-    frame: Option<u8>,
-    width: u16,
-    (style, lit): (Style, bool),
-) -> Line<'static> {
+fn menu_label(glyphs: &Glyphs, view: &View, width: u16, (style, lit): (Style, bool)) -> Line<'static> {
     let menu = glyphs.menu;
-    let Some(status) = attention else { return Line::from(Span::styled(centered(menu, width), style)) };
+    let Some(status) = view.attention else { return Line::from(Span::styled(centered(menu, width), style)) };
     let width = usize::from(width);
     let left = width.saturating_sub(1) / 2;
-    let badge = status_icon(muted, status, frame);
+    let badge = status_icon(view.muted, status, view.spin);
     let badge = if lit { Span::styled(badge.content, style) } else { badge };
     Line::from(vec![
         Span::styled(format!("{}{menu} ", " ".repeat(left)), style),

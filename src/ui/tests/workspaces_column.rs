@@ -240,7 +240,13 @@ mod pull_request_tag {
     }
 
     fn badge_text(v: &View) -> Option<String> {
-        let r = workspace_pull(wlist(), areas().pitch, &v.tab_lines(), v.workspaces_scroll, 0, &v.workspaces[0])?;
+        let r = workspace_pull(
+            &workspace_layout(wlist(), areas().pitch, &v.tab_lines(), v.workspaces_scroll),
+            areas().pitch,
+            &v.tab_lines(),
+            0,
+            &v.workspaces[0],
+        )?;
         let terminal = render(v);
         let buffer = terminal.backend().buffer();
         Some((r.x..r.right()).map(|x| buffer[(x, r.y)].symbol().to_string()).collect())
@@ -278,13 +284,25 @@ mod pull_request_tag {
         let mut v = tagged("login", 3, mark(State::Open, Some(Ci::Failing)));
         v.workspaces[0].tabs[0].status = Some(Status::Waiting);
         let list = Rect { width: 20, ..wlist() };
-        let r = workspace_pull(list, areas().pitch, &v.tab_lines(), 0, 0, &v.workspaces[0]).expect("a target");
+        let r = workspace_pull(
+            &workspace_layout(list, areas().pitch, &v.tab_lines(), 0),
+            areas().pitch,
+            &v.tab_lines(),
+            0,
+            &v.workspaces[0],
+        )
+        .expect("a target");
         let row = workspace_row(list, areas().pitch, &v.tab_lines(), 0, WorkspaceRow::Workspace(0));
         let mut terminal = Terminal::new(TestBackend::new(160, 60)).expect("terminal");
         terminal
             .draw(|f| {
                 let band = Band { r: row, pitch: 1, lead: vec![Span::raw("    ")], bg: Style::default() };
-                workspaces::draw_workspace_band(f, &v, band, &v.workspaces[0], false, workspaces::Badge::Attention);
+                let line = workspaces::WorkspaceLine {
+                    entry: &v.workspaces[0],
+                    active: false,
+                    badge: workspaces::Badge::Attention,
+                };
+                workspaces::draw_workspace_band(f, &v, band, line);
             })
             .expect("draw");
         let buffer = terminal.backend().buffer();
@@ -299,7 +317,14 @@ mod pull_request_tag {
         let v = tagged("login", 0, mark(State::Open, Some(Ci::Failing)));
         let pitch = 3;
 
-        let r = workspace_pull(wlist(), pitch, &v.tab_lines(), 0, 0, &v.workspaces[0]).expect("a target");
+        let r = workspace_pull(
+            &workspace_layout(wlist(), pitch, &v.tab_lines(), 0),
+            pitch,
+            &v.tab_lines(),
+            0,
+            &v.workspaces[0],
+        )
+        .expect("a target");
 
         assert_eq!(r.height, pitch);
         assert_eq!(r.width, 5);
@@ -327,14 +352,28 @@ mod pull_request_tag {
     }
 
     fn badge_cell(v: &View) -> ratatui::buffer::Cell {
-        let r = workspace_pull(wlist(), areas().pitch, &v.tab_lines(), 0, 0, &v.workspaces[0]).expect("a target");
+        let r = workspace_pull(
+            &workspace_layout(wlist(), areas().pitch, &v.tab_lines(), 0),
+            areas().pitch,
+            &v.tab_lines(),
+            0,
+            &v.workspaces[0],
+        )
+        .expect("a target");
         render(v).backend().buffer()[(r.x, r.y)].clone()
     }
 
     #[test]
     fn hovering_it_underlines_it_and_keeps_its_colour() {
         let mut v = tagged("login", 0, mark(State::Open, Some(Ci::Failing)));
-        let r = workspace_pull(wlist(), areas().pitch, &v.tab_lines(), 0, 0, &v.workspaces[0]).expect("a target");
+        let r = workspace_pull(
+            &workspace_layout(wlist(), areas().pitch, &v.tab_lines(), 0),
+            areas().pitch,
+            &v.tab_lines(),
+            0,
+            &v.workspaces[0],
+        )
+        .expect("a target");
         v.hover = Some(r.as_position());
 
         let cell = badge_cell(&v);
@@ -354,7 +393,14 @@ mod pull_request_tag {
     #[test]
     fn no_underline_while_an_overlay_is_open() {
         let mut v = tagged("login", 0, mark(State::Open, Some(Ci::Failing)));
-        let r = workspace_pull(wlist(), areas().pitch, &v.tab_lines(), 0, 0, &v.workspaces[0]).expect("a target");
+        let r = workspace_pull(
+            &workspace_layout(wlist(), areas().pitch, &v.tab_lines(), 0),
+            areas().pitch,
+            &v.tab_lines(),
+            0,
+            &v.workspaces[0],
+        )
+        .expect("a target");
         v.hover = Some(r.as_position());
         v.overlay = Some(Overlay::Menu { at: Position::new(0, 0), items: vec!["rename".into()] });
 

@@ -235,7 +235,7 @@ pub fn layout(area: Rect, widths: Widths) -> Areas {
 }
 
 pub fn layout_with(area: Rect, widths: Widths, changes: bool, sidebar: Sidebar) -> Areas {
-    full_layout(area, widths, changes, sidebar, false, false)
+    full_layout(area, widths, Screen { changes, sidebar, agents: false, icons: false })
 }
 
 pub(crate) fn window_layout(area: Rect, accounts: bool, layout: impl FnOnce(Rect) -> Areas) -> Areas {
@@ -251,14 +251,16 @@ pub(crate) fn status_split(area: Rect, shown: bool) -> (Rect, Rect) {
     (Rect { height, ..area }, Rect { y: area.y + height, height: 2, ..area })
 }
 
-pub(crate) fn full_layout(
-    area: Rect,
-    widths: Widths,
-    changes: bool,
-    sidebar: Sidebar,
-    agents: bool,
-    icons: bool,
-) -> Areas {
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Screen {
+    pub(crate) changes: bool,
+    pub(crate) sidebar: Sidebar,
+    pub(crate) agents: bool,
+    pub(crate) icons: bool,
+}
+
+pub(crate) fn full_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
+    let Screen { changes, sidebar, agents, icons } = screen;
     if area.width < COMPACT_WIDTH {
         return compact_layout(area, changes, agents);
     }
@@ -303,8 +305,7 @@ fn agents_section(r: Rect, widths: Widths, keep: u16, agents: bool) -> (Rect, Ar
     (rest, areas)
 }
 
-fn wide_layout(area: Rect, widths: Widths, agents: bool, icons: bool) -> Areas {
-    let Widths { projects, workspaces, .. } = widths.fit(area.width);
+fn wide_columns(area: Rect, projects: u16, workspaces: u16) -> [Rect; 4] {
     let [columns, _, pane] = Layout::horizontal([
         Constraint::Length(projects + workspaces),
         Constraint::Length(PANE_PADDING),
@@ -313,9 +314,13 @@ fn wide_layout(area: Rect, widths: Widths, agents: bool, icons: bool) -> Areas {
     .areas(area);
     let [left, workspaces] =
         Layout::horizontal([Constraint::Length(projects), Constraint::Length(workspaces)]).areas(columns);
-    let [header, results] = Layout::vertical([Constraint::Length(HEADER_HEIGHT), Constraint::Min(0)])
-        .areas(Rect { width: columns.width.saturating_sub(1), ..columns });
-    let search = search_area(header);
+    [columns, left, workspaces, pane]
+}
+
+fn wide_layout(area: Rect, widths: Widths, agents: bool, icons: bool) -> Areas {
+    let Widths { projects, workspaces, .. } = widths.fit(area.width);
+    let [columns, left, workspaces, pane] = wide_columns(area, projects, workspaces);
+    let (search, results) = search_and_results(Rect { width: columns.width.saturating_sub(1), ..columns });
     let sidebar = below_header(left);
     let [title, list, separator, settings, usage, quit] = projects_column(sidebar_block().inner(sidebar), icons);
     let lists = Rect { height: list.bottom().saturating_sub(title.y), ..title };
@@ -325,12 +330,8 @@ fn wide_layout(area: Rect, widths: Widths, agents: bool, icons: bool) -> Areas {
         workspaces_column(below_header(sidebar_block().inner(workspaces)), icons);
     Areas {
         pitch: 1,
-        activity: Rect::default(),
-        tree: false,
-        bar: Rect::default(),
         search,
         search_button: search,
-        back: Rect::default(),
         sidebar,
         title,
         list,
@@ -347,14 +348,15 @@ fn wide_layout(area: Rect, widths: Widths, agents: bool, icons: bool) -> Areas {
         pane,
         projects_border: right_edge(sidebar),
         workspaces_border: right_edge(workspaces),
-        stack_border: Rect::default(),
-        changes: Rect::default(),
-        changes_border: Rect::default(),
-        changes_button: Rect::default(),
         todo_button: changes_button(todo, TODO_LABEL),
         files_button: files_button(todo),
         ..agents_areas
     }
+}
+
+fn search_and_results(r: Rect) -> (Rect, Rect) {
+    let [header, results] = Layout::vertical([Constraint::Length(HEADER_HEIGHT), Constraint::Min(0)]).areas(r);
+    (search_area(header), results)
 }
 
 fn section(r: Rect) -> [Rect; 2] {
@@ -368,8 +370,7 @@ fn one_column(area: Rect, widths: Widths, keep: u16, agents: bool, icons: bool) 
     let pane_x = column.right().saturating_add(PANE_PADDING).min(area.right());
     let pane = Rect { x: pane_x, width: area.right() - pane_x, ..area };
     let inner = sidebar_block().inner(column);
-    let [header, results] = Layout::vertical([Constraint::Length(HEADER_HEIGHT), Constraint::Min(0)]).areas(inner);
-    let search = search_area(header);
+    let (search, results) = search_and_results(inner);
     let room = stack_room(inner, icons);
     let footer_y = inner.bottom().saturating_sub(stack_footer(icons)).max(room.y);
     let footer = Rect { y: footer_y, height: inner.bottom() - footer_y, ..inner };
@@ -438,42 +439,48 @@ fn tree_layout(area: Rect, widths: Widths, agents: bool, icons: bool) -> Areas {
     }
 }
 
+fn compact_buttons(bar: Rect) -> [Rect; 4] {
+    let mut left = bar.right();
+    [(); 4].map(|()| {
+        let width = COMPACT_BUTTON_WIDTH.min(left.saturating_sub(bar.x));
+        left -= width;
+        Rect { x: left, width, ..bar }
+    })
+}
+
+fn compact_agents(menu: Rect, title: Rect, agents: bool) -> [Rect; 4] {
+    let [agents_title, _, agents_list] =
+        Layout::vertical([Constraint::Length(COMPACT_PITCH), Constraint::Length(GAP), Constraint::Min(1)]).areas(menu);
+    let width = (button_width(AGENTS_LABEL) + 2).min(title.width);
+    let button = Rect { x: title.right() - width, width, ..title };
+    let shown = |r: Rect| if agents { r } else { Rect::default() };
+    [shown(menu), shown(agents_title), shown(agents_list), shown(button)]
+}
+
+fn compact_column(menu: Rect) -> [Rect; 5] {
+    Layout::vertical([
+        Constraint::Length(COMPACT_PITCH),
+        Constraint::Length(GAP),
+        Constraint::Min(1),
+        Constraint::Length(1),
+        Constraint::Length(COMPACT_PITCH),
+    ])
+    .areas(menu)
+}
+
 fn compact_layout(area: Rect, changes: bool, agents: bool) -> Areas {
     let pitch = COMPACT_PITCH;
     let [bar, below] = Layout::vertical([Constraint::Length(pitch), Constraint::Min(0)]).areas(area);
-    let search_width = COMPACT_BUTTON_WIDTH.min(bar.width);
-    let search_button = Rect { x: bar.right() - search_width, width: search_width, ..bar };
-    let todo_width = COMPACT_BUTTON_WIDTH.min(search_button.x.saturating_sub(bar.x));
-    let todo_button = Rect { x: search_button.x - todo_width, width: todo_width, ..bar };
-    let files_width = COMPACT_BUTTON_WIDTH.min(todo_button.x.saturating_sub(bar.x));
-    let files_button = Rect { x: todo_button.x - files_width, width: files_width, ..bar };
-    let changes_width = COMPACT_BUTTON_WIDTH.min(files_button.x.saturating_sub(bar.x));
-    let changes_button = Rect { x: files_button.x - changes_width, width: changes_width, ..bar };
+    let [search_button, todo_button, files_button, changes_button] = compact_buttons(bar);
     let [_, menu] = Layout::vertical([Constraint::Length(GAP), Constraint::Min(0)]).areas(below);
-    let column = |footer: u16| {
-        Layout::vertical([
-            Constraint::Length(pitch),
-            Constraint::Length(GAP),
-            Constraint::Min(1),
-            Constraint::Length(1),
-            Constraint::Length(footer),
-        ])
-        .areas::<5>(menu)
-    };
-    let [title, _, list, separator, footer] = column(pitch);
+    let [title, _, list, separator, footer] = compact_column(menu);
     let [settings, usage, quit] =
         Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1), Constraint::Fill(1)]).areas(footer);
-    let [workspaces_title, _, workspaces_list, workspaces_separator, issues] = column(pitch);
+    let [workspaces_title, _, workspaces_list, workspaces_separator, issues] = compact_column(menu);
     let back = Rect { width: button_width(BACK_LABEL) + 2, ..workspaces_title }.intersection(workspaces_title);
-    let [agents_title, _, agents_list] =
-        Layout::vertical([Constraint::Length(pitch), Constraint::Length(GAP), Constraint::Min(1)]).areas(menu);
-    let agents_width = (button_width(AGENTS_LABEL) + 2).min(title.width);
-    let agents_button = Rect { x: title.right() - agents_width, width: agents_width, ..title };
-    let shown = |r: Rect| if agents { r } else { Rect::default() };
+    let [agents, agents_title, agents_list, agents_button] = compact_agents(menu, title, agents);
     Areas {
         pitch,
-        activity: Rect::default(),
-        tree: false,
         bar,
         search: bar,
         search_button,
@@ -492,21 +499,15 @@ fn compact_layout(area: Rect, changes: bool, agents: bool) -> Areas {
         issues,
         results: below,
         pane: below,
-        projects_border: Rect::default(),
-        workspaces_border: Rect::default(),
-        stack_border: Rect::default(),
-        agents: shown(below),
-        agents_title: shown(agents_title),
-        agents_list: shown(agents_list),
-        agents_border: Rect::default(),
-        agents_button: shown(agents_button),
+        agents,
+        agents_title,
+        agents_list,
+        agents_button,
         changes: if changes { below } else { Rect::default() },
-        changes_border: Rect::default(),
         changes_button,
         todo_button,
         files_button,
-        tab_bar: Rect::default(),
-        accounts: Rect::default(),
+        ..Areas::default()
     }
 }
 

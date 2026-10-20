@@ -269,45 +269,52 @@ pub(super) fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
 
     let list = areas.workspaces_list;
     let tabs = view.tab_lines();
-    let dim = Style::default().fg(view.muted);
-    let accent = Style::default().fg(Color::Cyan);
     let base = workspace_layout(list, areas.pitch, &tabs, view.workspaces_scroll);
     let landing = view.workspaces_landing();
     let (rows, landing_line) = landed(workspace_rows(&tabs), &base, landing, WorkspaceRow::Gap, WorkspaceRow::Landing);
     let layout = workspace_rows_layout(list, areas.pitch, &rows, &tabs, base.first());
+    let paint =
+        WorkspacePaint { view, pitch: areas.pitch, tabs: &tabs, rows: &rows, indent: landing.map(|l| l.spot.indent()) };
     for (i, &row) in rows.iter().enumerate() {
         let r = layout.item(i);
-        if r.is_empty() {
-            continue;
+        if !r.is_empty() {
+            paint.row(f, i, row, r);
         }
+    }
+
+    draw_hidden(f, view.muted, &layout, &rows, |r| matches!(r, WorkspaceRow::Workspace(_) | WorkspaceRow::Tab(..)));
+
+    let r = layout.button();
+    let accent = Style::default().fg(Color::Cyan);
+    draw_button(f, r, " ", NEW_BUTTON, button_style(view, r, accent, Color::Cyan));
+    draw_landing(f, landing_line, paint.indent);
+}
+
+struct WorkspacePaint<'a> {
+    view: &'a View<'a>,
+    pitch: u16,
+    tabs: &'a TabLines,
+    rows: &'a [WorkspaceRow],
+    indent: Option<u16>,
+}
+
+impl WorkspacePaint<'_> {
+    fn row(&self, f: &mut Frame, index: usize, row: WorkspaceRow, r: Rect) {
+        let view = self.view;
         let guide = r.x.saturating_add(2);
         match row {
             WorkspaceRow::Gap => {}
             WorkspaceRow::Landing => {
-                draw_landing(f, r, landing.map(|l| l.spot.indent()));
-                if among_tabs(&rows, i) {
+                draw_landing(f, r, self.indent);
+                if among_tabs(self.rows, index) {
                     draw_guide(f, view.line(), guide, r, Guide::Bar);
                 }
             }
-            WorkspaceRow::Workspace(w) => {
-                let folded = tabs.is_folded(w);
-                let marked = folded && w == view.active_workspace;
-                let bg = view.row_background(r, marked || view.dragging_workspace_row(row));
-                let fold = if tabs.listed { arrow(view.muted, folded) } else { Span::raw("  ") };
-                let band = Band { r, pitch: areas.pitch, lead: vec![marker(marked), fold], bg };
-                let badge = if folded { Badge::Highest } else { Badge::Attention };
-                draw_workspace_band(f, view, band, &view.workspaces[w], w == view.active_workspace, badge);
-                if !folded {
-                    draw_guide(f, view.line(), guide, r, Guide::Top);
-                }
-                if marked {
-                    draw_rail(f, r);
-                }
-            }
+            WorkspaceRow::Workspace(w) => self.workspace(f, row, w, r),
             WorkspaceRow::Tab(w, t) => {
                 let active = w == view.active_workspace && view.active_tab == Some(t);
                 let bg = view.row_background(r, active || view.dragging_workspace_row(row));
-                let band = Band { r, pitch: areas.pitch, lead: vec![marker(active), Span::raw("  ")], bg };
+                let band = Band { r, pitch: self.pitch, lead: vec![marker(active), Span::raw("  ")], bg };
                 draw_tab_band(f, view, band, &view.workspaces[w].tabs[t], active);
                 draw_guide(f, view.line(), guide, r, Guide::Tee);
                 if active {
@@ -316,18 +323,31 @@ pub(super) fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
             }
             WorkspaceRow::NewTab(w) => {
                 if !view.workspaces[w].removing {
-                    draw_button(f, r, "   ", "+ Tab", button_style(view, r, dim, Color::Cyan));
+                    let style = button_style(view, r, dim(view.muted), Color::Cyan);
+                    draw_button(f, r, "   ", "+ Tab", style);
                 }
                 draw_guide(f, view.line(), guide, r, Guide::End);
             }
         }
     }
 
-    draw_hidden(f, view.muted, &layout, &rows, |r| matches!(r, WorkspaceRow::Workspace(_) | WorkspaceRow::Tab(..)));
-
-    let r = layout.button();
-    draw_button(f, r, " ", NEW_BUTTON, button_style(view, r, accent, Color::Cyan));
-    draw_landing(f, landing_line, landing.map(|l| l.spot.indent()));
+    fn workspace(&self, f: &mut Frame, row: WorkspaceRow, w: usize, r: Rect) {
+        let view = self.view;
+        let folded = self.tabs.is_folded(w);
+        let marked = folded && w == view.active_workspace;
+        let bg = view.row_background(r, marked || view.dragging_workspace_row(row));
+        let fold = if self.tabs.listed { arrow(view.muted, folded) } else { Span::raw("  ") };
+        let band = Band { r, pitch: self.pitch, lead: vec![marker(marked), fold], bg };
+        let badge = if folded { Badge::Highest } else { Badge::Attention };
+        let line = WorkspaceLine { entry: &view.workspaces[w], active: w == view.active_workspace, badge };
+        draw_workspace_band(f, view, band, line);
+        if !folded {
+            draw_guide(f, view.line(), r.x.saturating_add(2), r, Guide::Top);
+        }
+        if marked {
+            draw_rail(f, r);
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -403,25 +423,26 @@ pub(super) fn pull_badge(row: Rect, pitch: u16, lead: usize, entry: &WorkspaceEn
 }
 
 pub(crate) fn workspace_pull(
-    list: Rect,
+    layout: &Rows,
     pitch: u16,
     tabs: &TabLines,
-    scroll: usize,
     w: usize,
     entry: &WorkspaceEntry,
 ) -> Option<Rect> {
     let badge = if tabs.is_folded(w) { Badge::Highest } else { Badge::Attention };
-    pull_badge(workspace_row(list, pitch, tabs, scroll, WorkspaceRow::Workspace(w)), pitch, 4, entry, badge)
+    let row = row_rect(layout, &workspace_rows(tabs), &WorkspaceRow::Workspace(w));
+    pull_badge(row, pitch, 4, entry, badge)
 }
 
-pub(super) fn draw_workspace_band(
-    f: &mut Frame,
-    view: &View,
-    band: Band,
-    entry: &WorkspaceEntry,
-    active: bool,
-    badge: Badge,
-) {
+#[derive(Clone, Copy)]
+pub(super) struct WorkspaceLine<'a> {
+    pub(super) entry: &'a WorkspaceEntry,
+    pub(super) active: bool,
+    pub(super) badge: Badge,
+}
+
+pub(super) fn draw_workspace_band(f: &mut Frame, view: &View, band: Band, line: WorkspaceLine) {
+    let WorkspaceLine { entry, active, badge } = line;
     let colour = match (entry.removing, active) {
         (true, _) => view.muted,
         (false, true) => Color::Reset,
@@ -469,19 +490,23 @@ pub(super) fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEnt
     draw_band(f, band.r, Line::from(line), band.bg);
     if tab.details.lines() > 1 {
         let buttons = row_menu_button(band.r, band.pitch).union(row_close_button(band.r, band.pitch));
-        draw_details(f, view.muted, (band.r, buttons), &tab.details, None, indent);
+        let line = DetailLine { row: band.r, buttons, details: &tab.details, agent: None, indent };
+        draw_details(f, view.muted, line);
     }
     draw_row_buttons(f, view, band.r, band.pitch, band.bg);
 }
 
-pub(super) fn draw_details(
-    f: &mut Frame,
-    muted: Color,
-    (row, buttons): (Rect, Rect),
-    details: &Details,
-    agent: Option<&str>,
-    indent: usize,
-) {
+#[derive(Clone, Copy)]
+pub(super) struct DetailLine<'a> {
+    pub(super) row: Rect,
+    pub(super) buttons: Rect,
+    pub(super) details: &'a Details,
+    pub(super) agent: Option<&'a str>,
+    pub(super) indent: usize,
+}
+
+pub(super) fn draw_details(f: &mut Frame, muted: Color, line: DetailLine) {
+    let DetailLine { row, buttons, details, agent, indent } = line;
     let r = Rect { y: middle(row).y + 1, height: 1, ..row }.intersection(row);
     let reserved = if buttons.bottom() > r.y { usize::from(buttons.width) } else { 0 };
     let dim = Style::default().fg(muted);

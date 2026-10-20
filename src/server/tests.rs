@@ -590,10 +590,7 @@ mod showing_images {
         ui::full_layout(
             Rect::new(0, 0, 100, 20),
             state::Widths::default(),
-            true,
-            config::Sidebar::default(),
-            false,
-            false,
+            ui::Screen { changes: true, sidebar: config::Sidebar::default(), agents: false, icons: false },
         )
         .settings
         .as_position()
@@ -668,7 +665,11 @@ mod pointing {
         let mut attached = Attached::new();
         let mut window = attached.join_with(Support::default(), Some(pointer::Terminal::Kitty));
         let area = Rect::new(0, 0, COLS, ROWS);
-        let layout = ui::full_layout(area, state::Widths::default(), false, config::Sidebar::default(), false, false);
+        let layout = ui::full_layout(
+            area,
+            state::Widths::default(),
+            ui::Screen { changes: false, sidebar: config::Sidebar::default(), agents: false, icons: false },
+        );
         let border = layout.border(ui::Border::Projects);
         let server = &mut attached.server;
         server.draw();

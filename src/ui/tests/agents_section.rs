@@ -3,7 +3,7 @@ use super::*;
 const TALL: Rect = Rect { x: 0, y: 0, width: W, height: 30 };
 
 fn with_agents(sidebar: Sidebar) -> Areas {
-    full_layout(TALL, Widths::default(), false, sidebar, true, false)
+    full_layout(TALL, Widths::default(), Screen { changes: false, sidebar, agents: true, icons: false })
 }
 
 fn agent(status: Status, agent: &str, project: &str, workspace: Option<&str>, details: Details) -> AgentEntry {
@@ -104,14 +104,27 @@ fn takes_a_third_of_the_room_by_default() {
 #[case::saved(Some(8), 8)]
 fn keeps_its_height_within_both_lists_minimum(#[case] saved: Option<u16>, #[case] rows: u16) {
     let widths = Widths { agents: saved, ..Widths::default() };
-    let a = full_layout(TALL, widths, false, Sidebar::ProjectsOnTop, true, false);
+    let a = full_layout(
+        TALL,
+        widths,
+        Screen { changes: false, sidebar: Sidebar::ProjectsOnTop, agents: true, icons: false },
+    );
     assert_eq!((a.agents.height, a.list.height >= 1, a.workspaces_list.height >= 1), (rows, true, true));
 }
 
 #[test]
 fn the_stack_line_cannot_be_dragged_into_it() {
-    let widths = Widths::default().stacked_dragged(Border::Stack, Position::new(5, 28), TALL, true, false);
-    let a = full_layout(TALL, widths, false, Sidebar::ProjectsOnTop, true, false);
+    let widths = Widths::default().stacked_dragged(
+        Border::Stack,
+        Position::new(5, 28),
+        TALL,
+        Screen { agents: true, ..Screen::default() },
+    );
+    let a = full_layout(
+        TALL,
+        widths,
+        Screen { changes: false, sidebar: Sidebar::ProjectsOnTop, agents: true, icons: false },
+    );
     assert_eq!((widths.stack, a.workspaces_list.bottom() <= a.agents_border.y), (Some(8), true));
 }
 
@@ -175,7 +188,11 @@ fn a_narrow_row_drops_the_workspace_then_cuts_the_project(#[case] width: u16, #[
 
 #[test]
 fn compact_mode_shows_it_as_a_third_menu() {
-    let small = full_layout(SMALL, Widths::default(), false, Sidebar::ProjectsOnTop, true, false);
+    let small = full_layout(
+        SMALL,
+        Widths::default(),
+        Screen { changes: false, sidebar: Sidebar::ProjectsOnTop, agents: true, icons: false },
+    );
     let agents = small.shown(Some(Nav::Agents));
     let projects = small.shown(Some(Nav::Projects));
     assert_eq!(

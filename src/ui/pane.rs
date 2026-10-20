@@ -13,7 +13,7 @@ use super::sidebar::NEW_BUTTON;
 use super::theme::{BRAND_COLOR, status_icon};
 use super::widgets::sidebar_hovered;
 use crate::agents::activity::Status;
-use crate::project::split::{Dir, Node, Place};
+use crate::project::split::{Dir, Divider, Node, Place};
 use crate::term::emulator::Snapshot;
 use crate::text::truncate_right;
 
@@ -285,23 +285,41 @@ fn divider_symbol(links: u8) -> &'static str {
     }
 }
 
+type DividerCells = HashMap<(u16, u16), (u8, bool)>;
+
 fn draw_dividers(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
     let dividers = tab.layout.dividers(area);
-    let mut cells: HashMap<(u16, u16), (u8, bool)> = HashMap::new();
+    let mut cells = DividerCells::new();
     for d in &dividers {
         let lit = tab.dragging.as_ref() == Some(&d.path) || (tab.dragging.is_none() && sidebar_hovered(view, d.line));
-        let links = match d.dir {
-            Dir::Right => UP | DOWN,
-            Dir::Down => LEFT | RIGHT,
-        };
-        for y in d.line.top()..d.line.bottom() {
-            for x in d.line.left()..d.line.right() {
-                let cell = cells.entry((x, y)).or_default();
-                cell.0 |= links;
-                cell.1 |= lit;
-            }
+        mark_line(&mut cells, d, lit);
+    }
+    bridge_dividers(&mut cells, &dividers);
+    for d in &dividers {
+        join_ends(&mut cells, d);
+    }
+    let buf = f.buffer_mut();
+    for ((x, y), (links, lit)) in cells {
+        let color = if lit { Color::Cyan } else { view.line() };
+        buf[(x, y)].set_symbol(divider_symbol(links)).set_style(Style::default().fg(color));
+    }
+}
+
+fn mark_line(cells: &mut DividerCells, d: &Divider, lit: bool) {
+    let links = match d.dir {
+        Dir::Right => UP | DOWN,
+        Dir::Down => LEFT | RIGHT,
+    };
+    for y in d.line.top()..d.line.bottom() {
+        for x in d.line.left()..d.line.right() {
+            let cell = cells.entry((x, y)).or_default();
+            cell.0 |= links;
+            cell.1 |= lit;
         }
     }
+}
+
+fn bridge_dividers(cells: &mut DividerCells, dividers: &[Divider]) {
     let bridges: Vec<(u16, u16)> = dividers
         .iter()
         .filter(|d| d.dir == Dir::Down)
@@ -319,23 +337,19 @@ fn draw_dividers(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
             bar.0 |= RIGHT;
         }
     }
-    for d in &dividers {
-        let Rect { x, y, .. } = d.line;
-        let ends = match d.dir {
-            Dir::Right => [(Some(x), y.checked_sub(1), DOWN), (Some(x), Some(d.line.bottom()), UP)],
-            Dir::Down => [(x.checked_sub(1), Some(y), RIGHT), (Some(d.line.right()), Some(y), LEFT)],
-        };
-        for (x, y, link) in ends {
-            if let (Some(x), Some(y)) = (x, y)
-                && let Some(cell) = cells.get_mut(&(x, y))
-            {
-                cell.0 |= link;
-            }
+}
+
+fn join_ends(cells: &mut DividerCells, d: &Divider) {
+    let Rect { x, y, .. } = d.line;
+    let ends = match d.dir {
+        Dir::Right => [(Some(x), y.checked_sub(1), DOWN), (Some(x), Some(d.line.bottom()), UP)],
+        Dir::Down => [(x.checked_sub(1), Some(y), RIGHT), (Some(d.line.right()), Some(y), LEFT)],
+    };
+    for (x, y, link) in ends {
+        if let (Some(x), Some(y)) = (x, y)
+            && let Some(cell) = cells.get_mut(&(x, y))
+        {
+            cell.0 |= link;
         }
-    }
-    let buf = f.buffer_mut();
-    for ((x, y), (links, lit)) in cells {
-        let color = if lit { Color::Cyan } else { view.line() };
-        buf[(x, y)].set_symbol(divider_symbol(links)).set_style(Style::default().fg(color));
     }
 }

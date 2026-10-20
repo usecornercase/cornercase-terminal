@@ -138,7 +138,16 @@ impl App {
                 ui::Border::Agents => self.agents_dragged(ev.row, window),
                 _ if self.sidebar().stacked() => {
                     let pos = Position::new(column, ev.row);
-                    self.widths.stacked_dragged(border, pos, main, self.config.agents_section, self.config.icon_bar)
+                    self.widths.stacked_dragged(
+                        border,
+                        pos,
+                        main,
+                        ui::Screen {
+                            agents: self.config.agents_section,
+                            icons: self.config.icon_bar,
+                            ..ui::Screen::default()
+                        },
+                    )
                 }
                 _ => self.widths.dragged(border, column, main.width),
             };
@@ -153,7 +162,13 @@ impl App {
         let wanted = state::Widths { agents: Some(bottom.saturating_sub(row.saturating_add(1))), ..self.widths };
         let (panel, sidebar) = (self.panel_shown(), self.sidebar());
         let main = self.above_status_bar(area);
-        let rows = ui::full_layout(main, wanted, panel, sidebar, true, self.config.icon_bar).agents.height;
+        let rows = ui::full_layout(
+            main,
+            wanted,
+            ui::Screen { changes: panel, sidebar, agents: true, icons: self.config.icon_bar },
+        )
+        .agents
+        .height;
         state::Widths { agents: Some(rows), ..wanted }
     }
 }

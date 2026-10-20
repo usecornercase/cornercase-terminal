@@ -39,7 +39,7 @@ impl App {
     pub(super) fn layout(&self, area: Rect) -> ui::Areas {
         let (panel, sidebar) = (self.panel_shown(), self.sidebar());
         let (agents, icons) = (self.config.agents_section, self.config.icon_bar);
-        let columns = |main| ui::full_layout(main, self.widths, panel, sidebar, agents, icons);
+        let columns = |main| ui::full_layout(main, self.widths, ui::Screen { changes: panel, sidebar, agents, icons });
         ui::window_layout(area, self.status_bar(), columns)
             .with_tab_bar(config::Tabs::from_setting(&self.config.tabs) == config::Tabs::Top)
             .with_full_screen(self.file_full_screen(), area)
