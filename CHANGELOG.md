@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.168
+
+- **Find text in the open file.** In the files panel, **`⌕`** next to **`▢`** opens a field under the file's header: what you type lights up every match in the file (case is ignored unless you type an uppercase letter, as in the files search), the one you're on in cyan, and the file jumps to the first match from the top of what you see. `↓` or `Enter` goes to the next match and `↑` to the previous one, as do the field's **`↑`** and **`↓`**, with a count such as `2/17`. `Esc` clears the field, then closes it. Opening a text match from the files search opens the file with the field already holding your search, so `↓` takes you to the next match in that file. The matches follow the file while an agent edits it, and your selected lines stay selected.
+
 ## 0.12.167
 
 - **Close an agent from the agents section.** Every agent row has a `×` (it shows on hover, and always, dimmed, in the compact layout), and its right-click menu a **close agent**. A confirmation says what will stop, what keeps running and what could be lost, and nothing stops until you confirm. An agent in a worktree of its own (or in a flow's run) closes its whole workspace and removes the worktree, after checking for uncommitted files, commits no remote has and locks; the branch is deleted only if you tick **also delete the branch**. An agent in a project's main checkout closes its tab and the tabs of the agents it started there, and the other tabs stay. Agents it started in another worktree or project keep running.
