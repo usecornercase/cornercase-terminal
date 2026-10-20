@@ -553,7 +553,7 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         accounts: crate::accounts::Accounts::default(),
     };
 
-    let refused = team.app.open_run(0, 0, starting, AREA, false).expect_err("refused");
+    let refused = team.app.open_run((0, 0), starting, AREA, false).expect_err("refused");
 
     assert!(refused.contains(said), "{refused}");
     assert_eq!((team.app.projects[0].workspaces[0].tabs.len(), team.app.runs.len()), (1, 0));

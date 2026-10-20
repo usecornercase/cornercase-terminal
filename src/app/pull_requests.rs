@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
@@ -113,28 +113,30 @@ impl App {
             if project.closing || self.pulls.waiting(project.id, now) {
                 continue;
             }
-            let mut due: Vec<(u64, PathBuf, String)> = Vec::new();
-            for workspace in project.workspaces.iter().filter(|w| w.open()) {
-                let Some(branch) = git::checked_out(&workspace.path) else {
-                    self.pulls.found.remove(&workspace.id);
-                    continue;
-                };
-                if !git::has_remote(&workspace.path) || git::origin_head(&workspace.path).as_ref() == Some(&branch) {
-                    self.pulls.found.remove(&workspace.id);
-                    continue;
-                }
-                let known = self.pulls.found.get(&workspace.id);
-                if known.is_some_and(|f| f.branch != branch) {
-                    self.pulls.found.remove(&workspace.id);
-                }
-                if self.pulls.found.get(&workspace.id).is_none_or(|f| f.due(now)) {
-                    due.push((workspace.id, workspace.path.clone(), branch));
-                }
-            }
+            let id = project.id;
+            let due = self.due_pull_requests(p, now);
             if !due.is_empty() {
-                self.spawn_pull_requests(project.id, due, gh.clone());
+                self.spawn_pull_requests(id, due, gh.clone());
             }
         }
+    }
+
+    fn due_pull_requests(&mut self, p: usize, now: Instant) -> Vec<(u64, PathBuf, String)> {
+        let mut due = Vec::new();
+        for workspace in self.projects[p].workspaces.iter().filter(|w| w.open()) {
+            let Some(branch) = pull_branch(workspace) else {
+                self.pulls.found.remove(&workspace.id);
+                continue;
+            };
+            let known = self.pulls.found.get(&workspace.id);
+            if known.is_some_and(|f| f.branch != branch) {
+                self.pulls.found.remove(&workspace.id);
+            }
+            if self.pulls.found.get(&workspace.id).is_none_or(|f| f.due(now)) {
+                due.push((workspace.id, workspace.path.clone(), branch));
+            }
+        }
+        due
     }
 
     fn spawn_pull_requests(&mut self, project: u64, due: Vec<(u64, PathBuf, String)>, gh: PathBuf) {
@@ -142,24 +144,7 @@ impl App {
         let job = Job::new(Level::Debug, "pr", "view").with("project", project).with("workspaces", due.len());
         self.spawn_job(
             job.slow_after(SLOW),
-            move || {
-                let mut asked: HashMap<PathBuf, Option<PullRequest>> = HashMap::new();
-                let mut found = Vec::new();
-                for (id, path, branch) in due {
-                    if let Some(pull) = asked.get(&path) {
-                        found.push((id, branch, pull.clone()));
-                        continue;
-                    }
-                    match pull_request::find(&gh, &path) {
-                        Ok(pull) => {
-                            asked.insert(path, pull.clone());
-                            found.push((id, branch, pull));
-                        }
-                        Err(e) => return Ok((found, Some(pull_request::explain(&e)))),
-                    }
-                }
-                Ok((found, None))
-            },
+            move || Ok(read_pull_requests(&gh, due)),
             move |result, _| {
                 let (found, error) = result.unwrap_or_else(|e| (Vec::new(), Some(e.to_string())));
                 Some(AppEvent::Worktree(WorktreeEvent::PullRequests { project, found, error }))
@@ -179,43 +164,33 @@ impl App {
         }
         let now = Instant::now();
         let known = self.pulls.answered.get(&project).and_then(|a| a.error.as_ref());
-        match &error {
-            Some(why) if known != Some(why) => {
-                log::warning!("pr", "cannot read pull requests", project = project, error = why);
-            }
-            None if known.is_some() => log::info!("pr", "pull requests read again", project = project),
-            _ => {}
-        }
+        log_pull_error(project, known, error.as_ref());
         self.pulls.answered.insert(project, Answered { at: now, error });
-        for (workspace, branch, mut pull) in found {
-            let path = self.projects.workspace_index(workspace).map(|(p, w)| &self.projects[p].workspaces[w].path);
-            if path.and_then(|path| git::checked_out(path)) != Some(branch.clone()) {
-                continue;
-            }
-            let before = self.pulls.found.get(&workspace).and_then(|f| f.pull.as_ref());
-            if let (Some(pull), Some(before)) = (pull.as_mut(), before) {
-                pull.keep_known(before);
-            }
-            let shown = before.map(PullRequest::mark);
-            if shown != pull.as_ref().map(PullRequest::mark) {
-                let mark = pull.as_ref().map(PullRequest::mark);
-                log::info!(
-                    "pr",
-                    "pull request",
-                    workspace = workspace,
-                    number = mark.map_or(0, |m| m.number),
-                    state = mark.map_or("none", |m| m.state.name()),
-                    checks = mark.and_then(|m| m.ci).map_or("none", |ci| ci.name()),
-                    conflicts = mark.is_some_and(|m| m.conflicts)
-                );
-            }
-            self.pulls.found.insert(workspace, Found { branch, at: Some(now), pull });
+        for (workspace, branch, pull) in found {
+            self.record_pull_request(workspace, branch, pull, now);
         }
         self.close_gone_pull_request();
         let note = self.pull_requests_note();
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
             s.pulls = note;
         }
+    }
+
+    fn record_pull_request(&mut self, workspace: u64, branch: String, mut pull: Option<PullRequest>, now: Instant) {
+        let path = self.projects.workspace_index(workspace).map(|(p, w)| &self.projects[p].workspaces[w].path);
+        if path.and_then(|path| git::checked_out(path)) != Some(branch.clone()) {
+            return;
+        }
+        let before = self.pulls.found.get(&workspace).and_then(|f| f.pull.as_ref());
+        if let (Some(pull), Some(before)) = (pull.as_mut(), before) {
+            pull.keep_known(before);
+        }
+        let shown = before.map(PullRequest::mark);
+        let mark = pull.as_ref().map(PullRequest::mark);
+        if shown != mark {
+            log_pull_request(workspace, mark);
+        }
+        self.pulls.found.insert(workspace, Found { branch, at: Some(now), pull });
     }
 
     fn close_gone_pull_request(&mut self) {
@@ -226,19 +201,11 @@ impl App {
         }
     }
 
-    pub(super) fn pull_in_list(
-        &self,
-        list: Rect,
-        pitch: u16,
-        tabs: &ui::TabLines,
-        w: usize,
-        pos: Position,
-    ) -> Option<u64> {
+    pub(super) fn pull_in_list(&self, list: Rect, pitch: u16, tabs: &ui::TabLines, w: usize) -> Option<(Rect, u64)> {
         let workspace = self.projects.get(self.active)?.workspaces.get(w)?;
         let entry = self.workspace_entry(workspace);
-        ui::workspace_pull(&ui::workspace_layout(list, pitch, tabs, self.scroll.workspaces), pitch, tabs, w, &entry)
-            .filter(|rect| rect.contains(pos))
-            .map(|_| workspace.id)
+        let layout = ui::workspace_layout(list, pitch, tabs, self.scroll.workspaces);
+        ui::workspace_pull(&layout, pitch, tabs, w, &entry).map(|rect| (rect, workspace.id))
     }
 
     pub(super) fn pull_in_tree(
@@ -368,4 +335,55 @@ impl App {
         self.overlay = None;
         self.ask_agent(workspace, &text);
     }
+}
+
+fn pull_branch(workspace: &Workspace) -> Option<String> {
+    let branch = git::checked_out(&workspace.path)?;
+    if !git::has_remote(&workspace.path) || git::origin_head(&workspace.path).as_ref() == Some(&branch) {
+        return None;
+    }
+    Some(branch)
+}
+
+type Looked = Vec<(u64, String, Option<PullRequest>)>;
+
+fn read_pull_requests(gh: &Path, due: Vec<(u64, PathBuf, String)>) -> (Looked, Option<String>) {
+    let mut asked: HashMap<PathBuf, Option<PullRequest>> = HashMap::new();
+    let mut found = Vec::new();
+    for (id, path, branch) in due {
+        if let Some(pull) = asked.get(&path) {
+            found.push((id, branch, pull.clone()));
+            continue;
+        }
+        match pull_request::find(gh, &path) {
+            Ok(pull) => {
+                asked.insert(path, pull.clone());
+                found.push((id, branch, pull));
+            }
+            Err(e) => return (found, Some(pull_request::explain(&e))),
+        }
+    }
+    (found, None)
+}
+
+fn log_pull_error(project: u64, known: Option<&String>, error: Option<&String>) {
+    match error {
+        Some(why) if known != Some(why) => {
+            log::warning!("pr", "cannot read pull requests", project = project, error = why);
+        }
+        None if known.is_some() => log::info!("pr", "pull requests read again", project = project),
+        _ => {}
+    }
+}
+
+fn log_pull_request(workspace: u64, mark: Option<Mark>) {
+    log::info!(
+        "pr",
+        "pull request",
+        workspace = workspace,
+        number = mark.map_or(0, |m| m.number),
+        state = mark.map_or("none", |m| m.state.name()),
+        checks = mark.and_then(|m| m.ci).map_or("none", |ci| ci.name()),
+        conflicts = mark.is_some_and(|m| m.conflicts)
+    );
 }

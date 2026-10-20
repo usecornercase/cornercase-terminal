@@ -2,6 +2,7 @@ use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
+use super::flow_runs::Starting;
 use super::flows_dialog::plan;
 use super::input::wheel;
 use super::overlay::Overlay;
@@ -131,8 +132,10 @@ impl App {
             Action::Start { flow, task, branch, accounts } => {
                 let Some(project) = self.start_flow().map(|start| start.project) else { return };
                 let accounts = self.requested_accounts(None, &accounts).map_err(String::from);
-                let started =
-                    accounts.and_then(|accounts| self.start_run(project, *flow, task, branch.clone(), accounts, area));
+                let started = accounts.and_then(|accounts| {
+                    let starting = Starting::new(*flow, task, branch.clone(), accounts);
+                    self.start_run(project, starting, area)
+                });
                 let opened = started.is_ok() && self.run_open_on(project, &branch);
                 match (started, self.start_flow()) {
                     (Ok(()), _) if opened => self.overlay = None,

@@ -8,7 +8,7 @@ use ratatui::layout::Rect;
 
 use super::{Handled, NO_PROJECT, Pending, Stage, json, none, sized};
 use crate::app::App;
-use crate::app::flow_runs::{Made, Starting};
+use crate::app::flow_runs::{Made, RunTrees, Starting};
 use crate::control::contract::Refusal;
 use crate::control::{self, BrokenFlow, Done, Exported, FlowInfo, FlowSpec, Flows, Imported, RoleInfo, RunInfo};
 use crate::error;
@@ -162,7 +162,7 @@ impl App {
                 return Err(own_folder(&branch).into());
             }
             if roles.is_empty() {
-                return Ok(Some(json(&self.open_run(p, w, starting, area, false)?)));
+                return Ok(Some(json(&self.open_run((p, w), starting, area, false)?)));
             }
         }
         let key = self.requests.key();
@@ -170,7 +170,7 @@ impl App {
         let made = existing
             .is_none()
             .then(|| worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &path, &branch));
-        self.spawn_run_worktrees(p, made, branch, roles, key);
+        self.spawn_run_worktrees(p, RunTrees { run: made, branch, roles }, key);
         let stage = Stage::Run(project, Box::new(starting));
         self.requests.pending.push(Pending { client, key, timeout: None, done: Done::default(), stage });
         Ok(None)
@@ -232,7 +232,7 @@ impl App {
             .workspace_on(p, &starting.branch)
             .ok_or_else(|| format!("the workspace on branch {} is gone", starting.branch))?;
         let (p, w) = self.usable_workspace(id)?;
-        let opened = self.open_run(p, w, starting, area, false);
+        let opened = self.open_run((p, w), starting, area, false);
         if opened.is_err() {
             self.discard_worktrees(p, fresh);
         }
@@ -244,7 +244,7 @@ impl App {
         let path = path.canonicalize().unwrap_or(path);
         let created = self.projects[p].workspaces.iter().all(|w| w.path != path);
         let w = self.worktree_workspace(p, path.clone());
-        let opened = self.open_run(p, w, starting, area, true);
+        let opened = self.open_run((p, w), starting, area, true);
         if opened.is_err() {
             if created {
                 self.projects[p].remove_workspace(w);

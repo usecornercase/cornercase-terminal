@@ -257,7 +257,8 @@ impl App {
             self.nav = None;
         }
         if let Some(WorkspaceHit::Workspace(w)) = hit
-            && let Some(id) = self.pull_in_list(list, pitch, &tabs, w, pos)
+            && let Some((rect, id)) = self.pull_in_list(list, pitch, &tabs, w)
+            && rect.contains(pos)
         {
             self.open_pull_request(id);
             return Ok(());

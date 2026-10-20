@@ -74,11 +74,9 @@ impl App {
             return;
         }
         let mut remotes: Vec<Remote> = Vec::new();
-        for project in self.projects.iter().filter(|p| !p.closing) {
-            for found in remote::of(&project.path) {
-                if !remotes.contains(&found) {
-                    remotes.push(found);
-                }
+        for found in self.projects.iter().filter(|p| !p.closing).flat_map(|project| remote::of(&project.path)) {
+            if !remotes.contains(&found) {
+                remotes.push(found);
             }
         }
         let hosts: BTreeSet<String> = remotes.iter().map(|r| r.host.clone()).collect();
@@ -95,6 +93,10 @@ impl App {
         self.merged.hosts = hosts;
         self.merged.asking = true;
         self.merged.asked = Some(now);
+        self.spawn_merged();
+    }
+
+    fn spawn_merged(&self) {
         let gh = self.config.gh(self.home.as_deref());
         let glab = self.config.glab(self.home.as_deref());
         let dir = self.home.clone().unwrap_or_else(|| PathBuf::from("/"));
