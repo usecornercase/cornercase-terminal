@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use crate::git::worktree::{check, git};
 use crate::log;
@@ -168,10 +168,24 @@ fn admins(repo: &Path) -> Vec<(String, PathBuf)> {
         .flatten()
         .filter_map(|entry| {
             let gitdir = std::fs::read_to_string(entry.path().join("gitdir")).ok()?;
-            let path = Path::new(gitdir.trim()).parent()?.to_path_buf();
+            let path = lexical(&canonical(&entry.path()).join(gitdir.trim())).parent()?.to_path_buf();
             Some((entry.file_name().to_string_lossy().into_owned(), canonical(&path)))
         })
         .collect()
+}
+
+fn lexical(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for part in path.components() {
+        match part {
+            Component::ParentDir => {
+                out.pop();
+            }
+            Component::CurDir => {}
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 pub(super) fn parse_porcelain(text: &str) -> Vec<(PathBuf, Option<String>, bool)> {

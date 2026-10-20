@@ -96,6 +96,27 @@ mod discover {
     }
 
     #[test]
+    fn a_missing_folder_added_with_relative_paths_is_prunable_with_its_admin() {
+        let repo = main_repo();
+        let dirs = TempDir::new();
+        let at = dirs.path().join("a");
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo.path())
+            .args(["worktree", "add", "--quiet", "--relative-paths", "-b", "feat-a"])
+            .arg(&at)
+            .output()
+            .expect("run git");
+        if !out.status.success() {
+            return;
+        }
+        std::fs::remove_dir_all(&at).expect("remove");
+        let found = discover(&[repo.path().to_path_buf()], dirs.path());
+        assert_eq!((found.len(), found[0].kind), (1, Kind::Prunable));
+        assert!(found[0].admin.is_some());
+    }
+
+    #[test]
     fn a_folder_whose_repository_is_gone_is_an_orphan() {
         let parent = TempDir::new();
         let repo = parent.path().join("repo");

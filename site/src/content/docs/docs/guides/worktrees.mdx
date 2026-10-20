@@ -164,7 +164,7 @@ The commands are stored on your computer, not in the repository, so a cloned pro
 
 ## Clean up worktrees
 
-Worktrees pile up: each one keeps its checkout, with its `node_modules` or build output, until someone removes it. The **Worktrees** dialog lists every worktree on disk, shows what decides whether it can go, and removes several at once after one confirmation that names the risks.
+Worktrees pile up: each one keeps its checkout, with its `node_modules` or build output, until someone removes it. The **Worktrees** dialog lists the worktrees of your open projects, and those in the worktrees folder whose project you have closed (a worktree of a closed project made elsewhere is not found), shows what decides whether it can go, and removes several at once after one confirmation that names the risks.
 
 Open it from **settings → Worktrees → worktrees on disk** (press `Enter` on the row) for every project, or from a project's `⋯` menu (or right-click) → **worktrees** for that project only. The title then reads `Worktrees › web-shop`.
 
@@ -226,9 +226,9 @@ A worktree can also be locked with `git worktree lock`; Claude Code locks the wo
 
 **remove** closes the dialog at once, so you can go on working while the folder is deleted, which takes a while for a checkout with `node_modules` or build output. The workspace's programs are ended first, and its row stays, dimmed, with `removing…` at its end until git has finished; meanwhile it can't be opened. If it was the workspace on screen, the view moves to the nearest one, above it when there is one. When git is done, the row goes and a message says `removed <workspace>`. If git refuses after all, for example because a file changed in the meantime, the row comes back without its tabs and a message gives git's reason; click its `×` again to **remove anyway**. You can remove several worktrees at once, with a single confirmation, from the [Worktrees dialog](#clean-up-worktrees).
 
-A run of a [flow](../flows/#a-worktree-of-its-own) can give roles worktrees of their own: they go with the run's workspace, which is checked, torn down and removed together with them (the message names how many), and one cannot be removed alone while its run lives. Their branches are kept.
+A run of a [flow](../flows/#a-worktree-of-its-own) can give roles worktrees of their own: they go with the run's workspace, which is checked, torn down and removed together with them (the message names how many), and one cannot be removed alone while its run lives. Their branches are kept, unless you remove the run's workspace from the [Worktrees dialog](#clean-up-worktrees) with **also delete the branch** ticked.
 
-<Aside type="note" title="Branches are never deleted">
+<Aside type="note" title="Removing a worktree keeps its branch">
 Removing a worktree only deletes its folder. The branch and its commits stay in the repository; delete the branch yourself with `git branch -d` when you no longer need it. Only the [Worktrees dialog](#clean-up-worktrees) can delete branches, and only when you tick **also delete the branch**.
 </Aside>
 
