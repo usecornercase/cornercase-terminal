@@ -97,7 +97,7 @@ mod listing {
     #[test]
     fn a_registry_that_cannot_be_read_is_a_problem() {
         let mut p = plugged(true);
-        std::fs::write(paths::plugins(&p.app.config_file.path), "garbage").expect("registry");
+        std::fs::write(paths::plugins(&p.app.config_file.path()), "garbage").expect("registry");
         let info = list(&mut p.app);
         assert!(info.problem.is_some_and(|text| text.contains("cannot read")));
     }
@@ -240,7 +240,7 @@ mod refusing {
     fn a_plugin_turned_off_is_not_found() {
         let mut p = plugged(true);
         let (_, _, _, pane) = ids(&p);
-        let mut registry = Registry::load(&paths::plugins(&p.app.config_file.path));
+        let mut registry = Registry::load(&paths::plugins(&p.app.config_file.path()));
         registry.set_enabled("acme.notes", false).expect("off");
         registry.save().expect("save");
         let refused = run(&mut p, "note", &json!({"pane": pane})).expect_err("off");

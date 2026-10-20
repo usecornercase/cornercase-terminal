@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use super::App;
@@ -12,14 +12,26 @@ const CHECK_EVERY: Duration = Duration::from_secs(1);
 
 #[derive(Default)]
 pub(super) struct ConfigFile {
-    pub(super) path: PathBuf,
-    pub(super) mark: persist::Mark,
+    path: PathBuf,
+    mark: persist::Mark,
     checked: Option<Instant>,
-    pub(super) problem: Option<String>,
-    pub(super) revision: u64,
+    problem: Option<String>,
+    revision: u64,
 }
 
 impl ConfigFile {
+    pub(super) fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub(super) fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    pub(super) fn problem(&self) -> Option<&str> {
+        self.problem.as_deref()
+    }
+
     pub(super) fn open(path: PathBuf) -> (Config, Self) {
         let mark = persist::mark(&path);
         let (config, problem) = match config::read(&path) {

@@ -309,17 +309,17 @@ fn using_a_profile_raises_the_settings_revision_and_feeds_the_app() {
     let mut s = setup();
     s.add("claude", "work");
     s.profile("Work", &json!({"claude": "work"}));
-    let before = s.app.config_file.revision;
+    let before = s.app.config_file.revision();
     assert_eq!(s.app.app_state().profile, None);
 
     let used = s.info("profile-use", &json!({"name": "Work"}));
 
     assert_eq!(used.profile, "Work");
-    assert!(s.app.config_file.revision > before);
+    assert!(s.app.config_file.revision() > before);
     assert_eq!(s.app.app_state().profile.as_deref(), Some("Work"));
-    let after = s.app.config_file.revision;
+    let after = s.app.config_file.revision();
     s.info("profile-use", &json!({"name": ""}));
-    assert!(s.app.config_file.revision > after);
+    assert!(s.app.config_file.revision() > after);
     assert_eq!(s.app.app_state().profile, None);
 }
 
@@ -530,14 +530,14 @@ mod switching {
     fn an_account_and_the_system_login_get_a_name_the_window_shows_until_it_is_cleared() {
         let mut s = setup();
         s.add("claude", "home");
-        let before = s.app.config_file.revision;
+        let before = s.app.config_file.revision();
 
         s.info("account-rename", &json!({"provider": "claude", "account": "home", "label": " Personal "}));
         let named = s.info("account-rename", &json!({"provider": "claude", "account": "", "label": "work"}));
 
         let claude = provider(&named, "claude");
         assert_eq!((claude.system_label.as_str(), claude.accounts[0].label.as_str()), ("work", "Personal"));
-        assert!(s.app.config_file.revision > before);
+        assert!(s.app.config_file.revision() > before);
         assert_eq!(s.saved()["account_names"], json!({"claude": {"": "work", "home": "Personal"}}));
         assert!(s.root().join("claude/home").is_dir());
 
@@ -560,12 +560,12 @@ mod switching {
         let mut s = setup();
         s.add("claude", "home");
         s.add("claude", "work");
-        let (revision, config) = (s.app.config_file.revision, s.app.config.clone());
+        let (revision, config) = (s.app.config_file.revision(), s.app.config.clone());
 
         let refusal = refused(&mut s.app, command, &args);
 
         assert_eq!(refusal.code, code, "{}", refusal.message);
-        assert_eq!((s.app.config_file.revision, &s.app.config), (revision, &config));
+        assert_eq!((s.app.config_file.revision(), &s.app.config), (revision, &config));
     }
 
     #[test]
@@ -590,13 +590,13 @@ mod switching {
         s.add("codex", "me");
         s.profile("Work", &json!({"codex": "me"}));
         s.info("profile-use", &json!({"name": "Work"}));
-        let before = s.app.config_file.revision;
+        let before = s.app.config_file.revision();
 
         let used = s.info("account-use", &json!({"provider": "claude", "account": "home"}));
 
         assert_eq!((used.profile.as_str(), provider(&used, "claude").active.as_str()), ("", "home"));
         assert_eq!(provider(&used, "codex").active, "me");
-        assert!(s.app.config_file.revision > before);
+        assert!(s.app.config_file.revision() > before);
         assert_eq!(s.saved()["active_accounts"], json!({"claude": "home", "codex": "me"}));
         assert_eq!(s.app.app_state().profile, None);
         assert_eq!(

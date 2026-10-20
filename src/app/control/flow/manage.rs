@@ -48,7 +48,7 @@ impl App {
     fn save_dir(&self, to: To, project: Option<&Path>) -> PathBuf {
         match (to, project) {
             (To::Project, Some(project)) => store::project_dir(project),
-            _ => paths::flows(&self.config_file.path),
+            _ => paths::flows(&self.config_file.path()),
         }
     }
 

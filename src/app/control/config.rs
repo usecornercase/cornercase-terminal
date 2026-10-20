@@ -39,9 +39,9 @@ impl App {
     fn described(&self, notices: Vec<String>) -> Described {
         let model = self.settings_model(Page::default());
         Described {
-            revision: self.config_file.revision,
-            path: self.config_file.path.clone(),
-            problem: self.config_file.problem.clone(),
+            revision: self.config_file.revision(),
+            path: self.config_file.path().to_path_buf(),
+            problem: self.config_file.problem().map(str::to_owned),
             settings: model.describe(),
             connections: model.connections(),
             projects: self.project_settings_entries(),
@@ -106,7 +106,7 @@ impl App {
     }
 
     fn config_refusal(&self, message: String) -> Refusal {
-        let code = if self.config_file.problem.is_some() { Code::Conflict } else { Code::Failed };
+        let code = if self.config_file.problem().is_some() { Code::Conflict } else { Code::Failed };
         Refusal::new(code, message)
     }
 

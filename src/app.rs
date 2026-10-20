@@ -181,7 +181,7 @@ impl App {
     pub(crate) fn new(shell: String, theme: HostTheme, config_path: PathBuf, tx: Sender<AppEvent>) -> Self {
         let home = std::env::var_os("HOME").map(PathBuf::from);
         let (config, config_file) = config_file::ConfigFile::open(config_path);
-        let config_path = &config_file.path;
+        let config_path = config_file.path();
         Self {
             screen: groups::Screen::default(),
             git: groups::Git::default(),

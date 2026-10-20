@@ -182,7 +182,7 @@ impl App {
         store::list(
             builtin::for_config(&self.config),
             &self.config.hidden_flows,
-            &paths::flows(&self.config_file.path),
+            &paths::flows(&self.config_file.path()),
             project.as_deref(),
         )
     }

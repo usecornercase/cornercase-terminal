@@ -133,7 +133,7 @@ fn manage_accounts_opens_the_accounts_page() {
 fn a_menu_opened_before_the_settings_changed_does_nothing() {
     let mut s = setup();
     s.open();
-    s.app.config_file.revision += 1;
+    s.app.settings_changed();
     pick(&mut s.app, "  home");
     assert_eq!(s.app.config.active_accounts.get("claude").map(String::as_str), Some("work"));
 }

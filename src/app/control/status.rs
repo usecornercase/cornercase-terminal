@@ -61,7 +61,7 @@ impl App {
             keep_awake: self.keep_awake_info(),
             view: None,
             theme: Some(self.theme_info()),
-            config: Some(ConfigInfo { revision: self.config_file.revision }),
+            config: Some(ConfigInfo { revision: self.config_file.revision() }),
         }
     }
 

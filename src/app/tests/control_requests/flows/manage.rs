@@ -364,12 +364,12 @@ fn restoring_your_version_deletes_it_and_unhides_the_built_in() {
 #[test]
 fn restoring_what_is_shown_and_not_edited_changes_nothing() {
     let mut team = Team::new();
-    let revision = team.app.config_file.revision;
+    let revision = team.app.config_file.revision();
 
     let nothing = removed(ok(&mut team.app, "flow-restore", &json!({"name": "Quick"})));
 
     assert!(!nothing.changed && nothing.deleted.is_none());
-    assert_eq!(team.app.config_file.revision, revision);
+    assert_eq!(team.app.config_file.revision(), revision);
 }
 
 #[test]
