@@ -94,7 +94,7 @@ impl App {
         let Some(run) = self.run_of(workspace) else {
             return Err(conflict(format!("workspace {workspace} runs no flow; `cornercase flow runs` lists the runs")));
         };
-        if self.clients.events.flow_messages.iter().any(|(follower, _)| *follower == client) {
+        if self.clients.events.follows_flow_messages(client) {
             return Err(conflict("this connection already follows a run's messages; open another connection"));
         }
         let backlog = FlowBacklog {
@@ -111,19 +111,12 @@ impl App {
             workspace = workspace,
             kept = backlog.messages.len()
         );
-        self.clients.events.flow_messages.push((client, backlog.run));
+        self.clients.events.follow_flow_messages(client, backlog.run);
         Ok(Some(json(&backlog)))
     }
 
     pub(in crate::app) fn publish_flow_message(&mut self, message: &FlowMessage) {
-        let followers: Vec<u64> = self
-            .clients
-            .events
-            .flow_messages
-            .iter()
-            .filter(|(_, run)| *run == message.run)
-            .map(|(client, _)| *client)
-            .collect();
+        let followers = self.clients.events.flow_message_followers(message.run);
         if followers.is_empty() {
             return;
         }
@@ -140,13 +133,7 @@ impl App {
 
     pub(in crate::app) fn end_flow_messages(&mut self) {
         let runs = &self.runs.list;
-        let ended: Vec<u64> = self
-            .clients
-            .events
-            .flow_messages
-            .extract_if(.., |(_, run)| !runs.iter().any(|other| other.id == *run))
-            .map(|(client, _)| client)
-            .collect();
+        let ended = self.clients.events.stop_flow_messages(|run| runs.iter().any(|other| other.id == run));
         for client in ended {
             log::info!("control", "flow messages ended", client = client, reason = "run ended");
             self.clients.events.push(client, Streamed::End);

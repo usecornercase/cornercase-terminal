@@ -12,7 +12,7 @@ type Fed = Snapshot<FlowRuns>;
 type Shown<'a> = (u64, &'a str, &'a str, &'a str, Option<&'a str>, usize, Option<RunEdge>);
 
 fn follow(app: &mut App) -> Fed {
-    app.clients.events.runs.every = Duration::ZERO;
+    app.clients.events.runs.set_every(Duration::ZERO);
     let answer = value(app, None, Command::FlowRuns(wire::FlowRunsWatch::default()));
     serde_json::from_value(answer).expect("a runs snapshot")
 }
@@ -244,7 +244,7 @@ fn a_messages_stream_ends_when_its_run_does() {
 
     let ended: Vec<Streamed> = streamed(&mut app);
     assert!(ended.contains(&Streamed::End), "{ended:?}");
-    assert_eq!(app.clients.events.flow_messages, []);
+    assert!(!app.clients.events.follows_flow_messages(CLIENT));
 }
 
 #[test]

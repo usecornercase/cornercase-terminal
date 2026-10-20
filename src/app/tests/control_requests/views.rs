@@ -74,7 +74,7 @@ fn window_pane(app: &App) -> (u16, u16) {
 }
 
 fn snapshots(app: &mut App, client: u64) -> Vec<Value> {
-    app.clients.events.snapshots.every = Duration::ZERO;
+    app.clients.events.snapshots.set_every(Duration::ZERO);
     app.trace();
     app.take_events()
         .into_iter()
@@ -487,7 +487,7 @@ fn a_view_change_reaches_the_view_at_once_but_a_watcher_keeps_its_pacing() {
     let tab = app.projects[0].workspaces[0].tabs[0].id;
     let view = open(&mut app, A, Some((60, 12)), Some(tab));
     ok(call(&mut app, 77, None, Command::Watch(wire::Watch::default()), false));
-    app.clients.events.snapshots.every = Duration::from_secs(60);
+    app.clients.events.snapshots.set_every(Duration::from_secs(60));
     app.trace();
     app.take_events();
 
