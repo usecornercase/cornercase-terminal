@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use ratatui::layout::Rect;
 
@@ -30,19 +30,61 @@ pub(in crate::app) struct Logins {
     seen: HashMap<Key, LoginInfo>,
     running: HashSet<Key>,
     waiting: Vec<u64>,
-    pub(in crate::app) generation: u64,
-    pub(in crate::app) page_checked: Option<Instant>,
+    generation: u64,
+    page_checked: Option<Instant>,
 }
 
 pub(in crate::app) struct AccountState {
-    pub(in crate::app) dir: PathBuf,
-    pub(in crate::app) default_homes: Option<PathBuf>,
+    dir: PathBuf,
+    default_homes: Option<PathBuf>,
     pub(in crate::app) logins: Logins,
+}
+
+impl Logins {
+    pub(in crate::app) fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub(in crate::app) fn page_closed(&mut self) {
+        self.page_checked = None;
+    }
+
+    pub(in crate::app) fn check_page(&mut self, now: Instant, every: Duration) -> Option<bool> {
+        if self.page_checked.is_some_and(|at| now.duration_since(at) < every) {
+            return None;
+        }
+        let first = self.page_checked.replace(now).is_none();
+        Some(first)
+    }
 }
 
 impl AccountState {
     pub(in crate::app) fn new(config_path: &Path) -> Self {
         Self { dir: config_path.with_file_name("accounts"), default_homes: None, logins: Logins::default() }
+    }
+
+    pub(in crate::app) fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    pub(in crate::app) fn set_dir(&mut self, dir: &Path) {
+        self.dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
+    }
+
+    pub(in crate::app) fn picked(&self, chosen: &BTreeMap<String, String>) -> Accounts {
+        Accounts::of(&self.dir, chosen)
+    }
+
+    pub(in crate::app) fn default_home(&self, kind: Known) -> Option<PathBuf> {
+        match &self.default_homes {
+            Some(root) => kind.account().map(|_| root.join(kind.name())),
+            None => accounts::default_home(kind),
+        }
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn set_default_homes(&mut self, dir: &Path) {
+        self.default_homes = Some(dir.to_path_buf());
     }
 }
 
@@ -131,7 +173,7 @@ impl App {
     }
 
     fn provider_info(&self, kind: Known, names: Vec<String>) -> ProviderInfo {
-        let default = self.default_home(kind);
+        let default = self.accounts.default_home(kind);
         let accounts = names.into_iter().map(|name| self.account_info(kind, name, default.as_deref())).collect();
         ProviderInfo {
             provider: kind.name().to_string(),
@@ -219,7 +261,7 @@ impl App {
             };
             Some(account.home)
         };
-        let system = self.default_home(kind);
+        let system = self.accounts.default_home(kind);
         let program = agents::command(&self.config, kind.name());
         let job =
             Job::new(Level::Debug, "accounts", "login check").with("provider", kind.name()).with("account", &name);
@@ -289,7 +331,7 @@ impl App {
         let kind = provider(&add.provider)?;
         self.check_new_account(kind, &add.name)?;
         let place = if add.login { Some(self.login_place(asker, add, area)?) } else { None };
-        let default = self.default_home(kind);
+        let default = self.accounts.default_home(kind);
         let dir = accounts::add(&self.accounts.dir, kind, &add.name, default.as_deref()).map_err(|e| e.to_string())?;
         log::info!("accounts", "account added", provider = kind.name(), account = add.name, path = dir.display());
         self.relist_accounts();

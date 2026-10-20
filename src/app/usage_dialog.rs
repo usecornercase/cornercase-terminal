@@ -62,13 +62,13 @@ impl App {
     }
 
     pub(super) fn usage_probes(&self) -> Vec<(agents::Known, Option<Account>)> {
-        let listed = accounts::list(&self.accounts.dir);
+        let listed = accounts::list(self.accounts.dir());
         let mut probes = Vec::new();
         for agent in self.usage_agents() {
             probes.push((agent, None));
             let names = listed.iter().find(|(kind, _)| *kind == agent).map(|(_, names)| names.as_slice());
             for name in names.unwrap_or_default() {
-                let home = accounts::path(&self.accounts.dir, agent, name);
+                let home = accounts::path(self.accounts.dir(), agent, name);
                 let home = home.canonicalize().unwrap_or(home);
                 probes.push((agent, Some(Account { kind: agent, name: name.clone(), home })));
             }

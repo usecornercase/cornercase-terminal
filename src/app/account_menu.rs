@@ -42,7 +42,7 @@ impl App {
     }
 
     fn account_revision(&self) -> (u64, u64) {
-        (self.config_file.revision, self.accounts.logins.generation)
+        (self.config_file.revision, self.accounts.logins.generation())
     }
 
     pub(super) fn open_pill_menu(&mut self, index: usize, at: Position) {

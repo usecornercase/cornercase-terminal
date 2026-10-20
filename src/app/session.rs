@@ -130,7 +130,7 @@ impl App {
         {
             wanted.entry(agent.kind.clone()).or_insert_with(|| name.clone());
         }
-        let accounts = Accounts::of(&self.accounts.dir, &wanted);
+        let accounts = self.accounts.picked(&wanted);
         let gone = wanted
             .into_iter()
             .filter(|(provider, name)| Known::of(provider).and_then(|kind| accounts.name(kind)) != Some(name.as_str()))

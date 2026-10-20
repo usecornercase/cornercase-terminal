@@ -4,8 +4,7 @@ use ratatui::layout::Rect;
 
 use super::App;
 use super::event::Start;
-use crate::accounts::{self, Accounts};
-use crate::agents::Known;
+use crate::accounts::Accounts;
 use crate::control;
 use crate::error::Result;
 use crate::flows::folder;
@@ -55,23 +54,16 @@ impl App {
     }
 
     pub(crate) fn set_accounts_dir(&mut self, dir: &Path) {
-        self.accounts.dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
+        self.accounts.set_dir(dir);
     }
 
     #[cfg(test)]
     pub(crate) fn set_default_homes(&mut self, dir: &Path) {
-        self.accounts.default_homes = Some(dir.to_path_buf());
-    }
-
-    pub(super) fn default_home(&self, kind: Known) -> Option<PathBuf> {
-        match &self.accounts.default_homes {
-            Some(root) => kind.account().map(|_| root.join(kind.name())),
-            None => accounts::default_home(kind),
-        }
+        self.accounts.set_default_homes(dir);
     }
 
     pub(super) fn active_accounts(&self) -> Accounts {
-        Accounts::of(&self.accounts.dir, self.config.selected_accounts())
+        self.accounts.picked(self.config.selected_accounts())
     }
 
     pub(super) fn pane_env(&self, id: u64, run: Option<&Path>, accounts: &Accounts) -> Vec<(String, String)> {
@@ -109,7 +101,7 @@ impl App {
 
     pub(super) fn spawn_term(&self, spawning: Spawning, accounts: Accounts) -> Result<Term> {
         let Spawning { id, size: (rows, cols), shell, args, cwd, run } = spawning;
-        accounts.link(|kind| self.default_home(kind));
+        accounts.link(|kind| self.accounts.default_home(kind));
         let env = self.pane_env(id, run, &accounts);
         let removed = accounts.removed();
         let opts = SpawnOptions {
@@ -169,7 +161,7 @@ impl App {
         let source = tab.pane_by(pane);
         let cwd = source.and_then(Term::cwd).filter(|dir| dir.is_dir()).unwrap_or_else(|| path.to_path_buf());
         let accounts =
-            source.map(|term| Accounts::of(&self.accounts.dir, &term.accounts().chosen())).unwrap_or_default();
+            source.map(|term| self.accounts.picked(&term.accounts().chosen())).unwrap_or_default();
         let term = self.spawn_in(area, cwd, None, accounts)?;
         let id = term.id;
         if let Some((_, tab)) = self.projects.tab_with_pane_mut(pane) {
