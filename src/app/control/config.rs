@@ -192,7 +192,7 @@ impl App {
         let saved = result.and_then(|account| {
             let name = source.secret_key().ok_or_else(|| Error::Api("nothing to save".into()))?;
             self.issues
-                .save_token(name, &token)
+                .save_token(name, token)
                 .map_err(|e| Error::Api(format!("failed to save the {}: {e}", source.token_name())))?;
             Ok(account)
         });

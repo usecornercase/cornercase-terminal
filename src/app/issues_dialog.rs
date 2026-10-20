@@ -283,7 +283,7 @@ impl App {
 
     fn save_asana(&mut self, workspace: String, token: &Secret, area: Rect) -> Result<()> {
         let key = Source::Asana.secret_key().unwrap_or_default();
-        if let Err(e) = self.issues.save_token(key, &token) {
+        if let Err(e) = self.issues.save_token(key, token) {
             if let Some(Overlay::Issues(b)) = &mut self.overlay {
                 b.token_rejected(Source::Asana, format!("failed to save the access token: {e}"));
             }
@@ -434,7 +434,7 @@ impl App {
         let saved = result.and_then(|account| {
             let key = source.secret_key().ok_or_else(|| Error::Api("nothing to save".into()))?;
             self.issues
-                .save_token(key, &token)
+                .save_token(key, token)
                 .map_err(|e| Error::Api(format!("failed to save the {}: {e}", source.token_name())))?;
             Ok(account)
         });

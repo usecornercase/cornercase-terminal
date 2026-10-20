@@ -88,7 +88,7 @@ impl App {
         }
         let dir = match (to, &path) {
             (To::Project, Some(path)) => store::project_dir(path),
-            _ => paths::flows(&self.config_file.path()),
+            _ => paths::flows(self.config_file.path()),
         };
         let saved =
             store::save(&dir, &flow, replaced.as_deref()).map_err(|e| format!("could not save the flow: {e}"))?;

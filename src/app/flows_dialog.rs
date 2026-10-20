@@ -164,7 +164,7 @@ impl App {
     }
 
     fn flows_duplicate(&mut self, flow: &Flow) {
-        let saved = self.save_flow_file(&paths::flows(&self.config_file.path()), flow, None);
+        let saved = self.save_flow_file(&paths::flows(self.config_file.path()), flow, None);
         self.flows_saved(saved, |dialog, path| {
             if let Some(i) = dialog.find(&Origin::User(path), "") {
                 dialog.open(i);
@@ -297,7 +297,7 @@ impl App {
 
     fn flows_dir(&self, place: Place) -> Result<PathBuf, String> {
         match place {
-            Place::Yours => Ok(paths::flows(&self.config_file.path())),
+            Place::Yours => Ok(paths::flows(self.config_file.path())),
             Place::Project => self
                 .flows_project()
                 .map(|path| store::project_dir(&path))
