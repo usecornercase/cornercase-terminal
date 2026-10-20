@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.169
+
+- **Restart open agents on another account, keeping their conversation.** After choosing another account for an agent, the agents already open kept the old one. `cornercase account restart claude` now restarts them on the account in use (or `cornercase account restart claude personal` on another): each one comes back in the same pane, in the same conversation, with the mode it ran in. Claude Code's and Codex's conversations are added to the other account's folder first (as hard links, never overwriting a file); Gemini CLI starts a new conversation. An agent that is working, or waiting for your answer, restarts once its turn is over, and its pane shows that with a ` cancel ` button. Agents of a flow are left as they are.
+- **A shell on another account.** `cornercase account restart claude personal --pane 5` on a shell at its prompt starts a new shell in its place, in the same folder, with that account, so the `claude` you type next uses it. A shell running a program is left alone until you stop it.
+- `cornercase status` says `(restarts after this turn)` on an agent waiting to restart. Scripts and other apps: the `account-restart` request, and `accounts` (each pane's account per agent) and `account_restart` on each pane of `status --json`, `watch` and `view`.
+
 ## 0.12.168
 
 - **Find text in the open file.** In the files panel, **`⌕`** next to **`▢`** opens a field under the file's header: what you type lights up every match in the file (case is ignored unless you type an uppercase letter, as in the files search), the one you're on in cyan, and the file jumps to the first match from the top of what you see. `↓` or `Enter` goes to the next match and `↑` to the previous one, as do the field's **`↑`** and **`↓`**, with a count such as `2/17`. `Esc` clears the field, then closes it. Opening a text match from the files search opens the file with the field already holding your search, so `↓` takes you to the next match in that file. The matches follow the file while an agent edits it, and your selected lines stay selected.
