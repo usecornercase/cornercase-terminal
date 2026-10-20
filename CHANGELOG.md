@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.167
+
+- **Close an agent from the agents section.** Every agent row has a `×` (it shows on hover, and always, dimmed, in the compact layout), and its right-click menu a **close agent**. A confirmation says what will stop, what keeps running and what could be lost, and nothing stops until you confirm. An agent in a worktree of its own (or in a flow's run) closes its whole workspace and removes the worktree, after checking for uncommitted files, commits no remote has and locks; the branch is deleted only if you tick **also delete the branch**. An agent in a project's main checkout closes its tab and the tabs of the agents it started there, and the other tabs stay. Agents it started in another worktree or project keep running.
+- **`cornercase close --agent --pane ID`** does the same from a script, with `--check` to see first what it would stop and lose, `--delete-branch`, `--force` and `--unlock`, and `--json` for the answer.
+
 ## 0.12.166
 
 - No changes in the app. The app reaches workspaces and tabs through one set of lookups.
