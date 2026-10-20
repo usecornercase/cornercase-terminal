@@ -16,12 +16,44 @@ const WINDOW_GAP: Duration = Duration::from_secs(2);
 
 #[derive(Default)]
 pub(super) struct StarPrompt {
-    pub(super) saved: Saved,
-    pub(super) path: Option<PathBuf>,
-    pub(super) window: Option<Instant>,
-    pub(super) card: bool,
-    pub(super) opened: Option<i64>,
-    pub(super) swallowed: bool,
+    saved: Saved,
+    path: Option<PathBuf>,
+    window: Option<Instant>,
+    card: bool,
+    opened: Option<i64>,
+    swallowed: bool,
+}
+
+impl StarPrompt {
+    pub(super) fn load(&mut self, path: PathBuf) {
+        self.saved = star::load(&path);
+        self.path = Some(path);
+    }
+
+    pub(super) fn shows_card(&self) -> bool {
+        self.card
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_saved(&mut self, saved: Saved, path: PathBuf) {
+        self.saved = saved;
+        self.path = Some(path);
+    }
+
+    #[cfg(test)]
+    pub(super) fn saved(&self) -> &Saved {
+        &self.saved
+    }
+
+    #[cfg(test)]
+    pub(super) fn forget_window(&mut self) {
+        self.window = None;
+    }
+
+    #[cfg(test)]
+    pub(super) fn swallowing(&self) -> bool {
+        self.swallowed
+    }
 }
 
 impl App {
@@ -62,7 +94,8 @@ impl App {
             })
     }
 
-    pub(super) fn star_seen(&mut self) {
+    pub(super) fn star_seen(&mut self, now: Instant) {
+        self.messages.star.window = Some(now);
         if let Some(clock) = self.messages.star.opened.take().filter(|_| self.messages.star.card) {
             self.messages.star.saved.shown(clock);
             self.save_star();

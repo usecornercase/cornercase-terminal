@@ -642,8 +642,7 @@ impl App {
     }
 
     pub(crate) fn set_star(&mut self, path: PathBuf) {
-        self.messages.star.saved = crate::star::load(&path);
-        self.messages.star.path = Some(path);
+        self.messages.star.load(path);
     }
 
     pub(crate) fn stats(&self) -> &agents::stats::Stats {
@@ -651,8 +650,7 @@ impl App {
     }
 
     fn begin_draw(&mut self, area: Rect, now: Instant) {
-        self.messages.star.window = Some(now);
-        self.star_seen();
+        self.star_seen(now);
         self.follow(area);
         if !self.screen.drawn.compact() {
             self.screen.nav = None;

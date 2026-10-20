@@ -21,8 +21,7 @@ impl Star {
         let term = app.term_mut().expect("a pane");
         term.agent.follow(Some(agents::Known::Claude.name()));
         term.agent.update(Some(activity), true, Instant::now());
-        app.messages.star.saved = Saved { days, ..Saved::default() };
-        app.messages.star.path = Some(dir.path().join("star.json"));
+        app.messages.star.with_saved(Saved { days, ..Saved::default() }, dir.path().join("star.json"));
         let mut star = Self { app, _rx: rx, dir, now: Instant::now() };
         star.draw();
         star
@@ -44,7 +43,7 @@ impl Star {
     }
 
     fn shows(&self) -> bool {
-        self.app.messages.star.card
+        self.app.messages.star.shows_card()
     }
 
     fn saved(&self) -> Saved {
@@ -85,12 +84,12 @@ mod schedule {
     #[test]
     fn a_day_counts_only_with_a_window_and_an_agent() {
         let mut s = Star::with(Activity::Idle, 0);
-        s.app.messages.star.window = None;
+        s.app.messages.star.forget_window();
         s.app.offer_star(s.now, T0);
-        assert_eq!(s.app.messages.star.saved.days, 0);
+        assert_eq!(s.app.messages.star.saved().days, 0);
         s.offer(T0);
         s.offer(T0 + 60);
-        assert_eq!(s.app.messages.star.saved.days, 1);
+        assert_eq!(s.app.messages.star.saved().days, 1);
         assert_eq!(s.saved().days, 1);
     }
 
@@ -99,13 +98,13 @@ mod schedule {
         let (mut app, _rx, _dirs) = app_with(1);
         render(&mut app, AREA);
         app.offer_star(Instant::now(), T0);
-        assert_eq!(app.messages.star.saved.days, 0);
+        assert_eq!(app.messages.star.saved().days, 0);
     }
 
     #[test]
     fn without_a_window_it_does_not_show() {
         let mut s = Star::due();
-        s.app.messages.star.window = None;
+        s.app.messages.star.forget_window();
         s.app.offer_star(s.now, T0);
         assert!(!s.shows());
     }
@@ -133,7 +132,7 @@ mod getting_in_the_way {
         s.app.offer_star(s.now, T0);
         assert!(!s.shows());
         s.draw();
-        assert_eq!(s.app.messages.star.saved.shown, None);
+        assert_eq!(s.app.messages.star.saved().shown, None);
         assert_eq!(s.saved().shown, None);
     }
 
@@ -148,7 +147,7 @@ mod getting_in_the_way {
         s.app.term_mut().expect("a pane").agent.update(Some(Activity::Idle), true, Instant::now());
         s.offer(T0 + DAY);
         assert!(!s.shows());
-        assert!(!s.app.messages.star.saved.due(T0 + DAY));
+        assert!(!s.app.messages.star.saved().due(T0 + DAY));
     }
 
     #[test]
@@ -272,7 +271,7 @@ mod the_pane_keeps_what_it_had {
         mouse(&mut s.app, MouseEventKind::Drag(MouseButton::Left), Position::new(5, 5));
         assert!(s.app.screen.drag.is_none());
         mouse(&mut s.app, MouseEventKind::Up(MouseButton::Left), Position::new(5, 5));
-        assert!(!s.app.messages.star.swallowed);
+        assert!(!s.app.messages.star.swallowing());
         assert!(s.app.screen.drag.is_none());
     }
 }

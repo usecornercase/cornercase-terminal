@@ -177,7 +177,7 @@ impl App {
             muted: ui::muted(self.themes.host()),
             soft: ui::soft(self.themes.host()),
             toast: self.messages.toast.as_ref().map(Toast::view),
-            star: self.messages.star.card,
+            star: self.messages.star.shows_card(),
             nav: self.screen.nav,
             update: self.update_label(),
             remote: self.remote_button(),
