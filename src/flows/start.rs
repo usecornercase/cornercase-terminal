@@ -342,32 +342,37 @@ impl Start {
             KeyCode::Esc => return Action::Close,
             KeyCode::Tab => self.step_focus(false),
             KeyCode::BackTab => self.step_focus(true),
-            _ => match self.focus {
-                Focus::List => match key.code {
-                    KeyCode::Up => self.select(self.cursor.saturating_sub(1)),
-                    KeyCode::Down => self.select(self.cursor + 1),
-                    KeyCode::Enter => self.focus = Focus::Prompt,
-                    _ => {}
-                },
-                Focus::Prompt => {
-                    if self.prompt.key(key, room.width, room.height) {
-                        self.typed();
-                    }
-                }
-                Focus::Branch => match key.code {
-                    KeyCode::Enter => return self.start(),
-                    KeyCode::Backspace => {
-                        self.branch.pop();
-                        self.named = true;
-                    }
-                    KeyCode::Char(c) if typing => {
-                        self.branch.push(c);
-                        self.named = true;
-                    }
-                    _ => {}
-                },
-                Focus::Account(_) => {}
+            _ => return self.focused_key(key, typing, room),
+        }
+        Action::None
+    }
+
+    fn focused_key(&mut self, key: KeyEvent, typing: bool, room: Room) -> Action {
+        match self.focus {
+            Focus::List => match key.code {
+                KeyCode::Up => self.select(self.cursor.saturating_sub(1)),
+                KeyCode::Down => self.select(self.cursor + 1),
+                KeyCode::Enter => self.focus = Focus::Prompt,
+                _ => {}
             },
+            Focus::Prompt => {
+                if self.prompt.key(key, room.width, room.height) {
+                    self.typed();
+                }
+            }
+            Focus::Branch => match key.code {
+                KeyCode::Enter => return self.start(),
+                KeyCode::Backspace => {
+                    self.branch.pop();
+                    self.named = true;
+                }
+                KeyCode::Char(c) if typing => {
+                    self.branch.push(c);
+                    self.named = true;
+                }
+                _ => {}
+            },
+            Focus::Account(_) => {}
         }
         Action::None
     }
@@ -401,12 +406,7 @@ impl Start {
             self.close_accounts();
         }
         match hit {
-            Hit::Account(i) => {
-                if let Some(agent) = self.accounts.get_mut(i) {
-                    self.focus = Focus::Account(i);
-                    if agent.combo.is_open() { agent.combo.close() } else { agent.combo.open() }
-                }
-            }
+            Hit::Account(i) => self.toggle_account(i),
             Hit::Choose(i) => {
                 if let Some(at) = open {
                     self.accounts[at].combo.choose(i);
@@ -426,6 +426,13 @@ impl Start {
             Hit::Button(label) => return self.press(label),
         }
         Action::None
+    }
+
+    fn toggle_account(&mut self, i: usize) {
+        if let Some(agent) = self.accounts.get_mut(i) {
+            self.focus = Focus::Account(i);
+            if agent.combo.is_open() { agent.combo.close() } else { agent.combo.open() }
+        }
     }
 
     pub(crate) fn failed(&mut self, why: &str) {

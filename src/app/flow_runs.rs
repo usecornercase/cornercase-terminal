@@ -346,7 +346,13 @@ impl App {
         }
         let spec = self.flow_spec(
             &roles[0],
-            brief::brief(&run.flow, &run.task, &info.branch, &run.members, &seats, Some(&dir)),
+            brief::brief(
+                &run.flow,
+                &run.task,
+                &info.branch,
+                brief::Team { members: &run.members, trees: &seats },
+                Some(&dir),
+            ),
             Some(&dir),
         );
         let mut launch = Launch::new(run.members[0].pane, spec, now);

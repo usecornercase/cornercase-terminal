@@ -50,22 +50,25 @@ fn deleting_an_edited_built_in_deletes_your_file_and_hides_it() {
 #[test]
 fn the_deleted_entry_comes_last_and_folds() {
     let mut d = with_deleted();
-    assert_eq!(d.entries(), toggle() + 1);
     let row = d.list_rows().pop().expect("a row");
-    assert_eq!((row.label.as_str(), row.muted), ("▸ deleted built-ins (1)", true));
+    assert_eq!((d.entries(), row.label.as_str(), row.muted), (toggle() + 1, "▸ deleted built-ins (1)", true));
     d.select(toggle());
     assert_eq!(d.buttons(ROOM), [IMPORT, NEW, DONE]);
     key(&mut d, KeyCode::Enter);
-    assert_eq!(d.entries(), toggle() + 2);
     let rows = d.list_rows();
-    assert_eq!(rows[toggle()].label, "▾ deleted built-ins (1)");
-    assert_eq!((rows[toggle() + 1].label.as_str(), rows[toggle() + 1].muted), ("  Arena", true));
-    assert!(rows[toggle() + 1].note.starts_with("deleted · "));
+    assert_eq!((d.entries(), rows[toggle()].label.as_str()), (toggle() + 2, "▾ deleted built-ins (1)"));
+    let deleted = &rows[toggle() + 1];
+    assert_eq!(
+        (deleted.label.as_str(), deleted.muted, deleted.note.starts_with("deleted · ")),
+        ("  Arena", true, true)
+    );
     d.select(toggle() + 1);
     assert!(matches!(d.preview(), Some(Preview::Flow(flow)) if flow.name == "Arena"));
     assert_eq!(d.buttons(ROOM), [RESTORE_BUILT_IN, IMPORT, NEW, DONE]);
-    assert_eq!(key(&mut d, KeyCode::Enter), Action::Unhide("Arena".into()));
-    assert_eq!(d.press(RESTORE_BUILT_IN), Action::Unhide("Arena".into()));
+    assert_eq!(
+        [key(&mut d, KeyCode::Enter), d.press(RESTORE_BUILT_IN)],
+        [Action::Unhide("Arena".into()), Action::Unhide("Arena".into())]
+    );
 }
 
 #[test]

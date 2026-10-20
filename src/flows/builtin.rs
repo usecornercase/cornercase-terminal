@@ -185,65 +185,81 @@ fn planned(agents: &Agents) -> Vec<Flow> {
     let second = agents.other(&[main]);
     let third = agents.other(&[main, second]);
     vec![
-        Flow {
-            name: "Full issue".into(),
-            description: "A coder, a reviewer and a security reviewer, then a tester, then a pull request.".into(),
-            orchestrator: orchestrator(main),
-            roles: vec![
-                role("coder", main, true, CODER),
-                role("reviewer", second, false, REVIEWER),
-                role("security", third, false, SECURITY),
-                role("tester", main, false, TESTER),
-            ],
-            stages: vec![
-                stage(&["coder"], None),
-                stage(&["reviewer", "security"], Some((1, "findings", 3))),
-                stage(&["tester"], Some((1, "failures", 2))),
-            ],
-            end: End::PullRequest,
-            ..Flow::default()
-        },
-        Flow {
-            name: "Cross review".into(),
-            description: "A coder and two reviewers of different agents, until both agree.".into(),
-            orchestrator: orchestrator(main),
-            roles: vec![
-                role("coder", main, true, CODER),
-                role("reviewer", second, false, REVIEWER),
-                role("second reviewer", third, false, REVIEWER),
-            ],
-            stages: vec![stage(&["coder"], None), stage(&["reviewer", "second reviewer"], Some((1, "findings", 3)))],
-            end: End::PullRequest,
-            ..Flow::default()
-        },
-        Flow {
-            name: "Quick".into(),
-            description: "A coder and one round of review, leaving the commits.".into(),
-            orchestrator: orchestrator(main),
-            roles: vec![role("coder", main, true, CODER), role("reviewer", second, false, REVIEWER)],
-            stages: vec![stage(&["coder"], None), stage(&["reviewer"], Some((1, "findings", 1)))],
-            end: End::Commits,
-            ..Flow::default()
-        },
-        Flow {
-            name: "Bug, test first".into(),
-            description: "A failing test first, then the fix, then a tester, then a pull request.".into(),
-            orchestrator: orchestrator(main),
-            roles: vec![
-                role("reproducer", second, true, REPRODUCER),
-                role("coder", main, true, CODER),
-                role("tester", main, false, TESTER),
-            ],
-            stages: vec![
-                stage(&["reproducer"], None),
-                stage(&["coder"], None),
-                stage(&["tester"], Some((2, "failures", 2))),
-            ],
-            end: End::PullRequest,
-            ..Flow::default()
-        },
+        full_issue(main, second, third),
+        cross_review(main, second, third),
+        quick(main, second),
+        bug_test_first(main, second),
         arena(agents, second),
     ]
+}
+
+fn full_issue(main: Known, second: Known, third: Known) -> Flow {
+    Flow {
+        name: "Full issue".into(),
+        description: "A coder, a reviewer and a security reviewer, then a tester, then a pull request.".into(),
+        orchestrator: orchestrator(main),
+        roles: vec![
+            role("coder", main, true, CODER),
+            role("reviewer", second, false, REVIEWER),
+            role("security", third, false, SECURITY),
+            role("tester", main, false, TESTER),
+        ],
+        stages: vec![
+            stage(&["coder"], None),
+            stage(&["reviewer", "security"], Some((1, "findings", 3))),
+            stage(&["tester"], Some((1, "failures", 2))),
+        ],
+        end: End::PullRequest,
+        ..Flow::default()
+    }
+}
+
+fn cross_review(main: Known, second: Known, third: Known) -> Flow {
+    Flow {
+        name: "Cross review".into(),
+        description: "A coder and two reviewers of different agents, until both agree.".into(),
+        orchestrator: orchestrator(main),
+        roles: vec![
+            role("coder", main, true, CODER),
+            role("reviewer", second, false, REVIEWER),
+            role("second reviewer", third, false, REVIEWER),
+        ],
+        stages: vec![stage(&["coder"], None), stage(&["reviewer", "second reviewer"], Some((1, "findings", 3)))],
+        end: End::PullRequest,
+        ..Flow::default()
+    }
+}
+
+fn quick(main: Known, second: Known) -> Flow {
+    Flow {
+        name: "Quick".into(),
+        description: "A coder and one round of review, leaving the commits.".into(),
+        orchestrator: orchestrator(main),
+        roles: vec![role("coder", main, true, CODER), role("reviewer", second, false, REVIEWER)],
+        stages: vec![stage(&["coder"], None), stage(&["reviewer"], Some((1, "findings", 1)))],
+        end: End::Commits,
+        ..Flow::default()
+    }
+}
+
+fn bug_test_first(main: Known, second: Known) -> Flow {
+    Flow {
+        name: "Bug, test first".into(),
+        description: "A failing test first, then the fix, then a tester, then a pull request.".into(),
+        orchestrator: orchestrator(main),
+        roles: vec![
+            role("reproducer", second, true, REPRODUCER),
+            role("coder", main, true, CODER),
+            role("tester", main, false, TESTER),
+        ],
+        stages: vec![
+            stage(&["reproducer"], None),
+            stage(&["coder"], None),
+            stage(&["tester"], Some((2, "failures", 2))),
+        ],
+        end: End::PullRequest,
+        ..Flow::default()
+    }
 }
 
 pub(crate) fn starter(installed: &[Known], default: Option<Known>) -> Flow {

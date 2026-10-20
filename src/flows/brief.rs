@@ -44,14 +44,14 @@ pub(crate) fn member(role: &Role, branch: Option<&str>, dir: Option<&Path>) -> S
     if prompt.is_empty() { format!("{told} {WAIT_FIRST}") } else { format!("{prompt}\n\n{told} {WAIT_FIRST}") }
 }
 
-pub(crate) fn brief(
-    flow: &Flow,
-    task: &str,
-    branch: &str,
-    members: &[Member],
-    trees: &[RoleWorktree],
-    dir: Option<&Path>,
-) -> String {
+#[derive(Clone, Copy)]
+pub(crate) struct Team<'a> {
+    pub(crate) members: &'a [Member],
+    pub(crate) trees: &'a [RoleWorktree],
+}
+
+pub(crate) fn brief(flow: &Flow, task: &str, branch: &str, team: Team, dir: Option<&Path>) -> String {
+    let Team { members, trees } = team;
     let pane = |role: &str| members.iter().find(|m| m.role == role).map(|m| m.pane);
     let mut out = format!(
         "You are the orchestrator of a team of coding agents that cornercase started for the flow \"{}\", all in \
@@ -61,12 +61,7 @@ pub(crate) fn brief(
         task.trim()
     );
     for role in &flow.roles {
-        let at = pane(&role.name).map_or_else(|| "no pane".to_string(), |id| format!("pane {id}"));
-        let edits = if role.edits { "edits files" } else { "must not edit files" };
-        let place = trees.iter().find(|tree| tree.role == role.name).map_or_else(String::new, |tree| {
-            format!(", in its own worktree {} on branch {}", tree.path.display(), tree.branch)
-        });
-        let _ = writeln!(out, "- {} ({at}): {}, {edits}{place}", role.name, role.summary());
+        out.push_str(&team_line(role, pane(&role.name), trees));
     }
     let own = pane(ORCHESTRATOR);
     let you = own.map_or_else(String::new, |id| format!(" (pane {id})"));
@@ -92,6 +87,15 @@ pub(crate) fn brief(
     }
     out.push_str(&rules(flow, members, own, dir));
     out
+}
+
+fn team_line(role: &Role, pane: Option<u64>, trees: &[RoleWorktree]) -> String {
+    let at = pane.map_or_else(|| "no pane".to_string(), |id| format!("pane {id}"));
+    let edits = if role.edits { "edits files" } else { "must not edit files" };
+    let place = trees.iter().find(|tree| tree.role == role.name).map_or_else(String::new, |tree| {
+        format!(", in its own worktree {} on branch {}", tree.path.display(), tree.branch)
+    });
+    format!("- {} ({at}): {}, {edits}{place}\n", role.name, role.summary())
 }
 
 pub(crate) fn restored(members: &[Member], dir: Option<&Path>) -> String {

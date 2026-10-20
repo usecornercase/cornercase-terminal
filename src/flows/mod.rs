@@ -183,6 +183,22 @@ impl Flow {
     }
 
     pub(crate) fn problems(&self) -> Vec<String> {
+        let mut out = self.leading_problems();
+        out.extend(self.role_list_problems());
+        if self.stages.is_empty() {
+            out.push("the flow has no stages".to_string());
+        }
+        out.extend(self.folder_problems());
+        out.extend(self.branch_problems());
+        for (i, stage) in self.stages.iter().enumerate() {
+            out.extend(self.stage_problems(i, stage));
+        }
+        out
+    }
+}
+
+impl Flow {
+    fn leading_problems(&self) -> Vec<String> {
         let mut out = Vec::new();
         if self.name.trim().is_empty() {
             out.push("the flow has no name".to_string());
@@ -197,6 +213,11 @@ impl Flow {
                 "the {ORCHESTRATOR} works in the run's worktree: only a role can have a worktree of its own"
             ));
         }
+        out
+    }
+
+    fn role_list_problems(&self) -> Vec<String> {
+        let mut out = Vec::new();
         if self.roles.is_empty() {
             out.push("the flow has no roles besides the orchestrator".to_string());
         }
@@ -205,48 +226,58 @@ impl Flow {
         }
         for (i, role) in self.roles.iter().enumerate() {
             let name = role.name.trim();
-            if name.is_empty() {
-                out.push(format!("role {} has no name", i + 1));
-            } else if name == ORCHESTRATOR {
-                out.push(format!("`{ORCHESTRATOR}` is the name of the orchestrator; give the role another one"));
-            } else if self.roles[..i].iter().any(|other| other.name.trim() == name) {
-                out.push(format!("two roles are named `{name}`"));
-            }
+            out.extend(self.name_problem(i, name));
             out.extend(role_problems(role, name));
             if !name.is_empty() && self.stage_of(&role.name).is_none() {
                 out.push(format!("`{name}` is in no stage"));
             }
         }
-        if self.stages.is_empty() {
-            out.push("the flow has no stages".to_string());
+        out
+    }
+
+    fn name_problem(&self, i: usize, name: &str) -> Option<String> {
+        if name.is_empty() {
+            Some(format!("role {} has no name", i + 1))
+        } else if name == ORCHESTRATOR {
+            Some(format!("`{ORCHESTRATOR}` is the name of the orchestrator; give the role another one"))
+        } else if self.roles[..i].iter().any(|other| other.name.trim() == name) {
+            Some(format!("two roles are named `{name}`"))
+        } else {
+            None
         }
-        out.extend(self.folder_problems());
-        out.extend(self.branch_problems());
-        for (i, stage) in self.stages.iter().enumerate() {
-            let number = i + 1;
-            if stage.roles.is_empty() {
-                out.push(format!("stage {number} has no roles"));
+    }
+
+    fn stage_problems(&self, i: usize, stage: &Stage) -> Vec<String> {
+        let number = i + 1;
+        let mut out = Vec::new();
+        if stage.roles.is_empty() {
+            out.push(format!("stage {number} has no roles"));
+        }
+        for (j, name) in stage.roles.iter().enumerate() {
+            out.extend(self.member_problem(i, j, name));
+        }
+        out.extend(self.sharing_problem(number, stage));
+        if let Some(back) = &stage.back {
+            if back.to == 0 || back.to >= number {
+                out.push(format!("stage {number} can only go back to an earlier stage"));
             }
-            for (j, name) in stage.roles.iter().enumerate() {
-                if self.roles.iter().all(|role| &role.name != name) {
-                    out.push(format!("stage {number} names `{name}`, which is not a role"));
-                } else if stage.roles[..j].contains(name) {
-                    out.push(format!("stage {number} names `{name}` twice"));
-                } else if let Some(k) = self.stages[..i].iter().position(|earlier| earlier.roles.contains(name)) {
-                    out.push(format!("`{name}` is in stage {} and stage {number}; a role works in one stage", k + 1));
-                }
-            }
-            out.extend(self.sharing_problem(number, stage));
-            if let Some(back) = &stage.back {
-                if back.to == 0 || back.to >= number {
-                    out.push(format!("stage {number} can only go back to an earlier stage"));
-                }
-                if back.at_most == 0 {
-                    out.push(format!("stage {number} goes back at most 0 times"));
-                }
+            if back.at_most == 0 {
+                out.push(format!("stage {number} goes back at most 0 times"));
             }
         }
         out
+    }
+
+    fn member_problem(&self, i: usize, j: usize, name: &str) -> Option<String> {
+        let number = i + 1;
+        if self.roles.iter().all(|role| role.name != name) {
+            Some(format!("stage {number} names `{name}`, which is not a role"))
+        } else if self.stages[i].roles[..j].iter().any(|r| r == name) {
+            Some(format!("stage {number} names `{name}` twice"))
+        } else {
+            let k = self.stages[..i].iter().position(|earlier| earlier.roles.iter().any(|r| r == name))?;
+            Some(format!("`{name}` is in stage {} and stage {number}; a role works in one stage", k + 1))
+        }
     }
 }
 
