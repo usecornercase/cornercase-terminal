@@ -38,30 +38,30 @@ pub(crate) struct QueueEvent {
 
 impl App {
     pub(crate) fn set_queue(&mut self, queue: Queue) {
-        self.queued.queue = queue;
+        self.panels.queued.queue = queue;
     }
 
     pub(crate) fn set_queue_path(&mut self, path: std::path::PathBuf) {
-        self.queued.path = Some(path);
+        self.panels.queued.path = Some(path);
     }
 
     pub(crate) fn queue_saved(&self) -> queue::Saved {
-        self.queued.queue.saved()
+        self.panels.queued.queue.saved()
     }
 
     pub(crate) fn set_queue_zone(&mut self, zone: String) {
-        self.queued.zone = zone;
+        self.panels.queued.zone = zone;
     }
 
     pub(crate) fn set_queue_area(&mut self, area: Rect) {
-        self.queued.area = Some(area);
+        self.panels.queued.area = Some(area);
     }
 
     pub(super) fn drive_queue(&mut self, clock: i64, now: Instant) {
-        if self.queued.area.is_none() {
+        if self.panels.queued.area.is_none() {
             return;
         }
-        for id in self.queued.queue.due(clock) {
+        for id in self.panels.queued.queue.due(clock) {
             if let Err(reason) = self.run_queued(id, now) {
                 self.fail_queued(id, &reason);
             }
@@ -69,7 +69,7 @@ impl App {
     }
 
     pub(super) fn queued_spec(&self, client: u64) -> Option<launch::Spec> {
-        let entry = self.queued.queue.entry(*self.queued.running.get(&client)?)?;
+        let entry = self.panels.queued.queue.entry(*self.panels.queued.running.get(&client)?)?;
         Some(launch::Spec {
             command: entry.task.command.clone(),
             prompt: Some(entry.task.prompt.clone()),
@@ -79,11 +79,11 @@ impl App {
     }
 
     pub(in crate::app) fn queue_answered(&mut self, client: u64, reply: &Result<Value, String>) -> bool {
-        let Some(id) = self.queued.running.remove(&client) else { return false };
+        let Some(id) = self.panels.queued.running.remove(&client) else { return false };
         match reply {
             Ok(value) => {
                 let pane = value.get("pane").and_then(Value::as_u64).unwrap_or_default();
-                if let Some(entry) = self.queued.queue.entry_mut(id) {
+                if let Some(entry) = self.panels.queued.queue.entry_mut(id) {
                     entry.state = State::Started { pane, server: control::server_token().into() };
                 }
                 self.queue_notice(&format!("started queued agent {id}"), ui::ToastIcon::Check);
@@ -94,7 +94,7 @@ impl App {
     }
 
     pub(super) fn fail_queued(&mut self, id: u64, reason: &str) {
-        if let Some(entry) = self.queued.queue.entry_mut(id) {
+        if let Some(entry) = self.panels.queued.queue.entry_mut(id) {
             entry.state = State::Failed { reason: reason.to_string() };
         }
         self.queue_notice(&format!("queued agent {id} failed: {reason}"), ui::ToastIcon::Bug);
@@ -102,12 +102,13 @@ impl App {
 
     fn queue_removed(&mut self, message: String, removed: Vec<queue::Entry>) {
         if !removed.is_empty() {
-            self.toast = Some(Toast { undo: Some(Undo::Queue(removed)), ..Toast::new(message, ui::ToastIcon::Check) });
+            self.messages.toast =
+                Some(Toast { undo: Some(Undo::Queue(removed)), ..Toast::new(message, ui::ToastIcon::Check) });
         }
     }
 
     fn queue_notice(&mut self, message: &str, icon: ui::ToastIcon) {
-        self.toast = Some(Toast::new(message, icon));
+        self.messages.toast = Some(Toast::new(message, icon));
         self.outbox.notifications.extend(Notification::new(message, &self.config.desktop_notifications));
     }
 
@@ -117,8 +118,8 @@ impl App {
                 return Err("the scheduled time passed while preparing this entry".into());
             }
             match event.edit {
-                Some(id) => self.queued.queue.edit(id, task).map(|()| id),
-                None => self.queued.queue.add(task),
+                Some(id) => self.panels.queued.queue.edit(id, task).map(|()| id),
+                None => self.panels.queued.queue.add(task),
             }
         });
         if let Some(client) = event.client {
@@ -129,8 +130,8 @@ impl App {
     }
 
     pub(super) fn queued_rows(&self) -> Vec<Queued> {
-        let zone = if self.queued.zone.is_empty() { "UTC" } else { &self.queued.zone };
-        self.queued.queue.entries.iter().map(|entry| self.queued_row(entry, zone)).collect()
+        let zone = if self.panels.queued.zone.is_empty() { "UTC" } else { &self.panels.queued.zone };
+        self.panels.queued.queue.entries.iter().map(|entry| self.queued_row(entry, zone)).collect()
     }
 
     fn queued_row(&self, entry: &queue::Entry, zone: &str) -> Queued {
@@ -161,14 +162,14 @@ impl App {
 
     fn queued_place(&self, place: &queue::Place) -> String {
         let project = self.projects.iter().find(|project| project.path == place.project).map_or_else(
-            || crate::text::folder_name(&place.project, self.home.as_deref()),
+            || crate::text::folder_name(&place.project, self.paths.home.as_deref()),
             |project| self.project_label(project),
         );
         match (&place.branch, &place.workspace_name, &place.workspace) {
             (Some(branch), ..) => format!("{project} › {branch}"),
             (None, Some(name), _) => format!("{project} › {name}"),
             (None, None, Some(path)) if *path != place.project => {
-                format!("{project} › {}", crate::text::folder_name(path, self.home.as_deref()))
+                format!("{project} › {}", crate::text::folder_name(path, self.paths.home.as_deref()))
             }
             _ => project,
         }
@@ -184,7 +185,7 @@ impl App {
     }
 
     pub(super) fn open_queued(&mut self, id: u64, area: Rect) {
-        match self.queued.queue.entry(id).map(|entry| &entry.state) {
+        match self.panels.queued.queue.entry(id).map(|entry| &entry.state) {
             Some(State::Started { pane, server }) if server == control::server_token() => {
                 let pane = *pane;
                 self.overlay = None;
@@ -203,16 +204,16 @@ impl App {
     }
 
     pub(super) fn remove_queued(&mut self, id: u64) {
-        if self.queued.running.values().any(|running| *running == id) {
-            self.toast = Some(Toast::new("this entry is already starting", ui::ToastIcon::Bug));
-        } else if let Ok(entry) = self.queued.queue.remove(id) {
+        if self.panels.queued.running.values().any(|running| *running == id) {
+            self.messages.toast = Some(Toast::new("this entry is already starting", ui::ToastIcon::Bug));
+        } else if let Ok(entry) = self.panels.queued.queue.remove(id) {
             self.queue_removed(format!("removed queue entry {id}"), vec![entry]);
         }
         self.sync_queued();
     }
 
     pub(super) fn clear_queued(&mut self) {
-        let cleared = self.queued.queue.clear_started();
+        let cleared = self.panels.queued.queue.clear_started();
         self.queue_removed(format!("cleared {} started", cleared.len()), cleared);
         self.sync_queued();
     }

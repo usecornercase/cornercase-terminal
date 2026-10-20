@@ -19,7 +19,7 @@ fn cell(col: u16, row: u16) -> Position {
 
 fn shown(app: &App) -> Option<(String, Option<(u32, u32)>)> {
     let workspace = app.project()?.workspace()?.id;
-    app.files.viewer(workspace).map(|v| (v.path.clone(), v.selection))
+    app.panels.files.viewer(workspace).map(|v| (v.path.clone(), v.selection))
 }
 
 fn written(app: &App) -> bool {
@@ -31,7 +31,7 @@ fn a_click_on_a_path_opens_it_at_its_lines() {
     let repo = repo();
     let (mut app, _rx) = showing(&repo, "look at src/main.rs:2-3");
     click(&mut app, cell(12, 0));
-    assert_eq!(app.side, Some(Side::Files));
+    assert_eq!(app.screen.side, Some(Side::Files));
     assert_eq!(shown(&app), Some(("src/main.rs".to_string(), Some((2, 3)))));
 }
 
@@ -63,7 +63,7 @@ fn an_outside_path_is_underlined_and_opens_in_the_viewer(
     let (mut app, rx) = app_in(repo.path(), no_config());
     app.resize(area);
     app.term_mut().expect("a pane").feed(format!("\x1b[2J\x1b[H{mode}{printed}:2-3").as_bytes());
-    app.home = Some(other.path().to_path_buf());
+    app.paths.home = Some(other.path().to_path_buf());
     app.term_mut().expect("a pane").input_at = None;
     let pane = app.layout(area).pane;
     let pos = Position::new(pane.x + 2, pane.y);
@@ -72,7 +72,7 @@ fn an_outside_path_is_underlined_and_opens_in_the_viewer(
     assert!(terminal.backend().buffer()[pos].modifier.contains(Modifier::UNDERLINED));
     click_in(&mut app, pos, area);
     assert_eq!(shown(&app), Some((path.clone(), Some((2, 3)))));
-    assert_eq!(app.side, Some(Side::Files));
+    assert_eq!(app.screen.side, Some(Side::Files));
     assert!(!written(&app), "the program never gets the click");
     wait_until("the outside file is read", || {
         app.refresh(Instant::now());
@@ -102,7 +102,7 @@ fn text_that_names_no_file_is_a_plain_click() {
     let repo = repo();
     let (mut app, _rx) = showing(&repo, "see src/gone.rs here");
     click(&mut app, cell(6, 0));
-    assert_ne!(app.side, Some(Side::Files));
+    assert_ne!(app.screen.side, Some(Side::Files));
 }
 
 #[test]
@@ -123,7 +123,7 @@ fn a_drag_from_a_path_still_reaches_the_program() {
     assert!(!written(&app), "the press waits");
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), cell(8, 0));
     mouse(&mut app, MouseEventKind::Up(MouseButton::Left), cell(8, 0));
-    assert_eq!((app.side == Some(Side::Files), written(&app)), (false, true));
+    assert_eq!((app.screen.side == Some(Side::Files), written(&app)), (false, true));
 }
 
 #[test]
@@ -136,7 +136,7 @@ fn a_path_stays_underlined_while_a_press_is_held_in_a_program_reading_the_mouse(
     press(&mut app, pos);
 
     assert!(!written(&app), "the press waits");
-    assert_ne!(app.side, Some(Side::Files), "the path opens on release");
+    assert_ne!(app.screen.side, Some(Side::Files), "the path opens on release");
     let terminal = render(&mut app, AREA);
     assert!(terminal.backend().buffer()[pos].modifier.contains(Modifier::UNDERLINED));
 }

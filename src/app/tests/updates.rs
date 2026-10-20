@@ -234,14 +234,14 @@ fn the_check_asks_github_once_an_hour() {
 #[test]
 fn a_later_release_replaces_the_one_shown_and_says_so_again() {
     let (mut app, _rx) = found(replaced());
-    app.toast = None;
+    app.messages.toast = None;
     let later = update::release(&serde_json::json!({"tag_name": "v9.1.0", "assets": []})).expect("a release");
 
     app.handle_event(AppEvent::Update(UpdateEvent::Checked(Ok(Some(later.clone())))), AREA).expect("handle check");
     assert_eq!(app.update_label().as_deref(), Some("↑ 9.1.0"));
     assert_eq!(toast(&app), Some(UPDATE_AVAILABLE));
 
-    app.toast = None;
+    app.messages.toast = None;
     app.handle_event(AppEvent::Update(UpdateEvent::Checked(Ok(Some(later)))), AREA).expect("handle check");
     assert_eq!(toast(&app), None);
 }

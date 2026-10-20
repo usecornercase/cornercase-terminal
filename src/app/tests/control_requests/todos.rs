@@ -12,7 +12,7 @@ fn add(app: &mut App, text: &str) -> u64 {
 }
 
 fn texts(app: &App) -> Vec<String> {
-    app.todos.items().iter().map(|i| if i.done { format!("[x] {}", i.text) } else { i.text.clone() }).collect()
+    app.panels.todos.items().iter().map(|i| if i.done { format!("[x] {}", i.text) } else { i.text.clone() }).collect()
 }
 
 fn undo_of(answer: &Value) -> u64 {
@@ -43,9 +43,9 @@ mod editing {
         let (mut app, _rx) = app();
         let id = add(&mut app, "a");
         let editor = todo::editor::Editor::new("a");
-        app.todo.field = Some(todo::Field { item: Some(id), editor });
+        app.panels.todo.field = Some(todo::Field { item: Some(id), editor });
         todo(&mut app, &json!({"edit": {"id": id, "text": "b"}}));
-        assert!(app.todo.field.is_none());
+        assert!(app.panels.todo.field.is_none());
         assert_eq!(texts(&app), ["b"]);
     }
 
@@ -162,8 +162,8 @@ mod removing {
         let (mut app, _rx) = app();
         let id = add(&mut app, "a");
         let editor = todo::editor::Editor::new("a");
-        app.todo.field = Some(todo::Field { item: Some(id), editor });
+        app.panels.todo.field = Some(todo::Field { item: Some(id), editor });
         todo(&mut app, &json!({"rm": id}));
-        assert!(app.todo.field.is_none());
+        assert!(app.panels.todo.field.is_none());
     }
 }

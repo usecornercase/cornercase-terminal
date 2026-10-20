@@ -21,8 +21,8 @@ impl App {
     }
 
     fn waiting(&mut self, client: u64) -> u64 {
-        let key = self.requests.key();
-        self.requests.pending.push(Pending {
+        let key = self.wire.requests.key();
+        self.wire.requests.pending.push(Pending {
             client: Some(client),
             key,
             timeout: None,
@@ -55,7 +55,7 @@ impl App {
 
     fn answer_waiting(&mut self, keys: &[u64], reply: &Result<serde_json::Value, Refusal>) {
         for key in keys {
-            if let Some(pending) = self.requests.take(*key) {
+            if let Some(pending) = self.wire.requests.take(*key) {
                 self.refuse_or_answer(pending.client, reply.clone());
             }
         }

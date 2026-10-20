@@ -61,7 +61,7 @@ impl App {
     }
 
     pub(super) fn project_label(&self, project: &Project) -> String {
-        project.label(self.home.as_deref())
+        project.label(self.paths.home.as_deref())
     }
 
     pub(super) fn remove(&mut self, id: u64) {
@@ -113,9 +113,9 @@ impl App {
     fn forget_project_changes(&mut self, p: usize) {
         let project = &self.projects[p];
         for workspace in &project.workspaces {
-            self.changes.forget(workspace.id);
+            self.panels.changes.forget(workspace.id);
         }
-        self.changes.headers.remove(&project.id);
+        self.panels.changes.headers.remove(&project.id);
     }
 
     pub(super) fn close_project(&mut self, id: u64) {
@@ -221,8 +221,8 @@ impl App {
     }
 
     pub(super) fn goto(&mut self, goto: Goto) {
-        self.nav = None;
-        self.files.set_full_screen(false);
+        self.screen.nav = None;
+        self.panels.files.set_full_screen(false);
         let (project, workspace, tab) = match goto {
             Goto::Group(id) => {
                 if let Some(entry) = self.group_mut(id) {
@@ -334,7 +334,7 @@ impl App {
 
     pub(super) fn drop_workspace(&mut self, project: u64, workspace: u64) {
         let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return };
-        self.changes.forget(workspace);
+        self.panels.changes.forget(workspace);
         let workspace = &mut self.projects[p].workspaces[w];
         let dirs = std::mem::take(&mut workspace.run_dirs);
         let id = workspace.id;

@@ -94,11 +94,11 @@ impl App {
                 picked.insert(kind.name().to_string(), account.clone());
             }
         }
-        Ok(Accounts::of(&self.accounts_dir, &picked))
+        Ok(Accounts::of(&self.paths.accounts_dir, &picked))
     }
 
     pub(in crate::app) fn accounts_info(&self, login: Option<Ids>) -> AccountsInfo {
-        let providers = accounts::list(&self.accounts_dir)
+        let providers = accounts::list(&self.paths.accounts_dir)
             .into_iter()
             .map(|(kind, names)| self.provider_info(kind, names))
             .collect();
@@ -133,7 +133,7 @@ impl App {
     }
 
     fn account_info(&self, kind: Known, name: String, default: Option<&std::path::Path>) -> AccountInfo {
-        let path = accounts::path(&self.accounts_dir, kind, &name);
+        let path = accounts::path(&self.paths.accounts_dir, kind, &name);
         let path = path.canonicalize().unwrap_or(path);
         let unshared = default.map(|default| links::status(kind, default, &path)).unwrap_or_default();
         let login = self.logins.seen.get(&(kind, name.clone())).cloned();
@@ -143,8 +143,8 @@ impl App {
 
     fn account_marks(&self) -> Vec<Option<SystemTime>> {
         let modified = |path: std::path::PathBuf| fs::metadata(path).and_then(|meta| meta.modified()).ok();
-        std::iter::once(modified(self.accounts_dir.clone()))
-            .chain(accounts::supported().map(|kind| modified(self.accounts_dir.join(kind.name()))))
+        std::iter::once(modified(self.paths.accounts_dir.clone()))
+            .chain(accounts::supported().map(|kind| modified(self.paths.accounts_dir.join(kind.name()))))
             .collect()
     }
 
@@ -161,7 +161,7 @@ impl App {
     }
 
     fn relist_accounts_with(&mut self, marks: Vec<Option<SystemTime>>) {
-        let listed = accounts::list(&self.accounts_dir);
+        let listed = accounts::list(&self.paths.accounts_dir);
         let known = |key: &Key| known_login(&listed, key);
         self.logins.seen.retain(|key, _| known(key));
         if listed != self.logins.listed {
@@ -199,7 +199,7 @@ impl App {
             None
         } else {
             let chosen = BTreeMap::from([(kind.name().to_string(), name.clone())]);
-            let Some(account) = Accounts::of(&self.accounts_dir, &chosen).get(kind).cloned() else {
+            let Some(account) = Accounts::of(&self.paths.accounts_dir, &chosen).get(kind).cloned() else {
                 self.logins.running.remove(&(kind, name));
                 return;
             };
@@ -238,7 +238,7 @@ impl App {
         }
         let reply = Ok(json(&self.accounts_info(None)));
         for key in std::mem::take(&mut self.logins.waiting) {
-            if let Some(pending) = self.requests.take(key) {
+            if let Some(pending) = self.wire.requests.take(key) {
                 self.refuse_or_answer(pending.client, reply.clone());
             }
         }
@@ -249,14 +249,14 @@ impl App {
         if !list.check || !self.check_logins() {
             return Some(json(&self.accounts_info(None)));
         }
-        let key = self.requests.key();
+        let key = self.wire.requests.key();
         self.pend_reading(client, key);
         self.logins.waiting.push(key);
         None
     }
 
     fn account_exists(&self, kind: Known, name: &str) -> Result<(), Refusal> {
-        if accounts::names(&self.accounts_dir, kind).iter().any(|known| known == name) {
+        if accounts::names(&self.paths.accounts_dir, kind).iter().any(|known| known == name) {
             return Ok(());
         }
         Err(Refusal::new(
@@ -276,7 +276,8 @@ impl App {
         self.check_new_account(kind, &add.name)?;
         let place = if add.login { Some(self.login_place(asker, add, area)?) } else { None };
         let default = self.default_home(kind);
-        let dir = accounts::add(&self.accounts_dir, kind, &add.name, default.as_deref()).map_err(|e| e.to_string())?;
+        let dir =
+            accounts::add(&self.paths.accounts_dir, kind, &add.name, default.as_deref()).map_err(|e| e.to_string())?;
         log::info!("accounts", "account added", provider = kind.name(), account = add.name, path = dir.display());
         self.relist_accounts();
         let Some(place) = place else { return Ok(Some(json(&self.accounts_info(None)))) };
@@ -291,7 +292,7 @@ impl App {
                 accounts::NAME_MAX
             )));
         }
-        let names = accounts::names(&self.accounts_dir, kind);
+        let names = accounts::names(&self.paths.accounts_dir, kind);
         if names.iter().any(|known| known == name) {
             return Err(conflict(self.config.account_taken(kind.name(), name)));
         }
@@ -324,7 +325,7 @@ impl App {
     ) -> Result<Ids, Refusal> {
         let kind = provider(&add.provider)?;
         let chosen = BTreeMap::from([(kind.name().to_string(), add.name.clone())]);
-        let given = Accounts::of(&self.accounts_dir, &chosen);
+        let given = Accounts::of(&self.paths.accounts_dir, &chosen);
         let t = self
             .push_tab_in((p, w), area, Some(format!("{} login", add.name)), given)
             .map_err(|e| format!("the account `{}` was added, but its login tab could not open: {e}", add.name))?;
@@ -346,7 +347,7 @@ impl App {
         let kind = provider(&remove.provider)?;
         self.account_exists(kind, &remove.name)?;
         self.readable_config()?;
-        accounts::remove(&self.accounts_dir, kind, &remove.name).map_err(|e| e.to_string())?;
+        accounts::remove(&self.paths.accounts_dir, kind, &remove.name).map_err(|e| e.to_string())?;
         log::info!("accounts", "account removed", provider = kind.name(), account = remove.name);
         self.relist_accounts();
         let (provider, name) = (kind.name(), remove.name.as_str());
@@ -375,7 +376,7 @@ impl App {
         }
         let account = rename.account.clone();
         if !label.is_empty() {
-            let names = accounts::names(&self.accounts_dir, kind);
+            let names = accounts::names(&self.paths.accounts_dir, kind);
             if let Some(taken) = self.config.label_taken(kind.name(), &label, &names, &account) {
                 return Err(conflict(taken));
             }

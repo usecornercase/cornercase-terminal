@@ -71,15 +71,15 @@ impl App {
         let seen_tabs = self.seen_tabs();
         let active = self.project().map(|p| p.id);
         let open = self.tree_open();
-        let tree = self.drawn.tree;
+        let tree = self.screen.drawn.tree;
         let (members, orchestrators) = (self.run_panes(false), self.run_panes(true));
         let mut round = Round {
             now,
             read,
             config: &self.config,
-            dirs: (self.agents.claude_dir.as_deref(), self.accounts_dir.as_path()),
+            dirs: (self.agents.claude_dir.as_deref(), self.paths.accounts_dir.as_path()),
             seen_tabs,
-            folds: tree || self.drawn.tab_bar.is_empty(),
+            folds: tree || self.screen.drawn.tab_bar.is_empty(),
             members,
             orchestrators,
             jobs: self.following(),

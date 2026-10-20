@@ -79,9 +79,9 @@ mod opening {
     fn a_workspace_without_a_run_offers_none() {
         let (mut app, _rx) = app();
         app.flow_by_key();
-        assert_eq!((app.side, toast(&app)), (None, Some("this workspace runs no flow")));
+        assert_eq!((app.screen.side, toast(&app)), (None, Some("this workspace runs no flow")));
         app.show_flow();
-        assert_eq!(app.side, None);
+        assert_eq!(app.screen.side, None);
     }
 
     #[test]
@@ -96,9 +96,9 @@ mod opening {
             send_key(app, KeyCode::Char('f'), KeyModifiers::NONE);
         };
         keys(&mut app);
-        assert_eq!((app.side, app.panel_shown()), (Some(Side::Flow), true));
+        assert_eq!((app.screen.side, app.panel_shown()), (Some(Side::Flow), true));
         keys(&mut app);
-        assert_eq!(app.side, None);
+        assert_eq!(app.screen.side, None);
     }
 
     #[test]
@@ -108,7 +108,7 @@ mod opening {
         let menu = app.target_menu(Target::Workspace(project, workspace));
         assert!(menu.contains(&MenuAction::ShowFlow(workspace)), "{menu:?}");
         app.menu_action(MenuAction::ShowFlow(workspace), Position::default(), AREA).expect("the action");
-        assert_eq!(app.side, Some(Side::Flow));
+        assert_eq!(app.screen.side, Some(Side::Flow));
     }
 
     #[test]
@@ -127,7 +127,7 @@ mod opening {
             ui::activity_items(bar, app.activity_shown()).into_iter().find(|(i, _)| *i == ui::ActivityItem::Flow);
         let (_, r) = slot.expect("a flow slot");
         click(&mut app, Position::new(r.x + 1, r.y));
-        assert_eq!(app.side, Some(Side::Flow));
+        assert_eq!(app.screen.side, Some(Side::Flow));
         app.runs.clear();
         assert!(!app.activity_shown().flow);
         assert!(!app.panel_shown());
@@ -138,7 +138,7 @@ mod opening {
         let (mut app, _rx, _dir) = team();
         app.show_flow();
         send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
-        assert_eq!(app.side, None);
+        assert_eq!(app.screen.side, None);
     }
 
     #[test]
@@ -147,7 +147,7 @@ mod opening {
         app.show_flow();
         let close = ui::flow::close(app.layout(AREA).changes).as_position();
         click(&mut app, close);
-        assert_eq!(app.side, None);
+        assert_eq!(app.screen.side, None);
     }
 
     #[test]
@@ -258,7 +258,7 @@ mod recording {
 
         assert!(again.restore(&saved, AREA));
 
-        assert_eq!((again.runs.len(), again.side), (1, Some(Side::Flow)));
+        assert_eq!((again.runs.len(), again.screen.side), (1, Some(Side::Flow)));
     }
 
     #[test]
@@ -300,7 +300,7 @@ mod clicks {
         let at = spot(&mut app, "reviewer");
         click_in(&mut app, at, TALL);
         assert_eq!(app.tab().and_then(Tab::pane).map(|t| t.id), Some(pane(&app, "reviewer")));
-        assert_eq!(app.side, Some(Side::Flow));
+        assert_eq!(app.screen.side, Some(Side::Flow));
     }
 
     #[test]
@@ -438,7 +438,7 @@ mod files {
         let at = spot(&mut app, "coder-1.md");
         click_in(&mut app, at, TALL);
 
-        assert_eq!(app.side, Some(Side::Files));
+        assert_eq!(app.screen.side, Some(Side::Files));
         wait_until_within("the file is read", Duration::from_secs(10), || {
             drain(&mut app, &rx);
             app.refresh(Instant::now());

@@ -171,7 +171,7 @@ impl App {
                 if matches!(self.overlay, Some(Overlay::Remote)) {
                     self.overlay = None;
                 }
-                self.toast = Some(Toast::new(CONNECTED, ui::ToastIcon::Check));
+                self.messages.toast = Some(Toast::new(CONNECTED, ui::ToastIcon::Check));
                 self.settings_changed();
             }
             web::Event::Browsers(n) => self.remote.browsers = n,

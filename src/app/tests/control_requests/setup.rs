@@ -164,8 +164,8 @@ fn closing_the_setup_tab_drops_the_agent_and_its_status_file() {
     pump_until(&mut team.app, &team.rx, "the setup starts", |a| {
         a.projects[0].workspaces.iter().any(Workspace::setting_up)
     });
-    refreshing(&mut team.app, &team.rx, "it is watched", |a| !a.setups.is_empty());
-    let (pane, (_, status)) = team.app.setups.iter().next().map(|(p, v)| (*p, v.clone())).expect("watched");
+    refreshing(&mut team.app, &team.rx, "it is watched", |a| !a.spawn.setups.is_empty());
+    let (pane, (_, status)) = team.app.spawn.setups.iter().next().map(|(p, v)| (*p, v.clone())).expect("watched");
     std::fs::write(&status, "").expect("status");
     let tab = team.app.projects[0]
         .workspaces
@@ -194,7 +194,7 @@ fn closing_the_setup_tab_drops_the_agent_and_its_status_file() {
         got.into_iter().find_map(|r| if let Response::Error(m) = r { Some(m) } else { None }).expect("the start fails");
 
     assert!(message.contains("closed before it was ready") || message.contains("did not"), "{message}");
-    let toast = team.app.toast.as_ref().map(|t| t.message.clone()).unwrap_or_default();
+    let toast = team.app.messages.toast.as_ref().map(|t| t.message.clone()).unwrap_or_default();
     assert!(toast.contains("setup was closed in") && toast.contains("its agent did not start"), "{toast}");
     assert!(!status.exists());
 }
@@ -206,8 +206,8 @@ fn a_setup_closed_before_the_first_watch_still_drops_the_agent() {
     pump_until(&mut team.app, &team.rx, "the setup starts", |a| {
         a.projects[0].workspaces.iter().any(Workspace::setting_up)
     });
-    assert_eq!(team.app.setups.len(), 1);
-    let pane = *team.app.setups.keys().next().expect("a setup");
+    assert_eq!(team.app.spawn.setups.len(), 1);
+    let pane = *team.app.spawn.setups.keys().next().expect("a setup");
     let tab = team.app.projects[0]
         .workspaces
         .iter()

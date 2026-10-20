@@ -147,7 +147,7 @@ mod files {
     }
 
     fn header_button(app: &mut App) -> Position {
-        app.files.set_full_screen(true);
+        app.panels.files.set_full_screen(true);
         let Some(Screen::File(file)) = app.files_view().map(|v| v.screen) else { panic!("a file shows") };
         files_ui::action(panel_area(app), &file, Action::OpenIn).as_position()
     }
@@ -192,7 +192,7 @@ mod files {
                 .is_some_and(|v| matches!(&v.screen, Screen::Tree(t) if t.rows.iter().any(|r| r.path == "src/main.rs")))
         });
         read(&mut app, &rx, "src/main.rs");
-        app.files.viewer_mut(app.projects[0].workspaces[0].id).expect("a viewer").selection = Some((3, 2));
+        app.panels.files.viewer_mut(app.projects[0].workspaces[0].id).expect("a viewer").selection = Some((3, 2));
         let button = header_button(&mut app);
         click(&mut app, button);
         pick(&mut app, "VS Code");

@@ -91,7 +91,7 @@ mod checking {
 
         assert_eq!(info(&answer)["release"]["version"], "9.0.0");
         assert_eq!(app.update_label().as_deref(), Some("↑ 9.0.0"));
-        assert!(app.toast.is_some());
+        assert!(app.messages.toast.is_some());
     }
 
     #[test]

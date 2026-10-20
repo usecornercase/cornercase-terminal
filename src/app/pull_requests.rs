@@ -83,7 +83,7 @@ impl PullRequests {
 
 impl App {
     pub(super) fn pull_request(&self, workspace: u64) -> Option<&PullRequest> {
-        self.pulls.found.get(&workspace)?.pull.as_ref()
+        self.git.pulls.found.get(&workspace)?.pull.as_ref()
     }
 
     pub(super) fn pull_mark(&self, workspace: &Workspace) -> Option<Mark> {
@@ -91,7 +91,7 @@ impl App {
     }
 
     pub(super) fn pull_requests_note(&self) -> String {
-        let mut answers = self.pulls.answered.values();
+        let mut answers = self.git.pulls.answered.values();
         match answers.next().and_then(|first| first.error.clone()) {
             Some(error) if answers.all(|a| a.error.is_some()) => error,
             _ => NOTE.into(),
@@ -100,17 +100,17 @@ impl App {
 
     pub(super) fn ask_pull_requests(&mut self, now: Instant) {
         if !self.config.pull_requests {
-            self.pulls = PullRequests::default();
+            self.git.pulls = PullRequests::default();
             return;
         }
         let workspaces: HashSet<u64> = self.projects.workspaces().map(|w| w.id).collect();
-        self.pulls.found.retain(|id, _| workspaces.contains(id));
-        self.pulls.answered.retain(|id, _| self.projects.project_index(*id).is_some());
+        self.git.pulls.found.retain(|id, _| workspaces.contains(id));
+        self.git.pulls.answered.retain(|id, _| self.projects.project_index(*id).is_some());
         self.close_gone_pull_request();
-        let gh = self.config.gh(self.home.as_deref());
+        let gh = self.config.gh(self.paths.home.as_deref());
         for p in 0..self.projects.len() {
             let project = &self.projects[p];
-            if project.closing || self.pulls.waiting(project.id, now) {
+            if project.closing || self.git.pulls.waiting(project.id, now) {
                 continue;
             }
             let id = project.id;
@@ -125,14 +125,14 @@ impl App {
         let mut due = Vec::new();
         for workspace in self.projects[p].workspaces.iter().filter(|w| w.open()) {
             let Some(branch) = pull_branch(workspace) else {
-                self.pulls.found.remove(&workspace.id);
+                self.git.pulls.found.remove(&workspace.id);
                 continue;
             };
-            let known = self.pulls.found.get(&workspace.id);
+            let known = self.git.pulls.found.get(&workspace.id);
             if known.is_some_and(|f| f.branch != branch) {
-                self.pulls.found.remove(&workspace.id);
+                self.git.pulls.found.remove(&workspace.id);
             }
-            if self.pulls.found.get(&workspace.id).is_none_or(|f| f.due(now)) {
+            if self.git.pulls.found.get(&workspace.id).is_none_or(|f| f.due(now)) {
                 due.push((workspace.id, workspace.path.clone(), branch));
             }
         }
@@ -140,7 +140,7 @@ impl App {
     }
 
     fn spawn_pull_requests(&mut self, project: u64, due: Vec<(u64, PathBuf, String)>, gh: PathBuf) {
-        self.pulls.asking.insert(project);
+        self.git.pulls.asking.insert(project);
         let job = Job::new(Level::Debug, "pr", "view").with("project", project).with("workspaces", due.len());
         self.spawn_job(
             job.slow_after(SLOW),
@@ -158,14 +158,14 @@ impl App {
         found: Vec<(u64, String, Option<PullRequest>)>,
         error: Option<String>,
     ) {
-        self.pulls.asking.remove(&project);
+        self.git.pulls.asking.remove(&project);
         if !self.config.pull_requests {
             return;
         }
         let now = Instant::now();
-        let known = self.pulls.answered.get(&project).and_then(|a| a.error.as_ref());
+        let known = self.git.pulls.answered.get(&project).and_then(|a| a.error.as_ref());
         log_pull_error(project, known, error.as_ref());
-        self.pulls.answered.insert(project, Answered { at: now, error });
+        self.git.pulls.answered.insert(project, Answered { at: now, error });
         for (workspace, branch, pull) in found {
             self.record_pull_request(workspace, branch, pull, now);
         }
@@ -181,7 +181,7 @@ impl App {
         if path.and_then(|path| git::checked_out(path)) != Some(branch.clone()) {
             return;
         }
-        let before = self.pulls.found.get(&workspace).and_then(|f| f.pull.as_ref());
+        let before = self.git.pulls.found.get(&workspace).and_then(|f| f.pull.as_ref());
         if let (Some(pull), Some(before)) = (pull.as_mut(), before) {
             pull.keep_known(before);
         }
@@ -190,7 +190,7 @@ impl App {
         if shown != mark {
             log_pull_request(workspace, mark);
         }
-        self.pulls.found.insert(workspace, Found { branch, at: Some(now), pull });
+        self.git.pulls.found.insert(workspace, Found { branch, at: Some(now), pull });
     }
 
     fn close_gone_pull_request(&mut self) {
@@ -223,12 +223,12 @@ impl App {
     }
 
     pub(super) fn open_pull_request(&mut self, workspace: u64) {
-        let Some(found) = self.pulls.found.get_mut(&workspace) else { return };
+        let Some(found) = self.git.pulls.found.get_mut(&workspace) else { return };
         found.at = None;
         if let Some((p, _)) = self.projects.workspace_index(workspace) {
-            self.pulls.answered.remove(&self.projects[p].id);
+            self.git.pulls.answered.remove(&self.projects[p].id);
         }
-        self.nav = None;
+        self.screen.nav = None;
         self.overlay = Some(Overlay::PullRequest { workspace, scroll: 0 });
         self.ask_pull_requests(Instant::now());
     }
@@ -241,19 +241,19 @@ impl App {
             return;
         }
         let project = self.project().map(|p| p.id).unwrap_or_default();
-        let error = self.pulls.answered.get(&project).and_then(|a| a.error.clone());
+        let error = self.git.pulls.answered.get(&project).and_then(|a| a.error.clone());
         let (message, icon) = match (git::checked_out(&path), error) {
             _ if !self.config.pull_requests => ("pull requests are off in settings".into(), ui::ToastIcon::Check),
             (None, _) => ("this workspace is not on a branch".into(), ui::ToastIcon::Check),
             (Some(_), Some(error)) => (error, ui::ToastIcon::Bug),
             (Some(branch), None)
-                if self.pulls.found.contains_key(&id) || git::origin_head(&path) == Some(branch.clone()) =>
+                if self.git.pulls.found.contains_key(&id) || git::origin_head(&path) == Some(branch.clone()) =>
             {
                 (format!("no pull request for {branch}"), ui::ToastIcon::Check)
             }
             (Some(branch), None) => (format!("looking for a pull request for {branch}…"), ui::ToastIcon::Check),
         };
-        self.toast = Some(Toast::new(message, icon));
+        self.messages.toast = Some(Toast::new(message, icon));
     }
 
     pub(super) fn pull_request_extra(&self, workspace: u64) -> Option<&'static str> {
@@ -261,7 +261,7 @@ impl App {
     }
 
     fn pull_request_lines(&self, pull: &PullRequest) -> Vec<Line<'static>> {
-        let grey = ui::muted(&self.theme);
+        let grey = ui::muted(&self.themes.theme);
         let muted = Style::default().fg(grey);
         let mut notes = vec![Line::from(Span::styled(pull.summary(), muted))];
         if pull.conflicts() {
@@ -283,7 +283,7 @@ impl App {
         let pull = self.pull_request(workspace)?;
         let notes = self.pull_request_lines(pull);
         let project = self.projects.workspace_index(workspace).map(|(p, _)| self.projects[p].id);
-        let error = project.and_then(|id| self.pulls.answered.get(&id)).and_then(|a| a.error.clone());
+        let error = project.and_then(|id| self.git.pulls.answered.get(&id)).and_then(|a| a.error.clone());
         Some(ui::Overlay::Update(ui::Update {
             title: TITLE,
             message: format!("#{} {}", pull.number, pull.title),

@@ -111,7 +111,7 @@ impl App {
         if matches!(self.overlay, Some(Overlay::Pairing(shown)) if shown == via) {
             self.overlay = None;
         }
-        self.toast = Some(Toast::new(format!("{} connected{who}", via.name()), ui::ToastIcon::Check));
+        self.messages.toast = Some(Toast::new(format!("{} connected{who}", via.name()), ui::ToastIcon::Check));
         self.refresh_messenger_note(via);
     }
 }

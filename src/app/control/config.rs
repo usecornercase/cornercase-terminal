@@ -40,7 +40,7 @@ impl App {
         let model = self.settings_model(Page::default());
         Described {
             revision: self.config_file.revision,
-            path: self.config_path.clone(),
+            path: self.paths.config_path.clone(),
             problem: self.config_file.problem.clone(),
             settings: model.describe(),
             connections: model.connections(),
@@ -50,7 +50,7 @@ impl App {
     }
 
     fn project_settings_entries(&self) -> Vec<ProjectEntry> {
-        let home = self.home.as_deref();
+        let home = self.paths.home.as_deref();
         let open =
             |folder: &std::path::Path| self.projects.iter().find(|p| !p.closing && p.path == folder).map(|p| p.id);
         let mut entries: Vec<ProjectEntry> = self
@@ -119,7 +119,7 @@ impl App {
             }
             (None, Some(path)) => {
                 let given = path.to_str().ok_or_else(|| Refusal::new(Code::Malformed, "the path is not text"))?;
-                let folder = config::expand_home(given, self.home.as_deref());
+                let folder = config::expand_home(given, self.paths.home.as_deref());
                 if !folder.is_absolute() {
                     return Err(Refusal::new(Code::Malformed, "use an absolute path or one starting with ~/"));
                 }
@@ -131,7 +131,7 @@ impl App {
 
     fn config_project(&mut self, change: ProjectChange) -> Handled {
         let folder = self.project_folder(&change)?;
-        let home = self.home.clone();
+        let home = self.paths.home.clone();
         let current = self.config.project(&folder, home.as_deref());
         let settings = ProjectSettings {
             setup: change.setup.unwrap_or(current.setup),
@@ -153,7 +153,7 @@ impl App {
 
     fn config_secret(&mut self, client: u64, secret: &SecretChange) -> Handled {
         let action = self.settings_model(Page::default()).secret(&secret.key, &secret.value).map_err(refusal)?;
-        let key = self.requests.key();
+        let key = self.wire.requests.key();
         match action {
             Action::CheckToken(source, token) => self.check_token_for(source, token, Some(key)),
             Action::CheckBot(via, token) => self.check_messenger_for(via, token, Some(key)),
@@ -161,12 +161,12 @@ impl App {
         }
         let pending =
             Pending { client: Some(client), key, timeout: None, done: Done::default(), stage: Stage::Reading };
-        self.requests.pending.push(pending);
+        self.wire.requests.pending.push(pending);
         Ok(None)
     }
 
     pub(in crate::app) fn secret_answered(&mut self, key: u64, result: Result<String, String>) {
-        let Some(pending) = self.requests.take(key) else { return };
+        let Some(pending) = self.wire.requests.take(key) else { return };
         let reply = match result {
             Ok(notice) => Ok(json(&self.described(vec![notice]))),
             Err(e) => Err(failed(e)),

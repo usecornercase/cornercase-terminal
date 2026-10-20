@@ -71,7 +71,7 @@ impl App {
     }
 
     pub(super) fn settings_model(&self, page: Page) -> Settings {
-        let mut settings = Settings::new(self.config.clone(), self.home.clone(), self.token_statuses(), page);
+        let mut settings = Settings::new(self.config.clone(), self.paths.home.clone(), self.token_statuses(), page);
         settings.awake = self.agents.awake.state().note();
         settings.pulls = self.pull_requests_note();
         settings.merged = self.merged_note();

@@ -183,7 +183,7 @@ fn send_refuses_an_agent_showing_a_panel_and_says_when_a_forced_prompt_was_not_t
 
     let shown = in_status(&mut agent.app, id).dialog;
     let refused = error(now(&mut agent.app, None, send_text(id, "next step", true, false)));
-    agent.app.confirm_within = Duration::from_millis(300);
+    agent.app.wire.confirm_within = Duration::from_millis(300);
     let forced = wire::SendText {
         pane: Some(id),
         text: Some("next step".into()),
@@ -387,7 +387,7 @@ mod restarting_when_idle {
         let stopped = report(agent.answered("the agent ends its turn"));
 
         assert_eq!(pending, (Vec::new(), Some("restart pending until 1 agent ends its turn".into())));
-        let notice = agent.app.toast.as_ref().map(|t| t.icon);
+        let notice = agent.app.messages.toast.as_ref().map(|t| t.icon);
         assert_eq!((early, agent.app.take_restart().is_some()), (None, true));
         assert_ne!(notice, Some(ui::ToastIcon::Restart));
         let panes = stopped.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs);
@@ -464,7 +464,7 @@ mod restarting_when_idle {
         let id = working(&mut agent, "next step");
         ask(&mut agent.app, None, when_idle(None));
 
-        let shown = agent.app.toast.as_ref().expect("the pending restart").view();
+        let shown = agent.app.messages.toast.as_ref().expect("the pending restart").view();
         let cancel = ui::toast_button(AREA, shown).as_position();
         click(&mut agent.app, cancel);
         let message = error(answers(&mut agent.app).remove(0));

@@ -236,7 +236,7 @@ fn holding_a_drag_on_the_more_line_scrolls_the_list() {
 fn a_drag_in_the_compact_menu_reorders_and_keeps_it_open() {
     const SMALL: Rect = Rect { x: 0, y: 0, width: 80, height: 40 };
     let (mut app, _rx, paths, _dirs) = grouped(2, &[]);
-    app.nav = Some(ui::Nav::Projects);
+    app.screen.nav = Some(ui::Nav::Projects);
     let small = ui::layout(SMALL, state::Widths::default());
     let entry = |p| ui::entry_row(small.list, small.pitch, &app.sidebar_rows(), 0, SidebarRow::Project(p));
     let (from, to) = (entry(1).as_position(), entry(0).as_position());
@@ -246,7 +246,7 @@ fn a_drag_in_the_compact_menu_reorders_and_keeps_it_open() {
     mouse_in(&mut app, MouseEventKind::Up(MouseButton::Left), to, SMALL);
 
     let expected = vec![(paths[1].clone(), None), (paths[0].clone(), None)];
-    assert_eq!((saved_projects(&app), app.nav), (expected, Some(ui::Nav::Projects)));
+    assert_eq!((saved_projects(&app), app.screen.nav), (expected, Some(ui::Nav::Projects)));
 }
 
 #[test]

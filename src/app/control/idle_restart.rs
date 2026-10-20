@@ -42,9 +42,9 @@ impl App {
         now: Instant,
     ) -> Handled {
         let timeout = deadline(restart.timeout, now)?;
-        let key = self.requests.key();
+        let key = self.wire.requests.key();
         let stage = Stage::Restart { caller };
-        self.requests.pending.push(Pending { client: Some(client), key, timeout, done: Done::default(), stage });
+        self.wire.requests.pending.push(Pending { client: Some(client), key, timeout, done: Done::default(), stage });
         self.show_pending_restart(now);
         Ok(None)
     }
@@ -67,26 +67,26 @@ impl App {
     }
 
     pub(in crate::app) fn show_pending_restart(&mut self, now: Instant) {
-        let shown = self.toast.as_ref().is_some_and(|t| t.icon == ui::ToastIcon::Restart);
-        let pending = self.requests.pending.iter().find_map(|p| match p.stage {
+        let shown = self.messages.toast.as_ref().is_some_and(|t| t.icon == ui::ToastIcon::Restart);
+        let pending = self.wire.requests.pending.iter().find_map(|p| match p.stage {
             Stage::Restart { caller } => Some(caller),
             _ => None,
         });
         match pending {
-            None if shown => self.toast = None,
-            Some(caller) if shown || self.toast.is_none() => {
+            None if shown => self.messages.toast = None,
+            Some(caller) if shown || self.messages.toast.is_none() => {
                 let message = pending_restart(self.holding(caller, now).len());
-                self.toast = Some(Toast::new(message, ui::ToastIcon::Restart));
+                self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Restart));
             }
             _ => {}
         }
     }
 
     pub(in crate::app) fn cancel_restarts(&mut self) {
-        let (cancelled, kept): (Vec<Pending>, Vec<Pending>) = std::mem::take(&mut self.requests.pending)
+        let (cancelled, kept): (Vec<Pending>, Vec<Pending>) = std::mem::take(&mut self.wire.requests.pending)
             .into_iter()
             .partition(|p| matches!(p.stage, Stage::Restart { .. }));
-        self.requests.pending = kept;
+        self.wire.requests.pending = kept;
         log::info!("control", "restart cancelled in the window", waits = cancelled.len());
         for pending in cancelled {
             self.answer(pending.client, Err(RESTART_CANCELLED.into()));

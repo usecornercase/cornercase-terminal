@@ -98,7 +98,7 @@ fn the_changes_panel_keeps_its_filter() {
     submit_text(&mut app, "*.txt");
     esc(&mut app);
     open(&mut app, Side::Changes);
-    assert_eq!(app.changes.filter.as_ref().map(changes::filter::Filter::query), Some("*.txt"));
+    assert_eq!(app.panels.changes.filter.as_ref().map(changes::filter::Filter::query), Some("*.txt"));
 }
 
 #[test]
@@ -114,14 +114,14 @@ fn without_a_panel_esc_reaches_the_pane() {
 fn a_changes_panel_that_is_not_shown_leaves_esc_to_the_pane() {
     let plain = TempDir::new();
     let (mut app, rx) = app_in(plain.path(), no_config());
-    app.side = Some(Side::Changes);
+    app.screen.side = Some(Side::Changes);
     type_line(&mut app, "echo cat-\"\"starts; cat -v");
     shows(&mut app, &rx, "cat-starts");
     esc(&mut app);
     type_text(&mut app, "b");
     send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     shows(&mut app, &rx, "^[b");
-    assert_eq!(app.side, Some(Side::Changes));
+    assert_eq!(app.screen.side, Some(Side::Changes));
 }
 
 #[test]
@@ -141,7 +141,7 @@ fn a_drag_takes_esc_first() {
     open(&mut app, Side::Todo);
     press(&mut app, entry_pos());
     esc(&mut app);
-    assert_eq!((app.drag.is_none(), app.panel_shown()), (true, true));
+    assert_eq!((app.screen.drag.is_none(), app.panel_shown()), (true, true));
     esc(&mut app);
     assert!(!app.panel_shown());
 }
@@ -155,7 +155,7 @@ fn a_drag_of_the_panel_border_takes_esc_first_and_puts_the_pointer_back() {
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(AREA.width - 1, r.y + 1));
     assert_eq!(app.pointer(AREA), pointer::Shape::Columns);
     esc(&mut app);
-    assert_eq!((app.drag.as_ref(), app.panel_shown(), app.pointer(AREA)), (None, true, pointer::Shape::Default));
+    assert_eq!((app.screen.drag.as_ref(), app.panel_shown(), app.pointer(AREA)), (None, true, pointer::Shape::Default));
 }
 
 #[test]
@@ -175,8 +175,8 @@ fn a_full_screen_file_goes_back_to_its_panel_first() {
     let (mut app, rx, _repo) = with_cat();
     open(&mut app, Side::Files);
     let ws = app.projects[0].workspaces[0].id;
-    app.files.open_file(ws, "a.txt");
-    app.files.set_full_screen(true);
+    app.panels.files.open_file(ws, "a.txt");
+    app.panels.files.set_full_screen(true);
     esc(&mut app);
     assert!(app.panel_shown() && !app.file_full_screen());
     esc(&mut app);

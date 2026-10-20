@@ -107,13 +107,13 @@ impl App {
         if self.shown_run().is_none() {
             return;
         }
-        self.nav = None;
-        self.flow.scroll = 0;
+        self.screen.nav = None;
+        self.panels.flow.scroll = 0;
         self.show_side(Some(Side::Flow));
     }
 
     pub(super) fn toggle_flow(&mut self) {
-        if self.side == Some(Side::Flow) {
+        if self.screen.side == Some(Side::Flow) {
             self.show_side(None);
         } else {
             self.show_flow();
@@ -130,7 +130,7 @@ impl App {
         if self.has_run() {
             self.toggle_flow();
         } else {
-            self.toast = Some(Toast::new(NO_RUN, ui::ToastIcon::Check));
+            self.messages.toast = Some(Toast::new(NO_RUN, ui::ToastIcon::Check));
         }
     }
 
@@ -141,13 +141,13 @@ impl App {
 
     pub(super) fn flow_view(&self, now: Instant, spin: Option<u8>) -> Option<flow::View> {
         let run = self.shown_run()?;
-        let (muted, light) = (ui::muted(&self.theme), self.theme.is_light() == Some(true));
+        let (muted, light) = (ui::muted(&self.themes.theme), self.themes.theme.is_light() == Some(true));
         let plan = flow::Diagram::plan(&run.flow, muted, light);
         let pull = run.pull(self.pull_request(run.workspace));
         let end = flow::Ending { reached: run.reached(pull), pull: pull.map(PullRequest::mark) };
         let mut diagram = plan.live(&run.progress, |role| self.role_state(run, role), end, now);
         diagram.spin = spin;
-        let files = self.flow.files.as_ref().filter(|(id, _)| *id == run.id).map(|(_, listing)| {
+        let files = self.panels.flow.files.as_ref().filter(|(id, _)| *id == run.id).map(|(_, listing)| {
             let now = SystemTime::now();
             let age = |file: &folder::File| {
                 let secs = file.modified.and_then(|at| now.duration_since(at).ok()).map_or(0, |d| d.as_secs());
@@ -162,25 +162,25 @@ impl App {
             task: run.task.clone(),
             diagram,
             files,
-            scroll: self.flow.scroll,
+            scroll: self.panels.flow.scroll,
         })
     }
 
     pub(super) fn refresh_run_files(&mut self, now: Instant) {
-        if self.side != Some(Side::Flow) || !self.panel_shown() {
+        if self.screen.side != Some(Side::Flow) || !self.panel_shown() {
             return;
         }
         let Some((id, dir)) = self.shown_run().and_then(|run| Some((run.id, run.dir.clone()?))) else { return };
-        if let Some((_, since)) = self.flow.listing
+        if let Some((_, since)) = self.panels.flow.listing
             && now.duration_since(since) < LIST_GIVE_UP
         {
             return;
         }
-        if self.flow.listed.is_some_and(|at| now.duration_since(at) < LIST_EVERY) {
+        if self.panels.flow.listed.is_some_and(|at| now.duration_since(at) < LIST_EVERY) {
             return;
         }
-        self.flow.listing = Some((id, now));
-        self.flow.listed = Some(now);
+        self.panels.flow.listing = Some((id, now));
+        self.panels.flow.listed = Some(now);
         let job = Job::new(Level::Debug, "flow", "list files").with("run", id);
         self.spawn_job(
             job,
@@ -195,25 +195,26 @@ impl App {
     }
 
     pub(super) fn run_files_listed(&mut self, run: u64, result: Result<Listing>) {
-        if self.flow.listing.is_some_and(|(id, _)| id == run) {
-            self.flow.listing = None;
+        if self.panels.flow.listing.is_some_and(|(id, _)| id == run) {
+            self.panels.flow.listing = None;
         }
         if let Ok(listing) = result
             && self.runs.iter().any(|r| r.id == run)
         {
-            self.flow.files = Some((run, listing));
+            self.panels.flow.files = Some((run, listing));
         }
     }
 
     fn open_run_file(&mut self, index: usize) {
-        let path = self.flow.files.as_ref().and_then(|(_, listing)| listing.files.get(index)).map(|f| f.path.clone());
+        let path =
+            self.panels.flow.files.as_ref().and_then(|(_, listing)| listing.files.get(index)).map(|f| f.path.clone());
         if let Some(path) = path.as_deref().and_then(std::path::Path::to_str) {
             self.open_link(&Target { path: path.to_string(), real: path.into(), lines: None });
         }
     }
 
     pub(super) fn flow_frame(&self, now: Instant) -> Option<Duration> {
-        let shown = self.side == Some(Side::Flow) && self.panel_shown();
+        let shown = self.screen.side == Some(Side::Flow) && self.panel_shown();
         let moving = self.shown_run().is_some_and(|run| run.progress.travelling(now).is_some());
         (shown && moving).then_some(FRAME_EVERY)
     }
@@ -221,7 +222,7 @@ impl App {
     pub(super) fn flow_mouse(&mut self, ev: MouseEvent, pos: Position, panel: Rect) {
         let Some(view) = self.flow_view(Instant::now(), None) else { return };
         if let Some(delta) = wheel(ev.kind) {
-            self.flow.scroll = flow::scrolled(panel, &view, delta);
+            self.panels.flow.scroll = flow::scrolled(panel, &view, delta);
             return;
         }
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
@@ -249,7 +250,7 @@ impl App {
         if self.projects.pane_by(pane).is_none() {
             return;
         }
-        if self.drawn.compact() {
+        if self.screen.drawn.compact() {
             self.show_side(None);
         }
         self.jump_to_pane(pane);
@@ -261,7 +262,7 @@ impl App {
 
     fn flow_message_lines(&self, workspace: u64, sent: Sent<'_>, area: Rect) -> Option<Vec<Line<'static>>> {
         let width = usize::from(ui::update_notes(area).width.max(1));
-        self.flow_message(workspace, sent.0, sent.1).map(|message| lines(message, width, ui::muted(&self.theme)))
+        self.flow_message(workspace, sent.0, sent.1).map(|message| lines(message, width, ui::muted(&self.themes.theme)))
     }
 
     pub(super) fn flow_message_view(
@@ -369,15 +370,15 @@ impl App {
     }
 
     fn hold_flow_read(&mut self, client: u64, noted: Noted) {
-        if self.flow.reads.len() == MAX_READS {
-            self.flow.reads.remove(0);
+        if self.panels.flow.reads.len() == MAX_READS {
+            self.panels.flow.reads.remove(0);
         }
-        self.flow.reads.push((client, noted));
+        self.panels.flow.reads.push((client, noted));
     }
 
     pub(super) fn flow_answered(&mut self, client: u64, reply: &std::result::Result<Value, String>) {
-        let Some(i) = self.flow.reads.iter().position(|(c, _)| *c == client) else { return };
-        let (_, mut noted) = self.flow.reads.remove(i);
+        let Some(i) = self.panels.flow.reads.iter().position(|(c, _)| *c == client) else { return };
+        let (_, mut noted) = self.panels.flow.reads.remove(i);
         let Ok(value) = reply else { return };
         let text = value.get("text").and_then(Value::as_str).unwrap_or_default();
         noted.message.bytes = text.len();
@@ -387,7 +388,7 @@ impl App {
 
     pub(super) fn forget_flow_reads(&mut self, client: Option<u64>) {
         let runs = &self.runs;
-        self.flow.reads.retain(|(c, noted)| Some(*c) != client && runs.iter().any(|run| run.id == noted.run));
+        self.panels.flow.reads.retain(|(c, noted)| Some(*c) != client && runs.iter().any(|run| run.id == noted.run));
     }
 
     fn record_flow(&mut self, noted: Noted) {

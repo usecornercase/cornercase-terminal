@@ -7,7 +7,7 @@ use crate::test_util::git;
 
 fn started(repo: &TempDir) -> (App, Receiver<AppEvent>) {
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.change_streams.every = Duration::ZERO;
+    app.wire.change_streams.every = Duration::ZERO;
     (app, rx)
 }
 
@@ -106,7 +106,7 @@ fn the_mode_of_a_stream_is_its_own_and_the_window_s_stays() {
     ok(&mut app, "changes-mode", &json!({"stream": 1, "mode": "all"}));
     let line = summary_until(&mut app, &rx, "all", |l| ready(l) && l["mode"] == "all");
     assert_eq!(paths(&line), ["a.txt", "b.txt"]);
-    assert_eq!(app.changes.mode, Mode::Uncommitted);
+    assert_eq!(app.panels.changes.mode, Mode::Uncommitted);
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn a_rename_has_its_old_path_and_its_patch_pairs_it() {
     wait_until("the window's changes load", || {
         drain(&mut app, &rx);
         app.refresh(Instant::now());
-        app.changes_target().is_some_and(|t| app.changes.model(t.workspace, t.base.as_deref()).is_some())
+        app.changes_target().is_some_and(|t| app.panels.changes.model(t.workspace, t.base.as_deref()).is_some())
     });
     let first = ok(&mut app, "changes", &json!({}));
     assert_eq!((&first["state"], &first["workspaces"][0]["files"][0]["old_path"]), (&json!("ready"), &json!("a.txt")));
@@ -199,8 +199,8 @@ fn viewed_marks_are_shared_and_cleared_by_a_change() {
     assert_eq!(line["workspaces"][0]["files"][0]["digest"], digest.as_str());
     let workspace = workspace_id(&app);
     let target = app.changes_target().expect("target");
-    let model = app.changes.model(workspace, target.base.as_deref()).expect("model");
-    assert!(app.changes.viewed(workspace, &model.diff().expect("diff").files[0]));
+    let model = app.panels.changes.model(workspace, target.base.as_deref()).expect("model");
+    assert!(app.panels.changes.viewed(workspace, &model.diff().expect("diff").files[0]));
 
     std::fs::write(repo.path().join("a.txt"), "one\nTWO and more\n").expect("edit again");
     summary_until(&mut app, &rx, "the mark is gone", |l| {
@@ -217,11 +217,11 @@ fn the_windows_mark_shows_in_a_stream() {
     wait_until("the changes load", || {
         drain(&mut app, &rx);
         app.refresh(Instant::now());
-        app.changes_target().is_some_and(|t| app.changes.model(t.workspace, t.base.as_deref()).is_some())
+        app.changes_target().is_some_and(|t| app.panels.changes.model(t.workspace, t.base.as_deref()).is_some())
     });
     let workspace = workspace_id(&app);
     let file = app.changes_target().and_then(|t| app.changed_diff(&t)).expect("diff").files[0].clone();
-    app.changes.toggle_viewed(workspace, &file);
+    app.panels.changes.toggle_viewed(workspace, &file);
 
     let first = ok(&mut app, "changes", &json!({}));
 
@@ -251,7 +251,7 @@ fn every_project_groups_by_sidebar_order_and_leaves_out_clean_and_plain_folders(
     let owners: Vec<u64> =
         line["workspaces"].as_array().expect("list").iter().map(|w| w["project"].as_u64().expect("project")).collect();
     assert_eq!(owners, [app.projects[0].id, app.projects[0].id, app.projects[1].id]);
-    assert_eq!(app.side, None);
+    assert_eq!(app.screen.side, None);
 }
 
 #[test]
@@ -269,8 +269,8 @@ fn a_workspace_nobody_follows_costs_nothing() {
         app.refresh(Instant::now());
     }
 
-    assert!(app.changes.model_in(second, Mode::Uncommitted, None).is_some());
-    assert!(app.changes.model_in(third, Mode::Uncommitted, None).is_none());
+    assert!(app.panels.changes.model_in(second, Mode::Uncommitted, None).is_some());
+    assert!(app.panels.changes.model_in(third, Mode::Uncommitted, None).is_none());
 }
 
 #[test]
@@ -280,10 +280,10 @@ fn the_stream_ends_when_its_project_closes_and_a_client_that_leaves_drops_its_mo
     ok(&mut app, "changes", &json!({"mode": "commits"}));
     let workspace = workspace_id(&app);
     summary_until(&mut app, &rx, "commits", ready);
-    assert!(app.changes.model_in(workspace, Mode::Commits, None).is_some());
+    assert!(app.panels.changes.model_in(workspace, Mode::Commits, None).is_some());
 
     app.forget(CLIENT);
-    assert!(app.changes.model_in(workspace, Mode::Commits, None).is_none());
+    assert!(app.panels.changes.model_in(workspace, Mode::Commits, None).is_none());
 
     ok(&mut app, "changes", &json!({}));
     let project = app.projects[0].id;
@@ -392,7 +392,7 @@ fn a_stream_can_only_be_changed_by_the_connection_that_opened_it() {
 
     let refusal = reply_of(&reply).expect_err("refused");
     assert_eq!(refusal.code, "not-found");
-    assert_eq!(app.change_streams.open[0].mode, Mode::Uncommitted);
+    assert_eq!(app.wire.change_streams.open[0].mode, Mode::Uncommitted);
     ok(&mut app, "changes-mode", &json!({"stream": 1, "mode": "all"}));
-    assert_eq!(app.change_streams.open[0].mode, Mode::All);
+    assert_eq!(app.wire.change_streams.open[0].mode, Mode::All);
 }

@@ -31,11 +31,11 @@ impl App {
                 }
                 if close.remove_worktree {
                     self.removable(id)?;
-                    let key = self.requests.key();
+                    let key = self.wire.requests.key();
                     self.spawn_check(p, w, Some(key));
                     let stage = Stage::Removing { force: close.force, unlock: close.unlock };
                     let pending = Pending { client: Some(client), key, timeout: None, done: Done::default(), stage };
-                    self.requests.pending.push(pending);
+                    self.wire.requests.pending.push(pending);
                     return Ok(None);
                 }
                 let workspace = &mut self.projects[p].workspaces[w];
@@ -73,10 +73,10 @@ impl App {
     pub(super) fn removal_check_request(&mut self, client: u64, check: &RemovalCheck) -> Handled {
         let id = check.workspace.ok_or_else(|| malformed("`removal-check` needs the workspace: pass its id"))?;
         let (p, w) = self.removable(id)?;
-        let key = self.requests.key();
+        let key = self.wire.requests.key();
         self.spawn_check(p, w, Some(key));
         let pending = Pending { client: Some(client), key, timeout: None, done: Done::default(), stage: Stage::Check };
-        self.requests.pending.push(pending);
+        self.wire.requests.pending.push(pending);
         Ok(None)
     }
 
@@ -115,14 +115,14 @@ impl App {
         workspace: u64,
         status: &worktree::Status,
     ) {
-        let Some(stage) = self.requests.pending.iter().find(|p| p.key == key).map(|p| &p.stage) else { return };
+        let Some(stage) = self.wire.requests.pending.iter().find(|p| p.key == key).map(|p| &p.stage) else { return };
         let (force, unlock, check) = match stage {
             Stage::Removing { force, unlock } => (*force, *unlock, false),
             Stage::Check => (false, false, true),
             _ => return,
         };
         if check {
-            let Some(pending) = self.requests.take(key) else { return };
+            let Some(pending) = self.wire.requests.take(key) else { return };
             let answer = match self.projects.workspace_in(project, workspace) {
                 Some((p, w)) => self.usable_workspace(workspace).map(|_| json(&self.removal(p, w, status))),
                 None => Err(none("workspace", workspace)),
@@ -134,7 +134,7 @@ impl App {
         if clear && self.start_removal(project, workspace, RemoveOptions { force, unlock }, Some(key)) {
             return;
         }
-        let Some(pending) = self.requests.take(key) else { return };
+        let Some(pending) = self.wire.requests.take(key) else { return };
         let refusal = match &status.lock {
             Some(lock) if !unlock => self.locked(workspace, lock).into(),
             _ if status.changed && !force => {
@@ -172,7 +172,7 @@ impl App {
         workspace: u64,
         result: error::Result<Option<String>>,
     ) {
-        let pending = self.requests.take(key);
+        let pending = self.wire.requests.take(key);
         self.settle_removal(project, workspace, result.is_ok());
         let Some(pending) = pending else { return };
         let answer = result.map(|warning| json(&Done { warning, ..Done::default() }));

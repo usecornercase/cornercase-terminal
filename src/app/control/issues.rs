@@ -204,7 +204,7 @@ impl App {
             entries.extend(unavailable_entries(unavailable));
             return Ok(Some(json(&self.lists_answer(project, &entries))));
         }
-        let ticket = Ticket { key: self.requests.key(), project, epochs };
+        let ticket = Ticket { key: self.wire.requests.key(), project, epochs };
         let key = ticket.key;
         let order: Vec<Source> = clients.iter().map(|(source, _)| *source).collect();
         let job = Job::new(Level::Info, "issues", "list").with("sources", clients.len()).with("project", project);
@@ -247,7 +247,7 @@ impl App {
 
     fn wait_reading(&mut self, client: u64, key: u64) {
         let waits = Waits { done: Done::default(), stage: Stage::Reading, timeout: None };
-        self.requests.push(client, key, waits);
+        self.wire.requests.push(client, key, waits);
     }
 
     fn lists_answer(&self, project: u64, entries: &[Entry]) -> Lists {
@@ -275,7 +275,7 @@ impl App {
         }
         let (api, locator) = self.locate_issue(project, &read.issue, read.source.as_deref())?;
         let source = locator.source;
-        let ticket = Ticket { key: self.requests.key(), project, epochs: vec![(source, self.epoch(source))] };
+        let ticket = Ticket { key: self.wire.requests.key(), project, epochs: vec![(source, self.epoch(source))] };
         let key = ticket.key;
         let job = Job::new(Level::Info, "issues", "read").with("source", source.name()).with("project", project);
         let work = move || {
@@ -302,7 +302,7 @@ impl App {
         let Some(api) = self.client(source, project) else {
             return Err(conflict(format!("{} is not connected", source.name())));
         };
-        let ticket = Ticket { key: self.requests.key(), project, epochs: vec![(source, self.epoch(source))] };
+        let ticket = Ticket { key: self.wire.requests.key(), project, epochs: vec![(source, self.epoch(source))] };
         let key = ticket.key;
         let job = Job::new(Level::Info, "issues", "people").with("source", source.name()).with("project", project);
         self.spawn_job(
@@ -346,7 +346,7 @@ impl App {
             entries.push(self.listed_entry(source, self.cache_key(source, project, query), result));
         }
         entries.extend(unavailable_entries(unavailable));
-        if let Some(pending) = self.requests.take(ticket.key) {
+        if let Some(pending) = self.wire.requests.take(ticket.key) {
             let answer = self.lists_answer(project, &entries);
             self.refuse_or_answer(pending.client, Ok(json(&answer)));
         }
@@ -370,7 +370,7 @@ impl App {
     }
 
     fn read_replied(&mut self, ticket: &Ticket, result: Result<(Issue, Detail)>) {
-        let Some(pending) = self.requests.take(ticket.key) else { return };
+        let Some(pending) = self.wire.requests.take(ticket.key) else { return };
         let reply = match result {
             Ok((issue, _)) if self.epoch_moved(&ticket.epochs, issue.source) => {
                 Err(conflict(stale(issue.source, "it was read")))
@@ -397,7 +397,7 @@ impl App {
 
     fn people_replied(&mut self, ticket: &Ticket, source: Source, result: Result<Vec<Person>>) {
         if self.epoch_moved(&ticket.epochs, source) {
-            if let Some(pending) = self.requests.take(ticket.key) {
+            if let Some(pending) = self.wire.requests.take(ticket.key) {
                 let refusal = conflict(stale(source, "its people were listed"));
                 self.refuse_or_answer(pending.client, Err(refusal));
             }
@@ -408,7 +408,7 @@ impl App {
             Err(error) => Err(failed(error.to_string())),
         };
         self.people_loaded(ticket.project, source, result);
-        if let Some(pending) = self.requests.take(ticket.key) {
+        if let Some(pending) = self.wire.requests.take(ticket.key) {
             self.refuse_or_answer(pending.client, reply);
         }
     }
@@ -483,12 +483,12 @@ impl App {
         let source = locator.source;
         self.issue_places(asker, source, &mut start, scope)?;
         let epoch = self.epoch(source);
-        let key = self.requests.key();
+        let key = self.wire.requests.key();
         let then = AfterIssue::Start(Box::new(start), accounts);
         let asking = Box::new(Asking { asker, source, epoch, then });
         let pending =
             Pending { client: Some(client), key, timeout, done: Done::default(), stage: Stage::Issue(asking) };
-        self.requests.pending.push(pending);
+        self.wire.requests.pending.push(pending);
         self.spawn_find(key, scope, api, locator);
         Ok(None)
     }
@@ -523,11 +523,12 @@ impl App {
         self.run_refusal(p, &starting)?;
         starting.task.clear();
         let epoch = self.epoch(source);
-        let key = self.requests.key();
+        let requests = &mut self.wire.requests;
+        let key = requests.key();
         let then = AfterIssue::Flow { project, starting: Box::new(starting) };
         let asking = Box::new(Asking { asker, source, epoch, then });
         let stage = Stage::Issue(asking);
-        self.requests.pending.push(Pending { client: Some(client), key, timeout: None, done: Done::default(), stage });
+        requests.pending.push(Pending { client: Some(client), key, timeout: None, done: Done::default(), stage });
         self.spawn_find(key, scope, api, locator);
         Ok(None)
     }
@@ -550,9 +551,9 @@ impl App {
     }
 
     fn found_replied(&mut self, key: u64, result: Result<Issue>, area: Rect) {
-        let found = self.requests.pending.iter().position(|p| p.key == key && matches!(p.stage, Stage::Issue(_)));
+        let found = self.wire.requests.pending.iter().position(|p| p.key == key && matches!(p.stage, Stage::Issue(_)));
         let Some(i) = found else { return };
-        let pending = self.requests.pending.remove(i);
+        let pending = self.wire.requests.pending.remove(i);
         let (Some(client), Stage::Issue(asking)) = (pending.client, pending.stage) else { return };
         let Asking { asker, source, epoch, then } = *asking;
         let reply = match result {

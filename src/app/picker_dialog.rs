@@ -20,7 +20,7 @@ const VSCODE_TAG: &str = "vs code";
 
 impl App {
     pub(super) fn open_picker(&mut self, group: Option<u64>) {
-        let home = self.home.as_deref();
+        let home = self.paths.home.as_deref();
         let in_group = group.and_then(|g| self.projects.iter().find(|p| p.group == Some(g)));
         let near = in_group.or_else(|| self.project()).and_then(|p| p.path.parent().map(Path::to_path_buf));
         let picker = near
@@ -95,7 +95,7 @@ impl App {
         }
         let name = self.group(group).map_or(workspace.name, |g| g.name.clone());
         let icon = if failed == 0 { ui::ToastIcon::Check } else { ui::ToastIcon::Bug };
-        self.toast = Some(Toast::new(import_message(&name, opened.len(), missing, failed), icon));
+        self.messages.toast = Some(Toast::new(import_message(&name, opened.len(), missing, failed), icon));
     }
 
     fn picker_rows(area: Rect) -> usize {

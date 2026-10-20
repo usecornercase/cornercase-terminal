@@ -8,11 +8,11 @@ use crate::project::Hierarchy;
 
 impl App {
     pub(super) fn terminal_theme(&self) -> &HostTheme {
-        self.client_theme.as_ref().unwrap_or(&self.theme)
+        self.themes.client_theme.as_ref().unwrap_or(&self.themes.theme)
     }
 
     pub(super) fn paint_terminals(&mut self) -> usize {
-        let theme = self.client_theme.as_ref().unwrap_or(&self.theme);
+        let theme = self.themes.client_theme.as_ref().unwrap_or(&self.themes.theme);
         let mut panes = 0;
         for term in self.projects.terms_mut() {
             term.set_theme(theme);
@@ -22,7 +22,7 @@ impl App {
     }
 
     pub(super) fn give_theme(&mut self, theme: Option<HostTheme>) {
-        self.client_theme = theme;
+        self.themes.client_theme = theme;
         let panes = self.paint_terminals();
         let info = self.theme_info();
         log::info!(

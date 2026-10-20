@@ -264,7 +264,7 @@ mod running {
         assert_eq!(git::branch(&workspace.path).as_deref(), Some("fix-the-login-form"));
         assert_eq!(tabs, ["orchestrator", "coder", "reviewer", "security", "tester"]);
         assert_eq!((workspace.active, s.app.runs[0].task.as_str()), (0, "Fix the login form"));
-        assert_eq!(s.app.side, Some(Side::Flow));
+        assert_eq!(s.app.screen.side, Some(Side::Flow));
     }
 
     #[test]
@@ -288,7 +288,7 @@ mod running {
             "{:?}",
             start.notice
         );
-        assert_eq!((start.prompt.text(), s.app.toast.is_none()), ("Fix the login form".into(), true));
+        assert_eq!((start.prompt.text(), s.app.messages.toast.is_none()), ("Fix the login form".into(), true));
     }
 
     #[test]

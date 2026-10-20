@@ -43,7 +43,7 @@ impl App {
                 });
                 ui::ProjectShape { group, collapsed: p.collapsed, workspaces: workspaces.collect() }
             });
-        ui::TreeShape { groups, projects: projects.collect(), tab_bar: !self.drawn.tab_bar.is_empty() }
+        ui::TreeShape { groups, projects: projects.collect(), tab_bar: !self.screen.drawn.tab_bar.is_empty() }
     }
 
     pub(in crate::app) fn tree_layout(&self, list: Rect) -> ui::Rows {

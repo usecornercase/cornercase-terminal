@@ -81,7 +81,7 @@ fn status(app: &App, id: u64) -> Option<Status> {
 #[case::gemini_with_one_home(Pair::geminis as fn() -> Pair)]
 fn a_send_with_enter_returns_once_enter_is_pressed(#[case] pair: fn() -> Pair) {
     let mut pair = pair();
-    pair.app.confirm_within = Duration::from_millis(300);
+    pair.app.wire.confirm_within = Duration::from_millis(300);
     ask(&mut pair.app, None, send_text(pair.ids[0], "fix the login", true, false));
     assert_eq!(done(answered(&mut pair.app, &pair.rx, "the send returns")).ids.pane, Some(pair.ids[0]));
 }
@@ -119,7 +119,7 @@ fn a_lone_agent_without_a_record_still_waits_for_its_prompt_to_be_recorded() {
     type_line(&mut app, &fake.served_command_line(signals.path()));
     let id = first(&app);
     refreshing(&mut app, &rx, "Codex is idle", |a| status(a, id) == Some(Status::Idle));
-    app.confirm_within = Duration::from_millis(300);
+    app.wire.confirm_within = Duration::from_millis(300);
     let send = wire::SendText { timeout: Some(1.0), ..send_text_of(id) };
     ask(&mut app, None, Command::Send(send));
     let message = error(answered(&mut app, &rx, "the send gives up"));

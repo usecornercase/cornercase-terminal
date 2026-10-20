@@ -39,7 +39,7 @@ fn with_project(project: bool) -> Setup {
         new_app(config.path().join("config.json"))
     };
     app.set_accounts_dir(&config.path().join("accounts"));
-    app.home = Some(config.path().to_path_buf());
+    app.paths.home = Some(config.path().to_path_buf());
     let fake = bin.path().join("claude");
     write_executable(&fake, &STATUS.replace("OUT", &bin.path().join("out").display().to_string()));
     app.config.agent_commands.insert("claude".into(), fake.display().to_string());

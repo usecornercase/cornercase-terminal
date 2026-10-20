@@ -21,12 +21,13 @@ pub(in crate::app) const CLIENTS: u64 = 1 << 61;
 
 impl App {
     fn todo_area(&self, area: Rect) -> Rect {
-        self.layout(area).shown(self.nav).changes
+        self.layout(area).shown(self.screen.nav).changes
     }
 
     pub(super) fn todo_view(&self, panel_area: Rect) -> panel::View {
-        let field = self.todo.field.as_ref();
+        let field = self.panels.todo.field.as_ref();
         let items = self
+            .panels
             .todos
             .items()
             .iter()
@@ -38,18 +39,18 @@ impl App {
             })
             .collect();
         let adding = field.filter(|f| f.item.is_none()).map(|f| f.editor.clone());
-        let light = self.theme.is_light() == Some(true);
-        let muted = ui::muted(&self.theme);
+        let light = self.themes.theme.is_light() == Some(true);
+        let muted = ui::muted(&self.themes.theme);
         let mut view = panel::View {
             items,
-            scroll: self.todo.scroll,
+            scroll: self.panels.todo.scroll,
             adding,
             light,
             muted,
             drag: None,
-            compact: self.drawn.compact(),
+            compact: self.screen.drawn.compact(),
         };
-        if let Some((drag, pos)) = self.row_drag().filter(|d| d.moved).zip(self.hover)
+        if let Some((drag, pos)) = self.row_drag().filter(|d| d.moved).zip(self.screen.hover)
             && let Grab::Todo(id) = drag.target
         {
             view.drag = Some((id, panel::drop(panel_area, &view, id, pos)));
@@ -58,13 +59,13 @@ impl App {
     }
 
     pub(super) fn todo_typing(&self) -> bool {
-        self.overlay.is_none() && self.side == Some(Side::Todo) && self.todo.field.is_some()
+        self.overlay.is_none() && self.screen.side == Some(Side::Todo) && self.panels.todo.field.is_some()
     }
 
     pub(super) fn toggle_todo(&mut self) {
-        let side = (self.side != Some(Side::Todo)).then_some(Side::Todo);
+        let side = (self.screen.side != Some(Side::Todo)).then_some(Side::Todo);
         self.show_side(side);
-        self.nav = None;
+        self.screen.nav = None;
     }
 
     pub(super) fn close_todo(&mut self) {
@@ -72,21 +73,21 @@ impl App {
     }
 
     pub(super) fn commit_todo(&mut self) {
-        let Some(field) = self.todo.field.take() else { return };
+        let Some(field) = self.panels.todo.field.take() else { return };
         let text = field.editor.text();
         match field.item {
-            Some(id) => _ = self.todos.edit(id, &text),
-            None => _ = self.todos.add(&text),
+            Some(id) => _ = self.panels.todos.edit(id, &text),
+            None => _ = self.panels.todos.add(&text),
         }
     }
 
     fn submit_todo(&mut self, area: Rect) {
-        let Some(field) = self.todo.field.take() else { return };
+        let Some(field) = self.panels.todo.field.take() else { return };
         let text = field.editor.text();
         if let Some(id) = field.item {
-            self.todos.edit(id, &text);
-        } else if let Some(id) = self.todos.add(&text) {
-            self.todo.field = Some(Field::default());
+            self.panels.todos.edit(id, &text);
+        } else if let Some(id) = self.panels.todos.add(&text) {
+            self.panels.todo.field = Some(Field::default());
             self.reveal_todo(id, area);
         }
     }
@@ -95,17 +96,17 @@ impl App {
         let panel_area = self.todo_area(area);
         let view = self.todo_view(panel_area);
         if let Some(i) = view.items.iter().position(|i| i.id == id) {
-            self.todo.scroll = panel::rows(panel_area, &view).reveal(i);
+            self.panels.todo.scroll = panel::rows(panel_area, &view).reveal(i);
         }
     }
 
     pub(super) fn todo_key(&mut self, key: KeyEvent, area: Rect) {
         let width = panel::text_width(self.todo_area(area));
-        let Some(field) = &mut self.todo.field else { return };
+        let Some(field) = &mut self.panels.todo.field else { return };
         let editor = &mut field.editor;
         match key.code {
             KeyCode::Esc if editor.is_empty() => self.close_panel(),
-            KeyCode::Esc => self.todo.field = None,
+            KeyCode::Esc => self.panels.todo.field = None,
             KeyCode::Enter => self.submit_todo(area),
             KeyCode::Backspace => editor.backspace(),
             KeyCode::Delete => editor.delete(),
@@ -123,7 +124,7 @@ impl App {
     }
 
     pub(super) fn todo_paste(&mut self, text: &str) {
-        if let Some(field) = &mut self.todo.field {
+        if let Some(field) = &mut self.panels.todo.field {
             field.editor.insert(text);
         }
     }
@@ -143,31 +144,32 @@ impl App {
         match hit {
             Some(Hit::Close) => self.show_side(None),
             Some(Hit::ClearDone) => self.clear_done_todos(),
-            Some(Hit::Add) => self.todo.field = Some(Field::default()),
+            Some(Hit::Add) => self.panels.todo.field = Some(Field::default()),
             Some(Hit::Field { line, col, .. }) => {
-                if let Some(field) = &mut self.todo.field {
+                if let Some(field) = &mut self.panels.todo.field {
                     field.editor.place(panel::text_width(panel_area), line, col);
                 }
             }
-            Some(Hit::Check(id)) => self.todos.toggle(id),
+            Some(Hit::Check(id)) => self.panels.todos.toggle(id),
             Some(Hit::Delete(id)) => self.delete_todo(id),
             Some(Hit::Send(id)) => self.ask_todo_agent(id, pos),
             Some(Hit::Item { id, row, .. }) => {
                 let target = Grab::Todo(id);
-                self.drag = Some(Drag::Row(RowDrag { target, row, moved: false, area, scrolled: None, fold: false }));
+                self.screen.drag =
+                    Some(Drag::Row(RowDrag { target, row, moved: false, area, scrolled: None, fold: false }));
             }
             None => {}
         }
     }
 
     fn clear_done_todos(&mut self) {
-        if let Some(removed) = self.todos.clear_done() {
+        if let Some(removed) = self.panels.todos.clear_done() {
             self.removed_todos(format!("cleared {} done", removed.len()), removed);
         }
     }
 
     fn delete_todo(&mut self, id: u64) {
-        if let Some(removed) = self.todos.remove(id) {
+        if let Some(removed) = self.panels.todos.remove(id) {
             self.removed_todos(DELETED.into(), removed);
         }
     }
@@ -179,7 +181,7 @@ impl App {
             .map(|(p, w, t, i)| self.projects[p].workspaces[w].tabs[t].panes[i].id)
             .collect();
         if panes.is_empty() {
-            self.toast = Some(Toast::new(NO_AGENT, ui::ToastIcon::Bug));
+            self.messages.toast = Some(Toast::new(NO_AGENT, ui::ToastIcon::Bug));
             return;
         }
         let actions = panes.into_iter().map(|pane| MenuAction::SendTodo { todo, pane }).collect();
@@ -224,9 +226,9 @@ impl App {
     }
 
     pub(super) fn send_todo_from_panel(&mut self, todo: u64, pane: u64, now: std::time::Instant) {
-        let client = CLIENTS + self.todo.next_client;
-        self.todo.next_client += 1;
-        self.todo.sending.insert(client, self.todo_agent_place(pane));
+        let client = CLIENTS + self.panels.todo.next_client;
+        self.panels.todo.next_client += 1;
+        self.panels.todo.sending.insert(client, self.todo_agent_place(pane));
         self.send_todo(client, todo, pane, now);
     }
 
@@ -235,11 +237,11 @@ impl App {
     }
 
     pub(in crate::app) fn todo_answered(&mut self, client: u64, reply: &Result<Value, String>) -> bool {
-        let Some(place) = self.todo.sending.remove(&client) else { return false };
+        let Some(place) = self.panels.todo.sending.remove(&client) else { return false };
         if place.is_empty() {
             return true;
         }
-        self.toast = Some(match reply {
+        self.messages.toast = Some(match reply {
             Ok(value) if value.get("unconfirmed").is_some() => {
                 Toast::new(format!("sent to {place}, not confirmed: stays to do"), ui::ToastIcon::Check)
             }
@@ -253,32 +255,33 @@ impl App {
     }
 
     fn removed_todos(&mut self, message: String, removed: Removed) {
-        self.toast = Some(Toast { undo: Some(Undo::Todos(removed)), ..Toast::new(message, ui::ToastIcon::Check) });
+        self.messages.toast =
+            Some(Toast { undo: Some(Undo::Todos(removed)), ..Toast::new(message, ui::ToastIcon::Check) });
     }
 
     pub(super) fn click_todo(&mut self, id: u64, row: Rect, pos: Position, area: Rect) {
-        let Some(item) = self.todos.item(id) else { return };
+        let Some(item) = self.panels.todos.item(id) else { return };
         let mut editor = Editor::new(&item.text);
         let (line, col) = panel::spot(row, pos);
         editor.place(panel::text_width(self.todo_area(area)), line, col);
-        self.todo.field = Some(Field { item: Some(id), editor });
+        self.panels.todo.field = Some(Field { item: Some(id), editor });
     }
 
     pub(super) fn drop_todo(&mut self, id: u64, pos: Position, area: Rect) {
         let panel_area = self.todo_area(area);
         if let Some(before) = panel::drop(panel_area, &self.todo_view(panel_area), id, pos) {
-            self.todos.move_before(id, before);
+            self.panels.todos.move_before(id, before);
         }
     }
 
     pub(super) fn scroll_todo(&mut self, panel_area: Rect, delta: isize) {
-        self.todo.scroll = panel::rows(panel_area, &self.todo_view(panel_area)).scrolled(delta);
+        self.panels.todo.scroll = panel::rows(panel_area, &self.todo_view(panel_area)).scrolled(delta);
     }
 
     pub(super) fn auto_scroll_todo(&mut self, panel_area: Rect, pos: Position) -> bool {
         let rows = panel::rows(panel_area, &self.todo_view(panel_area));
         let Some(delta) = rows.edge(pos) else { return false };
-        self.todo.scroll = rows.scrolled(delta);
+        self.panels.todo.scroll = rows.scrolled(delta);
         true
     }
 }

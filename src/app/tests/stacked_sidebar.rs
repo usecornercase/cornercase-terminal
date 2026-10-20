@@ -75,13 +75,13 @@ fn dragging_the_line_moves_it_and_saves_it() {
 fn a_double_click_on_the_line_splits_the_lists_in_half_again() {
     let (mut app, _rx, _dirs) = stacked(1);
     let at = drag_line(&mut app, 3);
-    let moved = app.widths.stack.is_some();
+    let moved = app.screen.widths.stack.is_some();
 
     press_at(&mut app, MouseEventKind::Down(MouseButton::Left), at);
     press_at(&mut app, MouseEventKind::Up(MouseButton::Left), at);
     press_at(&mut app, MouseEventKind::Down(MouseButton::Left), at);
 
-    assert_eq!((moved, app.widths.stack), (true, None));
+    assert_eq!((moved, app.screen.widths.stack), (true, None));
 }
 
 #[test]
@@ -94,7 +94,7 @@ fn the_column_can_take_the_room_of_the_workspaces_column() {
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(59, from.y));
     mouse(&mut app, MouseEventKind::Up(MouseButton::Left), Position::new(59, from.y));
 
-    assert_eq!(app.widths.projects, 60);
+    assert_eq!(app.screen.widths.projects, 60);
 }
 
 #[test]

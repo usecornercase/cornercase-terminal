@@ -139,7 +139,7 @@ impl App {
     }
 
     pub(super) fn following(&self) -> bool {
-        self.events.listening() || self.plugins.hooked()
+        self.wire.events.listening() || self.plugins.hooked()
     }
 
     pub(super) fn watch_plugins(&mut self, now: Instant) {
@@ -265,7 +265,7 @@ impl App {
             PluginEvent::Ran { request, ran } => self.plugin_ran(request, *ran),
             PluginEvent::Failed { plugin, title, reason } => {
                 let message = format!("{plugin}: {title} failed: {reason}");
-                self.toast = Some(super::Toast::new(message, ui::ToastIcon::Bug));
+                self.messages.toast = Some(super::Toast::new(message, ui::ToastIcon::Bug));
             }
         }
     }

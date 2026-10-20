@@ -104,7 +104,7 @@ fn the_button_opens_the_tree_beside_the_pane() {
     let (mut app, _rx) = app_in(repo.path(), no_config());
     let before = app.layout(AREA).pane.width;
     open(&mut app);
-    assert_eq!((app.side == Some(Side::Files), app.layout(AREA).pane.width < before), (true, true));
+    assert_eq!((app.screen.side == Some(Side::Files), app.layout(AREA).pane.width < before), (true, true));
 }
 
 #[test]
@@ -114,12 +114,12 @@ fn the_files_todo_and_changes_panels_take_turns() {
     open(&mut app);
     let todo = app.layout(AREA).todo_button.as_position();
     click(&mut app, todo);
-    assert_eq!((app.side == Some(Side::Files), app.side == Some(Side::Todo)), (false, true));
+    assert_eq!((app.screen.side == Some(Side::Files), app.screen.side == Some(Side::Todo)), (false, true));
     open(&mut app);
-    assert_eq!((app.side == Some(Side::Files), app.side == Some(Side::Todo)), (true, false));
+    assert_eq!((app.screen.side == Some(Side::Files), app.screen.side == Some(Side::Todo)), (true, false));
     let changes = ui::changes_button(app.layout(AREA).issues, &app.changes_label().expect("a changes button"));
     click(&mut app, changes.as_position());
-    assert_eq!((app.side == Some(Side::Files), app.side == Some(Side::Changes)), (false, true));
+    assert_eq!((app.screen.side == Some(Side::Files), app.screen.side == Some(Side::Changes)), (false, true));
 }
 
 #[test]
@@ -128,7 +128,7 @@ fn the_compact_bar_has_a_button_too() {
     let repo = repo();
     let (mut app, _rx) = app_in(repo.path(), no_config());
     click_in(&mut app, ui::layout(small, state::Widths::default()).files_button.as_position(), small);
-    assert_eq!(app.side, Some(Side::Files));
+    assert_eq!(app.screen.side, Some(Side::Files));
 }
 
 #[test]
@@ -283,7 +283,7 @@ fn ask_and_copy_from_the_outside_file(app: &mut App, path: &str) -> u64 {
     click(app, copy);
     assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("# Note\nRead this.")));
     let workspace = app.project().expect("project").workspace().expect("workspace").id;
-    app.files.viewer_mut(workspace).expect("viewer").selection = None;
+    app.panels.files.viewer_mut(workspace).expect("viewer").selection = None;
     click(app, copy);
     assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("# Note\nRead this.\n")));
     click(app, ask);
@@ -307,7 +307,7 @@ fn an_outside_file_keeps_its_absolute_path_for_actions_and_the_previous_search()
     let back = panel::back(panel_area(&app)).as_position();
     click(&mut app, back);
     assert!(!results(&view(&app)).is_empty(), "back returns to the previous search");
-    assert_eq!(app.files.last(workspace), Some(path.as_str()));
+    assert_eq!(app.panels.files.last(workspace), Some(path.as_str()));
     let field = panel::field(panel_area(&app)).as_position();
     click(&mut app, field);
     send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
@@ -390,12 +390,15 @@ fn the_search_field_takes_the_keys_until_a_press_outside() {
     let (mut app, rx) = opened(&repo);
     search(&mut app, &rx, files::Mode::Name, "ma");
     assert_eq!(
-        app.files.query(app.project().and_then(Project::workspace).map(|w| w.id).expect("ws")).map(|q| q.text.as_str()),
+        app.panels
+            .files
+            .query(app.project().and_then(Project::workspace).map(|w| w.id).expect("ws"))
+            .map(|q| q.text.as_str()),
         Some("ma")
     );
     click(&mut app, areas().pane.as_position());
     type_text(&mut app, "x");
-    let query = app.files.query(app.project().and_then(Project::workspace).map(|w| w.id).expect("ws"));
+    let query = app.panels.files.query(app.project().and_then(Project::workspace).map(|w| w.id).expect("ws"));
     assert_eq!(query.map(|q| (q.text.as_str(), q.focused)), Some(("ma", false)));
 }
 
@@ -418,7 +421,11 @@ fn the_open_panel_is_saved() {
     let (mut restored, _rx) = empty_app();
     restored.restore(&saved, AREA);
     assert_eq!(
-        (restored.side == Some(Side::Files), restored.side == Some(Side::Todo), restored.side == Some(Side::Changes)),
+        (
+            restored.screen.side == Some(Side::Files),
+            restored.screen.side == Some(Side::Todo),
+            restored.screen.side == Some(Side::Changes)
+        ),
         (true, false, false)
     );
 }
@@ -616,18 +623,18 @@ mod full_screen {
     #[case::dragged(Some(50))]
     fn the_button_brings_back_the_panel_at_its_width(#[case] width: Option<u16>) {
         let (_repo, mut app, _rx) = with_file();
-        app.widths.changes = width;
+        app.screen.widths.changes = width;
         let before = panel_area(&app);
         toggle(&mut app);
         toggle(&mut app);
-        assert_eq!((panel_area(&app), app.widths.changes, file(&app).full_screen), (before, width, false));
+        assert_eq!((panel_area(&app), app.screen.widths.changes, file(&app).full_screen), (before, width, false));
     }
 
     #[test]
     fn scroll_selection_and_highlights_survive_both_ways() {
         let (_repo, mut app, _rx) = with_file();
         let ws = app.projects[0].workspaces[0].id;
-        app.files.open_at(ws, "src/main.rs", (2, 3), Some("run".into()));
+        app.panels.files.open_at(ws, "src/main.rs", (2, 3), Some("run".into()));
         let before = file(&app);
         toggle(&mut app);
         let full = file(&app);
@@ -681,7 +688,7 @@ mod full_screen {
     #[test]
     fn open_and_jumps_end_it() {
         let (_repo, mut app, _rx) = with_file();
-        app.editor_env = vec![("VISUAL".into(), "true".into())];
+        app.spawn.editor_env = vec![("VISUAL".into(), "true".into())];
         toggle(&mut app);
         let pos = action_pos(&app, Action::Open);
         click(&mut app, pos);
@@ -745,7 +752,7 @@ mod full_screen {
         let pos = app.layout(small).files_button.as_position();
         click_in(&mut app, pos, small);
         let workspace = app.projects[0].workspaces[0].id;
-        app.files.open_file(workspace, "src/main.rs");
+        app.panels.files.open_file(workspace, "src/main.rs");
         let button = panel::full_screen_button(app.layout(small).changes).as_position();
         click_in(&mut app, button, small);
         assert_eq!(app.layout(small).changes, small);

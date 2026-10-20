@@ -30,7 +30,7 @@ fn repo(url: Option<&str>, configure: impl FnOnce(&mut Config)) -> Repo {
 
 fn ask(repo: &mut Repo) {
     repo.app.ask_merged(Instant::now());
-    pump_until(&mut repo.app, &repo.rx, "the merged pull requests arrive", |a| !a.merged.asking());
+    pump_until(&mut repo.app, &repo.rx, "the merged pull requests arrive", |a| !a.git.merged.asking());
 }
 
 const SHOP: &str = "https://github.com/acme/web-shop.git";
@@ -67,7 +67,7 @@ fn a_project_without_a_remote_never_runs_gh() {
 
     repo.app.ask_merged(Instant::now());
 
-    assert!(!repo.app.merged.asking());
+    assert!(!repo.app.git.merged.asking());
     assert!(repo.app.stats_view(SystemTime::now()).merged.is_none());
 }
 

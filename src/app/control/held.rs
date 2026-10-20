@@ -77,32 +77,34 @@ impl App {
     pub(in crate::app) fn held_label(&self, pane: u64) -> Option<(String, bool)> {
         let first = self.held(pane).next()?;
         let newest = self.held_keys(pane).max()?;
-        let queued = self.requests.queued.get(&pane).is_some_and(|acked| *acked >= newest);
+        let queued = self.wire.requests.queued.get(&pane).is_some_and(|acked| *acked >= newest);
         Some((label(self.held_sends(pane), first.from, queued), queued))
     }
 
     fn held_keys(&self, pane: u64) -> impl Iterator<Item = u64> {
-        let held = self.requests.pending.iter().filter(move |p| p.done.ids.pane == Some(pane));
+        let held = self.wire.requests.pending.iter().filter(move |p| p.done.ids.pane == Some(pane));
         held.filter(|p| matches!(p.stage, Stage::Held(_))).map(|p| p.key)
     }
 
     pub(in crate::app) fn queue_held(&mut self, pane: u64) {
         if let Some(newest) = self.held_keys(pane).max() {
             log::info!("control", "held sends acknowledged", pane = pane);
-            self.requests.queued.insert(pane, newest);
+            self.wire.requests.queued.insert(pane, newest);
         }
     }
 
     pub(in crate::app) fn held_labels(&self) -> HashMap<u64, (String, bool)> {
-        let panes = self.requests.pending.iter().filter(|p| matches!(p.stage, Stage::Held(_)));
+        let panes = self.wire.requests.pending.iter().filter(|p| matches!(p.stage, Stage::Held(_)));
         let panes: HashSet<u64> = panes.filter_map(|p| p.done.ids.pane).collect();
         panes.into_iter().filter_map(|pane| Some((pane, self.held_label(pane)?))).collect()
     }
 
     fn held(&self, pane: u64) -> impl Iterator<Item = &Held> {
-        self.requests.pending.iter().filter(move |p| p.done.ids.pane == Some(pane)).filter_map(|p| match &p.stage {
-            Stage::Held(held) => Some(held.as_ref()),
-            _ => None,
+        self.wire.requests.pending.iter().filter(move |p| p.done.ids.pane == Some(pane)).filter_map(|p| {
+            match &p.stage {
+                Stage::Held(held) => Some(held.as_ref()),
+                _ => None,
+            }
         })
     }
 
@@ -110,7 +112,7 @@ impl App {
         let term = self.projects.pane_by(pane)?;
         if term.draft(now) {
             Some(Why::Draft)
-        } else if term.typing.recent(now, self.typing_holds) {
+        } else if term.typing.recent(now, self.wire.typing_holds) {
             Some(Why::Typing)
         } else {
             self.sending(pane).then_some(Why::Earlier)
@@ -124,8 +126,8 @@ impl App {
     pub(super) fn hold(&mut self, client: u64, pane: u64, waits: Waits, now: Instant) -> Option<serde_json::Value> {
         let why = self.holding_back(pane, now).map_or("earlier", Why::name);
         log::info!("control", "send held", pane = pane, why = why, waiting = self.held_sends(pane) + 1);
-        let key = self.requests.key();
-        self.requests.push(client, key, waits);
+        let key = self.wire.requests.key();
+        self.wire.requests.push(client, key, waits);
         None
     }
 
@@ -137,16 +139,17 @@ impl App {
 
     pub(super) fn release_held(&mut self, now: Instant) {
         let held: HashSet<u64> = self
+            .wire
             .requests
             .pending
             .iter()
             .filter(|p| matches!(p.stage, Stage::Held(_)))
             .filter_map(|p| p.done.ids.pane)
             .collect();
-        self.requests.queued.retain(|pane, _| held.contains(pane));
+        self.wire.requests.queued.retain(|pane, _| held.contains(pane));
         let mut seen = HashSet::new();
         let mut i = 0;
-        while let Some(pending) = self.requests.pending.get(i) {
+        while let Some(pending) = self.wire.requests.pending.get(i) {
             let Stage::Held(held) = &pending.stage else {
                 i += 1;
                 continue;
@@ -158,9 +161,9 @@ impl App {
                 i += 1;
                 continue;
             }
-            let pending = self.requests.pending.remove(i);
+            let pending = self.wire.requests.pending.remove(i);
             if let Some(kept) = self.release(pending, gone, now) {
-                self.requests.pending.insert(i, kept);
+                self.wire.requests.pending.insert(i, kept);
                 i += 1;
             }
         }
@@ -190,11 +193,11 @@ impl App {
 
     pub(in crate::app) fn send_held_now(&mut self, pane: u64) {
         let first =
-            self.requests.pending.iter_mut().filter(|p| p.done.ids.pane == Some(pane)).find_map(|p| {
-                match &mut p.stage {
-                    Stage::Held(held) => Some(held),
-                    _ => None,
-                }
+            self.wire.requests.pending.iter_mut().filter(|p| p.done.ids.pane == Some(pane)).find_map(|p| match &mut p
+                .stage
+            {
+                Stage::Held(held) => Some(held),
+                _ => None,
             });
         if let Some(held) = first {
             held.force = true;
@@ -204,7 +207,10 @@ impl App {
 
     pub(super) fn held_due(&self, pane: u64) -> Vec<Instant> {
         let at = self.projects.pane_by(pane).and_then(|term| term.typing.at);
-        at.into_iter().flat_map(|at| [at.checked_add(self.typing_holds), at.checked_add(DRAFT_FOR)]).flatten().collect()
+        at.into_iter()
+            .flat_map(|at| [at.checked_add(self.wire.typing_holds), at.checked_add(DRAFT_FOR)])
+            .flatten()
+            .collect()
     }
 }
 

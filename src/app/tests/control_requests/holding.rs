@@ -71,7 +71,7 @@ fn a_send_waits_for_the_persons_draft_and_follows_it() {
 fn recent_typing_holds_a_send_for_a_moment() {
     let (mut app, rx) = app();
     let id = cat_pane(&mut app, &rx);
-    app.typing_holds = Duration::from_millis(300);
+    app.wire.typing_holds = Duration::from_millis(300);
     type_text(&mut app, "x");
     send_key(&mut app, KeyCode::Char('u'), KeyModifiers::CONTROL);
     let typed = Instant::now();
@@ -124,7 +124,7 @@ fn keys_from_the_window_are_dropped_between_a_paste_and_its_enter() {
     ask(&mut app, None, send_text(id, "sent", true, false));
     type_text(&mut app, "zz");
 
-    assert!(app.toast.as_ref().is_some_and(|t| t.message.contains("cornercase send")), "a toast says why");
+    assert!(app.messages.toast.as_ref().is_some_and(|t| t.message.contains("cornercase send")), "a toast says why");
     done(answered(&mut app, &rx, "the send is entered"));
     pump_until(&mut app, &rx, "the line reaches cat", |a| screen_lines(a, id).iter().any(|l| l == "sent"));
     assert!(!pane_screen(&app, id).contains("zz"));

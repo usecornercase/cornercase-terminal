@@ -9,7 +9,7 @@ fn add(app: &mut App, text: &str) -> u64 {
 }
 
 fn is_done(app: &App, id: u64) -> bool {
-    app.todos.item(id).expect("the item").done
+    app.panels.todos.item(id).expect("the item").done
 }
 
 mod sending_a_todo_to_an_agent {
@@ -40,7 +40,7 @@ mod sending_a_todo_to_an_agent {
         agent.refreshing("the item is checked off", |a| is_done(a, todo));
 
         assert!(refused.contains("already being sent"), "{refused}");
-        assert!(agent.app.toast.is_none());
+        assert!(agent.app.messages.toast.is_none());
     }
 
     #[test]
@@ -49,7 +49,7 @@ mod sending_a_todo_to_an_agent {
         let id = agent.start(None);
         let todo = add(&mut agent.app, "fix the login");
         ask(&mut agent.app, None, todo_send(todo, Some(id)));
-        agent.app.todos.edit(todo, "fix the logout");
+        agent.app.panels.todos.edit(todo, "fix the logout");
 
         let sent = done(agent.answered("the agent records the prompt"));
 
@@ -63,7 +63,7 @@ mod sending_a_todo_to_an_agent {
         let todo = add(&mut agent.app, "fix the login");
         ask(&mut agent.app, None, todo_send(todo, Some(id)));
         let editor = todo::editor::Editor::new("fix the logout");
-        agent.app.todo.field = Some(todo::Field { item: Some(todo), editor });
+        agent.app.panels.todo.field = Some(todo::Field { item: Some(todo), editor });
 
         let sent = done(agent.answered("the agent records the prompt"));
 
@@ -158,11 +158,11 @@ mod the_todo_panel_send_button {
     use crate::ui::todo as panel;
 
     fn panel_area(app: &App) -> Rect {
-        app.layout(AREA).shown(app.nav).changes
+        app.layout(AREA).shown(app.screen.nav).changes
     }
 
     fn open_and_press_send(app: &mut App, todo_index: usize) {
-        if app.side != Some(Side::Todo) {
+        if app.screen.side != Some(Side::Todo) {
             click(app, app.layout(AREA).todo_button.as_position());
         }
         let area = panel_area(app);
@@ -177,7 +177,7 @@ mod the_todo_panel_send_button {
 
     fn settle(agent: &mut Agent) {
         let (app, rx) = (&mut agent.app, &agent.rx);
-        refreshing(app, rx, "the toast says how it went", |a| a.toast.is_some());
+        refreshing(app, rx, "the toast says how it went", |a| a.messages.toast.is_some());
     }
 
     #[test]
@@ -198,7 +198,7 @@ mod the_todo_panel_send_button {
         pick(&mut agent.app, 0);
         settle(&mut agent);
 
-        let toast = agent.app.toast.as_ref().expect("a toast");
+        let toast = agent.app.messages.toast.as_ref().expect("a toast");
         assert!(toast.message.starts_with("sent to claude in "), "{}", toast.message);
         assert_eq!(
             (toast.icon, is_done(&agent.app, todo), pane(&agent.app, id).agent.status().is_some()),
@@ -226,7 +226,7 @@ mod the_todo_panel_send_button {
 
         open_and_press_send(&mut app, 0);
 
-        let toast = app.toast.as_ref().expect("a toast");
+        let toast = app.messages.toast.as_ref().expect("a toast");
         assert_eq!((toast.message.as_str(), app.overlay.is_none()), ("no agent is running", true));
     }
 
@@ -242,7 +242,7 @@ mod the_todo_panel_send_button {
         open_and_press_send(&mut agent.app, 0);
         pick(&mut agent.app, 0);
 
-        let toast = agent.app.toast.as_ref().expect("a toast");
+        let toast = agent.app.messages.toast.as_ref().expect("a toast");
         assert!(toast.message.contains("shows a dialog, a panel or its shell mode"), "{}", toast.message);
         assert_eq!((toast.icon, is_done(&agent.app, todo)), (ui::ToastIcon::Bug, false));
     }

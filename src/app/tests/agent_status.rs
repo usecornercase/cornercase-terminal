@@ -125,13 +125,13 @@ fn finishing_out_of_sight_marks_the_tab_done_until_it_is_opened() {
 #[test]
 fn the_compact_menu_hides_the_tab_beneath_it() {
     let (mut app, rx, _dirs, claude) = working_claude();
-    app.nav = Some(ui::Nav::Workspaces);
+    app.screen.nav = Some(ui::Nav::Workspaces);
     claude.signal("finish");
     watch_until(&mut app, &rx, "claude finishes under the menu", |a| status(a, 0, 0) == Some(Status::Done));
     let small = Rect::new(0, 0, 80, 30);
     let bar = text(&render(&mut app, small), Rect::new(0, 1, 7, 1));
 
-    app.nav = None;
+    app.screen.nav = None;
     let now = app.agents.watched.expect("watched");
     app.watch_agents(now);
 
@@ -529,7 +529,7 @@ impl Watched {
     }
 
     fn token(&self) -> Option<String> {
-        self.app.toast.as_ref().and_then(|toast| toast.go.clone())
+        self.app.messages.toast.as_ref().and_then(|toast| toast.go.clone())
     }
 
     fn told(&mut self) -> (Option<String>, Vec<Notification>) {
@@ -675,7 +675,7 @@ fn gemini_context_reaches_both_layouts_and_ambiguity_hides_only_conversation_dat
     fake.append(crate::test_util::fixture!("gemini/0.63.0/reply.jsonl"));
     watch_until(&mut w.app, &w.rx, "Gemini's context shows", |a| a.tab().is_some_and(|t| t.context().is_some()));
     assert!(second_row(&mut w.app).1.contains("1%"));
-    w.app.nav = Some(ui::Nav::Workspaces);
+    w.app.screen.nav = Some(ui::Nav::Workspaces);
     let compact = render(&mut w.app, Rect::new(0, 0, 80, 30));
     let contents: String = compact.backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect();
     assert!(contents.contains("gemini-"));

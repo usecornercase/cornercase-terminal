@@ -137,21 +137,21 @@ fn discard(repo: &Path, paths: &[PathBuf]) {
 
 impl App {
     pub(crate) fn set_runs_dir(&mut self, dir: &Path) {
-        self.runs_dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
+        self.paths.runs_dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
     }
 
     pub(super) fn defer_run_dirs(&mut self, workspace: u64, dirs: Vec<PathBuf>) {
         if !dirs.is_empty() {
-            self.pending_run_dirs.push((workspace, dirs));
+            self.spawn.pending_run_dirs.push((workspace, dirs));
         }
     }
 
     pub(super) fn flush_run_dirs(&mut self) {
         let projects = &self.projects;
-        let (gone, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.pending_run_dirs)
+        let (gone, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.spawn.pending_run_dirs)
             .into_iter()
             .partition(|(id, _)| projects.workspace_index(*id).is_none());
-        self.pending_run_dirs = kept;
+        self.spawn.pending_run_dirs = kept;
         for (_, dirs) in gone {
             self.remove_run_dirs(dirs);
         }
@@ -169,7 +169,7 @@ impl App {
         store::list(
             builtin::for_config(&self.config),
             &self.config.hidden_flows,
-            &paths::flows(&self.config_path),
+            &paths::flows(&self.paths.config_path),
             project.as_deref(),
         )
     }
@@ -185,7 +185,7 @@ impl App {
         let RunTrees { run, branch, roles } = trees;
         let project = &self.projects[p];
         let (id, repo) = (project.id, project.path.clone());
-        let dir = self.config.worktrees_dir(self.home.as_deref());
+        let dir = self.config.worktrees_dir(self.paths.home.as_deref());
         let job = Job::new(Level::Info, "worktree", "add for a flow").with("project", id).with("branch", &branch);
         let job = job.with("roles", roles.len()).with("run", run.is_some());
         self.spawn_job(
@@ -321,7 +321,7 @@ impl App {
         let mut info =
             RunInfo { run: run.id, project, workspace: id, branch, members: Vec::new(), note, run_dir: None };
         let path = self.projects[p].workspaces[w].path.clone();
-        let dir = folder::make(&self.runs_dir, &path, time::now() * 1000)
+        let dir = folder::make(&self.paths.runs_dir, &path, time::now() * 1000)
             .map_err(|e| format!("could not make the run's folder: {e}"))?;
         self.projects[p].workspaces[w].run_dirs.push(dir.clone());
         let panes = RunPanes { roles: &roles, trees: &trees, setup, dir: &dir, accounts: &accounts };
@@ -422,13 +422,13 @@ impl App {
         ));
         log::info!("flow", "a member waits for you", workspace = workspace, role = role);
         self.outbox.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
-        self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(activity::Status::Waiting)));
+        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Agent(activity::Status::Waiting)));
     }
 
     pub(super) fn run_failed(&mut self, message: &str) {
         log::warning!("flow", "the run did not start", error = message);
         if !self.start_flow_settled(Some(message)) {
-            self.toast = Some(Toast::new(format!("the flow did not start: {message}"), ui::ToastIcon::Bug));
+            self.messages.toast = Some(Toast::new(format!("the flow did not start: {message}"), ui::ToastIcon::Bug));
         }
     }
 

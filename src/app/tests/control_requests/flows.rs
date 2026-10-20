@@ -414,7 +414,7 @@ fn yours_replaces_a_built_in_of_its_name_and_a_projects_comes_after_the_built_in
     let mut team = Team::new();
     let mut quick = pair();
     quick.name = "Quick".into();
-    store::save(&paths::flows(&team.app.config_path), &quick, None).expect("save your Quick");
+    store::save(&paths::flows(&team.app.paths.config_path), &quick, None).expect("save your Quick");
     let mut theirs = pair();
     theirs.name = "Full issue".into();
     store::save(&store::project_dir(team.repo.path()), &theirs, None).expect("save the project's flow");

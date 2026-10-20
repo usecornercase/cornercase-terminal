@@ -33,9 +33,9 @@ fn a_panel_button_opens_and_closes_its_panel(#[case] item: ui::ActivityItem, #[c
     let (mut app, _rx) = with_bar();
     let at = button(&app, item);
     click(&mut app, at);
-    let opened = app.side;
+    let opened = app.screen.side;
     click(&mut app, at);
-    assert_eq!((opened, app.side), (Some(side), None));
+    assert_eq!((opened, app.screen.side), (Some(side), None));
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn changes_shows_in_a_repository() {
     app.config.icon_bar = true;
     let at = button(&app, ui::ActivityItem::Changes);
     click(&mut app, at);
-    assert_eq!(app.side, Some(Side::Changes));
+    assert_eq!(app.screen.side, Some(Side::Changes));
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn a_press_beside_the_icons_does_nothing() {
     let (mut app, _rx) = with_bar();
     let settings = button(&app, ui::ActivityItem::Settings);
     click(&mut app, Position::new(settings.x, settings.y - 1));
-    assert_eq!((app.overlay.is_none(), app.side), (true, None));
+    assert_eq!((app.overlay.is_none(), app.screen.side), (true, None));
 }
 
 #[rstest]

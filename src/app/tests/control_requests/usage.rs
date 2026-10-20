@@ -85,7 +85,7 @@ fn a_failed_probe_answers_its_error_and_the_reading_before_it() {
     let (mut app, rx, dir) = with_agents(&[(CLAUDE, &claude)]);
     fresh(&mut app, &rx);
     write_executable(&dir.path().join(CLAUDE), "#!/bin/sh\nexec sleep 30\n");
-    app.usage_timeout = Duration::from_millis(200);
+    app.usages.timeout = Duration::from_millis(200);
     let answer = fresh(&mut app, &rx);
     let claude = plan(&answer, CLAUDE);
     assert_eq!(claude.error.as_deref(), Some("claude did not answer in time"));
@@ -112,12 +112,12 @@ fn an_answer_does_not_wait_for_a_probe_started_after_it() {
         "while [ ! -e \"$(dirname \"$0\")/go\" ]; do sleep 0.05; done\nread -r a\nread -r b\nread -r c\necho '{CODEX_ANSWER}'"
     ));
     let (mut app, rx, dir) = with_agents(&[(CLAUDE, &claude), (CODEX, &codex)]);
-    app.usage_timeout = Duration::from_secs(3);
+    app.usages.timeout = Duration::from_secs(3);
     let text = json!({"contract": 1, "command": "usage", "args": {}}).to_string();
     app.request(CLIENT, &text, Some(AREA), Instant::now());
-    pump_until(&mut app, &rx, "claude answers", |a| a.usage.probe(crate::agents::Known::Claude).answers() == 1);
+    pump_until(&mut app, &rx, "claude answers", |a| a.usages.state.probe(crate::agents::Known::Claude).answers() == 1);
     app.request(10, &text, Some(AREA), Instant::now());
-    assert!(app.usage.probe(crate::agents::Known::Claude).loading());
+    assert!(app.usages.state.probe(crate::agents::Known::Claude).loading());
     std::fs::write(dir.path().join("go"), "").expect("go");
     let mut got = Vec::new();
     wait_until("the first request is answered", || {
@@ -126,7 +126,7 @@ fn an_answer_does_not_wait_for_a_probe_started_after_it() {
         got.extend(app.take_answers());
         got.iter().any(|(client, _)| *client == CLIENT)
     });
-    assert!(app.usage.probe(crate::agents::Known::Claude).loading());
+    assert!(app.usages.state.probe(crate::agents::Known::Claude).loading());
     assert!(got.iter().all(|(client, _)| *client == CLIENT));
 }
 
@@ -137,7 +137,9 @@ fn a_client_that_leaves_drops_its_request_but_the_reading_is_kept() {
     let text = json!({"contract": 1, "command": "usage", "args": {}}).to_string();
     app.request(CLIENT, &text, Some(AREA), Instant::now());
     app.forget(CLIENT);
-    pump_until(&mut app, &rx, "the probe answers", |a| a.usage.probe(crate::agents::Known::Claude).answers() == 1);
+    pump_until(&mut app, &rx, "the probe answers", |a| {
+        a.usages.state.probe(crate::agents::Known::Claude).answers() == 1
+    });
     app.refresh(Instant::now());
     assert_eq!(app.take_answers().len(), 0);
     let cached = plans(ok(&mut app, "usage", &json!({"cached": true})));

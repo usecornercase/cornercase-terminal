@@ -21,7 +21,7 @@ pub(super) struct Resolving<'a> {
 impl App {
     fn link_at(&mut self, at: Position) -> Option<Target> {
         let root = self.project()?.workspace()?.path.clone();
-        let home = self.home.clone();
+        let home = self.paths.home.clone();
         let term = self.term_mut()?;
         let screen = term.emulator.snapshot().ok()?;
         link::under(screen.rows.get(usize::from(at.y))?, at.x, term.cwd().as_deref(), &root, home.as_deref())
@@ -34,9 +34,9 @@ impl App {
         };
         match ev.kind {
             MouseEventKind::Down(MouseButton::Left) => {
-                self.drag = None;
+                self.screen.drag = None;
                 let Some(target) = self.link_at(at) else { return false };
-                self.drag = Some(Drag::Link(LinkPress { term: id, at, target, held: reads.then_some(ev) }));
+                self.screen.drag = Some(Drag::Link(LinkPress { term: id, at, target, held: reads.then_some(ev) }));
                 reads
             }
             MouseEventKind::Drag(MouseButton::Left) => {
@@ -45,7 +45,7 @@ impl App {
                 if press.at == at {
                     return true;
                 }
-                self.drag = None;
+                self.screen.drag = None;
                 if let Some(held) = press.held {
                     self.forward_mouse(held, press.at);
                 }
@@ -53,7 +53,7 @@ impl App {
             }
             MouseEventKind::Up(MouseButton::Left) => {
                 let press = self.held_link().filter(|p| p.term == id).cloned();
-                self.drag = None;
+                self.screen.drag = None;
                 let Some(press) = press else { return false };
                 if press.at == at {
                     self.open_link(&press.target);
@@ -69,7 +69,7 @@ impl App {
     }
 
     fn held_link(&self) -> Option<&LinkPress> {
-        self.drag.as_ref().and_then(Drag::link).filter(|press| press.held.is_some())
+        self.screen.drag.as_ref().and_then(Drag::link).filter(|press| press.held.is_some())
     }
 
     pub(super) fn open_link(&mut self, target: &Target) {
@@ -77,18 +77,18 @@ impl App {
             return;
         };
         self.show_side(Some(Side::Files));
-        self.nav = None;
+        self.screen.nav = None;
         match target.lines {
-            Some(lines) => self.files.open_at(workspace, &target.path, lines, None),
-            None => self.files.open_file(workspace, &target.path),
+            Some(lines) => self.panels.files.open_at(workspace, &target.path, lines, None),
+            None => self.panels.files.open_file(workspace, &target.path),
         }
     }
 
     pub(super) fn link_hover(&self) -> Option<Position> {
-        self.hover.filter(|_| {
+        self.screen.hover.filter(|_| {
             self.overlay.is_none()
                 && !self.file_full_screen()
-                && match &self.drag {
+                && match &self.screen.drag {
                     Some(Drag::Row(_) | Drag::Pane(_) | Drag::Selection { .. } | Drag::Divider { .. }) => false,
                     Some(Drag::Border(_) | Drag::Link(_) | Drag::Lines { .. }) | None => true,
                 }

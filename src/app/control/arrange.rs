@@ -92,7 +92,7 @@ impl App {
             return Err("the notification needs a text".into());
         }
         self.outbox.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
-        self.toast = Some(Toast::new(message, ui::ToastIcon::Check));
+        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Check));
         Ok(Some(json(&Done::default())))
     }
 
@@ -105,12 +105,15 @@ impl App {
             control::Todo::Edit { id, text } => self.todo_edited(id, &text),
             control::Todo::Move { id, before } => self.todo_moved(id, before),
             control::Todo::Rm(id) => {
-                let removed = self.todos.remove(id).ok_or_else(|| none("todo", id))?;
+                let removed = self.panels.todos.remove(id).ok_or_else(|| none("todo", id))?;
                 Ok(Some(json(&self.removed_by_request(removed))))
             }
             control::Todo::ClearDone => {
-                let list =
-                    self.todos.clear_done().map_or_else(TodoList::default, |removed| self.removed_by_request(removed));
+                let list = self
+                    .panels
+                    .todos
+                    .clear_done()
+                    .map_or_else(TodoList::default, |removed| self.removed_by_request(removed));
                 Ok(Some(json(&list)))
             }
             control::Todo::Restore(undo) => self.todo_restored(undo),
@@ -118,43 +121,43 @@ impl App {
     }
 
     fn todo_added(&mut self, text: &str) -> Handled {
-        let id = self.todos.add(text).ok_or("the todo needs a text")?;
+        let id = self.panels.todos.add(text).ok_or("the todo needs a text")?;
         Ok(Some(json(&Done { todo: Some(id), ..Done::default() })))
     }
 
     fn todo_toggled(&mut self, id: u64, only_if_done: bool) -> Handled {
-        let done = self.todos.item(id).ok_or_else(|| none("todo", id))?.done;
+        let done = self.panels.todos.item(id).ok_or_else(|| none("todo", id))?.done;
         if !only_if_done || done {
-            self.todos.toggle(id);
+            self.panels.todos.toggle(id);
         }
         Ok(Some(json(&Done::default())))
     }
 
     fn todo_edited(&mut self, id: u64, text: &str) -> Handled {
-        self.todos.item(id).ok_or_else(|| none("todo", id))?;
-        if !self.todos.edit(id, text) {
+        self.panels.todos.item(id).ok_or_else(|| none("todo", id))?;
+        if !self.panels.todos.edit(id, text) {
             return Err("the todo needs a text".into());
         }
-        if self.todo.field.as_ref().is_some_and(|field| field.item == Some(id)) {
-            self.todo.field = None;
+        if self.panels.todo.field.as_ref().is_some_and(|field| field.item == Some(id)) {
+            self.panels.todo.field = None;
         }
         Ok(Some(json(&Done::default())))
     }
 
     fn todo_moved(&mut self, id: u64, before: Option<u64>) -> Handled {
-        self.todos.item(id).ok_or_else(|| none("todo", id))?;
+        self.panels.todos.item(id).ok_or_else(|| none("todo", id))?;
         if let Some(before) = before {
-            self.todos.item(before).ok_or_else(|| none("todo", before))?;
+            self.panels.todos.item(before).ok_or_else(|| none("todo", before))?;
             if before == id {
                 return Err(malformed(format!("todo {id} cannot move before itself")));
             }
         }
-        self.todos.move_to(id, before);
+        self.panels.todos.move_to(id, before);
         Ok(Some(json(&Done::default())))
     }
 
     fn todo_restored(&mut self, undo: u64) -> Handled {
-        let removed = self.todo.undos.take(undo).ok_or_else(|| {
+        let removed = self.panels.todo.undos.take(undo).ok_or_else(|| {
             Refusal::new(
                 Code::NotFound,
                 format!(
@@ -164,22 +167,22 @@ impl App {
             )
         })?;
         let todos = removed.items().map(todo_item).collect();
-        self.todos.restore(removed);
+        self.panels.todos.restore(removed);
         Ok(Some(json(&TodoList { todos, undo: None })))
     }
 
     pub(in crate::app) fn todo_items(&self) -> Vec<TodoItem> {
-        self.todos.items().iter().map(todo_item).collect()
+        self.panels.todos.items().iter().map(todo_item).collect()
     }
 
     fn removed_by_request(&mut self, removed: crate::todo::Removed) -> TodoList {
         let todos = removed.items().map(todo_item).collect();
-        if let Some(field) = &self.todo.field
+        if let Some(field) = &self.panels.todo.field
             && field.item.is_some_and(|open| removed.items().any(|item| item.id == open))
         {
-            self.todo.field = None;
+            self.panels.todo.field = None;
         }
-        let undo = self.todo.undos.keep(removed);
+        let undo = self.panels.todo.undos.keep(removed);
         TodoList { todos, undo: Some(undo) }
     }
 
@@ -190,11 +193,11 @@ impl App {
         todo: &control::TodoSend,
         now: Instant,
     ) -> Handled {
-        let item = self.todos.item(todo.id).ok_or_else(|| none("todo", todo.id))?;
+        let item = self.panels.todos.item(todo.id).ok_or_else(|| none("todo", todo.id))?;
         if item.done {
             return Err(format!("todo {} is already done, so it is not sent; uncheck it first", todo.id).into());
         }
-        if self.requests.todo_sends.values().any(|sending| sending.todo == todo.id) {
+        if self.wire.requests.todo_sends.values().any(|sending| sending.todo == todo.id) {
             return Err(format!("todo {} is already being sent; wait for its answer", todo.id).into());
         }
         let pane = self.target(asker, todo.pane, todo.tab)?;
@@ -212,7 +215,7 @@ impl App {
             force: todo.force,
             ..control::SendText::default()
         };
-        self.requests.todo_sends.insert(client, super::Sending { todo: todo.id, text, confirmed });
+        self.wire.requests.todo_sends.insert(client, super::Sending { todo: todo.id, text, confirmed });
         self.send_request(client, asker, send, now)
     }
 

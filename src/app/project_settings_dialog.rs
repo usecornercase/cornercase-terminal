@@ -12,9 +12,9 @@ use crate::ui::{self, ProjectSettingsHit};
 impl App {
     pub(super) fn open_project_settings(&mut self, project: u64) {
         let Some(p) = self.projects.project_index(project) else { return };
-        let saved = self.config.project(&self.projects[p].path, self.home.as_deref());
+        let saved = self.config.project(&self.projects[p].path, self.paths.home.as_deref());
         let form = Form::new(project, self.project_label(&self.projects[p]), &saved);
-        self.nav = None;
+        self.screen.nav = None;
         self.overlay = Some(Overlay::ProjectSettings(Box::new(form)));
     }
 
@@ -74,7 +74,7 @@ impl App {
             return;
         };
         let folder = self.projects[p].path.clone();
-        let home = self.home.clone();
+        let home = self.paths.home.clone();
         match self.change_config(|c| c.set_project(&folder, home.as_deref(), settings)) {
             Ok(()) => self.overlay = None,
             Err(e) => {

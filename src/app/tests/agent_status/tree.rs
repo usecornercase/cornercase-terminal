@@ -41,7 +41,7 @@ fn shape(app: &App) -> Vec<(usize, bool, Vec<bool>)> {
 }
 
 fn row_pos(app: &App, i: usize) -> Position {
-    let a = app.layout(TALL).shown(app.nav);
+    let a = app.layout(TALL).shown(app.screen.nav);
     let r = ui::agent_row(a.agents_list, a.pitch, app.agent_places().len(), app.scroll.agents, i);
     Position::new(r.x + 4, r.y + r.height / 2)
 }
@@ -243,7 +243,7 @@ mod folds {
     }
 
     fn row_at(app: &App, i: usize, on_arrow: bool) -> Position {
-        let a = app.layout(TALL).shown(app.nav);
+        let a = app.layout(TALL).shown(app.screen.nav);
         let r = ui::agent_row(a.agents_list, a.pitch, app.shown_agents(false).1.len(), app.scroll.agents, i);
         let depth = app.agents_view().entries[i].depth;
         let x = if on_arrow { ui::agent_fold(r, depth).right() - 1 } else { r.x + 4 };
@@ -405,7 +405,7 @@ mod folds {
             panes: vec![f.child],
             principal: true,
         });
-        let token = f.app.toast.as_ref().and_then(|toast| toast.go.clone()).expect("a go");
+        let token = f.app.messages.toast.as_ref().and_then(|toast| toast.go.clone()).expect("a go");
 
         f.app.notification_clicked(&token);
         render(&mut f.app, TALL);
@@ -447,7 +447,7 @@ mod folds {
         for _ in 0..5 {
             fourth(&mut f, under, Activity::Idle);
         }
-        f.app.widths.agents = Some(6);
+        f.app.screen.widths.agents = Some(6);
         render(&mut f.app, TALL);
         let areas = f.app.layout(TALL);
         f.app.scroll.agents = f.app.agent_layout(&areas).scrolled(100);
@@ -456,7 +456,7 @@ mod folds {
         f.app.set_agent_fold(f.parent, true);
 
         assert!(high > 0);
-        assert_eq!(f.app.scroll.agents, f.app.agent_layout(&f.app.drawn).scrolled(0));
+        assert_eq!(f.app.scroll.agents, f.app.agent_layout(&f.app.screen.drawn).scrolled(0));
         assert!(f.app.scroll.agents < high);
     }
 

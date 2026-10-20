@@ -79,7 +79,7 @@ fn following_panes_tells_only_about_them_and_ends_once_they_all_closed() {
     let got = until_told(&mut app, &rx, "the followed pane closes", |streamed| streamed.last() == Some(&Streamed::End));
 
     assert_eq!(told(&got), [(wire::What::Closed { kind: wire::Kind::Pane }, ids)]);
-    assert!(!app.events.listening());
+    assert!(!app.wire.events.listening());
 }
 
 #[test]
@@ -90,7 +90,7 @@ fn a_pane_that_does_not_exist_cannot_be_followed() {
         error(now(&mut app, None, Command::Events(wire::Events { panes: vec![999], host: false, notices: false })));
 
     assert!(message.contains("there is no pane 999"), "{message}");
-    assert!(!app.events.listening());
+    assert!(!app.wire.events.listening());
 }
 
 #[test]
@@ -244,8 +244,8 @@ fn notices_reach_only_the_readers_that_asked_and_a_pane_reader_gets_those_naming
     let (mut app, _rx, _dirs) = app_with(1);
     let pane = term(&app, 0).id;
     let other = done(now(&mut app, None, new_tab(None))).ids.pane.expect("a pane");
-    app.events.subscribe(CLIENT, vec![pane], false, true);
-    app.events.subscribe(CLIENT + 1, Vec::new(), false, false);
+    app.wire.events.subscribe(CLIENT, vec![pane], false, true);
+    app.wire.events.subscribe(CLIENT + 1, Vec::new(), false, false);
     let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
     let _ = app.take_events();
 
@@ -284,7 +284,7 @@ fn a_notice_says_whether_it_plays_a_sound(#[case] sound: bool) {
     let (mut app, _rx, _dirs) = app_with(1);
     app.config.sound = sound;
     let pane = term(&app, 0).id;
-    app.events.subscribe(CLIENT, Vec::new(), false, true);
+    app.wire.events.subscribe(CLIENT, Vec::new(), false, true);
     let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
     let _ = app.take_events();
 

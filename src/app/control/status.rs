@@ -49,7 +49,7 @@ impl App {
             caller: caller.filter(|id| self.projects.tab_of_pane(*id).is_some()),
             live: self.pane_ids(),
             counted: self.changes_target().map(|t| t.workspace),
-            sweeping: self.change_streams.wants_every(),
+            sweeping: self.wire.change_streams.wants_every(),
         };
         Report {
             version: version::CURRENT.to_string(),
@@ -138,7 +138,7 @@ impl App {
             version: version::CURRENT.to_string(),
             boot: control::server_token().to_string(),
             todos: self.todo_items(),
-            queue: self.queued.queue.entries.clone(),
+            queue: self.panels.queued.queue.entries.clone(),
             away: self.away_info(),
             update: self.update_info(),
             keep_awake: self.keep_awake_info(),
@@ -243,7 +243,7 @@ impl App {
             return Err(none("pane", *pane));
         }
         self.publish(log::enabled(Level::Info));
-        self.events.subscribe(client, events.panes, events.host, events.notices);
+        self.wire.events.subscribe(client, events.panes, events.host, events.notices);
         Ok(Some(json(&Done::default())))
     }
 }

@@ -34,7 +34,7 @@ type Held = (Receiver<AppEvent>, TempDir, TempDir, TempDir);
 fn scheduled(accounts: BTreeMap<String, String>) -> (App, u64, Held) {
     let (mut app, rx, repo, config, worktrees) = queued_app();
     with_profiles(&mut app, &config);
-    let id = app.queued.queue.add(chosen(&app, accounts)).expect("add");
+    let id = app.panels.queued.queue.add(chosen(&app, accounts)).expect("add");
     (app, id, (rx, repo, config, worktrees))
 }
 
@@ -81,7 +81,7 @@ fn an_account_deleted_before_the_start_fails_the_entry_with_its_reason() {
     let reason = app.run_queued(id, Instant::now()).expect_err("no account");
 
     assert!(reason.contains("there is no claude account `home`"), "{reason}");
-    let state = &app.queued.queue.entry(id).expect("entry").state;
+    let state = &app.panels.queued.queue.entry(id).expect("entry").state;
     assert!(
         matches!(state, QueueState::Failed { reason } if reason.contains("there is no claude account `home`")),
         "{state:?}"
@@ -106,7 +106,7 @@ fn adding_with_an_unknown_account_is_refused(#[case] agent: &str, #[case] accoun
     let refused = app.add_queue_request(None, None, None, &add).expect_err("unknown");
 
     assert_eq!(refused.code, crate::control::contract::Code::NotFound);
-    assert_eq!(app.queued.queue.entries, []);
+    assert_eq!(app.panels.queued.queue.entries, []);
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn an_edit_keeps_the_accounts_and_changes_only_the_agents_it_names() {
     };
     let id =
         app.add_queue_request(None, None, None, &add).expect("add").expect("answered")["id"].as_u64().expect("an id");
-    let accounts_of = |app: &App| app.queued.queue.entry(id).expect("entry").task.accounts.clone();
+    let accounts_of = |app: &App| app.panels.queued.queue.entry(id).expect("entry").task.accounts.clone();
 
     let edit = QueueAdd { prompt: Some("fix logout".into()), ..QueueAdd::default() };
     app.add_queue_request(None, None, Some(id), &edit).expect("edit");
@@ -165,7 +165,7 @@ fn the_form_offers_the_agents_accounts_with_the_one_in_use_and_saves_the_pick() 
     form(&mut app).account.as_mut().expect("combo").combo.choose(1);
     save(&mut app);
 
-    let entry = app.queued.queue.entries.last().expect("the entry");
+    let entry = app.panels.queued.queue.entries.last().expect("the entry");
     assert_eq!(entry.task.accounts, claude("home"));
 }
 
@@ -195,7 +195,7 @@ fn editing_an_entry_shows_its_account_and_saves_a_new_pick() {
     form(&mut app).account.as_mut().expect("combo").combo.choose(0);
     save(&mut app);
 
-    assert_eq!(app.queued.queue.entry(id).expect("entry").task.accounts, claude(""));
+    assert_eq!(app.panels.queued.queue.entry(id).expect("entry").task.accounts, claude(""));
 }
 
 #[test]
@@ -206,7 +206,7 @@ fn editing_an_entry_without_accounts_leaves_it_to_the_selection_when_it_runs() {
     assert_eq!(shown(&mut app).1.as_deref(), Some("work"));
     save(&mut app);
 
-    assert_eq!(app.queued.queue.entry(id).expect("entry").task.accounts, BTreeMap::new());
+    assert_eq!(app.panels.queued.queue.entry(id).expect("entry").task.accounts, BTreeMap::new());
 }
 
 #[test]
@@ -223,7 +223,7 @@ fn an_account_deleted_while_the_form_is_open_is_refused_on_save() {
 
     let error = form(&mut app).error.clone().expect("the form says why");
     assert!(error.contains("there is no claude account `home`"), "{error}");
-    assert_eq!(app.queued.queue.entries, []);
+    assert_eq!(app.panels.queued.queue.entries, []);
 }
 
 #[rstest]
@@ -239,7 +239,7 @@ fn without_accounts_or_with_the_picker_off_the_form_has_no_account(#[case] accou
     assert!(form(&mut app).account.is_none());
     assert!(!form(&mut app).controls().contains(&Control::Account));
     save(&mut app);
-    assert_eq!(app.queued.queue.entries.last().expect("entry").task.accounts, BTreeMap::new());
+    assert_eq!(app.panels.queued.queue.entries.last().expect("entry").task.accounts, BTreeMap::new());
 }
 
 #[test]
@@ -257,5 +257,5 @@ fn editing_an_entry_whose_account_is_gone_says_so_and_keeps_it() {
 
     let error = form(&mut app).error.clone().expect("the save is refused");
     assert!(error.contains("there is no claude account `home`"), "{error}");
-    assert_eq!(app.queued.queue.entry(id).expect("entry").task.accounts, claude("home"));
+    assert_eq!(app.panels.queued.queue.entry(id).expect("entry").task.accounts, claude("home"));
 }

@@ -64,7 +64,7 @@ impl App {
             self.restore_run(id, run, &mut tabs, run_dir.as_deref());
         }
         let tabs = tabs.into_iter().map(|(_, tab)| tab).collect();
-        let mut workspace = saved.restore(id, path, tabs, &self.runs_dir);
+        let mut workspace = saved.restore(id, path, tabs, &self.paths.runs_dir);
         if let Some(dir) = run_dir.filter(|dir| !workspace.run_dirs.contains(dir)) {
             workspace.run_dirs.push(dir);
         }
@@ -73,7 +73,7 @@ impl App {
 
     fn restore_run_dir(&self, saved: &WorkspaceState) -> Option<PathBuf> {
         let name = saved.run.as_ref()?.dir.as_deref().filter(|name| folder::valid(name))?;
-        let dir = self.runs_dir.join(name);
+        let dir = self.paths.runs_dir.join(name);
         match folder::ensure(&dir) {
             Ok(true) => log::info!("flow", "run folder made again", path = dir.display()),
             Ok(false) => {}
@@ -107,7 +107,7 @@ impl App {
                 log::warning!("server", "a role's worktree is gone, so its agent does not resume", pane = term.id);
                 let name = role.map(|role| role.name.as_str()).unwrap_or_default();
                 let message = format!("the worktree of {name} is gone: it works in the run's worktree now");
-                self.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
+                self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
             } else if !lost && self.resume(&mut term, pane.agent.as_ref(), role, run) {
                 term.agent.restore(pane.done, pane.pending);
             }
@@ -130,7 +130,7 @@ impl App {
         {
             wanted.entry(agent.kind.clone()).or_insert_with(|| name.clone());
         }
-        let accounts = Accounts::of(&self.accounts_dir, &wanted);
+        let accounts = Accounts::of(&self.paths.accounts_dir, &wanted);
         let gone = wanted
             .into_iter()
             .filter(|(provider, name)| Known::of(provider).and_then(|kind| accounts.name(kind)) != Some(name.as_str()))
@@ -147,7 +147,7 @@ impl App {
         log::warning!("accounts", "a saved account is gone", pane = pane, provider = provider, account = name);
         let what = if lost { "its conversation does not resume" } else { "the pane opens without it" };
         let message = format!("the {provider} account `{name}` is gone: {what}");
-        self.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
+        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
         lost
     }
 
@@ -203,7 +203,7 @@ impl App {
         } else {
             return false;
         };
-        self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(Status::Working)));
+        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Agent(Status::Working)));
         true
     }
 

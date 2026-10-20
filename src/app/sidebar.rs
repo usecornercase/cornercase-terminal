@@ -110,7 +110,7 @@ impl App {
     pub(super) fn agents_view(&self) -> ui::AgentsView {
         let focus = self.focus();
         let focused = self.term().map(|term| term.id);
-        let narrow = self.drawn.agents_list.width < ui::MIN_MENU_ROW_WIDTH;
+        let narrow = self.screen.drawn.agents_list.width < ui::MIN_MENU_ROW_WIDTH;
         let (places, nodes) = self.shown_agents(narrow);
         let entries = nodes.into_iter().map(|node| {
             let (p, w, t, i) = places[node.index];
@@ -194,7 +194,7 @@ impl App {
 
     fn press_agent(&mut self, areas: &ui::Areas, pos: Position, area: Rect) {
         let Some(at) = self.agent_row_at(areas, pos) else { return };
-        self.drag = Some(Drag::Row(RowDrag {
+        self.screen.drag = Some(Drag::Row(RowDrag {
             target: Grab::Agent(at.pane),
             row: at.row,
             moved: false,
@@ -207,7 +207,7 @@ impl App {
     pub(super) fn set_agent_fold(&mut self, pane: u64, collapsed: bool) -> bool {
         let Some(term) = self.projects.pane_by_mut(pane) else { return false };
         term.collapsed = collapsed;
-        self.scroll.agents = self.agent_layout(&self.drawn).scrolled(0);
+        self.scroll.agents = self.agent_layout(&self.screen.drawn).scrolled(0);
         true
     }
 
@@ -244,7 +244,7 @@ impl App {
         let lines = |w: &Workspace| -> Vec<u16> { w.tabs.iter().map(|t| self.tab_details(t).lines()).collect() };
         let lines = self.project().map(|p| p.workspaces.iter().map(lines).collect()).unwrap_or_default();
         let folded = self.project().map(|p| p.workspaces.iter().map(|w| w.collapsed).collect()).unwrap_or_default();
-        ui::TabLines::new(lines, self.drawn.tab_bar.is_empty()).folded(folded)
+        ui::TabLines::new(lines, self.screen.drawn.tab_bar.is_empty()).folded(folded)
     }
 
     pub(super) fn click_workspaces(&mut self, list: Rect, pitch: u16, pos: Position, area: Rect) -> Result<()> {
@@ -254,7 +254,7 @@ impl App {
         let tabs = self.tab_lines();
         let hit = self.workspace_hit(list, pitch, &tabs, pos);
         if matches!(hit, Some(WorkspaceHit::NewTab(_))) {
-            self.nav = None;
+            self.screen.nav = None;
         }
         if let Some(WorkspaceHit::Workspace(w)) = hit
             && let Some((rect, id)) = self.pull_in_list(list, pitch, &tabs, w)

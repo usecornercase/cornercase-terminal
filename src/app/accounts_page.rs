@@ -65,7 +65,7 @@ impl App {
         };
         if self.account_answered(result, done.clone()) && matches!(order, Order::Add(_)) {
             self.overlay = None;
-            self.toast = Some(Toast::new(done, ui::ToastIcon::Check));
+            self.messages.toast = Some(Toast::new(done, ui::ToastIcon::Check));
         }
     }
 
@@ -73,7 +73,7 @@ impl App {
         if let Err(refusal) = result {
             match &mut self.overlay {
                 Some(Overlay::Settings(s)) => s.notice = Some(refusal.message),
-                _ => self.toast = Some(Toast::new(refusal.message, ui::ToastIcon::Bug)),
+                _ => self.messages.toast = Some(Toast::new(refusal.message, ui::ToastIcon::Bug)),
             }
             return false;
         }
@@ -85,7 +85,7 @@ impl App {
         self.refresh_accounts_page();
         match &mut self.overlay {
             Some(Overlay::Settings(s)) => s.notice = Some(notice),
-            _ => self.toast = Some(Toast::new(notice, ui::ToastIcon::Check)),
+            _ => self.messages.toast = Some(Toast::new(notice, ui::ToastIcon::Check)),
         }
     }
 

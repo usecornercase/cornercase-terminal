@@ -244,7 +244,7 @@ impl Events {
 
 impl App {
     pub(super) fn tell_host(&mut self, pane: u64, copied: Vec<String>, rang: u32, now: Instant) {
-        if !self.events.hosting() || (copied.is_empty() && rang == 0) {
+        if !self.wire.events.hosting() || (copied.is_empty() && rang == 0) {
             return;
         }
         let Some((p, w, t)) = self.projects.tab_of_pane(pane) else { return };
@@ -264,31 +264,31 @@ impl App {
             })
             .collect();
         if rang > 0
-            && let Some(count) = self.events.bells.ring(pane, ids, u64::from(rang), now)
+            && let Some(count) = self.wire.events.bells.ring(pane, ids, u64::from(rang), now)
         {
             events.push(Event { time, what: What::Bell { count }, ids });
         }
-        self.events.publish(&events);
+        self.wire.events.publish(&events);
     }
 
     pub(super) fn ring_bells(&mut self, now: Instant) {
-        let due = self.events.bells.due(now);
+        let due = self.wire.events.bells.due(now);
         if due.is_empty() {
             return;
         }
         let time = crate::time::Stamp(SystemTime::now()).to_string();
         let events: Vec<Event> =
             due.into_iter().map(|(ids, count)| Event { time: time.clone(), what: What::Bell { count }, ids }).collect();
-        self.events.publish(&events);
+        self.wire.events.publish(&events);
     }
 
     pub(crate) fn take_events(&mut self) -> Vec<(u64, Streamed)> {
-        std::mem::take(&mut self.events.out)
+        std::mem::take(&mut self.wire.events.out)
     }
 
     pub(super) fn watch_snapshots(&mut self, client: u64, now: Instant) -> Snapshot {
         let report = self.report(None);
-        let Events { snapshots, out, .. } = &mut self.events;
+        let Events { snapshots, out, .. } = &mut self.wire.events;
         snapshots.offer(report, now, out, "session");
         let snapshot = snapshots.join(client);
         log::info!("control", "watching", client = client, revision = snapshot.revision);
@@ -297,7 +297,7 @@ impl App {
 
     pub(super) fn app_snapshots(&mut self, client: u64, now: Instant) -> Snapshot<AppState> {
         let state = self.app_state();
-        let Events { app, out, .. } = &mut self.events;
+        let Events { app, out, .. } = &mut self.wire.events;
         app.offer(state, now, out, "app");
         let snapshot = app.join(client);
         log::info!("control", "following the app", client = client, revision = snapshot.revision);
@@ -305,16 +305,16 @@ impl App {
     }
 
     pub(super) fn publish_app(&mut self, now: Instant) {
-        if self.events.app.ready(now) {
+        if self.wire.events.app.ready(now) {
             let state = self.app_state();
-            let Events { app, out, .. } = &mut self.events;
+            let Events { app, out, .. } = &mut self.wire.events;
             app.offer(state, now, out, "app");
         }
     }
 
     pub(super) fn flow_runs_snapshots(&mut self, client: u64, now: Instant) -> Snapshot<FlowRuns> {
         let state = self.flow_runs_state();
-        let Events { runs, out, .. } = &mut self.events;
+        let Events { runs, out, .. } = &mut self.wire.events;
         runs.offer(state, now, out, "flow-runs");
         let snapshot = runs.join(client);
         log::info!("control", "following flow runs", client = client, revision = snapshot.revision);
@@ -322,28 +322,28 @@ impl App {
     }
 
     pub(super) fn publish_flow_runs(&mut self, now: Instant) {
-        if self.events.runs.ready(now) {
+        if self.wire.events.runs.ready(now) {
             let state = self.flow_runs_state();
-            let Events { runs, out, .. } = &mut self.events;
+            let Events { runs, out, .. } = &mut self.wire.events;
             runs.offer(state, now, out, "flow-runs");
         }
     }
 
     pub(super) fn publish_snapshot(&mut self, now: Instant) {
-        let watching = !self.events.snapshots.watchers.is_empty();
-        if !watching && self.views.is_empty() {
+        let watching = !self.wire.events.snapshots.watchers.is_empty();
+        if !watching && self.wire.views.is_empty() {
             return;
         }
-        if self.events.snapshots.read != self.agents.watched {
-            self.events.snapshots.read = self.agents.watched;
+        if self.wire.events.snapshots.read != self.agents.watched {
+            self.wire.events.snapshots.read = self.agents.watched;
             let refreshed = Some(self.refreshed());
-            if self.events.snapshots.refreshed != refreshed {
-                self.events.snapshots.refreshed = refreshed;
-                self.events.snapshots.changed = true;
+            if self.wire.events.snapshots.refreshed != refreshed {
+                self.wire.events.snapshots.refreshed = refreshed;
+                self.wire.events.snapshots.changed = true;
             }
         }
-        let own = self.views.changed();
-        let snapshots = &mut self.events.snapshots;
+        let own = self.wire.views.changed();
+        let snapshots = &mut self.wire.events.snapshots;
         let paced = snapshots.waits(now);
         if !snapshots.changed && !own {
             return;
@@ -354,15 +354,15 @@ impl App {
         }
         let report = self.report(None);
         if paced {
-            self.events.snapshots.due = self.events.snapshots.changed;
+            self.wire.events.snapshots.due = self.wire.events.snapshots.changed;
             self.publish_views(&report);
             return;
         }
         if watching {
-            let Events { snapshots, out, .. } = &mut self.events;
+            let Events { snapshots, out, .. } = &mut self.wire.events;
             snapshots.offer(report.clone(), now, out, "session");
         } else {
-            let snapshots = &mut self.events.snapshots;
+            let snapshots = &mut self.wire.events.snapshots;
             snapshots.built = Some(now);
             snapshots.due = false;
             snapshots.changed = false;

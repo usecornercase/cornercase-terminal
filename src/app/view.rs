@@ -87,7 +87,7 @@ impl App {
     pub(super) fn tree_view(&self) -> ui::TreeView {
         let shape = self.tree_shape();
         let rows = ui::tree_rows(&shape);
-        let (above, below) = ui::tree_layout_rows(self.drawn.list, &shape, &rows, self.scroll.projects).hidden();
+        let (above, below) = ui::tree_layout_rows(self.screen.drawn.list, &shape, &rows, self.scroll.projects).hidden();
         let shown = &rows[above.end..below.start];
         let open = self.tree_open();
         let workspaces = self.projects.iter().enumerate().map(|(p, project)| {
@@ -122,12 +122,12 @@ impl App {
     }
 
     pub(super) fn tab_view(&mut self, area: Rect) -> Option<ui::TabView> {
-        let dragging = self.drag.as_ref().and_then(Drag::divider);
-        let pane_area = self.layout(area).shown(self.nav).pane;
+        let dragging = self.screen.drag.as_ref().and_then(Drag::divider);
+        let pane_area = self.layout(area).shown(self.screen.nav).pane;
         let landing = self.pane_landing(pane_area);
         let pointer = self.link_hover();
         let root = self.project().and_then(Project::workspace).map(|w| w.path.clone());
-        let (home, bands) = (self.home.clone(), self.pane_bands());
+        let (home, bands) = (self.paths.home.clone(), self.pane_bands());
         let dim_inactive = self.config.dim_inactive_panes;
         self.tab_mut().and_then(|tab| {
             let layout = tab.layout_by_index()?;
@@ -144,10 +144,10 @@ impl App {
     pub(super) fn lists_view(&self, area: Rect, now: Instant) -> ui::View<'_> {
         let project = self.project();
         let workspaces = project
-            .filter(|_| !self.drawn.tree)
+            .filter(|_| !self.screen.drawn.tree)
             .map(|p| p.workspaces.iter().map(|w| self.workspace_entry(w)).collect());
         ui::View {
-            tree: self.drawn.tree.then(|| self.tree_view()),
+            tree: self.screen.drawn.tree.then(|| self.tree_view()),
             agents: self.config.agents_section.then(|| self.agents_view()),
             counts: self.config.counts,
             icons: self.config.icon_bar,
@@ -169,23 +169,23 @@ impl App {
         let visible = self.visible_tab();
         let attention = activity::attention(self.projects.tabs().filter(|t| Some(t.id) != visible).map(Tab::status));
         ui::View {
-            hover: self.hover.filter(|_| self.drag.as_ref().is_none_or(Drag::shows_hover)),
-            widths: self.widths,
+            hover: self.screen.hover.filter(|_| self.screen.drag.as_ref().is_none_or(Drag::shows_hover)),
+            widths: self.screen.widths,
             sidebar: self.sidebar(),
-            resizing: self.drag.as_ref().and_then(Drag::border),
-            light: self.theme.is_light() == Some(true),
-            muted: ui::muted(&self.theme),
-            soft: ui::soft(&self.theme),
-            toast: self.toast.as_ref().map(Toast::view),
-            star: self.star.card,
-            nav: self.nav,
+            resizing: self.screen.drag.as_ref().and_then(Drag::border),
+            light: self.themes.theme.is_light() == Some(true),
+            muted: ui::muted(&self.themes.theme),
+            soft: ui::soft(&self.themes.theme),
+            toast: self.messages.toast.as_ref().map(Toast::view),
+            star: self.messages.star.card,
+            nav: self.screen.nav,
             update: self.update_label(),
             remote: self.remote_button(),
             accounts: self.account_pills(),
             attention,
             spin: self.spin(now),
             drag: self.row_drag_view(area),
-            tab_bar: (!self.drawn.tab_bar.is_empty()).then(|| self.tab_bar_view()),
+            tab_bar: (!self.screen.drawn.tab_bar.is_empty()).then(|| self.tab_bar_view()),
             ..self.panels_view(area, now)
         }
     }
@@ -194,11 +194,12 @@ impl App {
         ui::View {
             changes: if self.changes_shown() { self.panel_view() } else { None },
             changes_button: self.changes_button_view(),
-            todo: (self.side == Some(Side::Todo)).then(|| self.todo_view(self.layout(area).shown(self.nav).changes)),
-            flow: (self.side == Some(Side::Flow)).then(|| self.flow_view(now, self.spin(now))).flatten(),
+            todo: (self.screen.side == Some(Side::Todo))
+                .then(|| self.todo_view(self.layout(area).shown(self.screen.nav).changes)),
+            flow: (self.screen.side == Some(Side::Flow)).then(|| self.flow_view(now, self.spin(now))).flatten(),
             flow_run: self.has_run(),
             todo_dot: self.config.todo_dot,
-            todo_pending: self.todos.pending() > 0,
+            todo_pending: self.panels.todos.pending() > 0,
             ..ui::View::default()
         }
     }
@@ -209,7 +210,7 @@ impl App {
     }
 
     fn row_drag_view(&self, area: Rect) -> Option<ui::Drag> {
-        let moved = self.row_drag().filter(|d| d.moved).zip(self.hover);
+        let moved = self.row_drag().filter(|d| d.moved).zip(self.screen.hover);
         moved.and_then(|(d, pos)| match d.target {
             Grab::Row(target) => self.drag_view(target, pos, area),
             Grab::Todo(id) => Some(ui::Drag::Todo(id)),

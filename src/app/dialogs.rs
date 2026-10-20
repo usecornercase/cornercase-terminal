@@ -34,7 +34,7 @@ impl App {
     pub(super) fn new_workspace_view(&self, overlay: &Overlay) -> Option<ui::Overlay> {
         let Overlay::NewWorkspace { project, input, worktree, error, creating } = overlay else { return None };
         let (project, worktree, creating) = (*project, *worktree, *creating);
-        let home = self.home.as_deref();
+        let home = self.paths.home.as_deref();
         let repo = self.projects.project_index(project).map(|p| self.projects[p].path.clone()).unwrap_or_default();
         let path = if worktree == Some(true) {
             worktree::checkout_path(&self.config.worktrees_dir(home), &repo, input.trim())

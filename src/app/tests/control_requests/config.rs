@@ -207,7 +207,7 @@ fn a_file_that_cannot_be_read_refuses_changes() {
 #[test]
 fn a_watcher_sees_the_revision_grow_when_a_setting_changes() {
     let mut s = setup();
-    s.app.events.snapshots.every = Duration::ZERO;
+    s.app.wire.events.snapshots.every = Duration::ZERO;
     let first: crate::control::Snapshot =
         serde_json::from_value(value(&mut s.app, None, Command::Watch(wire::Watch::default()))).expect("a snapshot");
     let before = first.report.config.expect("a revision").revision;

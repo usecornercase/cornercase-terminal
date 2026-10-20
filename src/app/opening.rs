@@ -52,7 +52,7 @@ impl App {
         let reason = text::one_line(&failed.reason);
         log::warning!("ui", "could not open", client = client, opener = failed.opener.id(), reason = reason);
         let message = format!("could not open in {}: {reason}", failed.opener.name());
-        self.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
+        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
     }
 
     pub(super) fn open_entry(&self, subject: Subject) -> MenuAction {
@@ -100,7 +100,7 @@ impl App {
             return;
         }
         let Some(path) = place.path.to_str() else {
-            self.toast = Some(Toast::new(NOT_UTF8, ui::ToastIcon::Bug));
+            self.messages.toast = Some(Toast::new(NOT_UTF8, ui::ToastIcon::Bug));
             return;
         };
         let client = self.opening.window;
@@ -112,13 +112,13 @@ impl App {
     pub(super) fn copy_path(&mut self, subject: Subject) {
         let Some(place) = self.place(subject) else { return };
         let Some(path) = place.path.to_str() else {
-            self.toast = Some(Toast::new(NOT_UTF8, ui::ToastIcon::Bug));
+            self.messages.toast = Some(Toast::new(NOT_UTF8, ui::ToastIcon::Bug));
             return;
         };
         self.copy(path);
         let what = if place.kind == Kind::Folder { "folder" } else { "file" };
         let message = format!("copied the {what}'s path: it is on the server's machine");
-        self.toast = Some(Toast::new(message, ui::ToastIcon::Check));
+        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Check));
     }
 
     fn workspace_path(&self, workspace: u64) -> Option<&Path> {
@@ -141,7 +141,7 @@ impl App {
             }
             Subject::File(workspace) => {
                 let root = self.workspace_path(workspace)?;
-                let viewer = self.files.viewer(workspace)?;
+                let viewer = self.panels.files.viewer(workspace)?;
                 let path = root.join(&viewer.path);
                 let image = viewer.content.as_ref().is_some_and(|content| content.is_image());
                 let line = viewer.selected().filter(|_| !image).map(|(first, _)| first);

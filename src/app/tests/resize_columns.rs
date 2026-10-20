@@ -41,7 +41,7 @@ fn dragging_the_projects_border_widens_the_sidebar() {
     drag(&mut app, from, 39);
 
     assert_eq!(
-        app.widths,
+        app.screen.widths,
         state::Widths { projects: 40, workspaces: ui::WORKSPACES_WIDTH, ..state::Widths::default() }
     );
 }
@@ -76,7 +76,7 @@ fn the_drag_ends_on_release() {
 
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(45, from.y));
 
-    assert_eq!((app.drag, app.widths.projects), (None, 40));
+    assert_eq!((app.screen.drag, app.screen.widths.projects), (None, 40));
 }
 
 fn hover(app: &mut App, pos: Position) {
@@ -106,7 +106,7 @@ fn hovering_a_border_asks_for_a_resize_pointer(
 #[test]
 fn the_changes_border_asks_for_a_sideways_pointer() {
     let (mut app, _rx) = app();
-    app.side = Some(Side::Todo);
+    app.screen.side = Some(Side::Todo);
     let from = border(&app, ui::Border::Changes);
 
     hover(&mut app, from);
@@ -140,11 +140,14 @@ fn esc_ends_the_drag_where_it_is() {
     let (mut app, _rx) = app();
     let from = grab_projects_border(&mut app);
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(AREA.width - 1, from.y + 4));
-    let widths = app.widths;
+    let widths = app.screen.widths;
 
     send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
 
-    assert_eq!((app.drag.as_ref(), app.widths, app.pointer(AREA)), (None, widths, pointer::Shape::Default));
+    assert_eq!(
+        (app.screen.drag.as_ref(), app.screen.widths, app.pointer(AREA)),
+        (None, widths, pointer::Shape::Default)
+    );
 }
 
 #[test]
@@ -157,7 +160,7 @@ fn the_prefix_key_ends_the_drag_and_brings_back_the_default_pointer() {
     send_key(&mut app, KeyCode::Char(']'), KeyModifiers::CONTROL);
 
     assert!(matches!(app.overlay, Some(Overlay::Keys(None))));
-    assert_eq!((app.drag.as_ref(), app.pointer(AREA)), (None, pointer::Shape::Default));
+    assert_eq!((app.screen.drag.as_ref(), app.pointer(AREA)), (None, pointer::Shape::Default));
 }
 
 #[test]
@@ -178,7 +181,7 @@ fn a_drag_away_from_the_border_keeps_resizing() {
 
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(39, from.y + 4));
 
-    assert_eq!((app.drag, app.widths.projects), (Some(Drag::Border(ui::Border::Projects)), 40));
+    assert_eq!((app.screen.drag, app.screen.widths.projects), (Some(Drag::Border(ui::Border::Projects)), 40));
 }
 
 #[test]
@@ -188,18 +191,19 @@ fn a_double_click_brings_back_the_default_width() {
     click(&mut app, moved);
     click(&mut app, moved);
 
-    assert_eq!((app.widths, app.drag), (state::Widths::default(), None));
+    assert_eq!((app.screen.widths, app.screen.drag), (state::Widths::default(), None));
 }
 
 #[test]
 fn two_slow_clicks_are_not_a_double_click() {
     let (mut app, _rx, moved) = moved_projects_border();
     click(&mut app, moved);
-    app.border_click = app.border_click.map(|(b, at)| (b, at.checked_sub(DOUBLE_CLICK).expect("an earlier instant")));
+    app.screen.border_click =
+        app.screen.border_click.map(|(b, at)| (b, at.checked_sub(DOUBLE_CLICK).expect("an earlier instant")));
 
     click(&mut app, moved);
 
-    assert_eq!(app.widths.projects, 40);
+    assert_eq!(app.screen.widths.projects, 40);
 }
 
 #[test]
@@ -208,7 +212,7 @@ fn a_click_right_after_a_drag_is_not_a_double_click() {
 
     press(&mut app, moved);
 
-    assert_eq!((app.widths.projects, app.drag), (40, Some(Drag::Border(ui::Border::Projects))));
+    assert_eq!((app.screen.widths.projects, app.screen.drag), (40, Some(Drag::Border(ui::Border::Projects))));
 }
 
 #[test]
@@ -252,5 +256,5 @@ fn restore_brings_back_the_widths() {
 
     app.restore(&saved, AREA);
 
-    assert_eq!(app.widths, widths);
+    assert_eq!(app.screen.widths, widths);
 }

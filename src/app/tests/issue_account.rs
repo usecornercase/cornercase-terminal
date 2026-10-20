@@ -103,7 +103,7 @@ fn an_issue_scheduled_from_the_browser_keeps_the_account_picked_there() {
     form.prompt = todo::editor::Editor::new("fix the login");
     s.app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
 
-    let entry = s.app.queued.queue.entries.last().expect("the entry");
+    let entry = s.app.panels.queued.queue.entries.last().expect("the entry");
     assert_eq!(entry.task.accounts, claude("home"));
 }
 

@@ -623,7 +623,7 @@ impl App {
         } else if self.messenger(via).away {
             self.come_back(via, By::Window);
         } else if let Err(why) = self.go_away(via, By::Window) {
-            self.toast = Some(Toast::new(why, ui::ToastIcon::Bug));
+            self.messages.toast = Some(Toast::new(why, ui::ToastIcon::Bug));
         }
     }
 
@@ -654,14 +654,14 @@ impl App {
         if !failed.is_empty() {
             let why = failed.join("; ");
             let text = if went.is_empty() { why } else { format!("away: agents message you on {names}; {why}") };
-            self.toast = Some(Toast::new(text, ui::ToastIcon::Bug));
+            self.messages.toast = Some(Toast::new(text, ui::ToastIcon::Bug));
         } else if went.len() > 1 {
             let text = if back {
                 format!("back: agents no longer message you on {names}")
             } else {
                 format!("away: agents message you on {names}")
             };
-            self.toast = Some(Toast::new(text, ui::ToastIcon::Check));
+            self.messages.toast = Some(Toast::new(text, ui::ToastIcon::Check));
         }
     }
 
@@ -687,7 +687,8 @@ impl App {
         );
         self.say_long(via, &header, status, Delivery { keyboard, ..Delivery::default() });
         if by != By::Chat {
-            self.toast = Some(Toast::new(format!("away: agents message you on {}", via.name()), ui::ToastIcon::Check));
+            self.messages.toast =
+                Some(Toast::new(format!("away: agents message you on {}", via.name()), ui::ToastIcon::Check));
         }
         self.refresh_messenger_note(via);
         Ok(())
@@ -704,7 +705,7 @@ impl App {
         self.say(via, text, Delivery::default());
         if by != By::Chat {
             let back = format!("back: agents no longer message you on {}", via.name());
-            self.toast = Some(Toast::new(back, ui::ToastIcon::Check));
+            self.messages.toast = Some(Toast::new(back, ui::ToastIcon::Check));
         }
         self.refresh_messenger_note(via);
     }

@@ -139,7 +139,7 @@ fn a_window_after_a_client_theme_draws_with_its_own_colours_but_leaves_the_termi
 
     assert!(!painted);
     assert_eq!(backgrounds(&app), [Some(DARK)]);
-    assert_eq!(app.theme.background, Some(LIGHT));
+    assert_eq!(app.themes.theme.background, Some(LIGHT));
     assert_eq!(app.theme_info(), ThemeInfo { from: ThemeFrom::Client, scheme: app.theme_info().scheme });
 }
 

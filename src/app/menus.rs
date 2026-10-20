@@ -231,12 +231,12 @@ impl App {
             MenuAction::AddProject(group) => self.pick_project(Some(group)),
             MenuAction::OpenProject => self.pick_project(None),
             MenuAction::NewGroup => {
-                self.nav = None;
+                self.screen.nav = None;
                 self.overlay = Some(Overlay::NewGroup { input: String::new() });
             }
             MenuAction::NewWorkspace(project) => {
                 if let Some(p) = self.projects.project_index(project) {
-                    self.nav = None;
+                    self.screen.nav = None;
                     self.ask_new_workspace(p);
                 }
             }
@@ -261,7 +261,7 @@ impl App {
     }
 
     fn pick_project(&mut self, group: Option<u64>) {
-        self.nav = None;
+        self.screen.nav = None;
         self.open_picker(group);
     }
 

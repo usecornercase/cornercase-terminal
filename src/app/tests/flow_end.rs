@@ -24,7 +24,7 @@ fn with_run(end: End) -> Repo {
 fn answer(repo: &mut Repo, json: &str, step: u64) {
     std::fs::write(repo.tmp.path().join("gh.json"), json).expect("the answer");
     repo.app.ask_pull_requests(Instant::now() + Duration::from_mins(10 * step));
-    pump_until(&mut repo.app, &repo.rx, "gh answers", |a| a.pulls.asking.is_empty());
+    pump_until(&mut repo.app, &repo.rx, "gh answers", |a| a.git.pulls.asking.is_empty());
 }
 
 fn end(app: &App) -> ui::flow::Ending {
@@ -45,7 +45,7 @@ fn mark(app: &mut App) {
 fn the_end_lights_once_the_pull_request_appears_and_its_tag_follows_the_checks() {
     let mut repo = with_run(End::PullRequest);
     repo.app.ask_pull_requests(Instant::now());
-    pump_until(&mut repo.app, &repo.rx, "gh fails", |a| a.pulls.asking.is_empty());
+    pump_until(&mut repo.app, &repo.rx, "gh fails", |a| a.git.pulls.asking.is_empty());
     assert_eq!((end(&repo.app).reached, end(&repo.app).pull), (false, None));
 
     answer(&mut repo, VIEW, 1);

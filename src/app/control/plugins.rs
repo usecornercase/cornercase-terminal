@@ -47,18 +47,18 @@ impl App {
                 spot.context().name()
             )));
         }
-        let key = self.requests.key();
+        let key = self.wire.requests.key();
         if !self.start_plugin_action(spot, plugin, action, Some(key)) {
             return Err(not_found(format!("{} is gone", request.item)));
         }
         let pending =
             Pending { client: Some(client), key, timeout: None, done: Done::default(), stage: Stage::Reading };
-        self.requests.pending.push(pending);
+        self.wire.requests.pending.push(pending);
         Ok(None)
     }
 
     pub(in crate::app) fn plugin_ran(&mut self, request: u64, ran: Result<ActionRan, String>) {
-        let Some(pending) = self.requests.take(request) else { return };
+        let Some(pending) = self.wire.requests.take(request) else { return };
         self.refuse_or_answer(pending.client, ran.map(|ran| json(&ran)).map_err(Refusal::from));
     }
 

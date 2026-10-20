@@ -42,7 +42,7 @@ impl App {
     pub(super) fn keys_mouse(&mut self, group: Option<Group>, ev: MouseEvent, pos: Position, area: Rect) -> Result<()> {
         let MouseEventKind::Down(button) = ev.kind else { return Ok(()) };
         let view = self.keys_view(group);
-        let menu = keys::area(keys::frame(self.layout(area).shown(self.nav).pane, area, &view), &view);
+        let menu = keys::area(keys::frame(self.layout(area).shown(self.screen.nav).pane, area, &view), &view);
         let picked = keys::hit(menu, &view, pos).and_then(|i| shortcuts::items(group)[i].step);
         self.overlay = None;
         if button == MouseButton::Left {
@@ -132,18 +132,18 @@ impl App {
     }
 
     fn search_by_key(&mut self, finder: Finder) {
-        self.nav = None;
+        self.screen.nav = None;
         self.overlay = Some(Overlay::Search(finder));
     }
 
     fn dialog_by_key(&mut self, open: fn(&mut Self)) {
-        self.nav = None;
+        self.screen.nav = None;
         open(self);
     }
 
     fn new_tab_by_key(&mut self, area: Rect) -> Result<()> {
         let Some((p, w)) = self.open_workspace_index() else { return Ok(()) };
-        self.nav = None;
+        self.screen.nav = None;
         self.add_tab(p, w, area)
     }
 
@@ -153,7 +153,7 @@ impl App {
         if tab.can_split(pane, id, dir) {
             return self.split_pane(id, dir, area, true).map(drop);
         }
-        self.toast = Some(Toast::new(NO_ROOM, ui::ToastIcon::Bug));
+        self.messages.toast = Some(Toast::new(NO_ROOM, ui::ToastIcon::Bug));
         Ok(())
     }
 
@@ -161,15 +161,15 @@ impl App {
         if !self.issues_available() {
             return Ok(());
         }
-        self.nav = None;
+        self.screen.nav = None;
         self.open_issues(area)
     }
 
     fn todo_by_key(&mut self) {
-        let opening = self.side != Some(Side::Todo);
+        let opening = self.screen.side != Some(Side::Todo);
         self.toggle_todo();
         if opening {
-            self.todo.field = Some(Field::default());
+            self.panels.todo.field = Some(Field::default());
         }
     }
 
@@ -191,7 +191,7 @@ impl App {
 
     fn new_workspace_by_key(&mut self) {
         if self.project().is_some() {
-            self.nav = None;
+            self.screen.nav = None;
             self.ask_new_workspace(self.active);
         }
     }
@@ -203,7 +203,7 @@ impl App {
 
     fn ask_rename(&mut self, target: Option<Target>) {
         if let Some((target, input)) = target.and_then(|t| Some((t, self.current_name(t)?))) {
-            self.nav = None;
+            self.screen.nav = None;
             self.overlay = Some(Overlay::Rename { target, input });
         }
     }
@@ -264,7 +264,7 @@ impl App {
             .map(|place| pane(place).id);
         match next {
             Some(id) => self.jump_to_pane(id),
-            None => self.toast = Some(Toast::new(NO_AGENT_WAITS, ui::ToastIcon::Check)),
+            None => self.messages.toast = Some(Toast::new(NO_AGENT_WAITS, ui::ToastIcon::Check)),
         }
     }
 
@@ -281,7 +281,7 @@ impl App {
             }
             _ => Toast::new(NO_AGENT_HERE, ui::ToastIcon::Bug),
         };
-        self.toast = Some(toast);
+        self.messages.toast = Some(toast);
     }
 
     fn ask_close_pane(&mut self) {
@@ -294,13 +294,13 @@ impl App {
         } else {
             Overlay::ClosePane { pane: pane.id }
         };
-        self.nav = None;
+        self.screen.nav = None;
         self.overlay = Some(overlay);
     }
 
     fn ask_close_workspace(&mut self) {
         let Some((p, w)) = self.open_workspace_index() else { return };
-        self.nav = None;
+        self.screen.nav = None;
         let project = &self.projects[p];
         if project.workspaces[w].worktree {
             self.ask_removal(p, w);
@@ -311,30 +311,30 @@ impl App {
 
     fn find_files(&mut self, mode: Mode) {
         let Some(workspace) = self.project().and_then(Project::workspace).map(|w| w.id) else { return };
-        if self.side != Some(Side::Files) {
+        if self.screen.side != Some(Side::Files) {
             self.toggle_files();
         }
-        self.files.search(workspace, mode);
+        self.panels.files.search(workspace, mode);
     }
 
     fn changes_by_key(&mut self) {
         if self.changes_target().is_none() {
-            self.toast = Some(Toast::new(NOT_GIT, ui::ToastIcon::Bug));
+            self.messages.toast = Some(Toast::new(NOT_GIT, ui::ToastIcon::Bug));
             return;
         }
-        let opening = self.side != Some(Side::Changes);
+        let opening = self.screen.side != Some(Side::Changes);
         self.toggle_changes();
         if opening {
-            self.changes.filter.get_or_insert_default().focused = true;
+            self.panels.changes.filter.get_or_insert_default().focused = true;
         }
     }
 
     fn compare_base(&mut self) {
         let Some(target) = self.changes_target() else {
-            self.toast = Some(Toast::new(NOT_GIT, ui::ToastIcon::Bug));
+            self.messages.toast = Some(Toast::new(NOT_GIT, ui::ToastIcon::Bug));
             return;
         };
-        if self.side != Some(Side::Changes) {
+        if self.screen.side != Some(Side::Changes) {
             self.toggle_changes();
         }
         self.open_branches(&target);

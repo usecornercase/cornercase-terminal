@@ -48,7 +48,11 @@ fn restoring_multiple_panels_prefers_files_then_todo_then_changes(
     assert!(app.restore(&saved, AREA));
 
     assert_eq!(
-        (app.side == Some(Side::Changes), app.side == Some(Side::Todo), app.side == Some(Side::Files)),
+        (
+            app.screen.side == Some(Side::Changes),
+            app.screen.side == Some(Side::Todo),
+            app.screen.side == Some(Side::Files)
+        ),
         expected
     );
     let again = app.state();
@@ -395,7 +399,7 @@ fn a_window_that_comes_later_gives_its_colours_to_the_panes_already_open() {
     app.retheme(HostTheme { background: Some(background), ..HostTheme::default() });
 
     assert!(app.projects.terms().all(|term| term.emulator.default_background() == Some(background)));
-    assert_eq!(app.theme.background, Some(background));
+    assert_eq!(app.themes.theme.background, Some(background));
 }
 
 mod parents {

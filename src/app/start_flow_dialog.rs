@@ -36,7 +36,7 @@ impl App {
 
     pub(super) fn open_start_flow(&mut self, start: Option<Start>) {
         let Some(start) = start else { return };
-        self.nav = None;
+        self.screen.nav = None;
         let back = self.overlay.take().filter(|o| matches!(o, Overlay::Issues(_))).map(Box::new);
         self.overlay = Some(Overlay::StartFlow { start: Box::new(start), back });
     }

@@ -8,7 +8,7 @@ fn statuses(app: &App) -> Vec<Option<Status>> {
 }
 
 fn agent_pos(app: &App, area: Rect, i: usize) -> Position {
-    let a = app.layout(area).shown(app.nav);
+    let a = app.layout(area).shown(app.screen.nav);
     let r = ui::agent_row(a.agents_list, a.pitch, app.agent_places().len(), app.scroll.agents, i);
     Position::new(r.x + 4, r.y + r.height / 2)
 }
@@ -117,17 +117,17 @@ fn the_wheel_scrolls_it() {
 fn compact_mode_opens_it_from_the_projects_menu_and_a_click_shows_the_pane() {
     let (mut app, rx, _dirs, claude, codex) = two_agents();
     let claude_pane = app.projects[0].workspaces[0].tabs[0].panes[0].id;
-    app.nav = Some(ui::Nav::Projects);
+    app.screen.nav = Some(ui::Nav::Projects);
     render(&mut app, SMALL);
 
-    let button = app.layout(SMALL).shown(app.nav).agents_button.as_position();
+    let button = app.layout(SMALL).shown(app.screen.nav).agents_button.as_position();
     click_in(&mut app, button, SMALL);
-    let nav = app.nav;
+    let nav = app.screen.nav;
     let at = agent_pos(&app, SMALL, 0);
     click_in(&mut app, at, SMALL);
     claude.signal("quit");
     codex.signal("quit", "");
     drop(rx);
 
-    assert_eq!((nav, app.nav, focus(&app)), (Some(ui::Nav::Agents), None, (0, Some(claude_pane))));
+    assert_eq!((nav, app.screen.nav, focus(&app)), (Some(ui::Nav::Agents), None, (0, Some(claude_pane))));
 }

@@ -19,9 +19,9 @@ pub(super) const WHEEL_ROWS: isize = 3;
 
 impl App {
     pub(super) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
-        let dragging = |app: &mut Self| match &app.drag {
+        let dragging = |app: &mut Self| match &app.screen.drag {
             Some(Drag::Border(_) | Drag::Divider { .. } | Drag::Row(_) | Drag::Pane(_)) => {
-                app.drag = None;
+                app.screen.drag = None;
                 true
             }
             Some(Drag::Selection { .. } | Drag::Link(_) | Drag::Lines { .. }) | None => false,
@@ -36,7 +36,7 @@ impl App {
                 self.overlay = Some(Overlay::Keys(None));
             }
             Some(Overlay::Menu { .. }) if key.code == KeyCode::Esc => self.overlay = None,
-            None if self.nav.is_some() && key.code == KeyCode::Esc => self.nav = None,
+            None if self.screen.nav.is_some() && key.code == KeyCode::Esc => self.screen.nav = None,
             Some(Overlay::Picker { .. }) => return self.picker_key(key, area),
             Some(Overlay::Branches(_)) => self.branches_key(key, area),
             Some(Overlay::Queue(_)) => self.queue_key(key, area),
@@ -52,7 +52,7 @@ impl App {
             None if self.todo_typing() => self.todo_key(key, area),
             None if self.files_typing() => self.files_key(key, area),
             None if self.filtering() => self.filter_key(key),
-            None if key.code == KeyCode::Esc && self.file_full_screen() => self.files.set_full_screen(false),
+            None if key.code == KeyCode::Esc && self.file_full_screen() => self.panels.files.set_full_screen(false),
             None if key.code == KeyCode::Esc && self.panel_shown() => self.close_panel(),
             Some(Overlay::Menu { .. }) | None => self.forward_key(key),
             Some(_) => return self.form_key(key, area),
@@ -69,14 +69,14 @@ impl App {
         let bytes = term.emulator.encode_key(key);
         term.typed_key(key);
         if !bytes.is_empty() && !term.write(&bytes) {
-            self.toast = Some(Toast::new(NOT_READING, ui::ToastIcon::Bug));
+            self.messages.toast = Some(Toast::new(NOT_READING, ui::ToastIcon::Bug));
         }
     }
 
     pub(super) fn handle_mouse(&mut self, ev: MouseEvent, area: Rect) -> Result<()> {
-        let areas = self.layout(area).shown(self.nav);
+        let areas = self.layout(area).shown(self.screen.nav);
         let pos = Position::new(ev.column, ev.row);
-        self.hover = Some(pos);
+        self.screen.hover = Some(pos);
         match self.route_mouse(ev, pos, &areas, area) {
             ControlFlow::Break(done) => done,
             ControlFlow::Continue(()) => Ok(()),
@@ -110,13 +110,13 @@ impl App {
     fn side_mouse(&mut self, ev: MouseEvent, pos: Position, areas: &ui::Areas, area: Rect) -> ControlFlow<Result<()>> {
         let in_panel = self.panel_shown() && areas.changes.contains(pos);
         if matches!(ev.kind, MouseEventKind::Down(_)) && !in_panel {
-            if let Some(filter) = &mut self.changes.filter {
+            if let Some(filter) = &mut self.panels.changes.filter {
                 filter.focused = false;
             }
             self.commit_todo();
-            self.files.unfocus();
+            self.panels.files.unfocus();
         }
-        if in_panel && self.side.is_some() {
+        if in_panel && self.screen.side.is_some() {
             return ControlFlow::Break(self.panel_mouse(ev, pos, areas.changes, area));
         }
         if let Some(delta) = wheel(ev.kind)
@@ -170,7 +170,7 @@ impl App {
         let navs = [(areas.back, ui::Nav::Projects), (areas.agents_button, ui::Nav::Agents)];
         let Some(nav) = navs.into_iter().find_map(|(r, nav)| r.contains(pos).then_some(nav)) else { return false };
         if left {
-            self.nav = Some(nav);
+            self.screen.nav = Some(nav);
         }
         true
     }
@@ -200,12 +200,16 @@ impl App {
         if areas.workspaces.contains(pos) {
             return ControlFlow::Break(self.workspaces_mouse(ev, pos, areas, area));
         }
-        if self.nav.is_some() && areas.compact() { ControlFlow::Break(Ok(())) } else { ControlFlow::Continue(()) }
+        if self.screen.nav.is_some() && areas.compact() {
+            ControlFlow::Break(Ok(()))
+        } else {
+            ControlFlow::Continue(())
+        }
     }
 
     fn issues_column_mouse(&mut self, left: bool, area: Rect) -> Result<()> {
         if left && self.issues_available() {
-            self.nav = None;
+            self.screen.nav = None;
             return self.open_issues(area);
         }
         Ok(())
@@ -225,7 +229,7 @@ impl App {
     }
 
     fn panel_mouse(&mut self, ev: MouseEvent, pos: Position, panel: Rect, area: Rect) -> Result<()> {
-        let Some(side) = self.side else { return Ok(()) };
+        let Some(side) = self.screen.side else { return Ok(()) };
         match side {
             Side::Todo => self.todo_mouse(ev, pos, panel, area),
             Side::Files => return self.files_mouse(ev, pos, panel, area),
@@ -260,7 +264,7 @@ impl App {
             Some(label) => ui::changes_button(areas.issues, &label),
             None => Rect::default(),
         };
-        let dot = self.config.todo_dot && self.todos.pending() > 0;
+        let dot = self.config.todo_dot && self.panels.todos.pending() > 0;
         let todo = if areas.compact() || self.project().is_some() { areas.todo_with_dot(dot) } else { Rect::default() };
         let files = if self.project().is_some() { areas.files_button } else { Rect::default() };
         let toggle: fn(&mut Self) = if changes.contains(pos) {
@@ -279,7 +283,7 @@ impl App {
     }
 
     fn continue_drag(&mut self, ev: MouseEvent, areas: &ui::Areas, area: Rect) -> bool {
-        match self.drag.clone() {
+        match self.screen.drag.clone() {
             Some(Drag::Border(border)) => self.drag_border(border, ev, area),
             Some(Drag::Divider { tab, path }) => self.drag_divider(tab, &path, ev, areas.pane),
             Some(Drag::Pane(drag)) => self.drag_pane(drag, ev, areas.pane, area),
@@ -316,10 +320,10 @@ impl App {
     }
 
     fn toggle_nav(&mut self) {
-        if self.nav.is_none() {
+        if self.screen.nav.is_none() {
             self.show_side(None);
         }
-        self.nav = match self.nav {
+        self.screen.nav = match self.screen.nav {
             Some(_) => None,
             None if self.project().is_some() => Some(ui::Nav::Workspaces),
             None => Some(ui::Nav::Projects),
@@ -347,7 +351,7 @@ impl App {
     }
 
     fn activity_click(&mut self, item: ui::ActivityItem, pos: Position, area: Rect) -> Result<()> {
-        self.nav = None;
+        self.screen.nav = None;
         match item {
             ui::ActivityItem::Issues => return self.open_issues(area),
             ui::ActivityItem::Changes => self.toggle_changes(),
@@ -378,7 +382,7 @@ impl App {
             || pill.is_some()
             || [areas.quit, areas.usage, areas.settings].iter().any(|r| r.contains(pos));
         if hit && left {
-            self.nav = None;
+            self.screen.nav = None;
             if update {
                 self.open_update();
             } else if remote {
@@ -411,7 +415,7 @@ impl App {
             term.emulator.scroll_to_bottom();
             term.typed_paste(text);
             if !term.paste(text) {
-                self.toast = Some(Toast::new(NOT_READING, ui::ToastIcon::Bug));
+                self.messages.toast = Some(Toast::new(NOT_READING, ui::ToastIcon::Bug));
             }
         }
     }
@@ -455,10 +459,10 @@ impl App {
             return true;
         }
         if self.filtering()
-            && let Some(filter) = &mut self.changes.filter
+            && let Some(filter) = &mut self.panels.changes.filter
         {
             text.chars().filter(|c| !c.is_control()).for_each(|c| filter.push(c));
-            self.changes.scroll = 0;
+            self.panels.changes.scroll = 0;
             return true;
         }
         false

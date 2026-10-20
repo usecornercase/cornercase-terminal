@@ -270,7 +270,7 @@ fn find_opens_the_files_panel_with_its_search_taking_the_keys(#[case] typed: &st
     let mut app = with_prefix(app);
     keys(&mut app, typed);
     let workspace = app.focus().workspace.expect("a workspace");
-    assert_eq!((app.files_typing(), app.files.mode(workspace)), (true, mode));
+    assert_eq!((app.files_typing(), app.panels.files.mode(workspace)), (true, mode));
 }
 
 #[test]

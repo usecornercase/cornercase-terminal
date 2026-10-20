@@ -94,7 +94,7 @@ impl App {
         let Some(run) = self.run_of(workspace) else {
             return Err(conflict(format!("workspace {workspace} runs no flow; `cornercase flow runs` lists the runs")));
         };
-        if self.events.flow_messages.iter().any(|(follower, _)| *follower == client) {
+        if self.wire.events.flow_messages.iter().any(|(follower, _)| *follower == client) {
             return Err(conflict("this connection already follows a run's messages; open another connection"));
         }
         let backlog = FlowBacklog {
@@ -111,12 +111,13 @@ impl App {
             workspace = workspace,
             kept = backlog.messages.len()
         );
-        self.events.flow_messages.push((client, backlog.run));
+        self.wire.events.flow_messages.push((client, backlog.run));
         Ok(Some(json(&backlog)))
     }
 
     pub(in crate::app) fn publish_flow_message(&mut self, message: &FlowMessage) {
         let followers: Vec<u64> = self
+            .wire
             .events
             .flow_messages
             .iter()
@@ -133,13 +134,14 @@ impl App {
             return;
         };
         for client in followers {
-            self.events.push(client, Streamed::Event(text.clone()));
+            self.wire.events.push(client, Streamed::Event(text.clone()));
         }
     }
 
     pub(in crate::app) fn end_flow_messages(&mut self) {
         let runs = &self.runs;
         let ended: Vec<u64> = self
+            .wire
             .events
             .flow_messages
             .extract_if(.., |(_, run)| !runs.iter().any(|other| other.id == *run))
@@ -147,7 +149,7 @@ impl App {
             .collect();
         for client in ended {
             log::info!("control", "flow messages ended", client = client, reason = "run ended");
-            self.events.push(client, Streamed::End);
+            self.wire.events.push(client, Streamed::End);
         }
     }
 
@@ -163,7 +165,7 @@ impl App {
             return Err(conflict(format!("workspace {workspace} has no run folder: it never ran a flow")));
         };
         let run = self.run_of(workspace).map(|run| run.id);
-        let key = self.requests.key();
+        let key = self.wire.requests.key();
         let job = Job::new(Level::Debug, "flow", "list files").with("workspace", workspace);
         let listed = dir.clone();
         self.spawn_job(
@@ -200,7 +202,7 @@ impl App {
     }
 
     pub(in crate::app) fn flow_files_listed(&mut self, key: u64, result: std::result::Result<RunFiles, String>) {
-        let Some(pending) = self.requests.take(key) else { return };
+        let Some(pending) = self.wire.requests.take(key) else { return };
         self.answer(pending.client, result.map(|files| json(&files)));
     }
 }

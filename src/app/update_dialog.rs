@@ -127,7 +127,7 @@ impl App {
         {
             log::info!("update", "release found", version = release.version);
             if self.update.updates.available.as_ref().is_none_or(|known| known.version != release.version) {
-                self.toast = Some(Toast::new(UPDATE_AVAILABLE, ui::ToastIcon::Check));
+                self.messages.toast = Some(Toast::new(UPDATE_AVAILABLE, ui::ToastIcon::Check));
             }
             self.update.updates.available = Some(release);
         }
@@ -327,7 +327,7 @@ impl App {
             }
             UpdateStep::Ask | UpdateStep::Updating | UpdateStep::Failed(_) => {
                 let exe = match &self.update.updates.install {
-                    Install::Replace(exe) => crate::text::display_path(exe, self.home.as_deref()),
+                    Install::Replace(exe) => crate::text::display_path(exe, self.paths.home.as_deref()),
                     Install::Command(_) => String::new(),
                 };
                 format!(

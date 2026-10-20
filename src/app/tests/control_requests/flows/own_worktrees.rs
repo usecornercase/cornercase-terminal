@@ -346,6 +346,6 @@ fn a_role_whose_worktree_is_gone_on_restore_says_so_in_a_toast() {
 
     again.restore(&saved, AREA);
 
-    let toast = again.toast.as_ref().map(|toast| toast.message.clone()).unwrap_or_default();
+    let toast = again.messages.toast.as_ref().map(|toast| toast.message.clone()).unwrap_or_default();
     assert!(toast.contains("worktree of coder A is gone"), "{toast}");
 }

@@ -31,7 +31,7 @@ fn setup() -> Setup {
 
 impl Setup {
     fn pill(&self, area: Rect) -> Rect {
-        let areas = self.app.layout(area).shown(self.app.nav);
+        let areas = self.app.layout(area).shown(self.app.screen.nav);
         ui::pill_rects(&areas, &self.app.account_pills()).first().map(|(_, r, _)| *r).expect("the pill shows")
     }
 
@@ -186,7 +186,7 @@ fn the_terminals_are_two_rows_shorter_while_the_bar_shows() {
 fn the_bar_shows_and_opens_in_compact_mode_too() {
     let mut s = setup();
     for nav in [None, Some(ui::Nav::Projects)] {
-        s.app.nav = nav;
+        s.app.screen.nav = nav;
         s.app.overlay = None;
         let at = s.pill(COMPACT).as_position();
         assert_eq!(at.y, COMPACT.bottom() - 1);
@@ -219,14 +219,14 @@ fn without_accounts_the_window_is_drawn_as_before(
     app.config.sidebar = sidebar.id().into();
     app.config.icon_bar = icons;
     app.tab_mut().expect("a tab").name = Some("shell".into());
-    app.nav = (area.width < ui::COMPACT_WIDTH).then_some(ui::Nav::Projects);
+    app.screen.nav = (area.width < ui::COMPACT_WIDTH).then_some(ui::Nav::Projects);
     assert!(app.config.account_switcher);
 
     let (panel, agents) = (app.panel_shown(), app.config.agents_section);
     assert!(!app.status_bar());
     assert_eq!(
         app.layout(area),
-        ui::full_layout(area, app.widths, ui::Screen { changes: panel, sidebar, agents, icons })
+        ui::full_layout(area, app.screen.widths, ui::Screen { changes: panel, sidebar, agents, icons })
     );
     assert!(app.layout(area).accounts.is_empty());
     let with_switcher = screen(&mut app, area);

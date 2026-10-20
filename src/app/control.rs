@@ -275,7 +275,7 @@ impl App {
     pub(crate) fn request(&mut self, client: u64, text: &str, area: Option<Rect>, now: Instant) {
         let parsed = contract::parse(text, self.unavailable());
         if parsed.structured {
-            self.requests.structured.insert(client);
+            self.wire.requests.structured.insert(client);
         }
         if parsed.request.is_err() {
             log::warning!("control", "unreadable request", client = client, bytes = text.len());
@@ -294,9 +294,9 @@ impl App {
         area: Option<Rect>,
         now: Instant,
     ) {
-        self.requests.open.push(client);
+        self.wire.requests.open.push(client);
         if let Ok(request) = &request {
-            self.requests.asked.insert(client, (now, request.command.name()));
+            self.wire.requests.asked.insert(client, (now, request.command.name()));
             log_request(client, request);
         }
         let handled = request.and_then(|request| self.handle_request(client, request, area, now));
@@ -312,11 +312,11 @@ impl App {
     }
 
     pub(crate) fn take_answers(&mut self) -> Vec<(u64, String)> {
-        std::mem::take(&mut self.requests.answers)
+        std::mem::take(&mut self.wire.requests.answers)
     }
 
     pub(crate) fn answer_lost_requests(&mut self) {
-        let Requests { pending, open, .. } = &self.requests;
+        let Requests { pending, open, .. } = &self.wire.requests;
         let lost: Vec<u64> =
             open.iter().copied().filter(|client| pending.iter().all(|p| p.client != Some(*client))).collect();
         for client in lost {
@@ -325,10 +325,10 @@ impl App {
     }
 
     pub(crate) fn forget(&mut self, client: u64) {
-        self.requests.open.retain(|open| *open != client);
-        self.requests.structured.remove(&client);
+        self.wire.requests.open.retain(|open| *open != client);
+        self.wire.requests.structured.remove(&client);
         self.orphan_todo_send(client);
-        if let Some((at, command)) = self.requests.asked.remove(&client) {
+        if let Some((at, command)) = self.wire.requests.asked.remove(&client) {
             log::info!(
                 "control",
                 "client left before the answer",
@@ -337,30 +337,30 @@ impl App {
                 ms = at.elapsed().as_millis()
             );
         }
-        self.events.forget(client);
+        self.wire.events.forget(client);
         self.forget_change_streams(client);
         self.forget_surfaces(client);
         self.forget_views(client);
-        self.notices.forget(client);
+        self.messages.notices.forget(client);
         self.forget_flow_reads(Some(client));
-        for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
+        for pending in self.wire.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
             pending.client = None;
         }
-        self.requests.pending.retain(|p| p.client.is_some() || p.stage.outlives_its_client());
+        self.wire.requests.pending.retain(|p| p.client.is_some() || p.stage.outlives_its_client());
     }
 
     fn orphan_todo_send(&mut self, client: u64) {
-        let Some(sending) = self.requests.todo_sends.remove(&client) else { return };
-        let orphan = crate::app::todo_panel::CLIENTS + self.todo.next_client;
-        self.todo.next_client += 1;
+        let Some(sending) = self.wire.requests.todo_sends.remove(&client) else { return };
+        let orphan = crate::app::todo_panel::CLIENTS + self.panels.todo.next_client;
+        self.panels.todo.next_client += 1;
         let mut kept = false;
-        for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
+        for pending in self.wire.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
             pending.client = Some(orphan);
             kept = true;
         }
         if kept {
-            self.requests.todo_sends.insert(orphan, sending);
-            self.todo.sending.insert(orphan, String::new());
+            self.wire.requests.todo_sends.insert(orphan, sending);
+            self.panels.todo.sending.insert(orphan, String::new());
         }
     }
 
@@ -384,8 +384,8 @@ impl App {
 
     fn refuse_or_answer(&mut self, client: Option<u64>, reply: Result<Value, Refusal>) {
         let Some(client) = client else { return };
-        let structured = self.requests.structured.remove(&client);
-        let reply = match (self.requests.todo_sends.remove(&client), reply) {
+        let structured = self.wire.requests.structured.remove(&client);
+        let reply = match (self.wire.requests.todo_sends.remove(&client), reply) {
             (Some(sending), Ok(value)) => Ok(self.todo_sent(&sending, value)),
             (_, reply) => reply,
         };
@@ -394,8 +394,8 @@ impl App {
             Err(refusal) => (refusal.code, Err(refusal.message)),
         };
         self.flow_answered(client, &reply);
-        self.requests.open.retain(|open| *open != client);
-        if let Some((at, command)) = self.requests.asked.remove(&client) {
+        self.wire.requests.open.retain(|open| *open != client);
+        if let Some((at, command)) = self.wire.requests.asked.remove(&client) {
             log_answered(client, at, command, &reply);
         }
         if self.queue_answered(client, &reply) || self.todo_answered(client, &reply) {
@@ -407,17 +407,17 @@ impl App {
         }
         let reply = reply.map_err(|message| Refusal::new(code, message));
         if let Some(text) = control::contract::render(reply, structured) {
-            self.requests.answers.push((client, text));
+            self.wire.requests.answers.push((client, text));
         }
     }
 
     fn todo_sent(&mut self, sending: &Sending, mut value: Value) -> Value {
-        let editing = self.todo.field.as_ref().filter(|field| field.item == Some(sending.todo));
-        let same = self.todos.item(sending.todo).is_some_and(|item| !item.done && item.text == sending.text)
+        let editing = self.panels.todo.field.as_ref().filter(|field| field.item == Some(sending.todo));
+        let same = self.panels.todos.item(sending.todo).is_some_and(|item| !item.done && item.text == sending.text)
             && editing.is_none_or(|field| field.editor.text() == sending.text);
         let checked = sending.confirmed && same;
         if checked {
-            self.todos.toggle(sending.todo);
+            self.panels.todos.toggle(sending.todo);
         }
         if let Some(fields) = value.as_object_mut() {
             fields.insert("todo".into(), sending.todo.into());
@@ -628,11 +628,11 @@ impl App {
 
     fn launch_within(&mut self, client: u64, launch: Option<Launch>, waits: Waits) -> Option<Value> {
         let Some(mut launch) = launch else { return Some(json(&waits.done)) };
-        let key = self.requests.key();
+        let key = self.wire.requests.key();
         launch.key = Some(key);
-        launch.trust = self.queued.running.contains_key(&client).then_some(agents::launch::Trust::Accepted);
+        launch.trust = self.panels.queued.running.contains_key(&client).then_some(agents::launch::Trust::Accepted);
         self.agents.launches.push(launch);
-        self.requests.push(client, key, waits);
+        self.wire.requests.push(client, key, waits);
         None
     }
 
@@ -656,12 +656,18 @@ impl App {
 
     pub(in crate::app) fn pend_reading(&mut self, client: u64, key: u64) {
         let done = Done::default();
-        self.requests.pending.push(Pending { client: Some(client), key, timeout: None, done, stage: Stage::Reading });
+        self.wire.requests.pending.push(Pending {
+            client: Some(client),
+            key,
+            timeout: None,
+            done,
+            stage: Stage::Reading,
+        });
     }
 
     fn here(&self, asker: impl Into<Asker>) -> Here {
         let asker = asker.into();
-        if let Some(view) = asker.view.and_then(|id| self.views.get(id)) {
+        if let Some(view) = asker.view.and_then(|id| self.wire.views.get(id)) {
             let shown = &view.shown;
             let project = shown.project.and_then(|id| self.projects.project_index(id));
             let workspace = project.zip(shown.workspace).and_then(|(p, id)| self.projects[p].index_of(id));
@@ -772,7 +778,7 @@ impl App {
             let message = format!("`{}` takes no view", request.command.name());
             return Err(Refusal::new(Code::Malformed, message));
         }
-        if self.views.get(view).is_none() {
+        if self.wire.views.get(view).is_none() {
             let message = format!(
                 "there is no view {view}: it closed with the connection that opened it, or the server restarted"
             );

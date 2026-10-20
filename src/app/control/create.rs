@@ -275,10 +275,10 @@ impl App {
         if !git::is_repo_root(&project.path) {
             return Err(format!("project {} is not the root of a git repository, so it has no worktrees", project.id));
         }
-        let key = self.requests.key();
+        let key = self.wire.requests.key();
         self.spawn_worktree(p, branch.to_string(), None, Some(key));
         let waits = Waits { done: Done::default(), stage: Stage::Worktree(then), timeout };
-        self.requests.push(client, key, waits);
+        self.wire.requests.push(client, key, waits);
         Ok(())
     }
 
@@ -289,14 +289,15 @@ impl App {
         result: error::Result<PathBuf>,
         area: Rect,
     ) {
-        let found = self.requests.pending.iter().position(|p| p.key == key && matches!(p.stage, Stage::Worktree(_)));
+        let found =
+            self.wire.requests.pending.iter().position(|p| p.key == key && matches!(p.stage, Stage::Worktree(_)));
         let Some(i) = found else { return };
-        let mut pending = self.requests.pending.remove(i);
+        let mut pending = self.wire.requests.pending.remove(i);
         let Stage::Worktree(then) = std::mem::replace(&mut pending.stage, Stage::launch(None)) else { return };
         let opened =
             self.worktree_place(project, result).and_then(|place| self.open_worktree(place, then, area, &mut pending));
         match opened {
-            Ok(true) => self.requests.pending.push(pending),
+            Ok(true) => self.wire.requests.pending.push(pending),
             Ok(false) => self.answer(pending.client, Ok(json(&pending.done))),
             Err(message) => self.answer(pending.client, Err(message)),
         }
@@ -359,7 +360,7 @@ impl App {
         launch.key = Some(pending.key);
         launch.trust = pending
             .client
-            .is_some_and(|client| self.queued.running.contains_key(&client))
+            .is_some_and(|client| self.panels.queued.running.contains_key(&client))
             .then_some(launch::Trust::Accepted);
         self.agents.launches.push(launch);
         pending.stage = Stage::launch(wait);

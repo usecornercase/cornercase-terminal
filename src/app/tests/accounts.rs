@@ -146,7 +146,7 @@ fn a_pane_whose_account_is_gone_comes_back_as_a_shell() {
     assert!(term.accounts().is_empty());
     assert!(term.resume.is_none());
     assert!(setup.app.agents.launches.is_empty());
-    let toast = setup.app.toast.as_ref().map(|toast| toast.message.clone()).unwrap_or_default();
+    let toast = setup.app.messages.toast.as_ref().map(|toast| toast.message.clone()).unwrap_or_default();
     assert!(toast.contains("`work`"), "{toast}");
     let env = setup.env_of(id);
     assert_eq!(value(&env, "CLAUDE_CONFIG_DIR"), None);
@@ -167,6 +167,6 @@ fn the_toast_names_the_account_of_the_agent_that_does_not_resume() {
     restore_pane(&mut setup, pane);
 
     assert!(setup.pane(0).resume.is_none());
-    let toast = setup.app.toast.as_ref().map(|toast| toast.message.clone()).unwrap_or_default();
+    let toast = setup.app.messages.toast.as_ref().map(|toast| toast.message.clone()).unwrap_or_default();
     assert_eq!(toast, "the codex account `work` is gone: its conversation does not resume");
 }
