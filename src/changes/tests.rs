@@ -499,4 +499,24 @@ mod viewed {
         assert_eq!(panel.gaps.len(), 1);
         assert!(panel.request_in(&target(1), Mode::Uncommitted, OPEN_EVERY, now).is_some());
     }
+
+    #[test]
+    fn a_load_in_flight_during_a_discard_does_not_bring_the_file_back() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        let (generation, request) = panel.request_in(&target(1), Mode::Uncommitted, OPEN_EVERY, now).expect("request");
+        panel.loaded(1, generation, &request, Ok(loaded(Some(diff(vec![file("a", 1, 1)])), 1)));
+        let later = now + OPEN_EVERY;
+        let (stale, request) = panel.request_in(&target(1), Mode::Uncommitted, OPEN_EVERY, later).expect("request");
+
+        panel.discarded(1, "a");
+        panel.loaded(1, stale, &request, Ok(loaded(Some(diff(vec![file("a", 1, 1), file("b", 2, 1)])), 2)));
+
+        let model = panel.model_in(1, Mode::Uncommitted, None).expect("model");
+        assert_eq!(model.diff().map(|d| d.files.len()), Some(1));
+        let (fresh, request) = panel.request_in(&target(1), Mode::Uncommitted, OPEN_EVERY, later).expect("a new load");
+        panel.loaded(1, fresh, &request, Ok(loaded(Some(diff(Vec::new())), 3)));
+        let model = panel.model_in(1, Mode::Uncommitted, None).expect("model");
+        assert_eq!(model.diff().map(|d| d.files.len()), Some(0));
+    }
 }

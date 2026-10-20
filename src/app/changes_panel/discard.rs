@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::Instant;
 
 use super::{ChangesEvent, Chosen};
 use crate::app::control::Replied;
@@ -66,6 +67,7 @@ impl App {
     ) {
         if matches!(result, Ok(discard::Outcome::Discarded(_))) {
             self.panels.changes.discarded(workspace, path);
+            self.refresh_changes(Instant::now());
         }
         match request {
             Some(key) => self.changes_discard_replied(Replied { key, workspace, path }, result),
