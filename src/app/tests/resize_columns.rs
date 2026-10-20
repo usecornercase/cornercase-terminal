@@ -198,8 +198,7 @@ fn a_double_click_brings_back_the_default_width() {
 fn two_slow_clicks_are_not_a_double_click() {
     let (mut app, _rx, moved) = moved_projects_border();
     click(&mut app, moved);
-    app.screen.clicks.border =
-        app.screen.clicks.border.map(|(b, at)| (b, at.checked_sub(DOUBLE_CLICK).expect("an earlier instant")));
+    app.screen.clicks.age(DOUBLE_CLICK);
 
     click(&mut app, moved);
 

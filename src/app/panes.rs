@@ -5,7 +5,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::input::wheel;
-use super::interaction::{DOUBLE_CLICK, Drag, LinkPress, PaneDrag};
+use super::interaction::{Drag, LinkPress, PaneDrag};
 use super::menus::Marked;
 use super::menus::MenuAction;
 use super::menus::PaneAction;
@@ -177,19 +177,11 @@ impl App {
     }
 
     fn press_divider(&mut self, tab: u64, path: Vec<bool>, now: Instant) {
-        let double = self
-            .screen
-            .clicks
-            .divider
-            .as_ref()
-            .is_some_and(|(t, p, at)| *t == tab && *p == path && now.duration_since(*at) < DOUBLE_CLICK);
-        if double {
+        if self.screen.clicks.divider_pressed(tab, &path, now) {
             if let Some(t) = self.tab_mut().filter(|t| t.id == tab) {
                 t.layout.set_ratio(&path, split::HALF);
             }
-            self.screen.clicks.divider = None;
         } else {
-            self.screen.clicks.divider = Some((tab, path.clone(), now));
             self.screen.drag = Some(Drag::Divider { tab, path });
         }
     }
@@ -199,7 +191,7 @@ impl App {
             self.screen.drag = None;
             return;
         }
-        self.screen.clicks.divider = None;
+        self.screen.clicks.forget_divider();
         let Some(t) = self.tab_mut().filter(|t| t.id == tab) else { return };
         if let Some(divider) = t.layout.dividers(pane).into_iter().find(|d| d.path == path) {
             t.layout.set_ratio(path, split::ratio_at(&divider, Position::new(ev.column, ev.row)));

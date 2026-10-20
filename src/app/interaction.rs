@@ -51,8 +51,28 @@ pub(super) struct LinkPress {
 
 #[derive(Default)]
 pub(super) struct Clicks {
-    pub(super) border: Option<(ui::Border, Instant)>,
-    pub(super) divider: Option<(u64, Vec<bool>, Instant)>,
+    border: Option<(ui::Border, Instant)>,
+    divider: Option<(u64, Vec<bool>, Instant)>,
+}
+
+impl Clicks {
+    pub(super) fn divider_pressed(&mut self, tab: u64, path: &[bool], now: Instant) -> bool {
+        let double = self
+            .divider
+            .as_ref()
+            .is_some_and(|(t, p, at)| *t == tab && p == path && now.duration_since(*at) < DOUBLE_CLICK);
+        self.divider = (!double).then(|| (tab, path.to_vec(), now));
+        double
+    }
+
+    pub(super) fn forget_divider(&mut self) {
+        self.divider = None;
+    }
+
+    #[cfg(test)]
+    pub(super) fn age(&mut self, by: Duration) {
+        self.border = self.border.map(|(b, at)| (b, at.checked_sub(by).expect("an earlier instant")));
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
