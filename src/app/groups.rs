@@ -13,6 +13,7 @@ use super::queue_panel::QueueRuntime;
 use super::star_prompt::StarPrompt;
 use super::toast::Toast;
 use super::worktrees::Upstream;
+use super::worktrees_dialog::{Cleanup, Scans};
 use super::{flow_panel, merged_pull_requests, pull_requests};
 
 #[derive(Default)]
@@ -31,6 +32,8 @@ pub(super) struct Git {
     pub(super) upstream: Upstream,
     pub(super) pulls: pull_requests::PullRequests,
     pub(super) merged: merged_pull_requests::MergedPulls,
+    pub(super) scans: Scans,
+    pub(super) cleanup: Cleanup,
 }
 
 #[derive(Default)]

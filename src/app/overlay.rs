@@ -83,6 +83,7 @@ pub(super) enum Overlay {
     PullRequest { workspace: u64, scroll: usize },
     FlowMessage { workspace: u64, edge: Edge, to: Option<String>, scroll: usize },
     Keys(Option<KeysGroup>),
+    Worktrees(Box<crate::worktrees::Dialog>),
 }
 
 impl Overlay {
@@ -117,6 +118,7 @@ impl Overlay {
             Self::PullRequest { .. } => "pull request",
             Self::FlowMessage { .. } => "flow message",
             Self::Keys(_) => "keys",
+            Self::Worktrees(_) => "worktrees",
         }
     }
 
@@ -219,6 +221,7 @@ impl App {
             Some(Overlay::Pairing(via)) => self.pairing_mouse(*via, ev, pos, area),
             Some(Overlay::GroupStyle { group }) => self.group_style_mouse(*group, ev, pos, area),
             Some(Overlay::Keys(group)) => return self.keys_mouse(*group, ev, pos, area),
+            Some(Overlay::Worktrees(_)) => self.worktrees_mouse(ev, pos, area),
             Some(
                 Overlay::NewGroup { .. }
                 | Overlay::NewWorkspace { .. }
@@ -258,6 +261,7 @@ impl App {
             Overlay::CloseTab { project, workspace, tab } => self.close_tab_view(*project, *workspace, *tab)?,
             Overlay::ClosePane { pane } => self.close_pane_view(*pane)?,
             Overlay::Keys(group) => ui::Overlay::Keys(self.keys_view(*group)),
+            Overlay::Worktrees(dialog) => ui::Overlay::Worktrees(self.worktrees_view(dialog, area)),
             Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), home),
             Overlay::Queue(form) => ui::Overlay::Queue(Self::queue_form_view(form)),
             Overlay::Issues(b) => view(b, room(area), time::now()),

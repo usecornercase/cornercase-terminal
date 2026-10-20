@@ -51,6 +51,7 @@ mod describing {
                     | Row::AddAgent
                     | Row::Plugin(_)
                     | Row::NoPlugins
+                    | Row::Worktrees
             ) || row.page() == Page::Accounts;
             assert!(skipped || rows.contains(&row), "{row:?} has no key");
         }

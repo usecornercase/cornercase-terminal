@@ -45,6 +45,7 @@ impl App {
             Some(Overlay::Flows { .. }) => self.flows_key(key, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_key(key, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_key(key, area),
+            Some(Overlay::Worktrees(_)) => self.worktrees_key(key, area),
             Some(Overlay::Usage) => {
                 self.usage_key(key);
             }
@@ -440,6 +441,7 @@ impl App {
             Some(Overlay::Flows { .. }) => self.flows_paste(text, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_paste(text, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_paste(text, area),
+            Some(Overlay::Worktrees(_)) => self.worktrees_paste(text),
             Some(overlay) => {
                 if let Some(input) = overlay.input() {
                     input.extend(clean());

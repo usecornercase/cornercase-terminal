@@ -92,6 +92,9 @@ pub(crate) use dialog::update::{Update, update_buttons, update_extra, update_not
 #[cfg(test)]
 pub(crate) use dialog::usage::usage_area;
 pub(crate) use dialog::usage::{Usage, UsageSection, UsageWindow, usage_done, usage_share, usage_tabs};
+#[cfg(test)]
+pub(crate) use dialog::worktrees::worktrees_area;
+pub(crate) use dialog::worktrees::{ConfirmView, WorktreeRow, Worktrees, WorktreesHit, worktrees_hit, worktrees_room};
 pub(crate) use dialog::{CANCEL_LABEL, Note, Overlay};
 pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
 pub(crate) use icons::glyphs;
@@ -148,6 +151,7 @@ use dialog::settings::draw_settings;
 use dialog::start_flow::draw_start_flow;
 use dialog::update::draw_update;
 use dialog::usage::draw_usage;
+use dialog::worktrees::draw_worktrees;
 use dialog::{FORM_WIDTH, draw_submit, form_inner};
 use pane::{draw_no_tab, draw_tab, draw_welcome};
 use rows::{GAP, Zone, draw_more};
@@ -398,6 +402,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::Flows(flows)) => draw_flows(f, view, flows),
         Some(Overlay::StartFlow(start)) => draw_start_flow(f, view, start),
         Some(Overlay::ProjectSettings(settings)) => draw_project_settings(f, view, settings),
+        Some(Overlay::Worktrees(worktrees)) => draw_worktrees(f, view, worktrees),
         Some(Overlay::Search(search)) if search.showing_results() => draw_results(f, view, search, areas.results),
         Some(Overlay::Keys(menu)) => keys::draw(f, view, menu, areas.pane),
         Some(Overlay::Search(_)) | None => {}

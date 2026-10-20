@@ -196,6 +196,7 @@ impl App {
                 self.settings_message(forgotten);
             }
             settings::Action::Plugin(id, on) => self.switch_plugin(&id, on),
+            settings::Action::Worktrees => self.open_worktrees(None),
             settings::Action::RemoveToken(source) => {
                 if let Err(e) = self.remove_token(source) {
                     self.settings_message(e);

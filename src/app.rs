@@ -129,6 +129,7 @@ mod view;
 mod views;
 mod worktree_setup;
 mod worktrees;
+mod worktrees_dialog;
 
 pub(crate) use event::AppEvent;
 pub(crate) use events::Streamed;
@@ -437,6 +438,7 @@ impl App {
         self.watch_plugins(now);
         self.check_requests(now);
         self.ring_bells(now);
+        self.watch_worktrees_dialog(now);
         self.close_gone_flow_message();
         self.check_updates(now);
     }

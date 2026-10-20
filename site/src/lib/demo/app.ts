@@ -120,6 +120,7 @@ const BRANCHES_NEED = 'naming issue branches needs cornercase on your computer; 
 const PULL_REQUESTS_NEED = 'this needs cornercase on your computer: the demo has no GitHub';
 
 const OPEN_IN_NEEDS = 'this needs cornercase on your computer: the demo opens no other apps';
+const WORKTREES_NEED = 'this needs cornercase on your computer: the demo has no worktrees on disk to list';
 const SETUP_NEEDS = 'this needs cornercase on your computer: the demo runs no setup scripts';
 
 const BUILT_IN_FLOWS: [string, number, string][] = [
@@ -2137,7 +2138,7 @@ export class App {
   openMenu(at: Pos, target: Target): void {
     const actions: MenuAction[] = [{ kind: 'rename', target }];
     if (target.kind === 'project' && this.groups.length) actions.push({ kind: 'moveToGroup', project: target.project });
-    if (target.kind === 'project' && this.projects.find((x) => x.id === target.project)?.repo) actions.push({ kind: 'projectSettings', project: target.project });
+    if (target.kind === 'project' && this.projects.find((x) => x.id === target.project)?.repo) { actions.push({ kind: 'projectSettings', project: target.project }); actions.push({ kind: 'worktrees', project: target.project }); }
     const tab = target.kind === 'tab' ? this.resolveTarget(target).tab : undefined;
     const mark = tab && this.markAction(tab.panes);
     if (mark) actions.push(mark);
@@ -2181,6 +2182,7 @@ export class App {
     if (a.kind === 'startFlow') return 'start a flow…';
     if (a.kind === 'projectSettings') return 'project settings';
     if (a.kind === 'openIn') return 'open in…';
+    if (a.kind === 'worktrees') return 'worktrees';
     return a.action;
   }
 
@@ -2247,6 +2249,7 @@ export class App {
     } else if (a.kind === 'startFlow') this.bug(FLOWS_NEED);
     else if (a.kind === 'projectSettings') this.bug(SETUP_NEEDS);
     else if (a.kind === 'openIn') this.bug(OPEN_IN_NEEDS);
+    else if (a.kind === 'worktrees') this.bug(WORKTREES_NEED);
     else this.paneAction(a.pane, a.action);
     this.dirty();
   }
@@ -2792,6 +2795,7 @@ export class App {
         { id: 'fetch', section: '', label: 'fetch branches every', value: c.fetchMinutes ? `${c.fetchMinutes} min` : 'off', note: 'commits to pull show as ↓n' },
         { id: 'pulls', section: '', label: 'pull requests', value: '[ ] hidden', note: "each workspace's pull request and its checks, from gh" },
         { id: 'merged', section: '', label: 'merged PRs in stats', value: '[ ] hidden', note: 'your merged pull requests, from gh and glab' },
+        { id: 'worktrees', section: '', label: 'worktrees on disk', value: '', note: 'enter lists every worktree and removes several at once' },
       ];
     }
     if (page === PAGE.agents) {
@@ -2998,6 +3002,8 @@ export class App {
       o.notice = BRANCHES_NEED;
     } else if (row.id === 'merged') {
       o.notice = MERGED_NEED;
+    } else if (row.id === 'worktrees') {
+      o.notice = WORKTREES_NEED;
     } else if (row.id.startsWith('flow:')) {
       o.notice = FLOWS_NEED;
     } else if (row.id === 'plugins') {

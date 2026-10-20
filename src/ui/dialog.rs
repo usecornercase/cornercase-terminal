@@ -11,6 +11,7 @@ pub(super) mod settings;
 pub(super) mod start_flow;
 pub(super) mod update;
 pub(super) mod usage;
+pub(super) mod worktrees;
 
 use ratatui::Frame;
 use ratatui::layout::{Margin, Position, Rect};
@@ -29,6 +30,7 @@ use super::dialog::settings::{Settings, settings_area};
 use super::dialog::start_flow::StartFlow;
 use super::dialog::update::Update;
 use super::dialog::usage::{Usage, usage_area};
+use super::dialog::worktrees::{Worktrees, worktrees_area};
 use super::keys;
 use super::remote_access;
 use super::widgets::{button_width, hovered, tab_style};
@@ -137,6 +139,7 @@ pub(crate) enum Overlay {
     ProjectSettings(Box<project_settings::ProjectSettings>),
     Search(Search),
     Keys(keys::Keys),
+    Worktrees(Box<Worktrees>),
 }
 
 impl Overlay {
@@ -155,6 +158,7 @@ impl Overlay {
             Self::Settings(_) => Some(settings_area(area)),
             Self::Flows(_) | Self::StartFlow(_) => Some(flows_area(area)),
             Self::ProjectSettings(_) => Some(project_settings::project_settings_area(area)),
+            Self::Worktrees(w) => Some(worktrees_area(area, w.compact)),
             Self::Menu { .. } | Self::Search(_) | Self::Keys(_) => None,
         }
     }

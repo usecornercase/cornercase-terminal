@@ -451,6 +451,16 @@ fn with_worktrees_config() -> (TempDir, TempDir, PathBuf) {
     (worktrees, config, config_path)
 }
 
+fn branch_exists(repo: &Path, branch: &str) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")])
+        .status()
+        .expect("run git")
+        .success()
+}
+
 mod account_pills;
 mod accounts;
 mod accounts_page;
@@ -493,6 +503,7 @@ mod tabs;
 mod tree_sidebar;
 mod workspace_folds;
 mod workspaces;
+mod worktrees_dialog;
 
 #[test]
 fn resize_fits_terminals_to_the_pane() {

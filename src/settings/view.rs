@@ -52,6 +52,12 @@ impl Settings {
                     if config.fetch_minutes == 0 { "off".into() } else { format!("{} min", config.fetch_minutes) };
                 ("fetch branches every".into(), value, "commits to pull show as ↓n".into(), false)
             }
+            Row::Worktrees => (
+                "worktrees on disk".into(),
+                String::new(),
+                "enter lists every worktree and removes several at once".into(),
+                false,
+            ),
             Row::MergedPullRequests => {
                 let value = if config.merged_pull_requests { "[x] shown" } else { "[ ] hidden" };
                 ("merged PRs in stats".into(), value.into(), self.merged.clone(), false)

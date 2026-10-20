@@ -66,8 +66,15 @@ mod pages {
     fn the_first_one_is_worktrees() {
         assert_eq!(
             settings().rows(),
-            [Row::Folder, Row::IssueBranch, Row::Fetch, Row::PullRequests, Row::MergedPullRequests]
+            [Row::Folder, Row::IssueBranch, Row::Fetch, Row::PullRequests, Row::MergedPullRequests, Row::Worktrees]
         );
+    }
+
+    #[test]
+    fn its_last_row_opens_the_worktrees_dialog() {
+        let mut s = settings();
+        go_to(&mut s, &Row::Worktrees);
+        assert_eq!(press(&mut s, KeyCode::Enter), Action::Worktrees);
     }
 
     #[rstest]
@@ -111,10 +118,10 @@ mod pages {
     #[test]
     fn down_stays_on_the_page() {
         let mut s = settings();
-        for _ in 0..4 {
+        for _ in 0..6 {
             press(&mut s, KeyCode::Down);
         }
-        assert_eq!((s.page, s.row()), (Page::Worktrees, Some(Row::MergedPullRequests)));
+        assert_eq!((s.page, s.row()), (Page::Worktrees, Some(Row::Worktrees)));
     }
 }
 

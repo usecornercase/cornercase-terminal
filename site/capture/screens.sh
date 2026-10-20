@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-full files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
+CC_SCREENS="first-run sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-full files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
 
 pane_in() {
   cc status --json | node -e '
@@ -317,6 +317,31 @@ screen_remove_workspace() {
   cc_click '×'
   cc_wait 'remove anyway'
   cc_shot remove-workspace
+}
+
+worktrees_open() {
+  cc_s1
+  cc_rclick 'web-shop'
+  cc_click 'worktrees'
+  cc_wait 'Worktrees › web-shop'
+  cc_wait 'feat/gift-cards'
+  cc_hover '╭─ Worktrees'
+}
+
+screen_worktrees() {
+  worktrees_open
+  cc_shot worktrees
+}
+
+screen_worktrees_confirm() {
+  worktrees_open
+  cc_click '○' 0 1
+  cc_click '○' 0 1
+  cc_wait ' remove 2 '
+  cc_click ' remove 2 '
+  cc_wait ' also delete the branch '
+  cc_hover '╭─ Worktrees'
+  cc_shot worktrees-confirm
 }
 
 pulls_shown() {

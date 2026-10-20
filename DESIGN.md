@@ -27,6 +27,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Folder picker](design/folder-picker.md) (`project/picker.rs`, `list.rs`, `app/picker_dialog.rs`): where it starts and how it is walked.
 - [Worktrees](design/worktrees.md) (`git/worktree.rs`, `app/worktrees.rs`): one worktree per workspace, removal in the background, locks, `↓n`.
 - [Worktree setup](design/worktree-setup.md) (`git/worktree/setup.rs`, `project/settings.rs`, `app/worktree_setup.rs`, `app/project_settings_dialog.rs`, `ui/dialog/project_settings.rs`, #250): a project's setup and teardown scripts.
+- [Worktrees dialog](design/worktrees-dialog.md) (`worktrees/`, `app/worktrees_dialog.rs`, `app/worktrees_dialog/`, `ui/dialog/worktrees.rs`, #256): every worktree on disk with when it last changed and what makes it safe to remove, removing several at once.
 - [Pull requests](design/pull-requests.md) (`pull_request.rs`, `gh.rs`, `app/pull_requests.rs`, `ui/workspaces.rs`, #251): a workspace's pull request and its checks, from `gh`.
 - [Merged pull requests](design/merged-pull-requests.md) (`pull_request/merged.rs`, `pull_request/merged/`, `git/remote.rs`, `app/merged_pull_requests.rs`, #293): the Stats row of merged pull requests, from `gh` and `glab`.
 - [Changes panel](design/changes-panel.md) (`changes/`, `ui/changes.rs`, `app/changes_panel.rs`): the git diff, its modes, filter, scope, pacing and digests.

@@ -71,6 +71,26 @@ pub(crate) fn remove(repo: &Path, path: &Path, force: bool, unlock: bool) -> Res
     check(git(repo, args)?).map(drop)
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct RemoveOptions {
+    pub(crate) force: bool,
+    pub(crate) unlock: bool,
+}
+
+pub(crate) fn remove_with_teardown(
+    repo: &Path,
+    path: &Path,
+    branch: &str,
+    script: Option<&str>,
+    options: RemoveOptions,
+) -> Result<Option<String>> {
+    let failed = script.and_then(|script| setup::teardown(script, path, repo, branch, setup::TEARDOWN_WITHIN));
+    if let Some(why) = &failed {
+        log::debug!("worktree", "teardown failed", why = why);
+    }
+    remove(repo, path, options.force, options.unlock).map(|()| failed)
+}
+
 pub(crate) fn changed(path: &Path) -> Result<bool> {
     check(git(path, ["--no-optional-locks", "status", "--porcelain"])?).map(|out| !out.is_empty())
 }

@@ -53,8 +53,8 @@ To keep them somewhere else, change **settings → Worktrees → worktrees folde
 
 <Screen
   name="settings-worktrees"
-  alt="The Worktrees tab of the settings: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; issue branches per tracker, with the default names as an example; fetch branches every 5 min, commits to pull show as ↓n; pull requests shown; merged PRs in stats shown"
-  crop={[2, 1, 106, 7]}
+  alt="The Worktrees tab of the settings: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; issue branches per tracker, with the default names as an example; fetch branches every 5 min, commits to pull show as ↓n; pull requests shown; merged PRs in stats shown; worktrees on disk, enter lists every worktree and removes several at once"
+  crop={[2, 1, 106, 9]}
 />
 
 ## Commits to pull
@@ -162,6 +162,54 @@ An agent that starts there (from an issue, `cornercase start --worktree`, the qu
 
 The commands are stored on your computer, not in the repository, so a cloned project cannot run anything until you have written it yourself; to share a setup with your team, commit a script and put one line, `./scripts/setup.sh`, in the field. Cornercase's log records sizes, exit statuses and timings, never the commands or their output; the only exception is a failed teardown, whose last output line (at most 160 characters) is logged at debug level.
 
+## Clean up worktrees
+
+Worktrees pile up: each one keeps its checkout, with its `node_modules` or build output, until someone removes it. The **Worktrees** dialog lists every worktree on disk, shows what decides whether it can go, and removes several at once after one confirmation that names the risks.
+
+Open it from **settings → Worktrees → worktrees on disk** (press `Enter` on the row) for every project, or from a project's `⋯` menu (or right-click) → **worktrees** for that project only. The title then reads `Worktrees › web-shop`.
+
+<Screen
+  name="worktrees"
+  alt="The Worktrees dialog for web-shop: two rows, feat/gift-cards and feat/dark-mode, each with a checkbox, its folder, its age and the marks no commits, the agent running in it (codex, claude) and open, the second also with ●1"
+  crop={[2, 1, 106, 6]}
+/>
+
+It lists the linked worktrees of your open projects and also those of projects you have closed, found in the [worktrees folder](#where-checkouts-go), so a repository you no longer have open still shows what it left behind. Folders left in the worktrees folder that git no longer knows about are listed too; folders reached through a symbolic link are skipped, so nothing is ever deleted at a link's target. The main checkout never is. Type in the field to filter by project or branch.
+
+Each row has a checkbox, the project, the branch, the folder, how long ago it last changed and some marks. *Last changed* is the newest of the last commit and the newest file git reports as modified or new, so ignored folders are never walked.
+
+| Mark | Means |
+| --- | --- |
+| `●3` | 3 files changed or untracked |
+| `↑2` | 2 commits that no remote branch has, so removing the branch loses them |
+| `merged` | its commits are already in the base branch (the workspace's base, else the default branch) and it was pushed, or its pull request is merged |
+| `no commits` | it has no commits of its own and was never pushed, such as a worktree just made; it sorts with the rest, not with the merged ones |
+| `upstream gone` | the branch's remote branch no longer exists, usually deleted after a squash merge. Its commits still count as not pushed (`↑n`), since no remote branch holds them any more, and with **also delete the branch** the red line says they would be lost from this machine |
+| `locked` | `git worktree lock` or Claude Code locked it |
+| `claude`, `2 running` | the program running in its workspace, or how many when there are several; shells waiting at their prompt don't count |
+| `1 outside` | processes working in its folder that its workspace doesn't run: in another terminal, or in another cornercase tab that `cd`'d into it |
+| `open` | it is a workspace in cornercase |
+| `prunable` | its folder is gone, git still lists it |
+| `repository gone` | its repository no longer exists, only the folder is left |
+| `unknown to git` | its folder points at a git folder that is not part of any repository, so git no longer knows it |
+| `?` | cornercase could not check it, so it is treated as having changes |
+
+While the checks run the dialog says `checking n of m…` and keeps a fixed order, then sorts once: first the leftovers (`prunable`, `repository gone` and `unknown to git`), then the merged ones, then the rest, the oldest first within each. Rows never move after that, so the one under your pointer stays put. A worktree of a [flow](../flows/#a-worktree-of-its-own) run's role cannot be ticked, since it goes with the run's workspace; the run's own workspace can. **changes** on a row of an open project closes the dialog and opens that workspace's [changes](../changes/) panel, to look inside before deciding; closed projects have no workspace to open, so their rows have none.
+
+Tick the rows to remove (click the circle, or press `Space`) and click **remove n**. Ticks on rows the filter hides stay ticked and are removed too, so the confirmation lists every one of them. Nothing stops and nothing is deleted until you confirm there.
+
+<Screen
+  name="worktrees-confirm"
+  alt="The confirmation of the Worktrees dialog: web-shop › feat/gift-cards, codex running in it; they stop; web-shop › feat/dark-mode, 1 file changed, claude running in it; they stop"
+  crop={[2, 1, 106, 6]}
+/>
+
+The confirmation checks the ticked worktrees again, so work written since the list was made is named, and shows `checking…` until it is done. For each worktree it says what it has: files changed, commits not pushed (for a `prunable` entry, the commits of its branch), a lock with its reason, the shells and agents that stop, whether the project's [teardown](#set-up-each-new-worktree) runs first, and processes that have its folder open but that its workspace doesn't run, found by their working directory: outside cornercase, such as a dev server started in another terminal, or in another cornercase tab. A folder git no longer knows says that it is deleted with its files. Worktrees with something to lose are shown in yellow. **back** (or `Esc`) returns to the list with your ticks.
+
+**also delete the branch** is off by default. Ticked, each branch is deleted after its worktree, and those that are neither merged nor pushed are listed in red as losing their commits. The branch deleted is the one the confirmation names, checked out when it was checked: if the worktree has switched to another branch since, or has no branch checked out, no branch is deleted and the final message says `kept the branch …: it changed since the confirmation`. The default branch and the main checkout's branch are never deleted.
+
+**remove** starts the work in the background, several worktrees at once, as a [single removal](#remove-a-worktree) does: the shells stop, the teardown runs, and git removes the checkout, with `--force` and unlocking where needed, since you confirmed knowing what each one has. Rows say `removing…` and disappear when done. A message at the end sums up, such as `removed 4 worktrees and 3 branches`, and names what failed. Branches are only deleted when you ticked the box.
+
 ## Remove a worktree
 
 Hover the workspace and click its `×`. Because removing the workspace also deletes its checkout, cornercase asks first (the message adds `Its teardown runs first.` when the project has a [teardown](#set-up-each-new-worktree)):
@@ -176,12 +224,12 @@ While the dialog is open, cornercase checks the checkout for modified or untrack
 
 A worktree can also be locked with `git worktree lock`; Claude Code locks the worktrees it creates while its session runs. The dialog then shows the lock's reason and, when the reason names a process, whether it still runs: a lock whose process is gone was left behind, for example when a restart ended the session. **unlock and remove** unlocks it and removes it. If the process still runs, cancel and end it first. From a script, `cornercase close --worktree BRANCH --remove-worktree --check` shows the same before anything stops, and `--unlock` does **unlock and remove**; see [Scripts and agents](../scripts-and-agents/#arrange).
 
-**remove** closes the dialog at once, so you can go on working while the folder is deleted, which takes a while for a checkout with `node_modules` or build output. The workspace's programs are ended first, and its row stays, dimmed, with `removing…` at its end until git has finished; meanwhile it can't be opened. If it was the workspace on screen, the view moves to the nearest one, above it when there is one. When git is done, the row goes and a message says `removed <workspace>`. If git refuses after all, for example because a file changed in the meantime, the row comes back without its tabs and a message gives git's reason; click its `×` again to **remove anyway**. You can remove several worktrees at once.
+**remove** closes the dialog at once, so you can go on working while the folder is deleted, which takes a while for a checkout with `node_modules` or build output. The workspace's programs are ended first, and its row stays, dimmed, with `removing…` at its end until git has finished; meanwhile it can't be opened. If it was the workspace on screen, the view moves to the nearest one, above it when there is one. When git is done, the row goes and a message says `removed <workspace>`. If git refuses after all, for example because a file changed in the meantime, the row comes back without its tabs and a message gives git's reason; click its `×` again to **remove anyway**. You can remove several worktrees at once, with a single confirmation, from the [Worktrees dialog](#clean-up-worktrees).
 
 A run of a [flow](../flows/#a-worktree-of-its-own) can give roles worktrees of their own: they go with the run's workspace, which is checked, torn down and removed together with them (the message names how many), and one cannot be removed alone while its run lives. Their branches are kept.
 
 <Aside type="note" title="Branches are never deleted">
-Removing a worktree only deletes its folder. The branch and its commits stay in the repository; delete the branch yourself with `git branch -d` when you no longer need it.
+Removing a worktree only deletes its folder. The branch and its commits stay in the repository; delete the branch yourself with `git branch -d` when you no longer need it. Only the [Worktrees dialog](#clean-up-worktrees) can delete branches, and only when you tick **also delete the branch**.
 </Aside>
 
 ## Worktrees from issues

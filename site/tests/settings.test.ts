@@ -24,13 +24,16 @@ test('the UI tab lists the icon bar, which needs a real cornercase', () => {
 test('the Worktrees tab lists pull requests, which need a real cornercase', () => {
   const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
   app.openSettings();
-  assert.deepEqual(app.settingsRows(0).map((row) => row.id), ['folder', 'branches', 'fetch', 'pulls', 'merged']);
+  assert.deepEqual(app.settingsRows(0).map((row) => row.id), ['folder', 'branches', 'fetch', 'pulls', 'merged', 'worktrees']);
   app.settingsClick(3);
   app.render();
   assert.ok(app.textAt('the demo has no GitHub'));
   app.settingsClick(4);
   app.render();
   assert.ok(app.textAt('the demo has no GitHub or GitLab'));
+  app.settingsClick(5);
+  app.render();
+  assert.ok(app.textAt('the demo has no worktrees on disk'));
   app.destroy();
 });
 

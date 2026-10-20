@@ -35,6 +35,7 @@ pub(crate) enum Row {
     Fetch,
     PullRequests,
     MergedPullRequests,
+    Worktrees,
     Sidebar,
     Tabs,
     IconBar,
@@ -95,6 +96,7 @@ impl Row {
             | Self::Fetch
             | Self::PullRequests
             | Self::MergedPullRequests
+            | Self::Worktrees
             | Self::Sidebar
             | Self::Tabs
             | Self::IconBar
@@ -132,9 +134,12 @@ impl Row {
 
     pub(crate) fn page(&self) -> Page {
         match self {
-            Self::Folder | Self::IssueBranch | Self::Fetch | Self::PullRequests | Self::MergedPullRequests => {
-                Page::Worktrees
-            }
+            Self::Folder
+            | Self::IssueBranch
+            | Self::Fetch
+            | Self::PullRequests
+            | Self::MergedPullRequests
+            | Self::Worktrees => Page::Worktrees,
             Self::DefaultAgent
             | Self::Submit
             | Self::Trust
@@ -335,6 +340,7 @@ pub(crate) enum Action {
     Plugin(String, bool),
     Accounts(Order),
     RemoveAccount(Known, String),
+    Worktrees,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -480,7 +486,8 @@ impl Settings {
     pub(crate) fn every_row(&self) -> Vec<Row> {
         let shown = self.shown_tabs();
         let hidden = TAB_IDS.iter().filter(|id| !shown.contains(id)).copied();
-        let mut rows = vec![Row::Folder, Row::IssueBranch, Row::Fetch, Row::PullRequests, Row::MergedPullRequests];
+        let mut rows =
+            vec![Row::Folder, Row::IssueBranch, Row::Fetch, Row::PullRequests, Row::MergedPullRequests, Row::Worktrees];
         rows.extend(self.token_rows());
         rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
         rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust, Row::Resume, Row::KeepAwake]);

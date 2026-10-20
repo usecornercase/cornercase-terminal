@@ -99,6 +99,7 @@ pub(super) enum MenuAction {
     NewWorkspace(u64),
     StartFlow(u64),
     ProjectSettings(u64),
+    Worktrees(u64),
     RunSetup(u64),
     OpenIn(Subject),
     OpenWith(Subject, Opener),
@@ -145,6 +146,7 @@ impl App {
             MenuAction::NewWorkspace(_) => "new workspace".into(),
             MenuAction::StartFlow(_) => "start a flow…".into(),
             MenuAction::ProjectSettings(_) => "project settings".into(),
+            MenuAction::Worktrees(_) => "worktrees".into(),
             MenuAction::RunSetup(_) => "run setup".into(),
             MenuAction::OpenIn(_) => "open in…".into(),
             MenuAction::OpenWith(_, opener) => opener.name().into(),
@@ -274,6 +276,7 @@ impl App {
         match action {
             MenuAction::StartFlow(project) => self.open_start_flow(self.start_flow_in(project)),
             MenuAction::ProjectSettings(project) => self.open_project_settings(project),
+            MenuAction::Worktrees(project) => self.open_worktrees(Some(project)),
             MenuAction::RunSetup(workspace) => self.run_setup(workspace, area),
             MenuAction::OpenIn(subject) => self.open_in_menu(subject, at),
             MenuAction::OpenWith(subject, opener) => self.open_with(subject, opener),

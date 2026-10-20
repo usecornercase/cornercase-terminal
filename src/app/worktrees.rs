@@ -10,16 +10,19 @@ use super::event::Start;
 use super::flow_runs::Made;
 use super::overlay::Overlay;
 use super::toast::Toast;
+use super::worktrees_dialog::Deleted;
 use crate::agents::launch::Launch;
 use crate::error::Result;
 use crate::flows::run::RoleWorktree;
 use crate::git;
 use crate::git::upstream;
-use crate::git::worktree::{self, setup};
+use crate::git::worktree;
+pub(super) use crate::git::worktree::RemoveOptions;
 use crate::log::{self, Job, Level};
 use crate::project::{Hierarchy, Phase, Tab, Workspace};
 use crate::pull_request::PullRequest;
 use crate::ui::{self};
+use crate::worktrees::{Found, Scan};
 
 #[derive(Default)]
 pub(super) struct Upstream {
@@ -55,6 +58,10 @@ pub(crate) enum WorktreeEvent {
     Removed { project: u64, workspace: u64, result: Result<Option<String>>, request: Option<u64> },
     Behind { project: u64, behind: Vec<(u64, u32)> },
     PullRequests { project: u64, found: Vec<(u64, String, Option<PullRequest>)>, error: Option<String> },
+    Listed { generation: u64, found: Vec<Found> },
+    Scanned { generation: u64, ticket: u64, path: PathBuf, scan: Box<Result<Scan>>, confirm: bool },
+    Outside { generation: u64, ticket: u64, found: Result<Vec<(PathBuf, String, bool)>> },
+    Cleaned { key: u64, result: Result<Option<String>>, branch: Deleted },
 }
 
 impl WorktreeEvent {
@@ -66,6 +73,10 @@ impl WorktreeEvent {
             Self::Removed { .. } => "worktree removed",
             Self::Behind { .. } => "behind",
             Self::PullRequests { .. } => "pull requests",
+            Self::Listed { .. } => "worktrees listed",
+            Self::Scanned { .. } => "worktree scanned",
+            Self::Outside { .. } => "outside processes",
+            Self::Cleaned { .. } => "worktree cleaned",
         }
     }
 }
@@ -94,6 +105,12 @@ impl App {
             }
             WorktreeEvent::Behind { project, behind } => self.behind_counted(project, &behind),
             WorktreeEvent::PullRequests { project, found, error } => self.pull_requests_found(project, found, error),
+            WorktreeEvent::Listed { generation, found } => self.worktrees_listed(generation, found),
+            WorktreeEvent::Scanned { generation, ticket, path, scan, confirm } => {
+                self.worktree_scanned((generation, ticket), &path, *scan, confirm);
+            }
+            WorktreeEvent::Outside { generation, ticket, found } => self.outside_found((generation, ticket), found),
+            WorktreeEvent::Cleaned { key, result, branch } => self.worktree_cleaned(key, result, branch),
         }
         Ok(())
     }
@@ -449,6 +466,10 @@ impl App {
     }
 
     pub(super) fn worktree_removed(&mut self, project: u64, workspace: u64, result: Result<Option<String>>) {
+        if self.cleaning(workspace) {
+            self.cleanup_removed(project, workspace, result);
+            return;
+        }
         let Some(name) = self.settle_removal(project, workspace, result.is_ok()) else { return };
         let toast = match result {
             Ok(None) => Toast::new(format!("removed {name}"), ui::ToastIcon::Check),
@@ -514,12 +535,6 @@ impl App {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub(super) struct RemoveOptions {
-    pub(super) force: bool,
-    pub(super) unlock: bool,
-}
-
 struct Teardown {
     repo: PathBuf,
     script: Option<String>,
@@ -528,14 +543,7 @@ struct Teardown {
 
 impl Teardown {
     fn remove_tree(&self, path: &Path, branch: &str) -> Result<Option<String>> {
-        let failed = self
-            .script
-            .as_deref()
-            .and_then(|script| setup::teardown(script, path, &self.repo, branch, setup::TEARDOWN_WITHIN));
-        if let Some(why) = &failed {
-            crate::log::debug!("worktree", "teardown failed", why = why);
-        }
-        worktree::remove(&self.repo, path, self.options.force, self.options.unlock).map(|()| failed)
+        worktree::remove_with_teardown(&self.repo, path, branch, self.script.as_deref(), self.options)
     }
 
     fn remove_roles(&self, roles: &[RoleWorktree]) -> Vec<String> {

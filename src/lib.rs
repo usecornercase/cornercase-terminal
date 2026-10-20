@@ -36,6 +36,7 @@ pub(crate) mod telegram;
 pub(crate) mod term;
 pub(crate) mod todo;
 pub mod update;
+pub(crate) mod worktrees;
 
 pub mod ui;
 
