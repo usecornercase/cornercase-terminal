@@ -16,14 +16,27 @@ use crate::protocol;
 use crate::term::{SpawnOptions, Term};
 
 pub(super) struct Shells {
-    pub(super) shell: String,
-    pub(super) pane_socket: Option<String>,
-    pub(super) editor_env: Vec<(String, String)>,
+    shell: String,
+    pane_socket: Option<String>,
+    editor_env: Vec<(String, String)>,
 }
 
 impl Shells {
     pub(super) fn new(shell: String) -> Self {
         Self { shell, pane_socket: None, editor_env: Vec::new() }
+    }
+
+    pub(super) fn shell(&self) -> &str {
+        &self.shell
+    }
+
+    pub(super) fn editor_env(&self) -> &[(String, String)] {
+        &self.editor_env
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_editor(&mut self, visual: &str) {
+        self.editor_env = vec![("VISUAL".into(), visual.into())];
     }
 }
 
