@@ -38,7 +38,7 @@ fn with_tailscale(script: Option<&str>) -> Remote {
         }
         None => dir.path().join("missing").join("tailscale"),
     };
-    app.remote.tailscale = Some(program);
+    app.remote.set_tailscale(program);
     let port = free_port();
     app.config.remote_port = port;
     Remote { app, rx, dir, port }
@@ -49,7 +49,7 @@ fn ready() -> Remote {
     r.app.config.remote = true;
     r.app.refresh(Instant::now());
     pump_until(&mut r.app, &r.rx, "tailscale answers", |a| {
-        matches!(a.remote.phase, crate::app::remote_access::Phase::Ready(_))
+        matches!(a.remote.phase(), crate::app::remote_access::Phase::Ready(_))
     });
     r
 }
@@ -89,7 +89,7 @@ fn is_off_until_switched_on() {
     let mut r = with_tailscale(Some("exit 0"));
     r.app.refresh(Instant::now());
 
-    assert_eq!((r.app.remote_button(), r.app.remote.web.listening(), calls(&r)), (None, None, String::new()));
+    assert_eq!((r.app.remote_button(), r.app.remote.listening(), calls(&r)), (None, None, String::new()));
 }
 
 #[test]
@@ -97,7 +97,7 @@ fn switching_it_on_serves_the_port_over_tailscale_and_shows_the_button() {
     let r = ready();
 
     assert_eq!(calls(&r), format!("status --json\nserve --bg --yes --https=8443 http://127.0.0.1:{}\n", r.port));
-    assert_eq!((r.app.remote_button(), r.app.remote.web.listening()), (Some(false), Some(r.port)));
+    assert_eq!((r.app.remote_button(), r.app.remote.listening()), (Some(false), Some(r.port)));
     assert!(get(r.port, "/").starts_with("HTTP/1.1 401"));
 }
 
@@ -112,7 +112,7 @@ fn the_code_pairs_one_browser_once_then_the_dialog_closes() {
 
     assert!(first.starts_with("HTTP/1.1 303") && first.contains("Set-Cookie: cornercase="), "{first}");
     assert!(again.starts_with("HTTP/1.1 403"), "{again}");
-    assert_eq!((toast(&r.app), r.app.remote.web.paired()), (Some("a browser connected"), 1));
+    assert_eq!((toast(&r.app), r.app.remote.paired()), (Some("a browser connected"), 1));
 }
 
 #[test]
@@ -133,7 +133,7 @@ fn switching_it_off_stops_serving() {
     r.app.refresh(Instant::now());
 
     wait_until("tailscale stops serving", || calls(&r).ends_with("serve --https=8443 off\n"));
-    assert_eq!((r.app.remote_button(), r.app.remote.web.listening()), (None, None));
+    assert_eq!((r.app.remote_button(), r.app.remote.listening()), (None, None));
     wait_until("the port stops accepting", || TcpStream::connect(("127.0.0.1", r.port)).is_err());
 }
 
@@ -192,20 +192,20 @@ fn opening_the_dialog_after_a_failure_tries_again_on_the_same_port() {
     );
     let program = r.dir.path().join("tailscale");
     write_executable(&program, &format!("#!/bin/sh\n{script}\n"));
-    r.app.remote.tailscale = Some(program);
+    r.app.remote.set_tailscale(program);
     r.app.config.remote = true;
     r.app.refresh(Instant::now());
     pump_until(&mut r.app, &r.rx, "tailscale is not connected", |a| {
-        matches!(a.remote.phase, crate::app::remote_access::Phase::Failed(_))
+        matches!(a.remote.phase(), crate::app::remote_access::Phase::Failed(_))
     });
     std::fs::write(&ok, "").expect("connect tailscale");
 
     open_dialog(&mut r);
     pump_until(&mut r.app, &r.rx, "tailscale answers again", |a| {
-        matches!(a.remote.phase, crate::app::remote_access::Phase::Ready(_))
+        matches!(a.remote.phase(), crate::app::remote_access::Phase::Ready(_))
     });
 
-    assert_eq!(r.app.remote.web.listening(), Some(r.port));
+    assert_eq!(r.app.remote.listening(), Some(r.port));
     assert!(shown(&r.app).and_then(|v| v.url).is_some());
 }
 
@@ -221,7 +221,7 @@ fn switching_quickly_runs_the_tailscale_commands_in_order() {
     let expected = format!("status --json\n{serve}\nserve --https=8443 off\nstatus --json\n{serve}\n");
     let ran = || calls(&r).lines().count() >= 5;
     wait_until_within("every command ran", Duration::from_secs(20), ran);
-    assert_eq!(calls(&r), expected, "phase {:?}", r.app.remote.phase);
+    assert_eq!(calls(&r), expected, "phase {:?}", r.app.remote.phase());
 }
 
 #[test]

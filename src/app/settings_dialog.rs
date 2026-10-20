@@ -76,7 +76,7 @@ impl App {
         settings.pulls = self.pull_requests_note();
         settings.merged = self.merged_note();
         settings.remote = self.remote.note();
-        settings.browsers = self.remote.web.paired();
+        settings.browsers = self.remote.paired();
         for via in Via::ALL {
             *settings.messenger_mut(via) = self.messenger_settings(via);
         }
@@ -87,7 +87,7 @@ impl App {
 
     pub(super) fn refresh_open_settings(&mut self) {
         let tokens = self.token_statuses();
-        let browsers = self.remote.web.paired();
+        let browsers = self.remote.paired();
         let messengers: Vec<_> = Via::ALL.iter().map(|via| self.messenger_settings(*via)).collect();
         let Some(Overlay::Settings(s)) = &mut self.overlay else { return };
         s.tokens = tokens;
