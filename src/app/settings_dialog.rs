@@ -8,7 +8,6 @@ use super::input::wheel;
 use super::overlay::Overlay;
 use crate::config::{self, Config};
 use crate::issues::Source;
-use crate::issues::secrets;
 use crate::log::{self, Level};
 use crate::messenger::Via;
 use crate::settings::{self, DONE, Page, Settings, Status};
@@ -63,7 +62,7 @@ impl App {
                 let status = match self.token(source) {
                     None => Status::Missing,
                     Some((_, true)) => Status::Env,
-                    Some((_, false)) => Status::Saved(self.issues.accounts.get(&source).cloned()),
+                    Some((_, false)) => Status::Saved(self.issues.account(source).cloned()),
                 };
                 (source, status)
             })
@@ -149,8 +148,7 @@ impl App {
 
     pub(super) fn remove_token(&mut self, source: Source) -> Result<String, String> {
         if let Some(key) = source.secret_key() {
-            secrets::remove(&self.issues.secrets_path, key)
-                .map_err(|e| format!("failed to remove the {}: {e}", source.token_name()))?;
+            self.issues.delete_token(key).map_err(|e| format!("failed to remove the {}: {e}", source.token_name()))?;
         }
         self.forget_issues(source);
         self.settings_changed();

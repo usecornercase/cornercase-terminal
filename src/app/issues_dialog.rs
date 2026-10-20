@@ -19,7 +19,6 @@ use crate::issues::browser::{
     self, Action, Browser, Connection, Field, IssuesHit, Listing, Naming, Pick, Place, Room, Screen, Step, Tab,
     TokenForm,
 };
-use crate::issues::secrets;
 use crate::issues::{self, Account, Detail, Issue, Listed, Person, Query, Secret, Source, gitlab};
 use crate::list::Search;
 use crate::log::{self, Job, Level};
@@ -104,7 +103,7 @@ impl App {
         let (places, here) = self.places(Some(self.active), self.project().map(|p| p.active));
         let Some(project) = self.project() else { return Ok(()) };
         let mut browser = self.new_browser(project, places, here.unwrap_or(0));
-        if let Some(tab) = self.issues.tab {
+        if let Some(tab) = self.issues.tab() {
             browser.tab_to(tab);
         }
         let action = browser.needs_load();
@@ -117,18 +116,13 @@ impl App {
             .into_iter()
             .filter_map(|source| {
                 let from_env = self.connected(source)?;
-                Some((source, Connection { from_env, account: self.issues.accounts.get(&source).cloned() }))
+                Some((source, Connection { from_env, account: self.issues.account(source).cloned() }))
             })
             .collect()
     }
 
     fn known_members(&self, project: u64) -> HashMap<Source, std::result::Result<Vec<Person>, String>> {
-        self.issues
-            .people_cache
-            .iter()
-            .filter(|((_, p), _)| p.is_none_or(|p| p == project))
-            .map(|((s, _), m)| (*s, Ok(m.clone())))
-            .collect()
+        self.issues.members(project)
     }
 
     fn new_browser(&self, project: &Project, places: Vec<Place>, here: usize) -> Browser {
@@ -139,8 +133,8 @@ impl App {
             worktrees: git::is_repo_root(&project.path),
             tabs: browser::tabs(&self.config.issue_tabs),
             tab: 0,
-            closed: self.issues.closed,
-            people: self.issues.people.clone(),
+            closed: self.issues.closed(),
+            people: self.issues.people().clone(),
             search: Search::default(),
             lists: HashMap::new(),
             connections: self.connections(),
@@ -154,7 +148,7 @@ impl App {
             scheduling: false,
             error: None,
             notice: None,
-            secrets_path: crate::text::display_path(&self.issues.secrets_path, self.home.as_deref()),
+            secrets_path: crate::text::display_path(self.issues.secrets_path(), self.home.as_deref()),
             agents: self.agent_choices(),
             accounts: self.account_choices(),
             picker: None,
@@ -258,9 +252,7 @@ impl App {
 
     fn remember_browser(&mut self) {
         if let Some(Overlay::Issues(b)) = &self.overlay {
-            self.issues.tab = Some(b.current());
-            self.issues.closed = b.closed;
-            self.issues.people = b.people.clone();
+            self.issues.remember(b);
         }
     }
 
@@ -291,7 +283,7 @@ impl App {
 
     fn save_asana(&mut self, workspace: String, token: &Secret, area: Rect) -> Result<()> {
         let key = Source::Asana.secret_key().unwrap_or_default();
-        if let Err(e) = secrets::write(&self.issues.secrets_path, key, &token.0) {
+        if let Err(e) = self.issues.save_token(key, &token) {
             if let Some(Overlay::Issues(b)) = &mut self.overlay {
                 b.token_rejected(Source::Asana, format!("failed to save the access token: {e}"));
             }
@@ -329,7 +321,7 @@ impl App {
 
     pub(super) fn people_loaded(&mut self, project: u64, source: Source, result: Result<Vec<Person>>) {
         if let Ok(people) = &result {
-            self.issues.people_cache.insert((source, source.in_repository().then_some(project)), people.clone());
+            self.issues.learn_people(source, project, people);
         }
         if let Some(Overlay::Issues(b)) = &mut self.overlay
             && b.project == project
@@ -441,7 +433,8 @@ impl App {
         };
         let saved = result.and_then(|account| {
             let key = source.secret_key().ok_or_else(|| Error::Api("nothing to save".into()))?;
-            secrets::write(&self.issues.secrets_path, key, &token.0)
+            self.issues
+                .save_token(key, &token)
                 .map_err(|e| Error::Api(format!("failed to save the {}: {e}", source.token_name())))?;
             Ok(account)
         });
@@ -470,7 +463,7 @@ impl App {
     }
 
     fn disconnect(&mut self, source: Source) {
-        let removed = source.secret_key().map(|key| secrets::remove(&self.issues.secrets_path, key));
+        let removed = source.secret_key().map(|key| self.issues.delete_token(key));
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return };
         if let Some(Err(e)) = removed {
             b.error = Some(format!("failed to remove the {}: {e}", source.token_name()));

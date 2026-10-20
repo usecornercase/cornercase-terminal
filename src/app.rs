@@ -30,7 +30,9 @@ use crate::host::notify::Notification;
 use crate::host::pointer;
 use crate::host::sound::Cue;
 use crate::host::theme::HostTheme;
+#[cfg(test)]
 use crate::issues::People;
+#[cfg(test)]
 use crate::issues::browser::Tab as IssueTab;
 use crate::issues::cache::Cache as IssueCache;
 #[cfg(test)]
@@ -40,7 +42,9 @@ use crate::project::search::said;
 use crate::project::split::Dir;
 use crate::project::{Group, Hierarchy, Project, group};
 use crate::settings::Page;
-use crate::state::{self, ChangesState, IssuesState, ProjectState, State};
+#[cfg(test)]
+use crate::state::IssuesState;
+use crate::state::{self, ChangesState, ProjectState, State};
 use crate::todo::{self, Todos};
 use crate::ui::{self};
 #[cfg(test)]
@@ -441,12 +445,6 @@ impl App {
             .zip(crate::project::group_indices(&self.projects, &self.groups))
             .map(|(p, group)| ProjectState::of(p, group, self.runs.all(), &parents))
             .collect();
-        let chosen = self.issues.tab.is_some() || self.issues.closed || self.issues.people != People::default();
-        let issues = chosen.then(|| IssuesState {
-            tab: self.issues.tab.map(|t| t.id().to_string()),
-            closed: self.issues.closed,
-            people: self.issues.people.clone(),
-        });
         let groups = self.groups.iter().map(|g| g.entry.clone()).collect();
         let changes = (self.screen.side == Some(Side::Changes)
             || self.panels.changes.mode != changes::Mode::default()
@@ -462,7 +460,7 @@ impl App {
             projects,
             active: self.active,
             widths: Some(self.screen.widths),
-            issues,
+            issues: self.issues.saved(),
             changes,
             todo: self.screen.side == Some(Side::Todo),
             files: self.screen.side == Some(Side::Files),
@@ -477,7 +475,7 @@ impl App {
             self.panels.changes.scope = changes.scope.unwrap_or_default();
         }
         self.show_side(saved_side(saved));
-        self.restore_issues(saved);
+        self.issues.restore(saved.issues.as_ref());
         let first_group = self.groups.len();
         for entry in &saved.groups {
             let icon = group::known_icon(entry.icon);
@@ -495,14 +493,6 @@ impl App {
             self.messages.toast = Some(Toast::new(not_restored(&missed), ui::ToastIcon::Bug));
         }
         missed.is_empty()
-    }
-
-    fn restore_issues(&mut self, saved: &State) {
-        if let Some(issues) = &saved.issues {
-            self.issues.tab = issues.tab.as_deref().and_then(IssueTab::from_id);
-            self.issues.closed = issues.closed;
-            self.issues.people = issues.people.clone();
-        }
     }
 
     fn restore_projects(

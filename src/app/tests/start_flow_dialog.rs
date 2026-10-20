@@ -20,7 +20,7 @@ fn setup(repo: bool) -> Setup {
     let config = TempDir::new();
     let (mut app, rx) = app_in(project.path(), config.path().join("config.json"));
     app.projects[0].name = Some("web-shop".into());
-    app.issues.env_tokens.clear();
+    app.issues.clear_env_tokens();
     for kind in Known::ALL {
         app.config.agent_commands.insert(kind.name().into(), "/nonexistent/agent".into());
     }

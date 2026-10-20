@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::App;
 use super::event::AppEvent;
@@ -7,7 +7,7 @@ use super::issues_dialog::IssueEvent;
 use crate::control::contract::{Code, Refusal};
 use crate::error::{Error, Result};
 use crate::git;
-use crate::issues::browser::{Place, Tab};
+use crate::issues::browser::{Browser, Place, Tab};
 use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
 use crate::issues::locate::{self, Locator};
 use crate::issues::secrets;
@@ -17,19 +17,20 @@ use crate::issues::{
 };
 use crate::log::{Job, Level};
 use crate::project::{Hierarchy, Project};
+use crate::state::IssuesState;
 
 pub(super) struct IssueConnections {
     pub(super) cache: IssueCache,
-    pub(super) closed: bool,
-    pub(super) people: People,
-    pub(super) people_cache: HashMap<(Source, Option<u64>), Vec<Person>>,
-    pub(super) failures: HashMap<(Source, Option<u64>), String>,
-    pub(super) accounts: HashMap<Source, Account>,
-    pub(super) epochs: HashMap<Source, u64>,
-    pub(super) tab: Option<Tab>,
-    pub(super) apis: Apis,
-    pub(super) env_tokens: HashMap<Source, String>,
-    pub(super) secrets_path: PathBuf,
+    closed: bool,
+    people: People,
+    people_cache: HashMap<(Source, Option<u64>), Vec<Person>>,
+    failures: HashMap<(Source, Option<u64>), String>,
+    accounts: HashMap<Source, Account>,
+    epochs: HashMap<Source, u64>,
+    tab: Option<Tab>,
+    apis: Apis,
+    env_tokens: HashMap<Source, String>,
+    secrets_path: PathBuf,
 }
 
 impl IssueConnections {
@@ -46,6 +47,107 @@ impl IssueConnections {
             apis: Apis::from_env(),
             env_tokens: env_tokens(),
             secrets_path,
+        }
+    }
+
+    fn source_key(source: Source, project: u64) -> (Source, Option<u64>) {
+        (source, source.in_repository().then_some(project))
+    }
+
+    pub(super) fn saved(&self) -> Option<IssuesState> {
+        let chosen = self.tab.is_some() || self.closed || self.people != People::default();
+        chosen.then(|| IssuesState {
+            tab: self.tab.map(|t| t.id().to_string()),
+            closed: self.closed,
+            people: self.people.clone(),
+        })
+    }
+
+    pub(super) fn restore(&mut self, saved: Option<&IssuesState>) {
+        if let Some(issues) = saved {
+            self.tab = issues.tab.as_deref().and_then(Tab::from_id);
+            self.closed = issues.closed;
+            self.people = issues.people.clone();
+        }
+    }
+
+    pub(super) fn remember(&mut self, browser: &Browser) {
+        self.tab = Some(browser.current());
+        self.closed = browser.closed;
+        self.people = browser.people.clone();
+    }
+
+    pub(super) fn tab(&self) -> Option<Tab> {
+        self.tab
+    }
+
+    pub(super) fn closed(&self) -> bool {
+        self.closed
+    }
+
+    pub(super) fn people(&self) -> &People {
+        &self.people
+    }
+
+    pub(super) fn account(&self, source: Source) -> Option<&Account> {
+        self.accounts.get(&source)
+    }
+
+    pub(super) fn members(&self, project: u64) -> HashMap<Source, std::result::Result<Vec<Person>, String>> {
+        self.people_cache
+            .iter()
+            .filter(|((_, p), _)| p.is_none_or(|p| p == project))
+            .map(|((s, _), m)| (*s, Ok(m.clone())))
+            .collect()
+    }
+
+    pub(super) fn people_found(&self, source: Source, project: u64) -> &[Person] {
+        self.people_cache.get(&Self::source_key(source, project)).map_or(&[], Vec::as_slice)
+    }
+
+    pub(super) fn learn_people(&mut self, source: Source, project: u64, people: &[Person]) {
+        self.people_cache.insert(Self::source_key(source, project), people.to_vec());
+    }
+
+    pub(super) fn failure(&self, source: Source, project: u64) -> Option<&str> {
+        self.failures.get(&Self::source_key(source, project)).map(String::as_str)
+    }
+
+    pub(super) fn note_failure(&mut self, source: Source, message: String) {
+        self.failures.insert((source, None), message);
+    }
+
+    pub(super) fn secrets_path(&self) -> &Path {
+        &self.secrets_path
+    }
+
+    pub(super) fn save_token(&self, key: &str, token: &Secret) -> std::io::Result<()> {
+        secrets::write(&self.secrets_path, key, &token.0)
+    }
+
+    pub(super) fn delete_token(&self, key: &str) -> std::io::Result<()> {
+        secrets::remove(&self.secrets_path, key)
+    }
+
+    #[cfg(test)]
+    pub(super) fn clear_env_tokens(&mut self) {
+        self.env_tokens.clear();
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_env_token(&mut self, source: Source, token: &str) {
+        self.env_tokens.insert(source, token.into());
+    }
+
+    #[cfg(test)]
+    pub(super) fn api_at(&mut self, source: Source, url: &str) {
+        match source {
+            Source::Shortcut => self.apis.shortcut = url.into(),
+            Source::Linear => self.apis.linear = url.into(),
+            Source::Jira => self.apis.jira = Some(url.into()),
+            Source::Plane => self.apis.plane = Some(url.into()),
+            Source::Asana => self.apis.asana = url.into(),
+            Source::Github | Source::Gitlab => {}
         }
     }
 }
@@ -72,7 +174,7 @@ impl Apis {
 }
 
 impl App {
-    pub(super) fn branch_user(&self, dir: Option<&std::path::Path>) -> String {
+    pub(super) fn branch_user(&self, dir: Option<&Path>) -> String {
         let wanted = naming::uses_user(&self.config.issue_branch);
         dir.filter(|_| wanted).and_then(git::user_name).unwrap_or_default()
     }
@@ -210,7 +312,7 @@ impl App {
     }
 
     pub(super) fn note_list(&mut self, source: Source, project: u64, result: &Result<Listed>) {
-        let key = (source, source.in_repository().then_some(project));
+        let key = IssueConnections::source_key(source, project);
         match result {
             Ok(_) => drop(self.issues.failures.remove(&key)),
             Err(error) => drop(self.issues.failures.insert(key, error.to_string())),

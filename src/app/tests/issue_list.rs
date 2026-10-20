@@ -5,12 +5,14 @@ use crate::issues::secrets;
 use crate::test_util::{FakeHttp, fake_gh};
 
 pub(super) fn assert_only_linear(s: &Setup) {
-    assert_eq!(s.app.issues.accounts.keys().collect::<Vec<_>>(), [&Source::Linear]);
+    let connected: Vec<Source> =
+        Source::REMOTE.into_iter().filter(|source| s.app.issues.account(*source).is_some()).collect();
+    assert_eq!(connected, [Source::Linear]);
 }
 
 pub(super) fn accounts_with_linear(s: &mut Setup, source: Source, workspace: &str) {
-    s.app.issues.accounts.insert(source, Account { handle: "Ana".into(), workspace: workspace.into() });
-    s.app.issues.accounts.insert(Source::Linear, Account { handle: "ana".into(), workspace: "b".into() });
+    s.app.learn_account(source, &Account { handle: "Ana".into(), workspace: workspace.into() });
+    s.app.learn_account(Source::Linear, &Account { handle: "ana".into(), workspace: "b".into() });
 }
 
 pub(super) fn shortcut_with_token(s: &mut Setup) -> FakeHttp {
@@ -60,7 +62,7 @@ pub(super) fn setup(git: bool, gh_script: &str) -> Setup {
     };
     let config_path = write_config(config.path(), &settings);
     let (mut app, rx) = app_in(dir.path(), config_path);
-    app.issues.env_tokens.clear();
+    app.issues.clear_env_tokens();
     Setup { app, rx, worktrees, config, _dir: dir }
 }
 
@@ -249,7 +251,7 @@ mod filters_and_places {
         pump_until(&mut s.app, &s.rx, "the filtered list loads", |a| loaded(a, Source::Github));
 
         assert!(gh_args(&s).contains("--assignee zoe"), "{}", gh_args(&s));
-        assert_eq!(s.app.issues.people.github[0], issues::Who::Person("zoe".into()));
+        assert_eq!(s.app.issues.people().github[0], issues::Who::Person("zoe".into()));
     }
 
     #[test]
@@ -306,9 +308,7 @@ mod remembering {
         };
         let (mut app, _rx) = empty_app();
         app.restore(&saved, AREA);
-        s.app.issues.tab = app.issues.tab;
-        s.app.issues.closed = app.issues.closed;
-        s.app.issues.people = app.issues.people.clone();
+        s.app.issues.restore(app.issues.saved().as_ref());
 
         open_list(&mut s);
 
@@ -564,7 +564,7 @@ mod tokens {
     fn a_token_from_the_environment_needs_no_form() {
         let mut s = setup(false, "echo '[]'");
         let _server = shortcut(&mut s, Vec::new());
-        s.app.issues.env_tokens.insert(Source::Shortcut, "env-token".into());
+        s.app.issues.set_env_token(Source::Shortcut, "env-token");
 
         open_loaded(&mut s, Source::Shortcut);
 
@@ -607,7 +607,7 @@ mod jira {
     fn jira(s: &mut Setup) -> FakeHttp {
         let server =
             FakeHttp::start(vec![("GET /rest/api/3/myself", 200, MYSELF), ("GET /rest/api/3/search/jql", 200, SEARCH)]);
-        s.app.issues.apis.jira = Some(server.url());
+        s.app.issues.api_at(Source::Jira, &server.url());
         server
     }
 
@@ -657,7 +657,7 @@ mod jira {
     fn a_token_from_the_environment_connects_once_the_email_is_typed() {
         let mut s = setup(false, "echo '[]'");
         let _server = jira(&mut s);
-        s.app.issues.env_tokens.insert(Source::Jira, "env-token".into());
+        s.app.issues.set_env_token(Source::Jira, "env-token");
 
         type_site_and_email(&mut s);
 
@@ -685,7 +685,8 @@ mod jira {
         s.app.set_config(Config { jira_site: "other.atlassian.net".into(), ..s.app.config.clone() });
         answer(&mut s, |e| matches!(e, AppEvent::Issues(IssueEvent::Listed { source: Source::Jira, .. })));
 
-        assert_eq!((s.app.issues.accounts.get(&Source::Jira), s.app.issues.cache.get(&key)), (None, None));
+        let account = s.app.issues.account(Source::Jira).cloned();
+        assert_eq!((account, s.app.issues.cache.get(&key)), (None, None));
     }
 
     #[test]
@@ -739,7 +740,7 @@ mod plane {
             ("GET /api/v1/workspaces/acme/members/", 200, MEMBERS),
             ("GET /api/v2/workspaces/acme/work-items/", 200, ITEMS),
         ]);
-        s.app.issues.apis.plane = Some(server.url());
+        s.app.issues.api_at(Source::Plane, &server.url());
         server
     }
 
@@ -771,7 +772,7 @@ mod plane {
     fn a_key_from_the_environment_connects_once_the_workspace_is_typed() {
         let mut s = setup(false, "echo '[]'");
         let _server = plane(&mut s);
-        s.app.issues.env_tokens.insert(Source::Plane, "env-key".into());
+        s.app.issues.set_env_token(Source::Plane, "env-key");
 
         type_workspace(&mut s);
 
@@ -840,7 +841,7 @@ mod gitlab {
     fn connected(s: &mut Setup) -> FakeHttp {
         let server = gitlab(s);
         s.app.config.gitlab_url = server.url();
-        s.app.issues.env_tokens.insert(Source::Gitlab, "env-token".into());
+        s.app.issues.set_env_token(Source::Gitlab, "env-token");
         to_tab_after_open(s, IssueTab::One(Source::Gitlab));
         pump_until(&mut s.app, &s.rx, "the issues load", |a| loaded(a, Source::Gitlab));
         server

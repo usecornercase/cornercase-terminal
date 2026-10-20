@@ -77,7 +77,7 @@ fn an_asana_token_for_several_workspaces_is_saved_and_says_to_choose_one() {
     let mut s = setup(true, "");
     let two = r#"{"data":{"gid":"u-me","name":"Ana","workspaces":[{"gid":"w-1","name":"Acme"},{"gid":"w-2","name":"Beta"}]}}"#;
     let server = crate::test_util::FakeHttp::start(vec![("GET /users/me", 200, two)]);
-    s.app.issues.apis.asana = server.url();
+    s.app.issues.api_at(Source::Asana, &server.url());
     let secret = json!({"action": "secret", "entry": {"key": "asana", "value": "t0k"}});
     good::<Value>(&mut s, "config", &secret);
     let got = sources(&mut s);
@@ -99,7 +99,7 @@ fn a_folder_that_is_not_a_repository_has_no_github() {
 #[test]
 fn a_token_from_the_environment_says_so() {
     let mut s = setup(true, "");
-    s.app.issues.env_tokens.insert(Source::Linear, "x".into());
+    s.app.issues.set_env_token(Source::Linear, "x");
     let got = sources(&mut s);
     let linear = info(&got, "linear");
     assert_eq!(
@@ -113,7 +113,7 @@ fn a_failing_list_marks_the_source_until_one_works_or_it_is_forgotten() {
     let mut s = setup(true, "");
     let broken = with_token(&mut s, Vec::new());
     drop(broken);
-    s.app.issues.apis.shortcut = "http://127.0.0.1:1/api/v3".into();
+    s.app.issues.api_at(Source::Shortcut, "http://127.0.0.1:1/api/v3");
     let lists: Lists = good(&mut s, "issue-list", &json!({"source": "shortcut"}));
     assert!(lists.sources[0].error.is_some(), "{lists:?}");
     let got = sources(&mut s);

@@ -17,7 +17,7 @@ struct Setup {
 fn setup() -> Setup {
     let (config, folder) = (TempDir::new(), TempDir::new());
     let (mut app, rx) = app_in(folder.path(), config.path().join("config.json"));
-    app.issues.env_tokens.clear();
+    app.issues.clear_env_tokens();
     Setup { app, rx, config, folder }
 }
 
@@ -139,7 +139,7 @@ fn a_rejected_token_is_not_saved_and_not_echoed() {
 #[test]
 fn a_token_from_the_environment_cannot_be_replaced_or_removed() {
     let mut s = setup();
-    s.app.issues.env_tokens.insert(Source::Linear, "from-env".into());
+    s.app.issues.set_env_token(Source::Linear, "from-env");
 
     let replaced = refused(&mut s, &json!({"action": "secret", "entry": {"key": "linear", "value": MARKER}}));
     let removed = refused(&mut s, &json!({"action": "remove", "entry": "linear"}));

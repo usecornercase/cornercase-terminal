@@ -24,7 +24,7 @@ fn undrawn_queued_app() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) 
     };
     let config_path = write_config(config.path(), &settings);
     let (mut app, rx) = app_in(repo.path(), config_path);
-    app.issues.env_tokens.clear();
+    app.issues.clear_env_tokens();
     (app, rx, repo, config, worktrees)
 }
 

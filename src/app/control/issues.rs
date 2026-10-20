@@ -119,14 +119,14 @@ impl App {
                 here: at == Some(i),
             })
             .collect();
-        Ok(Some(json(&Sources { project, closed: self.issues.closed, sources, places })))
+        Ok(Some(json(&Sources { project, closed: self.issues.closed(), sources, places })))
     }
 
     fn source_info(&self, source: Source, p: usize, git: bool, tab: bool) -> SourceInfo {
         let project = self.projects[p].id;
         let token = self.token(source);
         let missing = self.missing_settings(source, p, git, token.is_some());
-        let failure = self.issues.failures.get(&(source, source.in_repository().then_some(project)));
+        let failure = self.issues.failure(source, project);
         let state = match (missing.is_empty(), failure) {
             (false, _) => SourceState::Missing,
             (true, Some(_)) => SourceState::Failing,
@@ -139,7 +139,7 @@ impl App {
             (_, Some(_)) => Some("saved"),
             _ => None,
         };
-        let people = self.issues.people.of(source);
+        let people = self.issues.people().of(source);
         SourceInfo {
             source: source.id().into(),
             name: source.name().into(),
@@ -147,8 +147,8 @@ impl App {
             repository: source.in_repository(),
             state,
             missing,
-            reason: failure.filter(|_| state == SourceState::Failing).cloned(),
-            account: self.issues.accounts.get(&source).map(Account::describe),
+            reason: failure.filter(|_| state == SourceState::Failing).map(str::to_string),
+            account: self.issues.account(source).map(Account::describe),
             from: from.map(String::from),
             env: source.token_env().filter(|_| from_env).map(String::from),
             fields: source.people_fields().map(String::from),
@@ -257,7 +257,7 @@ impl App {
                 source: entry.source.id().into(),
                 count: entry.issues.len(),
                 cached: entry.cached,
-                account: self.issues.accounts.get(&entry.source).map(Account::describe),
+                account: self.issues.account(entry.source).map(Account::describe),
                 error: entry.error.clone(),
             })
             .collect();
@@ -296,9 +296,8 @@ impl App {
         let (_, project) = self.issue_project(asker, request.project)?;
         let source = source_named(&request.source)?;
         if request.cached {
-            let key = (source, source.in_repository().then_some(project));
-            let people = self.issues.people_cache.get(&key).cloned().unwrap_or_default();
-            return Ok(Some(json(&people_answer(source, true, &people))));
+            let people = self.issues.people_found(source, project);
+            return Ok(Some(json(&people_answer(source, true, people))));
         }
         let Some(api) = self.client(source, project) else {
             return Err(conflict(format!("{} is not connected", source.name())));

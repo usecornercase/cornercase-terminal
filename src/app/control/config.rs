@@ -8,7 +8,7 @@ use crate::control::config::{Configure, Described, ProjectChange, ProjectEntry, 
 use crate::control::contract::{Code, Refusal};
 use crate::error::Error;
 use crate::git;
-use crate::issues::{Account, Secret, Source, secrets};
+use crate::issues::{Account, Secret, Source};
 use crate::project::Hierarchy;
 use crate::settings::{Action, Page, Refused};
 use crate::text;
@@ -191,7 +191,8 @@ impl App {
         };
         let saved = result.and_then(|account| {
             let name = source.secret_key().ok_or_else(|| Error::Api("nothing to save".into()))?;
-            secrets::write(&self.issues.secrets_path, name, &token.0)
+            self.issues
+                .save_token(name, &token)
                 .map_err(|e| Error::Api(format!("failed to save the {}: {e}", source.token_name())))?;
             Ok(account)
         });
@@ -199,7 +200,7 @@ impl App {
             self.forget_issues(source);
             self.learn_account(source, account);
             if let Some(message) = unchosen {
-                self.issues.failures.insert((source, None), message);
+                self.issues.note_failure(source, message);
             }
             self.refresh_open_settings();
         }

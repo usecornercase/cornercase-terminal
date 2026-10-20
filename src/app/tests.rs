@@ -113,7 +113,7 @@ fn panel_area(app: &App) -> Rect {
 
 fn fake_shortcut<B: Into<Vec<u8>>>(app: &mut App, routes: Vec<(&'static str, u16, B)>) -> crate::test_util::FakeHttp {
     let server = crate::test_util::FakeHttp::start(routes);
-    app.issues.apis.shortcut = format!("{}/api/v3", server.url());
+    app.issues.api_at(Source::Shortcut, &format!("{}/api/v3", server.url()));
     server
 }
 

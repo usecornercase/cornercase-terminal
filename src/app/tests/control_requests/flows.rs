@@ -852,7 +852,7 @@ fn a_flow_runs_on_an_issue_with_the_branch_its_start_would_use() {
     let gh_dir = TempDir::new();
     let gh = crate::test_util::fake_gh(gh_dir.path(), &format!("cat <<'EOF'\n{ISSUE}\nEOF"));
     let mut team = Team::configured(FAKE, |config, _| config.gh = gh.display().to_string());
-    team.app.issues.env_tokens.clear();
+    team.app.issues.clear_env_tokens();
     let run = wire::FlowRun { name: "Pair".into(), issue: Some("#7".into()), ..wire::FlowRun::default() };
     ask(&mut team.app, None, Command::FlowRun(run));
 
@@ -867,7 +867,7 @@ fn a_flow_runs_on_an_issue_with_the_branch_its_start_would_use() {
 #[test]
 fn a_flow_on_an_issue_of_a_remote_tracker_asks_which_project() {
     let mut team = Team::new();
-    team.app.issues.env_tokens.clear();
+    team.app.issues.clear_env_tokens();
     let other = git_repo(&[("README", "hi")]);
     team.app.open_project(other.path().to_path_buf(), AREA).expect("a second repository");
     crate::issues::secrets::write(&paths::secrets(&team.config.path().join("config.json")), "shortcut_token", "t0k")
