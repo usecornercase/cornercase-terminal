@@ -62,6 +62,13 @@ pub(super) enum Phase {
     Rejected,
 }
 
+#[derive(Default)]
+struct Delivery {
+    keyboard: Keyboard,
+    route: Option<Route>,
+    reply_to: Option<i64>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Route {
     Pane(u64),
@@ -310,7 +317,8 @@ impl App {
         }
     }
 
-    fn say(&mut self, via: Via, text: String, keyboard: Keyboard, route: Option<Route>, reply_to: Option<i64>) {
+    fn say(&mut self, via: Via, text: String, delivery: Delivery) {
+        let Delivery { keyboard, route, reply_to } = delivery;
         let messenger = self.messenger_mut(via);
         if route.is_some() {
             messenger.open_ask = None;
@@ -320,21 +328,22 @@ impl App {
         self.post(via, Order::Send { chat, text, keyboard, reply_to, ask: None, tag });
     }
 
-    fn say_long(&mut self, via: Via, header: &str, parts: Vec<String>, keyboard: Keyboard, route: Option<Route>) {
+    fn say_long(&mut self, via: Via, header: &str, parts: Vec<String>, delivery: Delivery) {
+        let Delivery { keyboard, route, .. } = delivery;
         let count = parts.len();
         if count == 0 {
-            self.say(via, header.to_string(), keyboard, route, None);
+            self.say(via, header.to_string(), Delivery { keyboard, route, reply_to: None });
             return;
         }
         let markup = via.markup();
         for (i, part) in parts.into_iter().enumerate() {
             let joined = i == 0 && markup.fits(header, &part);
             if i == 0 && !joined {
-                self.say(via, header.to_string(), Vec::new(), route, None);
+                self.say(via, header.to_string(), Delivery { route, ..Delivery::default() });
             }
             let text = if joined { format!("{header}\n\n{part}") } else { part };
             let keys = if i + 1 == count { keyboard.clone() } else { Vec::new() };
-            self.say(via, text, keys, route, None);
+            self.say(via, text, Delivery { keyboard: keys, route, reply_to: None });
         }
     }
 
@@ -351,7 +360,7 @@ impl App {
 
     fn reply(&mut self, via: Via, message: i64, text: &str) {
         let text = via.markup().escape(text);
-        self.say(via, text, Vec::new(), None, Some(message));
+        self.say(via, text, Delivery { reply_to: Some(message), ..Delivery::default() });
     }
 
     fn answer_press(&self, via: Via, press: &str, text: &str) {
@@ -392,7 +401,7 @@ impl App {
             },
             Asked::Finished { pane, header } => self.finished_read(via, pane, &header, reply),
             Asked::Start { message, place, agent } => match reply {
-                Ok(value) => self.started(via, &value, message, &place, &agent),
+                Ok(value) => self.started(via, &value, message, (&place, &agent)),
                 Err(why) => self.reply(via, message, &why),
             },
         }
@@ -404,7 +413,7 @@ impl App {
         }
     }
 
-    fn started(&mut self, via: Via, value: &Value, message: i64, place: &str, agent: &str) {
+    fn started(&mut self, via: Via, value: &Value, message: i64, (place, agent): (&str, &str)) {
         let done: Done = serde_json::from_value(value.clone()).unwrap_or_default();
         let later = if self.messenger(via).away { "" } else { "\n/away to get its messages here." };
         let m = via.markup();
@@ -414,7 +423,7 @@ impl App {
             m.escape(place)
         );
         let route = done.ids.pane.map(Route::Pane);
-        self.say(via, text, Vec::new(), route, Some(message));
+        self.say(via, text, Delivery { route, reply_to: Some(message), ..Delivery::default() });
     }
 
     pub(super) fn messenger_event(&mut self, event: MessengerEvent, area: Rect) {
@@ -558,7 +567,7 @@ impl App {
         }
         let paired = u64::try_from(unix_now()).unwrap_or_default();
         self.connect(via, Chat { id: message.chat, user: message.user, name: message.name.clone(), paired });
-        self.say(via, chat::welcome(via), Vec::new(), None, None);
+        self.say(via, chat::welcome(via), Delivery::default());
         true
     }
 
@@ -676,7 +685,7 @@ impl App {
             m.bold("Away"),
             m.bold(notices::AGENTS)
         );
-        self.say_long(via, &header, status, keyboard, None);
+        self.say_long(via, &header, status, Delivery { keyboard, ..Delivery::default() });
         if by != By::Chat {
             self.toast = Some(Toast::new(format!("away: agents message you on {}", via.name()), ui::ToastIcon::Check));
         }
@@ -692,7 +701,7 @@ impl App {
         messenger.away = false;
         log::info!(via.target(), "back", by = by.name(via));
         let text = format!("{}: I no longer message you here. /away starts again.", via.markup().bold("Back"));
-        self.say(via, text, Vec::new(), None, None);
+        self.say(via, text, Delivery::default());
         if by != By::Chat {
             let back = format!("back: agents no longer message you on {}", via.name());
             self.toast = Some(Toast::new(back, ui::ToastIcon::Check));

@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use ratatui::layout::Rect;
 
-use super::{Asked, By, Route};
+use super::{Asked, By, Delivery, Route};
 use crate::agents::activity::Status;
 use crate::app::App;
 use crate::control::{Command, Keys, SendText};
@@ -75,7 +75,7 @@ impl App {
         match route {
             Some(Route::Pane(pane)) => self.deliver(via, pane, message.text.clone(), message.id),
             Some(Route::Branch(draft)) => self.draft_branch(via, draft, message.text.trim(), message.id),
-            Some(Route::Prompt(draft)) => self.draft_prompt(via, draft, &message.text, message.id, area),
+            Some(Route::Prompt(draft)) => self.draft_prompt(via, draft, message, area),
             None => self.unrouted(via, message),
         }
     }
@@ -85,7 +85,7 @@ impl App {
             "status" => {
                 let (status, keyboard) = self.status_message(via);
                 let header = via.markup().bold(super::notices::AGENTS);
-                self.say_long(via, &header, status, keyboard, None);
+                self.say_long(via, &header, status, Delivery { keyboard, ..Delivery::default() });
             }
             "new" => self.new_draft(via, None, area),
             "away" => {
@@ -98,8 +98,8 @@ impl App {
                     self.reply(via, message.id, "I wasn't messaging you here. /away starts.");
                 }
             }
-            "start" => self.say(via, welcome(via), Vec::new(), None, None),
-            _ => self.say(via, HELP.into(), Vec::new(), None, Some(message.id)),
+            "start" => self.say(via, welcome(via), Delivery::default()),
+            _ => self.say(via, HELP.into(), Delivery { reply_to: Some(message.id), ..Delivery::default() }),
         }
     }
 
@@ -124,7 +124,7 @@ impl App {
                         Some(vec![self.messenger(via).tap(text, &Tap::Deliver(pane, id))])
                     })
                     .collect();
-                self.say(via, WHICH.into(), keyboard, None, Some(message.id));
+                self.say(via, WHICH.into(), Delivery { keyboard, reply_to: Some(message.id), ..Delivery::default() });
             }
         }
     }
@@ -144,7 +144,7 @@ impl App {
         } else if survey {
             let keyboard = vec![vec![messenger.tap("dismiss the survey", &Tap::Key(pane, "0".into()))]];
             let text = "Claude Code's feedback survey is open above its input box: dismiss it, then send again.";
-            self.say(via, text.into(), keyboard, Some(Route::Pane(pane)), Some(message));
+            self.say(via, text.into(), Delivery { keyboard, route: Some(Route::Pane(pane)), reply_to: Some(message) });
         } else if dialog {
             let keyboard = vec![vec![
                 messenger.tap("screen", &Tap::Screen(pane)),
@@ -155,7 +155,7 @@ impl App {
                  then send again.",
                 via.markup().escape(&agent.kind)
             );
-            self.say(via, text, keyboard, Some(Route::Pane(pane)), Some(message));
+            self.say(via, text, Delivery { keyboard, route: Some(Route::Pane(pane)), reply_to: Some(message) });
         } else {
             let send = SendText { pane: Some(pane), text: Some(text), enter: true, ..SendText::default() };
             self.chat_request(via, Command::Send(send), Asked::Send { message }, None);
@@ -179,47 +179,18 @@ impl App {
 
     fn chat_tap(&mut self, via: Via, tap: Tap, press: &Press, area: Rect) {
         match tap {
-            Tap::Key(pane, key) => {
-                let Some(agent) = self.agent_at(pane) else {
-                    self.answer_press(via, &press.id, GONE);
-                    return;
-                };
-                let asked = Asked::Keys {
-                    press: press.id.clone(),
-                    chat_message: press.message,
-                    key: key.clone(),
-                    agent: agent.kind,
-                };
-                let keys = Keys { pane: Some(pane), tab: None, keys: vec![key] };
-                self.chat_request(via, Command::Keys(keys), asked, None);
-            }
+            Tap::Key(pane, key) => self.tap_key(via, pane, key, press),
             Tap::Screen(pane) => {
                 self.answer_press(via, &press.id, "");
                 self.send_screen(via, pane);
             }
             Tap::Write(pane) => {
                 self.answer_press(via, &press.id, "");
-                let Some(agent) = self.agent_at(pane) else {
-                    self.say(via, GONE.into(), Vec::new(), None, None);
-                    return;
-                };
-                let m = via.markup();
-                let text = format!("Write to {} in {}:", m.bold(&m.escape(&agent.kind)), m.escape(&agent.place));
-                self.ask(via, text, &format!("message for {}", agent.kind), Route::Pane(pane));
+                self.tap_write(via, pane);
             }
             Tap::Deliver(pane, held) => {
                 self.answer_press(via, &press.id, "");
-                let messenger = self.messenger_mut(via);
-                let found = messenger.held.iter().position(|(id, ..)| *id == held);
-                let Some((_, text, message)) = found.and_then(|i| messenger.held.remove(i)) else { return };
-                if let Some(agent) = self.agent_at(pane)
-                    && let Some(chat) = self.messenger(via).chat().map(|c| c.id)
-                {
-                    let m = via.markup();
-                    let edited = format!("For {} in {}.", m.bold(&m.escape(&agent.kind)), m.escape(&agent.place));
-                    self.post(via, Order::Edit { chat, message: press.message, text: edited, keyboard: Vec::new() });
-                }
-                self.deliver(via, pane, text, message);
+                self.tap_deliver(via, pane, held, press.message);
             }
             Tap::New => {
                 self.answer_press(via, &press.id, "");
@@ -227,9 +198,44 @@ impl App {
             }
             Tap::Draft(draft, choice) => {
                 self.answer_press(via, &press.id, "");
-                self.draft_choice(via, draft, choice, press.message, area);
+                self.draft_choice(via, draft, choice, press.message);
             }
         }
+    }
+
+    fn tap_key(&mut self, via: Via, pane: u64, key: String, press: &Press) {
+        let Some(agent) = self.agent_at(pane) else {
+            self.answer_press(via, &press.id, GONE);
+            return;
+        };
+        let asked =
+            Asked::Keys { press: press.id.clone(), chat_message: press.message, key: key.clone(), agent: agent.kind };
+        let keys = Keys { pane: Some(pane), tab: None, keys: vec![key] };
+        self.chat_request(via, Command::Keys(keys), asked, None);
+    }
+
+    fn tap_write(&mut self, via: Via, pane: u64) {
+        let Some(agent) = self.agent_at(pane) else {
+            self.say(via, GONE.into(), Delivery::default());
+            return;
+        };
+        let m = via.markup();
+        let text = format!("Write to {} in {}:", m.bold(&m.escape(&agent.kind)), m.escape(&agent.place));
+        self.ask(via, text, &format!("message for {}", agent.kind), Route::Pane(pane));
+    }
+
+    fn tap_deliver(&mut self, via: Via, pane: u64, held: u32, edited_message: i64) {
+        let messenger = self.messenger_mut(via);
+        let found = messenger.held.iter().position(|(id, ..)| *id == held);
+        let Some((_, text, message)) = found.and_then(|i| messenger.held.remove(i)) else { return };
+        if let Some(agent) = self.agent_at(pane)
+            && let Some(chat) = self.messenger(via).chat().map(|c| c.id)
+        {
+            let m = via.markup();
+            let edited = format!("For {} in {}.", m.bold(&m.escape(&agent.kind)), m.escape(&agent.place));
+            self.post(via, Order::Edit { chat, message: edited_message, text: edited, keyboard: Vec::new() });
+        }
+        self.deliver(via, pane, text, message);
     }
 }
 

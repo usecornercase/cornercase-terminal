@@ -1,11 +1,11 @@
 use ratatui::layout::Rect;
 
-use super::{Asked, Route};
+use super::{Asked, Delivery, Route};
 use crate::agents;
 use crate::app::App;
 use crate::control::{Command, Start};
 use crate::git;
-use crate::messenger::{Choice, Keyboard, Order, Tap, Via};
+use crate::messenger::{Choice, Keyboard, Message, Order, Tap, Via};
 use crate::project::{Hierarchy, Workspace};
 use crate::text::CRUMB_SEPARATOR;
 
@@ -80,53 +80,14 @@ impl App {
     }
 
     fn next(&mut self, via: Via, id: u32) -> Next {
-        let projects: Vec<u64> = crate::project::sidebar_order(&self.projects, &self.groups)
-            .into_iter()
-            .filter(|&p| !self.projects[p].closing)
-            .map(|p| self.projects[p].id)
-            .collect();
         let Some(draft) = self.messenger(via).drafts.iter().find(|d| d.id == id).cloned() else { return Next::Gone };
-        let only = match projects.as_slice() {
-            [only] => Some(*only),
-            _ => None,
+        let project = match self.draft_project(via, &draft) {
+            Ok(project) => project,
+            Err(next) => return next,
         };
-        let Some(project) = draft.project.filter(|p| projects.contains(p)).or(only) else {
-            let keyboard = projects
-                .iter()
-                .filter_map(|&id| self.projects.project_index(id))
-                .map(|p| {
-                    let project = &self.projects[p];
-                    vec![
-                        self.messenger(via)
-                            .tap(self.project_label(project), &Tap::Draft(id, Choice::Project(project.id))),
-                    ]
-                })
-                .collect();
-            return Next::Project(keyboard);
-        };
-        let workspaces: Vec<(u64, String)> =
-            self.open_workspaces(project).into_iter().map(|w| (w.id, w.label())).collect();
-        let root = self.projects.project_index(project).is_some_and(|p| git::is_repo_root(&self.projects[p].path));
-        let only = match workspaces.as_slice() {
-            [(only, _)] if !root => Some(Place::Workspace(*only)),
-            _ => None,
-        };
-        let open = |place: &Place| match place {
-            Place::Workspace(ws) => workspaces.iter().any(|(id, _)| id == ws),
-            Place::Worktree(_) => true,
-        };
-        let Some(place) = draft.place.clone().filter(open).or(only) else {
-            let mut keyboard: Keyboard = workspaces
-                .iter()
-                .map(|(ws, label)| {
-                    vec![self.messenger(via).tap(label.clone(), &Tap::Draft(id, Choice::Workspace(*ws)))]
-                })
-                .collect();
-            if root {
-                keyboard.push(vec![self.messenger(via).tap("+ new worktree", &Tap::Draft(id, Choice::Worktree))]);
-            }
-            let name = self.projects.project_index(project).map(|p| self.project_label(&self.projects[p]));
-            return Next::Place(name.unwrap_or_default(), keyboard);
+        let place = match self.draft_place(via, &draft, project) {
+            Ok(place) => place,
+            Err(next) => return next,
         };
         let place_label = self.place_label(project, &place);
         let installed = self.installed_agents(via);
@@ -149,17 +110,69 @@ impl App {
         Next::Prompt(agent, place_label)
     }
 
+    fn draft_project(&self, via: Via, draft: &Draft) -> Result<u64, Next> {
+        let projects: Vec<u64> = crate::project::sidebar_order(&self.projects, &self.groups)
+            .into_iter()
+            .filter(|&p| !self.projects[p].closing)
+            .map(|p| self.projects[p].id)
+            .collect();
+        let only = match projects.as_slice() {
+            [only] => Some(*only),
+            _ => None,
+        };
+        draft.project.filter(|p| projects.contains(p)).or(only).ok_or_else(|| {
+            let keyboard = projects
+                .iter()
+                .filter_map(|&project| self.projects.project_index(project))
+                .map(|p| {
+                    let project = &self.projects[p];
+                    let tap = Tap::Draft(draft.id, Choice::Project(project.id));
+                    vec![self.messenger(via).tap(self.project_label(project), &tap)]
+                })
+                .collect();
+            Next::Project(keyboard)
+        })
+    }
+
+    fn draft_place(&self, via: Via, draft: &Draft, project: u64) -> Result<Place, Next> {
+        let id = draft.id;
+        let workspaces: Vec<(u64, String)> =
+            self.open_workspaces(project).into_iter().map(|w| (w.id, w.label())).collect();
+        let root = self.projects.project_index(project).is_some_and(|p| git::is_repo_root(&self.projects[p].path));
+        let only = match workspaces.as_slice() {
+            [(only, _)] if !root => Some(Place::Workspace(*only)),
+            _ => None,
+        };
+        let open = |place: &Place| match place {
+            Place::Workspace(ws) => workspaces.iter().any(|(id, _)| id == ws),
+            Place::Worktree(_) => true,
+        };
+        draft.place.clone().filter(open).or(only).ok_or_else(|| {
+            let mut keyboard: Keyboard = workspaces
+                .iter()
+                .map(|(ws, label)| {
+                    vec![self.messenger(via).tap(label.clone(), &Tap::Draft(id, Choice::Workspace(*ws)))]
+                })
+                .collect();
+            if root {
+                keyboard.push(vec![self.messenger(via).tap("+ new worktree", &Tap::Draft(id, Choice::Worktree))]);
+            }
+            let name = self.projects.project_index(project).map(|p| self.project_label(&self.projects[p]));
+            Next::Place(name.unwrap_or_default(), keyboard)
+        })
+    }
+
     fn show_step(&mut self, via: Via, edit: Option<i64>, text: String, keyboard: Keyboard) {
         match (edit, self.messenger(via).chat().map(|c| c.id)) {
             (Some(message), Some(chat)) => self.post(via, Order::Edit { chat, message, text, keyboard }),
-            _ => self.say(via, text, keyboard, None, None),
+            _ => self.say(via, text, Delivery { keyboard, ..Delivery::default() }),
         }
     }
 
     fn advance_draft(&mut self, via: Via, id: u32, edit: Option<i64>) {
         let m = via.markup();
         match self.next(via, id) {
-            Next::Gone => self.say(via, EXPIRED.into(), Vec::new(), None, None),
+            Next::Gone => self.say(via, EXPIRED.into(), Delivery::default()),
             Next::Project(keyboard) if keyboard.is_empty() => {
                 self.show_step(via, edit, NO_PROJECT.into(), Vec::new());
             }
@@ -183,7 +196,7 @@ impl App {
         }
     }
 
-    pub(super) fn draft_choice(&mut self, via: Via, id: u32, choice: Choice, message: i64, _area: Rect) {
+    pub(super) fn draft_choice(&mut self, via: Via, id: u32, choice: Choice, message: i64) {
         let Some(draft) = self.draft_mut(via, id) else {
             self.show_step(via, Some(message), EXPIRED.into(), Vec::new());
             return;
@@ -221,7 +234,8 @@ impl App {
         self.advance_draft(via, id, None);
     }
 
-    pub(super) fn draft_prompt(&mut self, via: Via, id: u32, prompt: &str, message: i64, area: Rect) {
+    pub(super) fn draft_prompt(&mut self, via: Via, id: u32, message: &Message, area: Rect) {
+        let (prompt, message) = (message.text.as_str(), message.id);
         if prompt.trim().is_empty() {
             self.reply(via, message, NO_PROMPT);
             return;

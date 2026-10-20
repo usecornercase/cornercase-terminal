@@ -3,12 +3,13 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use super::{Asked, Route};
+use super::{Asked, Delivery, Route};
 use crate::agents::activity::{MOON, SHELL, Status};
 use crate::app::App;
 use crate::control::{Command, LastMessage};
 use crate::messenger::{self, Keyboard, Tap, Via};
 use crate::project::Hierarchy;
+use crate::term::Term;
 use crate::text::{CRUMB_SEPARATOR, truncate_right};
 
 const SETTLE: Duration = Duration::from_secs(1);
@@ -131,36 +132,7 @@ impl App {
                 watch.state = state;
                 watch.since = now;
             }
-            let over = !matches!(state, WORKING | WAITING);
-            watch.busy |= !over;
-            if now.saturating_duration_since(watch.since) < SETTLE {
-                continue;
-            }
-            if state == WAITING && watch.settled != WAITING {
-                watch.question = question(&term.emulator.screen_text().unwrap_or_default());
-                watch.asked = now;
-                notices.push(Notice::Waiting(term.id));
-            } else if state == WAITING
-                && term.input_at.is_some_and(|input| input > watch.asked && term.output_at > input)
-                && term.output_at > watch.looked
-                && now.saturating_duration_since(term.output_at) >= SETTLE
-            {
-                watch.looked = now;
-                let next = question(&term.emulator.screen_text().unwrap_or_default());
-                if next.is_some() && next != watch.question {
-                    watch.question = next;
-                    watch.asked = now;
-                    notices.push(Notice::Waiting(term.id));
-                }
-            } else if over
-                && !(members.contains(&term.id) && state != "failed")
-                && !term.agent.reported_idle()
-                && (watch.busy || matches!(state, "done" | "failed") && watch.settled != state)
-            {
-                notices.push(Notice::Finished(term.id, state == SHELL));
-            }
-            watch.settled = state;
-            watch.busy &= !over;
+            notices.extend(settle(watch, term, now, members.contains(&term.id)));
         }
         self.messenger_mut(via).watches.retain(|pane, _| seen.contains(pane));
         if !self.messenger(via).away {
@@ -191,7 +163,7 @@ impl App {
         let header =
             format!("{} · {}", m.bold(&format!("! {} needs you", m.escape(&agent.kind))), m.escape(&agent.place));
         let text = with_screen(via, &header, &agent.screen, EXCERPT);
-        self.say(via, text, keyboard, Some(Route::Pane(pane)), None);
+        self.say(via, text, Delivery { keyboard, route: Some(Route::Pane(pane)), reply_to: None });
     }
 
     fn notice_finished(&mut self, via: Via, pane: u64, shell: bool) {
@@ -224,12 +196,12 @@ impl App {
                 vec![m.pre(&excerpt(&screen, EXCERPT), m.room(header))]
             }
         };
-        self.say_long(via, header, parts, keyboard, Some(Route::Pane(pane)));
+        self.say_long(via, header, parts, Delivery { keyboard, route: Some(Route::Pane(pane)), reply_to: None });
     }
 
     pub(super) fn send_screen(&mut self, via: Via, pane: u64) {
         let Some(agent) = self.agent_at(pane) else {
-            self.say(via, super::chat::GONE.into(), Vec::new(), None, None);
+            self.say(via, super::chat::GONE.into(), Delivery::default());
             return;
         };
         let messenger = self.messenger(via);
@@ -240,7 +212,7 @@ impl App {
         let m = via.markup();
         let header = format!("{} {} · {}", icon(agent.status), m.bold(&m.escape(&agent.kind)), m.escape(&agent.place));
         let text = with_screen(via, &header, &agent.screen, SCREEN);
-        self.say(via, text, keyboard, Some(Route::Pane(pane)), None);
+        self.say(via, text, Delivery { keyboard, route: Some(Route::Pane(pane)), reply_to: None });
     }
 
     pub(super) fn status_message(&self, via: Via) -> (Vec<String>, Keyboard) {
@@ -282,4 +254,51 @@ impl App {
         keyboard.push(vec![messenger.tap("+ new agent", &Tap::New)]);
         (m.lines(&lines), keyboard)
     }
+}
+
+fn settle(watch: &mut Watch, term: &Term, now: Instant, member: bool) -> Option<Notice> {
+    let state = watch.state;
+    let over = !matches!(state, WORKING | WAITING);
+    watch.busy |= !over;
+    if now.saturating_duration_since(watch.since) < SETTLE {
+        return None;
+    }
+    let notice = if state == WAITING && watch.settled != WAITING {
+        watch.question = question(&term.emulator.screen_text().unwrap_or_default());
+        watch.asked = now;
+        Some(Notice::Waiting(term.id))
+    } else if state == WAITING && answered_and_redrawn(watch, term, now) {
+        reread_question(watch, term, now)
+    } else if over && finished(watch, term, member) {
+        Some(Notice::Finished(term.id, state == SHELL))
+    } else {
+        None
+    };
+    watch.settled = state;
+    watch.busy &= !over;
+    notice
+}
+
+fn answered_and_redrawn(watch: &Watch, term: &Term, now: Instant) -> bool {
+    term.input_at.is_some_and(|input| input > watch.asked && term.output_at > input)
+        && term.output_at > watch.looked
+        && now.saturating_duration_since(term.output_at) >= SETTLE
+}
+
+fn reread_question(watch: &mut Watch, term: &Term, now: Instant) -> Option<Notice> {
+    watch.looked = now;
+    let next = question(&term.emulator.screen_text().unwrap_or_default());
+    if next.is_some() && next != watch.question {
+        watch.question = next;
+        watch.asked = now;
+        return Some(Notice::Waiting(term.id));
+    }
+    None
+}
+
+fn finished(watch: &Watch, term: &Term, member: bool) -> bool {
+    let state = watch.state;
+    (!member || state == "failed")
+        && !term.agent.reported_idle()
+        && (watch.busy || matches!(state, "done" | "failed") && watch.settled != state)
 }
