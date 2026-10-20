@@ -496,10 +496,7 @@ fn restore_brings_back_the_layout_and_the_right_clicks() {
     );
 }
 
-#[test]
-fn a_tab_saved_without_a_layout_puts_its_panes_side_by_side() {
-    let dir = TempDir::new();
-    let (mut app, _rx) = empty_app();
+fn tab_without_layout() -> TabState {
     let pane_state = PaneState {
         cwd: None,
         right_clicks: false,
@@ -511,9 +508,12 @@ fn a_tab_saved_without_a_layout_puts_its_panes_side_by_side() {
         collapsed: false,
         accounts: std::collections::BTreeMap::new(),
     };
-    let tab = TabState { name: None, panes: vec![pane_state.clone(), pane_state], active: 1, layout: None };
-    let workspace = WorkspaceState {
-        path: dir.path().to_path_buf(),
+    TabState { name: None, panes: vec![pane_state.clone(), pane_state], active: 1, layout: None }
+}
+
+fn workspace_with(tab: TabState, dir: &Path) -> WorkspaceState {
+    WorkspaceState {
+        path: dir.to_path_buf(),
         name: None,
         worktree: false,
         tabs: vec![tab],
@@ -523,16 +523,19 @@ fn a_tab_saved_without_a_layout_puts_its_panes_side_by_side() {
         run: None,
         role_worktrees: Vec::new(),
         run_dirs: Vec::new(),
-    };
+    }
+}
+
+fn saved_with(workspace: WorkspaceState, dir: &Path) -> State {
     let project = ProjectState {
-        path: dir.path().to_path_buf(),
+        path: dir.to_path_buf(),
         name: None,
         group: None,
         workspaces: vec![workspace],
         active: 0,
         collapsed: false,
     };
-    let saved = State {
+    State {
         version: state::VERSION,
         groups: Vec::new(),
         projects: vec![project],
@@ -543,7 +546,14 @@ fn a_tab_saved_without_a_layout_puts_its_panes_side_by_side() {
         todo: false,
         files: false,
         flow: false,
-    };
+    }
+}
+
+#[test]
+fn a_tab_saved_without_a_layout_puts_its_panes_side_by_side() {
+    let dir = TempDir::new();
+    let (mut app, _rx) = empty_app();
+    let saved = saved_with(workspace_with(tab_without_layout(), dir.path()), dir.path());
 
     app.restore(&saved, AREA);
 

@@ -313,8 +313,7 @@ fn a_built_in_is_hidden_and_restored() {
     let hidden = removed(ok(&mut team.app, "flow-hide", &json!({"name": "quick"})));
     let again = removed(ok(&mut team.app, "flow-hide", &json!({"name": "Quick"})));
 
-    assert!(hidden.hidden && hidden.changed);
-    assert_eq!(hidden.name, "Quick");
+    assert_eq!((hidden.hidden, hidden.changed, hidden.name.as_str()), (true, true, "Quick"));
     assert!(!again.changed && again.hidden);
     assert_eq!(team.app.config.hidden_flows, ["Quick"]);
     assert!(crate::config::load(&team.config.path().join("config.json")).hidden_flows.contains(&"Quick".to_string()));

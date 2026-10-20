@@ -600,11 +600,7 @@ fn the_run_ends_with_its_workspace() {
     refreshing(&mut team.app, &team.rx, "the run goes with its workspace", |a| a.runs.is_empty());
 }
 
-#[test]
-fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_told_its_new_panes() {
-    let mut team = Team::new();
-    team.started();
-    team.until_got(3);
+fn saved_run_with_conversations(team: &Team) -> State {
     let mut saved = team.app.state();
     let workspace = saved.projects[0].workspaces.iter_mut().find(|w| w.run.is_some()).expect("the run is saved");
     let state = workspace.run.as_ref().expect("the run");
@@ -615,6 +611,15 @@ fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_tol
         tab.panes[0].agent =
             Some(AgentState { kind: "claude".into(), conversation: format!("c{i}"), mode: None, account: None });
     }
+    saved
+}
+
+#[test]
+fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_told_its_new_panes() {
+    let mut team = Team::new();
+    team.started();
+    team.until_got(3);
+    let saved = saved_run_with_conversations(&team);
     std::fs::write(team.log.path().join("order"), "").expect("empty the log");
     let (mut again, rx) = new_app(team.config.path().join("config.json"));
 

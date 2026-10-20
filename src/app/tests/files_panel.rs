@@ -274,6 +274,23 @@ fn the_wheel_scrolls_a_selection_without_ending_it() {
     assert_eq!(file(&app).selection, Some((1, 8)));
 }
 
+fn ask_and_copy_from_the_outside_file(app: &mut App, path: &str) -> u64 {
+    assert!(file(app).gutter.is_none());
+    let ask = action_pos(app, Action::Ask);
+    click(app, ask);
+    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52(&format!("{path}:1-2"))));
+    let copy = action_pos(app, Action::Copy);
+    click(app, copy);
+    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("# Note\nRead this.")));
+    let workspace = app.project().expect("project").workspace().expect("workspace").id;
+    app.files.viewer_mut(workspace).expect("viewer").selection = None;
+    click(app, copy);
+    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("# Note\nRead this.\n")));
+    click(app, ask);
+    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52(path)));
+    workspace
+}
+
 #[test]
 fn an_outside_file_keeps_its_absolute_path_for_actions_and_the_previous_search() {
     let (repo, other) = (repo(), TempDir::new());
@@ -283,19 +300,7 @@ fn an_outside_file_keeps_its_absolute_path_for_actions_and_the_previous_search()
     search(&mut app, &rx, files::Mode::Text, "shop");
     app.open_link(&files::link::Target { path: path.clone(), real: path.clone().into(), lines: Some((1, 2)) });
     settle(&mut app, &rx, "the outside file is read", |v| lines(v) == ["# Note", "Read this."]);
-    assert!(file(&app).gutter.is_none());
-    let ask = action_pos(&app, Action::Ask);
-    click(&mut app, ask);
-    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52(&format!("{path}:1-2"))));
-    let copy = action_pos(&app, Action::Copy);
-    click(&mut app, copy);
-    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("# Note\nRead this.")));
-    let workspace = app.project().expect("project").workspace().expect("workspace").id;
-    app.files.viewer_mut(workspace).expect("viewer").selection = None;
-    click(&mut app, copy);
-    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("# Note\nRead this.\n")));
-    click(&mut app, ask);
-    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52(&path)));
+    let workspace = ask_and_copy_from_the_outside_file(&mut app, &path);
     open(&mut app);
     open(&mut app);
     assert_eq!(file(&app).path, path, "reopening the panel keeps the outside file");

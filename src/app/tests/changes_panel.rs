@@ -41,12 +41,9 @@ mod every_project {
         file
     }
 
-    #[test]
-    fn groups_projects_and_changed_worktrees_and_leaves_out_clean_and_plain_folders() {
-        let (shop, _worktree) = shop_with_topic_worktree();
-        let api = repo_with_edit();
-        let clean = git_repo(&[]);
-        let plain = TempDir::new();
+    fn shop_api_and_notes() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+        let (shop, worktree) = shop_with_topic_worktree();
+        let (api, clean, plain) = (repo_with_edit(), git_repo(&[]), TempDir::new());
         let (mut app, rx) = app_in(shop.path(), no_config());
         for (path, name) in [(api.path(), "api"), (clean.path(), "clean"), (plain.path(), "notes")] {
             let p = app.add_project(path.to_path_buf(), AREA).expect("project");
@@ -54,6 +51,14 @@ mod every_project {
         }
         app.projects[0].name = Some("shop".into());
         loaded_every(&mut app, &rx);
+        (app, rx, vec![shop, worktree, api, clean, plain])
+    }
+
+    fn rows_of(app: &App) -> Vec<panel::Row> {
+        panel::rows(&app.panel_view().expect("panel"))
+    }
+
+    fn assert_folded_overview(app: &App) {
         let view = app.panel_view().expect("panel");
         assert_eq!(
             view.headers.iter().map(|h| (h.label.as_str(), h.workspace)).collect::<Vec<_>>(),
@@ -62,33 +67,28 @@ mod every_project {
         assert_eq!(view.folded, [true; 3]);
         let changes::Body::Ready(diff) = view.body else { panic!("ready") };
         assert!(diff.files.iter().all(|f| f.hunks.is_empty()));
+    }
+
+    #[test]
+    fn groups_projects_and_changed_worktrees_and_leaves_out_clean_and_plain_folders() {
+        let (mut app, rx, dirs) = shop_api_and_notes();
+        assert_folded_overview(&app);
         let before = app.active;
         let header = row(&app, panel::Row::Header(0));
         click(&mut app, header);
         assert_eq!(app.active, before);
-        assert_eq!(
-            panel::rows(&app.panel_view().expect("panel")),
-            [panel::Row::Header(0), panel::Row::Header(3), panel::Row::File(2)]
-        );
+        assert_eq!(rows_of(&app), [panel::Row::Header(0), panel::Row::Header(3), panel::Row::File(2)]);
         let header = row(&app, panel::Row::Header(0));
         click(&mut app, header);
         let sub = row(&app, panel::Row::Header(2));
         click(&mut app, sub);
-        assert!(!panel::rows(&app.panel_view().expect("panel")).contains(&panel::Row::File(1)));
+        assert!(!rows_of(&app).contains(&panel::Row::File(1)));
         filter_changes(&mut app, "new.txt");
-        assert_eq!(panel::rows(&app.panel_view().expect("panel")), [panel::Row::Header(0), panel::Row::Header(2)]);
+        assert_eq!(rows_of(&app), [panel::Row::Header(0), panel::Row::Header(2)]);
         filter_changes(&mut app, "a.txt");
-        assert_eq!(
-            panel::rows(&app.panel_view().expect("panel")),
-            [
-                panel::Row::Header(0),
-                panel::Row::Header(1),
-                panel::Row::File(0),
-                panel::Row::Header(3),
-                panel::Row::File(2)
-            ]
-        );
-        git(shop.path(), &["checkout", "--", "a.txt"]);
+        let (header, file) = (panel::Row::Header, panel::Row::File);
+        assert_eq!(rows_of(&app), [header(0), header(1), file(0), header(3), file(2)]);
+        git(dirs[0].path(), &["checkout", "--", "a.txt"]);
         let main = app.projects[0].workspaces[0].id;
         let topic = app.projects[0].workspaces[1].id;
         app.changes.invalidate_summary(main);
@@ -220,25 +220,68 @@ mod every_project {
         assert_eq!(headers.len(), 1);
     }
 
+    struct Owners {
+        first: TempDir,
+        second: TempDir,
+        scripts: TempDir,
+        agent: PathBuf,
+        editor: PathBuf,
+    }
+
+    impl Owners {
+        fn new() -> Self {
+            let first = repo_with_edit();
+            let second = git_repo(&[("b.txt", "one\n")]);
+            std::fs::write(second.path().join("b.txt"), "two\n").expect("edit");
+            let scripts = TempDir::new();
+            let agent = scripts.path().join("agent");
+            let editor = scripts.path().join("editor");
+            let reads = "#!/bin/sh\nIFS= read -r line\nprintf '%s' \"$line\" > got\nIFS= read -r line\n";
+            write_executable(&agent, reads);
+            write_executable(&editor, "#!/bin/sh\nprintf '%s\n' \"$PWD\" \"$@\" > editor-got\nIFS= read -r line\n");
+            Self { first, second, scripts, agent, editor }
+        }
+
+        fn config(&self) -> PathBuf {
+            let agent_commands = [("fake".into(), self.agent.display().to_string())].into();
+            write_config(self.scripts.path(), &Config { agent_commands, ..Config::default() })
+        }
+    }
+
+    fn assert_shown_in_every_scope(app: &App) {
+        assert!(!app.projects[0].collapsed && !app.projects[0].workspaces[0].collapsed);
+        assert!(app.side == Some(Side::Changes) && app.changes.scope == changes::Scope::Every);
+    }
+
+    fn assert_agent_got_the_reference(app: &mut App, owners: &Owners, agent_pane: u64) {
+        assert_eq!(app.active, 0);
+        assert_eq!(app.term().expect("visible agent").id, agent_pane);
+        assert_shown_in_every_scope(app);
+        app.term_mut().expect("visible agent").write(b"\r");
+        wait_until("the owning agent receives the reference", || {
+            std::fs::read_to_string(owners.second.path().join("got")).is_ok_and(|s| s == "b.txt:1 ")
+        });
+        assert!(!owners.first.path().join("got").exists());
+    }
+
+    fn assert_editor_opened_in_owner(app: &App, second: &Path, active: usize) {
+        let got = std::fs::read_to_string(second.join("editor-got")).expect("editor arguments");
+        assert_eq!(got, format!("{}\n+1\n{}\n", second.display(), second.join("b.txt").display()));
+        assert_eq!((app.projects[0].workspaces[0].tabs.len(), app.projects[active].workspaces[0].tabs.len()), (2, 1));
+        assert_eq!(app.active, 0);
+        assert_eq!(app.projects[0].workspace().expect("owning workspace").active, 1);
+        assert_eq!(app.term().expect("visible editor").cwd(), Some(second.to_path_buf()));
+        assert_shown_in_every_scope(app);
+    }
+
     #[test]
     fn file_actions_reach_the_workspace_that_owns_the_file() {
-        let first = repo_with_edit();
-        let second = git_repo(&[("b.txt", "one\n")]);
-        std::fs::write(second.path().join("b.txt"), "two\n").expect("edit");
-        let scripts = TempDir::new();
-        let agent = scripts.path().join("agent");
-        let editor = scripts.path().join("editor");
-        write_executable(&agent, "#!/bin/sh\nIFS= read -r line\nprintf '%s' \"$line\" > got\nIFS= read -r line\n");
-        write_executable(&editor, "#!/bin/sh\nprintf '%s\n' \"$PWD\" \"$@\" > editor-got\nIFS= read -r line\n");
-        let config_path = write_config(
-            scripts.path(),
-            &Config { agent_commands: [("fake".into(), agent.display().to_string())].into(), ..Config::default() },
-        );
-        let (mut app, rx) = app_in(second.path(), config_path);
-        exec_agent(&mut app, &agent);
+        let owners = Owners::new();
+        let (mut app, rx) = app_in(owners.second.path(), owners.config());
+        exec_agent(&mut app, &owners.agent);
         let owner = app.projects[0].workspaces[0].id;
         let agent_pane = app.term().expect("agent pane").id;
-        app.open_project(first.path().to_path_buf(), AREA).expect("other project");
+        app.open_project(owners.first.path().to_path_buf(), AREA).expect("other project");
         let active = app.active;
         app.projects[0].collapsed = true;
         app.projects[0].workspaces[0].collapsed = true;
@@ -248,31 +291,16 @@ mod every_project {
         let hunk = Rect::new(panel_area(&app).x, position.y, panel_area(&app).width, 1);
         let ask = panel::actions(hunk)[1].1.as_position();
         click(&mut app, ask);
-        assert_eq!(app.active, 0);
-        assert_eq!(app.term().expect("visible agent").id, agent_pane);
-        assert!(!app.projects[0].collapsed && !app.projects[0].workspaces[0].collapsed);
-        assert!(app.side == Some(Side::Changes) && app.changes.scope == changes::Scope::Every);
-        app.term_mut().expect("visible agent").write(b"\r");
-        wait_until("the owning agent receives the reference", || {
-            std::fs::read_to_string(second.path().join("got")).is_ok_and(|s| s == "b.txt:1 ")
-        });
-        assert!(!first.path().join("got").exists());
+        assert_agent_got_the_reference(&mut app, &owners, agent_pane);
         assert_eq!(app.panel_view().expect("panel").owners[file], owner);
         app.goto(Goto::Place { project: app.projects[active].id, workspace: None, tab: None });
         app.projects[0].collapsed = true;
         app.projects[0].workspaces[0].collapsed = true;
-        app.editor_env = vec![("VISUAL".into(), editor.display().to_string())];
+        app.editor_env = vec![("VISUAL".into(), owners.editor.display().to_string())];
         let open = panel::actions(hunk)[0].1.as_position();
         click(&mut app, open);
-        wait_until("the editor runs in the owning workspace", || second.path().join("editor-got").exists());
-        let got = std::fs::read_to_string(second.path().join("editor-got")).expect("editor arguments");
-        assert_eq!(got, format!("{}\n+1\n{}\n", second.path().display(), second.path().join("b.txt").display()));
-        assert_eq!((app.projects[0].workspaces[0].tabs.len(), app.projects[active].workspaces[0].tabs.len()), (2, 1));
-        assert_eq!(app.active, 0);
-        assert_eq!(app.projects[0].workspace().expect("owning workspace").active, 1);
-        assert_eq!(app.term().expect("visible editor").cwd(), Some(second.path().to_path_buf()));
-        assert!(!app.projects[0].collapsed && !app.projects[0].workspaces[0].collapsed);
-        assert!(app.side == Some(Side::Changes) && app.changes.scope == changes::Scope::Every);
+        wait_until("the editor runs in the owning workspace", || owners.second.path().join("editor-got").exists());
+        assert_editor_opened_in_owner(&app, owners.second.path(), active);
     }
 }
 

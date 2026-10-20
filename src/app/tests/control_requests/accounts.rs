@@ -274,8 +274,7 @@ fn a_profile_is_made_changed_renamed_and_deleted() {
     assert_eq!(s.saved()["profile"], json!("Job"));
 
     let deleted = s.info("profile-delete", &json!({"name": "Job"}));
-    assert_eq!(deleted.profiles.len(), 0);
-    assert_eq!(deleted.profile, "");
+    assert_eq!((deleted.profiles.len(), deleted.profile.as_str()), (0, ""));
     assert_eq!(s.app.config.profile, "");
 }
 

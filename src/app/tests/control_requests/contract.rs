@@ -160,14 +160,16 @@ mod opting_in {
     }
 }
 
-fn sent(
-    app: &mut App,
+#[derive(Clone, Copy, Default)]
+struct Header<'a> {
     caller: Option<u64>,
-    server: Option<&str>,
+    server: Option<&'a str>,
     contract: Option<u32>,
-    boot: Option<&str>,
-    command: Command,
-) -> String {
+    boot: Option<&'a str>,
+}
+
+fn sent(app: &mut App, header: Header, command: Command) -> String {
+    let Header { caller, server, contract, boot } = header;
     let (server, boot) = (server.map(str::to_string), boot.map(str::to_string));
     let text =
         serde_json::to_string(&wire::Request { caller, server, contract, boot, view: None, command }).expect("json");
@@ -193,8 +195,12 @@ mod boot {
         let (mut app, rx) = app();
         let id = first(&app);
 
-        let (code, message) = match serde_json::from_str(&sent(&mut app, None, None, None, Some(OLD), close_pane(id)))
-            .expect("a structured answer")
+        let (code, message) = match serde_json::from_str(&sent(
+            &mut app,
+            Header { boot: Some(OLD), ..Header::default() },
+            close_pane(id),
+        ))
+        .expect("a structured answer")
         {
             Structured::Error(refusal) => (refusal.code, refusal.message),
             Structured::Ok(value) => panic!("the request did not fail: {value}"),
@@ -211,7 +217,11 @@ mod boot {
         let id = first(&app);
         let before = pane(&app, id).input_at;
 
-        let answer = sent(&mut app, None, None, Some(1), Some(OLD), send_text(id, "hello", true, false));
+        let answer = sent(
+            &mut app,
+            Header { contract: Some(1), boot: Some(OLD), ..Header::default() },
+            send_text(id, "hello", true, false),
+        );
 
         let Structured::Error(refusal) = serde_json::from_str(&answer).expect("a structured answer") else {
             panic!("the request did not fail: {answer}")
@@ -224,7 +234,7 @@ mod boot {
         let (mut app, rx) = app();
         let id = first(&app);
 
-        let answer = sent(&mut app, None, None, None, Some(wire::server_token()), close_pane(id));
+        let answer = sent(&mut app, Header { boot: Some(wire::server_token()), ..Header::default() }, close_pane(id));
 
         assert_eq!(answer, r#"{"ok":{}}"#);
         pump_until(&mut app, &rx, "the pane closes", |a| a.projects.pane_by(id).is_none());
@@ -237,7 +247,11 @@ mod boot {
         type_line(&mut app, "echo cat-\"\"starts; cat -v");
         pump_until(&mut app, &rx, "cat runs", |a| pane_screen(a, id).contains("cat-starts"));
 
-        let answer = sent(&mut app, Some(id), Some(OLD), None, None, send_text(id, "hello", false, false));
+        let answer = sent(
+            &mut app,
+            Header { caller: Some(id), server: Some(OLD), ..Header::default() },
+            send_text(id, "hello", false, false),
+        );
 
         assert_eq!(answer, format!(r#"{{"ok":{{"pane":{id}}}}}"#));
         pump_until(&mut app, &rx, "cat echoes it", |a| pane_screen(a, id).contains("hello"));
@@ -257,8 +271,8 @@ mod not_found {
         let (mut app, _rx) = app();
         let message = format!("there is no {kind} 999; `cornercase status` lists them");
 
-        let structured = sent(&mut app, None, None, Some(1), None, command.clone());
-        let legacy_answer = sent(&mut app, None, None, None, None, command);
+        let structured = sent(&mut app, Header { contract: Some(1), ..Header::default() }, command.clone());
+        let legacy_answer = sent(&mut app, Header::default(), command);
 
         assert_eq!(
             serde_json::from_str::<Structured>(&structured).expect("a structured answer"),
