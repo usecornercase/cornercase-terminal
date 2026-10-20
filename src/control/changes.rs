@@ -93,6 +93,20 @@ impl ChangesViewed {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct ChangesDiscard {
+    pub(crate) workspace: Option<u64>,
+    pub(crate) path: String,
+    pub(crate) digest: Option<String>,
+}
+
+impl ChangesDiscard {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.maybe("workspace", self.workspace).add("path", &self.path);
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum State {
@@ -111,6 +125,18 @@ pub(crate) enum FileStatus {
     Deleted,
     Renamed,
     Untracked,
+}
+
+impl From<FileStatus> for diff::Status {
+    fn from(status: FileStatus) -> Self {
+        match status {
+            FileStatus::Modified => Self::Modified,
+            FileStatus::Added => Self::Added,
+            FileStatus::Deleted => Self::Deleted,
+            FileStatus::Renamed => Self::Renamed,
+            FileStatus::Untracked => Self::Untracked,
+        }
+    }
 }
 
 impl From<diff::Status> for FileStatus {
@@ -390,6 +416,15 @@ pub(crate) struct Viewed {
     pub(crate) workspace: u64,
     pub(crate) path: String,
     pub(crate) viewed: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Discarded {
+    pub(crate) workspace: u64,
+    pub(crate) path: String,
+    pub(crate) old_path: Option<String>,
+    pub(crate) status: FileStatus,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

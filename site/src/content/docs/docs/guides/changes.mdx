@@ -105,6 +105,20 @@ Clicking in a pane also gives it the keys back and keeps the filter; a click on 
 
 Hover a file row and click the **`✓`** at its right to mark it as viewed: it collapses, and the footer counts how many you have viewed. When the file changes again, for example because the agent touched it, the mark goes away and it opens again, so you only review what is new.
 
+### Discard a file's changes
+
+In **Uncommitted** and in **Every project**, hovering a file row also shows **`↺`**, left of its `✓`. Click it to throw the file's changes away and put it back as it is in the last commit: staged and unstaged edits go, a deleted file comes back, a file added since the last commit is deleted, and a renamed file gets its old name back. A file git doesn't track (`new`) is deleted; for a symlink, only the link goes. A confirmation names the file, and nothing changes until you click **discard**.
+
+<Screen
+  name="changes-discard"
+  alt="The Discard changes dialog asking whether to discard the changes to a file, with a red discard button and a cancel button"
+  crop={[34, 7, 72, 24]}
+/>
+
+- Only the version you saw is discarded: if the file changes between your click and **discard**, for example because an agent kept writing, nothing is thrown away and a message says so.
+- Discarding writes git's index, so it can fail while an agent commits; the message says why, and you can try again.
+- There's no undo. **Commits** and **All** have no `↺`: their changes are already in commits.
+
 ## Act on a hunk
 
 Hover a hunk and three buttons appear on its first line:
@@ -119,13 +133,13 @@ The editor gets the line as `+11`, which `vi`, `vim`, `nvim`, `nano`, `emacs` an
 
 ## Live, and light on your repository
 
-In the project scope, while the panel is open it asks git for changes every second, so edits show up shortly after they are saved; while it is closed it checks every three seconds, for the count on the button. It runs git in the background with options that never take git's index lock, so it doesn't get in the way of an agent running `git add` or `git commit` at the same time. When nothing changed, the diff is reused.
+In the project scope, while the panel is open it asks git for changes every second, so edits show up shortly after they are saved; while it is closed it checks every three seconds, for the count on the button. It runs git in the background with options that never take git's index lock, so it doesn't get in the way of an agent running `git add` or `git commit` at the same time. Only **discard** writes git's index, once, when you confirm it. When nothing changed, the diff is reused.
 
 While **Every project** is shown, one background job visits the workspaces in turn, no more often than every three seconds per workspace. Collapsed files need only status and line counts; patches are read and refreshed for expanded files. Closing the panel or returning to the project scope stops that sweep. If a git job takes more than 30 seconds, refreshing can continue with another job.
 
 ## From scripts and other apps
 
-The same data is there for programs: `cornercase changes list` prints a workspace's changed files (`--every` for every project, `--follow` to keep printing them as they change), `changes file` a file's diff, `changes base` the branches to compare with and `changes viewed` marks a file. A program that draws its own changes panel reads them over the socket, as [Follow a workspace's changes](../scripts-and-agents/#follow-a-workspaces-changes) describes.
+The same data is there for programs: `cornercase changes list` prints a workspace's changed files (`--every` for every project, `--follow` to keep printing them as they change), `changes file` a file's diff, `changes base` the branches to compare with and `changes viewed` marks a file and `changes discard` throws a file's changes away (it asks first, `--yes` skips the question). A program that draws its own changes panel reads them over the socket, as [Follow a workspace's changes](../scripts-and-agents/#follow-a-workspaces-changes) describes.
 
 <Aside type="tip">
 The green and red backgrounds are mixed from your terminal's own background and palette when your terminal supports 24-bit colour and says so in `COLORTERM` (most modern terminals set `COLORTERM=truecolor`). Without it, cornercase uses palette colours: on dark themes the changed lines get only the coloured bar and numbers, with the changed words highlighted.

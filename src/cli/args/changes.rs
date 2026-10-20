@@ -112,4 +112,13 @@ pub(crate) enum ChangesAction {
         #[command(flatten)]
         mode: ModeFlag,
     },
+    #[command(about = "Throw away a file's uncommitted changes, after asking")]
+    Discard {
+        #[arg(value_name = "PATH", help = "The file, relative to the workspace")]
+        path: String,
+        #[command(flatten)]
+        place: Where,
+        #[arg(short, long, help = "Discard without asking")]
+        yes: bool,
+    },
 }

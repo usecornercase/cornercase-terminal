@@ -212,6 +212,7 @@ impl App {
             }
             Overlay::DeleteGroup { group } => self.submit_delete_group(group),
             Overlay::RemoveAccount { kind, name } => Some(self.submit_remove_account(kind, &name)),
+            Overlay::DiscardChanges(target) => self.submit_discard(target),
             Overlay::CloseProject { project } => self.submit_close_project(project),
             Overlay::CloseWorkspace { project, workspace } => self.submit_close_workspace(project, workspace),
             Overlay::CloseTab { project, workspace, tab } => self.submit_close_tab(project, workspace, tab),
@@ -316,7 +317,7 @@ pub(super) fn confirm_view(
     submit: &'static str,
     extra: Option<&'static str>,
 ) -> ui::Overlay {
-    ui::Overlay::Confirm(ui::Confirm { title, message, note: None, submit, extra })
+    ui::Overlay::Confirm(ui::Confirm { title, message, note: None, submit, extra, dangerous: false })
 }
 
 fn stopped_tabs(tabs: usize) -> String {

@@ -526,19 +526,24 @@ function fileRow(p: Painter, f: FileDiff, r: Rect, surface: number): void {
   p.span(r.x + 4 + indent, r.y, f.change.status, muted ? DARK : { fg: colour, add: BOLD });
   const check = rect(right(r) - 3, r.y, 3, 1);
   if (viewed || p.hovered(r)) p.span(check.x + 1, r.y, '✓', viewed || p.hovered(check) ? { fg: 2 } : DARK);
+  const discardable = app.changesScope === 'every' || app.changesMode === 'uncommitted';
+  const discard = discardable ? rect(check.x - 3, r.y, 3, 1) : null;
+  if (discard && p.hovered(r)) p.span(discard.x + 1, r.y, '↺', p.hovered(discard) ? { fg: 1 } : DARK);
+  const end = discard ? discard.x : check.x;
   const tag = f.change.lockfile ? 'lockfile' : f.change.untracked ? 'new' : '';
   const parts: [string, Style][] = [];
   if (tag) parts.push([tag, { fg: 8, add: ITALIC }]);
   if (f.added) parts.push([`+${f.added}`, muted ? DARK : { fg: 2 }]);
   if (f.removed) parts.push([`−${f.removed}`, muted ? DARK : { fg: 1 }]);
-  let x = check.x - parts.reduce((n, [t]) => n + [...t].length + 1, 0);
+  let x = end - parts.reduce((n, [t]) => n + [...t].length + 1, 0);
   const pathEnd = x - 1;
   for (const [t, s] of parts) x = p.span(x, r.y, t, s) + 1;
   const path = truncateLeft(f.change.path, Math.max(0, pathEnd - (r.x + 6 + indent)));
   const cut = path.lastIndexOf('/') + 1;
   const px = p.span(r.x + 6 + indent, r.y, path.slice(0, cut), DARK);
   p.span(px, r.y, path.slice(cut), muted ? DARK : { fg: DEFAULT, add: BOLD });
-  p.region({ r: rect(r.x, r.y, r.w - 3, 1), click: () => app.toggleChangesFile(f), cursor: 'pointer' });
+  p.region({ r: rect(r.x, r.y, r.w - (discard ? 6 : 3), 1), click: () => app.toggleChangesFile(f), cursor: 'pointer' });
+  if (discard) p.region({ r: discard, click: () => app.askDiscard(f), cursor: 'pointer' });
   p.region({ r: check, click: () => app.toggleChangesViewed(f), cursor: 'pointer' });
 }
 

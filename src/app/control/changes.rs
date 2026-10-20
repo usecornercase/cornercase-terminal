@@ -4,17 +4,17 @@ use std::time::Instant;
 use serde_json::Value;
 
 use super::{Asker, Handled, Pending, Stage, conflict, json, malformed};
-use crate::app::changes_panel::Gapped;
+use crate::app::changes_panel::{Gapped, Seen};
 use crate::app::{App, AppEvent, ChangesEvent};
 use crate::changes::diff::File;
-use crate::changes::{self, Mode, Scope};
+use crate::changes::{self, Mode, Scope, discard};
 use crate::control::changes::{self as wire, Base, Gap, Patch, Viewed};
 use crate::control::contract::{Code, Refusal};
-use crate::control::{Changes, ChangesBase, ChangesFile, ChangesGap, ChangesMode, ChangesViewed};
+use crate::control::{Changes, ChangesBase, ChangesDiscard, ChangesFile, ChangesGap, ChangesMode, ChangesViewed};
 use crate::error::Result;
 use crate::git;
 use crate::log::{Job, Level};
-use crate::project::Hierarchy;
+use crate::project::{Hierarchy, Workspace};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BaseChange {
@@ -48,16 +48,7 @@ fn missing(path: &str, workspace: u64) -> Refusal {
 }
 
 fn read_file(place: &Place, mode: Mode, path: &str) -> Result<Option<Arc<File>>> {
-    let request = changes::git::Request {
-        dir: place.dir.clone(),
-        mode,
-        base: place.base.clone(),
-        last: None,
-        previous: Vec::new(),
-        expanded: (mode == Mode::Uncommitted).then(|| vec![path.to_string()]),
-    };
-    let loaded = changes::git::load(&request)?;
-    Ok(loaded.diff.and_then(|diff| diff.files.into_iter().find(|f| f.path == path)))
+    changes::git::read_file(&place.dir, mode, place.base.clone(), path)
 }
 
 impl App {
@@ -80,6 +71,11 @@ impl App {
             let at = here.ok_or_else(|| Refusal::from("no workspace is open here; pass --workspace"))?;
             self.projects.workspace(at).id
         };
+        let ws = self.git_workspace(id)?;
+        Ok(Place { id, dir: ws.path.clone(), base: ws.base.clone() })
+    }
+
+    pub(in crate::app) fn git_workspace(&self, id: u64) -> std::result::Result<&Workspace, Refusal> {
         let at = self.usable_workspace(id)?;
         let ws = self.projects.workspace(at);
         if self.projects[at.project()].closing {
@@ -88,7 +84,7 @@ impl App {
         if git::branch(&ws.path).is_none() {
             return Err(conflict(format!("workspace {id} is not in a git repository")));
         }
-        Ok(Place { id, dir: ws.path.clone(), base: ws.base.clone() })
+        Ok(ws)
     }
 
     fn live_file(
@@ -278,6 +274,35 @@ impl App {
         self.refuse_or_answer(pending.client, reply);
     }
 
+    pub(super) fn changes_discard_request(&mut self, client: u64, asker: Asker, request: &ChangesDiscard) -> Handled {
+        let place = self.changes_place(asker, request.workspace)?;
+        if request.path.is_empty() {
+            return Err(malformed("`changes-discard` needs the file's path"));
+        }
+        let digest = seen_digest(request.digest.as_deref(), "discarding a file")?;
+        let key = self.clients.requests.key();
+        self.spawn_discard(Some(key), place.dir, Seen { workspace: place.id, path: request.path.clone(), digest });
+        self.reading(client, key);
+        Ok(None)
+    }
+
+    pub(in crate::app) fn changes_discard_replied(&mut self, at: Replied<'_>, result: Result<discard::Outcome>) {
+        self.answer_read(at.key, |_| match result {
+            Err(e) => Err(Refusal::from(format!("cannot discard {}: {e}", at.path))),
+            Ok(discard::Outcome::Gone) => Err(missing(at.path, at.workspace)),
+            Ok(discard::Outcome::Changed) => Err(conflict(format!(
+                "{} changed since that digest, so nothing was discarded; read it again with `cornercase changes file`",
+                at.path
+            ))),
+            Ok(discard::Outcome::Discarded(file)) => Ok(json(&wire::Discarded {
+                workspace: at.workspace,
+                path: file.path.clone(),
+                old_path: file.old_path.clone(),
+                status: file.status.into(),
+            })),
+        });
+    }
+
     pub(super) fn changes_viewed_request(&mut self, asker: Asker, request: &ChangesViewed) -> Handled {
         let place = self.changes_place(asker, request.workspace)?;
         if request.path.is_empty() {
@@ -286,15 +311,17 @@ impl App {
         let digest = if request.clear {
             None
         } else {
-            let text = request.digest.as_deref().ok_or_else(|| {
-                malformed("marking a file as viewed needs the digest of the version seen: pass --digest")
-            })?;
-            Some(wire::parse_digest(text).ok_or_else(|| malformed("a digest is 16 hexadecimal digits"))?)
+            Some(seen_digest(request.digest.as_deref(), "marking a file as viewed")?)
         };
         self.panels.changes.set_viewed(place.id, &request.path, digest);
         self.clients.change_streams.mark_changed();
         Ok(Some(json(&Viewed { workspace: place.id, path: request.path.clone(), viewed: !request.clear })))
     }
+}
+
+fn seen_digest(text: Option<&str>, doing: &str) -> std::result::Result<u64, Refusal> {
+    let text = text.ok_or_else(|| malformed(format!("{doing} needs the digest of the version seen: pass --digest")))?;
+    wire::parse_digest(text).ok_or_else(|| malformed("a digest is 16 hexadecimal digits"))
 }
 
 fn gap_reply(at: Replied<'_>, hunk: usize, hunks: usize, lines: Option<Vec<changes::GapLine>>) -> Answer {

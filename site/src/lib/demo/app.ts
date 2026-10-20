@@ -225,6 +225,12 @@ const REMOTES: Record<Remote, { name: string; token: string; env: string; help: 
 const isRemote = (s: string): s is Remote => Object.hasOwn(REMOTES, s);
 const tokenName = (s: Remote) => `${REMOTES[s].name} ${REMOTES[s].token}`;
 
+function discardQuestion(o: { path: string; status: string; untracked: boolean }): string {
+  if (o.untracked) return `Delete ${o.path}? It is not in git, so this cannot be undone.`;
+  if (o.status === 'A') return `Discard the changes to ${o.path}? It is new, so it is deleted. This cannot be undone.`;
+  return `Discard the changes to ${o.path}? This cannot be undone.`;
+}
+
 function checkWorkspace(input: string): [string, string?] {
   const slug = input.trim().replace(/^\/+|\/+$/g, '').toLowerCase();
   if (!slug) return ['', 'type your workspace, the part after app.plane.so/, such as acme'];
@@ -440,6 +446,7 @@ export class App {
   private linkPress: { at: Pos; link: PathLink; held: (() => void) | null } | null = null;
   private folded = new Map<string, boolean>();
   private viewed = new Set<string>();
+  private discarded = new Set<string>();
   nav: Nav = null;
   narration: Demo['narrate'] = english.narrate;
   groups: Group[] = [];
@@ -1176,6 +1183,7 @@ export class App {
     if (o?.kind === 'closeWorkspace') return { title: 'Close workspace', message: this.closeWorkspaceMessage(o.project, o.workspace), submit: 'close' };
     if (o?.kind === 'closeTab') return { title: 'Close tab', message: this.closeTabMessage(o.project, o.workspace, o.tab), submit: 'close' };
     if (o?.kind === 'closePane') return { title: 'Close pane', message: this.closePaneMessage(o.pane), submit: 'close' };
+    if (o?.kind === 'discard') return { title: 'Discard changes', message: discardQuestion(o), submit: 'discard', dangerous: true };
     return null;
   }
 
@@ -1192,6 +1200,25 @@ export class App {
       if (at) this.closeTab(at.p, at.w, at.t);
     } else if (o?.kind === 'deleteGroup') this.deleteGroup(o.group);
     else if (o?.kind === 'closePane') this.paneAction(o.pane, 'close pane');
+    else if (o?.kind === 'discard') this.submitDiscard(o);
+  }
+
+  askDiscard(f: FileDiff): void {
+    const status = f.change.untracked ? '?' : f.change.status;
+    this.overlay = { kind: 'discard', key: this.fileKey(f), path: f.change.path, status, untracked: !!f.change.untracked };
+    this.dirty();
+  }
+
+  private submitDiscard(o: { key: string; path: string; status: string; untracked: boolean }): void {
+    this.discarded.add(o.key);
+    this.viewed.delete(o.key);
+    this.folded.delete(`project:${o.key}`);
+    this.folded.delete(`every:${o.key}`);
+    this.notify(o.untracked || o.status === 'A' ? `deleted ${o.path}` : `discarded the changes to ${o.path}`, 'done');
+  }
+
+  private kept(p: Project, w: Workspace, mode: ChangesMode): FileDiff[] {
+    return workspaceDiff(p, w, mode).filter((f) => !this.discarded.has(`${w.id}:${f.change.path}`));
   }
 
   closePaneMessage(id: number): string {
@@ -1543,16 +1570,16 @@ export class App {
       return order.flatMap((row) => {
         if (row.kind !== 'project') return [];
         const p = this.projects[row.p];
-        return p.workspaces.filter(hasChanges).flatMap((w) => workspaceDiff(p, w, 'uncommitted'));
+        return p.workspaces.filter(hasChanges).flatMap((w) => this.kept(p, w, 'uncommitted'));
       });
     }
-    return p && w ? workspaceDiff(p, w, this.changesMode) : [];
+    return p && w ? this.kept(p, w, this.changesMode) : [];
   }
 
   activeChangesDiff(): FileDiff[] {
     const p = this.project();
     const w = this.workspace();
-    return p && w ? workspaceDiff(p, w, this.changesScope === 'every' && this.changesShown() ? 'uncommitted' : this.changesMode) : [];
+    return p && w ? this.kept(p, w, this.changesScope === 'every' && this.changesShown() ? 'uncommitted' : this.changesMode) : [];
   }
 
   setChangesScope(scope: 'project' | 'every'): void {
@@ -1720,7 +1747,7 @@ export class App {
   filesMap(): Map<string, string> {
     const p = this.project();
     const w = this.workspace();
-    const files = workspaceFiles(p, w, p && w ? workspaceDiff(p, w, 'all') : []);
+    const files = workspaceFiles(p, w, p && w ? this.kept(p, w, 'all') : []);
     const path = this.filesPlace()?.viewer?.path;
     if (path?.startsWith('/')) {
       const text = this.linkedFiles().get(path);
@@ -1736,7 +1763,7 @@ export class App {
     ]);
     for (const p of this.projects)
       for (const w of p.workspaces)
-        for (const [path, text] of workspaceFiles(p, w, workspaceDiff(p, w, 'all')))
+        for (const [path, text] of workspaceFiles(p, w, this.kept(p, w, 'all')))
           files.set(absolutePath(`${w.root}/${path}`), text);
     for (const run of this.runs) for (const f of run.files) files.set(`${RUN_DIR}/${f.name}`, f.text);
     return files;

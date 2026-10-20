@@ -396,3 +396,43 @@ fn a_stream_can_only_be_changed_by_the_connection_that_opened_it() {
     ok(&mut app, "changes-mode", &json!({"stream": 1, "mode": "all"}));
     assert_eq!(app.clients.change_streams.mode_of(1), Some(Mode::All));
 }
+
+fn seen_digest(app: &mut App, events: &Receiver<AppEvent>, path: &str) -> String {
+    let read = call_later(app, events, "changes-file", &json!({"path": path})).expect("a patch");
+    read["digest"].as_str().expect("digest").to_string()
+}
+
+#[test]
+fn discard_puts_the_file_back() {
+    let repo = repo_with_edit();
+    let (mut app, rx) = started(&repo);
+    let digest = seen_digest(&mut app, &rx, "a.txt");
+
+    let done =
+        call_later(&mut app, &rx, "changes-discard", &json!({"path": "a.txt", "digest": digest})).expect("discarded");
+
+    let workspace = workspace_id(&app);
+    assert_eq!(done, json!({"workspace": workspace, "path": "a.txt", "old_path": null, "status": "modified"}));
+    assert_eq!(std::fs::read_to_string(repo.path().join("a.txt")).expect("read"), "one\ntwo\n");
+    ok(&mut app, "changes", &json!({}));
+    summary_until(&mut app, &rx, "no files are left", |l| ready(l) && paths(l).is_empty());
+    assert_eq!(toast(&app), None);
+}
+
+#[test]
+fn discard_refuses_what_it_cannot_discard() {
+    let repo = repo_with_edit();
+    let (mut app, rx) = started(&repo);
+
+    let stale = call_later(&mut app, &rx, "changes-discard", &json!({"path": "a.txt", "digest": "0000000000000000"}));
+    assert_eq!(stale.expect_err("refused").code, "conflict");
+    assert_eq!(std::fs::read_to_string(repo.path().join("a.txt")).expect("read"), "one\nTWO\n");
+    let unknown =
+        call_later(&mut app, &rx, "changes-discard", &json!({"path": "nope.txt", "digest": "0000000000000000"}));
+    assert_eq!(unknown.expect_err("refused").code, "not-found");
+    for request in
+        [json!({"digest": "0000000000000000"}), json!({"path": "a.txt"}), json!({"path": "a.txt", "digest": "zz"})]
+    {
+        assert_eq!(refused(&mut app, "changes-discard", &request).code, "malformed");
+    }
+}

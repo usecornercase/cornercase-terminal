@@ -20,6 +20,8 @@ const HEADER_ROWS: u16 = 4;
 const FOOTER_ROWS: u16 = 2;
 const BAR_CELLS: usize = 8;
 const VIEWED_WIDTH: u16 = 3;
+const DISCARD_WIDTH: u16 = 3;
+const DISCARD: &str = "↺";
 const LOADING: &str = "reading changes…";
 const COLLAPSE_ALL: &str = "collapse all";
 const EXPAND_ALL: &str = "expand all";
@@ -301,6 +303,14 @@ fn viewed_cell(row: Rect) -> Rect {
     Rect::new(row.right().saturating_sub(VIEWED_WIDTH), row.y, VIEWED_WIDTH.min(row.width), 1)
 }
 
+pub(crate) fn discard_cell(view: &View, row: Rect) -> Rect {
+    if view.mode != Mode::Uncommitted {
+        return Rect::default();
+    }
+    let x = viewed_cell(row).x.saturating_sub(DISCARD_WIDTH).max(row.x);
+    Rect::new(x, row.y, DISCARD_WIDTH, 1).intersection(row)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Hit {
     Scope(Scope),
@@ -314,6 +324,7 @@ pub(crate) enum Hit {
     FoldAll,
     File(usize),
     Viewed(usize),
+    Discard(usize),
     Gap(usize, usize),
     Action(usize, usize, Action),
 }
@@ -347,6 +358,7 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     match row {
         Row::Header(i) => Some(Hit::Header(i)),
         Row::File(i) if viewed_cell(r).contains(pos) => Some(Hit::Viewed(i)),
+        Row::File(i) if discard_cell(view, r).contains(pos) => Some(Hit::Discard(i)),
         Row::File(i) => Some(Hit::File(i)),
         Row::Gap(i, h) => Some(Hit::Gap(i, h)),
         Row::Hunk(i, h) => actions(r).into_iter().find(|(_, a)| a.contains(pos)).map(|(a, _)| Hit::Action(i, h, a)),
@@ -632,16 +644,29 @@ impl Painter<'_> {
         }
         let status = if muted { dim(view.muted) } else { status_style(file.status) };
         put(self.buf, (r.x + 4 + indent, r.y), file.status.letter(), status, r.right());
-        let check = viewed_cell(r);
-        self.viewed_mark(check, r, viewed);
+        let end = self.marks(r, viewed);
         let right = file_tags(view, file, muted);
         let right_width: u16 = right.iter().map(|(t, _)| width(t) + 1).sum();
-        let mut x = check.x.saturating_sub(right_width);
+        let mut x = end.saturating_sub(right_width);
         let path_end = x.saturating_sub(1);
         for (text, style) in &right {
-            x = put(self.buf, (x, r.y), text, *style, check.x) + 1;
+            x = put(self.buf, (x, r.y), text, *style, end) + 1;
         }
         self.path(file, (r.x + 6 + indent, r.y), path_end, muted);
+    }
+
+    fn marks(&mut self, r: Rect, viewed: bool) -> u16 {
+        let check = viewed_cell(r);
+        self.viewed_mark(check, r, viewed);
+        let cell = discard_cell(self.view, r);
+        if cell.width == 0 {
+            return check.x;
+        }
+        if self.lit(r) {
+            let style = if self.lit(cell) { Style::default().fg(Color::Red) } else { dim(self.view.muted) };
+            put(self.buf, (cell.x + 1, r.y), DISCARD, style, r.right());
+        }
+        cell.x
     }
 
     fn viewed_mark(&mut self, check: Rect, r: Rect, viewed: bool) {

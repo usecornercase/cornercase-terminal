@@ -120,6 +120,7 @@ impl Command {
             Self::ChangesGap(gap) => gap.fields(fields),
             Self::ChangesBase(base) => base.fields(fields),
             Self::ChangesViewed(viewed) => viewed.fields(fields),
+            Self::ChangesDiscard(discard) => discard.fields(fields),
             _ => return false,
         }
         true

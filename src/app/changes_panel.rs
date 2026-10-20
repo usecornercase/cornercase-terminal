@@ -20,8 +20,10 @@ use crate::ui::changes::{self as panel, Action as HunkAction, Hit as PanelHit};
 use crate::ui::{self};
 
 mod branches;
+mod discard;
 pub(super) mod streams;
 
+pub(super) use discard::Seen;
 pub(super) use streams::Streams;
 
 const CHANGES_LABEL: &str = "Changes";
@@ -67,6 +69,12 @@ pub(crate) enum ChangesEvent {
         change: BaseChange,
         listed: Result<(Vec<String>, Option<String>)>,
     },
+    Discarded {
+        request: Option<u64>,
+        workspace: u64,
+        path: String,
+        result: Result<changes::discard::Outcome>,
+    },
 }
 
 impl ChangesEvent {
@@ -78,6 +86,7 @@ impl ChangesEvent {
             Self::File { .. } => "changes file",
             Self::GapRead { .. } => "changes gap",
             Self::Base { .. } => "changes base",
+            Self::Discarded { .. } => "changes discard",
         }
     }
 }
@@ -103,6 +112,9 @@ impl App {
             }
             ChangesEvent::Base { request, workspace, change, listed } => {
                 self.changes_base_replied(request, workspace, &change, listed);
+            }
+            ChangesEvent::Discarded { request, workspace, path, result } => {
+                self.discard_answered(request, workspace, &path, result);
             }
         }
     }
@@ -332,9 +344,13 @@ impl App {
         }
         let hit = panel::hit(panel_area, &view, pos);
         let chosen = match hit {
-            Some(PanelHit::File(i) | PanelHit::Viewed(i) | PanelHit::Gap(i, _) | PanelHit::Action(i, _, _)) => {
-                self.chosen_file(&view, i)
-            }
+            Some(
+                PanelHit::File(i)
+                | PanelHit::Viewed(i)
+                | PanelHit::Discard(i)
+                | PanelHit::Gap(i, _)
+                | PanelHit::Action(i, _, _),
+            ) => self.chosen_file(&view, i),
             _ => None,
         };
         if let (Some(PanelHit::Action(_, index, action)), Some(chosen)) = (hit, &chosen) {
@@ -372,6 +388,7 @@ impl App {
                     self.panels.changes.toggle_viewed(chosen.target.workspace, &chosen.file);
                 }
             }
+            Some(PanelHit::Discard(_)) => self.ask_discard(chosen),
             Some(PanelHit::Gap(_, h)) => self.read_gap(view.mode, chosen, h),
             Some(PanelHit::Action(..)) | None => {}
         }

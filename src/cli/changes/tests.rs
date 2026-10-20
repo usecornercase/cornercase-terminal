@@ -23,6 +23,9 @@ mod parsing {
     #[case::the_default_base(&["changes", "base", "--default"])]
     #[case::viewed(&["changes", "viewed", "src/main.rs"])]
     #[case::unviewed(&["changes", "viewed", "src/main.rs", "--clear"])]
+    #[case::discard(&["changes", "discard", "src/main.rs"])]
+    #[case::discard_without_asking(&["changes", "discard", "src/main.rs", "--yes", "--workspace", "3"])]
+    #[case::discard_in_a_branch(&["changes", "discard", "src/main.rs", "--worktree", "x"])]
     fn these_are_taken(#[case] args: &[&str]) {
         let parsed = parse(args).expect("parse");
 
@@ -37,6 +40,9 @@ mod parsing {
     #[case::a_gap_without_its_hunk(&["changes", "gap", "a.rs"])]
     #[case::a_mode_command(&["changes", "mode", "--stream", "1", "commits"])]
     #[case::an_unknown_mode(&["changes", "list", "--mode", "some"])]
+    #[case::discard_in_a_mode(&["changes", "discard", "a.rs", "--mode", "commits"])]
+    #[case::discard_without_a_path(&["changes", "discard"])]
+    #[case::discard_in_two_places(&["changes", "discard", "a.rs", "--workspace", "1", "--worktree", "x"])]
     fn these_are_refused(#[case] args: &[&str]) {
         assert!(parse(args).is_err());
     }

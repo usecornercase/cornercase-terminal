@@ -510,7 +510,14 @@ impl App {
                 },
             ),
         };
-        ui::Overlay::Confirm(ui::Confirm { title: "Remove workspace", message, note, submit, extra: None })
+        ui::Overlay::Confirm(ui::Confirm {
+            title: "Remove workspace",
+            message,
+            note,
+            submit,
+            extra: None,
+            dangerous: false,
+        })
     }
 
     fn found_label(&self, found: Option<WorkspaceAt>) -> String {

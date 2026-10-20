@@ -9,7 +9,7 @@ expression: terminal.backend()
 "  Uncommitted   Commits   All                                                   "
 " 3 files  +7 −3  ▃▃▃▃▃▃▃▃                                                ● live "
 "                                                                                "
-" ▌▾ M src/returns.rs                                                   +5 −2    "
+" ▌▾ M src/returns.rs                                                +5 −2       "
 " ┄┄ impl Address ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ "
 "   9   9   /// The first line, when the address has one.                        "
 "  10     ▎ pub fn street(parts: &[String]) -> &str {                            "

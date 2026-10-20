@@ -26,9 +26,8 @@ fn a_todo_typed_in_the_panel_is_saved_next_to_the_session() {
     app.session.wait_for_file("todos.json", "the item is saved", |saved| saved.contains("buy milk"));
 }
 
-#[test]
-fn the_changes_panel_shows_what_changed_in_the_repo() {
-    let repo = std::env::temp_dir().join(format!("ccch-{}", std::process::id()));
+fn edited_repo(prefix: &str) -> (PathBuf, String) {
+    let repo = std::env::temp_dir().join(format!("{prefix}-{}", std::process::id()));
     std::fs::create_dir_all(&repo).expect("create repo dir");
     let repo_name = repo.file_name().and_then(|n| n.to_str()).expect("repo name").to_string();
     git(&repo, &["init", "--quiet"]);
@@ -36,6 +35,12 @@ fn the_changes_panel_shows_what_changed_in_the_repo() {
     git(&repo, &["add", "notes.txt"]);
     git(&repo, &["commit", "--quiet", "-m", "init"]);
     std::fs::write(repo.join("notes.txt"), "one\nTWO\n").expect("edit file");
+    (repo, repo_name)
+}
+
+#[test]
+fn the_changes_panel_shows_what_changed_in_the_repo() {
+    let (repo, repo_name) = edited_repo("ccch");
     let mut app = Harness::start();
     app.open_project(1, &repo);
     app.wait_for("the repo opens as project 2", |s| s.contains(&entry(&repo_name)));
@@ -51,14 +56,7 @@ fn the_changes_panel_shows_what_changed_in_the_repo() {
 
 #[test]
 fn scripts_see_the_changes_of_a_workspace() {
-    let repo = std::env::temp_dir().join(format!("ccsc-{}", std::process::id()));
-    std::fs::create_dir_all(&repo).expect("create repo dir");
-    let repo_name = repo.file_name().and_then(|n| n.to_str()).expect("repo name").to_string();
-    git(&repo, &["init", "--quiet"]);
-    std::fs::write(repo.join("notes.txt"), "one\ntwo\n").expect("write file");
-    git(&repo, &["add", "notes.txt"]);
-    git(&repo, &["commit", "--quiet", "-m", "init"]);
-    std::fs::write(repo.join("notes.txt"), "one\nTWO\n").expect("edit file");
+    let (repo, repo_name) = edited_repo("ccsc");
     let mut app = Harness::start();
     app.open_project(1, &repo);
     app.wait_for("the repo opens as project 2", |s| s.contains(&entry(&repo_name)));
@@ -69,6 +67,24 @@ fn scripts_see_the_changes_of_a_workspace() {
 
     assert_eq!(summary["workspaces"][0]["files"][0]["path"], "notes.txt", "{list}");
     assert!(diff.contains("-two") && diff.contains("+TWO"), "{diff}");
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+#[test]
+fn scripts_discard_a_file_only_when_told_to() {
+    let (repo, repo_name) = edited_repo("ccdc");
+    let mut app = Harness::start();
+    app.open_project(1, &repo);
+    app.wait_for("the repo opens as project 2", |s| s.contains(&entry(&repo_name)));
+
+    let asked = app.session.cli(&["changes", "discard", "notes.txt"]);
+    assert_eq!(asked.status.code(), Some(1), "{asked:?}");
+    assert!(String::from_utf8_lossy(&asked.stderr).contains("pass --yes"), "{asked:?}");
+    assert_eq!(std::fs::read_to_string(repo.join("notes.txt")).expect("read"), "one\nTWO\n");
+    let done = app.session.says(&["changes", "discard", "notes.txt", "--yes"]);
+
+    assert_eq!(done, "discarded the changes to notes.txt");
+    assert_eq!(std::fs::read_to_string(repo.join("notes.txt")).expect("read"), "one\ntwo\n");
     let _ = std::fs::remove_dir_all(&repo);
 }
 

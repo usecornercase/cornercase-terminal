@@ -169,6 +169,10 @@ mod requests {
             keys(serde_json::to_value(ChangesViewed::default()).expect("json")),
             ["clear", "digest", "path", "workspace"]
         );
+        assert_eq!(
+            keys(serde_json::to_value(ChangesDiscard::default()).expect("json")),
+            ["digest", "path", "workspace"]
+        );
     }
 
     #[test]
@@ -176,6 +180,25 @@ mod requests {
         let request: Changes = serde_json::from_value(json!({})).expect("a request");
 
         assert_eq!((request.scope, request.mode, request.workspace), (Scope::Project, Mode::Uncommitted, None));
+    }
+}
+
+mod discarded {
+    use super::*;
+
+    #[test]
+    fn the_answer_survives_a_round_trip() {
+        let answer = Discarded {
+            workspace: 3,
+            path: "b.txt".into(),
+            old_path: Some("a.txt".into()),
+            status: FileStatus::Renamed,
+        };
+
+        let text = serde_json::to_string(&answer).expect("json");
+
+        assert_eq!(serde_json::from_str::<Discarded>(&text).expect("answer"), answer);
+        assert_eq!(Status::from(FileStatus::Renamed), Status::Renamed);
     }
 }
 

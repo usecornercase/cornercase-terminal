@@ -1,4 +1,5 @@
 pub(crate) mod diff;
+pub(crate) mod discard;
 pub(crate) mod every;
 pub(crate) mod filter;
 pub(crate) mod git;
@@ -450,6 +451,12 @@ impl Panel {
         self.folded.remove(&key);
         self.every_folded.remove(&key);
         self.invalidate_summary(workspace);
+    }
+
+    pub(crate) fn discarded(&mut self, workspace: u64, path: &str) {
+        self.set_viewed(workspace, path, None);
+        self.gaps.retain(|(k, _, _), _| k.workspace != workspace || k.path != path);
+        self.requested.retain(|(w, _), _| *w != workspace);
     }
 
     fn auto_folded(&self, workspace: u64, diff: &Diff, file: &File) -> bool {

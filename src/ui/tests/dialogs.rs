@@ -281,8 +281,31 @@ fn renders_a_confirmation() {
         note: Some(Note::Error("contains modified or untracked files, use --force to delete it".into())),
         submit: "remove anyway",
         extra: None,
+        dangerous: false,
     };
     insta::assert_snapshot!(render(&with(Overlay::Confirm(confirm))).backend());
+}
+
+#[test]
+fn a_dangerous_confirmation_draws_its_submit_red() {
+    let confirm = |dangerous| Confirm {
+        title: "Discard changes",
+        message: "Discard the changes to a.txt? This cannot be undone.".into(),
+        note: None,
+        submit: "discard",
+        extra: None,
+        dangerous,
+    };
+    let [submit, _] = form_buttons(form_area(AREA), "discard");
+    let styled = |dangerous, hover: Option<Position>| {
+        let view = View { hover, ..with(Overlay::Confirm(confirm(dangerous))) };
+        let cell = render(&view).backend().buffer()[(submit.x + 1, submit.y)].clone();
+        (cell.fg, cell.bg)
+    };
+    let off = Some(Position::new(0, 0));
+    assert_eq!(styled(true, off).0, Color::Red);
+    assert_eq!(styled(true, Some(submit.as_position())), (Color::Black, Color::Red));
+    assert_eq!(styled(false, off).0, Color::Cyan);
 }
 
 #[test]
@@ -295,6 +318,7 @@ fn renders_a_confirmation_with_a_second_choice() {
         note: None,
         submit: "keep projects",
         extra: Some("close projects"),
+        dangerous: false,
     };
     insta::assert_snapshot!(render(&with(Overlay::Confirm(confirm))).backend());
 }

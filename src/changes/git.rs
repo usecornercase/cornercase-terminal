@@ -128,6 +128,24 @@ fn read(path: &Path) -> Option<Vec<u8>> {
     Some(bytes)
 }
 
+fn find(request: &Request, path: &str) -> Result<Option<Arc<File>>> {
+    let loaded = load(request)?;
+    Ok(loaded.diff.and_then(|diff| diff.files.into_iter().find(|f| f.path == path)))
+}
+
+fn single(dir: &Path, mode: Mode, base: Option<String>, expanded: Option<Vec<String>>) -> Request {
+    Request { dir: dir.to_path_buf(), mode, base, last: None, previous: Vec::new(), expanded }
+}
+
+pub(crate) fn read_file(dir: &Path, mode: Mode, base: Option<String>, path: &str) -> Result<Option<Arc<File>>> {
+    let expanded = (mode == Mode::Uncommitted).then(|| vec![path.to_string()]);
+    find(&single(dir, mode, base, expanded), path)
+}
+
+pub(crate) fn listed(dir: &Path, path: &str) -> Result<Option<Arc<File>>> {
+    find(&single(dir, Mode::Uncommitted, None, Some(Vec::new())), path)
+}
+
 pub(crate) fn load(request: &Request) -> Result<Loaded> {
     if let Some(expanded) = &request.expanded {
         return super::summary::load(request, expanded);

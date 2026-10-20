@@ -226,6 +226,61 @@ fn clicks_on_a_file_row() {
         (hit(AREA, &view, Position::new(10, r.y)), hit(AREA, &view, Position::new(r.right() - 2, r.y))),
         (Some(Hit::File(1)), Some(Hit::Viewed(1)))
     );
+    let cell = discard_cell(&view, r);
+    assert_eq!(hit(AREA, &view, Position::new(cell.x + 1, r.y)), Some(Hit::Discard(1)));
+}
+
+mod discard {
+    use super::*;
+
+    fn glyph_at(terminal: &Terminal<TestBackend>, cell: Rect) -> (String, Color) {
+        let c = &terminal.backend().buffer()[(cell.x + 1, cell.y)];
+        (c.symbol().to_string(), c.fg)
+    }
+
+    #[test]
+    fn the_icon_shows_on_a_hovered_row_and_turns_red_under_the_pointer() {
+        let view = sample();
+        let r = row_of(&view, Row::File(1));
+        let cell = discard_cell(&view, r);
+        let on_row = render(&view, Some(Position::new(10, r.y)));
+        assert_eq!(glyph_at(&on_row, cell), ("↺".to_string(), Color::DarkGray));
+        let on_cell = render(&view, Some(Position::new(cell.x + 1, r.y)));
+        assert_eq!(glyph_at(&on_cell, cell), ("↺".to_string(), Color::Red));
+        assert_eq!(glyph_at(&render(&view, None), cell).0, " ");
+        insta::assert_snapshot!(on_row.backend());
+    }
+
+    #[test]
+    fn it_shows_on_a_viewed_row_too() {
+        let view = View { viewed: vec![false, true, false], ..sample() };
+        let r = row_of(&view, Row::File(1));
+        let terminal = render(&view, Some(Position::new(10, r.y)));
+        assert_eq!(glyph_at(&terminal, discard_cell(&view, r)).0, "↺");
+    }
+
+    #[rstest::rstest]
+    #[case::commits(Mode::Commits)]
+    #[case::all(Mode::All)]
+    fn commits_and_all_have_none(#[case] mode: Mode) {
+        let view = View { mode, ..sample() };
+        let r = row_of(&view, Row::File(1));
+        let hovered = render(&view, Some(Position::new(10, r.y)));
+        let line: String =
+            (r.x..r.right()).map(|x| hovered.backend().buffer()[(x, r.y)].symbol().to_string()).collect();
+        assert!(!line.contains('↺'), "{line}");
+        assert_eq!(discard_cell(&view, r), Rect::default());
+        let at = Position::new(viewed_cell(r).x.saturating_sub(2), r.y);
+        assert_eq!(hit(AREA, &view, at), Some(Hit::File(1)));
+    }
+
+    #[test]
+    fn every_project_has_it_too() {
+        let view = View { scope: Scope::Every, ..sample() };
+        let r = row_of(&view, Row::File(1));
+        let cell = discard_cell(&view, r);
+        assert_eq!(hit(AREA, &view, Position::new(cell.x + 1, r.y)), Some(Hit::Discard(1)));
+    }
 }
 
 #[test]

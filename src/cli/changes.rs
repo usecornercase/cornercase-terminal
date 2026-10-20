@@ -1,11 +1,14 @@
 use std::fmt::Write as _;
+use std::io::{self, IsTerminal};
 
 use super::args::changes::{ChangesAction, ChangesArgs, ModeFlag, Where};
 use super::{print_json, print_out, stream_json, workspace};
-use crate::changes::{Mode, Scope};
+use crate::changes::{Mode, Scope, discard};
 use crate::client::{self, answer, ask};
-use crate::control::changes::{Base, Content, FileInfo, FileStatus, FoldClass, Gap, LineKind, Patch, State, Summary};
-use crate::control::{Changes, ChangesBase, ChangesFile, ChangesGap, ChangesViewed};
+use crate::control::changes::{
+    Base, Content, Discarded, FileInfo, FileStatus, FoldClass, Gap, LineKind, Patch, State, Summary,
+};
+use crate::control::{Changes, ChangesBase, ChangesDiscard, ChangesFile, ChangesGap, ChangesViewed};
 use crate::control::{Command, Report};
 use crate::error::{Error, Result};
 
@@ -18,6 +21,7 @@ pub(super) fn run(args: ChangesArgs) -> Result<()> {
         ChangesAction::Gap { path, hunk, place, mode, print } => gap(&path, hunk, &place, &mode, print.json),
         ChangesAction::Base { branch, default, place, print } => base(branch, default, &place, print.json),
         ChangesAction::Viewed { path, clear, place, mode } => viewed(&path, clear, &place, &mode),
+        ChangesAction::Discard { path, place, yes } => discard(&path, &place, yes),
     }
 }
 
@@ -218,6 +222,26 @@ fn viewed(path: &str, clear: bool, at: &Where, mode: &ModeFlag) -> Result<()> {
     };
     let request = ChangesViewed { workspace, path: path.to_string(), digest, clear };
     ask("changes-viewed", Command::ChangesViewed(request)).map(drop)
+}
+
+fn discard(path: &str, at: &Where, yes: bool) -> Result<()> {
+    let workspace = place("changes discard", at)?;
+    let request = ChangesFile { workspace, path: path.to_string(), mode: Mode::Uncommitted };
+    let seen: Patch = answer(ask("changes-file", Command::ChangesFile(request))?)?;
+    let (status, old) = (seen.file.status.into(), seen.file.old_path.as_deref());
+    if !yes && !confirmed_discard(&discard::question(path, old, status))? {
+        return print_out("nothing discarded\n");
+    }
+    let request = ChangesDiscard { workspace, path: path.to_string(), digest: Some(seen.file.digest.clone()) };
+    let done: Discarded = answer(ask("changes-discard", Command::ChangesDiscard(request))?)?;
+    print_out(&format!("{}\n", discard::done(&done.path, done.old_path.as_deref(), done.status.into())))
+}
+
+fn confirmed_discard(question: &str) -> Result<bool> {
+    if !io::stdin().is_terminal() {
+        return Err(Error::Control("no terminal to ask in; pass --yes to discard it".into()));
+    }
+    Ok(client::confirm(&format!("{question} [y/N] ")))
 }
 
 #[cfg(test)]

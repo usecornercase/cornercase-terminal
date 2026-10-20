@@ -585,6 +585,7 @@ impl App {
             Command::ChangesGap(gap) => self.changes_gap_request(client, asker, &gap, now),
             Command::ChangesBase(base) => self.changes_base_request(client, asker, &base),
             Command::ChangesViewed(viewed) => self.changes_viewed_request(asker, &viewed),
+            Command::ChangesDiscard(discard) => self.changes_discard_request(client, asker, &discard),
             other => return ControlFlow::Continue(other),
         })
     }

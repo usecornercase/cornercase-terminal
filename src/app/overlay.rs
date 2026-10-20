@@ -14,7 +14,7 @@ use super::start_flow_dialog::start_flow_view;
 use super::update_dialog::UpdateStep;
 use super::worktrees::Check;
 use crate::agents::Known;
-use crate::changes::BranchPicker;
+use crate::changes::{self, BranchPicker};
 use crate::error::Result;
 use crate::flows::dialog::Dialog;
 use crate::flows::progress::Edge;
@@ -41,6 +41,8 @@ pub(super) const CLOSE_SUBMIT: &str = "close";
 
 pub(super) const FORCE_REMOVE_SUBMIT: &str = "remove anyway";
 
+pub(super) const DISCARD_SUBMIT: &str = "discard";
+
 pub(super) const UNLOCK_SUBMIT: &str = "unlock and remove";
 
 pub(super) const UPDATE_SUBMIT: &str = "update";
@@ -66,6 +68,7 @@ pub(super) enum Overlay {
     NewWorkspace { project: u64, input: String, worktree: Option<bool>, error: Option<String>, creating: bool },
     Settings(Box<Settings>),
     RemoveAccount { kind: Known, name: String },
+    DiscardChanges(changes::discard::Target),
     Flows { dialog: Box<Dialog>, back: Option<Box<Overlay>> },
     StartFlow { start: Box<Start>, back: Option<Box<Overlay>> },
     ProjectSettings(Box<crate::project::settings::Form>),
@@ -102,6 +105,7 @@ impl Overlay {
             Self::NewWorkspace { .. } => "new workspace",
             Self::Settings(_) => "settings",
             Self::RemoveAccount { .. } => "remove account",
+            Self::DiscardChanges(_) => "discard changes",
             Self::Flows { .. } => "flows",
             Self::StartFlow { .. } => "start flow",
             Self::ProjectSettings(_) => "project settings",
@@ -142,12 +146,30 @@ impl Overlay {
         }
     }
 
+    fn is_form(&self) -> bool {
+        matches!(
+            self,
+            Overlay::NewGroup { .. }
+                | Overlay::NewWorkspace { .. }
+                | Overlay::Rename { .. }
+                | Overlay::RemoveWorkspace { .. }
+                | Overlay::RemoveAccount { .. }
+                | Overlay::DiscardChanges(_)
+                | Overlay::DeleteGroup { .. }
+                | Overlay::CloseProject { .. }
+                | Overlay::CloseWorkspace { .. }
+                | Overlay::CloseTab { .. }
+                | Overlay::ClosePane { .. }
+        )
+    }
+
     pub(super) fn submit_label(&self) -> &'static str {
         match self {
             Self::Rename { .. } => RENAME_SUBMIT,
             Self::RemoveWorkspace { lock: Some(_), .. } => UNLOCK_SUBMIT,
             Self::RemoveWorkspace { check: Check::Changed, .. } => FORCE_REMOVE_SUBMIT,
             Self::RemoveWorkspace { .. } | Self::RemoveAccount { .. } => REMOVE_SUBMIT,
+            Self::DiscardChanges(_) => DISCARD_SUBMIT,
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
             Self::CloseAgent(dialog) => dialog.submit_label(),
             Self::CloseProject { .. }
@@ -227,19 +249,8 @@ impl App {
             Some(Overlay::Keys(group)) => return self.keys_mouse(*group, ev, pos, area),
             Some(Overlay::Worktrees(_)) => self.worktrees_mouse(ev, pos, area),
             Some(Overlay::CloseAgent(_)) => self.close_agent_mouse(ev, pos, area),
-            Some(
-                Overlay::NewGroup { .. }
-                | Overlay::NewWorkspace { .. }
-                | Overlay::Rename { .. }
-                | Overlay::RemoveWorkspace { .. }
-                | Overlay::RemoveAccount { .. }
-                | Overlay::DeleteGroup { .. }
-                | Overlay::CloseProject { .. }
-                | Overlay::CloseWorkspace { .. }
-                | Overlay::CloseTab { .. }
-                | Overlay::ClosePane { .. },
-            ) => return self.form_mouse(ev, pos, area),
-            None => (),
+            Some(overlay) if overlay.is_form() => return self.form_mouse(ev, pos, area),
+            _ => (),
         }
         Ok(())
     }
@@ -253,6 +264,7 @@ impl App {
             Overlay::NewWorkspace { .. } => self.new_workspace_view(overlay)?,
             Overlay::Settings(s) => ui::Overlay::Settings(settings_view(s)),
             Overlay::RemoveAccount { kind, name } => Self::remove_account_view(*kind, name),
+            Overlay::DiscardChanges(target) => Self::discard_view(target),
             Overlay::Flows { dialog, .. } => flows_view(dialog, area),
             Overlay::StartFlow { start, .. } => start_flow_view(start, area),
             Overlay::ProjectSettings(form) => super::project_settings_dialog::project_settings_overlay(form),

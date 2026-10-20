@@ -13,7 +13,7 @@ mod every_project {
         query.chars().for_each(|c| app.panels.changes.push_filter(c));
     }
 
-    fn loaded_every(app: &mut App, rx: &Receiver<AppEvent>) {
+    pub(super) fn loaded_every(app: &mut App, rx: &Receiver<AppEvent>) {
         app.screen.side = Some(Side::Changes);
         app.panels.changes.set_scope(changes::Scope::Every);
         app.refresh_changes(Instant::now());
@@ -22,7 +22,7 @@ mod every_project {
         });
     }
 
-    fn row(app: &App, wanted: panel::Row) -> Position {
+    pub(super) fn row(app: &App, wanted: panel::Row) -> Position {
         let view = app.panel_view().expect("panel");
         let index = panel::rows(&view).iter().position(|r| *r == wanted).expect("row");
         let body = panel::parts(panel_area(app), &view).body;
@@ -639,4 +639,130 @@ fn open_starts_the_editor_in_a_new_tab() {
     app.hunk_action(&target, &file, Hunk { index: 0, action: HunkAction::Open }, AREA).expect("open");
     let workspace = &app.projects[0].workspaces[0];
     assert_eq!((workspace.tabs.len(), workspace.active), (tabs + 1, tabs));
+}
+
+mod discarding {
+    use super::every_project::{loaded_every, row};
+    use super::*;
+
+    const QUESTION: &str = "Discard the changes to a.txt? This cannot be undone.";
+
+    fn cell(app: &App, file: usize) -> Position {
+        let view = app.panel_view().expect("panel");
+        let at = row(app, panel::Row::File(file));
+        let line = Rect::new(panel::parts(panel_area(app), &view).body.x, at.y, panel_area(app).width, 1);
+        let cell = panel::discard_cell(&view, line);
+        Position::new(cell.x + 1, cell.y)
+    }
+
+    fn ask(app: &mut App, file: usize) {
+        let at = cell(app, file);
+        click(app, at);
+    }
+
+    fn confirm(app: &mut App) {
+        click(app, ui::form_buttons(ui::form_area(AREA), "discard")[0].as_position());
+    }
+
+    fn asked(app: &App) -> String {
+        let ui::Overlay::Confirm(confirm) = overlay_shown(app, AREA) else { panic!("a confirmation") };
+        assert_eq!((confirm.title, confirm.submit, confirm.dangerous), ("Discard changes", "discard", true));
+        confirm.message
+    }
+
+    fn read(repo: &TempDir, path: &str) -> String {
+        std::fs::read_to_string(repo.path().join(path)).expect("read file")
+    }
+
+    #[test]
+    fn a_click_asks_and_changes_nothing() {
+        let (repo, mut app, _rx) = open_changes();
+        ask(&mut app, 0);
+        assert_eq!(asked(&app), QUESTION);
+        assert_eq!(read(&repo, "a.txt"), "one\nTWO\n");
+        send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+        assert!(app.overlay.is_none());
+        assert_eq!(read(&repo, "a.txt"), "one\nTWO\n");
+    }
+
+    #[test]
+    fn confirming_puts_the_file_back_and_the_row_goes() {
+        let (repo, mut app, rx) = open_changes();
+        ask(&mut app, 0);
+        confirm(&mut app);
+        wait_until("the row goes", || {
+            drain(&mut app, &rx);
+            app.refresh(Instant::now());
+            let target = app.changes_target().expect("target");
+            app.changed_diff(&target).is_some_and(|d| d.files.is_empty())
+        });
+        assert_eq!(read(&repo, "a.txt"), "one\ntwo\n");
+        assert_eq!(toast(&app), Some("discarded the changes to a.txt"));
+    }
+
+    #[test]
+    fn a_file_that_changed_after_the_click_is_kept() {
+        let (repo, mut app, rx) = open_changes();
+        ask(&mut app, 0);
+        std::fs::write(repo.path().join("a.txt"), "one\nTWO\nthree\n").expect("rewrite");
+        confirm(&mut app);
+        pump_until(&mut app, &rx, "the answer", |a| toast(a).is_some());
+        assert_eq!(toast(&app), Some("a.txt changed meanwhile: nothing was discarded"));
+        assert_eq!(read(&repo, "a.txt"), "one\nTWO\nthree\n");
+    }
+
+    #[test]
+    fn the_viewed_mark_is_forgotten() {
+        let (_repo, mut app, rx) = open_changes();
+        let (target, file) = first_changed_file(&app);
+        app.panels.changes.toggle_viewed(target.workspace, &file);
+        assert!(app.panels.changes.viewed(target.workspace, &file));
+        ask(&mut app, 0);
+        confirm(&mut app);
+        pump_until(&mut app, &rx, "the answer", |a| toast(a).is_some());
+        assert!(!app.panels.changes.viewed(target.workspace, &file));
+    }
+
+    #[test]
+    fn every_project_discards_in_the_owning_workspace() {
+        let (shop, worktree) = shop_with_topic_worktree();
+        let (mut app, rx) = app_in(shop.path(), no_config());
+        loaded_every(&mut app, &rx);
+        let view = app.panel_view().expect("panel");
+        let changes::Body::Ready(diff) = &view.body else { panic!("ready") };
+        let new = diff.files.iter().position(|f| f.path == "new.txt").expect("new.txt");
+        ask(&mut app, new);
+        assert_eq!(asked(&app), "Delete new.txt? It is not in git, so this cannot be undone.");
+        confirm(&mut app);
+        pump_until(&mut app, &rx, "the answer", |a| toast(a).is_some());
+        assert!(!worktree.path().join("topic/new.txt").exists());
+        assert_eq!(read(&shop, "a.txt"), "one\nTWO\n");
+    }
+
+    #[test]
+    fn commits_has_no_discard() {
+        let repo = repo_with_edit();
+        git(repo.path(), &["checkout", "--quiet", "-b", "feat"]);
+        git(repo.path(), &["commit", "--quiet", "-am", "edit"]);
+        let (mut app, rx) = app_in(repo.path(), no_config());
+        app.screen.side = Some(Side::Changes);
+        app.panels.changes.set_mode(changes::Mode::Commits);
+        refresh_until_loaded(&mut app, &rx);
+        let view = app.panel_view().expect("panel");
+        let at = row(&app, panel::Row::File(0));
+        let line = Rect::new(panel::parts(panel_area(&app), &view).body.x, at.y, panel_area(&app).width, 1);
+        assert_eq!(panel::discard_cell(&view, line), Rect::default());
+        click(&mut app, Position::new(line.right().saturating_sub(5), at.y));
+        assert!(app.overlay.is_none());
+    }
+
+    #[test]
+    fn a_workspace_gone_before_confirming_discards_nothing() {
+        let (repo, mut app, _rx) = open_changes();
+        ask(&mut app, 0);
+        std::fs::remove_dir_all(repo.path().join(".git")).expect("remove .git");
+        confirm(&mut app);
+        assert!(toast(&app).is_some_and(|t| t.contains("not in a git repository")), "{:?}", toast(&app));
+        assert_eq!(read(&repo, "a.txt"), "one\nTWO\n");
+    }
 }

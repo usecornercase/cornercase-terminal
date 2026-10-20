@@ -216,7 +216,7 @@ pub(crate) enum Control {
         after_help = ISSUE_HELP
     )]
     Issue(issue::IssueArgs),
-    #[command(about = "List, read and mark the changes of a workspace, as the changes panel shows them", after_help = CHANGES_HELP)]
+    #[command(about = "List, read, mark and discard the changes of a workspace, as the changes panel shows them", after_help = CHANGES_HELP)]
     Changes(changes::ChangesArgs),
     #[command(
         about = "Print your Claude Code and Codex plan limits, as the Usage dialog's Limits tab shows them",

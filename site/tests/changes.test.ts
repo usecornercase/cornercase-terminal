@@ -19,7 +19,76 @@ function demo(columns: number): App {
   return app;
 }
 
+function fileRow(app: App): { x: number; y: number } {
+  app.render();
+  const at = app.textAt('▸ M') ?? app.textAt('▾ M');
+  assert.ok(at);
+  return at;
+}
+
+function onRow(app: App, needle: string, y: number): number {
+  for (let nth = 0; ; nth++) {
+    const at = app.textAt(needle, nth);
+    if (!at) return -1;
+    if (at.y === y) return at.x;
+  }
+}
+
+function hover(app: App): { icon: number; check: number; y: number } {
+  const row = fileRow(app);
+  app.pointerMove(row.x + 6, row.y, 0);
+  app.render();
+  return { icon: onRow(app, '↺', row.y), check: onRow(app, '✓', row.y), y: row.y };
+}
+
+function press(app: App, x: number, y: number): void {
+  app.pointerDown(x, y, 0);
+  app.pointerUp();
+  app.render();
+}
+
 for (const columns of [140, 80]) {
+  test(`hovering a file shows the discard icon left of its check at ${columns} columns`, () => {
+    const app = demo(columns);
+    const { icon, check } = hover(app);
+    assert.ok(icon >= 0 && icon < check);
+    app.destroy();
+  });
+
+  test(`the discard icon asks, cancel keeps the file and discard drops it at ${columns} columns`, () => {
+    const app = demo(columns);
+    const files = app.changesDiff().length;
+    const { icon, y } = hover(app);
+    press(app, icon, y);
+    assert.equal(app.confirmView()?.title, 'Discard changes');
+    assert.equal(app.confirmView()?.dangerous, true);
+    assert.match(app.confirmView()?.message ?? '', /cannot be undone/);
+    const cancel = app.textAt(' cancel ');
+    assert.ok(cancel);
+    press(app, cancel.x + 1, cancel.y);
+    assert.equal(app.confirmView(), null);
+    assert.equal(app.changesDiff().length, files);
+    press(app, hover(app).icon, y);
+    const discard = app.textAt(' discard ');
+    assert.ok(discard);
+    press(app, discard.x + 1, discard.y);
+    assert.equal(app.changesDiff().length, files - 1);
+    assert.match(app.toast?.text ?? '', /^(discarded the changes to|deleted) /);
+    app.destroy();
+  });
+
+  test(`Commits has no discard icon and a click there folds the file at ${columns} columns`, () => {
+    const app = demo(columns);
+    app.setChangesMode('commits');
+    const { icon, check, y } = hover(app);
+    assert.equal(icon, -1);
+    const folded = app.changesFolded(app.changesDiff()[0]);
+    press(app, check - 2, y);
+    assert.equal(app.confirmView(), null);
+    assert.notEqual(app.changesFolded(app.changesDiff()[0]), folded);
+    app.destroy();
+  });
+
   test(`the last cell of Every project selects its scope at ${columns} columns`, () => {
     const app = demo(columns);
     app.render();

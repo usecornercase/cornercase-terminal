@@ -1099,21 +1099,22 @@ export class Painter {
     if (menu.h >= 4) this.span(menu.x + 2, menu.y + menu.h - 2, truncateRight(hint, Math.max(0, menu.w - 4)), DARK);
   }
 
-  dialogButtons(row: Rect, submit: string, onSubmit: () => void, onCancel: () => void, label = 'cancel'): void {
+  dialogButtons(row: Rect, submit: string, onSubmit: () => void, onCancel: () => void, label = 'cancel', dangerous = false): void {
     const cancel = intersect(rect(right(row) - buttonWidth(label), row.y, buttonWidth(label), 1), row);
     const ok = intersect(rect(cancel.x - buttonWidth(submit) - 1, row.y, buttonWidth(submit), 1), row);
-    this.submitButton(ok, submit, onSubmit);
+    this.submitButton(ok, submit, onSubmit, dangerous);
     this.span(cancel.x, cancel.y, ` ${label} `, this.pill(cancel, false));
     this.region({ r: cancel, click: onCancel, cursor: 'pointer' });
   }
 
-  private pill(r: Rect, primary: boolean): Style {
+  private pill(r: Rect, primary: boolean, dangerous = false): Style {
+    if (primary && dangerous) return this.hovered(r) ? { fg: 0, bg: 1, add: BOLD } : { fg: 1, bg: this.surface, add: BOLD };
     if (primary) return this.hovered(r) ? PRESSED : { fg: 6, bg: this.surface, add: BOLD };
     return this.hovered(r) ? { fg: 0, bg: 7 } : { fg: 7, bg: this.surface };
   }
 
-  private submitButton(r: Rect, label: string, onClick: () => void): void {
-    this.span(r.x, r.y, ` ${label} `, this.pill(r, true), r.w);
+  private submitButton(r: Rect, label: string, onClick: () => void, dangerous = false): void {
+    this.span(r.x, r.y, ` ${label} `, this.pill(r, true, dangerous), r.w);
     this.region({ r, click: onClick, cursor: 'pointer' });
   }
 
@@ -1244,7 +1245,7 @@ export class Painter {
     return lines;
   }
 
-  private confirm({ title, message, submit, extra, note }: ConfirmView): void {
+  private confirm({ title, message, submit, extra, note, dangerous }: ConfirmView): void {
     const app = this.app;
     const r = formArea(app.cols, app.rows);
     this.dialogBackdrop(r);
@@ -1254,7 +1255,7 @@ export class Painter {
     rows.slice(0, 4).forEach((row, i) => row.forEach((cell, x) => this.g.put(c.x + x, c.y + i, cell.ch, {})));
     if (note) this.span(c.x, c.y + 4, note, DARK);
     const row = rect(c.x, bottom(c) - 1, c.w, 1);
-    this.dialogButtons(row, submit, () => app.submitConfirm(), () => app.closeOverlay());
+    this.dialogButtons(row, submit, () => app.submitConfirm(), () => app.closeOverlay(), 'cancel', dangerous);
     if (extra) {
       const end = Math.max(row.x, right(row) - buttonWidth('cancel') - 1 - buttonWidth(submit) - 1);
       const x = Math.max(row.x, end - buttonWidth(extra));

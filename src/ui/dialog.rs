@@ -199,6 +199,19 @@ pub(super) fn dialog_button_style(view: &View, r: Rect, primary: bool) -> Style 
     }
 }
 
+fn danger_button_style(view: &View, r: Rect) -> Style {
+    if hovered(view, r) {
+        Style::default().fg(Color::Black).bg(Color::Red).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Red).bg(view.surface()).add_modifier(Modifier::BOLD)
+    }
+}
+
+pub(super) fn draw_danger(f: &mut Frame, view: &View, r: Rect, label: &str) {
+    let style = danger_button_style(view, r);
+    f.render_widget(Paragraph::new(Span::styled(format!(" {label} "), style)), r);
+}
+
 pub(super) fn draw_submit(f: &mut Frame, view: &View, r: Rect, label: &str) {
     let style = dialog_button_style(view, r, true);
     f.render_widget(Paragraph::new(Span::styled(format!(" {label} "), style)), r);

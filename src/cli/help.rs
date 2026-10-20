@@ -661,7 +661,8 @@ pub(super) const CHANGES_HELP: &str =
 every project with --every, and with --follow keeps printing them as JSON lines each time they change. `file` prints one \
 file's diff, `gap` the unchanged lines before one of its hunks, `base` the branches the Commits and All modes can compare \
 with (naming one sets it, --default goes back to following the default branch), and `viewed` marks a file as viewed or clears \
-the mark. The modes are uncommitted (the default), \
+the mark. `discard` throws a file's uncommitted changes away (a file git does not track is deleted), asks first on a terminal \
+and needs --yes in a script; it cannot be undone. The modes are uncommitted (the default), \
 commits and all. The base and the viewed marks are shared with the window's changes panel; the mode of a stream is its own.
 
 Examples:
@@ -671,7 +672,8 @@ Examples:
   cornercase changes file src/main.rs --json
   cornercase changes gap src/main.rs --hunk 1
   cornercase changes base origin/main
-  cornercase changes viewed src/main.rs";
+  cornercase changes viewed src/main.rs
+  cornercase changes discard src/main.rs --yes";
 
 mod flow;
 
