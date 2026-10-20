@@ -5,7 +5,7 @@ use std::time::Instant;
 use ratatui::layout::Rect;
 use serde_json::json;
 
-use super::{Handled, Pending, Stage};
+use super::{Asked, Asker, Handled, Pending, Stage};
 use crate::agents;
 use crate::agents::usage;
 use crate::app::App;
@@ -17,41 +17,35 @@ use crate::log::{Job, Level};
 use crate::queue::{self, Place, State};
 
 impl App {
-    pub(super) fn queue_request(
-        &mut self,
-        client: u64,
-        caller: Option<u64>,
-        command: control::Queue,
-        area: Option<Rect>,
-        now: Instant,
-    ) -> Handled {
+    pub(super) fn queue_request(&mut self, asked: Asked, command: control::Queue) -> Handled {
+        let Asked { client, asker, area, now } = asked;
         match command {
             control::Queue::List => Ok(Some(json!({ "entries": self.queued.queue.entries }))),
-            control::Queue::Remove(id) => {
-                if self.queued.running.values().any(|running| *running == id) {
-                    return Err("this entry is already starting".into());
-                }
-                self.queued.queue.remove(id)?;
-                Ok(Some(json!({})))
-            }
-            control::Queue::Run(id) => {
-                self.queued.area = Some(super::sized(area)?);
-                if let Err(reason) = self.run_queued(id, now) {
-                    if self
-                        .queued
-                        .queue
-                        .entry(id)
-                        .is_some_and(|entry| !matches!(entry.state, State::Starting | State::Started { .. }))
-                    {
-                        self.fail_queued(id, &reason);
-                    }
-                    return Err(reason.into());
-                }
-                Ok(Some(json!({ "id": id })))
-            }
-            control::Queue::Add(add) => self.add_queue_request(Some(client), caller, None, &add),
-            control::Queue::Edit { id, add } => self.add_queue_request(Some(client), caller, Some(id), &add),
+            control::Queue::Remove(id) => self.remove_queue_request(id),
+            control::Queue::Run(id) => self.run_queue_request(id, area, now),
+            control::Queue::Add(add) => self.add_queue_request(Some(client), asker.caller, None, &add),
+            control::Queue::Edit { id, add } => self.add_queue_request(Some(client), asker.caller, Some(id), &add),
         }
+    }
+
+    fn remove_queue_request(&mut self, id: u64) -> Handled {
+        if self.queued.running.values().any(|running| *running == id) {
+            return Err("this entry is already starting".into());
+        }
+        self.queued.queue.remove(id)?;
+        Ok(Some(json!({})))
+    }
+
+    fn run_queue_request(&mut self, id: u64, area: Option<Rect>, now: Instant) -> Handled {
+        self.queued.area = Some(super::sized(area)?);
+        if let Err(reason) = self.run_queued(id, now) {
+            let unfinished = |entry: &queue::Entry| !matches!(entry.state, State::Starting | State::Started { .. });
+            if self.queued.queue.entry(id).is_some_and(unfinished) {
+                self.fail_queued(id, &reason);
+            }
+            return Err(reason.into());
+        }
+        Ok(Some(json!({ "id": id })))
     }
 
     pub(in crate::app) fn add_queue_request(
@@ -230,7 +224,7 @@ impl App {
             }
             return Err(reason);
         }
-        match self.start_request(client, None.into(), start, self.queued.area, now) {
+        match self.start_request(Asked { client, asker: Asker::default(), area: self.queued.area, now }, start) {
             Ok(Some(value)) => {
                 self.queue_answered(client, &Ok(value));
             }

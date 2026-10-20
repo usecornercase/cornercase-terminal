@@ -100,6 +100,17 @@ fn encode(term: &mut Term, pane: u64, input: &Input, dims: (u16, u16)) -> Result
     Ok(out)
 }
 
+fn note_typed(term: &mut Term, events: &[InputEvent]) {
+    for event in events {
+        match event {
+            InputEvent::Key(key) => key.event().into_iter().for_each(|key| term.typed_key(key)),
+            InputEvent::Text(text) => term.typed_text(text),
+            InputEvent::Paste(text) => term.typed_paste(text),
+            InputEvent::Mouse(_) => {}
+        }
+    }
+}
+
 impl App {
     fn pane_mut(&mut self, pane: u64) -> Result<&mut Term, Refusal> {
         self.projects.pane_by_mut(pane).ok_or_else(|| none("pane", pane))
@@ -128,14 +139,7 @@ impl App {
         }
         if sent.typed {
             term.emulator.scroll_to_bottom();
-            for event in &input.events {
-                match event {
-                    InputEvent::Key(key) => key.event().into_iter().for_each(|key| term.typed_key(key)),
-                    InputEvent::Text(text) => term.typed_text(text),
-                    InputEvent::Paste(text) => term.typed_paste(text),
-                    InputEvent::Mouse(_) => {}
-                }
-            }
+            note_typed(term, &input.events);
         }
         let answer = Sent { pane, bytes: sent.bytes.len(), skipped: sent.skipped };
         Ok(Some(json(&answer)))

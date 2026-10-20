@@ -20,6 +20,7 @@ mod usage;
 mod wait;
 
 use std::collections::{HashMap, HashSet};
+use std::ops::ControlFlow;
 use std::time::{Duration, Instant, SystemTime};
 
 use ratatui::layout::Rect;
@@ -92,6 +93,11 @@ impl Requests {
         self.next
     }
 
+    fn push(&mut self, client: u64, key: u64, waits: Waits) {
+        let Waits { done, stage, timeout } = waits;
+        self.pending.push(Pending { client: Some(client), key, timeout, done, stage });
+    }
+
     fn take(&mut self, key: u64) -> Option<Pending> {
         let found = self.pending.iter().position(|p| p.key == key)?;
         Some(self.pending.remove(found))
@@ -127,6 +133,21 @@ impl Stage {
     fn launch(wait: Option<Condition>) -> Self {
         Self::Launch { confirm: None, wait }
     }
+
+    fn outlives_its_client(&self) -> bool {
+        !matches!(
+            self,
+            Self::Held(_)
+                | Self::Confirm(_)
+                | Self::Watch(_)
+                | Self::Several { .. }
+                | Self::Reading
+                | Self::Restart { .. }
+                | Self::Check
+                | Self::Issue(_)
+                | Self::Usage(_)
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -139,6 +160,20 @@ impl From<Option<u64>> for Asker {
     fn from(caller: Option<u64>) -> Self {
         Self { caller, view: None }
     }
+}
+
+#[derive(Clone, Copy)]
+pub(in crate::app) struct Asked {
+    pub(in crate::app) client: u64,
+    pub(in crate::app) asker: Asker,
+    pub(in crate::app) area: Option<Rect>,
+    pub(in crate::app) now: Instant,
+}
+
+struct Waits {
+    done: Done,
+    stage: Stage,
+    timeout: Option<(Instant, f64)>,
 }
 
 #[derive(Default)]
@@ -208,6 +243,30 @@ fn endings(value: &Value) -> String {
     panes.iter().map(|pane| format!("{}:{}", id(pane), ended(pane))).collect::<Vec<_>>().join(",")
 }
 
+fn log_request(client: u64, request: &Request) {
+    let command = request.command.name();
+    let level = if Command::chatty(command) { Level::Debug } else { Level::Info };
+    let mut fields = vec![("client", client.to_string())];
+    fields.extend(request.caller.map(|caller| ("caller", caller.to_string())));
+    fields.extend(request.view.map(|view| ("view", view.to_string())));
+    fields.extend(request.command.fields());
+    log::write_fields(level, "control", command, &fields);
+}
+
+fn log_answered(client: u64, at: Instant, command: &'static str, reply: &Reply) {
+    let ms = at.elapsed().as_millis();
+    match reply {
+        Ok(value) => {
+            let ended = endings(value);
+            let level = if Command::chatty(command) { Level::Debug } else { Level::Info };
+            log::event!(level, "control", "answered", client = client, command = command, ms = ms, ended = ended);
+        }
+        Err(message) => {
+            log::info!("control", "refused", client = client, command = command, ms = ms, error = message);
+        }
+    }
+}
+
 fn pane_ids(pane: u64) -> Done {
     Done { ids: Ids { pane: Some(pane), ..Ids::default() }, ..Done::default() }
 }
@@ -218,7 +277,10 @@ impl App {
         if parsed.structured {
             self.requests.structured.insert(client);
         }
-        self.run_request(client, parsed.request, text.len(), area, now);
+        if parsed.request.is_err() {
+            log::warning!("control", "unreadable request", client = client, bytes = text.len());
+        }
+        self.run_request(client, parsed.request, area, now);
     }
 
     fn unavailable(&self) -> &'static [(&'static str, &'static str)] {
@@ -229,25 +291,20 @@ impl App {
         &mut self,
         client: u64,
         request: Result<Request, Refusal>,
-        bytes: usize,
         area: Option<Rect>,
         now: Instant,
     ) {
         self.requests.open.push(client);
-        match &request {
-            Ok(request) => {
-                let command = request.command.name();
-                self.requests.asked.insert(client, (now, command));
-                let level = if Command::chatty(command) { Level::Debug } else { Level::Info };
-                let mut fields = vec![("client", client.to_string())];
-                fields.extend(request.caller.map(|caller| ("caller", caller.to_string())));
-                fields.extend(request.view.map(|view| ("view", view.to_string())));
-                fields.extend(request.command.fields());
-                log::write_fields(level, "control", command, &fields);
-            }
-            Err(_) => log::warning!("control", "unreadable request", client = client, bytes = bytes),
+        if let Ok(request) = &request {
+            self.requests.asked.insert(client, (now, request.command.name()));
+            log_request(client, request);
         }
-        match request.and_then(|request| self.handle_request(client, request, area, now)) {
+        let handled = request.and_then(|request| self.handle_request(client, request, area, now));
+        self.answer_handled(client, handled);
+    }
+
+    pub(in crate::app) fn answer_handled(&mut self, client: u64, handled: Handled) {
+        match handled {
             Ok(Some(value)) => self.refuse_or_answer(Some(client), Ok(value)),
             Ok(None) => {}
             Err(refusal) => self.refuse_or_answer(Some(client), Err(refusal)),
@@ -270,19 +327,7 @@ impl App {
     pub(crate) fn forget(&mut self, client: u64) {
         self.requests.open.retain(|open| *open != client);
         self.requests.structured.remove(&client);
-        if let Some(sending) = self.requests.todo_sends.remove(&client) {
-            let orphan = crate::app::todo_panel::CLIENTS + self.todo.next_client;
-            self.todo.next_client += 1;
-            let mut kept = false;
-            for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
-                pending.client = Some(orphan);
-                kept = true;
-            }
-            if kept {
-                self.requests.todo_sends.insert(orphan, sending);
-                self.todo.sending.insert(orphan, String::new());
-            }
-        }
+        self.orphan_todo_send(client);
         if let Some((at, command)) = self.requests.asked.remove(&client) {
             log::info!(
                 "control",
@@ -301,21 +346,22 @@ impl App {
         for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
             pending.client = None;
         }
-        self.requests.pending.retain(|p| {
-            p.client.is_some()
-                || !matches!(
-                    p.stage,
-                    Stage::Held(_)
-                        | Stage::Confirm(_)
-                        | Stage::Watch(_)
-                        | Stage::Several { .. }
-                        | Stage::Reading
-                        | Stage::Restart { .. }
-                        | Stage::Check
-                        | Stage::Issue(_)
-                        | Stage::Usage(_)
-                )
-        });
+        self.requests.pending.retain(|p| p.client.is_some() || p.stage.outlives_its_client());
+    }
+
+    fn orphan_todo_send(&mut self, client: u64) {
+        let Some(sending) = self.requests.todo_sends.remove(&client) else { return };
+        let orphan = crate::app::todo_panel::CLIENTS + self.todo.next_client;
+        self.todo.next_client += 1;
+        let mut kept = false;
+        for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
+            pending.client = Some(orphan);
+            kept = true;
+        }
+        if kept {
+            self.requests.todo_sends.insert(orphan, sending);
+            self.todo.sending.insert(orphan, String::new());
+        }
     }
 
     fn start_server_request(&mut self, client: u64, start: &StartServer) -> Handled {
@@ -340,23 +386,7 @@ impl App {
         let Some(client) = client else { return };
         let structured = self.requests.structured.remove(&client);
         let reply = match (self.requests.todo_sends.remove(&client), reply) {
-            (Some(sending), Ok(mut value)) => {
-                let editing = self.todo.field.as_ref().filter(|field| field.item == Some(sending.todo));
-                let same = self.todos.item(sending.todo).is_some_and(|item| !item.done && item.text == sending.text)
-                    && editing.is_none_or(|field| field.editor.text() == sending.text);
-                let checked = sending.confirmed && same;
-                if checked {
-                    self.todos.toggle(sending.todo);
-                }
-                if let Some(fields) = value.as_object_mut() {
-                    fields.insert("todo".into(), sending.todo.into());
-                    fields.insert("checked".into(), checked.into());
-                    if !sending.confirmed {
-                        fields.insert("unconfirmed".into(), true.into());
-                    }
-                }
-                Ok(value)
-            }
+            (Some(sending), Ok(value)) => Ok(self.todo_sent(&sending, value)),
             (_, reply) => reply,
         };
         let (code, reply) = match reply {
@@ -366,30 +396,9 @@ impl App {
         self.flow_answered(client, &reply);
         self.requests.open.retain(|open| *open != client);
         if let Some((at, command)) = self.requests.asked.remove(&client) {
-            let ms = at.elapsed().as_millis();
-            match &reply {
-                Ok(value) => {
-                    let ended = endings(value);
-                    let level = if Command::chatty(command) { Level::Debug } else { Level::Info };
-                    log::event!(
-                        level,
-                        "control",
-                        "answered",
-                        client = client,
-                        command = command,
-                        ms = ms,
-                        ended = ended
-                    );
-                }
-                Err(message) => {
-                    log::info!("control", "refused", client = client, command = command, ms = ms, error = message);
-                }
-            }
+            log_answered(client, at, command, &reply);
         }
-        if self.queue_answered(client, &reply) {
-            return;
-        }
-        if self.todo_answered(client, &reply) {
+        if self.queue_answered(client, &reply) || self.todo_answered(client, &reply) {
             return;
         }
         if client >= MESSENGER_CLIENTS {
@@ -402,7 +411,24 @@ impl App {
         }
     }
 
-    #[expect(clippy::too_many_lines, reason = "one arm per request")]
+    fn todo_sent(&mut self, sending: &Sending, mut value: Value) -> Value {
+        let editing = self.todo.field.as_ref().filter(|field| field.item == Some(sending.todo));
+        let same = self.todos.item(sending.todo).is_some_and(|item| !item.done && item.text == sending.text)
+            && editing.is_none_or(|field| field.editor.text() == sending.text);
+        let checked = sending.confirmed && same;
+        if checked {
+            self.todos.toggle(sending.todo);
+        }
+        if let Some(fields) = value.as_object_mut() {
+            fields.insert("todo".into(), sending.todo.into());
+            fields.insert("checked".into(), checked.into());
+            if !sending.confirmed {
+                fields.insert("unconfirmed".into(), true.into());
+            }
+        }
+        value
+    }
+
     fn handle_request(&mut self, client: u64, request: Request, area: Option<Rect>, now: Instant) -> Handled {
         if let Some(boot) = request.boot.as_deref().filter(|boot| *boot != control::server_token()) {
             return Err(stale_boot(boot));
@@ -412,56 +438,53 @@ impl App {
         self.check_view(&request)?;
         self.settle_views();
         let noted = self.flow_steps(caller, &request.command, now);
-        let handled = match request.command {
-            Command::Status(_) => Ok(Some(match asker.view.and_then(|view| self.view_report(view)) {
-                Some(report) => json(&report),
-                None => json(&self.report(caller)),
-            })),
-            Command::Stats(_) => Ok(Some(json(&self.stats_view(SystemTime::now())))),
-            Command::Contract(_) => Ok(Some(json(&contract::descriptor(self.unavailable())))),
-            Command::UpdateCheck(_) => {
-                self.update_check_request(client, now);
-                Ok(None)
-            }
-            Command::UpdateInstall(_) => self.update_install_request(client),
-            Command::Theme(theme) => self.theme_request(&theme),
-            Command::Go(go) => self.go_request(asker, &go),
-            Command::Config(config) => self.config_request(client, config),
-            Command::Changes(changes) => self.changes_request(client, asker, &changes),
-            Command::ChangesMode(mode) => self.changes_mode_request(client, &mode),
-            Command::ChangesFile(file) => self.changes_file_request(client, asker, &file, now),
-            Command::ChangesGap(gap) => self.changes_gap_request(client, asker, &gap, now),
-            Command::ChangesBase(base) => self.changes_base_request(client, asker, &base),
-            Command::ChangesViewed(viewed) => self.changes_viewed_request(asker, &viewed),
-            Command::StartServer(start) => self.start_server_request(client, &start),
+        let handled = match self.route(Asked { client, asker, area, now }, request.command) {
+            ControlFlow::Break(handled) => handled,
+            ControlFlow::Continue(command) => Err(malformed(format!("no area answers `{}`", command.name()))),
+        };
+        self.flow_requested(client, noted, handled.is_ok());
+        handled
+    }
+
+    fn route(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
+        let command = self.pane_requests(asked, command)?;
+        let command = self.row_requests(asked, command)?;
+        let command = self.stream_requests(asked, command)?;
+        let command = self.surface_requests(asked, command)?;
+        let command = self.changes_requests(asked, command)?;
+        let command = self.issue_requests(asked, command)?;
+        let command = self.flow_requests(asked, command)?;
+        let command = self.account_requests(asked, command)?;
+        self.server_requests(asked, command)
+    }
+
+    fn pane_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
+        let Asked { client, asker, area, now } = asked;
+        ControlFlow::Break(match command {
             Command::Open(open) => self.open_request(asker, &open, area),
             Command::NewWorkspace(new) => self.new_workspace_request(client, asker, new, area),
-            Command::NewTab(new) => self.new_tab_request(client, asker, new, area, now),
-            Command::Split(split) => self.split_request(client, asker, split, area, now),
-            Command::Start(start) | Command::StartWith(start) => self.start_request(client, asker, start, area, now),
+            Command::NewTab(new) => self.new_tab_request(asked, new),
+            Command::Split(split) => self.split_request(asked, split),
+            Command::Start(start) | Command::StartWith(start) => self.start_request(asked, start),
             Command::Send(send) => self.send_request(client, asker, send, now),
             Command::Keys(keys) => self.keys_request(asker, &keys, now),
             Command::Read(read) => self.read_request(asker, &read),
+            Command::LastMessage(last) => self.last_message_request(client, asker, &last),
             Command::Wait(wait) => self.wait_request(client, asker, wait, now),
             Command::WaitSeveral(wait) => self.wait_several_request(client, asker, wait, now),
+            Command::Mark(mark) => self.mark_request(asker, &mark),
+            Command::Notify(notify) => self.notify_request(&notify.text),
+            Command::Focus(focus) => self.focus_request(asker, focus.item),
+            other => return ControlFlow::Continue(other),
+        })
+    }
+
+    fn row_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
+        let Asked { client, asker, area, now } = asked;
+        ControlFlow::Break(match command {
             Command::Close(close) => self.close_request(client, &close),
             Command::Rename(rename) => self.rename_request(asker, rename),
-            Command::Focus(focus) => self.focus_request(asker, focus.item),
-            Command::Notify(notify) => self.notify_request(&notify.text),
-            Command::Todo(todo) => self.todo_request(todo),
-            Command::TodoSend(send) => self.todo_send_request(client, asker, &send, now),
-            Command::Queue(queue) => self.queue_request(client, caller, queue, area, now),
-            Command::Events(events) => self.events_request(client, events),
-            Command::Surface(surface) => self.surface_request(client, asker.view, &surface, now),
-            Command::Watch(_) => Ok(Some(json(&self.watch_snapshots(client, now)))),
-            Command::App(_) => Ok(Some(json(&self.app_snapshots(client, now)))),
-            Command::Input(input) => self.input_request(&input),
-            Command::Scroll(scroll) => self.scroll_request(&scroll),
-            Command::Selection(selection) => self.selection_request(&selection),
-            Command::Resize(resize) => self.resize_surface_request(&resize, now),
-            Command::Redraw(redraw) => self.redraw_surface_request(&redraw, now),
-            Command::Ratio(ratio) => self.ratio_request(&ratio, area),
-            Command::Link(at) => self.link_request(&at),
+            Command::RemovalCheck(check) => self.removal_check_request(client, &check),
             Command::Move(moving) => self.move_request(&moving),
             Command::MovePane(moving) => self.move_pane_request(&moving, area),
             Command::Collapse(fold) => self.fold_request("collapse", fold.item, true),
@@ -469,29 +492,73 @@ impl App {
             Command::GroupNew(new) => self.group_new_request(&new),
             Command::GroupStyle(style) => self.group_style_request(&style),
             Command::GroupDelete(delete) => self.group_delete_request(&delete),
-            Command::RemovalCheck(check) => self.removal_check_request(client, &check),
+            Command::Todo(todo) => self.todo_request(todo),
+            Command::TodoSend(send) => self.todo_send_request(client, asker, &send, now),
+            other => return ControlFlow::Continue(other),
+        })
+    }
+
+    fn stream_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
+        let Asked { client, asker, area, now } = asked;
+        ControlFlow::Break(match command {
+            Command::Status(_) => Ok(Some(self.status_value(asker))),
+            Command::Stats(_) => Ok(Some(json(&self.stats_view(SystemTime::now())))),
+            Command::Contract(_) => Ok(Some(json(&contract::descriptor(self.unavailable())))),
+            Command::Watch(_) => Ok(Some(json(&self.watch_snapshots(client, now)))),
+            Command::App(_) => Ok(Some(json(&self.app_snapshots(client, now)))),
+            Command::Events(events) => self.events_request(client, events),
+            Command::FlowRuns(_) => Ok(Some(json(&self.flow_runs_snapshots(client, now)))),
+            Command::Surface(surface) => self.surface_request(client, asker.view, &surface, now),
+            Command::View(open) => self.view_request(client, &open, area),
+            Command::ViewSet(set) => self.view_set_asked(asker, &set, area),
+            Command::Search(search) => self.search_request(client, &search.query),
+            other => return ControlFlow::Continue(other),
+        })
+    }
+
+    fn surface_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
+        let Asked { area, now, .. } = asked;
+        ControlFlow::Break(match command {
+            Command::Input(input) => self.input_request(&input),
+            Command::Scroll(scroll) => self.scroll_request(&scroll),
+            Command::Selection(selection) => self.selection_request(&selection),
+            Command::Resize(resize) => self.resize_surface_request(&resize, now),
+            Command::Redraw(redraw) => self.redraw_surface_request(&redraw, now),
+            Command::Ratio(ratio) => self.ratio_request(&ratio, area),
+            Command::Link(at) => self.link_request(&at),
+            other => return ControlFlow::Continue(other),
+        })
+    }
+
+    fn changes_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
+        let Asked { client, asker, now, .. } = asked;
+        ControlFlow::Break(match command {
+            Command::Changes(changes) => self.changes_request(client, asker, &changes),
+            Command::ChangesMode(mode) => self.changes_mode_request(client, &mode),
+            Command::ChangesFile(file) => self.changes_file_request(client, asker, &file, now),
+            Command::ChangesGap(gap) => self.changes_gap_request(client, asker, &gap, now),
+            Command::ChangesBase(base) => self.changes_base_request(client, asker, &base),
+            Command::ChangesViewed(viewed) => self.changes_viewed_request(asker, &viewed),
+            other => return ControlFlow::Continue(other),
+        })
+    }
+
+    fn issue_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
+        let Asked { client, asker, .. } = asked;
+        ControlFlow::Break(match command {
             Command::IssueSources(sources) => self.issue_sources_request(asker, &sources),
             Command::IssueList(list) => self.issue_list_request(client, asker, &list),
             Command::IssueRead(read) => self.issue_read_request(client, asker, &read),
             Command::IssuePeople(people) => self.issue_people_request(client, asker, &people),
-            Command::Usage(usage) => Ok(self.usage_request(client, &usage, now)),
-            Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),
-            Command::PluginActions(actions) => Ok(Some(self.plugin_actions_request(&actions))),
-            Command::PluginRun(run) => self.plugin_run_request(client, &run),
-            Command::AccountList(list) => Ok(self.account_list_request(client, &list)),
-            Command::ProfileList(_) => Ok(Some(json(&self.accounts_info(None)))),
-            Command::AccountAdd(add) => self.account_add_request(asker, &add, area, now),
-            Command::AccountRemove(remove) => self.account_remove_request(&remove),
-            Command::ProfileNew(new) => self.profile_new_request(&new),
-            Command::ProfileSet(set) => self.profile_set_request(&set),
-            Command::ProfileUse(wanted) => self.profile_use_request(&wanted),
-            Command::ProfileDelete(delete) => self.profile_delete_request(&delete),
-            Command::AccountRename(rename) => self.account_rename_request(&rename),
-            Command::AccountUse(chosen) => self.account_use_request(&chosen),
-            Command::LastMessage(last) => self.last_message_request(client, asker, &last),
-            Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
-            Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),
-            Command::Mark(mark) => self.mark_request(asker, &mark),
+            Command::Queue(queue) => self.queue_request(asked, queue),
+            other => return ControlFlow::Continue(other),
+        })
+    }
+
+    fn flow_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
+        let Asked { client, asker, area, .. } = asked;
+        let caller = asker.caller;
+        ControlFlow::Break(match command {
             Command::FlowList(list) => self.flow_list_request(caller, &list),
             Command::FlowRun(run) => self.flow_run_request(client, caller, run, area),
             Command::FlowExport(export) => self.flow_export_request(caller, &export),
@@ -500,35 +567,77 @@ impl App {
             Command::FlowDelete(delete) => self.flow_delete_request(caller, &delete),
             Command::FlowHide(hide) => self.flow_hide_request(&hide),
             Command::FlowRestore(restore) => self.flow_restore_request(&restore),
-            Command::FlowRuns(_) => Ok(Some(json(&self.flow_runs_snapshots(client, now)))),
             Command::FlowMessages(messages) => self.flow_messages_request(client, caller, &messages),
             Command::FlowFiles(files) => self.flow_files_request(client, caller, &files),
-            Command::Search(search) => self.search_request(client, &search.query),
-            Command::View(open) => self.view_request(client, &open, area),
-            Command::ViewSet(set) => match asker.view {
-                Some(view) => self.view_set_request(view, &set, area),
-                None => Err(Refusal::new(Code::Malformed, "`view-set` needs the view to change: pass --view")),
-            },
-        };
-        self.flow_requested(client, noted, handled.is_ok());
-        handled
+            other => return ControlFlow::Continue(other),
+        })
     }
 
-    fn launch_within(
-        &mut self,
-        client: u64,
-        done: Done,
-        launch: Option<Launch>,
-        stage: Stage,
-        timeout: Option<(Instant, f64)>,
-    ) -> Option<Value> {
-        let Some(mut launch) = launch else { return Some(json(&done)) };
+    fn account_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
+        let Asked { client, asker, area, now } = asked;
+        ControlFlow::Break(match command {
+            Command::AccountList(list) => Ok(self.account_list_request(client, &list)),
+            Command::AccountAdd(add) => self.account_add_request(asker, &add, area, now),
+            Command::AccountRemove(remove) => self.account_remove_request(&remove),
+            Command::AccountRename(rename) => self.account_rename_request(&rename),
+            Command::AccountUse(chosen) => self.account_use_request(&chosen),
+            Command::ProfileList(_) => Ok(Some(json(&self.accounts_info(None)))),
+            Command::ProfileNew(new) => self.profile_new_request(&new),
+            Command::ProfileSet(set) => self.profile_set_request(&set),
+            Command::ProfileUse(wanted) => self.profile_use_request(&wanted),
+            Command::ProfileDelete(delete) => self.profile_delete_request(&delete),
+            other => return ControlFlow::Continue(other),
+        })
+    }
+
+    fn server_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
+        let Asked { client, asker, now, .. } = asked;
+        ControlFlow::Break(match command {
+            Command::Config(config) => self.config_request(client, config),
+            Command::Theme(theme) => self.theme_request(&theme),
+            Command::Go(go) => self.go_request(asker, &go),
+            Command::UpdateCheck(_) => {
+                self.update_check_request(client, now);
+                Ok(None)
+            }
+            Command::UpdateInstall(_) => self.update_install_request(client),
+            Command::RestartWhenIdle(restart) => self.restart_request(client, asker.caller, &restart, now),
+            Command::StartServer(start) => self.start_server_request(client, &start),
+            Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),
+            Command::Usage(usage) => Ok(self.usage_request(client, &usage, now)),
+            Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),
+            Command::PluginActions(actions) => Ok(Some(self.plugin_actions_request(&actions))),
+            Command::PluginRun(run) => self.plugin_run_request(client, &run),
+            other => return ControlFlow::Continue(other),
+        })
+    }
+
+    fn status_value(&self, asker: Asker) -> Value {
+        match asker.view.and_then(|view| self.view_report(view)) {
+            Some(report) => json(&report),
+            None => json(&self.report(asker.caller)),
+        }
+    }
+
+    fn view_set_asked(&mut self, asker: Asker, set: &control::SetView, area: Option<Rect>) -> Handled {
+        match asker.view {
+            Some(view) => self.view_set_request(view, set, area),
+            None => Err(malformed("`view-set` needs the view to change: pass --view")),
+        }
+    }
+
+    fn launch_within(&mut self, client: u64, launch: Option<Launch>, waits: Waits) -> Option<Value> {
+        let Some(mut launch) = launch else { return Some(json(&waits.done)) };
         let key = self.requests.key();
         launch.key = Some(key);
         launch.trust = self.queued.running.contains_key(&client).then_some(agents::launch::Trust::Accepted);
         self.agents.launches.push(launch);
-        self.requests.pending.push(Pending { client: Some(client), key, timeout, done, stage });
+        self.requests.push(client, key, waits);
         None
+    }
+
+    fn show_if(&mut self, view: Option<u64>, focus: bool, item: Item) -> Result<Option<u64>, Refusal> {
+        if focus { self.show_to(view, item) } else { Ok(None) }
     }
 
     fn runs_agent(&self, term: &Term) -> bool {

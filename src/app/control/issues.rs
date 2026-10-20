@@ -4,7 +4,7 @@ use std::time::Instant;
 use ratatui::layout::Rect;
 
 use super::create::Within;
-use super::{Asker, Handled, NO_PROJECT, Pending, Stage, conflict, json, malformed, none};
+use super::{Asked, Asker, Handled, NO_PROJECT, Pending, Stage, conflict, json, malformed, none};
 use crate::accounts::Accounts;
 use crate::agents;
 use crate::app::App;
@@ -585,11 +585,7 @@ impl App {
             Ok(issue) => self.issue_found(client, asker, then, &issue, area, pending.timeout),
             Err(error) => Err(failed(error.to_string())),
         };
-        match reply {
-            Ok(Some(value)) => self.refuse_or_answer(Some(client), Ok(value)),
-            Ok(None) => {}
-            Err(refusal) => self.refuse_or_answer(Some(client), Err(refusal)),
-        }
+        self.answer_handled(client, reply);
     }
 
     fn issue_found(
@@ -638,7 +634,11 @@ impl App {
                     branch = branch,
                     in_a_tab = !root,
                 );
-                self.start_within(client, asker, start, Some(area), Instant::now(), Within { timeout, named, accounts })
+                self.start_within(
+                    Asked { client, asker, area: Some(area), now: Instant::now() },
+                    &start,
+                    Within { timeout, named, accounts },
+                )
             }
             AfterIssue::Flow { project, starting } => {
                 let mut starting = *starting;

@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use super::idle_restart::INPUT_HOLDS;
 use super::wait::Condition;
-use super::{Pending, Stage, json, pane_ids};
+use super::{Pending, Stage, Waits, json};
 use crate::app::App;
 use crate::log;
 use crate::project::Hierarchy;
@@ -121,19 +121,11 @@ impl App {
         self.blocked(pane, now).or_else(|| (self.held_sends(pane) > 0).then_some(Why::Earlier))
     }
 
-    pub(super) fn hold(
-        &mut self,
-        client: u64,
-        pane: u64,
-        held: Held,
-        timeout: Option<(Instant, f64)>,
-        now: Instant,
-    ) -> Option<serde_json::Value> {
+    pub(super) fn hold(&mut self, client: u64, pane: u64, waits: Waits, now: Instant) -> Option<serde_json::Value> {
         let why = self.holding_back(pane, now).map_or("earlier", Why::name);
         log::info!("control", "send held", pane = pane, why = why, waiting = self.held_sends(pane) + 1);
         let key = self.requests.key();
-        let stage = Stage::Held(Box::new(held));
-        self.requests.pending.push(Pending { client: Some(client), key, timeout, done: pane_ids(pane), stage });
+        self.requests.push(client, key, waits);
         None
     }
 

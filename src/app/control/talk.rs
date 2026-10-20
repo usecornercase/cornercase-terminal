@@ -4,7 +4,7 @@ use crossterm::event::KeyCode;
 
 use super::held::Held;
 use super::wait::Condition;
-use super::{Asker, Handled, Pending, Stage, deadline, json, none, pane_ids};
+use super::{Asker, Handled, Pending, Stage, Waits, deadline, json, none, pane_ids};
 use crate::agents;
 use crate::agents::activity::{self, Status};
 use crate::agents::context;
@@ -55,11 +55,14 @@ impl App {
         }
         let held = Held { text, enter: send.enter, wait, from: asker.caller, force: send.force };
         if (!send.force && self.holding_back(pane, now).is_some()) || (send.force && self.sending(pane)) {
-            return Ok(self.hold(client, pane, held, timeout, now));
+            let waits = Waits { done: pane_ids(pane), stage: Stage::Held(Box::new(held)), timeout };
+            return Ok(self.hold(client, pane, waits, now));
         }
         Ok(match self.put_through(pane, held, now)? {
             None => Some(json(&pane_ids(pane))),
-            Some((launch, stage)) => self.launch_within(client, pane_ids(pane), Some(launch), stage, timeout),
+            Some((launch, stage)) => {
+                self.launch_within(client, Some(launch), Waits { done: pane_ids(pane), stage, timeout })
+            }
         })
     }
 

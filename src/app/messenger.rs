@@ -366,7 +366,7 @@ impl App {
         let client = CLIENTS + offset + messenger.next_client;
         messenger.asked.insert(client, asked);
         let request = Request { caller: None, server: None, contract: None, boot: None, view: None, command };
-        self.run_request(client, Ok(request), 0, area, Instant::now());
+        self.run_request(client, Ok(request), area, Instant::now());
     }
 
     pub(in crate::app) fn chat_answered(&mut self, client: u64, reply: Result<Value, String>) {
