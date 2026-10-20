@@ -291,7 +291,7 @@ fn a_local_command_needs_no_record(app: &mut App, rx: &Receiver<AppEvent>, text:
 }
 
 fn an_unconfirmed_send_gives_up(app: &mut App, rx: &Receiver<AppEvent>) {
-    app.clients.confirm_within = Duration::from_millis(300);
+    app.clients.set_confirm_within(Duration::from_millis(300));
     send_enter(app, "fix the login");
     let message = error(answered(app, rx, "the send gives up"));
     assert!(message.contains("not confirmed"), "{message}");

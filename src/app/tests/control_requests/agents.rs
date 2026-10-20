@@ -183,7 +183,7 @@ fn send_refuses_an_agent_showing_a_panel_and_says_when_a_forced_prompt_was_not_t
 
     let shown = in_status(&mut agent.app, id).dialog;
     let refused = error(now(&mut agent.app, None, send_text(id, "next step", true, false)));
-    agent.app.clients.confirm_within = Duration::from_millis(300);
+    agent.app.clients.set_confirm_within(Duration::from_millis(300));
     let forced = wire::SendText {
         pane: Some(id),
         text: Some("next step".into()),

@@ -71,8 +71,8 @@ pub(super) struct Clients {
     pub(super) change_streams: changes_panel::Streams,
     pub(super) surfaces: surfaces::Surfaces,
     pub(super) views: views::Views,
-    pub(super) confirm_within: Duration,
-    pub(super) typing_holds: Duration,
+    confirm_within: Duration,
+    typing_holds: Duration,
 }
 
 impl Default for Clients {
@@ -86,6 +86,17 @@ impl Default for Clients {
             confirm_within: CONFIRM_WITHIN,
             typing_holds: INPUT_HOLDS,
         }
+    }
+}
+
+#[cfg(test)]
+impl Clients {
+    pub(super) fn set_confirm_within(&mut self, within: Duration) {
+        self.confirm_within = within;
+    }
+
+    pub(super) fn set_typing_holds(&mut self, holds: Duration) {
+        self.typing_holds = holds;
     }
 }
 
