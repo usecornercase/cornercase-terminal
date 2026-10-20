@@ -6,6 +6,18 @@ use crate::host::theme::HostTheme;
 use crate::log;
 use crate::project::Hierarchy;
 
+pub(super) struct Themes {
+    pub(super) theme: HostTheme,
+    pub(super) window_theme: bool,
+    pub(super) client_theme: Option<HostTheme>,
+}
+
+impl Themes {
+    pub(super) fn new(theme: HostTheme) -> Self {
+        Self { theme, window_theme: false, client_theme: None }
+    }
+}
+
 impl App {
     pub(super) fn terminal_theme(&self) -> &HostTheme {
         self.themes.client_theme.as_ref().unwrap_or(&self.themes.theme)

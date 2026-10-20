@@ -7,7 +7,6 @@ use ratatui::layout::Position;
 use crate::agents::usage;
 use crate::changes;
 use crate::files;
-use crate::host::theme::HostTheme;
 use crate::state;
 use crate::todo::{self, Todos};
 use crate::ui;
@@ -85,18 +84,6 @@ impl Paths {
             config_path,
             home,
         }
-    }
-}
-
-pub(super) struct Themes {
-    pub(super) theme: HostTheme,
-    pub(super) window_theme: bool,
-    pub(super) client_theme: Option<HostTheme>,
-}
-
-impl Themes {
-    pub(super) fn new(theme: HostTheme) -> Self {
-        Self { theme, window_theme: false, client_theme: None }
     }
 }
 
