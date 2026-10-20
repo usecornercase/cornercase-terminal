@@ -10,7 +10,7 @@ If you have two accounts of one agent, say a work and a personal Claude Code sub
 
 - An **account** is a folder of its own in which the agent keeps its login. cornercase hands the folder to the agent through the variable it already reads: `CLAUDE_CONFIG_DIR` for Claude Code, `CODEX_HOME` for Codex, `GEMINI_CLI_HOME` for Gemini CLI.
 - Each agent also has its **own login**, the usual one in `~/.claude`, `~/.codex` or `~/.gemini`, called *System* until you give it a name.
-- **Each pane has its own accounts**, shown in a row under it. A new tab or a split takes the accounts of the pane it comes from, and you change a pane's account from its row: an agent [restarts on it](#restart-open-agents-on-another-account), in the same conversation.
+- **Each pane has its own accounts**, shown in a row under it. A new tab or a split takes the accounts of the pane it comes from, and you change a pane's account from its row: an agent [restarts on it](#restart-open-agents-on-another-account), in the same conversation (Gemini CLI in a new one).
 - Each agent also has a **default** account, the one a new workspace, a new project and a script run outside cornercase start with.
 
 cornercase never reads, copies or refreshes a token: you log in with the agent itself, in its account's folder.
@@ -74,7 +74,7 @@ Once you have an account, every pane gives its last row to its accounts, under i
 
 Click a button to see that agent's own login and accounts, the pane's with a check mark, and click another:
 
-- **An agent** [restarts on it](#restart-open-agents-on-another-account) in the same pane and conversation, at once if it is idle, else once its turn is over (` restarts on personal after this turn `, with ` cancel `). Clicking the account it still runs on cancels a waiting restart, and a third account changes where it goes.
+- **An agent** [restarts on it](#restart-open-agents-on-another-account) in the same pane and conversation (Gemini CLI in a new one), at once if it is idle, else once its turn is over (` restarts on personal after this turn `, with ` cancel `). Clicking the account it still runs on cancels a waiting restart, and a third account changes where it goes.
 - **A shell at its prompt** starts again in the same place and folder with that account, so the `claude` you type next uses it. Nothing is typed into it; what you ran in it before is gone from its history.
 - **A pane running another program** (`vim`, or an agent without accounts) shows its buttons dimmed, and their menu says why nothing can change: `stop vim first`. An agent of a [flow](../flows/), one whose folder variable you set yourself (`custom`), and a pane still being set up or resuming keep their buttons as they are, but their menu also says why nothing can change, and its accounts cannot be picked.
 
@@ -100,7 +100,7 @@ cornercase account use claude --system   # back to its own login
 
 ### Another account once
 
-To start one agent with another account without changing the default, pick it in the account list that opens when you [start an issue](../issues-and-agents/) (or ahead with **account…** on its page), in the agent's account list when you start [a flow](../flows/) (one list per agent of the team that has accounts), or in the **Account** list beside the agent when you [schedule](../queue/) one. Each starts on the default account. From the command line, `--account AGENT=ACCOUNT` (once per agent; `AGENT=` is its own login):
+To start one agent with another account without changing the default, pick it in the account list that opens when you [start an issue](../issues-and-agents/) (or ahead with **account…** on its page), in the agent's account list when you start [a flow](../flows/) (one list per agent of the team that has accounts), or in the **Account** list beside the agent when you [schedule](../queue/) one. Each starts on the default account, except a flow's lists when you start the flow from an issue, which start on the account you picked for the issue. From the command line, `--account AGENT=ACCOUNT` (once per agent; `AGENT=` is its own login):
 
 ```sh
 cornercase start claude --account claude=personal --prompt 'fix the tests'
@@ -109,7 +109,7 @@ cornercase flow run 'Full issue' --account claude=personal --prompt 'add gift ca
 cornercase queue add --at 18:00 --prompt 'update the docs' --account claude=personal
 ```
 
-If the account you picked is removed before the agent starts, nothing starts: the issue's and the flow's dialogs say so, and a scheduled agent fails when its time comes and says why. A scheduled agent with no account picked starts with the default at that moment. A flow's team keeps the accounts it started with if you change the default while it runs.
+If the account you picked is removed before the agent starts, nothing starts: the issue's and the flow's dialogs say so, and a scheduled agent fails when its time comes and says why. The schedule form keeps the account its list shows, the default when you saved it unless you picked another, even if the default changes later; only an entry added with `cornercase queue add` without `--account` starts with the default at that moment. A flow's team keeps the accounts it started with if you change the default while it runs.
 
 ### Profiles, for scripts
 
