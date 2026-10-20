@@ -28,7 +28,8 @@ pub(super) fn hovered_at(hover: Option<Position>, r: Rect) -> bool {
     hover.is_some_and(|p| r.contains(p))
 }
 
-pub(super) fn put(buf: &mut Buffer, x: u16, y: u16, text: &str, style: Style, end: u16) -> u16 {
+pub(super) fn put(buf: &mut Buffer, at: impl Into<Position>, text: &str, style: Style, end: u16) -> u16 {
+    let Position { x, y } = at.into();
     if x >= end {
         return x;
     }
@@ -38,7 +39,7 @@ pub(super) fn put(buf: &mut Buffer, x: u16, y: u16, text: &str, style: Style, en
 pub(super) fn draw_close(buf: &mut Buffer, r: Rect, hover: Option<Position>, muted: Color) {
     let style =
         if hovered_at(hover, r) { Style::default().fg(Color::Red).add_modifier(Modifier::BOLD) } else { dim(muted) };
-    put(buf, r.x + 1, r.y, "×", style, r.right());
+    put(buf, (r.x + 1, r.y), "×", style, r.right());
 }
 
 pub(super) fn action_style(lit: bool) -> Style {

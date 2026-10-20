@@ -307,7 +307,7 @@ pub(crate) fn draw_scrolled(buf: &mut Buffer, area: Rect, diagram: &Diagram, scr
 fn markers(buf: &mut Buffer, area: Rect, muted: Color, scroll: u16, total: u16) {
     let more = |buf: &mut Buffer, y: u16, text: &str| {
         let x = area.right().saturating_sub(u16::try_from(text::cells(text)).unwrap_or(0));
-        put(buf, x, y, text, dim(muted), area.right());
+        put(buf, (x, y), text, dim(muted), area.right());
     };
     if scroll > 0 && area.height > 0 {
         more(buf, area.y, MORE_ABOVE);
@@ -374,10 +374,10 @@ pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Positio
     let buf = f.buffer_mut();
     let row = header(area);
     let name = text::truncate_cells(&view.name, usize::from(row.width.saturating_sub(4)));
-    put(buf, row.x, row.y, &name, Style::default().add_modifier(Modifier::BOLD), row.right());
+    put(buf, (row.x, row.y), &name, Style::default().add_modifier(Modifier::BOLD), row.right());
     draw_close(buf, close(area), hover, view.diagram.muted);
     let task = text::truncate_cells(view.task.lines().next().unwrap_or_default(), usize::from(row.width));
-    put(buf, row.x, row.y + 1, &task, dim(view.diagram.muted), row.right().min(area.right()));
+    put(buf, (row.x, row.y + 1), &task, dim(view.diagram.muted), row.right().min(area.right()));
     let body = body(area);
     let scroll = scrolled(area, view, 0);
     let hover = hover.filter(|p| body.contains(*p));

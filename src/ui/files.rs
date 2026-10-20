@@ -392,7 +392,7 @@ pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Positio
             draw_title(buf, area, view);
             cursor = draw_bar(buf, area, view, hover);
             let note = Rect { y: p.info.y + 1, ..p.info }.intersection(area);
-            put(buf, note.x + 1, note.y, &search.note, dim(view.muted), note.right());
+            put(buf, (note.x + 1, note.y), &search.note, dim(view.muted), note.right());
             draw_found(buf, area, view, search, hover);
         }
         Screen::File(file) => {
@@ -410,8 +410,8 @@ fn draw_title(buf: &mut Buffer, area: Rect, view: &View) {
     let row = parts(area).title;
     let end = close(area).x.saturating_sub(1);
     let style = super::tab_style(true, false, super::surface_colour(view.light), view.muted);
-    let x = put(buf, row.x, row.y, &format!(" {LABEL} "), style, end) + 1;
-    put(buf, x, row.y, &truncate_left(&view.root, usize::from(end.saturating_sub(x))), dim(view.muted), end);
+    let x = put(buf, (row.x, row.y), &format!(" {LABEL} "), style, end) + 1;
+    put(buf, (x, row.y), &truncate_left(&view.root, usize::from(end.saturating_sub(x))), dim(view.muted), end);
 }
 
 fn draw_bar(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>) -> Option<Position> {
@@ -430,22 +430,22 @@ fn draw_bar(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>) 
     } else {
         dim(view.muted)
     };
-    put(buf, mode.x, mode.y, &format!(" {} ", view.glyphs.names), style, mode.right());
+    put(buf, (mode.x, mode.y), &format!(" {} ", view.glyphs.names), style, mode.right());
     let x = clear(area);
     let style =
         if hovered(hover, x) { Style::default().fg(Color::Red).add_modifier(Modifier::BOLD) } else { dim(view.muted) };
     if !bar.query.is_empty() {
-        put(buf, x.x + 1, x.y, "×", style, x.right());
+        put(buf, (x.x + 1, x.y), "×", style, x.right());
     }
     let accent = if bar.focused { Color::Cyan } else { view.muted };
-    let start = put(buf, row.x + 1, row.y, view.glyphs.search, Style::default().fg(accent), x.x) + 1;
+    let start = put(buf, (row.x + 1, row.y), view.glyphs.search, Style::default().fg(accent), x.x) + 1;
     let room = usize::from(x.x.saturating_sub(start + 1));
     if bar.query.is_empty() {
         let placeholder = if names { NAME_PLACEHOLDER } else { TEXT_PLACEHOLDER };
-        put(buf, start, row.y, &truncate_right(placeholder, room), dim(view.muted), x.x);
+        put(buf, (start, row.y), &truncate_right(placeholder, room), dim(view.muted), x.x);
     }
     let query = truncate_left(&bar.query, room);
-    let end = put(buf, start, row.y, &query, Style::default().add_modifier(Modifier::BOLD), x.x);
+    let end = put(buf, (start, row.y), &query, Style::default().add_modifier(Modifier::BOLD), x.x);
     (bar.focused && end < x.x).then_some(Position::new(end, row.y))
 }
 
@@ -485,7 +485,7 @@ fn draw_found(buf: &mut Buffer, area: Rect, view: &View, search: &SearchView, ho
         let r = Rect::new(body.x, y, body.width, 1);
         if search.selected == Some(i) {
             buf.set_style(r, Style::default().bg(super::surface_colour(view.light)));
-            put(buf, r.x, r.y, "▌", Style::default().fg(Color::Cyan), r.right());
+            put(buf, (r.x, r.y), "▌", Style::default().fg(Color::Cyan), r.right());
         } else if row.selectable() && hovered(hover, r) {
             buf.set_style(r, Style::default().bg(super::hover_colour(view.light)));
         }
@@ -504,10 +504,10 @@ fn draw_found(buf: &mut Buffer, area: Rect, view: &View, search: &SearchView, ho
                     *style = style.add_modifier(Modifier::BOLD);
                 }
                 draw_code(buf, view, Rect::new(r.x + 2, y, end.saturating_sub(r.x + 2), 1), &segments);
-                put(buf, end + 1, y, &count, dim(view.muted), r.right());
+                put(buf, (end + 1, y), &count, dim(view.muted), r.right());
             }
             Found::Line { number, text, ranges, .. } => {
-                let x = put(buf, r.x + 2, y, &format!("{number:>5}"), dim(view.muted), r.right()) + 2;
+                let x = put(buf, (r.x + 2, y), &format!("{number:>5}"), dim(view.muted), r.right()) + 2;
                 let room = usize::from(r.right().saturating_sub(x + 1));
                 let skip =
                     ranges.first().filter(|first| first.end > room).map_or(0, |first| first.start.saturating_sub(8));
@@ -544,7 +544,7 @@ fn draw_tree(buf: &mut Buffer, area: Rect, view: &View, tree: &TreeView, hover: 
     let body = parts(area).body;
     if tree.rows.is_empty() {
         let text = if tree.loading { LOADING } else { EMPTY };
-        put(buf, body.x + 2, body.y, text, dim(view.muted), body.right());
+        put(buf, (body.x + 2, body.y), text, dim(view.muted), body.right());
         return;
     }
     let shown = tree.rows.iter().skip(first(area, view)).zip(body.y..body.bottom());
@@ -553,13 +553,13 @@ fn draw_tree(buf: &mut Buffer, area: Rect, view: &View, tree: &TreeView, hover: 
         let last = tree.last.as_deref() == Some(row.path.as_str());
         if last {
             buf.set_style(r, Style::default().bg(super::surface_colour(view.light)));
-            put(buf, r.x, r.y, "▌", Style::default().fg(Color::Cyan), r.right());
+            put(buf, (r.x, r.y), "▌", Style::default().fg(Color::Cyan), r.right());
         } else if hovered(hover, r) {
             buf.set_style(r, Style::default().bg(super::hover_colour(view.light)));
         }
         let x = r.x + 2 + 2 * row.depth;
         if row.dir {
-            put(buf, x, r.y, if row.open { "▾" } else { "▸" }, dim(view.muted), r.right());
+            put(buf, (x, r.y), if row.open { "▾" } else { "▸" }, dim(view.muted), r.right());
         }
         let end = r.right().saturating_sub(4);
         let colour = row.status.map_or(Color::Reset, status_colour);
@@ -568,10 +568,10 @@ fn draw_tree(buf: &mut Buffer, area: Rect, view: &View, tree: &TreeView, hover: 
             style = style.add_modifier(Modifier::BOLD);
         }
         let name = truncate_right(&row.name, usize::from(end.saturating_sub(x + 2)));
-        put(buf, x + 2, r.y, &name, style, end);
+        put(buf, (x + 2, r.y), &name, style, end);
         if let Some(status) = row.status {
             let mark = if row.dir { "●" } else { status.letter() };
-            put(buf, end + 1, r.y, mark, Style::default().fg(colour), r.right());
+            put(buf, (end + 1, r.y), mark, Style::default().fg(colour), r.right());
         }
     }
 }
@@ -580,19 +580,19 @@ fn draw_header(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover
     let p = parts(area);
     let b = back(area);
     let style = if hovered(hover, b) { action_style(true) } else { Style::default().fg(Color::Cyan) };
-    put(buf, b.x, b.y, " ‹ ", style, b.right());
+    put(buf, (b.x, b.y), " ‹ ", style, b.right());
     let start = b.right() + 1;
     let full = full_screen_button(area);
     let end = full.x.saturating_sub(1);
     let shown = truncate_left(&file.path, usize::from(end.saturating_sub(start)));
     let split = shown.rfind('/').map_or(0, |i| i + 1);
     let (folder, name) = shown.split_at(split);
-    let x = put(buf, start, b.y, folder, dim(view.muted), end);
-    put(buf, x, b.y, name, Style::default().fg(Color::Reset).add_modifier(Modifier::BOLD), end);
+    let x = put(buf, (start, b.y), folder, dim(view.muted), end);
+    put(buf, (x, b.y), name, Style::default().fg(Color::Reset).add_modifier(Modifier::BOLD), end);
     let glyph = if file.full_screen { view.glyphs.restore } else { view.glyphs.full_screen };
     let style =
         if file.full_screen || hovered(hover, full) { Style::default().fg(Color::Cyan) } else { dim(view.muted) };
-    put(buf, full.x + 1, full.y, glyph, style, full.right());
+    put(buf, (full.x + 1, full.y), glyph, style, full.right());
     let buttons = file.actions(p.info);
     let end = buttons.first().map_or(p.info.right(), |(_, r)| r.x.saturating_sub(1));
     let (texts, style) = match file.selection {
@@ -607,9 +607,9 @@ fn draw_header(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover
     let room = usize::from(end.saturating_sub(start));
     let fitting = texts.iter().find(|t| t.chars().count() <= room).or(texts.last());
     let text = truncate_right(fitting.map_or("", String::as_str), room);
-    put(buf, start, p.info.y, &text, style, end);
+    put(buf, (start, p.info.y), &text, style, end);
     for (action, r) in buttons {
-        put(buf, r.x, r.y, &format!(" {} ", action.label()), action_style(hovered(hover, r)), r.right());
+        put(buf, (r.x, r.y), &format!(" {} ", action.label()), action_style(hovered(hover, r)), r.right());
     }
 }
 
@@ -665,7 +665,7 @@ fn draw_file(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover: 
         Some(Body::Text { .. }) => None,
     };
     if let Some(note) = note {
-        put(buf, body.x + 2, body.y, &note, dim(view.muted), body.right());
+        put(buf, (body.x + 2, body.y), &note, dim(view.muted), body.right());
         return;
     }
     let Some(content) = &file.content else { return };
@@ -686,7 +686,7 @@ fn draw_file(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover: 
                 } else {
                     dim(view.muted)
                 };
-                put(buf, r.x + 1, y, &format!("{n:>digits$}"), style, mark_x);
+                put(buf, (r.x + 1, y), &format!("{n:>digits$}"), style, mark_x);
                 if let Some(mark) = file.gutter.as_ref().and_then(|g| g.mark(n)) {
                     let (glyph, colour) = match mark {
                         Mark::Added => ("▎", Color::Green),
@@ -694,7 +694,7 @@ fn draw_file(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover: 
                         Mark::Deleted => ("▁", Color::Red),
                         Mark::DeletedAbove => ("▔", Color::Red),
                     };
-                    put(buf, mark_x, y, glyph, Style::default().fg(colour), r.right());
+                    put(buf, (mark_x, y), glyph, Style::default().fg(colour), r.right());
                 }
                 let index = usize::try_from(n).unwrap_or(usize::MAX) - 1;
                 let text = &content.lines()[index];
@@ -708,7 +708,7 @@ fn draw_file(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover: 
                 if let Some(tint) = view.tint {
                     buf.set_style(r, Style::default().bg(tint));
                 }
-                put(buf, mark_x, y, "-", Style::default().fg(Color::Red), r.right());
+                put(buf, (mark_x, y), "-", Style::default().fg(Color::Red), r.right());
                 let text = lines.removed(key, k).unwrap_or_default();
                 let segments: Segments = vec![(text.to_string(), Style::default().fg(Color::Red))];
                 draw_code(buf, view, Rect::new(mark_x + 2, y, r.right().saturating_sub(mark_x + 2), 1), &segments);
@@ -763,10 +763,10 @@ fn draw_code(buf: &mut Buffer, view: &View, r: Rect, segments: &[(String, Style)
         let piece: String = text.chars().take(left).collect();
         left -= piece.chars().count();
         let style = if style.fg == Some(Color::DarkGray) { style.fg(view.muted) } else { *style };
-        x = put(buf, x, r.y, &piece, style, end);
+        x = put(buf, (x, r.y), &piece, style, end);
     }
     if total > room {
-        put(buf, x, r.y, "…", dim(view.muted), end + 1);
+        put(buf, (x, r.y), "…", dim(view.muted), end + 1);
     }
 }
 
