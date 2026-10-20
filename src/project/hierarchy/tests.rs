@@ -37,53 +37,82 @@ mod lookups {
         let projects = hierarchy();
         for (project, workspace, tab, pane, position) in [(10, 14, 17, 19, (0, 1, 1)), (20, 21, 22, 23, (1, 0, 0))] {
             let (p, w, t) = position;
-            assert_eq!(projects.project_index(project), Some(p));
-            assert_eq!(projects.workspace_index(workspace), Some((p, w)));
-            assert_eq!(projects.workspace_in(project, workspace), Some((p, w)));
-            assert_eq!(projects.tab_index(tab), Some(position));
-            assert_eq!(projects.tab_in(project, workspace, tab), Some(position));
-            assert_eq!(projects.tab_of_pane(pane), Some(position));
-            assert_eq!(projects.pane_by(pane).map(|p| p.id), Some(pane));
+            assert_eq!(
+                (
+                    projects.project_index(project),
+                    projects.workspace_index(workspace),
+                    projects.workspace_in(project, workspace),
+                    projects.tab_index(tab),
+                    projects.tab_in(project, workspace, tab),
+                    projects.tab_of_pane(pane),
+                ),
+                (Some(p), Some((p, w)), Some((p, w)), Some(position), Some(position), Some(position))
+            );
             let (path, found) = projects.tab_with_pane(pane).expect("tab and workspace folder");
-            assert_eq!(path, projects[p].workspaces[w].path);
-            assert_eq!(found.id, tab);
-            assert_eq!(projects[p].index_of(workspace), Some(w));
-            assert_eq!(projects[p].workspaces[w].index_of(tab), Some(t));
-            assert_eq!(found.index_of(pane), Some(found.panes.len() - 1));
-            assert_eq!(found.pane_by(pane).map(|p| p.id), Some(pane));
+            assert_eq!(
+                (
+                    projects.pane_by(pane).map(|p| p.id),
+                    path.to_path_buf(),
+                    found.id,
+                    projects[p].index_of(workspace),
+                    projects[p].workspaces[w].index_of(tab),
+                    found.index_of(pane),
+                    found.pane_by(pane).map(|p| p.id),
+                ),
+                (
+                    Some(pane),
+                    projects[p].workspaces[w].path.clone(),
+                    tab,
+                    Some(w),
+                    Some(t),
+                    Some(found.panes.len() - 1),
+                    Some(pane)
+                )
+            );
         }
     }
 
     #[test]
     fn reject_unknown_ids_and_ids_from_another_level() {
         let mut projects = hierarchy();
-        for id in [999, 14, 17, 19] {
-            assert_eq!(projects.project_index(id), None);
-        }
-        for id in [999, 10, 17, 19] {
-            assert_eq!(projects.workspace_index(id), None);
-            assert_eq!(projects.workspace_in(10, id), None);
-            assert_eq!(projects[0].index_of(id), None);
-        }
-        for id in [999, 10, 14, 19] {
-            assert_eq!(projects.tab_index(id), None);
-            assert_eq!(projects.tab_in(10, 14, id), None);
-            assert_eq!(projects[0].workspaces[1].index_of(id), None);
-        }
+        assert_eq!([999, 14, 17, 19].map(|id| projects.project_index(id)), [None; 4]);
+        assert_eq!(
+            [999, 10, 17, 19].map(|id| (
+                projects.workspace_index(id),
+                projects.workspace_in(10, id),
+                projects[0].index_of(id)
+            )),
+            [(None, None, None); 4]
+        );
+        assert_eq!(
+            [999, 10, 14, 19].map(|id| (
+                projects.tab_index(id),
+                projects.tab_in(10, 14, id),
+                projects[0].workspaces[1].index_of(id)
+            )),
+            [(None, None, None); 4]
+        );
         for id in [999, 10, 14, 17] {
-            assert_eq!(projects.tab_of_pane(id), None);
-            assert!(projects.tab_with_pane(id).is_none());
-            assert!(projects.tab_with_pane_mut(id).is_none());
-            assert!(projects.pane_by(id).is_none());
-            assert!(projects.pane_by_mut(id).is_none());
+            assert_eq!(
+                (
+                    projects.tab_of_pane(id),
+                    projects.tab_with_pane(id).is_none(),
+                    projects.tab_with_pane_mut(id).is_none(),
+                    projects.pane_by(id).is_none(),
+                    projects.pane_by_mut(id).is_none(),
+                ),
+                (None, true, true, true, true)
+            );
             let tab = &mut projects[0].workspaces[1].tabs[1];
-            assert_eq!(tab.index_of(id), None);
-            assert!(tab.pane_by(id).is_none());
-            assert!(tab.pane_by_mut(id).is_none());
+            assert_eq!(
+                (tab.index_of(id), tab.pane_by(id).is_none(), tab.pane_by_mut(id).is_none()),
+                (None, true, true)
+            );
         }
-        assert_eq!(projects.workspace_in(999, 14), None);
-        assert_eq!(projects.tab_in(999, 14, 17), None);
-        assert_eq!(projects.tab_in(10, 999, 17), None);
+        assert_eq!(
+            (projects.workspace_in(999, 14), projects.tab_in(999, 14, 17), projects.tab_in(10, 999, 17)),
+            (None, None, None)
+        );
     }
 
     #[test]
@@ -104,15 +133,26 @@ mod lookups {
         projects[1].workspaces[0].phase = Phase::Closing;
         assert_eq!(projects.project_index(10), Some(0));
         for (p, w, t, workspace, tab, pane) in [(0, 1, 1, 14, 17, 19), (1, 0, 0, 21, 22, 23)] {
-            assert_eq!(projects.workspace_index(workspace), Some((p, w)));
-            assert_eq!(projects.workspace_in(projects[p].id, workspace), Some((p, w)));
-            assert_eq!(projects.tab_index(tab), Some((p, w, t)));
-            assert_eq!(projects.tab_in(projects[p].id, workspace, tab), Some((p, w, t)));
-            assert_eq!(projects.tab_of_pane(pane), Some((p, w, t)));
-            assert_eq!(projects.tab_with_pane(pane).map(|(_, t)| t.id), Some(tab));
-            assert_eq!(projects.pane_by(pane).map(|p| p.id), Some(pane));
-            assert_eq!(projects.pane_by_mut(pane).map(|p| p.id), Some(pane));
-            assert_eq!(projects.tab_with_pane_mut(pane).map(|(_, t)| t.id), Some(tab));
+            let id = projects[p].id;
+            assert_eq!(
+                (
+                    projects.workspace_index(workspace),
+                    projects.workspace_in(id, workspace),
+                    projects.tab_index(tab),
+                    projects.tab_in(id, workspace, tab),
+                    projects.tab_of_pane(pane),
+                ),
+                (Some((p, w)), Some((p, w)), Some((p, w, t)), Some((p, w, t)), Some((p, w, t)))
+            );
+            assert_eq!(
+                (
+                    projects.tab_with_pane(pane).map(|(_, t)| t.id),
+                    projects.pane_by(pane).map(|p| p.id),
+                    projects.pane_by_mut(pane).map(|p| p.id),
+                    projects.tab_with_pane_mut(pane).map(|(_, t)| t.id),
+                ),
+                (Some(tab), Some(pane), Some(pane), Some(tab))
+            );
         }
     }
 
@@ -143,12 +183,22 @@ mod iterators {
         let workspaces = [11, 14, 21];
         let tabs = [12, 15, 17, 22];
         let terms = [13, 16, 18, 19, 23];
-        assert_eq!(projects.workspaces().map(|w| w.id).collect::<Vec<_>>(), workspaces);
-        assert_eq!(projects.tabs().map(|t| t.id).collect::<Vec<_>>(), tabs);
-        assert_eq!(projects.terms().map(|t| t.id).collect::<Vec<_>>(), terms);
-        assert_eq!(projects.workspaces_mut().map(|w| w.id).collect::<Vec<_>>(), workspaces);
-        assert_eq!(projects.tabs_mut().map(|t| t.id).collect::<Vec<_>>(), tabs);
-        assert_eq!(projects.terms_mut().map(|t| t.id).collect::<Vec<_>>(), terms);
+        assert_eq!(
+            (
+                projects.workspaces().map(|w| w.id).collect::<Vec<_>>(),
+                projects.tabs().map(|t| t.id).collect::<Vec<_>>(),
+                projects.terms().map(|t| t.id).collect::<Vec<_>>(),
+            ),
+            (workspaces.to_vec(), tabs.to_vec(), terms.to_vec())
+        );
+        assert_eq!(
+            (
+                projects.workspaces_mut().map(|w| w.id).collect::<Vec<_>>(),
+                projects.tabs_mut().map(|t| t.id).collect::<Vec<_>>(),
+                projects.terms_mut().map(|t| t.id).collect::<Vec<_>>(),
+            ),
+            (workspaces.to_vec(), tabs.to_vec(), terms.to_vec())
+        );
         for workspace in projects.workspaces_mut() {
             workspace.name = Some("workspace".into());
         }
@@ -168,18 +218,22 @@ mod iterators {
     #[test]
     fn an_empty_hierarchy_has_no_children() {
         let mut projects: Vec<Project> = Vec::new();
-        assert_eq!(projects.project_index(1), None);
-        assert_eq!(projects.workspace_index(1), None);
-        assert_eq!(projects.tab_index(1), None);
-        assert_eq!(projects.tab_of_pane(1), None);
-        assert!(projects.pane_by(1).is_none());
-        assert!(projects.pane_by_mut(1).is_none());
-        assert_eq!(projects.workspaces().count(), 0);
-        assert_eq!(projects.tabs().count(), 0);
-        assert_eq!(projects.terms().count(), 0);
-        assert_eq!(projects.workspaces_mut().count(), 0);
-        assert_eq!(projects.tabs_mut().count(), 0);
-        assert_eq!(projects.terms_mut().count(), 0);
+        assert_eq!(
+            (projects.project_index(1), projects.workspace_index(1), projects.tab_index(1), projects.tab_of_pane(1)),
+            (None, None, None, None)
+        );
+        assert!(projects.pane_by(1).is_none() && projects.pane_by_mut(1).is_none());
+        assert_eq!(
+            [
+                projects.workspaces().count(),
+                projects.tabs().count(),
+                projects.terms().count(),
+                projects.workspaces_mut().count(),
+                projects.tabs_mut().count(),
+                projects.terms_mut().count(),
+            ],
+            [0; 6]
+        );
     }
 }
 

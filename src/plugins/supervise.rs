@@ -5,7 +5,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::process::Child;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::{self, RecvTimeoutError, Sender};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -107,22 +107,8 @@ impl Supervisor {
         let steps = Arc::new(AtomicUsize::new(0));
         let stepped = steps.clone();
         let thread = thread::spawn(move || {
-            let mut state =
-                State { kind, places, env, notes: shared, running: BTreeMap::new(), waiting: BTreeMap::new() };
-            let mut watch = Watch::new(state.places.registry.clone());
-            let mut wanted = BTreeMap::new();
-            loop {
-                if let Some(plugins) = watch.changed() {
-                    wanted = state.wanted(&plugins);
-                }
-                let _ = panics::contain(|| state.step(&wanted, Instant::now()));
-                stepped.fetch_add(1, Ordering::SeqCst);
-                match rx.recv_timeout(CHECK_EVERY) {
-                    Err(RecvTimeoutError::Timeout) => {}
-                    Ok(()) | Err(RecvTimeoutError::Disconnected) => break,
-                }
-            }
-            state.stop_all();
+            let state = State { kind, places, env, notes: shared, running: BTreeMap::new(), waiting: BTreeMap::new() };
+            supervise(state, &rx, &stepped);
         });
         Self { kind, stop: Some(tx), thread: Some(thread), notes, steps }
     }
@@ -148,6 +134,23 @@ impl Drop for Supervisor {
             let _ = thread.join();
         }
     }
+}
+
+fn supervise(mut state: State, rx: &Receiver<()>, stepped: &AtomicUsize) {
+    let mut watch = Watch::new(state.places.registry.clone());
+    let mut wanted = BTreeMap::new();
+    loop {
+        if let Some(plugins) = watch.changed() {
+            wanted = state.wanted(&plugins);
+        }
+        let _ = panics::contain(|| state.step(&wanted, Instant::now()));
+        stepped.fetch_add(1, Ordering::SeqCst);
+        match rx.recv_timeout(CHECK_EVERY) {
+            Err(RecvTimeoutError::Timeout) => {}
+            Ok(()) | Err(RecvTimeoutError::Disconnected) => break,
+        }
+    }
+    state.stop_all();
 }
 
 struct State {
@@ -200,64 +203,58 @@ impl State {
     }
 
     fn spawn(&mut self, key: &Key, spec: &Spec, now: Instant) {
-        let kind = self.kind.name();
         let lock = try_shared(&self.places, &key.plugin);
-        let child = match &lock {
-            Ok(Some(_)) if !on_disk(&self.places, &spec.plugin.entry) => return,
+        let Some(child) = self.start_child(&lock, spec) else { return };
+        match child {
+            Ok(child) => self.started(key, spec, child, now),
+            Err(e) => self.cannot_start(key, &e, now),
+        }
+    }
+
+    fn start_child(&self, lock: &std::io::Result<Option<File>>, spec: &Spec) -> Option<std::io::Result<Child>> {
+        Some(match lock {
+            Ok(Some(_)) if !on_disk(&self.places, &spec.plugin.entry) => return None,
             Ok(Some(_)) if !spec.plugin.root().is_dir() => {
                 Err(std::io::Error::new(std::io::ErrorKind::NotFound, "the plugin's folder is gone"))
             }
             Ok(Some(_)) => {
                 self.places.command(&spec.plugin, &spec.command, &self.env, None).and_then(|mut c| c.spawn())
             }
-            Ok(None) => return,
+            Ok(None) => return None,
             Err(e) => Err(std::io::Error::new(e.kind(), e.to_string())),
-        };
-        match child {
-            Ok(child) => {
-                log::info!("plugins", "started", kind = kind, plugin = key.plugin, entry = key.entry, pid = child.id());
-                self.places.note(
-                    &key.plugin,
-                    &format!("{kind} started"),
-                    &[("entry", &key.entry), ("pid", &child.id())],
-                );
-                let run = Running { spec: spec.clone(), child, since: now };
-                match record(&self.places, &key.plugin, run.child.id(), &format!("{kind} {}", key.entry)) {
-                    Ok(()) => {
-                        self.running.insert(key.clone(), run);
-                    }
-                    Err(e) => {
-                        log::warning!(
-                            "plugins",
-                            "cannot record a running process, stopping it",
-                            kind = kind,
-                            plugin = key.plugin,
-                            entry = key.entry,
-                            error = e
-                        );
-                        self.places.note(
-                            &key.plugin,
-                            &format!("{kind} stopped"),
-                            &[("entry", &key.entry), ("error", &e)],
-                        );
-                        stop_children(&self.places, vec![run]);
-                        self.retry(key, now, false);
-                    }
-                }
+        })
+    }
+
+    fn started(&mut self, key: &Key, spec: &Spec, child: Child, now: Instant) {
+        let kind = self.kind.name();
+        log::info!("plugins", "started", kind = kind, plugin = key.plugin, entry = key.entry, pid = child.id());
+        self.places.note(&key.plugin, &format!("{kind} started"), &[("entry", &key.entry), ("pid", &child.id())]);
+        let run = Running { spec: spec.clone(), child, since: now };
+        match record(&self.places, &key.plugin, run.child.id(), &format!("{kind} {}", key.entry)) {
+            Ok(()) => {
+                self.running.insert(key.clone(), run);
             }
             Err(e) => {
                 log::warning!(
                     "plugins",
-                    "cannot start",
+                    "cannot record a running process, stopping it",
                     kind = kind,
                     plugin = key.plugin,
                     entry = key.entry,
                     error = e
                 );
-                self.places.note(&key.plugin, &format!("{kind} cannot start"), &[("entry", &key.entry), ("error", &e)]);
+                self.places.note(&key.plugin, &format!("{kind} stopped"), &[("entry", &key.entry), ("error", &e)]);
+                stop_children(&self.places, vec![run]);
                 self.retry(key, now, false);
             }
         }
+    }
+
+    fn cannot_start(&mut self, key: &Key, e: &std::io::Error, now: Instant) {
+        let kind = self.kind.name();
+        log::warning!("plugins", "cannot start", kind = kind, plugin = key.plugin, entry = key.entry, error = e);
+        self.places.note(&key.plugin, &format!("{kind} cannot start"), &[("entry", &key.entry), ("error", e)]);
+        self.retry(key, now, false);
     }
 
     fn reap(&mut self, now: Instant) {

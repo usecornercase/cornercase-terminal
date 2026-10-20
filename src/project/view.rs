@@ -35,54 +35,68 @@ impl Shown {
         self.project.is_none()
     }
 
+    fn key(&self) -> (Option<u64>, Option<u64>, Option<u64>) {
+        (self.project, self.workspace, self.tab)
+    }
+
     pub(crate) fn settle(&mut self, projects: &[Project], window: impl FnOnce() -> Self) -> bool {
-        let before = (self.project, self.workspace, self.tab);
+        let before = self.key();
         if self.project.is_none() {
             let adopted = window();
             if !adopted.is_empty() {
                 *self = adopted;
             }
-            return before != (self.project, self.workspace, self.tab);
+            return before != self.key();
         }
-        let usable = |p: usize| !projects[p].closing;
-        let found = self.project.and_then(|id| projects.iter().position(|p| p.id == id)).filter(|&p| usable(p));
-        let nearer = || nearest(projects.len(), self.at[0], usable);
-        let Some((p, moved)) = found.map(|p| (p, false)).or_else(|| nearer().map(|p| (p, true))) else {
+        let Some((p, moved)) = self.settled_project(projects) else {
             *self = Self::default();
             return before != (None, None, None);
         };
         let project = &projects[p];
-        let (w, moved) = if moved {
-            (first_open(project), true)
-        } else {
-            let found = self.workspace.and_then(|id| project.index_of(id)).filter(|&w| project.workspaces[w].open());
-            match found {
-                Some(w) => (Some(w), false),
-                None if self.workspace.is_none() => (first_open(project), false),
-                None => (nearest(project.workspaces.len(), self.at[1], |w| project.workspaces[w].open()), true),
-            }
-        };
+        let (w, moved) = self.settled_workspace(project, moved);
         let Some(w) = w else {
             *self = Self { project: Some(project.id), at: [p, 0, 0], ..Self::default() };
             return before != (self.project, None, None);
         };
         let workspace = &project.workspaces[w];
-        let found = self.tab.and_then(|id| workspace.index_of(id));
-        let t = match found {
-            Some(t) => Some(t),
-            None if moved || self.tab.is_none() => Some(workspace.active).filter(|&t| t < workspace.tabs.len()),
-            None => {
-                let t = if self.at[2] > 0 { self.at[2] - 1 } else { 0 };
-                (!workspace.tabs.is_empty()).then(|| t.min(workspace.tabs.len() - 1))
-            }
-        };
+        let t = self.settled_tab(workspace, moved);
         *self = Self {
             project: Some(project.id),
             workspace: Some(workspace.id),
             tab: t.map(|t| workspace.tabs[t].id),
             at: [p, w, t.unwrap_or_default()],
         };
-        before != (self.project, self.workspace, self.tab)
+        before != self.key()
+    }
+
+    fn settled_project(&self, projects: &[Project]) -> Option<(usize, bool)> {
+        let usable = |p: usize| !projects[p].closing;
+        let found = self.project.and_then(|id| projects.iter().position(|p| p.id == id)).filter(|&p| usable(p));
+        let nearer = || nearest(projects.len(), self.at[0], usable);
+        found.map(|p| (p, false)).or_else(|| nearer().map(|p| (p, true)))
+    }
+
+    fn settled_workspace(&self, project: &Project, moved: bool) -> (Option<usize>, bool) {
+        if moved {
+            return (first_open(project), true);
+        }
+        let found = self.workspace.and_then(|id| project.index_of(id)).filter(|&w| project.workspaces[w].open());
+        match found {
+            Some(w) => (Some(w), false),
+            None if self.workspace.is_none() => (first_open(project), false),
+            None => (nearest(project.workspaces.len(), self.at[1], |w| project.workspaces[w].open()), true),
+        }
+    }
+
+    fn settled_tab(&self, workspace: &Workspace, moved: bool) -> Option<usize> {
+        match self.tab.and_then(|id| workspace.index_of(id)) {
+            Some(t) => Some(t),
+            None if moved || self.tab.is_none() => Some(workspace.active).filter(|&t| t < workspace.tabs.len()),
+            None => {
+                let t = if self.at[2] > 0 { self.at[2] - 1 } else { 0 };
+                (!workspace.tabs.is_empty()).then(|| t.min(workspace.tabs.len() - 1))
+            }
+        }
     }
 }
 

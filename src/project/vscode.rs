@@ -101,19 +101,23 @@ fn without_comments(text: &str) -> String {
             ('/', Some('/')) => while chars.next_if(|&c| c != '\n').is_some() {},
             ('/', Some('*')) => {
                 chars.next();
-                let mut last = ' ';
-                for c in chars.by_ref() {
-                    if last == '*' && c == '/' {
-                        break;
-                    }
-                    last = c;
-                }
+                skip_block_comment(&mut chars);
                 out.push(' ');
             }
             _ => out.push(c),
         }
     }
     out
+}
+
+fn skip_block_comment(chars: &mut impl Iterator<Item = char>) {
+    let mut last = ' ';
+    for c in chars {
+        if last == '*' && c == '/' {
+            break;
+        }
+        last = c;
+    }
 }
 
 fn without_trailing_commas(text: &str) -> String {

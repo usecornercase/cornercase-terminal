@@ -167,6 +167,19 @@ impl Manifest {
     }
 
     fn check(&self) -> Result<(), String> {
+        self.check_texts()?;
+        self.check_requirements()?;
+        self.check_entries()?;
+        for build in &self.build {
+            valid_command("a build step", &build.command)?;
+        }
+        for (target, download) in &self.download {
+            valid_download(target, download)?;
+        }
+        Ok(())
+    }
+
+    fn check_texts(&self) -> Result<(), String> {
         if let Some((field, value)) = self.texts().find(|(_, value)| value.chars().any(text::hidden)) {
             return Err(format!("{FILE}: {field} `{}` has an invisible or control character", around_hidden(value)));
         }
@@ -179,6 +192,10 @@ impl Manifest {
                 return Err(format!("{FILE}: `{field}` is empty"));
             }
         }
+        Ok(())
+    }
+
+    fn check_requirements(&self) -> Result<(), String> {
         if let Some(min) = &self.min_cornercase
             && version::newer(min, version::CURRENT)
         {
@@ -190,38 +207,25 @@ impl Manifest {
         if !self.platforms.is_empty() && !self.platforms.iter().any(|p| p.eq_ignore_ascii_case(platform())) {
             return Err(format!("runs on {} only", self.platforms.join(", ")));
         }
+        Ok(())
+    }
+
+    fn check_entries(&self) -> Result<(), String> {
         let entries = self.actions.len() + self.events.len() + self.service.len() + self.window.len();
         if entries > MAX_ENTRIES {
             return Err(format!("{FILE}: {entries} entries, more than the {MAX_ENTRIES} a plugin may declare"));
         }
         let mut seen = HashSet::new();
         for action in &self.actions {
-            valid_id("action id", &action.id)?;
-            if !seen.insert(("action", action.id.as_str())) {
-                return Err(format!("{FILE}: two actions are called `{}`", action.id));
-            }
-            if action.title.trim().is_empty() || action.contexts.is_empty() {
-                return Err(format!("{FILE}: action `{}` needs a title and at least one context", action.id));
-            }
-            valid_command(&format!("action `{}`", action.id), &action.command)?;
+            check_action(action, &mut seen)?;
         }
         for hook in &self.events {
             valid_command(&format!("the hook on `{}`", hook.on.name()), &hook.command)?;
         }
         for (kind, processes) in [("service", &self.service), ("window", &self.window)] {
             for process in processes {
-                valid_id(&format!("{kind} id"), &process.id)?;
-                if !seen.insert((kind, process.id.as_str())) {
-                    return Err(format!("{FILE}: two {kind} entries are called `{}`", process.id));
-                }
-                valid_command(&format!("{kind} `{}`", process.id), &process.command)?;
+                check_process(kind, process, &mut seen)?;
             }
-        }
-        for build in &self.build {
-            valid_command("a build step", &build.command)?;
-        }
-        for (target, download) in &self.download {
-            valid_download(target, download)?;
         }
         Ok(())
     }
@@ -317,6 +321,29 @@ fn around_hidden(value: &str) -> String {
     let end = (start + MAX_QUOTED).min(chars.len());
     let cut = |cut: bool| if cut { "…" } else { "" };
     format!("{}{}{}", cut(start > 0), chars[start..end].iter().collect::<String>(), cut(end < chars.len()))
+}
+
+fn check_action<'a>(action: &'a Action, seen: &mut HashSet<(&'a str, &'a str)>) -> Result<(), String> {
+    valid_id("action id", &action.id)?;
+    if !seen.insert(("action", action.id.as_str())) {
+        return Err(format!("{FILE}: two actions are called `{}`", action.id));
+    }
+    if action.title.trim().is_empty() || action.contexts.is_empty() {
+        return Err(format!("{FILE}: action `{}` needs a title and at least one context", action.id));
+    }
+    valid_command(&format!("action `{}`", action.id), &action.command)
+}
+
+fn check_process<'a>(
+    kind: &'a str,
+    process: &'a Process,
+    seen: &mut HashSet<(&'a str, &'a str)>,
+) -> Result<(), String> {
+    valid_id(&format!("{kind} id"), &process.id)?;
+    if !seen.insert((kind, process.id.as_str())) {
+        return Err(format!("{FILE}: two {kind} entries are called `{}`", process.id));
+    }
+    valid_command(&format!("{kind} `{}`", process.id), &process.command)
 }
 
 fn valid_id(field: &str, id: &str) -> Result<(), String> {

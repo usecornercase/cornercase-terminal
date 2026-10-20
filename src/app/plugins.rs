@@ -229,7 +229,8 @@ impl App {
             job,
             move || {
                 places.note(&plugin.entry.id, "action started", &[("action", &action.id)]);
-                let ran = run::run_to_end(&places, &plugin, &action.command, &env, Some(&cwd), ACTION_WITHIN);
+                let invocation = run::Invocation { argv: &action.command, env: &env, cwd: Some(&cwd) };
+                let ran = run::run_to_end(&places, &plugin, invocation, ACTION_WITHIN);
                 if let Some(e) = ran.failure() {
                     places.note(&plugin.entry.id, "action failed", &[("action", &action.id), ("error", &e)]);
                 }
@@ -293,7 +294,8 @@ impl App {
         self.spawn_job(
             job,
             move || {
-                let ran = run::run_to_end(&places, &plugin, &command, &env, None, HOOK_WITHIN);
+                let invocation = run::Invocation { argv: &command, env: &env, cwd: None };
+                let ran = run::run_to_end(&places, &plugin, invocation, HOOK_WITHIN);
                 let failure = ran.failure();
                 if let Some(e) = &failure {
                     places.note(&plugin.entry.id, "hook failed", &[("on", &on), ("error", e)]);

@@ -20,46 +20,32 @@ pub(crate) fn verify(bytes: &[u8], sha256: &str) -> Result<(), String> {
     }
 }
 
-pub(crate) fn unpack(bytes: &[u8], into: &Path) -> Result<usize, String> {
-    let failed = |e: &dyn std::fmt::Display| format!("cannot unpack the download: {e}");
-    let mut archive = tar::Archive::new(GzDecoder::new(bytes));
-    let (mut count, mut total) = (0, 0u64);
-    for entry in archive.entries().map_err(|e| failed(&e))? {
-        let mut entry = entry.map_err(|e| failed(&e))?;
-        count += 1;
-        if count > MAX_ENTRIES {
+fn failed(e: &dyn std::fmt::Display) -> String {
+    format!("cannot unpack the download: {e}")
+}
+
+struct Unpacker<'a> {
+    into: &'a Path,
+    count: usize,
+    total: u64,
+}
+
+impl Unpacker<'_> {
+    fn entry<R: io::Read>(&mut self, entry: &mut tar::Entry<'_, R>) -> Result<(), String> {
+        self.count += 1;
+        if self.count > MAX_ENTRIES {
             return Err(failed(&format!("it holds more than {MAX_ENTRIES} files")));
         }
         let name = entry.path().map_err(|e| failed(&e))?.into_owned();
         let relative = inside(&name).ok_or_else(|| failed(&format!("`{}` points outside", name.display())))?;
         if relative.as_os_str().is_empty() {
-            continue;
+            return Ok(());
         }
-        no_links_above(into, &relative).map_err(|e| failed(&e))?;
-        let path = into.join(&relative);
+        no_links_above(self.into, &relative).map_err(|e| failed(&e))?;
+        let path = self.into.join(&relative);
         match entry.header().entry_type() {
             EntryType::Directory => fs::create_dir_all(&path).map_err(|e| failed(&e))?,
-            EntryType::Regular | EntryType::Continuous => {
-                total = total.saturating_add(entry.size());
-                if total > MAX_BYTES {
-                    return Err(failed(&format!("it unpacks to more than {} MiB", MAX_BYTES / 1024 / 1024)));
-                }
-                if let Some(parent) = path.parent() {
-                    fs::create_dir_all(parent).map_err(|e| failed(&e))?;
-                }
-                if fs::symlink_metadata(&path).is_ok() {
-                    remove(&path).map_err(|e| failed(&e))?;
-                }
-                let executable = entry.header().mode().is_ok_and(|mode| mode & 0o100 != 0);
-                let mode = if executable { 0o755 } else { 0o644 };
-                let mut file =
-                    OpenOptions::new().write(true).create_new(true).mode(mode).open(&path).map_err(|e| failed(&e))?;
-                let size = entry.size();
-                let copied = io::copy(&mut entry, &mut file).map_err(|e| failed(&e))?;
-                if copied != size {
-                    return Err(failed(&format!("`{}` ends early", name.display())));
-                }
-            }
+            EntryType::Regular | EntryType::Continuous => self.file(entry, &path, &name)?,
             EntryType::XGlobalHeader | EntryType::XHeader => {}
             other => {
                 return Err(failed(&format!(
@@ -69,8 +55,39 @@ pub(crate) fn unpack(bytes: &[u8], into: &Path) -> Result<usize, String> {
                 )));
             }
         }
+        Ok(())
     }
-    Ok(count)
+
+    fn file<R: io::Read>(&mut self, entry: &mut tar::Entry<'_, R>, path: &Path, name: &Path) -> Result<(), String> {
+        self.total = self.total.saturating_add(entry.size());
+        if self.total > MAX_BYTES {
+            return Err(failed(&format!("it unpacks to more than {} MiB", MAX_BYTES / 1024 / 1024)));
+        }
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|e| failed(&e))?;
+        }
+        if fs::symlink_metadata(path).is_ok() {
+            remove(path).map_err(|e| failed(&e))?;
+        }
+        let executable = entry.header().mode().is_ok_and(|mode| mode & 0o100 != 0);
+        let mode = if executable { 0o755 } else { 0o644 };
+        let mut file = OpenOptions::new().write(true).create_new(true).mode(mode).open(path).map_err(|e| failed(&e))?;
+        let size = entry.size();
+        let copied = io::copy(entry, &mut file).map_err(|e| failed(&e))?;
+        if copied != size {
+            return Err(failed(&format!("`{}` ends early", name.display())));
+        }
+        Ok(())
+    }
+}
+
+pub(crate) fn unpack(bytes: &[u8], into: &Path) -> Result<usize, String> {
+    let mut archive = tar::Archive::new(GzDecoder::new(bytes));
+    let mut unpacker = Unpacker { into, count: 0, total: 0 };
+    for entry in archive.entries().map_err(|e| failed(&e))? {
+        unpacker.entry(&mut entry.map_err(|e| failed(&e))?)?;
+    }
+    Ok(unpacker.count)
 }
 
 fn inside(name: &Path) -> Option<PathBuf> {

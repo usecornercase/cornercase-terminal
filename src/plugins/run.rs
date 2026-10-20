@@ -164,14 +164,15 @@ impl Ran {
     }
 }
 
-pub(crate) fn run_to_end(
-    places: &Places,
-    plugin: &Plugin,
-    argv: &[String],
-    env: &[(String, String)],
-    cwd: Option<&Path>,
-    within: Duration,
-) -> Ran {
+#[derive(Clone, Copy)]
+pub(crate) struct Invocation<'a> {
+    pub(crate) argv: &'a [String],
+    pub(crate) env: &'a [(String, String)],
+    pub(crate) cwd: Option<&'a Path>,
+}
+
+pub(crate) fn run_to_end(places: &Places, plugin: &Plugin, invocation: Invocation<'_>, within: Duration) -> Ran {
+    let Invocation { argv, env, cwd } = invocation;
     let started = Instant::now();
     let child = places.command(plugin, argv, env, cwd).and_then(|mut c| c.spawn());
     let ended = match child {
