@@ -98,7 +98,7 @@ fn the_changes_panel_keeps_its_filter() {
     submit_text(&mut app, "*.txt");
     esc(&mut app);
     open(&mut app, Side::Changes);
-    assert_eq!(app.panels.changes.filter.as_ref().map(changes::filter::Filter::query), Some("*.txt"));
+    assert_eq!(app.panels.changes.filter().map(changes::filter::Filter::query), Some("*.txt"));
 }
 
 #[test]

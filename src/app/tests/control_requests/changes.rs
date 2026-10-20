@@ -106,7 +106,7 @@ fn the_mode_of_a_stream_is_its_own_and_the_window_s_stays() {
     ok(&mut app, "changes-mode", &json!({"stream": 1, "mode": "all"}));
     let line = summary_until(&mut app, &rx, "all", |l| ready(l) && l["mode"] == "all");
     assert_eq!(paths(&line), ["a.txt", "b.txt"]);
-    assert_eq!(app.panels.changes.mode, Mode::Uncommitted);
+    assert_eq!(app.panels.changes.mode(), Mode::Uncommitted);
 }
 
 #[test]

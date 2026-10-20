@@ -139,7 +139,7 @@ impl App {
 
     pub(super) fn refresh_files(&mut self, now: Instant) {
         let shown = self.files_shown();
-        self.panels.changes.watched = self.screen.side == Some(Side::Changes) || shown;
+        self.panels.changes.set_watched(self.screen.side == Some(Side::Changes) || shown);
         let Some((workspace, root)) = self.files_target().filter(|_| shown) else { return };
         if let Some((generation, list)) = self.panels.files.list(workspace, &root, now) {
             self.spawn_listing(workspace, generation, list);

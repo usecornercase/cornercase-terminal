@@ -32,8 +32,8 @@ impl App {
         let Some(target) = self.changes_target().filter(|t| t.workspace == workspace) else { return };
         if self.overlay.is_some()
             || self.screen.side != Some(Side::Changes)
-            || self.panels.changes.scope == changes::Scope::Every
-            || self.panels.changes.mode == changes::Mode::Uncommitted
+            || self.panels.changes.scope() == changes::Scope::Every
+            || self.panels.changes.mode() == changes::Mode::Uncommitted
         {
             return;
         }
@@ -91,7 +91,7 @@ impl App {
         if let Some((p, w)) = self.projects.workspace_index(workspace) {
             self.projects[p].workspaces[w].base = base;
         }
-        self.panels.changes.scroll = 0;
+        self.panels.changes.scroll_to_top();
     }
 
     pub(in crate::app) fn branches_view(picker: &BranchPicker) -> ui::Overlay {

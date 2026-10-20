@@ -26,13 +26,12 @@ fn resetting_the_interaction_closes_dialogs_and_ends_drags() {
 #[test]
 fn resetting_the_interaction_drops_the_todo_field_and_gives_the_filter_keys_back() {
     let (mut app, _rx) = app();
-    let mut filter = changes::filter::Filter::default();
-    filter.push('a');
-    app.panels.changes.filter = Some(filter);
+    app.panels.changes.focus_filter();
+    app.panels.changes.push_filter('a');
     app.panels.todo.start_adding();
 
     app.reset_interaction();
 
-    let filter = app.panels.changes.filter.as_ref().map(|f| (f.query(), f.focused));
+    let filter = app.panels.changes.filter().map(|f| (f.query(), f.focused));
     assert_eq!((app.panels.todo.field().is_none(), filter), (true, Some(("a", false))));
 }

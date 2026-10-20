@@ -8,9 +8,9 @@ mod every_project {
     use super::*;
 
     fn filter_changes(app: &mut App, query: &str) {
-        let mut filter = changes::filter::Filter::default();
-        query.chars().for_each(|c| filter.push(c));
-        app.panels.changes.filter = Some(filter);
+        app.panels.changes.clear_filter();
+        app.panels.changes.focus_filter();
+        query.chars().for_each(|c| app.panels.changes.push_filter(c));
     }
 
     fn loaded_every(app: &mut App, rx: &Receiver<AppEvent>) {
@@ -104,19 +104,19 @@ mod every_project {
         let repo = repo_with_edit();
         let (mut app, rx) = app_in(repo.path(), no_config());
         loaded_every(&mut app, &rx);
-        app.panels.changes.mode = changes::Mode::Commits;
+        app.panels.changes.set_mode(changes::Mode::Commits);
         let saved = app.state();
         let (mut restored, _) = new_app(no_config());
         restored.restore(&saved, AREA);
         assert_eq!(
-            (saved.version, restored.panels.changes.scope, restored.panels.changes.mode),
+            (saved.version, restored.panels.changes.scope(), restored.panels.changes.mode()),
             (5, changes::Scope::Every, changes::Mode::Commits)
         );
         let mut old = serde_json::to_value(saved).expect("json");
         old["changes"].as_object_mut().expect("changes").remove("scope");
         let old: State = serde_json::from_value(old).expect("older session");
         restored.restore(&old, AREA);
-        assert_eq!(restored.panels.changes.scope, changes::Scope::Project);
+        assert_eq!(restored.panels.changes.scope(), changes::Scope::Project);
     }
 
     #[test]
@@ -134,7 +134,7 @@ mod every_project {
         let repo = git_repo(&[]);
         let (mut app, _) = app_in(repo.path(), no_config());
         app.projects[0].name = Some("shop".into());
-        app.panels.changes.scope = changes::Scope::Every;
+        app.panels.changes.set_scope(changes::Scope::Every);
         let targets = app.every_targets();
         let (workspace, generation, request) =
             app.panels.changes.request_every(&targets, Instant::now()).expect("summary");
@@ -170,7 +170,7 @@ mod every_project {
         let (mut app, rx) = app_in(repo.path(), no_config());
         loaded_every(&mut app, &rx);
         let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[1].id);
-        app.panels.changes.headers.insert(workspace);
+        app.panels.changes.toggle_header(workspace);
         match action {
             "closed" => app.drop_workspace(project, workspace),
             "removed" => {
@@ -185,7 +185,7 @@ mod every_project {
             }
         }
         assert!(app.panels.changes.summary(workspace).is_none());
-        assert!(!app.panels.changes.headers.contains(&workspace));
+        assert!(!app.panels.changes.header_folded(workspace));
         assert!(!app.panel_view().expect("panel").owners.contains(&workspace));
     }
 
@@ -197,14 +197,15 @@ mod every_project {
         let (mut app, rx) = app_in(repo.path(), no_config());
         loaded_every(&mut app, &rx);
         let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
-        app.panels.changes.headers.extend([project, workspace]);
+        app.panels.changes.toggle_header(project);
+        app.panels.changes.toggle_header(workspace);
         if close {
             app.close_project(project);
         } else {
             app.remove_project(0);
         }
         assert!(app.panels.changes.summary(workspace).is_none());
-        assert!(app.panels.changes.headers.is_empty());
+        assert!(!app.panels.changes.header_folded(project) && !app.panels.changes.header_folded(workspace));
         assert!(app.every_targets().is_empty());
     }
 
@@ -251,7 +252,7 @@ mod every_project {
 
     fn assert_shown_in_every_scope(app: &App) {
         assert!(!app.projects[0].collapsed && !app.projects[0].workspaces[0].collapsed);
-        assert!(app.screen.side == Some(Side::Changes) && app.panels.changes.scope == changes::Scope::Every);
+        assert!(app.screen.side == Some(Side::Changes) && app.panels.changes.scope() == changes::Scope::Every);
     }
 
     fn assert_agent_got_the_reference(app: &mut App, owners: &Owners, agent_pane: u64) {
@@ -483,7 +484,7 @@ fn the_panel_is_saved_and_restored() {
     let (mut restored, _rx) = empty_app();
     restored.restore(&saved, AREA);
     assert_eq!(
-        (restored.screen.side == Some(Side::Changes), restored.panels.changes.mode),
+        (restored.screen.side == Some(Side::Changes), restored.panels.changes.mode()),
         (true, changes::Mode::Commits)
     );
 }
@@ -554,7 +555,7 @@ fn open_filter(app: &mut App, rx: &Receiver<AppEvent>) {
 }
 
 fn query(app: &App) -> Option<&str> {
-    app.panels.changes.filter.as_ref().map(changes::filter::Filter::query)
+    app.panels.changes.filter().map(changes::filter::Filter::query)
 }
 
 #[test]

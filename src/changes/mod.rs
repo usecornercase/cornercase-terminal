@@ -112,17 +112,17 @@ pub(crate) enum Body {
 
 #[derive(Debug, Default)]
 pub(crate) struct Panel {
-    pub(crate) watched: bool,
-    pub(crate) mode: Mode,
-    pub(crate) scope: Scope,
-    pub(crate) scroll: usize,
-    pub(crate) workspace: Option<u64>,
-    pub(crate) filter: Option<filter::Filter>,
+    watched: bool,
+    mode: Mode,
+    scope: Scope,
+    scroll: usize,
+    workspace: Option<u64>,
+    filter: Option<filter::Filter>,
     models: HashMap<(u64, Mode), Model>,
     followed: HashSet<(u64, Mode)>,
     summaries: HashMap<u64, Model>,
     every_folded: HashMap<FileKey, bool>,
-    pub(crate) headers: HashSet<u64>,
+    headers: HashSet<u64>,
     next: usize,
     summary_requested: HashMap<u64, Instant>,
     folded: HashMap<FileKey, bool>,
@@ -144,6 +144,79 @@ fn key(workspace: u64, file: &File) -> FileKey {
 }
 
 impl Panel {
+    pub(crate) fn mode(&self) -> Mode {
+        self.mode
+    }
+
+    pub(crate) fn scope(&self) -> Scope {
+        self.scope
+    }
+
+    pub(crate) fn scroll(&self) -> usize {
+        self.scroll
+    }
+
+    pub(crate) fn filter(&self) -> Option<&filter::Filter> {
+        self.filter.as_ref()
+    }
+
+    pub(crate) fn set_watched(&mut self, watched: bool) {
+        self.watched = watched;
+    }
+
+    pub(crate) fn show_workspace(&mut self, workspace: u64) {
+        if self.workspace != Some(workspace) {
+            self.workspace = Some(workspace);
+            self.scroll = 0;
+        }
+    }
+
+    pub(crate) fn scroll_by(&mut self, delta: isize, max: usize) {
+        self.scroll = self.scroll.min(max).saturating_add_signed(delta).min(max);
+    }
+
+    pub(crate) fn scroll_to_top(&mut self) {
+        self.scroll = 0;
+    }
+
+    pub(crate) fn focus_filter(&mut self) {
+        self.filter.get_or_insert_default().focused = true;
+    }
+
+    pub(crate) fn clear_filter(&mut self) {
+        self.filter = None;
+    }
+
+    pub(crate) fn push_filter(&mut self, c: char) {
+        if let Some(filter) = &mut self.filter {
+            filter.push(c);
+        }
+    }
+
+    pub(crate) fn pop_filter(&mut self) {
+        if let Some(filter) = &mut self.filter {
+            filter.pop();
+        }
+    }
+
+    pub(crate) fn unfocus(&mut self) {
+        if let Some(filter) = &mut self.filter {
+            filter.focused = false;
+        }
+    }
+
+    pub(crate) fn unfold_headers(&mut self) {
+        self.headers.clear();
+    }
+
+    pub(crate) fn forget_header(&mut self, id: u64) {
+        self.headers.remove(&id);
+    }
+
+    pub(crate) fn header_folded(&self, id: u64) -> bool {
+        self.headers.contains(&id)
+    }
+
     pub(crate) fn model(&self, workspace: u64, base: Option<&str>) -> Option<&Model> {
         self.model_in(workspace, self.mode, base)
     }
@@ -403,9 +476,7 @@ impl Panel {
     }
 
     pub(crate) fn close(&mut self) {
-        if let Some(filter) = &mut self.filter {
-            filter.focused = false;
-        }
+        self.unfocus();
     }
 
     #[cfg(test)]

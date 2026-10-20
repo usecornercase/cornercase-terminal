@@ -277,9 +277,7 @@ impl App {
         self.panels.todo.cancel();
         self.panels.files.unfocus();
         self.panels.files.set_full_screen(false);
-        if let Some(filter) = &mut self.panels.changes.filter {
-            filter.focused = false;
-        }
+        self.panels.changes.unfocus();
     }
 
     pub(crate) fn pointer(&self, area: Rect) -> pointer::Shape {
@@ -447,12 +445,12 @@ impl App {
             .collect();
         let groups = self.groups.iter().map(|g| g.entry.clone()).collect();
         let changes = (self.screen.side == Some(Side::Changes)
-            || self.panels.changes.mode != changes::Mode::default()
-            || self.panels.changes.scope != changes::Scope::default())
+            || self.panels.changes.mode() != changes::Mode::default()
+            || self.panels.changes.scope() != changes::Scope::default())
         .then_some(ChangesState {
             open: self.screen.side == Some(Side::Changes),
-            mode: self.panels.changes.mode,
-            scope: (self.panels.changes.scope != changes::Scope::default()).then_some(self.panels.changes.scope),
+            mode: self.panels.changes.mode(),
+            scope: (self.panels.changes.scope() != changes::Scope::default()).then_some(self.panels.changes.scope()),
         });
         State {
             version: state::VERSION,
@@ -471,8 +469,8 @@ impl App {
     pub(crate) fn restore(&mut self, saved: &State, area: Rect) -> bool {
         self.screen.widths = saved.widths.unwrap_or_default();
         if let Some(changes) = saved.changes {
-            self.panels.changes.mode = changes.mode;
-            self.panels.changes.scope = changes.scope.unwrap_or_default();
+            self.panels.changes.set_mode(changes.mode);
+            self.panels.changes.set_scope(changes.scope.unwrap_or_default());
         }
         self.show_side(saved_side(saved));
         self.issues.restore(saved.issues.as_ref());

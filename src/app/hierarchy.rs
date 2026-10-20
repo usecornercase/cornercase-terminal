@@ -115,7 +115,7 @@ impl App {
         for workspace in &project.workspaces {
             self.panels.changes.forget(workspace.id);
         }
-        self.panels.changes.headers.remove(&project.id);
+        self.panels.changes.forget_header(project.id);
     }
 
     pub(super) fn close_project(&mut self, id: u64) {

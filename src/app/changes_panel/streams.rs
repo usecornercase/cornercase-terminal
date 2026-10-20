@@ -279,13 +279,13 @@ impl App {
         };
         let (_, w) = self.projects.workspace_index(workspace).map(|(p, w)| (p, &self.projects[p].workspaces[w]))?;
         if target == Some(workspace) {
-            let every = self.panels.changes.scope == Scope::Every && self.changes_shown();
+            let every = self.every_shown();
             let model = if every {
                 self.panels.changes.summary(workspace)
             } else {
                 self.panels.changes.model(workspace, w.base.as_deref())
             };
-            let mode = if every { Mode::Uncommitted } else { self.panels.changes.mode };
+            let mode = if every { Mode::Uncommitted } else { self.panels.changes.mode() };
             return model.and_then(changes::Model::diff).map(|d| counted(d, mode));
         }
         let open = &self.clients.change_streams.open;

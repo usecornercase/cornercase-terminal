@@ -111,9 +111,7 @@ impl App {
     fn side_mouse(&mut self, ev: MouseEvent, pos: Position, areas: &ui::Areas, area: Rect) -> ControlFlow<Result<()>> {
         let in_panel = self.panel_shown() && areas.changes.contains(pos);
         if matches!(ev.kind, MouseEventKind::Down(_)) && !in_panel {
-            if let Some(filter) = &mut self.panels.changes.filter {
-                filter.focused = false;
-            }
+            self.panels.changes.unfocus();
             self.commit_todo();
             self.panels.files.unfocus();
         }
@@ -461,11 +459,9 @@ impl App {
             self.files_paste(text);
             return true;
         }
-        if self.filtering()
-            && let Some(filter) = &mut self.panels.changes.filter
-        {
-            text.chars().filter(|c| !c.is_control()).for_each(|c| filter.push(c));
-            self.panels.changes.scroll = 0;
+        if self.filtering() {
+            text.chars().filter(|c| !c.is_control()).for_each(|c| self.panels.changes.push_filter(c));
+            self.panels.changes.scroll_to_top();
             return true;
         }
         false

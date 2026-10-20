@@ -35,7 +35,7 @@ pub(crate) fn targets(projects: &[Project], order: &[usize], panel: &Panel) -> V
             workspaces
                 .into_iter()
                 .map(|w| {
-                    let hidden = panel.headers.contains(&project.id) || (several && panel.headers.contains(&w.id));
+                    let hidden = panel.header_folded(project.id) || (several && panel.header_folded(w.id));
                     (Checkout { workspace: w.id, dir: w.path.clone(), base: None }, hidden)
                 })
                 .collect::<Vec<_>>()
@@ -62,7 +62,7 @@ impl Grouped {
             label: project.label(home),
             files: start..start + count,
             workspace: false,
-            folded: panel.headers.contains(&project.id),
+            folded: panel.header_folded(project.id),
         });
         let several = changed.len() > 1;
         for (workspace, changes) in changed {
@@ -73,7 +73,7 @@ impl Grouped {
                     label: workspace.label(),
                     files: start..start + changes.files.len(),
                     workspace: true,
-                    folded: panel.headers.contains(&workspace.id),
+                    folded: panel.header_folded(workspace.id),
                 });
             }
             self.owners.extend(std::iter::repeat_n(workspace.id, changes.files.len()));

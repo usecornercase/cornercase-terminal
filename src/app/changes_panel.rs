@@ -87,9 +87,7 @@ impl App {
         match event {
             ChangesEvent::Loaded { workspace, generation, request, result } => {
                 self.panels.changes.loaded(workspace, generation, &request, result);
-                if (self.changes_shown() && self.panels.changes.scope == changes::Scope::Every)
-                    || !self.clients.change_streams.is_empty()
-                {
+                if self.every_shown() || !self.clients.change_streams.is_empty() {
                     self.refresh_changes(Instant::now());
                 }
             }
@@ -117,12 +115,16 @@ impl App {
 
     pub(super) fn changes_shown(&self) -> bool {
         self.screen.side == Some(Side::Changes)
-            && (self.panels.changes.scope == changes::Scope::Every || self.changes_target().is_some())
+            && (self.panels.changes.scope() == changes::Scope::Every || self.changes_target().is_some())
+    }
+
+    fn every_shown(&self) -> bool {
+        self.panels.changes.scope() == changes::Scope::Every && self.changes_shown()
     }
 
     pub(super) fn refresh_changes(&mut self, now: Instant) {
         self.end_gone_streams();
-        let tui_every = self.panels.changes.scope == changes::Scope::Every && self.changes_shown();
+        let tui_every = self.every_shown();
         let every = tui_every || self.clients.change_streams.wants_every();
         let targets = if every { self.every_targets() } else { Vec::new() };
         let request =
@@ -138,10 +140,7 @@ impl App {
 
     fn project_request(&mut self, now: Instant) -> Option<(u64, u64, changes::git::Request)> {
         let target = self.changes_target()?;
-        if self.panels.changes.workspace != Some(target.workspace) {
-            self.panels.changes.workspace = Some(target.workspace);
-            self.panels.changes.scroll = 0;
-        }
+        self.panels.changes.show_workspace(target.workspace);
         self.panels.changes.request(&target, now).map(|(generation, request)| (target.workspace, generation, request))
     }
 
@@ -188,7 +187,7 @@ impl App {
 
     pub(super) fn changes_files(&self) -> Option<usize> {
         let target = self.changes_target()?;
-        let model = if self.panels.changes.scope == changes::Scope::Every && self.changes_shown() {
+        let model = if self.every_shown() {
             self.panels.changes.summary(target.workspace)
         } else {
             self.panels.changes.model(target.workspace, target.base.as_deref())
@@ -203,24 +202,26 @@ impl App {
     }
 
     pub(super) fn filtering(&self) -> bool {
-        self.overlay.is_none() && self.changes_shown() && self.panels.changes.filter.as_ref().is_some_and(|f| f.focused)
+        self.overlay.is_none() && self.changes_shown() && self.panels.changes.filter().is_some_and(|f| f.focused)
     }
 
     pub(super) fn filter_key(&mut self, key: KeyEvent) {
-        let Some(filter) = &mut self.panels.changes.filter else { return };
+        let Some(filter) = self.panels.changes.filter() else { return };
         let empty = filter.query().is_empty();
         match key.code {
             KeyCode::Esc if empty => {
-                self.panels.changes.filter = None;
+                self.panels.changes.clear_filter();
                 self.close_panel();
             }
-            KeyCode::Esc => self.panels.changes.filter = None,
-            KeyCode::Enter => filter.focused = false,
-            KeyCode::Backspace => filter.pop(),
-            KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => filter.push(c),
+            KeyCode::Esc => self.panels.changes.clear_filter(),
+            KeyCode::Enter => self.panels.changes.unfocus(),
+            KeyCode::Backspace => self.panels.changes.pop_filter(),
+            KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+                self.panels.changes.push_filter(c);
+            }
             _ => return,
         }
-        self.panels.changes.scroll = 0;
+        self.panels.changes.scroll_to_top();
     }
 
     pub(super) fn changed_diff(&self, target: &Checkout) -> Option<Arc<changes::diff::Diff>> {
@@ -241,7 +242,7 @@ impl App {
     }
 
     pub(super) fn panel_view(&self) -> Option<panel::View> {
-        let every = self.panels.changes.scope == changes::Scope::Every;
+        let every = self.panels.changes.scope() == changes::Scope::Every;
         let target = if every { None } else { self.changes_target() };
         let model = target.as_ref().and_then(|t| self.panels.changes.model(t.workspace, t.base.as_deref()));
         let targets = if every { self.every_targets() } else { Vec::new() };
@@ -250,17 +251,17 @@ impl App {
         let (folded, viewed, gaps) = self.panel_marks(&body, &owners);
         let filter = self.panel_filter(&body);
         Some(panel::View {
-            scope: self.panels.changes.scope,
+            scope: self.panels.changes.scope(),
             project: self.panel_project(),
             owners,
             headers,
-            mode: if every { Mode::Uncommitted } else { self.panels.changes.mode },
+            mode: if every { Mode::Uncommitted } else { self.panels.changes.mode() },
             base: target.and_then(|t| self.panels.changes.label(t.workspace).or(t.base)).filter(|_| !every),
             body,
             folded,
             viewed,
             gaps,
-            scroll: self.panels.changes.scroll,
+            scroll: self.panels.changes.scroll(),
             live: self.panel_live(every, &targets, model),
             light: self.themes.light(),
             muted: ui::muted(self.themes.host()),
@@ -290,7 +291,7 @@ impl App {
     }
 
     fn panel_filter(&self, body: &changes::Body) -> Option<panel::FilterView> {
-        self.panels.changes.filter.as_ref().map(|f| panel::FilterView {
+        self.panels.changes.filter().map(|f| panel::FilterView {
             query: f.query().to_string(),
             focused: f.focused && self.overlay.is_none(),
             kept: match body {
@@ -324,7 +325,7 @@ impl App {
         let Some(view) = self.panel_view() else { return Ok(()) };
         if let Some(delta) = wheel(ev.kind) {
             let max = panel::max_scroll(panel_area, &view);
-            self.panels.changes.scroll = self.panels.changes.scroll.min(max).saturating_add_signed(delta).min(max);
+            self.panels.changes.scroll_by(delta, max);
             return Ok(());
         }
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
@@ -341,7 +342,7 @@ impl App {
             return self.hunk_action(&chosen.target, &chosen.file, Hunk { index, action }, area);
         }
         self.changes_hit(hit, &view, chosen);
-        if self.panels.changes.scope == changes::Scope::Every && self.changes_shown() {
+        if self.every_shown() {
             self.refresh_changes(Instant::now());
         }
         Ok(())
@@ -362,9 +363,9 @@ impl App {
             Some(PanelHit::Mode(mode)) => self.panels.changes.set_mode(mode),
             Some(PanelHit::Close) => self.show_side(None),
             Some(PanelHit::Filter | PanelHit::Query) => {
-                self.panels.changes.filter.get_or_insert_default().focused = true;
+                self.panels.changes.focus_filter();
             }
-            Some(PanelHit::ClearFilter) => self.panels.changes.filter = None,
+            Some(PanelHit::ClearFilter) => self.panels.changes.clear_filter(),
             Some(PanelHit::Base) => self.pick_changes_base(),
             Some(PanelHit::FoldAll) => self.fold_all_files(view),
             Some(PanelHit::File(_)) => self.toggle_file_fold(view, chosen),
@@ -395,7 +396,7 @@ impl App {
         let Some(diff) = ready(view) else { return };
         let fold = view.folded.iter().any(|f| !f);
         if !fold {
-            self.panels.changes.headers.clear();
+            self.panels.changes.unfold_headers();
         }
         for (file, workspace) in diff.files.iter().zip(&view.owners) {
             self.panels.changes.set_fold(*workspace, file, fold);
@@ -437,7 +438,7 @@ impl App {
     }
 
     pub(super) fn gap_loaded(&mut self, workspace: u64, file: &ChangedFile, hunk: usize, lines: Vec<changes::GapLine>) {
-        let current = if self.panels.changes.scope == changes::Scope::Every {
+        let current = if self.panels.changes.scope() == changes::Scope::Every {
             self.panels
                 .changes
                 .summary(workspace)

@@ -324,7 +324,7 @@ impl App {
         let opening = self.screen.side != Some(Side::Changes);
         self.toggle_changes();
         if opening {
-            self.panels.changes.filter.get_or_insert_default().focused = true;
+            self.panels.changes.focus_filter();
         }
     }
 
