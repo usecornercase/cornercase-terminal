@@ -38,15 +38,15 @@ pub(super) fn hit(area: Rect, files: &Files, top: u16, scroll: u16, pos: Positio
     (index < files.rows.len()).then_some(Hit::File(index))
 }
 
-pub(super) fn draw(
-    buf: &mut Buffer,
-    area: Rect,
-    files: &Files,
-    (top, scroll): (u16, u16),
-    muted: Color,
-    light: bool,
-    hover: Option<Position>,
-) {
+#[derive(Clone, Copy)]
+pub(super) struct Look {
+    pub(super) muted: Color,
+    pub(super) light: bool,
+    pub(super) hover: Option<Position>,
+}
+
+pub(super) fn draw(buf: &mut Buffer, area: Rect, files: &Files, (top, scroll): (u16, u16), look: Look) {
+    let Look { muted, light, hover } = look;
     let at = |row: u16| {
         let content = top.saturating_add(row);
         let y = content.checked_sub(scroll)?;

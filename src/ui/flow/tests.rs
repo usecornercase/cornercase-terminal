@@ -164,7 +164,7 @@ mod plan {
     #[test]
     fn a_flow_being_edited_still_draws() {
         let mut flow = full_issue();
-        flow.stages.push(crate::flows::Stage::default());
+        flow.stages.push(Stage::default());
         flow.stages[0].roles.push("nobody".into());
         flow.stages[1].back = Some(crate::flows::Back { to: 7, ..crate::flows::Back::default() });
         let d = Diagram::plan(&flow, MUTED, false);
