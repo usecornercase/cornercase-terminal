@@ -85,7 +85,7 @@ fn a_failed_probe_answers_its_error_and_the_reading_before_it() {
     let (mut app, rx, dir) = with_agents(&[(CLAUDE, &claude)]);
     fresh(&mut app, &rx);
     write_executable(&dir.path().join(CLAUDE), "#!/bin/sh\nexec sleep 30\n");
-    app.usages.timeout = Duration::from_millis(200);
+    app.usages.set_timeout(Duration::from_millis(200));
     let answer = fresh(&mut app, &rx);
     let claude = plan(&answer, CLAUDE);
     assert_eq!(claude.error.as_deref(), Some("claude did not answer in time"));
@@ -112,7 +112,7 @@ fn an_answer_does_not_wait_for_a_probe_started_after_it() {
         "while [ ! -e \"$(dirname \"$0\")/go\" ]; do sleep 0.05; done\nread -r a\nread -r b\nread -r c\necho '{CODEX_ANSWER}'"
     ));
     let (mut app, rx, dir) = with_agents(&[(CLAUDE, &claude), (CODEX, &codex)]);
-    app.usages.timeout = Duration::from_secs(3);
+    app.usages.set_timeout(Duration::from_secs(3));
     let text = json!({"contract": 1, "command": "usage", "args": {}}).to_string();
     app.request(CLIENT, &text, Some(AREA), Instant::now());
     pump_until(&mut app, &rx, "claude answers", |a| a.usages.state.probe(crate::agents::Known::Claude).answers() == 1);

@@ -20,13 +20,24 @@ use crate::ui;
 
 pub(super) struct Usages {
     pub(super) state: usage::State,
-    pub(super) page: usage::Page,
-    pub(super) timeout: Duration,
+    page: usage::Page,
+    timeout: Duration,
 }
 
 impl Default for Usages {
     fn default() -> Self {
         Self { state: usage::State::default(), page: usage::Page::default(), timeout: usage::TIMEOUT }
+    }
+}
+
+impl Usages {
+    pub(super) fn timeout(&self) -> Duration {
+        self.timeout
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_timeout(&mut self, timeout: Duration) {
+        self.timeout = timeout;
     }
 }
 

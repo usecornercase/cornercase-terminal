@@ -114,7 +114,7 @@ impl App {
             return Err("a queue entry needs --prompt or --issue".into());
         }
         let reset = reset_agent(&at)?;
-        let probe = reset.map(|agent| (agent, agents::command(&self.config, agent.name()), self.usages.timeout));
+        let probe = reset.map(|agent| (agent, agents::command(&self.config, agent.name()), self.usages.timeout()));
         let repo_root = crate::git::is_repo_root(&task.place.project);
         let (named, follow) = (add.label.is_some(), add.worktree.is_none());
         let template = self.config.prompt.clone();
