@@ -49,6 +49,12 @@ pub(super) struct LinkPress {
     pub(super) held: Option<MouseEvent>,
 }
 
+#[derive(Default)]
+pub(super) struct Clicks {
+    pub(super) border: Option<(ui::Border, Instant)>,
+    pub(super) divider: Option<(u64, Vec<bool>, Instant)>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Drag {
     Border(ui::Border),
@@ -128,12 +134,12 @@ impl App {
 
     pub(super) fn press_border(&mut self, border: ui::Border, now: Instant) {
         let double =
-            self.screen.border_click.is_some_and(|(b, at)| b == border && now.duration_since(at) < DOUBLE_CLICK);
+            self.screen.clicks.border.is_some_and(|(b, at)| b == border && now.duration_since(at) < DOUBLE_CLICK);
         if double {
             self.screen.widths = self.screen.widths.reset(border);
-            self.screen.border_click = None;
+            self.screen.clicks.border = None;
         } else {
-            self.screen.border_click = Some((border, now));
+            self.screen.clicks.border = Some((border, now));
             self.screen.drag = Some(Drag::Border(border));
         }
     }
@@ -164,7 +170,7 @@ impl App {
                 }
                 _ => self.screen.widths.dragged(border, column, main.width),
             };
-            self.screen.border_click = None;
+            self.screen.clicks.border = None;
         } else {
             self.screen.drag = None;
         }

@@ -179,16 +179,17 @@ impl App {
     fn press_divider(&mut self, tab: u64, path: Vec<bool>, now: Instant) {
         let double = self
             .screen
-            .divider_click
+            .clicks
+            .divider
             .as_ref()
             .is_some_and(|(t, p, at)| *t == tab && *p == path && now.duration_since(*at) < DOUBLE_CLICK);
         if double {
             if let Some(t) = self.tab_mut().filter(|t| t.id == tab) {
                 t.layout.set_ratio(&path, split::HALF);
             }
-            self.screen.divider_click = None;
+            self.screen.clicks.divider = None;
         } else {
-            self.screen.divider_click = Some((tab, path.clone(), now));
+            self.screen.clicks.divider = Some((tab, path.clone(), now));
             self.screen.drag = Some(Drag::Divider { tab, path });
         }
     }
@@ -198,7 +199,7 @@ impl App {
             self.screen.drag = None;
             return;
         }
-        self.screen.divider_click = None;
+        self.screen.clicks.divider = None;
         let Some(t) = self.tab_mut().filter(|t| t.id == tab) else { return };
         if let Some(divider) = t.layout.dividers(pane).into_iter().find(|d| d.path == path) {
             t.layout.set_ratio(path, split::ratio_at(&divider, Position::new(ev.column, ev.row)));

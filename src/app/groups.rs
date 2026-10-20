@@ -10,7 +10,7 @@ use crate::state;
 use crate::todo::{self, Todos};
 use crate::ui;
 
-use super::interaction::Drag;
+use super::interaction::{Clicks, Drag};
 use super::layout::Side;
 use super::notifications::Notices;
 use super::queue_panel::QueueRuntime;
@@ -27,8 +27,7 @@ pub(super) struct Screen {
     pub(super) hover: Option<Position>,
     pub(super) widths: state::Widths,
     pub(super) drag: Option<Drag>,
-    pub(super) border_click: Option<(ui::Border, Instant)>,
-    pub(super) divider_click: Option<(u64, Vec<bool>, Instant)>,
+    pub(super) clicks: Clicks,
 }
 
 #[derive(Default)]
