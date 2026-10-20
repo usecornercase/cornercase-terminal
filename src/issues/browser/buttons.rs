@@ -79,34 +79,40 @@ impl Browser {
             return vec![Button::Done, Button::Clear];
         }
         match &self.screen {
-            Screen::Detail { raw, issue, .. } => {
-                let mut buttons = vec![Button::Start, Button::Schedule, Button::Flow, Button::Agent];
-                if !issue.source.in_repository() && self.places.len() > 1 {
-                    buttons.push(Button::Where);
-                }
-                if self.agent_accounts().is_some() {
-                    buttons.push(Button::Account);
-                }
-                if self.agents.chosen.is_some() && self.agents.chosen != self.agents.default {
-                    buttons.push(Button::MakeDefault);
-                }
-                buttons.extend([if *raw { Button::Rendered } else { Button::Raw }, Button::Copy, Button::Back]);
-                buttons
-            }
+            Screen::Detail { raw, issue, .. } => self.detail_buttons(*raw, issue),
             Screen::List => match self.token_form().map(|source| self.form_step(source)) {
-                Some(Step::Workspace) if self.token_form() == Some(Source::Asana) => {
-                    vec![Button::Next, Button::Back, Button::Cancel]
-                }
-                Some(Step::Site | Step::Workspace | Step::Server) => vec![Button::Next, Button::Cancel],
-                Some(Step::Email) => vec![Button::Next, Button::Back, Button::Cancel],
-                Some(Step::Token)
-                    if matches!(self.token_form(), Some(Source::Jira | Source::Plane | Source::Gitlab)) =>
-                {
-                    vec![Button::Connect, Button::Back, Button::Cancel]
-                }
-                Some(Step::Token) => vec![Button::Connect, Button::Cancel],
+                Some(step) => self.form_buttons(step),
                 None => self.list_buttons(),
             },
+        }
+    }
+
+    fn detail_buttons(&self, raw: bool, issue: &Issue) -> Vec<Button> {
+        let mut buttons = vec![Button::Start, Button::Schedule, Button::Flow, Button::Agent];
+        if !issue.source.in_repository() && self.places.len() > 1 {
+            buttons.push(Button::Where);
+        }
+        if self.agent_accounts().is_some() {
+            buttons.push(Button::Account);
+        }
+        if self.agents.chosen.is_some() && self.agents.chosen != self.agents.default {
+            buttons.push(Button::MakeDefault);
+        }
+        buttons.extend([if raw { Button::Rendered } else { Button::Raw }, Button::Copy, Button::Back]);
+        buttons
+    }
+
+    fn form_buttons(&self, step: Step) -> Vec<Button> {
+        match step {
+            Step::Workspace if self.token_form() == Some(Source::Asana) => {
+                vec![Button::Next, Button::Back, Button::Cancel]
+            }
+            Step::Site | Step::Workspace | Step::Server => vec![Button::Next, Button::Cancel],
+            Step::Email => vec![Button::Next, Button::Back, Button::Cancel],
+            Step::Token if matches!(self.token_form(), Some(Source::Jira | Source::Plane | Source::Gitlab)) => {
+                vec![Button::Connect, Button::Back, Button::Cancel]
+            }
+            Step::Token => vec![Button::Connect, Button::Cancel],
         }
     }
 
@@ -160,39 +166,8 @@ impl Browser {
 
     pub(super) fn press(&mut self, button: Button) -> Action {
         match button {
-            Button::Start | Button::Schedule => {
-                self.scheduling = button == Button::Schedule;
-                match &self.screen {
-                    Screen::Detail { issue, .. } => {
-                        let issue = (**issue).clone();
-                        self.start(issue)
-                    }
-                    Screen::List => match self.selected() {
-                        Some(issue) if self.ready_to_start(&issue) => self.start(issue),
-                        Some(issue) => {
-                            let read = self.read(issue.clone());
-                            let _ = self.start(issue);
-                            read
-                        }
-                        None => Action::None,
-                    },
-                }
-            }
-            Button::Flow => match &self.screen {
-                Screen::Detail { issue, .. } => {
-                    let issue = (**issue).clone();
-                    self.start_flow(issue)
-                }
-                Screen::List => match self.selected() {
-                    Some(issue) if !self.needs_place(&issue) => self.start_flow(issue),
-                    Some(issue) => {
-                        let read = self.read(issue.clone());
-                        let _ = self.start_flow(issue);
-                        read
-                    }
-                    None => Action::None,
-                },
-            },
+            Button::Start | Button::Schedule => self.press_start(button == Button::Schedule),
+            Button::Flow => self.press_flow(),
             Button::Agent | Button::Where | Button::Account => {
                 let pick = match button {
                     Button::Agent => Pick::Agent,
@@ -202,32 +177,16 @@ impl Browser {
                 self.open_picker(pick, After::Nothing);
                 Action::None
             }
-            Button::New => Action::QueueNew,
-            Button::RunNow => self.selected_queued().map_or(Action::None, |queued| Action::QueueRun(queued.id)),
-            Button::Remove => self.selected_queued().map_or(Action::None, |queued| Action::QueueRemove(queued.id)),
-            Button::ClearStarted => Action::QueueClear,
+            Button::New | Button::RunNow | Button::Remove | Button::ClearStarted => self.press_queue(button),
             Button::Done => self.close_people(),
-            Button::Clear => {
-                for source in self.people_sources() {
-                    for field in 0..2 {
-                        self.set_person(source, field, Who::Anyone);
-                    }
-                }
-                Action::None
-            }
+            Button::Clear => self.clear_people(),
             Button::MakeDefault => self.agents.chosen.clone().map_or(Action::None, Action::SetDefaultAgent),
             Button::Choose => self.choose(None),
             Button::Refresh => {
                 let sources = self.sources();
                 if sources.is_empty() { Action::None } else { Action::Load(sources) }
             }
-            Button::Raw | Button::Rendered => {
-                if let Screen::Detail { raw, scroll, .. } = &mut self.screen {
-                    *raw = !*raw;
-                    *scroll = 0;
-                }
-                Action::None
-            }
+            Button::Raw | Button::Rendered => self.flip_raw(),
             Button::Copy => match &self.screen {
                 Screen::Detail { issue, .. } if !issue.url.is_empty() => Action::Copy(issue.url.clone()),
                 _ => Action::None,
@@ -238,19 +197,82 @@ impl Browser {
             },
             Button::Connect | Button::Next => self.submit_token(),
             Button::Cancel => Action::Close,
-            Button::Back if self.picker.is_some() => {
-                self.picker = None;
-                Action::None
+            Button::Back => self.press_back(),
+        }
+    }
+
+    fn press_start(&mut self, scheduling: bool) -> Action {
+        self.scheduling = scheduling;
+        match &self.screen {
+            Screen::Detail { issue, .. } => {
+                let issue = (**issue).clone();
+                self.start(issue)
             }
-            Button::Back if self.token_form().is_some() => {
-                self.step_back();
-                Action::None
+            Screen::List => match self.selected() {
+                Some(issue) if self.ready_to_start(&issue) => self.start(issue),
+                Some(issue) => {
+                    let read = self.read(issue.clone());
+                    let _ = self.start(issue);
+                    read
+                }
+                None => Action::None,
+            },
+        }
+    }
+
+    fn press_flow(&mut self) -> Action {
+        match &self.screen {
+            Screen::Detail { issue, .. } => {
+                let issue = (**issue).clone();
+                self.start_flow(issue)
             }
-            Button::Back => {
-                self.screen = Screen::List;
-                Action::None
+            Screen::List => match self.selected() {
+                Some(issue) if !self.needs_place(&issue) => self.start_flow(issue),
+                Some(issue) => {
+                    let read = self.read(issue.clone());
+                    let _ = self.start_flow(issue);
+                    read
+                }
+                None => Action::None,
+            },
+        }
+    }
+
+    fn press_queue(&mut self, button: Button) -> Action {
+        match button {
+            Button::RunNow => self.selected_queued().map_or(Action::None, |queued| Action::QueueRun(queued.id)),
+            Button::Remove => self.selected_queued().map_or(Action::None, |queued| Action::QueueRemove(queued.id)),
+            Button::ClearStarted => Action::QueueClear,
+            _ => Action::QueueNew,
+        }
+    }
+
+    fn clear_people(&mut self) -> Action {
+        for source in self.people_sources() {
+            for field in 0..2 {
+                self.set_person(source, field, Who::Anyone);
             }
         }
+        Action::None
+    }
+
+    fn flip_raw(&mut self) -> Action {
+        if let Screen::Detail { raw, scroll, .. } = &mut self.screen {
+            *raw = !*raw;
+            *scroll = 0;
+        }
+        Action::None
+    }
+
+    fn press_back(&mut self) -> Action {
+        if self.picker.is_some() {
+            self.picker = None;
+        } else if self.token_form().is_some() {
+            self.step_back();
+        } else {
+            self.screen = Screen::List;
+        }
+        Action::None
     }
 
     pub(super) fn switch(&mut self, delta: isize) -> Action {

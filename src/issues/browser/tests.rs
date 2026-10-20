@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButto
 use ratatui::style::Color;
 use ratatui::text::Line;
 
-use super::view::detail_lines;
+use super::view::{Shown, detail_lines};
 use super::*;
 use crate::issues::{Comment, issue};
 
@@ -292,10 +292,11 @@ mod detail {
             comments: vec![Comment { author: "bo".into(), created_at: String::new(), body: "Same".into() }],
         };
         let issue = issue(Source::Github, 7, "Login fails");
-        let text: Vec<String> = detail_lines(&issue, Some(&detail), 30, 0, false, Vec::new())
-            .iter()
-            .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect())
-            .collect();
+        let text: Vec<String> =
+            detail_lines(Shown { issue: &issue, detail: Some(&detail), width: 30, now: 0, raw: false }, Vec::new())
+                .iter()
+                .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect())
+                .collect();
         assert_eq!(
             text,
             [
