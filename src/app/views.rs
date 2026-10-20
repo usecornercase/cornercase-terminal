@@ -9,11 +9,13 @@ use crate::control::{self, Ids, Item, OpenView, Report, SetView, Snapshot, ViewI
 use crate::log;
 use crate::project::view::{Claim, Shown, controller};
 use crate::project::{Hierarchy, Tab, TabAt, WorkspaceAt};
+use crate::ui;
 
 use super::events::Streamed;
 
-fn resize_shown(tab: &mut Tab, area: Rect) {
-    for (id, rect) in tab.shown(area) {
+fn resize_shown(tab: &mut Tab, area: Rect, footer: bool) {
+    for (id, leaf) in tab.shown(area) {
+        let (rect, _) = ui::split_footer(leaf, footer);
         if let Some(term) = tab.pane_by_mut(id) {
             term.resize(rect.height.max(1), rect.width.max(1));
         }
@@ -383,11 +385,11 @@ impl App {
         if self.clients.views.window.is_some_and(|(tab, _)| Some(tab) != focus) {
             self.clients.views.window = None;
         }
-        let pane = window.map(|area| self.layout(area).pane);
+        let pane = window.map(|area| (self.layout(area).pane, self.pane_footer()));
         let sized = self.clients.views.sized(focus);
         for tab in self.projects.tabs_mut() {
-            let Some(area) = sized.get(&tab.id).copied().or(pane) else { continue };
-            resize_shown(tab, area);
+            let Some((area, footer)) = sized.get(&tab.id).map(|area| (*area, false)).or(pane) else { continue };
+            resize_shown(tab, area, footer);
         }
         self.log_controllers(&sized);
     }
@@ -410,6 +412,10 @@ impl App {
     pub(in crate::app) fn tab_area(&self, tab: u64, window: Rect) -> Rect {
         let view = self.clients.views.sized(self.focus().tab).get(&tab).copied();
         view.unwrap_or_else(|| self.layout(window).pane)
+    }
+
+    pub(in crate::app) fn tab_footer(&self, tab: u64) -> bool {
+        self.pane_footer() && !self.clients.views.sized(self.focus().tab).contains_key(&tab)
     }
 
     pub(super) fn publish_views(&mut self, report: &Report) {

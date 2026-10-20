@@ -11,7 +11,7 @@ use crate::list::COMBO_ROWS;
 use crate::todo::editor::Editor;
 
 pub(crate) const START: &str = "start";
-const ACCOUNT_HINT: &str = "only this run: new tabs keep the one in use · enter opens the list";
+const ACCOUNT_HINT: &str = "only this run: the default stays · enter opens the list";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Focus {

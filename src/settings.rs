@@ -220,7 +220,7 @@ impl Detail {
             Self::Context => "how full its context is, such as 23%",
             Self::Memory => "the RAM its processes use, such as 1.2 GB",
             Self::Account => "the account an agent uses; only once you add an account",
-            Self::AccountSwitcher => "a bar at the bottom; only once you add an account",
+            Self::AccountSwitcher => "a row under each pane; only once you add an account",
             Self::AccountPicker => "in issues, flows and the queue; only once you add an account",
         }
     }
@@ -235,7 +235,7 @@ impl Detail {
             (Self::Memory, false) => "tabs hide their memory",
             (Self::Account, true) => "agent tabs show their account",
             (Self::Account, false) => "agent tabs hide their account",
-            (Self::AccountSwitcher, true) => "each agent's account shows at the bottom",
+            (Self::AccountSwitcher, true) => "each pane shows its accounts in a row under it",
             (Self::AccountSwitcher, false) => "the account switcher is hidden",
             (Self::AccountPicker, true) => "starting an agent asks for its account",
             (Self::AccountPicker, false) => "starting an agent uses its chosen account",

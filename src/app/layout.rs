@@ -81,19 +81,9 @@ impl App {
     pub(super) fn layout(&self, area: Rect) -> ui::Areas {
         let (panel, sidebar) = (self.panel_shown(), self.sidebar());
         let (agents, icons) = (self.config.agents_section, self.config.icon_bar);
-        let columns =
-            |main| ui::full_layout(main, self.screen.widths, ui::Screen { changes: panel, sidebar, agents, icons });
-        ui::window_layout(area, self.status_bar(), columns)
+        ui::full_layout(area, self.screen.widths, ui::Screen { changes: panel, sidebar, agents, icons })
             .with_tab_bar(config::Tabs::from_setting(&self.config.tabs) == config::Tabs::Top)
             .with_full_screen(self.file_full_screen(), area)
-    }
-
-    pub(super) fn status_bar(&self) -> bool {
-        !self.account_pills().is_empty()
-    }
-
-    pub(super) fn above_status_bar(&self, area: Rect) -> Rect {
-        ui::status_split(area, self.status_bar()).0
     }
 
     pub(super) fn panel_shown(&self) -> bool {
@@ -125,8 +115,12 @@ impl App {
     }
 
     pub(super) fn pane_size(&self, area: Rect) -> (u16, u16) {
-        let pane = self.layout(area).pane;
+        let (pane, _) = ui::split_footer(self.layout(area).pane, self.pane_footer());
         (pane.height.max(1), pane.width.max(1))
+    }
+
+    pub(super) fn pane_footer(&self) -> bool {
+        self.config.account_switcher && self.has_accounts()
     }
 
     pub(super) fn visible_tab(&self) -> Option<u64> {

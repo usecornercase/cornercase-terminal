@@ -128,7 +128,8 @@ fn other_rows_stay_plain() {
 #[test]
 fn no_row_is_lit_while_an_overlay_is_open() {
     let (mut v, r) = hovering(sample(false), AREA, Row::Project(1));
-    v.overlay = Some(Overlay::Menu { at: Position::new(80, 1), items: vec!["rename tab".into()] });
+    v.overlay =
+        Some(Overlay::Menu { at: Position::new(80, 1), items: vec!["rename tab".into()], disabled: Vec::new() });
     assert_eq!(backgrounds(&v, AREA, r), vec![Color::Reset]);
 }
 

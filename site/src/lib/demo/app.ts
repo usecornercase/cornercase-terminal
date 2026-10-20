@@ -113,7 +113,7 @@ export const PAGE_NAMES = ['Worktrees', 'Agents', 'Accounts', 'Flows', 'Issues',
 const ACCOUNT_AGENTS = [['Claude Code', 'claude'], ['Codex', 'codex'], ['Gemini CLI', 'gemini']] as const;
 const ACCOUNT_SWITCHES = [
   ['account', 'account', 'the account an agent uses; only once you add an account'],
-  ['accountSwitcher', 'account switcher', "a bar at the bottom; only once you add an account"],
+  ['accountSwitcher', 'account switcher', "a row under each pane; only once you add an account"],
   ['accountPicker', 'account picker', 'in issues, flows and the queue; only once you add an account'],
 ] as const;
 

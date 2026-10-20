@@ -402,7 +402,7 @@ mod pull_request_tag {
         )
         .expect("a target");
         v.hover = Some(r.as_position());
-        v.overlay = Some(Overlay::Menu { at: Position::new(0, 0), items: vec!["rename".into()] });
+        v.overlay = Some(Overlay::Menu { at: Position::new(0, 0), items: vec!["rename".into()], disabled: Vec::new() });
 
         assert!(!badge_cell(&v).modifier.contains(Modifier::UNDERLINED));
     }

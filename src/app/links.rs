@@ -11,6 +11,7 @@ use crate::files::link::{self, Target};
 use crate::project::Tab;
 use crate::term::emulator::Snapshot;
 use crate::term::mouse::MouseMode;
+use crate::ui;
 
 #[derive(Clone, Copy)]
 pub(super) struct Resolving<'a> {
@@ -89,7 +90,9 @@ impl App {
             self.overlay.is_none()
                 && !self.file_full_screen()
                 && match &self.screen.drag {
-                    Some(Drag::Row(_) | Drag::Pane(_) | Drag::Selection { .. } | Drag::Divider { .. }) => false,
+                    Some(
+                        Drag::Row(_) | Drag::Pane(_) | Drag::Selection { .. } | Drag::Divider { .. } | Drag::Footer(_),
+                    ) => false,
                     Some(Drag::Border(_) | Drag::Link(_) | Drag::Lines { .. }) | None => true,
                 }
         })
@@ -98,12 +101,12 @@ impl App {
     pub(super) fn hovered_link(
         tab: &Tab,
         screens: &[Snapshot],
-        pane_area: Rect,
+        (pane_area, footer): (Rect, bool),
         hover: Position,
         resolving: Resolving<'_>,
     ) -> Option<(u16, Range<u16>)> {
         let term = tab.pane()?;
-        let pane = tab.rect(pane_area, term.id)?;
+        let (pane, _) = ui::split_footer(tab.rect(pane_area, term.id)?, footer);
         if !pane.contains(hover) {
             return None;
         }

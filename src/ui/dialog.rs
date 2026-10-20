@@ -123,7 +123,7 @@ pub(crate) enum Note {
 }
 
 pub(crate) enum Overlay {
-    Menu { at: Position, items: Vec<String> },
+    Menu { at: Position, items: Vec<String>, disabled: Vec<bool> },
     Form(Form),
     Queue(Box<crate::queue::form::Form>),
     GroupStyle(GroupEntry),

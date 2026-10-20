@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use ratatui::layout::Rect;
@@ -194,9 +195,15 @@ impl App {
     }
 
     pub(super) fn add_tab(&mut self, at: WorkspaceAt, area: Rect) -> Result<()> {
-        let tab = self.push_tab(at, area, None)?;
+        let accounts = self.inherited_accounts(at);
+        let tab = self.push_tab_in(at, area, None, accounts)?;
         self.show_tab(tab);
         Ok(())
+    }
+
+    fn inherited_accounts(&self, at: WorkspaceAt) -> Accounts {
+        let pane = self.projects.active_tab(at).and_then(|tab| self.projects.tab(tab).pane()).map(|term| term.id);
+        self.requested_accounts_from(pane, None, &BTreeMap::new()).unwrap_or_else(|_| self.active_accounts())
     }
 
     pub(super) fn show_tab(&mut self, at: TabAt) {
@@ -209,6 +216,7 @@ impl App {
         start.and_then(|start| start.accounts.clone()).unwrap_or_else(|| self.active_accounts())
     }
 
+    #[cfg(test)]
     pub(super) fn push_tab(&mut self, at: WorkspaceAt, area: Rect, name: Option<String>) -> Result<TabAt> {
         let accounts = self.active_accounts();
         self.push_tab_in(at, area, name, accounts)

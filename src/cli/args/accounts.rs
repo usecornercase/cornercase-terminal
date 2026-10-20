@@ -8,14 +8,14 @@ pub(crate) struct ProfileArg {
         long,
         value_name = "NAME",
         help = "Start it with the accounts of this profile; an empty name is each agent's own login [default: the \
-                accounts in use]"
+                default accounts]"
     )]
     pub(crate) profile: Option<String>,
     #[arg(
         long = "account",
         value_name = "AGENT=ACCOUNT",
         value_parser = choice,
-        help = "Start that agent with this account, over the ones in use; AGENT= is its own login. Give it once \
+        help = "Start that agent with this account, over the default ones; AGENT= is its own login. Give it once \
                 per agent"
     )]
     pub(crate) accounts: Vec<(String, String)>,
@@ -37,7 +37,7 @@ pub(crate) enum AccountAction {
     Remove(AccountRemoveArgs),
     #[command(about = "Give an account a name the window shows; its folder keeps its name")]
     Rename(AccountRenameArgs),
-    #[command(about = "Use an account for an agent's new tabs; open tabs keep theirs")]
+    #[command(about = "Make an account the default for an agent's new workspaces; open panes keep theirs")]
     Use(AccountUseArgs),
     #[command(about = "Restart an agent's open tabs on an account, keeping their conversations")]
     Restart(AccountRestartArgs),
@@ -78,7 +78,7 @@ pub(crate) struct AccountUseArgs {
 pub(crate) struct AccountRestartArgs {
     #[arg(value_name = "AGENT", help = "The agent: claude, codex or gemini")]
     pub(crate) provider: String,
-    #[arg(value_name = "ACCOUNT", help = "The account's folder name [default: the one in use]")]
+    #[arg(value_name = "ACCOUNT", help = "The account's folder name [default: the agent's default]")]
     pub(crate) account: Option<String>,
     #[arg(long, conflicts_with = "account", help = "Restart them on the agent's own login, outside any account")]
     pub(crate) system: bool,
@@ -160,7 +160,7 @@ pub(crate) enum ProfileAction {
         #[arg(long, value_name = "NEW", help = "A new name for the profile")]
         rename: Option<String>,
     },
-    #[command(about = "Make a profile the active one: new tabs and agents use its accounts")]
+    #[command(about = "Make a profile the active one: new workspaces and agents use its accounts")]
     Use {
         #[arg(value_name = "NAME", required_unless_present = "system", help = "The profile's name")]
         name: Option<String>,

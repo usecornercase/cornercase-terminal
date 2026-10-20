@@ -8,6 +8,8 @@ use crate::agents::codex::fake::FakeCodex;
 use crate::control::{self as wire, Command, Until};
 use crate::test_util::write_executable;
 
+mod menu;
+mod rows;
 mod shells;
 
 struct Setup {
@@ -66,6 +68,16 @@ impl Setup {
         let mut run = crate::flows::run::Run::new(workspace, crate::flows::Flow::default(), "fix it".into());
         run.members.push(crate::flows::run::Member { role: "coder".into(), pane });
         self.app.runs.push(run);
+    }
+
+    fn set_custom(&mut self, pane: u64) {
+        let root = self.config.path().join("accounts");
+        let outside = self.project.path().join("elsewhere");
+        let env = move |_| vec![("CLAUDE_CONFIG_DIR".to_string(), outside.display().to_string())];
+        let term = self.app.projects.pane_by_mut(pane).expect("the pane");
+        term.set_accounts(accounts::Accounts::default());
+        term.see_account(&root, Some((i32::MAX, Known::Claude, &[])), env);
+        assert_eq!(term.agent_account(), Some((Known::Claude, Some(accounts::CUSTOM))));
     }
 
     fn shell_beside_personal() -> (Self, u64) {
@@ -286,13 +298,7 @@ fn a_flow_member_and_a_custom_account_stay_as_they_are() {
     assert_eq!(setup.app.term().and_then(Term::shell_pid), old_shell);
 
     setup.app.runs.clear();
-    let root = setup.config.path().join("accounts");
-    let outside = setup.project.path().join("elsewhere");
-    let env = move |_| vec![("CLAUDE_CONFIG_DIR".to_string(), outside.display().to_string())];
-    let term = setup.app.projects.pane_by_mut(pane).expect("the pane");
-    term.set_accounts(accounts::Accounts::default());
-    term.see_account(&root, Some((i32::MAX, Known::Claude, &[])), env);
-    assert_eq!(term.agent_account(), Some((Known::Claude, Some(accounts::CUSTOM))));
+    setup.set_custom(pane);
 
     let skipped = vec![(pane, "its account was not set by cornercase".to_string())];
     assert_eq!(setup.app.panes_on_other_accounts(Known::Claude, "personal"), (Vec::new(), skipped));

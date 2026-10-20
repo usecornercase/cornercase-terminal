@@ -66,7 +66,7 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
   crop={[2, 1, 106, 24]}
 />
 
-Your [agent accounts](../../guides/accounts/). One section per agent that takes accounts (Claude Code, Codex, Gemini CLI): first the agent's own login (*System*, or the name you gave it, with its usual folder), then a row per account (whether it is logged in and as whom, its folder, and the settings that stopped being shared), each followed by **rename…**, which gives it a name for the window, and last **`+ add account`**, which makes one and opens a tab to log in. `●` marks the one new tabs use; `Enter` on a row uses it from now on, `Backspace` on an account asks before removing it. When a token variable such as `ANTHROPIC_API_KEY` is set where the server runs, a line at the top names it, since it wins over the accounts. What you choose here is kept in [`account_names`](#account_names) and [`active_accounts`](#active_accounts); scripts use `cornercase account`, and the profiles of `cornercase profile` ([`profiles`](#profiles), [`profile`](#profile)).
+Your [agent accounts](../../guides/accounts/). One section per agent that takes accounts (Claude Code, Codex, Gemini CLI): first the agent's own login (*System*, or the name you gave it, with its usual folder), then a row per account (whether it is logged in and as whom, its folder, and the settings that stopped being shared), each followed by **rename…**, which gives it a name for the window, and last **`+ add account`**, which makes one and opens a tab to log in. `●` marks each agent's default account, the one new workspaces start with; `Enter` on a row makes it the default, `Backspace` on an account asks before removing it. When a token variable such as `ANTHROPIC_API_KEY` is set where the server runs, a line at the top names it, since it wins over the accounts. What you choose here is kept in [`account_names`](#account_names) and [`active_accounts`](#active_accounts); scripts use `cornercase account`, and the profiles of `cornercase profile` ([`profiles`](#profiles), [`profile`](#profile)).
 
 ### Flows
 
@@ -124,7 +124,7 @@ Your [agent accounts](../../guides/accounts/). One section per agent that takes 
 | **context** | Show how full its context is on that line, such as `23%`. With the model off too, and the memory off, every tab takes one row. See [How full the context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). |
 | **memory** | Show how much memory every tab uses, at the end of an agent's line or on a second line in a shell tab, such as `1.2 GB`. Off by default. See [How much memory a tab uses](../../guides/projects-workspaces-tabs/#how-much-memory-a-tab-uses). |
 | **account** | Show the [account](../../guides/accounts/) an agent uses on its second line, such as `work`. On by default; shown only once you have an account. |
-| **account switcher** | Show a status bar at the bottom of the window with a button per agent, such as ` claude: work ▾ `, to choose the account new tabs use. On by default; shown only once you have an account. |
+| **account switcher** | Show a row under each pane with its accounts, such as ` claude: work ▾ `, to change that pane's account. On by default; shown only once you have an account. |
 | **account picker** | Offer an account list when you start an issue or a flow, or schedule one. On by default; shown only once you have an account. |
 | **desktop notifications** | How your terminal tells you that an agent in another tab needs you or finished: *auto* picks what your terminal understands, *osc777*, *osc9*, *osc99* or *bell* force one, *off* sends none. The toast in cornercase shows either way; see [Notifications](../../guides/projects-workspaces-tabs/#notifications). |
 | **sound** | Also play a sound when an agent in another tab needs you or finishes, on the computer the window is on, even while your terminal is focused and inside tmux. On by default. See [A sound](../../guides/projects-workspaces-tabs/#a-sound). |
@@ -473,11 +473,11 @@ Whether an agent's tab, the tab bar and the agents section name the [account](..
 
 #### `account_switcher`
 
-Whether a status bar along the bottom of the window shows a button per agent with accounts, such as ` claude: work ▾ `, to choose the [account](../../guides/accounts/) new tabs use. The panes give it one row while it shows. Nothing shows while you have no account.
+Whether each pane gives its last row to its [accounts](../../guides/accounts/#change-a-panes-account): the button of the agent it runs, such as ` claude: work ▾ `, or in a shell one per agent with accounts, to change that pane's account. Each terminal is one row shorter while it shows. Nothing shows while you have no account. Off, the right-click menu of a pane and the ` ⋯ ` menu of a tab still have **account ›**.
 
 #### `account_picker`
 
-Whether the dialogs that start an issue or a flow, and the schedule form, offer an account list for the agents that have accounts. Off, they use the accounts in use. Nothing shows while you have no account.
+Whether the dialogs that start an issue or a flow, and the schedule form, offer an account list for the agents that have accounts. Off, they use the default accounts. Nothing shows while you have no account.
 
 #### `desktop_notifications`
 
@@ -535,7 +535,7 @@ Your [profiles](../../guides/accounts/): for each, the account each agent uses. 
 
 #### `profile`
 
-The active profile, whose accounts new tabs and agents start with. Empty, the default, means no profile: each agent uses the account in [`active_accounts`](#active_accounts), else its usual login. A name that is not in `profiles` counts as empty. `cornercase profile use` changes it, and an edit to the file applies at once. Choosing an account in the window empties it.
+The active profile, whose accounts are the default, the ones new workspaces and agents start with. Empty, the default, means no profile: each agent uses the account in [`active_accounts`](#active_accounts), else its usual login. A name that is not in `profiles` counts as empty. `cornercase profile use` changes it, and an edit to the file applies at once. Choosing a default in Settings › Accounts empties it.
 
 #### `account_names`
 
@@ -547,7 +547,7 @@ The names the window shows for your [accounts](../../guides/accounts/), per agen
 
 #### `active_accounts`
 
-The account each agent's new tabs start with while no [profile](#profile) is active; an agent left out uses its usual login. Left out of the file while it is empty. The buttons above **`Usage`**, `Enter` in Settings › Accounts and `cornercase account use` change it; `cornercase profile use --system` empties it.
+Each agent's default account while no [profile](#profile) is active: what a new workspace, a new project and an agent started from outside a pane start with (a new tab takes the accounts of the workspace's active pane); an agent left out uses its usual login. Left out of the file while it is empty. `Enter` in Settings › Accounts and `cornercase account use` change it; `cornercase profile use --system` empties it.
 
 ```json
 "active_accounts": { "claude": "personal" }

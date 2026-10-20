@@ -11,7 +11,7 @@ Code: `config.rs`, `state.rs`, `ui.rs`, `ui/`, `app/layout.rs`, `app/sidebar.rs`
 - [Stacked sidebar and tree](layout/sidebar.md): the stacked layouts and their line; the tree's rows, arrows and drops.
 - [The agents section](layout/agents-section.md): Agents section; The agents section is a tree: its order, drawing, roles and folding.
 - [Resize pointer](layout/resize-pointer.md): OSC 22 shapes over borders and dividers, which terminals get them, multiplexers, leaving.
-- [Row menus, the account status bar and counts](layout/row-menus-and-status-bar.md): Row menus; The account status bar; Counts.
+- [Row menus, the account row and counts](layout/row-menus-and-account-row.md): Row menus; The account row under each pane; Counts.
 - [Tabs above the pane and the icon bar](layout/tab-bar-and-icon-bar.md): Tabs above the pane; Icon bar: icons, places, indicators, names on hover, colours.
 - [Side panels, folding, scrolling and the active row](layout/panels-and-folding.md): Side panels; Folding; scrolling lists by item; the active row and its rail.
 - [Lines, wording and the colours of text](layout/lines-and-text.md): Lines; Tree lines; Empty panes; Capitals; Expand and collapse; Grey text; Soft text; the hover fill.

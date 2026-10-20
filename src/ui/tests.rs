@@ -108,6 +108,8 @@ fn single(screen: Snapshot) -> TabView {
         link: None,
         landing: None,
         bands: Vec::new(),
+        footer: false,
+        accounts: Vec::new(),
     }
 }
 
@@ -132,6 +134,7 @@ mod issues;
 mod layout;
 mod muted;
 mod overlay;
+mod pane_footer;
 mod picker;
 mod queue;
 mod reorder;

@@ -20,7 +20,7 @@ pub(super) const WHEEL_ROWS: isize = 3;
 impl App {
     fn stop_dragging(&mut self) -> bool {
         match &self.screen.drag {
-            Some(Drag::Border(_) | Drag::Divider { .. } | Drag::Row(_) | Drag::Pane(_)) => {
+            Some(Drag::Border(_) | Drag::Divider { .. } | Drag::Row(_) | Drag::Pane(_) | Drag::Footer(_)) => {
                 self.screen.drag = None;
                 true
             }
@@ -292,9 +292,10 @@ impl App {
             Some(Drag::Pane(drag)) => self.drag_pane(drag, ev, areas.pane, area),
             Some(Drag::Lines { .. }) => self.drag_lines(ev, areas.changes),
             Some(Drag::Selection { term, link }) => {
-                let pane = self.tab().and_then(|t| t.rect(areas.pane, term)).unwrap_or(areas.pane);
+                let pane = self.terminal_rect(areas.pane, term).unwrap_or(areas.pane);
                 self.drag_selection(term, link, ev, pane);
             }
+            Some(Drag::Footer(pane)) => self.drag_footer(pane, ev, areas.pane),
             Some(Drag::Row(drag)) => self.drag_row(drag, ev, areas, area),
             Some(Drag::Link(_)) | None => return false,
         }
@@ -380,19 +381,13 @@ impl App {
     fn footer_mouse(&mut self, areas: &ui::Areas, pos: Position, left: bool) -> bool {
         let update = self.update_label().is_some_and(|label| ui::update_button(areas.settings, &label).contains(pos));
         let remote = self.remote_button().is_some_and(|on| ui::remote_button(areas.usage, on).contains(pos));
-        let pill = ui::account_pill_hit(areas, &self.account_pills(), pos);
-        let hit = update
-            || remote
-            || pill.is_some()
-            || [areas.quit, areas.usage, areas.settings].iter().any(|r| r.contains(pos));
+        let hit = update || remote || [areas.quit, areas.usage, areas.settings].iter().any(|r| r.contains(pos));
         if hit && left {
             self.screen.nav = None;
             if update {
                 self.open_update();
             } else if remote {
                 self.open_remote_menu(pos);
-            } else if let Some(index) = pill {
-                self.open_pill_menu(index, pos);
             } else if areas.quit.contains(pos) {
                 self.outbox.detach();
             } else if areas.usage.contains(pos) {

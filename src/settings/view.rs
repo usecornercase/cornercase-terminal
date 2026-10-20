@@ -332,7 +332,7 @@ impl Settings {
             } else if self.pick.is_some() {
                 "enter picks · type to filter · esc goes back".into()
             } else if self.page == Page::Accounts {
-                "enter uses an account for new tabs · backspace removes it · open tabs keep theirs".into()
+                "enter makes an account the default · backspace removes it · each pane keeps its own".into()
             } else if self.page == Page::Plugins {
                 "plugins run as you and can do what you can; what they ask for is shown, not enforced".into()
             } else if self.page == Page::Issues {

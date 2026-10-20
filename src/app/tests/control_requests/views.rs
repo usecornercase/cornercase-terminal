@@ -173,6 +173,22 @@ fn a_views_size_has_no_window_chrome_and_other_tabs_keep_the_window_size() {
 }
 
 #[test]
+fn a_tab_sized_by_a_view_has_no_account_row_while_the_window_s_tabs_do() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let root = TempDir::new();
+    app.set_accounts_dir(root.path());
+    crate::accounts::add(root.path(), crate::agents::Known::Claude, "work", None).expect("add the account");
+    app.relist_accounts();
+    let ids = tabs(&mut app, 2);
+
+    open(&mut app, A, Some((80, 20)), Some(ids[1]));
+    app.resize(AREA);
+
+    let (cols, rows) = window_pane(&app);
+    assert_eq!((size_of(&app, ids[1]), size_of(&app, ids[0])), ((80, 20), (cols, rows - 1)));
+}
+
+#[test]
 fn two_sizes_on_one_tab_go_to_the_latest_claim_and_never_bounce() {
     let (mut app, _rx, _dirs) = app_with(1);
     let tab = tabs(&mut app, 2)[1];

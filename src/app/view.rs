@@ -130,15 +130,28 @@ impl App {
         let root = self.project().and_then(Project::workspace).map(|w| w.path.clone());
         let (home, bands) = (self.home.clone(), self.pane_bands());
         let dim_inactive = self.config.dim_inactive_panes;
+        let footer = self.tab().is_some_and(|tab| self.tab_footer(tab.id));
+        let accounts = if footer { self.account_rows() } else { Vec::new() };
         self.tab_mut().and_then(|tab| {
             let layout = tab.layout_by_index()?;
             let screens: Vec<_> = tab.panes.iter_mut().map(|t| t.emulator.snapshot().unwrap_or_default()).collect();
             let dragging = dragging.filter(|(id, _)| *id == tab.id).map(|(_, path)| path);
             let link = pointer.zip(root.as_deref()).and_then(|(at, root)| {
-                Self::hovered_link(tab, &screens, pane_area, at, Resolving { root, home: home.as_deref() })
+                Self::hovered_link(tab, &screens, (pane_area, footer), at, Resolving { root, home: home.as_deref() })
             });
             let bands = tab.panes.iter().map(|t| bands.get(&t.id).cloned()).collect();
-            Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging, link, landing, bands })
+            Some(ui::TabView {
+                layout,
+                screens,
+                active: tab.active,
+                dim_inactive,
+                dragging,
+                link,
+                landing,
+                bands,
+                footer,
+                accounts,
+            })
         })
     }
 
@@ -182,7 +195,6 @@ impl App {
             nav: self.screen.nav,
             update: self.update_label(),
             remote: self.remote_button(),
-            accounts: self.account_pills(),
             attention,
             spin: self.spin(now),
             drag: self.row_drag_view(area),

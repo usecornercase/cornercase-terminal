@@ -80,7 +80,7 @@ impl App {
         (other, skipped)
     }
 
-    fn not_restartable(&self, pane: u64, account: Option<&str>) -> Option<String> {
+    pub(super) fn not_restartable(&self, pane: u64, account: Option<&str>) -> Option<String> {
         if account == Some(accounts::CUSTOM) {
             return Some("its account was not set by cornercase".to_string());
         }

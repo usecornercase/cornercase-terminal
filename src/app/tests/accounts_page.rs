@@ -207,7 +207,7 @@ fn using_an_account_saves_it_leaves_the_profile_and_raises_the_revision() {
     assert_eq!(s.app.config.active_accounts, BTreeMap::new());
     assert!(s.app.config_file.revision() > before);
     assert_eq!(s.label(&Row::System(Known::Claude)), "● System");
-    assert_eq!(s.notice().as_deref(), Some("new claude tabs use System · open tabs keep theirs"));
+    assert_eq!(s.notice(), None);
 
     s.go(&Row::Account(Known::Claude, "home".into()));
     s.key(KeyCode::Enter);

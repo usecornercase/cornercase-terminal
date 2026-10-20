@@ -855,9 +855,11 @@ screen_account_pills() {
   accounts_knobs
   cc_s1
   accounts_add
+  cc_click 'Opus 5.5 · work'
+  cc_wait 'esc to interrupt'
   cc_click ' claude: work ▾'
   cc_wait 'manage accounts'
-  cc_hover 'manage accounts'
+  cc_hover '  personal'
   cc_shot account-pills
 }
 
@@ -865,9 +867,7 @@ screen_tab_account() {
   accounts_knobs
   cc_s1
   accounts_add
-  cc account use claude personal >/dev/null
-  cc_wait ' claude: personal ▾'
-  cc new-tab --workspace "$(ws_in feat-dark-mode)" -- CC_AGENT_STATE=busy CC_AGENT_TASK=dark CC_AGENT_PERCENT=12 claude >/dev/null
+  cc new-tab --workspace "$(ws_in feat-dark-mode)" --account claude=personal -- CC_AGENT_STATE=busy CC_AGENT_TASK=dark CC_AGENT_PERCENT=12 claude >/dev/null
   cc_click 'feat/dark-mode'
   cc_wait '· personal · 12%'
   cc_hover 'Workspaces'

@@ -8,6 +8,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use super::View;
+use super::accounts_bar::{Row as AccountRow, draw_row};
 use super::dialog::dialog_button_style;
 use super::sidebar::NEW_BUTTON;
 use super::theme::{BRAND_COLOR, status_icon};
@@ -41,6 +42,8 @@ pub(crate) struct TabView {
     pub(crate) link: Option<(u16, Range<u16>)>,
     pub(crate) landing: Option<(Rect, Place)>,
     pub(crate) bands: Vec<Option<PaneBand>>,
+    pub(crate) footer: bool,
+    pub(crate) accounts: Vec<AccountRow>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,6 +108,14 @@ pub(super) fn draw_welcome(f: &mut Frame, muted: Color, pane: Rect) {
 pub(super) fn wordmark() -> Vec<Span<'static>> {
     let mark = Style::default().fg(BRAND_COLOR).add_modifier(Modifier::BOLD);
     vec![Span::styled("c", mark), Span::styled("ornercase", Style::default().add_modifier(Modifier::BOLD))]
+}
+
+pub(crate) fn split_footer(leaf: Rect, footer: bool) -> (Rect, Option<Rect>) {
+    if !footer || leaf.height < 2 {
+        return (leaf, None);
+    }
+    let terminal = Rect { height: leaf.height - 1, ..leaf };
+    (terminal, Some(Rect { y: terminal.bottom(), height: 1, ..leaf }))
 }
 
 pub(crate) fn scrollback_label(below: usize) -> String {
@@ -227,10 +238,15 @@ fn draw_scrollback_badge(f: &mut Frame, view: &View, pane: Rect, below: usize) {
 pub(super) fn draw_tab(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
     let panes = tab.layout.visible(area, tab.active);
     let split = panes.len() > 1;
-    for (i, pane) in panes {
+    for (i, leaf) in panes {
         let Some(screen) = tab.screens.get(i) else { continue };
+        let (pane, row) = split_footer(leaf, tab.footer);
         let active = i == tab.active;
-        draw_screen(f, screen, pane, active && view.overlay.is_none(), split && !active && tab.dim_inactive);
+        let dim = split && !active && tab.dim_inactive;
+        draw_screen(f, screen, pane, active && view.overlay.is_none(), dim);
+        if let (Some(row), Some(shown)) = (row, tab.accounts.get(i)) {
+            draw_row(f, view, row, shown, dim);
+        }
         if let Some((row, cols)) = tab.link.as_ref().filter(|_| active) {
             let r = Rect::new(pane.x + cols.start, pane.y + row, cols.end - cols.start, 1).intersection(pane);
             f.buffer_mut().set_style(r, Style::default().fg(Color::Cyan).add_modifier(Modifier::UNDERLINED));

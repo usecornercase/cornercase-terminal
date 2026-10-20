@@ -228,7 +228,7 @@ impl App {
 
     pub(super) fn press_held_notice(&mut self, area: Rect, pos: Position) -> bool {
         let Some(tab) = self.tab() else { return false };
-        let pressed = tab.shown(area).into_iter().find_map(|(id, rect)| {
+        let pressed = self.terminals(area).into_iter().find_map(|(id, rect)| {
             let (_, queued) = self.held_label(id).filter(|_| !self.resume_holds(id))?;
             let bar = ui::held_notice(rect, tab.pane_by(id)?.emulator.below(), queued)?;
             match (bar.send.contains(pos), bar.wait.is_some_and(|wait| wait.contains(pos))) {
@@ -246,8 +246,7 @@ impl App {
     }
 
     pub(super) fn press_resume_notice(&mut self, area: Rect, pos: Position) -> bool {
-        let Some(tab) = self.tab() else { return false };
-        let pressed = tab.shown(area).into_iter().find_map(|(id, rect)| {
+        let pressed = self.terminals(area).into_iter().find_map(|(id, rect)| {
             let notice = match self.resume_notice(id) {
                 Some(notice) => ui::resume_notice(rect, &notice),
                 None if self.held_label(id).is_none() => ui::restart_notice(rect, &self.waiting_notice(id)?),

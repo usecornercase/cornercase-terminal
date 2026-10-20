@@ -55,7 +55,7 @@ fn a_border_stays_cyan_while_it_is_dragged() {
 #[test]
 fn a_border_ignores_the_hover_while_an_overlay_is_open() {
     let pos = middle(Border::Workspaces);
-    let menu = Overlay::Menu { at: Position::new(80, 1), items: vec!["rename tab".into()] };
+    let menu = Overlay::Menu { at: Position::new(80, 1), items: vec!["rename tab".into()], disabled: Vec::new() };
     let v = View { hover: Some(pos), overlay: Some(menu), ..view(&["~"]) };
     assert_eq!(render(&v).backend().buffer()[pos].fg, DARK_LINE);
 }

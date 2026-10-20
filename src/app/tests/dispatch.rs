@@ -128,10 +128,13 @@ fn every_menu_action() -> Vec<MenuAction> {
         MenuAction::CopyPath(subject),
         MenuAction::SendTodo { todo: 1, pane: 1 },
         MenuAction::Plugin { spot: Spot::Pane(1), index: 0, revision: 0 },
-        MenuAction::Account(AccountItem { kind, index: 0 }, (0, 0)),
+        MenuAction::Account(AccountItem { pane: 1, generation: 0, kind, index: 0 }, (0, 0)),
         MenuAction::ManageAccounts,
         MenuAction::Worktrees(1),
         MenuAction::CloseAgent(1),
+        MenuAction::AccountNote(AccountItem { pane: 1, generation: 0, kind, index: 0 }),
+        MenuAction::AccountsOf(AccountItem { pane: 1, generation: 0, kind, index: 0 }),
+        MenuAction::AccountMenu(1),
     ]
 }
 
@@ -165,6 +168,9 @@ fn menu_index(action: &MenuAction) -> usize {
         MenuAction::ManageAccounts => 25,
         MenuAction::Worktrees(_) => 26,
         MenuAction::CloseAgent(_) => 27,
+        MenuAction::AccountNote(_) => 28,
+        MenuAction::AccountsOf(_) => 29,
+        MenuAction::AccountMenu(_) => 30,
     }
 }
 

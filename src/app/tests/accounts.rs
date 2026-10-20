@@ -260,3 +260,88 @@ mod respawning_a_pane {
         assert!(!setup.app.respawn_in(u64::MAX, cwd, Accounts::default()).expect("respawn"));
     }
 }
+
+mod a_new_tab {
+    use super::*;
+    use crate::control::AccountUse;
+    use crate::project::Workspace;
+
+    fn claude(term: &Term) -> Option<&str> {
+        term.accounts().name(Known::Claude)
+    }
+
+    fn on_work_then_home(setup: &mut Setup) {
+        setup.add(Known::Claude, "work");
+        setup.add(Known::Claude, "home");
+        setup.use_profile("Trabajo", &[("claude", "work")]);
+        setup.open();
+        setup.app.config.profile = String::new();
+        setup.app.config.active_accounts.insert("claude".into(), "home".into());
+    }
+
+    #[test]
+    fn keeps_the_accounts_of_the_active_pane_whatever_the_selection_says() {
+        let mut setup = Setup::new();
+        on_work_then_home(&mut setup);
+
+        setup.app.add_tab(workspace_at(&setup.app, 0, 0), AREA).expect("a new tab");
+
+        let new = setup.pane(1).id;
+        assert_eq!(claude(setup.pane(1)), Some("work"));
+        let env = setup.env_of(new);
+        assert_eq!(value(&env, "CLAUDE_CONFIG_DIR"), setup.root().join("claude").join("work").to_str());
+    }
+
+    #[test]
+    fn from_the_tree_keeps_the_accounts_of_its_own_workspace() {
+        let mut setup = Setup::new();
+        on_work_then_home(&mut setup);
+        let other = TempDir::new();
+        setup.app.open_project(other.path().to_path_buf(), AREA).expect("open another project");
+        assert_eq!((setup.app.active, claude(tab_term(&setup.app, 0, 0))), (1, Some("home")));
+
+        setup.app.add_tab_row(0, 0, AREA).expect("a new tab");
+
+        let at = tab_at(&setup.app, 0, 0, 1);
+        assert_eq!(setup.app.projects.tab(at).pane().and_then(claude), Some("work"));
+    }
+
+    #[test]
+    fn whose_account_is_gone_uses_the_agent_s_own_login() {
+        let mut setup = Setup::new();
+        on_work_then_home(&mut setup);
+        std::fs::remove_dir_all(setup.root().join("claude").join("work")).expect("remove the account");
+
+        setup.app.add_tab(workspace_at(&setup.app, 0, 0), AREA).expect("a new tab");
+
+        assert_eq!(claude(setup.pane(1)), None);
+    }
+
+    #[test]
+    fn in_a_workspace_without_tabs_uses_the_selection() {
+        let mut setup = Setup::new();
+        on_work_then_home(&mut setup);
+        let id = setup.app.take_id();
+        let path = setup.project.path().to_path_buf();
+        let at = setup.app.projects.push_workspace(0, Workspace::new(id, path, None, false));
+
+        setup.app.add_tab(at, AREA).expect("a new tab");
+
+        let tab = tab_at(&setup.app, 0, at.index(), 0);
+        assert_eq!(setup.app.projects.tab(tab).pane().and_then(claude), Some("home"));
+    }
+
+    #[test]
+    fn changing_the_selection_leaves_the_open_panes_alone() {
+        let mut setup = Setup::new();
+        on_work_then_home(&mut setup);
+        let pid = setup.pane(0).shell_pid();
+
+        let wanted = AccountUse { provider: "claude".into(), account: String::new() };
+        setup.app.account_use_request(&wanted).expect("use the system login");
+
+        assert_eq!(setup.app.config.selected_accounts().get("claude"), None);
+        assert_eq!((setup.pane(0).shell_pid(), claude(setup.pane(0))), (pid, Some("work")));
+        assert!(setup.app.messages.toast.is_none());
+    }
+}

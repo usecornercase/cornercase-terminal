@@ -661,7 +661,7 @@ fn picker_hint(browser: &Browser) -> (String, Option<ui::Note>) {
         }
         Some(Pick::Account) => (
             format!(
-                "which {} account should it start with? only this start: new tabs keep the one in use",
+                "which {} account should it start with? only this start: the default stays",
                 browser.agents.pick().unwrap_or_default()
             ),
             None,

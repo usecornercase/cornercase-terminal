@@ -430,6 +430,13 @@ fn menu_labels(app: &App) -> Vec<String> {
     app.menu_labels(actions)
 }
 
+fn menu_disabled(app: &App) -> Vec<bool> {
+    match overlay_shown(app, AREA) {
+        ui::Overlay::Menu { disabled, .. } => disabled,
+        _ => panic!("the menu is not shown"),
+    }
+}
+
 fn menu_item_at(app: &App, i: usize) -> Position {
     let Some(Overlay::Menu { at, .. }) = &app.overlay else { panic!("the menu is not open") };
     ui::menu_item(ui::menu_area(AREA, *at, &menu_labels(app)), i).as_position()
@@ -439,6 +446,15 @@ fn pick(app: &mut App, label: &str) {
     let i = menu_labels(app).iter().position(|l| l == label).expect("the menu has the item");
     let pos = menu_item_at(app, i);
     click(app, pos);
+}
+
+fn click_pill(app: &mut App, pane: u64, pill: usize) {
+    let shown = app.tab().expect("a tab").shown(app.layout(AREA).pane);
+    let leaf = shown.into_iter().find_map(|(id, leaf)| (id == pane).then_some(leaf)).expect("the pane is shown");
+    let row = ui::split_footer(leaf, true).1.expect("the pane has a row");
+    let pills = app.pane_pills(app.projects.pane_by(pane).expect("the pane")).pills;
+    let (_, rect, _) = ui::pill_rects(row, &pills).swap_remove(pill);
+    click(app, rect.as_position());
 }
 
 fn plain(projects: usize) -> Vec<SidebarRow> {
@@ -493,6 +509,7 @@ mod lock_text;
 mod merged_pull_requests;
 mod muted_text;
 mod opening;
+mod pane_footer;
 mod picker;
 mod plugins;
 mod project_settings;

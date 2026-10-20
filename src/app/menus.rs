@@ -108,12 +108,17 @@ pub(super) enum MenuAction {
     SendTodo { todo: u64, pane: u64 },
     Plugin { spot: Spot, index: u16, revision: u32 },
     Account(AccountItem, (u64, u64)),
+    AccountNote(AccountItem),
+    AccountsOf(AccountItem),
+    AccountMenu(u64),
     ManageAccounts,
 }
 
 impl App {
     pub(super) fn menu_view(&self, at: Position, actions: &[MenuAction]) -> ui::Overlay {
-        ui::Overlay::Menu { at, items: self.menu_labels(actions) }
+        let blocker = self.menu_blocker(actions);
+        let disabled = actions.iter().map(|&action| Self::account_disabled(action, blocker.is_some())).collect();
+        ui::Overlay::Menu { at, items: self.labels_of(actions, blocker.as_deref()), disabled }
     }
 
     pub(super) fn menu_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> Result<()> {
@@ -130,10 +135,17 @@ impl App {
     }
 
     pub(super) fn menu_labels(&self, actions: &[MenuAction]) -> Vec<String> {
-        actions.iter().map(|&a| self.menu_label(a)).collect()
+        self.labels_of(actions, self.menu_blocker(actions).as_deref())
     }
 
-    fn menu_label(&self, action: MenuAction) -> String {
+    fn labels_of(&self, actions: &[MenuAction], blocker: Option<&str>) -> Vec<String> {
+        actions.iter().map(|&a| self.menu_label(a, blocker)).collect()
+    }
+
+    fn menu_label(&self, action: MenuAction, blocker: Option<&str>) -> String {
+        if let Some(label) = self.account_menu_label(action, blocker) {
+            return label;
+        }
         match action {
             MenuAction::Rename(target) => target.rename_label().into(),
             MenuAction::MoveToGroup(_) => "move to group".into(),
@@ -169,8 +181,7 @@ impl App {
             MenuAction::Away(via) => format!("continue on {}", via.name()),
             MenuAction::SendTodo { pane, .. } => self.todo_agent_label(pane),
             MenuAction::Plugin { index, .. } => self.plugin_label(index),
-            MenuAction::Account(item, _) => self.account_item_label(item),
-            MenuAction::ManageAccounts => "manage accounts…".into(),
+            _ => String::new(),
         }
     }
 
@@ -179,6 +190,10 @@ impl App {
             Target::Tab(_, _, tab) => self.mark_action(Marked::Tab(tab)),
             Target::Workspace(_, workspace) => self.pull_request(workspace).map(|_| MenuAction::PullRequest(workspace)),
             Target::Group(_) | Target::Project(_) => None,
+        };
+        let account = match target {
+            Target::Tab(_, _, tab) => self.account_entry(self.tab_pane(tab)),
+            _ => None,
         };
         let flow = match target {
             Target::Workspace(_, workspace) => self.run_of(workspace).map(|_| MenuAction::ShowFlow(workspace)),
@@ -200,6 +215,7 @@ impl App {
         };
         std::iter::once(MenuAction::Rename(target))
             .chain(more)
+            .chain(account)
             .chain(flow)
             .chain(setup)
             .chain(open)
@@ -285,6 +301,8 @@ impl App {
             MenuAction::CopyPath(subject) => self.copy_path(subject),
             MenuAction::PullRequest(workspace) => self.open_pull_request(workspace),
             MenuAction::ShowFlow(workspace) => self.show_flow_of(workspace),
+            MenuAction::AccountMenu(pane) => self.open_account_submenu(pane, at),
+            MenuAction::AccountsOf(item) => self.open_accounts_of(item, at),
             other => return Some(other),
         }
         None
@@ -305,6 +323,7 @@ impl App {
             MenuAction::SendTodo { todo, pane } => self.send_todo_from_panel(todo, pane, std::time::Instant::now()),
             MenuAction::Plugin { spot, index, revision } => self.run_plugin_action(spot, index, revision),
             MenuAction::Account(item, revision) => self.account_item(item, revision),
+            MenuAction::AccountNote(_) => {}
             MenuAction::ManageAccounts => self.manage_accounts(),
             other => return Some(other),
         }

@@ -777,9 +777,11 @@ Examples:
 pub(super) const ACCOUNT_HELP: &str =
     "An account is a folder of its own under cornercase's state folder in which an agent keeps its
 login: CLAUDE_CONFIG_DIR for Claude Code, CODEX_HOME for Codex, GEMINI_CLI_HOME for Gemini CLI.
-Each agent has an account in use for its new tabs: `account use`, or its button in the window,
-changes it, and tabs already open keep theirs until `account restart` restarts them on it, each
-once its turn is over, in the same conversation. `account rename` gives an account (or the agent's
+Each agent has a default account, which new workspaces, scripts run outside a pane and the queue
+start with: `account use`, or Settings › Accounts in the window, changes it. A new tab or a split
+takes the accounts of the pane it comes from, and panes already open keep theirs until
+`account restart`, or the account button under the pane, restarts them on another, each once its
+turn is over, in the same conversation. `account rename` gives an account (or the agent's
 own login, with --system) the name the window shows; commands always name an account by its
 folder. `start`, `new-tab`, `flow run` and `queue` take --account AGENT=ACCOUNT to start once
 with another. A new account links the settings it shares from the agent's own folder (settings,
@@ -798,11 +800,11 @@ Examples:
   cornercase account remove claude work";
 
 pub(super) const PROFILE_HELP: &str =
-    "A profile, for scripts, names which account each agent uses. While a profile is active, new tabs
-and agents use its accounts; tabs already open keep the ones they started with. Choosing an
-account with `account use`, or in the window, leaves the active profile; `profile use --system`
-goes back to each agent's own login. `start`, `new-tab` and `flow run` take --profile to use
-another one once, without changing what is in use.
+    "A profile, for scripts, names which account each agent uses. While a profile is active, it is the
+default: new workspaces and agents use its accounts; panes already open keep the ones they started
+with. Choosing an account with `account use`, or in Settings › Accounts, leaves the active profile;
+`profile use --system` goes back to each agent's own login. `start`, `new-tab` and `flow run` take
+--profile to use another one once, without changing the default.
 
 Examples:
   cornercase profile new Work claude=work codex=work

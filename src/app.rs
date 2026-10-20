@@ -284,14 +284,7 @@ impl App {
 
     pub(crate) fn pointer(&self, area: Rect) -> pointer::Shape {
         let areas = self.layout(area).shown(self.screen.nav);
-        let border = |border: ui::Border| match border {
-            ui::Border::Stack | ui::Border::Agents => pointer::Shape::Rows,
-            ui::Border::Projects | ui::Border::Workspaces | ui::Border::Changes => pointer::Shape::Columns,
-        };
-        let divider = |dir: Dir| match dir {
-            Dir::Right => pointer::Shape::Columns,
-            Dir::Down => pointer::Shape::Rows,
-        };
+        let (border, divider) = (border_shape, divider_shape);
         match &self.screen.drag {
             Some(Drag::Border(b)) => return border(*b),
             Some(Drag::Divider { tab, path }) => {
@@ -300,7 +293,14 @@ impl App {
                     .and_then(|d| d.into_iter().find(|d| d.path == *path))
                     .map_or(pointer::Shape::Default, |d| divider(d.dir));
             }
-            Some(Drag::Row(_) | Drag::Pane(_) | Drag::Selection { .. } | Drag::Link(_) | Drag::Lines { .. }) => {
+            Some(
+                Drag::Row(_)
+                | Drag::Pane(_)
+                | Drag::Selection { .. }
+                | Drag::Link(_)
+                | Drag::Lines { .. }
+                | Drag::Footer(_),
+            ) => {
                 return pointer::Shape::Default;
             }
             None => {}
@@ -672,6 +672,20 @@ fn saved_side(saved: &State) -> Option<Side> {
         Some(Side::Changes)
     } else {
         None
+    }
+}
+
+fn border_shape(border: ui::Border) -> pointer::Shape {
+    match border {
+        ui::Border::Stack | ui::Border::Agents => pointer::Shape::Rows,
+        ui::Border::Projects | ui::Border::Workspaces | ui::Border::Changes => pointer::Shape::Columns,
+    }
+}
+
+fn divider_shape(dir: Dir) -> pointer::Shape {
+    match dir {
+        Dir::Right => pointer::Shape::Columns,
+        Dir::Down => pointer::Shape::Rows,
     }
 }
 

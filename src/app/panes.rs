@@ -23,10 +23,74 @@ use crate::ui::{self};
 
 impl App {
     pub(super) fn pane_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
-        if self.pane_notice_mouse(ev, pos, area) || self.pane_chosen_mouse(ev, pos, area) {
+        if self.pane_footer_mouse(ev, pos, area)
+            || self.pane_notice_mouse(ev, pos, area)
+            || self.pane_chosen_mouse(ev, pos, area)
+        {
             return;
         }
         self.pane_press_mouse(ev, area);
+    }
+
+    pub(super) fn terminals(&self, area: Rect) -> Vec<(u64, Rect)> {
+        self.footers(area).into_iter().map(|(id, terminal, _)| (id, terminal)).collect()
+    }
+
+    pub(super) fn terminal_rect(&self, area: Rect, pane: u64) -> Option<Rect> {
+        self.terminals(area).into_iter().find(|(id, _)| *id == pane).map(|(_, rect)| rect)
+    }
+
+    fn footers(&self, area: Rect) -> Vec<(u64, Rect, Option<Rect>)> {
+        let Some(tab) = self.tab() else { return Vec::new() };
+        let footer = self.tab_footer(tab.id);
+        let split = |(id, leaf)| {
+            let (terminal, row) = ui::split_footer(leaf, footer);
+            (id, terminal, row)
+        };
+        tab.shown(area).into_iter().map(split).collect()
+    }
+
+    fn footer_at(&self, area: Rect, pos: Position) -> Option<u64> {
+        let found = self.footers(area).into_iter().find(|(_, _, row)| row.is_some_and(|row| row.contains(pos)));
+        found.map(|(id, _, _)| id)
+    }
+
+    fn pane_footer_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> bool {
+        if matches!(ev.kind, MouseEventKind::Drag(_) | MouseEventKind::Up(_)) {
+            return false;
+        }
+        let Some(pane) = self.footer_at(area, pos) else { return false };
+        match ev.kind {
+            MouseEventKind::Down(MouseButton::Right) => self.start_pane_drag(pane, pos, area),
+            MouseEventKind::Down(_) => self.screen.drag = Some(Drag::Footer(pane)),
+            _ => {}
+        }
+        true
+    }
+
+    fn start_pane_drag(&mut self, pane: u64, from: Position, area: Rect) {
+        let Some(tab) = self.tab() else { return };
+        let (rect, tab) = (tab.rect(area, pane), tab.id);
+        self.screen.drag = rect.map(|rect| Drag::Pane(PaneDrag { tab, pane, from, rect, moved: false }));
+    }
+
+    pub(super) fn drag_footer(&mut self, pane: u64, ev: MouseEvent, area: Rect) {
+        if matches!(ev.kind, MouseEventKind::Drag(_)) {
+            return;
+        }
+        self.screen.drag = None;
+        if ev.kind == MouseEventKind::Up(MouseButton::Left) {
+            self.press_pill(pane, Position::new(ev.column, ev.row), area);
+        }
+    }
+
+    fn press_pill(&mut self, pane: u64, pos: Position, area: Rect) {
+        let row = self.footers(area).into_iter().find_map(|(id, _, row)| row.filter(|_| id == pane));
+        let Some((row, term)) = row.zip(self.projects.pane_by(pane)) else { return };
+        if let Some(index) = ui::account_pill_hit(row, &self.pane_pills(term).pills, pos) {
+            self.screen.nav = None;
+            self.open_pill_menu(pane, index, pos);
+        }
     }
 
     fn pane_notice_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> bool {
@@ -60,8 +124,7 @@ impl App {
         let program_takes_right = tab.right_clicks_to_pane(id)
             && tab.pane_by(id).is_some_and(|t| t.emulator.mouse_mode() != mouse::MouseMode::None);
         if right && !program_takes_right {
-            let (rect, tab) = (tab.rect(area, id), tab.id);
-            self.screen.drag = rect.map(|rect| Drag::Pane(PaneDrag { tab, pane: id, from: pos, rect, moved: false }));
+            self.start_pane_drag(id, pos, area);
             return true;
         }
         if id == active {
@@ -77,8 +140,8 @@ impl App {
 
     fn pane_press_mouse(&mut self, ev: MouseEvent, area: Rect) {
         let left = ev.kind == MouseEventKind::Down(MouseButton::Left);
-        let Some(tab) = self.tab() else { return };
-        let Some(pane) = tab.pane().and_then(|t| tab.rect(area, t.id).map(|rect| within_terminal(t, rect))) else {
+        let Some(term) = self.term() else { return };
+        let Some(pane) = self.terminal_rect(area, term.id).map(|rect| within_terminal(term, rect)) else {
             return;
         };
         let Some(at) = pane_cell(pane, ev) else { return };
@@ -138,9 +201,8 @@ impl App {
     }
 
     fn press_scrollback_badge(&mut self, area: Rect, pos: Position) -> bool {
-        let Some(tab) = self.tab_mut() else { return false };
-        let Some((id, rect)) = tab.shown(area).into_iter().find(|(_, r)| r.contains(pos)) else { return false };
-        let Some(term) = tab.pane_by_mut(id) else { return false };
+        let Some((id, rect)) = self.terminals(area).into_iter().find(|(_, r)| r.contains(pos)) else { return false };
+        let Some(term) = self.tab_mut().and_then(|tab| tab.pane_by_mut(id)) else { return false };
         if !ui::scrollback_badge(rect, term.emulator.below()).is_some_and(|badge| badge.contains(pos)) {
             return false;
         }
@@ -233,7 +295,8 @@ impl App {
                 | Drag::Pane(_)
                 | Drag::Selection { .. }
                 | Drag::Link(_)
-                | Drag::Lines { .. },
+                | Drag::Lines { .. }
+                | Drag::Footer(_),
             )
             | None => return None,
         };
@@ -256,6 +319,7 @@ impl App {
             .map(|a| MenuAction::Pane(pane, a))
             .collect();
         actions.extend(self.mark_action(Marked::Pane(pane)));
+        actions.extend(self.account_entry(Some(pane)));
         actions.push(self.open_entry(Subject::Pane(pane)));
         actions.push(MenuAction::Pane(pane, PaneAction::Close));
         actions.extend(self.plugin_menu(Spot::Pane(pane)));

@@ -47,27 +47,25 @@ impl App {
         let (result, done) = match order {
             Order::Add(add) => (
                 self.account_add_request(Asker::default(), add, Some(area), Instant::now()),
-                format!("log in to {} in the tab {} login", add.provider, add.name),
+                Some(format!("log in to {} in the tab {} login", add.provider, add.name)),
             ),
             Order::Rename(rename) => {
                 let was = self.config.account_label(&rename.provider, &rename.account).to_string();
                 let result = self.account_rename_request(rename);
                 let now = self.config.account_label(&rename.provider, &rename.account);
-                (result, format!("{}: {was} is now called {now}", rename.provider))
+                (result, Some(format!("{}: {was} is now called {now}", rename.provider)))
             }
-            Order::Use(wanted) => {
-                let result = self.account_use_request(wanted);
-                let label = self.config.account_label(&wanted.provider, &wanted.account);
-                (result, format!("new {} tabs use {label} · open tabs keep theirs", wanted.provider))
-            }
+            Order::Use(wanted) => (self.account_use_request(wanted), None),
         };
-        if self.account_answered(result, done.clone()) && matches!(order, Order::Add(_)) {
+        if self.account_answered(result, done.clone())
+            && let (Order::Add(_), Some(done)) = (order, done)
+        {
             self.overlay = None;
             self.messages.toast = Some(Toast::new(done, ui::ToastIcon::Check));
         }
     }
 
-    pub(super) fn account_answered(&mut self, result: Handled, done: String) -> bool {
+    pub(super) fn account_answered(&mut self, result: Handled, done: Option<String>) -> bool {
         if let Err(refusal) = result {
             match &mut self.overlay {
                 Some(Overlay::Settings(s)) => s.notice = Some(refusal.message),
@@ -79,11 +77,15 @@ impl App {
         true
     }
 
-    fn settings_notice(&mut self, notice: String) {
+    fn settings_notice(&mut self, notice: Option<String>) {
         self.refresh_accounts_page();
         match &mut self.overlay {
-            Some(Overlay::Settings(s)) => s.notice = Some(notice),
-            _ => self.messages.toast = Some(Toast::new(notice, ui::ToastIcon::Check)),
+            Some(Overlay::Settings(s)) => s.notice = notice,
+            _ => {
+                if let Some(notice) = notice {
+                    self.messages.toast = Some(Toast::new(notice, ui::ToastIcon::Check));
+                }
+            }
         }
     }
 

@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/pane_footer.rs
+expression: render(&v).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │ $ claude            │ $ claude           "
+"                                                         │                     │                    "
+" Projects                      │ Workspaces              │                     │                    "
+"                               │                         │                     │                    "
+"▌ ~ (1)                        │                         │                     │                    "
+"                               │                         │                     │                    "
+"  + New                        │                         │                     │                    "
+"                               │                         │                     │                    "
+"                               │                         │                     │   personal ▾       "
+"                               │                         │                     ├────────────────────"
+"                               │                         │                     │ $ vim              "
+"                               │                         │                     │                    "
+"                               │                         │                     │                    "
+"                               │                         │                     │                    "
+" ───────────────────────────── │                         │                     │                    "
+"  Settings                     │                         │                     │                    "
+"  Usage                        │                         │                     │                    "
+"  Quit                         │                         │   claude: work ▾    │   personal ▾       "
