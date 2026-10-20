@@ -133,7 +133,7 @@ fn a_variable_set_outside_cornercase_keeps_the_shell() {
     let shell = setup.app.term().and_then(Term::shell_pid).expect("the shell's pid");
     let elsewhere = dir(&setup).display().to_string();
     wait_until("the shell runs with the variable", || {
-        crate::process::env(shell).iter().any(|(name, value)| name == "CLAUDE_CONFIG_DIR" && *value == elsewhere)
+        process::env(shell).iter().any(|(name, value)| name == "CLAUDE_CONFIG_DIR" && *value == elsewhere)
     });
 
     let refused = setup.app.respawn_shell(pane, Known::Claude, "personal").expect_err("set by hand");
