@@ -296,38 +296,8 @@ impl Session {
 
     fn apply_event(&mut self, event: &Value) {
         match event["type"].as_str() {
-            Some("turn_started") => {
-                self.turn_open = true;
-                self.phase.clear();
-                self.pending.clear();
-                self.asks = 0;
-                self.primary = is_primary(event);
-                if let Some(at) = event_time(event) {
-                    self.note_event(at);
-                    self.turns.push(Turn {
-                        at,
-                        end: None,
-                        model: event["model_id"].as_str().map(str::to_string),
-                        primary: self.primary,
-                    });
-                    if self.turns.len() > TURNS {
-                        self.turns.remove(0);
-                    }
-                }
-            }
-            Some("turn_ended") => {
-                self.turn_open = false;
-                self.phase.clear();
-                self.pending.clear();
-                self.asks = 0;
-                self.primary = true;
-                if let Some(at) = event_time(event) {
-                    self.note_event(at);
-                    if let Some(turn) = self.turns.iter_mut().rev().find(|turn| turn.end.is_none()) {
-                        turn.end = Some(at);
-                    }
-                }
-            }
+            Some("turn_started") => self.turn_started(event),
+            Some("turn_ended") => self.turn_ended(event),
             Some("phase_changed") => self.phase = event["phase"].as_str().unwrap_or_default().to_string(),
             Some("permission_requested") => *self.pending.entry(tool_name(event)).or_insert(0) += 1,
             Some("permission_resolved") => {
@@ -342,28 +312,68 @@ impl Session {
         }
     }
 
+    fn reset_turn(&mut self, open: bool) {
+        self.turn_open = open;
+        self.phase.clear();
+        self.pending.clear();
+        self.asks = 0;
+    }
+
+    fn turn_started(&mut self, event: &Value) {
+        self.reset_turn(true);
+        self.primary = is_primary(event);
+        if let Some(at) = event_time(event) {
+            self.note_event(at);
+            self.turns.push(Turn {
+                at,
+                end: None,
+                model: event["model_id"].as_str().map(str::to_string),
+                primary: self.primary,
+            });
+            if self.turns.len() > TURNS {
+                self.turns.remove(0);
+            }
+        }
+    }
+
+    fn turn_ended(&mut self, event: &Value) {
+        self.reset_turn(false);
+        self.primary = true;
+        if let Some(at) = event_time(event) {
+            self.note_event(at);
+            if let Some(turn) = self.turns.iter_mut().rev().find(|turn| turn.end.is_none()) {
+                turn.end = Some(at);
+            }
+        }
+    }
+
     fn apply_update(&mut self, update: &Value) {
         let body = &update["params"]["update"];
         let at = update_time(update);
         match body["sessionUpdate"].as_str() {
             Some("auto_compact_completed" | "compaction_checkpoint") => self.compact = self.compact.max(at),
             Some("turn_completed") => {
-                let Some(at) = at else { return };
-                let reply = self.reply(body, at);
-                if !reply.tokens.is_empty() {
-                    let record = token_record(&reply);
-                    if reply.primary {
-                        self.counted.push(record);
-                    } else {
-                        self.push_extra(format!("{}/side", self.id), record);
-                    }
-                }
-                if reply.primary {
-                    self.newest = Some(reply);
+                if let Some(at) = at {
+                    self.turn_completed(body, at);
                 }
             }
             Some("user_message_chunk") => self.note_chunk(update),
             _ => {}
+        }
+    }
+
+    fn turn_completed(&mut self, body: &Value, at: SystemTime) {
+        let reply = self.reply(body, at);
+        if !reply.tokens.is_empty() {
+            let record = token_record(&reply);
+            if reply.primary {
+                self.counted.push(record);
+            } else {
+                self.push_extra(format!("{}/side", self.id), record);
+            }
+        }
+        if reply.primary {
+            self.newest = Some(reply);
         }
     }
 
@@ -386,18 +396,21 @@ impl Session {
         self.emit_prompt(chunk);
     }
 
+    fn admits(&mut self, chunk: &Chunk) -> bool {
+        let Some(latest) = self.prompt_at else { return true };
+        if chunk.at < latest {
+            return false;
+        }
+        if chunk.at > latest {
+            self.prompt_ids.clear();
+            return true;
+        }
+        !(self.prompt_ids.contains(&chunk.id) || self.prompt_ids.len() >= PROMPT_IDS)
+    }
+
     fn emit_prompt(&mut self, chunk: Chunk) {
-        if let Some(latest) = self.prompt_at {
-            if chunk.at < latest {
-                return;
-            }
-            if chunk.at == latest {
-                if self.prompt_ids.contains(&chunk.id) || self.prompt_ids.len() >= PROMPT_IDS {
-                    return;
-                }
-            } else {
-                self.prompt_ids.clear();
-            }
+        if !self.admits(&chunk) {
+            return;
         }
         self.prompt_ids.insert(chunk.id.clone());
         self.prompt_at = Some(chunk.at);
@@ -594,17 +607,19 @@ impl Session {
         let mut next = Vec::new();
         for path in dirs {
             let mut child = self.take_child(&path);
-            let updates = path.join("updates.jsonl");
-            if let Some(batch) = read_tail(&mut child.tail, &updates) {
-                for update in jsonl::values(&batch.bytes) {
-                    if let Some(record) = child_token(&update) {
-                        self.push_extra(path.to_string_lossy().into_owned(), record);
-                    }
-                }
-            }
+            self.read_child(&path, &mut child.tail);
             next.push(child);
         }
         self.children = next;
+    }
+
+    fn read_child(&mut self, path: &Path, tail: &mut Tail) {
+        let Some(batch) = read_tail(tail, &path.join("updates.jsonl")) else { return };
+        for update in jsonl::values(&batch.bytes) {
+            if let Some(record) = child_token(&update) {
+                self.push_extra(path.to_string_lossy().into_owned(), record);
+            }
+        }
     }
 
     fn take_child(&mut self, path: &Path) -> Child {

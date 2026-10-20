@@ -102,16 +102,17 @@ fn whole(percent: Option<f64>) -> u16 {
     percent.unwrap_or(0.0).clamp(0.0, 999.0).round() as u16
 }
 
-pub(in crate::agents) fn window(
-    label: String,
-    kind: String,
-    scope: Option<String>,
-    percent: Option<f64>,
-    severity: Option<&str>,
-    resets_at: Option<i64>,
-) -> Window {
-    let percent = whole(percent);
-    Window { label, kind, scope, percent, severity: Severity::parse(severity, percent), resets_at }
+#[derive(Clone, Copy)]
+pub(in crate::agents) struct Reading<'a> {
+    pub(in crate::agents) percent: Option<f64>,
+    pub(in crate::agents) severity: Option<&'a str>,
+    pub(in crate::agents) resets_at: Option<i64>,
+}
+
+pub(in crate::agents) fn window(label: String, kind: String, scope: Option<String>, reading: Reading<'_>) -> Window {
+    let percent = whole(reading.percent);
+    let severity = Severity::parse(reading.severity, percent);
+    Window { label, kind, scope, percent, severity, resets_at: reading.resets_at }
 }
 
 type Answer = fn(&str) -> Option<Result<Report>>;

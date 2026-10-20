@@ -99,32 +99,43 @@ impl Reader {
     ) -> Option<SystemTime> {
         let mut prompted = None;
         if let Some(found) = self.reading.take() {
-            if let Some(mut session) = found {
-                ledger.apply(&session.id, since, std::mem::take(&mut session.counted));
-                for (id, records) in std::mem::take(&mut session.extras) {
-                    ledger.apply(&id, since, records);
-                }
-                shown.clone_from(&session.context);
-                prompted = session.prompted;
-                self.held = Some(Held {
-                    path: session.path.clone(),
-                    id: session.id.clone(),
-                    activity: session.activity,
-                    turn_open: session.turn_open,
-                    resumable: session.resumable,
-                });
-                self.session = Some(Box::new(session));
-            } else {
-                *shown = None;
-                self.session = None;
-                self.held = None;
-            }
+            prompted = self.adopt(found, since, shown, ledger);
         }
         if !self.reading.running() {
             let pid = look.pid;
             let previous = self.session.take().map(|session| *session);
             self.reading.start(move || session::follow(pid, previous));
         }
+        prompted
+    }
+
+    fn adopt(
+        &mut self,
+        found: Option<session::Session>,
+        since: SystemTime,
+        shown: &mut Option<Context>,
+        ledger: &mut Ledger,
+    ) -> Option<SystemTime> {
+        let Some(mut session) = found else {
+            *shown = None;
+            self.session = None;
+            self.held = None;
+            return None;
+        };
+        ledger.apply(&session.id, since, std::mem::take(&mut session.counted));
+        for (id, records) in std::mem::take(&mut session.extras) {
+            ledger.apply(&id, since, records);
+        }
+        shown.clone_from(&session.context);
+        let prompted = session.prompted;
+        self.held = Some(Held {
+            path: session.path.clone(),
+            id: session.id.clone(),
+            activity: session.activity,
+            turn_open: session.turn_open,
+            resumable: session.resumable,
+        });
+        self.session = Some(Box::new(session));
         prompted
     }
 

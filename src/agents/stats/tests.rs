@@ -240,6 +240,11 @@ fn count_and_token_formats_fit_the_table() {
         ["9999", "12.3k", "410k", "3.1M", "2.4B"]
     );
 }
+fn first_agent(counts: Counts) -> Vec<Counts> {
+    let mut by_agent = vec![Counts::default(); 7];
+    by_agent[0] = counts;
+    by_agent
+}
 pub(crate) fn example(now: SystemTime) -> Stats {
     let fixture: serde_json::Value =
         serde_json::from_str(crate::test_util::fixture!("stats/share-v2.txt")).expect("fixture");
@@ -248,23 +253,14 @@ pub(crate) fn example(now: SystemTime) -> Stats {
         let a: Vec<u64> =
             fixture[name].as_array().expect("array").iter().map(|v| v.as_u64().expect("integer")).collect();
         Bucket {
-            by_agent: [
-                Counts {
-                    agents: a[0],
-                    prompts: a[1],
-                    turns: a[6],
-                    agent_ms: a[2] * 1000,
-                    waited_ms: a[7] * 1000,
-                    tokens: Tokens { input: a[8], out: a[5], cache_read: a[9], ..Tokens::default() },
-                },
-                Counts::default(),
-                Counts::default(),
-                Counts::default(),
-                Counts::default(),
-                Counts::default(),
-                Counts::default(),
-            ]
-            .to_vec(),
+            by_agent: first_agent(Counts {
+                agents: a[0],
+                prompts: a[1],
+                turns: a[6],
+                agent_ms: a[2] * 1000,
+                waited_ms: a[7] * 1000,
+                tokens: Tokens { input: a[8], out: a[5], cache_read: a[9], ..Tokens::default() },
+            }),
             busy_ms: a[3] * 1000,
             most_at_once: a[4],
         }
@@ -282,16 +278,7 @@ pub(crate) fn example(now: SystemTime) -> Stats {
         stats.hours.insert(
             hour(now) - i as u64 * 24,
             Bucket {
-                by_agent: [
-                    Counts { agent_ms: n.as_u64().expect("seconds") * 1000, ..Counts::default() },
-                    Counts::default(),
-                    Counts::default(),
-                    Counts::default(),
-                    Counts::default(),
-                    Counts::default(),
-                    Counts::default(),
-                ]
-                .to_vec(),
+                by_agent: first_agent(Counts { agent_ms: n.as_u64().expect("seconds") * 1000, ..Counts::default() }),
                 ..Bucket::default()
             },
         );

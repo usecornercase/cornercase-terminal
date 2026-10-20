@@ -3,7 +3,7 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::agents::usage::{Report, Window, window};
+use crate::agents::usage::{Reading, Report, Window, window};
 use crate::error::{Error, Result};
 use crate::time;
 
@@ -123,22 +123,23 @@ fn windows(limits: &Limits) -> Vec<Window> {
             .list
             .iter()
             .map(|l| {
-                window(
-                    label(l),
-                    l.kind.clone(),
-                    model(l).map(str::to_string),
-                    l.percent,
-                    l.severity.as_deref(),
-                    time(l.resets_at.as_deref()),
-                )
+                let reading = Reading {
+                    percent: l.percent,
+                    severity: l.severity.as_deref(),
+                    resets_at: time(l.resets_at.as_deref()),
+                };
+                window(label(l), l.kind.clone(), model(l).map(str::to_string), reading)
             })
             .collect();
     }
     [("session (5h)", "session", &limits.five_hour), ("week", "weekly_all", &limits.seven_day)]
         .into_iter()
         .filter_map(|(name, kind, u)| {
-            u.as_ref()
-                .map(|u| window(name.into(), kind.into(), None, u.utilization, None, time(u.resets_at.as_deref())))
+            u.as_ref().map(|u| {
+                let reading =
+                    Reading { percent: u.utilization, severity: None, resets_at: time(u.resets_at.as_deref()) };
+                window(name.into(), kind.into(), None, reading)
+            })
         })
         .collect()
 }
