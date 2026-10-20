@@ -485,14 +485,17 @@ mod parsing {
 mod output {
     use super::*;
 
-    fn report() -> Report {
-        let pane = |id, program: &str, active| PaneInfo {
+    fn pane(id: u64, program: &str, active: bool) -> PaneInfo {
+        PaneInfo {
             id,
             path: Some(PathBuf::from("/home/ana/shop")),
             program: Some(program.into()),
             active,
             ..PaneInfo::default()
-        };
+        }
+    }
+
+    fn tab() -> TabInfo {
         let claude = PaneInfo {
             agent: Some("claude".into()),
             status: Some("working".into()),
@@ -501,7 +504,7 @@ mod output {
             caller: true,
             ..pane(5, "claude", false)
         };
-        let tab = TabInfo {
+        TabInfo {
             id: 3,
             name: "claude".into(),
             status: Some("working".into()),
@@ -510,8 +513,11 @@ mod output {
             custom_name: None,
             layout: None,
             controller: None,
-        };
-        let workspace = WorkspaceInfo {
+        }
+    }
+
+    fn workspace() -> WorkspaceInfo {
+        WorkspaceInfo {
             id: 2,
             name: "fix/login".into(),
             path: PathBuf::from("/home/ana/.cornercase/worktrees/shop/fix-login"),
@@ -526,15 +532,15 @@ mod output {
             custom_name: None,
             collapsed: false,
             changes: None,
-            tabs: vec![tab],
-        };
-        let project = |id, name: &str, group| ProjectInfo {
-            id,
-            name: name.into(),
-            path: format!("/home/ana/{name}").into(),
-            group,
-            ..ProjectInfo::default()
-        };
+            tabs: vec![tab()],
+        }
+    }
+
+    fn project(id: u64, name: &str, group: Option<u64>) -> ProjectInfo {
+        ProjectInfo { id, name: name.into(), path: format!("/home/ana/{name}").into(), group, ..ProjectInfo::default() }
+    }
+
+    fn report() -> Report {
         Report {
             version: "0.9.0".into(),
             boot: String::new(),
@@ -542,7 +548,7 @@ mod output {
             shown: Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) },
             groups: vec![GroupInfo { id: 8, name: "work".into(), collapsed: true, icon: String::new(), colour: 0 }],
             projects: vec![
-                ProjectInfo { workspaces: vec![workspace], ..project(1, "shop", None) },
+                ProjectInfo { workspaces: vec![workspace()], ..project(1, "shop", None) },
                 project(9, "api", Some(8)),
             ],
             keep_awake: None,

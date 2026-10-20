@@ -28,61 +28,15 @@ pub(super) fn run(action: PluginAction) -> Result<bool> {
     let places = Places::new(&paths::config(), &paths::session());
     let mut registry = Registry::open(&places.registry).map_err(Error::Plugin)?;
     match action {
-        PluginAction::Link { folder } => {
-            let (manifest, enabled) = registry.link(&folder).map_err(Error::Plugin)?;
-            registry.save()?;
-            if enabled {
-                println!("linked {} {} ({}), still on", manifest.name, manifest.version, manifest.id);
-            } else {
-                println!("linked {} {} ({}), turned off", manifest.name, manifest.version, manifest.id);
-                println!("it {}; turn it on with `cornercase plugin enable {}`", manifest.asks(), manifest.id);
-            }
-        }
+        PluginAction::Link { folder } => link(&mut registry, &folder)?,
         PluginAction::Install { source, yes } => install_from(&places, &source, yes)?,
         PluginAction::Update { id, yes } => update(&places, &registry, id, yes)?,
-        PluginAction::Remove { id } => {
-            if supervise::running(&places, &id).is_ok_and(|pids| !pids.is_empty()) {
-                println!("stopping {id}…");
-            }
-            match install::remove(&places, &id).map_err(Error::Plugin)? {
-                Removed::Unlinked => println!("forgot {id}; its folder and its files stay where they are"),
-                Removed::Deleted => println!("removed {id} and deleted its installed copy; its settings and data stay"),
-            }
-        }
-        PluginAction::Unlink { id } => {
-            if registry.entry(&id).is_ok_and(|entry| entry.source.installed()) {
-                return Err(Error::Plugin(format!("`{id}` was installed; `cornercase plugin remove {id}` removes it")));
-            }
-            if !registry.unlink(&id) {
-                return Err(Error::Plugin(missing(&id)));
-            }
-            registry.save()?;
-            println!("unlinked {id}; its folder and its files stay where they are");
-        }
-        PluginAction::List(print) => {
-            let plugins = registry.plugins();
-            let mut out = io::stdout().lock();
-            let text = if print.json { list_json(&plugins, &places) } else { list_text(&plugins) };
-            if super::quietly(out.write_all(text.as_bytes()).and_then(|()| out.flush()))? {
-                return Ok(true);
-            }
-        }
+        PluginAction::Remove { id } => remove(&places, &id)?,
+        PluginAction::Unlink { id } => unlink(&mut registry, &id)?,
+        PluginAction::List(print) => list(&registry, &places, print.json)?,
         PluginAction::Actions { .. } | PluginAction::Run(_) => {}
-        PluginAction::Enable { id } => {
-            let plugin = registry.set_enabled(&id, true).map_err(Error::Plugin)?;
-            registry.save()?;
-            let Ok(manifest) = &plugin.manifest else { return Ok(true) };
-            println!("{} is on. It runs as you and can do anything you can, in every terminal.", manifest.name);
-            println!("It {}; that is shown, not enforced.", manifest.asks());
-            if !manifest.runs().is_empty() {
-                println!("It runs {}.", manifest.runs().join(", "));
-            }
-        }
-        PluginAction::Disable { id } => {
-            let plugin = registry.set_enabled(&id, false).map_err(Error::Plugin)?;
-            registry.save()?;
-            println!("{} is off", plugin.name());
-        }
+        PluginAction::Enable { id } => enable(&mut registry, &id)?,
+        PluginAction::Disable { id } => disable(&mut registry, &id)?,
         PluginAction::Logs { id, logs } => {
             if !registry.entries.iter().any(|entry| entry.id == id) {
                 return Err(Error::Plugin(missing(&id)));
@@ -91,6 +45,67 @@ pub(super) fn run(action: PluginAction) -> Result<bool> {
         }
     }
     Ok(true)
+}
+
+fn link(registry: &mut Registry, folder: &Path) -> Result<()> {
+    let (manifest, enabled) = registry.link(folder).map_err(Error::Plugin)?;
+    registry.save()?;
+    if enabled {
+        println!("linked {} {} ({}), still on", manifest.name, manifest.version, manifest.id);
+    } else {
+        println!("linked {} {} ({}), turned off", manifest.name, manifest.version, manifest.id);
+        println!("it {}; turn it on with `cornercase plugin enable {}`", manifest.asks(), manifest.id);
+    }
+    Ok(())
+}
+
+fn remove(places: &Places, id: &str) -> Result<()> {
+    if supervise::running(places, id).is_ok_and(|pids| !pids.is_empty()) {
+        println!("stopping {id}…");
+    }
+    match install::remove(places, id).map_err(Error::Plugin)? {
+        Removed::Unlinked => println!("forgot {id}; its folder and its files stay where they are"),
+        Removed::Deleted => println!("removed {id} and deleted its installed copy; its settings and data stay"),
+    }
+    Ok(())
+}
+
+fn unlink(registry: &mut Registry, id: &str) -> Result<()> {
+    if registry.entry(id).is_ok_and(|entry| entry.source.installed()) {
+        return Err(Error::Plugin(format!("`{id}` was installed; `cornercase plugin remove {id}` removes it")));
+    }
+    if !registry.unlink(id) {
+        return Err(Error::Plugin(missing(id)));
+    }
+    registry.save()?;
+    println!("unlinked {id}; its folder and its files stay where they are");
+    Ok(())
+}
+
+fn list(registry: &Registry, places: &Places, json: bool) -> Result<()> {
+    let plugins = registry.plugins();
+    let mut out = io::stdout().lock();
+    let text = if json { list_json(&plugins, places) } else { list_text(&plugins) };
+    super::quietly(out.write_all(text.as_bytes()).and_then(|()| out.flush())).map(drop)
+}
+
+fn enable(registry: &mut Registry, id: &str) -> Result<()> {
+    let plugin = registry.set_enabled(id, true).map_err(Error::Plugin)?;
+    registry.save()?;
+    let Ok(manifest) = &plugin.manifest else { return Ok(()) };
+    println!("{} is on. It runs as you and can do anything you can, in every terminal.", manifest.name);
+    println!("It {}; that is shown, not enforced.", manifest.asks());
+    if !manifest.runs().is_empty() {
+        println!("It runs {}.", manifest.runs().join(", "));
+    }
+    Ok(())
+}
+
+fn disable(registry: &mut Registry, id: &str) -> Result<()> {
+    let plugin = registry.set_enabled(id, false).map_err(Error::Plugin)?;
+    registry.save()?;
+    println!("{} is off", plugin.name());
+    Ok(())
 }
 
 fn actions(context: Option<&str>, json: bool) -> Result<bool> {

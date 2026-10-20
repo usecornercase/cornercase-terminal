@@ -195,6 +195,16 @@ pub(super) fn render(described: &Described, changed: bool) -> String {
         .chain(described.connections.iter().map(|c| c.key.len()))
         .max()
         .unwrap_or(0);
+    write_settings(&mut out, described, key_width);
+    let _ = writeln!(out, "\nConnections");
+    for c in &described.connections {
+        let _ = writeln!(out, "  {:key_width$}  {}", c.key, connection(c));
+    }
+    write_projects(&mut out, described);
+    out
+}
+
+fn write_settings(out: &mut String, described: &Described, key_width: usize) {
     let value_width = described.settings.iter().map(|s| shown(&s.value).chars().count()).max().unwrap_or(0).min(40);
     let mut page = "";
     for setting in &described.settings {
@@ -205,19 +215,17 @@ pub(super) fn render(described: &Described, changed: bool) -> String {
         let value = shown(&setting.value);
         let _ = writeln!(out, "  {:key_width$}  {value:value_width$}  {}", setting.key, setting.note);
     }
-    let _ = writeln!(out, "\nConnections");
-    for c in &described.connections {
-        let _ = writeln!(out, "  {:key_width$}  {}", c.key, connection(c));
+}
+
+fn write_projects(out: &mut String, described: &Described) {
+    if described.projects.is_empty() {
+        return;
     }
-    if !described.projects.is_empty() {
-        let _ = writeln!(out, "\nProjects");
-        for p in &described.projects {
-            let line = |text: &str| if text.is_empty() { "-".to_string() } else { text.replace('\n', "; ") };
-            let _ =
-                writeln!(out, "  {}  setup: {}  teardown: {}", p.folder.display(), line(&p.setup), line(&p.teardown));
-        }
+    let _ = writeln!(out, "\nProjects");
+    for p in &described.projects {
+        let line = |text: &str| if text.is_empty() { "-".to_string() } else { text.replace('\n', "; ") };
+        let _ = writeln!(out, "  {}  setup: {}  teardown: {}", p.folder.display(), line(&p.setup), line(&p.teardown));
     }
-    out
 }
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
 use std::io::{self, Read as _, Write as _};
+use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -149,140 +150,214 @@ pub(super) fn quietly(written: io::Result<()>) -> Result<bool> {
     }
 }
 
-#[expect(clippy::too_many_lines, reason = "one arm per command for scripts")]
 fn run_control(command: Control) -> Result<bool> {
     if let Some(view) = command.view() {
         client::use_view(view)?;
     }
-    match command {
-        Control::Status(status) => run_status(&status),
-        Control::Open(open) => {
-            let path = std::path::absolute(&open.path)?;
-            let value = ask("open", control::Command::Open(control::Open { path, focus: open.create.focus }))?;
-            say(value, open.create.print.json, |done| id(done.ids.project))
+    match control_route(command) {
+        ControlFlow::Break(done) => done,
+        ControlFlow::Continue(_) => Err(Error::Control("no area runs this command".into())),
+    }
+}
+
+fn control_route(command: Control) -> ControlFlow<Result<bool>, Control> {
+    let command = create_commands(command)?;
+    let command = talk_commands(command)?;
+    let command = row_commands(command)?;
+    let command = stream_commands(command)?;
+    let command = terminal_commands(command)?;
+    other_commands(command)
+}
+
+fn create_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
+    ControlFlow::Break(match command {
+        Control::Open(open) => run_open(&open).map(|()| true),
+        Control::NewWorkspace(new) => run_new_workspace(new).map(|()| true),
+        Control::NewTab(new) => run_new_tab(new).map(|()| true),
+        Control::Split(split) => run_split(&split).map(|()| true),
+        Control::Start(start) => run_start(*start).map(|()| true),
+        Control::Go(go) => run_go(go).map(|()| true),
+        other => return ControlFlow::Continue(other),
+    })
+}
+
+fn talk_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
+    ControlFlow::Break(match command {
+        Control::Send(send) => run_send(send).map(|()| true),
+        Control::Keys(keys) => run_keys(keys).map(|()| true),
+        Control::Mark(mark) => run_mark(&mark).map(|()| true),
+        Control::Read(read) => read::run(&read),
+        Control::Wait(wait) => run_wait(wait).map(|()| true),
+        Control::Notify(notify) => run_notify(&notify).map(|()| true),
+        Control::Focus(focus) => run_focus(&focus).map(|()| true),
+        other => return ControlFlow::Continue(other),
+    })
+}
+
+fn row_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
+    ControlFlow::Break(
+        match command {
+            Control::Close(close) => return ControlFlow::Break(run_close(&close)),
+            Control::Rename(rename) => run_rename(rename),
+            Control::Move(args) => arrange::move_row(&args),
+            Control::MovePane(args) => arrange::move_pane(&args),
+            Control::Collapse(args) => arrange::fold(&args, "collapse"),
+            Control::Expand(args) => arrange::fold(&args, "expand"),
+            Control::Group(args) => arrange::group(args.action),
+            Control::Todo(todo) => todo::run(todo.action),
+            other => return ControlFlow::Continue(other),
         }
-        Control::NewWorkspace(new) => {
-            let (name, project, worktree, focus) = (new.name, new.project, new.worktree, new.create.focus);
-            let request = control::NewWorkspace { name, project, worktree, focus };
-            let value = ask("new-workspace", control::Command::NewWorkspace(request))?;
-            say(value, new.create.print.json, |done| id(done.ids.workspace))
+        .map(|()| true),
+    )
+}
+
+fn stream_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
+    ControlFlow::Break(
+        match command {
+            Control::Status(status) => run_status(&status),
+            Control::Events(events) => follow_events(events),
+            Control::Contract(contract) => contract::run(contract.print.json),
+            Control::Surface(args) => stream_surface(&args),
+            Control::View(args) => view::open(&args),
+            Control::ViewSet(args) => view::set(&args),
+            Control::Search(search) => search::run(&search),
+            other => return ControlFlow::Continue(other),
         }
-        Control::NewTab(new) => {
-            let (profile, accounts) = accounts::profile_arg(new.profile)?;
-            let request = control::NewTab {
-                workspace: workspace("new-tab", new.workspace, new.worktree.as_deref())?,
-                name: new.name,
-                command: typed(&new.command),
-                focus: new.create.focus,
-                profile,
-                accounts,
-            };
-            say(ask("new-tab", control::Command::NewTab(request))?, new.create.print.json, |done| id(done.ids.pane))
+        .map(|()| true),
+    )
+}
+
+fn terminal_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
+    ControlFlow::Break(
+        match command {
+            Control::Input(args) => terminal::input(&args),
+            Control::Scroll(args) => terminal::scroll(&args),
+            Control::Selection(args) => terminal::selection(&args),
+            Control::Resize(args) => terminal::resize(&args),
+            Control::Redraw(args) => terminal::redraw(&args),
+            Control::Ratio(args) => terminal::ratio(&args),
+            Control::Link(args) => terminal::link(&args),
+            other => return ControlFlow::Continue(other),
         }
-        Control::Split(split) => {
-            let request = control::Split {
-                pane: split.pane,
-                down: split.down,
-                command: typed(&split.command),
-                focus: split.create.focus,
-            };
-            say(ask("split", control::Command::Split(request))?, split.create.print.json, |done| id(done.ids.pane))
-        }
-        Control::Start(start) => run_start(*start),
-        Control::Queue(queue) => queue::run(queue.action),
-        Control::Send(send) => {
-            let text = send.text.map(|text| if text == "-" { stdin() } else { Ok(text) }).transpose()?;
-            let Target { pane, tab, .. } = send.target;
-            let request = control::SendText {
-                pane,
-                tab,
-                text,
-                enter: send.enter,
-                wait: send.wait,
-                until: send.until.map_or(Until::Stops, Until::from),
-                timeout: send.timeout,
-                force: send.force,
-            };
-            say(ask("send", control::Command::Send(request))?, send.print.json, ending)
-        }
-        Control::Keys(keys) => {
-            let Target { pane, tab, .. } = keys.target;
-            ask("keys", control::Command::Keys(control::Keys { pane, tab, keys: keys.keys })).map(drop)
-        }
-        Control::Mark(mark) => {
-            let Target { pane, tab, .. } = mark.target;
-            let request = control::Mark { pane, tab, reviewed: mark.reviewed };
-            ask("mark", control::Command::Mark(request)).map(drop)
-        }
-        Control::Read(read) => return read::run(&read),
-        Control::Wait(wait) => run_wait(wait),
-        Control::Close(close) => {
-            let item = close.which.item("close")?.ok_or_else(|| Error::Control("say what to close".into()))?;
-            if close.check {
-                arrange::check_removal(item, close.json)?;
-                return Ok(true);
-            }
-            if close.unlock {
-                client::use_close_unlock()?;
-            }
-            let request = control::Close {
-                item,
-                remove_worktree: close.remove_worktree,
-                force: close.force,
-                unlock: close.unlock,
-            };
-            let value = ask("close", control::Command::Close(request))?;
-            if let Some(warning) = value.get("warning").and_then(Value::as_str) {
-                eprintln!("warning: {warning}");
-            }
-            Ok(())
-        }
-        Control::Rename(rename) => run_rename(rename),
-        Control::Move(args) => arrange::move_row(&args),
-        Control::MovePane(args) => arrange::move_pane(&args),
-        Control::Collapse(args) => arrange::fold(&args, "collapse"),
-        Control::Expand(args) => arrange::fold(&args, "expand"),
-        Control::Group(args) => arrange::group(args.action),
-        Control::Focus(focus) => {
-            let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
-            ask("focus", control::Command::Focus(control::Focus { item })).map(drop)
-        }
-        Control::Go(go) => {
-            let command = control::Command::Go(control::Go { token: go.token });
-            say(ask("go", command)?, go.print.json, |done| id(done.ids.pane))
-        }
-        Control::Notify(notify) => {
-            let text = notify.text.join(" ");
-            ask("notify", control::Command::Notify(control::Notify { text })).map(drop)
-        }
-        Control::Search(search) => search::run(&search),
-        Control::Away(away) => {
-            let value = ask("away", control::Command::Away(control::Away { off: away.off }))?;
-            print_out(&away_line(&value))
-        }
-        Control::Todo(todo) => todo::run(todo.action),
-        Control::Events(events) => follow_events(events),
-        Control::Flow(flow) => flow::run(flow.action),
-        Control::Contract(contract) => contract::run(contract.print.json),
-        Control::Surface(args) => stream_surface(&args),
-        Control::View(args) => view::open(&args),
-        Control::ViewSet(args) => view::set(&args),
-        Control::Input(args) => terminal::input(&args),
-        Control::Scroll(args) => terminal::scroll(&args),
-        Control::Selection(args) => terminal::selection(&args),
-        Control::Resize(args) => terminal::resize(&args),
-        Control::Redraw(args) => terminal::redraw(&args),
-        Control::Ratio(args) => terminal::ratio(&args),
-        Control::Link(args) => terminal::link(&args),
-        Control::Theme(args) => theme::run(&args),
-        Control::Config(args) => config::run(args),
-        Control::Issue(args) => return issue::run(args.action),
-        Control::Changes(args) => changes::run(args),
-        Control::Usage(args) => return usage::run(&args),
-        Control::Account(args) => accounts::account(args.action),
-        Control::Profile(args) => accounts::profile(args.action),
-    }?;
+        .map(|()| true),
+    )
+}
+
+fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
+    ControlFlow::Break(match command {
+        Control::Issue(args) => return ControlFlow::Break(issue::run(args.action)),
+        Control::Usage(args) => return ControlFlow::Break(usage::run(&args)),
+        Control::Queue(queue) => queue::run(queue.action).map(|()| true),
+        Control::Away(away) => run_away(&away).map(|()| true),
+        Control::Flow(flow) => flow::run(flow.action).map(|()| true),
+        Control::Theme(args) => theme::run(&args).map(|()| true),
+        Control::Config(args) => config::run(args).map(|()| true),
+        Control::Changes(args) => changes::run(args).map(|()| true),
+        Control::Account(args) => accounts::account(args.action).map(|()| true),
+        Control::Profile(args) => accounts::profile(args.action).map(|()| true),
+        other => return ControlFlow::Continue(other),
+    })
+}
+
+fn run_open(open: &args::OpenArgs) -> Result<()> {
+    let path = std::path::absolute(&open.path)?;
+    let value = ask("open", control::Command::Open(control::Open { path, focus: open.create.focus }))?;
+    say(value, open.create.print.json, |done| id(done.ids.project))
+}
+
+fn run_new_workspace(new: args::NewWorkspaceArgs) -> Result<()> {
+    let (name, project, worktree, focus) = (new.name, new.project, new.worktree, new.create.focus);
+    let request = control::NewWorkspace { name, project, worktree, focus };
+    let value = ask("new-workspace", control::Command::NewWorkspace(request))?;
+    say(value, new.create.print.json, |done| id(done.ids.workspace))
+}
+
+fn run_new_tab(new: args::NewTabArgs) -> Result<()> {
+    let (profile, accounts) = accounts::profile_arg(new.profile)?;
+    let request = control::NewTab {
+        workspace: workspace("new-tab", new.workspace, new.worktree.as_deref())?,
+        name: new.name,
+        command: typed(&new.command),
+        focus: new.create.focus,
+        profile,
+        accounts,
+    };
+    say(ask("new-tab", control::Command::NewTab(request))?, new.create.print.json, |done| id(done.ids.pane))
+}
+
+fn run_split(split: &args::SplitArgs) -> Result<()> {
+    let request = control::Split {
+        pane: split.pane,
+        down: split.down,
+        command: typed(&split.command),
+        focus: split.create.focus,
+    };
+    say(ask("split", control::Command::Split(request))?, split.create.print.json, |done| id(done.ids.pane))
+}
+
+fn run_send(send: args::SendArgs) -> Result<()> {
+    let text = send.text.map(|text| if text == "-" { stdin() } else { Ok(text) }).transpose()?;
+    let Target { pane, tab, .. } = send.target;
+    let request = control::SendText {
+        pane,
+        tab,
+        text,
+        enter: send.enter,
+        wait: send.wait,
+        until: send.until.map_or(Until::Stops, Until::from),
+        timeout: send.timeout,
+        force: send.force,
+    };
+    say(ask("send", control::Command::Send(request))?, send.print.json, ending)
+}
+
+fn run_keys(keys: args::KeysArgs) -> Result<()> {
+    let Target { pane, tab, .. } = keys.target;
+    ask("keys", control::Command::Keys(control::Keys { pane, tab, keys: keys.keys })).map(drop)
+}
+
+fn run_mark(mark: &args::MarkArgs) -> Result<()> {
+    let Target { pane, tab, .. } = mark.target;
+    let request = control::Mark { pane, tab, reviewed: mark.reviewed };
+    ask("mark", control::Command::Mark(request)).map(drop)
+}
+
+fn run_close(close: &args::CloseArgs) -> Result<bool> {
+    let item = close.which.item("close")?.ok_or_else(|| Error::Control("say what to close".into()))?;
+    if close.check {
+        arrange::check_removal(item, close.json)?;
+        return Ok(true);
+    }
+    if close.unlock {
+        client::use_close_unlock()?;
+    }
+    let request =
+        control::Close { item, remove_worktree: close.remove_worktree, force: close.force, unlock: close.unlock };
+    let value = ask("close", control::Command::Close(request))?;
+    if let Some(warning) = value.get("warning").and_then(Value::as_str) {
+        eprintln!("warning: {warning}");
+    }
     Ok(true)
+}
+
+fn run_focus(focus: &args::FocusArgs) -> Result<()> {
+    let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
+    ask("focus", control::Command::Focus(control::Focus { item })).map(drop)
+}
+
+fn run_go(go: args::GoArgs) -> Result<()> {
+    let command = control::Command::Go(control::Go { token: go.token });
+    say(ask("go", command)?, go.print.json, |done| id(done.ids.pane))
+}
+
+fn run_notify(notify: &args::NotifyArgs) -> Result<()> {
+    let text = notify.text.join(" ");
+    ask("notify", control::Command::Notify(control::Notify { text })).map(drop)
+}
+
+fn run_away(away: &args::AwayArgs) -> Result<()> {
+    let value = ask("away", control::Command::Away(control::Away { off: away.off }))?;
+    print_out(&away_line(&value))
 }
 
 fn run_rename(rename: args::RenameArgs) -> Result<()> {

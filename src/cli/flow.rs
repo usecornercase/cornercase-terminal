@@ -3,13 +3,13 @@ use std::io::{IsTerminal as _, Read as _};
 use std::path::Path;
 
 use super::args::{
-    FlowAction, FlowDeleteArgs, FlowFilesArgs, FlowImportArgs, FlowMessagesArgs, FlowRunsArgs, ImportTo,
+    self, FlowAction, FlowDeleteArgs, FlowFilesArgs, FlowImportArgs, FlowMessagesArgs, FlowRunsArgs, ImportTo,
 };
 use super::{print_json, print_out, quietly, read_prompt, stream_json, workspace};
 use crate::client::{self, answer, ask, confirm};
 use crate::control::{
-    self, Exported, FlowBacklog, FlowInfo, FlowMessage, FlowRemoved, FlowRuns, Flows, Imported, RunEdge, RunFiles,
-    RunInfo, RunState,
+    self, Exported, FlowBacklog, FlowInfo, FlowMessage, FlowRemoved, FlowRuns, Flows, Imported, RoleInfo, RunEdge,
+    RunFiles, RunInfo, RunState,
 };
 use crate::error::{Error, Result};
 use crate::flows::Worktree;
@@ -18,54 +18,9 @@ use crate::flows::share;
 
 pub(super) fn run(action: FlowAction) -> Result<()> {
     match action {
-        FlowAction::List(list) => {
-            let value = ask("flow list", control::Command::FlowList(control::FlowList { project: list.project }))?;
-            if list.print.json {
-                return print_json(&value);
-            }
-            print_out(&listing(&answer(value)?))
-        }
-        FlowAction::Run(run) => {
-            if run.issue.key.is_some() {
-                client::use_issues()?;
-            }
-            let (profile, accounts) = super::accounts::profile_arg(run.profile)?;
-            let request = control::FlowRun {
-                name: run.name,
-                prompt: read_prompt(run.prompt, run.prompt_file)?.unwrap_or_default(),
-                worktree: run.worktree,
-                project: run.project,
-                issue: run.issue.key,
-                source: run.issue.source,
-                focus: run.create.focus,
-                profile,
-                accounts,
-            };
-            let value = ask("flow run", control::Command::FlowRun(request))?;
-            if run.create.print.json {
-                return print_json(&value);
-            }
-            let run: RunInfo = answer(value)?;
-            if let Some(note) = &run.note {
-                eprintln!("{note}");
-            }
-            if let Some(note) = folder_note(&run) {
-                eprintln!("{note}");
-            }
-            print_out(&started(&run))
-        }
-        FlowAction::Export(export) => {
-            let request = control::FlowExport { name: export.name, project: export.project };
-            let value = ask("flow export", control::Command::FlowExport(request))?;
-            if export.print.json {
-                return print_json(&value);
-            }
-            let exported: Exported = answer(value)?;
-            if let Some(note) = &exported.note {
-                eprintln!("{note}");
-            }
-            print_out(&exported.text)
-        }
+        FlowAction::List(list) => flow_list(&list),
+        FlowAction::Run(run) => flow_run(run),
+        FlowAction::Export(export) => flow_export(export),
         FlowAction::Import(import) => import_flow(import),
         FlowAction::Runs(runs) => follow_runs(&runs),
         FlowAction::Messages(messages) => messages_of(&messages),
@@ -80,6 +35,57 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
             removed("flow restore", control::Command::FlowRestore(request), restore.print.json, restored_line)
         }
     }
+}
+
+fn flow_list(list: &args::FlowListArgs) -> Result<()> {
+    let value = ask("flow list", control::Command::FlowList(control::FlowList { project: list.project }))?;
+    if list.print.json {
+        return print_json(&value);
+    }
+    print_out(&listing(&answer(value)?))
+}
+
+fn flow_run(run: args::FlowRunArgs) -> Result<()> {
+    if run.issue.key.is_some() {
+        client::use_issues()?;
+    }
+    let (profile, accounts) = super::accounts::profile_arg(run.profile)?;
+    let request = control::FlowRun {
+        name: run.name,
+        prompt: read_prompt(run.prompt, run.prompt_file)?.unwrap_or_default(),
+        worktree: run.worktree,
+        project: run.project,
+        issue: run.issue.key,
+        source: run.issue.source,
+        focus: run.create.focus,
+        profile,
+        accounts,
+    };
+    let value = ask("flow run", control::Command::FlowRun(request))?;
+    if run.create.print.json {
+        return print_json(&value);
+    }
+    let run: RunInfo = answer(value)?;
+    if let Some(note) = &run.note {
+        eprintln!("{note}");
+    }
+    if let Some(note) = folder_note(&run) {
+        eprintln!("{note}");
+    }
+    print_out(&started(&run))
+}
+
+fn flow_export(export: args::FlowExportArgs) -> Result<()> {
+    let request = control::FlowExport { name: export.name, project: export.project };
+    let value = ask("flow export", control::Command::FlowExport(request))?;
+    if export.print.json {
+        return print_json(&value);
+    }
+    let exported: Exported = answer(value)?;
+    if let Some(note) = &exported.note {
+        eprintln!("{note}");
+    }
+    print_out(&exported.text)
 }
 
 fn delete_flow(args: FlowDeleteArgs) -> Result<()> {
@@ -140,17 +146,9 @@ pub(super) fn restored_line(removed: &FlowRemoved) -> String {
 
 fn import_flow(args: FlowImportArgs) -> Result<()> {
     let source = registry::source(&args.source, Path::exists).map_err(Error::Control)?;
-    let from = args.source.clone();
-    let text = match &source {
-        Source::Stdin => read_shared(Path::new("-"))?,
-        Source::File(path) => read_shared(path)?,
-        remote => {
-            eprintln!("fetching {}", remote.label());
-            registry::fetch(remote).map_err(|e| Error::Control(share::visible(&e)))?
-        }
-    };
-    let flow =
-        share::from_share(&text).map_err(|e| Error::Control(share::visible(&format!("cannot read `{from}`: {e}"))))?;
+    let text = import_text(&source)?;
+    let flow = share::from_share(&text)
+        .map_err(|e| Error::Control(share::visible(&format!("cannot read `{}`: {e}", args.source))))?;
     eprint!("{}", share::summary(&flow));
     let risks = share::risks(&flow, "it");
     let asked = match &source {
@@ -165,18 +163,11 @@ fn import_flow(args: FlowImportArgs) -> Result<()> {
         replace: args.replace,
         check: false,
     };
-    if let Some(risks) = asked.filter(|_| !args.yes) {
-        request.check = true;
-        ask("flow import", control::Command::FlowImport(request.clone()))?;
-        request.check = false;
-        let asking = source != Source::Stdin && std::io::stdin().is_terminal();
-        if !asking {
-            return Err(Error::Control(format!("{risks}; pass --yes to import it")));
-        }
-        if !confirm(&confirmation(&risks, args.to)) {
-            println!("not imported");
-            return Ok(());
-        }
+    if let Some(risks) = asked.filter(|_| !args.yes)
+        && !confirmed_import(&mut request, &source, &risks, args.to)?
+    {
+        println!("not imported");
+        return Ok(());
     }
     let value = ask("flow import", control::Command::FlowImport(request))?;
     if args.print.json {
@@ -187,6 +178,28 @@ fn import_flow(args: FlowImportArgs) -> Result<()> {
         eprintln!("{note}");
     }
     print_out(&imported_line(&imported))
+}
+
+fn import_text(source: &Source) -> Result<String> {
+    match source {
+        Source::Stdin => read_shared(Path::new("-")),
+        Source::File(path) => read_shared(path),
+        remote => {
+            eprintln!("fetching {}", remote.label());
+            registry::fetch(remote).map_err(|e| Error::Control(share::visible(&e)))
+        }
+    }
+}
+
+fn confirmed_import(request: &mut control::FlowImport, source: &Source, risks: &str, to: ImportTo) -> Result<bool> {
+    request.check = true;
+    ask("flow import", control::Command::FlowImport(request.clone()))?;
+    request.check = false;
+    let asking = *source != Source::Stdin && std::io::stdin().is_terminal();
+    if !asking {
+        return Err(Error::Control(format!("{risks}; pass --yes to import it")));
+    }
+    Ok(confirm(&confirmation(risks, to)))
 }
 
 pub(super) fn fetched(source: &Source, risks: Option<String>) -> String {
@@ -236,21 +249,7 @@ pub(super) fn listing(flows: &Flows) -> String {
         if !flow.description.is_empty() {
             let _ = writeln!(out, "  {}", flow.description);
         }
-        let roles: Vec<String> = flow
-            .roles
-            .iter()
-            .map(|role| {
-                let model = role.model.as_deref().map(|m| format!(" · {m}")).unwrap_or_default();
-                let effort = role.effort.as_deref().map(|e| format!(" · {e}")).unwrap_or_default();
-                let edits = match (role.edits, role.worktree) {
-                    (true, Worktree::Own) => " (edits, own worktree)",
-                    (true, Worktree::Shared) => " (edits)",
-                    (false, Worktree::Own) => " (own worktree)",
-                    (false, Worktree::Shared) => "",
-                };
-                format!("{}: {}{model}{effort}{edits}", role.role, role.agent)
-            })
-            .collect();
+        let roles: Vec<String> = flow.roles.iter().map(role_summary).collect();
         let _ = writeln!(out, "  {}", roles.join(", "));
         for problem in &flow.problems {
             let _ = writeln!(out, "  cannot run: {problem}");
@@ -271,6 +270,18 @@ pub(super) fn listing(flows: &Flows) -> String {
         );
     }
     out
+}
+
+fn role_summary(role: &RoleInfo) -> String {
+    let model = role.model.as_deref().map(|m| format!(" · {m}")).unwrap_or_default();
+    let effort = role.effort.as_deref().map(|e| format!(" · {e}")).unwrap_or_default();
+    let edits = match (role.edits, role.worktree) {
+        (true, Worktree::Own) => " (edits, own worktree)",
+        (true, Worktree::Shared) => " (edits)",
+        (false, Worktree::Own) => " (own worktree)",
+        (false, Worktree::Shared) => "",
+    };
+    format!("{}: {}{model}{effort}{edits}", role.role, role.agent)
 }
 
 fn heading(flow: &FlowInfo) -> String {

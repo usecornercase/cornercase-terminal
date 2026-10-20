@@ -11,14 +11,20 @@ fn events(args: &[String]) -> Result<Vec<InputEvent>> {
     let mut events = Vec::new();
     for text in args {
         if text == "-" {
-            for line in io::stdin().lock().lines() {
-                let line = line?;
-                if !line.trim().is_empty() {
-                    events.push(event(&line)?);
-                }
-            }
+            events.extend(events_from_stdin()?);
         } else {
             events.push(event(text)?);
+        }
+    }
+    Ok(events)
+}
+
+fn events_from_stdin() -> Result<Vec<InputEvent>> {
+    let mut events = Vec::new();
+    for line in io::stdin().lock().lines() {
+        let line = line?;
+        if !line.trim().is_empty() {
+            events.push(event(&line)?);
         }
     }
     Ok(events)
