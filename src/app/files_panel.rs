@@ -13,6 +13,7 @@ use super::layout::Side;
 use super::{App, AppEvent};
 use crate::changes::{Checkout, Tints};
 use crate::error::Result;
+use crate::files::find::Find;
 use crate::files::search::{self, MAX_MATCHES, MAX_NAMES};
 use crate::files::{self, Mode, Query, Reading, disk};
 use crate::log::{self, Job, Level};
@@ -20,6 +21,8 @@ use crate::panics;
 use crate::project::Hierarchy;
 use crate::ui;
 use crate::ui::files::{self as panel, Action, Bar, FileView, Found, Hit, Screen, SearchView, TreeRow, TreeView};
+
+mod find;
 
 fn text_rows(text: &search::Text) -> Vec<Found> {
     let mut rows = Vec::new();
@@ -226,7 +229,10 @@ impl App {
             unfolded: viewer.unfolded.clone(),
             scroll: viewer.scroll,
             selection: viewer.selection,
-            find: viewer.find.clone(),
+            find: viewer.finding().cloned().map(|mut find| {
+                find.focused &= self.overlay.is_none();
+                find
+            }),
             image: None,
             full_screen: self.file_full_screen(),
         }
@@ -344,6 +350,9 @@ impl App {
             Some(Hit::Field) => self.panels.files.query_mut(workspace).focused = true,
             Some(Hit::Clear) => self.edit_query(workspace, String::clear),
             Some(Hit::Found(i)) => self.open_found(workspace, &view, i),
+            Some(hit @ (Hit::Find | Hit::FindField | Hit::FindPrevious | Hit::FindNext | Hit::FindClose)) => {
+                self.find_mouse(workspace, hit, panel_area);
+            }
             Some(Hit::Back) => self.panels.files.close_file(workspace),
             Some(Hit::FullScreen) => self.panels.files.set_full_screen(!self.panels.files.full_screen()),
             Some(Hit::Row(i)) => self.click_file_row(workspace, &view, i),
@@ -423,6 +432,10 @@ impl App {
 
     pub(super) fn files_key(&mut self, key: KeyEvent, area: Rect) {
         let Some((workspace, _)) = self.files_target() else { return };
+        if self.panels.files.viewer(workspace).is_some() {
+            self.find_key(workspace, key, self.layout(area).shown(self.screen.nav).changes);
+            return;
+        }
         match key.code {
             KeyCode::Esc if self.panels.files.query(workspace).is_none_or(|q| q.text.is_empty()) => self.close_panel(),
             KeyCode::Esc => *self.panels.files.query_mut(workspace) = Query::default(),
@@ -462,8 +475,12 @@ impl App {
         }
     }
 
-    pub(super) fn files_paste(&mut self, text: &str) {
+    pub(super) fn files_paste(&mut self, text: &str, area: Rect) {
         let Some((workspace, _)) = self.files_target() else { return };
+        if self.panels.files.viewer(workspace).is_some() {
+            self.find_paste(workspace, text, self.layout(area).shown(self.screen.nav).changes);
+            return;
+        }
         self.edit_query(workspace, |q| q.extend(text.chars().filter(|c| !c.is_control())));
     }
 
@@ -490,12 +507,14 @@ impl App {
         let Screen::Search(search) = &view.screen else { return };
         let line = search.rows.get(i..).and_then(|rows| rows.iter().find(|r| r.selectable()));
         let query = self.panels.files.query_mut(workspace);
+        let focused = query.focused;
         query.focused = false;
         query.selected = search.rows.iter().take(i).filter(|r| r.selectable()).count();
-        let find = query.wanted().map(str::to_string);
+        let wanted = query.wanted().map(str::to_string);
         match line {
             Some(Found::Name { path, .. }) => self.panels.files.open_file(workspace, path),
             Some(Found::Line { path, number, .. }) => {
+                let find = wanted.map(|text| Find::new(&text, *number, focused));
                 self.panels.files.open_at(workspace, path, (*number, *number), find);
             }
             Some(Found::File { .. }) | None => {}

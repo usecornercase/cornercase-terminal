@@ -11,7 +11,8 @@ import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, wo
 import { TodoPanel, todoWidth } from './todo';
 import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
 import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
-import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, fileMax, foundRows, lineEdge, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
+import { type FindState, findAll, firstFrom, nearest, start as hitStart } from './find';
+import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, fileLines, fileMax, foundRows, lineEdge, lineNear, linkAt, ordered, resolveLink, reveal, selectable, selectedText, topLine, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
   GROUP_STYLES,
@@ -1806,7 +1807,7 @@ export class App {
     this.dirty();
   }
 
-  showFile(path: string, lines: [number, number] | null = null, find: string | null = null): void {
+  showFile(path: string, lines: [number, number] | null = null, find: FindState | null = null): void {
     const place = this.filesPlace();
     if (place) viewFile(place, path, lines, find);
     this.files.full = false;
@@ -1821,10 +1822,11 @@ export class App {
     const query = wanted(place);
     const rows = foundRows(this.filesMap(), place);
     const row = rows.slice(i).find((r) => r.kind !== 'file');
+    const focused = place.focused;
     place.focused = false;
     place.selected = selectable(rows).filter((r) => r < i).length;
     if (row?.kind === 'name') this.showFile(row.path);
-    else if (row?.kind === 'line') this.showFile(row.path, [row.n, row.n], query);
+    else if (row?.kind === 'line') this.showFile(row.path, [row.n, row.n], query ? { query, focused, at: [row.n, 0] } : null);
     else this.dirty();
   }
 
@@ -1844,6 +1846,7 @@ export class App {
   private filesKey(k: Key): boolean {
     const place = this.filesPlace();
     if (!place) return false;
+    if (place.viewer) return this.findKey(k);
     const ch = this.typed(k);
     if (k.key === 'Escape' && !place.query) return this.closePanel();
     if (k.key === 'Escape') Object.assign(place, { query: '', focused: false, selected: 0, scroll: 0 });
@@ -1853,6 +1856,73 @@ export class App {
     } else if (k.key === 'ArrowUp' || k.key === 'ArrowDown') this.moveFound(place, k.key === 'ArrowUp' ? -1 : 1);
     else if (k.key === 'Backspace') this.editFilesQuery([...place.query].slice(0, -1).join(''));
     else if (ch) this.editFilesQuery(place.query + ch);
+    this.dirty();
+    return true;
+  }
+
+  openFind(): void {
+    const viewer = this.filesPlace()?.viewer;
+    if (!viewer) return;
+    if (viewer.find) viewer.find.focused = true;
+    else viewer.find = { query: '', focused: true, at: [topLine(this), 0] };
+    this.dirty();
+  }
+
+  closeFind(): void {
+    const viewer = this.filesPlace()?.viewer;
+    if (viewer) viewer.find = null;
+    this.dirty();
+  }
+
+  private findHits(): ReturnType<typeof findAll> {
+    const viewer = this.filesPlace()?.viewer;
+    return viewer?.find ? findAll(fileLines(this.filesMap(), viewer), viewer.find.query) : [];
+  }
+
+  private revealFind(): void {
+    const viewer = this.filesPlace()?.viewer;
+    const hits = this.findHits();
+    const now = viewer?.find ? nearest(hits, viewer.find.at) : null;
+    const scroll = now === null ? null : reveal(this, hits[now].line);
+    if (viewer && scroll !== null) viewer.scroll = scroll;
+  }
+
+  editFind(query: string): void {
+    const viewer = this.filesPlace()?.viewer;
+    if (!viewer?.find) return;
+    const top = topLine(this);
+    viewer.find.query = query;
+    viewer.find.focused = true;
+    const hits = this.findHits();
+    const first = firstFrom(hits, [top, 0]);
+    viewer.find.at = first === null ? [top, 0] : hitStart(hits[first]);
+    this.revealFind();
+    this.dirty();
+  }
+
+  stepFind(delta: number): void {
+    const viewer = this.filesPlace()?.viewer;
+    if (!viewer?.find) return;
+    const hits = this.findHits();
+    const now = nearest(hits, viewer.find.at);
+    if (now !== null) {
+      viewer.find.at = hitStart(hits[(now + delta + hits.length) % hits.length]);
+      this.revealFind();
+    }
+    this.dirty();
+  }
+
+  private findKey(k: Key): boolean {
+    const find = this.filesPlace()?.viewer?.find;
+    if (!find) return false;
+    const ch = this.typed(k);
+    if (k.key === 'Escape') {
+      if (find.query) this.editFind('');
+      else this.closeFind();
+    } else if (k.key === 'Enter' || k.key === 'ArrowDown') this.stepFind(1);
+    else if (k.key === 'ArrowUp') this.stepFind(-1);
+    else if (k.key === 'Backspace') this.editFind([...find.query].slice(0, -1).join(''));
+    else if (ch) this.editFind(find.query + ch);
     this.dirty();
     return true;
   }
@@ -4360,7 +4430,10 @@ export class App {
       return;
     }
     if (this.filesTyping()) {
-      this.editFilesQuery((this.filesPlace()?.query ?? '') + text.replace(/\p{Cc}/gu, ''));
+      const place = this.filesPlace();
+      const clean = text.replace(/\p{Cc}/gu, '');
+      if (place?.viewer?.find) this.editFind(place.viewer.find.query + clean);
+      else this.editFilesQuery((place?.query ?? '') + clean);
       return;
     }
     if (this.filteringChanges() && this.changesFilter) {

@@ -1,6 +1,7 @@
 use super::*;
 use crate::changes::diff::Status;
 use crate::files::Mark;
+use crate::files::find::Find;
 use crate::state;
 use crate::ui::changes::close;
 use crate::ui::files::{self as panel, Action, Screen};
@@ -73,7 +74,7 @@ fn lines(view: &panel::View) -> Vec<String> {
 
 fn line_pos(app: &App, line: u32) -> Position {
     let view = view(app);
-    let body = panel::parts(panel_area(app)).body;
+    let body = panel::body(panel_area(app), &view);
     let row = panel::row_of(&view, line) - file(app).scroll;
     Position::new(body.x + 2, body.y + u16::try_from(row).expect("the line is on screen"))
 }
@@ -222,12 +223,15 @@ fn copy_without_a_selection_takes_the_whole_file_as_it_is() {
     assert_eq!(app.take_host_writes().last(), Some(&clipboard::osc52("\trun();")));
 }
 
-fn long_file() -> (TempDir, App, Receiver<AppEvent>) {
-    let source = (1..=200).map(|n| format!("let line_{n} = {n};\n")).collect::<Vec<_>>().concat();
-    let repo = git_repo(&[("src/main.rs", &source)]);
+fn file_with(source: &str) -> (TempDir, App, Receiver<AppEvent>) {
+    let repo = git_repo(&[("src/main.rs", source)]);
     let (mut app, rx) = opened(&repo);
     show(&mut app, &rx, "src/main.rs");
     (repo, app, rx)
+}
+
+fn long_file() -> (TempDir, App, Receiver<AppEvent>) {
+    file_with(&(1..=200).map(|n| format!("let line_{n} = {n};\n")).collect::<Vec<_>>().concat())
 }
 
 fn hold(app: &mut App, from: Instant, steps: u32) -> Instant {
@@ -361,7 +365,7 @@ fn a_text_search_opens_the_file_at_the_line() {
     click(&mut app, Position::new(body.x + 4, body.y + u16::try_from(row).expect("on screen")));
     let opened = file(&app);
     assert_eq!(
-        (opened.path.as_str(), opened.selection, opened.find.as_deref()),
+        (opened.path.as_str(), opened.selection, opened.find.as_ref().map(Find::text)),
         ("src/main.rs", Some((2, 2)), Some("run"))
     );
     let back = panel::back(panel_area(&app)).as_position();
@@ -634,7 +638,7 @@ mod full_screen {
     fn scroll_selection_and_highlights_survive_both_ways() {
         let (_repo, mut app, _rx) = with_file();
         let ws = app.projects[0].workspaces[0].id;
-        app.panels.files.open_at(ws, "src/main.rs", (2, 3), Some("run".into()));
+        app.panels.files.open_at(ws, "src/main.rs", (2, 3), Some(Find::new("run", 2, false)));
         let before = file(&app);
         toggle(&mut app);
         let full = file(&app);
@@ -758,3 +762,5 @@ mod full_screen {
         assert_eq!(app.layout(small).changes, small);
     }
 }
+
+mod find;

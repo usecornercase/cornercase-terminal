@@ -102,9 +102,3 @@ fn a_cancelled_search_finds_nothing_more() {
     let text = text(repo.path(), &paths(&["a.txt"]), "needle", &AtomicBool::new(true));
     assert_eq!(text.matches, 0);
 }
-
-#[test]
-fn occurrences_follow_smart_case() {
-    assert_eq!(occurrences("Run run RUN", "run"), [0..3, 4..7, 8..11]);
-    assert_eq!(occurrences("Run run RUN", "Run"), std::iter::once(0..3).collect::<Vec<_>>());
-}

@@ -412,7 +412,7 @@ impl App {
             self.overlay_paste(text, area);
             return;
         }
-        if self.typing_paste(text) || self.holds_input() {
+        if self.typing_paste(text, area) || self.holds_input() {
             return;
         }
         if let Some(term) = self.term_mut() {
@@ -454,13 +454,13 @@ impl App {
         }
     }
 
-    fn typing_paste(&mut self, text: &str) -> bool {
+    fn typing_paste(&mut self, text: &str, area: Rect) -> bool {
         if self.todo_typing() {
             self.todo_paste(text);
             return true;
         }
         if self.files_typing() {
-            self.files_paste(text);
+            self.files_paste(text, area);
             return true;
         }
         if self.filtering() {

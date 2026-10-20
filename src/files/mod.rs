@@ -1,4 +1,5 @@
 pub(crate) mod disk;
+pub(crate) mod find;
 pub(crate) mod link;
 pub(crate) mod search;
 
@@ -8,10 +9,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use self::disk::{Content, Entry, Stamp};
+use self::disk::{Body, Content, Entry, Stamp};
+use self::find::Find;
 use crate::changes::diff::{Diff, File as Changed, Hunk, Kind, Status};
 
 pub(crate) const LIST_EVERY: Duration = Duration::from_secs(2);
+pub(crate) const CONTEXT: usize = 3;
 pub(crate) const CHECK_EVERY: Duration = Duration::from_secs(1);
 pub(crate) const INDEX_EVERY: Duration = Duration::from_secs(10);
 const GIVE_UP_AFTER: Duration = Duration::from_secs(30);
@@ -85,12 +88,17 @@ pub(crate) struct Viewer {
     pub(crate) content: Option<Arc<Content>>,
     pub(crate) selection: Option<(u32, u32)>,
     pub(crate) unfolded: HashSet<u32>,
-    pub(crate) find: Option<String>,
+    pub(crate) find: Option<Find>,
 }
 
 impl Viewer {
     pub(crate) fn selected(&self) -> Option<(u32, u32)> {
         self.selection.map(|(a, b)| (a.min(b), a.max(b)))
+    }
+
+    pub(crate) fn finding(&self) -> Option<&Find> {
+        let shown = self.content.as_deref().is_none_or(|c| matches!(c.body, Body::Text { .. }));
+        self.find.as_ref().filter(|_| shown)
     }
 }
 
@@ -230,7 +238,10 @@ impl Panel {
     }
 
     pub(crate) fn typing(&self, workspace: u64) -> bool {
-        self.viewer(workspace).is_none() && self.query(workspace).is_some_and(|q| q.focused)
+        match self.viewer(workspace) {
+            Some(viewer) => viewer.finding().is_some_and(|f| f.focused),
+            None => self.query(workspace).is_some_and(|q| q.focused),
+        }
     }
 
     pub(crate) fn full_screen(&self) -> bool {
@@ -244,12 +255,18 @@ impl Panel {
     pub(crate) fn close(&mut self) {
         self.full_screen = false;
         self.unfocus();
+        for viewer in self.places.values_mut().filter_map(|p| p.viewer.as_mut()) {
+            viewer.find = None;
+        }
     }
 
     pub(crate) fn unfocus(&mut self) {
         for place in self.places.values_mut() {
             place.query.focused = false;
             place.query.enter = false;
+            if let Some(find) = place.viewer.as_mut().and_then(|v| v.find.as_mut()) {
+                find.focused = false;
+            }
         }
     }
 
@@ -353,11 +370,11 @@ impl Panel {
         answer(&mut self.places, &mut self.texts, workspace, search, found);
     }
 
-    pub(crate) fn open_at(&mut self, workspace: u64, path: &str, lines: (u32, u32), find: Option<String>) {
+    pub(crate) fn open_at(&mut self, workspace: u64, path: &str, lines: (u32, u32), find: Option<Find>) {
         self.open_file(workspace, path);
         if let Some(viewer) = self.viewer_mut(workspace) {
             viewer.selection = Some(lines);
-            viewer.scroll = usize::try_from(lines.0).unwrap_or(usize::MAX).saturating_sub(4);
+            viewer.scroll = usize::try_from(lines.0.saturating_sub(1)).unwrap_or(usize::MAX).saturating_sub(CONTEXT);
             viewer.find = find;
         }
     }
@@ -454,6 +471,10 @@ impl Panel {
         }
         let viewer = self.places.get_mut(&workspace).and_then(|p| p.viewer.as_mut()).filter(|v| v.path == path);
         if let (Some(viewer), Some(content)) = (viewer, content) {
+            let changed = viewer.content.as_ref().is_none_or(|old| old.lines() != content.lines());
+            if let Some(find) = viewer.find.as_mut().filter(|_| changed) {
+                find.recount(content.lines());
+            }
             viewer.content = Some(Arc::new(content));
         }
     }
@@ -609,7 +630,6 @@ impl<'a> Lines<'a> {
         self.blocks.iter().find(|(b, _)| *b == key).and_then(|(_, lines)| lines.get(k)).map(String::as_str)
     }
 
-    #[cfg(test)]
     pub(crate) fn row_of(&self, line: u32) -> usize {
         let before: usize = self.blocks.iter().filter(|(key, _)| *key <= line).map(|(_, l)| l.len()).sum();
         usize::try_from(line).unwrap_or(usize::MAX).saturating_sub(1) + before

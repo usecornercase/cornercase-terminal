@@ -99,7 +99,7 @@ pub(crate) struct Text {
     pub(crate) capped: bool,
 }
 
-fn matcher(query: &str) -> Option<RegexMatcher> {
+pub(super) fn matcher(query: &str) -> Option<RegexMatcher> {
     RegexMatcherBuilder::new().case_smart(true).fixed_strings(true).build(query).ok()
 }
 
@@ -173,27 +173,6 @@ fn text_on(root: &Path, paths: &[String], query: &str, cancel: &AtomicBool, thre
     let files: Vec<Found> = files.into_iter().map(|(_, f)| f).collect();
     let matches = files.iter().map(|f| f.lines.len()).sum();
     Text { files, matches, capped: seen.into_inner() > MAX_MATCHES }
-}
-
-pub(crate) fn occurrences(text: &str, query: &str) -> Vec<Range<usize>> {
-    if query.is_empty() {
-        return Vec::new();
-    }
-    let fold = !query.chars().any(char::is_uppercase);
-    let norm = |c: char| if fold { c.to_lowercase().next().unwrap_or(c) } else { c };
-    let needle: Vec<char> = query.chars().map(norm).collect();
-    let hay: Vec<char> = text.chars().map(norm).collect();
-    let mut ranges = Vec::new();
-    let mut i = 0;
-    while i + needle.len() <= hay.len() {
-        if hay[i..i + needle.len()] == needle[..] {
-            ranges.push(i..i + needle.len());
-            i += needle.len();
-        } else {
-            i += 1;
-        }
-    }
-    ranges
 }
 
 #[cfg(test)]
