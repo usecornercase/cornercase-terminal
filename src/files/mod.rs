@@ -471,8 +471,8 @@ impl Panel {
         }
         let viewer = self.places.get_mut(&workspace).and_then(|p| p.viewer.as_mut()).filter(|v| v.path == path);
         if let (Some(viewer), Some(content)) = (viewer, content) {
-            let changed = viewer.content.as_ref().is_none_or(|old| old.lines() != content.lines());
-            if let Some(find) = viewer.find.as_mut().filter(|_| changed) {
+            let old = viewer.content.as_ref();
+            if let Some(find) = viewer.find.as_mut().filter(|_| old.is_none_or(|old| old.lines() != content.lines())) {
                 find.recount(content.lines());
             }
             viewer.content = Some(Arc::new(content));
