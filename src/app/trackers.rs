@@ -291,3 +291,16 @@ pub(crate) enum IssueReply {
     People(Source, Result<Vec<Person>>),
     Found(Result<Issue>),
 }
+
+#[derive(Debug)]
+pub(crate) struct Ticket {
+    pub(in crate::app) key: u64,
+    pub(in crate::app) project: u64,
+    pub(in crate::app) epochs: Vec<(Source, u64)>,
+}
+
+impl Ticket {
+    pub(in crate::app) fn replied(self, answer: IssueReply) -> AppEvent {
+        AppEvent::Issues(IssueEvent::Replied { ticket: self, answer: Box::new(answer) })
+    }
+}

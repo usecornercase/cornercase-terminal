@@ -7,7 +7,7 @@ use super::App;
 use super::event::AppEvent;
 use super::event::Start;
 use super::overlay::Overlay;
-use super::trackers::IssueReply;
+use super::trackers::{IssueReply, Ticket};
 use crate::agents;
 use crate::agents::launch::{self};
 use crate::config::Config;
@@ -32,7 +32,7 @@ pub(crate) enum IssueEvent {
     Read { source: Source, epoch: u64, key: String, result: Result<Detail> },
     TokenChecked { source: Source, epoch: u64, token: Secret, result: Result<Account>, request: Option<u64> },
     People { project: u64, source: Source, epoch: u64, result: Result<Vec<Person>> },
-    Replied { key: u64, project: u64, epochs: Vec<(Source, u64)>, answer: Box<IssueReply> },
+    Replied { ticket: Ticket, answer: Box<IssueReply> },
 }
 
 impl IssueEvent {
@@ -79,9 +79,7 @@ impl App {
                     None => self.token_checked(source, &token, result, area)?,
                 }
             }
-            IssueEvent::Replied { key, project, epochs, answer } => {
-                self.issue_replied(key, project, &epochs, *answer, area);
-            }
+            IssueEvent::Replied { ticket, answer } => self.issue_replied(&ticket, *answer, area),
             IssueEvent::People { project, source, epoch, result } => {
                 if epoch == self.epoch(source) {
                     self.people_loaded(project, source, result);
