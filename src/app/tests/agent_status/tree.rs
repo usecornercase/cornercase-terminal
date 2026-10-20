@@ -123,7 +123,7 @@ fn in_a_run(f: &mut Family) {
     let mut run = Run::new(workspace, Flow::default(), "fix it".into());
     run.members.push(Member { role: ORCHESTRATOR.into(), pane: f.parent });
     run.members.push(Member { role: "coder".into(), pane: f.child });
-    f.app.runs.list.push(run);
+    f.app.runs.push(run);
 }
 
 fn labels(app: &App) -> Vec<(Option<String>, bool)> {
@@ -223,7 +223,7 @@ fn a_role_that_goes_changes_what_watchers_see() {
     in_a_run(&mut f);
     let before = f.app.refreshed();
 
-    f.app.runs.list[0].members.retain(|member| member.role != "coder");
+    f.app.runs.first_mut().members.retain(|member| member.role != "coder");
 
     assert_ne!(f.app.refreshed(), before);
 }

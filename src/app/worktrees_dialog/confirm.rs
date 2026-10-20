@@ -158,7 +158,7 @@ impl App {
         }
         if let Some(live) = live.filter(|live| live.run_roles > 0) {
             let roles = plural(live.run_roles, "role", "roles");
-            let run = self.runs.list.iter().any(|run| run.workspace == live.workspace);
+            let run = self.runs.of_workspace(live.workspace).is_some();
             risks.push(if run {
                 format!("ends its flow run and removes the worktrees of its {roles}")
             } else {

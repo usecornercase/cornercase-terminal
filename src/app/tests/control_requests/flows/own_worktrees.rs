@@ -60,7 +60,7 @@ fn seat<'a>(run: &'a RunInfo, role: &str) -> &'a crate::control::MemberInfo {
 }
 
 fn tree_of(team: &Team, role: &str) -> PathBuf {
-    let run = team.app.runs.list.first().expect("a run");
+    let run = team.app.runs.all().first().expect("a run");
     let (p, w) = team.app.projects.workspace_index(run.workspace).expect("the workspace");
     let trees = &team.app.projects[p].workspaces[w].role_worktrees;
     trees.iter().find(|tree| tree.role == role).map(|tree| tree.path.clone()).expect("the role's worktree")
@@ -235,7 +235,7 @@ fn a_chosen_branch_that_is_new_while_a_role_branch_is_left_over_is_refused() {
     let refused = error(start(&mut team, Some("fresh")));
 
     assert!(refused.contains("branch fresh--coder-a already exists"), "{refused}");
-    assert!(team.app.runs.list.is_empty());
+    assert!(team.app.runs.all().is_empty());
 }
 
 #[test]
@@ -257,7 +257,7 @@ fn a_role_worktree_that_cannot_be_made_opens_no_tab() {
     let refused = error(start(&mut team, None));
 
     assert!(refused.contains("already exists") || refused.contains("exists"), "{refused}");
-    assert!(team.app.runs.list.is_empty());
+    assert!(team.app.runs.all().is_empty());
     let tabs: usize = team.app.projects[0].workspaces.iter().map(|w| w.tabs.len()).sum();
     assert_eq!(tabs, 1);
     let made = |branch: &str| checkout_path(team.worktrees.path(), team.repo.path(), branch);

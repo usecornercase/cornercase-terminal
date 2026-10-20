@@ -32,7 +32,7 @@ fn end(app: &App) -> ui::flow::Ending {
 }
 
 fn orchestrator(app: &mut App) -> &mut Term {
-    let pane = app.runs.list[0].pane_of(ORCHESTRATOR).expect("the orchestrator");
+    let pane = app.runs.all()[0].pane_of(ORCHESTRATOR).expect("the orchestrator");
     app.projects.pane_by_mut(pane).expect("its pane")
 }
 
@@ -77,7 +77,7 @@ fn the_end_stays_lit_once_the_orchestrator_marked_it_even_when_it_works_again_wi
 
     mark(&mut repo.app);
 
-    assert_eq!(repo.app.runs.list[0].ended.as_deref(), Some("feat/x"));
+    assert_eq!(repo.app.runs.all()[0].ended.as_deref(), Some("feat/x"));
     orchestrator(&mut repo.app).agent.update(Some(Activity::Working), true, now);
     assert!(!orchestrator(&mut repo.app).agent.pending());
     repo.app.config.pull_requests = false;
@@ -107,14 +107,14 @@ fn another_branch_forgets_the_end_and_a_detached_head_keeps_it() {
 
     git(&path, &["checkout", "--quiet", "--detach"]);
     repo.app.forget_moved_run_ends();
-    assert!(repo.app.runs.list[0].ended.is_some());
+    assert!(repo.app.runs.all()[0].ended.is_some());
 
     git(&path, &["checkout", "--quiet", "-b", "feat/y"]);
     repo.app.forget_moved_run_ends();
-    assert_eq!(repo.app.runs.list[0].ended, None);
+    assert_eq!(repo.app.runs.all()[0].ended, None);
     assert!(!orchestrator(&mut repo.app).agent.pending());
     repo.app.latch_run_ends();
-    assert_eq!(repo.app.runs.list[0].ended, None);
+    assert_eq!(repo.app.runs.all()[0].ended, None);
 }
 
 #[test]

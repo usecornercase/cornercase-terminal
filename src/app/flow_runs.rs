@@ -29,14 +29,59 @@ use crate::time;
 use crate::ui;
 
 pub(super) struct Runs {
-    pub(super) list: Vec<Run>,
-    pub(super) dir: PathBuf,
-    pub(super) pending_dirs: Vec<(u64, Vec<PathBuf>)>,
+    list: Vec<Run>,
+    dir: PathBuf,
+    pending_dirs: Vec<(u64, Vec<PathBuf>)>,
 }
 
 impl Runs {
     pub(super) fn new(config_path: &Path) -> Self {
         Self { list: Vec::new(), dir: config_path.with_file_name("runs"), pending_dirs: Vec::new() }
+    }
+
+    pub(super) fn all(&self) -> &[Run] {
+        &self.list
+    }
+
+    pub(super) fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    pub(super) fn seat(&self, pane: u64) -> Option<(&Run, &str)> {
+        self.list.iter().find_map(|run| Some((run, run.role_of(pane)?)))
+    }
+
+    pub(super) fn of_workspace(&self, workspace: u64) -> Option<&Run> {
+        self.list.iter().find(|run| run.workspace == workspace)
+    }
+
+    pub(super) fn has(&self, id: u64) -> bool {
+        self.list.iter().any(|run| run.id == id)
+    }
+
+    pub(super) fn run_mut(&mut self, id: u64) -> Option<&mut Run> {
+        self.list.iter_mut().find(|run| run.id == id)
+    }
+
+    pub(super) fn end_in(&mut self, workspace: u64) -> usize {
+        let ended = self.list.iter().filter(|run| run.workspace == workspace).count();
+        self.list.retain(|run| run.workspace != workspace);
+        ended
+    }
+
+    #[cfg(test)]
+    pub(super) fn push(&mut self, run: Run) {
+        self.list.push(run);
+    }
+
+    #[cfg(test)]
+    pub(super) fn clear(&mut self) {
+        self.list.clear();
+    }
+
+    #[cfg(test)]
+    pub(super) fn first_mut(&mut self) -> &mut Run {
+        self.list.first_mut().expect("a run")
     }
 }
 
@@ -433,7 +478,7 @@ impl App {
     }
 
     pub(super) fn member_waits(&mut self, pane: u64) {
-        let Some((run, role)) = self.runs.list.iter().find_map(|run| Some((run, run.role_of(pane)?))) else { return };
+        let Some((run, role)) = self.runs.seat(pane) else { return };
         let (workspace, role) = (run.workspace, role.to_string());
         let Some((p, w)) = self.projects.workspace_index(workspace) else { return };
         let project = &self.projects[p];

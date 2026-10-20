@@ -251,7 +251,7 @@ fn with_a_role() -> Setup {
 fn a_role_worktree_of_a_live_run_cannot_be_ticked() {
     let mut s = with_a_role();
     let id = s.app.projects[0].workspaces[1].id;
-    s.app.runs.list.push(Run::new(id, Flow::default(), "x".into()));
+    s.app.runs.push(Run::new(id, Flow::default(), "x".into()));
     opened(&mut s, 2);
     let pos = at(&s.app, ui::WorktreesHit::Row(shown(&s.app, "coder")));
 

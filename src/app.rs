@@ -439,7 +439,7 @@ impl App {
             .projects
             .iter()
             .zip(crate::project::group_indices(&self.projects, &self.groups))
-            .map(|(p, group)| ProjectState::of(p, group, &self.runs.list, &parents))
+            .map(|(p, group)| ProjectState::of(p, group, self.runs.all(), &parents))
             .collect();
         let chosen = self.issues.tab.is_some() || self.issues.closed || self.issues.people != People::default();
         let issues = chosen.then(|| IssuesState {

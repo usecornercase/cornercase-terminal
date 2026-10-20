@@ -17,12 +17,12 @@ use crate::version;
 
 impl App {
     pub(in crate::app) fn workspace_run_dir(&self, workspace: &Workspace) -> Option<std::path::PathBuf> {
-        let run = self.runs.list.iter().find(|run| run.workspace == workspace.id);
+        let run = self.runs.of_workspace(workspace.id);
         run.and_then(|run| run.dir.clone()).or_else(|| workspace.run_dirs.last().cloned())
     }
 
     pub(in crate::app) fn flow_runs_state(&self) -> FlowRuns {
-        let runs = self.runs.list.iter().filter_map(|run| self.run_state(run)).collect();
+        let runs = self.runs.all().iter().filter_map(|run| self.run_state(run)).collect();
         FlowRuns { version: version::CURRENT.to_string(), boot: control::server_token().to_string(), runs }
     }
 
@@ -132,8 +132,8 @@ impl App {
     }
 
     pub(in crate::app) fn end_flow_messages(&mut self) {
-        let runs = &self.runs.list;
-        let ended = self.clients.events.stop_flow_messages(|run| runs.iter().any(|other| other.id == run));
+        let runs = &self.runs;
+        let ended = self.clients.events.stop_flow_messages(|run| runs.has(run));
         for client in ended {
             log::info!("control", "flow messages ended", client = client, reason = "run ended");
             self.clients.events.push(client, Streamed::End);

@@ -261,13 +261,13 @@ mod running {
         click_in(&mut s.app, Position::new(0, 0), WIDE);
         let ui::Overlay::StartFlow(view) = overlay_shown(&s.app, WIDE) else { panic!("the dialog closed at once") };
         assert_eq!(view.note, Some(ui::Note::Busy("creating the worktree and starting the team…")));
-        pump_until(&mut s.app, &s.rx, "the team's tabs open", |a| !a.runs.list.is_empty());
+        pump_until(&mut s.app, &s.rx, "the team's tabs open", |a| !a.runs.all().is_empty());
         assert!(s.app.overlay.is_none());
         let workspace = s.app.project().and_then(Project::workspace).expect("the run's workspace");
         let tabs: Vec<String> = workspace.tabs.iter().map(|t| t.label(&s.app.config)).collect();
         assert_eq!(git::branch(&workspace.path).as_deref(), Some("fix-the-login-form"));
         assert_eq!(tabs, ["orchestrator", "coder", "reviewer", "security", "tester"]);
-        assert_eq!((workspace.active, s.app.runs.list[0].task.as_str()), (0, "Fix the login form"));
+        assert_eq!((workspace.active, s.app.runs.all()[0].task.as_str()), (0, "Fix the login form"));
         assert_eq!(s.app.screen.side, Some(Side::Flow));
     }
 
@@ -286,7 +286,7 @@ mod running {
         }
         type_in(&mut s.app, "Login", WIDE);
         button(&mut s.app, WIDE, START);
-        pump_until(&mut s.app, &s.rx, "the team's tabs open", |a| !a.runs.list.is_empty());
+        pump_until(&mut s.app, &s.rx, "the team's tabs open", |a| !a.runs.all().is_empty());
         let workspace = s.app.project().and_then(Project::workspace).expect("the run's workspace");
         assert_eq!(git::branch(&workspace.path).as_deref(), Some("feat/7-fix-the-login"));
         assert_eq!(workspace.name.as_deref(), Some("Login"));
@@ -300,7 +300,7 @@ mod running {
         crate::test_util::git(&s.app.projects[0].path, &["branch", "issue-7-fix-the-login"]);
         from_issue(&mut s);
         button(&mut s.app, WIDE, START);
-        pump_until(&mut s.app, &s.rx, "the team's tabs open", |a| !a.runs.list.is_empty());
+        pump_until(&mut s.app, &s.rx, "the team's tabs open", |a| !a.runs.all().is_empty());
         let workspace = s.app.project().and_then(Project::workspace).expect("the run's workspace");
         assert_eq!(git::branch(&workspace.path).as_deref(), Some("issue-7-fix-the-login"));
     }
@@ -350,7 +350,7 @@ mod running {
         let refused = start(&s.app).notice.clone().expect("the refusal");
         assert!(refused.contains("cannot find on its PATH"), "{refused}");
         let ui::Overlay::StartFlow(view) = overlay_shown(&s.app, WIDE) else { panic!("the dialog closed") };
-        assert_eq!((view.note, s.app.runs.list.len()), (Some(ui::Note::Error(refused)), 0));
+        assert_eq!((view.note, s.app.runs.all().len()), (Some(ui::Note::Error(refused)), 0));
     }
 }
 
@@ -430,7 +430,7 @@ mod accounts {
         click_in(&mut s.app, prompt.as_position(), WIDE);
         type_in(&mut s.app, "Fix the login form", WIDE);
         button(&mut s.app, WIDE, START);
-        pump_until(&mut s.app, &s.rx, "the team's tabs open", |a| !a.runs.list.is_empty());
+        pump_until(&mut s.app, &s.rx, "the team's tabs open", |a| !a.runs.all().is_empty());
         let workspace = s.app.project().and_then(Project::workspace).expect("the run's workspace");
         workspace.terms().map(|t| t.accounts().name(Known::Claude).map(String::from)).collect()
     }
@@ -502,7 +502,7 @@ mod accounts {
         button(&mut s.app, WIDE, START);
         let notice = start(&s.app).notice.clone().expect("the refusal");
         assert!(notice.contains("home"), "{notice}");
-        assert!(s.app.runs.list.is_empty());
+        assert!(s.app.runs.all().is_empty());
         assert_eq!(s.app.projects[0].workspaces.len(), 1);
     }
 
