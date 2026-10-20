@@ -261,7 +261,7 @@ impl App {
     }
 
     fn pull_request_lines(&self, pull: &PullRequest) -> Vec<Line<'static>> {
-        let grey = ui::muted(&self.themes.theme);
+        let grey = ui::muted(self.themes.host());
         let muted = Style::default().fg(grey);
         let mut notes = vec![Line::from(Span::styled(pull.summary(), muted))];
         if pull.conflicts() {

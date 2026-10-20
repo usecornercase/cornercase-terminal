@@ -261,19 +261,11 @@ impl App {
     }
 
     pub(crate) fn set_theme(&mut self, theme: HostTheme) {
-        self.themes.theme = theme;
-        self.themes.window_theme = true;
+        self.themes.reported(theme);
     }
 
     pub(crate) fn theme_info(&self) -> ThemeInfo {
-        let from = if self.themes.client_theme.is_some() {
-            ThemeFrom::Client
-        } else if self.themes.window_theme {
-            ThemeFrom::Window
-        } else {
-            ThemeFrom::Default
-        };
-        ThemeInfo::of(from, self.terminal_theme())
+        ThemeInfo::of(self.themes.source(), self.terminal_theme())
     }
 
     #[cfg(test)]
@@ -282,9 +274,8 @@ impl App {
     }
 
     pub(crate) fn retheme(&mut self, theme: HostTheme) -> bool {
-        self.themes.theme = theme;
-        self.themes.window_theme = true;
-        let paint = self.themes.client_theme.is_none();
+        self.themes.reported(theme);
+        let paint = self.themes.source() != ThemeFrom::Client;
         if paint {
             self.paint_terminals();
         }

@@ -318,9 +318,9 @@ impl App {
             root: crate::text::display_path(&root, self.home.as_deref()),
             bar: self.bar(workspace),
             screen,
-            light: self.themes.theme.is_light() == Some(true),
-            muted: ui::muted(&self.themes.theme),
-            tint: Tints::of(&self.themes.theme).removed,
+            light: self.themes.light(),
+            muted: ui::muted(self.themes.host()),
+            tint: Tints::of(self.themes.host()).removed,
             glyphs: ui::glyphs(self.config.icon_bar),
         })
     }

@@ -141,7 +141,7 @@ impl App {
 
     pub(super) fn flow_view(&self, now: Instant, spin: Option<u8>) -> Option<flow::View> {
         let run = self.shown_run()?;
-        let (muted, light) = (ui::muted(&self.themes.theme), self.themes.theme.is_light() == Some(true));
+        let (muted, light) = (ui::muted(self.themes.host()), self.themes.light());
         let plan = flow::Diagram::plan(&run.flow, muted, light);
         let pull = run.pull(self.pull_request(run.workspace));
         let end = flow::Ending { reached: run.reached(pull), pull: pull.map(PullRequest::mark) };
@@ -262,7 +262,7 @@ impl App {
 
     fn flow_message_lines(&self, workspace: u64, sent: Sent<'_>, area: Rect) -> Option<Vec<Line<'static>>> {
         let width = usize::from(ui::update_notes(area).width.max(1));
-        self.flow_message(workspace, sent.0, sent.1).map(|message| lines(message, width, ui::muted(&self.themes.theme)))
+        self.flow_message(workspace, sent.0, sent.1).map(|message| lines(message, width, ui::muted(self.themes.host())))
     }
 
     pub(super) fn flow_message_view(

@@ -399,7 +399,7 @@ fn a_window_that_comes_later_gives_its_colours_to_the_panes_already_open() {
     app.retheme(HostTheme { background: Some(background), ..HostTheme::default() });
 
     assert!(app.projects.terms().all(|term| term.emulator.default_background() == Some(background)));
-    assert_eq!(app.themes.theme.background, Some(background));
+    assert_eq!(app.themes.host().background, Some(background));
 }
 
 mod parents {

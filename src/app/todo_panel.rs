@@ -39,8 +39,8 @@ impl App {
             })
             .collect();
         let adding = field.filter(|f| f.item.is_none()).map(|f| f.editor.clone());
-        let light = self.themes.theme.is_light() == Some(true);
-        let muted = ui::muted(&self.themes.theme);
+        let light = self.themes.light();
+        let muted = ui::muted(self.themes.host());
         let mut view = panel::View {
             items,
             scroll: self.panels.todo.scroll,

@@ -603,7 +603,7 @@ impl App {
     }
 
     fn worktree_marks(&self, row: &Row) -> Vec<(String, Color)> {
-        let muted = ui::muted(&self.themes.theme);
+        let muted = ui::muted(self.themes.host());
         let mut marks: Vec<(String, Color)> = kind_mark(row.found.kind, muted).into_iter().collect();
         match &row.scan {
             Some(Ok(scan)) => marks.extend(scan_marks(row, scan, muted)),
@@ -621,7 +621,7 @@ impl App {
             marks.push((format!("{elsewhere} outside"), Color::Yellow));
         }
         if live.is_some() {
-            marks.push(("open".into(), ui::soft(&self.themes.theme)));
+            marks.push(("open".into(), ui::soft(self.themes.host())));
         }
         marks
     }
