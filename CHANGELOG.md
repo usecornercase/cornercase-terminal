@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.161
+
+- No changes in the app. Its functions are split into smaller ones.
+
 ## 0.12.159
 
 - **Switch accounts from the window.** Settings has a new **Accounts** tab: add an account of Claude Code, Codex or Gemini CLI (it opens a tab to log in there), see whether each one, and the agent's own login, is logged in and as whom, and remove an account (it asks first, and reminds you to log out before). Once you have an account, a status bar at the bottom of the window shows a button per agent, such as ` claude: work ▾ `: click it and pick the account its new tabs use. Open tabs keep theirs, so a work agent and a personal one can run side by side.
