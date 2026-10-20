@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use serde_json::Value;
+
 use super::{Asker, Handled, Pending, Stage, conflict, json, malformed};
 use crate::app::changes_panel::Gapped;
 use crate::app::changes_panel::streams::{Stream, summary_of};
@@ -21,6 +23,15 @@ pub(crate) enum BaseChange {
     Set(String),
     Clear,
 }
+
+#[derive(Clone, Copy)]
+pub(in crate::app) struct Replied<'a> {
+    pub(in crate::app) key: u64,
+    pub(in crate::app) workspace: u64,
+    pub(in crate::app) path: &'a str,
+}
+
+type Answer = std::result::Result<Value, Refusal>;
 
 struct Place {
     id: u64,
@@ -176,20 +187,22 @@ impl App {
 
     pub(in crate::app) fn changes_file_replied(
         &mut self,
-        key: u64,
-        workspace: u64,
+        at: Replied<'_>,
         mode: Mode,
-        path: &str,
         result: Result<Option<Arc<File>>>,
     ) {
-        let Some(pending) = self.requests.take(key) else { return };
-        let reply = match result {
+        self.answer_read(at.key, |app| match result {
             Err(e) => Err(Refusal::from(format!("cannot read the changes: {e}"))),
-            Ok(None) => Err(missing(path, workspace)),
-            Ok(Some(file)) => self
-                .usable_workspace(workspace)
-                .map(|_| json(&Patch::of(workspace, mode, &file, self.changes.viewed(workspace, &file)))),
-        };
+            Ok(None) => Err(missing(at.path, at.workspace)),
+            Ok(Some(file)) => app
+                .usable_workspace(at.workspace)
+                .map(|_| json(&Patch::of(at.workspace, mode, &file, app.changes.viewed(at.workspace, &file)))),
+        });
+    }
+
+    fn answer_read(&mut self, key: u64, reply: impl FnOnce(&mut Self) -> Answer) {
+        let Some(pending) = self.requests.take(key) else { return };
+        let reply = reply(self);
         self.refuse_or_answer(pending.client, reply);
     }
 
@@ -229,34 +242,12 @@ impl App {
         Ok(None)
     }
 
-    pub(in crate::app) fn changes_gap_replied(
-        &mut self,
-        key: u64,
-        workspace: u64,
-        path: &str,
-        hunk: usize,
-        result: Result<Gapped>,
-    ) {
-        let Some(pending) = self.requests.take(key) else { return };
-        let reply = match result {
+    pub(in crate::app) fn changes_gap_replied(&mut self, at: Replied<'_>, hunk: usize, result: Result<Gapped>) {
+        self.answer_read(at.key, |_| match result {
             Err(e) => Err(Refusal::from(format!("cannot read the changes: {e}"))),
-            Ok(None) => Err(missing(path, workspace)),
-            Ok(Some((file, lines))) => {
-                if hunk < 1 || hunk >= file.hunks.len() {
-                    Err(Refusal::new(
-                        Code::NotFound,
-                        format!("{path} has no gap before hunk {hunk}: it has {} hunks", file.hunks.len()),
-                    ))
-                } else {
-                    lines.map(|lines| json(&Gap::of(workspace, path, hunk, &lines))).ok_or_else(|| {
-                        Refusal::from(format!(
-                            "cannot read the unchanged lines of {path}: the file is gone or too large"
-                        ))
-                    })
-                }
-            }
-        };
-        self.refuse_or_answer(pending.client, reply);
+            Ok(None) => Err(missing(at.path, at.workspace)),
+            Ok(Some((file, lines))) => gap_reply(at, hunk, file.hunks.len(), lines),
+        });
     }
 
     pub(super) fn changes_base_request(&mut self, client: u64, asker: Asker, request: &ChangesBase) -> Handled {
@@ -334,4 +325,17 @@ impl App {
         self.change_streams.changed = true;
         Ok(Some(json(&Viewed { workspace: place.id, path: request.path.clone(), viewed: !request.clear })))
     }
+}
+
+fn gap_reply(at: Replied<'_>, hunk: usize, hunks: usize, lines: Option<Vec<changes::GapLine>>) -> Answer {
+    let Replied { workspace, path, .. } = at;
+    if hunk < 1 || hunk >= hunks {
+        return Err(Refusal::new(
+            Code::NotFound,
+            format!("{path} has no gap before hunk {hunk}: it has {hunks} hunks"),
+        ));
+    }
+    lines.map(|lines| json(&Gap::of(workspace, path, hunk, &lines))).ok_or_else(|| {
+        Refusal::from(format!("cannot read the unchanged lines of {path}: the file is gone or too large"))
+    })
 }

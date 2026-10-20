@@ -100,31 +100,7 @@ impl App {
     pub(in crate::app) fn accounts_info(&self, login: Option<Ids>) -> AccountsInfo {
         let providers = accounts::list(&self.accounts_dir)
             .into_iter()
-            .map(|(kind, names)| {
-                let default = self.default_home(kind);
-                let accounts = names
-                    .into_iter()
-                    .map(|name| {
-                        let path = accounts::path(&self.accounts_dir, kind, &name);
-                        let path = path.canonicalize().unwrap_or(path);
-                        let unshared =
-                            default.as_deref().map(|default| links::status(kind, default, &path)).unwrap_or_default();
-                        let login = self.logins.seen.get(&(kind, name.clone())).cloned();
-                        let label = self.saved_label(kind, &name).to_string();
-                        AccountInfo { name, path, unshared, login, label }
-                    })
-                    .collect();
-                ProviderInfo {
-                    provider: kind.name().to_string(),
-                    title: kind.title().to_string(),
-                    env: kind.account().map(|home| home.env.to_string()).unwrap_or_default(),
-                    accounts,
-                    system_label: self.saved_label(kind, "").to_string(),
-                    active: self.config.selected_accounts().get(kind.name()).cloned().unwrap_or_default(),
-                    system_path: default.clone(),
-                    system_login: self.logins.seen.get(&(kind, String::new())).cloned(),
-                }
-            })
+            .map(|(kind, names)| self.provider_info(kind, names))
             .collect();
         let active = self.config.active_profile().map(|(name, _)| name);
         let profiles = self
@@ -139,6 +115,30 @@ impl App {
             .collect();
         let tokens = login::tokens(|name| std::env::var_os(name));
         AccountsInfo { providers, profiles, profile: active.unwrap_or_default().to_string(), login, tokens }
+    }
+
+    fn provider_info(&self, kind: Known, names: Vec<String>) -> ProviderInfo {
+        let default = self.default_home(kind);
+        let accounts = names.into_iter().map(|name| self.account_info(kind, name, default.as_deref())).collect();
+        ProviderInfo {
+            provider: kind.name().to_string(),
+            title: kind.title().to_string(),
+            env: kind.account().map(|home| home.env.to_string()).unwrap_or_default(),
+            accounts,
+            system_label: self.saved_label(kind, "").to_string(),
+            active: self.config.selected_accounts().get(kind.name()).cloned().unwrap_or_default(),
+            system_path: default,
+            system_login: self.logins.seen.get(&(kind, String::new())).cloned(),
+        }
+    }
+
+    fn account_info(&self, kind: Known, name: String, default: Option<&std::path::Path>) -> AccountInfo {
+        let path = accounts::path(&self.accounts_dir, kind, &name);
+        let path = path.canonicalize().unwrap_or(path);
+        let unshared = default.map(|default| links::status(kind, default, &path)).unwrap_or_default();
+        let login = self.logins.seen.get(&(kind, name.clone())).cloned();
+        let label = self.saved_label(kind, &name).to_string();
+        AccountInfo { name, path, unshared, login, label }
     }
 
     fn account_marks(&self) -> Vec<Option<SystemTime>> {
@@ -273,35 +273,56 @@ impl App {
         now: Instant,
     ) -> Handled {
         let kind = provider(&add.provider)?;
-        if !accounts::valid(&add.name) {
-            return Err(malformed(format!(
-                "`{}` is not a valid account name: use letters, digits, `.`, `_` and `-`, at most {}",
-                add.name,
-                accounts::NAME_MAX
-            )));
-        }
-        let names = accounts::names(&self.accounts_dir, kind);
-        if names.contains(&add.name) {
-            return Err(conflict(self.config.account_taken(kind.name(), &add.name)));
-        }
-        if let Some(taken) = self.config.label_taken(kind.name(), &add.name, &names, &add.name) {
-            return Err(conflict(taken));
-        }
-        let place = if add.login {
-            let area = sized(area)?;
-            let (p, w) = match add.workspace {
-                Some(id) => self.usable_workspace(id)?,
-                None => self.here_workspace(asker)?,
-            };
-            Some((area, p, w))
-        } else {
-            None
-        };
+        self.check_new_account(kind, &add.name)?;
+        let place = if add.login { Some(self.login_place(asker, add, area)?) } else { None };
         let default = self.default_home(kind);
         let dir = accounts::add(&self.accounts_dir, kind, &add.name, default.as_deref()).map_err(|e| e.to_string())?;
         log::info!("accounts", "account added", provider = kind.name(), account = add.name, path = dir.display());
         self.relist_accounts();
-        let Some((area, p, w)) = place else { return Ok(Some(json(&self.accounts_info(None)))) };
+        let Some(place) = place else { return Ok(Some(json(&self.accounts_info(None)))) };
+        let ids = self.open_login_tab(asker, add, place, now)?;
+        Ok(Some(json(&self.accounts_info(Some(ids)))))
+    }
+
+    fn check_new_account(&self, kind: Known, name: &str) -> Result<(), Refusal> {
+        if !accounts::valid(name) {
+            return Err(malformed(format!(
+                "`{name}` is not a valid account name: use letters, digits, `.`, `_` and `-`, at most {}",
+                accounts::NAME_MAX
+            )));
+        }
+        let names = accounts::names(&self.accounts_dir, kind);
+        if names.iter().any(|known| known == name) {
+            return Err(conflict(self.config.account_taken(kind.name(), name)));
+        }
+        match self.config.label_taken(kind.name(), name, &names, name) {
+            Some(taken) => Err(conflict(taken)),
+            None => Ok(()),
+        }
+    }
+
+    fn login_place(
+        &mut self,
+        asker: Asker,
+        add: &AccountAdd,
+        area: Option<Rect>,
+    ) -> Result<(Rect, usize, usize), Refusal> {
+        let area = sized(area)?;
+        let (p, w) = match add.workspace {
+            Some(id) => self.usable_workspace(id)?,
+            None => self.here_workspace(asker)?,
+        };
+        Ok((area, p, w))
+    }
+
+    fn open_login_tab(
+        &mut self,
+        asker: Asker,
+        add: &AccountAdd,
+        (area, p, w): (Rect, usize, usize),
+        now: Instant,
+    ) -> Result<Ids, Refusal> {
+        let kind = provider(&add.provider)?;
         let chosen = BTreeMap::from([(kind.name().to_string(), add.name.clone())]);
         let given = Accounts::of(&self.accounts_dir, &chosen);
         let t = self
@@ -318,7 +339,7 @@ impl App {
             .collect::<Vec<_>>()
             .join(" ");
         self.agents.launches.push(Launch::command(pane, line, now));
-        Ok(Some(json(&self.accounts_info(Some(ids)))))
+        Ok(ids)
     }
 
     pub(in crate::app) fn account_remove_request(&mut self, remove: &AccountRemove) -> Handled {

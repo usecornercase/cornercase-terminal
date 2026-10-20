@@ -5,7 +5,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::{Position, Rect};
 
 use super::App;
-use super::control::BaseChange;
+use super::control::{BaseChange, Replied};
 use super::event::AppEvent;
 use super::input::wheel;
 use super::layout::Side;
@@ -97,10 +97,10 @@ impl App {
             }
             ChangesEvent::Gap { workspace, file, hunk, lines } => self.gap_loaded(workspace, &file, hunk, lines),
             ChangesEvent::File { request, workspace, mode, path, result } => {
-                self.changes_file_replied(request, workspace, mode, &path, result);
+                self.changes_file_replied(Replied { key: request, workspace, path: &path }, mode, result);
             }
             ChangesEvent::GapRead { request, workspace, path, hunk, result } => {
-                self.changes_gap_replied(request, workspace, &path, hunk, result);
+                self.changes_gap_replied(Replied { key: request, workspace, path: &path }, hunk, result);
             }
             ChangesEvent::Base { request, workspace, change, listed } => {
                 self.changes_base_replied(request, workspace, &change, listed);

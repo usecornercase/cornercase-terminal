@@ -41,7 +41,7 @@ use crate::log::{self, Level};
 use crate::project::search::Goto;
 use crate::project::{Hierarchy, Phase, Tab, Workspace};
 use crate::term::Term;
-pub(in crate::app) use changes::BaseChange;
+pub(in crate::app) use changes::{BaseChange, Replied};
 use create::Then;
 use held::Held;
 use issues::Asking;

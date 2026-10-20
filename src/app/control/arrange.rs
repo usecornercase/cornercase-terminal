@@ -97,70 +97,75 @@ impl App {
     }
 
     pub(super) fn todo_request(&mut self, todo: control::Todo) -> Handled {
-        let done = match todo {
-            control::Todo::Add(text) => {
-                Done { todo: Some(self.todos.add(&text).ok_or("the todo needs a text")?), ..Done::default() }
-            }
-            control::Todo::List => return Ok(Some(json(&TodoList { todos: self.todo_items(), undo: None }))),
-            control::Todo::Done(id) => {
-                self.todos.item(id).ok_or_else(|| none("todo", id))?;
-                self.todos.toggle(id);
-                Done::default()
-            }
-            control::Todo::Undone(id) => {
-                if self.todos.item(id).ok_or_else(|| none("todo", id))?.done {
-                    self.todos.toggle(id);
-                }
-                Done::default()
-            }
-            control::Todo::Edit { id, text } => {
-                self.todos.item(id).ok_or_else(|| none("todo", id))?;
-                if !self.todos.edit(id, &text) {
-                    return Err("the todo needs a text".into());
-                }
-                if self.todo.field.as_ref().is_some_and(|field| field.item == Some(id)) {
-                    self.todo.field = None;
-                }
-                Done::default()
-            }
-            control::Todo::Move { id, before } => {
-                self.todos.item(id).ok_or_else(|| none("todo", id))?;
-                if let Some(before) = before {
-                    self.todos.item(before).ok_or_else(|| none("todo", before))?;
-                    if before == id {
-                        return Err(malformed(format!("todo {id} cannot move before itself")));
-                    }
-                }
-                self.todos.move_to(id, before);
-                Done::default()
-            }
+        match todo {
+            control::Todo::Add(text) => self.todo_added(&text),
+            control::Todo::List => Ok(Some(json(&TodoList { todos: self.todo_items(), undo: None }))),
+            control::Todo::Done(id) => self.todo_toggled(id, false),
+            control::Todo::Undone(id) => self.todo_toggled(id, true),
+            control::Todo::Edit { id, text } => self.todo_edited(id, &text),
+            control::Todo::Move { id, before } => self.todo_moved(id, before),
             control::Todo::Rm(id) => {
                 let removed = self.todos.remove(id).ok_or_else(|| none("todo", id))?;
-                return Ok(Some(json(&self.removed_by_request(removed))));
+                Ok(Some(json(&self.removed_by_request(removed))))
             }
             control::Todo::ClearDone => {
-                let list = match self.todos.clear_done() {
-                    Some(removed) => self.removed_by_request(removed),
-                    None => TodoList::default(),
-                };
-                return Ok(Some(json(&list)));
+                let list =
+                    self.todos.clear_done().map_or_else(TodoList::default, |removed| self.removed_by_request(removed));
+                Ok(Some(json(&list)))
             }
-            control::Todo::Restore(undo) => {
-                let removed = self.todo.undos.take(undo).ok_or_else(|| {
-                    Refusal::new(
-                        Code::NotFound,
-                        format!(
-                            "there is no removal {undo} to undo: it was undone already, or is older than the last {}",
-                            crate::todo::UNDOS
-                        ),
-                    )
-                })?;
-                let todos = removed.items().map(todo_item).collect();
-                self.todos.restore(removed);
-                return Ok(Some(json(&TodoList { todos, undo: None })));
+            control::Todo::Restore(undo) => self.todo_restored(undo),
+        }
+    }
+
+    fn todo_added(&mut self, text: &str) -> Handled {
+        let id = self.todos.add(text).ok_or("the todo needs a text")?;
+        Ok(Some(json(&Done { todo: Some(id), ..Done::default() })))
+    }
+
+    fn todo_toggled(&mut self, id: u64, only_if_done: bool) -> Handled {
+        let done = self.todos.item(id).ok_or_else(|| none("todo", id))?.done;
+        if !only_if_done || done {
+            self.todos.toggle(id);
+        }
+        Ok(Some(json(&Done::default())))
+    }
+
+    fn todo_edited(&mut self, id: u64, text: &str) -> Handled {
+        self.todos.item(id).ok_or_else(|| none("todo", id))?;
+        if !self.todos.edit(id, text) {
+            return Err("the todo needs a text".into());
+        }
+        if self.todo.field.as_ref().is_some_and(|field| field.item == Some(id)) {
+            self.todo.field = None;
+        }
+        Ok(Some(json(&Done::default())))
+    }
+
+    fn todo_moved(&mut self, id: u64, before: Option<u64>) -> Handled {
+        self.todos.item(id).ok_or_else(|| none("todo", id))?;
+        if let Some(before) = before {
+            self.todos.item(before).ok_or_else(|| none("todo", before))?;
+            if before == id {
+                return Err(malformed(format!("todo {id} cannot move before itself")));
             }
-        };
-        Ok(Some(json(&done)))
+        }
+        self.todos.move_to(id, before);
+        Ok(Some(json(&Done::default())))
+    }
+
+    fn todo_restored(&mut self, undo: u64) -> Handled {
+        let removed = self.todo.undos.take(undo).ok_or_else(|| {
+            Refusal::new(
+                Code::NotFound,
+                format!(
+                    "there is no removal {undo} to undo: it was undone already, or is older than the last {}",
+                    crate::todo::UNDOS
+                ),
+            )
+        })?;
+        let todos = removed.items().map(todo_item).collect();
+        self.todos.restore(removed);
+        Ok(Some(json(&TodoList { todos, undo: None })))
     }
 
     pub(in crate::app) fn todo_items(&self) -> Vec<TodoItem> {
