@@ -171,21 +171,7 @@ pub(in crate::ui) fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
             cursor
         }
         IssuesBody::Name { heading, fields, focus, help } => {
-            let [tabs, _, list, _, _] = issues_rows(r);
-            let heading = truncate_right(heading, usize::from(tabs.width));
-            f.render_widget(Paragraph::new(Span::styled(heading, Style::default().add_modifier(Modifier::BOLD))), tabs);
-            let rects = issue_name_fields(r);
-            let mut cursor = None;
-            for (i, (rect, (label, value))) in rects.iter().zip(fields).enumerate() {
-                let at = draw_input(f, view.muted, *rect, label, value);
-                if i == *focus {
-                    cursor = at;
-                }
-            }
-            let text: Vec<Line> = help.iter().map(|h| Line::from(Span::styled(h.as_str(), dim))).collect();
-            let below = Rect::new(list.x, list.y.saturating_add(2), list.width, list.height.saturating_sub(2));
-            f.render_widget(Paragraph::new(text).wrap(Wrap { trim: false }), below.inner(Margin::new(1, 0)));
-            cursor
+            draw_issue_name(f, view, r, (heading, fields, *focus), help)
         }
         IssuesBody::Token { label, input: typed, help } => {
             draw_issue_tabs(f, view, issues, r);
@@ -201,6 +187,30 @@ pub(in crate::ui) fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
     if let Some(pos) = cursor.filter(|_| !matches!(issues.note, Some(Note::Busy(_)))) {
         f.set_cursor_position(pos);
     }
+}
+
+fn draw_issue_name(
+    f: &mut Frame,
+    view: &View,
+    r: Rect,
+    (heading, fields, focus): (&str, &[(&'static str, String); 2], usize),
+    help: &[String],
+) -> Option<Position> {
+    let [tabs, _, list, _, _] = issues_rows(r);
+    let dim = Style::default().fg(view.muted);
+    let heading = truncate_right(heading, usize::from(tabs.width));
+    f.render_widget(Paragraph::new(Span::styled(heading, Style::default().add_modifier(Modifier::BOLD))), tabs);
+    let mut cursor = None;
+    for (i, (rect, (label, value))) in issue_name_fields(r).iter().zip(fields).enumerate() {
+        let at = draw_input(f, view.muted, *rect, label, value);
+        if i == focus {
+            cursor = at;
+        }
+    }
+    let text: Vec<Line> = help.iter().map(|h| Line::from(Span::styled(h.as_str(), dim))).collect();
+    let below = Rect::new(list.x, list.y.saturating_add(2), list.width, list.height.saturating_sub(2));
+    f.render_widget(Paragraph::new(text).wrap(Wrap { trim: false }), below.inner(Margin::new(1, 0)));
+    cursor
 }
 
 fn draw_issue_note(f: &mut Frame, dim: Style, issues: &Issues, note: Rect) {

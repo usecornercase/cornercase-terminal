@@ -122,10 +122,14 @@ fn an_issue_is_read_then_handed_to_its_agent_in_its_own_worktree() {
     let got = worktrees.join(&repo_name).join("issue-7-fix-the-login").join("got");
     assert!(!got.exists(), "the prompt was sent without Enter");
     app.send(b"\r");
+    wait_for_the_prompt(&got, "https://github.com/acme/shop/issues/7");
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+fn wait_for_the_prompt(got: &std::path::Path, prompt: &str) {
     let deadline = Instant::now() + TIMEOUT;
-    while std::fs::read_to_string(&got).ok().as_deref() != Some("https://github.com/acme/shop/issues/7") {
+    while std::fs::read_to_string(got).ok().as_deref() != Some(prompt) {
         assert!(Instant::now() < deadline, "the agent never got the prompt");
         thread::sleep(POLL);
     }
-    let _ = std::fs::remove_dir_all(&repo);
 }

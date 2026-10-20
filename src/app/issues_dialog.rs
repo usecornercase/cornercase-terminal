@@ -28,6 +28,12 @@ use crate::project::{Hierarchy, Project};
 use crate::time;
 use crate::ui;
 
+struct IssueStart<'a> {
+    agent: &'a str,
+    place: Option<Place>,
+    names: Option<(String, String)>,
+}
+
 #[derive(Debug)]
 pub(crate) enum IssueEvent {
     Listed { project: u64, source: Source, epoch: u64, query: Query, result: Result<Listed> },
@@ -228,11 +234,14 @@ impl App {
             Action::QueueRun(id) => self.run_queued_now(id),
             Action::QueueRemove(id) => self.remove_queued(id),
             Action::QueueClear => self.clear_queued(),
-            Action::Start(issue, agent, place) => return self.start_issue(&issue, &agent, place, None, area),
+            Action::Start(issue, agent, place) => {
+                return self.start_issue(&issue, IssueStart { agent: &agent, place, names: None }, area);
+            }
             Action::Name(issue, kind, place) => self.name_issue_start(issue, kind, place),
             Action::StartNamed(naming) => {
                 let Naming { issue, kind, place, branch, name, .. } = *naming;
-                return self.start_issue(&issue, &kind, place, Some((branch, name)), area);
+                let start = IssueStart { agent: &kind, place, names: Some((branch, name)) };
+                return self.start_issue(&issue, start, area);
             }
             Action::StartFlow(issue, place) => self.start_issue_flow(&issue, place),
             Action::LoadPeople(sources) => sources.into_iter().for_each(|source| self.load_people(source)),
@@ -536,14 +545,8 @@ impl App {
         }
     }
 
-    fn start_issue(
-        &mut self,
-        issue: &Issue,
-        agent: &str,
-        place: Option<Place>,
-        names: Option<(String, String)>,
-        area: Rect,
-    ) -> Result<()> {
+    fn start_issue(&mut self, issue: &Issue, start: IssueStart, area: Rect) -> Result<()> {
+        let IssueStart { agent, place, names } = start;
         let Some(browsing) = self.browser_project() else { return Ok(()) };
         let project = place.as_ref().map_or(browsing, |place| place.project);
         let Some(p) = self.projects.project_index(project) else {

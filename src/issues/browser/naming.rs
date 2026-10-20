@@ -52,13 +52,17 @@ impl Browser {
         }
         match hit {
             Some(IssuesHit::Field(i)) => {
-                if let Some(naming) = &mut self.naming {
-                    naming.field = if i == 0 { Field::Branch } else { Field::Name };
-                }
+                self.focus_field(i);
                 Action::None
             }
             Some(IssuesHit::Button(i)) => self.press(self.buttons(room.buttons)[i]),
             _ => Action::None,
+        }
+    }
+
+    fn focus_field(&mut self, i: usize) {
+        if let Some(naming) = &mut self.naming {
+            naming.field = if i == 0 { Field::Branch } else { Field::Name };
         }
     }
 
