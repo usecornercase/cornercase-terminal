@@ -5,6 +5,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
 use super::View;
+use super::dialog::pick_background;
 use super::widgets::{hovered, overlay_block, rail};
 use crate::list::{COMBO_ROWS, Combo};
 use crate::text::truncate_right;
@@ -35,7 +36,15 @@ pub(crate) fn hit(list: Rect, combo: &Combo, pos: Position) -> Option<usize> {
     (0..rows(list)).find(|row| item(list, *row).contains(pos)).and_then(|row| shown.get(combo.scroll() + row).copied())
 }
 
-pub(crate) fn draw_field(f: &mut Frame, view: &View, field: Rect, combo: &Combo, placeholder: &str, focused: bool) {
+#[derive(Clone, Copy)]
+pub(crate) struct Field<'a> {
+    pub(crate) combo: &'a Combo,
+    pub(crate) placeholder: &'a str,
+    pub(crate) focused: bool,
+}
+
+pub(crate) fn draw_field(f: &mut Frame, view: &View, field: Rect, state: Field) {
+    let Field { combo, placeholder, focused } = state;
     if field.is_empty() {
         return;
     }
@@ -84,13 +93,7 @@ pub(crate) fn draw_list(f: &mut Frame, view: &View, list: Rect, combo: &Combo) {
         let Some(&i) = shown.get(combo.scroll() + row) else { break };
         let r = item(list, row);
         let selected = combo.highlighted() == Some(i);
-        let bg = if selected {
-            Style::default().bg(view.surface())
-        } else if hovered(view, r) {
-            Style::default().bg(view.hover_fill())
-        } else {
-            Style::default()
-        };
+        let bg = pick_background(view, selected, r);
         let text = if selected { bg.add_modifier(Modifier::BOLD) } else { bg };
         let line = Line::from(vec![rail(selected, bg), Span::styled(truncate_right(&combo.options()[i], width), text)]);
         f.render_widget(Paragraph::new(line).style(bg), r);

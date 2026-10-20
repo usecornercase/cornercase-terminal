@@ -160,16 +160,17 @@ pub(crate) fn drop(area: Rect, view: &View, dragged: u64, pos: Position) -> Opti
 pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
     let hover = hover.filter(|_| view.drag.is_none());
     draw_header(f.buffer_mut(), area, view, hover);
+    let mut cursor = None;
     let width = text_width(area);
     let layout = rows(area, view);
     let landing = view.drag.and_then(|(_, at)| at);
     let shown = landed(&layout, landing);
-    let mut cursor = None;
     for (slot, row) in (shown.first()..shown.end()).map(|k| (k, shown.item(k))) {
         match slot_item(slot, landing) {
             Some(i) => {
                 let dragged = view.drag.is_some_and(|(id, _)| id == view.items[i].id);
-                cursor = cursor.or(draw_item(f.buffer_mut(), view, &view.items[i], row, width, hover, dragged));
+                let mut painter = Painter { buf: f.buffer_mut(), view, hover };
+                cursor = cursor.or(painter.item(&view.items[i], row, width, dragged));
             }
             None => draw_landing(f.buffer_mut(), row),
         }
@@ -179,7 +180,8 @@ pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Positio
     super::draw_more(f, view.muted, [more_above(layout.list), shown.more_below()], count(above), count(below));
     let button = shown.button();
     if let Some(editor) = &view.adding {
-        cursor = cursor.or(draw_field(f.buffer_mut(), view, editor, button, width, "+"));
+        let mut painter = Painter { buf: f.buffer_mut(), view, hover };
+        cursor = cursor.or(painter.field(editor, button, width, "+"));
     } else {
         let style = action_style(hovered(hover, button));
         put(f.buffer_mut(), (button.x + 1, button.y), &format!(" {NEW_TODO} "), style, button.right());
@@ -231,92 +233,111 @@ fn text_area(row: Rect) -> Rect {
     Rect { x, width: row.right().saturating_sub(x).saturating_sub(BUTTONS - 1), ..row }
 }
 
-fn draw_field(buf: &mut Buffer, view: &View, editor: &Editor, r: Rect, width: usize, mark: &str) -> Option<Position> {
-    let field = text_area(r);
-    buf.set_style(field, Style::default().bg(super::surface_colour(view.light)));
-    put(buf, (r.x + 2, r.y), mark, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD), r.right());
-    let text: Vec<char> = editor.text().chars().collect();
-    let x = field.x + 1;
-    if text.is_empty() {
-        put(buf, (x, r.y), PLACEHOLDER, dim(view.muted).bg(super::surface_colour(view.light)), field.right());
-    }
-    for (line, range) in editor.lines(width).into_iter().enumerate() {
-        let y = r.y.saturating_add(height(line));
-        if y >= r.bottom() {
-            break;
-        }
-        let part: String = text[range].iter().collect();
-        put(buf, (x, y), &part, Style::default().bg(super::surface_colour(view.light)), field.right());
-    }
-    let (line, col) = editor.position(width);
-    let at = Position::new(x.saturating_add(height(col)), r.y.saturating_add(height(line)));
-    r.contains(at).then_some(at)
-}
-
-fn draw_item(
-    buf: &mut Buffer,
-    view: &View,
-    item: &Item,
-    row: Rect,
-    width: usize,
+struct Painter<'a> {
+    buf: &'a mut Buffer,
+    view: &'a View,
     hover: Option<Position>,
-    dragged: bool,
-) -> Option<Position> {
-    let lit = hovered(hover, row) && item.editing.is_none();
-    let bg = if lit { Style::default().bg(super::hover_colour(view.light)) } else { Style::default() };
-    if lit {
-        buf.set_style(row, bg);
+}
+
+impl Painter<'_> {
+    fn lit(&self, r: Rect) -> bool {
+        hovered(self.hover, r)
     }
-    let box_style = if hovered(hover, check(row)) {
-        bg.fg(Color::Cyan).add_modifier(Modifier::BOLD)
-    } else if item.done {
-        bg.fg(Color::Green)
-    } else if dragged {
-        bg.fg(view.muted)
-    } else {
-        bg
-    };
-    put(buf, (row.x + 2, row.y), if item.done { DONE_BOX } else { OPEN_BOX }, box_style, row.right());
-    if let Some(editor) = &item.editing {
-        let cursor = draw_field(buf, view, editor, row, width, "");
-        draw_delete(buf, view, row, hover, bg);
-        return cursor;
-    }
-    let style = if item.done {
-        bg.fg(view.muted).add_modifier(Modifier::CROSSED_OUT)
-    } else if dragged {
-        bg.fg(view.muted)
-    } else {
-        bg
-    };
-    let text: Vec<char> = item.text.chars().collect();
-    for (line, range) in wrap(&item.text, width).into_iter().enumerate() {
-        let y = row.y.saturating_add(height(line));
-        if y >= row.bottom() {
-            break;
+
+    fn field(&mut self, editor: &Editor, r: Rect, width: usize, mark: &str) -> Option<Position> {
+        let view = self.view;
+        let field = text_area(r);
+        self.buf.set_style(field, Style::default().bg(super::surface_colour(view.light)));
+        put(self.buf, (r.x + 2, r.y), mark, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD), r.right());
+        let text: Vec<char> = editor.text().chars().collect();
+        let x = field.x + 1;
+        if text.is_empty() {
+            let style = dim(view.muted).bg(super::surface_colour(view.light));
+            put(self.buf, (x, r.y), PLACEHOLDER, style, field.right());
         }
-        let part: String = text[range].iter().collect();
-        put(buf, (row.x + TEXT_X, y), part.trim_end(), style, text_area(row).right());
+        for (line, range) in editor.lines(width).into_iter().enumerate() {
+            let y = r.y.saturating_add(height(line));
+            if y >= r.bottom() {
+                break;
+            }
+            let part: String = text[range].iter().collect();
+            put(self.buf, (x, y), &part, Style::default().bg(super::surface_colour(view.light)), field.right());
+        }
+        let (line, col) = editor.position(width);
+        let at = Position::new(x.saturating_add(height(col)), r.y.saturating_add(height(line)));
+        r.contains(at).then_some(at)
     }
-    if lit {
-        draw_delete(buf, view, row, hover, bg);
-    }
-    if !item.done && (lit || view.compact) {
-        draw_send(buf, view, row, hover, bg);
-    }
-    None
-}
 
-fn draw_send(buf: &mut Buffer, view: &View, row: Rect, hover: Option<Position>, bg: Style) {
-    let r = send(row);
-    let style = if hovered(hover, r) { bg.fg(Color::Cyan).add_modifier(Modifier::BOLD) } else { bg.fg(view.muted) };
-    put(buf, (r.x + 1, r.y), SEND, style, r.right());
-}
+    fn item(&mut self, item: &Item, row: Rect, width: usize, dragged: bool) -> Option<Position> {
+        let view = self.view;
+        let lit = self.lit(row) && item.editing.is_none();
+        let bg = if lit { Style::default().bg(super::hover_colour(view.light)) } else { Style::default() };
+        if lit {
+            self.buf.set_style(row, bg);
+        }
+        let box_style = self.box_style(item, row, bg, dragged);
+        put(self.buf, (row.x + 2, row.y), if item.done { DONE_BOX } else { OPEN_BOX }, box_style, row.right());
+        if let Some(editor) = &item.editing {
+            let cursor = self.field(editor, row, width, "");
+            self.delete(row, bg);
+            return cursor;
+        }
+        let style = self.text_style(item, bg, dragged);
+        self.item_text(item, row, width, style);
+        if lit {
+            self.delete(row, bg);
+        }
+        if !item.done && (lit || view.compact) {
+            self.send(row, bg);
+        }
+        None
+    }
 
-fn draw_delete(buf: &mut Buffer, view: &View, row: Rect, hover: Option<Position>, bg: Style) {
-    let r = delete(row);
-    let style = if hovered(hover, r) { bg.fg(Color::Red).add_modifier(Modifier::BOLD) } else { bg.fg(view.muted) };
-    put(buf, (r.x + 1, r.y), "×", style, r.right());
+    fn box_style(&self, item: &Item, row: Rect, bg: Style, dragged: bool) -> Style {
+        if self.lit(check(row)) {
+            bg.fg(Color::Cyan).add_modifier(Modifier::BOLD)
+        } else if item.done {
+            bg.fg(Color::Green)
+        } else if dragged {
+            bg.fg(self.view.muted)
+        } else {
+            bg
+        }
+    }
+
+    fn text_style(&self, item: &Item, bg: Style, dragged: bool) -> Style {
+        if item.done {
+            bg.fg(self.view.muted).add_modifier(Modifier::CROSSED_OUT)
+        } else if dragged {
+            bg.fg(self.view.muted)
+        } else {
+            bg
+        }
+    }
+
+    fn item_text(&mut self, item: &Item, row: Rect, width: usize, style: Style) {
+        let text: Vec<char> = item.text.chars().collect();
+        for (line, range) in wrap(&item.text, width).into_iter().enumerate() {
+            let y = row.y.saturating_add(height(line));
+            if y >= row.bottom() {
+                break;
+            }
+            let part: String = text[range].iter().collect();
+            put(self.buf, (row.x + TEXT_X, y), part.trim_end(), style, text_area(row).right());
+        }
+    }
+
+    fn send(&mut self, row: Rect, bg: Style) {
+        let r = send(row);
+        let style = if self.lit(r) { bg.fg(Color::Cyan).add_modifier(Modifier::BOLD) } else { bg.fg(self.view.muted) };
+        put(self.buf, (r.x + 1, r.y), SEND, style, r.right());
+    }
+
+    fn delete(&mut self, row: Rect, bg: Style) {
+        let r = delete(row);
+        let style = if self.lit(r) { bg.fg(Color::Red).add_modifier(Modifier::BOLD) } else { bg.fg(self.view.muted) };
+        put(self.buf, (r.x + 1, r.y), "×", style, r.right());
+    }
 }
 
 #[cfg(test)]

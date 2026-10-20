@@ -298,7 +298,12 @@ pub(in crate::ui) fn draw_start_flow(f: &mut Frame, view: &View, start: &StartFl
         let label =
             Line::from(vec![Span::styled(INPUT_PROMPT, Style::default().fg(Color::Cyan)), Span::styled(name, lit)]);
         f.render_widget(Paragraph::new(label), account_row(area, shape, n));
-        combo::draw_field(f, view, start_account(area, shape, n), &field.combo, "", focused);
+        combo::draw_field(
+            f,
+            view,
+            start_account(area, shape, n),
+            combo::Field { combo: &field.combo, placeholder: "", focused },
+        );
         if focused {
             cursor = None;
         }

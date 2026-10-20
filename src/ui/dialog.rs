@@ -160,7 +160,7 @@ impl Overlay {
     }
 }
 
-fn pick_background(view: &View, selected: bool, r: Rect) -> Style {
+pub(in crate::ui) fn pick_background(view: &View, selected: bool, r: Rect) -> Style {
     if selected {
         Style::default().bg(view.surface())
     } else if hovered(view, r) {

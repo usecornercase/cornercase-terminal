@@ -205,7 +205,8 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
                 Control::Account => gone.as_deref().unwrap_or_default(),
                 _ => "",
             };
-            combo::draw_field(f, view, r, choices, empty, form.focus == *control && !form.busy);
+            let focused = form.focus == *control && !form.busy;
+            combo::draw_field(f, view, r, combo::Field { combo: choices, placeholder: empty, focused });
         }
     }
     let values =

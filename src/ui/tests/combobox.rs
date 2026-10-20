@@ -1,6 +1,6 @@
 use super::*;
 use crate::list::{COMBO_ROWS, Combo};
-use crate::ui::combo::{draw_field, draw_list, hit, list, rows};
+use crate::ui::combo::{Field, draw_field, draw_list, hit, list, rows};
 
 const SCREEN: Rect = Rect { x: 0, y: 0, width: 40, height: 20 };
 
@@ -35,7 +35,7 @@ fn the_list_marks_its_choice_and_counts_what_is_hidden() {
     let field = Rect::new(5, 2, 20, 1);
     let c = combo(20, 15);
     t.draw(|f| {
-        draw_field(f, &view, field, &c, "", true);
+        draw_field(f, &view, field, Field { combo: &c, placeholder: "", focused: true });
         draw_list(f, &view, list(field, &c, SCREEN), &c);
     })
     .expect("draw");

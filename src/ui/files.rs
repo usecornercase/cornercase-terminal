@@ -289,39 +289,45 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     if close(area).contains(pos) {
         return Some(Hit::Close);
     }
-    if !matches!(view.screen, Screen::File(_)) {
-        if mode_button(area).contains(pos) {
-            return Some(Hit::Mode);
-        }
-        if !view.bar.query.is_empty() && clear(area).contains(pos) {
-            return Some(Hit::Clear);
-        }
-        if field(area).contains(pos) {
-            return Some(Hit::Field);
-        }
+    if !matches!(view.screen, Screen::File(_))
+        && let Some(hit) = hit_bar(area, view, pos)
+    {
+        return Some(hit);
     }
     match &view.screen {
         Screen::Tree(tree) => row_at(area, view, pos.y).filter(|&i| i < tree.rows.len()).map(Hit::Row),
         Screen::Search(search) => row_at(area, view, pos.y).filter(|&i| i < search.rows.len()).map(Hit::Found),
-        Screen::File(file) => {
-            if full_screen_button(area).contains(pos) {
-                return Some(Hit::FullScreen);
-            }
-            if back(area).contains(pos) {
-                return Some(Hit::Back);
-            }
-            if let Some((action, _)) = file.actions(parts(area).info).into_iter().find(|(_, r)| r.contains(pos)) {
-                return Some(Hit::Action(action));
-            }
-            match file.lines().at(row_at(area, view, pos.y)?)? {
-                Line::Removed(key, _) => Some(Hit::Fold(key)),
-                Line::Code(n) => {
-                    let block = file.gutter.as_ref().and_then(|g| g.block(n));
-                    match block {
-                        Some(key) if pos.x == mark_cell(area, file) => Some(Hit::Fold(key)),
-                        _ => Some(Hit::Line(n)),
-                    }
-                }
+        Screen::File(file) => hit_file(area, view, file, pos),
+    }
+}
+
+fn hit_bar(area: Rect, view: &View, pos: Position) -> Option<Hit> {
+    if mode_button(area).contains(pos) {
+        return Some(Hit::Mode);
+    }
+    if !view.bar.query.is_empty() && clear(area).contains(pos) {
+        return Some(Hit::Clear);
+    }
+    field(area).contains(pos).then_some(Hit::Field)
+}
+
+fn hit_file(area: Rect, view: &View, file: &FileView, pos: Position) -> Option<Hit> {
+    if full_screen_button(area).contains(pos) {
+        return Some(Hit::FullScreen);
+    }
+    if back(area).contains(pos) {
+        return Some(Hit::Back);
+    }
+    if let Some((action, _)) = file.actions(parts(area).info).into_iter().find(|(_, r)| r.contains(pos)) {
+        return Some(Hit::Action(action));
+    }
+    match file.lines().at(row_at(area, view, pos.y)?)? {
+        Line::Removed(key, _) => Some(Hit::Fold(key)),
+        Line::Code(n) => {
+            let block = file.gutter.as_ref().and_then(|g| g.block(n));
+            match block {
+                Some(key) if pos.x == mark_cell(area, file) => Some(Hit::Fold(key)),
+                _ => Some(Hit::Line(n)),
             }
         }
     }
@@ -551,28 +557,36 @@ fn draw_tree(buf: &mut Buffer, area: Rect, view: &View, tree: &TreeView, hover: 
     for (row, y) in shown {
         let r = Rect::new(body.x, y, body.width, 1);
         let last = tree.last.as_deref() == Some(row.path.as_str());
-        if last {
-            buf.set_style(r, Style::default().bg(super::surface_colour(view.light)));
-            put(buf, (r.x, r.y), "▌", Style::default().fg(Color::Cyan), r.right());
-        } else if hovered(hover, r) {
-            buf.set_style(r, Style::default().bg(super::hover_colour(view.light)));
-        }
-        let x = r.x + 2 + 2 * row.depth;
-        if row.dir {
-            put(buf, (x, r.y), if row.open { "▾" } else { "▸" }, dim(view.muted), r.right());
-        }
-        let end = r.right().saturating_sub(4);
-        let colour = row.status.map_or(Color::Reset, status_colour);
-        let mut style = Style::default().fg(colour);
-        if last {
-            style = style.add_modifier(Modifier::BOLD);
-        }
-        let name = truncate_right(&row.name, usize::from(end.saturating_sub(x + 2)));
-        put(buf, (x + 2, r.y), &name, style, end);
-        if let Some(status) = row.status {
-            let mark = if row.dir { "●" } else { status.letter() };
-            put(buf, (end + 1, r.y), mark, Style::default().fg(colour), r.right());
-        }
+        tree_highlight(buf, view, r, last, hovered(hover, r));
+        tree_label(buf, view, r, row, last);
+    }
+}
+
+fn tree_highlight(buf: &mut Buffer, view: &View, r: Rect, last: bool, lit: bool) {
+    if last {
+        buf.set_style(r, Style::default().bg(super::surface_colour(view.light)));
+        put(buf, (r.x, r.y), "▌", Style::default().fg(Color::Cyan), r.right());
+    } else if lit {
+        buf.set_style(r, Style::default().bg(super::hover_colour(view.light)));
+    }
+}
+
+fn tree_label(buf: &mut Buffer, view: &View, r: Rect, row: &TreeRow, last: bool) {
+    let x = r.x + 2 + 2 * row.depth;
+    if row.dir {
+        put(buf, (x, r.y), if row.open { "▾" } else { "▸" }, dim(view.muted), r.right());
+    }
+    let end = r.right().saturating_sub(4);
+    let colour = row.status.map_or(Color::Reset, status_colour);
+    let mut style = Style::default().fg(colour);
+    if last {
+        style = style.add_modifier(Modifier::BOLD);
+    }
+    let name = truncate_right(&row.name, usize::from(end.saturating_sub(x + 2)));
+    put(buf, (x + 2, r.y), &name, style, end);
+    if let Some(status) = row.status {
+        let mark = if row.dir { "●" } else { status.letter() };
+        put(buf, (end + 1, r.y), mark, Style::default().fg(colour), r.right());
     }
 }
 
@@ -649,73 +663,89 @@ fn summary(file: &FileView) -> Vec<String> {
     texts
 }
 
-fn draw_file(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover: Option<Position>) {
-    let body = parts(area).body;
-    let note = match file.content.as_ref().map(|c| &c.body) {
-        Some(Body::Image(_)) => {
-            draw_image(buf, body, view, file.image.as_ref());
-            return;
-        }
+#[derive(Clone, Copy)]
+struct Slot {
+    r: Rect,
+    mark_x: u16,
+    hover: Option<Position>,
+}
+
+fn file_note(file: &FileView) -> Option<String> {
+    match file.content.as_ref().map(|c| &c.body) {
         Some(Body::Unreadable { reason, .. }) => Some(format!("{UNREADABLE}: {reason}")),
         None => Some(READING.to_string()),
         Some(Body::Binary) => Some(BINARY.to_string()),
         Some(Body::Missing) => Some(GONE.to_string()),
         Some(Body::TooLarge(bytes)) => Some(format!("too large to show ({} MB)", bytes.div_ceil(1 << 20))),
         Some(Body::Text { lines, .. }) if lines.is_empty() => Some(BLANK.to_string()),
-        Some(Body::Text { .. }) => None,
-    };
-    if let Some(note) = note {
+        Some(Body::Text { .. } | Body::Image(_)) => None,
+    }
+}
+
+fn draw_file(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover: Option<Position>) {
+    let body = parts(area).body;
+    if let Some(Body::Image(_)) = file.content.as_ref().map(|c| &c.body) {
+        draw_image(buf, body, view, file.image.as_ref());
+        return;
+    }
+    if let Some(note) = file_note(file) {
         put(buf, (body.x + 2, body.y), &note, dim(view.muted), body.right());
         return;
     }
-    let Some(content) = &file.content else { return };
     let lines = file.lines();
-    let digits = usize::from(file.digits());
     let mark_x = mark_cell(area, file);
     for (row, y) in (first(area, view)..lines.len()).zip(body.y..body.bottom()) {
-        let r = Rect::new(body.x, y, body.width, 1);
+        let slot = Slot { r: Rect::new(body.x, y, body.width, 1), mark_x, hover };
         match lines.at(row) {
-            Some(Line::Code(n)) => {
-                let selected = file.selected(n);
-                if selected {
-                    buf.set_style(r, Style::default().bg(super::surface_colour(view.light)));
-                }
-                let number = Rect::new(r.x + 1, y, mark_x - r.x - 1, 1);
-                let style = if selected || hovered(hover, number) {
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
-                } else {
-                    dim(view.muted)
-                };
-                put(buf, (r.x + 1, y), &format!("{n:>digits$}"), style, mark_x);
-                if let Some(mark) = file.gutter.as_ref().and_then(|g| g.mark(n)) {
-                    let (glyph, colour) = match mark {
-                        Mark::Added => ("▎", Color::Green),
-                        Mark::Modified => ("▎", Color::Blue),
-                        Mark::Deleted => ("▁", Color::Red),
-                        Mark::DeletedAbove => ("▔", Color::Red),
-                    };
-                    put(buf, (mark_x, y), glyph, Style::default().fg(colour), r.right());
-                }
-                let index = usize::try_from(n).unwrap_or(usize::MAX) - 1;
-                let text = &content.lines()[index];
-                let plain = [(text.clone(), Style::default())];
-                let segments = content.styles().and_then(|s| s.get(index)).map_or(&plain[..], Vec::as_slice);
-                let found = file.find.as_deref().map(|q| occurrences(text, q)).unwrap_or_default();
-                let segments = mark(segments, &found, LIT);
-                draw_code(buf, view, Rect::new(mark_x + 2, y, r.right().saturating_sub(mark_x + 2), 1), &segments);
-            }
-            Some(Line::Removed(key, k)) => {
-                if let Some(tint) = view.tint {
-                    buf.set_style(r, Style::default().bg(tint));
-                }
-                put(buf, (mark_x, y), "-", Style::default().fg(Color::Red), r.right());
-                let text = lines.removed(key, k).unwrap_or_default();
-                let segments: Segments = vec![(text.to_string(), Style::default().fg(Color::Red))];
-                draw_code(buf, view, Rect::new(mark_x + 2, y, r.right().saturating_sub(mark_x + 2), 1), &segments);
-            }
+            Some(Line::Code(n)) => draw_code_row(buf, view, file, slot, n),
+            Some(Line::Removed(key, k)) => draw_removed_row(buf, view, slot, lines.removed(key, k).unwrap_or_default()),
             None => {}
         }
     }
+}
+
+fn draw_code_row(buf: &mut Buffer, view: &View, file: &FileView, slot: Slot, n: u32) {
+    let Slot { r, mark_x, hover } = slot;
+    let y = r.y;
+    let digits = usize::from(file.digits());
+    let selected = file.selected(n);
+    if selected {
+        buf.set_style(r, Style::default().bg(super::surface_colour(view.light)));
+    }
+    let number = Rect::new(r.x + 1, y, mark_x - r.x - 1, 1);
+    let style = if selected || hovered(hover, number) {
+        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+    } else {
+        dim(view.muted)
+    };
+    put(buf, (r.x + 1, y), &format!("{n:>digits$}"), style, mark_x);
+    if let Some(mark) = file.gutter.as_ref().and_then(|g| g.mark(n)) {
+        let (glyph, colour) = match mark {
+            Mark::Added => ("▎", Color::Green),
+            Mark::Modified => ("▎", Color::Blue),
+            Mark::Deleted => ("▁", Color::Red),
+            Mark::DeletedAbove => ("▔", Color::Red),
+        };
+        put(buf, (mark_x, y), glyph, Style::default().fg(colour), r.right());
+    }
+    let Some(content) = &file.content else { return };
+    let index = usize::try_from(n).unwrap_or(usize::MAX) - 1;
+    let text = &content.lines()[index];
+    let plain = [(text.clone(), Style::default())];
+    let segments = content.styles().and_then(|s| s.get(index)).map_or(&plain[..], Vec::as_slice);
+    let found = file.find.as_deref().map(|q| occurrences(text, q)).unwrap_or_default();
+    let segments = mark(segments, &found, LIT);
+    draw_code(buf, view, Rect::new(mark_x + 2, y, r.right().saturating_sub(mark_x + 2), 1), &segments);
+}
+
+fn draw_removed_row(buf: &mut Buffer, view: &View, slot: Slot, text: &str) {
+    let Slot { r, mark_x, .. } = slot;
+    if let Some(tint) = view.tint {
+        buf.set_style(r, Style::default().bg(tint));
+    }
+    put(buf, (mark_x, r.y), "-", Style::default().fg(Color::Red), r.right());
+    let segments: Segments = vec![(text.to_string(), Style::default().fg(Color::Red))];
+    draw_code(buf, view, Rect::new(mark_x + 2, r.y, r.right().saturating_sub(mark_x + 2), 1), &segments);
 }
 
 fn draw_image(buf: &mut Buffer, body: Rect, view: &View, image: Option<&Image>) {
