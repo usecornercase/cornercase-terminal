@@ -12,6 +12,27 @@ use crate::project::{Hierarchy, Tab};
 
 use super::events::Streamed;
 
+fn resize_shown(tab: &mut Tab, area: Rect) {
+    for (id, rect) in tab.shown(area) {
+        if let Some(term) = tab.pane_by_mut(id) {
+            term.resize(rect.height.max(1), rect.width.max(1));
+        }
+    }
+}
+
+fn log_opened(view: &View) {
+    log::info!(
+        "control",
+        "view opened",
+        client = view.client,
+        view = view.id,
+        cols = view.size.map_or(0, |s| s.0),
+        rows = view.size.map_or(0, |s| s.1),
+        active = view.active,
+        visible = view.visible
+    );
+}
+
 pub(super) struct View {
     pub(super) id: u64,
     client: u64,
@@ -154,44 +175,39 @@ impl App {
         if self.views.list.iter().any(|view| view.client == client) {
             return Err(Refusal::from("this connection already holds a view; open another connection for another"));
         }
-        let shown = if let Some(id) = open.tab {
-            let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
-            Shown::place(&self.projects, p, Some(w), Some(t))
-        } else if let Some(id) = open.workspace {
-            let (p, w) = self.usable_workspace(id)?;
-            Shown::place(&self.projects, p, Some(w), None)
-        } else if let Some(id) = open.project {
-            let p = self.projects.project_index(id).ok_or_else(|| none("project", id))?;
-            Shown::place(&self.projects, p, None, None)
-        } else {
-            self.window_shown()
-        };
+        let shown = self.requested_shown(open)?;
         let id = self.take_id();
         let active = open.active.unwrap_or(true);
         let visible = open.visible.unwrap_or(true);
         let view =
             View { id, client, size, active, visible, shown, projection: 1, claimed: 0, revision: 0, sent: None };
         let eligible = view.eligible().is_some();
+        log_opened(&view);
         self.views.list.push(view);
         if eligible {
             self.views.claim(id);
         }
-        log::info!(
-            "control",
-            "view opened",
-            client = client,
-            view = id,
-            cols = size.map_or(0, |s| s.0),
-            rows = size.map_or(0, |s| s.1),
-            active = active,
-            visible = visible
-        );
         self.size_tabs(area);
         let report = self.view_report(id).ok_or_else(|| Refusal::from("the view closed"))?;
         let view = self.views.get_mut(id).ok_or_else(|| Refusal::from("the view closed"))?;
         view.revision = 1;
         view.sent = Some(report.clone());
         Ok(Some(json(&Snapshot { revision: 1, report })))
+    }
+
+    fn requested_shown(&mut self, open: &OpenView) -> Result<Shown, Refusal> {
+        if let Some(id) = open.tab {
+            let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
+            Ok(Shown::place(&self.projects, p, Some(w), Some(t)))
+        } else if let Some(id) = open.workspace {
+            let (p, w) = self.usable_workspace(id)?;
+            Ok(Shown::place(&self.projects, p, Some(w), None))
+        } else if let Some(id) = open.project {
+            let p = self.projects.project_index(id).ok_or_else(|| none("project", id))?;
+            Ok(Shown::place(&self.projects, p, None, None))
+        } else {
+            Ok(self.window_shown())
+        }
     }
 
     pub(in crate::app) fn view_set_request(&mut self, id: u64, set: &SetView, area: Option<Rect>) -> Handled {
@@ -236,7 +252,25 @@ impl App {
 
     pub(in crate::app) fn show_to(&mut self, view: Option<u64>, item: Item) -> Result<Option<u64>, Refusal> {
         let Some(id) = view else { return self.show(item).map(|()| None) };
-        let shown = match item {
+        let shown = self.item_shown(item)?;
+        let view = self.views.get_mut(id).ok_or_else(|| none("view", id))?;
+        if view.shown.tab != shown.tab || view.shown.workspace != shown.workspace || view.shown.project != shown.project
+        {
+            view.projection += 1;
+        }
+        view.shown = shown;
+        let eligible = view.eligible().is_some();
+        if eligible {
+            self.views.claim(id);
+        }
+        self.views.changed = true;
+        let area = self.views.area;
+        self.size_tabs(area);
+        Ok(self.view_projection(id))
+    }
+
+    fn item_shown(&mut self, item: Item) -> Result<Shown, Refusal> {
+        Ok(match item {
             Item::Group(group) => {
                 let first = self.projects.iter().position(|p| p.group == Some(group) && !p.closing);
                 let p = first.ok_or_else(|| none("group", group))?;
@@ -262,21 +296,7 @@ impl App {
                 self.projects[p].workspaces[w].tabs[t].focus(pane);
                 Shown::place(&self.projects, p, Some(w), Some(t))
             }
-        };
-        let view = self.views.get_mut(id).ok_or_else(|| none("view", id))?;
-        if view.shown.tab != shown.tab || view.shown.workspace != shown.workspace || view.shown.project != shown.project
-        {
-            view.projection += 1;
-        }
-        view.shown = shown;
-        let eligible = view.eligible().is_some();
-        if eligible {
-            self.views.claim(id);
-        }
-        self.views.changed = true;
-        let area = self.views.area;
-        self.size_tabs(area);
-        Ok(self.view_projection(id))
+        })
     }
 
     pub(in crate::app) fn focus_in_view(&mut self, view: Option<u64>, pane: u64) -> Result<Option<u64>, Refusal> {
@@ -367,11 +387,7 @@ impl App {
         let sized = self.views.sized(focus);
         for tab in self.projects.tabs_mut() {
             let Some(area) = sized.get(&tab.id).copied().or(pane) else { continue };
-            for (id, rect) in tab.shown(area) {
-                if let Some(term) = tab.pane_by_mut(id) {
-                    term.resize(rect.height.max(1), rect.width.max(1));
-                }
-            }
+            resize_shown(tab, area);
         }
         self.log_controllers(&sized);
     }

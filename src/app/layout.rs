@@ -132,12 +132,20 @@ impl App {
             return;
         }
         if focus.project != before.project || relayout {
-            let sidebar = self.sidebar_rows();
-            let rows = ui::project_rows(areas.list, areas.pitch, &sidebar, self.scroll.projects);
-            if let Some(i) = self.active_row(&sidebar) {
-                self.scroll.projects = rows.reveal(i);
-            }
+            self.reveal_project_row(&areas);
         }
+        self.reveal_workspace_rows(&areas);
+    }
+
+    fn reveal_project_row(&mut self, areas: &ui::Areas) {
+        let sidebar = self.sidebar_rows();
+        let rows = ui::project_rows(areas.list, areas.pitch, &sidebar, self.scroll.projects);
+        if let Some(i) = self.active_row(&sidebar) {
+            self.scroll.projects = rows.reveal(i);
+        }
+    }
+
+    fn reveal_workspace_rows(&mut self, areas: &ui::Areas) {
         let Some(project) = self.project() else { return };
         let w = project.active;
         let mut shown = vec![WorkspaceRow::Workspace(w)];

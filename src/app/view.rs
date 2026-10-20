@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 use super::App;
 use super::interaction::{Drag, Grab};
 use super::layout::Side;
+use super::links::Resolving;
 use super::toast::Toast;
 use crate::accounts;
 use crate::agents::context::Context;
@@ -132,9 +133,9 @@ impl App {
             let layout = tab.layout_by_index()?;
             let screens: Vec<_> = tab.panes.iter_mut().map(|t| t.emulator.snapshot().unwrap_or_default()).collect();
             let dragging = dragging.filter(|(id, _)| *id == tab.id).map(|(_, path)| path);
-            let link = pointer
-                .zip(root.as_deref())
-                .and_then(|(at, root)| Self::hovered_link(tab, &screens, pane_area, at, root, home.as_deref()));
+            let link = pointer.zip(root.as_deref()).and_then(|(at, root)| {
+                Self::hovered_link(tab, &screens, pane_area, at, Resolving { root, home: home.as_deref() })
+            });
             let bands = tab.panes.iter().map(|t| bands.get(&t.id).cloned()).collect();
             Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging, link, landing, bands })
         })

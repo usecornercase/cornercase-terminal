@@ -85,6 +85,18 @@ impl Drag {
         }
     }
 
+    pub(super) fn link(&self) -> Option<&LinkPress> {
+        match self {
+            Self::Link(press) => Some(press),
+            Self::Border(_)
+            | Self::Divider { .. }
+            | Self::Row(_)
+            | Self::Pane(_)
+            | Self::Selection { .. }
+            | Self::Lines { .. } => None,
+        }
+    }
+
     pub(super) fn shows_hover(&self) -> bool {
         match self {
             Self::Pane(_) => false,

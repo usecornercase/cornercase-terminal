@@ -205,24 +205,21 @@ impl App {
 
     pub(super) fn menu_action(&mut self, action: MenuAction, at: Position, area: Rect) -> Result<()> {
         log::info!("ui", "menu", action = format!("{action:?}"));
+        let Some(action) = self.group_action(action, at) else { return Ok(()) };
+        let Some(action) = self.project_action(action, at, area) else { return Ok(()) };
+        let Some(action) = self.agent_action(action) else { return Ok(()) };
+        match action {
+            MenuAction::Pane(pane, action) => self.pane_action(pane, action, area),
+            _ => Ok(()),
+        }
+    }
+
+    fn group_action(&mut self, action: MenuAction, at: Position) -> Option<MenuAction> {
         match action {
             MenuAction::Rename(target) => {
                 self.overlay = self.current_name(target).map(|input| Overlay::Rename { target, input });
             }
-            MenuAction::MoveToGroup(project) => {
-                let Some(p) = self.projects.project_index(project) else { return Ok(()) };
-                let current = self.projects[p].group;
-                let mut actions: Vec<MenuAction> = self
-                    .groups
-                    .iter()
-                    .filter(|g| Some(g.id) != current)
-                    .map(|g| MenuAction::SetGroup(project, Some(g.id)))
-                    .collect();
-                if current.is_some() {
-                    actions.push(MenuAction::SetGroup(project, None));
-                }
-                self.overlay = Some(Overlay::Menu { at, actions });
-            }
+            MenuAction::MoveToGroup(project) => self.move_to_group_menu(project, at),
             MenuAction::SetGroup(project, group) => {
                 if let Some(p) = self.projects.project_index(project) {
                     self.projects[p].group = group;
@@ -231,14 +228,8 @@ impl App {
             }
             MenuAction::GroupStyle(group) => self.overlay = Some(Overlay::GroupStyle { group }),
             MenuAction::DeleteGroup(group) => self.overlay = Some(Overlay::DeleteGroup { group }),
-            MenuAction::AddProject(group) => {
-                self.nav = None;
-                self.open_picker(Some(group));
-            }
-            MenuAction::OpenProject => {
-                self.nav = None;
-                self.open_picker(None);
-            }
+            MenuAction::AddProject(group) => self.pick_project(Some(group)),
+            MenuAction::OpenProject => self.pick_project(None),
             MenuAction::NewGroup => {
                 self.nav = None;
                 self.overlay = Some(Overlay::NewGroup { input: String::new() });
@@ -249,21 +240,54 @@ impl App {
                     self.ask_new_workspace(p);
                 }
             }
+            other => return Some(other),
+        }
+        None
+    }
+
+    fn move_to_group_menu(&mut self, project: u64, at: Position) {
+        let Some(p) = self.projects.project_index(project) else { return };
+        let current = self.projects[p].group;
+        let mut actions: Vec<MenuAction> = self
+            .groups
+            .iter()
+            .filter(|g| Some(g.id) != current)
+            .map(|g| MenuAction::SetGroup(project, Some(g.id)))
+            .collect();
+        if current.is_some() {
+            actions.push(MenuAction::SetGroup(project, None));
+        }
+        self.overlay = Some(Overlay::Menu { at, actions });
+    }
+
+    fn pick_project(&mut self, group: Option<u64>) {
+        self.nav = None;
+        self.open_picker(group);
+    }
+
+    fn project_action(&mut self, action: MenuAction, at: Position, area: Rect) -> Option<MenuAction> {
+        match action {
             MenuAction::StartFlow(project) => self.open_start_flow(self.start_flow_in(project)),
             MenuAction::ProjectSettings(project) => self.open_project_settings(project),
             MenuAction::RunSetup(workspace) => self.run_setup(workspace, area),
             MenuAction::OpenIn(subject) => self.open_in_menu(subject, at),
             MenuAction::OpenWith(subject, opener) => self.open_with(subject, opener),
             MenuAction::CopyPath(subject) => self.copy_path(subject),
-            MenuAction::Pane(pane, action) => return self.pane_action(pane, action, area),
+            MenuAction::PullRequest(workspace) => self.open_pull_request(workspace),
+            MenuAction::ShowFlow(workspace) => self.show_flow_of(workspace),
+            other => return Some(other),
+        }
+        None
+    }
+
+    fn agent_action(&mut self, action: MenuAction) -> Option<MenuAction> {
+        match action {
             MenuAction::Mark(marked, pending) => {
                 self.mark(marked, pending);
             }
             MenuAction::AgentFold(pane, collapsed) => {
                 self.set_agent_fold(pane, collapsed);
             }
-            MenuAction::PullRequest(workspace) => self.open_pull_request(workspace),
-            MenuAction::ShowFlow(workspace) => self.show_flow_of(workspace),
             MenuAction::Browser if self.config.remote => self.open_remote(),
             MenuAction::Browser => self.open_settings_on(&settings::Row::Remote),
             MenuAction::Away(via) => self.toggle_away(via),
@@ -271,7 +295,8 @@ impl App {
             MenuAction::Plugin { spot, index, revision } => self.run_plugin_action(spot, index, revision),
             MenuAction::Account(item, revision) => self.account_item(item, revision),
             MenuAction::ManageAccounts => self.manage_accounts(),
+            other => return Some(other),
         }
-        Ok(())
+        None
     }
 }

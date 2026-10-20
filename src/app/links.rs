@@ -12,6 +12,12 @@ use crate::project::Tab;
 use crate::term::emulator::Snapshot;
 use crate::term::mouse::MouseMode;
 
+#[derive(Clone, Copy)]
+pub(super) struct Resolving<'a> {
+    pub(super) root: &'a Path,
+    pub(super) home: Option<&'a Path>,
+}
+
 impl App {
     fn link_at(&mut self, at: Position) -> Option<Target> {
         let root = self.project()?.workspace()?.path.clone();
@@ -63,18 +69,7 @@ impl App {
     }
 
     fn held_link(&self) -> Option<&LinkPress> {
-        match &self.drag {
-            Some(Drag::Link(press)) => press.held.is_some().then_some(press),
-            Some(
-                Drag::Border(_)
-                | Drag::Divider { .. }
-                | Drag::Row(_)
-                | Drag::Pane(_)
-                | Drag::Selection { .. }
-                | Drag::Lines { .. },
-            )
-            | None => None,
-        }
+        self.drag.as_ref().and_then(Drag::link).filter(|press| press.held.is_some())
     }
 
     pub(super) fn open_link(&mut self, target: &Target) {
@@ -105,8 +100,7 @@ impl App {
         screens: &[Snapshot],
         pane_area: Rect,
         hover: Position,
-        root: &Path,
-        home: Option<&Path>,
+        resolving: Resolving<'_>,
     ) -> Option<(u16, Range<u16>)> {
         let term = tab.pane()?;
         let pane = tab.rect(pane_area, term.id)?;
@@ -114,8 +108,8 @@ impl App {
             return None;
         }
         let (row, col) = (hover.y - pane.y, hover.x - pane.x);
-        let (found, _) =
-            link::under(screens.get(tab.active)?.rows.get(usize::from(row))?, col, term.cwd().as_deref(), root, home)?;
+        let line = screens.get(tab.active)?.rows.get(usize::from(row))?;
+        let (found, _) = link::under(line, col, term.cwd().as_deref(), resolving.root, resolving.home)?;
         Some((row, found.start..found.end))
     }
 }

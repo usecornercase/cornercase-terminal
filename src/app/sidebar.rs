@@ -256,51 +256,62 @@ impl App {
         if matches!(hit, Some(WorkspaceHit::NewTab(_))) {
             self.nav = None;
         }
-        let p = self.active;
-        let ask = pitch > 1;
-        let rect = |row: WorkspaceRow| ui::workspace_row(list, pitch, &tabs, self.scroll.workspaces, row);
-        let pull = match hit {
-            Some(WorkspaceHit::Workspace(w)) => self.pull_in_list(list, pitch, &tabs, w, pos),
-            _ => None,
-        };
-        if let Some(id) = pull {
+        if let Some(WorkspaceHit::Workspace(w)) = hit
+            && let Some(id) = self.pull_in_list(list, pitch, &tabs, w, pos)
+        {
             self.open_pull_request(id);
             return Ok(());
         }
-        let project = &self.projects[p];
+        let Some(hit) = hit else { return Ok(()) };
+        let (p, ask) = (self.active, pitch > 1);
+        let rect = |row: WorkspaceRow| ui::workspace_row(list, pitch, &tabs, self.scroll.workspaces, row);
         match hit {
-            Some(WorkspaceHit::Workspace(w)) => {
-                let target = Target::Workspace(project.id, project.workspaces[w].id);
-                self.grab(target, rect(WorkspaceRow::Workspace(w)), area, false);
+            WorkspaceHit::Workspace(w) => {
+                self.grab(self.workspace_target(p, w), rect(WorkspaceRow::Workspace(w)), area, false);
             }
-            Some(WorkspaceHit::Fold(w)) => {
-                let target = Target::Workspace(project.id, project.workspaces[w].id);
-                self.grab(target, rect(WorkspaceRow::Workspace(w)), area, true);
+            WorkspaceHit::Fold(w) => {
+                self.grab(self.workspace_target(p, w), rect(WorkspaceRow::Workspace(w)), area, true);
             }
-            Some(WorkspaceHit::CloseWorkspace(w)) if ask && !project.workspaces[w].worktree => {
-                self.overlay =
-                    Some(Overlay::CloseWorkspace { project: project.id, workspace: project.workspaces[w].id });
+            WorkspaceHit::Tab(w, t) => {
+                self.grab(self.tab_row_target(p, w, t), rect(WorkspaceRow::Tab(w, t)), area, false);
             }
-            Some(WorkspaceHit::CloseWorkspace(w)) => self.close_workspace(p, w),
-            Some(WorkspaceHit::Tab(w, t)) => {
-                let workspace = &project.workspaces[w];
-                let target = Target::Tab(project.id, workspace.id, workspace.tabs[t].id);
-                self.grab(target, rect(WorkspaceRow::Tab(w, t)), area, false);
-            }
-            Some(WorkspaceHit::CloseTab(w, t)) if ask => {
-                let workspace = &project.workspaces[w];
-                let (project, workspace, tab) = (project.id, workspace.id, workspace.tabs[t].id);
-                self.overlay = Some(Overlay::CloseTab { project, workspace, tab });
-            }
-            Some(WorkspaceHit::CloseTab(w, t)) => self.close_tab(p, w, t),
-            Some(WorkspaceHit::NewTab(w)) => self.add_tab(p, w, area)?,
-            Some(WorkspaceHit::NewWorkspace) => self.new_workspace_menu(p, pos),
-            Some(WorkspaceHit::WorkspaceMenu(_) | WorkspaceHit::TabMenu(..)) => {
-                self.open_workspace_menu(list, pitch, pos);
-            }
-            None => {}
+            WorkspaceHit::CloseWorkspace(w) => self.close_workspace_row(p, w, ask),
+            WorkspaceHit::CloseTab(w, t) => self.close_tab_row(p, w, t, ask),
+            WorkspaceHit::NewTab(w) => return self.add_tab(p, w, area),
+            WorkspaceHit::NewWorkspace => self.new_workspace_menu(p, pos),
+            WorkspaceHit::WorkspaceMenu(_) | WorkspaceHit::TabMenu(..) => self.open_workspace_menu(list, pitch, pos),
         }
         Ok(())
+    }
+
+    fn workspace_target(&self, p: usize, w: usize) -> Target {
+        let project = &self.projects[p];
+        Target::Workspace(project.id, project.workspaces[w].id)
+    }
+
+    fn tab_row_target(&self, p: usize, w: usize, t: usize) -> Target {
+        let project = &self.projects[p];
+        let workspace = &project.workspaces[w];
+        Target::Tab(project.id, workspace.id, workspace.tabs[t].id)
+    }
+
+    fn close_workspace_row(&mut self, p: usize, w: usize, ask: bool) {
+        let project = &self.projects[p];
+        if ask && !project.workspaces[w].worktree {
+            self.overlay = Some(Overlay::CloseWorkspace { project: project.id, workspace: project.workspaces[w].id });
+        } else {
+            self.close_workspace(p, w);
+        }
+    }
+
+    fn close_tab_row(&mut self, p: usize, w: usize, t: usize, ask: bool) {
+        if !ask {
+            return self.close_tab(p, w, t);
+        }
+        let project = &self.projects[p];
+        let workspace = &project.workspaces[w];
+        let (project, workspace, tab) = (project.id, workspace.id, workspace.tabs[t].id);
+        self.overlay = Some(Overlay::CloseTab { project, workspace, tab });
     }
 
     pub(super) fn open_project_menu(&mut self, list: Rect, pitch: u16, pos: Position) {

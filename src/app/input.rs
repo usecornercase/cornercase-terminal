@@ -1,3 +1,4 @@
+use std::ops::ControlFlow;
 use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
@@ -76,19 +77,37 @@ impl App {
         let areas = self.layout(area).shown(self.nav);
         let pos = Position::new(ev.column, ev.row);
         self.hover = Some(pos);
+        match self.route_mouse(ev, pos, &areas, area) {
+            ControlFlow::Break(done) => done,
+            ControlFlow::Continue(()) => Ok(()),
+        }
+    }
 
-        if self.continue_drag(ev, &areas, area) {
-            return Ok(());
-        }
-        if self.star_mouse(ev, pos, area) {
-            return Ok(());
-        }
-        if self.toast_mouse(ev, pos, area) {
-            return Ok(());
+    fn route_mouse(&mut self, ev: MouseEvent, pos: Position, areas: &ui::Areas, area: Rect) -> ControlFlow<Result<()>> {
+        self.floating_mouse(ev, pos, areas, area)?;
+        self.side_mouse(ev, pos, areas, area)?;
+        self.chrome_mouse(ev, pos, areas, area)?;
+        self.column_mouse(ev, pos, areas, area)?;
+        ControlFlow::Break(self.main_mouse(ev, pos, areas, area))
+    }
+
+    fn floating_mouse(
+        &mut self,
+        ev: MouseEvent,
+        pos: Position,
+        areas: &ui::Areas,
+        area: Rect,
+    ) -> ControlFlow<Result<()>> {
+        if self.continue_drag(ev, areas, area) || self.star_mouse(ev, pos, area) || self.toast_mouse(ev, pos, area) {
+            return ControlFlow::Break(Ok(()));
         }
         if self.overlay.is_some() {
-            return self.overlay_mouse(ev, pos, area);
+            return ControlFlow::Break(self.overlay_mouse(ev, pos, area));
         }
+        ControlFlow::Continue(())
+    }
+
+    fn side_mouse(&mut self, ev: MouseEvent, pos: Position, areas: &ui::Areas, area: Rect) -> ControlFlow<Result<()>> {
         let in_panel = self.panel_shown() && areas.changes.contains(pos);
         if matches!(ev.kind, MouseEventKind::Down(_)) && !in_panel {
             if let Some(filter) = &mut self.changes.filter {
@@ -97,80 +116,116 @@ impl App {
             self.commit_todo();
             self.files.unfocus();
         }
-        if in_panel && let Some(side) = self.side {
-            return self.panel_mouse(side, ev, pos, areas.changes, area);
+        if in_panel && self.side.is_some() {
+            return ControlFlow::Break(self.panel_mouse(ev, pos, areas.changes, area));
         }
         if let Some(delta) = wheel(ev.kind)
-            && self.scroll_column(&areas, pos, delta)
+            && self.scroll_column(areas, pos, delta)
         {
-            return Ok(());
+            return ControlFlow::Break(Ok(()));
         }
+        ControlFlow::Continue(())
+    }
 
+    fn chrome_mouse(
+        &mut self,
+        ev: MouseEvent,
+        pos: Position,
+        areas: &ui::Areas,
+        area: Rect,
+    ) -> ControlFlow<Result<()>> {
         let left = ev.kind == MouseEventKind::Down(MouseButton::Left);
-        let right = ev.kind == MouseEventKind::Down(MouseButton::Right);
         if let Some(border) = areas.border_hit(pos) {
             if left {
                 self.press_border(border, Instant::now());
             }
-            return Ok(());
+            return ControlFlow::Break(Ok(()));
         }
+        if self.button_mouse(areas, pos, left) {
+            return ControlFlow::Break(Ok(()));
+        }
+        if areas.agents.contains(pos) {
+            self.agents_mouse(areas, pos, ev.kind, area);
+            return ControlFlow::Break(Ok(()));
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn button_mouse(&mut self, areas: &ui::Areas, pos: Position, left: bool) -> bool {
         if areas.search_button.contains(pos) {
             if left {
                 self.overlay = Some(Overlay::Search(Finder::default()));
             }
-            return Ok(());
+            return true;
         }
-        if self.panel_buttons(&areas, pos, left) {
-            return Ok(());
+        if self.panel_buttons(areas, pos, left) {
+            return true;
         }
         if areas.bar.contains(pos) {
             if left {
                 self.toggle_nav();
             }
-            return Ok(());
+            return true;
         }
-        if let Some(nav) = [(areas.back, ui::Nav::Projects), (areas.agents_button, ui::Nav::Agents)]
-            .into_iter()
-            .find_map(|(r, nav)| r.contains(pos).then_some(nav))
-        {
-            if left {
-                self.nav = Some(nav);
-            }
-            return Ok(());
+        let navs = [(areas.back, ui::Nav::Projects), (areas.agents_button, ui::Nav::Agents)];
+        let Some(nav) = navs.into_iter().find_map(|(r, nav)| r.contains(pos).then_some(nav)) else { return false };
+        if left {
+            self.nav = Some(nav);
         }
-        if areas.agents.contains(pos) {
-            self.agents_mouse(&areas, pos, ev.kind, area);
-            return Ok(());
-        }
-        if self.activity_mouse(&areas, pos, left, area)? || self.footer_mouse(&areas, pos, left) {
-            return Ok(());
-        }
-        if areas.list.contains(pos) {
-            return self.list_mouse(&areas, pos, ev.kind, area);
-        }
-        if areas.issues.contains(pos) {
-            if left && self.issues_available() {
-                self.nav = None;
-                return self.open_issues(area);
-            }
-            return Ok(());
-        }
-        if areas.workspaces.contains(pos) {
-            if left && areas.workspaces_list.contains(pos) {
-                return self.click_workspaces(areas.workspaces_list, areas.pitch, pos, area);
-            }
-            if right && areas.workspaces_list.contains(pos) {
-                self.open_workspace_menu(areas.workspaces_list, areas.pitch, pos);
-            }
-            return Ok(());
-        }
-        if self.nav.is_some() && areas.compact() {
-            return Ok(());
-        }
-        self.main_mouse(ev, pos, &areas, area)
+        true
     }
 
-    fn panel_mouse(&mut self, side: Side, ev: MouseEvent, pos: Position, panel: Rect, area: Rect) -> Result<()> {
+    fn column_mouse(
+        &mut self,
+        ev: MouseEvent,
+        pos: Position,
+        areas: &ui::Areas,
+        area: Rect,
+    ) -> ControlFlow<Result<()>> {
+        let left = ev.kind == MouseEventKind::Down(MouseButton::Left);
+        match self.activity_mouse(areas, pos, left, area) {
+            Err(e) => return ControlFlow::Break(Err(e)),
+            Ok(true) => return ControlFlow::Break(Ok(())),
+            Ok(false) => {}
+        }
+        if self.footer_mouse(areas, pos, left) {
+            return ControlFlow::Break(Ok(()));
+        }
+        if areas.list.contains(pos) {
+            return ControlFlow::Break(self.list_mouse(areas, pos, ev.kind, area));
+        }
+        if areas.issues.contains(pos) {
+            return ControlFlow::Break(self.issues_column_mouse(left, area));
+        }
+        if areas.workspaces.contains(pos) {
+            return ControlFlow::Break(self.workspaces_mouse(ev, pos, areas, area));
+        }
+        if self.nav.is_some() && areas.compact() { ControlFlow::Break(Ok(())) } else { ControlFlow::Continue(()) }
+    }
+
+    fn issues_column_mouse(&mut self, left: bool, area: Rect) -> Result<()> {
+        if left && self.issues_available() {
+            self.nav = None;
+            return self.open_issues(area);
+        }
+        Ok(())
+    }
+
+    fn workspaces_mouse(&mut self, ev: MouseEvent, pos: Position, areas: &ui::Areas, area: Rect) -> Result<()> {
+        let list = areas.workspaces_list;
+        if !list.contains(pos) {
+            return Ok(());
+        }
+        match ev.kind {
+            MouseEventKind::Down(MouseButton::Left) => return self.click_workspaces(list, areas.pitch, pos, area),
+            MouseEventKind::Down(MouseButton::Right) => self.open_workspace_menu(list, areas.pitch, pos),
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn panel_mouse(&mut self, ev: MouseEvent, pos: Position, panel: Rect, area: Rect) -> Result<()> {
+        let Some(side) = self.side else { return Ok(()) };
         match side {
             Side::Todo => self.todo_mouse(ev, pos, panel, area),
             Side::Files => return self.files_mouse(ev, pos, panel, area),
@@ -345,68 +400,11 @@ impl App {
         if matches!(self.overlay, Some(Overlay::Keys(_))) {
             self.overlay = None;
         }
-        if let Some(Overlay::Picker { picker, .. }) = &mut self.overlay {
-            text.chars().filter(|c| !c.is_control()).for_each(|c| picker.push(c));
+        if self.overlay.is_some() {
+            self.overlay_paste(text, area);
             return;
         }
-        if let Some(Overlay::Search(search)) = &mut self.overlay {
-            text.chars().filter(|c| !c.is_control()).for_each(|c| search.field.push(c));
-            self.ask_sessions(Instant::now());
-            return;
-        }
-        if let Some(Overlay::Branches(picker)) = &mut self.overlay {
-            text.chars().filter(|c| !c.is_control()).for_each(|c| picker.push(c));
-            return;
-        }
-        if let Some(Overlay::Queue(form)) = &mut self.overlay {
-            let (focus, idle) = (form.focus, !form.busy && form.opened().is_none());
-            if let Some(editor) = form.editor(focus).filter(|_| idle) {
-                editor.insert(text);
-            }
-            return;
-        }
-        if let Some(Overlay::Issues(b)) = &mut self.overlay {
-            b.paste(text);
-            return;
-        }
-        if let Some(Overlay::Settings(s)) = &mut self.overlay {
-            s.paste(text);
-            return;
-        }
-        if matches!(self.overlay, Some(Overlay::Flows { .. })) {
-            self.flows_paste(text, area);
-            return;
-        }
-        if matches!(self.overlay, Some(Overlay::StartFlow { .. })) {
-            self.start_flow_paste(text, area);
-            return;
-        }
-        if matches!(self.overlay, Some(Overlay::ProjectSettings(_))) {
-            self.project_settings_paste(text, area);
-            return;
-        }
-        if let Some(overlay) = &mut self.overlay {
-            if let Some(input) = overlay.input() {
-                input.extend(text.chars().filter(|c| !c.is_control()));
-            }
-            return;
-        }
-        if self.todo_typing() {
-            self.todo_paste(text);
-            return;
-        }
-        if self.files_typing() {
-            self.files_paste(text);
-            return;
-        }
-        if self.filtering()
-            && let Some(filter) = &mut self.changes.filter
-        {
-            text.chars().filter(|c| !c.is_control()).for_each(|c| filter.push(c));
-            self.changes.scroll = 0;
-            return;
-        }
-        if self.holds_input() {
+        if self.typing_paste(text) || self.holds_input() {
             return;
         }
         if let Some(term) = self.term_mut() {
@@ -416,6 +414,54 @@ impl App {
                 self.toast = Some(Toast::new(NOT_READING, ui::ToastIcon::Bug));
             }
         }
+    }
+
+    fn overlay_paste(&mut self, text: &str, area: Rect) {
+        let clean = || text.chars().filter(|c| !c.is_control());
+        match &mut self.overlay {
+            Some(Overlay::Picker { picker, .. }) => clean().for_each(|c| picker.push(c)),
+            Some(Overlay::Branches(picker)) => clean().for_each(|c| picker.push(c)),
+            Some(Overlay::Search(search)) => {
+                clean().for_each(|c| search.field.push(c));
+                self.ask_sessions(Instant::now());
+            }
+            Some(Overlay::Queue(form)) => {
+                let (focus, idle) = (form.focus, !form.busy && form.opened().is_none());
+                if let Some(editor) = form.editor(focus).filter(|_| idle) {
+                    editor.insert(text);
+                }
+            }
+            Some(Overlay::Issues(b)) => b.paste(text),
+            Some(Overlay::Settings(s)) => s.paste(text),
+            Some(Overlay::Flows { .. }) => self.flows_paste(text, area),
+            Some(Overlay::StartFlow { .. }) => self.start_flow_paste(text, area),
+            Some(Overlay::ProjectSettings(_)) => self.project_settings_paste(text, area),
+            Some(overlay) => {
+                if let Some(input) = overlay.input() {
+                    input.extend(clean());
+                }
+            }
+            None => {}
+        }
+    }
+
+    fn typing_paste(&mut self, text: &str) -> bool {
+        if self.todo_typing() {
+            self.todo_paste(text);
+            return true;
+        }
+        if self.files_typing() {
+            self.files_paste(text);
+            return true;
+        }
+        if self.filtering()
+            && let Some(filter) = &mut self.changes.filter
+        {
+            text.chars().filter(|c| !c.is_control()).for_each(|c| filter.push(c));
+            self.changes.scroll = 0;
+            return true;
+        }
+        false
     }
 }
 
