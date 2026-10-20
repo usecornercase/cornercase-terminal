@@ -336,7 +336,7 @@ fn codex_takes_its_rollout_to_the_new_account_and_resumes_it() {
     wait_until("the restart line is typed", || {
         drain(&mut app, &rx);
         app.refresh(Instant::now());
-        screen(&mut app).contains(&format!("restarted: resume {id}"))
+        screen(&mut app).replace('\n', "").contains(&format!("restarted: resume {id}"))
     });
     fake.signal("quit", "");
 }
