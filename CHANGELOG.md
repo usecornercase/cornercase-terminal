@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.164
+
+- No changes in the app. Each part of the app's state is changed through its own methods.
+
 ## 0.12.163
 
 - **Clean up your worktrees in one place.** The new **Worktrees** dialog lists the worktrees of your open projects, and those in the worktrees folder (`~/.cornercase/worktrees` by default) whose project you have closed, with the project, branch, folder, how long ago it last changed and what it has: `●n` changed files, `↑n` commits no remote has, `merged`, `no commits` for a branch never pushed that has nothing of its own yet, `upstream gone`, `locked`, the program running in it (`claude`, or `2 running`), `n outside` for processes using its folder from another terminal or another tab, `open`, and `prunable`, `repository gone` or `unknown to git` for leftovers. Leftovers come first, then the merged ones, then the oldest. Open it from **Settings → Worktrees → worktrees on disk**, or from a project's `⋯` menu → **worktrees** for that project alone. On a row of an open project, **changes** opens that workspace's changes panel.
