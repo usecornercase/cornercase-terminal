@@ -32,14 +32,11 @@ mod describing {
         assert_eq!(descriptor.contract, CONTRACT);
         assert_eq!(descriptor.boot, "1-2");
         assert_eq!(descriptor.features, FEATURES);
-        assert!(descriptor.features.iter().any(|feature| feature == "theme"));
-        assert!(descriptor.features.iter().any(|feature| feature == "notices"));
-        assert!(descriptor.features.iter().any(|feature| feature == "todo-panel"));
-        assert!(descriptor.features.iter().any(|feature| feature == "close-unlock"));
-        assert!(descriptor.features.iter().any(|feature| feature == "agent-folds"));
-        assert!(descriptor.features.iter().any(|feature| feature == "issues"));
-        assert!(descriptor.features.iter().any(|feature| feature == "todo-panel"));
-        assert!(descriptor.features.iter().any(|feature| feature == "changes"));
+        let wanted =
+            ["theme", "notices", "todo-panel", "close-unlock", "agent-folds", "issues", "todo-panel", "changes"];
+        let missing: Vec<&str> =
+            wanted.into_iter().filter(|name| !descriptor.features.iter().any(|feature| feature == name)).collect();
+        assert!(missing.is_empty(), "missing features {missing:?}");
     }
 
     #[test]

@@ -198,53 +198,45 @@ pub(crate) enum Command {
 
 impl Command {
     pub(crate) fn name(&self) -> &'static str {
-        Self::NAMES[match self {
-            Self::Status(_) => 0,
+        let at = self
+            .pane_name()
+            .or_else(|| self.row_name())
+            .or_else(|| self.stream_name())
+            .or_else(|| self.terminal_name())
+            .or_else(|| self.change_name())
+            .or_else(|| self.issue_name())
+            .or_else(|| self.flow_name())
+            .or_else(|| self.account_name())
+            .or_else(|| self.server_name());
+        Self::NAMES[at.unwrap_or_default()]
+    }
+
+    fn pane_name(&self) -> Option<usize> {
+        Some(match self {
             Self::Open(_) => 1,
             Self::NewWorkspace(_) => 2,
             Self::NewTab(_) => 3,
             Self::Split(_) => 4,
             Self::Start(_) => 5,
+            Self::StartWith(_) => 23,
             Self::Send(_) => 6,
             Self::Keys(_) => 7,
             Self::Read(_) => 8,
+            Self::LastMessage(_) => 17,
             Self::Wait(_) => 9,
+            Self::WaitSeveral(_) => 15,
+            Self::Mark(_) => 21,
+            Self::Notify(_) => 13,
+            Self::Focus(_) => 12,
+            _ => return None,
+        })
+    }
+
+    fn row_name(&self) -> Option<usize> {
+        Some(match self {
             Self::Close(_) => 10,
             Self::Rename(_) => 11,
-            Self::Focus(_) => 12,
-            Self::Notify(_) => 13,
-            Self::Todo(_) => 14,
-            Self::WaitSeveral(_) => 15,
-            Self::Events(_) => 16,
-            Self::LastMessage(_) => 17,
-            Self::RestartWhenIdle(_) => 18,
-            Self::Stats(_) => 19,
-            Self::Away(_) => 20,
-            Self::Mark(_) => 21,
-            Self::Queue(_) => 22,
-            Self::StartWith(_) => 23,
-            Self::FlowList(_) => 24,
-            Self::FlowRun(_) => 25,
-            Self::FlowExport(_) => 26,
-            Self::FlowImport(_) => 27,
-            Self::Search(_) => 28,
-            Self::Contract(_) => 29,
-            Self::StartServer(_) => 30,
-            Self::Watch(_) => 31,
-            Self::Surface(_) => 32,
-            Self::View(_) => 33,
-            Self::ViewSet(_) => 34,
-            Self::Input(_) => 35,
-            Self::Scroll(_) => 36,
-            Self::Selection(_) => 37,
-            Self::Resize(_) => 38,
-            Self::Ratio(_) => 39,
-            Self::Link(_) => 40,
-            Self::TodoSend(_) => 41,
-            Self::Theme(_) => 42,
-            Self::Go(_) => 43,
-            Self::Redraw(_) => 44,
-            Self::Config(_) => 45,
+            Self::RemovalCheck(_) => 53,
             Self::Move(_) => 46,
             Self::MovePane(_) => 47,
             Self::Collapse(_) => 48,
@@ -252,42 +244,113 @@ impl Command {
             Self::GroupNew(_) => 50,
             Self::GroupStyle(_) => 51,
             Self::GroupDelete(_) => 52,
-            Self::RemovalCheck(_) => 53,
-            Self::IssueSources(_) => 54,
-            Self::IssueList(_) => 55,
-            Self::IssueRead(_) => 56,
-            Self::IssuePeople(_) => 57,
-            Self::UpdateCheck(_) => 58,
-            Self::UpdateInstall(_) => 59,
+            Self::Todo(_) => 14,
+            Self::TodoSend(_) => 41,
+            _ => return None,
+        })
+    }
+
+    fn stream_name(&self) -> Option<usize> {
+        Some(match self {
+            Self::Status(_) => 0,
+            Self::Stats(_) => 19,
+            Self::Contract(_) => 29,
+            Self::Watch(_) => 31,
             Self::App(_) => 60,
+            Self::Events(_) => 16,
+            Self::FlowRuns(_) => 75,
+            Self::Surface(_) => 32,
+            Self::View(_) => 33,
+            Self::ViewSet(_) => 34,
+            Self::Search(_) => 28,
+            _ => return None,
+        })
+    }
+
+    fn terminal_name(&self) -> Option<usize> {
+        Some(match self {
+            Self::Input(_) => 35,
+            Self::Scroll(_) => 36,
+            Self::Selection(_) => 37,
+            Self::Resize(_) => 38,
+            Self::Redraw(_) => 44,
+            Self::Ratio(_) => 39,
+            Self::Link(_) => 40,
+            _ => return None,
+        })
+    }
+
+    fn change_name(&self) -> Option<usize> {
+        Some(match self {
             Self::Changes(_) => 61,
             Self::ChangesMode(_) => 62,
             Self::ChangesFile(_) => 63,
             Self::ChangesGap(_) => 64,
             Self::ChangesBase(_) => 65,
             Self::ChangesViewed(_) => 66,
-            Self::Usage(_) => 67,
-            Self::PluginList(_) => 68,
-            Self::PluginActions(_) => 69,
-            Self::PluginRun(_) => 70,
+            _ => return None,
+        })
+    }
+
+    fn issue_name(&self) -> Option<usize> {
+        Some(match self {
+            Self::IssueSources(_) => 54,
+            Self::IssueList(_) => 55,
+            Self::IssueRead(_) => 56,
+            Self::IssuePeople(_) => 57,
+            Self::Queue(_) => 22,
+            _ => return None,
+        })
+    }
+
+    fn flow_name(&self) -> Option<usize> {
+        Some(match self {
+            Self::FlowList(_) => 24,
+            Self::FlowRun(_) => 25,
+            Self::FlowExport(_) => 26,
+            Self::FlowImport(_) => 27,
             Self::FlowSave(_) => 71,
             Self::FlowDelete(_) => 72,
             Self::FlowHide(_) => 73,
             Self::FlowRestore(_) => 74,
-            Self::FlowRuns(_) => 75,
             Self::FlowMessages(_) => 76,
             Self::FlowFiles(_) => 77,
+            _ => return None,
+        })
+    }
+
+    fn account_name(&self) -> Option<usize> {
+        Some(match self {
             Self::AccountList(_) => 78,
             Self::AccountAdd(_) => 79,
             Self::AccountRemove(_) => 80,
+            Self::AccountRename(_) => 86,
+            Self::AccountUse(_) => 87,
             Self::ProfileList(_) => 81,
             Self::ProfileNew(_) => 82,
             Self::ProfileSet(_) => 83,
             Self::ProfileUse(_) => 84,
             Self::ProfileDelete(_) => 85,
-            Self::AccountRename(_) => 86,
-            Self::AccountUse(_) => 87,
-        }]
+            _ => return None,
+        })
+    }
+
+    fn server_name(&self) -> Option<usize> {
+        Some(match self {
+            Self::Config(_) => 45,
+            Self::Theme(_) => 42,
+            Self::Go(_) => 43,
+            Self::UpdateCheck(_) => 58,
+            Self::UpdateInstall(_) => 59,
+            Self::RestartWhenIdle(_) => 18,
+            Self::StartServer(_) => 30,
+            Self::Away(_) => 20,
+            Self::Usage(_) => 67,
+            Self::PluginList(_) => 68,
+            Self::PluginActions(_) => 69,
+            Self::PluginRun(_) => 70,
+            _ => return None,
+        })
     }
 
     pub(crate) const NAMES: [&str; 88] = [

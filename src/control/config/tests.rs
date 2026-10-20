@@ -3,79 +3,87 @@ use serde_json::json;
 use super::*;
 use crate::test_util::fixture;
 
+fn settings() -> Vec<Setting> {
+    vec![
+        Setting {
+            key: "counts".into(),
+            page: "UI".into(),
+            label: "counts".into(),
+            kind: Kind::Switch,
+            value: json!(true),
+            default: json!(true),
+            shown: "[x] shown".into(),
+            note: "what a project or collapsed group holds, such as (3)".into(),
+            ..Setting::default()
+        },
+        Setting {
+            key: "sidebar".into(),
+            page: "UI".into(),
+            label: "sidebar".into(),
+            kind: Kind::Choice,
+            value: json!("tree"),
+            default: json!("projects_on_top"),
+            shown: "tree".into(),
+            note: "how projects, workspaces and tabs are laid out".into(),
+            choices: vec![
+                Choice { value: "projects_on_top".into(), note: "one column".into(), dangerous: false },
+                Choice { value: "tree".into(), note: "one list".into(), dangerous: false },
+            ],
+            question: Some("How should projects, workspaces and tabs be laid out?".into()),
+            ..Setting::default()
+        },
+        Setting {
+            key: "worktrees_dir".into(),
+            page: "Worktrees".into(),
+            label: "worktrees folder".into(),
+            kind: Kind::Text,
+            value: json!("~/.cornercase/worktrees"),
+            default: json!("~/.cornercase/worktrees"),
+            shown: "~/.cornercase/worktrees".into(),
+            field: Some("worktrees folder".into()),
+            ..Setting::default()
+        },
+    ]
+}
+
+fn connections() -> Vec<Connection> {
+    vec![
+        Connection {
+            key: "linear".into(),
+            kind: ConnectionKind::Tracker,
+            page: "Issues".into(),
+            section: "Accounts".into(),
+            label: "Linear API key".into(),
+            note: "saved".into(),
+            state: State::Connected,
+            account: Some("@ana".into()),
+            from: Some("saved".into()),
+            env: None,
+            field: Some("Linear API key".into()),
+            removable: true,
+            ..Connection::default()
+        },
+        Connection {
+            key: "browsers".into(),
+            kind: ConnectionKind::Browsers,
+            page: "Remote".into(),
+            section: "Browser".into(),
+            label: "paired browsers".into(),
+            note: "enter forgets them all".into(),
+            state: State::Missing,
+            count: Some(0),
+            ..Connection::default()
+        },
+    ]
+}
+
 fn answer() -> Described {
     Described {
         revision: 4,
         path: PathBuf::from("/home/me/.config/cornercase/config.json"),
         problem: None,
-        settings: vec![
-            Setting {
-                key: "counts".into(),
-                page: "UI".into(),
-                label: "counts".into(),
-                kind: Kind::Switch,
-                value: json!(true),
-                default: json!(true),
-                shown: "[x] shown".into(),
-                note: "what a project or collapsed group holds, such as (3)".into(),
-                ..Setting::default()
-            },
-            Setting {
-                key: "sidebar".into(),
-                page: "UI".into(),
-                label: "sidebar".into(),
-                kind: Kind::Choice,
-                value: json!("tree"),
-                default: json!("projects_on_top"),
-                shown: "tree".into(),
-                note: "how projects, workspaces and tabs are laid out".into(),
-                choices: vec![
-                    Choice { value: "projects_on_top".into(), note: "one column".into(), dangerous: false },
-                    Choice { value: "tree".into(), note: "one list".into(), dangerous: false },
-                ],
-                question: Some("How should projects, workspaces and tabs be laid out?".into()),
-                ..Setting::default()
-            },
-            Setting {
-                key: "worktrees_dir".into(),
-                page: "Worktrees".into(),
-                label: "worktrees folder".into(),
-                kind: Kind::Text,
-                value: json!("~/.cornercase/worktrees"),
-                default: json!("~/.cornercase/worktrees"),
-                shown: "~/.cornercase/worktrees".into(),
-                field: Some("worktrees folder".into()),
-                ..Setting::default()
-            },
-        ],
-        connections: vec![
-            Connection {
-                key: "linear".into(),
-                kind: ConnectionKind::Tracker,
-                page: "Issues".into(),
-                section: "Accounts".into(),
-                label: "Linear API key".into(),
-                note: "saved".into(),
-                state: State::Connected,
-                account: Some("@ana".into()),
-                from: Some("saved".into()),
-                env: None,
-                field: Some("Linear API key".into()),
-                removable: true,
-                ..Connection::default()
-            },
-            Connection {
-                key: "browsers".into(),
-                kind: ConnectionKind::Browsers,
-                page: "Remote".into(),
-                section: "Browser".into(),
-                label: "paired browsers".into(),
-                note: "enter forgets them all".into(),
-                state: State::Missing,
-                count: Some(0),
-                ..Connection::default()
-            },
-        ],
+        settings: settings(),
+        connections: connections(),
         projects: vec![ProjectEntry {
             folder: PathBuf::from("/home/me/code/web-shop"),
             key: "~/code/web-shop".into(),

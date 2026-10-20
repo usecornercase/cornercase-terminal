@@ -75,44 +75,49 @@ impl Report {
 
     pub fn panes(&self) -> Vec<PaneRow> {
         let projects = self.loose().chain(self.groups.iter().flat_map(|group| self.grouped(group.id)));
-        let mut rows = Vec::new();
-        for project in projects {
-            for workspace in &project.workspaces {
-                for tab in &workspace.tabs {
-                    rows.extend(tab.panes.iter().map(|pane| PaneRow {
-                        pane: pane.id,
-                        tab: tab.id,
-                        workspace: workspace.id,
-                        project: project.id,
-                        program: pane.program.clone(),
-                        agent: pane.agent.clone(),
-                        status: pane.status.clone(),
-                        background_shell: pane.background_shell,
-                        dialog: pane.dialog,
-                        at_prompt: pane.at_prompt,
-                        model: pane.model.clone(),
-                        context: pane.context,
-                        caller: pane.caller,
-                        shown: self.shown.pane == Some(pane.id),
-                        active: pane.active,
-                        tab_name: tab.name.clone(),
-                        workspace_name: workspace.name.clone(),
-                        branch: workspace.branch.clone(),
-                        worktree: workspace.worktree,
-                        project_name: project.name.clone(),
-                        path: pane.path.clone(),
-                        survey: pane.survey,
-                        resuming: pane.resuming,
-                        parent: pane.parent,
-                        subagents: pane.subagents,
-                        role: pane.role.clone(),
-                        held_sends: pane.held_sends,
-                        draft: pane.draft,
-                    }));
-                }
-            }
+        let tabs = projects.flat_map(|project| {
+            project
+                .workspaces
+                .iter()
+                .flat_map(move |workspace| workspace.tabs.iter().map(move |tab| (project, workspace, tab)))
+        });
+        let rows = tabs.flat_map(|(project, workspace, tab)| {
+            tab.panes.iter().map(move |pane| self.pane_row(project, workspace, tab, pane))
+        });
+        rows.collect()
+    }
+
+    fn pane_row(&self, project: &ProjectInfo, workspace: &WorkspaceInfo, tab: &TabInfo, pane: &PaneInfo) -> PaneRow {
+        PaneRow {
+            pane: pane.id,
+            tab: tab.id,
+            workspace: workspace.id,
+            project: project.id,
+            program: pane.program.clone(),
+            agent: pane.agent.clone(),
+            status: pane.status.clone(),
+            background_shell: pane.background_shell,
+            dialog: pane.dialog,
+            at_prompt: pane.at_prompt,
+            model: pane.model.clone(),
+            context: pane.context,
+            caller: pane.caller,
+            shown: self.shown.pane == Some(pane.id),
+            active: pane.active,
+            tab_name: tab.name.clone(),
+            workspace_name: workspace.name.clone(),
+            branch: workspace.branch.clone(),
+            worktree: workspace.worktree,
+            project_name: project.name.clone(),
+            path: pane.path.clone(),
+            survey: pane.survey,
+            resuming: pane.resuming,
+            parent: pane.parent,
+            subagents: pane.subagents,
+            role: pane.role.clone(),
+            held_sends: pane.held_sends,
+            draft: pane.draft,
         }
-        rows
     }
 }
 

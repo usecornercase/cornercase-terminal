@@ -8,7 +8,7 @@ use super::event::AppEvent;
 use super::menus::MenuAction;
 use super::overlay::Overlay;
 use crate::control;
-use crate::control::plugins::{ActionInfo, ActionRan, ActionsInfo, PluginInfo, PluginsInfo, ServiceInfo};
+use crate::control::plugins::{ActionInfo, ActionRan, ActionsInfo, Invoked, PluginInfo, PluginsInfo, ServiceInfo};
 use crate::error::Error;
 use crate::log::{self, Job, Level};
 use crate::plugins::manifest::Action;
@@ -235,7 +235,10 @@ impl App {
                     places.note(&plugin.entry.id, "action failed", &[("action", &action.id), ("error", &e)]);
                 }
                 let log = places.log(&plugin.entry.id);
-                Ok((ActionRan::of(&plugin.entry.id, &action.id, context, ids, &ran, log), ran.failure()))
+                Ok((
+                    ActionRan::of(Invoked { plugin: &plugin.entry.id, action: &action.id, context, ids }, &ran, log),
+                    ran.failure(),
+                ))
             },
             move |result, job| {
                 let failure = result.as_ref().ok().and_then(|(_, failure)| failure.clone());
