@@ -80,15 +80,7 @@ impl<T: Clone + PartialEq + Serialize + Default> Snapshots<T> {
         out.extend(self.watchers.iter().map(|watcher| (*watcher, Streamed::Snapshot(text.clone()))));
     }
 
-    fn join(
-        &mut self,
-        client: u64,
-        report: T,
-        now: Instant,
-        out: &mut Vec<(u64, Streamed)>,
-        stream: &str,
-    ) -> Snapshot<T> {
-        self.offer(report, now, out, stream);
+    fn join(&mut self, client: u64) -> Snapshot<T> {
         self.watchers.push(client);
         self.current().unwrap_or_default()
     }
@@ -234,9 +226,7 @@ impl Events {
                 && let Some(pane) = event.ids.pane
             {
                 bells.panes.remove(&pane);
-                for panes in subscribers.iter_mut().filter_map(|subscriber| subscriber.panes.as_mut()) {
-                    panes.retain(|watched| *watched != pane);
-                }
+                unwatch_pane(subscribers, pane);
             }
         }
         for ended in subscribers.extract_if(.., |subscriber| subscriber.panes.as_ref().is_some_and(Vec::is_empty)) {
@@ -299,7 +289,8 @@ impl App {
     pub(super) fn watch_snapshots(&mut self, client: u64, now: Instant) -> Snapshot {
         let report = self.report(None);
         let Events { snapshots, out, .. } = &mut self.events;
-        let snapshot = snapshots.join(client, report, now, out, "session");
+        snapshots.offer(report, now, out, "session");
+        let snapshot = snapshots.join(client);
         log::info!("control", "watching", client = client, revision = snapshot.revision);
         snapshot
     }
@@ -307,7 +298,8 @@ impl App {
     pub(super) fn app_snapshots(&mut self, client: u64, now: Instant) -> Snapshot<AppState> {
         let state = self.app_state();
         let Events { app, out, .. } = &mut self.events;
-        let snapshot = app.join(client, state, now, out, "app");
+        app.offer(state, now, out, "app");
+        let snapshot = app.join(client);
         log::info!("control", "following the app", client = client, revision = snapshot.revision);
         snapshot
     }
@@ -323,7 +315,8 @@ impl App {
     pub(super) fn flow_runs_snapshots(&mut self, client: u64, now: Instant) -> Snapshot<FlowRuns> {
         let state = self.flow_runs_state();
         let Events { runs, out, .. } = &mut self.events;
-        let snapshot = runs.join(client, state, now, out, "flow-runs");
+        runs.offer(state, now, out, "flow-runs");
+        let snapshot = runs.join(client);
         log::info!("control", "following flow runs", client = client, revision = snapshot.revision);
         snapshot
     }
@@ -375,5 +368,11 @@ impl App {
             snapshots.changed = false;
         }
         self.publish_views(&report);
+    }
+}
+
+fn unwatch_pane(subscribers: &mut [Subscriber], pane: u64) {
+    for panes in subscribers.iter_mut().filter_map(|subscriber| subscriber.panes.as_mut()) {
+        panes.retain(|watched| *watched != pane);
     }
 }

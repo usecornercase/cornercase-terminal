@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
 use std::time::{Instant, SystemTime};
 
@@ -6,7 +6,7 @@ use super::layout::Side;
 use super::{App, Toast};
 use crate::control::{self, Ids, What};
 use crate::log::{self, Level};
-use crate::project::{Hierarchy, Phase};
+use crate::project::{Hierarchy, Phase, Workspace};
 use crate::term::Term;
 use crate::ui;
 
@@ -304,31 +304,20 @@ impl App {
     }
 
     fn traced_places(&self) -> Vec<(Place, Option<PaneNow<'_>>)> {
-        let open = "open";
-        let place = |kind, id, parent, phase, ids| Place { key: Key { kind, id }, parent, phase, ids, opener: None };
         let live = self.pane_ids();
         let mut places: Vec<(Place, Option<PaneNow>)> =
-            self.groups.iter().map(|g| (place(Kind::Group, g.id, None, open, Ids::default()), None)).collect();
+            self.groups.iter().map(|g| (place_of(Kind::Group, g.id, None, OPEN, Ids::default()), None)).collect();
         for project in &self.projects {
             let ids = Ids { project: Some(project.id), ..Ids::default() };
-            let phase_now = if project.closing { "closing" } else { open };
-            places.push((place(Kind::Project, project.id, project.group, phase_now, ids), None));
+            let phase_now = if project.closing { "closing" } else { OPEN };
+            places.push((place_of(Kind::Project, project.id, project.group, phase_now, ids), None));
             for workspace in &project.workspaces {
-                let ids = Ids { workspace: Some(workspace.id), ..ids };
-                places
-                    .push((place(Kind::Workspace, workspace.id, Some(project.id), phase(&workspace.phase), ids), None));
-                for tab in &workspace.tabs {
-                    let ids = Ids { tab: Some(tab.id), ..ids };
-                    places.push((place(Kind::Tab, tab.id, Some(workspace.id), open, ids), None));
-                    places.extend(tab.panes.iter().map(|term| {
-                        let ids = Ids { pane: Some(term.id), ..ids };
-                        let opener = Self::live_parent(term, &live);
-                        (
-                            Place { opener, ..place(Kind::Pane, term.id, Some(tab.id), open, ids) },
-                            Some(PaneNow::of(term)),
-                        )
-                    }));
-                }
+                workspace_places(
+                    workspace,
+                    (project.id, Ids { workspace: Some(workspace.id), ..ids }),
+                    &live,
+                    &mut places,
+                );
             }
         }
         places.sort_by_key(|(place, _)| place.key);
@@ -390,37 +379,9 @@ impl App {
 
     fn observe_ui(&mut self) -> Vec<Note> {
         let mut notes = Vec::new();
-        let focus = self.focus();
-        let pane = self.tab().and_then(|tab| tab.pane()).map(|term| term.id);
-        let focus = Focus { project: focus.project, workspace: focus.workspace, tab: focus.tab, pane };
-        if focus != self.seen.focus {
-            self.seen.focus = focus;
-            let note = Note::new(Level::Info, "ui", "focus").maybe("project", focus.project);
-            let note = note.maybe("workspace", focus.workspace).maybe("tab", focus.tab);
-            notes.push(note.maybe("pane", focus.pane));
-        }
-        let overlay = self.overlay.as_ref().map(super::Overlay::name);
-        if overlay != self.seen.overlay {
-            if let Some(closed) = self.seen.overlay {
-                notes.push(Note::new(Level::Info, "ui", "overlay closed").with("kind", closed));
-            }
-            if let Some(opened) = overlay {
-                notes.push(Note::new(Level::Info, "ui", "overlay opened").with("kind", opened));
-            }
-            self.seen.overlay = overlay;
-        }
-        let panel = match self.side {
-            Some(Side::Changes) => Some("changes"),
-            Some(Side::Todo) => Some("todo"),
-            Some(Side::Files) => Some("files"),
-            Some(Side::Flow) => Some("flow"),
-            None => None,
-        };
-        if panel != self.seen.panel {
-            let note = Note::new(Level::Info, "ui", "panel").with("shown", panel.unwrap_or("none"));
-            notes.push(note);
-            self.seen.panel = panel;
-        }
+        self.observe_focus(&mut notes);
+        self.observe_overlay(&mut notes);
+        self.observe_panel(&mut notes);
         let full = self.file_full_screen();
         if full != self.seen.full {
             let text = if full { "file shown full screen" } else { "file back in its panel" };
@@ -439,5 +400,72 @@ impl App {
             }
         }
         notes
+    }
+
+    fn observe_focus(&mut self, notes: &mut Vec<Note>) {
+        let focus = self.focus();
+        let pane = self.tab().and_then(|tab| tab.pane()).map(|term| term.id);
+        let focus = Focus { project: focus.project, workspace: focus.workspace, tab: focus.tab, pane };
+        if focus != self.seen.focus {
+            self.seen.focus = focus;
+            let note = Note::new(Level::Info, "ui", "focus").maybe("project", focus.project);
+            let note = note.maybe("workspace", focus.workspace).maybe("tab", focus.tab);
+            notes.push(note.maybe("pane", focus.pane));
+        }
+    }
+
+    fn observe_overlay(&mut self, notes: &mut Vec<Note>) {
+        let overlay = self.overlay.as_ref().map(super::Overlay::name);
+        if overlay != self.seen.overlay {
+            if let Some(closed) = self.seen.overlay {
+                notes.push(Note::new(Level::Info, "ui", "overlay closed").with("kind", closed));
+            }
+            if let Some(opened) = overlay {
+                notes.push(Note::new(Level::Info, "ui", "overlay opened").with("kind", opened));
+            }
+            self.seen.overlay = overlay;
+        }
+    }
+
+    fn observe_panel(&mut self, notes: &mut Vec<Note>) {
+        let panel = match self.side {
+            Some(Side::Changes) => Some("changes"),
+            Some(Side::Todo) => Some("todo"),
+            Some(Side::Files) => Some("files"),
+            Some(Side::Flow) => Some("flow"),
+            None => None,
+        };
+        if panel != self.seen.panel {
+            let note = Note::new(Level::Info, "ui", "panel").with("shown", panel.unwrap_or("none"));
+            notes.push(note);
+            self.seen.panel = panel;
+        }
+    }
+}
+
+const OPEN: &str = "open";
+
+type Placed<'a> = Vec<(Place, Option<PaneNow<'a>>)>;
+
+fn place_of(kind: Kind, id: u64, parent: Option<u64>, phase: &'static str, ids: Ids) -> Place {
+    Place { key: Key { kind, id }, parent, phase, ids, opener: None }
+}
+
+fn workspace_places<'a>(
+    workspace: &'a Workspace,
+    (project, ids): (u64, Ids),
+    live: &HashSet<u64>,
+    places: &mut Placed<'a>,
+) {
+    let found = place_of(Kind::Workspace, workspace.id, Some(project), phase(&workspace.phase), ids);
+    places.push((found, None));
+    for tab in &workspace.tabs {
+        let ids = Ids { tab: Some(tab.id), ..ids };
+        places.push((place_of(Kind::Tab, tab.id, Some(workspace.id), OPEN, ids), None));
+        places.extend(tab.panes.iter().map(|term| {
+            let ids = Ids { pane: Some(term.id), ..ids };
+            let opener = App::live_parent(term, live);
+            (Place { opener, ..place_of(Kind::Pane, term.id, Some(tab.id), OPEN, ids) }, Some(PaneNow::of(term)))
+        }));
     }
 }
