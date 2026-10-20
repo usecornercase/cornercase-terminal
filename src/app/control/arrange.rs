@@ -197,7 +197,7 @@ impl App {
         if item.done {
             return Err(format!("todo {} is already done, so it is not sent; uncheck it first", todo.id).into());
         }
-        if self.wire.requests.todo_sends.values().any(|sending| sending.todo == todo.id) {
+        if self.clients.requests.todo_sends.values().any(|sending| sending.todo == todo.id) {
             return Err(format!("todo {} is already being sent; wait for its answer", todo.id).into());
         }
         let pane = self.target(asker, todo.pane, todo.tab)?;
@@ -215,7 +215,7 @@ impl App {
             force: todo.force,
             ..control::SendText::default()
         };
-        self.wire.requests.todo_sends.insert(client, super::Sending { todo: todo.id, text, confirmed });
+        self.clients.requests.todo_sends.insert(client, super::Sending { todo: todo.id, text, confirmed });
         self.send_request(client, asker, send, now)
     }
 

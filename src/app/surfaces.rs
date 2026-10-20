@@ -148,12 +148,12 @@ impl App {
         let (tab, area, projection) = self.surface_target(view, surface)?;
         self.refuse_second_stream(client)?;
         let content = self.surface_content(tab, area).ok_or_else(|| none("tab", tab))?;
-        self.wire.surfaces.issued += 1;
-        let id = self.wire.surfaces.issued;
+        self.clients.surfaces.issued += 1;
+        let id = self.clients.surfaces.issued;
         let shown = Shown { surface: id, tab, area, view: projection.map(|p| (view.unwrap_or_default(), p)) };
         let frame = self.surface_frame(shown, 1, content.clone());
         log_opened(client, shown, surface.patches);
-        self.wire.surfaces.subscriptions.push(Subscription {
+        self.clients.surfaces.subscriptions.push(Subscription {
             id,
             client,
             view,
@@ -184,7 +184,7 @@ impl App {
     }
 
     fn refuse_second_stream(&self, client: u64) -> Result<(), Refusal> {
-        match self.wire.surfaces.subscriptions.iter().find(|s| s.client == client) {
+        match self.clients.surfaces.subscriptions.iter().find(|s| s.client == client) {
             Some(own) => {
                 let message =
                     format!("this connection already streams tab {}; open another connection for another tab", own.tab);
@@ -233,7 +233,7 @@ impl App {
     }
 
     fn sub_place_of(&self, view: u64) -> Place {
-        let Some(view) = self.wire.views.get(view) else { return Place::Gone };
+        let Some(view) = self.clients.views.get(view) else { return Place::Gone };
         match (view.eligible(), view.area()) {
             (Some(tab), Some(area)) => Place::At(tab, area, Some(view.projection)),
             _ => Place::Paused(view.why_not()),
@@ -254,7 +254,7 @@ impl App {
             view: shown.view.map(|(view, _)| view),
             projection: shown.view.map(|(_, projection)| projection),
             boot: control::server_token().to_string(),
-            session: self.wire.events.snapshots.revision(),
+            session: self.clients.events.snapshots.revision(),
             revision,
             surface: shown.surface,
             tab: shown.tab,
@@ -268,7 +268,7 @@ impl App {
         self.settle_views();
         let mut out = Vec::new();
         let mut at = 0;
-        while at < self.wire.surfaces.subscriptions.len() {
+        while at < self.clients.surfaces.subscriptions.len() {
             match self.render_surface(at, ready, now) {
                 Rendered::Kept(sent) => {
                     out.extend(sent);
@@ -281,11 +281,11 @@ impl App {
     }
 
     fn render_surface(&mut self, at: usize, ready: &[u64], now: Instant) -> Rendered {
-        let client = self.wire.surfaces.subscriptions[at].client;
-        let (tab, area, projection) = match self.sub_place(&self.wire.surfaces.subscriptions[at]) {
+        let client = self.clients.surfaces.subscriptions[at].client;
+        let (tab, area, projection) = match self.sub_place(&self.clients.surfaces.subscriptions[at]) {
             Place::At(tab, area, projection) => (tab, area, projection),
             Place::Paused(_) => {
-                self.wire.surfaces.subscriptions[at].dirty = false;
+                self.clients.surfaces.subscriptions[at].dirty = false;
                 return Rendered::Kept(None);
             }
             Place::Gone => {
@@ -293,7 +293,7 @@ impl App {
                 return Rendered::Ended((client, Surfaced::End));
             }
         };
-        let sub = &mut self.wire.surfaces.subscriptions[at];
+        let sub = &mut self.clients.surfaces.subscriptions[at];
         let forced = projection.is_some_and(|p| p != sub.projection);
         if !sub.due(now, forced, ready.contains(&client)) {
             return Rendered::Kept(None);
@@ -304,7 +304,7 @@ impl App {
             self.end_surface(at, "bug");
             return Rendered::Ended((client, Surfaced::End));
         };
-        let sub = &mut self.wire.surfaces.subscriptions[at];
+        let sub = &mut self.clients.surfaces.subscriptions[at];
         sub.drawn = now;
         sub.next = now + FRAME_EVERY;
         sub.dirty = false;
@@ -324,7 +324,7 @@ impl App {
         forced: bool,
     ) -> Option<String> {
         let (shown, base, changes) = self.next_frame(at, &content, place, forced)?;
-        let sub = &mut self.wire.surfaces.subscriptions[at];
+        let sub = &mut self.clients.surfaces.subscriptions[at];
         let revision = sub.revision;
         let text = match changes {
             Some(changes) if changes.panes.is_empty() => {
@@ -343,7 +343,7 @@ impl App {
             }
         };
         if text.is_none() {
-            let sub = &mut self.wire.surfaces.subscriptions[at];
+            let sub = &mut self.clients.surfaces.subscriptions[at];
             sub.revision = base;
             sub.frames = sub.frames.saturating_sub(1);
             sub.wants = Wants::Complete;
@@ -359,7 +359,7 @@ impl App {
         forced: bool,
     ) -> Option<(Shown, u64, Option<patch::Changes>)> {
         let (tab, area, view) = place;
-        let sub = &mut self.wire.surfaces.subscriptions[at];
+        let sub = &mut self.clients.surfaces.subscriptions[at];
         let redraw = sub.wants == Wants::Redraw;
         let wants = std::mem::take(&mut sub.wants);
         if !forced && !redraw && *content == sub.last {
@@ -396,7 +396,7 @@ impl App {
             let message = format!("`{name}` needs the surface: pass --surface");
             return Err(Refusal::new(Code::Malformed, message));
         };
-        self.wire.surfaces.subscriptions.iter_mut().find(|sub| sub.id == id).ok_or_else(|| {
+        self.clients.surfaces.subscriptions.iter_mut().find(|sub| sub.id == id).ok_or_else(|| {
             Refusal::new(
                 Code::NotFound,
                 format!("there is no surface {id}: its stream ended, or it belongs to an earlier start of the server"),
@@ -431,23 +431,23 @@ impl App {
     }
 
     fn end_surface(&mut self, at: usize, reason: &str) {
-        let sub = self.wire.surfaces.subscriptions.remove(at);
+        let sub = self.clients.surfaces.subscriptions.remove(at);
         log::info!("control", "surface ended", client = sub.client, reason = reason, frames = sub.frames);
     }
 
     pub(crate) fn touch_surfaces(&mut self) {
-        self.wire.surfaces.subscriptions.iter_mut().for_each(|sub| sub.dirty = true);
+        self.clients.surfaces.subscriptions.iter_mut().for_each(|sub| sub.dirty = true);
     }
 
     pub(super) fn surface_printed(&mut self, pane: u64) {
-        if self.wire.surfaces.subscriptions.is_empty() {
+        if self.clients.surfaces.subscriptions.is_empty() {
             return;
         }
         let Some((_, tab)) = self.projects.tab_with_pane(pane) else { return };
         let id = tab.id;
-        let places: Vec<Place> = self.wire.surfaces.subscriptions.iter().map(|sub| self.sub_place(sub)).collect();
+        let places: Vec<Place> = self.clients.surfaces.subscriptions.iter().map(|sub| self.sub_place(sub)).collect();
         let Some((_, tab)) = self.projects.tab_with_pane(pane) else { return };
-        for (sub, place) in self.wire.surfaces.subscriptions.iter_mut().zip(places) {
+        for (sub, place) in self.clients.surfaces.subscriptions.iter_mut().zip(places) {
             if let Place::At(on, area, _) = place
                 && on == id
                 && tab.shown(area).iter().any(|(shown, _)| *shown == pane)
@@ -458,7 +458,7 @@ impl App {
     }
 
     pub(super) fn surface_wake(&self, now: Instant) -> Option<Duration> {
-        self.wire
+        self.clients
             .surfaces
             .subscriptions
             .iter()
@@ -468,11 +468,11 @@ impl App {
     }
 
     pub(crate) fn streams_surfaces(&self) -> bool {
-        !self.wire.surfaces.subscriptions.is_empty()
+        !self.clients.surfaces.subscriptions.is_empty()
     }
 
     pub(in crate::app) fn forget_surfaces(&mut self, client: u64) {
-        if let Some(at) = self.wire.surfaces.subscriptions.iter().position(|sub| sub.client == client) {
+        if let Some(at) = self.clients.surfaces.subscriptions.iter().position(|sub| sub.client == client) {
             self.end_surface(at, "client left");
         }
     }

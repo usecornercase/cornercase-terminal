@@ -68,8 +68,8 @@ impl App {
             return self.add_queue_now(edit, &mut prepared);
         }
         if let Some(client) = client {
-            let key = self.wire.requests.key();
-            self.wire.requests.push(
+            let key = self.clients.requests.key();
+            self.clients.requests.push(
                 client,
                 key,
                 Waits { done: control::Done::default(), stage: Stage::Reading, timeout: None },
@@ -141,7 +141,7 @@ impl App {
     }
 
     pub(in crate::app) fn queue_reply(&mut self, client: u64, reply: Result<u64, String>) {
-        self.wire.requests.pending.retain(|pending| pending.client != Some(client));
+        self.clients.requests.pending.retain(|pending| pending.client != Some(client));
         self.answer(Some(client), reply.map(|id| json!({ "id": id })));
     }
 

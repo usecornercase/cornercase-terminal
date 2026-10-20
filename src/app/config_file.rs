@@ -111,6 +111,6 @@ impl App {
 
     pub(super) fn settings_changed(&mut self) {
         self.config_file.revision += 1;
-        self.wire.events.snapshots.changed = true;
+        self.clients.events.snapshots.changed = true;
     }
 }

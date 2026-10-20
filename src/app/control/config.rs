@@ -153,7 +153,7 @@ impl App {
 
     fn config_secret(&mut self, client: u64, secret: &SecretChange) -> Handled {
         let action = self.settings_model(Page::default()).secret(&secret.key, &secret.value).map_err(refusal)?;
-        let key = self.wire.requests.key();
+        let key = self.clients.requests.key();
         match action {
             Action::CheckToken(source, token) => self.check_token_for(source, token, Some(key)),
             Action::CheckBot(via, token) => self.check_messenger_for(via, token, Some(key)),
@@ -161,12 +161,12 @@ impl App {
         }
         let pending =
             Pending { client: Some(client), key, timeout: None, done: Done::default(), stage: Stage::Reading };
-        self.wire.requests.pending.push(pending);
+        self.clients.requests.pending.push(pending);
         Ok(None)
     }
 
     pub(in crate::app) fn secret_answered(&mut self, key: u64, result: Result<String, String>) {
-        let Some(pending) = self.wire.requests.take(key) else { return };
+        let Some(pending) = self.clients.requests.take(key) else { return };
         let reply = match result {
             Ok(notice) => Ok(json(&self.described(vec![notice]))),
             Err(e) => Err(failed(e)),

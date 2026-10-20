@@ -185,7 +185,7 @@ impl App {
             .into());
         };
         let record = term.context.record_for(agent).ok_or_else(|| unfound(pane, agent))?;
-        let key = self.wire.requests.key();
+        let key = self.clients.requests.key();
         let job = Job::new(Level::Debug, "control", "last message").with("pane", pane).with("agent", agent.name());
         self.spawn_job(
             job,
@@ -196,7 +196,7 @@ impl App {
             },
         );
         let done = Done { agent: Some(agent.name().to_string()), ..pane_ids(pane) };
-        self.wire.requests.pending.push(Pending {
+        self.clients.requests.pending.push(Pending {
             client: Some(client),
             key,
             timeout: None,
@@ -207,7 +207,7 @@ impl App {
     }
 
     pub(in crate::app) fn message_read(&mut self, key: u64, result: error::Result<Option<context::Said>>) {
-        let Some(mut pending) = self.wire.requests.take(key) else { return };
+        let Some(mut pending) = self.clients.requests.take(key) else { return };
         let pane = pending.done.ids.pane.unwrap_or_default();
         let agent = pending.done.agent.clone().unwrap_or_default();
         let reply = match result {

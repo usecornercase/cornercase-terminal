@@ -71,7 +71,7 @@ fn a_send_waits_for_the_persons_draft_and_follows_it() {
 fn recent_typing_holds_a_send_for_a_moment() {
     let (mut app, rx) = app();
     let id = cat_pane(&mut app, &rx);
-    app.wire.typing_holds = Duration::from_millis(300);
+    app.clients.typing_holds = Duration::from_millis(300);
     type_text(&mut app, "x");
     send_key(&mut app, KeyCode::Char('u'), KeyModifiers::CONTROL);
     let typed = Instant::now();

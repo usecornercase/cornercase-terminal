@@ -173,7 +173,7 @@ impl App {
         let dropped: Vec<_> = self.agents.launches.iter().filter(|l| panes.contains(&l.term)).map(|l| l.key).collect();
         self.agents.launches.retain(|l| !panes.contains(&l.term));
         for key in dropped.iter().flatten() {
-            self.wire.requests.launched(*key, false);
+            self.clients.requests.launched(*key, false);
         }
         let ended = self.runs.iter().filter(|r| r.workspace == workspace).count();
         self.runs.retain(|r| r.workspace != workspace);

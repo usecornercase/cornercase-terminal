@@ -25,10 +25,10 @@ impl App {
                 (key, answers)
             })
             .collect();
-        let key = self.wire.requests.key();
+        let key = self.clients.requests.key();
         let pending =
             Pending { client: Some(client), key, timeout: None, done: Done::default(), stage: Stage::Usage(waiting) };
-        self.wire.requests.pending.push(pending);
+        self.clients.requests.pending.push(pending);
         None
     }
 

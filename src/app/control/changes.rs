@@ -64,7 +64,7 @@ fn read_file(place: &Place, mode: Mode, path: &str) -> Result<Option<Arc<File>>>
 impl App {
     fn reading(&mut self, client: u64, key: u64) {
         let done = crate::control::Done::default();
-        self.wire.requests.pending.push(Pending {
+        self.clients.requests.pending.push(Pending {
             client: Some(client),
             key,
             timeout: None,
@@ -108,7 +108,7 @@ impl App {
     }
 
     pub(super) fn changes_request(&mut self, client: u64, asker: Asker, request: &Changes) -> Handled {
-        if self.wire.change_streams.open.iter().any(|s| s.client == client) {
+        if self.clients.change_streams.open.iter().any(|s| s.client == client) {
             return Err(conflict("this connection already follows changes; open another connection for another scope"));
         }
         let workspace = match request.scope {
@@ -120,11 +120,11 @@ impl App {
                 None
             }
         };
-        self.wire.change_streams.issued += 1;
+        self.clients.change_streams.issued += 1;
         let targets = if workspace.is_none() { self.every_targets() } else { Vec::new() };
         let content = self.change_content(request.scope, workspace, request.mode, &targets);
         let stream = Stream {
-            id: self.wire.change_streams.issued,
+            id: self.clients.change_streams.issued,
             client,
             scope: request.scope,
             workspace,
@@ -142,15 +142,16 @@ impl App {
             workspace = workspace.unwrap_or_default(),
             mode = request.mode.name()
         );
-        self.wire.change_streams.open.push(stream);
-        self.panels.changes.follow(self.wire.change_streams.followed());
-        self.wire.change_streams.changed = true;
+        self.clients.change_streams.open.push(stream);
+        self.panels.changes.follow(self.clients.change_streams.followed());
+        self.clients.change_streams.changed = true;
         Ok(Some(json(&summary)))
     }
 
     pub(super) fn changes_mode_request(&mut self, client: u64, request: &ChangesMode) -> Handled {
         let id = request.stream.ok_or_else(|| malformed("`changes-mode` needs the stream to change: pass --stream"))?;
-        let Some(stream) = self.wire.change_streams.open.iter_mut().find(|s| s.id == id && s.client == client) else {
+        let Some(stream) = self.clients.change_streams.open.iter_mut().find(|s| s.id == id && s.client == client)
+        else {
             return Err(Refusal::new(Code::NotFound, format!("there is no changes stream {id} on this connection")));
         };
         if stream.scope == Scope::Every && request.mode != Mode::Uncommitted {
@@ -158,8 +159,8 @@ impl App {
         }
         stream.mode = request.mode;
         let following = Following { stream: id, scope: stream.scope, workspace: stream.workspace, mode: stream.mode };
-        self.panels.changes.follow(self.wire.change_streams.followed());
-        self.wire.change_streams.changed = true;
+        self.panels.changes.follow(self.clients.change_streams.followed());
+        self.clients.change_streams.changed = true;
         Ok(Some(json(&following)))
     }
 
@@ -176,7 +177,7 @@ impl App {
             let viewed = self.panels.changes.viewed(place.id, &file);
             return Ok(Some(json(&Patch::of(place.id, mode, &file, viewed))));
         }
-        let key = self.wire.requests.key();
+        let key = self.clients.requests.key();
         let (workspace, path) = (place.id, request.path.clone());
         let reading = path.clone();
         let job = Job::new(Level::Debug, "changes", "file").with("workspace", workspace);
@@ -207,7 +208,7 @@ impl App {
     }
 
     fn answer_read(&mut self, key: u64, reply: impl FnOnce(&mut Self) -> Answer) {
-        let Some(pending) = self.wire.requests.take(key) else { return };
+        let Some(pending) = self.clients.requests.take(key) else { return };
         let reply = reply(self);
         self.refuse_or_answer(pending.client, reply);
     }
@@ -222,7 +223,7 @@ impl App {
         let place = self.changes_place(asker, request.workspace)?;
         let (mode, hunk) = (request.mode, request.hunk);
         let live = self.live_file(&place, mode, &request.path, now)?;
-        let key = self.wire.requests.key();
+        let key = self.clients.requests.key();
         let (workspace, path) = (place.id, request.path.clone());
         let job = Job::new(Level::Debug, "changes", "gap").with("workspace", workspace);
         let read = path.clone();
@@ -264,7 +265,7 @@ impl App {
             (None, false) => BaseChange::Read,
         };
         let place = self.changes_place(asker, request.workspace)?;
-        let key = self.wire.requests.key();
+        let key = self.clients.requests.key();
         let workspace = place.id;
         let job = Job::new(Level::Debug, "changes", "branches").with("workspace", workspace);
         self.spawn_job(
@@ -283,7 +284,7 @@ impl App {
         change: &BaseChange,
         listed: Result<Listed>,
     ) {
-        let Some(pending) = self.wire.requests.take(key) else { return };
+        let Some(pending) = self.clients.requests.take(key) else { return };
         let reply = match listed {
             Err(e) => Err(Refusal::from(format!("cannot list the branches: {e}"))),
             Ok((branches, default)) => self
@@ -328,7 +329,7 @@ impl App {
             Some(wire::parse_digest(text).ok_or_else(|| malformed("a digest is 16 hexadecimal digits"))?)
         };
         self.panels.changes.set_viewed(place.id, &request.path, digest);
-        self.wire.change_streams.changed = true;
+        self.clients.change_streams.changed = true;
         Ok(Some(json(&Viewed { workspace: place.id, path: request.path.clone(), viewed: !request.clear })))
     }
 }

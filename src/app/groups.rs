@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use ratatui::layout::Position;
 
@@ -17,7 +17,7 @@ use super::queue_panel::QueueRuntime;
 use super::star_prompt::StarPrompt;
 use super::toast::Toast;
 use super::worktrees::Upstream;
-use super::{changes_panel, control, events, flow_panel, merged_pull_requests, pull_requests, surfaces, trace, views};
+use super::{flow_panel, merged_pull_requests, pull_requests};
 
 #[derive(Default)]
 pub(super) struct Screen {
@@ -82,32 +82,6 @@ impl Paths {
             default_homes: None,
             config_path,
             home,
-        }
-    }
-}
-
-pub(super) struct Wire {
-    pub(super) requests: control::Requests,
-    pub(super) events: events::Events,
-    pub(super) change_streams: changes_panel::Streams,
-    pub(super) surfaces: surfaces::Surfaces,
-    pub(super) views: views::Views,
-    pub(super) seen: trace::Seen,
-    pub(super) confirm_within: Duration,
-    pub(super) typing_holds: Duration,
-}
-
-impl Default for Wire {
-    fn default() -> Self {
-        Self {
-            requests: control::Requests::default(),
-            events: events::Events::default(),
-            change_streams: changes_panel::Streams::default(),
-            surfaces: surfaces::Surfaces::default(),
-            views: views::Views::default(),
-            seen: trace::Seen::default(),
-            confirm_within: control::CONFIRM_WITHIN,
-            typing_holds: control::INPUT_HOLDS,
         }
     }
 }

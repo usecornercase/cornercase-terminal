@@ -119,13 +119,13 @@ impl App {
     pub(in crate::app) fn check_requests(&mut self, now: Instant) {
         self.settle_drafts(now);
         self.release_held(now);
-        let launched = std::mem::take(&mut self.wire.requests.launched);
+        let launched = std::mem::take(&mut self.clients.requests.launched);
         let mut kept = Vec::new();
-        for pending in std::mem::take(&mut self.wire.requests.pending) {
+        for pending in std::mem::take(&mut self.clients.requests.pending) {
             kept.extend(self.settle(pending, &launched, now));
         }
-        kept.append(&mut self.wire.requests.pending);
-        self.wire.requests.pending = kept;
+        kept.append(&mut self.clients.requests.pending);
+        self.clients.requests.pending = kept;
         self.show_pending_restart(now);
     }
 
@@ -171,7 +171,7 @@ impl App {
         }
         let (confirm, wait) = (confirm.take(), wait.take());
         let next = match confirm {
-            Some(since) => Some(Stage::Confirm(Confirm { pane, since, by: now + self.wire.confirm_within, wait })),
+            Some(since) => Some(Stage::Confirm(Confirm { pane, since, by: now + self.clients.confirm_within, wait })),
             None => wait.map(|until| Stage::Watch(self.watch(pane, until, now))),
         };
         match next {
@@ -308,7 +308,7 @@ impl App {
             return Some(Ok(()));
         }
         if holds_prompts(term.agent.agent().and_then(agents::Known::of), term.agent.status()) {
-            confirm.by = confirm.by.max(now + self.wire.confirm_within);
+            confirm.by = confirm.by.max(now + self.clients.confirm_within);
         }
         (now >= confirm.by).then(|| Err(not_confirmed(pane)))
     }
@@ -343,7 +343,7 @@ impl App {
     }
 
     pub(in crate::app) fn next_request(&self, now: Instant) -> Option<Duration> {
-        let due = self.wire.requests.pending.iter().flat_map(|pending| {
+        let due = self.clients.requests.pending.iter().flat_map(|pending| {
             let deadline = pending.timeout.filter(|_| pending.client.is_some()).map(|(at, _)| at);
             let watches: Vec<&Watch> = match &pending.stage {
                 Stage::Watch(watch) => vec![watch],
@@ -410,10 +410,10 @@ impl App {
         let timeout = deadline(wait.timeout, now)?;
         let until = Condition::of(wait.until)?;
         self.can_wait(asker.caller, pane, &until)?;
-        let key = self.wire.requests.key();
+        let key = self.clients.requests.key();
         let watch = self.watch(pane, until, now);
         let pending = Pending { client: Some(client), key, timeout, done: pane_ids(pane), stage: Stage::Watch(watch) };
-        self.wire.requests.pending.push(pending);
+        self.clients.requests.pending.push(pending);
         Ok(None)
     }
 
@@ -445,9 +445,15 @@ impl App {
             let stage = Stage::Watch(self.watch(id, until, now));
             parts.push(Pending { client: None, key: 0, timeout: None, done, stage });
         }
-        let key = self.wire.requests.key();
+        let key = self.clients.requests.key();
         let stage = Stage::Several { all: wait.all, parts };
-        self.wire.requests.pending.push(Pending { client: Some(client), key, timeout, done: Done::default(), stage });
+        self.clients.requests.pending.push(Pending {
+            client: Some(client),
+            key,
+            timeout,
+            done: Done::default(),
+            stage,
+        });
         Ok(None)
     }
 }

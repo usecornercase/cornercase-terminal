@@ -7,7 +7,7 @@ use crate::test_util::git;
 
 fn started(repo: &TempDir) -> (App, Receiver<AppEvent>) {
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.wire.change_streams.every = Duration::ZERO;
+    app.clients.change_streams.every = Duration::ZERO;
     (app, rx)
 }
 
@@ -392,7 +392,7 @@ fn a_stream_can_only_be_changed_by_the_connection_that_opened_it() {
 
     let refusal = reply_of(&reply).expect_err("refused");
     assert_eq!(refusal.code, "not-found");
-    assert_eq!(app.wire.change_streams.open[0].mode, Mode::Uncommitted);
+    assert_eq!(app.clients.change_streams.open[0].mode, Mode::Uncommitted);
     ok(&mut app, "changes-mode", &json!({"stream": 1, "mode": "all"}));
-    assert_eq!(app.wire.change_streams.open[0].mode, Mode::All);
+    assert_eq!(app.clients.change_streams.open[0].mode, Mode::All);
 }

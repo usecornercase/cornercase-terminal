@@ -258,8 +258,8 @@ fn changes(before: Place, now: Place) -> Vec<Change> {
 
 impl App {
     pub(crate) fn trace(&mut self) {
-        self.wire.events.snapshots.changed = true;
-        self.wire.change_streams.changed = true;
+        self.clients.events.snapshots.changed = true;
+        self.clients.change_streams.changed = true;
         self.trace_refresh();
     }
 
@@ -280,7 +280,7 @@ impl App {
         if logged {
             notes.iter().for_each(Note::write);
         }
-        self.wire.events.publish(&events);
+        self.clients.events.publish(&events);
         self.run_hooks(&events);
     }
 
@@ -353,7 +353,7 @@ impl App {
     }
 
     fn observe_items(&mut self) -> Vec<Change> {
-        let mut old = std::mem::take(&mut self.wire.seen.items).into_iter().peekable();
+        let mut old = std::mem::take(&mut self.seen.items).into_iter().peekable();
         let (mut closed, mut changed, mut items) = (Vec::new(), Vec::new(), Vec::new());
         for (place, pane) in self.traced_places() {
             closed.extend(std::iter::from_fn(|| old.next_if(|item| item.place.key < place.key)).map(Item::closed));
@@ -373,7 +373,7 @@ impl App {
         closed.extend(old.map(Item::closed));
         closed.reverse();
         closed.append(&mut changed);
-        self.wire.seen.items = items;
+        self.seen.items = items;
         closed
     }
 
@@ -383,18 +383,18 @@ impl App {
         self.observe_overlay(&mut notes);
         self.observe_panel(&mut notes);
         let full = self.file_full_screen();
-        if full != self.wire.seen.full {
+        if full != self.seen.full {
             let text = if full { "file shown full screen" } else { "file back in its panel" };
             notes.push(Note::new(Level::Info, "ui", text));
-            self.wire.seen.full = full;
+            self.seen.full = full;
         }
         let menu = self.screen.nav.is_some();
-        if menu != self.wire.seen.menu {
+        if menu != self.seen.menu {
             notes.push(Note::new(Level::Info, "ui", if menu { "compact menu opened" } else { "compact menu closed" }));
-            self.wire.seen.menu = menu;
+            self.seen.menu = menu;
         }
-        if self.messages.toast != self.wire.seen.toast {
-            self.wire.seen.toast.clone_from(&self.messages.toast);
+        if self.messages.toast != self.seen.toast {
+            self.seen.toast.clone_from(&self.messages.toast);
             if let Some(toast) = self.messages.toast.as_ref().filter(|toast| toast.icon == ui::ToastIcon::Bug) {
                 notes.push(Note::new(Level::Warn, "ui", "error shown").with("text", &toast.message));
             }
@@ -406,8 +406,8 @@ impl App {
         let focus = self.focus();
         let pane = self.tab().and_then(|tab| tab.pane()).map(|term| term.id);
         let focus = Focus { project: focus.project, workspace: focus.workspace, tab: focus.tab, pane };
-        if focus != self.wire.seen.focus {
-            self.wire.seen.focus = focus;
+        if focus != self.seen.focus {
+            self.seen.focus = focus;
             let note = Note::new(Level::Info, "ui", "focus").maybe("project", focus.project);
             let note = note.maybe("workspace", focus.workspace).maybe("tab", focus.tab);
             notes.push(note.maybe("pane", focus.pane));
@@ -416,14 +416,14 @@ impl App {
 
     fn observe_overlay(&mut self, notes: &mut Vec<Note>) {
         let overlay = self.overlay.as_ref().map(super::Overlay::name);
-        if overlay != self.wire.seen.overlay {
-            if let Some(closed) = self.wire.seen.overlay {
+        if overlay != self.seen.overlay {
+            if let Some(closed) = self.seen.overlay {
                 notes.push(Note::new(Level::Info, "ui", "overlay closed").with("kind", closed));
             }
             if let Some(opened) = overlay {
                 notes.push(Note::new(Level::Info, "ui", "overlay opened").with("kind", opened));
             }
-            self.wire.seen.overlay = overlay;
+            self.seen.overlay = overlay;
         }
     }
 
@@ -435,10 +435,10 @@ impl App {
             Some(Side::Flow) => Some("flow"),
             None => None,
         };
-        if panel != self.wire.seen.panel {
+        if panel != self.seen.panel {
             let note = Note::new(Level::Info, "ui", "panel").with("shown", panel.unwrap_or("none"));
             notes.push(note);
-            self.wire.seen.panel = panel;
+            self.seen.panel = panel;
         }
     }
 }

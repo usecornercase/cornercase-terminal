@@ -34,7 +34,7 @@ fn notices(w: &mut Watched) -> Vec<serde_json::Value> {
 }
 
 fn listen(w: &mut Watched) {
-    w.app.wire.events.subscribe(READER, Vec::new(), false, true);
+    w.app.clients.events.subscribe(READER, Vec::new(), false, true);
 }
 
 #[rstest]
@@ -80,7 +80,7 @@ fn a_view_without_a_size_or_inactive_or_hidden_sees_nothing(#[case] view: OpenVi
 fn each_notice_reaches_the_readers_that_asked_once_per_settle() {
     let mut w = Watched::start(agents::Known::Claude, true);
     listen(&mut w);
-    w.app.wire.events.subscribe(READER + 1, Vec::new(), false, false);
+    w.app.clients.events.subscribe(READER + 1, Vec::new(), false, false);
 
     w.report("waiting", 6);
     let token = w.token().expect("a token");

@@ -148,7 +148,7 @@ impl App {
         starting.branch = self.flow_branch(p, project, &starting)?;
         let branch = starting.branch.clone();
         let busy = |pending: &Pending| matches!(&pending.stage, Stage::Run(other, starting) if *other == project && starting.branch == branch);
-        if self.wire.requests.pending.iter().any(busy) {
+        if self.clients.requests.pending.iter().any(busy) {
             return Err(format!("a flow is already starting on branch {branch}").into());
         }
         let existing = self.workspace_on(p, &branch);
@@ -168,14 +168,14 @@ impl App {
                 return Ok(Some(json(&self.open_run((p, w), starting, area, false)?)));
             }
         }
-        let key = self.wire.requests.key();
+        let key = self.clients.requests.key();
         let path = self.projects[p].path.clone();
         let made = existing
             .is_none()
             .then(|| worktree::checkout_path(&self.config.worktrees_dir(self.paths.home.as_deref()), &path, &branch));
         self.spawn_run_worktrees(p, RunTrees { run: made, branch, roles }, key);
         let stage = Stage::Run(project, Box::new(starting));
-        self.wire.requests.pending.push(Pending { client, key, timeout: None, done: Done::default(), stage });
+        self.clients.requests.pending.push(Pending { client, key, timeout: None, done: Done::default(), stage });
         Ok(None)
     }
 
@@ -192,9 +192,10 @@ impl App {
         result: error::Result<Made>,
         area: Rect,
     ) {
-        let found = self.wire.requests.pending.iter().position(|p| p.key == key && matches!(p.stage, Stage::Run(..)));
+        let found =
+            self.clients.requests.pending.iter().position(|p| p.key == key && matches!(p.stage, Stage::Run(..)));
         let Some(i) = found else { return };
-        let pending = self.wire.requests.pending.remove(i);
+        let pending = self.clients.requests.pending.remove(i);
         if let Stage::Run(_, starting) = pending.stage {
             self.flow_worktree_ready(Opening { client: pending.client, project, area }, result, *starting);
         }
@@ -295,7 +296,7 @@ impl Branches<'_> {
 
     fn starting_on(&self, b: &str) -> bool {
         let on = |pending: &Pending| matches!(&pending.stage, Stage::Run(other, s) if *other == self.project && s.branch == b);
-        self.app.wire.requests.pending.iter().any(on)
+        self.app.clients.requests.pending.iter().any(on)
     }
 
     fn taken(&self, b: &str) -> bool {

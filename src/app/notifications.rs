@@ -103,7 +103,7 @@ impl App {
         let event = notice_event(token, &notice, said.sound);
         self.messages.notices.sent.push_back(notice);
         self.messages.toast = Some(toast);
-        self.wire.events.publish(&[event]);
+        self.clients.events.publish(&[event]);
     }
 
     fn alert_windows(&mut self, message: &str, token: &str) {

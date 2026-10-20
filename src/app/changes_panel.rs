@@ -88,7 +88,7 @@ impl App {
             ChangesEvent::Loaded { workspace, generation, request, result } => {
                 self.panels.changes.loaded(workspace, generation, &request, result);
                 if (self.changes_shown() && self.panels.changes.scope == changes::Scope::Every)
-                    || !self.wire.change_streams.is_empty()
+                    || !self.clients.change_streams.is_empty()
                 {
                     self.refresh_changes(Instant::now());
                 }
@@ -123,7 +123,7 @@ impl App {
     pub(super) fn refresh_changes(&mut self, now: Instant) {
         self.end_gone_streams();
         let tui_every = self.panels.changes.scope == changes::Scope::Every && self.changes_shown();
-        let every = tui_every || self.wire.change_streams.wants_every();
+        let every = tui_every || self.clients.change_streams.wants_every();
         let targets = if every { self.every_targets() } else { Vec::new() };
         let request =
             if tui_every { self.panels.changes.request_every(&targets, now) } else { self.project_request(now) };
@@ -146,7 +146,7 @@ impl App {
     }
 
     fn feed_request(&mut self, now: Instant) -> Option<(u64, u64, changes::git::Request)> {
-        let mut followed: Vec<_> = self.wire.change_streams.followed().into_iter().collect();
+        let mut followed: Vec<_> = self.clients.change_streams.followed().into_iter().collect();
         followed.sort_by_key(|(workspace, mode)| (*workspace, mode.name()));
         let wanted: Vec<(Checkout, Mode)> = followed
             .into_iter()

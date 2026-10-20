@@ -21,8 +21,8 @@ mod answer_lost_requests {
             done: Done::default(),
             stage: Stage::Removing { force: false, unlock: false },
         };
-        app.wire.requests.pending.push(removing);
-        app.wire.requests.open.extend([1, 2]);
+        app.clients.requests.pending.push(removing);
+        app.clients.requests.open.extend([1, 2]);
 
         app.answer_lost_requests();
 
@@ -40,11 +40,11 @@ mod forget {
         let (tx, _rx) = mpsc::channel();
         let mut app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), tx);
         let reading = Pending { client: Some(1), key: 1, timeout: None, done: pane_ids(4), stage: Stage::Reading };
-        app.wire.requests.pending.push(reading);
-        app.wire.requests.open.push(1);
+        app.clients.requests.pending.push(reading);
+        app.clients.requests.open.push(1);
 
         app.forget(1);
-        let left = app.wire.requests.pending.len();
+        let left = app.clients.requests.pending.len();
         app.message_read(1, Ok(Some(context::Said { text: "Done.".into(), written: None })));
 
         assert_eq!((left, app.take_answers()), (0, Vec::new()));
@@ -60,12 +60,12 @@ mod checks {
         let (tx, _rx) = mpsc::channel();
         let mut app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), tx);
         let checking = Pending { client: Some(1), key: 1, timeout: None, done: Done::default(), stage: Stage::Check };
-        app.wire.requests.pending.push(checking);
-        app.wire.requests.open.push(1);
+        app.clients.requests.pending.push(checking);
+        app.clients.requests.open.push(1);
 
         app.forget(1);
 
-        assert_eq!(app.wire.requests.pending.len(), 0);
+        assert_eq!(app.clients.requests.pending.len(), 0);
     }
 }
 
@@ -82,8 +82,8 @@ mod forgotten_checks {
         app.open_here(Rect::new(0, 0, 120, 40)).expect("open the project");
         let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
         let checking = Pending { client: Some(1), key: 1, timeout: None, done: Done::default(), stage: Stage::Check };
-        app.wire.requests.pending.push(checking);
-        app.wire.requests.open.push(1);
+        app.clients.requests.pending.push(checking);
+        app.clients.requests.open.push(1);
         app.forget(1);
 
         app.removal_checked(1, project, workspace, &Status::default());

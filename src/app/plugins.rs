@@ -139,7 +139,7 @@ impl App {
     }
 
     pub(super) fn following(&self) -> bool {
-        self.wire.events.listening() || self.plugins.hooked()
+        self.clients.events.listening() || self.plugins.hooked()
     }
 
     pub(super) fn watch_plugins(&mut self, now: Instant) {

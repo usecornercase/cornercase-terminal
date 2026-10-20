@@ -63,16 +63,16 @@ pub(in crate::app) fn summary_of(stream: &Stream, content: Content) -> Summary {
 
 impl App {
     pub(in crate::app) fn forget_change_streams(&mut self, client: u64) {
-        let before = self.wire.change_streams.open.len();
-        self.wire.change_streams.open.retain(|s| s.client != client);
-        if self.wire.change_streams.open.len() != before {
-            self.panels.changes.follow(self.wire.change_streams.followed());
+        let before = self.clients.change_streams.open.len();
+        self.clients.change_streams.open.retain(|s| s.client != client);
+        if self.clients.change_streams.open.len() != before {
+            self.panels.changes.follow(self.clients.change_streams.followed());
         }
     }
 
     pub(in crate::app) fn end_gone_streams(&mut self) {
         let gone: Vec<usize> = self
-            .wire
+            .clients
             .change_streams
             .open
             .iter()
@@ -84,7 +84,7 @@ impl App {
             return;
         }
         for i in gone.into_iter().rev() {
-            let stream = self.wire.change_streams.open.remove(i);
+            let stream = self.clients.change_streams.open.remove(i);
             log::info!(
                 "control",
                 "changes ended",
@@ -92,9 +92,9 @@ impl App {
                 stream = stream.id,
                 reason = "workspace gone"
             );
-            self.wire.events.push(stream.client, Streamed::End);
+            self.clients.events.push(stream.client, Streamed::End);
         }
-        self.panels.changes.follow(self.wire.change_streams.followed());
+        self.panels.changes.follow(self.clients.change_streams.followed());
     }
 
     fn change_workspace_usable(&self, workspace: u64) -> bool {
@@ -168,7 +168,7 @@ impl App {
     }
 
     pub(in crate::app) fn publish_change_streams(&mut self, targets: &[(Checkout, bool)], now: Instant) {
-        let streams = &mut self.wire.change_streams;
+        let streams = &mut self.clients.change_streams;
         if streams.open.is_empty() {
             streams.changed = false;
             return;
@@ -178,7 +178,7 @@ impl App {
         }
         streams.built = Some(now);
         streams.changed = false;
-        let mut list = std::mem::take(&mut self.wire.change_streams.open);
+        let mut list = std::mem::take(&mut self.clients.change_streams.open);
         for stream in &mut list {
             let content = self.change_content(stream.scope, stream.workspace, stream.mode, targets);
             if stream.last.as_ref() == Some(&content) {
@@ -196,10 +196,10 @@ impl App {
                 files = summary.content.workspaces.iter().map(|w| w.files.len()).sum::<usize>(),
                 bytes = text.len()
             );
-            self.wire.events.push(stream.client, Streamed::Snapshot(text));
+            self.clients.events.push(stream.client, Streamed::Snapshot(text));
         }
-        list.append(&mut self.wire.change_streams.open);
-        self.wire.change_streams.open = list;
+        list.append(&mut self.clients.change_streams.open);
+        self.clients.change_streams.open = list;
     }
 
     pub(in crate::app) fn changes_count(
@@ -225,8 +225,14 @@ impl App {
             let mode = if every { Mode::Uncommitted } else { self.panels.changes.mode };
             return model.and_then(changes::Model::diff).map(|d| counted(d, mode));
         }
-        let mut modes: Vec<Mode> =
-            self.wire.change_streams.open.iter().filter(|s| s.workspace == Some(workspace)).map(|s| s.mode).collect();
+        let mut modes: Vec<Mode> = self
+            .clients
+            .change_streams
+            .open
+            .iter()
+            .filter(|s| s.workspace == Some(workspace))
+            .map(|s| s.mode)
+            .collect();
         modes.sort_by_key(|m| *m != Mode::Uncommitted);
         if let Some(mode) = modes.first() {
             return self

@@ -49,7 +49,7 @@ impl App {
             caller: caller.filter(|id| self.projects.tab_of_pane(*id).is_some()),
             live: self.pane_ids(),
             counted: self.changes_target().map(|t| t.workspace),
-            sweeping: self.wire.change_streams.wants_every(),
+            sweeping: self.clients.change_streams.wants_every(),
         };
         Report {
             version: version::CURRENT.to_string(),
@@ -243,7 +243,7 @@ impl App {
             return Err(none("pane", *pane));
         }
         self.publish(log::enabled(Level::Info));
-        self.wire.events.subscribe(client, events.panes, events.host, events.notices);
+        self.clients.events.subscribe(client, events.panes, events.host, events.notices);
         Ok(Some(json(&Done::default())))
     }
 }

@@ -238,7 +238,7 @@ impl App {
         }
         let reply = Ok(json(&self.accounts_info(None)));
         for key in std::mem::take(&mut self.logins.waiting) {
-            if let Some(pending) = self.wire.requests.take(key) {
+            if let Some(pending) = self.clients.requests.take(key) {
                 self.refuse_or_answer(pending.client, reply.clone());
             }
         }
@@ -249,7 +249,7 @@ impl App {
         if !list.check || !self.check_logins() {
             return Some(json(&self.accounts_info(None)));
         }
-        let key = self.wire.requests.key();
+        let key = self.clients.requests.key();
         self.pend_reading(client, key);
         self.logins.waiting.push(key);
         None

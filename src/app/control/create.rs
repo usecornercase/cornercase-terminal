@@ -275,10 +275,10 @@ impl App {
         if !git::is_repo_root(&project.path) {
             return Err(format!("project {} is not the root of a git repository, so it has no worktrees", project.id));
         }
-        let key = self.wire.requests.key();
+        let key = self.clients.requests.key();
         self.spawn_worktree(p, branch.to_string(), None, Some(key));
         let waits = Waits { done: Done::default(), stage: Stage::Worktree(then), timeout };
-        self.wire.requests.push(client, key, waits);
+        self.clients.requests.push(client, key, waits);
         Ok(())
     }
 
@@ -290,14 +290,14 @@ impl App {
         area: Rect,
     ) {
         let found =
-            self.wire.requests.pending.iter().position(|p| p.key == key && matches!(p.stage, Stage::Worktree(_)));
+            self.clients.requests.pending.iter().position(|p| p.key == key && matches!(p.stage, Stage::Worktree(_)));
         let Some(i) = found else { return };
-        let mut pending = self.wire.requests.pending.remove(i);
+        let mut pending = self.clients.requests.pending.remove(i);
         let Stage::Worktree(then) = std::mem::replace(&mut pending.stage, Stage::launch(None)) else { return };
         let opened =
             self.worktree_place(project, result).and_then(|place| self.open_worktree(place, then, area, &mut pending));
         match opened {
-            Ok(true) => self.wire.requests.pending.push(pending),
+            Ok(true) => self.clients.requests.pending.push(pending),
             Ok(false) => self.answer(pending.client, Ok(json(&pending.done))),
             Err(message) => self.answer(pending.client, Err(message)),
         }

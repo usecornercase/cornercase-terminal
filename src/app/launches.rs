@@ -40,7 +40,7 @@ impl App {
         }
         for (i, started) in finished.into_iter().rev() {
             if let Some(key) = self.agents.launches.remove(i).key {
-                self.wire.requests.launched(key, started);
+                self.clients.requests.launched(key, started);
             }
         }
         for pane in parked {

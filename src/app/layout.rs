@@ -106,7 +106,7 @@ impl App {
         let before = std::mem::replace(&mut self.scroll.followed_pane, pane);
         let seen = std::mem::replace(&mut self.scroll.pane_followed, true);
         if seen && before != pane && pane.is_some_and(|pane| self.reveal_agent(pane)) {
-            self.wire.events.snapshots.changed = true;
+            self.clients.events.snapshots.changed = true;
         }
     }
 

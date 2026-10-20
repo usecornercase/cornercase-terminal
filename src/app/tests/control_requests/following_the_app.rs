@@ -7,7 +7,7 @@ use crate::ui::todo as panel;
 type Fed = Snapshot<AppState>;
 
 fn follow(app: &mut App) -> Fed {
-    app.wire.events.app.every = Duration::ZERO;
+    app.clients.events.app.every = Duration::ZERO;
     let answer = value(app, None, Command::App(wire::AppWatch::default()));
     serde_json::from_value(answer).expect("an app snapshot")
 }
@@ -114,7 +114,7 @@ fn away_shows_for_each_platform() {
 #[test]
 fn nothing_is_built_while_nobody_follows() {
     let (mut app, _rx) = empty_app();
-    app.wire.events.app.every = Duration::ZERO;
+    app.clients.events.app.every = Duration::ZERO;
 
     for text in ["one", "two", "three"] {
         add(&mut app, text);
@@ -142,7 +142,7 @@ fn nothing_changed_sends_nothing() {
 fn a_change_inside_the_pace_comes_when_it_ends() {
     let (mut app, _rx) = empty_app();
     follow(&mut app);
-    app.wire.events.app.every = Duration::from_secs(60);
+    app.clients.events.app.every = Duration::from_secs(60);
     let revision = follow_revision(&mut app);
     add(&mut app, "later");
 
@@ -150,12 +150,12 @@ fn a_change_inside_the_pace_comes_when_it_ends() {
     let wait = app.tick_at(Instant::now(), 0);
     assert!(wait.is_some_and(|wait| wait <= Duration::from_secs(60)), "{wait:?}");
 
-    app.wire.events.app.built = Some(Instant::now().checked_sub(Duration::from_secs(61)).expect("a past instant"));
+    app.clients.events.app.built = Some(Instant::now().checked_sub(Duration::from_secs(61)).expect("a past instant"));
     assert_eq!(next(&mut app, revision).revision, revision + 1);
 }
 
 fn follow_revision(app: &mut App) -> u64 {
-    app.wire.events.app.revision()
+    app.clients.events.app.revision()
 }
 
 #[test]

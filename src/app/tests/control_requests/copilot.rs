@@ -58,7 +58,7 @@ fn a_later_submission_confirms_a_pending_send() {
 #[test]
 fn a_queued_prompt_confirms_once_copilot_takes_it() {
     let mut running = Running::new();
-    running.app.wire.confirm_within = Duration::from_millis(300);
+    running.app.clients.confirm_within = Duration::from_millis(300);
     running.working();
     let id = first(&running.app);
 

@@ -42,9 +42,15 @@ impl App {
         now: Instant,
     ) -> Handled {
         let timeout = deadline(restart.timeout, now)?;
-        let key = self.wire.requests.key();
+        let key = self.clients.requests.key();
         let stage = Stage::Restart { caller };
-        self.wire.requests.pending.push(Pending { client: Some(client), key, timeout, done: Done::default(), stage });
+        self.clients.requests.pending.push(Pending {
+            client: Some(client),
+            key,
+            timeout,
+            done: Done::default(),
+            stage,
+        });
         self.show_pending_restart(now);
         Ok(None)
     }
@@ -68,7 +74,7 @@ impl App {
 
     pub(in crate::app) fn show_pending_restart(&mut self, now: Instant) {
         let shown = self.messages.toast.as_ref().is_some_and(|t| t.icon == ui::ToastIcon::Restart);
-        let pending = self.wire.requests.pending.iter().find_map(|p| match p.stage {
+        let pending = self.clients.requests.pending.iter().find_map(|p| match p.stage {
             Stage::Restart { caller } => Some(caller),
             _ => None,
         });
@@ -83,10 +89,10 @@ impl App {
     }
 
     pub(in crate::app) fn cancel_restarts(&mut self) {
-        let (cancelled, kept): (Vec<Pending>, Vec<Pending>) = std::mem::take(&mut self.wire.requests.pending)
+        let (cancelled, kept): (Vec<Pending>, Vec<Pending>) = std::mem::take(&mut self.clients.requests.pending)
             .into_iter()
             .partition(|p| matches!(p.stage, Stage::Restart { .. }));
-        self.wire.requests.pending = kept;
+        self.clients.requests.pending = kept;
         log::info!("control", "restart cancelled in the window", waits = cancelled.len());
         for pending in cancelled {
             self.answer(pending.client, Err(RESTART_CANCELLED.into()));
