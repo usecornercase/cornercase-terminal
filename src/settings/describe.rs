@@ -199,34 +199,32 @@ impl Settings {
                 Row::Tab(_) if tabs => {}
                 Row::Tab(_) => {
                     tabs = true;
-                    let shown = self.shown_tabs();
-                    let mut setting = self.base(&row, "issue_tabs", Kind::List);
-                    setting.label = "sources shown".into();
-                    setting.shown = shown.join(", ");
-                    setting.value = strings(&shown);
-                    setting.note = "every source together is `all`; the order is the order of the tabs".into();
-                    setting.choices =
-                        super::TAB_IDS.iter().map(|id| Choice { value: (*id).into(), ..Choice::default() }).collect();
-                    found.push((setting, Target::Tabs));
+                    found.push(self.tabs_entry(&row));
                 }
                 Row::Kind(_) => {}
-                Row::AddAgent => {
-                    let mut kinds = self.listed_kinds();
-                    let rest: Vec<String> =
-                        agents::kinds(&self.config).into_iter().filter(|k| !kinds.contains(k)).collect();
-                    kinds.extend(rest);
-                    for kind in kinds {
-                        found.extend(self.kind_settings(&kind));
-                    }
-                }
-                row => {
-                    if let Some(setting) = self.setting_of(row) {
-                        found.push((setting, Target::Row(row.clone())));
-                    }
-                }
+                Row::AddAgent => found.extend(self.agent_entries()),
+                row => found.extend(self.setting_of(row).map(|setting| (setting, Target::Row(row.clone())))),
             }
         }
         found
+    }
+
+    fn tabs_entry(&self, row: &Row) -> (Setting, Target) {
+        let shown = self.shown_tabs();
+        let mut setting = self.base(row, "issue_tabs", Kind::List);
+        setting.label = "sources shown".into();
+        setting.shown = shown.join(", ");
+        setting.value = strings(&shown);
+        setting.note = "every source together is `all`; the order is the order of the tabs".into();
+        setting.choices = super::TAB_IDS.iter().map(|id| Choice { value: (*id).into(), ..Choice::default() }).collect();
+        (setting, Target::Tabs)
+    }
+
+    fn agent_entries(&self) -> Vec<(Setting, Target)> {
+        let mut kinds = self.listed_kinds();
+        let rest: Vec<String> = agents::kinds(&self.config).into_iter().filter(|k| !kinds.contains(k)).collect();
+        kinds.extend(rest);
+        kinds.iter().flat_map(|kind| self.kind_settings(kind)).collect()
     }
 
     pub(crate) fn describe(&self) -> Vec<Setting> {
@@ -234,7 +232,15 @@ impl Settings {
     }
 
     pub(crate) fn connections(&self) -> Vec<Connection> {
-        let place = |row: &Row| (row.page().name().to_string(), row.section().to_string());
+        let mut found = self.tracker_connections();
+        found.push(self.browsers_connection());
+        for via in Via::ALL {
+            found.extend(self.messenger_connections(via));
+        }
+        found
+    }
+
+    fn tracker_connections(&self) -> Vec<Connection> {
         let mut found = Vec::new();
         for (source, status) in &self.tokens {
             let row = Row::Token(*source);
@@ -263,10 +269,14 @@ impl Settings {
                 ..Connection::default()
             });
         }
+        found
+    }
+
+    fn browsers_connection(&self) -> Connection {
         let row = Row::Browsers;
         let text = self.row_text(&row);
         let (page, section) = place(&row);
-        found.push(Connection {
+        Connection {
             key: "browsers".into(),
             kind: ConnectionKind::Browsers,
             page,
@@ -277,44 +287,49 @@ impl Settings {
             count: Some(self.browsers),
             removable: self.browsers > 0,
             ..Connection::default()
-        });
-        for via in Via::ALL {
-            let messenger = self.messenger(via);
-            let (bot, chat) = (Row::Bot(via), Row::Chat(via));
-            let text = self.row_text(&bot);
-            let (page, section) = place(&bot);
-            let state = match (&messenger.bot, messenger.refused) {
-                (None, _) => State::Missing,
-                (Some(_), true) => State::Refused,
-                (Some(_), false) => State::Connected,
-            };
-            found.push(Connection {
-                key: via.target().into(),
-                kind: ConnectionKind::Bot,
-                page: page.clone(),
-                section: section.clone(),
-                label: format!("{} {}", via.name(), text.label),
-                note: text.note,
-                state,
-                account: messenger.bot.clone(),
-                field: Some(via.token_field().into()),
-                removable: self.removal_of_row(&bot).is_some(),
-                ..Connection::default()
-            });
-            let text = self.row_text(&chat);
-            found.push(Connection {
-                key: format!("{}.chat", via.target()),
-                kind: ConnectionKind::Chat,
-                page,
-                section,
-                label: format!("{} {}", via.name(), text.label),
-                note: text.note,
-                state: if messenger.chat.is_some() { State::Connected } else { State::Missing },
-                account: messenger.chat.clone(),
-                removable: self.removal_of_row(&chat).is_some(),
-                ..Connection::default()
-            });
         }
-        found
     }
+
+    fn messenger_connections(&self, via: Via) -> [Connection; 2] {
+        let messenger = self.messenger(via);
+        let (bot, chat) = (Row::Bot(via), Row::Chat(via));
+        let text = self.row_text(&bot);
+        let (page, section) = place(&bot);
+        let state = match (&messenger.bot, messenger.refused) {
+            (None, _) => State::Missing,
+            (Some(_), true) => State::Refused,
+            (Some(_), false) => State::Connected,
+        };
+        let bot_connection = Connection {
+            key: via.target().into(),
+            kind: ConnectionKind::Bot,
+            page: page.clone(),
+            section: section.clone(),
+            label: format!("{} {}", via.name(), text.label),
+            note: text.note,
+            state,
+            account: messenger.bot.clone(),
+            field: Some(via.token_field().into()),
+            removable: self.removal_of_row(&bot).is_some(),
+            ..Connection::default()
+        };
+        let text = self.row_text(&chat);
+        let chat_connection = Connection {
+            key: format!("{}.chat", via.target()),
+            kind: ConnectionKind::Chat,
+            page,
+            section,
+            label: format!("{} {}", via.name(), text.label),
+            note: text.note,
+            state: if messenger.chat.is_some() { State::Connected } else { State::Missing },
+            account: messenger.chat.clone(),
+            removable: self.removal_of_row(&chat).is_some(),
+            ..Connection::default()
+        };
+        [bot_connection, chat_connection]
+    }
+}
+
+fn place(row: &Row) -> (String, String) {
+    (row.page().name().to_string(), row.section().to_string())
 }

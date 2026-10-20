@@ -1,9 +1,10 @@
 use crate::agents;
 use crate::config::{Config, Sidebar, Tabs, WorkingIcon};
 use crate::host::notify;
+use crate::issues::Source;
 use crate::list::Search;
 
-use super::{Action, EXTRA_ARGS, Edit, NO_PLUGINS, Pick, PickItem, Row, Settings, Status};
+use super::{Action, EXTRA_ARGS, Edit, NO_PLUGINS, Page, Pick, PickItem, Row, Settings, Status};
 
 impl Settings {
     fn flip(&mut self, switch: fn(&mut Config) -> &mut bool, [on, off]: [&str; 2]) -> Action {
@@ -14,10 +15,22 @@ impl Settings {
         self.save(config, notice.into())
     }
 
-    #[expect(clippy::too_many_lines, reason = "one arm per row")]
     pub(crate) fn activate(&mut self) -> Action {
         let Some(row) = self.row() else { return Action::None };
         self.notice = None;
+        match row.page() {
+            Page::Worktrees => self.activate_worktrees(row),
+            Page::Agents => self.activate_agents(row),
+            Page::Issues => self.activate_issues(row),
+            Page::Ui => self.activate_ui(row),
+            Page::Remote => self.activate_remote(row),
+            Page::Plugins => self.switch_plugin(row),
+            Page::Accounts => self.activate_account(row),
+            Page::Flows => Action::None,
+        }
+    }
+
+    fn activate_worktrees(&mut self, row: Row) -> Action {
         match row {
             Row::Folder => self.start_edit(row, self.config.worktrees_dir.clone()),
             Row::Fetch => self.start_edit(row, self.config.fetch_minutes.to_string()),
@@ -29,28 +42,97 @@ impl Settings {
                 |c| &mut c.merged_pull_requests,
                 ["Stats counts your merged pull requests", "Stats no longer counts merged pull requests"],
             ),
-            Row::Token(source) => {
-                if self.status(source) == Some(&Status::Env) {
-                    let env = source.token_env().unwrap_or_default();
-                    self.notice = Some(format!("{env} is set: change or unset it there"));
-                    return Action::None;
-                }
-                self.start_edit(row, String::new())
-            }
-            Row::GitlabUrl => self.start_edit(row, self.config.gitlab_url.clone()),
-            Row::JiraSite => self.start_edit(row, self.config.jira_site.clone()),
-            Row::JiraEmail => self.start_edit(row, self.config.jira_email.clone()),
-            Row::JiraJql => self.start_edit(row, self.config.jira_jql.clone()),
-            Row::PlaneWorkspace => self.start_edit(row, self.config.plane_workspace.clone()),
-            Row::PlaneUrl => self.start_edit(row, self.config.plane_url.clone()),
-            Row::PlaneFilter => self.start_edit(row, self.config.plane_filter.clone()),
-            Row::AsanaWorkspace => self.start_edit(row, self.config.asana_workspace.clone()),
-            Row::AsanaProjects => self.start_edit(row, self.config.asana_projects.clone()),
-            Row::Tab(id) => self.toggle_tab(id),
+            _ => Action::None,
+        }
+    }
+
+    fn activate_agents(&mut self, row: Row) -> Action {
+        match row {
             Row::DefaultAgent => self.pick_default_agent(row),
             Row::Submit => {
                 self.flip(|c| &mut c.submit, ["the prompt is sent for you", "the prompt is typed; you press Enter"])
             }
+            Row::Trust => self.flip(
+                |c| &mut c.accept_trust_prompts,
+                ["trust prompts are accepted for you", "trust prompts are left to you"],
+            ),
+            Row::Resume => self.flip(
+                |c| &mut c.resume_agents,
+                ["conversations resume after a restart", "agents no longer resume after a restart"],
+            ),
+            Row::KeepAwake => self.flip(
+                |c| &mut c.keep_awake,
+                ["the computer stays awake while an agent works", "the computer sleeps as usual"],
+            ),
+            Row::Kind(kind) => self.pick_mode(kind),
+            Row::AddAgent => self.pick_new_agent(row),
+            _ => Action::None,
+        }
+    }
+
+    fn pick_new_agent(&mut self, row: Row) -> Action {
+        let listed = self.listed_kinds();
+        let items: Vec<PickItem> = agents::kinds(&self.config)
+            .into_iter()
+            .filter(|k| !listed.contains(k))
+            .map(|kind| PickItem { note: agents::command(&self.config, &kind), value: kind, dangerous: false })
+            .collect();
+        if items.is_empty() {
+            self.notice = Some("every known agent is listed already".into());
+        } else {
+            self.open_pick(row, items);
+        }
+        Action::None
+    }
+
+    fn activate_issues(&mut self, row: Row) -> Action {
+        let current = match &row {
+            Row::GitlabUrl => self.config.gitlab_url.clone(),
+            Row::JiraSite => self.config.jira_site.clone(),
+            Row::JiraEmail => self.config.jira_email.clone(),
+            Row::JiraJql => self.config.jira_jql.clone(),
+            Row::PlaneWorkspace => self.config.plane_workspace.clone(),
+            Row::PlaneUrl => self.config.plane_url.clone(),
+            Row::PlaneFilter => self.config.plane_filter.clone(),
+            Row::AsanaWorkspace => self.config.asana_workspace.clone(),
+            Row::AsanaProjects => self.config.asana_projects.clone(),
+            Row::Token(source) => return self.activate_token(row.clone(), *source),
+            Row::Tab(id) => return self.toggle_tab(id),
+            _ => return Action::None,
+        };
+        self.start_edit(row, current)
+    }
+
+    fn activate_token(&mut self, row: Row, source: Source) -> Action {
+        if self.status(source) == Some(&Status::Env) {
+            let env = source.token_env().unwrap_or_default();
+            self.notice = Some(format!("{env} is set: change or unset it there"));
+            return Action::None;
+        }
+        self.start_edit(row, String::new())
+    }
+
+    fn activate_ui(&mut self, row: Row) -> Action {
+        match row {
+            Row::Detail(detail) => {
+                let mut config = self.config.clone();
+                let on = !detail.on(&config);
+                *detail.switch(&mut config) = on;
+                self.save(config, detail.notice(on).into())
+            }
+            Row::Sidebar => self.pick_from(row, Sidebar::choices()),
+            Row::Tabs => self.pick_from(row, Tabs::choices()),
+            Row::WorkingIcon => self.pick_from(row, WorkingIcon::choices()),
+            Row::Notifications => self.pick_from(row, notify::choices()),
+            Row::SoundWaiting => self.start_edit(row, self.config.sound_waiting.clone()),
+            Row::SoundDone => self.start_edit(row, self.config.sound_done.clone()),
+            Row::Prefix => self.start_capture(),
+            row => self.flip_look(&row),
+        }
+    }
+
+    fn flip_look(&mut self, row: &Row) -> Action {
+        match row {
             Row::IconBar => self.flip(
                 |c| &mut c.icon_bar,
                 ["the buttons are icons on the left", "the buttons are back under the lists"],
@@ -67,22 +149,16 @@ impl Settings {
             Row::DimPanes => {
                 self.flip(|c| &mut c.dim_inactive_panes, ["inactive panes are dimmed", "every pane looks the same"])
             }
-            Row::Detail(detail) => {
-                let mut config = self.config.clone();
-                let on = !detail.on(&config);
-                *detail.switch(&mut config) = on;
-                self.save(config, detail.notice(on).into())
-            }
-            Row::Sidebar => self.pick_from(row, Sidebar::choices()),
-            Row::Tabs => self.pick_from(row, Tabs::choices()),
-            Row::WorkingIcon => self.pick_from(row, WorkingIcon::choices()),
-            Row::Notifications => self.pick_from(row, notify::choices()),
+            row => self.flip_notices(row),
+        }
+    }
+
+    fn flip_notices(&mut self, row: &Row) -> Action {
+        match row {
             Row::Sound => self.flip(
                 |c| &mut c.sound,
                 ["a sound plays when an agent needs you or finishes", "agents no longer play a sound"],
             ),
-            Row::SoundWaiting => self.start_edit(row, self.config.sound_waiting.clone()),
-            Row::SoundDone => self.start_edit(row, self.config.sound_done.clone()),
             Row::SoundSubagents => self.flip(
                 |c| &mut c.sound_subagents,
                 ["agents started by other agents play a sound too", "only agents you started play a sound"],
@@ -95,45 +171,20 @@ impl Settings {
                 |c| &mut c.star_prompt,
                 ["cornercase may ask for a star on GitHub", "cornercase never asks for a star"],
             ),
-            Row::Trust => self.flip(
-                |c| &mut c.accept_trust_prompts,
-                ["trust prompts are accepted for you", "trust prompts are left to you"],
-            ),
-            Row::Prefix => self.start_capture(),
+            _ => Action::None,
+        }
+    }
+
+    fn activate_remote(&mut self, row: Row) -> Action {
+        match row {
             Row::Remote => self.flip(
                 |c| &mut c.remote,
                 ["remote access is on: click Remote to connect a phone", "remote access is off"],
             ),
             Row::Browsers => Action::ForgetBrowsers,
-            Row::Resume => self.flip(
-                |c| &mut c.resume_agents,
-                ["conversations resume after a restart", "agents no longer resume after a restart"],
-            ),
-            Row::KeepAwake => self.flip(
-                |c| &mut c.keep_awake,
-                ["the computer stays awake while an agent works", "the computer sleeps as usual"],
-            ),
-            Row::Kind(kind) => self.pick_mode(kind),
             Row::Bot(_) => self.start_edit(row, String::new()),
             Row::Chat(via) => Action::Pair(via),
-            Row::Plugin(_) | Row::NoPlugins => self.switch_plugin(row),
-            Row::ServerTokens | Row::Account(..) | Row::AddAccount(_) | Row::System(_) | Row::RenameAccount(..) => {
-                self.activate_account(row)
-            }
-            Row::AddAgent => {
-                let listed = self.listed_kinds();
-                let items: Vec<PickItem> = agents::kinds(&self.config)
-                    .into_iter()
-                    .filter(|k| !listed.contains(k))
-                    .map(|kind| PickItem { note: agents::command(&self.config, &kind), value: kind, dangerous: false })
-                    .collect();
-                if items.is_empty() {
-                    self.notice = Some("every known agent is listed already".into());
-                } else {
-                    self.open_pick(row, items);
-                }
-                Action::None
-            }
+            _ => Action::None,
         }
     }
 

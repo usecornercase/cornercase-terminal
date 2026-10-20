@@ -7,6 +7,10 @@ use super::{Action, Move, Row, Settings};
 
 const PREFIX_OFF: &str = "keyboard shortcuts are off";
 
+fn typing(key: KeyEvent) -> bool {
+    !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+}
+
 impl Settings {
     pub(crate) fn key(&mut self, key: KeyEvent, rows: usize) -> Action {
         if self.busy() {
@@ -15,37 +19,51 @@ impl Settings {
         if self.capturing {
             return self.capture(key);
         }
-        let typing = !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
-        if let Some(edit) = &mut self.edit {
-            match key.code {
-                KeyCode::Esc => self.edit = None,
-                KeyCode::Enter => return self.submit_edit(),
-                KeyCode::Backspace => {
-                    edit.input.pop();
-                    edit.error = None;
-                }
-                KeyCode::Char(c) if typing => {
-                    edit.input.push(c);
-                    edit.error = None;
-                }
-                _ => {}
-            }
-            return Action::None;
+        if self.edit.is_some() {
+            return self.edit_key(key);
         }
         if self.pick.is_some() {
-            let count = self.pick_choices().len();
-            let Some(pick) = &mut self.pick else { return Action::None };
-            match key.code {
-                KeyCode::Esc => self.pick = None,
-                KeyCode::Enter => return self.choose(None),
-                KeyCode::Up => pick.search.move_selection(-1, count, rows),
-                KeyCode::Down => pick.search.move_selection(1, count, rows),
-                KeyCode::Backspace => pick.search.pop(),
-                KeyCode::Char(c) if typing => pick.search.push(c),
-                _ => {}
-            }
-            return Action::None;
+            return self.pick_key(key, rows);
         }
+        self.list_key(key)
+    }
+
+    fn edit_key(&mut self, key: KeyEvent) -> Action {
+        let typing = typing(key);
+        let Some(edit) = &mut self.edit else { return Action::None };
+        match key.code {
+            KeyCode::Esc => self.edit = None,
+            KeyCode::Enter => return self.submit_edit(),
+            KeyCode::Backspace => {
+                edit.input.pop();
+                edit.error = None;
+            }
+            KeyCode::Char(c) if typing => {
+                edit.input.push(c);
+                edit.error = None;
+            }
+            _ => {}
+        }
+        Action::None
+    }
+
+    fn pick_key(&mut self, key: KeyEvent, rows: usize) -> Action {
+        let typing = typing(key);
+        let count = self.pick_choices().len();
+        let Some(pick) = &mut self.pick else { return Action::None };
+        match key.code {
+            KeyCode::Esc => self.pick = None,
+            KeyCode::Enter => return self.choose(None),
+            KeyCode::Up => pick.search.move_selection(-1, count, rows),
+            KeyCode::Down => pick.search.move_selection(1, count, rows),
+            KeyCode::Backspace => pick.search.pop(),
+            KeyCode::Char(c) if typing => pick.search.push(c),
+            _ => {}
+        }
+        Action::None
+    }
+
+    fn list_key(&mut self, key: KeyEvent) -> Action {
         let count = self.rows().len();
         let shift = key.modifiers.contains(KeyModifiers::SHIFT);
         self.notice = None;

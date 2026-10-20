@@ -149,23 +149,6 @@ impl Row {
             | Self::AsanaWorkspace
             | Self::AsanaProjects
             | Self::Tab(_) => Page::Issues,
-            Self::Sidebar
-            | Self::Tabs
-            | Self::IconBar
-            | Self::AgentsSection
-            | Self::WorkingIcon
-            | Self::Counts
-            | Self::TodoDot
-            | Self::DimPanes
-            | Self::Detail(_)
-            | Self::Notifications
-            | Self::Sound
-            | Self::SoundWaiting
-            | Self::SoundDone
-            | Self::SoundSubagents
-            | Self::Updates
-            | Self::StarPrompt
-            | Self::Prefix => Page::Ui,
             Self::Remote | Self::Browsers | Self::Bot(_) | Self::Chat(_) => Page::Remote,
             Self::Plugin(_) | Self::NoPlugins => Page::Plugins,
             Self::ServerTokens
@@ -173,6 +156,7 @@ impl Row {
             | Self::AddAccount(_)
             | Self::System(_)
             | Self::RenameAccount(..) => Page::Accounts,
+            _ => Page::Ui,
         }
     }
 }
@@ -249,6 +233,32 @@ impl Detail {
         }
     }
 }
+
+const LOOK_ROWS: [Row; 23] = [
+    Row::AddAgent,
+    Row::Sidebar,
+    Row::Tabs,
+    Row::IconBar,
+    Row::AgentsSection,
+    Row::WorkingIcon,
+    Row::Counts,
+    Row::TodoDot,
+    Row::DimPanes,
+    Row::Detail(Detail::Model),
+    Row::Detail(Detail::Context),
+    Row::Detail(Detail::Memory),
+    Row::Detail(Detail::Account),
+    Row::Detail(Detail::AccountSwitcher),
+    Row::Detail(Detail::AccountPicker),
+    Row::Notifications,
+    Row::Sound,
+    Row::SoundWaiting,
+    Row::SoundDone,
+    Row::SoundSubagents,
+    Row::Updates,
+    Row::StarPrompt,
+    Row::Prefix,
+];
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) enum Page {
@@ -467,6 +477,22 @@ impl Settings {
         let shown = self.shown_tabs();
         let hidden = TAB_IDS.iter().filter(|id| !shown.contains(id)).copied();
         let mut rows = vec![Row::Folder, Row::Fetch, Row::PullRequests, Row::MergedPullRequests];
+        rows.extend(self.token_rows());
+        rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
+        rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust, Row::Resume, Row::KeepAwake]);
+        rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
+        rows.extend(self.account_rows());
+        rows.extend(LOOK_ROWS);
+        rows.extend(self.remote_rows());
+        rows.extend(self.plugins.iter().map(|plugin| Row::Plugin(plugin.id.clone())));
+        if self.plugins.is_empty() {
+            rows.push(Row::NoPlugins);
+        }
+        rows
+    }
+
+    fn token_rows(&self) -> Vec<Row> {
+        let mut rows = Vec::new();
         for (source, _) in &self.tokens {
             match source {
                 Source::Jira => rows.extend([Row::JiraSite, Row::JiraEmail, Row::Token(Source::Jira), Row::JiraJql]),
@@ -480,36 +506,11 @@ impl Settings {
                 _ => rows.push(Row::Token(*source)),
             }
         }
-        rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
-        rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust, Row::Resume, Row::KeepAwake]);
-        rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
-        rows.extend(self.account_rows());
-        rows.extend([
-            Row::AddAgent,
-            Row::Sidebar,
-            Row::Tabs,
-            Row::IconBar,
-            Row::AgentsSection,
-            Row::WorkingIcon,
-            Row::Counts,
-            Row::TodoDot,
-            Row::DimPanes,
-            Row::Detail(Detail::Model),
-            Row::Detail(Detail::Context),
-            Row::Detail(Detail::Memory),
-            Row::Detail(Detail::Account),
-            Row::Detail(Detail::AccountSwitcher),
-            Row::Detail(Detail::AccountPicker),
-            Row::Notifications,
-            Row::Sound,
-            Row::SoundWaiting,
-            Row::SoundDone,
-            Row::SoundSubagents,
-            Row::Updates,
-            Row::StarPrompt,
-            Row::Prefix,
-            Row::Remote,
-        ]);
+        rows
+    }
+
+    fn remote_rows(&self) -> Vec<Row> {
+        let mut rows = vec![Row::Remote];
         if self.browsers > 0 {
             rows.push(Row::Browsers);
         }
@@ -518,10 +519,6 @@ impl Settings {
             if self.messenger(via).bot.is_some() {
                 rows.push(Row::Chat(via));
             }
-        }
-        rows.extend(self.plugins.iter().map(|plugin| Row::Plugin(plugin.id.clone())));
-        if self.plugins.is_empty() {
-            rows.push(Row::NoPlugins);
         }
         rows
     }
@@ -549,13 +546,16 @@ impl Settings {
 
     pub(crate) fn take_config(&mut self, config: Config) {
         if config.asana_workspace != self.config.asana_workspace {
-            for (source, status) in &mut self.tokens {
-                if *source == Source::Asana && matches!(status, Status::Saved(_)) {
-                    *status = Status::Saved(None);
-                }
-            }
+            self.forget_asana_projects();
         }
         self.config = config;
+    }
+
+    fn forget_asana_projects(&mut self) {
+        let saved = self.tokens.iter_mut().filter(|(source, _)| *source == Source::Asana);
+        for (_, status) in saved.filter(|(_, status)| matches!(status, Status::Saved(_))) {
+            *status = Status::Saved(None);
+        }
     }
 
     fn save(&mut self, config: Config, notice: String) -> Action {
