@@ -291,7 +291,7 @@ fn output_alone_does_not_build_the_session_again_even_when_the_refresh_reads_the
     let pane = term(&app, 0).id;
     let revision = watching(&mut app).revision;
     settled(&mut app, &rx, revision);
-    app.agents.watched = Some(Instant::now());
+    app.agents.set_watched(Some(Instant::now()));
     app.trace_refresh();
     app.take_events();
     let built = app.clients.events.snapshots.built();
@@ -303,7 +303,7 @@ fn output_alone_does_not_build_the_session_again_even_when_the_refresh_reads_the
     });
     app.trace_refresh();
     let after_output = (app.clients.events.snapshots.built(), app.take_events());
-    app.agents.watched = Some(Instant::now());
+    app.agents.set_watched(Some(Instant::now()));
     app.trace_refresh();
 
     assert!(wrote);

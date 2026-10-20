@@ -21,7 +21,7 @@ mod work_stats {
 
     fn sample(agent: &mut Agent) {
         let now = Instant::now();
-        agent.app.agents.watched = Some(now.checked_sub(Duration::from_secs(1)).expect("previous read"));
+        agent.app.agents.set_watched(Some(now.checked_sub(Duration::from_secs(1)).expect("previous read")));
         agent.app.watch_agents(now);
     }
     fn total(agent: &Agent) -> crate::agents::stats::Window {
@@ -364,7 +364,7 @@ mod restarting_when_idle {
 
     fn looked_again(agent: &mut Agent) {
         let since = Instant::now();
-        agent.refreshing("another look at the agents", |a| a.agents.watched.is_some_and(|at| at > since));
+        agent.refreshing("another look at the agents", |a| a.agents.watched().is_some_and(|at| at > since));
     }
 
     fn report(response: Response) -> Report {
@@ -429,10 +429,10 @@ mod restarting_when_idle {
         ask(&mut agent.app, None, when_idle(None));
         let typed = Instant::now();
 
-        agent.app.agents.watched = None;
+        agent.app.agents.set_watched(None);
         agent.app.refresh(typed);
         let held = (answers(&mut agent.app), agent.app.take_restart());
-        agent.app.agents.watched = None;
+        agent.app.agents.set_watched(None);
         agent.app.refresh(typed + Duration::from_secs(3));
 
         assert_eq!(held, (Vec::new(), None));
@@ -504,7 +504,7 @@ mod keeping_awake {
     }
 
     fn later(agent: &mut Agent, by: Duration) -> State {
-        agent.app.agents.watched = None;
+        agent.app.agents.set_watched(None);
         agent.app.refresh(Instant::now() + by);
         agent.app.agents.awake.state()
     }
@@ -610,7 +610,7 @@ mod pending_review {
         assert_eq!(marked, [(true, true)]);
 
         let (mut back, rx) = new_app(agent.config_dir.path().join("config.json"));
-        back.agents.claude_dir = Some(agent.fake.dir().to_path_buf());
+        back.agents.set_claude_dir(agent.fake.dir());
         assert!(back.restore(&saved, AREA));
         refreshing(&mut back, &rx, "the resumed agent shows its mark", |a| {
             a.projects

@@ -369,8 +369,8 @@ impl App {
         if !watching && self.clients.views.is_empty() {
             return;
         }
-        if self.clients.events.snapshots.read != self.agents.watched {
-            self.clients.events.snapshots.read = self.agents.watched;
+        if self.clients.events.snapshots.read != self.agents.watched() {
+            self.clients.events.snapshots.read = self.agents.watched();
             let refreshed = Some(self.refreshed());
             if self.clients.events.snapshots.refreshed != refreshed {
                 self.clients.events.snapshots.refreshed = refreshed;

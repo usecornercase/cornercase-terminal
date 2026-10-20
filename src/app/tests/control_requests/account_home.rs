@@ -13,7 +13,7 @@ fn in_its_own_home() -> (Agent, [TempDir; 2], u64) {
     );
     write_executable(&wrapper, &script);
     agent.app.config.agent_commands.insert(Known::Claude.name().into(), wrapper.display().to_string());
-    agent.app.agents.claude_dir = Some(elsewhere.path().to_path_buf());
+    agent.app.agents.set_claude_dir(elsewhere.path());
     let id = agent.start(None);
     (agent, [elsewhere, bin], id)
 }
@@ -27,7 +27,7 @@ fn with_an_account() -> (Agent, TempDir, u64) {
     agent.app.set_accounts_dir(&root);
     agent.app.config.profiles.insert("Work".into(), [(Known::Claude.name().to_string(), "work".to_string())].into());
     agent.app.config.profile = "Work".into();
-    agent.app.agents.claude_dir = Some(elsewhere.path().to_path_buf());
+    agent.app.agents.set_claude_dir(elsewhere.path());
     let id = agent.start(None);
     (agent, elsewhere, id)
 }

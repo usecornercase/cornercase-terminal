@@ -334,7 +334,7 @@ impl App {
             self.projects[p].workspaces[w].active = t;
             let term = self.projects[p].workspaces[w].tab().and_then(Tab::pane).map(|t| t.id);
             if let (Some(term), Some(start)) = (term, start) {
-                self.agents.launches.push(Launch::new(term, start.spec, Instant::now()));
+                self.agents.launches.add(Launch::new(term, start.spec, Instant::now()));
             }
         }
         self.projects[p].active = w;

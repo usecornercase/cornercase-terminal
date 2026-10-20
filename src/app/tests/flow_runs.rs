@@ -43,9 +43,9 @@ fn a_pane_where_another_agent_ran_resumes_that_agent_and_its_orchestrator_is_not
 
     let pane = |role: &str| again.runs.all()[0].pane_of(role).expect("a member");
     let (orchestrator, coder, tester) = (pane(ORCHESTRATOR), pane("coder"), pane("tester"));
-    let briefed = again.agents.launches.iter().find(|launch| launch.term == orchestrator).map(|l| !l.after.is_empty());
+    let briefed = again.agents.launches.of_pane(orchestrator).next().map(|l| !l.after.is_empty());
     assert_eq!(briefed, Some(false), "an orchestrator pane that ran Codex gets no brief");
-    let trusted = |pane: u64| again.agents.launches.iter().find(|l| l.term == pane).map(Launch::trusted);
+    let trusted = |pane: u64| again.agents.launches.of_pane(pane).next().map(Launch::trusted);
     assert_eq!((trusted(coder), trusted(tester)), (Some(false), Some(true)), "only the role's own agent is trusted");
     refreshing(&mut again, &rx, "the conversations are typed", |a| {
         screen(a, orchestrator).contains("codex resume c-orchestrator")

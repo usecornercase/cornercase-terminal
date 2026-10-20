@@ -394,7 +394,7 @@ impl App {
             .chain(kind.account().into_iter().flat_map(|home| home.login.iter().map(ToString::to_string)))
             .collect::<Vec<_>>()
             .join(" ");
-        self.agents.launches.push(Launch::command(pane, line, now));
+        self.agents.launches.add(Launch::command(pane, line, now));
         Ok(ids)
     }
 

@@ -186,8 +186,7 @@ impl App {
     fn drop_workspace_launches(&mut self, workspace: u64, gone: Option<u64>, reason: &str) -> (usize, usize) {
         let mut panes = self.workspace_panes(workspace);
         panes.extend(gone);
-        let dropped: Vec<_> = self.agents.launches.iter().filter(|l| panes.contains(&l.term)).map(|l| l.key).collect();
-        self.agents.launches.retain(|l| !panes.contains(&l.term));
+        let dropped = self.agents.launches.drop_panes(&panes);
         for key in dropped.iter().flatten() {
             self.clients.requests.launched(*key, false);
         }
@@ -230,9 +229,7 @@ impl App {
             self.projects[p].workspaces[w].clear_failed_setups();
         }
         let panes = self.workspace_panes(workspace);
-        for launch in self.agents.launches.iter_mut().filter(|l| panes.contains(&l.term)) {
-            launch.wait_from(now);
-        }
+        self.agents.launches.wait_from(&panes, now);
     }
 
     fn setup_failed(&mut self, pane: u64, failed: String, (project, workspace): (u64, u64), unseen: bool) {

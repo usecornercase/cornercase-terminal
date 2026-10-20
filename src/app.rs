@@ -340,8 +340,7 @@ impl App {
         let drag = self.row_drag().filter(|d| d.moved).map(|_| AUTO_SCROLL_EVERY);
         let lines = self.lines_edge().map(|_| LINES_SCROLL_EVERY);
         let held = self.held_launch_panes();
-        let launch =
-            self.agents.launches.iter().any(|l| !l.waits_for_you() && !held.contains(&l.term)).then_some(LAUNCH_EVERY);
+        let launch = self.agents.launches.driven().any(|pane| !held.contains(&pane)).then_some(LAUNCH_EVERY);
         let spin =
             (self.config.spinner() && self.agent_working()).then(|| activity::spin_wait(self.clock.since_boot(now)));
         [
@@ -578,7 +577,7 @@ impl App {
     }
 
     fn output(&mut self, id: u64, bytes: &[u8]) {
-        for launch in self.agents.launches.iter_mut().filter(|l| l.term == id) {
+        for launch in self.agents.launches.of_pane_mut(id) {
             launch.output(Instant::now());
         }
         if let Some(t) = self.projects.pane_by_mut(id) {

@@ -4,6 +4,7 @@ use std::time::Instant;
 use super::idle_restart::INPUT_HOLDS;
 use super::wait::Condition;
 use super::{Pending, Stage, Waits, json};
+use crate::agents::launch::Launch;
 use crate::app::App;
 use crate::log;
 use crate::project::Hierarchy;
@@ -67,7 +68,7 @@ pub(crate) fn label(count: usize, from: Option<u64>, queued: bool) -> String {
 
 impl App {
     pub(in crate::app) fn sending(&self, pane: u64) -> bool {
-        self.agents.launches.iter().any(|launch| launch.term == pane && launch.submits())
+        self.agents.launches.of_pane(pane).any(Launch::submits)
     }
 
     pub(in crate::app) fn held_sends(&self, pane: u64) -> usize {
@@ -183,7 +184,7 @@ impl App {
             Ok(None) => self.answer(pending.client, Ok(json(&pending.done))),
             Ok(Some((mut launch, stage))) => {
                 launch.key = Some(pending.key);
-                self.agents.launches.push(launch);
+                self.agents.launches.add(launch);
                 pending.stage = stage;
                 return Some(pending);
             }

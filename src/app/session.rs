@@ -168,7 +168,7 @@ impl App {
         log::info!("app", "resuming a conversation", pane = term.id, agent = agent.kind);
         let now = Instant::now();
         let trusted = role.is_some_and(|role| role.agent == agent.kind);
-        self.agents.launches.push(Launch::resume(term.id, line, trusted, now, now + RESUME_GRACE));
+        self.agents.launches.add(Launch::resume(term.id, line, trusted, now, now + RESUME_GRACE));
         term.resume = Some(agent.clone());
         term.resuming = Some(now + RESUME_GRACE);
         true
@@ -176,7 +176,7 @@ impl App {
 
     pub(super) fn resume_holds(&self, pane: u64) -> bool {
         let now = Instant::now();
-        self.agents.launches.iter().any(|launch| launch.term == pane && launch.holds(now))
+        self.agents.launches.of_pane(pane).any(|launch| launch.holds(now))
     }
 
     pub(super) fn pane_bands(&self) -> HashMap<u64, ui::PaneBand> {
@@ -186,8 +186,8 @@ impl App {
             .into_iter()
             .map(|(pane, (text, queued))| (pane, ui::PaneBand::Held { text, queued }))
             .collect();
-        for launch in self.agents.launches.iter().filter(|launch| launch.holds(now)) {
-            if let Some(term) = self.projects.pane_by(launch.term) {
+        for pane in self.agents.launches.holding(now) {
+            if let Some(term) = self.projects.pane_by(pane) {
                 bands.insert(term.id, ui::PaneBand::Resuming(resumed(term)));
             }
         }
@@ -240,11 +240,8 @@ impl App {
     }
 
     fn cancel_resume(&mut self, pane: u64) {
-        let Some(i) = self.agents.launches.iter().position(|launch| launch.term == pane && launch.resume.is_some())
-        else {
-            return;
-        };
-        let typed = self.agents.launches.remove(i).typed();
+        let Some(launch) = self.agents.launches.take_resume(pane) else { return };
+        let typed = launch.typed();
         if !typed && let Some(term) = self.projects.pane_by_mut(pane) {
             term.resuming = None;
             term.resume = None;

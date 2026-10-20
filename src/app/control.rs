@@ -666,7 +666,7 @@ impl App {
         let key = self.clients.requests.key();
         launch.key = Some(key);
         launch.trust = self.panels.queued.trust(client).then_some(agents::launch::Trust::Accepted);
-        self.agents.launches.push(launch);
+        self.agents.launches.add(launch);
         self.clients.requests.push(client, key, waits);
         None
     }

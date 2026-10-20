@@ -360,7 +360,7 @@ impl App {
         launch.key = Some(pending.key);
         launch.trust =
             pending.client.is_some_and(|client| self.panels.queued.trust(client)).then_some(launch::Trust::Accepted);
-        self.agents.launches.push(launch);
+        self.agents.launches.add(launch);
         pending.stage = Stage::launch(wait);
     }
 }

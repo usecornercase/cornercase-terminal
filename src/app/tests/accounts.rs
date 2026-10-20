@@ -145,7 +145,7 @@ fn a_pane_whose_account_is_gone_comes_back_as_a_shell() {
     let id = term.id;
     assert!(term.accounts().is_empty());
     assert!(term.resume.is_none());
-    assert!(setup.app.agents.launches.is_empty());
+    assert!(setup.app.agents.launches.list().is_empty());
     let toast = setup.app.messages.toast.as_ref().map(|toast| toast.message.clone()).unwrap_or_default();
     assert!(toast.contains("`work`"), "{toast}");
     let env = setup.env_of(id);

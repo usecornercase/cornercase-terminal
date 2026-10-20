@@ -233,7 +233,7 @@ impl App {
 
     fn restart_reply(&self, pending: &Pending, now: Instant) -> Option<Reply> {
         let Stage::Restart { caller } = pending.stage else { return None };
-        (self.agents.watched == Some(now) && self.holding(caller, now).is_empty())
+        (self.agents.watched() == Some(now) && self.holding(caller, now).is_empty())
             .then(|| Ok(json(&self.report(caller))))
     }
 

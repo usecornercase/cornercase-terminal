@@ -13,20 +13,80 @@ use crate::term::Term;
 
 pub(super) const LAUNCH_EVERY: Duration = Duration::from_millis(100);
 
+#[derive(Default)]
+pub(super) struct Launches {
+    list: Vec<Launch>,
+    trust_prompt: agents::TrustPrompt,
+}
+
+impl Launches {
+    pub(super) fn add(&mut self, launch: Launch) {
+        self.list.push(launch);
+    }
+
+    pub(super) fn replace(&mut self, launch: Launch) {
+        self.list.retain(|l| l.term != launch.term);
+        self.list.push(launch);
+    }
+
+    pub(super) fn of_pane(&self, pane: u64) -> impl Iterator<Item = &Launch> {
+        self.list.iter().filter(move |l| l.term == pane)
+    }
+
+    pub(super) fn of_pane_mut(&mut self, pane: u64) -> impl Iterator<Item = &mut Launch> {
+        self.list.iter_mut().filter(move |l| l.term == pane)
+    }
+
+    pub(super) fn driven(&self) -> impl Iterator<Item = u64> + '_ {
+        self.list.iter().filter(|l| !l.waits_for_you()).map(|l| l.term)
+    }
+
+    pub(super) fn holding(&self, now: Instant) -> impl Iterator<Item = u64> + '_ {
+        self.list.iter().filter(move |l| l.holds(now)).map(|l| l.term)
+    }
+
+    pub(super) fn take_resume(&mut self, pane: u64) -> Option<Launch> {
+        let i = self.list.iter().position(|l| l.term == pane && l.resume.is_some())?;
+        Some(self.list.remove(i))
+    }
+
+    pub(super) fn drop_panes(&mut self, panes: &[u64]) -> Vec<Option<u64>> {
+        let dropped = self.list.iter().filter(|l| panes.contains(&l.term)).map(|l| l.key).collect();
+        self.list.retain(|l| !panes.contains(&l.term));
+        dropped
+    }
+
+    pub(super) fn wait_from(&mut self, panes: &[u64], now: Instant) {
+        for launch in self.list.iter_mut().filter(|l| panes.contains(&l.term)) {
+            launch.wait_from(now);
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn list(&self) -> &[Launch] {
+        &self.list
+    }
+
+    #[cfg(test)]
+    pub(super) fn clear(&mut self) {
+        self.list.clear();
+    }
+}
+
 impl App {
     pub(super) fn drive_launches(&mut self, now: Instant) {
-        if self.agents.launches.is_empty() {
+        if self.agents.launches.list.is_empty() {
             return;
         }
         let held = self.held_launch_panes();
-        let regex = self.agents.trust_prompt.regex(&self.config.trust_prompt_pattern);
+        let regex = self.agents.launches.trust_prompt.regex(&self.config.trust_prompt_pattern);
         let asks = |screen: &str| regex.is_some_and(|re| agents::asks_trust(re, screen));
         let trust = if self.config.accept_trust_prompts { Trust::Accepted } else { Trust::LeftToYou };
         let round = Round { now, trust, asks: &asks };
         let mut parked = Vec::new();
         let mut finished = Vec::new();
-        let starting: Vec<u64> = self.agents.launches.iter().map(|launch| launch.term).collect();
-        for (i, launch) in self.agents.launches.iter_mut().enumerate() {
+        let starting: Vec<u64> = self.agents.launches.list.iter().map(|launch| launch.term).collect();
+        for (i, launch) in self.agents.launches.list.iter_mut().enumerate() {
             if held.contains(&launch.term) || launch.after.iter().any(|pane| starting.contains(pane)) {
                 continue;
             }
@@ -39,7 +99,7 @@ impl App {
             }
         }
         for (i, started) in finished.into_iter().rev() {
-            if let Some(key) = self.agents.launches.remove(i).key {
+            if let Some(key) = self.agents.launches.list.remove(i).key {
                 self.clients.requests.launched(key, started);
             }
         }
@@ -57,7 +117,7 @@ impl App {
         if let Some(tab) = self.projects[p].workspaces[w].tab_mut() {
             tab.name = Some(start.name);
             if let Some(term) = tab.pane() {
-                self.agents.launches.push(Launch::new(term.id, start.spec, Instant::now()));
+                self.agents.launches.add(Launch::new(term.id, start.spec, Instant::now()));
             }
         }
         Ok(())

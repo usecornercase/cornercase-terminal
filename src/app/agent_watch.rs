@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
 use super::App;
+use super::launches::Launches;
 use super::menus::{Marked, MenuAction};
 use super::notifications::Said;
 use super::overlay::Overlay;
@@ -12,7 +13,6 @@ use crate::agents::AgentState;
 use crate::agents::activity;
 use crate::agents::awake::{self, Awake};
 use crate::agents::context::Look;
-use crate::agents::launch::Launch;
 use crate::agents::tree;
 use crate::config::Config;
 use crate::host::{notify, sound};
@@ -27,10 +27,9 @@ pub(super) type AgentPlace = (usize, usize, usize, usize);
 type Listed = (Vec<AgentPlace>, Vec<(u64, Option<u64>)>, HashSet<u64>);
 
 pub(super) struct AgentRuntime {
-    pub(super) launches: Vec<Launch>,
-    pub(super) trust_prompt: agents::TrustPrompt,
-    pub(super) claude_dir: Option<PathBuf>,
-    pub(super) watched: Option<Instant>,
+    pub(super) launches: Launches,
+    claude_dir: Option<PathBuf>,
+    watched: Option<Instant>,
     pub(super) awake: Awake,
     pub(super) stats: agents::stats::Stats,
 }
@@ -38,13 +37,26 @@ pub(super) struct AgentRuntime {
 impl AgentRuntime {
     pub(super) fn new(home: Option<&Path>) -> Self {
         Self {
-            launches: Vec::new(),
-            trust_prompt: agents::TrustPrompt::default(),
+            launches: Launches::default(),
             claude_dir: agents::claude::claude_dir(home),
             watched: None,
             awake: Awake::new(awake::tools()),
             stats: agents::stats::Stats::new(SystemTime::now()),
         }
+    }
+
+    pub(super) fn watched(&self) -> Option<Instant> {
+        self.watched
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_claude_dir(&mut self, dir: &Path) {
+        self.claude_dir = Some(dir.to_path_buf());
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_watched(&mut self, at: Option<Instant>) {
+        self.watched = at;
     }
 }
 

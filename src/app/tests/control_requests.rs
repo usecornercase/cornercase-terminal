@@ -173,7 +173,7 @@ impl Agent {
         };
         let config_path = write_config(config.path(), &settings);
         let (mut app, rx) = app_in(project.path(), config_path);
-        app.agents.claude_dir = Some(fake.dir().to_path_buf());
+        app.agents.set_claude_dir(fake.dir());
         Self { app, rx, fake, config_dir: config, _project: project }
     }
 

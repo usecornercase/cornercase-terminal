@@ -135,7 +135,7 @@ const LAUNCH_WAIT: Duration = Duration::from_secs(20);
 fn wait_typed(s: &mut Setup, text: &str) {
     wait_until_within("the command is typed", LAUNCH_WAIT, || {
         pump(s);
-        s.app.agents.launches.is_empty() && screen(&mut s.app).replace('\n', "").contains(text)
+        s.app.agents.launches.list().is_empty() && screen(&mut s.app).replace('\n', "").contains(text)
     });
 }
 
@@ -421,7 +421,7 @@ mod starting {
 
         wait_until_within("the launch waits for you", LAUNCH_WAIT, || {
             pump(&mut s);
-            s.app.agents.launches.iter().all(Launch::waits_for_you) && !s.app.agents.launches.is_empty()
+            s.app.agents.launches.list().iter().all(Launch::waits_for_you) && !s.app.agents.launches.list().is_empty()
         });
 
         assert_eq!(s.app.tick(Instant::now()), None);

@@ -45,13 +45,13 @@ trait StartClaude {
 
 impl StartClaude for FakeClaude {
     fn start_with(&self, app: &mut App, args: &str) {
-        app.agents.claude_dir = Some(self.dir().to_path_buf());
+        app.agents.set_claude_dir(self.dir());
         type_line(app, &self.command_line(args));
     }
 }
 
 fn tick(app: &mut App) {
-    let now = app.agents.watched.map_or_else(Instant::now, |at| at + WATCH_AGENTS_EVERY);
+    let now = app.agents.watched().map_or_else(Instant::now, |at| at + WATCH_AGENTS_EVERY);
     app.watch_agents(now);
 }
 
@@ -116,7 +116,7 @@ fn finishing_out_of_sight_marks_the_tab_done_until_it_is_opened() {
     watch_until(&mut app, &rx, "claude finishes out of sight", |a| status(a, 0, 0) == Some(Status::Done));
 
     click_row(&mut app, WorkspaceRow::Tab(0, 0));
-    let now = app.agents.watched.expect("watched");
+    let now = app.agents.watched().expect("watched");
     app.watch_agents(now);
 
     assert_eq!(status(&app, 0, 0), Some(Status::Idle));
@@ -132,7 +132,7 @@ fn the_compact_menu_hides_the_tab_beneath_it() {
     let bar = text(&render(&mut app, small), Rect::new(0, 1, 7, 1));
 
     app.screen.nav = None;
-    let now = app.agents.watched.expect("watched");
+    let now = app.agents.watched().expect("watched");
     app.watch_agents(now);
 
     assert_eq!((bar.as_str(), status(&app, 0, 0)), ("   ≡ ✓ ", Some(Status::Idle)));

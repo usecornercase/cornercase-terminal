@@ -58,7 +58,7 @@ fn an_agent_restored_in_its_conversation_is_not_a_new_start() {
     let (mut back, rx, _dirs) = app_with(0);
     back.config.agent_commands.insert(agents::Known::Claude.name().into(), claude.script().display().to_string());
     back.config.agent_args.insert(agents::Known::Claude.name().into(), vec![claude.dir().display().to_string()]);
-    back.agents.claude_dir = Some(claude.dir().to_path_buf());
+    back.agents.set_claude_dir(claude.dir());
     assert!(back.restore(&saved, AREA));
     refreshing(&mut back, &rx, "resumed conversation", |a| a.term().and_then(|t| t.context.conversation()).is_some());
     assert_eq!(back.stats_view(SystemTime::now()).windows["total"].counts.agents, 0);
@@ -173,7 +173,7 @@ fn nothing_resumes_when_it_is_turned_off() {
 
     let (back, _rx, _bin) = restored(&saved, agents::Known::Claude.name(), false);
 
-    assert_eq!((back.agents.launches.len(), saved_agent(&back.state())), (0, None));
+    assert_eq!((back.agents.launches.list().len(), saved_agent(&back.state())), (0, None));
 }
 
 mod input_while_resuming {
@@ -259,11 +259,11 @@ mod input_while_resuming {
         let (mut back, _rx, _bin, id) = resuming(STAYS);
         let held = back.resume_holds(id);
 
-        if let Some(launch) = back.agents.launches.iter_mut().find(|launch| launch.term == id) {
+        if let Some(launch) = back.agents.launches.of_pane_mut(id).next() {
             launch.resume = Some(Instant::now());
         }
 
-        assert_eq!((held, back.resume_holds(id), back.agents.launches.len()), (true, false, 1));
+        assert_eq!((held, back.resume_holds(id), back.agents.launches.list().len()), (true, false, 1));
     }
 
     #[test]

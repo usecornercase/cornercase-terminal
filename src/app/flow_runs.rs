@@ -459,14 +459,14 @@ impl App {
         for (role, member) in roles.iter().zip(&run.members).skip(1) {
             let branch = seats.iter().find(|tree| tree.role == role.name).map(|tree| tree.branch.as_str());
             let spec = self.flow_spec(role, brief::member(role, branch, dir), dir);
-            self.agents.launches.push(Launch::new(member.pane, spec, now));
+            self.agents.launches.add(Launch::new(member.pane, spec, now));
             team.push(member.pane);
         }
         let members = brief::Team { members: &run.members, trees: seats };
         let spec = self.flow_spec(&roles[0], brief::brief(&run.flow, &run.task, branch, members, dir), dir);
         let mut launch = Launch::new(run.members[0].pane, spec, now);
         launch.after = team;
-        self.agents.launches.push(launch);
+        self.agents.launches.add(launch);
         log::info!(
             "flow",
             "run started",
@@ -600,7 +600,6 @@ impl App {
             return;
         };
         let Some(line) = self.resume_line(Some(&run.flow.orchestrator), agent, run.dir.as_deref()) else { return };
-        self.agents.launches.retain(|launch| launch.term != term.id);
         let spec = launch::Spec {
             command: line,
             prompt: Some(brief::restored(&run.members, run.dir.as_deref())),
@@ -610,6 +609,6 @@ impl App {
         let mut launch = Launch::new(term.id, spec, Instant::now());
         launch.after = run.members.iter().map(|m| m.pane).filter(|pane| *pane != term.id).collect();
         launch.resume = term.resuming;
-        self.agents.launches.push(launch);
+        self.agents.launches.replace(launch);
     }
 }

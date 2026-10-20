@@ -137,7 +137,7 @@ impl Team {
     fn state(&mut self) -> String {
         let order = self.order().join("\n");
         let launches: Vec<String> =
-            self.app.agents.launches.iter().map(|l| format!("{} {}", l.term, l.stage())).collect();
+            self.app.agents.launches.list().iter().map(|l| format!("{} {}", l.term, l.stage())).collect();
         let screens: Vec<String> = self
             .app
             .projects

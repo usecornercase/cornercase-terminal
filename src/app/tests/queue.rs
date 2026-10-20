@@ -113,11 +113,11 @@ mod starts {
         app.panels.queued.schedule(None, task(&app, at, None)).expect("add");
         assert_eq!(app.tick_at(Instant::now(), at - 10), Some(Duration::from_secs(10)));
         app.refresh_at(Instant::now(), at - 1);
-        assert!(app.agents.launches.is_empty());
+        assert!(app.agents.launches.list().is_empty());
         assert_eq!(app.panels.queued.queue().pending(), 1);
         app.refresh_at(Instant::now(), at);
-        assert_eq!(app.agents.launches.len(), 1);
-        assert_eq!(app.agents.launches[0].trust, Some(agents::launch::Trust::Accepted));
+        assert_eq!(app.agents.launches.list().len(), 1);
+        assert_eq!(app.agents.launches.list()[0].trust, Some(agents::launch::Trust::Accepted));
     }
 
     #[test]
@@ -126,12 +126,12 @@ mod starts {
         let at = time::now() + 3600;
         app.panels.queued.schedule(None, task(&app, at, None)).expect("add");
         app.refresh_at(Instant::now(), at);
-        assert!(app.agents.launches.is_empty());
+        assert!(app.agents.launches.list().is_empty());
 
         app.set_queue_area(AREA);
         app.refresh_at(Instant::now(), at);
 
-        assert_eq!(app.agents.launches.len(), 1);
+        assert_eq!(app.agents.launches.list().len(), 1);
         assert_eq!(app.panels.queued.queue().pending(), 0);
     }
 
@@ -147,7 +147,7 @@ mod starts {
             matches!(&app.panels.queued.queue().entry(id).expect("entry").state, QueueState::Failed { reason } if reason.contains("not installed"))
         );
         app.refresh_at(Instant::now(), at + 1);
-        assert!(app.agents.launches.is_empty());
+        assert!(app.agents.launches.list().is_empty());
     }
 
     #[test]
@@ -158,7 +158,7 @@ mod starts {
         crate::persist::save(&path, &app.queue_saved()).expect("save");
         app.set_queue(queue::load(&path, 100 + queue::GRACE + 1));
         app.refresh_at(Instant::now(), 1000);
-        assert!(app.agents.launches.is_empty());
+        assert!(app.agents.launches.list().is_empty());
         assert_eq!(app.panels.queued.queue().entry(id).expect("entry").state, QueueState::Missed);
         app.run_queued(id, Instant::now()).expect("start now");
         refreshing(&mut app, &rx, "started now", |app| {
@@ -424,7 +424,7 @@ mod guarantees {
         app.set_queue_path(path);
         let id = app.panels.queued.schedule(None, task(&app, time::now() + 3600, None)).expect("add");
         assert!(app.run_queued(id, Instant::now()).expect_err("save must fail").contains("cannot save"));
-        assert_eq!(app.agents.launches.len(), 0);
+        assert_eq!(app.agents.launches.list().len(), 0);
         assert_eq!(app.projects[0].workspaces[0].tabs.len(), 1);
         assert!(
             matches!(&app.panels.queued.queue().entry(id).expect("entry").state, QueueState::Failed { reason } if reason.contains("cannot save"))

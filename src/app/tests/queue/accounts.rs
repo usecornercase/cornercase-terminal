@@ -55,7 +55,7 @@ fn an_entry_starts_with_its_accounts_and_keeps_the_selection() {
 
     app.run_queued(id, Instant::now()).expect("start");
 
-    assert_eq!(app.agents.launches.len(), 1);
+    assert_eq!(app.agents.launches.list().len(), 1);
     let pane = app.projects[0].workspaces[0].tabs.last().and_then(Tab::pane).expect("the new tab");
     assert_eq!((pane.accounts().chosen(), app.config.profile.as_str()), (claude("home"), "Work"));
 }
