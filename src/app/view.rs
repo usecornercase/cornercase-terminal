@@ -1,9 +1,16 @@
+use std::time::Instant;
+
+use ratatui::layout::Rect;
+
 use super::App;
+use super::interaction::{Drag, Grab};
+use super::layout::Side;
+use super::toast::Toast;
 use crate::accounts;
 use crate::agents::context::Context;
 use crate::agents::{Known, activity};
 use crate::config::Config;
-use crate::project::{Tab, Workspace};
+use crate::project::{Hierarchy, Project, Tab, Workspace};
 use crate::term::Term;
 use crate::ui::{self};
 
@@ -83,28 +90,130 @@ impl App {
         let shown = &rows[above.end..below.start];
         let open = self.tree_open();
         let workspaces = self.projects.iter().enumerate().map(|(p, project)| {
-            let entry = |(w, workspace): (usize, &Workspace)| {
-                let tab = |(t, tab): (usize, &Tab)| {
-                    if shown.contains(&ui::TreeRow::Tab(p, w, t)) {
-                        self.tab_entry(tab)
-                    } else {
-                        ui::TabEntry { status: tab.status(), ..ui::TabEntry::from("") }
-                    }
-                };
-                let named = shown.contains(&ui::TreeRow::Workspace(p, w));
-                ui::WorkspaceEntry {
-                    name: if named { workspace.label() } else { String::new() },
-                    tabs: workspace.tabs.iter().enumerate().map(tab).collect(),
-                    behind: workspace.behind,
-                    pull: self.pull_mark(workspace),
-                    removing: workspace.removing(),
-                    collapsed: workspace.collapsed,
-                    setting_up: workspace.setting_up(),
-                }
-            };
-            if open[p] { project.workspaces.iter().enumerate().map(entry).collect() } else { Vec::new() }
+            let entries = project.workspaces.iter().enumerate();
+            if open[p] {
+                entries.map(|(w, workspace)| self.tree_entry(p, w, workspace, shown)).collect()
+            } else {
+                Vec::new()
+            }
         });
         ui::TreeView { workspaces: workspaces.collect(), shape }
+    }
+
+    fn tree_entry(&self, p: usize, w: usize, workspace: &Workspace, shown: &[ui::TreeRow]) -> ui::WorkspaceEntry {
+        let tab = |(t, tab): (usize, &Tab)| {
+            if shown.contains(&ui::TreeRow::Tab(p, w, t)) {
+                self.tab_entry(tab)
+            } else {
+                ui::TabEntry { status: tab.status(), ..ui::TabEntry::from("") }
+            }
+        };
+        let named = shown.contains(&ui::TreeRow::Workspace(p, w));
+        ui::WorkspaceEntry {
+            name: if named { workspace.label() } else { String::new() },
+            tabs: workspace.tabs.iter().enumerate().map(tab).collect(),
+            behind: workspace.behind,
+            pull: self.pull_mark(workspace),
+            removing: workspace.removing(),
+            collapsed: workspace.collapsed,
+            setting_up: workspace.setting_up(),
+        }
+    }
+
+    pub(super) fn tab_view(&mut self, area: Rect) -> Option<ui::TabView> {
+        let dragging = self.drag.as_ref().and_then(Drag::divider);
+        let pane_area = self.layout(area).shown(self.nav).pane;
+        let landing = self.pane_landing(pane_area);
+        let pointer = self.link_hover();
+        let root = self.project().and_then(Project::workspace).map(|w| w.path.clone());
+        let (home, bands) = (self.home.clone(), self.pane_bands());
+        let dim_inactive = self.config.dim_inactive_panes;
+        self.tab_mut().and_then(|tab| {
+            let layout = tab.layout_by_index()?;
+            let screens: Vec<_> = tab.panes.iter_mut().map(|t| t.emulator.snapshot().unwrap_or_default()).collect();
+            let dragging = dragging.filter(|(id, _)| *id == tab.id).map(|(_, path)| path);
+            let link = pointer
+                .zip(root.as_deref())
+                .and_then(|(at, root)| Self::hovered_link(tab, &screens, pane_area, at, root, home.as_deref()));
+            let bands = tab.panes.iter().map(|t| bands.get(&t.id).cloned()).collect();
+            Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging, link, landing, bands })
+        })
+    }
+
+    pub(super) fn lists_view(&self, area: Rect, now: Instant) -> ui::View<'_> {
+        let project = self.project();
+        let workspaces = project
+            .filter(|_| !self.drawn.tree)
+            .map(|p| p.workspaces.iter().map(|w| self.workspace_entry(w)).collect());
+        ui::View {
+            tree: self.drawn.tree.then(|| self.tree_view()),
+            agents: self.config.agents_section.then(|| self.agents_view()),
+            counts: self.config.counts,
+            icons: self.config.icon_bar,
+            groups: self.groups.iter().map(|g| g.entry.clone()).collect(),
+            projects: self.project_entries(),
+            active: self.active,
+            projects_scroll: self.scroll.projects,
+            has_project: project.is_some(),
+            workspaces: workspaces.unwrap_or_default(),
+            active_workspace: project.map_or(0, |p| p.active),
+            active_tab: project.and_then(Project::workspace).filter(|w| !w.tabs.is_empty()).map(|w| w.active),
+            workspaces_scroll: self.scroll.workspaces,
+            issues: self.issues_available(),
+            ..self.chrome_view(area, now)
+        }
+    }
+
+    fn chrome_view(&self, area: Rect, now: Instant) -> ui::View<'_> {
+        let visible = self.visible_tab();
+        let attention = activity::attention(self.projects.tabs().filter(|t| Some(t.id) != visible).map(Tab::status));
+        ui::View {
+            hover: self.hover.filter(|_| self.drag.as_ref().is_none_or(Drag::shows_hover)),
+            widths: self.widths,
+            sidebar: self.sidebar(),
+            resizing: self.drag.as_ref().and_then(Drag::border),
+            light: self.theme.is_light() == Some(true),
+            muted: ui::muted(&self.theme),
+            soft: ui::soft(&self.theme),
+            toast: self.toast.as_ref().map(Toast::view),
+            star: self.star.card,
+            nav: self.nav,
+            update: self.update_label(),
+            remote: self.remote_button(),
+            accounts: self.account_pills(),
+            attention,
+            spin: self.spin(now),
+            drag: self.row_drag_view(area),
+            tab_bar: (!self.drawn.tab_bar.is_empty()).then(|| self.tab_bar_view()),
+            ..self.panels_view(area, now)
+        }
+    }
+
+    fn panels_view(&self, area: Rect, now: Instant) -> ui::View<'_> {
+        ui::View {
+            changes: if self.changes_shown() { self.panel_view() } else { None },
+            changes_button: self.changes_button_view(),
+            todo: (self.side == Some(Side::Todo)).then(|| self.todo_view(self.layout(area).shown(self.nav).changes)),
+            flow: (self.side == Some(Side::Flow)).then(|| self.flow_view(now, self.spin(now))).flatten(),
+            flow_run: self.has_run(),
+            todo_dot: self.config.todo_dot,
+            todo_pending: self.todos.pending() > 0,
+            ..ui::View::default()
+        }
+    }
+
+    fn spin(&self, now: Instant) -> Option<u8> {
+        let elapsed = now.saturating_duration_since(self.booted);
+        self.config.spinner().then(|| if self.agent_working() { activity::spin_frame(elapsed) } else { 0 })
+    }
+
+    fn row_drag_view(&self, area: Rect) -> Option<ui::Drag> {
+        let moved = self.row_drag().filter(|d| d.moved).zip(self.hover);
+        moved.and_then(|(d, pos)| match d.target {
+            Grab::Row(target) => self.drag_view(target, pos, area),
+            Grab::Todo(id) => Some(ui::Drag::Todo(id)),
+            Grab::Agent(_) => None,
+        })
     }
 }
 

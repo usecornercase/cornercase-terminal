@@ -54,6 +54,7 @@ use crate::issues::browser::{Browser, Screen};
 use crate::issues::{self, Secret};
 use crate::paths;
 use crate::process;
+use crate::project::Tab;
 use crate::project::picker::Picker;
 use crate::project::search::Finder;
 use crate::project::search::{Goto, Kind};

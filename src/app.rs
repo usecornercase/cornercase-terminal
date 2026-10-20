@@ -35,7 +35,7 @@ use crate::issues::{Account, Source};
 use crate::paths;
 use crate::project::search::said;
 use crate::project::split::Dir;
-use crate::project::{Group, Hierarchy, Project, Tab, group};
+use crate::project::{Group, Hierarchy, Project, group};
 use crate::settings::Page;
 use crate::state::{self, ChangesState, IssuesState, ProjectState, State};
 use crate::todo::{self, Todos};
@@ -49,7 +49,6 @@ use changes_panel::ChangesEvent;
 use files_panel::FilesEvent;
 use interaction::AUTO_SCROLL_EVERY;
 use interaction::Drag;
-use interaction::Grab;
 use interaction::LINES_SCROLL_EVERY;
 use issues_dialog::IssueEvent;
 use launches::LAUNCH_EVERY;
@@ -463,6 +462,17 @@ impl App {
     }
 
     pub(super) fn refresh_at(&mut self, now: Instant, clock: i64) {
+        self.refresh_sources(now, clock);
+        self.refresh_agents(now, clock);
+        self.refresh_panels(now);
+        if self.synced.is_some_and(|at| now.duration_since(at) < SYNC_EVERY) {
+            return;
+        }
+        self.synced = Some(now);
+        self.refresh_slowly(now);
+    }
+
+    fn refresh_sources(&mut self, now: Instant, clock: i64) {
         self.reap();
         self.watch_config(now);
         self.watch_setups(now);
@@ -473,6 +483,9 @@ impl App {
         {
             self.list_running(now);
         }
+    }
+
+    fn refresh_agents(&mut self, now: Instant, clock: i64) {
         self.drive_launches(now);
         self.latch_run_ends();
         self.watch_agents(now);
@@ -487,6 +500,9 @@ impl App {
         self.ring_bells(now);
         self.close_gone_flow_message();
         self.check_updates(now);
+    }
+
+    fn refresh_panels(&mut self, now: Instant) {
         self.refresh_files(now);
         self.refresh_run_files(now);
         self.flush_run_dirs();
@@ -494,10 +510,9 @@ impl App {
         self.refresh_changes(now);
         self.auto_scroll(now);
         self.auto_scroll_lines(now);
-        if self.synced.is_some_and(|at| now.duration_since(at) < SYNC_EVERY) {
-            return;
-        }
-        self.synced = Some(now);
+    }
+
+    fn refresh_slowly(&mut self, now: Instant) {
         self.watch_accounts();
         self.watch_accounts_page(now);
         self.sync_worktrees();
@@ -556,53 +571,16 @@ impl App {
             self.changes.mode = changes.mode;
             self.changes.scope = changes.scope.unwrap_or_default();
         }
-        let side = if saved.files {
-            Some(Side::Files)
-        } else if saved.todo {
-            Some(Side::Todo)
-        } else if saved.changes.is_some_and(|changes| changes.open) {
-            Some(Side::Changes)
-        } else {
-            None
-        };
-        self.show_side(side);
-        if let Some(issues) = &saved.issues {
-            self.issues.tab = issues.tab.as_deref().and_then(IssueTab::from_id);
-            self.issues.closed = issues.closed;
-            self.issues.people = issues.people.clone();
-        }
+        self.show_side(saved_side(saved));
+        self.restore_issues(saved);
         let first_group = self.groups.len();
         for entry in &saved.groups {
             let icon = group::known_icon(entry.icon);
             let id = self.take_id();
             self.groups.push(Group { id, entry: group::GroupEntry { icon, ..entry.clone() } });
         }
-        let mut missed: Vec<(String, usize)> = Vec::new();
         let mut parents = session::Parents::default();
-        for (i, saved_project) in saved.projects.iter().enumerate() {
-            let path = saved_project.path.canonicalize().unwrap_or_else(|_| saved_project.path.clone());
-            if !path.is_dir() || self.projects.iter().any(|p| p.path == path) {
-                continue;
-            }
-            let id = self.take_id();
-            let group = saved_project.group.and_then(|g| self.groups.get(first_group + g)).map(|g| g.id);
-            let mut workspaces = Vec::new();
-            let mut lost = 0;
-            for saved_ws in &saved_project.workspaces {
-                if let Some((workspace, missing)) = self.restore_workspace(saved_ws, area, &mut parents) {
-                    workspaces.push(workspace);
-                    lost += missing;
-                }
-            }
-            let project = saved_project.restore(id, path, group, workspaces);
-            if lost > 0 {
-                missed.push((self.project_label(&project), lost));
-            }
-            if i <= saved.active {
-                self.active = self.projects.len();
-            }
-            self.projects.push(project);
-        }
+        let missed = self.restore_projects(saved, first_group, area, &mut parents);
         self.adopt_saved(parents);
         self.sync_worktrees();
         if saved.flow {
@@ -612,6 +590,59 @@ impl App {
             self.toast = Some(Toast::new(not_restored(&missed), ui::ToastIcon::Bug));
         }
         missed.is_empty()
+    }
+
+    fn restore_issues(&mut self, saved: &State) {
+        if let Some(issues) = &saved.issues {
+            self.issues.tab = issues.tab.as_deref().and_then(IssueTab::from_id);
+            self.issues.closed = issues.closed;
+            self.issues.people = issues.people.clone();
+        }
+    }
+
+    fn restore_projects(
+        &mut self,
+        saved: &State,
+        first_group: usize,
+        area: Rect,
+        parents: &mut session::Parents,
+    ) -> Vec<(String, usize)> {
+        let mut missed = Vec::new();
+        for (i, saved_project) in saved.projects.iter().enumerate() {
+            let group = saved_project.group.and_then(|g| self.groups.get(first_group + g)).map(|g| g.id);
+            let Some((project, lost)) = self.restore_project(saved_project, group, area, parents) else { continue };
+            if lost > 0 {
+                missed.push((self.project_label(&project), lost));
+            }
+            if i <= saved.active {
+                self.active = self.projects.len();
+            }
+            self.projects.push(project);
+        }
+        missed
+    }
+
+    fn restore_project(
+        &mut self,
+        saved_project: &ProjectState,
+        group: Option<u64>,
+        area: Rect,
+        parents: &mut session::Parents,
+    ) -> Option<(Project, usize)> {
+        let path = saved_project.path.canonicalize().unwrap_or_else(|_| saved_project.path.clone());
+        if !path.is_dir() || self.projects.iter().any(|p| p.path == path) {
+            return None;
+        }
+        let id = self.take_id();
+        let mut workspaces = Vec::new();
+        let mut lost = 0;
+        for saved_ws in &saved_project.workspaces {
+            if let Some((workspace, missing)) = self.restore_workspace(saved_ws, area, parents) {
+                workspaces.push(workspace);
+                lost += missing;
+            }
+        }
+        Some((saved_project.restore(id, path, group, workspaces), lost))
     }
 
     pub(crate) fn handle_event(&mut self, ev: AppEvent, area: Rect) -> Result<()> {
@@ -720,102 +751,28 @@ impl App {
     }
 
     pub(crate) fn draw(&mut self, f: &mut Frame, sight: &Sight, now: Instant) -> Option<Placed> {
-        self.begin_draw(f.area(), now);
-        let projects = self.project_entries();
-        let groups = self.groups.iter().map(|g| g.entry.clone()).collect();
-        let (has_project, workspaces, active_workspace, active_tab) = match self.project() {
-            Some(p) => (
-                true,
-                if self.drawn.tree {
-                    Vec::new()
-                } else {
-                    p.workspaces.iter().map(|w| self.workspace_entry(w)).collect()
-                },
-                p.active,
-                p.workspace().filter(|w| !w.tabs.is_empty()).map(|w| w.active),
-            ),
-            None => (false, Vec::new(), 0, None),
-        };
         let area = f.area();
+        self.begin_draw(area, now);
         let overlay = self.overlay.as_ref().and_then(|o| self.overlay_view(o, area));
         let modal = overlay.as_ref().is_some_and(ui::Overlay::is_modal);
         let (files, placed) = self.files_seen(sight, area, modal);
-        let dim_inactive = self.config.dim_inactive_panes;
-        let dragging = self.drag.as_ref().and_then(Drag::divider);
-        let pane_area = self.layout(area).shown(self.nav).pane;
-        let landing = self.pane_landing(pane_area);
-        let pointer = self.link_hover();
-        let root = self.project().and_then(Project::workspace).map(|w| w.path.clone());
-        let (home, bands) = (self.home.clone(), self.pane_bands());
-        let tab = self.tab_mut().and_then(|tab| {
-            let layout = tab.layout_by_index()?;
-            let screens: Vec<_> = tab.panes.iter_mut().map(|t| t.emulator.snapshot().unwrap_or_default()).collect();
-            let dragging = dragging.filter(|(id, _)| *id == tab.id).map(|(_, path)| path);
-            let link = pointer
-                .zip(root.as_deref())
-                .and_then(|(at, root)| Self::hovered_link(tab, &screens, pane_area, at, root, home.as_deref()));
-            let bands = tab.panes.iter().map(|t| bands.get(&t.id).cloned()).collect();
-            Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging, link, landing, bands })
-        });
+        let tab = self.tab_view(area);
         self.toast = self.toast.take().filter(|t| t.at.elapsed() < t.lasts());
-        let visible = self.visible_tab();
-        let tabs = self.projects.tabs();
-        let attention = activity::attention(tabs.filter(|t| Some(t.id) != visible).map(Tab::status));
-        let elapsed = now.saturating_duration_since(self.booted);
-        let spin = self.config.spinner().then(|| if self.agent_working() { activity::spin_frame(elapsed) } else { 0 });
-        let moved = self.row_drag().filter(|d| d.moved).zip(self.hover);
-        let drag = moved.and_then(|(d, pos)| match d.target {
-            Grab::Row(target) => self.drag_view(target, pos, area),
-            Grab::Todo(id) => Some(ui::Drag::Todo(id)),
-            Grab::Agent(_) => None,
-        });
-        let tree = self.drawn.tree.then(|| self.tree_view());
-        let agents = self.config.agents_section.then(|| self.agents_view());
-        let view = ui::View {
-            tree,
-            agents,
-            counts: self.config.counts,
-            icons: self.config.icon_bar,
-            groups,
-            projects,
-            active: self.active,
-            projects_scroll: self.scroll.projects,
-            has_project,
-            workspaces,
-            active_workspace,
-            active_tab,
-            workspaces_scroll: self.scroll.workspaces,
-            issues: self.issues_available(),
-            hover: self.hover.filter(|_| self.drag.as_ref().is_none_or(Drag::shows_hover)),
-            widths: self.widths,
-            sidebar: self.sidebar(),
-            resizing: self.drag.as_ref().and_then(Drag::border),
-            light: self.theme.is_light() == Some(true),
-            muted: ui::muted(&self.theme),
-            soft: ui::soft(&self.theme),
-            tab,
-            overlay,
-            toast: self.toast.as_ref().map(Toast::view),
-            star: self.star.card,
-            nav: self.nav,
-            update: self.update_label(),
-            remote: self.remote_button(),
-            accounts: self.account_pills(),
-            changes: if self.changes_shown() { self.panel_view() } else { None },
-            changes_button: self.changes_button_view(),
-            todo: (self.side == Some(Side::Todo)).then(|| self.todo_view(self.layout(area).shown(self.nav).changes)),
-            flow: (self.side == Some(Side::Flow)).then(|| self.flow_view(now, spin)).flatten(),
-            flow_run: self.has_run(),
-            todo_dot: self.config.todo_dot,
-            todo_pending: self.todos.pending() > 0,
-            files,
-            attention,
-            spin,
-            drag,
-            tab_bar: (!self.drawn.tab_bar.is_empty()).then(|| self.tab_bar_view()),
-        };
+        let view = ui::View { tab, overlay, files, ..self.lists_view(area, now) };
         ui::draw(f, &view);
         placed.map(|placed| images::owned(f.buffer_mut(), placed))
+    }
+}
+
+fn saved_side(saved: &State) -> Option<Side> {
+    if saved.files {
+        Some(Side::Files)
+    } else if saved.todo {
+        Some(Side::Todo)
+    } else if saved.changes.is_some_and(|changes| changes.open) {
+        Some(Side::Changes)
+    } else {
+        None
     }
 }
 
