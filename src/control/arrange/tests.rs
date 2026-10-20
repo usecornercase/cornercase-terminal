@@ -60,8 +60,9 @@ fn an_older_server_refuses_close_agent_by_name() {
     };
     let sent = serde_json::to_value(asked).expect("json");
 
-    let older = &Command::NAMES[..Command::NAMES.len() - 1];
-    assert_eq!(command_name(&sent), Command::NAMES.last().copied());
+    let added = Command::NAMES.iter().position(|name| *name == "close-agent").expect("close-agent is a name");
+    let older = &Command::NAMES[..added];
+    assert_eq!(command_name(&sent), Some("close-agent"));
     assert!(!older.contains(&"close-agent") && sent["args"].get("item").is_none(), "{sent}");
 }
 

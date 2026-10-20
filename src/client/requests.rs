@@ -63,6 +63,10 @@ pub(crate) fn use_account_switch() -> Result<()> {
     require("account-switch", "cannot rename or switch accounts")
 }
 
+pub(crate) fn use_account_restart() -> Result<()> {
+    require("account-restart", "cannot restart agents on another account")
+}
+
 fn require(feature: &str, lacks: &str) -> Result<()> {
     require_on(connect(), feature, lacks)
 }

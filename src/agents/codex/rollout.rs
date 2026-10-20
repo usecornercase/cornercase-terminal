@@ -36,6 +36,11 @@ pub(in crate::agents) fn rollout_path(pid: i32, since: SystemTime) -> Option<Pat
     single(paths.into_iter().filter(|p| metadata(p).is_some()))
 }
 
+pub(in crate::agents) fn conversation_files(rollout: &Path) -> Option<Vec<(PathBuf, PathBuf)>> {
+    let relative = crate::agents::context::under(rollout, "sessions")?;
+    Some(vec![(rollout.to_path_buf(), relative)])
+}
+
 fn served(pid: i32, since: SystemTime) -> Option<PathBuf> {
     let codex_home = home(pid)?;
     let cwd = folder(pid)?;

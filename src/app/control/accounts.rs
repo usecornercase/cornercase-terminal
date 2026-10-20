@@ -96,7 +96,7 @@ fn known_login(listed: &[(Known, Vec<String>)], (kind, name): &Key) -> bool {
     listed.iter().any(|(k, names)| k == kind && (names.contains(name) || name.is_empty() && !names.is_empty()))
 }
 
-fn provider(name: &str) -> Result<Known, Refusal> {
+pub(super) fn provider(name: &str) -> Result<Known, Refusal> {
     Known::of(name).filter(|kind| kind.account().is_some()).ok_or_else(|| {
         let known: Vec<&str> = accounts::supported().map(Known::name).collect();
         malformed(format!("`{name}` has no accounts; the agents with accounts are {}", known.join(", ")))
@@ -419,6 +419,7 @@ impl App {
         self.relist_accounts();
         let (provider, name) = (kind.name(), remove.name.as_str());
         self.change_config_for(|config| config.forget_account(provider, name))?;
+        self.forget_restarts_to(kind, &remove.name);
         Ok(Some(json(&self.accounts_info(None))))
     }
 
@@ -426,7 +427,7 @@ impl App {
         self.config.account_names.get(kind.name()).and_then(|labels| labels.get(name)).map_or("", String::as_str)
     }
 
-    fn known_account(&self, kind: Known, name: &str) -> Result<(), Refusal> {
+    pub(super) fn known_account(&self, kind: Known, name: &str) -> Result<(), Refusal> {
         if name.is_empty() { Ok(()) } else { self.account_exists(kind, name) }
     }
 

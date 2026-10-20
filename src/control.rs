@@ -32,8 +32,8 @@ use fields::{Fields, chosen};
 pub(crate) use todo::{Todo, TodoSend};
 
 pub(crate) use accounts::{
-    AccountAdd, AccountList, AccountRemove, AccountRename, AccountUse, AccountsInfo, ProfileDelete, ProfileList,
-    ProfileNew, ProfileSet, ProfileUse,
+    AccountAdd, AccountList, AccountRemove, AccountRename, AccountRestart, AccountUse, AccountsInfo, ProfileDelete,
+    ProfileList, ProfileNew, ProfileSet, ProfileUse, RestartInfo, SkippedPane,
 };
 pub(crate) use app_state::{
     AppState, AppWatch, AwayInfo, InstallInfo, NoUpdate, Notes, ReleaseInfo, UpdateCheck, UpdateInfo, UpdateInstall,
@@ -195,6 +195,7 @@ pub(crate) enum Command {
     AccountRename(AccountRename),
     AccountUse(AccountUse),
     CloseAgent(CloseAgent),
+    AccountRestart(AccountRestart),
 }
 
 impl Command {
@@ -333,6 +334,7 @@ impl Command {
             Self::ProfileSet(_) => 83,
             Self::ProfileUse(_) => 84,
             Self::ProfileDelete(_) => 85,
+            Self::AccountRestart(_) => 89,
             _ => return None,
         })
     }
@@ -355,7 +357,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 89] = [
+    pub(crate) const NAMES: [&str; 90] = [
         "status",
         "open",
         "new-workspace",
@@ -445,6 +447,7 @@ impl Command {
         "account-rename",
         "account-use",
         "close-agent",
+        "account-restart",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

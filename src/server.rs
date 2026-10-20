@@ -691,7 +691,7 @@ impl Server {
         if log::enabled(Level::Debug) {
             describe(&ev);
         }
-        if let ServerEvent::App(AppEvent::Output(id, _)) = &ev {
+        if let ServerEvent::App(AppEvent::Output(id, ..)) = &ev {
             self.printed = self.printed || self.app.shows(*id);
         } else {
             self.changed = true;

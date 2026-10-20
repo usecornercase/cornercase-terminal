@@ -62,6 +62,20 @@ impl Record {
             Self::Copilot(path) => copilot::message::said_all(path, each),
         }
     }
+
+    pub(crate) fn conversation_files(&self) -> Option<Vec<(PathBuf, PathBuf)>> {
+        match self {
+            Self::Claude(path) => claude::transcript::conversation_files(path),
+            Self::Codex(path) => codex::rollout::conversation_files(path),
+            Self::Gemini(_) | Self::Opencode { .. } | Self::Grok(_) | Self::Cursor(_) | Self::Copilot(_) => None,
+        }
+    }
+}
+
+pub(in crate::agents) fn under(path: &Path, root: &str) -> Option<PathBuf> {
+    let parts: Vec<_> = path.components().collect();
+    let at = parts.iter().rposition(|part| part.as_os_str() == root)?;
+    (at + 1 < parts.len()).then(|| parts[at..].iter().collect())
 }
 
 pub(crate) struct Look<'a> {
@@ -158,6 +172,18 @@ impl Reader {
             Self::Copilot(reader) => reader.conversation(),
         }
     }
+
+    fn folder(&self) -> Option<&Path> {
+        match self {
+            Self::Claude(reader) => reader.folder(),
+            Self::Codex(_)
+            | Self::Gemini(_)
+            | Self::Opencode(_)
+            | Self::Grok(_)
+            | Self::Cursor(_)
+            | Self::Copilot(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -223,6 +249,14 @@ impl Pane {
 
     pub(crate) fn conversation(&self) -> Option<&str> {
         self.reader.as_ref()?.conversation()
+    }
+
+    pub(crate) fn folder(&self) -> Option<&Path> {
+        self.reader.as_ref()?.folder()
+    }
+
+    pub(crate) fn conversation_files(&self) -> Option<Vec<(PathBuf, PathBuf)>> {
+        self.record_for(self.kind?)?.conversation_files()
     }
 }
 

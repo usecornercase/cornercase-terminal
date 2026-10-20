@@ -146,6 +146,7 @@ fn last_commands() -> Vec<Command> {
         Command::AccountRename(AccountRename::default()),
         Command::AccountUse(AccountUse::default()),
         Command::CloseAgent(CloseAgent::default()),
+        Command::AccountRestart(AccountRestart::default()),
     ]
 }
 
@@ -694,6 +695,17 @@ mod watch_v1 {
         assert!(plain.get("collapsed").is_none(), "{plain}");
         assert_eq!(folded["collapsed"], true);
         assert!(!serde_json::from_value::<PaneInfo>(plain).expect("a pane").collapsed);
+    }
+
+    #[test]
+    fn a_pane_leaves_its_accounts_out_unless_it_has_some() {
+        let accounts: BTreeMap<String, String> = [("claude".to_string(), "work".to_string())].into();
+        let plain = serde_json::to_value(pane(4, false)).expect("a pane");
+        let given = serde_json::to_value(PaneInfo { accounts: accounts.clone(), ..pane(4, false) }).expect("a pane");
+
+        assert!(plain.get("accounts").is_none(), "{plain}");
+        assert_eq!(given["accounts"], serde_json::json!({ "claude": "work" }));
+        assert_eq!(serde_json::from_value::<PaneInfo>(given).expect("a pane").accounts, accounts);
     }
 
     fn agents_tab() -> TabInfo {

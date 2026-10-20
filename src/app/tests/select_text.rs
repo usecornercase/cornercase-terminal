@@ -86,7 +86,7 @@ fn a_program_that_copies_reaches_the_clipboard_with_a_toast() {
     let (mut app, _rx) = app();
     let id = term(&app, 0).id;
 
-    app.handle_event(AppEvent::Output(id, b"\x1b]52;c;aGVsbG8=\x07".to_vec()), AREA).expect("handle output");
+    app.handle_event(AppEvent::Output(id, 0, b"\x1b]52;c;aGVsbG8=\x07".to_vec()), AREA).expect("handle output");
 
     assert_eq!((app.take_host_writes(), toast(&app)), (vec![clipboard::osc52("hello")], Some(COPIED)));
 }

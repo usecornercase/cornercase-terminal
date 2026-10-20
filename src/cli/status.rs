@@ -174,6 +174,7 @@ fn pane_notes(pane: &PaneInfo) -> Vec<String> {
         (pane.survey, "survey open"),
         (pane.resuming, "resuming"),
         (pane.draft, "draft"),
+        (pane.account_restart.as_deref() == Some("waiting"), "restarts after this turn"),
     ];
     let flagged = flags.into_iter().filter(|(on, _)| *on).map(|(_, note)| note.to_string());
     subagents.into_iter().chain(held).chain(flagged).collect()

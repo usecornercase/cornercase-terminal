@@ -175,6 +175,16 @@ pub(in crate::agents) fn transcript_path(dir: &Path, cwd: &Path, id: &str) -> Op
     safe.then(|| dir.join("projects").join(project_dir(cwd)).join(format!("{id}.jsonl")))
 }
 
+pub(in crate::agents) fn conversation_files(transcript: &Path) -> Option<Vec<(PathBuf, PathBuf)>> {
+    let relative = crate::agents::context::under(transcript, "projects")?;
+    let mut files = vec![(transcript.to_path_buf(), relative.clone())];
+    let folder = transcript.with_extension("");
+    if folder.is_dir() {
+        files.push((folder, relative.with_extension("")));
+    }
+    Some(files)
+}
+
 fn project_dir(cwd: &Path) -> String {
     let cwd = cwd.to_string_lossy();
     let name: String = cwd

@@ -477,6 +477,7 @@ fn branch_exists(repo: &Path, branch: &str) -> bool {
 }
 
 mod account_pills;
+mod account_restart;
 mod accounts;
 mod accounts_page;
 mod agent_status;

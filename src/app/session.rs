@@ -175,8 +175,17 @@ impl App {
     }
 
     pub(super) fn resume_holds(&self, pane: u64) -> bool {
+        self.resume_notice(pane).is_some()
+    }
+
+    fn resume_notice(&self, pane: u64) -> Option<String> {
+        if let Some(notice) = self.moving_notice(pane) {
+            return Some(notice.to_string());
+        }
         let now = Instant::now();
-        self.agents.launches.of_pane(pane).any(|launch| launch.holds(now))
+        let launch = self.agents.launches.of_pane(pane).find(|launch| launch.holds(now))?;
+        let term = self.projects.pane_by(pane)?;
+        Some(launch.restart.clone().unwrap_or_else(|| format!("resuming {}", resumed(term))))
     }
 
     pub(super) fn pane_bands(&self) -> HashMap<u64, ui::PaneBand> {
@@ -186,9 +195,14 @@ impl App {
             .into_iter()
             .map(|(pane, (text, queued))| (pane, ui::PaneBand::Held { text, queued }))
             .collect();
-        for pane in self.agents.launches.holding(now) {
-            if let Some(term) = self.projects.pane_by(pane) {
-                bands.insert(term.id, ui::PaneBand::Resuming(resumed(term)));
+        for pane in self.agents.launches.holding(now).chain(self.agents.restarts.moving_panes()) {
+            if let Some(text) = self.resume_notice(pane) {
+                bands.insert(pane, ui::PaneBand::Resuming(text));
+            }
+        }
+        for pane in self.agents.restarts.waiting_panes() {
+            if let Some(text) = self.waiting_notice(pane) {
+                bands.entry(pane).or_insert(ui::PaneBand::Restarts(text));
             }
         }
         bands
@@ -196,8 +210,13 @@ impl App {
 
     pub(super) fn holds_input(&mut self) -> bool {
         let Some(term) = self.term() else { return false };
-        let message = if self.resume_holds(term.id) {
-            format!("{} is resuming its conversation in this pane; wait for it, or press cancel", resumed(term))
+        let message = if let Some(notice) = self.resume_notice(term.id) {
+            match notice.strip_prefix("resuming ") {
+                Some(agent) => {
+                    format!("{agent} is resuming its conversation in this pane; wait for it, or press cancel")
+                }
+                None => format!("{notice} in this pane; wait for it, or press cancel"),
+            }
         } else if self.sending(term.id) {
             SENDING.to_string()
         } else {
@@ -229,17 +248,26 @@ impl App {
     pub(super) fn press_resume_notice(&mut self, area: Rect, pos: Position) -> bool {
         let Some(tab) = self.tab() else { return false };
         let pressed = tab.shown(area).into_iter().find_map(|(id, rect)| {
-            let term = tab.pane_by(id)?;
-            ui::resume_notice(rect, &resumed(term))
-                .filter(|(_, button)| self.resume_holds(id) && button.contains(pos))
-                .map(|_| id)
+            let notice = match self.resume_notice(id) {
+                Some(notice) => ui::resume_notice(rect, &notice),
+                None if self.held_label(id).is_none() => ui::restart_notice(rect, &self.waiting_notice(id)?),
+                None => return None,
+            };
+            notice.filter(|(_, button)| button.contains(pos)).map(|_| id)
         });
         let Some(pane) = pressed else { return false };
-        self.cancel_resume(pane);
+        if self.resume_holds(pane) {
+            self.cancel_resume(pane);
+        } else {
+            self.cancel_restart(pane);
+        }
         true
     }
 
     fn cancel_resume(&mut self, pane: u64) {
+        if self.cancel_move(pane) {
+            return;
+        }
         let Some(launch) = self.agents.launches.take_resume(pane) else { return };
         let typed = launch.typed();
         if !typed && let Some(term) = self.projects.pane_by_mut(pane) {

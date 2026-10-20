@@ -64,6 +64,7 @@ pub(crate) struct Term {
     pub(crate) setup: Option<setup::Pane>,
     pub(crate) parent: Option<u64>,
     pub(crate) collapsed: bool,
+    generation: u32,
     accounts: Accounts,
     account: accounts::Seen,
     master: Box<dyn MasterPty + Send>,
@@ -75,8 +76,8 @@ pub(crate) struct Term {
 
 #[derive(Debug)]
 pub(crate) enum Event {
-    Output(u64, Vec<u8>),
-    Exited(u64),
+    Output(u64, u32, Vec<u8>),
+    Exited(u64, u32),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,6 +100,7 @@ pub(crate) struct SpawnOptions<'a> {
 
 struct Wired {
     id: u64,
+    generation: u32,
     emulator: Emulator,
     master: Box<dyn MasterPty + Send>,
     writer: Writer,
@@ -109,7 +111,7 @@ struct Wired {
 
 impl From<Wired> for Term {
     fn from(wired: Wired) -> Self {
-        let Wired { id, emulator, master, writer, child, size, interactive } = wired;
+        let Wired { id, generation, emulator, master, writer, child, size, interactive } = wired;
         Self {
             id,
             emulator,
@@ -128,6 +130,7 @@ impl From<Wired> for Term {
             setup: None,
             parent: None,
             collapsed: false,
+            generation,
             accounts: Accounts::default(),
             account: accounts::Seen::default(),
             master,
@@ -170,6 +173,14 @@ fn pty_size(rows: u16, cols: u16) -> PtySize {
 
 impl Term {
     pub(crate) fn spawn<E: From<Event> + Send + 'static>(opts: SpawnOptions, tx: Sender<E>) -> Result<Self> {
+        Self::spawn_as(opts, 0, tx)
+    }
+
+    pub(crate) fn spawn_as<E: From<Event> + Send + 'static>(
+        opts: SpawnOptions,
+        generation: u32,
+        tx: Sender<E>,
+    ) -> Result<Self> {
         let SpawnOptions { id, shell, args, env, remove, rows, cols, cwd, theme } = opts;
         let pair = native_pty_system().openpty(pty_size(rows, cols)).map_err(|e| Error::OpenPty(e.into()))?;
 
@@ -189,10 +200,19 @@ impl Term {
         let emulator =
             Emulator::new(rows, cols, SCROLLBACK_BYTES, theme, Box::new(move |bytes| _ = write_to(&replies, bytes)))
                 .map_err(|e| Error::Emulator(e.into()))?;
-        spawn_reader(id, reader, tx);
+        spawn_reader(id, generation, reader, tx);
 
         let master = pair.master;
-        Ok(Wired { id, emulator, master, writer, child, size: (rows, cols), interactive: args.is_empty() }.into())
+        Ok(Wired { id, generation, emulator, master, writer, child, size: (rows, cols), interactive: args.is_empty() }
+            .into())
+    }
+
+    pub(crate) fn generation(&self) -> u32 {
+        self.generation
+    }
+
+    pub(crate) fn size(&self) -> (u16, u16) {
+        self.size
     }
 
     pub(crate) fn accounts(&self) -> &Accounts {
@@ -437,15 +457,20 @@ fn spawn_writer(mut pty: Box<dyn Write + Send>) -> Writer {
     Writer { tx, queued }
 }
 
-fn spawn_reader<E: From<Event> + Send + 'static>(id: u64, mut reader: Box<dyn Read + Send>, tx: Sender<E>) {
+fn spawn_reader<E: From<Event> + Send + 'static>(
+    id: u64,
+    generation: u32,
+    mut reader: Box<dyn Read + Send>,
+    tx: Sender<E>,
+) {
     thread::spawn(move || {
         let mut buf = vec![0u8; READ_BUFFER];
         while let Ok(n @ 1..) = reader.read(&mut buf) {
-            if tx.send(E::from(Event::Output(id, buf[..n].to_vec()))).is_err() {
+            if tx.send(E::from(Event::Output(id, generation, buf[..n].to_vec()))).is_err() {
                 return;
             }
         }
-        let _ = tx.send(E::from(Event::Exited(id)));
+        let _ = tx.send(E::from(Event::Exited(id, generation)));
     });
 }
 

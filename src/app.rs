@@ -77,6 +77,7 @@ use update_dialog::{UpdateEvent, UpdateState};
 use worktrees::WorktreeEvent;
 
 mod account_menu;
+mod account_restart;
 mod accounts_page;
 mod actions;
 mod agent_watch;
@@ -395,6 +396,7 @@ impl App {
         self.drive_launches(now);
         self.latch_run_ends();
         self.watch_agents(now);
+        self.drive_restarts(now);
         self.keep_awake(now);
         self.offer_star(now, clock);
         self.watch_messengers(now);
@@ -541,8 +543,9 @@ impl App {
     pub(crate) fn handle_event(&mut self, ev: AppEvent, area: Rect) -> Result<()> {
         match ev {
             AppEvent::Input(event) => self.handle_input(event, area)?,
-            AppEvent::Output(id, bytes) => self.output(id, &bytes),
-            AppEvent::Exited(id) => self.remove(id),
+            AppEvent::Output(id, generation, bytes) if self.current_shell(id, generation) => self.output(id, &bytes),
+            AppEvent::Exited(id, generation) if self.current_shell(id, generation) => self.remove(id),
+            AppEvent::Output(..) | AppEvent::Exited(..) => {}
             AppEvent::Worktree(event) => self.worktree_answered(event, area)?,
             AppEvent::Issues(event) => self.issue_answered(event, area)?,
             AppEvent::Changes(event) => self.changes_answered(event),
@@ -563,6 +566,7 @@ impl App {
             AppEvent::Merged(answer) => self.merged_answered(answer),
             AppEvent::Plugin(event) => self.plugin_answered(event),
             AppEvent::Login(kind, name, login) => self.login_checked(kind, name, login),
+            AppEvent::Restarted(restarted) => self.restarted(*restarted),
         }
         Ok(())
     }
@@ -575,6 +579,10 @@ impl App {
             _ => {}
         }
         Ok(())
+    }
+
+    fn current_shell(&self, id: u64, generation: u32) -> bool {
+        self.projects.pane_by(id).is_none_or(|t| t.generation() == generation)
     }
 
     fn output(&mut self, id: u64, bytes: &[u8]) {

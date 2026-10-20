@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
 use super::App;
+use super::account_restart::Restarts;
 use super::launches::Launches;
 use super::menus::{Marked, MenuAction};
 use super::notifications::Said;
@@ -32,6 +33,7 @@ pub(super) struct AgentRuntime {
     watched: Option<Instant>,
     pub(super) awake: Awake,
     pub(super) stats: agents::stats::Stats,
+    pub(super) restarts: Restarts,
 }
 
 impl AgentRuntime {
@@ -42,6 +44,7 @@ impl AgentRuntime {
             watched: None,
             awake: Awake::new(awake::tools()),
             stats: agents::stats::Stats::new(SystemTime::now()),
+            restarts: Restarts::default(),
         }
     }
 

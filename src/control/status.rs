@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
@@ -117,6 +118,7 @@ impl Report {
             role: pane.role.clone(),
             held_sends: pane.held_sends,
             draft: pane.draft,
+            account_restart: pane.account_restart.clone(),
         }
     }
 }
@@ -159,10 +161,11 @@ pub struct PaneRow {
     pub(crate) role: Option<String>,
     pub(crate) held_sends: u32,
     pub(crate) draft: bool,
+    pub(crate) account_restart: Option<String>,
 }
 
 impl PaneRow {
-    pub const COLUMNS: [&str; 28] = [
+    pub const COLUMNS: [&str; 29] = [
         "pane",
         "tab",
         "workspace",
@@ -191,6 +194,7 @@ impl PaneRow {
         "role",
         "held_sends",
         "draft",
+        "account_restart",
     ];
 }
 
@@ -316,4 +320,8 @@ pub struct PaneInfo {
     pub(crate) collapsed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) account: Option<String>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) accounts: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) account_restart: Option<String>,
 }

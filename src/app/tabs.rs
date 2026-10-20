@@ -8,6 +8,7 @@ use crate::accounts::Accounts;
 use crate::control;
 use crate::error::Result;
 use crate::flows::folder;
+use crate::log;
 use crate::paths;
 use crate::project::split::Dir;
 use crate::project::{Hierarchy, Project, Tab, TabAt, Workspace, WorkspaceAt};
@@ -99,7 +100,26 @@ impl App {
         self.spawn_term(Spawning { id, size, shell: &self.shells.shell, args: &[], cwd, run }, accounts)
     }
 
+    pub(super) fn respawn_in(&mut self, pane: u64, cwd: PathBuf, accounts: Accounts) -> Result<bool> {
+        let Some(old) = self.projects.pane_by(pane) else { return Ok(false) };
+        let (generation, size, parent, collapsed) =
+            (old.generation().wrapping_add(1), old.size(), old.parent, old.collapsed);
+        let spawning = Spawning { id: pane, size, shell: &self.shells.shell, args: &[], cwd, run: None };
+        let mut term = self.spawn_as(spawning, generation, accounts)?;
+        term.parent = parent;
+        term.collapsed = collapsed;
+        let Some(slot) = self.projects.pane_by_mut(pane) else { return Ok(false) };
+        let old = std::mem::replace(slot, term);
+        log::info!("app", "pane respawned", pane = pane, generation = generation);
+        drop(old);
+        Ok(true)
+    }
+
     pub(super) fn spawn_term(&self, spawning: Spawning, accounts: Accounts) -> Result<Term> {
+        self.spawn_as(spawning, 0, accounts)
+    }
+
+    fn spawn_as(&self, spawning: Spawning, generation: u32, accounts: Accounts) -> Result<Term> {
         let Spawning { id, size: (rows, cols), shell, args, cwd, run } = spawning;
         accounts.link(|kind| self.accounts.default_home(kind));
         let env = self.pane_env(id, run, &accounts);
@@ -115,7 +135,7 @@ impl App {
             cwd: Some(cwd),
             theme: self.terminal_theme(),
         };
-        let mut term = Term::spawn(opts, self.tx.clone())?;
+        let mut term = Term::spawn_as(opts, generation, self.tx.clone())?;
         term.set_accounts(accounts);
         Ok(term)
     }

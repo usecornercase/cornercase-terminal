@@ -115,6 +115,15 @@ fn not_confirmed(pane: u64) -> String {
     )
 }
 
+fn touches(pending: &Pending, pane: u64) -> bool {
+    match &pending.stage {
+        Stage::Held(_) | Stage::Launch { .. } | Stage::Confirm(_) => pending.done.ids.pane == Some(pane),
+        Stage::Watch(watch) => watch.pane == pane,
+        Stage::Several { parts, .. } => parts.iter().any(|part| part.done.ended.is_none() && touches(part, pane)),
+        _ => false,
+    }
+}
+
 impl App {
     pub(in crate::app) fn check_requests(&mut self, now: Instant) {
         self.settle_drafts(now);
@@ -136,6 +145,16 @@ impl App {
         }
         self.answer(pending.client, reply);
         matches!(pending.stage, Stage::Worktree(_)).then(|| Pending { client: None, timeout: None, ..pending })
+    }
+
+    pub(in crate::app) fn fail_pane_requests(&mut self, pane: u64, message: &str) {
+        let (failed, kept) =
+            std::mem::take(&mut self.clients.requests.pending).into_iter().partition(|p| touches(p, pane));
+        self.clients.requests.pending = kept;
+        self.clients.requests.queued.remove(&pane);
+        for pending in failed {
+            self.answer(pending.client, Err(message.to_string()));
+        }
     }
 
     fn advance(&self, pending: &mut Pending, launched: &[(u64, bool)], now: Instant) -> Option<Reply> {

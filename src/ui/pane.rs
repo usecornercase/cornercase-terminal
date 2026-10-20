@@ -46,6 +46,7 @@ pub(crate) struct TabView {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PaneBand {
     Resuming(String),
+    Restarts(String),
     Held { text: String, queued: bool },
 }
 
@@ -126,13 +127,25 @@ const HELD_SEND: &str = " send now ";
 const HELD_WAIT: &str = " wait turn ";
 const HELD_TEXT_MIN: u16 = 6;
 
-fn resume_label(agent: &str) -> String {
-    format!(" resuming {agent}… ")
+fn resume_label(text: &str) -> String {
+    format!(" {text}… ")
 }
 
 pub(crate) fn resume_notice(pane: Rect, agent: &str) -> Option<(Rect, Rect)> {
-    let label = u16::try_from(resume_label(agent).chars().count()).unwrap_or(u16::MAX);
-    let button = u16::try_from(RESUME_CANCEL.chars().count()).unwrap_or(u16::MAX);
+    notice(pane, &resume_label(agent))
+}
+
+pub(crate) fn restart_notice(pane: Rect, text: &str) -> Option<(Rect, Rect)> {
+    notice(pane, &restart_label(text))
+}
+
+fn restart_label(text: &str) -> String {
+    format!(" {text} ")
+}
+
+fn notice(pane: Rect, label: &str) -> Option<(Rect, Rect)> {
+    let label = width_of(label);
+    let button = width_of(RESUME_CANCEL);
     let width = label.saturating_add(button).saturating_add(1);
     if pane.height == 0 || width > pane.width {
         return None;
@@ -169,12 +182,12 @@ pub(crate) fn held_notice(pane: Rect, below: usize, queued: bool) -> Option<Held
     Some(HeldBar { text, send: Rect::new(send_x, y, send_w, 1), wait })
 }
 
-fn draw_resume_notice(f: &mut Frame, view: &View, pane: Rect, agent: &str) {
-    let Some((label, button)) = resume_notice(pane, agent) else { return };
+fn draw_notice(f: &mut Frame, view: &View, pane: Rect, text: String) {
+    let Some((label, button)) = notice(pane, &text) else { return };
     let band = Rect { y: label.y, height: 1, ..pane };
     f.buffer_mut().set_style(band, Style::default().bg(view.surface()));
-    let text = Style::default().bg(view.surface()).add_modifier(Modifier::BOLD);
-    f.render_widget(Paragraph::new(Span::styled(resume_label(agent), text)), label);
+    let bold = Style::default().bg(view.surface()).add_modifier(Modifier::BOLD);
+    f.render_widget(Paragraph::new(Span::styled(text, bold)), label);
     let style = dialog_button_style(view, button, false);
     f.render_widget(Paragraph::new(Span::styled(RESUME_CANCEL, style)), button);
 }
@@ -224,7 +237,8 @@ pub(super) fn draw_tab(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
         }
         draw_scrollback_badge(f, view, pane, screen.below);
         match tab.bands.get(i) {
-            Some(Some(PaneBand::Resuming(agent))) => draw_resume_notice(f, view, pane, agent),
+            Some(Some(PaneBand::Resuming(agent))) => draw_notice(f, view, pane, resume_label(agent)),
+            Some(Some(PaneBand::Restarts(text))) => draw_notice(f, view, pane, restart_label(text)),
             Some(Some(PaneBand::Held { text, queued })) => {
                 draw_held_notice(f, view, (pane, screen.below), text, *queued);
             }

@@ -77,7 +77,7 @@ impl App {
         }
         if !force && self.resume_holds(pane) {
             return Err(format!(
-                "pane {pane} is resuming its agent's conversation, and what you send would reach its shell or its \
+                "pane {pane} is restarting or resuming its agent, and what you send would reach its shell or its \
                  start-up instead; send again once `cornercase status` no longer shows it resuming, or with --force"
             )
             .into());

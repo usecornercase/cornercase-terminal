@@ -270,7 +270,7 @@ mod input_while_resuming {
     fn cancel_before_the_line_is_typed_leaves_a_shell_that_takes_keys() {
         let (mut back, rx, _bin, id) = resuming(STAYS);
         let pane = back.tab().and_then(|t| t.shown(back.layout(AREA).pane).first().map(|(_, r)| *r)).expect("a pane");
-        let (_, button) = ui::resume_notice(pane, "claude").expect("the notice fits");
+        let (_, button) = ui::resume_notice(pane, "resuming claude").expect("the notice fits");
 
         click(&mut back, button.as_position());
         type_text(&mut back, "echo ok-$((1+1))");
@@ -293,7 +293,7 @@ mod input_while_resuming {
         let forced = send(&mut back, id, true);
 
         assert!(
-            matches!(&refused, Response::Error(e) if e.contains("is resuming its agent's conversation")),
+            matches!(&refused, Response::Error(e) if e.contains("is restarting or resuming its agent")),
             "{refused:?}"
         );
         assert!(matches!(forced, Response::Ok(_)), "{forced:?}");

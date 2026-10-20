@@ -776,7 +776,8 @@ pub(super) const ACCOUNT_HELP: &str =
     "An account is a folder of its own under cornercase's state folder in which an agent keeps its
 login: CLAUDE_CONFIG_DIR for Claude Code, CODEX_HOME for Codex, GEMINI_CLI_HOME for Gemini CLI.
 Each agent has an account in use for its new tabs: `account use`, or its button in the window,
-changes it, and tabs already open keep theirs. `account rename` gives an account (or the agent's
+changes it, and tabs already open keep theirs until `account restart` restarts them on it, each
+once its turn is over, in the same conversation. `account rename` gives an account (or the agent's
 own login, with --system) the name the window shows; commands always name an account by its
 folder. `start`, `new-tab`, `flow run` and `queue` take --account AGENT=ACCOUNT to start once
 with another. A new account links the settings it shares from the agent's own folder (settings,
@@ -788,6 +789,7 @@ login.
 Examples:
   cornercase account add claude work --login
   cornercase account use claude work
+  cornercase account restart claude --pane 4
   cornercase account rename claude work Work
   cornercase account list
   cornercase start claude --account claude=home --prompt \"fix the tests\"

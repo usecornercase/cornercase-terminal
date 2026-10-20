@@ -1,3 +1,4 @@
+mod account_restart;
 pub(in crate::app) mod accounts;
 mod arrange;
 mod changes;
@@ -114,6 +115,7 @@ pub(super) struct Requests {
     launched: Vec<(u64, bool)>,
     todo_sends: HashMap<u64, Sending>,
     queued: HashMap<u64, u64>,
+    restarting: HashMap<u64, account_restart::Batch>,
     next: u64,
 }
 
@@ -625,6 +627,7 @@ impl App {
             Command::AccountRemove(remove) => self.account_remove_request(&remove),
             Command::AccountRename(rename) => self.account_rename_request(&rename),
             Command::AccountUse(chosen) => self.account_use_request(&chosen),
+            Command::AccountRestart(restart) => self.account_restart_request(client, &restart),
             Command::ProfileList(_) => Ok(Some(json(&self.accounts_info(None)))),
             Command::ProfileNew(new) => self.profile_new_request(&new),
             Command::ProfileSet(set) => self.profile_set_request(&set),

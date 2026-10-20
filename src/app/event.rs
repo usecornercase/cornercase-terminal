@@ -17,8 +17,8 @@ use crate::web::{self};
 pub(crate) enum AppEvent {
     Input(Event),
     Queue(Box<QueueEvent>),
-    Output(u64, Vec<u8>),
-    Exited(u64),
+    Output(u64, u32, Vec<u8>),
+    Exited(u64, u32),
     Worktree(WorktreeEvent),
     Issues(IssueEvent),
     Changes(ChangesEvent),
@@ -38,6 +38,7 @@ pub(crate) enum AppEvent {
     Merged(crate::pull_request::merged::Answer),
     Plugin(PluginEvent),
     Login(crate::agents::Known, String, crate::accounts::login::Login),
+    Restarted(Box<super::account_restart::Restarted>),
 }
 
 impl AppEvent {
@@ -46,7 +47,7 @@ impl AppEvent {
             Self::Input(_) => "input",
             Self::Queue(_) => "queue prepared",
             Self::Output(..) => "output",
-            Self::Exited(_) => "exited",
+            Self::Exited(..) => "exited",
             Self::Worktree(event) => event.name(),
             Self::Issues(event) => event.name(),
             Self::Changes(event) => event.name(),
@@ -66,6 +67,7 @@ impl AppEvent {
             Self::Merged(_) => "merged pull requests",
             Self::Plugin(event) => event.name(),
             Self::Login(..) => "login checked",
+            Self::Restarted(_) => "conversation moved",
         }
     }
 }
@@ -73,8 +75,8 @@ impl AppEvent {
 impl From<term::Event> for AppEvent {
     fn from(event: term::Event) -> Self {
         match event {
-            term::Event::Output(id, bytes) => Self::Output(id, bytes),
-            term::Event::Exited(id) => Self::Exited(id),
+            term::Event::Output(id, generation, bytes) => Self::Output(id, generation, bytes),
+            term::Event::Exited(id, generation) => Self::Exited(id, generation),
         }
     }
 }

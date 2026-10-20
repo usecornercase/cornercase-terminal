@@ -3,11 +3,12 @@ use std::fmt::Write as _;
 use std::io::{self, IsTerminal as _};
 
 use super::args::accounts::{
-    AccountAction, AccountAddArgs, AccountListArgs, AccountRemoveArgs, AccountRenameArgs, ProfileAction, ProfileArg,
+    AccountAction, AccountAddArgs, AccountListArgs, AccountRemoveArgs, AccountRenameArgs, AccountRestartArgs,
+    AccountUseArgs, ProfileAction, ProfileArg,
 };
 use super::{print_json, print_out};
 use crate::client::{self, answer, ask, confirm};
-use crate::control::{self, AccountsInfo, Command};
+use crate::control::{self, AccountsInfo, Command, RestartInfo};
 use crate::error::{Error, Result};
 
 pub(super) fn profile_arg(arg: ProfileArg) -> Result<(Option<String>, BTreeMap<String, String>)> {
@@ -36,13 +37,26 @@ pub(super) fn account(action: AccountAction) -> Result<()> {
         AccountAction::Add(add) => account_add(&add),
         AccountAction::Remove(remove) => account_remove(&remove),
         AccountAction::Rename(rename) => account_rename(rename),
-        AccountAction::Use(chosen) => {
-            client::use_account_switch()?;
-            let request =
-                control::AccountUse { provider: chosen.provider, account: chosen.account.unwrap_or_default() };
-            switched(ask("account-use", Command::AccountUse(request))?, chosen.print.json)
-        }
+        AccountAction::Use(chosen) => account_use(chosen),
+        AccountAction::Restart(restart) => account_restart(restart),
     }
+}
+
+fn account_use(chosen: AccountUseArgs) -> Result<()> {
+    client::use_account_switch()?;
+    let account = chosen.account.unwrap_or_default();
+    let request = control::AccountUse { provider: chosen.provider, account };
+    switched(ask("account-use", Command::AccountUse(request))?, chosen.print.json)
+}
+
+fn account_restart(AccountRestartArgs { provider, account, system, panes, print }: AccountRestartArgs) -> Result<()> {
+    client::use_account_restart()?;
+    let account = if system { Some(String::new()) } else { account };
+    let value = restart(provider, account, panes)?;
+    if print.json {
+        return print_json(&value);
+    }
+    print_out(&restart_text(&answer(value)?))
 }
 
 fn account_list(list: &AccountListArgs) -> Result<()> {
@@ -113,6 +127,40 @@ fn account_rename(rename: AccountRenameArgs) -> Result<()> {
     let json = rename.print.json;
     let request = control::AccountRename { provider: rename.provider, account, label };
     switched(ask("account-rename", Command::AccountRename(request))?, json)
+}
+
+fn restart(provider: String, account: Option<String>, panes: Vec<u64>) -> Result<serde_json::Value> {
+    ask("account-restart", Command::AccountRestart(control::AccountRestart { provider, account, panes }))
+}
+
+pub(crate) fn restart_text(info: &RestartInfo) -> String {
+    let on = if info.account.is_empty() {
+        format!("its own {} login", info.provider)
+    } else {
+        format!("the {} account {}", info.provider, info.account)
+    };
+    let listed = |panes: &[u64]| panes.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
+    let panes = |panes: &[u64]| if panes.len() == 1 { "pane" } else { "panes" };
+    let mut text = String::new();
+    if !info.restarted.is_empty() {
+        let _ = writeln!(text, "restarted {} {} on {on}", panes(&info.restarted), listed(&info.restarted));
+    }
+    if !info.waiting.is_empty() {
+        let (verb, whose) = if info.waiting.len() == 1 { ("restarts", "its") } else { ("restart", "their") };
+        let _ = writeln!(
+            text,
+            "{} {} {verb} on {on} once {whose} turn is over",
+            panes(&info.waiting),
+            listed(&info.waiting)
+        );
+    }
+    for skipped in &info.skipped {
+        let _ = writeln!(text, "skipped pane {}: {}", skipped.pane, skipped.why);
+    }
+    if text.is_empty() {
+        let _ = writeln!(text, "every open {} agent already runs on {on}", info.provider);
+    }
+    text
 }
 
 fn switched(value: serde_json::Value, json: bool) -> Result<()> {

@@ -97,3 +97,79 @@ mod config_dir {
         assert_eq!(own_dir(env), expected.map(PathBuf::from));
     }
 }
+
+mod conversation_files {
+    use super::*;
+    use crate::agents::Known;
+    use crate::agents::claude::transcript::transcript_path;
+    use crate::agents::context::tests::pane_look;
+    use crate::agents::context::{Look, Pane, Record};
+
+    struct Session {
+        home: TempDir,
+        work: TempDir,
+        transcript: PathBuf,
+    }
+
+    impl Session {
+        fn new() -> Self {
+            let home = TempDir::new();
+            let work = TempDir::new();
+            let transcript = transcript_path(home.path(), work.path(), "session-1").expect("path");
+            std::fs::create_dir_all(transcript.parent().expect("parent")).expect("project folder");
+            std::fs::write(&transcript, "{}\n").expect("transcript");
+            std::fs::create_dir(home.path().join("sessions")).expect("sessions");
+            std::fs::write(
+                home.path().join("sessions/7.json"),
+                serde_json::json!({"pid": 7, "sessionId": "session-1", "cwd": work.path()}).to_string(),
+            )
+            .expect("session");
+            Self { home, work, transcript }
+        }
+
+        fn files(&self) -> Option<Vec<(PathBuf, PathBuf)>> {
+            let mut pane = Pane::default();
+            pane.update(Some(Known::Claude), &Look { claude_dir: Some(self.home.path()), ..pane_look(7) });
+            pane.conversation_files()
+        }
+
+        fn relative(&self) -> PathBuf {
+            self.transcript.strip_prefix(self.home.path()).expect("under the home").to_path_buf()
+        }
+    }
+
+    #[test]
+    fn are_the_transcript_under_the_folder_of_the_sessions_cwd() {
+        let session = Session::new();
+
+        let files = session.files().expect("files");
+
+        assert_eq!(files, vec![(session.transcript.clone(), session.relative())]);
+        assert_eq!(Some(session.relative()), transcript_path(Path::new(""), session.work.path(), "session-1"));
+    }
+
+    #[test]
+    fn include_the_folder_of_its_subagents_when_there_is_one() {
+        let session = Session::new();
+        let folder = session.transcript.with_extension("");
+        std::fs::create_dir_all(folder.join("subagents")).expect("subagents");
+        std::fs::write(folder.join("subagents/agent-a1.jsonl"), "{}\n").expect("subagent");
+
+        let files = session.files().expect("files");
+
+        assert_eq!(
+            files,
+            vec![(session.transcript.clone(), session.relative()), (folder, session.relative().with_extension("")),]
+        );
+    }
+
+    #[test]
+    fn are_none_for_a_transcript_outside_a_projects_folder() {
+        assert_eq!(Record::Claude(PathBuf::from("/tmp/session.jsonl")).conversation_files(), None);
+    }
+
+    #[test]
+    fn are_none_for_gemini_which_starts_afresh() {
+        assert_eq!(Record::Gemini(PathBuf::from("/home/.gemini/tmp/chats/session.json")).conversation_files(), None);
+    }
+}

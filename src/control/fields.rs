@@ -163,6 +163,7 @@ impl Command {
             Self::AccountRemove(remove) => remove.fields(fields),
             Self::AccountRename(rename) => rename.fields(fields),
             Self::AccountUse(chosen) => chosen.fields(fields),
+            Self::AccountRestart(restart) => restart.fields(fields),
             Self::ProfileList(_) => {}
             Self::ProfileSet(set) => set.fields(fields),
             Self::ProfileNew(ProfileNew { name, .. })
@@ -271,7 +272,7 @@ impl Close {
     }
 }
 
-fn listed(ids: &[u64]) -> String {
+pub(super) fn listed(ids: &[u64]) -> String {
     ids.iter().map(u64::to_string).collect::<Vec<_>>().join(",")
 }
 

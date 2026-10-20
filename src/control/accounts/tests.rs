@@ -192,3 +192,26 @@ fn renaming_and_using_an_account_read_with_no_stray_field_and_log_what_they_name
     assert!(FEATURES.contains(&"account-switch"));
     assert!(Command::NAMES.contains(&"account-rename") && Command::NAMES.contains(&"account-use"));
 }
+
+fn restarting() -> RestartInfo {
+    let skipped = vec![SkippedPane { pane: 9, why: "it is the coder of a flow run".into() }];
+    RestartInfo { provider: "claude".into(), account: "personal".into(), restarted: vec![4], waiting: vec![7], skipped }
+}
+
+#[test]
+fn a_restart_answer_is_written_as_its_fixture_and_reads_back() {
+    let written = serde_json::to_string_pretty(&restarting()).expect("json");
+    let read: RestartInfo = serde_json::from_str(fixture!("control/accounts/v1/answer-restart.json")).expect("answer");
+
+    assert_eq!(written, fixture!("control/accounts/v1/answer-restart.json").trim_end());
+    assert_eq!(read, restarting());
+}
+
+#[test]
+fn a_restart_request_logs_its_agent_and_panes_and_is_in_the_contract() {
+    let restart =
+        Command::AccountRestart(AccountRestart { provider: "claude".into(), account: None, panes: vec![4, 7] });
+
+    assert_eq!(restart.fields(), vec![("provider", "claude".into()), ("panes", "4,7".into())]);
+    assert!(FEATURES.contains(&"account-restart") && Command::NAMES.contains(&"account-restart"));
+}

@@ -56,10 +56,13 @@ impl App {
     }
 
     pub(super) fn holding(&self, caller: Option<u64>, now: Instant) -> Vec<u64> {
-        let launching: Vec<u64> = self.agents.launches.driven().collect();
         let terms = self.projects.terms();
-        let holds = |term: &&Term| Some(term.id) != caller && (launching.contains(&term.id) || self.at_work(term, now));
-        terms.filter(holds).map(|term| term.id).collect()
+        terms.filter(|term| Some(term.id) != caller && self.holds_restart(term, now)).map(|term| term.id).collect()
+    }
+
+    pub(in crate::app) fn holds_restart(&self, term: &Term, now: Instant) -> bool {
+        let launching = self.agents.launches.driven().any(|pane| pane == term.id);
+        launching || self.at_work(term, now)
     }
 
     fn at_work(&self, term: &Term, now: Instant) -> bool {

@@ -46,6 +46,31 @@ pub(crate) struct AccountUse {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+pub(crate) struct AccountRestart {
+    pub(crate) provider: String,
+    pub(crate) account: Option<String>,
+    pub(crate) panes: Vec<u64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct RestartInfo {
+    pub(crate) provider: String,
+    pub(crate) account: String,
+    pub(crate) restarted: Vec<u64>,
+    pub(crate) waiting: Vec<u64>,
+    pub(crate) skipped: Vec<SkippedPane>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct SkippedPane {
+    pub(crate) pane: u64,
+    pub(crate) why: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct ProfileList {}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -171,6 +196,13 @@ impl AccountRename {
 impl AccountUse {
     pub(super) fn fields(&self, fields: &mut Fields) {
         fields.add("provider", &self.provider).add("account", &self.account);
+    }
+}
+
+impl AccountRestart {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.add("provider", &self.provider).maybe("account", self.account.as_ref());
+        fields.add("panes", super::fields::listed(&self.panes));
     }
 }
 

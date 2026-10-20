@@ -424,3 +424,23 @@ fn a_fold_of_an_agents_children_reaches_watchers() {
 
     assert_eq!((collapsed(&folded), collapsed(&opened)), (vec![ids[0]], Vec::<u64>::new()));
 }
+
+#[test]
+fn a_pane_s_account_changing_sends_its_accounts() {
+    let (mut app, rx, _dirs) = app_with(1);
+    let root = TempDir::new();
+    crate::accounts::add(root.path(), crate::agents::Known::Claude, "work", None).expect("an account");
+    let chosen: std::collections::BTreeMap<String, String> = [("claude".to_string(), "work".to_string())].into();
+    let revision = watching(&mut app).revision;
+    let revision = settled(&mut app, &rx, revision);
+    let accounts = |snapshot: &Snapshot| snapshot.report.projects[0].workspaces[0].tabs[0].panes[0].accounts.clone();
+
+    let before = app.refreshed();
+
+    let shell = app.projects[0].workspaces[0].tabs[0].pane_mut().expect("a pane");
+    shell.set_accounts(crate::accounts::Accounts::of(root.path(), &chosen));
+    let changed = next(&mut app, revision);
+
+    assert_ne!(app.refreshed(), before);
+    assert_eq!(accounts(&changed), chosen);
+}

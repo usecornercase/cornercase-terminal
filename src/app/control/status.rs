@@ -186,6 +186,7 @@ impl App {
             self.seat(term.id).map(|(_, role)| role).hash(hash);
             Self::pane_refreshed(term, self.resume_holds(term.id), parent, hash);
             (self.held_sends(term.id), term.typing.drafting()).hash(hash);
+            self.restart_waiting(term.id).is_some().hash(hash);
         }
     }
 
@@ -198,6 +199,7 @@ impl App {
         (term.dialog(), term.survey(), term.resume.is_some(), resuming, parent).hash(hash);
         term.emulator.title().hash(hash);
         term.account().hash(hash);
+        term.accounts().chosen().hash(hash);
     }
 
     fn pane_info(&self, term: &Term, active: bool, caller: Option<u64>, live: &HashSet<u64>) -> PaneInfo {
@@ -226,6 +228,8 @@ impl App {
             draft: term.draft(Instant::now()),
             collapsed: term.collapsed,
             account: term.account().map(str::to_string),
+            accounts: term.accounts().chosen(),
+            account_restart: self.restart_waiting(term.id).map(|_| "waiting".to_string()),
         }
     }
 

@@ -10,5 +10,7 @@
   {"command": "profile-delete", "args": {"name": "Work"}},
   {"command": "start", "args": {"agent": "claude", "prompt": "Fix the login", "profile": "Work"}},
   {"command": "new-tab", "args": {"profile": ""}},
+  {"command": "account-restart", "args": {"provider": "claude", "account": "personal", "panes": [4, 7]}},
+  {"command": "account-restart", "args": {"provider": "codex", "account": null, "panes": []}},
   {"command": "flow-run", "args": {"name": "Quick", "prompt": "Fix the login", "profile": "Work"}}
 ]

@@ -44,6 +44,7 @@ pub(crate) struct Launch {
     pub(crate) told: bool,
     pub(crate) trust: Option<Trust>,
     pub(crate) resume: Option<Instant>,
+    pub(crate) restart: Option<String>,
     spec: Spec,
     agent: bool,
     stage: Stage,
@@ -88,6 +89,7 @@ impl Launch {
             told: false,
             trust: None,
             resume: None,
+            restart: None,
             spec,
             agent: true,
             stage: Stage::Shell,
@@ -113,6 +115,10 @@ impl Launch {
     pub(crate) fn resume(term: u64, command: String, trusted: bool, now: Instant, until: Instant) -> Self {
         let spec = Spec { command, prompt: None, submit: false, trusted };
         Self { trust: Some(Trust::LeftToYou), resume: Some(until), ..Self::new(term, spec, now) }
+    }
+
+    pub(crate) fn restart(term: u64, command: String, label: String, now: Instant, until: Instant) -> Self {
+        Self { restart: Some(label), ..Self::resume(term, command, false, now, until) }
     }
 
     #[cfg(test)]

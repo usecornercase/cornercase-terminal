@@ -32,7 +32,7 @@ impl App {
         self.listed_accounts().iter().find(|(k, _)| *k == kind).map_or(&[], |(_, names)| names.as_slice())
     }
 
-    fn chosen(&self, kind: Known) -> &str {
+    pub(super) fn chosen(&self, kind: Known) -> &str {
         let chosen = self.config.selected_accounts().get(kind.name()).map_or("", String::as_str);
         if self.account_names(kind).iter().any(|name| name == chosen) { chosen } else { "" }
     }

@@ -124,6 +124,10 @@ impl App {
         self.blocked(pane, now).or_else(|| (self.held_sends(pane) > 0).then_some(Why::Earlier))
     }
 
+    pub(in crate::app) fn person_holds(&self, pane: u64, now: Instant) -> bool {
+        self.holding_back(pane, now).is_some()
+    }
+
     pub(super) fn hold(&mut self, client: u64, pane: u64, waits: Waits, now: Instant) -> Option<serde_json::Value> {
         let why = self.holding_back(pane, now).map_or("earlier", Why::name);
         log::info!("control", "send held", pane = pane, why = why, waiting = self.held_sends(pane) + 1);

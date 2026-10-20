@@ -39,6 +39,8 @@ pub(crate) enum AccountAction {
     Rename(AccountRenameArgs),
     #[command(about = "Use an account for an agent's new tabs; open tabs keep theirs")]
     Use(AccountUseArgs),
+    #[command(about = "Restart an agent's open tabs on an account, keeping their conversations")]
+    Restart(AccountRestartArgs),
 }
 
 #[derive(Debug, Args)]
@@ -68,6 +70,25 @@ pub(crate) struct AccountUseArgs {
     pub(crate) account: Option<String>,
     #[arg(long, conflicts_with = "account", help = "Use the agent's own login, outside any account")]
     pub(crate) system: bool,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct AccountRestartArgs {
+    #[arg(value_name = "AGENT", help = "The agent: claude, codex or gemini")]
+    pub(crate) provider: String,
+    #[arg(value_name = "ACCOUNT", help = "The account's folder name [default: the one in use]")]
+    pub(crate) account: Option<String>,
+    #[arg(long, conflicts_with = "account", help = "Restart them on the agent's own login, outside any account")]
+    pub(crate) system: bool,
+    #[arg(
+        long = "pane",
+        value_name = "ID",
+        help = "Restart only this pane, also a shell at its prompt; give it once per pane [default: every pane of \
+                the agent on another account]"
+    )]
+    pub(crate) panes: Vec<u64>,
     #[command(flatten)]
     pub(crate) print: Print,
 }

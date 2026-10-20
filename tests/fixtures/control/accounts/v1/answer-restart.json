@@ -1,0 +1,16 @@
+{
+  "provider": "claude",
+  "account": "personal",
+  "restarted": [
+    4
+  ],
+  "waiting": [
+    7
+  ],
+  "skipped": [
+    {
+      "pane": 9,
+      "why": "it is the coder of a flow run"
+    }
+  ]
+}
