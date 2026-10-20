@@ -523,3 +523,13 @@ fn the_list_marks_running_programs_and_processes_elsewhere() {
     let (of_a, of_b) = (marks("a"), marks("b"));
     assert!(of_a.contains(&"1 outside".to_string()) && of_b.contains(&"sleep".to_string()), "{of_a:?} {of_b:?}");
 }
+
+#[test]
+fn a_run_with_one_role_names_it_in_the_singular() {
+    let mut s = with_a_role();
+    confirmed(&mut s, 2, &["lead"]);
+
+    let text = confirmation(&s.app);
+
+    assert!(text.contains("of its 1 role") && !text.contains("1 roles"), "{text}");
+}

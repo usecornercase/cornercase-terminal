@@ -157,12 +157,12 @@ impl App {
             risks.push("teardown runs first".to_string());
         }
         if let Some(live) = live.filter(|live| live.run_roles > 0) {
-            let roles = live.run_roles;
+            let roles = plural(live.run_roles, "role", "roles");
             let run = self.runs.list.iter().any(|run| run.workspace == live.workspace);
             risks.push(if run {
-                format!("ends its flow run and removes its {roles} roles' worktrees")
+                format!("ends its flow run and removes the worktrees of its {roles}")
             } else {
-                format!("removes the worktrees of its {roles} roles")
+                format!("removes the worktrees of its {roles}")
             });
         }
         risks
