@@ -229,20 +229,22 @@ fn the_input_loop_uses_the_held_keys_remaining_wait() {
     run(
         &stop,
         true,
-        |wait| {
-            polls += 1;
-            if polls == 1 {
-                assert_eq!(wait, super::super::INPUT_POLL);
-                Ok(true)
-            } else {
-                assert!(wait < ESC_WAIT);
-                stop.store(true, Ordering::Relaxed);
-                Ok(false)
-            }
-        },
-        |bytes| {
-            bytes[0] = 0x1b;
-            Ok(1)
+        Source {
+            poll: |wait| {
+                polls += 1;
+                if polls == 1 {
+                    assert_eq!(wait, super::super::INPUT_POLL);
+                    Ok(true)
+                } else {
+                    assert!(wait < ESC_WAIT);
+                    stop.store(true, Ordering::Relaxed);
+                    Ok(false)
+                }
+            },
+            read: |bytes| {
+                bytes[0] = 0x1b;
+                Ok(1)
+            },
         },
         |_| true,
         |_| panic!("poll must use the remaining hold time"),
@@ -331,13 +333,15 @@ fn an_input_failure_is_retried_with_a_pause(#[case] in_read: bool, #[case] panic
     run(
         &stop,
         false,
-        |_| if !in_read && !failed.replace(true) { fail() } else { Ok(true) },
-        |bytes| {
-            if in_read && !failed.replace(true) {
-                return fail().map(|_| 1);
-            }
-            bytes[0] = b'z';
-            Ok(1)
+        Source {
+            poll: |_| if !in_read && !failed.replace(true) { fail() } else { Ok(true) },
+            read: |bytes| {
+                if in_read && !failed.replace(true) {
+                    return fail().map(|_| 1);
+                }
+                bytes[0] = b'z';
+                Ok(1)
+            },
         },
         |event| {
             received.push(event);
@@ -358,8 +362,7 @@ fn the_end_of_input_stops_the_reader(#[case] error: Option<io::Error>) {
     run(
         &AtomicBool::new(false),
         false,
-        |_| Ok(true),
-        |_| error.take().map_or(Ok(0), Err),
+        Source { poll: |_| Ok(true), read: |_| error.take().map_or(Ok(0), Err) },
         |_| panic!("no event after input ended"),
         |_| panic!("no retry after input ended"),
     );
@@ -372,20 +375,22 @@ fn a_read_error_clears_a_partial_sequence_before_retrying() {
     run(
         &AtomicBool::new(false),
         false,
-        |_| Ok(true),
-        |bytes| {
-            reads += 1;
-            match reads {
-                1 => {
-                    bytes[..2].copy_from_slice(b"\x1b[");
-                    Ok(2)
+        Source {
+            poll: |_| Ok(true),
+            read: |bytes| {
+                reads += 1;
+                match reads {
+                    1 => {
+                        bytes[..2].copy_from_slice(b"\x1b[");
+                        Ok(2)
+                    }
+                    2 => Err(io::Error::other("input failure")),
+                    _ => {
+                        bytes[0] = b'z';
+                        Ok(1)
+                    }
                 }
-                2 => Err(io::Error::other("input failure")),
-                _ => {
-                    bytes[0] = b'z';
-                    Ok(1)
-                }
-            }
+            },
         },
         |event| {
             received.push(event);
@@ -406,18 +411,20 @@ fn an_interrupted_system_call_keeps_a_partial_mouse_sequence(#[case] in_read: bo
     run(
         &AtomicBool::new(false),
         false,
-        |_| {
-            polls.set(polls.get() + 1);
-            if !in_read && polls.get() == 2 { Err(io::ErrorKind::Interrupted.into()) } else { Ok(true) }
-        },
-        |bytes| {
-            reads += 1;
-            if in_read && reads == 2 {
-                return Err(io::ErrorKind::Interrupted.into());
-            }
-            let chunk = if reads == 1 { b"\x1b[<0;8;".as_slice() } else { b"5M" };
-            bytes[..chunk.len()].copy_from_slice(chunk);
-            Ok(chunk.len())
+        Source {
+            poll: |_| {
+                polls.set(polls.get() + 1);
+                if !in_read && polls.get() == 2 { Err(io::ErrorKind::Interrupted.into()) } else { Ok(true) }
+            },
+            read: |bytes| {
+                reads += 1;
+                if in_read && reads == 2 {
+                    return Err(io::ErrorKind::Interrupted.into());
+                }
+                let chunk = if reads == 1 { b"\x1b[<0;8;".as_slice() } else { b"5M" };
+                bytes[..chunk.len()].copy_from_slice(chunk);
+                Ok(chunk.len())
+            },
         },
         |event| {
             received.push(event);
@@ -443,8 +450,7 @@ fn repeated_errors_back_off_until_stopped() {
     run(
         &stop,
         false,
-        |_| Err(io::Error::other("not ready")),
-        |_| panic!("no read"),
+        Source { poll: |_| Err(io::Error::other("not ready")), read: |_| panic!("no read") },
         |_| panic!("no event"),
         |wait| {
             assert_eq!(wait, RETRY);

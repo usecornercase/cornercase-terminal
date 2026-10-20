@@ -37,6 +37,17 @@ impl From<Input> for ClientMessage {
     }
 }
 
+enum Absorbed {
+    Yes,
+    No,
+    Stop,
+}
+
+pub(super) struct Source<P: FnMut(Duration) -> io::Result<bool>, R: FnMut(&mut [u8]) -> io::Result<usize>> {
+    pub(super) poll: P,
+    pub(super) read: R,
+}
+
 pub(super) enum Decoded {
     Event(Event),
     Reply,
@@ -74,73 +85,108 @@ impl Parser {
         }
         for (at, &byte) in bytes.iter().enumerate() {
             let more = at + 1 < bytes.len() || full;
-            self.pending.push(byte);
-            self.since = Some(Instant::now());
-            if REPLY_PREFIXES.iter().any(|prefix| self.pending.starts_with(prefix))
-                && let Some(at) = self
-                    .pending
-                    .windows(2)
-                    .enumerate()
-                    .skip(2)
-                    .find_map(|(at, pair)| (pair[0] == 0x1b && pair[1] != b'\\').then_some(at))
-            {
-                self.pending.drain(..at);
-                self.since = Some(Instant::now());
-            }
-            if !self.pending.starts_with(b"\x1b[200~")
-                && let Some(end) = reply(&self.pending)
-                && (end || !reply_prefix(&self.pending) || more || self.expects_replies())
-            {
-                if end {
-                    self.replies_until = Some(Instant::now() + REPLY_WAIT);
-                    let activated = notify::activation(&self.pending);
-                    self.reset();
-                    if let Some(token) = activated
-                        && !emit(Input::Activated(token))
-                    {
-                        return false;
-                    }
-                }
-                continue;
-            }
-            if byte == 0x1b && self.pending.len() > 2 && !self.pending.starts_with(b"\x1b[200~") {
-                self.pending.clear();
-                self.pending.push(byte);
-            }
-            let remainder = if self.pending.len() > 2 && matches!(self.pending[..2], [0x1b, b']' | b'P' | b'_']) {
-                self.pending.split_off(2)
-            } else {
-                Vec::new()
-            };
-            let more = more || (self.pending == b"\x1b" && self.expects_replies());
-            let result = panics::contain(|| decode(&self.pending, more));
-            match result {
-                Some(Ok(Some(Decoded::Event(event)))) => {
-                    self.reset();
-                    if !emit(Input::Event(event)) {
-                        return false;
-                    }
-                }
-                Some(Ok(Some(Decoded::Reply))) => {
-                    self.replies_until = Some(Instant::now() + REPLY_WAIT);
-                    self.reset();
-                }
-                Some(Err(_)) => self.reset(),
-                Some(Ok(None)) => {
-                    if self.pending.len() > SEQUENCE_LIMIT && !self.pending.starts_with(b"\x1b[200~") {
-                        self.reset();
-                    }
-                }
-                None => {
-                    self.reset();
-                    self.failures += 1;
-                    if self.failures.is_power_of_two() {
-                        report("input parser panicked; discarded the sequence");
-                    }
-                }
-            }
+            let Some(remainder) = self.feed_byte(byte, more, emit, decode) else { return false };
             if !remainder.is_empty() && !self.feed_with(&remainder, full, emit, decode) {
                 return false;
+            }
+        }
+        true
+    }
+
+    fn feed_byte(
+        &mut self,
+        byte: u8,
+        more: bool,
+        emit: &mut impl FnMut(Input) -> bool,
+        decode: &mut Decode<'_>,
+    ) -> Option<Vec<u8>> {
+        self.pending.push(byte);
+        self.since = Some(Instant::now());
+        self.drop_before_next_escape();
+        match self.absorb_reply(more, emit) {
+            Absorbed::Yes => return Some(Vec::new()),
+            Absorbed::Stop => return None,
+            Absorbed::No => {}
+        }
+        if byte == 0x1b && self.pending.len() > 2 && !self.pending.starts_with(b"\x1b[200~") {
+            self.pending.clear();
+            self.pending.push(byte);
+        }
+        let remainder = self.split_remainder();
+        let more = more || (self.pending == b"\x1b" && self.expects_replies());
+        let result = panics::contain(|| decode(&self.pending, more));
+        self.apply_decoded(result, emit).then_some(remainder)
+    }
+
+    fn drop_before_next_escape(&mut self) {
+        if REPLY_PREFIXES.iter().any(|prefix| self.pending.starts_with(prefix))
+            && let Some(at) = self
+                .pending
+                .windows(2)
+                .enumerate()
+                .skip(2)
+                .find_map(|(at, pair)| (pair[0] == 0x1b && pair[1] != b'\\').then_some(at))
+        {
+            self.pending.drain(..at);
+            self.since = Some(Instant::now());
+        }
+    }
+
+    fn absorb_reply(&mut self, more: bool, emit: &mut impl FnMut(Input) -> bool) -> Absorbed {
+        if self.pending.starts_with(b"\x1b[200~") {
+            return Absorbed::No;
+        }
+        let Some(end) = reply(&self.pending) else { return Absorbed::No };
+        if !(end || !reply_prefix(&self.pending) || more || self.expects_replies()) {
+            return Absorbed::No;
+        }
+        if end {
+            self.replies_until = Some(Instant::now() + REPLY_WAIT);
+            let activated = notify::activation(&self.pending);
+            self.reset();
+            if let Some(token) = activated
+                && !emit(Input::Activated(token))
+            {
+                return Absorbed::Stop;
+            }
+        }
+        Absorbed::Yes
+    }
+
+    fn split_remainder(&mut self) -> Vec<u8> {
+        if self.pending.len() > 2 && matches!(self.pending[..2], [0x1b, b']' | b'P' | b'_']) {
+            self.pending.split_off(2)
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn apply_decoded(
+        &mut self,
+        result: Option<io::Result<Option<Decoded>>>,
+        emit: &mut impl FnMut(Input) -> bool,
+    ) -> bool {
+        match result {
+            Some(Ok(Some(Decoded::Event(event)))) => {
+                self.reset();
+                return emit(Input::Event(event));
+            }
+            Some(Ok(Some(Decoded::Reply))) => {
+                self.replies_until = Some(Instant::now() + REPLY_WAIT);
+                self.reset();
+            }
+            Some(Err(_)) => self.reset(),
+            Some(Ok(None)) => {
+                if self.pending.len() > SEQUENCE_LIMIT && !self.pending.starts_with(b"\x1b[200~") {
+                    self.reset();
+                }
+            }
+            None => {
+                self.reset();
+                self.failures += 1;
+                if self.failures.is_power_of_two() {
+                    report("input parser panicked; discarded the sequence");
+                }
             }
         }
         true
@@ -228,8 +274,7 @@ pub(super) fn readable(input: &impl AsFd, wait: Duration) -> io::Result<bool> {
 pub(super) fn run(
     stop: &AtomicBool,
     probe_timed_out: bool,
-    mut poll: impl FnMut(Duration) -> io::Result<bool>,
-    mut read: impl FnMut(&mut [u8]) -> io::Result<usize>,
+    mut source: Source<impl FnMut(Duration) -> io::Result<bool>, impl FnMut(&mut [u8]) -> io::Result<usize>>,
     mut emit: impl FnMut(Input) -> bool,
     mut pause: impl FnMut(Duration),
 ) {
@@ -237,7 +282,10 @@ pub(super) fn run(
     let mut bytes = [0; 1024];
     let mut failures = 0_u64;
     while !stop.load(Ordering::Relaxed) {
-        let result = panics::contain(|| if poll(parser.wait())? { read(&mut bytes).map(Some) } else { Ok(None) });
+        let result =
+            panics::contain(
+                || if (source.poll)(parser.wait())? { (source.read)(&mut bytes).map(Some) } else { Ok(None) },
+            );
         match result {
             Some(Ok(Some(0))) => return,
             Some(Err(error)) if error.kind() == io::ErrorKind::Interrupted => {}

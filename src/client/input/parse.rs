@@ -17,51 +17,11 @@ pub(super) fn parse_event(buffer: &[u8], input_available: bool) -> io::Result<Op
     }
 
     match buffer[0] {
-        b'\x1B' => {
-            if buffer.len() == 1 {
-                if input_available { Ok(None) } else { Ok(Some(Decoded::Event(Event::Key(KeyCode::Esc.into())))) }
-            } else {
-                match buffer[1] {
-                    b'O' => {
-                        if buffer.len() == 2 {
-                            Ok(None)
-                        } else {
-                            match buffer[2] {
-                                b'D' => Ok(Some(Decoded::Event(Event::Key(KeyCode::Left.into())))),
-                                b'C' => Ok(Some(Decoded::Event(Event::Key(KeyCode::Right.into())))),
-                                b'A' => Ok(Some(Decoded::Event(Event::Key(KeyCode::Up.into())))),
-                                b'B' => Ok(Some(Decoded::Event(Event::Key(KeyCode::Down.into())))),
-                                b'H' => Ok(Some(Decoded::Event(Event::Key(KeyCode::Home.into())))),
-                                b'F' => Ok(Some(Decoded::Event(Event::Key(KeyCode::End.into())))),
-                                val @ b'P'..=b'S' => {
-                                    Ok(Some(Decoded::Event(Event::Key(KeyCode::F(1 + val - b'P').into()))))
-                                }
-                                _ => Err(could_not_parse_event_error()),
-                            }
-                        }
-                    }
-                    b'[' => parse_csi(buffer),
-                    b'\x1B' => Ok(Some(Decoded::Event(Event::Key(KeyCode::Esc.into())))),
-                    _ => parse_event(&buffer[1..], input_available).map(|event_option| {
-                        event_option.map(|event| {
-                            if let Decoded::Event(Event::Key(key_event)) = event {
-                                let mut alt_key_event = key_event;
-                                alt_key_event.modifiers |= KeyModifiers::ALT;
-                                Decoded::Event(Event::Key(alt_key_event))
-                            } else {
-                                event
-                            }
-                        })
-                    }),
-                }
-            }
-        }
-        b'\r' => Ok(Some(Decoded::Event(Event::Key(KeyCode::Enter.into())))),
-        b'\n' if !crossterm::terminal::is_raw_mode_enabled().unwrap_or(true) => {
-            Ok(Some(Decoded::Event(Event::Key(KeyCode::Enter.into()))))
-        }
-        b'\t' => Ok(Some(Decoded::Event(Event::Key(KeyCode::Tab.into())))),
-        b'\x7F' => Ok(Some(Decoded::Event(Event::Key(KeyCode::Backspace.into())))),
+        b'\x1B' => parse_escape(buffer, input_available),
+        b'\r' => Ok(Some(key_event(KeyCode::Enter))),
+        b'\n' if !crossterm::terminal::is_raw_mode_enabled().unwrap_or(true) => Ok(Some(key_event(KeyCode::Enter))),
+        b'\t' => Ok(Some(key_event(KeyCode::Tab))),
+        b'\x7F' => Ok(Some(key_event(KeyCode::Backspace))),
         c @ b'\x01'..=b'\x1A' => Ok(Some(Decoded::Event(Event::Key(KeyEvent::new(
             KeyCode::Char((c - 0x1 + b'a') as char),
             KeyModifiers::CONTROL,
@@ -75,6 +35,49 @@ pub(super) fn parse_event(buffer: &[u8], input_available: bool) -> io::Result<Op
             maybe_char.map(KeyCode::Char).map(char_code_to_event).map(Event::Key).map(Decoded::Event)
         }),
     }
+}
+
+fn key_event(code: KeyCode) -> Decoded {
+    Decoded::Event(Event::Key(code.into()))
+}
+
+fn parse_escape(buffer: &[u8], input_available: bool) -> io::Result<Option<Decoded>> {
+    if buffer.len() == 1 {
+        return Ok(if input_available { None } else { Some(key_event(KeyCode::Esc)) });
+    }
+    match buffer[1] {
+        b'O' => parse_ss3(buffer),
+        b'[' => parse_csi(buffer),
+        b'\x1B' => Ok(Some(key_event(KeyCode::Esc))),
+        _ => parse_event(&buffer[1..], input_available).map(|event_option| event_option.map(with_alt)),
+    }
+}
+
+fn with_alt(event: Decoded) -> Decoded {
+    if let Decoded::Event(Event::Key(key_event)) = event {
+        let mut alt_key_event = key_event;
+        alt_key_event.modifiers |= KeyModifiers::ALT;
+        Decoded::Event(Event::Key(alt_key_event))
+    } else {
+        event
+    }
+}
+
+fn parse_ss3(buffer: &[u8]) -> io::Result<Option<Decoded>> {
+    if buffer.len() == 2 {
+        return Ok(None);
+    }
+    let code = match buffer[2] {
+        b'D' => KeyCode::Left,
+        b'C' => KeyCode::Right,
+        b'A' => KeyCode::Up,
+        b'B' => KeyCode::Down,
+        b'H' => KeyCode::Home,
+        b'F' => KeyCode::End,
+        val @ b'P'..=b'S' => KeyCode::F(1 + val - b'P'),
+        _ => return Err(could_not_parse_event_error()),
+    };
+    Ok(Some(key_event(code)))
 }
 
 fn char_code_to_event(code: KeyCode) -> KeyEvent {
@@ -93,16 +96,7 @@ fn parse_csi(buffer: &[u8]) -> io::Result<Option<Decoded>> {
     }
 
     let input_event = match buffer[2] {
-        b'[' => {
-            if buffer.len() == 3 {
-                None
-            } else {
-                match buffer[3] {
-                    val @ b'A'..=b'E' => Some(Event::Key(KeyCode::F(1 + val - b'A').into())),
-                    _ => return Err(could_not_parse_event_error()),
-                }
-            }
-        }
+        b'[' => parse_csi_linux_function_key(buffer)?,
         b'D' => Some(Event::Key(KeyCode::Left.into())),
         b'C' => Some(Event::Key(KeyCode::Right.into())),
         b'A' => Some(Event::Key(KeyCode::Up.into())),
@@ -121,30 +115,47 @@ fn parse_csi(buffer: &[u8]) -> io::Result<Option<Decoded>> {
         b'?' | b'>' => {
             return Ok(buffer.last().filter(|&&last| (b'@'..=b'~').contains(&last)).map(|_| Decoded::Reply));
         }
-        b'0'..=b'9' => {
-            if buffer.len() == 3 {
-                None
-            } else {
-                let last_byte = buffer[buffer.len() - 1];
-                if (64..=126).contains(&last_byte) {
-                    if buffer.starts_with(b"\x1B[200~") {
-                        return Ok(parse_csi_bracketed_paste(buffer));
-                    }
-                    match last_byte {
-                        b'M' => return parse_csi_rxvt_mouse(buffer),
-                        b'~' => return parse_csi_special_key_code(buffer),
-                        b'u' => return parse_csi_u_encoded_key_code(buffer),
-                        b'R' => return Ok(Some(Decoded::Reply)),
-                        _ => return parse_csi_modifier_key_code(buffer),
-                    }
-                }
-                None
-            }
-        }
+        b'0'..=b'9' => return parse_csi_numeric(buffer),
         _ => return Err(could_not_parse_event_error()),
     };
 
     Ok(input_event.map(Decoded::Event))
+}
+
+fn parse_csi_linux_function_key(buffer: &[u8]) -> io::Result<Option<Event>> {
+    if buffer.len() == 3 {
+        return Ok(None);
+    }
+    match buffer[3] {
+        val @ b'A'..=b'E' => Ok(Some(Event::Key(KeyCode::F(1 + val - b'A').into()))),
+        _ => Err(could_not_parse_event_error()),
+    }
+}
+
+fn parse_csi_numeric(buffer: &[u8]) -> io::Result<Option<Decoded>> {
+    if buffer.len() == 3 {
+        return Ok(None);
+    }
+    let last_byte = buffer[buffer.len() - 1];
+    if !(64..=126).contains(&last_byte) {
+        return Ok(None);
+    }
+    if buffer.starts_with(b"\x1B[200~") {
+        return Ok(parse_csi_bracketed_paste(buffer));
+    }
+    match last_byte {
+        b'M' => parse_csi_rxvt_mouse(buffer),
+        b'~' => parse_csi_special_key_code(buffer),
+        b'u' => parse_csi_u_encoded_key_code(buffer),
+        b'R' => Ok(Some(Decoded::Reply)),
+        _ => parse_csi_modifier_key_code(buffer),
+    }
+}
+
+fn csi_fields(buffer: &[u8]) -> io::Result<std::str::Split<'_, char>> {
+    assert!(buffer.starts_with(b"\x1B["));
+    let s = std::str::from_utf8(&buffer[2..buffer.len() - 1]).map_err(|_| could_not_parse_event_error())?;
+    Ok(s.split(';'))
 }
 
 fn next_parsed<T>(iter: &mut dyn Iterator<Item = &str>) -> io::Result<T>
@@ -214,10 +225,16 @@ fn parse_key_event_kind(kind: u8) -> KeyEventKind {
     }
 }
 
+fn modifiers_kind_state(split: &mut dyn Iterator<Item = &str>) -> (KeyModifiers, KeyEventKind, KeyEventState) {
+    if let Ok((modifier_mask, kind_code)) = modifier_and_kind_parsed(split) {
+        (parse_modifiers(modifier_mask), parse_key_event_kind(kind_code), parse_modifiers_to_state(modifier_mask))
+    } else {
+        (KeyModifiers::NONE, KeyEventKind::Press, KeyEventState::NONE)
+    }
+}
+
 fn parse_csi_modifier_key_code(buffer: &[u8]) -> io::Result<Option<Decoded>> {
-    assert!(buffer.starts_with(b"\x1B["));
-    let s = std::str::from_utf8(&buffer[2..buffer.len() - 1]).map_err(|_| could_not_parse_event_error())?;
-    let mut split = s.split(';');
+    let mut split = csi_fields(buffer)?;
 
     split.next();
 
@@ -257,113 +274,111 @@ fn parse_csi_modifier_key_code(buffer: &[u8]) -> io::Result<Option<Decoded>> {
     Ok(Some(Decoded::Event(input_event)))
 }
 
+const KEYPAD: [(u32, KeyCode); 29] = [
+    (57399, KeyCode::Char('0')),
+    (57400, KeyCode::Char('1')),
+    (57401, KeyCode::Char('2')),
+    (57402, KeyCode::Char('3')),
+    (57403, KeyCode::Char('4')),
+    (57404, KeyCode::Char('5')),
+    (57405, KeyCode::Char('6')),
+    (57406, KeyCode::Char('7')),
+    (57407, KeyCode::Char('8')),
+    (57408, KeyCode::Char('9')),
+    (57409, KeyCode::Char('.')),
+    (57410, KeyCode::Char('/')),
+    (57411, KeyCode::Char('*')),
+    (57412, KeyCode::Char('-')),
+    (57413, KeyCode::Char('+')),
+    (57414, KeyCode::Enter),
+    (57415, KeyCode::Char('=')),
+    (57416, KeyCode::Char(',')),
+    (57417, KeyCode::Left),
+    (57418, KeyCode::Right),
+    (57419, KeyCode::Up),
+    (57420, KeyCode::Down),
+    (57421, KeyCode::PageUp),
+    (57422, KeyCode::PageDown),
+    (57423, KeyCode::Home),
+    (57424, KeyCode::End),
+    (57425, KeyCode::Insert),
+    (57426, KeyCode::Delete),
+    (57427, KeyCode::KeypadBegin),
+];
+
+const FUNCTIONAL: [(u32, KeyCode); 56] = [
+    (57358, KeyCode::CapsLock),
+    (57359, KeyCode::ScrollLock),
+    (57360, KeyCode::NumLock),
+    (57361, KeyCode::PrintScreen),
+    (57362, KeyCode::Pause),
+    (57363, KeyCode::Menu),
+    (57376, KeyCode::F(13)),
+    (57377, KeyCode::F(14)),
+    (57378, KeyCode::F(15)),
+    (57379, KeyCode::F(16)),
+    (57380, KeyCode::F(17)),
+    (57381, KeyCode::F(18)),
+    (57382, KeyCode::F(19)),
+    (57383, KeyCode::F(20)),
+    (57384, KeyCode::F(21)),
+    (57385, KeyCode::F(22)),
+    (57386, KeyCode::F(23)),
+    (57387, KeyCode::F(24)),
+    (57388, KeyCode::F(25)),
+    (57389, KeyCode::F(26)),
+    (57390, KeyCode::F(27)),
+    (57391, KeyCode::F(28)),
+    (57392, KeyCode::F(29)),
+    (57393, KeyCode::F(30)),
+    (57394, KeyCode::F(31)),
+    (57395, KeyCode::F(32)),
+    (57396, KeyCode::F(33)),
+    (57397, KeyCode::F(34)),
+    (57398, KeyCode::F(35)),
+    (57428, KeyCode::Media(MediaKeyCode::Play)),
+    (57429, KeyCode::Media(MediaKeyCode::Pause)),
+    (57430, KeyCode::Media(MediaKeyCode::PlayPause)),
+    (57431, KeyCode::Media(MediaKeyCode::Reverse)),
+    (57432, KeyCode::Media(MediaKeyCode::Stop)),
+    (57433, KeyCode::Media(MediaKeyCode::FastForward)),
+    (57434, KeyCode::Media(MediaKeyCode::Rewind)),
+    (57435, KeyCode::Media(MediaKeyCode::TrackNext)),
+    (57436, KeyCode::Media(MediaKeyCode::TrackPrevious)),
+    (57437, KeyCode::Media(MediaKeyCode::Record)),
+    (57438, KeyCode::Media(MediaKeyCode::LowerVolume)),
+    (57439, KeyCode::Media(MediaKeyCode::RaiseVolume)),
+    (57440, KeyCode::Media(MediaKeyCode::MuteVolume)),
+    (57441, KeyCode::Modifier(ModifierKeyCode::LeftShift)),
+    (57442, KeyCode::Modifier(ModifierKeyCode::LeftControl)),
+    (57443, KeyCode::Modifier(ModifierKeyCode::LeftAlt)),
+    (57444, KeyCode::Modifier(ModifierKeyCode::LeftSuper)),
+    (57445, KeyCode::Modifier(ModifierKeyCode::LeftHyper)),
+    (57446, KeyCode::Modifier(ModifierKeyCode::LeftMeta)),
+    (57447, KeyCode::Modifier(ModifierKeyCode::RightShift)),
+    (57448, KeyCode::Modifier(ModifierKeyCode::RightControl)),
+    (57449, KeyCode::Modifier(ModifierKeyCode::RightAlt)),
+    (57450, KeyCode::Modifier(ModifierKeyCode::RightSuper)),
+    (57451, KeyCode::Modifier(ModifierKeyCode::RightHyper)),
+    (57452, KeyCode::Modifier(ModifierKeyCode::RightMeta)),
+    (57453, KeyCode::Modifier(ModifierKeyCode::IsoLevel3Shift)),
+    (57454, KeyCode::Modifier(ModifierKeyCode::IsoLevel5Shift)),
+];
+
+fn lookup(table: &[(u32, KeyCode)], codepoint: u32) -> Option<KeyCode> {
+    table.iter().find(|(code, _)| *code == codepoint).map(|&(_, keycode)| keycode)
+}
+
 fn translate_functional_key_code(codepoint: u32) -> Option<(KeyCode, KeyEventState)> {
-    if let Some(keycode) = match codepoint {
-        57399 => Some(KeyCode::Char('0')),
-        57400 => Some(KeyCode::Char('1')),
-        57401 => Some(KeyCode::Char('2')),
-        57402 => Some(KeyCode::Char('3')),
-        57403 => Some(KeyCode::Char('4')),
-        57404 => Some(KeyCode::Char('5')),
-        57405 => Some(KeyCode::Char('6')),
-        57406 => Some(KeyCode::Char('7')),
-        57407 => Some(KeyCode::Char('8')),
-        57408 => Some(KeyCode::Char('9')),
-        57409 => Some(KeyCode::Char('.')),
-        57410 => Some(KeyCode::Char('/')),
-        57411 => Some(KeyCode::Char('*')),
-        57412 => Some(KeyCode::Char('-')),
-        57413 => Some(KeyCode::Char('+')),
-        57414 => Some(KeyCode::Enter),
-        57415 => Some(KeyCode::Char('=')),
-        57416 => Some(KeyCode::Char(',')),
-        57417 => Some(KeyCode::Left),
-        57418 => Some(KeyCode::Right),
-        57419 => Some(KeyCode::Up),
-        57420 => Some(KeyCode::Down),
-        57421 => Some(KeyCode::PageUp),
-        57422 => Some(KeyCode::PageDown),
-        57423 => Some(KeyCode::Home),
-        57424 => Some(KeyCode::End),
-        57425 => Some(KeyCode::Insert),
-        57426 => Some(KeyCode::Delete),
-        57427 => Some(KeyCode::KeypadBegin),
-        _ => None,
-    } {
-        return Some((keycode, KeyEventState::KEYPAD));
-    }
-
-    if let Some(keycode) = match codepoint {
-        57358 => Some(KeyCode::CapsLock),
-        57359 => Some(KeyCode::ScrollLock),
-        57360 => Some(KeyCode::NumLock),
-        57361 => Some(KeyCode::PrintScreen),
-        57362 => Some(KeyCode::Pause),
-        57363 => Some(KeyCode::Menu),
-        57376 => Some(KeyCode::F(13)),
-        57377 => Some(KeyCode::F(14)),
-        57378 => Some(KeyCode::F(15)),
-        57379 => Some(KeyCode::F(16)),
-        57380 => Some(KeyCode::F(17)),
-        57381 => Some(KeyCode::F(18)),
-        57382 => Some(KeyCode::F(19)),
-        57383 => Some(KeyCode::F(20)),
-        57384 => Some(KeyCode::F(21)),
-        57385 => Some(KeyCode::F(22)),
-        57386 => Some(KeyCode::F(23)),
-        57387 => Some(KeyCode::F(24)),
-        57388 => Some(KeyCode::F(25)),
-        57389 => Some(KeyCode::F(26)),
-        57390 => Some(KeyCode::F(27)),
-        57391 => Some(KeyCode::F(28)),
-        57392 => Some(KeyCode::F(29)),
-        57393 => Some(KeyCode::F(30)),
-        57394 => Some(KeyCode::F(31)),
-        57395 => Some(KeyCode::F(32)),
-        57396 => Some(KeyCode::F(33)),
-        57397 => Some(KeyCode::F(34)),
-        57398 => Some(KeyCode::F(35)),
-        57428 => Some(KeyCode::Media(MediaKeyCode::Play)),
-        57429 => Some(KeyCode::Media(MediaKeyCode::Pause)),
-        57430 => Some(KeyCode::Media(MediaKeyCode::PlayPause)),
-        57431 => Some(KeyCode::Media(MediaKeyCode::Reverse)),
-        57432 => Some(KeyCode::Media(MediaKeyCode::Stop)),
-        57433 => Some(KeyCode::Media(MediaKeyCode::FastForward)),
-        57434 => Some(KeyCode::Media(MediaKeyCode::Rewind)),
-        57435 => Some(KeyCode::Media(MediaKeyCode::TrackNext)),
-        57436 => Some(KeyCode::Media(MediaKeyCode::TrackPrevious)),
-        57437 => Some(KeyCode::Media(MediaKeyCode::Record)),
-        57438 => Some(KeyCode::Media(MediaKeyCode::LowerVolume)),
-        57439 => Some(KeyCode::Media(MediaKeyCode::RaiseVolume)),
-        57440 => Some(KeyCode::Media(MediaKeyCode::MuteVolume)),
-        57441 => Some(KeyCode::Modifier(ModifierKeyCode::LeftShift)),
-        57442 => Some(KeyCode::Modifier(ModifierKeyCode::LeftControl)),
-        57443 => Some(KeyCode::Modifier(ModifierKeyCode::LeftAlt)),
-        57444 => Some(KeyCode::Modifier(ModifierKeyCode::LeftSuper)),
-        57445 => Some(KeyCode::Modifier(ModifierKeyCode::LeftHyper)),
-        57446 => Some(KeyCode::Modifier(ModifierKeyCode::LeftMeta)),
-        57447 => Some(KeyCode::Modifier(ModifierKeyCode::RightShift)),
-        57448 => Some(KeyCode::Modifier(ModifierKeyCode::RightControl)),
-        57449 => Some(KeyCode::Modifier(ModifierKeyCode::RightAlt)),
-        57450 => Some(KeyCode::Modifier(ModifierKeyCode::RightSuper)),
-        57451 => Some(KeyCode::Modifier(ModifierKeyCode::RightHyper)),
-        57452 => Some(KeyCode::Modifier(ModifierKeyCode::RightMeta)),
-        57453 => Some(KeyCode::Modifier(ModifierKeyCode::IsoLevel3Shift)),
-        57454 => Some(KeyCode::Modifier(ModifierKeyCode::IsoLevel5Shift)),
-        _ => None,
-    } {
-        return Some((keycode, KeyEventState::empty()));
-    }
-
-    None
+    lookup(&KEYPAD, codepoint)
+        .map(|keycode| (keycode, KeyEventState::KEYPAD))
+        .or_else(|| lookup(&FUNCTIONAL, codepoint).map(|keycode| (keycode, KeyEventState::empty())))
 }
 
 fn parse_csi_u_encoded_key_code(buffer: &[u8]) -> io::Result<Option<Decoded>> {
-    assert!(buffer.starts_with(b"\x1B["));
     assert!(buffer.ends_with(b"u"));
 
-    let s = std::str::from_utf8(&buffer[2..buffer.len() - 1]).map_err(|_| could_not_parse_event_error())?;
-    let mut split = s.split(';');
+    let mut split = csi_fields(buffer)?;
 
     let mut codepoints = split.next().ok_or_else(could_not_parse_event_error)?.split(':');
 
@@ -373,49 +388,12 @@ fn parse_csi_u_encoded_key_code(buffer: &[u8]) -> io::Result<Option<Decoded>> {
         .parse::<u32>()
         .map_err(|_| could_not_parse_event_error())?;
 
-    let (mut modifiers, kind, state_from_modifiers) =
-        if let Ok((modifier_mask, kind_code)) = modifier_and_kind_parsed(&mut split) {
-            (parse_modifiers(modifier_mask), parse_key_event_kind(kind_code), parse_modifiers_to_state(modifier_mask))
-        } else {
-            (KeyModifiers::NONE, KeyEventKind::Press, KeyEventState::NONE)
-        };
+    let (mut modifiers, kind, state_from_modifiers) = modifiers_kind_state(&mut split);
 
-    let (mut keycode, state_from_keycode) = {
-        if let Some((special_key_code, state)) = translate_functional_key_code(codepoint) {
-            (special_key_code, state)
-        } else if let Some(c) = char::from_u32(codepoint) {
-            (
-                match c {
-                    '\x1B' => KeyCode::Esc,
-                    '\r' => KeyCode::Enter,
-                    '\n' if !crossterm::terminal::is_raw_mode_enabled().unwrap_or(true) => KeyCode::Enter,
-                    '\t' => {
-                        if modifiers.contains(KeyModifiers::SHIFT) {
-                            KeyCode::BackTab
-                        } else {
-                            KeyCode::Tab
-                        }
-                    }
-                    '\x7F' => KeyCode::Backspace,
-                    _ => KeyCode::Char(c),
-                },
-                KeyEventState::empty(),
-            )
-        } else {
-            return Err(could_not_parse_event_error());
-        }
-    };
+    let (mut keycode, state_from_keycode) = decode_codepoint(codepoint, modifiers)?;
 
     if let KeyCode::Modifier(modifier_keycode) = keycode {
-        match modifier_keycode {
-            ModifierKeyCode::LeftAlt | ModifierKeyCode::RightAlt => modifiers.set(KeyModifiers::ALT, true),
-            ModifierKeyCode::LeftControl | ModifierKeyCode::RightControl => modifiers.set(KeyModifiers::CONTROL, true),
-            ModifierKeyCode::LeftShift | ModifierKeyCode::RightShift => modifiers.set(KeyModifiers::SHIFT, true),
-            ModifierKeyCode::LeftSuper | ModifierKeyCode::RightSuper => modifiers.set(KeyModifiers::SUPER, true),
-            ModifierKeyCode::LeftHyper | ModifierKeyCode::RightHyper => modifiers.set(KeyModifiers::HYPER, true),
-            ModifierKeyCode::LeftMeta | ModifierKeyCode::RightMeta => modifiers.set(KeyModifiers::META, true),
-            _ => {}
-        }
+        apply_modifier_key(&mut modifiers, modifier_keycode);
     }
 
     if modifiers.contains(KeyModifiers::SHIFT)
@@ -436,20 +414,43 @@ fn parse_csi_u_encoded_key_code(buffer: &[u8]) -> io::Result<Option<Decoded>> {
     Ok(Some(Decoded::Event(input_event)))
 }
 
+fn decode_codepoint(codepoint: u32, modifiers: KeyModifiers) -> io::Result<(KeyCode, KeyEventState)> {
+    if let Some(special) = translate_functional_key_code(codepoint) {
+        return Ok(special);
+    }
+    let c = char::from_u32(codepoint).ok_or_else(could_not_parse_event_error)?;
+    let keycode = match c {
+        '\x1B' => KeyCode::Esc,
+        '\r' => KeyCode::Enter,
+        '\n' if !crossterm::terminal::is_raw_mode_enabled().unwrap_or(true) => KeyCode::Enter,
+        '\t' if modifiers.contains(KeyModifiers::SHIFT) => KeyCode::BackTab,
+        '\t' => KeyCode::Tab,
+        '\x7F' => KeyCode::Backspace,
+        _ => KeyCode::Char(c),
+    };
+    Ok((keycode, KeyEventState::empty()))
+}
+
+fn apply_modifier_key(modifiers: &mut KeyModifiers, modifier_keycode: ModifierKeyCode) {
+    match modifier_keycode {
+        ModifierKeyCode::LeftAlt | ModifierKeyCode::RightAlt => modifiers.set(KeyModifiers::ALT, true),
+        ModifierKeyCode::LeftControl | ModifierKeyCode::RightControl => modifiers.set(KeyModifiers::CONTROL, true),
+        ModifierKeyCode::LeftShift | ModifierKeyCode::RightShift => modifiers.set(KeyModifiers::SHIFT, true),
+        ModifierKeyCode::LeftSuper | ModifierKeyCode::RightSuper => modifiers.set(KeyModifiers::SUPER, true),
+        ModifierKeyCode::LeftHyper | ModifierKeyCode::RightHyper => modifiers.set(KeyModifiers::HYPER, true),
+        ModifierKeyCode::LeftMeta | ModifierKeyCode::RightMeta => modifiers.set(KeyModifiers::META, true),
+        _ => {}
+    }
+}
+
 fn parse_csi_special_key_code(buffer: &[u8]) -> io::Result<Option<Decoded>> {
-    assert!(buffer.starts_with(b"\x1B["));
     assert!(buffer.ends_with(b"~"));
 
-    let s = std::str::from_utf8(&buffer[2..buffer.len() - 1]).map_err(|_| could_not_parse_event_error())?;
-    let mut split = s.split(';');
+    let mut split = csi_fields(buffer)?;
 
     let first = next_parsed::<u8>(&mut split)?;
 
-    let (modifiers, kind, state) = if let Ok((modifier_mask, kind_code)) = modifier_and_kind_parsed(&mut split) {
-        (parse_modifiers(modifier_mask), parse_key_event_kind(kind_code), parse_modifiers_to_state(modifier_mask))
-    } else {
-        (KeyModifiers::NONE, KeyEventKind::Press, KeyEventState::NONE)
-    };
+    let (modifiers, kind, state) = modifiers_kind_state(&mut split);
 
     let keycode = match first {
         1 | 7 => KeyCode::Home,
@@ -470,13 +471,10 @@ fn parse_csi_special_key_code(buffer: &[u8]) -> io::Result<Option<Decoded>> {
 
     Ok(Some(Decoded::Event(input_event)))
 }
-
 fn parse_csi_rxvt_mouse(buffer: &[u8]) -> io::Result<Option<Decoded>> {
-    assert!(buffer.starts_with(b"\x1B["));
     assert!(buffer.ends_with(b"M"));
 
-    let s = std::str::from_utf8(&buffer[2..buffer.len() - 1]).map_err(|_| could_not_parse_event_error())?;
-    let mut split = s.split(';');
+    let mut split = csi_fields(buffer)?;
 
     let cb = next_parsed::<u8>(&mut split)?.checked_sub(32).ok_or_else(could_not_parse_event_error)?;
     let (kind, modifiers) = parse_cb(cb)?;
@@ -580,22 +578,22 @@ fn parse_utf8_char(buffer: &[u8]) -> io::Result<Option<char>> {
 
         Ok(Some(ch))
     } else {
-        let required_bytes = match buffer[0] {
-            (0x00..=0x7F) => 1,
-            (0xC0..=0xDF) => 2,
-            (0xE0..=0xEF) => 3,
-            (0xF0..=0xF7) => 4,
-            (0x80..=0xBF) | (0xF8..=0xFF) => return Err(could_not_parse_event_error()),
-        };
-
-        if required_bytes > 1 && buffer.len() > 1 {
-            for byte in &buffer[1..] {
-                if byte & !0b0011_1111 != 0b1000_0000 {
-                    return Err(could_not_parse_event_error());
-                }
-            }
-        }
-
-        if buffer.len() < required_bytes { Ok(None) } else { Err(could_not_parse_event_error()) }
+        incomplete_utf8_char(buffer)
     }
+}
+
+fn incomplete_utf8_char(buffer: &[u8]) -> io::Result<Option<char>> {
+    let required_bytes = match buffer[0] {
+        (0x00..=0x7F) => 1,
+        (0xC0..=0xDF) => 2,
+        (0xE0..=0xEF) => 3,
+        (0xF0..=0xF7) => 4,
+        (0x80..=0xBF) | (0xF8..=0xFF) => return Err(could_not_parse_event_error()),
+    };
+
+    if required_bytes > 1 && buffer.len() > 1 && buffer[1..].iter().any(|byte| byte & !0b0011_1111 != 0b1000_0000) {
+        return Err(could_not_parse_event_error());
+    }
+
+    if buffer.len() < required_bytes { Ok(None) } else { Err(could_not_parse_event_error()) }
 }

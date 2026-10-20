@@ -97,48 +97,20 @@ pub(crate) struct SpawnOptions<'a> {
     pub(crate) theme: &'a HostTheme,
 }
 
-fn pty_size(rows: u16, cols: u16) -> PtySize {
-    PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }
+struct Wired {
+    id: u64,
+    emulator: Emulator,
+    master: Box<dyn MasterPty + Send>,
+    writer: Writer,
+    child: Box<dyn Child + Send + Sync>,
+    size: (u16, u16),
+    interactive: bool,
 }
 
-impl Term {
-    pub(crate) fn spawn<E: From<Event> + Send + 'static>(opts: SpawnOptions, tx: Sender<E>) -> Result<Self> {
-        let SpawnOptions { id, shell, args, env, remove, rows, cols, cwd, theme } = opts;
-        let pair = native_pty_system().openpty(pty_size(rows, cols)).map_err(|e| Error::OpenPty(e.into()))?;
-
-        let mut cmd = CommandBuilder::new(shell);
-        cmd.args(args);
-        cmd.env("TERM", "xterm-256color");
-        for key in agents::claude::CLAUDE_SESSION_ENV.iter().chain(&agents::copilot::SESSION_ENV) {
-            cmd.env_remove(key);
-        }
-        for (key, value) in env {
-            cmd.env(key, value);
-        }
-        for key in remove {
-            cmd.env_remove(key);
-        }
-        let dir = cwd.or_else(|| std::env::current_dir().ok());
-        if let Some(dir) = &dir {
-            cmd.cwd(dir);
-        }
-
-        let child = pair.slave.spawn_command(cmd).map_err(|e| Error::SpawnShell {
-            shell: shell.to_string(),
-            dir: dir.unwrap_or_default(),
-            cause: e.into(),
-        })?;
-        drop(pair.slave);
-
-        let reader = pair.master.try_clone_reader().map_err(|e| Error::AttachPty(e.into()))?;
-        let writer = spawn_writer(pair.master.take_writer().map_err(|e| Error::AttachPty(e.into()))?);
-        let replies = writer.clone();
-        let emulator =
-            Emulator::new(rows, cols, SCROLLBACK_BYTES, theme, Box::new(move |bytes| _ = write_to(&replies, bytes)))
-                .map_err(|e| Error::Emulator(e.into()))?;
-        spawn_reader(id, reader, tx);
-
-        Ok(Self {
+impl From<Wired> for Term {
+    fn from(wired: Wired) -> Self {
+        let Wired { id, emulator, master, writer, child, size, interactive } = wired;
+        Self {
             id,
             emulator,
             agent: activity::Pane::default(),
@@ -158,12 +130,69 @@ impl Term {
             collapsed: false,
             accounts: Accounts::default(),
             account: accounts::Seen::default(),
-            master: pair.master,
+            master,
             writer,
             child,
-            size: (rows, cols),
-            interactive: args.is_empty(),
-        })
+            size,
+            interactive,
+        }
+    }
+}
+
+fn command(
+    shell: &str,
+    args: &[String],
+    env: &[(String, String)],
+    remove: &[&str],
+    dir: Option<&Path>,
+) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new(shell);
+    cmd.args(args);
+    cmd.env("TERM", "xterm-256color");
+    for key in agents::claude::CLAUDE_SESSION_ENV.iter().chain(&agents::copilot::SESSION_ENV) {
+        cmd.env_remove(key);
+    }
+    for (key, value) in env {
+        cmd.env(key, value);
+    }
+    for key in remove {
+        cmd.env_remove(key);
+    }
+    if let Some(dir) = dir {
+        cmd.cwd(dir);
+    }
+    cmd
+}
+
+fn pty_size(rows: u16, cols: u16) -> PtySize {
+    PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }
+}
+
+impl Term {
+    pub(crate) fn spawn<E: From<Event> + Send + 'static>(opts: SpawnOptions, tx: Sender<E>) -> Result<Self> {
+        let SpawnOptions { id, shell, args, env, remove, rows, cols, cwd, theme } = opts;
+        let pair = native_pty_system().openpty(pty_size(rows, cols)).map_err(|e| Error::OpenPty(e.into()))?;
+
+        let dir = cwd.or_else(|| std::env::current_dir().ok());
+        let cmd = command(shell, args, env, remove, dir.as_deref());
+
+        let child = pair.slave.spawn_command(cmd).map_err(|e| Error::SpawnShell {
+            shell: shell.to_string(),
+            dir: dir.unwrap_or_default(),
+            cause: e.into(),
+        })?;
+        drop(pair.slave);
+
+        let reader = pair.master.try_clone_reader().map_err(|e| Error::AttachPty(e.into()))?;
+        let writer = spawn_writer(pair.master.take_writer().map_err(|e| Error::AttachPty(e.into()))?);
+        let replies = writer.clone();
+        let emulator =
+            Emulator::new(rows, cols, SCROLLBACK_BYTES, theme, Box::new(move |bytes| _ = write_to(&replies, bytes)))
+                .map_err(|e| Error::Emulator(e.into()))?;
+        spawn_reader(id, reader, tx);
+
+        let master = pair.master;
+        Ok(Wired { id, emulator, master, writer, child, size: (rows, cols), interactive: args.is_empty() }.into())
     }
 
     pub(crate) fn accounts(&self) -> &Accounts {

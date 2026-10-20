@@ -194,46 +194,18 @@ impl Window<'_> {
             Incoming::Signal | Incoming::InputEnded => Ok(Some(Ending::Detached)),
             Incoming::Input(ev) => self.input(ev),
             Incoming::Activated(token) => {
-                if let Some(out) = &self.out {
-                    let _ = out.send(ClientMessage::Activated(token));
-                }
+                self.send_out(ClientMessage::Activated(token));
                 Ok(None)
             }
             Incoming::OpenFailed(failed) => {
-                if let Some(out) = &self.out {
-                    let _ = out.send(ClientMessage::OpenFailed(failed));
-                }
+                self.send_out(ClientMessage::OpenFailed(failed));
                 Ok(None)
             }
             Incoming::Tmux(outer) => {
                 self.tmux_checked(outer);
                 Ok(None)
             }
-            Incoming::Server(generation, received) if generation == self.generation => {
-                match next(received, self.target.reconnects())? {
-                    Next::Show(bytes) => {
-                        self.retries.showed();
-                        let mut out = stdout();
-                        out.write_all(&bytes)?;
-                        out.flush()?;
-                    }
-                    Next::End(ending) => return Ok(Some(ending)),
-                    Next::Reconnect => self.lose()?,
-                    Next::Sound(cue) => {
-                        if let Some(player) = &mut self.player {
-                            player.play(&cue, Instant::now());
-                        }
-                    }
-                    Next::Open(open) => {
-                        let tx = self.tx.clone();
-                        self.openers.open(&open, move |failed| {
-                            let _ = tx.send(Incoming::OpenFailed(failed));
-                        });
-                    }
-                    Next::Nothing => {}
-                }
-                Ok(None)
-            }
+            Incoming::Server(generation, received) if generation == self.generation => self.handle_server(received),
             Incoming::Linked(generation, linked) if generation == self.generation => {
                 match linked {
                     Ok(link) => self.link(link)?,
@@ -244,6 +216,38 @@ impl Window<'_> {
             }
             Incoming::Server(..) | Incoming::Linked(..) => Ok(None),
         }
+    }
+
+    fn send_out(&self, message: ClientMessage) {
+        if let Some(out) = &self.out {
+            let _ = out.send(message);
+        }
+    }
+
+    fn handle_server(&mut self, received: Received) -> Result<Option<Ending>> {
+        match next(received, self.target.reconnects())? {
+            Next::Show(bytes) => {
+                self.retries.showed();
+                let mut out = stdout();
+                out.write_all(&bytes)?;
+                out.flush()?;
+            }
+            Next::End(ending) => return Ok(Some(ending)),
+            Next::Reconnect => self.lose()?,
+            Next::Sound(cue) => {
+                if let Some(player) = &mut self.player {
+                    player.play(&cue, Instant::now());
+                }
+            }
+            Next::Open(open) => {
+                let tx = self.tx.clone();
+                self.openers.open(&open, move |failed| {
+                    let _ = tx.send(Incoming::OpenFailed(failed));
+                });
+            }
+            Next::Nothing => {}
+        }
+        Ok(None)
     }
 
     fn input(&mut self, ev: Event) -> Result<Option<Ending>> {
@@ -407,13 +411,8 @@ pub(super) fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal
         guard: None,
         lost: None,
         retries: Retries::default(),
-        player: sound::local_machine(|name| std::env::var(name).ok())
-            .then(|| Player::detect(paths::session().parent().map(Path::to_path_buf).unwrap_or_default())),
-        openers: if matches!(target, Target::Local) {
-            Openers::detect(|name| std::env::var(name).ok())
-        } else {
-            Openers::default()
-        },
+        player: local_player(),
+        openers: openers_for(target),
     };
     window.link(link)?;
     let _threads = Threads::spawn(tx, probe_timed_out)?;
@@ -421,6 +420,19 @@ pub(super) fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal
         let places = Places::new(&paths::config(), &paths::session());
         Supervisor::start(Kind::Window, places, Vec::new())
     });
+    run_window(&mut window, &rx)
+}
+
+fn local_player() -> Option<Player> {
+    sound::local_machine(|name| std::env::var(name).ok())
+        .then(|| Player::detect(paths::session().parent().map(Path::to_path_buf).unwrap_or_default()))
+}
+
+fn openers_for(target: &Target) -> Openers {
+    if matches!(target, Target::Local) { Openers::detect(|name| std::env::var(name).ok()) } else { Openers::default() }
+}
+
+fn run_window(window: &mut Window<'_>, rx: &Receiver<Incoming>) -> Result<Ending> {
     loop {
         let ending = match rx.recv_timeout(window.wait(Instant::now())) {
             Ok(incoming) => window.handle(incoming)?,
@@ -483,43 +495,54 @@ impl Threads {
         let mut signals = Signals::new([SIGTERM, SIGHUP, SIGINT, SIGWINCH]).map_err(Error::Signals)?;
         let handle = signals.handle();
         let signalled = tx.clone();
-        thread::spawn(move || {
-            for signal in signals.forever() {
-                let incoming = if signal == SIGWINCH {
-                    let Ok((cols, rows)) = crossterm::terminal::size() else { continue };
-                    Incoming::Input(Event::Resize(cols, rows))
-                } else {
-                    Incoming::Signal
-                };
-                if signalled.send(incoming).is_err() || signal != SIGWINCH {
-                    break;
-                }
-            }
-        });
+        thread::spawn(move || forward_signals(&mut signals, &signalled));
         let stop = Arc::new(AtomicBool::new(false));
         let (done, stopped) = mpsc::channel();
         let asked = Arc::clone(&stop);
         thread::Builder::new().name("input".into()).spawn(move || {
             let _done = done;
-            let _ended = InputEnd(tx.clone());
-            let input = stdin();
-            input::run(
-                &asked,
-                probe_timed_out,
-                |wait| input::readable(&input, wait),
-                |bytes| rustix::io::read(&input, bytes).map_err(Into::into),
-                |input| {
-                    tx.send(match input {
-                        input::Input::Event(event) => Incoming::Input(event),
-                        input::Input::Activated(token) => Incoming::Activated(token),
-                    })
-                    .is_ok()
-                },
-                thread::sleep,
-            );
+            read_input(&tx, &asked, probe_timed_out);
         })?;
         Ok(Self { stop, stopped, signals: handle })
     }
+}
+
+fn signal_incoming(signal: i32) -> Option<Incoming> {
+    if signal != SIGWINCH {
+        return Some(Incoming::Signal);
+    }
+    let (cols, rows) = crossterm::terminal::size().ok()?;
+    Some(Incoming::Input(Event::Resize(cols, rows)))
+}
+
+fn forward_signals(signals: &mut Signals, tx: &Sender<Incoming>) {
+    for signal in signals.forever() {
+        let Some(incoming) = signal_incoming(signal) else { continue };
+        if tx.send(incoming).is_err() || signal != SIGWINCH {
+            break;
+        }
+    }
+}
+
+fn read_input(tx: &Sender<Incoming>, stop: &AtomicBool, probe_timed_out: bool) {
+    let _ended = InputEnd(tx.clone());
+    let input = stdin();
+    input::run(
+        stop,
+        probe_timed_out,
+        input::Source {
+            poll: |wait| input::readable(&input, wait),
+            read: |bytes| rustix::io::read(&input, bytes).map_err(Into::into),
+        },
+        |input| {
+            tx.send(match input {
+                input::Input::Event(event) => Incoming::Input(event),
+                input::Input::Activated(token) => Incoming::Activated(token),
+            })
+            .is_ok()
+        },
+        thread::sleep,
+    );
 }
 
 impl Drop for Threads {
