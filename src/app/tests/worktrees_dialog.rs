@@ -12,15 +12,15 @@ use crate::flows::run::{RoleWorktree, Run};
 use crate::test_util::git;
 use crate::worktrees::Dialog;
 
-struct Setup {
-    app: App,
-    rx: Receiver<AppEvent>,
-    repo: TempDir,
+pub(super) struct Setup {
+    pub(super) app: App,
+    pub(super) rx: Receiver<AppEvent>,
+    pub(super) repo: TempDir,
     worktrees: TempDir,
     _config: TempDir,
 }
 
-fn with(names: &[&str]) -> Setup {
+pub(super) fn with(names: &[&str]) -> Setup {
     let repo = git_repo(&[("README", "hi")]);
     let (worktrees, config, config_path) = with_worktrees_config();
     let (mut app, rx) = app_in(repo.path(), config_path);
@@ -32,7 +32,7 @@ fn with(names: &[&str]) -> Setup {
     Setup { app, rx, repo, worktrees, _config: config }
 }
 
-fn path_of(s: &Setup, branch: &str) -> PathBuf {
+pub(super) fn path_of(s: &Setup, branch: &str) -> PathBuf {
     let found = s.app.projects[0].workspaces.iter().find(|w| git::branch(&w.path).as_deref() == Some(branch));
     found.expect("the workspace exists").path.clone()
 }
@@ -120,7 +120,7 @@ fn remove(s: &mut Setup) {
     click(&mut s.app, pos);
 }
 
-fn settle(s: &mut Setup, left: usize) -> Vec<String> {
+pub(super) fn settle(s: &mut Setup, left: usize) -> Vec<String> {
     let seen = RefCell::new(Vec::new());
     pump_until(&mut s.app, &s.rx, "the removals settle", |a| {
         if let Some(text) = toast(a)
@@ -133,7 +133,7 @@ fn settle(s: &mut Setup, left: usize) -> Vec<String> {
     seen.into_inner()
 }
 
-fn alive(app: &App, path: &Path) -> bool {
+pub(super) fn alive(app: &App, path: &Path) -> bool {
     let ws = app.projects[0].workspaces.iter().find(|w| w.path == path).expect("the workspace is there");
     ws.open() && ws.terms().all(|t| t.shell_pid().is_some_and(process::alive))
 }
@@ -372,13 +372,13 @@ fn remove_counts_ticked_rows_the_filter_hides() {
     assert_eq!((view(&s.app).rows.len(), view(&s.app).ticked), (1, 2));
 }
 
-fn commit_in(dir: &Path) {
+pub(super) fn commit_in(dir: &Path) {
     std::fs::write(dir.join("work.txt"), "work").expect("write");
     git(dir, &["add", "--all"]);
     git(dir, &["-c", "user.name=t", "-c", "user.email=t@e.com", "commit", "--quiet", "-m", "work"]);
 }
 
-fn settled_text(s: &mut Setup, left: usize) -> Option<String> {
+pub(super) fn settled_text(s: &mut Setup, left: usize) -> Option<String> {
     settle(s, left).last().cloned()
 }
 
@@ -417,6 +417,24 @@ fn a_detached_worktree_deletes_no_branch() {
 
     let text = settled_text(&mut s, 1);
     assert_eq!((branch_exists(s.repo.path(), "a"), text.as_deref()), (true, Some("removed 1 worktree")));
+}
+
+#[test]
+fn an_open_workspaces_branch_goes_when_its_folder_was_deleted_by_hand() {
+    let mut s = with(&["a"]);
+    let folder = path_of(&s, "a");
+    std::fs::remove_dir_all(&folder).expect("remove the folder");
+    let repo = s.repo.path().to_path_buf();
+
+    assert!(s.app.remove_workspace_with_branches(
+        workspace_at(&s.app, 0, 1),
+        ("a".to_string(), repo),
+        vec!["a".to_string()],
+        (true, false)
+    ));
+
+    settle(&mut s, 1);
+    assert!(!branch_exists(s.repo.path(), "a"));
 }
 
 #[test]

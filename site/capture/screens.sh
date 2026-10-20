@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-full files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
+CC_SCREENS="first-run sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-full files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
 
 pane_in() {
   cc status --json | node -e '
@@ -181,6 +181,20 @@ screen_sidebar_agents() {
   cc_wheel 'feat/dark-mode' down 1
   cc_wait '│   gpt-5.4 · 20%'
   cc_shot sidebar-agents
+}
+
+screen_close_agent() {
+  agents_knobs
+  cc_s1_at 110 44
+  cc_wait 'Sonnet 5.5'
+  cc_wheel 'feat/dark-mode' down 1
+  cc_wait '│   gpt-5.4 · 20%'
+  cc_hover 'web-shop › feat/dark'
+  cc_wait '×'
+  cc_click '×'
+  cc_wait 'Close agent'
+  cc_wait ' close and remove '
+  cc_shot close-agent
 }
 
 screen_agent_failed() {

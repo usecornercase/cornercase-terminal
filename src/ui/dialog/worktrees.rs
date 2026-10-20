@@ -4,10 +4,11 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
+use super::form::Toggle;
 use super::settings::settings_area;
 use super::{
-    Note, draw_input, draw_note, draw_secondary, draw_submit, first_visible_by, form_inner, list_item_by,
-    pick_background, right_aligned,
+    Note, draw_input, draw_note, draw_secondary, draw_submit, draw_tick, draw_waiting, first_visible_by, form_inner,
+    list_item_by, pick_background, right_aligned,
 };
 use crate::text::{truncate_left, truncate_right};
 use crate::ui::View;
@@ -29,6 +30,8 @@ const REMOVE_LABEL: &str = "remove";
 const DONE_LABEL: &str = "done";
 
 const BACK_LABEL: &str = "back";
+
+pub(crate) const BRANCHES_LABEL: &str = "also delete the branch";
 
 pub(crate) struct Worktrees {
     pub(crate) title: String,
@@ -201,8 +204,7 @@ fn draw_buttons(f: &mut Frame, view: &View, worktrees: &Worktrees, area: Rect) {
     if remove_enabled(worktrees) {
         draw_submit(f, view, remove, &remove_label(worktrees));
     } else {
-        let style = Style::default().fg(view.muted).bg(view.surface());
-        f.render_widget(Paragraph::new(Span::styled(format!(" {} ", remove_label(worktrees)), style)), remove);
+        draw_waiting(f, view, remove, &remove_label(worktrees));
     }
     let label = if worktrees.confirm.is_some() { BACK_LABEL } else { DONE_LABEL };
     draw_secondary(f, view, other_rect(area, worktrees), label);
@@ -214,17 +216,7 @@ fn draw_confirm_step(f: &mut Frame, view: &View, worktrees: &Worktrees, confirm:
         Paragraph::new(confirm.lines.clone()).scroll((u16::try_from(confirm.scroll).unwrap_or(u16::MAX), 0)),
         body,
     );
-    let (mark, colour) = if confirm.branches { ("✓", Color::Green) } else { ("○", view.muted) };
-    let bg = pick_background(view, false, branches);
-    f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::raw(" "),
-            Span::styled(mark, bg.fg(colour)),
-            Span::styled(" also delete the branch ", bg),
-        ]))
-        .style(bg),
-        branches,
-    );
+    draw_tick(f, view, branches, &Toggle { label: BRANCHES_LABEL, on: confirm.branches });
     draw_note(f, view.muted, worktrees.note.as_ref(), note);
 }
 

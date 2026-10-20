@@ -19,7 +19,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 
 - [Architecture](design/architecture.md): what each file and folder of `src/` holds, the server loop, the client.
 - [Code layout](design/code-layout.md) (`src/`, `tests/layers.rs`): domains, `pub`, the files of `App`, 1,000 lines per file, `tests/layers.rs`.
-- [Layout](design/layout.md) (`config.rs`, `state.rs`, `ui.rs`, `ui/`, `app/layout.rs`, `app/sidebar.rs`, `app/tab_bar.rs`, `app/interaction.rs`): the sidebar layouts, the agents section, borders, bars, text colours, compact mode.
+- [Layout](design/layout.md) (`config.rs`, `state.rs`, `ui.rs`, `ui/`, `app/layout.rs`, `app/sidebar.rs`, `app/tab_bar.rs`, `app/interaction.rs`, `agents/closing.rs`, `app/close_agent.rs`, `app/close_agent/`): the sidebar layouts, the agents section (and its Close agent dialog), borders, bars, text colours, compact mode.
 - [Dialogs](design/dialogs.md) (`ui/dialog.rs`, `ui/dialog/`, `ui/combo.rs`, `list.rs`, `app/overlay.rs`, `app/dialogs.rs`): borders, dimming, buttons, a click outside, comboboxes.
 - [Hierarchy](design/hierarchy.md) (`project.rs`, `project/group.rs`, `project/hierarchy.rs`, `app/hierarchy.rs`, `app/tabs.rs`, `app/menus.rs`, `app/sidebar/drag.rs`): groups, projects, workspaces, tabs and panes; ids, labels, closing, reordering.
 - [Splits](design/splits.md) (`project/split.rs`, `app/panes.rs`): the split tree, minimum sizes, hidden panes, moving panes.

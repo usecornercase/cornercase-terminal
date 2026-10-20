@@ -54,6 +54,7 @@ impl Command {
     fn row_fields(&self, fields: &mut Fields) -> bool {
         match self {
             Self::Close(close) => close.fields(fields),
+            Self::CloseAgent(close) => close.fields(fields),
             Self::Rename(rename) => {
                 fields.maybe("item", rename.item).add("name", &rename.name);
             }

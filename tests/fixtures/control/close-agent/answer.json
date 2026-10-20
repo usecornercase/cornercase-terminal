@@ -1,0 +1,82 @@
+{
+  "pane": 7,
+  "agent": "claude",
+  "project": 1,
+  "workspace": 3,
+  "removes": {
+    "workspace": 3,
+    "path": "/w/wt",
+    "branch": "wt",
+    "changed": true,
+    "lock": {
+      "reason": "on a usb disk",
+      "path": "/w/wt",
+      "role": null,
+      "pid": 41,
+      "running": false
+    },
+    "roles": [
+      {
+        "role": "reviewer",
+        "path": "/w/wt-reviewer",
+        "branch": "wt-reviewer"
+      }
+    ],
+    "teardown": true
+  },
+  "branches": [
+    {
+      "path": "/w/wt",
+      "branch": "wt",
+      "lost": false,
+      "deletes": true,
+      "deleted": true
+    },
+    {
+      "path": "/w/wt-reviewer",
+      "branch": "wt-reviewer",
+      "lost": true,
+      "deletes": true,
+      "deleted": false
+    }
+  ],
+  "tabs": [
+    5,
+    6
+  ],
+  "stops": [
+    {
+      "pane": 7,
+      "agent": "claude",
+      "project": 1,
+      "workspace": 3,
+      "tab": 5
+    },
+    {
+      "pane": 8,
+      "agent": null,
+      "project": 1,
+      "workspace": 3,
+      "tab": 6
+    },
+    {
+      "pane": 11,
+      "agent": "codex",
+      "project": 1,
+      "workspace": 4,
+      "tab": 9
+    }
+  ],
+  "keeps": [
+    {
+      "pane": 12,
+      "agent": "codex",
+      "project": 1,
+      "workspace": 2,
+      "tab": 10
+    }
+  ],
+  "run": 2,
+  "closed": true,
+  "warning": "could not delete the branch wt-reviewer: not fully merged"
+}

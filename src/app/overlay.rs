@@ -2,6 +2,7 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
+use super::close_agent::CloseAgent;
 use super::flow_panel::COPY;
 use super::flows_dialog::flows_view;
 use super::issues_dialog::{room, view};
@@ -84,6 +85,7 @@ pub(super) enum Overlay {
     FlowMessage { workspace: u64, edge: Edge, to: Option<String>, scroll: usize },
     Keys(Option<KeysGroup>),
     Worktrees(Box<crate::worktrees::Dialog>),
+    CloseAgent(Box<CloseAgent>),
 }
 
 impl Overlay {
@@ -119,6 +121,7 @@ impl Overlay {
             Self::FlowMessage { .. } => "flow message",
             Self::Keys(_) => "keys",
             Self::Worktrees(_) => "worktrees",
+            Self::CloseAgent(_) => "close agent",
         }
     }
 
@@ -146,6 +149,7 @@ impl Overlay {
             Self::RemoveWorkspace { check: Check::Changed, .. } => FORCE_REMOVE_SUBMIT,
             Self::RemoveWorkspace { .. } | Self::RemoveAccount { .. } => REMOVE_SUBMIT,
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
+            Self::CloseAgent(dialog) => dialog.submit_label(),
             Self::CloseProject { .. }
             | Self::CloseWorkspace { .. }
             | Self::CloseTab { .. }
@@ -222,6 +226,7 @@ impl App {
             Some(Overlay::GroupStyle { group }) => self.group_style_mouse(*group, ev, pos, area),
             Some(Overlay::Keys(group)) => return self.keys_mouse(*group, ev, pos, area),
             Some(Overlay::Worktrees(_)) => self.worktrees_mouse(ev, pos, area),
+            Some(Overlay::CloseAgent(_)) => self.close_agent_mouse(ev, pos, area),
             Some(
                 Overlay::NewGroup { .. }
                 | Overlay::NewWorkspace { .. }
@@ -262,6 +267,7 @@ impl App {
             Overlay::ClosePane { pane } => self.close_pane_view(*pane)?,
             Overlay::Keys(group) => ui::Overlay::Keys(self.keys_view(*group)),
             Overlay::Worktrees(dialog) => ui::Overlay::Worktrees(self.worktrees_view(dialog, area)),
+            Overlay::CloseAgent(dialog) => self.close_agent_view(dialog, area),
             Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), home),
             Overlay::Queue(form) => ui::Overlay::Queue(Self::queue_form_view(form)),
             Overlay::Issues(b) => view(b, room(area), time::now()),

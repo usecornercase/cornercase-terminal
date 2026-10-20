@@ -517,6 +517,7 @@ mod accounts;
 mod agents;
 mod arranging;
 mod changes;
+mod close_agent;
 mod config;
 mod contract;
 mod copilot;

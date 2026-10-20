@@ -1,3 +1,5 @@
+mod agent;
+
 use super::{Handled, Pending, Stage, json, malformed, none};
 use crate::app::App;
 use crate::app::worktrees::RemoveOptions;
@@ -8,6 +10,12 @@ use crate::error;
 use crate::git::{self, worktree};
 use crate::project::{Hierarchy, WorkspaceAt};
 use crate::term::Term;
+
+pub(super) use agent::Asking;
+
+fn uncommitted(workspace: u64) -> String {
+    format!("workspace {workspace} has changes that are not committed; add --force to remove it anyway")
+}
 
 pub(super) fn shell_quote(path: &str) -> String {
     if !path.is_empty() && path.chars().all(|c| c.is_ascii_alphanumeric() || "/._~+-".contains(c)) {
@@ -137,10 +145,7 @@ impl App {
         let Some(pending) = self.clients.requests.take(key) else { return };
         let refusal = match &status.lock {
             Some(lock) if !unlock => self.locked(workspace, lock).into(),
-            _ if status.changed && !force => {
-                format!("workspace {workspace} has changes that are not committed; add --force to remove it anyway")
-                    .into()
-            }
+            _ if status.changed && !force => uncommitted(workspace).into(),
             _ => self.usable_workspace(workspace).err().unwrap_or_else(|| none("workspace", workspace)),
         };
         self.refuse_or_answer(pending.client, Err(refusal));

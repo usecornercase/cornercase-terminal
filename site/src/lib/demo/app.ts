@@ -120,6 +120,7 @@ const BRANCHES_NEED = 'naming issue branches needs cornercase on your computer; 
 const PULL_REQUESTS_NEED = 'this needs cornercase on your computer: the demo has no GitHub';
 
 const OPEN_IN_NEEDS = 'this needs cornercase on your computer: the demo opens no other apps';
+const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
 const WORKTREES_NEED = 'this needs cornercase on your computer: the demo has no worktrees on disk to list';
 const SETUP_NEEDS = 'this needs cornercase on your computer: the demo runs no setup scripts';
 
@@ -2129,7 +2130,7 @@ export class App {
     const pane = this.findPane(id)?.pane;
     const mark = pane && this.markAction([pane]);
     const row = this.agentShown().find((r) => r.pane === id);
-    const actions: MenuAction[] = [...(mark ? [mark] : []), ...(row && row.fold !== null ? [{ kind: 'agentFold' as const, pane: id, collapsed: !row.fold }] : [])];
+    const actions: MenuAction[] = [...(mark ? [mark] : []), ...(row && row.fold !== null ? [{ kind: 'agentFold' as const, pane: id, collapsed: !row.fold }] : []), ...(row ? [{ kind: 'closeAgent' as const, pane: id }] : [])];
     if (!actions.length) return;
     this.overlay = { kind: 'menu', at, actions };
     this.dirty();
@@ -2177,6 +2178,7 @@ export class App {
     if (a.kind === 'sendTodo') return this.todoAgent(a.pane)?.label ?? '';
     if (a.kind === 'mark') return a.pending ? 'mark as pending review' : 'mark as reviewed';
     if (a.kind === 'agentFold') return a.collapsed ? 'collapse' : 'expand';
+    if (a.kind === 'closeAgent') return 'close agent';
     if (a.kind === 'showFlow') return 'show flow';
     if (a.kind === 'newWorkspace') return 'new workspace';
     if (a.kind === 'startFlow') return 'start a flow…';
@@ -2241,6 +2243,7 @@ export class App {
       this.emit('narrate', this.narration.group);
     } else if (a.kind === 'mark') this.mark(a);
     else if (a.kind === 'agentFold') this.setAgentFold(a.pane, a.collapsed);
+    else if (a.kind === 'closeAgent') this.askCloseAgent(a.pane);
     else if (a.kind === 'sendTodo') this.sendTodo(a.todo, a.pane);
     else if (a.kind === 'showFlow') return this.showFlowOf(a.workspace);
     else if (a.kind === 'newWorkspace') {
@@ -2657,6 +2660,10 @@ export class App {
     if (!step) return;
     if ('open' in step) this.overlay = { kind: 'keys', group: step.open };
     else this.shortcut(step.run);
+  }
+
+  askCloseAgent(_pane: number): void {
+    this.bug(CLOSE_AGENT_NEEDS);
   }
 
   private bug(text: string): void {

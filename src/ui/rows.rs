@@ -292,20 +292,28 @@ pub(super) fn draw_row_buttons(f: &mut Frame, view: &View, row: Rect, pitch: u16
     if !hover && pitch == 1 {
         return;
     }
-    let style = |r: Rect, lit: Color| {
-        if hover && hovered(view, r) { bg.fg(lit).add_modifier(Modifier::BOLD) } else { bg.fg(view.muted) }
-    };
     let menu = row_menu_button(row, pitch);
-    let menu_style = style(menu, Color::Cyan);
+    let menu_style = button_lit(view, hover, bg, menu, Color::Cyan);
     draw_band(
         f,
         menu,
         Span::styled(format!("{ROW_MENU_ICON:>width$}", width = usize::from(menu.width)), menu_style),
         menu_style,
     );
-    let close = row_close_button(row, pitch);
-    let close_style = style(close, Color::Red);
-    draw_band(f, close, Span::styled(centered("×", close.width), close_style), close_style);
+    draw_close_in(f, view, row, row_close_button(row, pitch), bg);
+}
+
+pub(super) fn draw_close_in(f: &mut Frame, view: &View, row: Rect, close: Rect, bg: Style) {
+    let hover = sidebar_hovered(view, row);
+    if close.is_empty() || (!hover && close.height == 1) {
+        return;
+    }
+    let style = button_lit(view, hover, bg, close, Color::Red);
+    draw_band(f, close, Span::styled(centered("×", close.width), style), style);
+}
+
+fn button_lit(view: &View, hover: bool, bg: Style, r: Rect, lit: Color) -> Style {
+    if hover && hovered(view, r) { bg.fg(lit).add_modifier(Modifier::BOLD) } else { bg.fg(view.muted) }
 }
 
 pub(super) fn marker(shown: bool) -> Span<'static> {

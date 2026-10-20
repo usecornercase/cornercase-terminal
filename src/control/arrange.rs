@@ -155,5 +155,63 @@ pub(crate) struct RoleTree {
     pub(crate) branch: String,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(clippy::struct_excessive_bools, reason = "each flag is its own option of close-agent")]
+pub(crate) struct CloseAgent {
+    pub(crate) pane: u64,
+    #[serde(default)]
+    pub(crate) check: bool,
+    #[serde(default)]
+    pub(crate) delete_branch: bool,
+    #[serde(default)]
+    pub(crate) force: bool,
+    #[serde(default)]
+    pub(crate) unlock: bool,
+}
+
+impl CloseAgent {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.add("pane", self.pane).add("check", self.check).add("delete_branch", self.delete_branch);
+        fields.add("force", self.force).add("unlock", self.unlock);
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct AgentClosing {
+    pub(crate) pane: u64,
+    pub(crate) agent: Option<String>,
+    pub(crate) project: u64,
+    pub(crate) workspace: u64,
+    pub(crate) removes: Option<Removal>,
+    pub(crate) branches: Vec<BranchFate>,
+    pub(crate) tabs: Vec<u64>,
+    pub(crate) stops: Vec<PaneRef>,
+    pub(crate) keeps: Vec<PaneRef>,
+    pub(crate) run: Option<u64>,
+    pub(crate) closed: bool,
+    pub(crate) warning: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct BranchFate {
+    pub(crate) path: PathBuf,
+    pub(crate) branch: Option<String>,
+    pub(crate) lost: bool,
+    pub(crate) deletes: bool,
+    pub(crate) deleted: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct PaneRef {
+    pub(crate) pane: u64,
+    pub(crate) agent: Option<String>,
+    pub(crate) project: u64,
+    pub(crate) workspace: u64,
+    pub(crate) tab: u64,
+}
+
 #[cfg(test)]
 mod tests;

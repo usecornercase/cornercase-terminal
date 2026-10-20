@@ -175,7 +175,7 @@ fn a_hovered_row_is_filled() {
 }
 
 #[rstest]
-#[case::wide(30, "! cornercase › issue-98-re…")]
+#[case::wide(30 + CLOSE_BUTTON_WIDTH, "! cornercase › issue-98-re…")]
 #[case::without_the_workspace(18, "! cornercase")]
 #[case::cut(12, "! corner…")]
 fn a_narrow_row_drops_the_workspace_then_cuts_the_project(#[case] width: u16, #[case] expected: &str) {
@@ -383,6 +383,7 @@ fn renders_a_run_in_the_compact_agents_menu() {
 }
 
 fn first_line(width: u16, entry: &AgentEntry) -> String {
+    let width = if width < MIN_MENU_ROW_WIDTH { width } else { width + CLOSE_BUTTON_WIDTH };
     let r = Rect::new(0, 0, width, 2);
     let mut t = Terminal::new(TestBackend::new(width, 2)).expect("test backend");
     let v = shown(Sidebar::ProjectsOnTop, Vec::new());
@@ -538,4 +539,90 @@ fn renders_the_account_on_the_second_line() {
     let text: Vec<String> = (0..TALL.height).map(|y| row_text(&t, Rect::new(0, y, 32, 1))).collect();
     assert!(text.iter().any(|line| line.contains("claude · ") && line.contains("work · 23%")), "{text:#?}");
     insta::assert_snapshot!(t.backend());
+}
+
+fn close_symbol(t: &Terminal<TestBackend>, close: Rect) -> (String, Color) {
+    let cell = &t.backend().buffer()[(close.x + close.width / 2, close.y + close.height / 2)];
+    (cell.symbol().to_string(), cell.fg)
+}
+
+fn hovering(row: Rect) -> View<'static> {
+    View { hover: Some(Position::new(row.x + 4, row.y)), ..shown(Sidebar::ProjectsOnTop, entries()) }
+}
+
+#[test]
+fn the_close_button_shows_on_hover_in_wide_mode() {
+    let a = with_agents(Sidebar::ProjectsOnTop);
+    let row = agent_row(a.agents_list, a.pitch, 3, 0, 0);
+    let close = agent_close(row, a.pitch);
+    let still = render_sized(&shown(Sidebar::ProjectsOnTop, entries()), W, TALL.height);
+    let near = render_sized(&hovering(row), W, TALL.height);
+    let muted = shown(Sidebar::ProjectsOnTop, Vec::new()).muted;
+    let on = View { hover: Some(close.as_position()), ..shown(Sidebar::ProjectsOnTop, entries()) };
+    let lit = render_sized(&on, W, TALL.height);
+    assert_eq!(
+        (close_symbol(&still, close).0, close_symbol(&near, close), close_symbol(&lit, close)),
+        (" ".into(), ("×".into(), muted), ("×".into(), Color::Red))
+    );
+}
+
+#[test]
+fn the_close_button_always_shows_dimmed_in_compact_mode() {
+    let small = full_layout(
+        SMALL,
+        Widths::default(),
+        Screen { changes: false, sidebar: Sidebar::ProjectsOnTop, agents: true, icons: false },
+    );
+    let a = small.shown(Some(Nav::Agents));
+    let row = agent_row(a.agents_list, a.pitch, 3, 0, 0);
+    let v = View { nav: Some(Nav::Agents), ..shown(Sidebar::ProjectsOnTop, entries()) };
+    let t = render_sized(&v, SMALL.width, SMALL.height);
+    assert_eq!(
+        (a.pitch, agent_close(row, a.pitch).width, close_symbol(&t, agent_close(row, a.pitch))),
+        (3, COMPACT_CLOSE_WIDTH, ("×".into(), shown(Sidebar::ProjectsOnTop, Vec::new()).muted))
+    );
+}
+
+#[test]
+fn a_narrow_row_has_no_close_button() {
+    let r = Rect::new(0, 0, MIN_MENU_ROW_WIDTH - 1, 2);
+    let mut t = Terminal::new(TestBackend::new(r.width, 2)).expect("test backend");
+    let v = View { hover: Some(Position::new(2, 0)), ..shown(Sidebar::ProjectsOnTop, Vec::new()) };
+    t.draw(|f| draw_agent(f, &v, r, 1, &entries()[0])).expect("draw");
+    assert_eq!((agent_close(r, 1), row_text(&t, r).contains('×')), (Rect::default(), false));
+}
+
+#[test]
+fn hover_does_not_move_the_row_text() {
+    let a = with_agents(Sidebar::ProjectsOnTop);
+    let row = agent_row(a.agents_list, a.pitch, 3, 0, 0);
+    let close = agent_close(row, a.pitch);
+    let still = render_sized(&shown(Sidebar::ProjectsOnTop, entries()), W, TALL.height);
+    let near = render_sized(&hovering(row), W, TALL.height);
+    let text = |t: &Terminal<TestBackend>| -> Vec<String> {
+        (row.y..row.bottom())
+            .map(|y| {
+                (row.x..row.right())
+                    .filter(|x| !(close.contains(Position::new(*x, y))))
+                    .map(|x| t.backend().buffer()[(x, y)].symbol().to_string())
+                    .collect()
+            })
+            .collect()
+    };
+    assert_eq!(text(&still), text(&near));
+}
+
+#[test]
+fn tags_fit_in_what_the_close_button_leaves() {
+    let mut e = agent(Status::Working, "claude", "web-shop", Some("fix"), Details::default());
+    e.fold = Some(true);
+    e.hidden = 3;
+    let r = Rect::new(0, 0, 24, 2);
+    let mut t = Terminal::new(TestBackend::new(r.width, 2)).expect("test backend");
+    let v = shown(Sidebar::ProjectsOnTop, Vec::new());
+    t.draw(|f| draw_agent(f, &v, r, 1, &e)).expect("draw");
+    let close = agent_close(r, 1);
+    let line = row_text(&t, Rect { height: 1, ..r });
+    let end = line.contains("+3").then(|| line.split("+3").next().map_or(0, |before| before.chars().count()) + 2);
+    assert!(end.is_some_and(|end| end < usize::from(close.x)), "{line:?} {close:?}");
 }

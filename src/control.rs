@@ -38,7 +38,7 @@ pub(crate) use accounts::{
 pub(crate) use app_state::{
     AppState, AppWatch, AwayInfo, InstallInfo, NoUpdate, Notes, ReleaseInfo, UpdateCheck, UpdateInfo, UpdateInstall,
 };
-pub(crate) use arrange::{Fold, GroupDelete, GroupNew, GroupStyle, Move, MovePane, RemovalCheck};
+pub(crate) use arrange::{CloseAgent, Fold, GroupDelete, GroupNew, GroupStyle, Move, MovePane, RemovalCheck};
 pub(crate) use changes::{Changes, ChangesBase, ChangesCount, ChangesFile, ChangesGap, ChangesMode, ChangesViewed};
 pub(crate) use config::{ConfigInfo, Configure};
 pub(crate) use contract::Contract;
@@ -194,6 +194,7 @@ pub(crate) enum Command {
     ProfileDelete(ProfileDelete),
     AccountRename(AccountRename),
     AccountUse(AccountUse),
+    CloseAgent(CloseAgent),
 }
 
 impl Command {
@@ -237,6 +238,7 @@ impl Command {
             Self::Close(_) => 10,
             Self::Rename(_) => 11,
             Self::RemovalCheck(_) => 53,
+            Self::CloseAgent(_) => 88,
             Self::Move(_) => 46,
             Self::MovePane(_) => 47,
             Self::Collapse(_) => 48,
@@ -353,7 +355,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 88] = [
+    pub(crate) const NAMES: [&str; 89] = [
         "status",
         "open",
         "new-workspace",
@@ -442,6 +444,7 @@ impl Command {
         "profile-delete",
         "account-rename",
         "account-use",
+        "close-agent",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

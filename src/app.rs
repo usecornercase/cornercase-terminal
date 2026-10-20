@@ -82,6 +82,7 @@ mod actions;
 mod agent_watch;
 mod changes_panel;
 mod clock;
+mod close_agent;
 mod config_file;
 mod control;
 mod dialogs;

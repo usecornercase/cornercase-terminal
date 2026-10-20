@@ -282,6 +282,8 @@ impl App {
             submit: COPY,
             extra: None,
             cancel: DONE,
+            toggle: None,
+            waiting: false,
         }))
     }
 

@@ -316,6 +316,8 @@ fn renders_a_second_button_left_of_the_first() {
         submit: "copy link",
         extra: Some("ask agent"),
         cancel: "done",
+        toggle: None,
+        waiting: false,
     };
     let v = with(Overlay::Update(update));
     let extra = update_extra(AREA, "copy link", "done", "ask agent");
@@ -338,6 +340,8 @@ fn renders_an_update_with_its_notes() {
         submit: "update",
         extra: None,
         cancel: CANCEL_LABEL,
+        toggle: None,
+        waiting: false,
     };
     insta::assert_snapshot!(render(&with(Overlay::Update(update))).backend());
 }

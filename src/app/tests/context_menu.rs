@@ -103,11 +103,8 @@ mod marking {
     #[test]
     fn an_agents_row_in_the_agents_section_offers_marking_its_pane() {
         let (mut app, _rx, _dirs) = with_claude();
-        app.config.agents_section = true;
-        let a = app.layout(AREA);
-        let row = ui::agent_row(a.agents_list, a.pitch, app.agent_places().len(), app.scroll.of(List::Agents), 0);
-        right_click(&mut app, Position::new(row.x + 4, row.y));
-        assert_eq!(menu_labels(&app), ["mark as pending review"]);
+        right_click_first_agent(&mut app);
+        assert_eq!(menu_labels(&app), ["mark as pending review", "close agent"]);
         pick(&mut app, "mark as pending review");
 
         assert_eq!(status(&app), Some(Status::Pending));

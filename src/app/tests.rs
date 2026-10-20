@@ -310,6 +310,13 @@ fn press(app: &mut App, pos: Position) {
     mouse_down(app, MouseButton::Left, pos);
 }
 
+fn right_click_first_agent(app: &mut App) {
+    app.config.agents_section = true;
+    let a = app.layout(AREA);
+    let row = ui::agent_row(a.agents_list, a.pitch, app.agent_places().len(), app.scroll.of(List::Agents), 0);
+    right_click(app, Position::new(row.x + 4, row.y));
+}
+
 fn right_click(app: &mut App, pos: Position) {
     mouse_down(app, MouseButton::Right, pos);
     mouse(app, MouseEventKind::Up(MouseButton::Right), pos);
@@ -474,6 +481,7 @@ mod accounts;
 mod accounts_page;
 mod agent_status;
 mod click_outside;
+mod close_agent;
 mod compact;
 mod context_menu;
 mod dispatch;

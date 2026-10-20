@@ -13,15 +13,29 @@ use crate::flows::run::RoleWorktree;
 use crate::log::{self, Job, Level};
 use crate::project::{Hierarchy, WorkspaceAt};
 use crate::ui;
-use crate::worktrees::{Found, Live, Row, Step, discover, remove};
+use crate::worktrees::{Row, Step, discover, remove};
 
 #[derive(Default)]
 pub(in crate::app) struct Cleanup {
     pub(in crate::app) pending: HashMap<u64, Pending>,
-    removed: usize,
-    branches: usize,
-    notes: Vec<String>,
-    failed: Vec<String>,
+    tally: Tally,
+}
+
+#[derive(Debug, Default)]
+pub(in crate::app) struct Tally {
+    pub(in crate::app) removed: usize,
+    pub(in crate::app) deleted: Vec<String>,
+    pub(in crate::app) notes: Vec<String>,
+    pub(in crate::app) failed: Vec<String>,
+}
+
+impl Tally {
+    fn add(&mut self, other: Self) {
+        self.removed += other.removed;
+        self.deleted.extend(other.deleted);
+        self.notes.extend(other.notes);
+        self.failed.extend(other.failed);
+    }
 }
 
 pub(in crate::app) struct Pending {
@@ -30,13 +44,30 @@ pub(in crate::app) struct Pending {
     paths: Vec<PathBuf>,
     branches: Vec<String>,
     removed: bool,
+    asked: Option<(u64, Tally)>,
 }
 
 pub(in crate::app) type Deleted = Vec<(String, Result<()>)>;
 
 impl Pending {
-    fn new(name: String, found: &Found, paths: Vec<PathBuf>, branches: Vec<String>) -> Self {
-        Self { name, repo: found.repo.clone(), paths, branches, removed: false }
+    fn new(name: String, repo: PathBuf, paths: Vec<PathBuf>, branches: Vec<String>) -> Self {
+        Self { name, repo, paths, branches, removed: false, asked: None }
+    }
+}
+
+impl Cleanup {
+    fn ask(&mut self, workspace: u64, key: u64, notes_from: usize) {
+        let notes = self.tally.notes.split_off(notes_from);
+        if let Some(pending) = self.pending.get_mut(&workspace) {
+            pending.asked = Some((key, Tally { notes, ..Tally::default() }));
+        }
+    }
+
+    fn add(&mut self, key: u64, tally: Tally) {
+        match self.pending.get_mut(&key).and_then(|pending| pending.asked.as_mut()) {
+            Some((_, asked)) => asked.add(tally),
+            None => self.tally.add(tally),
+        }
     }
 }
 
@@ -67,7 +98,7 @@ impl App {
         if removing.is_empty() {
             let why = skipped.first().copied().unwrap_or("nothing ticked can be removed");
             self.messages.toast = Some(Toast::new(format!("nothing was removed: {why}"), ui::ToastIcon::Bug));
-            self.git.cleanup.notes.clear();
+            self.git.cleanup.tally.notes.clear();
         }
         if let Some(Overlay::Worktrees(dialog)) = &mut self.overlay {
             dialog.step = Step::List;
@@ -88,7 +119,7 @@ impl App {
             Some((_, live)) if live.removing => Err("it is already being removed or closed"),
             Some((_, live)) if live.role_of_run => Err("it belongs to a running flow"),
             Some((at, _)) if !self.projects.workspace(at).worktree => Err("it is a project's own folder"),
-            Some(found) => self.remove_open(row, rows, branches, found),
+            Some((at, _)) => self.remove_open(row, rows, branches, at),
             None => Ok(self.remove_closed(row, branches)),
         }
     }
@@ -98,23 +129,68 @@ impl App {
         row: &Row,
         rows: &[Row],
         branches: bool,
-        (at, live): (WorkspaceAt, Live),
+        at: WorkspaceAt,
     ) -> std::result::Result<Vec<PathBuf>, &'static str> {
-        let found = &row.found;
         let roles = self.projects.workspace(at).role_worktrees.clone();
-        let mut paths = vec![found.path.clone()];
-        paths.extend(roles.iter().map(|tree| canonical(&tree.path)));
-        let (mut names, before) = (Vec::new(), self.git.cleanup.notes.len());
+        let paths = self.removal_paths(at);
+        let (mut names, before) = (Vec::new(), self.git.cleanup.tally.notes.len());
         if branches {
             names.extend(self.deletable(row));
             names.extend(self.role_branches(rows, &roles));
         }
-        if !self.start_removal(live.project, live.workspace, RemoveOptions { force: true, unlock: true }, None) {
-            self.git.cleanup.notes.truncate(before);
+        if !self.remove_workspace_with_branches(at, (row_name(row), row.found.repo.clone()), names, (true, true)) {
+            self.git.cleanup.tally.notes.truncate(before);
             return Err("its workspace could not be stopped");
         }
-        self.git.cleanup.pending.insert(live.workspace, Pending::new(row_name(row), found, paths.clone(), names));
         Ok(paths)
+    }
+
+    fn removal_paths(&self, at: WorkspaceAt) -> Vec<PathBuf> {
+        let workspace = self.projects.workspace(at);
+        let mut paths = vec![canonical(&workspace.path)];
+        paths.extend(workspace.role_worktrees.iter().map(|tree| canonical(&tree.path)));
+        paths
+    }
+
+    pub(in crate::app) fn remove_with_shown_branches(
+        &mut self,
+        at: WorkspaceAt,
+        shown: Vec<(PathBuf, String)>,
+        options: (bool, bool),
+        asked: Option<u64>,
+    ) -> bool {
+        let before = self.git.cleanup.tally.notes.len();
+        let mut names = Vec::new();
+        for (path, branch) in shown {
+            let now = branch_now(&path, &branch);
+            names.extend(self.keep_or_delete(Some(branch), now.as_deref()));
+        }
+        let (workspace, name) = (self.projects.workspace(at).id, self.projects.workspace(at).label());
+        let repo = discover::main_checkout(&canonical(&self.projects[at.project()].path));
+        if !self.remove_workspace_with_branches(at, (name, repo), names, options) {
+            self.git.cleanup.tally.notes.truncate(before);
+            return false;
+        }
+        if let Some(key) = asked {
+            self.git.cleanup.ask(workspace, key, before);
+        }
+        true
+    }
+
+    pub(in crate::app) fn remove_workspace_with_branches(
+        &mut self,
+        at: WorkspaceAt,
+        (name, repo): (String, PathBuf),
+        branches: Vec<String>,
+        (force, unlock): (bool, bool),
+    ) -> bool {
+        let paths = self.removal_paths(at);
+        let (project, workspace) = (self.projects[at.project()].id, self.projects.workspace(at).id);
+        if !self.start_removal(project, workspace, RemoveOptions { force, unlock }, None) {
+            return false;
+        }
+        self.git.cleanup.pending.insert(workspace, Pending::new(name, repo, paths, branches));
+        true
     }
 
     fn role_branches(&mut self, rows: &[Row], roles: &[RoleWorktree]) -> Vec<String> {
@@ -123,8 +199,7 @@ impl App {
             let path = canonical(&tree.path);
             let (shown, now) = match rows.iter().find(|r| r.found.path == path) {
                 Some(role) => (role.branch().map(str::to_string), discover::checked_out(&role.found)),
-                None if path.exists() => (Some(tree.branch.clone()), discover::branch_at(&path)),
-                None => (Some(tree.branch.clone()), Some(tree.branch.clone())),
+                None => (Some(tree.branch.clone()), branch_now(&path, &tree.branch)),
             };
             names.extend(self.keep_or_delete(shown, now.as_deref()));
         }
@@ -155,7 +230,7 @@ impl App {
             },
         );
         let paths = vec![found.path.clone()];
-        self.git.cleanup.pending.insert(key, Pending::new(row_name(row), found, paths.clone(), names));
+        self.git.cleanup.pending.insert(key, Pending::new(row_name(row), found.repo.clone(), paths.clone(), names));
         paths
     }
 
@@ -169,7 +244,7 @@ impl App {
             return Some(shown);
         }
         log::info!("worktrees", "branch kept: it changed since the confirmation", branch = shown);
-        self.git.cleanup.notes.push(format!("kept the branch {shown}: it changed since the confirmation"));
+        self.git.cleanup.tally.notes.push(format!("kept the branch {shown}: it changed since the confirmation"));
         None
     }
 
@@ -187,8 +262,7 @@ impl App {
         self.cleaned(workspace, result, Vec::new());
         let Some(pending) = self.git.cleanup.pending.get(&workspace) else { return };
         if !ok || pending.branches.is_empty() {
-            self.git.cleanup.pending.remove(&workspace);
-            self.finish_cleanup();
+            self.cleanup_finished(workspace);
             return;
         }
         let (repo, names) = (pending.repo.clone(), pending.branches.clone());
@@ -208,40 +282,51 @@ impl App {
 
     pub(in crate::app) fn worktree_cleaned(&mut self, key: u64, result: Result<Option<String>>, branch: Deleted) {
         self.cleaned(key, result, branch);
-        if self.git.cleanup.pending.remove(&key).is_some() {
-            self.finish_cleanup();
+        self.cleanup_finished(key);
+    }
+
+    fn cleanup_finished(&mut self, key: u64) {
+        let Some(pending) = self.git.cleanup.pending.remove(&key) else { return };
+        if let Some((asked, tally)) = pending.asked {
+            self.agent_closed(asked, tally);
         }
+        self.finish_cleanup();
     }
 
     fn cleaned(&mut self, key: u64, result: Result<Option<String>>, branch: Deleted) {
         let Some(pending) = self.git.cleanup.pending.get_mut(&key) else { return };
-        let name = pending.name.clone();
-        let paths = pending.paths.clone();
+        let mut tally = Tally::default();
         if !pending.removed {
             pending.removed = true;
-            match result {
-                Ok(warning) => {
-                    self.git.cleanup.failed.extend(warning.map(|why| format!("{name}: {why}")));
-                    let gone: Vec<PathBuf> = paths
-                        .iter()
-                        .enumerate()
-                        .filter(|(i, path)| *i == 0 || !path.exists())
-                        .map(|(_, path)| path.clone())
-                        .collect();
-                    self.git.cleanup.removed += gone.len();
-                    self.worktree_rows_back(&paths);
-                    self.worktree_rows_gone(&gone);
-                }
-                Err(e) => {
-                    self.git.cleanup.failed.push(format!("could not remove {name}: {e}"));
-                    self.worktree_rows_back(&paths);
-                }
-            }
+            let (name, paths) = (pending.name.clone(), pending.paths.clone());
+            self.tally_removal(&mut tally, &name, &paths, result);
         }
         for (branch, deleted) in branch {
             match deleted {
-                Ok(()) => self.git.cleanup.branches += 1,
-                Err(e) => self.git.cleanup.failed.push(format!("could not delete the branch {branch}: {e}")),
+                Ok(()) => tally.deleted.push(branch),
+                Err(e) => tally.failed.push(format!("could not delete the branch {branch}: {e}")),
+            }
+        }
+        self.git.cleanup.add(key, tally);
+    }
+
+    fn tally_removal(&mut self, tally: &mut Tally, name: &str, paths: &[PathBuf], result: Result<Option<String>>) {
+        match result {
+            Ok(warning) => {
+                tally.failed.extend(warning.map(|why| format!("{name}: {why}")));
+                let gone: Vec<PathBuf> = paths
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, path)| *i == 0 || !path.exists())
+                    .map(|(_, path)| path.clone())
+                    .collect();
+                tally.removed += gone.len();
+                self.worktree_rows_back(paths);
+                self.worktree_rows_gone(&gone);
+            }
+            Err(e) => {
+                tally.failed.push(format!("could not remove {name}: {e}"));
+                self.worktree_rows_back(paths);
             }
         }
     }
@@ -266,13 +351,13 @@ impl App {
         if !self.git.cleanup.pending.is_empty() {
             return;
         }
-        let Cleanup { removed, branches, notes, failed, .. } = std::mem::take(&mut self.git.cleanup);
+        let Tally { removed, deleted, notes, failed } = std::mem::take(&mut self.git.cleanup).tally;
         if removed == 0 && failed.is_empty() && notes.is_empty() {
             return;
         }
         let mut parts = vec![format!("removed {}", plural(removed, "worktree", "worktrees"))];
-        if branches > 0 {
-            parts[0] = format!("{} and {}", parts[0], plural(branches, "branch", "branches"));
+        if !deleted.is_empty() {
+            parts[0] = format!("{} and {}", parts[0], plural(deleted.len(), "branch", "branches"));
         }
         parts.extend(notes);
         parts.extend(failed.iter().cloned());
@@ -285,6 +370,10 @@ impl App {
         };
         self.messages.toast = Some(Toast::new(text, icon));
     }
+}
+
+fn branch_now(path: &Path, shown: &str) -> Option<String> {
+    if path.exists() { discover::branch_at(path) } else { Some(shown.to_string()) }
 }
 
 fn delete(repo: &Path, branches: &[String]) -> Deleted {

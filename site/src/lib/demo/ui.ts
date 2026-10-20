@@ -37,6 +37,7 @@ import {
   landingIndent,
   menuArea,
   menuButton,
+  EMPTY,
   MIN_MENU_ROW_WIDTH,
   moreAbove,
   pickerArea,
@@ -644,9 +645,9 @@ export class Painter {
     this.region({ r, click: close, right: menu, cursor: 'pointer' });
   }
 
-  private details(row: Rect, pitch: number, d: Details, indent: number, agent: string | null = null): void {
+  private details(row: Rect, pitch: number, d: Details, indent: number, agent: string | null = null, buttons?: Rect): void {
     const r = intersect(rect(row.x, middle(row).y + 1, row.w, 1), row);
-    const close = closeButton(row, pitch);
+    const close = buttons ?? closeButton(row, pitch);
     const free = r.w - (bottom(close) > r.y ? close.w : 0) - 1;
     const lead: Seg[] = agent === null ? [] : [seg(agent, DARK)];
     const fixed: Seg[] = [];
@@ -890,6 +891,8 @@ export class Painter {
       const click = (x: number, y: number) =>
         entry.fold !== null && contains(lead, x, y) ? app.toggleAgentFold(entry.pane) : app.jumpToPane(entry.pane);
       this.region({ r, click, right, hold: true, cursor: 'pointer' });
+      const close = r.w < MIN_MENU_ROW_WIDTH ? EMPTY : closeButton(r, areas.pitch);
+      if (this.sidebarHovered(r) || close.h > 1) this.region({ r: close, click: () => app.askCloseAgent(entry.pane), right, cursor: 'pointer' });
     });
     this.more(list, rows, entries, () => true);
   }
@@ -899,19 +902,29 @@ export class Painter {
     const depth = entry.depth;
     const line: Line = [marker(entry.active), seg(' '.repeat(2 * depth)), statusIcon(entry.status, spinAt(this.app)), seg(' ')];
     const indent = width(line);
-    const room = Math.max(0, r.w - indent - 1);
+    const close = r.w < MIN_MENU_ROW_WIDTH ? EMPTY : closeButton(r, pitch);
+    const room = Math.max(0, r.w - indent - close.w - 1);
     const tags = fitTags(foldTags(entry, spinAt(this.app)), room);
     const place = agentPlace(entry, room - tags.reserved, { fg: entry.active ? DEFAULT : 7 });
     line.push(...place);
     pushTags(line, tags, width(place), room);
     this.band(r, line, bg);
     if (entry.fold !== null) this.span(r.x + 2 * depth + 1, middle(r).y, entry.fold ? '▸' : '▾', DARK, 1);
-    this.details(r, pitch, entry.details, indent, entry.agent);
+    this.agentClose(r, close, bg);
+    this.details(r, pitch, entry.details, indent, entry.agent, close);
     if (depth > 0) {
       for (const level of entry.bars) this.guide(r.x + 2 * level, r, 'bar');
       this.guide(r.x + 2 * depth, r, entry.last ? 'end' : 'tee');
     }
     if (entry.active) this.rail(r);
+  }
+
+  private agentClose(row: Rect, close: Rect, bg: Style): void {
+    const hover = this.sidebarHovered(row);
+    if (isEmpty(close) || (!hover && close.h === 1)) return;
+    const lit = hover && this.hovered(close);
+    const style: Style = lit ? { ...bg, fg: 1, add: BOLD } : { ...bg, fg: 8 };
+    this.band(close, [seg(centered('×', close.w))], style);
   }
 
   private back(areas: Areas, name: string): void {

@@ -7,6 +7,7 @@ use ratatui::widgets::Paragraph;
 use super::View;
 use super::chrome::{draw_back, draw_border};
 use super::layout::{Areas, Border};
+use super::rows::{MIN_MENU_ROW_WIDTH, draw_close_in};
 use super::rows::{Rows, Tags, draw_hidden, draw_rail, marker, row_close_button};
 use super::theme::status_icon;
 use super::widgets::{button_style, dim, draw_band, draw_button, draw_separator, draw_title, middle};
@@ -37,6 +38,10 @@ const EXPANDED: &str = "▾";
 pub(crate) fn agent_fold(row: Rect, depth: usize) -> Rect {
     let width = u16::try_from(GUIDE_STEP * depth + 2).unwrap_or(u16::MAX);
     Rect { width, ..row }.intersection(row)
+}
+
+pub(crate) fn agent_close(row: Rect, pitch: u16) -> Rect {
+    if row.width < MIN_MENU_ROW_WIDTH { Rect::default() } else { row_close_button(row, pitch) }
 }
 
 pub(crate) fn agent_rows(list: Rect, pitch: u16, agents: usize, scroll: usize) -> Rows {
@@ -112,7 +117,8 @@ pub(super) fn draw_agent(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry:
         line.extend([status_icon(view.muted, status, view.spin), Span::raw(" ")]);
     }
     let indent = line.iter().map(Span::width).sum::<usize>();
-    let room = usize::from(r.width).saturating_sub(indent + 1);
+    let close = agent_close(r, pitch);
+    let room = usize::from(r.width).saturating_sub(indent + usize::from(close.width) + 1);
     let colour = if entry.active { Color::Reset } else { view.soft };
     let tags = Tags::fit(fold_tags(entry, view), room);
     let place = agent_place(entry, room.saturating_sub(tags.reserved()), Style::default().fg(colour), dim(view.muted));
@@ -120,14 +126,9 @@ pub(super) fn draw_agent(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry:
     line.extend(place);
     tags.push_onto(&mut line, used, room);
     draw_band(f, r, Line::from(line), bg);
+    draw_close_in(f, view, r, close, bg);
     draw_fold(f, view.muted, r, entry);
-    let line = DetailLine {
-        row: r,
-        buttons: row_close_button(r, pitch),
-        details: &entry.details,
-        agent: Some(&entry.agent),
-        indent,
-    };
+    let line = DetailLine { row: r, buttons: close, details: &entry.details, agent: Some(&entry.agent), indent };
     draw_details(f, view.muted, line);
     draw_guides(f, view.line(), r, entry);
     if entry.active {

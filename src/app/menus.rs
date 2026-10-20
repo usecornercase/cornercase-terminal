@@ -92,6 +92,7 @@ pub(super) enum MenuAction {
     Pane(u64, PaneAction),
     Mark(Marked, bool),
     AgentFold(u64, bool),
+    CloseAgent(u64),
     PullRequest(u64),
     ShowFlow(u64),
     Browser,
@@ -156,6 +157,7 @@ impl App {
             MenuAction::Mark(_, false) => "mark as reviewed".into(),
             MenuAction::AgentFold(_, true) => "collapse".into(),
             MenuAction::AgentFold(_, false) => "expand".into(),
+            MenuAction::CloseAgent(_) => "close agent".into(),
             MenuAction::PullRequest(workspace) => {
                 self.pull_request(workspace).map(|p| format!("pull request #{}", p.number)).unwrap_or_default()
             }
@@ -296,6 +298,7 @@ impl App {
             MenuAction::AgentFold(pane, collapsed) => {
                 self.set_agent_fold(pane, collapsed);
             }
+            MenuAction::CloseAgent(pane) => self.ask_close_agent(pane),
             MenuAction::Browser if self.config.remote => self.open_remote(),
             MenuAction::Browser => self.open_settings_on(&settings::Row::Remote),
             MenuAction::Away(via) => self.toggle_away(via),

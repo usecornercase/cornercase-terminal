@@ -39,7 +39,7 @@ pub(crate) use accounts_bar::{Pill as AccountPill, hit as account_pill_hit};
 #[cfg(test)]
 pub(crate) use activity::items as activity_items;
 pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as activity_hit};
-pub(crate) use agents_section::{AgentEntry, AgentsView, agent_fold, agent_hit, agent_row, agent_rows};
+pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold, agent_hit, agent_row, agent_rows};
 pub(crate) use chrome::ChangesButton;
 pub(crate) use dialog::flows::{
     FlowPreview, Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_text, flows_wide, preview_body,
@@ -88,13 +88,17 @@ pub(crate) use dialog::start_flow::{
 pub(crate) use dialog::start_flow::{
     start_account, start_account_list, start_branch, start_buttons, start_list, start_workspace,
 };
-pub(crate) use dialog::update::{Update, update_buttons, update_extra, update_notes, update_scroll};
+pub(crate) use dialog::update::{
+    Update, scroll_in, update_body, update_buttons, update_extra, update_notes, update_scroll, update_toggle,
+};
 #[cfg(test)]
 pub(crate) use dialog::usage::usage_area;
 pub(crate) use dialog::usage::{Usage, UsageSection, UsageWindow, usage_done, usage_share, usage_tabs};
 #[cfg(test)]
 pub(crate) use dialog::worktrees::worktrees_area;
-pub(crate) use dialog::worktrees::{ConfirmView, WorktreeRow, Worktrees, WorktreesHit, worktrees_hit, worktrees_room};
+pub(crate) use dialog::worktrees::{
+    BRANCHES_LABEL, ConfirmView, WorktreeRow, Worktrees, WorktreesHit, worktrees_hit, worktrees_room,
+};
 pub(crate) use dialog::{CANCEL_LABEL, Note, Overlay};
 pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
 pub(crate) use icons::glyphs;

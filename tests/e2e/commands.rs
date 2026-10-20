@@ -491,6 +491,41 @@ fn a_worktree_made_from_the_command_line_is_removed_by_its_branch() {
 }
 
 #[test]
+fn close_agent_checks_then_closes_an_agents_tab_and_refuses_a_shell() {
+    let mut app = Harness::start();
+    let shell = app.session.report().shown.pane.expect("the first pane").to_string();
+    let sessions = app.session.claude_dir().join("sessions");
+    std::fs::create_dir_all(&sessions).expect("create the sessions folder");
+    let bin = temp_dir("close-agent");
+    let claude = bin.join("claude");
+    write_executable(
+        &claude,
+        "#!/bin/sh\nprintf '{\"pid\":%s,\"status\":\"waiting\"}' $$ > \"$1/$$.json\"\nread answer\n",
+    );
+    let (claude, sessions) = (claude.display().to_string(), sessions.display().to_string());
+    let pane = app.session.says(&["new-tab", "--name", "helper", "--", &claude, &sessions]);
+    let id: u64 = pane.parse().expect("a pane id");
+    app.session.wait_for_report("claude waits", |report| {
+        panes(report).any(|p| p.id == id && p.status.as_deref() == Some("waiting"))
+    });
+
+    let shell_refused = app.session.cli(&["close", "--agent", "--pane", &shell]);
+    let check = app.session.says(&["close", "--agent", "--pane", &pane, "--check", "--json"]);
+    let check: serde_json::Value = serde_json::from_str(&check).expect("the check");
+    assert!(refused(&shell_refused, 1, "runs no agent cornercase reads"), "{shell_refused:?}");
+    assert_eq!(
+        (&check["closed"], &check["removes"], check["tabs"].as_array().map(Vec::len)),
+        (&false.into(), &serde_json::Value::Null, Some(1)),
+        "{check}"
+    );
+    app.wait_for("the agent's tab still shows", |s| s.contains("helper"));
+    app.session.says(&["close", "--agent", "--pane", &pane]);
+
+    app.wait_for("the agent's tab goes", |s| !s.contains("helper"));
+    let _ = std::fs::remove_dir_all(&bin);
+}
+
+#[test]
 fn skill_prints_the_instructions_for_agents() {
     let out = std::process::Command::new(bin()).arg("skill").output().expect("run cornercase");
 

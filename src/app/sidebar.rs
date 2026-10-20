@@ -29,6 +29,7 @@ struct AgentAt {
     row: Rect,
     fold: Option<bool>,
     on_fold: bool,
+    on_close: bool,
 }
 
 impl App {
@@ -160,6 +161,7 @@ impl App {
             row,
             fold,
             on_fold: fold.is_some() && ui::agent_fold(row, node.depth).contains(pos),
+            on_close: ui::agent_close(row, pitch).contains(pos),
         })
     }
 
@@ -178,14 +180,17 @@ impl App {
             .mark_action(Marked::Pane(at.pane))
             .into_iter()
             .chain(at.fold.map(|collapsed| MenuAction::AgentFold(at.pane, !collapsed)))
+            .chain(std::iter::once(MenuAction::CloseAgent(at.pane)))
             .collect();
-        if !actions.is_empty() {
-            self.overlay = Some(Overlay::Menu { at: pos, actions });
-        }
+        self.overlay = Some(Overlay::Menu { at: pos, actions });
     }
 
     fn press_agent(&mut self, areas: &ui::Areas, pos: Position, area: Rect) {
         let Some(at) = self.agent_row_at(areas, pos) else { return };
+        if at.on_close {
+            self.ask_close_agent(at.pane);
+            return;
+        }
         self.screen.drag = Some(Drag::Row(RowDrag {
             target: Grab::Agent(at.pane),
             row: at.row,

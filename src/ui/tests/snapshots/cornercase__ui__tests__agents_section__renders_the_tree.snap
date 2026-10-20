@@ -21,7 +21,7 @@ expression: "render_sized(&shown(Sidebar::Tree, entries()), W, TALL.height).back
 " ───────────────────────────── │                                                                    "
 " Agents                        │                                                                    "
 "                               │                                                                    "
-"  ! cornercase › issue-98-rem… │                                                                    "
+"  ! cornercase › issue-98-…    │                                                                    "
 "    claude · Opus 5.5 · 23%    │                                                                    "
 "▌ ◐ website                    │                                                                    "
 "▌   codex · gpt-5.5 · 41%      │                                                                    "

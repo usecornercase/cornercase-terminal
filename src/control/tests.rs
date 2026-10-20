@@ -145,6 +145,7 @@ fn last_commands() -> Vec<Command> {
         Command::ProfileDelete(ProfileDelete::default()),
         Command::AccountRename(AccountRename::default()),
         Command::AccountUse(AccountUse::default()),
+        Command::CloseAgent(CloseAgent::default()),
     ]
 }
 

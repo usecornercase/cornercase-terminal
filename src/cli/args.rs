@@ -14,7 +14,7 @@ pub(crate) mod view;
 
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{ArgGroup, Args, Parser, Subcommand, ValueEnum};
 
 use super::help::CHANGES_HELP;
 use super::help::{
@@ -557,6 +557,10 @@ pub(crate) struct Which {
 }
 
 #[derive(Debug, Args)]
+#[command(
+    group(ArgGroup::new("removing").multiple(false).args(["remove_worktree", "agent"])),
+    group(ArgGroup::new("printing").multiple(true).args(["check", "agent"]))
+)]
 #[expect(clippy::struct_excessive_bools, reason = "each flag is its own option of close")]
 pub(crate) struct CloseArgs {
     #[command(flatten)]
@@ -567,22 +571,39 @@ pub(crate) struct CloseArgs {
         help = "Also remove the workspace's git worktree from disk"
     )]
     pub(crate) remove_worktree: bool,
-    #[arg(long, requires = "remove_worktree", help = "Remove it even when git would lose changes")]
+    #[arg(
+        long,
+        conflicts_with_all = ["tab", "workspace", "worktree", "project"],
+        help = "Close the agent in --pane with what goes with it, as its close agent in the window does"
+    )]
+    pub(crate) agent: bool,
+    #[arg(
+        long,
+        requires = "removing",
+        help = "Remove it even when git would lose changes; with --agent, also a branch whose commits would be lost"
+    )]
     pub(crate) force: bool,
     #[arg(
         long,
-        requires = "remove_worktree",
+        requires = "removing",
         help = "Unlock a locked worktree first, as the window's unlock and remove does; changes still need --force"
     )]
     pub(crate) unlock: bool,
     #[arg(
         long,
-        requires = "remove_worktree",
+        requires = "agent",
+        conflicts_with = "remove_worktree",
+        help = "Also delete the branch of each worktree removed with the agent"
+    )]
+    pub(crate) delete_branch: bool,
+    #[arg(
+        long,
+        requires = "removing",
         conflicts_with_all = ["force", "unlock"],
         help = "Only say what removing it would lose, as the window's dialog does; nothing stops"
     )]
     pub(crate) check: bool,
-    #[arg(long, requires = "check", help = "Print the check as JSON")]
+    #[arg(long, requires = "printing", help = "Print the check, or with --agent what was closed, as JSON")]
     pub(crate) json: bool,
 }
 

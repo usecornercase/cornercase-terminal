@@ -18,21 +18,24 @@ use crate::ui::{self};
 pub(super) const WHEEL_ROWS: isize = 3;
 
 impl App {
-    pub(super) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
-        let dragging = |app: &mut Self| match &app.screen.drag {
+    fn stop_dragging(&mut self) -> bool {
+        match &self.screen.drag {
             Some(Drag::Border(_) | Drag::Divider { .. } | Drag::Row(_) | Drag::Pane(_)) => {
-                app.screen.drag = None;
+                self.screen.drag = None;
                 true
             }
             Some(Drag::Selection { .. } | Drag::Link(_) | Drag::Lines { .. }) | None => false,
-        };
-        if key.code == KeyCode::Esc && dragging(self) {
+        }
+    }
+
+    pub(super) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
+        if key.code == KeyCode::Esc && self.stop_dragging() {
             return Ok(());
         }
         match &self.overlay {
             Some(Overlay::Keys(group)) => return self.keys_key(*group, key, area),
             Some(Overlay::Menu { .. }) | None if self.is_prefix(key) => {
-                dragging(self);
+                self.stop_dragging();
                 self.overlay = Some(Overlay::Keys(None));
             }
             Some(Overlay::Menu { .. }) if key.code == KeyCode::Esc => self.overlay = None,
@@ -46,6 +49,7 @@ impl App {
             Some(Overlay::StartFlow { .. }) => self.start_flow_key(key, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_key(key, area),
             Some(Overlay::Worktrees(_)) => self.worktrees_key(key, area),
+            Some(Overlay::CloseAgent(_)) => self.close_agent_key(key, area),
             Some(Overlay::Usage) => {
                 self.usage_key(key);
             }

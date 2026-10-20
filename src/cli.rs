@@ -323,6 +323,9 @@ fn run_mark(mark: &args::MarkArgs) -> Result<()> {
 }
 
 fn run_close(close: &args::CloseArgs) -> Result<bool> {
+    if close.agent {
+        return arrange::close_agent(close).map(|()| true);
+    }
     let item = close.which.item("close")?.ok_or_else(|| Error::Control("say what to close".into()))?;
     if close.check {
         arrange::check_removal(item, close.json)?;

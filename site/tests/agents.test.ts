@@ -167,7 +167,7 @@ test('An agent row in the agents section offers marking its pane', () => {
   watchPane(pane, 'idle', true, 0);
   app.openAgentMenu({ x: 1, y: 1 }, pane.id);
   const labels = app.overlay?.kind === 'menu' ? app.overlay.actions.map((a) => app.menuLabel(a)) : [];
-  assert.deepEqual(labels, ['mark as pending review']);
+  assert.deepEqual(labels, ['mark as pending review', 'close agent']);
   app.chooseMenu(0);
   assert.equal(tabStatus(app.projects[0].workspaces[0].tabs[0]), 'pending');
   app.destroy();
@@ -386,7 +386,7 @@ test('The arrow folds an agent team into its row and the menu brings it back', (
   assert.equal(app.tab(), before);
   assert.equal(folded.filter((line) => line.includes('payments')).length, 1, folded.join('\n'));
   assert.ok(!folded.some((line) => line.includes('coder')), folded.join('\n'));
-  assert.match(folded.find((line) => line.includes('payments')) ?? '', /▸\S payments › .*\+4\s*$/);
+  assert.match(folded.find((line) => line.includes('payments')) ?? '', /▸\S payments › .*\+4(\s+×)?\s*$/);
   assert.equal(app.agentRows().filter((row) => row.project === 'payments').length, 5);
 
   app.openAgentMenu({ x: arrow.x + 5, y: arrow.y }, orchestrator.pane);
@@ -397,5 +397,58 @@ test('The arrow folds an agent team into its row and the menu brings it back', (
   const back = lines();
   assert.ok(back.some((line) => line.includes('coder')), back.join('\n'));
   assert.match(back.find((line) => line.includes('payments')) ?? '', /▾\S payments › /);
+  app.destroy();
+});
+
+function agentsDemo(): App {
+  const app = new App();
+  app.virtual = true;
+  app.resize(177, 46);
+  world(app);
+  app.config.agentsSection = true;
+  const pane = app.projects[0].workspaces[0].tabs[0].panes[0];
+  followAgent(pane, 'claude');
+  watchPane(pane, 'idle', true, 0);
+  app.render();
+  return app;
+}
+
+test('An agent row shows a close button on hover, and pressing it says it needs a real cornercase', () => {
+  const app = agentsDemo();
+  const list = app.areas().agentsList;
+  const inList = (at: { x: number; y: number } | null) => at !== null && at.y >= list.y && at.y < list.y + list.h && at.x > list.x + list.w - 8;
+  assert.ok(!inList(app.textAt('×')), 'no button without hover');
+  app.pointerMove(list.x + 4, list.y, 0);
+  app.render();
+  const at = app.textAt('×');
+  assert.ok(inList(at), 'the button shows on the hovered row');
+  app.pointerDown(at!.x, at!.y, 0);
+  app.pointerUp();
+  app.render();
+  assert.ok(app.textAt('the demo closes no agents'));
+  app.destroy();
+});
+
+test('The agent menu offers close agent, which says it needs a real cornercase', () => {
+  const app = agentsDemo();
+  const pane = app.agentRows()[0].pane;
+  app.openAgentMenu({ x: 1, y: 1 }, pane);
+  if (app.overlay?.kind !== 'menu') return assert.fail('no menu');
+  const last = app.overlay.actions.length - 1;
+  assert.equal(app.menuLabel(app.overlay.actions[last]), 'close agent');
+  app.chooseMenu(last);
+  app.render();
+  assert.ok(app.textAt('the demo closes no agents'));
+  app.destroy();
+});
+
+test('The close button keeps its column, so hovering a row does not move its text', () => {
+  const app = agentsDemo();
+  const list = app.areas().agentsList;
+  const text = () => app.textAt('claude');
+  const rest = text();
+  app.pointerMove(list.x + 4, list.y, 0);
+  app.render();
+  assert.deepEqual(text(), rest);
   app.destroy();
 });

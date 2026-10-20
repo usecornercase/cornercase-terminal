@@ -204,6 +204,25 @@ pub(super) fn draw_submit(f: &mut Frame, view: &View, r: Rect, label: &str) {
     f.render_widget(Paragraph::new(Span::styled(format!(" {label} "), style)), r);
 }
 
+fn draw_waiting(f: &mut Frame, view: &View, r: Rect, label: &str) {
+    let style = Style::default().fg(view.muted).bg(view.surface());
+    f.render_widget(Paragraph::new(Span::styled(format!(" {label} "), style)), r);
+}
+
+fn draw_tick(f: &mut Frame, view: &View, row: Rect, toggle: &form::Toggle) {
+    let (mark, colour) = if toggle.on { ("✓", Color::Green) } else { ("○", view.muted) };
+    let bg = pick_background(view, false, row);
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::raw(" "),
+            Span::styled(mark, bg.fg(colour)),
+            Span::styled(format!(" {} ", toggle.label), bg),
+        ]))
+        .style(bg),
+        row,
+    );
+}
+
 fn draw_secondary(f: &mut Frame, view: &View, r: Rect, label: &str) {
     let style = dialog_button_style(view, r, false);
     f.render_widget(Paragraph::new(Span::styled(format!(" {label} "), style)), r);

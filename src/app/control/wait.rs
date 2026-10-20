@@ -255,6 +255,7 @@ impl App {
             Stage::Worktree(_) | Stage::Run(..) => return "git is still creating the worktree".into(),
             Stage::Removing { .. } => return "git is still removing the worktree".into(),
             Stage::Check => return "git is still checking the worktree".into(),
+            Stage::CloseAgent(_) => return "git is still checking or removing the agent's worktree".into(),
             Stage::Issue(asking) => return format!("{} is still looking the issue up", asking.source().name()),
             Stage::Usage(_) => return "the agents have not said their usage yet".into(),
             Stage::Held(_) => return held::waiting(pane, self.blocked(pane, Instant::now())),

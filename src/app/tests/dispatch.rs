@@ -131,6 +131,7 @@ fn every_menu_action() -> Vec<MenuAction> {
         MenuAction::Account(AccountItem { kind, index: 0 }, (0, 0)),
         MenuAction::ManageAccounts,
         MenuAction::Worktrees(1),
+        MenuAction::CloseAgent(1),
     ]
 }
 
@@ -163,6 +164,7 @@ fn menu_index(action: &MenuAction) -> usize {
         MenuAction::Account(..) => 24,
         MenuAction::ManageAccounts => 25,
         MenuAction::Worktrees(_) => 26,
+        MenuAction::CloseAgent(_) => 27,
     }
 }
 
