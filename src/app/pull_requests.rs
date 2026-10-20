@@ -178,7 +178,7 @@ impl App {
     }
 
     fn record_pull_request(&mut self, workspace: u64, branch: String, mut pull: Option<PullRequest>, now: Instant) {
-        let path = self.projects.workspace_index(workspace).map(|(p, w)| &self.projects[p].workspaces[w].path);
+        let path = self.projects.workspace_by(workspace).map(|w| &w.path);
         if path.and_then(|path| git::checked_out(path)) != Some(branch.clone()) {
             return;
         }
@@ -226,8 +226,8 @@ impl App {
     pub(super) fn open_pull_request(&mut self, workspace: u64) {
         let Some(found) = self.git.pulls.found.get_mut(&workspace) else { return };
         found.at = None;
-        if let Some((p, _)) = self.projects.workspace_index(workspace) {
-            self.git.pulls.answered.remove(&self.projects[p].id);
+        if let Some(at) = self.projects.workspace_index(workspace) {
+            self.git.pulls.answered.remove(&self.projects[at.project()].id);
         }
         self.screen.nav = None;
         self.overlay = Some(Overlay::PullRequest { workspace, scroll: 0 });
@@ -283,7 +283,7 @@ impl App {
     pub(super) fn pull_request_view(&self, workspace: u64, scroll: usize) -> Option<ui::Overlay> {
         let pull = self.pull_request(workspace)?;
         let notes = self.pull_request_lines(pull);
-        let project = self.projects.workspace_index(workspace).map(|(p, _)| self.projects[p].id);
+        let project = self.projects.workspace_index(workspace).map(|at| self.projects[at.project()].id);
         let error = project.and_then(|id| self.git.pulls.answered.get(&id)).and_then(|a| a.error.clone());
         Some(ui::Overlay::Update(ui::Update {
             title: TITLE,

@@ -102,9 +102,9 @@ impl App {
 
     fn run_open_on(&self, project: u64, branch: &str) -> bool {
         self.runs.all().iter().any(|run| {
-            self.projects.workspace_index(run.workspace).is_some_and(|(p, w)| {
-                self.projects[p].id == project
-                    && git::branch(&self.projects[p].workspaces[w].path).as_deref() == Some(branch)
+            self.projects.workspace_index(run.workspace).is_some_and(|at| {
+                self.projects[at.project()].id == project
+                    && git::branch(&self.projects.workspace(at).path).as_deref() == Some(branch)
             })
         })
     }

@@ -19,10 +19,10 @@ use crate::host::{notify, sound};
 use crate::log::{self};
 use crate::process;
 use crate::project::search::Goto;
-use crate::project::{Hierarchy, Project};
+use crate::project::{Hierarchy, Project, TabAt};
 use crate::term::Term;
 
-pub(super) type AgentPlace = (usize, usize, usize, usize);
+pub(super) type AgentPlace = (TabAt, usize);
 
 type Listed = (Vec<AgentPlace>, Vec<(u64, Option<u64>)>, HashSet<u64>);
 
@@ -136,13 +136,13 @@ impl App {
         self.agent_tree(false)
             .into_iter()
             .filter(|(_, node)| node.depth > 0)
-            .map(|((p, w, t, i), _)| self.projects[p].workspaces[w].tabs[t].panes[i].id)
+            .map(|(place, _)| self.placed(place).id)
             .collect()
     }
 
     pub(super) fn notify(&mut self, notice: Notice<'_>) {
         let Notice { agent, status, at: (project, workspace), panes, principal } = notice;
-        let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return };
+        let Some(at) = self.projects.workspace_in(project, workspace) else { return };
         let what = match status {
             activity::Status::Waiting => "needs you",
             activity::Status::Failed => "failed",
@@ -153,8 +153,8 @@ impl App {
             _ => sound::Kind::Finished,
         };
         let sound = (self.config.sound && (principal || self.config.sound_subagents)).then_some(kind);
-        let project = &self.projects[p];
-        let place = format!("{} › {}", self.project_label(project), project.workspaces[w].label());
+        let place = self.place_name(at);
+        let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at));
         let message = notify::clean(&format!("{agent} {what} in {place}"));
         log::info!(
             "activity",
@@ -162,26 +162,19 @@ impl App {
             agent = agent,
             status = status.name(),
             project = project.id,
-            workspace = project.workspaces[w].id,
+            workspace = workspace.id,
             panes = panes.len(),
             sound = sound.map_or("none", sound::Kind::id)
         );
-        self.tell(Said {
-            agent,
-            status,
-            place,
-            message,
-            project: project.id,
-            workspace: project.workspaces[w].id,
-            panes,
-            sound,
-        });
+        self.tell(Said { agent, status, place, message, project: project.id, workspace: workspace.id, panes, sound });
     }
 
     fn marked_panes(&self, marked: Marked) -> Vec<&Term> {
         let terms: Vec<&Term> = match marked {
             Marked::Pane(pane) => self.projects.pane_by(pane).into_iter().collect(),
-            Marked::Tab(tab) => self.projects.tabs().filter(|t| t.id == tab).flat_map(|t| &t.panes).collect(),
+            Marked::Tab(tab) => {
+                self.projects.tab_index(tab).into_iter().flat_map(|at| &self.projects.tab(at).panes).collect()
+            }
         };
         terms.into_iter().filter(|term| term.agent.agent().is_some()).collect()
     }
@@ -199,6 +192,10 @@ impl App {
             }
         }
         panes.len()
+    }
+
+    pub(super) fn placed(&self, (at, i): AgentPlace) -> &Term {
+        &self.projects.tab(at).panes[i]
     }
 
     pub(super) fn agent_places(&self) -> Vec<AgentPlace> {
@@ -231,22 +228,19 @@ impl App {
     }
 
     fn agent_terms(&self) -> impl Iterator<Item = (AgentPlace, &Term)> {
-        let workspaces = crate::project::sidebar_order(&self.projects, &self.groups)
-            .into_iter()
-            .flat_map(|p| self.projects[p].workspaces.iter().enumerate().map(move |(w, workspace)| (p, w, workspace)));
-        let tabs = workspaces
-            .flat_map(|(p, w, workspace)| workspace.tabs.iter().enumerate().map(move |(t, tab)| (p, w, t, tab)));
-        tabs.flat_map(|(p, w, t, tab)| {
+        let order = crate::project::sidebar_order(&self.projects, &self.groups);
+        let tabs = order.into_iter().flat_map(|p| self.projects.project_tabs(p));
+        tabs.flat_map(|(at, tab)| {
             let live = tab.panes.iter().enumerate().filter(|(_, term)| term.agent.status().is_some());
-            live.map(move |(i, term)| ((p, w, t, i), term))
+            live.map(move |(i, term)| ((at, i), term))
         })
     }
 
     pub(super) fn jump_to_pane(&mut self, pane: u64) {
-        let Some((p, w, t)) = self.projects.tab_of_pane(pane) else { return };
-        let project = &self.projects[p];
-        let workspace = &project.workspaces[w];
-        let place = Goto::Place { project: project.id, workspace: Some(workspace.id), tab: Some(workspace.tabs[t].id) };
+        let Some(at) = self.projects.tab_of_pane(pane) else { return };
+        let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at.workspace()));
+        let place =
+            Goto::Place { project: project.id, workspace: Some(workspace.id), tab: Some(self.projects.tab(at).id) };
         self.goto(place);
         if let Some(tab) = self.tab_mut() {
             tab.focus(pane);

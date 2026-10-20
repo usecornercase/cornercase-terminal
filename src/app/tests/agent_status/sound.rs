@@ -16,12 +16,12 @@ fn with_a_subagent(subagents: bool) -> Watched {
     loud(&mut w);
     w.app.config.sound_subagents = subagents;
     let parent = tab_term(&w.app, 0, 0).id;
-    w.app.add_tab(0, 0, AREA).expect("a tab for cursor");
+    w.app.add_tab(workspace_at(&w.app, 0, 0), AREA).expect("a tab for cursor");
     w.run(agents::Known::Cursor);
     w.report("busy", 1);
     let cursor = tab_term(&w.app, 0, 1).id;
     w.app.projects.pane_by_mut(cursor).expect("the cursor pane").parent = Some(parent);
-    w.app.add_tab(0, 0, AREA).expect("hide both agents");
+    w.app.add_tab(workspace_at(&w.app, 0, 0), AREA).expect("hide both agents");
     w
 }
 
@@ -165,11 +165,11 @@ fn an_agent_and_its_subagent_needing_you_together_play_one_sound() {
     let mut w = Watched::start(agents::Known::Claude, false);
     loud(&mut w);
     let parent = tab_term(&w.app, 0, 0).id;
-    w.app.add_tab(0, 0, AREA).expect("a tab for the subagent");
+    w.app.add_tab(workspace_at(&w.app, 0, 0), AREA).expect("a tab for the subagent");
     w.run(agents::Known::Claude);
     let child = tab_term(&w.app, 0, 1).id;
     w.app.projects.pane_by_mut(child).expect("the subagent pane").parent = Some(parent);
-    w.app.add_tab(0, 0, AREA).expect("hide both agents");
+    w.app.add_tab(workspace_at(&w.app, 0, 0), AREA).expect("hide both agents");
 
     program_reports(&mut w, &[0, 1], "blocked");
 

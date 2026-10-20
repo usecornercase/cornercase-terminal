@@ -153,11 +153,8 @@ impl App {
                 form.agent.choose(i);
             }
             let path = project.and_then(|id| self.projects.project_index(id)).map(|p| &self.projects[p].path);
-            let workspace = place
-                .as_ref()
-                .and_then(|place| place.workspace)
-                .and_then(|id| self.projects.workspace_index(id))
-                .map(|(p, w)| &self.projects[p].workspaces[w]);
+            let workspace =
+                place.as_ref().and_then(|place| place.workspace).and_then(|id| self.projects.workspace_by(id));
             let found = form.places.iter().position(|choice| {
                 Some(&choice.place.project) == path
                     && choice.place.workspace_id == workspace.map(|workspace| workspace.id)
@@ -288,9 +285,8 @@ impl App {
             return Err("the selected project closed; choose an open place");
         };
         let workspace = place.place.workspace.as_ref().and_then(|path| {
-            project.workspaces.iter().find(|workspace| {
-                workspace.open() && workspace.path == *path && Some(workspace.id) == place.place.workspace_id
-            })
+            let at = self.projects.workspace_in(project.id, place.place.workspace_id?)?;
+            Some(self.projects.workspace(at)).filter(|workspace| workspace.open() && workspace.path == *path)
         });
         if place.place.workspace.is_some() && workspace.is_none() {
             return Err("the selected workspace closed; choose an open place");

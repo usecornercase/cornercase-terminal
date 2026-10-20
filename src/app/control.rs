@@ -40,7 +40,7 @@ use crate::error;
 use crate::git;
 use crate::log::{self, Level};
 use crate::project::search::Goto;
-use crate::project::{Hierarchy, Phase, Tab, Workspace};
+use crate::project::{Hierarchy, Phase, Tab, TabAt, Workspace, WorkspaceAt};
 use crate::term::Term;
 pub(in crate::app) use changes::{BaseChange, Replied};
 use create::Then;
@@ -215,8 +215,8 @@ struct Waits {
 #[derive(Default)]
 struct Here {
     project: Option<usize>,
-    workspace: Option<usize>,
-    tab: Option<usize>,
+    workspace: Option<WorkspaceAt>,
+    tab: Option<TabAt>,
     pane: Option<u64>,
 }
 
@@ -705,53 +705,54 @@ impl App {
         if let Some(view) = asker.view.and_then(|id| self.clients.views.get(id)) {
             let shown = &view.shown;
             let project = shown.project.and_then(|id| self.projects.project_index(id));
-            let workspace = project.zip(shown.workspace).and_then(|(p, id)| self.projects[p].index_of(id));
-            let tab = project
-                .zip(workspace)
-                .zip(shown.tab)
-                .and_then(|((p, w), id)| self.projects[p].workspaces[w].index_of(id));
-            let pane =
-                project.zip(workspace).zip(tab).and_then(|((p, w), t)| self.projects[p].workspaces[w].tabs[t].pane());
+            let workspace = shown.project.zip(shown.workspace).and_then(|(p, w)| self.projects.workspace_in(p, w));
+            let tab =
+                shown.project.zip(shown.workspace).zip(shown.tab).and_then(|((p, w), t)| self.projects.tab_in(p, w, t));
+            let pane = tab.and_then(|at| self.projects.tab(at).pane());
             return Here { project, workspace, tab, pane: pane.map(|term| term.id) };
         }
         if let Some(pane) = asker.caller
-            && let Some((p, w, t)) = self.projects.tab_of_pane(pane)
+            && let Some(at) = self.projects.tab_of_pane(pane)
         {
-            return Here { project: Some(p), workspace: Some(w), tab: Some(t), pane: Some(pane) };
+            return Here {
+                project: Some(at.project()),
+                workspace: Some(at.workspace()),
+                tab: Some(at),
+                pane: Some(pane),
+            };
         }
-        let Some(project) = self.project() else { return Here::default() };
-        let workspace = project.workspace();
-        let tab = workspace.and_then(Workspace::tab);
-        Here {
-            project: Some(self.active),
-            workspace: workspace.map(|_| project.active),
-            tab: workspace.filter(|_| tab.is_some()).map(|w| w.active),
-            pane: tab.and_then(Tab::pane).map(|t| t.id),
+        if self.project().is_none() {
+            return Here::default();
         }
+        let workspace = self.projects.active_workspace(self.active);
+        let tab = workspace.and_then(|at| self.projects.active_tab(at));
+        let pane = tab.and_then(|at| self.projects.tab(at).pane()).map(|t| t.id);
+        Here { project: Some(self.active), workspace, tab, pane }
     }
 
-    fn ids(&self, p: usize, w: Option<usize>, t: Option<usize>) -> Ids {
-        let project = &self.projects[p];
-        let workspace = w.and_then(|w| project.workspaces.get(w));
-        let tab = workspace.zip(t).and_then(|(workspace, t)| workspace.tabs.get(t));
+    fn ids(&self, p: usize, workspace: Option<WorkspaceAt>, tab: Option<TabAt>) -> Ids {
+        let tab = tab.map(|at| self.projects.tab(at));
         Ids {
-            project: Some(project.id),
-            workspace: workspace.map(|w| w.id),
+            project: Some(self.projects[p].id),
+            workspace: workspace.map(|at| self.projects.workspace(at).id),
             tab: tab.map(|t| t.id),
             pane: tab.and_then(Tab::pane).map(|t| t.id),
         }
     }
 
-    fn shown_ids(&self, p: usize) -> Ids {
-        let project = &self.projects[p];
-        let w = project.workspace().map(|_| project.active);
-        self.ids(p, w, project.workspace().map(|w| w.active))
+    pub(in crate::app) fn ids_of_tab(&self, at: TabAt) -> Ids {
+        self.ids(at.project(), Some(at.workspace()), Some(at))
     }
 
-    fn here_workspace(&mut self, asker: impl Into<Asker>) -> Result<(usize, usize), String> {
+    fn shown_ids(&self, p: usize) -> Ids {
+        let workspace = self.projects.active_workspace(p);
+        self.ids(p, workspace, workspace.and_then(|at| self.projects.active_tab(at)))
+    }
+
+    fn here_workspace(&mut self, asker: impl Into<Asker>) -> Result<WorkspaceAt, String> {
         let here = self.here(asker);
         let p = here.project.ok_or(NO_PROJECT)?;
-        Ok((p, here.workspace.unwrap_or_else(|| self.ensure_workspace(p))))
+        Ok(here.workspace.unwrap_or_else(|| self.ensure_workspace(p)))
     }
 
     pub(in crate::app) fn target(
@@ -764,19 +765,15 @@ impl App {
             return self.projects.tab_of_pane(id).map(|_| id).ok_or_else(|| none("pane", id));
         }
         if let Some(id) = tab {
-            let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
-            let tab = &self.projects[p].workspaces[w].tabs[t];
-            let agent = std::iter::once(tab.active)
-                .chain(0..tab.panes.len())
-                .filter_map(|i| tab.panes.get(i))
-                .find(|term| self.runs_agent(term));
+            let tab = self.projects.tab(self.projects.tab_index(id).ok_or_else(|| none("tab", id))?);
+            let agent = tab.pane().into_iter().chain(&tab.panes).find(|term| self.runs_agent(term));
             return agent.or_else(|| tab.pane()).map(|t| t.id).ok_or_else(|| format!("tab {id} has no pane").into());
         }
         self.here(asker).pane.ok_or_else(|| NO_PANE.to_string().into())
     }
 
     pub(in crate::app) fn show(&mut self, item: Item) -> Result<(), Refusal> {
-        let place = |app: &Self, p: usize, w: Option<usize>, t: Option<usize>| {
+        let place = |app: &Self, p: usize, w: Option<WorkspaceAt>, t: Option<TabAt>| {
             let Ids { project, workspace, tab, .. } = app.ids(p, w, t);
             Goto::Place { project: project.unwrap_or_default(), workspace, tab }
         };
@@ -790,17 +787,17 @@ impl App {
                 place(self, p, None, None)
             }
             Item::Workspace(id) => {
-                let (p, w) = self.usable_workspace(id)?;
-                place(self, p, Some(w), None)
+                let at = self.usable_workspace(id)?;
+                place(self, at.project(), Some(at), None)
             }
             Item::Tab(id) => {
-                let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
-                place(self, p, Some(w), Some(t))
+                let at = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
+                place(self, at.project(), Some(at.workspace()), Some(at))
             }
             Item::Pane(id) => {
-                let (p, w, t) = self.projects.tab_of_pane(id).ok_or_else(|| none("pane", id))?;
-                self.projects[p].workspaces[w].tabs[t].focus(id);
-                place(self, p, Some(w), Some(t))
+                let at = self.projects.tab_of_pane(id).ok_or_else(|| none("pane", id))?;
+                self.projects.tab_mut(at).focus(id);
+                place(self, at.project(), Some(at.workspace()), Some(at))
             }
         };
         self.goto(goto);
@@ -828,18 +825,18 @@ impl App {
         Ok(Some(json(&Done { ids, projection, ..Done::default() })))
     }
 
-    pub(in crate::app) fn usable_workspace(&self, id: u64) -> Result<(usize, usize), Refusal> {
-        let (p, w) = self.projects.workspace_index(id).ok_or_else(|| none("workspace", id))?;
-        match self.projects[p].workspaces[w].phase {
-            Phase::Open => Ok((p, w)),
+    pub(in crate::app) fn usable_workspace(&self, id: u64) -> Result<WorkspaceAt, Refusal> {
+        let at = self.projects.workspace_index(id).ok_or_else(|| none("workspace", id))?;
+        match self.projects.workspace(at).phase {
+            Phase::Open => Ok(at),
             Phase::Removing(_) => Err(format!("workspace {id} is being removed").into()),
             Phase::Closing => Err(format!("workspace {id} is closing").into()),
         }
     }
 
     fn workspace_on(&self, p: usize, branch: &str) -> Option<u64> {
-        let workspaces = self.projects[p].workspaces.iter().filter(|w| w.open());
-        workspaces.into_iter().find(|w| git::branch(&w.path).as_deref() == Some(branch)).map(|w| w.id)
+        let on = |w: &Workspace| w.open() && git::branch(&w.path).as_deref() == Some(branch);
+        self.projects.find_workspace(p, on).map(|at| self.projects.workspace(at).id)
     }
 }
 

@@ -150,8 +150,7 @@ impl App {
         let wanted: Vec<(Checkout, Mode)> = followed
             .into_iter()
             .filter_map(|(workspace, mode)| {
-                let (p, w) = self.projects.workspace_index(workspace)?;
-                let ws = &self.projects[p].workspaces[w];
+                let ws = self.projects.workspace_by(workspace)?;
                 Some((Checkout { workspace, dir: ws.path.clone(), base: ws.base.clone() }, mode))
             })
             .collect();
@@ -351,8 +350,7 @@ impl App {
     fn chosen_file(&self, view: &panel::View, i: usize) -> Option<Chosen> {
         let file = ready(view)?.files.get(i)?.clone();
         let workspace = *view.owners.get(i)?;
-        let (p, w) = self.projects.workspace_index(workspace)?;
-        let ws = &self.projects[p].workspaces[w];
+        let ws = self.projects.workspace_by(workspace)?;
         Some(Chosen { target: Checkout { workspace, dir: ws.path.clone(), base: ws.base.clone() }, file })
     }
 

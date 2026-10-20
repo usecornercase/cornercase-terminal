@@ -10,7 +10,7 @@ use crate::error::Result;
 use crate::flows::folder;
 use crate::paths;
 use crate::project::split::Dir;
-use crate::project::{Hierarchy, Project, Tab, Workspace};
+use crate::project::{Hierarchy, Project, Tab, TabAt, Workspace, WorkspaceAt};
 use crate::protocol;
 use crate::term::{SpawnOptions, Term};
 
@@ -166,64 +166,60 @@ impl App {
         if let Some((_, tab)) = self.projects.tab_with_pane_mut(pane) {
             tab.split(pane, dir, term, focus);
         }
-        for workspace in self.projects.iter_mut().flat_map(|p| &mut p.workspaces) {
-            if workspace.tabs.iter().any(|t| t.index_of(pane).is_some()) {
-                workspace.stop_blaming_setup();
-            }
+        if let Some(at) = self.projects.tab_of_pane(pane) {
+            self.projects.workspace_mut(at.workspace()).stop_blaming_setup();
         }
         self.resize(area);
         Ok(Some(id))
     }
 
-    pub(super) fn add_tab(&mut self, p: usize, w: usize, area: Rect) -> Result<()> {
-        let t = self.push_tab(p, w, area, None)?;
-        self.show_tab(p, w, t);
+    pub(super) fn add_tab(&mut self, at: WorkspaceAt, area: Rect) -> Result<()> {
+        let tab = self.push_tab(at, area, None)?;
+        self.show_tab(tab);
         Ok(())
     }
 
-    pub(super) fn show_tab(&mut self, p: usize, w: usize, t: usize) {
-        let project = &mut self.projects[p];
-        project.workspaces[w].active = t;
-        project.active = w;
-        self.active = p;
+    pub(super) fn show_tab(&mut self, at: TabAt) {
+        self.projects.workspace_mut(at.workspace()).active = at.index();
+        self.projects[at.project()].active = at.workspace().index();
+        self.active = at.project();
     }
 
     pub(super) fn start_accounts(&self, start: Option<&Start>) -> Accounts {
         start.and_then(|start| start.accounts.clone()).unwrap_or_else(|| self.active_accounts())
     }
 
-    pub(super) fn push_tab(&mut self, p: usize, w: usize, area: Rect, name: Option<String>) -> Result<usize> {
+    pub(super) fn push_tab(&mut self, at: WorkspaceAt, area: Rect, name: Option<String>) -> Result<TabAt> {
         let accounts = self.active_accounts();
-        self.push_tab_in((p, w), area, name, accounts)
+        self.push_tab_in(at, area, name, accounts)
     }
 
     pub(super) fn push_tab_in(
         &mut self,
-        place: (usize, usize),
+        at: WorkspaceAt,
         area: Rect,
         name: Option<String>,
         accounts: Accounts,
-    ) -> Result<usize> {
-        let (p, w) = place;
-        self.projects[p].workspaces[w].stop_blaming_setup();
-        let path = self.projects[p].workspaces[w].path.clone();
+    ) -> Result<TabAt> {
+        let workspace = self.projects.workspace_mut(at);
+        workspace.stop_blaming_setup();
+        let path = workspace.path.clone();
         let term = self.spawn_in(area, path, None, accounts)?;
-        Ok(self.insert_tab(place, name, term))
+        Ok(self.insert_tab(at, name, term))
     }
 
-    pub(super) fn insert_tab(&mut self, (p, w): (usize, usize), name: Option<String>, term: Term) -> usize {
+    pub(super) fn insert_tab(&mut self, at: WorkspaceAt, name: Option<String>, term: Term) -> TabAt {
         let tab = Tab::new(self.take_id(), name, term);
-        let workspace = &mut self.projects[p].workspaces[w];
-        workspace.tabs.push(tab);
-        workspace.tabs.len() - 1
+        self.projects.push_tab(at, tab)
     }
 
-    pub(super) fn ensure_workspace(&mut self, p: usize) -> usize {
-        if self.projects[p].workspaces.is_empty() {
-            let id = self.take_id();
-            let path = self.projects[p].path.clone();
-            self.projects[p].workspaces.push(Workspace::new(id, path, None, false));
+    pub(super) fn ensure_workspace(&mut self, p: usize) -> WorkspaceAt {
+        let shown = self.projects[p].active.min(self.projects[p].workspaces.len().saturating_sub(1));
+        if let Some(at) = self.projects.workspace_at(p, shown) {
+            return at;
         }
-        self.projects[p].active.min(self.projects[p].workspaces.len() - 1)
+        let id = self.take_id();
+        let path = self.projects[p].path.clone();
+        self.projects.push_workspace(p, Workspace::new(id, path, None, false))
     }
 }

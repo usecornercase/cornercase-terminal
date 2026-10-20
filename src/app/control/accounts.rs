@@ -19,7 +19,7 @@ use crate::control::{
     ProfileNew, ProfileSet, ProfileUse,
 };
 use crate::log::{self, Job, Level};
-use crate::project::Hierarchy;
+use crate::project::{Hierarchy, WorkspaceAt};
 use crate::time::Stamp;
 
 type Key = (Known, String);
@@ -374,29 +374,29 @@ impl App {
         asker: Asker,
         add: &AccountAdd,
         area: Option<Rect>,
-    ) -> Result<(Rect, usize, usize), Refusal> {
+    ) -> Result<(Rect, WorkspaceAt), Refusal> {
         let area = sized(area)?;
-        let (p, w) = match add.workspace {
+        let at = match add.workspace {
             Some(id) => self.usable_workspace(id)?,
             None => self.here_workspace(asker)?,
         };
-        Ok((area, p, w))
+        Ok((area, at))
     }
 
     fn open_login_tab(
         &mut self,
         asker: Asker,
         add: &AccountAdd,
-        (area, p, w): (Rect, usize, usize),
+        (area, at): (Rect, WorkspaceAt),
         now: Instant,
     ) -> Result<Ids, Refusal> {
         let kind = provider(&add.provider)?;
         let chosen = BTreeMap::from([(kind.name().to_string(), add.name.clone())]);
         let given = Accounts::of(&self.accounts.dir, &chosen);
-        let t = self
-            .push_tab_in((p, w), area, Some(format!("{} login", add.name)), given)
+        let tab = self
+            .push_tab_in(at, area, Some(format!("{} login", add.name)), given)
             .map_err(|e| format!("the account `{}` was added, but its login tab could not open: {e}", add.name))?;
-        let ids = self.ids(p, Some(w), Some(t));
+        let ids = self.ids_of_tab(tab);
         let pane = ids.pane.unwrap_or_default();
         self.adopt(pane, asker.caller);
         if add.focus {

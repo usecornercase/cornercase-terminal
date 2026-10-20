@@ -282,14 +282,8 @@ impl App {
         if !self.clients.events.hosting() || (copied.is_empty() && rang == 0) {
             return;
         }
-        let Some((p, w, t)) = self.projects.tab_of_pane(pane) else { return };
-        let workspace = &self.projects[p].workspaces[w];
-        let ids = Ids {
-            project: Some(self.projects[p].id),
-            workspace: Some(workspace.id),
-            tab: Some(workspace.tabs[t].id),
-            pane: Some(pane),
-        };
+        let Some(at) = self.projects.tab_of_pane(pane) else { return };
+        let ids = Ids { pane: Some(pane), ..self.ids_of_tab(at) };
         let time = crate::time::Stamp(SystemTime::now()).to_string();
         let mut events: Vec<Event> = copied
             .into_iter()

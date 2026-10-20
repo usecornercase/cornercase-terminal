@@ -131,7 +131,7 @@ fn two_copilot_in_one_folder_each_follow_their_own_conversation() {
     let (left, right) = (FakeCopilot::new(&folder), FakeCopilot::new(&folder));
     type_line(&mut app, &left.command_line());
     let (left_pane, right_pane) = (first(&app), {
-        app.add_tab(0, 0, AREA).expect("a second tab");
+        app.add_tab(workspace_at(&app, 0, 0), AREA).expect("a second tab");
         type_line(&mut app, &right.command_line());
         app.projects[0].workspaces[0].tabs[1].pane().map(|t| t.id).expect("the second pane")
     });

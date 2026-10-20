@@ -21,7 +21,7 @@ fn keys(app: &mut App, typed: &str) {
 
 fn add_tabs(app: &mut App, n: usize) {
     for _ in 0..n {
-        app.push_tab(app.active, 0, AREA, None).expect("open a tab");
+        app.push_tab(workspace_at(app, app.active, 0), AREA, None).expect("open a tab");
     }
 }
 

@@ -56,19 +56,11 @@ impl App {
     }
 
     pub(in crate::app) fn tree_target(&self, row: ui::TreeRow) -> Option<Target> {
-        let project = |p: usize| self.projects.get(p);
         Some(match row {
             ui::TreeRow::Group(g) => Target::Group(self.groups.get(g)?.id),
-            ui::TreeRow::Project(p) => Target::Project(project(p)?.id),
-            ui::TreeRow::Workspace(p, w) => {
-                let project = project(p)?;
-                Target::Workspace(project.id, project.workspaces.get(w)?.id)
-            }
-            ui::TreeRow::Tab(p, w, t) => {
-                let project = project(p)?;
-                let workspace = project.workspaces.get(w)?;
-                Target::Tab(project.id, workspace.id, workspace.tabs.get(t)?.id)
-            }
+            ui::TreeRow::Project(p) => Target::Project(self.projects.get(p)?.id),
+            ui::TreeRow::Workspace(p, w) => self.workspace_target(self.projects.workspace_at(p, w)?),
+            ui::TreeRow::Tab(p, w, t) => self.tab_target(self.projects.tab_at(p, w, t)?),
             _ => return None,
         })
     }
@@ -78,12 +70,12 @@ impl App {
             Target::Group(id) => ui::TreeRow::Group(self.group_index(id)?),
             Target::Project(id) => ui::TreeRow::Project(self.projects.project_index(id)?),
             Target::Workspace(project, workspace) => {
-                let (p, w) = self.projects.workspace_in(project, workspace)?;
-                ui::TreeRow::Workspace(p, w)
+                let at = self.projects.workspace_in(project, workspace)?;
+                ui::TreeRow::Workspace(at.project(), at.index())
             }
             Target::Tab(project, workspace, tab) => {
-                let (p, w, t) = self.projects.tab_in(project, workspace, tab)?;
-                ui::TreeRow::Tab(p, w, t)
+                let at = self.projects.tab_in(project, workspace, tab)?;
+                ui::TreeRow::Tab(at.project(), at.workspace().index(), at.index())
             }
         })
     }
@@ -107,7 +99,7 @@ impl App {
             }
             Some(ui::TreeHit::Close(row)) => self.close_row(row),
             Some(ui::TreeHit::Menu(_)) => self.open_tree_menu(list, pos),
-            Some(ui::TreeHit::NewTab(p, w)) => self.add_tab(p, w, area)?,
+            Some(ui::TreeHit::NewTab(p, w)) => self.add_tab_row(p, w, area)?,
             Some(ui::TreeHit::NewWorkspace(p)) => self.new_workspace_menu(p, pos),
             Some(ui::TreeHit::NewProject) => self.new_project_menu(pos),
             None => {}

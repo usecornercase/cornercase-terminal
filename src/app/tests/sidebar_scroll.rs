@@ -14,7 +14,7 @@ fn wheel_at(app: &mut App, kind: MouseEventKind, pos: Position) {
 fn with_tabs(n: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let (mut app, rx, dirs) = app_with(1);
     for _ in 1..n {
-        app.add_tab(0, 0, SHORT).expect("add a tab");
+        app.add_tab(workspace_at(&app, 0, 0), SHORT).expect("add a tab");
     }
     (app, rx, dirs)
 }

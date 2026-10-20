@@ -6,7 +6,7 @@ use crate::control::contract::Refusal;
 use crate::control::{self, Done, Item};
 use crate::error;
 use crate::git::{self, worktree};
-use crate::project::Hierarchy;
+use crate::project::{Hierarchy, WorkspaceAt};
 use crate::term::Term;
 
 pub(super) fn shell_quote(path: &str) -> String {
@@ -21,28 +21,28 @@ impl App {
         match close.item {
             Item::Pane(id) => self.projects.pane_by_mut(id).ok_or_else(|| none("pane", id))?.kill(),
             Item::Tab(id) => {
-                let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
-                self.projects[p].workspaces[w].tabs[t].panes.iter_mut().for_each(Term::kill);
+                let at = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
+                self.projects.tab_mut(at).panes.iter_mut().for_each(Term::kill);
             }
             Item::Workspace(id) => {
-                let (p, w) = self.usable_workspace(id)?;
+                let at = self.usable_workspace(id)?;
                 if close.unlock && !close.remove_worktree {
                     return Err(malformed("`unlock` goes with `remove_worktree`"));
                 }
                 if close.remove_worktree {
                     self.removable(id)?;
                     let key = self.clients.requests.key();
-                    self.spawn_check(p, w, Some(key));
+                    self.spawn_check(at, Some(key));
                     let stage = Stage::Removing { force: close.force, unlock: close.unlock };
                     let pending = Pending { client: Some(client), key, timeout: None, done: Done::default(), stage };
                     self.clients.requests.pending.push(pending);
                     return Ok(None);
                 }
-                let workspace = &mut self.projects[p].workspaces[w];
+                let workspace = self.projects.workspace_mut(at);
                 if workspace.worktree {
                     workspace.kill();
                 } else {
-                    self.drop_workspace(self.projects[p].id, id);
+                    self.drop_workspace(self.projects[at.project()].id, id);
                 }
             }
             Item::Project(id) => {
@@ -59,29 +59,29 @@ impl App {
         Ok(Some(json(&Done::default())))
     }
 
-    fn removable(&self, id: u64) -> Result<(usize, usize), Refusal> {
-        let (p, w) = self.usable_workspace(id)?;
-        if !self.projects[p].workspaces[w].worktree {
+    fn removable(&self, id: u64) -> Result<WorkspaceAt, Refusal> {
+        let at = self.usable_workspace(id)?;
+        if !self.projects.workspace(at).worktree {
             return Err(format!("workspace {id} is not a git worktree").into());
         }
-        if let Some(refusal) = self.role_owner(p, w) {
+        if let Some(refusal) = self.role_owner(at) {
             return Err(refusal.into());
         }
-        Ok((p, w))
+        Ok(at)
     }
 
     pub(super) fn removal_check_request(&mut self, client: u64, check: &RemovalCheck) -> Handled {
         let id = check.workspace.ok_or_else(|| malformed("`removal-check` needs the workspace: pass its id"))?;
-        let (p, w) = self.removable(id)?;
+        let at = self.removable(id)?;
         let key = self.clients.requests.key();
-        self.spawn_check(p, w, Some(key));
+        self.spawn_check(at, Some(key));
         let pending = Pending { client: Some(client), key, timeout: None, done: Done::default(), stage: Stage::Check };
         self.clients.requests.pending.push(pending);
         Ok(None)
     }
 
-    fn removal(&self, p: usize, w: usize, status: &worktree::Status) -> Removal {
-        let workspace = &self.projects[p].workspaces[w];
+    fn removal(&self, at: WorkspaceAt, status: &worktree::Status) -> Removal {
+        let workspace = self.projects.workspace(at);
         let lock = status.lock.as_ref().map(|lock| {
             let (role, path) = match &lock.role {
                 Some((name, path)) => (Some(name.clone()), path.clone()),
@@ -104,7 +104,7 @@ impl App {
             roles: roles
                 .map(|tree| RoleTree { role: tree.role.clone(), path: tree.path.clone(), branch: tree.branch.clone() })
                 .collect(),
-            teardown: self.teardown_script(p).is_some(),
+            teardown: self.teardown_script(at.project()).is_some(),
         }
     }
 
@@ -124,7 +124,7 @@ impl App {
         if check {
             let Some(pending) = self.clients.requests.take(key) else { return };
             let answer = match self.projects.workspace_in(project, workspace) {
-                Some((p, w)) => self.usable_workspace(workspace).map(|_| json(&self.removal(p, w, status))),
+                Some(at) => self.usable_workspace(workspace).map(|_| json(&self.removal(at, status))),
                 None => Err(none("workspace", workspace)),
             };
             self.refuse_or_answer(pending.client, answer);
@@ -147,11 +147,7 @@ impl App {
     }
 
     fn locked(&self, workspace: u64, lock: &worktree::Lock) -> String {
-        let path = self
-            .projects
-            .workspace_index(workspace)
-            .map(|(p, w)| self.projects[p].workspaces[w].path.display().to_string())
-            .unwrap_or_default();
+        let path = self.projects.workspace_by(workspace).map(|w| w.path.display().to_string()).unwrap_or_default();
         let reason = if lock.reason.is_empty() { String::new() } else { format!(" ({})", lock.reason) };
         match &lock.role {
             Some((name, role)) => format!(

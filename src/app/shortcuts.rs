@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
+use super::agent_watch::AgentPlace;
 use super::layout::Side;
 use super::menus::{Marked, MenuAction, Target};
 use super::{App, Overlay, Toast};
@@ -8,9 +9,9 @@ use crate::agents::activity::Status;
 use crate::error::Result;
 use crate::files::Mode;
 use crate::log;
-use crate::project::Project;
 use crate::project::search::{Finder, Goto};
 use crate::project::split::{self, Place};
+use crate::project::{Hierarchy, Project, WorkspaceAt};
 use crate::shortcuts::{self, Action, Group, Step};
 use crate::ui::{self, keys};
 
@@ -141,9 +142,9 @@ impl App {
     }
 
     fn new_tab_by_key(&mut self, area: Rect) -> Result<()> {
-        let Some((p, w)) = self.open_workspace_index() else { return Ok(()) };
+        let Some(at) = self.open_active_workspace() else { return Ok(()) };
         self.screen.nav = None;
-        self.add_tab(p, w, area)
+        self.add_tab(at, area)
     }
 
     fn split_by_key(&mut self, dir: split::Dir, area: Rect) -> Result<()> {
@@ -173,19 +174,12 @@ impl App {
     }
 
     fn rename_tab_by_key(&mut self) {
-        let found = self.open_workspace_index().and_then(|(p, w)| {
-            let workspace = &self.projects[p].workspaces[w];
-            (!workspace.tabs.is_empty()).then_some((p, w, workspace.active))
-        });
-        self.ask_rename(self.tab_target(found));
+        let found = self.open_active_workspace().and_then(|at| self.projects.active_tab(at));
+        self.ask_rename(found.map(|at| self.tab_target(at)));
     }
 
     fn rename_workspace_by_key(&mut self) {
-        let target = self.open_workspace_index().map(|(p, w)| {
-            let project = &self.projects[p];
-            Target::Workspace(project.id, project.workspaces[w].id)
-        });
-        self.ask_rename(target);
+        self.ask_rename(self.open_active_workspace().map(|at| self.workspace_target(at)));
     }
 
     fn new_workspace_by_key(&mut self) {
@@ -195,9 +189,8 @@ impl App {
         }
     }
 
-    fn open_workspace_index(&self) -> Option<(usize, usize)> {
-        let project = self.project()?;
-        project.workspace().filter(|w| w.open()).map(|_| (self.active, project.active))
+    fn open_active_workspace(&self) -> Option<WorkspaceAt> {
+        self.projects.active_workspace(self.active).filter(|&at| self.projects.workspace(at).open())
     }
 
     fn ask_rename(&mut self, target: Option<Target>) {
@@ -222,10 +215,16 @@ impl App {
 
     fn step_workspace(&mut self, delta: isize) {
         let Some(project) = self.project() else { return };
-        let open: Vec<usize> = (0..project.workspaces.len()).filter(|&w| project.workspaces[w].open()).collect();
-        let at = open.iter().position(|&w| w == project.active).unwrap_or(0);
-        let Some(next) = cycle(at, open.len(), delta).map(|i| open[i]) else { return };
-        let goto = Goto::Place { project: project.id, workspace: Some(project.workspaces[next].id), tab: None };
+        let open: Vec<(usize, u64)> = project
+            .workspaces
+            .iter()
+            .enumerate()
+            .filter(|(_, w)| w.open())
+            .map(|(w, workspace)| (w, workspace.id))
+            .collect();
+        let at = open.iter().position(|&(w, _)| w == project.active).unwrap_or(0);
+        let Some(next) = cycle(at, open.len(), delta).map(|i| open[i].1) else { return };
+        let goto = Goto::Place { project: project.id, workspace: Some(next), tab: None };
         self.goto(goto);
     }
 
@@ -252,7 +251,7 @@ impl App {
 
     fn next_agent(&mut self) {
         let places = self.agent_places();
-        let pane = |&(p, w, t, i): &(usize, usize, usize, usize)| &self.projects[p].workspaces[w].tabs[t].panes[i];
+        let pane = |&place: &AgentPlace| self.placed(place);
         let here = self.term().map(|t| t.id);
         let at = places.iter().position(|place| Some(pane(place).id) == here);
         let count = places.len();
@@ -298,13 +297,14 @@ impl App {
     }
 
     fn ask_close_workspace(&mut self) {
-        let Some((p, w)) = self.open_workspace_index() else { return };
+        let Some(at) = self.open_active_workspace() else { return };
         self.screen.nav = None;
-        let project = &self.projects[p];
-        if project.workspaces[w].worktree {
-            self.ask_removal(p, w);
+        let workspace = self.projects.workspace(at);
+        if workspace.worktree {
+            self.ask_removal(at);
         } else {
-            self.overlay = Some(Overlay::CloseWorkspace { project: project.id, workspace: project.workspaces[w].id });
+            self.overlay =
+                Some(Overlay::CloseWorkspace { project: self.projects[at.project()].id, workspace: workspace.id });
         }
     }
 

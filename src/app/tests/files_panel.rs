@@ -703,7 +703,7 @@ mod full_screen {
     fn another_tab_ends_it() {
         let (_repo, mut app, _rx) = with_file();
         toggle(&mut app);
-        app.add_tab(0, 0, AREA).expect("a tab");
+        app.add_tab(workspace_at(&app, 0, 0), AREA).expect("a tab");
         render(&mut app, AREA);
         assert!(!app.file_full_screen());
     }
@@ -711,11 +711,11 @@ mod full_screen {
     #[test]
     fn a_tab_closing_behind_it_ends_it() {
         let (_repo, mut app, rx) = with_file();
-        app.add_tab(0, 0, AREA).expect("a tab");
+        app.add_tab(workspace_at(&app, 0, 0), AREA).expect("a tab");
         render(&mut app, AREA);
         toggle(&mut app);
         let active = app.projects[0].workspaces[0].active;
-        app.close_tab(0, 0, active);
+        app.close_tab(tab_at(&app, 0, 0, active));
         wait_until("the tab is gone", || {
             app.refresh(Instant::now());
             drain(&mut app, &rx);

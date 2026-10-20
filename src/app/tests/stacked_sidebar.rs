@@ -33,7 +33,7 @@ fn a_click_on_a_project_selects_it() {
 #[test]
 fn a_click_on_a_tab_selects_it() {
     let (mut app, _rx, _dirs) = stacked(1);
-    app.add_tab(0, 0, TALL).expect("add a tab");
+    app.add_tab(workspace_at(&app, 0, 0), TALL).expect("add a tab");
     let list = app.layout(TALL).workspaces_list;
     let tab = ui::workspace_row(list, 1, &app.tab_lines(), app.scroll.of(List::Workspaces), WorkspaceRow::Tab(0, 0));
     click_in(&mut app, tab.as_position(), TALL);
@@ -54,7 +54,7 @@ fn the_wheel_over_the_projects_scrolls_only_the_projects() {
 fn the_wheel_over_the_workspaces_scrolls_only_the_workspaces() {
     let (mut app, _rx, _dirs) = stacked(1);
     for _ in 1..4 {
-        app.add_tab(0, 0, AREA).expect("add a tab");
+        app.add_tab(workspace_at(&app, 0, 0), AREA).expect("add a tab");
     }
     app.projects[0].workspaces[0].active = 0;
     app.follow(AREA);

@@ -11,6 +11,7 @@ use crate::app::worktrees::{RemoveOptions, WorktreeEvent};
 use crate::error::Result;
 use crate::flows::run::RoleWorktree;
 use crate::log::{self, Job, Level};
+use crate::project::{Hierarchy, WorkspaceAt};
 use crate::ui;
 use crate::worktrees::{Found, Live, Row, Step, discover, remove};
 
@@ -50,7 +51,7 @@ impl App {
         let covered: HashSet<PathBuf> = picked
             .iter()
             .filter_map(|row| self.live(&row.found.path))
-            .flat_map(|(p, w, _)| self.projects[p].workspaces[w].role_worktrees.iter().map(|t| canonical(&t.path)))
+            .flat_map(|(at, _)| self.projects.workspace(at).role_worktrees.iter().map(|t| canonical(&t.path)))
             .collect();
         let mut removing: Vec<PathBuf> = Vec::new();
         let mut skipped = Vec::new();
@@ -84,10 +85,10 @@ impl App {
         branches: bool,
     ) -> std::result::Result<Vec<PathBuf>, &'static str> {
         match self.live(&row.found.path) {
-            Some((_, _, live)) if live.removing => Err("it is already being removed or closed"),
-            Some((_, _, live)) if live.role_of_run => Err("it belongs to a running flow"),
-            Some((p, w, _)) if !self.projects[p].workspaces[w].worktree => Err("it is a project's own folder"),
-            Some((p, w, live)) => self.remove_open(row, rows, branches, (p, w, live)),
+            Some((_, live)) if live.removing => Err("it is already being removed or closed"),
+            Some((_, live)) if live.role_of_run => Err("it belongs to a running flow"),
+            Some((at, _)) if !self.projects.workspace(at).worktree => Err("it is a project's own folder"),
+            Some(found) => self.remove_open(row, rows, branches, found),
             None => Ok(self.remove_closed(row, branches)),
         }
     }
@@ -97,10 +98,10 @@ impl App {
         row: &Row,
         rows: &[Row],
         branches: bool,
-        (p, w, live): (usize, usize, Live),
+        (at, live): (WorkspaceAt, Live),
     ) -> std::result::Result<Vec<PathBuf>, &'static str> {
         let found = &row.found;
-        let roles = self.projects[p].workspaces[w].role_worktrees.clone();
+        let roles = self.projects.workspace(at).role_worktrees.clone();
         let mut paths = vec![found.path.clone()];
         paths.extend(roles.iter().map(|tree| canonical(&tree.path)));
         let (mut names, before) = (Vec::new(), self.git.cleanup.notes.len());

@@ -7,7 +7,7 @@ use crate::control::QueueAdd;
 use crate::git;
 use crate::issues::Client;
 use crate::issues::locate::Locator;
-use crate::project::Hierarchy;
+use crate::project::{Hierarchy, WorkspaceAt};
 use crate::queue::{Entry, Place, Task};
 
 impl App {
@@ -58,13 +58,13 @@ impl App {
         })
     }
 
-    fn queue_workspace(&mut self, caller: Option<u64>, add: &QueueAdd) -> Result<(usize, usize), String> {
+    fn queue_workspace(&mut self, caller: Option<u64>, add: &QueueAdd) -> Result<WorkspaceAt, String> {
         if let Some(workspace) = add.workspace {
             return Ok(self.usable_workspace(workspace)?);
         }
         if let Some(project) = add.project {
             let p = self.projects.project_index(project).ok_or_else(|| super::super::none("project", project))?;
-            return Ok((p, self.ensure_workspace(p)));
+            return Ok(self.ensure_workspace(p));
         }
         self.here_workspace(caller)
     }
@@ -77,8 +77,8 @@ impl App {
         {
             return Ok(old.task.place.clone());
         }
-        let (p, w) = self.queue_workspace(caller, add)?;
-        let project = &self.projects[p];
+        let at = self.queue_workspace(caller, add)?;
+        let (project, found) = (&self.projects[at.project()], self.projects.workspace(at));
         let branch = add.worktree.clone();
         if let Some(branch) = &branch {
             if branch.trim().is_empty() {
@@ -94,10 +94,10 @@ impl App {
         {
             None
         } else {
-            Some(project.workspaces[w].path.clone())
+            Some(found.path.clone())
         };
-        let workspace_name = workspace.as_ref().and_then(|_| project.workspaces[w].name.clone());
-        let workspace_id = workspace.as_ref().map(|_| project.workspaces[w].id);
+        let workspace_name = workspace.as_ref().and_then(|_| found.name.clone());
+        let workspace_id = workspace.as_ref().map(|_| found.id);
         Ok(Place {
             project: project.path.clone(),
             workspace,

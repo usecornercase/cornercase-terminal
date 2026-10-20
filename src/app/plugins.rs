@@ -177,7 +177,7 @@ impl App {
     }
 
     pub(super) fn spot_env(&self, spot: Spot) -> Option<(control::Ids, PathBuf)> {
-        let (p, w, t, pane) = match spot {
+        let (at, tab, pane) = match spot {
             Spot::Project(project) => {
                 let p = self.projects.project_index(project)?;
                 return Some((
@@ -185,24 +185,21 @@ impl App {
                     self.projects[p].path.clone(),
                 ));
             }
-            Spot::Workspace(project, workspace) => {
-                let (p, w) = self.projects.workspace_in(project, workspace)?;
-                (p, w, None, None)
-            }
+            Spot::Workspace(project, workspace) => (self.projects.workspace_in(project, workspace)?, None, None),
             Spot::Tab(project, workspace, tab) => {
-                let (p, w, t) = self.projects.tab_in(project, workspace, tab)?;
-                (p, w, Some(t), None)
+                let at = self.projects.tab_in(project, workspace, tab)?;
+                (at.workspace(), Some(at), None)
             }
             Spot::Pane(pane) => {
-                let (p, w, t) = self.projects.tab_of_pane(pane)?;
-                (p, w, Some(t), Some(pane))
+                let at = self.projects.tab_of_pane(pane)?;
+                (at.workspace(), Some(at), Some(pane))
             }
         };
-        let workspace = &self.projects[p].workspaces[w];
+        let workspace = self.projects.workspace(at);
         let ids = control::Ids {
-            project: Some(self.projects[p].id),
+            project: Some(self.projects[at.project()].id),
             workspace: Some(workspace.id),
-            tab: t.map(|t| workspace.tabs[t].id),
+            tab: tab.map(|t| self.projects.tab(t).id),
             pane,
         };
         Some((ids, workspace.path.clone()))

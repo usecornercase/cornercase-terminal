@@ -122,8 +122,7 @@ impl App {
     }
 
     fn workspace_path(&self, workspace: u64) -> Option<&Path> {
-        let (p, w) = self.projects.workspace_index(workspace)?;
-        Some(&self.projects[p].workspaces[w].path)
+        Some(&self.projects.workspace_by(workspace)?.path)
     }
 
     fn place(&self, subject: Subject) -> Option<Place> {
@@ -136,8 +135,8 @@ impl App {
                 if let Some(cwd) = cwd.filter(|cwd| cwd.is_dir()) {
                     return Some(folder(cwd));
                 }
-                let (p, w, _) = self.projects.tab_of_pane(id)?;
-                Some(folder(self.projects[p].workspaces[w].path.clone()))
+                let at = self.projects.tab_of_pane(id)?.workspace();
+                Some(folder(self.projects.workspace(at).path.clone()))
             }
             Subject::File(workspace) => {
                 let root = self.workspace_path(workspace)?;

@@ -173,7 +173,12 @@ fn a_flow_opens_a_tab_per_role_in_a_new_worktree_and_leaves_the_window_as_it_is(
 
     let run = team.started();
 
-    let (p, w) = team.app.projects.workspace_index(run.workspace).expect("the run's workspace");
+    let (p, w) = team
+        .app
+        .projects
+        .workspace_index(run.workspace)
+        .map(|at| (at.project(), at.index()))
+        .expect("the run's workspace");
     let workspace = &team.app.projects[p].workspaces[w];
     let names: Vec<Option<&str>> = workspace.tabs.iter().map(|t| t.name.as_deref()).collect();
     assert_eq!(names, [Some(ORCHESTRATOR), Some("coder"), Some("reviewer")]);
@@ -525,7 +530,12 @@ fn a_worktree_that_comes_back_once_its_project_is_closing_opens_nothing() {
     let refused = error(got.remove(0));
     assert_eq!(refused, format!("project {project} is closing"));
     assert!(team.app.runs.all().is_empty());
-    let (p, _) = team.app.projects.workspace_index(team.app.projects[0].workspaces[0].id).expect("still closing");
+    let p = team
+        .app
+        .projects
+        .workspace_index(team.app.projects[0].workspaces[0].id)
+        .map(WorkspaceAt::project)
+        .expect("still closing");
     assert!(team.app.projects[p].workspaces.iter().all(|w| w.tabs.len() <= 1), "a tab opened in a closing project");
 }
 
@@ -555,7 +565,7 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         name: None,
     };
 
-    let refused = team.app.open_run((0, 0), starting, AREA, false).expect_err("refused");
+    let refused = team.app.open_run(workspace_at(&team.app, 0, 0), starting, AREA, false).expect_err("refused");
 
     assert!(refused.contains(said), "{refused}");
     assert_eq!((team.app.projects[0].workspaces[0].tabs.len(), team.app.runs.all().len()), (1, 0));
@@ -628,7 +638,11 @@ fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_tol
     assert!(again.restore(&saved, AREA));
 
     assert_eq!(again.runs.all().len(), 1);
-    let (p, w) = again.projects.workspace_index(again.runs.all()[0].workspace).expect("the workspace");
+    let (p, w) = again
+        .projects
+        .workspace_index(again.runs.all()[0].workspace)
+        .map(|at| (at.project(), at.index()))
+        .expect("the workspace");
     let tabs: Vec<(Option<String>, u64)> = again.projects[p].workspaces[w]
         .tabs
         .iter()
@@ -686,7 +700,8 @@ fn every_pane_of_a_run_has_its_private_folder_outside_the_worktree() {
 
     assert_eq!(dir.parent(), Some(runs_root(&team).as_path()));
     assert_eq!(mode(&dir), 0o700);
-    let (p, w) = team.app.projects.workspace_index(run.workspace).expect("the workspace");
+    let (p, w) =
+        team.app.projects.workspace_index(run.workspace).map(|at| (at.project(), at.index())).expect("the workspace");
     let workspace = &team.app.projects[p].workspaces[w];
     assert!(!dir.starts_with(&workspace.path));
     assert_eq!(workspace.run_dirs, std::slice::from_ref(&dir));

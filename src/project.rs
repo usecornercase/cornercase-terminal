@@ -20,7 +20,7 @@ pub(crate) mod view;
 pub(crate) mod vscode;
 
 pub(crate) use group::Group;
-pub(crate) use hierarchy::{Hierarchy, group_indices, sidebar_order};
+pub(crate) use hierarchy::{Hierarchy, TabAt, WorkspaceAt, group_indices, sidebar_order};
 
 pub(crate) struct Landing {
     pub(crate) area: Rect,

@@ -88,8 +88,8 @@ impl App {
 
     pub(in crate::app) fn set_changes_base(&mut self, workspace: u64, branch: Option<String>, default: Option<&str>) {
         let base = branch.filter(|b| default != Some(b.as_str()));
-        if let Some((p, w)) = self.projects.workspace_index(workspace) {
-            self.projects[p].workspaces[w].base = base;
+        if let Some(ws) = self.projects.workspace_by_mut(workspace) {
+            ws.base = base;
         }
         self.panels.changes.scroll_to_top();
     }

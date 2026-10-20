@@ -495,7 +495,7 @@ mod parents {
         };
         assert_eq!((under_root, under_child), (Some(root), Some(child)));
 
-        app.close_tab(0, 0, 0);
+        app.close_tab(tab_at(&app, 0, 0, 0));
         pump_until(&mut app, &rx, "the parent's tab closes", |a| a.projects.pane_by(ids[0]).is_none());
         assert_eq!(saved_parents(&app.state()), [(Some(ids[1]), None), (None, Some(ids[1]))]);
     }

@@ -23,7 +23,7 @@ impl Pair {
         let (lines, signals, mut keep) = make(&app.projects[0].path.clone());
         type_line(&mut app, &lines[0]);
         let first = first(&app);
-        app.add_tab(0, 0, AREA).expect("a second tab");
+        app.add_tab(workspace_at(&app, 0, 0), AREA).expect("a second tab");
         type_line(&mut app, &lines[1]);
         let ids = [first, first_of_tab(&app, 1)];
         keep.extend(dirs.into_iter().map(|dir| Box::new(dir) as Box<dyn Any>));

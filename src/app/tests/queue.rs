@@ -572,7 +572,7 @@ mod panel {
     fn a_started_entry_opens_its_pane() {
         let (mut app, _rx, _dirs) = opened();
         let pane = app.projects[0].workspaces[0].tabs[0].panes[0].id;
-        app.add_tab(0, 0, AREA).expect("a second tab");
+        app.add_tab(workspace_at(&app, 0, 0), AREA).expect("a second tab");
         let id = app.panels.queued.schedule(None, task(&app, time::now() + 3600, None)).expect("add");
         app.panels.queued.started(id, pane);
         click(&mut app, queue_row(0));

@@ -16,7 +16,7 @@ use crate::issues::{
     plane, shortcut,
 };
 use crate::log::{Job, Level};
-use crate::project::{Hierarchy, Project};
+use crate::project::{Hierarchy, Project, WorkspaceAt};
 use crate::state::IssuesState;
 
 pub(super) struct IssueConnections {
@@ -258,12 +258,13 @@ impl App {
         }
     }
 
-    pub(super) fn places(&self, project: Option<usize>, workspace: Option<usize>) -> (Vec<Place>, Option<usize>) {
+    pub(super) fn places(&self, project: Option<usize>, workspace: Option<WorkspaceAt>) -> (Vec<Place>, Option<usize>) {
         let listed = self.projects.iter().enumerate().filter(|(_, p)| !p.closing);
         let entries: Vec<(usize, Place, Option<usize>)> = listed
             .flat_map(|(p, open)| self.project_places(open).into_iter().map(move |(place, w)| (p, place, w)))
             .collect();
-        let here = entries.iter().position(|(p, _, w)| project == Some(*p) && w.is_none_or(|w| workspace == Some(w)));
+        let shown = workspace.map(WorkspaceAt::index);
+        let here = entries.iter().position(|(p, _, w)| project == Some(*p) && w.is_none_or(|w| shown == Some(w)));
         (entries.into_iter().map(|(_, place, _)| place).collect(), here)
     }
 

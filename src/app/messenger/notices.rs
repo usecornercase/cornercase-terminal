@@ -88,10 +88,9 @@ fn excerpt(screen: &str, lines: usize) -> String {
 
 impl App {
     pub(super) fn agent_at(&self, pane: u64) -> Option<Agent> {
-        let (p, w, t) = self.projects.tab_of_pane(pane)?;
-        let project = &self.projects[p];
-        let workspace = &project.workspaces[w];
-        let term = workspace.tabs[t].pane_by(pane)?;
+        let at = self.projects.tab_of_pane(pane)?;
+        let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at.workspace()));
+        let term = self.projects.tab(at).pane_by(pane)?;
         let kind = term.agent.agent()?.to_string();
         let mut place = self.project_label(project);
         if project.workspaces.len() > 1 {
@@ -104,7 +103,7 @@ impl App {
 
     pub(super) fn agent_panes(&self) -> Vec<u64> {
         let places = self.agent_places().into_iter();
-        places.map(|(p, w, t, i)| self.projects[p].workspaces[w].tabs[t].panes[i].id).collect()
+        places.map(|place| self.placed(place).id).collect()
     }
 
     pub(in crate::app) fn watch_messengers(&mut self, now: Instant) {

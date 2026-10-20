@@ -249,15 +249,15 @@ impl App {
     }
 
     fn submit_close_workspace(&mut self, project: u64, workspace: u64) -> Option<Overlay> {
-        if let Some((p, w)) = self.projects.workspace_in(project, workspace) {
-            self.close_workspace(p, w);
+        if let Some(at) = self.projects.workspace_in(project, workspace) {
+            self.close_workspace(at);
         }
         None
     }
 
     fn submit_close_tab(&mut self, project: u64, workspace: u64, tab: u64) -> Option<Overlay> {
-        if let Some((p, w, t)) = self.projects.tab_in(project, workspace, tab) {
-            self.close_tab(p, w, t);
+        if let Some(at) = self.projects.tab_in(project, workspace, tab) {
+            self.close_tab(at);
         }
         None
     }
@@ -294,14 +294,12 @@ impl App {
     }
 
     pub(super) fn close_workspace_message(&self, project: u64, workspace: u64) -> Option<String> {
-        let (p, w) = self.projects.workspace_in(project, workspace)?;
-        let workspace = &self.projects[p].workspaces[w];
+        let workspace = self.projects.workspace(self.projects.workspace_in(project, workspace)?);
         Some(format!("Close the workspace {}?{}", workspace.label(), stopped_tabs(workspace.tabs.len())))
     }
 
     pub(super) fn close_tab_message(&self, project: u64, workspace: u64, tab: u64) -> Option<String> {
-        let (p, w, t) = self.projects.tab_in(project, workspace, tab)?;
-        let name = self.projects[p].workspaces[w].tabs[t].label(&self.config);
+        let name = self.projects.tab(self.projects.tab_in(project, workspace, tab)?).label(&self.config);
         Some(format!("Close the tab {name}? The programs running in it are stopped."))
     }
 

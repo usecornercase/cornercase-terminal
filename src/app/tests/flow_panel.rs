@@ -28,7 +28,7 @@ pub(super) fn run_in(app: &mut App, (p, w): (usize, usize), flow: crate::flows::
     let workspace = app.projects[p].workspaces[w].id;
     let mut run = Run::new(workspace, flow, "fix the login\nand the rest".into());
     for role in ROLES {
-        let t = app.push_tab(p, w, AREA, Some(role.into())).expect("a tab for the role");
+        let t = app.push_tab(workspace_at(app, p, w), AREA, Some(role.into())).expect("a tab for the role").index();
         let pane = app.projects[p].workspaces[w].tabs[t].panes[0].id;
         run.members.push(Member { role: role.into(), pane });
     }

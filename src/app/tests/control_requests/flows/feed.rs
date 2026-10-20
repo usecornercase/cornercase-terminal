@@ -323,7 +323,8 @@ mod files {
         let (mut app, rx, _dir) = lightweight();
         let dir = folder(&mut app, &["answer.md"]);
         let workspace = app.runs.all()[0].workspace;
-        let (p, w) = app.projects.workspace_index(workspace).expect("the workspace");
+        let (p, w) =
+            app.projects.workspace_index(workspace).map(|at| (at.project(), at.index())).expect("the workspace");
         app.projects[p].workspaces[w].run_dirs.push(dir.path().to_path_buf());
         app.runs.clear();
 

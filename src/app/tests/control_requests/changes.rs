@@ -349,7 +349,7 @@ fn the_base_lists_branches_and_is_set_and_cleared() {
 
     let set = call_later(&mut app, &rx, "changes-base", &json!({"base": "topic"})).expect("set");
     assert_eq!(set["base"], "topic");
-    let (p, w) = app.projects.workspace_index(workspace).expect("workspace");
+    let (p, w) = app.projects.workspace_index(workspace).map(|at| (at.project(), at.index())).expect("workspace");
     assert_eq!(app.projects[p].workspaces[w].base.as_deref(), Some("topic"));
     call_later(&mut app, &rx, "changes-base", &json!({"base": "main"})).expect("the default");
     assert_eq!(app.projects[p].workspaces[w].base, None);

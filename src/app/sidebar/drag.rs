@@ -135,7 +135,11 @@ impl App {
                 self.move_project(self.projects[p].id, group, before);
             }
             (ui::TreeRow::Workspace(p, w), ui::Spot::Workspace(before)) => self.move_workspace(p, w, before),
-            (ui::TreeRow::Tab(p, w, t), ui::Spot::Tab(before)) => self.move_tab(p, w, t, before),
+            (ui::TreeRow::Tab(p, w, t), ui::Spot::Tab(before)) => {
+                if let Some(at) = self.projects.tab_at(p, w, t) {
+                    self.move_tab(at, before);
+                }
+            }
             _ => {}
         }
     }

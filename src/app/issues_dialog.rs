@@ -100,7 +100,7 @@ impl App {
     }
 
     pub(super) fn open_issues(&mut self, area: Rect) -> Result<()> {
-        let (places, here) = self.places(Some(self.active), self.project().map(|p| p.active));
+        let (places, here) = self.places(Some(self.active), self.projects.active_workspace(self.active));
         let Some(project) = self.project() else { return Ok(()) };
         let mut browser = self.new_browser(project, places, here.unwrap_or(0));
         if let Some(tab) = self.issues.tab() {
@@ -606,15 +606,15 @@ impl App {
     fn start_issue_in_tab(&mut self, p: usize, place: Option<Place>, start: Start, area: Rect) -> Result<()> {
         self.overlay = None;
         let workspace = place.and_then(|place| place.workspace);
-        let w = workspace.and_then(|id| self.projects[p].index_of(id));
-        self.open_tab_with(p, w, start, area)
+        let at = workspace.and_then(|id| self.projects.workspace_in(self.projects[p].id, id));
+        self.open_tab_with(p, at, start, area)
     }
 
     fn start_issue_in_worktree(&mut self, p: usize, branch: String, start: Start, area: Rect) -> Result<()> {
-        let open = self.projects[p].workspaces.iter().position(|w| git::branch(&w.path).as_deref() == Some(&branch));
-        if let Some(w) = open {
+        let open = self.projects.find_workspace(p, |w| git::branch(&w.path).as_deref() == Some(&branch));
+        if let Some(at) = open {
             self.overlay = None;
-            return self.open_workspace((p, w), Some(start), area, false);
+            return self.open_workspace(at, Some(start), area, false);
         }
         self.spawn_worktree(p, branch, Some(start), None);
         if let Some(Overlay::Issues(b)) = &mut self.overlay {

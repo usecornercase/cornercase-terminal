@@ -59,17 +59,10 @@ impl App {
                 self.projects.project_index(id).ok_or_else(|| none("project", id))?;
                 Target::Project(id)
             }
-            Some(Item::Workspace(id)) => {
-                let (p, _) = self.usable_workspace(id)?;
-                Target::Workspace(self.projects[p].id, id)
-            }
-            Some(Item::Tab(id)) => self.tab_target(self.projects.tab_index(id)).ok_or_else(|| none("tab", id))?,
-            Some(Item::Pane(id)) => self.tab_target(self.projects.tab_of_pane(id)).ok_or_else(|| none("pane", id))?,
-            None => {
-                let here = self.here(asker);
-                let found = here.project.zip(here.workspace).zip(here.tab).map(|((p, w), t)| (p, w, t));
-                self.tab_target(found).ok_or("no tab is open here; pass --tab")?
-            }
+            Some(Item::Workspace(id)) => self.workspace_target(self.usable_workspace(id)?),
+            Some(Item::Tab(id)) => self.tab_target(self.projects.tab_index(id).ok_or_else(|| none("tab", id))?),
+            Some(Item::Pane(id)) => self.tab_target(self.projects.tab_of_pane(id).ok_or_else(|| none("pane", id))?),
+            None => self.tab_target(self.here(asker).tab.ok_or("no tab is open here; pass --tab")?),
         };
         let name = name_of(Some(rename.name));
         if matches!(target, Target::Group(_)) && name.is_none() {
@@ -77,13 +70,6 @@ impl App {
         }
         self.rename(target, name);
         Ok(Some(json(&Done::default())))
-    }
-
-    pub(in crate::app) fn tab_target(&self, found: Option<(usize, usize, usize)>) -> Option<Target> {
-        let (p, w, t) = found?;
-        let project = &self.projects[p];
-        let workspace = &project.workspaces[w];
-        Some(Target::Tab(project.id, workspace.id, workspace.tabs[t].id))
     }
 
     pub(super) fn notify_request(&mut self, text: &str) -> Handled {
@@ -285,38 +271,39 @@ impl App {
     }
 
     fn move_workspace_request(&mut self, id: u64, before: Option<u64>) -> Result<(), Refusal> {
-        let (p, w) = self.usable_workspace(id)?;
+        let at = self.usable_workspace(id)?;
+        let p = at.project();
         let to = match before {
             Some(before) => {
-                let (other, v) = self.projects.workspace_index(before).ok_or_else(|| none("workspace", before))?;
-                if other != p {
+                let other = self.projects.workspace_index(before).ok_or_else(|| none("workspace", before))?;
+                if other.project() != p {
                     return Err(conflict(format!(
                         "workspace {before} is in another project: a workspace moves only among its project's"
                     )));
                 }
-                v
+                other.index()
             }
             None => self.projects[p].workspaces.len(),
         };
-        self.move_workspace(p, w, to);
+        self.move_workspace(p, at.index(), to);
         Ok(())
     }
 
     fn move_tab_request(&mut self, id: u64, before: Option<u64>) -> Result<(), Refusal> {
-        let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
+        let at = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
         let to = match before {
             Some(before) => {
-                let (op, ow, u) = self.projects.tab_index(before).ok_or_else(|| none("tab", before))?;
-                if (op, ow) != (p, w) {
+                let other = self.projects.tab_index(before).ok_or_else(|| none("tab", before))?;
+                if other.workspace() != at.workspace() {
                     return Err(conflict(format!(
                         "tab {before} is in another workspace: a tab moves only among its workspace's"
                     )));
                 }
-                u
+                other.index()
             }
-            None => self.projects[p].workspaces[w].tabs.len(),
+            None => self.projects.workspace(at.workspace()).tabs.len(),
         };
-        self.move_tab(p, w, t, to);
+        self.move_tab(at, to);
         Ok(())
     }
 
@@ -330,10 +317,7 @@ impl App {
                 self.projects.project_index(id).ok_or_else(|| none("project", id))?;
                 Target::Project(id)
             }
-            Item::Workspace(id) => {
-                let (p, _) = self.usable_workspace(id)?;
-                Target::Workspace(self.projects[p].id, id)
-            }
+            Item::Workspace(id) => self.workspace_target(self.usable_workspace(id)?),
             Item::Pane(id) => {
                 let term = self.projects.pane_by(id).ok_or_else(|| none("pane", id))?;
                 if term.agent.status().is_none() {
@@ -408,15 +392,14 @@ impl App {
         if pane == target {
             return Err(malformed("a pane cannot move onto itself"));
         }
-        let (p, w, t) = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
-        let (op, ow, ot) = self.projects.tab_of_pane(target).ok_or_else(|| none("pane", target))?;
-        if (p, w, t) != (op, ow, ot) {
+        let at = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
+        if self.projects.tab_of_pane(target).ok_or_else(|| none("pane", target))? != at {
             return Err(conflict(format!("pane {target} is in another tab: a pane moves within its tab")));
         }
         let window = sized(area)?;
-        let tab_id = self.projects[p].workspaces[w].tabs[t].id;
+        let tab_id = self.projects.tab(at).id;
         let room = self.tab_area(tab_id, window);
-        let tab = &mut self.projects[p].workspaces[w].tabs[t];
+        let tab = self.projects.tab_mut(at);
         let layout = tab.rearranged(room, pane, target, place.into()).ok_or_else(|| {
             conflict(format!(
                 "tab {tab_id} has no room for every pane after that move ({}×{})",

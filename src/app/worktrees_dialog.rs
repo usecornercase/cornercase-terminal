@@ -17,8 +17,8 @@ use crate::error::Result;
 use crate::git;
 use crate::log::{Job, Level};
 use crate::process;
-use crate::project::Hierarchy;
 use crate::project::search::Goto;
+use crate::project::{Hierarchy, WorkspaceAt};
 use crate::pull_request::State;
 use crate::time;
 use crate::ui;
@@ -153,7 +153,7 @@ impl App {
         let rows: Vec<Row> = found
             .into_iter()
             .map(|found| Row {
-                live: self.live(&found.path).map(|(_, _, live)| live),
+                live: self.live(&found.path).map(|(_, live)| live),
                 removing: self.cleaning_path(&found.path),
                 found,
                 scan: None,
@@ -186,8 +186,8 @@ impl App {
     }
 
     fn base_of(&self, path: &Path) -> Option<String> {
-        let (p, w, _) = self.live(path)?;
-        self.projects[p].workspaces[w].base.clone()
+        let (at, _) = self.live(path)?;
+        self.projects.workspace(at).base.clone()
     }
 
     fn refresh_places(&mut self) {
@@ -203,11 +203,10 @@ impl App {
         self.git.scans.places = places;
     }
 
-    pub(super) fn live(&self, path: &Path) -> Option<(usize, usize, Live)> {
+    pub(super) fn live(&self, path: &Path) -> Option<(WorkspaceAt, Live)> {
         let (_, project, workspace) = self.git.scans.places.iter().find(|(at, ..)| at == path)?;
-        let (p, w) = self.projects.workspace_in(*project, *workspace)?;
-        let project = &self.projects[p];
-        let workspace = &project.workspaces[w];
+        let at = self.projects.workspace_in(*project, *workspace)?;
+        let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at));
         let running =
             workspace.terms().filter(|t| !t.shell_in_foreground()).filter_map(|t| t.program(&self.config)).collect();
         let live = Live {
@@ -215,11 +214,11 @@ impl App {
             workspace: workspace.id,
             running,
             removing: !workspace.open() || project.closing,
-            role_of_run: self.role_owner(p, w).is_some(),
+            role_of_run: self.role_owner(at).is_some(),
             run_roles: workspace.role_worktrees.len(),
             pull_merged: self.pull_request(workspace.id).is_some_and(|pull| pull.state == State::Merged),
         };
-        Some((p, w, live))
+        Some((at, live))
     }
 
     fn sync_worktree_rows(&mut self) {
@@ -233,7 +232,7 @@ impl App {
             .rows
             .iter()
             .map(|row| match self.live(&row.found.path) {
-                Some((p, w, live)) => (!self.projects[p].workspaces[w].worktree, Some(live)),
+                Some((at, live)) => (!self.projects.workspace(at).worktree, Some(live)),
                 None => (false, None),
             })
             .collect();
@@ -478,9 +477,7 @@ impl App {
         let roles: Vec<PathBuf> = ticked
             .iter()
             .filter_map(|&i| self.live(&dialog.list.rows[i].found.path))
-            .flat_map(|(p, w, _)| {
-                self.projects[p].workspaces[w].role_worktrees.iter().map(|tree| canonical(&tree.path))
-            })
+            .flat_map(|(at, _)| self.projects.workspace(at).role_worktrees.iter().map(|tree| canonical(&tree.path)))
             .filter(|path| dialog.list.rows.iter().any(|row| &row.found.path == path && row.checked_on_confirm()))
             .collect();
         let mut targets: Vec<&Row> = rows.iter().map(|&i| &dialog.list.rows[i]).collect();
@@ -519,7 +516,7 @@ impl App {
     fn worktree_changes(&mut self, row: usize) {
         let Some(Overlay::Worktrees(dialog)) = &self.overlay else { return };
         let Some(found) = dialog.list.rows.get(row).map(|row| row.found.clone()) else { return };
-        let Some((_, _, live)) = self.live(&found.path).filter(|(.., live)| !live.removing) else { return };
+        let Some((_, live)) = self.live(&found.path).filter(|(_, live)| !live.removing) else { return };
         if found.kind != Kind::Linked {
             return;
         }
@@ -581,7 +578,7 @@ impl App {
         let live = row.live.as_ref();
         let closing = live
             .and_then(|l| self.projects.workspace_in(l.project, l.workspace))
-            .is_some_and(|(p, w)| !self.projects[p].workspaces[w].removing());
+            .is_some_and(|at| !self.projects.workspace(at).removing());
         let removing = row.removing || live.is_some_and(|l| l.removing);
         let status = if removing {
             Some(if closing && !row.removing { "closing…" } else { "removing…" })

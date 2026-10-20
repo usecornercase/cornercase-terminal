@@ -160,12 +160,12 @@ impl App {
             .map(|role| (role.name.clone(), flows::role_branch(&branch, &role.name)))
             .collect();
         if let Some(id) = existing {
-            let (p, w) = self.usable_workspace(id)?;
-            if !self.projects[p].workspaces[w].worktree {
+            let at = self.usable_workspace(id)?;
+            if !self.projects.workspace(at).worktree {
                 return Err(own_folder(&branch).into());
             }
             if roles.is_empty() {
-                return Ok(Some(json(&self.open_run((p, w), starting, area, false)?)));
+                return Ok(Some(json(&self.open_run(at, starting, area, false)?)));
             }
         }
         let key = self.clients.requests.key();
@@ -235,10 +235,10 @@ impl App {
         let id = self
             .workspace_on(p, &starting.branch)
             .ok_or_else(|| format!("the workspace on branch {} is gone", starting.branch))?;
-        let (p, w) = self.usable_workspace(id)?;
-        let opened = self.open_run((p, w), starting, area, false);
+        let at = self.usable_workspace(id)?;
+        let opened = self.open_run(at, starting, area, false);
         if opened.is_err() {
-            self.discard_worktrees(p, fresh);
+            self.discard_worktrees(at.project(), fresh);
         }
         opened
     }
@@ -246,12 +246,12 @@ impl App {
     fn open_in_new_worktree(&mut self, landing: Landing, path: PathBuf, starting: Starting) -> Result<RunInfo, String> {
         let Landing { p, area, fresh } = landing;
         let path = path.canonicalize().unwrap_or(path);
-        let created = self.projects[p].workspaces.iter().all(|w| w.path != path);
-        let w = self.worktree_workspace(p, path.clone());
-        let opened = self.open_run((p, w), starting, area, true);
+        let created = self.projects.find_workspace(p, |w| w.path == path).is_none();
+        let at = self.worktree_workspace(p, path.clone());
+        let opened = self.open_run(at, starting, area, true);
         if opened.is_err() {
             if created {
-                self.projects[p].remove_workspace(w);
+                self.projects[p].remove_workspace(at.index());
             }
             let run_tree = created.then_some(path).into_iter();
             self.discard_worktrees(p, fresh.into_iter().chain(run_tree).collect());

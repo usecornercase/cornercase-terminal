@@ -19,7 +19,7 @@ use crate::git::upstream;
 use crate::git::worktree;
 pub(super) use crate::git::worktree::RemoveOptions;
 use crate::log::{self, Job, Level};
-use crate::project::{Hierarchy, Phase, Tab, Workspace};
+use crate::project::{Hierarchy, Phase, Workspace, WorkspaceAt};
 use crate::pull_request::PullRequest;
 use crate::ui::{self};
 use crate::worktrees::{Found, Scan};
@@ -159,11 +159,9 @@ impl App {
         if self.config.fetch_every().is_none() {
             return;
         }
-        let Some(p) = self.projects.project_index(project) else { return };
-        let p = &mut self.projects[p];
         for (id, n) in behind {
-            if let Some(w) = p.index_of(*id) {
-                p.workspaces[w].behind = *n;
+            if let Some(at) = self.projects.workspace_in(project, *id) {
+                self.projects.workspace_mut(at).behind = *n;
             }
         }
     }
@@ -176,15 +174,15 @@ impl App {
             }
             let Some(linked) = self.linked_worktrees(p) else { continue };
             dirs.append(&mut self.drop_gone_worktrees(p, &linked));
-            let project = &mut self.projects[p];
-            for workspace in &mut project.workspaces {
+            for workspace in &mut self.projects[p].workspaces {
                 workspace.role_worktrees.retain(|tree| tree.path.is_dir());
             }
+            let projects = &self.projects;
             let missing: Vec<PathBuf> =
-                linked.into_iter().filter(|path| project.workspaces.iter().all(|w| &w.path != path)).collect();
+                linked.into_iter().filter(|path| projects.find_workspace(p, |w| &w.path == path).is_none()).collect();
             for path in missing {
                 let id = self.take_id();
-                self.projects[p].workspaces.push(Workspace::new(id, path, None, true));
+                self.projects.push_workspace(p, Workspace::new(id, path, None, true));
             }
         }
         self.remove_run_dirs(dirs);
@@ -213,19 +211,16 @@ impl App {
     }
 
     fn drop_gone_worktrees(&mut self, p: usize, linked: &[PathBuf]) -> Vec<PathBuf> {
-        let project = &mut self.projects[p];
-        let gone: Vec<usize> = (0..project.workspaces.len())
-            .rev()
-            .filter(|&w| {
-                let ws = &project.workspaces[w];
-                ws.worktree && ws.open() && ws.tabs.is_empty() && !linked.contains(&ws.path)
-            })
-            .collect();
+        let is_gone = |ws: &Workspace| ws.worktree && ws.open() && ws.tabs.is_empty() && !linked.contains(&ws.path);
+        let workspaces = self.projects[p].workspaces.iter().enumerate().rev();
+        let gone: Vec<usize> = workspaces.filter(|(_, ws)| is_gone(ws)).map(|(w, _)| w).collect();
         let mut dirs = Vec::new();
         for w in gone {
-            self.panels.changes.forget(project.workspaces[w].id);
-            dirs.append(&mut project.workspaces[w].run_dirs);
-            project.remove_workspace(w);
+            let Some(at) = self.projects.workspace_at(p, w) else { continue };
+            let workspace = self.projects.workspace_mut(at);
+            self.panels.changes.forget(workspace.id);
+            dirs.append(&mut workspace.run_dirs);
+            self.projects[p].remove_workspace(at.index());
         }
         dirs
     }
@@ -262,9 +257,8 @@ impl App {
         }
         let repo = self.projects[p].path.clone();
         let workspace = self.new_workspace(area, repo, Some(name), false)?;
-        let project = &mut self.projects[p];
-        project.workspaces.push(workspace);
-        project.active = project.workspaces.len() - 1;
+        let at = self.projects.push_workspace(p, workspace);
+        self.projects[p].active = at.index();
         self.active = p;
         Ok(None)
     }
@@ -297,28 +291,26 @@ impl App {
             self.overlay = None;
         }
         let Some(p) = self.projects.project_index(project) else { return Ok(()) };
-        let w = self.worktree_workspace(p, path);
-        self.open_workspace((p, w), start, area, true)
+        let at = self.worktree_workspace(p, path);
+        self.open_workspace(at, start, area, true)
     }
 
-    pub(super) fn worktree_workspace(&mut self, p: usize, path: PathBuf) -> usize {
-        if let Some(w) = self.projects[p].workspaces.iter().position(|w| w.path == path) {
-            return w;
+    pub(super) fn worktree_workspace(&mut self, p: usize, path: PathBuf) -> WorkspaceAt {
+        if let Some(at) = self.projects.find_workspace(p, |w| w.path == path) {
+            return at;
         }
         let id = self.take_id();
-        self.projects[p].workspaces.push(Workspace::new(id, path, None, true));
-        self.projects[p].workspaces.len() - 1
+        self.projects.push_workspace(p, Workspace::new(id, path, None, true))
     }
 
     pub(super) fn open_workspace(
         &mut self,
-        place: (usize, usize),
+        at: WorkspaceAt,
         start: Option<Start>,
         area: Rect,
         setup: bool,
     ) -> Result<()> {
-        let (p, w) = place;
-        let workspace = &mut self.projects[p].workspaces[w];
+        let workspace = self.projects.workspace_mut(at);
         if let Some(start) = &start
             && workspace.name.is_none()
         {
@@ -326,25 +318,25 @@ impl App {
         }
         if workspace.tabs.is_empty() {
             let accounts = self.start_accounts(start.as_ref());
-            let t = if setup {
-                self.push_setup_tab_in(place, area, None, accounts)?
+            let tab = if setup {
+                self.push_setup_tab_in(at, area, None, accounts)?
             } else {
-                self.push_tab_in(place, area, None, accounts)?
+                self.push_tab_in(at, area, None, accounts)?
             };
-            self.projects[p].workspaces[w].active = t;
-            let term = self.projects[p].workspaces[w].tab().and_then(Tab::pane).map(|t| t.id);
+            self.projects.workspace_mut(at).active = tab.index();
+            let term = self.projects.tab(tab).pane().map(|t| t.id);
             if let (Some(term), Some(start)) = (term, start) {
                 self.agents.launches.add(Launch::new(term, start.spec, Instant::now()));
             }
         }
-        self.projects[p].active = w;
-        self.active = p;
+        self.projects[at.project()].active = at.index();
+        self.active = at.project();
         Ok(())
     }
 
-    pub(super) fn role_owner(&self, p: usize, w: usize) -> Option<String> {
-        let path = &self.projects[p].workspaces[w].path;
-        let project = &self.projects[p];
+    pub(super) fn role_owner(&self, at: WorkspaceAt) -> Option<String> {
+        let path = &self.projects.workspace(at).path;
+        let project = &self.projects[at.project()];
         project.workspaces.iter().filter(|owner| owner.open()).find_map(|owner| {
             let tree = owner.role_worktrees.iter().find(|tree| &tree.path == path)?;
             self.runs.of_workspace(owner.id).is_some().then(|| {
@@ -358,22 +350,22 @@ impl App {
         })
     }
 
-    pub(super) fn ask_removal(&mut self, p: usize, w: usize) {
-        if let Some(refusal) = self.role_owner(p, w) {
+    pub(super) fn ask_removal(&mut self, at: WorkspaceAt) {
+        if let Some(refusal) = self.role_owner(at) {
             self.messages.toast = Some(Toast::new(refusal, ui::ToastIcon::Bug));
             return;
         }
-        let (project, workspace) = (self.projects[p].id, self.projects[p].workspaces[w].id);
-        self.spawn_check(p, w, None);
+        let (project, workspace) = (self.projects[at.project()].id, self.projects.workspace(at).id);
+        self.spawn_check(at, None);
         self.overlay = Some(Overlay::RemoveWorkspace { project, workspace, check: Check::Running, lock: None });
     }
 
-    pub(super) fn spawn_check(&self, p: usize, w: usize, request: Option<u64>) {
-        let project = &self.projects[p];
-        let (id, workspace) = (project.id, project.workspaces[w].id);
-        let path = project.workspaces[w].path.clone();
+    pub(super) fn spawn_check(&self, at: WorkspaceAt, request: Option<u64>) {
+        let target = self.projects.workspace(at);
+        let (id, workspace) = (self.projects[at.project()].id, target.id);
+        let path = target.path.clone();
         let roles: Vec<(String, PathBuf)> =
-            project.workspaces[w].role_worktrees.iter().map(|tree| (tree.role.clone(), tree.path.clone())).collect();
+            target.role_worktrees.iter().map(|tree| (tree.role.clone(), tree.path.clone())).collect();
         let job = Job::new(Level::Info, "worktree", "status").with("workspace", workspace);
         self.spawn_job(
             job,
@@ -424,17 +416,18 @@ impl App {
         options: RemoveOptions,
         request: Option<u64>,
     ) -> bool {
-        let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return false };
-        let target = &mut self.projects[p].workspaces[w];
+        let Some(at) = self.projects.workspace_in(project, workspace) else { return false };
+        let target = self.projects.workspace_mut(at);
         if !target.open() {
             return false;
         }
         target.start_removing();
         target.kill();
         self.panels.changes.forget(workspace);
-        self.projects[p].step_off(w);
-        let (repo, path) = (self.projects[p].path.clone(), self.projects[p].workspaces[w].path.clone());
-        let roles = self.take_role_trees(p, w);
+        let p = at.project();
+        self.projects[p].step_off(at.index());
+        let (repo, path) = (self.projects[p].path.clone(), self.projects.workspace(at).path.clone());
+        let roles = self.take_role_trees(at);
         let script = self.teardown_script(p);
         let branch = git::branch(&path).unwrap_or_default();
         let job = Job::new(Level::Info, "worktree", "remove").with("workspace", workspace).with("path", path.display());
@@ -449,12 +442,12 @@ impl App {
         true
     }
 
-    fn take_role_trees(&mut self, p: usize, w: usize) -> Vec<RoleWorktree> {
-        let trees = self.projects[p].workspaces[w].role_worktrees.clone();
-        let project = &mut self.projects[p];
+    fn take_role_trees(&mut self, at: WorkspaceAt) -> Vec<RoleWorktree> {
+        let trees = self.projects.workspace(at).role_worktrees.clone();
         let mut stopped = Vec::new();
         for tree in &trees {
-            if let Some(row) = project.workspaces.iter_mut().find(|row| row.path == tree.path && row.open()) {
+            if let Some(found) = self.projects.find_workspace(at.project(), |row| row.path == tree.path && row.open()) {
+                let row = self.projects.workspace_mut(found);
                 row.kill();
                 stopped.push(row.id);
             }
@@ -480,12 +473,12 @@ impl App {
     }
 
     pub(super) fn settle_removal(&mut self, project: u64, workspace: u64, removed: bool) -> Option<String> {
-        let (p, w) = self.projects.workspace_in(project, workspace)?;
-        let name = self.projects[p].workspaces[w].label();
+        let at = self.projects.workspace_in(project, workspace)?;
+        let name = self.projects.workspace(at).label();
         if removed {
             self.drop_workspace(project, workspace);
         } else {
-            self.projects[p].workspaces[w].phase = Phase::Open;
+            self.projects.workspace_mut(at).phase = Phase::Open;
         }
         Some(name)
     }
@@ -498,7 +491,7 @@ impl App {
         submit: &'static str,
     ) -> ui::Overlay {
         let found = self.projects.workspace_in(project, workspace);
-        let teardown = found.is_some_and(|(p, _)| self.teardown_script(p).is_some());
+        let teardown = found.is_some_and(|at| self.teardown_script(at.project()).is_some());
         let (message, note) = match lock {
             Some(lock) => (
                 lock_message(&self.found_label(found), lock) + if teardown { " Its teardown runs first." } else { "" },
@@ -516,18 +509,15 @@ impl App {
         ui::Overlay::Confirm(ui::Confirm { title: "Remove workspace", message, note, submit, extra: None })
     }
 
-    fn found_label(&self, found: Option<(usize, usize)>) -> String {
-        found.map(|(p, w)| self.projects[p].workspaces[w].label()).unwrap_or_default()
+    fn found_label(&self, found: Option<WorkspaceAt>) -> String {
+        found.map(|at| self.projects.workspace(at).label()).unwrap_or_default()
     }
 
-    fn remove_question(&self, found: Option<(usize, usize)>, teardown: bool) -> String {
+    fn remove_question(&self, found: Option<WorkspaceAt>, teardown: bool) -> String {
         let label = self.found_label(found);
-        let path = found
-            .map(|(p, w)| crate::text::display_path(&self.projects[p].workspaces[w].path, self.home.as_deref()))
-            .unwrap_or_default();
-        let roles = found.map_or(0, |(p, w)| {
-            self.projects[p].workspaces[w].role_worktrees.iter().filter(|tree| tree.path.is_dir()).count()
-        });
+        let found = found.map(|at| self.projects.workspace(at));
+        let path = found.map(|w| crate::text::display_path(&w.path, self.home.as_deref())).unwrap_or_default();
+        let roles = found.map_or(0, |w| w.role_worktrees.iter().filter(|tree| tree.path.is_dir()).count());
         let kept = if roles == 0 { "The branch is kept." } else { "The branches are kept." };
         let with_roles = if roles == 0 { String::new() } else { format!(", with the worktrees of its {roles} roles") };
         let first = if teardown { "Its teardown runs first. " } else { "" };

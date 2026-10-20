@@ -174,11 +174,7 @@ impl App {
     }
 
     fn ask_todo_agent(&mut self, todo: u64, at: Position) {
-        let panes: Vec<u64> = self
-            .agent_places()
-            .into_iter()
-            .map(|(p, w, t, i)| self.projects[p].workspaces[w].tabs[t].panes[i].id)
-            .collect();
+        let panes: Vec<u64> = self.agent_places().into_iter().map(|place| self.placed(place).id).collect();
         if panes.is_empty() {
             self.messages.toast = Some(Toast::new(NO_AGENT, ui::ToastIcon::Bug));
             return;
@@ -188,14 +184,10 @@ impl App {
     }
 
     fn todo_agent(&self, pane: u64) -> Option<(String, String, String)> {
-        let (p, w, _) = self.projects.tab_of_pane(pane)?;
-        let project = &self.projects[p];
+        let at = self.projects.tab_of_pane(pane)?.workspace();
+        let project = &self.projects[at.project()];
         let term = self.projects.pane_by(pane)?;
-        let place = if project.workspaces.len() > 1 {
-            format!("{} › {}", self.project_label(project), project.workspaces[w].label())
-        } else {
-            self.project_label(project)
-        };
+        let place = if project.workspaces.len() > 1 { self.place_name(at) } else { self.project_label(project) };
         let icon = term.agent.status().map(ui::status_text).unwrap_or_default();
         Some((icon, place, term.agent.agent().unwrap_or_default().to_string()))
     }
@@ -203,15 +195,10 @@ impl App {
     pub(super) fn todo_agent_label(&self, pane: u64) -> String {
         let base = |id: u64| self.todo_agent(id).map(|(icon, place, kind)| format!("{icon} {place} · {kind}"));
         let Some(label) = base(pane) else { return String::new() };
-        let others: Vec<u64> = self
-            .agent_places()
-            .into_iter()
-            .map(|(p, w, t, i)| self.projects[p].workspaces[w].tabs[t].panes[i].id)
-            .filter(|id| *id != pane)
-            .collect();
+        let others: Vec<u64> =
+            self.agent_places().into_iter().map(|place| self.placed(place).id).filter(|id| *id != pane).collect();
         let tabbed = |id: u64| {
-            let (p, w, t) = self.projects.tab_of_pane(id)?;
-            let tab = self.projects[p].workspaces[w].tabs[t].label(&self.config);
+            let tab = self.projects.tab(self.projects.tab_of_pane(id)?).label(&self.config);
             base(id).map(|label| format!("{label} · {tab}"))
         };
         if !others.iter().any(|id| base(*id).as_ref() == Some(&label)) {

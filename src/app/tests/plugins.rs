@@ -140,7 +140,7 @@ mod hooks {
     #[test]
     fn opening_a_tab_runs_the_hook_with_the_event_and_nothing_older() {
         let mut p = plugged(true);
-        p.app.add_tab(0, 0, AREA).expect("new tab");
+        p.app.add_tab(workspace_at(&p.app, 0, 0), AREA).expect("new tab");
         p.app.trace();
         wait_until("both hooks ran", || p.read("events").lines().count() == 2);
         let events: Vec<serde_json::Value> =
@@ -154,7 +154,7 @@ mod hooks {
     #[test]
     fn a_plugin_that_is_off_hears_nothing() {
         let mut p = plugged(false);
-        p.app.add_tab(0, 0, AREA).expect("new tab");
+        p.app.add_tab(workspace_at(&p.app, 0, 0), AREA).expect("new tab");
         p.app.trace();
         assert!(!p.app.following());
     }

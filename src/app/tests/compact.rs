@@ -74,7 +74,7 @@ fn picking_a_project_shows_its_workspaces() {
 #[test]
 fn picking_a_tab_closes_the_menu() {
     let (mut app, _rx, _dirs) = app_with(1);
-    app.add_tab(0, 0, SMALL).expect("add a tab");
+    app.add_tab(workspace_at(&app, 0, 0), SMALL).expect("add a tab");
     open_menu(&mut app);
     let pos = row(&app, WorkspaceRow::Tab(0, 0));
     press(&mut app, pos);
@@ -84,7 +84,7 @@ fn picking_a_tab_closes_the_menu() {
 #[test]
 fn closing_a_tab_keeps_the_menu_open() {
     let (mut app, _rx, _dirs) = app_with(1);
-    app.add_tab(0, 0, SMALL).expect("add a tab");
+    app.add_tab(workspace_at(&app, 0, 0), SMALL).expect("add a tab");
     open_menu(&mut app);
     let r = ui::workspace_row(small().workspaces_list, small().pitch, &app.tab_lines(), 0, WorkspaceRow::Tab(0, 0));
     press(&mut app, ui::row_close_button(r, small().pitch).as_position());
@@ -194,7 +194,7 @@ fn the_question_goes_when_its_tab_exits_by_itself() {
     click_close(&mut app, WorkspaceRow::Tab(1, 0));
     let asked = confirmation(&app).is_some();
 
-    app.close_tab(0, 1, 0);
+    app.close_tab(tab_at(&app, 0, 1, 0));
 
     pump_until(&mut app, &rx, "the question goes", |a| a.overlay.is_none());
     assert!(asked);

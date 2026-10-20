@@ -8,7 +8,7 @@ use crate::agents;
 use crate::agents::launch::{self, Launch, Step, Trust};
 use crate::error::Result;
 use crate::log::{self};
-use crate::project::Hierarchy;
+use crate::project::{Hierarchy, WorkspaceAt};
 use crate::term::Term;
 
 pub(super) const LAUNCH_EVERY: Duration = Duration::from_millis(100);
@@ -108,17 +108,21 @@ impl App {
         }
     }
 
-    pub(super) fn open_tab_with(&mut self, p: usize, w: Option<usize>, start: Start, area: Rect) -> Result<()> {
+    pub(super) fn open_tab_with(
+        &mut self,
+        p: usize,
+        workspace: Option<WorkspaceAt>,
+        start: Start,
+        area: Rect,
+    ) -> Result<()> {
         let active = self.ensure_workspace(p);
-        let w = w.unwrap_or(active).min(self.projects[p].workspaces.len() - 1);
         let accounts = self.start_accounts(Some(&start));
-        let t = self.push_tab_in((p, w), area, None, accounts)?;
-        self.show_tab(p, w, t);
-        if let Some(tab) = self.projects[p].workspaces[w].tab_mut() {
-            tab.name = Some(start.name);
-            if let Some(term) = tab.pane() {
-                self.agents.launches.add(Launch::new(term.id, start.spec, Instant::now()));
-            }
+        let at = self.push_tab_in(workspace.unwrap_or(active), area, None, accounts)?;
+        self.show_tab(at);
+        let tab = self.projects.tab_mut(at);
+        tab.name = Some(start.name);
+        if let Some(term) = tab.pane() {
+            self.agents.launches.add(Launch::new(term.id, start.spec, Instant::now()));
         }
         Ok(())
     }

@@ -27,8 +27,8 @@ impl App {
     }
 
     fn run_state(&self, run: &Run) -> Option<RunState> {
-        let (p, w) = self.projects.workspace_index(run.workspace)?;
-        let workspace = &self.projects[p].workspaces[w];
+        let at = self.projects.workspace_index(run.workspace)?;
+        let workspace = self.projects.workspace(at);
         let roles: Vec<RoleState> = std::iter::once(&run.flow.orchestrator)
             .chain(&run.flow.roles)
             .map(|role| self.run_role(run, workspace, &role.name))
@@ -37,7 +37,7 @@ impl App {
         let progress = &run.progress;
         Some(RunState {
             run: run.id,
-            project: self.projects[p].id,
+            project: self.projects[at.project()].id,
             workspace: run.workspace,
             flow: (&run.flow).into(),
             task: run.task.clone(),
@@ -66,7 +66,7 @@ impl App {
         match self.projects.pane_by(pane) {
             Some(term) => {
                 state.status = term.agent.status().map(|status| status.name().to_string());
-                state.tab = self.projects.tab_of_pane(pane).map(|(p, w, t)| self.projects[p].workspaces[w].tabs[t].id);
+                state.tab = self.projects.tab_of_pane(pane).map(|at| self.projects.tab(at).id);
             }
             None => state.closed = true,
         }
@@ -77,10 +77,9 @@ impl App {
         if let Some(id) = workspace {
             return self.projects.workspace_index(id).map(|_| id).ok_or_else(|| none("workspace", id));
         }
-        let here = self.here(caller);
-        here.project
-            .zip(here.workspace)
-            .map(|(p, w)| self.projects[p].workspaces[w].id)
+        self.here(caller)
+            .workspace
+            .map(|at| self.projects.workspace(at).id)
             .ok_or_else(|| conflict("no workspace is open here; pass --workspace ID or --worktree BRANCH"))
     }
 
@@ -147,8 +146,8 @@ impl App {
         files: &control::FlowFiles,
     ) -> Handled {
         let workspace = self.flow_workspace(caller, files.workspace)?;
-        let (p, w) = self.projects.workspace_index(workspace).ok_or_else(|| none("workspace", workspace))?;
-        let Some(dir) = self.workspace_run_dir(&self.projects[p].workspaces[w]) else {
+        let found = self.projects.workspace_by(workspace).ok_or_else(|| none("workspace", workspace))?;
+        let Some(dir) = self.workspace_run_dir(found) else {
             return Err(conflict(format!("workspace {workspace} has no run folder: it never ran a flow")));
         };
         let run = self.run_of(workspace).map(|run| run.id);

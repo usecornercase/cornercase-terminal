@@ -92,7 +92,7 @@ fn switching_to_system_changes_new_tabs_only() {
     let old = setup.pane(0).id;
 
     setup.app.config.profile = String::new();
-    let t = setup.app.push_tab(0, 0, AREA, None).expect("a new tab");
+    let t = setup.app.push_tab(workspace_at(&setup.app, 0, 0), AREA, None).expect("a new tab").index();
     let new = setup.pane(t).id;
 
     let (old_env, new_env) = (setup.env_of(old), setup.env_of(new));

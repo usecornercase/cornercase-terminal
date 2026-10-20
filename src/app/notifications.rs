@@ -126,10 +126,8 @@ impl App {
         if let Some(pane) = self.notice_pane(&notice) {
             return Some(Ok((notice.project, Item::Pane(pane))));
         }
-        let open = self
-            .projects
-            .workspace_in(notice.project, notice.workspace)
-            .is_some_and(|(p, w)| !self.projects[p].closing && self.projects[p].workspaces[w].open());
+        let open =
+            self.projects.workspace_in(notice.project, notice.workspace).is_some_and(|at| self.workspace_open(at));
         Some(if open {
             Ok((notice.project, Item::Workspace(notice.workspace)))
         } else {
@@ -158,14 +156,8 @@ impl App {
     }
 
     fn notice_pane(&self, notice: &Notice) -> Option<u64> {
-        let (p, w) = self.projects.workspace_in(notice.project, notice.workspace)?;
-        let project = &self.projects[p];
-        let workspace = &project.workspaces[w];
-        if project.closing || !workspace.open() {
-            return None;
-        }
-        let kept: Vec<_> =
-            workspace.tabs.iter().flat_map(|tab| &tab.panes).filter(|term| notice.panes.contains(&term.id)).collect();
+        let at = self.projects.workspace_in(notice.project, notice.workspace).filter(|&at| self.workspace_open(at))?;
+        let kept: Vec<_> = self.projects.workspace(at).terms().filter(|term| notice.panes.contains(&term.id)).collect();
         kept.iter().find(|term| term.agent.status().is_some_and(Status::needs_you)).or(kept.first()).map(|term| term.id)
     }
 
@@ -177,8 +169,8 @@ impl App {
         }
         let Some(token) = window.missed.take() else { return };
         let Some(notice) = self.messages.notices.find(&token).cloned() else { return };
-        let needs = self.projects.workspace_in(notice.project, notice.workspace).is_some_and(|(p, w)| {
-            let tabs = &self.projects[p].workspaces[w].tabs;
+        let needs = self.projects.workspace_in(notice.project, notice.workspace).is_some_and(|at| {
+            let tabs = &self.projects.workspace(at).tabs;
             let terms = || tabs.iter().flat_map(|tab| &tab.panes).filter(|term| notice.panes.contains(&term.id));
             let seen = self.seen_tabs();
             let shown = seen.iter().any(|id| {

@@ -14,7 +14,7 @@ use crate::git;
 use crate::git::worktree::setup;
 use crate::host::notify::Notification;
 use crate::log;
-use crate::project::{Hierarchy, Project};
+use crate::project::{Hierarchy, Project, TabAt, Workspace, WorkspaceAt};
 use crate::term::Term;
 use crate::ui;
 
@@ -84,46 +84,43 @@ impl App {
         Ok(term)
     }
 
-    pub(super) fn push_setup_tab(&mut self, p: usize, w: usize, area: Rect, name: Option<String>) -> Result<usize> {
+    pub(super) fn push_setup_tab(&mut self, at: WorkspaceAt, area: Rect, name: Option<String>) -> Result<TabAt> {
         let accounts = self.active_accounts();
-        self.push_setup_tab_in((p, w), area, name, accounts)
+        self.push_setup_tab_in(at, area, name, accounts)
     }
 
     pub(super) fn push_setup_tab_in(
         &mut self,
-        place: (usize, usize),
+        at: WorkspaceAt,
         area: Rect,
         name: Option<String>,
         accounts: Accounts,
-    ) -> Result<usize> {
-        let (p, w) = place;
-        self.projects[p].workspaces[w].clear_failed_setups();
-        let Some(script) = self.setup_script(p) else { return self.push_tab_in(place, area, name, accounts) };
-        let path = self.projects[p].workspaces[w].path.clone();
-        let workspace = self.projects[p].workspaces[w].id;
+    ) -> Result<TabAt> {
+        self.projects.workspace_mut(at).clear_failed_setups();
+        let p = at.project();
+        let Some(script) = self.setup_script(p) else { return self.push_tab_in(at, area, name, accounts) };
+        let target = self.projects.workspace(at);
+        let (path, workspace) = (target.path.clone(), target.id);
         let setup = SetupRun { project: p, workspace, path, script: &script, run: None };
         let term = self.spawn_setup(area, setup, accounts)?;
-        Ok(self.insert_tab(place, name, term))
+        Ok(self.insert_tab(at, name, term))
     }
 
     pub(super) fn setup_action(&self, project: u64, workspace: u64) -> Option<super::menus::MenuAction> {
-        let (p, w) = self.projects.workspace_in(project, workspace)?;
-        let target = &self.projects[p].workspaces[w];
-        let offered = target.worktree && target.open() && !target.setting_up() && self.setup_script(p).is_some();
+        let at = self.projects.workspace_in(project, workspace)?;
+        let target = self.projects.workspace(at);
+        let offered =
+            target.worktree && target.open() && !target.setting_up() && self.setup_script(at.project()).is_some();
         offered.then_some(super::menus::MenuAction::RunSetup(workspace))
     }
 
     pub(super) fn run_setup(&mut self, workspace: u64, area: Rect) {
-        let Some((p, w)) = self.projects.workspace_index(workspace) else { return };
-        if self.setup_script(p).is_none() || self.projects[p].workspaces[w].setting_up() {
+        let Some(at) = self.projects.workspace_index(workspace) else { return };
+        if self.setup_script(at.project()).is_none() || self.projects.workspace(at).setting_up() {
             return;
         }
-        match self.push_setup_tab(p, w, area, None) {
-            Ok(t) => {
-                self.projects[p].workspaces[w].active = t;
-                self.projects[p].active = w;
-                self.active = p;
-            }
+        match self.push_setup_tab(at, area, None) {
+            Ok(tab) => self.show_tab(tab),
             Err(e) => self.messages.toast = Some(Toast::new(e.to_string(), ui::ToastIcon::Bug)),
         }
     }
@@ -134,15 +131,11 @@ impl App {
     }
 
     pub(super) fn workspace_setting_up(&self, workspace: u64) -> bool {
-        self.projects.iter().flat_map(|p| &p.workspaces).any(|w| w.id == workspace && w.setting_up())
+        self.projects.workspace_by(workspace).is_some_and(Workspace::setting_up)
     }
 
     pub(super) fn setup_failure(&self, pane: u64) -> Option<String> {
-        let workspace = self
-            .projects
-            .iter()
-            .flat_map(|p| &p.workspaces)
-            .find(|w| w.tabs.iter().any(|t| t.index_of(pane).is_some()))?;
+        let workspace = self.projects.workspace(self.projects.tab_of_pane(pane)?.workspace());
         let (at, state) = workspace.setup()?;
         let setup::Pane::Failed { code, blame: true, .. } = state else { return None };
         Some(format!(
@@ -176,9 +169,9 @@ impl App {
         let (dropped, ended) = self.drop_workspace_launches(workspace, Some(pane), "setup closed");
         log::info!("worktree", "setup pane closed", pane = pane, dropped = dropped);
         if dropped + ended > 0
-            && let Some(place) = self.workspace_place(workspace)
+            && let Some(at) = self.projects.workspace_index(workspace)
         {
-            let message = format!("setup was closed in {place}: its agent did not start");
+            let message = format!("setup was closed in {}: its agent did not start", self.place_name(at));
             self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Agent(Status::Failed)));
         }
     }
@@ -198,11 +191,9 @@ impl App {
     }
 
     fn pane_tab(&self, pane: u64) -> Option<(u64, u64, u64)> {
-        self.projects.iter().find_map(|p| {
-            p.workspaces
-                .iter()
-                .find_map(|w| w.tabs.iter().find(|t| t.index_of(pane).is_some()).map(|t| (p.id, w.id, t.id)))
-        })
+        let at = self.projects.tab_of_pane(pane)?;
+        let workspace = self.projects.workspace(at.workspace());
+        Some((self.projects[at.project()].id, workspace.id, self.projects.tab(at).id))
     }
 
     fn setup_finished(&mut self, pane: u64, code: i32, now: Instant) {
@@ -225,8 +216,8 @@ impl App {
 
     fn setup_succeeded(&mut self, pane: u64, (project, workspace): (u64, u64), ms: u64, now: Instant) {
         log::info!("worktree", "setup finished", pane = pane, status = 0, ms = ms);
-        if let Some((p, w)) = self.projects.workspace_in(project, workspace) {
-            self.projects[p].workspaces[w].clear_failed_setups();
+        if let Some(at) = self.projects.workspace_in(project, workspace) {
+            self.projects.workspace_mut(at).clear_failed_setups();
         }
         let panes = self.workspace_panes(workspace);
         self.agents.launches.wait_from(&panes, now);
@@ -237,8 +228,8 @@ impl App {
             term.setup = Some(setup::Pane::Failed { code: failed, unseen, blame: true });
         }
         let (dropped, ended) = self.drop_workspace_launches(workspace, None, "setup failed");
-        let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return };
-        let place = format!("{} › {}", self.project_label(&self.projects[p]), self.projects[p].workspaces[w].label());
+        let Some(at) = self.projects.workspace_in(project, workspace) else { return };
+        let place = self.place_name(at);
         let tail = if dropped == 0 && ended == 0 { "" } else { ": its agent did not start" };
         let message = format!("setup failed in {place}{tail}");
         if unseen {
@@ -248,15 +239,8 @@ impl App {
         self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Agent(Status::Failed)));
     }
 
-    fn workspace_place(&self, workspace: u64) -> Option<String> {
-        let project = self.projects.iter().find(|p| p.workspaces.iter().any(|w| w.id == workspace))?;
-        let found = project.workspaces.iter().find(|w| w.id == workspace)?;
-        Some(format!("{} › {}", self.project_label(project), found.label()))
-    }
-
     fn workspace_panes(&self, workspace: u64) -> Vec<u64> {
-        let found = self.projects.iter().flat_map(|p| &p.workspaces).find(|w| w.id == workspace);
-        found.into_iter().flat_map(|w| w.tabs.iter().flat_map(|t| t.panes.iter().map(|term| term.id))).collect()
+        self.projects.workspace_by(workspace).into_iter().flat_map(Workspace::terms).map(|term| term.id).collect()
     }
 }
 

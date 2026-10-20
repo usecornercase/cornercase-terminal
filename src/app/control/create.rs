@@ -13,8 +13,8 @@ use crate::control::contract::Refusal;
 use crate::control::{self, Done, Ids, Item};
 use crate::error;
 use crate::git;
-use crate::project::Hierarchy;
 use crate::project::split::Dir;
+use crate::project::{Hierarchy, WorkspaceAt};
 
 pub(super) struct Within {
     pub(super) timeout: Option<(Instant, f64)>,
@@ -23,7 +23,7 @@ pub(super) struct Within {
 }
 
 enum Place {
-    Open(usize, usize),
+    Open(WorkspaceAt),
     Create(usize, String),
 }
 
@@ -90,9 +90,8 @@ impl App {
         }
         let path = self.projects[p].path.clone();
         let workspace = self.new_workspace(area, path, Some(name), false).map_err(|e| e.to_string())?;
-        self.projects[p].workspaces.push(workspace);
-        let w = self.projects[p].workspaces.len() - 1;
-        let ids = self.ids(p, Some(w), Some(0));
+        let at = self.projects.push_workspace(p, workspace);
+        let ids = self.ids(p, Some(at), self.projects.tab_at(p, at.index(), 0));
         let projection = self.show_if(asker.view, new.focus, Item::Tab(ids.tab.unwrap_or_default()))?;
         Ok(Some(json(&Done { ids, projection, ..Done::default() })))
     }
@@ -100,13 +99,13 @@ impl App {
     pub(super) fn new_tab_request(&mut self, asked: Asked, new: control::NewTab) -> Handled {
         let Asked { client, asker, area, now } = asked;
         let area = sized(area)?;
-        let (p, w) = match new.workspace {
+        let at = match new.workspace {
             Some(id) => self.usable_workspace(id)?,
             None => self.here_workspace(asker)?,
         };
         let accounts = self.requested_accounts_from(asker.caller, new.profile.as_deref(), &new.accounts)?;
-        let t = self.push_tab_in((p, w), area, name_of(new.name), accounts).map_err(|e| e.to_string())?;
-        let ids = self.ids(p, Some(w), Some(t));
+        let tab = self.push_tab_in(at, area, name_of(new.name), accounts).map_err(|e| e.to_string())?;
+        let ids = self.ids_of_tab(tab);
         let pane = ids.pane.unwrap_or_default();
         self.adopt(pane, asker.caller);
         let projection = self.show_if(asker.view, new.focus, Item::Pane(pane))?;
@@ -120,18 +119,15 @@ impl App {
         let Asked { client, asker, area, now } = asked;
         let area = sized(area)?;
         let pane = self.target(asker, split.pane, None)?;
-        let (p, w, t) = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
+        let at = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
         let (dir, way) = if split.down { (Dir::Down, "down") } else { (Dir::Right, "right") };
-        if !self.projects[p].workspaces[w].tabs[t].can_split(
-            self.tab_area(self.projects[p].workspaces[w].tabs[t].id, area),
-            pane,
-            dir,
-        ) {
+        let tab = self.projects.tab(at);
+        if !tab.can_split(self.tab_area(tab.id, area), pane, dir) {
             return Err(format!("pane {pane} is too small to split {way}").into());
         }
         let new =
             self.split_pane(pane, dir, area, false).map_err(|e| e.to_string())?.ok_or_else(|| none("pane", pane))?;
-        let ids = Ids { pane: Some(new), ..self.ids(p, Some(w), Some(t)) };
+        let ids = Ids { pane: Some(new), ..self.ids_of_tab(at) };
         self.adopt(new, asker.caller);
         let projection = self.show_if(asker.view, split.focus, Item::Pane(new))?;
         let launch = split.command.map(|command| Launch::command(new, command, now));
@@ -169,8 +165,8 @@ impl App {
         let wait = start.wait.then(|| Condition::of(start.until.clone())).transpose()?;
         let spec = self.start_spec(client, asker, start)?;
         let name = name_of(start.name.clone());
-        let (p, w) = match self.start_place(asker, start, named.as_deref())? {
-            Place::Open(p, w) => (p, w),
+        let at = match self.start_place(asker, start, named.as_deref())? {
+            Place::Open(at) => at,
             Place::Create(p, branch) => {
                 let (focus, view, parent) = (start.focus, asker.view, asker.caller);
                 let then = Then { start: Some((spec, name)), wait, focus, view, parent, named, accounts };
@@ -178,8 +174,8 @@ impl App {
                 return Ok(None);
             }
         };
-        let t = self.push_tab_in((p, w), area, name, accounts).map_err(|e| e.to_string())?;
-        let ids = self.ids(p, Some(w), Some(t));
+        let tab = self.push_tab_in(at, area, name, accounts).map_err(|e| e.to_string())?;
+        let ids = self.ids_of_tab(tab);
         let pane = ids.pane.unwrap_or_default();
         self.adopt(pane, asker.caller);
         let projection = self.show_if(asker.view, start.focus, Item::Pane(pane))?;
@@ -201,38 +197,34 @@ impl App {
 
     fn start_place(&mut self, asker: Asker, start: &control::Start, named: Option<&str>) -> Result<Place, Refusal> {
         if let Some(id) = start.workspace {
-            return self.usable_workspace(id).map(|(p, w)| Place::Open(p, w));
+            return self.usable_workspace(id).map(Place::Open);
         }
         if let Some(branch) = start.worktree.as_deref().map(str::trim).filter(|b| !b.is_empty()) {
             let p = self.project_of(asker, start.project)?;
             let open = self.workspace_on(p, branch).and_then(|id| self.projects.workspace_index(id));
-            if let (Some((p, w)), Some(name)) = (open, named) {
-                self.name_workspace(p, w, name);
+            if let (Some(at), Some(name)) = (open, named) {
+                self.name_workspace(at, name);
             }
-            return Ok(open.map_or_else(|| Place::Create(p, branch.to_string()), |(p, w)| Place::Open(p, w)));
+            return Ok(open.map_or_else(|| Place::Create(p, branch.to_string()), Place::Open));
         }
         if let Some(project) = start.project {
-            return self.root_workspace(project).map(|(p, w)| Place::Open(p, w));
+            return self.root_workspace(project).map(Place::Open);
         }
-        let (p, w) = self.here_workspace(asker)?;
-        Ok(Place::Open(p, w))
+        Ok(Place::Open(self.here_workspace(asker)?))
     }
 
-    fn root_workspace(&mut self, project: u64) -> Result<(usize, usize), Refusal> {
+    fn root_workspace(&mut self, project: u64) -> Result<WorkspaceAt, Refusal> {
         let p = self.projects.project_index(project).ok_or_else(|| none("project", project))?;
-        let root = |workspace: &crate::project::Workspace| workspace.open() && workspace.path == self.projects[p].path;
-        let found = self.projects[p].workspaces.iter().position(root);
-        let w = found.unwrap_or_else(|| {
-            let id = self.take_id();
-            let path = self.projects[p].path.clone();
-            self.projects[p].workspaces.push(crate::project::Workspace::new(id, path, None, false));
-            self.projects[p].workspaces.len() - 1
-        });
-        Ok((p, w))
+        let path = self.projects[p].path.clone();
+        if let Some(at) = self.projects.find_workspace(p, |workspace| workspace.open() && workspace.path == path) {
+            return Ok(at);
+        }
+        let id = self.take_id();
+        Ok(self.projects.push_workspace(p, crate::project::Workspace::new(id, path, None, false)))
     }
 
-    fn name_workspace(&mut self, p: usize, w: usize, name: &str) {
-        let workspace = &mut self.projects[p].workspaces[w];
+    fn name_workspace(&mut self, at: WorkspaceAt, name: &str) {
+        let workspace = self.projects.workspace_mut(at);
         if workspace.name.is_none() {
             workspace.name = Some(name.to_string());
         }
@@ -303,36 +295,36 @@ impl App {
         }
     }
 
-    fn worktree_place(&mut self, project: u64, result: error::Result<PathBuf>) -> Result<(usize, usize), String> {
+    fn worktree_place(&mut self, project: u64, result: error::Result<PathBuf>) -> Result<WorkspaceAt, String> {
         let path = result.map_err(|e| e.to_string())?;
         let path = path.canonicalize().unwrap_or(path);
         let p = self.projects.project_index(project).ok_or_else(|| format!("project {project} closed"))?;
-        Ok((p, self.worktree_workspace(p, path)))
+        Ok(self.worktree_workspace(p, path))
     }
 
     fn open_worktree(
         &mut self,
-        (p, w): (usize, usize),
+        at: WorkspaceAt,
         then: Then,
         area: Rect,
         pending: &mut Pending,
     ) -> Result<bool, String> {
         if let Some(name) = &then.named {
-            self.name_workspace(p, w, name);
+            self.name_workspace(at, name);
         }
         let launch = match then.start {
             Some((spec, name)) => {
-                let t = self.push_setup_tab_in((p, w), area, name, then.accounts.clone()).map_err(|e| e.to_string())?;
-                Some((spec, t))
+                let tab = self.push_setup_tab_in(at, area, name, then.accounts.clone()).map_err(|e| e.to_string())?;
+                Some((spec, tab))
             }
-            None if self.projects[p].workspaces[w].tabs.is_empty() => {
-                self.push_setup_tab_in((p, w), area, None, then.accounts.clone()).map_err(|e| e.to_string())?;
+            None if self.projects.workspace(at).tabs.is_empty() => {
+                self.push_setup_tab_in(at, area, None, then.accounts.clone()).map_err(|e| e.to_string())?;
                 None
             }
             None => None,
         };
-        let t = launch.as_ref().map_or(self.projects[p].workspaces[w].active, |(_, t)| *t);
-        pending.done.ids = self.ids(p, Some(w), Some(t));
+        let tab = launch.as_ref().map_or_else(|| self.projects.active_tab(at), |(_, tab)| Some(*tab));
+        pending.done.ids = self.ids(at.project(), Some(at), tab);
         let pane = pending.done.ids.pane.unwrap_or_default();
         if launch.is_some() {
             self.adopt(pane, then.parent);
@@ -341,14 +333,14 @@ impl App {
             pending.done.projection = self.focus_in_view(then.view, pane)?;
         }
         let Some((spec, _)) = launch else {
-            return Ok(self.settle_worktree(p, w, pending));
+            return Ok(self.settle_worktree(at, pending));
         };
         self.launch_in_worktree(spec, pane, then.wait, pending);
         Ok(true)
     }
 
-    fn settle_worktree(&self, p: usize, w: usize, pending: &mut Pending) -> bool {
-        let workspace = &self.projects[p].workspaces[w];
+    fn settle_worktree(&self, at: WorkspaceAt, pending: &mut Pending) -> bool {
+        let workspace = self.projects.workspace(at);
         if workspace.setting_up() {
             pending.stage = Stage::Setup(workspace.id);
         }

@@ -43,7 +43,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 - **Small functions**: `clippy.toml` limits a function to 40 lines, 5 arguments (`self` counts), two levels of nesting inside a method (`excessive-nesting-threshold = 4`) and a cognitive complexity of 10 (`cognitive_complexity`, turned on in `Cargo.toml`). Split the function; never silence these four (`design/code-layout.md`).
 - Imports in three groups: `std`, external crates, then `super`/`crate`.
 - `rustfmt.toml`: `max_width = 120`.
-- **Where code goes** (the reasons are in `design/code-layout.md`): by domain; `impl App` only in `app.rs` and under `src/app/`; only `app` and `server` use `crate::app`, and only `ui`, `app`, `server` and `client` use `crate::ui`; the tests of `foo.rs` in `foo/tests.rs`; at most 1,000 lines per file. `tests/layers.rs` checks the imports and the sizes, and its lists of exceptions only shrink.
+- **Where code goes** (the reasons are in `design/code-layout.md`): by domain; `impl App` only in `app.rs` and under `src/app/`; only `app` and `server` use `crate::app`, and only `ui`, `app`, `server` and `client` use `crate::ui`; the tests of `foo.rs` in `foo/tests.rs`; at most 1,000 lines per file. `app/` reaches workspaces and tabs through `Hierarchy`'s places, never `.workspaces[…]` or `.tabs[…]`. `tests/layers.rs` checks the imports, the sizes and the indexing, and its lists of exceptions only shrink.
 - **`pub` only for what `src/main.rs` or the e2e tests use**; everything else is `pub(crate)` or narrower. `unreachable_pub` (in `Cargo.toml`) enforces it, so `dead_code` reports what nothing uses: delete it, or put it under `#[cfg(test)]` when only tests use it.
 
 ## Interaction

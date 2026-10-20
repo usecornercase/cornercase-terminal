@@ -29,14 +29,22 @@ fn hierarchy() -> Vec<Project> {
     vec![first, second]
 }
 
+fn workspace_at(project: usize, workspace: usize) -> WorkspaceAt {
+    WorkspaceAt { project, workspace }
+}
+
+fn tab_at(project: usize, workspace: usize, tab: usize) -> TabAt {
+    TabAt { workspace: workspace_at(project, workspace), tab }
+}
+
 mod lookups {
     use super::*;
 
     #[test]
     fn find_children_in_later_projects_workspaces_and_tabs() {
         let projects = hierarchy();
-        for (project, workspace, tab, pane, position) in [(10, 14, 17, 19, (0, 1, 1)), (20, 21, 22, 23, (1, 0, 0))] {
-            let (p, w, t) = position;
+        for (project, workspace, tab, pane, (p, w, t)) in [(10, 14, 17, 19, (0, 1, 1)), (20, 21, 22, 23, (1, 0, 0))] {
+            let (place, position) = (workspace_at(p, w), tab_at(p, w, t));
             assert_eq!(
                 (
                     projects.project_index(project),
@@ -46,7 +54,7 @@ mod lookups {
                     projects.tab_in(project, workspace, tab),
                     projects.tab_of_pane(pane),
                 ),
-                (Some(p), Some((p, w)), Some((p, w)), Some(position), Some(position), Some(position))
+                (Some(p), Some(place), Some(place), Some(position), Some(position), Some(position))
             );
             let (path, found) = projects.tab_with_pane(pane).expect("tab and workspace folder");
             assert_eq!(
@@ -142,7 +150,13 @@ mod lookups {
                     projects.tab_in(id, workspace, tab),
                     projects.tab_of_pane(pane),
                 ),
-                (Some((p, w)), Some((p, w)), Some((p, w, t)), Some((p, w, t)), Some((p, w, t)))
+                (
+                    Some(workspace_at(p, w)),
+                    Some(workspace_at(p, w)),
+                    Some(tab_at(p, w, t)),
+                    Some(tab_at(p, w, t)),
+                    Some(tab_at(p, w, t))
+                )
             );
             assert_eq!(
                 (
@@ -169,6 +183,86 @@ mod lookups {
         assert!(text(projects.pane_by_mut(23).expect("same pane")).contains("second project"));
         assert_eq!(projects[1].workspaces[0].tabs[0].name.as_deref(), Some("renamed"));
         assert!(!text(projects.pane_by_mut(18).expect("other split pane")).contains("later pane"));
+    }
+}
+
+mod places {
+    use super::*;
+
+    #[test]
+    fn name_their_project_workspace_and_tab() {
+        let place = tab_at(0, 1, 1);
+        assert_eq!(
+            (place.project(), place.workspace(), place.workspace().project(), place.workspace().index(), place.index()),
+            (0, workspace_at(0, 1), 0, 1, 1)
+        );
+    }
+
+    #[test]
+    fn reach_the_workspace_and_tab_they_name() {
+        let mut projects = hierarchy();
+        let (place, tab) = (workspace_at(0, 1), tab_at(1, 0, 0));
+        assert_eq!((projects.workspace(place).id, projects.tab(tab).id), (14, 22));
+        projects.workspace_mut(place).name = Some("later".into());
+        projects.tab_mut(tab).name = Some("second".into());
+        assert_eq!(projects[0].workspaces[1].name.as_deref(), Some("later"));
+        assert_eq!(projects[1].workspaces[0].tabs[0].name.as_deref(), Some("second"));
+    }
+
+    #[test]
+    fn come_from_positions_only_when_something_is_there() {
+        let projects = hierarchy();
+        assert_eq!(
+            [(0, 1), (1, 0), (0, 2), (2, 0)].map(|(p, w)| projects.workspace_at(p, w)),
+            [Some(workspace_at(0, 1)), Some(workspace_at(1, 0)), None, None]
+        );
+        assert_eq!(
+            [(0, 1, 1), (1, 0, 0), (0, 1, 2), (1, 1, 0), (2, 0, 0)].map(|(p, w, t)| projects.tab_at(p, w, t)),
+            [Some(tab_at(0, 1, 1)), Some(tab_at(1, 0, 0)), None, None, None]
+        );
+    }
+
+    #[test]
+    fn follow_the_active_workspace_and_tab() {
+        let mut projects = hierarchy();
+        projects[0].active = 1;
+        projects[0].workspaces[1].active = 1;
+        assert_eq!(projects.active_workspace(0), Some(workspace_at(0, 1)));
+        assert_eq!(projects.active_tab(workspace_at(0, 1)), Some(tab_at(0, 1, 1)));
+        projects[1].active = 5;
+        projects[0].workspaces[0].tabs.clear();
+        assert_eq!(
+            (projects.active_workspace(1), projects.active_workspace(2), projects.active_tab(workspace_at(0, 0))),
+            (None, None, None)
+        );
+    }
+
+    #[test]
+    fn find_workspaces_by_id_or_by_what_they_hold() {
+        let mut projects = hierarchy();
+        assert_eq!(projects.workspace_by(21).map(|w| w.id), Some(21));
+        assert!(projects.workspace_by(22).is_none() && projects.workspace_by_mut(999).is_none());
+        projects.workspace_by_mut(14).expect("later workspace").name = Some("found".into());
+        assert_eq!(projects[0].workspaces[1].name.as_deref(), Some("found"));
+        assert_eq!(projects.find_workspace(0, |w| w.path == Path::new("/first/later")), Some(workspace_at(0, 1)));
+        assert_eq!(projects.find_workspace(1, |w| w.path == Path::new("/first/later")), None);
+        assert_eq!(projects.find_workspace(2, |_| true), None);
+    }
+
+    #[test]
+    fn walk_a_projects_tabs_with_their_places() {
+        let projects = hierarchy();
+        let walked: Vec<_> = projects.project_tabs(0).map(|(at, tab)| (at, tab.id)).collect();
+        assert_eq!(walked, [(tab_at(0, 0, 0), 12), (tab_at(0, 1, 0), 15), (tab_at(0, 1, 1), 17)]);
+    }
+
+    #[test]
+    fn name_what_was_just_pushed() {
+        let mut projects = hierarchy();
+        let place = projects.push_workspace(1, Workspace::new(30, PathBuf::from("/second/new"), None, false));
+        let tab = projects.push_tab(place, Tab::new(31, None, spawn_term(32, &[], None).0));
+        assert_eq!((place, tab), (workspace_at(1, 1), tab_at(1, 1, 0)));
+        assert_eq!((projects.workspace_index(30), projects.tab_of_pane(32)), (Some(place), Some(tab)));
     }
 }
 

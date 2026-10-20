@@ -75,13 +75,12 @@ impl App {
                 return Ok(Spot::Project(id));
             }
             Item::Workspace(id) => {
-                let (p, w) = self.projects.workspace_index(id).ok_or_else(|| none("workspace", id))?;
-                Spot::Workspace(self.projects[p].id, self.projects[p].workspaces[w].id)
+                let at = self.projects.workspace_index(id).ok_or_else(|| none("workspace", id))?;
+                Spot::Workspace(self.projects[at.project()].id, id)
             }
             Item::Tab(id) => {
-                let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
-                let workspace = &self.projects[p].workspaces[w];
-                Spot::Tab(self.projects[p].id, workspace.id, workspace.tabs[t].id)
+                let at = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
+                Spot::Tab(self.projects[at.project()].id, self.projects.workspace(at.workspace()).id, id)
             }
             Item::Pane(id) => {
                 self.projects.tab_of_pane(id).ok_or_else(|| none("pane", id))?;
@@ -91,13 +90,12 @@ impl App {
         let workspace = match spot {
             Spot::Workspace(_, w) | Spot::Tab(_, w, _) => w,
             Spot::Pane(pane) => {
-                let (p, w, _) = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
-                self.projects[p].workspaces[w].id
+                let at = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
+                self.projects.workspace(at.workspace()).id
             }
             Spot::Project(_) => return Ok(spot),
         };
-        let (p, _) = self.usable_workspace(workspace)?;
-        if self.projects[p].closing {
+        if self.projects[self.usable_workspace(workspace)?.project()].closing {
             return Err(format!("workspace {workspace} is closing").into());
         }
         Ok(spot)

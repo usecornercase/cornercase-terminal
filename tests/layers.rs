@@ -10,6 +10,7 @@ const LEAVES: &[&str] =
 const APP_EXCEPTIONS: &[&str] = &[];
 const UI_EXCEPTIONS: &[&str] = &[];
 const LONG_FILES: &[&str] = &[];
+const INDEX_EXCEPTIONS: &[&str] = &[];
 
 struct Source {
     path: PathBuf,
@@ -273,7 +274,9 @@ fn resolve_path(tokens: &[&str], mut cursor: usize, mut path: Vec<String>, used:
     cursor
 }
 
-fn scan_scope(tokens: &[&str], module: &[String], used: &mut BTreeSet<String>) {
+type Visit<'a> = dyn FnMut(&[&str], usize, &[String]) -> usize + 'a;
+
+fn scan_scope(tokens: &[&str], module: &[String], visit: &mut Visit) {
     if module.iter().any(|part| matches!(part.as_str(), "tests" | "test_util")) {
         return;
     }
@@ -285,20 +288,35 @@ fn scan_scope(tokens: &[&str], module: &[String], used: &mut BTreeSet<String>) {
             let mut child = module.to_vec();
             child.push(tokens[cursor + 1].to_owned());
             let end = block_end(tokens, cursor + 2);
-            scan_scope(&tokens[cursor + 3..end - 1], &child, used);
+            scan_scope(&tokens[cursor + 3..end - 1], &child, visit);
             cursor = end;
-        } else if matches!(tokens[cursor], "crate" | "super" | "self") && tokens.get(cursor + 1) == Some(&"::") {
-            cursor = resolve_path(tokens, cursor, module.to_vec(), used);
         } else {
-            cursor += 1;
+            cursor = visit(tokens, cursor, module);
         }
     }
 }
 
 fn used_modules(module: &[String], source: &str) -> BTreeSet<String> {
     let mut used = BTreeSet::new();
-    scan_scope(&code_tokens(source), module, &mut used);
+    scan_scope(&code_tokens(source), module, &mut |tokens, cursor, module| {
+        if matches!(tokens[cursor], "crate" | "super" | "self") && tokens.get(cursor + 1) == Some(&"::") {
+            resolve_path(tokens, cursor, module.to_vec(), &mut used)
+        } else {
+            cursor + 1
+        }
+    });
     used
+}
+
+fn nested_indexes(module: &[String], source: &str) -> usize {
+    let mut found = 0;
+    scan_scope(&code_tokens(source), module, &mut |tokens, cursor, _| {
+        if matches!(tokens[cursor..], [".", "workspaces" | "tabs", "[", ..]) {
+            found += 1;
+        }
+        cursor + 1
+    });
+    found
 }
 
 fn covers_import(exception: &Path, path: &Path) -> bool {
@@ -375,6 +393,32 @@ fn size_failures(sources: &[Source], exceptions: &[&str]) -> Vec<String> {
     failures
 }
 
+fn index_failures(sources: &[Source], exceptions: &[&str]) -> Vec<String> {
+    let in_app = |source: &&Source| source.path.starts_with("src") && source.module.first().is_some_and(|m| m == "app");
+    let mut failures = Vec::new();
+    let mut indexing = Vec::new();
+    for source in sources.iter().filter(in_app) {
+        let found = nested_indexes(&source.module, &source.text);
+        if found > 0 {
+            indexing.push(source.path.as_path());
+        }
+        if found > 0 && !exceptions.iter().any(|exception| source.path == Path::new(exception)) {
+            failures.push(format!(
+                "{} indexes `.workspaces[` or `.tabs[` {found} times in production code. Reach workspaces and tabs through the places Hierarchy's lookups return and its workspace, workspace_mut, tab and tab_mut (see Hierarchy in DESIGN.md). Do not add it to INDEX_EXCEPTIONS: that list only shrinks.",
+                source.path.display()
+            ));
+        }
+    }
+    for exception in exceptions {
+        if !indexing.contains(&Path::new(exception)) {
+            failures.push(format!(
+                "{exception} no longer indexes `.workspaces[` or `.tabs[`, or is gone: remove it from INDEX_EXCEPTIONS in tests/layers.rs."
+            ));
+        }
+    }
+    failures
+}
+
 fn assert_clean(failures: &[String]) {
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
@@ -403,6 +447,11 @@ fn only_ui_app_server_and_client_use_ui() {
 #[test]
 fn no_file_is_over_1000_lines() {
     assert_clean(&size_failures(&sources(), LONG_FILES));
+}
+
+#[test]
+fn app_reaches_workspaces_and_tabs_through_places() {
+    assert_clean(&index_failures(&sources(), INDEX_EXCEPTIONS));
 }
 
 const SCANNER_CASES: &[(&str, &str, &[&str])] = &[
@@ -468,9 +517,32 @@ fn assert_leaves_and_sizes() {
     assert!(size_failures(&[child], &["src/app.rs"])[0].contains("over 1000"));
 }
 
+fn assert_nested_indexes() {
+    for (path, text, found) in [
+        ("src/app/tabs.rs", "fn f(&self) { self.projects[p].workspaces[w].tabs[t].id; }", 2),
+        ("src/app.rs", "let tab = &workspace . tabs [t];", 1),
+        ("src/app/tabs.rs", "let n = ws.tabs.len(); let s = \".tabs[0]\"; // .workspaces[0]\n/* .tabs[1] */", 0),
+        ("src/app/tabs.rs", "#[cfg(test)] mod tests { fn f() { app.projects[0].workspaces[0]; } }", 0),
+        ("src/app/tabs.rs", "#[cfg(test)] fn f() { app.projects[0].workspaces[0]; } fn g() { ws.tabs[1]; }", 1),
+        ("src/app/tests/tabs.rs", "app.projects[0].workspaces[0].tabs[0];", 0),
+        ("src/app/tabs/tests.rs", "app.projects[0].workspaces[0];", 0),
+        ("src/ui/tabs.rs", "project.workspaces[w];", 0),
+    ] {
+        let source = Source::new(PathBuf::from(path), text.to_owned());
+        let failures = index_failures(std::slice::from_ref(&source), &[]);
+        assert_eq!(failures.len(), usize::from(found > 0), "{path}: {text}");
+        assert!(failures.iter().all(|failure| failure.contains(&format!(" {found} times"))), "{path}: {text}");
+    }
+    let clean = Source::new(PathBuf::from("src/app/tabs.rs"), "ws.tabs.first();".to_owned());
+    let indexing = Source::new(PathBuf::from("src/app/tabs.rs"), "ws.tabs[0];".to_owned());
+    assert!(index_failures(&[clean], &["src/app/tabs.rs"])[0].contains("no longer indexes"));
+    assert_eq!(index_failures(&[indexing], &["src/app/tabs.rs"]), Vec::<String>::new());
+}
+
 #[test]
 fn the_scanner_resolves_paths_and_skips_strings_and_tests() {
     assert_scanned_uses();
     assert_module_paths_and_exceptions();
     assert_leaves_and_sizes();
+    assert_nested_indexes();
 }

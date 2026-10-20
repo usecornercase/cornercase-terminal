@@ -161,9 +161,7 @@ impl App {
     }
 
     fn change_workspace_usable(&self, workspace: u64) -> bool {
-        self.projects
-            .workspace_index(workspace)
-            .is_some_and(|(p, w)| !self.projects[p].closing && self.projects[p].workspaces[w].open())
+        self.projects.workspace_index(workspace).is_some_and(|at| self.workspace_open(at))
     }
 
     pub(in crate::app) fn change_content(
@@ -182,8 +180,8 @@ impl App {
     }
 
     fn project_content(&self, content: &mut Content, workspace: Option<u64>, mode: Mode) {
-        let Some((p, w)) = workspace.and_then(|id| self.projects.workspace_index(id)) else { return };
-        let ws = &self.projects[p].workspaces[w];
+        let Some(at) = workspace.and_then(|id| self.projects.workspace_index(id)) else { return };
+        let ws = self.projects.workspace(at);
         match self.panels.changes.model_in(ws.id, mode, ws.base.as_deref()).map(|m| &m.result) {
             None => {}
             Some(Err(e)) => {
@@ -196,7 +194,13 @@ impl App {
                     .then(|| self.panels.changes.label_in(ws.id, mode).or_else(|| ws.base.clone()))
                     .flatten();
                 let viewed = |f: &changes::diff::File| self.panels.changes.viewed(ws.id, f);
-                content.workspaces.push(WorkspaceChanges::of(self.projects[p].id, ws.id, base, diff, viewed));
+                content.workspaces.push(WorkspaceChanges::of(
+                    self.projects[at.project()].id,
+                    ws.id,
+                    base,
+                    diff,
+                    viewed,
+                ));
             }
         }
     }
@@ -222,9 +226,10 @@ impl App {
             let owner = owners[start];
             let len = owners[start..].iter().take_while(|o| **o == owner).count();
             let part = changes::diff::Diff { files: diff.files[start..start + len].to_vec() };
-            if let Some((p, _)) = self.projects.workspace_index(owner) {
+            if let Some(at) = self.projects.workspace_index(owner) {
                 let viewed = |f: &changes::diff::File| self.panels.changes.viewed(owner, f);
-                content.workspaces.push(WorkspaceChanges::of(self.projects[p].id, owner, None, &part, viewed));
+                let project = self.projects[at.project()].id;
+                content.workspaces.push(WorkspaceChanges::of(project, owner, None, &part, viewed));
             }
             start += len;
         }
@@ -277,7 +282,7 @@ impl App {
             removed: diff.removed() as u64,
             mode,
         };
-        let (_, w) = self.projects.workspace_index(workspace).map(|(p, w)| (p, &self.projects[p].workspaces[w]))?;
+        let w = self.projects.workspace_by(workspace)?;
         if target == Some(workspace) {
             let every = self.every_shown();
             let model = if every {

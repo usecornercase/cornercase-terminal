@@ -218,11 +218,11 @@ impl App {
     pub(in crate::app) fn link_request(&mut self, at: &Link) -> Handled {
         let pane = explicit(at.pane, "link")?;
         let cell = at.cell.ok_or_else(|| malformed("`link` needs the cell to look at: pass --cell X,Y"))?;
-        let (p, w, t) = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
+        let place = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
         let home = self.home.clone();
-        let workspace = &mut self.projects[p].workspaces[w];
+        let workspace = self.projects.workspace(place.workspace());
         let (root, id) = (workspace.path.clone(), workspace.id);
-        let term = workspace.tabs[t].pane_by_mut(pane).ok_or_else(|| none("pane", pane))?;
+        let term = self.projects.tab_mut(place).pane_by_mut(pane).ok_or_else(|| none("pane", pane))?;
         let dims = fits(term, pane, at.size)?;
         if let Some(refusal) = outside(pane, cell, dims) {
             return Err(refusal);
@@ -261,8 +261,8 @@ impl App {
                 ratio.ratio
             )));
         }
-        let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
-        let tab = &mut self.projects[p].workspaces[w].tabs[t];
+        let at = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
+        let tab = self.projects.tab_mut(at);
         let moved = tab.layout.set_ratio(&ratio.path, share);
         if !moved {
             return Err(Refusal::new(

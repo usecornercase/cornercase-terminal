@@ -6,7 +6,9 @@ use super::menus::Target;
 use super::overlay::Overlay;
 use crate::log::{self};
 use crate::project::search::Goto;
-use crate::project::{Group, Hierarchy, Phase, Project, Tab, Workspace, group, move_before, shift_active};
+use crate::project::{
+    Group, Hierarchy, Phase, Project, Tab, TabAt, Workspace, WorkspaceAt, group, move_before, shift_active,
+};
 use crate::term::Term;
 
 impl App {
@@ -62,6 +64,23 @@ impl App {
 
     pub(super) fn project_label(&self, project: &Project) -> String {
         project.label(self.home.as_deref())
+    }
+
+    pub(super) fn place_name(&self, at: WorkspaceAt) -> String {
+        format!("{} › {}", self.project_label(&self.projects[at.project()]), self.projects.workspace(at).label())
+    }
+
+    pub(super) fn workspace_open(&self, at: WorkspaceAt) -> bool {
+        !self.projects[at.project()].closing && self.projects.workspace(at).open()
+    }
+
+    pub(super) fn workspace_target(&self, at: WorkspaceAt) -> Target {
+        Target::Workspace(self.projects[at.project()].id, self.projects.workspace(at).id)
+    }
+
+    pub(super) fn tab_target(&self, at: TabAt) -> Target {
+        let workspace = self.projects.workspace(at.workspace());
+        Target::Tab(self.projects[at.project()].id, workspace.id, self.projects.tab(at).id)
     }
 
     pub(super) fn remove(&mut self, id: u64) {
@@ -147,8 +166,8 @@ impl App {
                 }
             }
             Target::Workspace(project, workspace) => {
-                if let Some((p, w)) = self.projects.workspace_in(project, workspace) {
-                    self.projects[p].workspaces[w].collapsed = collapsed;
+                if let Some(at) = self.projects.workspace_in(project, workspace) {
+                    self.projects.workspace_mut(at).collapsed = collapsed;
                 }
             }
             Target::Tab(..) => {}
@@ -159,7 +178,7 @@ impl App {
         let collapsed = match target {
             Target::Project(id) => self.projects.project_index(id).map(|p| self.projects[p].collapsed),
             Target::Workspace(project, workspace) => {
-                self.projects.workspace_in(project, workspace).map(|(p, w)| self.projects[p].workspaces[w].collapsed)
+                self.projects.workspace_in(project, workspace).map(|at| self.projects.workspace(at).collapsed)
             }
             Target::Group(_) | Target::Tab(..) => return self.click_row(target),
         };
@@ -168,8 +187,8 @@ impl App {
         }
     }
 
-    pub(super) fn close_tab(&mut self, p: usize, w: usize, t: usize) {
-        for term in &mut self.projects[p].workspaces[w].tabs[t].panes {
+    pub(super) fn close_tab(&mut self, at: TabAt) {
+        for term in &mut self.projects.tab_mut(at).panes {
             term.kill();
         }
     }
@@ -196,9 +215,9 @@ impl App {
         move_before(&mut project.workspaces, w, before, Some(&mut project.active));
     }
 
-    pub(super) fn move_tab(&mut self, p: usize, w: usize, t: usize, before: usize) {
-        let workspace = &mut self.projects[p].workspaces[w];
-        move_before(&mut workspace.tabs, t, before, Some(&mut workspace.active));
+    pub(super) fn move_tab(&mut self, at: TabAt, before: usize) {
+        let workspace = self.projects.workspace_mut(at.workspace());
+        move_before(&mut workspace.tabs, at.index(), before, Some(&mut workspace.active));
     }
 
     pub(super) fn style_group(&mut self, id: u64, icon: Option<char>, colour: Option<u8>) -> bool {
@@ -212,12 +231,13 @@ impl App {
         true
     }
 
-    pub(super) fn close_workspace(&mut self, p: usize, w: usize) {
-        if self.projects[p].workspaces[w].worktree {
-            self.ask_removal(p, w);
+    pub(super) fn close_workspace(&mut self, at: WorkspaceAt) {
+        let workspace = self.projects.workspace(at);
+        if workspace.worktree {
+            self.ask_removal(at);
             return;
         }
-        self.drop_workspace(self.projects[p].id, self.projects[p].workspaces[w].id);
+        self.drop_workspace(self.projects[at.project()].id, workspace.id);
     }
 
     pub(super) fn goto(&mut self, goto: Goto) {
@@ -238,8 +258,9 @@ impl App {
         let project = &mut self.projects[p];
         if let Some(w) = workspace.and_then(|id| project.index_of(id)) {
             project.active = w;
-            let workspace = &mut project.workspaces[w];
-            if let Some(t) = tab.and_then(|id| workspace.index_of(id)) {
+            if let Some(workspace) = project.workspace_mut()
+                && let Some(t) = tab.and_then(|id| workspace.index_of(id))
+            {
                 workspace.active = t;
             }
         }
@@ -251,11 +272,11 @@ impl App {
             Target::Group(id) => self.group(id).map(|g| g.name.clone()),
             Target::Project(id) => self.projects.project_index(id).map(|p| self.project_label(&self.projects[p])),
             Target::Workspace(project, workspace) => {
-                self.projects.workspace_in(project, workspace).map(|(p, w)| self.projects[p].workspaces[w].label())
+                self.projects.workspace_in(project, workspace).map(|at| self.projects.workspace(at).label())
             }
             Target::Tab(project, workspace, tab) => {
-                let (p, w, t) = self.projects.tab_in(project, workspace, tab)?;
-                Some(self.projects[p].workspaces[w].tabs[t].label(&self.config))
+                let at = self.projects.tab_in(project, workspace, tab)?;
+                Some(self.projects.tab(at).label(&self.config))
             }
         }
     }
@@ -276,13 +297,13 @@ impl App {
                 }
             }
             Target::Workspace(project, workspace) => {
-                if let Some((p, w)) = self.projects.workspace_in(project, workspace) {
-                    self.projects[p].workspaces[w].name = name;
+                if let Some(at) = self.projects.workspace_in(project, workspace) {
+                    self.projects.workspace_mut(at).name = name;
                 }
             }
             Target::Tab(project, workspace, tab) => {
-                if let Some((p, w, t)) = self.projects.tab_in(project, workspace, tab) {
-                    self.projects[p].workspaces[w].tabs[t].name = name;
+                if let Some(at) = self.projects.tab_in(project, workspace, tab) {
+                    self.projects.tab_mut(at).name = name;
                 }
             }
         }
@@ -333,15 +354,15 @@ impl App {
     }
 
     pub(super) fn drop_workspace(&mut self, project: u64, workspace: u64) {
-        let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return };
+        let Some(at) = self.projects.workspace_in(project, workspace) else { return };
         self.panels.changes.forget(workspace);
-        let workspace = &mut self.projects[p].workspaces[w];
+        let workspace = self.projects.workspace_mut(at);
         let dirs = std::mem::take(&mut workspace.run_dirs);
         let id = workspace.id;
         workspace.phase = Phase::Closing;
         workspace.kill();
         if workspace.tabs.is_empty() {
-            self.projects[p].remove_workspace(w);
+            self.projects[at.project()].remove_workspace(at.index());
         }
         self.defer_run_dirs(id, dirs);
     }

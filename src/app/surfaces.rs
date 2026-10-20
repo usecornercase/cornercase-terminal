@@ -195,8 +195,8 @@ impl App {
     }
 
     fn surface_content(&mut self, tab: u64, area: Rect) -> Option<Content> {
-        let (p, w, t) = self.projects.tab_index(tab)?;
-        let tab = &mut self.projects[p].workspaces[w].tabs[t];
+        let at = self.projects.tab_index(tab)?;
+        let tab = self.projects.tab_mut(at);
         let layout = Layout::from(&tab.layout);
         let dividers = tab.layout.dividers(area);
         let active = tab.pane().map(|term| term.id);

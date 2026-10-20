@@ -340,8 +340,7 @@ impl App {
                 }
             }
             Kind::Workspace => {
-                if let Some((p, w)) = self.projects.workspace_index(key.id) {
-                    let workspace = &self.projects[p].workspaces[w];
+                if let Some(workspace) = self.projects.workspace_by(key.id) {
                     fields.push(("path", workspace.path.display().to_string()));
                     fields.push(("label", workspace.label()));
                     fields.push(("worktree", workspace.worktree.to_string()));

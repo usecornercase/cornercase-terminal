@@ -56,7 +56,7 @@ fn a_second_copilot_in_its_folder_keeps_its_own_status_and_model() {
     let folder = app.projects[0].path.clone();
     let (one, other) = (FakeCopilot::new(&folder), FakeCopilot::new(&folder));
     let first = start(&mut app, &rx, &one);
-    app.add_tab(0, 0, AREA).expect("a second tab");
+    app.add_tab(workspace_at(&app, 0, 0), AREA).expect("a second tab");
     let second = start(&mut app, &rx, &other);
     one.started("gpt-4.1");
     other.started("claude-sonnet-4.5");

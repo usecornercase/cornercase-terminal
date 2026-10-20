@@ -53,8 +53,8 @@ fn a_click_on_a_notification_shows_its_pane_in_another_project() {
 #[test]
 fn with_two_panes_behind_one_notification_it_goes_to_the_one_still_waiting() {
     let (mut app, _rx, _dirs) = app_with(1);
-    app.add_tab(0, 0, AREA).expect("add a tab");
-    app.add_tab(0, 0, AREA).expect("add a tab");
+    app.add_tab(workspace_at(&app, 0, 0), AREA).expect("add a tab");
+    app.add_tab(workspace_at(&app, 0, 0), AREA).expect("add a tab");
     let (a, b) = (pane_of(&app, 0, 0), pane_of(&app, 0, 1));
     let now = Instant::now();
     for (pane, activity) in [(a, Activity::Idle), (b, Activity::Waiting)] {
@@ -78,7 +78,7 @@ fn a_closed_pane_falls_back_to_its_workspace_then_to_a_toast() {
     notify_for(&mut w.app, 0, vec![pane]);
     let token = go(&w.app);
     let project = w.app.projects[0].id;
-    w.app.close_tab(0, 0, 0);
+    w.app.close_tab(tab_at(&w.app, 0, 0, 0));
     pump_until(&mut w.app, &w.rx, "the tab is gone", |a| a.projects[0].workspaces[0].tabs.len() == 1);
     let other = TempDir::new();
     w.app.open_project(other.path().to_path_buf(), AREA).expect("open another project");

@@ -40,7 +40,7 @@ fn with_workspaces(names: &[&str]) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
 fn with_tabs(names: &[&str]) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let (mut app, rx, dirs) = app_with(1);
     for _ in 1..names.len() {
-        app.add_tab(0, 0, AREA).expect("add a tab");
+        app.add_tab(workspace_at(&app, 0, 0), AREA).expect("add a tab");
     }
     for (tab, name) in app.projects[0].workspaces[0].tabs.iter_mut().zip(names) {
         tab.name = Some((*name).into());

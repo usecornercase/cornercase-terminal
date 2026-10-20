@@ -17,6 +17,7 @@ use crate::issues;
 use crate::issues::Client;
 use crate::issues::locate::Locator;
 use crate::log::{Job, Level};
+use crate::project::{Hierarchy, WorkspaceAt};
 use crate::queue::{self, Place, State};
 
 impl App {
@@ -137,25 +138,25 @@ impl App {
         self.answer(Some(client), reply.map(|id| json!({ "id": id })));
     }
 
-    fn queue_place(&self, place: &Place) -> Result<(usize, usize), String> {
+    fn queue_place(&self, place: &Place) -> Result<(usize, Option<WorkspaceAt>), String> {
         let p = self
             .projects
             .iter()
             .position(|project| !project.closing && project.path == place.project)
             .ok_or_else(|| format!("the queued project {} is closed", place.project.display()))?;
-        let w = match (&place.workspace, place.workspace_id) {
+        let at = match (&place.workspace, place.workspace_id) {
             (Some(path), Some(id)) if place.server == control::server_token() => {
-                let (found, w) = self.usable_workspace(id)?;
-                if found != p || self.projects[p].workspaces[w].path != *path {
+                let at = self.usable_workspace(id)?;
+                if at.project() != p || self.projects.workspace(at).path != *path {
                     return Err("the queued workspace moved to another folder".into());
                 }
-                w
+                Some(at)
             }
             (Some(path), _) => {
-                let mut matching = self.projects[p].workspaces.iter().enumerate().filter(|(_, workspace)| {
+                let mut matching = self.projects[p].workspaces.iter().filter(|workspace| {
                     workspace.open() && workspace.path == *path && workspace.name == place.workspace_name
                 });
-                let (_, workspace) = matching
+                let workspace = matching
                     .next()
                     .ok_or_else(|| format!("the queued workspace {} is closed or renamed", path.display()))?;
                 let id = workspace.id;
@@ -165,11 +166,11 @@ impl App {
                             .into(),
                     );
                 }
-                self.projects[p].index_of(id).ok_or("the queued workspace is closed")?
+                Some(self.projects.workspace_in(self.projects[p].id, id).ok_or("the queued workspace is closed")?)
             }
-            (None, _) => self.projects[p].active,
+            (None, _) => None,
         };
-        Ok((p, w))
+        Ok((p, at))
     }
 
     pub(in crate::app) fn run_queued(&mut self, id: u64, now: Instant) -> Result<(), String> {
@@ -177,14 +178,14 @@ impl App {
         if matches!(entry.state, State::Starting | State::Started { .. }) || self.panels.queued.starting(id) {
             return Err("this queue entry has already started".into());
         }
-        let (p, w) = self.queue_place(&entry.task.place)?;
+        let (p, at) = self.queue_place(&entry.task.place)?;
         if !agents::installed(&entry.task.program) {
             return Err(format!("{} is not installed", entry.task.agent));
         }
         let start = control::Start {
             agent: Some(entry.task.agent.clone()),
             project: Some(self.projects[p].id),
-            workspace: entry.task.place.workspace.as_ref().map(|_| self.projects[p].workspaces[w].id),
+            workspace: at.map(|at| self.projects.workspace(at).id),
             worktree: entry.task.place.branch.clone(),
             name: Some(entry.task.label.clone()),
             accounts: entry.task.accounts.clone(),

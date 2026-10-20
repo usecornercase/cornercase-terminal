@@ -24,7 +24,7 @@ const EDIT_SCRIPT: &str = "exec ${VISUAL:-${EDITOR:-vi}} \"+$1\" \"$2\"";
 
 impl App {
     pub(super) fn open_in_editor(&mut self, target: &Checkout, path: &str, line: u32, area: Rect) -> Result<()> {
-        let Some((p, w)) = self.projects.workspace_index(target.workspace) else { return Ok(()) };
+        let Some(at) = self.projects.workspace_index(target.workspace) else { return Ok(()) };
         let (rows, cols) = self.pane_size(area);
         let id = self.take_id();
         let file = target.dir.join(path).display().to_string();
@@ -43,8 +43,9 @@ impl App {
         };
         let term = Term::spawn(opts, self.tx.clone())?;
         let tab = Tab::new(self.take_id(), None, term);
-        let place = Goto::Place { project: self.projects[p].id, workspace: Some(target.workspace), tab: Some(tab.id) };
-        let workspace = &mut self.projects[p].workspaces[w];
+        let project = self.projects[at.project()].id;
+        let place = Goto::Place { project, workspace: Some(target.workspace), tab: Some(tab.id) };
+        let workspace = self.projects.workspace_mut(at);
         workspace.tabs.push(tab);
         workspace.active = workspace.tabs.len() - 1;
         self.goto(place);
@@ -52,18 +53,13 @@ impl App {
     }
 
     pub(super) fn ask_agent(&mut self, workspace: u64, text: &str) {
-        let Some((p, w)) = self.projects.workspace_index(workspace) else { return };
-        let ws = &self.projects[p].workspaces[w];
-        let tabs = std::iter::once(ws.active).chain(0..ws.tabs.len()).filter(|&t| t < ws.tabs.len());
-        let found = tabs.into_iter().find_map(|t| {
-            let tab = &ws.tabs[t];
-            let panes = std::iter::once(tab.active).chain(0..tab.panes.len()).filter(|&i| i < tab.panes.len());
-            panes
-                .into_iter()
-                .find(|&i| agents::detect(&self.config, &tab.panes[i].foreground_args()).is_some())
-                .map(|i| (t, tab.panes[i].id))
+        let Some(at) = self.projects.workspace_index(workspace) else { return };
+        let ws = self.projects.workspace(at);
+        let found = ws.tab().into_iter().chain(&ws.tabs).find_map(|tab| {
+            let mut panes = tab.pane().into_iter().chain(&tab.panes);
+            panes.find(|term| agents::detect(&self.config, &term.foreground_args()).is_some()).map(|term| term.id)
         });
-        let Some((t, id)) = found else {
+        let Some(id) = found else {
             self.outbox.copy(text.trim_end());
             self.messages.toast = Some(Toast::new(NO_AGENT, ui::ToastIcon::Check));
             return;
@@ -75,8 +71,7 @@ impl App {
             self.messages.toast = Some(Toast::new(why, ui::ToastIcon::Check));
             return;
         }
-        let tab = &mut self.projects[p].workspaces[w].tabs[t];
-        let sent = tab.pane_by_mut(id).is_some_and(|term| {
+        let sent = self.projects.pane_by_mut(id).is_some_and(|term| {
             term.emulator.scroll_to_bottom();
             term.typed_paste(text);
             term.paste(text)

@@ -17,8 +17,8 @@ struct Family {
 fn family(activity: Activity) -> Family {
     let (mut app, rx, dirs) = app_with(1);
     app.config.agents_section = true;
-    app.push_tab(0, 0, TALL, None).expect("a second tab");
-    app.push_tab(0, 0, TALL, None).expect("a third tab");
+    app.push_tab(workspace_at(&app, 0, 0), TALL, None).expect("a second tab");
+    app.push_tab(workspace_at(&app, 0, 0), TALL, None).expect("a third tab");
     let mut ids = Vec::new();
     for tab in &mut app.projects[0].workspaces[0].tabs {
         let term = tab.pane_mut().expect("a pane");
@@ -33,7 +33,7 @@ fn family(activity: Activity) -> Family {
 }
 
 fn listed(app: &App) -> Vec<u64> {
-    app.agent_places().into_iter().map(|(p, w, t, i)| app.projects[p].workspaces[w].tabs[t].panes[i].id).collect()
+    app.agent_places().into_iter().map(|place| app.placed(place).id).collect()
 }
 
 fn shape(app: &App) -> Vec<(usize, bool, Vec<bool>)> {
@@ -90,7 +90,7 @@ fn a_right_click_on_a_child_offers_marking_its_pane() {
 fn closing_the_parent_puts_the_child_back_in_its_place() {
     let mut f = family(Activity::Idle);
 
-    f.app.close_tab(0, 0, 0);
+    f.app.close_tab(tab_at(&f.app, 0, 0, 0));
     wait_until("the parent's tab closes", || {
         drain(&mut f.app, &f.rx);
         f.app.projects[0].workspaces[0].tabs.len() == 2
@@ -150,7 +150,7 @@ fn a_member_whose_orchestrator_is_not_listed_shows_its_place_and_its_role(#[case
     in_a_run(&mut f);
 
     if close {
-        f.app.close_tab(0, 0, 0);
+        f.app.close_tab(tab_at(&f.app, 0, 0, 0));
         wait_until("the parent's tab closes", || {
             drain(&mut f.app, &f.rx);
             f.app.projects[0].workspaces[0].tabs.len() == 2
@@ -177,7 +177,7 @@ fn a_renamed_tab_does_not_change_the_role() {
 fn an_agent_a_member_starts_keeps_its_line() {
     let mut f = family(Activity::Idle);
     in_a_run(&mut f);
-    f.app.push_tab(0, 0, TALL, None).expect("a fourth tab");
+    f.app.push_tab(workspace_at(&f.app, 0, 0), TALL, None).expect("a fourth tab");
     let term = f.app.projects[0].workspaces[0].tabs[3].pane_mut().expect("a pane");
     term.agent.follow(Some(agents::Known::Claude.name()));
     term.agent.update(Some(Activity::Idle), true, Instant::now());
@@ -233,13 +233,7 @@ mod folds {
 
     fn shown_ids(app: &App) -> Vec<u64> {
         let (places, nodes) = app.shown_agents(false);
-        nodes
-            .into_iter()
-            .map(|node| {
-                let (p, w, t, i) = places[node.index];
-                app.projects[p].workspaces[w].tabs[t].panes[i].id
-            })
-            .collect()
+        nodes.into_iter().map(|node| app.placed(places[node.index]).id).collect()
     }
 
     fn row_at(app: &App, i: usize, on_arrow: bool) -> Position {
@@ -255,7 +249,7 @@ mod folds {
     }
 
     fn fourth(f: &mut Family, parent: u64, activity: Activity) -> u64 {
-        f.app.push_tab(0, 0, TALL, None).expect("a fourth tab");
+        f.app.push_tab(workspace_at(&f.app, 0, 0), TALL, None).expect("a fourth tab");
         let term = f.app.projects[0].workspaces[0].tabs.last_mut().and_then(Tab::pane_mut).expect("a pane");
         term.agent.follow(Some(agents::Known::Claude.name()));
         term.agent.update(Some(activity), activity != Activity::Waiting, Instant::now());

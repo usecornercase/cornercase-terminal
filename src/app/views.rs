@@ -8,7 +8,7 @@ use crate::control::contract::{Code, Refusal};
 use crate::control::{self, Ids, Item, OpenView, Report, SetView, Snapshot, ViewInfo};
 use crate::log;
 use crate::project::view::{Claim, Shown, controller};
-use crate::project::{Hierarchy, Tab};
+use crate::project::{Hierarchy, Tab, TabAt, WorkspaceAt};
 
 use super::events::Streamed;
 
@@ -128,6 +128,14 @@ impl Views {
 }
 
 impl App {
+    fn shown_workspace(&self, at: WorkspaceAt) -> Shown {
+        Shown::place(&self.projects, at.project(), Some(at.index()), None)
+    }
+
+    fn shown_tab(&self, at: TabAt) -> Shown {
+        Shown::place(&self.projects, at.project(), Some(at.workspace().index()), Some(at.index()))
+    }
+
     fn window_shown(&self) -> Shown {
         let Some(project) = self.project() else { return Shown::default() };
         let workspace = project.workspace();
@@ -139,7 +147,7 @@ impl App {
     }
 
     fn tab_ids(&self, shown: &Shown) -> Ids {
-        let pane = shown.tab.and_then(|id| self.projects.tabs().find(|tab| tab.id == id)).and_then(Tab::pane);
+        let pane = shown.tab.and_then(|id| self.projects.tab_index(id)).and_then(|at| self.projects.tab(at).pane());
         Ids { project: shown.project, workspace: shown.workspace, tab: shown.tab, pane: pane.map(|term| term.id) }
     }
 
@@ -197,11 +205,9 @@ impl App {
 
     fn requested_shown(&mut self, open: &OpenView) -> Result<Shown, Refusal> {
         if let Some(id) = open.tab {
-            let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
-            Ok(Shown::place(&self.projects, p, Some(w), Some(t)))
+            Ok(self.shown_tab(self.projects.tab_index(id).ok_or_else(|| none("tab", id))?))
         } else if let Some(id) = open.workspace {
-            let (p, w) = self.usable_workspace(id)?;
-            Ok(Shown::place(&self.projects, p, Some(w), None))
+            Ok(self.shown_workspace(self.usable_workspace(id)?))
         } else if let Some(id) = open.project {
             let p = self.projects.project_index(id).ok_or_else(|| none("project", id))?;
             Ok(Shown::place(&self.projects, p, None, None))
@@ -283,18 +289,12 @@ impl App {
                 }
                 Shown::place(&self.projects, p, None, None)
             }
-            Item::Workspace(workspace) => {
-                let (p, w) = self.usable_workspace(workspace)?;
-                Shown::place(&self.projects, p, Some(w), None)
-            }
-            Item::Tab(tab) => {
-                let (p, w, t) = self.projects.tab_index(tab).ok_or_else(|| none("tab", tab))?;
-                Shown::place(&self.projects, p, Some(w), Some(t))
-            }
+            Item::Workspace(workspace) => self.shown_workspace(self.usable_workspace(workspace)?),
+            Item::Tab(tab) => self.shown_tab(self.projects.tab_index(tab).ok_or_else(|| none("tab", tab))?),
             Item::Pane(pane) => {
-                let (p, w, t) = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
-                self.projects[p].workspaces[w].tabs[t].focus(pane);
-                Shown::place(&self.projects, p, Some(w), Some(t))
+                let at = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
+                self.projects.tab_mut(at).focus(pane);
+                self.shown_tab(at)
             }
         })
     }

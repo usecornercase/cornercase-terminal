@@ -87,7 +87,7 @@ impl App {
         let mut lost = vec![(row.branch().map(str::to_string), row)];
         let trees = live
             .and_then(|l| self.projects.workspace_in(l.project, l.workspace))
-            .map_or(&[][..], |(p, w)| self.projects[p].workspaces[w].role_worktrees.as_slice());
+            .map_or(&[][..], |at| self.projects.workspace(at).role_worktrees.as_slice());
         for tree in trees {
             let (more, role) = self.role_lines(rows, tree, branches);
             lines.extend(more);

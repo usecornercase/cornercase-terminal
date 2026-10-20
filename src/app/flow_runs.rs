@@ -22,7 +22,7 @@ use crate::host::notify::{self, Notification};
 use crate::log::{self, Job, Level};
 use crate::paths;
 use crate::project::search::Goto;
-use crate::project::{Hierarchy, Phase, Project, Tab};
+use crate::project::{Hierarchy, Phase, Project, Tab, Workspace, WorkspaceAt};
 use crate::state::RunState;
 use crate::term::Term;
 use crate::time;
@@ -170,7 +170,7 @@ fn folder_removed(result: &crate::error::Result<(usize, u64)>, job: &mut Job) ->
 
 fn forget_moved_end(projects: &mut [Project], run: &mut Run) {
     let id = run.workspace;
-    let branch = projects.workspace_index(id).and_then(|(p, w)| git::checked_out(&projects[p].workspaces[w].path));
+    let branch = projects.workspace_by(id).and_then(|w| git::checked_out(&w.path));
     let Some(ended) = run.moved_to(branch.as_deref()) else { return };
     let pane = run.pane_of(flows::ORCHESTRATOR);
     if let Some(term) = pane.and_then(|pane| projects.pane_by_mut(pane)) {
@@ -309,9 +309,10 @@ impl App {
         Ok(())
     }
 
-    fn spawn_run_panes(&mut self, area: Rect, (p, w): (usize, usize), panes: &RunPanes) -> Result<Vec<Term>, String> {
+    fn spawn_run_panes(&mut self, area: Rect, at: WorkspaceAt, panes: &RunPanes) -> Result<Vec<Term>, String> {
         let RunPanes { roles, trees, setup, dir, accounts } = *panes;
-        let (id, path) = (self.projects[p].workspaces[w].id, self.projects[p].workspaces[w].path.clone());
+        let (p, workspace) = (at.project(), self.projects.workspace(at));
+        let (id, path) = (workspace.id, workspace.path.clone());
         let mut terms = Vec::with_capacity(roles.len());
         let script = self.setup_script(p);
         let own = |role: &Role| trees.iter().find(|(tree, _)| tree.role == role.name);
@@ -337,7 +338,7 @@ impl App {
                 Ok(term) => terms.push(term),
                 Err(e) => {
                     let _ = std::fs::remove_dir(dir);
-                    self.projects[p].workspaces[w].run_dirs.retain(|kept| kept != dir);
+                    self.projects.workspace_mut(at).run_dirs.retain(|kept| kept != dir);
                     return Err(e.to_string());
                 }
             }
@@ -345,8 +346,8 @@ impl App {
         Ok(terms)
     }
 
-    fn open_check(&self, p: usize, w: usize) -> Result<u64, String> {
-        let (project, workspace) = (&self.projects[p], &self.projects[p].workspaces[w]);
+    fn open_check(&self, at: WorkspaceAt) -> Result<u64, String> {
+        let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at));
         let id = workspace.id;
         if project.closing {
             return Err(format!("project {} is closing", project.id));
@@ -364,24 +365,23 @@ impl App {
 
     pub(super) fn open_run(
         &mut self,
-        place: (usize, usize),
+        place: WorkspaceAt,
         starting: Starting,
         area: Rect,
         setup: bool,
     ) -> Result<RunInfo, String> {
-        let (p, w) = place;
-        let id = self.open_check(p, w)?;
+        let id = self.open_check(place)?;
         let Starting { flow, task, branch, focus, note, trees, parent, accounts, name } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
         run.id = self.take_id();
-        let project = self.projects[p].id;
+        let project = self.projects[place.project()].id;
         let mut info =
             RunInfo { run: run.id, project, workspace: id, branch, members: Vec::new(), note, run_dir: None };
-        let path = self.projects[p].workspaces[w].path.clone();
+        let path = self.projects.workspace(place).path.clone();
         let dir = folder::make(&self.runs.dir, &path, time::now() * 1000)
             .map_err(|e| format!("could not make the run's folder: {e}"))?;
-        self.projects[p].workspaces[w].run_dirs.push(dir.clone());
+        self.projects.workspace_mut(place).run_dirs.push(dir.clone());
         let panes = RunPanes { roles: &roles, trees: &trees, setup, dir: &dir, accounts: &accounts };
         let terms = self.spawn_run_panes(area, place, &panes)?;
         self.name_flow_workspace(place, name);
@@ -401,8 +401,8 @@ impl App {
         Ok(info)
     }
 
-    fn name_flow_workspace(&mut self, (p, w): (usize, usize), name: Option<String>) {
-        let workspace = &mut self.projects[p].workspaces[w];
+    fn name_flow_workspace(&mut self, at: WorkspaceAt, name: Option<String>) {
+        let workspace = self.projects.workspace_mut(at);
         if workspace.name.is_none() {
             workspace.name = name;
         }
@@ -410,7 +410,7 @@ impl App {
 
     fn seat_members(
         &mut self,
-        (p, w): (usize, usize),
+        at: WorkspaceAt,
         roles: &[Role],
         terms: Vec<Term>,
         seats: &[RoleWorktree],
@@ -429,18 +429,18 @@ impl App {
                 worktree: tree.map(|tree| tree.path.clone()),
                 branch: tree.map(|tree| tree.branch.clone()),
             });
-            self.projects[p].workspaces[w].tabs.push(tab);
+            self.projects.push_tab(at, tab);
         }
         (members, infos)
     }
 
-    fn remember_role_trees(&mut self, (p, w): (usize, usize), seats: &[RoleWorktree]) {
+    fn remember_role_trees(&mut self, at: WorkspaceAt, seats: &[RoleWorktree]) {
         for tree in seats {
-            let remembered = &mut self.projects[p].workspaces[w].role_worktrees;
+            let remembered = &mut self.projects.workspace_mut(at).role_worktrees;
             if !remembered.iter().any(|known| known.path == tree.path) {
                 remembered.push(tree.clone());
             }
-            self.worktree_workspace(p, tree.path.clone());
+            self.worktree_workspace(at.project(), tree.path.clone());
         }
     }
 
@@ -480,9 +480,8 @@ impl App {
     pub(super) fn member_waits(&mut self, pane: u64) {
         let Some((run, role)) = self.runs.seat(pane) else { return };
         let (workspace, role) = (run.workspace, role.to_string());
-        let Some((p, w)) = self.projects.workspace_index(workspace) else { return };
-        let project = &self.projects[p];
-        let place = format!("{} › {}", self.project_label(project), project.workspaces[w].label());
+        let Some(at) = self.projects.workspace_index(workspace) else { return };
+        let place = self.place_name(at);
         let message = notify::clean(&format!(
             "{role} waits for you in {place}: accept or refuse Claude Code's bypass permissions mode in its tab"
         ));
@@ -516,10 +515,7 @@ impl App {
                 .and_then(|pane| projects.pane_by(pane))
                 .is_some_and(|term| term.agent.pending());
             let id = run.workspace;
-            let branch = || {
-                let (p, w) = projects.workspace_index(id)?;
-                git::checked_out(&projects[p].workspaces[w].path)
-            };
+            let branch = || git::checked_out(&projects.workspace_by(id)?.path);
             if run.latch(marked, branch) {
                 log::info!("flow", "end marked", workspace = id, branch = run.ended.as_deref().unwrap_or_default());
             }
@@ -534,7 +530,7 @@ impl App {
 
     pub(super) fn forget_runs(&mut self) {
         let projects = &self.projects;
-        let open = |id: u64| projects.workspace_index(id).is_some_and(|(p, w)| projects[p].workspaces[w].open());
+        let open = |id: u64| projects.workspace_by(id).is_some_and(Workspace::open);
         self.runs.list.retain(|run| {
             let kept = open(run.workspace) && run.members.iter().any(|m| projects.pane_by(m.pane).is_some());
             if !kept {

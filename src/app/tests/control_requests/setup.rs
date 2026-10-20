@@ -96,7 +96,7 @@ fn the_teardown_runs_before_the_folder_goes_and_a_failure_still_removes_it() {
         }),
     );
     let id = done(answered(&mut team.app, &team.rx, "git makes the worktree")).ids.workspace.expect("workspace");
-    let (p, w) = team.app.projects.workspace_index(id).expect("it");
+    let (p, w) = team.app.projects.workspace_index(id).map(|at| (at.project(), at.index())).expect("it");
     let path = team.app.projects[p].workspaces[w].path.clone();
 
     ask(

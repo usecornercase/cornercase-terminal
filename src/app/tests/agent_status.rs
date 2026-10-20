@@ -111,7 +111,7 @@ fn a_tab_follows_what_claude_says_it_is_doing() {
 #[test]
 fn finishing_out_of_sight_marks_the_tab_done_until_it_is_opened() {
     let (mut app, rx, _dirs, claude) = working_claude();
-    app.add_tab(0, 0, AREA).expect("add a tab");
+    app.add_tab(workspace_at(&app, 0, 0), AREA).expect("add a tab");
     claude.signal("finish");
     watch_until(&mut app, &rx, "claude finishes out of sight", |a| status(a, 0, 0) == Some(Status::Done));
 
@@ -261,7 +261,7 @@ fn concurrent_codex_sessions_in_one_directory_keep_their_own_context_and_cleanup
     let context = |app: &App, t: usize| app.projects[0].workspaces[0].tabs[t].context().cloned();
     type_line(&mut app, &first.command_line());
     watch_until(&mut app, &rx, "first Codex answers", |a| context(a, 0).is_some());
-    app.add_tab(0, 0, AREA).expect("add a concurrent session");
+    app.add_tab(workspace_at(&app, 0, 0), AREA).expect("add a concurrent session");
     type_line(&mut app, &second.command_line());
     watch_until(&mut app, &rx, "wrapper Codex answers", |a| context(a, 1).is_some());
 
@@ -468,7 +468,7 @@ impl Watched {
         watched.run(agent);
         watched.report("busy", 1);
         if hidden {
-            watched.app.add_tab(0, 0, AREA).expect("add a tab");
+            watched.app.add_tab(workspace_at(&watched.app, 0, 0), AREA).expect("add a tab");
         }
         watched
     }
@@ -802,7 +802,7 @@ fn claude_and_codex_in_one_workspace_each_say_who_needs_you() {
     let mut w = Watched::start(agents::Known::Claude, true);
     w.run(agents::Known::Codex);
     w.report("busy", 1);
-    w.app.add_tab(0, 0, AREA).expect("hide the codex tab");
+    w.app.add_tab(workspace_at(&w.app, 0, 0), AREA).expect("hide the codex tab");
 
     w.report("waiting", 6);
 

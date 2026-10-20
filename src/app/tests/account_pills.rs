@@ -68,7 +68,7 @@ fn picking_an_account_uses_it_for_new_tabs_only() {
     assert_eq!((state.profile, state.accounts.get("claude").map(String::as_str)), (None, Some("home")));
     assert_eq!(toast(&s.app), Some("new claude tabs use home · open tabs keep theirs"));
     assert_eq!(s.app.term().map(|t| t.accounts().name(Known::Claude)), Some(None));
-    s.app.add_tab(0, 0, AREA).expect("a new tab");
+    s.app.add_tab(workspace_at(&s.app, 0, 0), AREA).expect("a new tab");
     assert_eq!(s.app.term().and_then(|t| t.accounts().name(Known::Claude)), Some("home"));
 }
 

@@ -472,10 +472,7 @@ impl App {
             return Err(malformed("give the prompt or the issue, not both"));
         }
         let scope = match (start.workspace, start.project) {
-            (Some(id), _) => {
-                let (p, _) = self.usable_workspace(id)?;
-                self.projects[p].id
-            }
+            (Some(id), _) => self.projects[self.usable_workspace(id)?.project()].id,
             (None, project) => self.issue_project(asker, project)?.1,
         };
         let text = start.issue.clone().unwrap_or_default();
@@ -587,8 +584,8 @@ impl App {
 
     fn start_branch(&self, start: &Start, issue: &Issue) -> String {
         let project = start.project.or_else(|| {
-            let (p, _) = self.projects.workspace_index(start.workspace?)?;
-            Some(self.projects[p].id)
+            let at = self.projects.workspace_index(start.workspace?)?;
+            Some(self.projects[at.project()].id)
         });
         let given = start.worktree.as_deref().map(str::trim).filter(|branch| !branch.is_empty());
         given.map_or_else(

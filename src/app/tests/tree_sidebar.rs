@@ -136,7 +136,7 @@ fn a_tab_of_another_project_can_be_renamed_from_its_menu() {
 #[test]
 fn a_tab_dragged_in_another_project_moves_there() {
     let (mut app, _rx, _dirs) = tree(2);
-    app.add_tab(0, 0, AREA).expect("add a tab");
+    app.add_tab(workspace_at(&app, 0, 0), AREA).expect("add a tab");
     app.active = 1;
     drawn(&mut app);
     let tabs = |app: &App| -> Vec<u64> { app.projects[0].workspaces[0].tabs.iter().map(|t| t.id).collect() };

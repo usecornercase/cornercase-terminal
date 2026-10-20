@@ -76,16 +76,13 @@ impl App {
         let id = if let Some(id) = id {
             id
         } else {
-            let here = self.here(asker);
-            let (p, w) = here
-                .project
-                .zip(here.workspace)
-                .ok_or_else(|| Refusal::from("no workspace is open here; pass --workspace"))?;
-            self.projects[p].workspaces[w].id
+            let here = self.here(asker).workspace;
+            let at = here.ok_or_else(|| Refusal::from("no workspace is open here; pass --workspace"))?;
+            self.projects.workspace(at).id
         };
-        let (p, w) = self.usable_workspace(id)?;
-        let ws = &self.projects[p].workspaces[w];
-        if self.projects[p].closing {
+        let at = self.usable_workspace(id)?;
+        let ws = self.projects.workspace(at);
+        if self.projects[at.project()].closing {
             return Err(format!("workspace {id} is closing").into());
         }
         if git::branch(&ws.path).is_none() {
@@ -274,10 +271,7 @@ impl App {
                     BaseChange::Read => Ok(()),
                 })
                 .map(|()| {
-                    let base = self
-                        .projects
-                        .workspace_index(workspace)
-                        .and_then(|(p, w)| self.projects[p].workspaces[w].base.clone());
+                    let base = self.projects.workspace_by(workspace).and_then(|w| w.base.clone());
                     json(&Base { workspace, base, default, branches })
                 }),
         };

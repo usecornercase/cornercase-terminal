@@ -121,8 +121,8 @@ impl App {
     }
 
     pub(super) fn show_flow_of(&mut self, workspace: u64) {
-        let Some((p, _)) = self.projects.workspace_index(workspace) else { return };
-        self.goto(Goto::Place { project: self.projects[p].id, workspace: Some(workspace), tab: None });
+        let Some(at) = self.projects.workspace_index(workspace) else { return };
+        self.goto(Goto::Place { project: self.projects[at.project()].id, workspace: Some(workspace), tab: None });
         self.show_flow();
     }
 

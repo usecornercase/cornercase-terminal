@@ -11,7 +11,7 @@ fn on_top(tabs: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let (mut app, rx, dirs) = app_with(1);
     app.config.tabs = config::Tabs::Top.id().into();
     for _ in 1..tabs {
-        app.add_tab(0, 0, AREA).expect("add a tab");
+        app.add_tab(workspace_at(&app, 0, 0), AREA).expect("add a tab");
     }
     for (t, tab) in app.projects[0].workspaces[0].tabs.iter_mut().enumerate() {
         tab.name = Some(format!("t{t}"));

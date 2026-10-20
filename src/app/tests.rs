@@ -54,12 +54,12 @@ use crate::issues::browser::{Browser, Screen};
 use crate::issues::{self, Secret};
 use crate::paths;
 use crate::process;
-use crate::project::Tab;
 use crate::project::picker::Picker;
 use crate::project::search::Finder;
 use crate::project::search::{Goto, Kind};
 use crate::project::split::{self};
 use crate::project::{Phase, Workspace};
+use crate::project::{Tab, TabAt, WorkspaceAt};
 use crate::settings::{Settings, Status};
 use crate::state;
 use crate::state::{PaneState, TabState, WorkspaceState};
@@ -205,6 +205,14 @@ fn shop_with_topic_worktree() -> (TempDir, TempDir) {
     );
     std::fs::write(checkout.join("new.txt"), "new\n").expect("edit worktree");
     (shop, worktree)
+}
+
+fn workspace_at(app: &App, p: usize, w: usize) -> WorkspaceAt {
+    app.projects.workspace_at(p, w).expect("the workspace")
+}
+
+fn tab_at(app: &App, p: usize, w: usize, t: usize) -> TabAt {
+    app.projects.tab_at(p, w, t).expect("the tab")
 }
 
 fn term(app: &App, p: usize) -> &Term {

@@ -61,7 +61,8 @@ fn seat<'a>(run: &'a RunInfo, role: &str) -> &'a crate::control::MemberInfo {
 
 fn tree_of(team: &Team, role: &str) -> PathBuf {
     let run = team.app.runs.all().first().expect("a run");
-    let (p, w) = team.app.projects.workspace_index(run.workspace).expect("the workspace");
+    let (p, w) =
+        team.app.projects.workspace_index(run.workspace).map(|at| (at.project(), at.index())).expect("the workspace");
     let trees = &team.app.projects[p].workspaces[w].role_worktrees;
     trees.iter().find(|tree| tree.role == role).map(|tree| tree.path.clone()).expect("the role's worktree")
 }
@@ -76,7 +77,12 @@ fn an_own_role_starts_in_a_worktree_of_its_own_on_a_branch_made_from_the_runs() 
     assert_eq!(apart.branch.as_deref(), Some("fix-the-login-form--coder-a"));
     assert_eq!(git::branch(&path).as_deref(), Some("fix-the-login-form--coder-a"));
     assert!(seat(&run, "judge").worktree.is_none() && seat(&run, ORCHESTRATOR).branch.is_none());
-    let (p, w) = team.app.projects.workspace_index(run.workspace).expect("the run's workspace");
+    let (p, w) = team
+        .app
+        .projects
+        .workspace_index(run.workspace)
+        .map(|at| (at.project(), at.index()))
+        .expect("the run's workspace");
     let project = &team.app.projects[p];
     assert_eq!(project.workspaces[w].role_worktrees.len(), 2);
     assert!(project.workspaces.iter().any(|ws| ws.path == path && ws.worktree), "the role has a row");
@@ -114,7 +120,8 @@ fn the_runs_setup_runs_in_every_worktree_with_its_own_branch_before_the_agents_s
     let ran = |path: &Path| std::fs::read_to_string(path.join(".setup-ran")).unwrap_or_default();
     assert_eq!(ran(&tree_of(&team, "coder A")), "fix-the-login-form--coder-a\n");
     assert_eq!(ran(&tree_of(&team, "coder B")), "fix-the-login-form--coder-b\n");
-    let (p, w) = team.app.projects.workspace_index(run.workspace).expect("the workspace");
+    let (p, w) =
+        team.app.projects.workspace_index(run.workspace).map(|at| (at.project(), at.index())).expect("the workspace");
     assert_eq!(ran(&team.app.projects[p].workspaces[w].path), "fix-the-login-form\n");
 }
 
