@@ -274,13 +274,18 @@ impl App {
         for event in events {
             let Some(on) = hook_name(event) else { continue };
             let Ok(json) = serde_json::to_string(event) else { continue };
-            for plugin in &self.plugins.loaded {
-                let Some(manifest) = plugin.runs() else { continue };
-                for hook in manifest.events.iter().filter(|hook| hook.on.name() == on) {
-                    self.run_hook(plugin, &hook.command, on, &json);
-                }
+            for (plugin, command) in self.hooks_on(on) {
+                self.run_hook(plugin, command, on, &json);
             }
         }
+    }
+
+    fn hooks_on(&self, on: &'static str) -> impl Iterator<Item = (&Plugin, &[String])> {
+        let runs = self.plugins.loaded.iter().filter_map(|plugin| Some((plugin, plugin.runs()?)));
+        runs.flat_map(move |(plugin, manifest)| {
+            let hooks = manifest.events.iter().filter(move |hook| hook.on.name() == on);
+            hooks.map(move |hook| (plugin, hook.command.as_slice()))
+        })
     }
 
     fn run_hook(&self, plugin: &Plugin, command: &[String], on: &'static str, json: &str) {

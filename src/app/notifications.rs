@@ -50,6 +50,15 @@ impl Notices {
         self.windows.remove(&client);
     }
 
+    fn next_token(&mut self) -> String {
+        self.next += 1;
+        let token = format!("cc-{}-{}", self.run, self.next);
+        if self.sent.len() >= notify::KEPT {
+            self.sent.pop_front();
+        }
+        token
+    }
+
     fn find(&self, token: &str) -> Option<&Notice> {
         self.sent.iter().find(|notice| notice.token == token)
     }
@@ -68,12 +77,7 @@ pub(super) struct Said<'a> {
 
 impl App {
     pub(super) fn tell(&mut self, said: Said<'_>) {
-        let notices = &mut self.notices;
-        notices.next += 1;
-        let token = format!("cc-{}-{}", notices.run, notices.next);
-        if notices.sent.len() >= notify::KEPT {
-            notices.sent.pop_front();
-        }
+        let token = self.notices.next_token();
         let notice = Notice {
             token: token.clone(),
             agent: said.agent.to_string(),
@@ -88,12 +92,7 @@ impl App {
             go: Some(token.clone()),
             ..Toast::new(notice.message.clone(), ui::ToastIcon::Agent(notice.status))
         };
-        if let Some(n) = Notification::new(&notice.message, &self.config.desktop_notifications) {
-            self.outbox.notifications.push(Notification { token: Some(token.clone()), ..n });
-            for window in notices.windows.values_mut().filter(|w| w.unfocused) {
-                window.missed = Some(token.clone());
-            }
-        }
+        self.alert_windows(&notice.message, &token);
         if let Some(kind) = said.sound {
             let path = match kind {
                 sound::Kind::NeedsYou => &self.config.sound_waiting,
@@ -101,22 +100,19 @@ impl App {
             };
             self.outbox.sounds.push(Cue { kind, path: path.clone() });
         }
-        let event = Event {
-            time: crate::time::Stamp(std::time::SystemTime::now()).to_string(),
-            what: What::Notice {
-                token,
-                agent: notice.agent.clone(),
-                status: notice.status.name().to_string(),
-                place: notify::clean(&notice.place),
-                message: notice.message.clone(),
-                panes: notice.panes.clone(),
-                sound: said.sound.map(|kind| kind.id().to_string()),
-            },
-            ids: Ids { project: Some(notice.project), workspace: Some(notice.workspace), ..Ids::default() },
-        };
-        notices.sent.push_back(notice);
+        let event = notice_event(token, &notice, said.sound);
+        self.notices.sent.push_back(notice);
         self.toast = Some(toast);
         self.events.publish(&[event]);
+    }
+
+    fn alert_windows(&mut self, message: &str, token: &str) {
+        if let Some(n) = Notification::new(message, &self.config.desktop_notifications) {
+            self.outbox.notifications.push(Notification { token: Some(token.to_string()), ..n });
+            for window in self.notices.windows.values_mut().filter(|w| w.unfocused) {
+                window.missed = Some(token.to_string());
+            }
+        }
     }
 
     pub(in crate::app) fn act_on_notice(&mut self, token: &str) -> Option<Result<(u64, Item), String>> {
@@ -198,5 +194,21 @@ impl App {
             });
             log::info!("activity", "notification shown again", client = client);
         }
+    }
+}
+
+fn notice_event(token: String, notice: &Notice, sound: Option<sound::Kind>) -> Event {
+    Event {
+        time: crate::time::Stamp(std::time::SystemTime::now()).to_string(),
+        what: What::Notice {
+            token,
+            agent: notice.agent.clone(),
+            status: notice.status.name().to_string(),
+            place: notify::clean(&notice.place),
+            message: notice.message.clone(),
+            panes: notice.panes.clone(),
+            sound: sound.map(|kind| kind.id().to_string()),
+        },
+        ids: Ids { project: Some(notice.project), workspace: Some(notice.workspace), ..Ids::default() },
     }
 }

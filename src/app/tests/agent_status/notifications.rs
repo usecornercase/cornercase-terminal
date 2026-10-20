@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::agent_watch::Notice;
 use crate::app::toast::UNDO_FOR;
 
 const WINDOW: u64 = 1;
@@ -9,7 +10,7 @@ fn go(app: &App) -> String {
 
 fn notify_for(app: &mut App, p: usize, panes: Vec<u64>) {
     let (project, workspace) = (app.projects[p].id, app.projects[p].workspaces[0].id);
-    app.notify("claude", Status::Waiting, (project, workspace), panes, true);
+    app.notify(Notice { agent: "claude", status: Status::Waiting, at: (project, workspace), panes, principal: true });
 }
 
 fn pane_of(app: &App, p: usize, t: usize) -> u64 {

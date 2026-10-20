@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::agent_watch::Notice;
 use crate::flows::run::{Member, Run};
 use crate::flows::{Flow, ORCHESTRATOR};
 
@@ -397,7 +398,13 @@ mod folds {
         render(&mut f.app, TALL);
         f.app.set_agent_fold(f.parent, true);
         let (project, workspace) = (f.app.projects[0].id, f.app.projects[0].workspaces[0].id);
-        f.app.notify("claude", Status::Waiting, (project, workspace), vec![f.child], true);
+        f.app.notify(Notice {
+            agent: "claude",
+            status: Status::Waiting,
+            at: (project, workspace),
+            panes: vec![f.child],
+            principal: true,
+        });
         let token = f.app.toast.as_ref().and_then(|toast| toast.go.clone()).expect("a go");
 
         f.app.notification_clicked(&token);

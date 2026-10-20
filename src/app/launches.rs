@@ -9,6 +9,7 @@ use crate::agents::launch::{self, Launch, Step, Trust};
 use crate::error::Result;
 use crate::log::{self};
 use crate::project::Hierarchy;
+use crate::term::Term;
 
 pub(super) const LAUNCH_EVERY: Duration = Duration::from_millis(100);
 
@@ -21,6 +22,7 @@ impl App {
         let regex = self.agents.trust_prompt.regex(&self.config.trust_prompt_pattern);
         let asks = |screen: &str| regex.is_some_and(|re| agents::asks_trust(re, screen));
         let trust = if self.config.accept_trust_prompts { Trust::Accepted } else { Trust::LeftToYou };
+        let round = Round { now, trust, asks: &asks };
         let mut parked = Vec::new();
         let mut finished = Vec::new();
         let starting: Vec<u64> = self.agents.launches.iter().map(|launch| launch.term).collect();
@@ -32,56 +34,8 @@ impl App {
                 finished.push((i, false));
                 continue;
             };
-            let shell_in_foreground = term.shell_in_foreground();
-            let bracketed_paste = term.emulator.bracketed_paste();
-            let application_cursor = term.emulator.application_cursor();
-            let emulator = &mut term.emulator;
-            let mut screen = || emulator.active_contents().unwrap_or_default();
-            let mut seen = launch::Seen {
-                shell_in_foreground,
-                bracketed_paste,
-                application_cursor,
-                screen: &mut screen,
-                trust_prompt: &asks,
-                trust: launch.trust.unwrap_or(trust),
-            };
-            let before = launch.stage();
-            let step = launch.step(now, &mut seen);
-            let (pane, kind, stage) = (launch.term, launch.kind(), launch.stage());
-            if stage == "consent" && before != stage && !launch.told {
-                launch.told = true;
-                parked.push(pane);
-            }
-            match &step {
-                Step::Wait if before != stage => log::info!("launch", "waits", pane = pane, kind = kind, stage = stage),
-                Step::Wait => {}
-                Step::Write(bytes) | Step::Done(bytes) => {
-                    let done = matches!(step, Step::Done(_));
-                    let message = if done { "done" } else { "wrote" };
-                    let bytes = bytes.len();
-                    log::info!("launch", message, pane = pane, kind = kind, from = before, to = stage, bytes = bytes);
-                }
-                Step::Abandon => log::warning!("launch", "the agent did not start", pane = pane, kind = kind),
-            }
-            match step {
-                Step::Wait => {}
-                Step::Write(bytes) => {
-                    if !(bytes.is_empty() || term.write(&bytes)) {
-                        log::warning!("launch", "the pane is not reading", pane = pane);
-                        finished.push((i, false));
-                    }
-                }
-                Step::Done(bytes) if !(bytes.is_empty() || term.write(&bytes)) => {
-                    log::warning!("launch", "the pane is not reading", pane = pane);
-                    finished.push((i, false));
-                }
-                Step::Done(_) => {
-                    if launch.submits() {
-                        term.submitted = Some(now);
-                    }
-                    finished.push((i, true));
-                }
-                Step::Abandon => finished.push((i, false)),
+            if let Some(started) = drive(launch, term, &round, &mut parked) {
+                finished.push((i, started));
             }
         }
         for (i, started) in finished.into_iter().rev() {
@@ -108,4 +62,75 @@ impl App {
         }
         Ok(())
     }
+}
+
+struct Round<'a> {
+    now: Instant,
+    trust: Trust,
+    asks: &'a dyn Fn(&str) -> bool,
+}
+
+fn drive(launch: &mut Launch, term: &mut Term, round: &Round, parked: &mut Vec<u64>) -> Option<bool> {
+    let before = launch.stage();
+    let step = step_launch(launch, term, round);
+    let (pane, kind, stage) = (launch.term, launch.kind(), launch.stage());
+    if stage == "consent" && before != stage && !launch.told {
+        launch.told = true;
+        parked.push(pane);
+    }
+    log_step(&step, (pane, kind), (before, stage));
+    apply_step(step, launch, term, round.now)
+}
+
+fn step_launch(launch: &mut Launch, term: &mut Term, round: &Round) -> Step {
+    let shell_in_foreground = term.shell_in_foreground();
+    let bracketed_paste = term.emulator.bracketed_paste();
+    let application_cursor = term.emulator.application_cursor();
+    let emulator = &mut term.emulator;
+    let mut screen = || emulator.active_contents().unwrap_or_default();
+    let mut seen = launch::Seen {
+        shell_in_foreground,
+        bracketed_paste,
+        application_cursor,
+        screen: &mut screen,
+        trust_prompt: round.asks,
+        trust: launch.trust.unwrap_or(round.trust),
+    };
+    launch.step(round.now, &mut seen)
+}
+
+fn log_step(step: &Step, (pane, kind): (u64, &str), (before, stage): (&str, &str)) {
+    match step {
+        Step::Wait if before != stage => log::info!("launch", "waits", pane = pane, kind = kind, stage = stage),
+        Step::Wait => {}
+        Step::Write(bytes) | Step::Done(bytes) => {
+            let message = if matches!(step, Step::Done(_)) { "done" } else { "wrote" };
+            let bytes = bytes.len();
+            log::info!("launch", message, pane = pane, kind = kind, from = before, to = stage, bytes = bytes);
+        }
+        Step::Abandon => log::warning!("launch", "the agent did not start", pane = pane, kind = kind),
+    }
+}
+
+fn apply_step(step: Step, launch: &Launch, term: &mut Term, now: Instant) -> Option<bool> {
+    match step {
+        Step::Wait => None,
+        Step::Write(bytes) => (!written(term, &bytes)).then_some(false),
+        Step::Done(bytes) if !written(term, &bytes) => Some(false),
+        Step::Done(_) => {
+            if launch.submits() {
+                term.submitted = Some(now);
+            }
+            Some(true)
+        }
+        Step::Abandon => Some(false),
+    }
+}
+
+fn written(term: &mut Term, bytes: &[u8]) -> bool {
+    let wrote = bytes.is_empty() || term.write(bytes);
+    if !wrote {
+        log::warning!("launch", "the pane is not reading", pane = term.id);
+    }
+    wrote
 }

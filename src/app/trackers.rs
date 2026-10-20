@@ -16,7 +16,7 @@ use crate::issues::{
     shortcut,
 };
 use crate::log::{Job, Level};
-use crate::project::Hierarchy;
+use crate::project::{Hierarchy, Project};
 
 pub(super) struct IssueConnections {
     pub(super) cache: IssueCache,
@@ -147,26 +147,26 @@ impl App {
     }
 
     pub(super) fn places(&self, project: Option<usize>, workspace: Option<usize>) -> (Vec<Place>, Option<usize>) {
-        let mut places = Vec::new();
-        let mut here = None;
-        for (p, open) in self.projects.iter().enumerate().filter(|(_, p)| !p.closing) {
-            let name = self.project_label(open);
-            if git::is_repo_root(&open.path) {
-                if project == Some(p) {
-                    here = Some(places.len());
-                }
-                places.push(Place { project: open.id, workspace: None, label: name, worktree: true });
-                continue;
-            }
-            for (w, found) in open.workspaces.iter().enumerate().filter(|(_, w)| w.open()) {
-                if project == Some(p) && workspace == Some(w) {
-                    here = Some(places.len());
-                }
-                let label = format!("{name} › {}", found.label());
-                places.push(Place { project: open.id, workspace: Some(found.id), label, worktree: false });
-            }
+        let listed = self.projects.iter().enumerate().filter(|(_, p)| !p.closing);
+        let entries: Vec<(usize, Place, Option<usize>)> = listed
+            .flat_map(|(p, open)| self.project_places(open).into_iter().map(move |(place, w)| (p, place, w)))
+            .collect();
+        let here = entries.iter().position(|(p, _, w)| project == Some(*p) && w.is_none_or(|w| workspace == Some(w)));
+        (entries.into_iter().map(|(_, place, _)| place).collect(), here)
+    }
+
+    fn project_places(&self, open: &Project) -> Vec<(Place, Option<usize>)> {
+        let name = self.project_label(open);
+        if git::is_repo_root(&open.path) {
+            return vec![(Place { project: open.id, workspace: None, label: name, worktree: true }, None)];
         }
-        (places, here)
+        let open_workspaces = open.workspaces.iter().enumerate().filter(|(_, w)| w.open());
+        open_workspaces
+            .map(|(w, found)| {
+                let label = format!("{name} › {}", found.label());
+                (Place { project: open.id, workspace: Some(found.id), label, worktree: false }, Some(w))
+            })
+            .collect()
     }
 
     pub(in crate::app) fn issue_sources(&self, project: u64) -> Vec<Source> {

@@ -60,29 +60,33 @@ impl App {
         if mark != self.config_file.mark {
             self.config_file.mark = mark;
             match config::read(&self.config_path) {
-                Ok(read) => {
-                    self.config_file.problem = None;
-                    if let Some(read) = read.filter(|read| *read != self.config) {
-                        let changes = config::Changes::between(&self.config, &read);
-                        log::info!("app", "config.json changed outside", keys = changes.keys().join(","));
-                        warn_unknown_profile(Some(&self.config), &read);
-                        self.set_config(read);
-                    }
-                }
-                Err(why) => {
-                    if self.config_file.problem.as_deref() != Some(why.as_str()) {
-                        log::warning!("app", "config.json cannot be read", why = why.as_str());
-                        let message = format!("config.json cannot be read: {why}; the settings in use stay");
-                        self.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
-                        self.config_file.problem = Some(why);
-                        self.settings_changed();
-                    }
-                }
+                Ok(read) => self.config_read(read),
+                Err(why) => self.config_unreadable(why),
             }
         }
         match &self.config_file.problem {
             Some(why) => Err(unreadable(why)),
             None => Ok(()),
+        }
+    }
+
+    fn config_read(&mut self, read: Option<Config>) {
+        self.config_file.problem = None;
+        if let Some(read) = read.filter(|read| *read != self.config) {
+            let changes = config::Changes::between(&self.config, &read);
+            log::info!("app", "config.json changed outside", keys = changes.keys().join(","));
+            warn_unknown_profile(Some(&self.config), &read);
+            self.set_config(read);
+        }
+    }
+
+    fn config_unreadable(&mut self, why: String) {
+        if self.config_file.problem.as_deref() != Some(why.as_str()) {
+            log::warning!("app", "config.json cannot be read", why = why.as_str());
+            let message = format!("config.json cannot be read: {why}; the settings in use stay");
+            self.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
+            self.config_file.problem = Some(why);
+            self.settings_changed();
         }
     }
 
