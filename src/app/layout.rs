@@ -111,7 +111,7 @@ impl App {
     }
 
     pub(super) fn follow(&mut self, area: Rect) {
-        self.panels.queued.area = Some(area);
+        self.set_queue_area(area);
         if self.focus() != self.scroll.followed {
             self.panels.files.set_full_screen(false);
         }

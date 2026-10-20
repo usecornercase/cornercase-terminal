@@ -9,7 +9,7 @@ use super::{Asked, Asker, Handled, Stage, Waits};
 use crate::agents;
 use crate::agents::usage;
 use crate::app::App;
-use crate::app::queue_panel::{CLIENTS, QueueEvent};
+use crate::app::queue_panel::QueueEvent;
 use crate::control::contract::Refusal;
 use crate::control::{self, QueueAdd};
 use crate::error::Error;
@@ -23,7 +23,7 @@ impl App {
     pub(super) fn queue_request(&mut self, asked: Asked, command: control::Queue) -> Handled {
         let Asked { client, asker, area, now } = asked;
         match command {
-            control::Queue::List => Ok(Some(json!({ "entries": self.panels.queued.queue.entries }))),
+            control::Queue::List => Ok(Some(json!({ "entries": self.panels.queued.queue().entries }))),
             control::Queue::Remove(id) => self.remove_queue_request(id),
             control::Queue::Run(id) => self.run_queue_request(id, area, now),
             control::Queue::Add(add) => self.add_queue_request(Some(client), asker.caller, None, &add),
@@ -32,18 +32,15 @@ impl App {
     }
 
     fn remove_queue_request(&mut self, id: u64) -> Handled {
-        if self.panels.queued.running.values().any(|running| *running == id) {
-            return Err("this entry is already starting".into());
-        }
-        self.panels.queued.queue.remove(id)?;
+        self.panels.queued.remove(id)?;
         Ok(Some(json!({})))
     }
 
     fn run_queue_request(&mut self, id: u64, area: Option<Rect>, now: Instant) -> Handled {
-        self.panels.queued.area = Some(super::sized(area)?);
+        self.set_queue_area(super::sized(area)?);
         if let Err(reason) = self.run_queued(id, now) {
             let unfinished = |entry: &queue::Entry| !matches!(entry.state, State::Starting | State::Started { .. });
-            if self.panels.queued.queue.entry(id).is_some_and(unfinished) {
+            if self.panels.queued.queue().entry(id).is_some_and(unfinished) {
                 self.fail_queued(id, &reason);
             }
             return Err(reason.into());
@@ -58,11 +55,12 @@ impl App {
         edit: Option<u64>,
         add: &QueueAdd,
     ) -> Handled {
-        if edit.is_some_and(|id| self.panels.queued.running.values().any(|running| *running == id)) {
+        if edit.is_some_and(|id| self.panels.queued.starting(id)) {
             return Err("this entry is already starting".into());
         }
-        let old =
-            edit.map(|id| self.panels.queued.queue.entry(id).cloned().ok_or_else(|| queue::missing(id))).transpose()?;
+        let old = edit
+            .map(|id| self.panels.queued.queue().entry(id).cloned().ok_or_else(|| queue::missing(id)))
+            .transpose()?;
         let mut prepared = self.prepare_queue(caller, add, old.as_ref())?;
         if prepared.issue.is_none() && prepared.probe.is_none() {
             return self.add_queue_now(edit, &mut prepared);
@@ -130,13 +128,7 @@ impl App {
             return Err("choose a time in the future".into());
         }
         let task = task.clone();
-        let id = match edit {
-            Some(id) => {
-                self.panels.queued.queue.edit(id, task)?;
-                id
-            }
-            None => self.panels.queued.queue.add(task)?,
-        };
+        let id = self.panels.queued.schedule(edit, task)?;
         Ok(Some(json!({ "id": id })))
     }
 
@@ -181,10 +173,8 @@ impl App {
     }
 
     pub(in crate::app) fn run_queued(&mut self, id: u64, now: Instant) -> Result<(), String> {
-        let entry = self.panels.queued.queue.entry(id).ok_or_else(|| queue::missing(id))?.clone();
-        if matches!(entry.state, State::Starting | State::Started { .. })
-            || self.panels.queued.running.values().any(|running| *running == id)
-        {
+        let entry = self.panels.queued.queue().entry(id).ok_or_else(|| queue::missing(id))?.clone();
+        if matches!(entry.state, State::Starting | State::Started { .. }) || self.panels.queued.starting(id) {
             return Err("this queue entry has already started".into());
         }
         let (p, w) = self.queue_place(&entry.task.place)?;
@@ -201,7 +191,7 @@ impl App {
             ..control::Start::default()
         };
         let client = self.mark_starting(id)?;
-        let asked = Asked { client, asker: Asker::default(), area: self.panels.queued.area, now };
+        let asked = Asked { client, asker: Asker::default(), area: self.panels.queued.area(), now };
         match self.start_request(asked, start) {
             Ok(Some(value)) => {
                 self.queue_answered(client, &Ok(value));
@@ -213,15 +203,8 @@ impl App {
     }
 
     fn mark_starting(&mut self, id: u64) -> Result<u64, String> {
-        self.panels.queued.next_client += 1;
-        let client = CLIENTS + self.panels.queued.next_client;
-        self.panels.queued.running.insert(client, id);
-        if let Some(entry) = self.panels.queued.queue.entry_mut(id) {
-            entry.state = State::Starting;
-        }
-        if let Some(path) = &self.panels.queued.path
-            && let Err(error) = crate::persist::save(path, &self.queue_saved())
-        {
+        let client = self.panels.queued.start(id);
+        if let Err(error) = self.panels.queued.save() {
             let reason = format!("cannot save the queue before starting: {error}");
             return Err(self.fail_starting(client, id, reason));
         }
@@ -229,10 +212,8 @@ impl App {
     }
 
     fn fail_starting(&mut self, client: u64, id: u64, reason: String) -> String {
-        self.panels.queued.running.remove(&client);
-        if let Some(entry) = self.panels.queued.queue.entry_mut(id) {
-            entry.state = State::Failed { reason: reason.clone() };
-        }
+        self.panels.queued.finish(client);
+        self.panels.queued.fail(id, &reason);
         reason
     }
 

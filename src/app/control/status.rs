@@ -138,7 +138,7 @@ impl App {
             version: version::CURRENT.to_string(),
             boot: control::server_token().to_string(),
             todos: self.todo_items(),
-            queue: self.panels.queued.queue.entries.clone(),
+            queue: self.panels.queued.queue().entries.clone(),
             away: self.away_info(),
             update: self.update_info(),
             keep_awake: self.keep_awake_info(),

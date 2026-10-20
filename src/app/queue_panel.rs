@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -16,17 +16,100 @@ use crate::project::Hierarchy;
 use crate::queue::{self, Queue, State, Task};
 use crate::ui;
 
-pub(super) const CLIENTS: u64 = 1 << 63;
+const CLIENTS: u64 = 1 << 63;
 
 #[derive(Default)]
 pub(super) struct QueueRuntime {
-    pub(super) queue: Queue,
-    pub(super) running: HashMap<u64, u64>,
-    pub(super) next_client: u64,
-    pub(super) zone: String,
-    pub(super) area: Option<Rect>,
-    pub(super) path: Option<std::path::PathBuf>,
-    pub(super) back: Option<Box<Browser>>,
+    queue: Queue,
+    running: HashMap<u64, u64>,
+    next_client: u64,
+    zone: String,
+    area: Option<Rect>,
+    path: Option<std::path::PathBuf>,
+    back: Option<Box<Browser>>,
+}
+
+impl QueueRuntime {
+    pub(super) fn queue(&self) -> &Queue {
+        &self.queue
+    }
+
+    pub(super) fn zone(&self) -> &str {
+        &self.zone
+    }
+
+    pub(super) fn area(&self) -> Option<Rect> {
+        self.area
+    }
+
+    pub(super) fn wake(&self, clock: i64) -> Option<Duration> {
+        self.area.and_then(|_| self.queue.next(clock))
+    }
+
+    pub(super) fn starting(&self, id: u64) -> bool {
+        self.running.values().any(|running| *running == id)
+    }
+
+    pub(super) fn trust(&self, client: u64) -> bool {
+        self.running.contains_key(&client)
+    }
+
+    pub(super) fn schedule(&mut self, edit: Option<u64>, task: Task) -> Result<u64, String> {
+        match edit {
+            Some(id) => self.queue.edit(id, task).map(|()| id),
+            None => self.queue.add(task),
+        }
+    }
+
+    pub(super) fn remove(&mut self, id: u64) -> Result<queue::Entry, String> {
+        if self.starting(id) {
+            return Err("this entry is already starting".into());
+        }
+        self.queue.remove(id)
+    }
+
+    pub(super) fn restore(&mut self, entries: Vec<queue::Entry>) {
+        self.queue.restore(entries);
+    }
+
+    pub(super) fn start(&mut self, id: u64) -> u64 {
+        self.next_client += 1;
+        let client = CLIENTS + self.next_client;
+        self.running.insert(client, id);
+        if let Some(entry) = self.queue.entry_mut(id) {
+            entry.state = State::Starting;
+        }
+        client
+    }
+
+    pub(super) fn started(&mut self, id: u64, pane: u64) {
+        if let Some(entry) = self.queue.entry_mut(id) {
+            entry.state = State::Started { pane, server: control::server_token().into() };
+        }
+    }
+
+    pub(super) fn fail(&mut self, id: u64, reason: &str) {
+        if let Some(entry) = self.queue.entry_mut(id) {
+            entry.state = State::Failed { reason: reason.to_string() };
+        }
+    }
+
+    pub(super) fn finish(&mut self, client: u64) -> Option<u64> {
+        self.running.remove(&client)
+    }
+
+    pub(super) fn save(&self) -> Result<(), String> {
+        let Some(path) = &self.path else { return Ok(()) };
+        crate::persist::save(path, &self.queue.saved()).map_err(|error| error.to_string())
+    }
+
+    pub(super) fn keep_browser(&mut self, back: Option<Box<Browser>>) {
+        self.back = back;
+    }
+
+    pub(super) fn take_browser(&mut self) -> Option<Box<Browser>> {
+        self.back.take()
+    }
 }
 
 #[derive(Debug)]
@@ -79,13 +162,11 @@ impl App {
     }
 
     pub(in crate::app) fn queue_answered(&mut self, client: u64, reply: &Result<Value, String>) -> bool {
-        let Some(id) = self.panels.queued.running.remove(&client) else { return false };
+        let Some(id) = self.panels.queued.finish(client) else { return false };
         match reply {
             Ok(value) => {
                 let pane = value.get("pane").and_then(Value::as_u64).unwrap_or_default();
-                if let Some(entry) = self.panels.queued.queue.entry_mut(id) {
-                    entry.state = State::Started { pane, server: control::server_token().into() };
-                }
+                self.panels.queued.started(id, pane);
                 self.queue_notice(&format!("started queued agent {id}"), ui::ToastIcon::Check);
             }
             Err(reason) => self.fail_queued(id, reason),
@@ -94,9 +175,7 @@ impl App {
     }
 
     pub(super) fn fail_queued(&mut self, id: u64, reason: &str) {
-        if let Some(entry) = self.panels.queued.queue.entry_mut(id) {
-            entry.state = State::Failed { reason: reason.to_string() };
-        }
+        self.panels.queued.fail(id, reason);
         self.queue_notice(&format!("queued agent {id} failed: {reason}"), ui::ToastIcon::Bug);
     }
 
@@ -117,10 +196,7 @@ impl App {
             if task.at <= crate::time::now() {
                 return Err("the scheduled time passed while preparing this entry".into());
             }
-            match event.edit {
-                Some(id) => self.panels.queued.queue.edit(id, task).map(|()| id),
-                None => self.panels.queued.queue.add(task),
-            }
+            self.panels.queued.schedule(event.edit, task)
         });
         if let Some(client) = event.client {
             self.queue_reply(client, reply);
@@ -204,9 +280,9 @@ impl App {
     }
 
     pub(super) fn remove_queued(&mut self, id: u64) {
-        if self.panels.queued.running.values().any(|running| *running == id) {
+        if self.panels.queued.starting(id) {
             self.messages.toast = Some(Toast::new("this entry is already starting", ui::ToastIcon::Bug));
-        } else if let Ok(entry) = self.panels.queued.queue.remove(id) {
+        } else if let Ok(entry) = self.panels.queued.remove(id) {
             self.queue_removed(format!("removed queue entry {id}"), vec![entry]);
         }
         self.sync_queued();

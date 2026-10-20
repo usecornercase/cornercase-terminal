@@ -21,7 +21,7 @@ use crate::ui;
 
 impl App {
     pub(super) fn new_queue_form(&mut self, id: Option<u64>) {
-        let entry = id.and_then(|id| self.panels.queued.queue.entry(id)).cloned();
+        let entry = id.and_then(|id| self.panels.queued.queue().entry(id)).cloned();
         let places = self.queue_places();
         let matching = matching_places(&places, entry.as_ref());
         let place = self.current_place(&places, &matching);
@@ -66,19 +66,20 @@ impl App {
     fn queue_zone(&self, entry: Option<&queue::Entry>) -> String {
         match entry {
             Some(entry) => entry.task.zone.clone(),
-            None if self.panels.queued.zone.is_empty() => queue::clock::local_zone(),
-            None => self.panels.queued.zone.clone(),
+            None if self.panels.queued.zone().is_empty() => queue::clock::local_zone(),
+            None => self.panels.queued.zone().to_string(),
         }
     }
 
     fn stash_browser(&mut self) {
-        self.panels.queued.back = match self.overlay.take() {
+        let back = match self.overlay.take() {
             Some(Overlay::Issues(browser)) => Some(browser),
             other => {
                 self.overlay = other;
                 None
             }
         };
+        self.panels.queued.keep_browser(back);
     }
 
     fn queue_kinds(&self, entry: Option<&queue::Entry>) -> Vec<String> {
@@ -303,7 +304,7 @@ impl App {
         let captured_default = mode == "default"
             && form
                 .id
-                .and_then(|id| self.panels.queued.queue.entry(id))
+                .and_then(|id| self.panels.queued.queue().entry(id))
                 .is_some_and(|entry| agent.as_ref() == Some(&entry.task.agent) && entry.task.mode.is_none());
         QueueAdd {
             at: form.at(),
@@ -323,7 +324,7 @@ impl App {
 
     fn queue_chosen_accounts(&self, form: &Form) -> BTreeMap<String, String> {
         let Some((kind, name)) = form.chosen_account() else { return BTreeMap::new() };
-        let entry = form.id.and_then(|id| self.panels.queued.queue.entry(id));
+        let entry = form.id.and_then(|id| self.panels.queued.queue().entry(id));
         if entry.is_some_and(|entry| !entry.task.accounts.contains_key(kind)) {
             let active = self.account_choices().and_then(|choices| Some(choices.of(kind)?.active.clone()));
             if active.as_deref() == Some(name) {
@@ -356,7 +357,7 @@ impl App {
     }
 
     pub(super) fn close_queue_form(&mut self, scheduled: bool) {
-        self.overlay = self.panels.queued.back.take().map(|mut browser| {
+        self.overlay = self.panels.queued.take_browser().map(|mut browser| {
             browser.scheduling = false;
             if scheduled {
                 browser.screen = Screen::List;

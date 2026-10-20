@@ -66,7 +66,7 @@ impl App {
         }
         match self.messages.toast.take() {
             Some(Toast { undo: Some(Undo::Todos(removed)), .. }) => self.panels.todos.restore(removed),
-            Some(Toast { undo: Some(Undo::Queue(entries)), .. }) => self.panels.queued.queue.restore(entries),
+            Some(Toast { undo: Some(Undo::Queue(entries)), .. }) => self.panels.queued.restore(entries),
             Some(Toast { go: Some(token), .. }) => self.notification_clicked(&token),
             Some(Toast { icon: ui::ToastIcon::Restart, .. }) => self.cancel_restarts(),
             _ => {}

@@ -356,7 +356,7 @@ impl App {
             self.clients.change_streams.wake(now),
             self.clients.events.bell_wake(now),
             self.surface_wake(now),
-            self.panels.queued.area.and_then(|_| self.panels.queued.queue.next(clock)),
+            self.panels.queued.wake(clock),
         ]
         .into_iter()
         .flatten()
