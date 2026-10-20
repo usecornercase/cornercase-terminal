@@ -259,7 +259,7 @@ fn changes(before: Place, now: Place) -> Vec<Change> {
 impl App {
     pub(crate) fn trace(&mut self) {
         self.clients.events.snapshots.mark_changed();
-        self.clients.change_streams.changed = true;
+        self.clients.change_streams.mark_changed();
         self.trace_refresh();
     }
 

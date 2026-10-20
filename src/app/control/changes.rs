@@ -5,16 +5,15 @@ use serde_json::Value;
 
 use super::{Asker, Handled, Pending, Stage, conflict, json, malformed};
 use crate::app::changes_panel::Gapped;
-use crate::app::changes_panel::streams::{Stream, summary_of};
 use crate::app::{App, AppEvent, ChangesEvent};
 use crate::changes::diff::File;
 use crate::changes::{self, Mode, Scope};
-use crate::control::changes::{self as wire, Base, Following, Gap, Patch, Viewed};
+use crate::control::changes::{self as wire, Base, Gap, Patch, Viewed};
 use crate::control::contract::{Code, Refusal};
 use crate::control::{Changes, ChangesBase, ChangesFile, ChangesGap, ChangesMode, ChangesViewed};
 use crate::error::Result;
 use crate::git;
-use crate::log::{self, Job, Level};
+use crate::log::{Job, Level};
 use crate::project::Hierarchy;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,7 +107,7 @@ impl App {
     }
 
     pub(super) fn changes_request(&mut self, client: u64, asker: Asker, request: &Changes) -> Handled {
-        if self.clients.change_streams.open.iter().any(|s| s.client == client) {
+        if self.clients.change_streams.opened_by(client) {
             return Err(conflict("this connection already follows changes; open another connection for another scope"));
         }
         let workspace = match request.scope {
@@ -120,47 +119,17 @@ impl App {
                 None
             }
         };
-        self.clients.change_streams.issued += 1;
         let targets = if workspace.is_none() { self.every_targets() } else { Vec::new() };
         let content = self.change_content(request.scope, workspace, request.mode, &targets);
-        let stream = Stream {
-            id: self.clients.change_streams.issued,
-            client,
-            scope: request.scope,
-            workspace,
-            mode: request.mode,
-            revision: 1,
-            last: Some(content.clone()),
-        };
-        let summary = summary_of(&stream, content);
-        log::info!(
-            "control",
-            "changes",
-            client = client,
-            stream = stream.id,
-            scope = request.scope.name(),
-            workspace = workspace.unwrap_or_default(),
-            mode = request.mode.name()
-        );
-        self.clients.change_streams.open.push(stream);
+        let summary = self.clients.change_streams.start(client, request, workspace, content);
         self.panels.changes.follow(self.clients.change_streams.followed());
-        self.clients.change_streams.changed = true;
         Ok(Some(json(&summary)))
     }
 
     pub(super) fn changes_mode_request(&mut self, client: u64, request: &ChangesMode) -> Handled {
         let id = request.stream.ok_or_else(|| malformed("`changes-mode` needs the stream to change: pass --stream"))?;
-        let Some(stream) = self.clients.change_streams.open.iter_mut().find(|s| s.id == id && s.client == client)
-        else {
-            return Err(Refusal::new(Code::NotFound, format!("there is no changes stream {id} on this connection")));
-        };
-        if stream.scope == Scope::Every && request.mode != Mode::Uncommitted {
-            return Err(malformed("Every project shows only uncommitted changes"));
-        }
-        stream.mode = request.mode;
-        let following = Following { stream: id, scope: stream.scope, workspace: stream.workspace, mode: stream.mode };
+        let following = self.clients.change_streams.change_mode(id, client, request.mode)?;
         self.panels.changes.follow(self.clients.change_streams.followed());
-        self.clients.change_streams.changed = true;
         Ok(Some(json(&following)))
     }
 
@@ -329,7 +298,7 @@ impl App {
             Some(wire::parse_digest(text).ok_or_else(|| malformed("a digest is 16 hexadecimal digits"))?)
         };
         self.panels.changes.set_viewed(place.id, &request.path, digest);
-        self.clients.change_streams.changed = true;
+        self.clients.change_streams.mark_changed();
         Ok(Some(json(&Viewed { workspace: place.id, path: request.path.clone(), viewed: !request.clear })))
     }
 }

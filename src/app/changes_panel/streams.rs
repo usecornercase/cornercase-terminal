@@ -4,29 +4,30 @@ use std::time::{Duration, Instant};
 use crate::app::App;
 use crate::app::events::Streamed;
 use crate::changes::{self, Body, Checkout, Mode, Scope};
-use crate::control::changes::{Content, State, Summary, WorkspaceChanges};
+use crate::control::changes::{Content, Following, State, Summary, WorkspaceChanges};
+use crate::control::contract::{Code, Refusal};
 use crate::control::{self, ChangesCount};
 use crate::log;
 use crate::project::Hierarchy;
 
 pub(in crate::app) const FEED_EVERY: Duration = Duration::from_millis(100);
 
-pub(in crate::app) struct Stream {
-    pub(in crate::app) id: u64,
-    pub(in crate::app) client: u64,
-    pub(in crate::app) scope: Scope,
-    pub(in crate::app) workspace: Option<u64>,
-    pub(in crate::app) mode: Mode,
-    pub(in crate::app) revision: u64,
-    pub(in crate::app) last: Option<Content>,
+struct Stream {
+    id: u64,
+    client: u64,
+    scope: Scope,
+    workspace: Option<u64>,
+    mode: Mode,
+    revision: u64,
+    last: Option<Content>,
 }
 
 pub(in crate::app) struct Streams {
-    pub(in crate::app) open: Vec<Stream>,
-    pub(in crate::app) issued: u64,
-    pub(in crate::app) changed: bool,
-    pub(in crate::app) built: Option<Instant>,
-    pub(in crate::app) every: Duration,
+    open: Vec<Stream>,
+    issued: u64,
+    changed: bool,
+    built: Option<Instant>,
+    every: Duration,
 }
 
 impl Default for Streams {
@@ -48,6 +49,68 @@ impl Streams {
         self.open.is_empty()
     }
 
+    pub(in crate::app) fn opened_by(&self, client: u64) -> bool {
+        self.open.iter().any(|s| s.client == client)
+    }
+
+    pub(in crate::app) fn mark_changed(&mut self) {
+        self.changed = true;
+    }
+
+    pub(in crate::app) fn start(
+        &mut self,
+        client: u64,
+        request: &control::Changes,
+        workspace: Option<u64>,
+        content: Content,
+    ) -> Summary {
+        self.issued += 1;
+        let stream = Stream {
+            id: self.issued,
+            client,
+            scope: request.scope,
+            workspace,
+            mode: request.mode,
+            revision: 1,
+            last: Some(content.clone()),
+        };
+        let summary = summary_of(&stream, content);
+        log::info!(
+            "control",
+            "changes",
+            client = client,
+            stream = stream.id,
+            scope = request.scope.name(),
+            workspace = workspace.unwrap_or_default(),
+            mode = request.mode.name()
+        );
+        self.open.push(stream);
+        self.changed = true;
+        summary
+    }
+
+    pub(in crate::app) fn change_mode(&mut self, id: u64, client: u64, mode: Mode) -> Result<Following, Refusal> {
+        let Some(stream) = self.open.iter_mut().find(|s| s.id == id && s.client == client) else {
+            return Err(Refusal::new(Code::NotFound, format!("there is no changes stream {id} on this connection")));
+        };
+        if stream.scope == Scope::Every && mode != Mode::Uncommitted {
+            return Err(Refusal::new(Code::Malformed, "Every project shows only uncommitted changes"));
+        }
+        stream.mode = mode;
+        self.changed = true;
+        Ok(Following { stream: id, scope: stream.scope, workspace: stream.workspace, mode })
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn set_every(&mut self, every: Duration) {
+        self.every = every;
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn mode_of(&self, stream: u64) -> Option<Mode> {
+        self.open.iter().find(|s| s.id == stream).map(|s| s.mode)
+    }
+
     pub(in crate::app) fn wake(&self, now: Instant) -> Option<Duration> {
         if !self.changed || self.open.is_empty() {
             return None;
@@ -57,7 +120,7 @@ impl Streams {
     }
 }
 
-pub(in crate::app) fn summary_of(stream: &Stream, content: Content) -> Summary {
+fn summary_of(stream: &Stream, content: Content) -> Summary {
     Summary { boot: control::server_token().to_string(), stream: stream.id, revision: stream.revision, content }
 }
 
