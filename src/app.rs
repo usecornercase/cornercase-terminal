@@ -43,11 +43,14 @@ use crate::settings::Page;
 use crate::state::{self, ChangesState, IssuesState, ProjectState, State};
 use crate::todo::{self, Todos};
 use crate::ui::{self};
+#[cfg(test)]
 use crate::update::Install;
 #[cfg(test)]
 use crate::update::restart;
 use crate::web::Web;
-use agent_watch::{AgentRuntime, WATCH_AGENTS_EVERY};
+use agent_watch::AgentRuntime;
+#[cfg(test)]
+use agent_watch::WATCH_AGENTS_EVERY;
 use changes_panel::ChangesEvent;
 use files_panel::FilesEvent;
 use interaction::AUTO_SCROLL_EVERY;
@@ -229,10 +232,7 @@ impl App {
         if !self.outbox.take_restart() {
             return None;
         }
-        Some(match &self.update.updates.install {
-            Install::Replace(exe) if self.update.updates.installed => exe.clone(),
-            _ => std::env::current_exe().unwrap_or_default(),
-        })
+        Some(self.update.restart_exe())
     }
 
     pub(crate) fn take_start(&mut self) -> Option<(u64, (u16, u16))> {
@@ -340,8 +340,8 @@ impl App {
         let held = self.held_launch_panes();
         let launch =
             self.agents.launches.iter().any(|l| !l.waits_for_you() && !held.contains(&l.term)).then_some(LAUNCH_EVERY);
-        let spin = (self.config.spinner() && self.agent_working())
-            .then(|| activity::spin_wait(self.clock.since_boot(now)));
+        let spin =
+            (self.config.spinner() && self.agent_working()).then(|| activity::spin_wait(self.clock.since_boot(now)));
         [
             drag,
             lines,
@@ -386,11 +386,7 @@ impl App {
         self.watch_setups(now);
         self.drive_queue(clock, now);
         self.sync_queued();
-        if self.overlay.as_ref().is_some_and(Overlay::lists_running)
-            && self.update.listed.is_none_or(|at| now.saturating_duration_since(at) >= WATCH_AGENTS_EVERY)
-        {
-            self.list_running(now);
-        }
+        self.refresh_restart_list(now);
     }
 
     fn refresh_agents(&mut self, now: Instant, clock: i64) {

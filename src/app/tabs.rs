@@ -160,8 +160,7 @@ impl App {
         let Some((path, tab)) = self.projects.tab_with_pane(pane) else { return Ok(None) };
         let source = tab.pane_by(pane);
         let cwd = source.and_then(Term::cwd).filter(|dir| dir.is_dir()).unwrap_or_else(|| path.to_path_buf());
-        let accounts =
-            source.map(|term| self.accounts.picked(&term.accounts().chosen())).unwrap_or_default();
+        let accounts = source.map(|term| self.accounts.picked(&term.accounts().chosen())).unwrap_or_default();
         let term = self.spawn_in(area, cwd, None, accounts)?;
         let id = term.id;
         if let Some((_, tab)) = self.projects.tab_with_pane_mut(pane) {

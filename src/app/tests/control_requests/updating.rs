@@ -16,8 +16,8 @@ fn target() -> &'static str {
 
 fn looking(server: &FakeHttp) -> (App, Receiver<AppEvent>) {
     let (mut app, rx) = empty_app();
-    app.update.updates.enabled = true;
-    app.update.updates.url = format!("{}/releases/latest", server.url());
+    app.update.updates_mut().enabled = true;
+    app.update.updates_mut().url = format!("{}/releases/latest", server.url());
     (app, rx)
 }
 
@@ -53,7 +53,7 @@ fn code(reply: &Value) -> &str {
 
 fn found(app: &mut App) {
     let release = update::release(&json!({"tag_name": "v9.0.0", "assets": []})).expect("a release");
-    app.update.updates.available = Some(release);
+    app.update.updates_mut().available = Some(release);
 }
 
 mod unavailable {
@@ -147,13 +147,13 @@ mod checking {
         #[case] expected: &str,
     ) {
         let (mut app, _rx) = empty_app();
-        app.update.updates.enabled = enabled;
+        app.update.updates_mut().enabled = enabled;
         app.config.check_updates = looks;
         if answered {
-            app.update.updates.answered = Some(SystemTime::now());
+            app.update.updates_mut().answered = Some(SystemTime::now());
         }
         if failed {
-            app.update.updates.error = Some("offline".into());
+            app.update.updates_mut().error = Some("offline".into());
         }
 
         assert_eq!(serde_json::to_value(app.update_info().none).expect("none"), expected);
@@ -163,7 +163,7 @@ mod checking {
     fn a_check_during_an_install_keeps_the_release_being_installed() {
         let (mut app, _rx) = empty_app();
         found(&mut app);
-        app.update.updates.installing = true;
+        app.update.updates_mut().installing = true;
         let later = update::release(&json!({"tag_name": "v9.1.0", "assets": []})).expect("a release");
 
         app.update_checked(Ok(Some(later)));
@@ -187,22 +187,22 @@ mod installing {
         let (releases, files) = publish_for(tmp, target(), sums);
         let exe = installed(tmp);
         let (mut app, rx) = looking(&releases);
-        app.update.updates.install = Install::Replace(exe.clone());
+        app.update.updates_mut().install = Install::Replace(exe.clone());
         Replacing { app, rx, exe, files, _releases: releases }
     }
 
     #[test]
     fn install_needs_a_release() {
         let (mut app, _rx) = empty_app();
-        app.update.updates.enabled = true;
+        app.update.updates_mut().enabled = true;
         assert_eq!(refused(&mut app, "update-install", &json!({})).code, "conflict");
     }
 
     #[test]
     fn an_install_by_command_is_refused_naming_it() {
         let (mut app, _rx) = empty_app();
-        app.update.updates.enabled = true;
-        app.update.updates.install = Install::Command(update::BREW);
+        app.update.updates_mut().enabled = true;
+        app.update.updates_mut().install = Install::Command(update::BREW);
         found(&mut app);
 
         let refusal = refused(&mut app, "update-install", &json!({}));
@@ -275,8 +275,8 @@ mod installing {
     #[test]
     fn an_installed_update_answers_at_once() {
         let (mut app, _rx) = empty_app();
-        app.update.updates.enabled = true;
-        app.update.updates.installed = true;
+        app.update.updates_mut().enabled = true;
+        app.update.updates_mut().installed = true;
 
         let answer = ok(&mut app, "update-install", &json!({}));
 

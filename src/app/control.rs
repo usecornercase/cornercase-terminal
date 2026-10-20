@@ -320,7 +320,7 @@ impl App {
     }
 
     fn unavailable(&self) -> &'static [(&'static str, &'static str)] {
-        if self.update.updates.enabled { &[] } else { contract::NOT_LOOKING }
+        if self.update.looks_for_releases() { &[] } else { contract::NOT_LOOKING }
     }
 
     pub(in crate::app) fn run_request(

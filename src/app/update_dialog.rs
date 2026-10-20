@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::{Instant, SystemTime};
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
@@ -5,6 +6,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::text::Line;
 
 use super::App;
+use super::agent_watch::WATCH_AGENTS_EVERY;
 use super::control::conflict;
 use super::event::AppEvent;
 use super::input::wheel;
@@ -22,12 +24,12 @@ use crate::update::{self, Install, Release, Updates};
 use crate::version;
 
 pub(super) struct UpdateState {
-    pub(super) updates: Updates,
-    pub(super) scroll: usize,
-    pub(super) restart_list: Vec<restart::Running>,
-    pub(super) listed: Option<Instant>,
-    pub(super) checks: Vec<u64>,
-    pub(super) installs: Vec<u64>,
+    updates: Updates,
+    scroll: usize,
+    restart_list: Vec<restart::Running>,
+    listed: Option<Instant>,
+    checks: Vec<u64>,
+    installs: Vec<u64>,
 }
 
 impl UpdateState {
@@ -40,6 +42,51 @@ impl UpdateState {
             checks: Vec::new(),
             installs: Vec::new(),
         }
+    }
+
+    pub(super) fn restart_exe(&self) -> PathBuf {
+        match &self.updates.install {
+            Install::Replace(exe) if self.updates.installed => exe.clone(),
+            _ => std::env::current_exe().unwrap_or_default(),
+        }
+    }
+
+    pub(super) fn looks_for_releases(&self) -> bool {
+        self.updates.enabled
+    }
+
+    pub(super) fn installed(&self) -> bool {
+        self.updates.installed
+    }
+
+    pub(super) fn available_version(&self) -> &str {
+        self.updates.available.as_ref().map_or("", |release| release.version.as_str())
+    }
+
+    pub(super) fn wait_for_check(&mut self, key: u64) {
+        self.checks.push(key);
+    }
+
+    pub(super) fn wait_for_install(&mut self, key: u64) {
+        self.installs.push(key);
+    }
+
+    pub(super) fn take_checks(&mut self) -> Vec<u64> {
+        std::mem::take(&mut self.checks)
+    }
+
+    pub(super) fn take_installs(&mut self) -> Vec<u64> {
+        std::mem::take(&mut self.installs)
+    }
+
+    #[cfg(test)]
+    pub(super) fn updates_mut(&mut self) -> &mut Updates {
+        &mut self.updates
+    }
+
+    #[cfg(test)]
+    pub(super) fn scroll(&self) -> usize {
+        self.scroll
     }
 }
 
@@ -138,7 +185,15 @@ impl App {
         restart::from_report(&self.report(None))
     }
 
-    pub(super) fn list_running(&mut self, now: Instant) {
+    pub(super) fn refresh_restart_list(&mut self, now: Instant) {
+        if self.overlay.as_ref().is_some_and(Overlay::lists_running)
+            && self.update.listed.is_none_or(|at| now.saturating_duration_since(at) >= WATCH_AGENTS_EVERY)
+        {
+            self.list_running(now);
+        }
+    }
+
+    fn list_running(&mut self, now: Instant) {
         self.update.restart_list = self.running();
         self.update.listed = Some(now);
     }
