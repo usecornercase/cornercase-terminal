@@ -162,7 +162,7 @@ impl Clock {
 pub(crate) struct App {
     screen: groups::Screen,
     git: groups::Git,
-    spawn: groups::Spawn,
+    setups: worktree_setup::Setups,
     messages: groups::Messages,
     panels: groups::Panels,
     paths: groups::Paths,
@@ -205,7 +205,7 @@ impl App {
         Self {
             screen: groups::Screen::default(),
             git: groups::Git::default(),
-            spawn: groups::Spawn::default(),
+            setups: worktree_setup::Setups::new(&config_path),
             messages: groups::Messages::default(),
             panels: groups::Panels::default(),
             clients: control::Clients::default(),

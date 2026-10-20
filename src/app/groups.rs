@@ -1,6 +1,5 @@
 use ratatui::layout::Position;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::changes;
 use crate::files;
@@ -36,11 +35,6 @@ pub(super) struct Git {
 }
 
 #[derive(Default)]
-pub(super) struct Spawn {
-    pub(super) setups: HashMap<u64, (u64, PathBuf)>,
-}
-
-#[derive(Default)]
 pub(super) struct Messages {
     pub(super) toast: Option<Toast>,
     pub(super) star: StarPrompt,
@@ -59,12 +53,11 @@ pub(super) struct Panels {
 
 pub(super) struct Paths {
     pub(super) config_path: PathBuf,
-    pub(super) setup_dir: PathBuf,
     pub(super) home: Option<PathBuf>,
 }
 
 impl Paths {
     pub(super) fn new(config_path: PathBuf, home: Option<PathBuf>) -> Self {
-        Self { setup_dir: config_path.parent().map(Path::to_path_buf).unwrap_or_default(), config_path, home }
+        Self { config_path, home }
     }
 }
