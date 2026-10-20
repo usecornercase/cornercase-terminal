@@ -4,7 +4,6 @@ use std::time::{Duration, Instant};
 
 use ratatui::layout::Position;
 
-use crate::agents::usage;
 use crate::changes;
 use crate::files;
 use crate::state;
@@ -110,17 +109,5 @@ impl Default for Wire {
             confirm_within: control::CONFIRM_WITHIN,
             typing_holds: control::INPUT_HOLDS,
         }
-    }
-}
-
-pub(super) struct Usages {
-    pub(super) state: usage::State,
-    pub(super) page: usage::Page,
-    pub(super) timeout: Duration,
-}
-
-impl Default for Usages {
-    fn default() -> Self {
-        Self { state: usage::State::default(), page: usage::Page::default(), timeout: usage::TIMEOUT }
     }
 }

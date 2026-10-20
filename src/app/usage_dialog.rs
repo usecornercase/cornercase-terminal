@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::time::{Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
@@ -17,6 +17,18 @@ use crate::host::clipboard;
 use crate::log::{Job, Level};
 use crate::time;
 use crate::ui;
+
+pub(super) struct Usages {
+    pub(super) state: usage::State,
+    pub(super) page: usage::Page,
+    pub(super) timeout: Duration,
+}
+
+impl Default for Usages {
+    fn default() -> Self {
+        Self { state: usage::State::default(), page: usage::Page::default(), timeout: usage::TIMEOUT }
+    }
+}
 
 impl App {
     pub(super) fn open_usage(&mut self) {
