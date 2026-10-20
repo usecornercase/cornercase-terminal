@@ -19,6 +19,7 @@ use crate::log::{self, Job, Level};
 use crate::paths;
 use crate::project::Hierarchy;
 use crate::settings::Page;
+use crate::todo::editor::Editor;
 use crate::ui::{self, FlowsHit, SettingsHit};
 
 const LIST_LABEL: usize = 26;
@@ -95,47 +96,23 @@ impl App {
     pub(super) fn flows_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
         let Some(dialog) = self.flows_dialog() else { return };
         let room = room(dialog, area);
-        if let Some((_, _, submit)) = dialog.confirm_text() {
-            if ev.kind == MouseEventKind::Down(MouseButton::Left) {
-                match ui::form_hit(area, submit, None, pos) {
-                    Some(ui::FormHit::Submit) => {
-                        let action = dialog.confirmed();
-                        self.flows_act(action);
-                    }
-                    Some(ui::FormHit::Cancel) => dialog.confirm = None,
-                    _ => {}
-                }
+        if dialog.confirm_text().is_some() {
+            if ev.kind == MouseEventKind::Down(MouseButton::Left)
+                && let Some(action) = confirm_click(dialog, area, pos)
+            {
+                self.flows_act(action);
             }
             return;
         }
         if let Some(delta) = wheel(ev.kind) {
-            let body = preview_body(dialog, area).filter(|body| body.contains(pos));
-            let most = body.and_then(|body| match dialog.preview() {
-                Some(Preview::Flow(flow)) => Some(ui::flow::max_scroll(&plan(flow), body)),
-                _ => None,
-            });
-            match (body, most) {
-                (Some(_), Some(most)) => dialog.scroll_preview(delta, most),
-                (Some(_), None) => {}
-                _ => dialog.wheel(delta, room),
-            }
+            wheel_flows(dialog, area, pos, delta, room);
             return;
         }
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
             return;
         }
         let ui::Overlay::Flows(view) = flows_view(dialog, area) else { return };
-        let hit = match ui::flows_hit(area, &view, pos) {
-            Some(FlowsHit::Tab(i)) => Hit::Tab(i),
-            Some(FlowsHit::Row(SettingsHit::Remove(i))) => Hit::Remove(i),
-            Some(FlowsHit::Row(SettingsHit::MoveUp(i))) => Hit::MoveUp(i),
-            Some(FlowsHit::Row(SettingsHit::MoveDown(i))) => Hit::MoveDown(i),
-            Some(FlowsHit::Row(SettingsHit::Row(i))) => Hit::Row(i),
-            Some(FlowsHit::Pick(i)) => Hit::Pick(i),
-            Some(FlowsHit::Button(i)) => Hit::Button(view.buttons[i]),
-            Some(FlowsHit::Text { line, col }) => Hit::Text { line, col },
-            Some(FlowsHit::Row(_)) | None => return,
-        };
+        let Some(hit) = list_hit(&view, ui::flows_hit(area, &view, pos)) else { return };
         let action = dialog.hit(hit, room);
         follow_preview(dialog, area);
         self.flows_act(action);
@@ -144,55 +121,16 @@ impl App {
     fn flows_act(&mut self, action: Action) {
         match action {
             Action::None => {}
-            Action::Close => {
-                let Some(Overlay::Flows { dialog, back }) = self.overlay.take() else { return };
-                self.overlay = back.map(|back| *back);
-                let starting = match &self.overlay {
-                    Some(Overlay::StartFlow { start, .. }) => Some(start.project),
-                    _ => None,
-                };
-                let listing = starting.map(|project| self.flow_listing(self.project_path(project).as_deref()));
-                if let (Some(Overlay::StartFlow { start, .. }), Some(listing)) = (&mut self.overlay, listing) {
-                    start.set_listing(listing, dialog.last.as_ref());
-                }
-            }
-            Action::Save { flow, place, previous } => {
-                let saved = self.flows_dir(place).and_then(|dir| self.save_flow_file(&dir, &flow, previous.as_deref()));
-                self.flows_saved(saved, Dialog::saved);
-            }
-            Action::Duplicate(flow) => {
-                let saved = self.save_flow_file(&paths::flows(&self.config_path), &flow, None);
-                self.flows_saved(saved, |dialog, path| {
-                    if let Some(i) = dialog.find(&Origin::User(path), "") {
-                        dialog.open(i);
-                    }
-                });
-            }
+            Action::Close => self.flows_closed(),
+            Action::Save { flow, place, previous } => self.flows_save(&flow, place, previous.as_deref()),
+            Action::Duplicate(flow) => self.flows_duplicate(&flow),
             Action::Delete(path) => {
                 if let (Err(e), Some(dialog)) = (self.delete_flow_file(&path), self.flows_dialog()) {
                     dialog.notice = Some(e);
                 }
             }
-            Action::Hide { name, file } => match self.hide_builtin(&name, file.as_deref()) {
-                Ok(()) => {
-                    if let Some(dialog) = self.flows_dialog() {
-                        dialog.notice =
-                            Some(format!("deleted {name}: deleted built-ins, at the end of the list, brings it back"));
-                    }
-                }
-                Err(e) => self.flows_notice(e),
-            },
-            Action::Unhide(name) => match self.unhide_builtin(&name, None) {
-                Ok(()) => {
-                    if let Some(dialog) = self.flows_dialog() {
-                        if let Some(i) = dialog.find(&Origin::BuiltIn, &name) {
-                            dialog.select(i);
-                        }
-                        dialog.notice = Some(format!("restored {name}"));
-                    }
-                }
-                Err(e) => self.flows_notice(e),
-            },
+            Action::Hide { name, file } => self.flows_hide(&name, file.as_deref()),
+            Action::Unhide(name) => self.flows_unhide(&name),
             Action::Restore { file, name } => {
                 if let Err(e) = self.unhide_builtin(&name, Some(&file)) {
                     self.flows_notice(e);
@@ -205,6 +143,60 @@ impl App {
             Action::ReadModels(kind) => self.read_models(kind),
             Action::Fetch(source) => self.fetch_flow(source),
         }
+    }
+
+    fn flows_closed(&mut self) {
+        let Some(Overlay::Flows { dialog, back }) = self.overlay.take() else { return };
+        self.overlay = back.map(|back| *back);
+        let starting = match &self.overlay {
+            Some(Overlay::StartFlow { start, .. }) => Some(start.project),
+            _ => None,
+        };
+        let listing = starting.map(|project| self.flow_listing(self.project_path(project).as_deref()));
+        if let (Some(Overlay::StartFlow { start, .. }), Some(listing)) = (&mut self.overlay, listing) {
+            start.set_listing(listing, dialog.last.as_ref());
+        }
+    }
+
+    fn flows_save(&mut self, flow: &Flow, place: Place, previous: Option<&Path>) {
+        let saved = self.flows_dir(place).and_then(|dir| self.save_flow_file(&dir, flow, previous));
+        self.flows_saved(saved, Dialog::saved);
+    }
+
+    fn flows_duplicate(&mut self, flow: &Flow) {
+        let saved = self.save_flow_file(&paths::flows(&self.config_path), flow, None);
+        self.flows_saved(saved, |dialog, path| {
+            if let Some(i) = dialog.find(&Origin::User(path), "") {
+                dialog.open(i);
+            }
+        });
+    }
+
+    fn flows_hide(&mut self, name: &str, file: Option<&Path>) {
+        match self.hide_builtin(name, file) {
+            Ok(()) => {
+                if let Some(dialog) = self.flows_dialog() {
+                    dialog.notice =
+                        Some(format!("deleted {name}: deleted built-ins, at the end of the list, brings it back"));
+                }
+            }
+            Err(e) => self.flows_notice(e),
+        }
+    }
+
+    fn flows_unhide(&mut self, name: &str) {
+        match self.unhide_builtin(name, None) {
+            Ok(()) => self.flows_restored(name),
+            Err(e) => self.flows_notice(e),
+        }
+    }
+
+    fn flows_restored(&mut self, name: &str) {
+        let Some(dialog) = self.flows_dialog() else { return };
+        if let Some(i) = dialog.find(&Origin::BuiltIn, name) {
+            dialog.select(i);
+        }
+        dialog.notice = Some(format!("restored {name}"));
     }
 
     fn flows_notice(&mut self, notice: String) {
@@ -416,6 +408,95 @@ pub(super) fn settings_row(text: &RowText) -> ui::SettingsRow {
     }
 }
 
+fn confirm_click(dialog: &mut Dialog, area: Rect, pos: Position) -> Option<Action> {
+    let (_, _, submit) = dialog.confirm_text()?;
+    match ui::form_hit(area, submit, None, pos) {
+        Some(ui::FormHit::Submit) => Some(dialog.confirmed()),
+        Some(ui::FormHit::Cancel) => {
+            dialog.confirm = None;
+            None
+        }
+        _ => None,
+    }
+}
+
+fn wheel_flows(dialog: &mut Dialog, area: Rect, pos: Position, delta: isize, room: Room) {
+    let body = preview_body(dialog, area).filter(|body| body.contains(pos));
+    let most = body.and_then(|body| match dialog.preview() {
+        Some(Preview::Flow(flow)) => Some(ui::flow::max_scroll(&plan(flow), body)),
+        _ => None,
+    });
+    match (body, most) {
+        (Some(_), Some(most)) => dialog.scroll_preview(delta, most),
+        (Some(_), None) => {}
+        _ => dialog.wheel(delta, room),
+    }
+}
+
+fn list_hit(view: &ui::Flows, hit: Option<FlowsHit>) -> Option<Hit> {
+    Some(match hit? {
+        FlowsHit::Tab(i) => Hit::Tab(i),
+        FlowsHit::Row(SettingsHit::Remove(i)) => Hit::Remove(i),
+        FlowsHit::Row(SettingsHit::MoveUp(i)) => Hit::MoveUp(i),
+        FlowsHit::Row(SettingsHit::MoveDown(i)) => Hit::MoveDown(i),
+        FlowsHit::Row(SettingsHit::Row(i)) => Hit::Row(i),
+        FlowsHit::Pick(i) => Hit::Pick(i),
+        FlowsHit::Button(i) => Hit::Button(view.buttons[i]),
+        FlowsHit::Text { line, col } => Hit::Text { line, col },
+        FlowsHit::Row(_) => return None,
+    })
+}
+
+fn pick_label(marks: Option<&Vec<Option<bool>>>, i: usize, label: &str) -> String {
+    match marks.and_then(|m| m.get(i)) {
+        Some(Some(true)) => format!("[x] {label}"),
+        Some(Some(false)) => format!("[ ] {label}"),
+        Some(None) => format!("    {label}"),
+        None => label.to_string(),
+    }
+}
+
+fn pick_view(edit: &Editing) -> Option<ui::SettingsPick> {
+    let pick = edit.pick.as_ref()?;
+    let choices = edit.pick_choices();
+    let marks = edit.pick_marks();
+    let items = choices
+        .iter()
+        .enumerate()
+        .map(|(i, choice)| (pick_label(marks.as_ref(), i, &choice.label), choice.note.clone(), false))
+        .collect();
+    let selected = choices.len().checked_sub(1).map(|last| pick.search.selected().min(last));
+    Some(ui::SettingsPick {
+        title: edit.pick_title(),
+        filter: pick.search.query().to_string(),
+        items,
+        selected,
+        scroll: pick.search.scroll(),
+    })
+}
+
+fn flows_tabs(dialog: &Dialog, edit: Option<&Editing>) -> (Vec<String>, usize) {
+    if dialog.settings_tabs() {
+        (Page::ALL.iter().map(|page| page.name().to_string()).collect(), Page::Flows.index())
+    } else {
+        (edit.map(Editing::tabs).unwrap_or_default(), edit.map_or(0, Editing::tab_index))
+    }
+}
+
+fn flows_heading(dialog: &Dialog, edit: Option<&Editing>) -> String {
+    match (&dialog.importing, edit.filter(|e| e.text.is_some())) {
+        (Some(_), _) => IMPORT_HEADING.to_string(),
+        (None, edit) => edit.map_or_else(|| HEADING.to_string(), Editing::text_heading),
+    }
+}
+
+fn flows_text(dialog: &Dialog, edit: Option<&Editing>) -> Option<Editor> {
+    match &dialog.importing {
+        Some(importing) => Some(importing.editor.clone()),
+        None => edit.and_then(|e| e.text.as_ref().map(|t| t.editor.clone())),
+    }
+}
+
 pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
     if let Some((title, message, submit)) = dialog.confirm_text() {
         return confirm_view(title, message, submit, None);
@@ -423,58 +504,20 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
     let room = room(dialog, area);
     let edit = dialog.edit.as_deref();
     let texts = edit.map_or_else(|| dialog.list_rows(), |edit| edit.row_texts(&dialog.agents));
-    let rows = texts.iter().map(settings_row).collect();
-    let pick = edit.and_then(|edit| {
-        let pick = edit.pick.as_ref()?;
-        let choices = edit.pick_choices();
-        let marks = edit.pick_marks();
-        let items = choices
-            .iter()
-            .enumerate()
-            .map(|(i, choice)| {
-                let label = match marks.as_ref().and_then(|m| m.get(i)) {
-                    Some(Some(true)) => format!("[x] {}", choice.label),
-                    Some(Some(false)) => format!("[ ] {}", choice.label),
-                    Some(None) => format!("    {}", choice.label),
-                    None => choice.label.clone(),
-                };
-                (label, choice.note.clone(), false)
-            })
-            .collect();
-        let selected = choices.len().checked_sub(1).map(|last| pick.search.selected().min(last));
-        Some(ui::SettingsPick {
-            title: edit.pick_title(),
-            filter: pick.search.query().to_string(),
-            items,
-            selected,
-            scroll: pick.search.scroll(),
-        })
-    });
     let field = edit
         .and_then(|e| e.field.as_ref().map(|f| ui::SettingsEdit { label: e.field_label(), value: f.input.clone() }));
-    let heading = match (&dialog.importing, edit.filter(|e| e.text.is_some())) {
-        (Some(_), _) => IMPORT_HEADING.to_string(),
-        (None, edit) => edit.map_or_else(|| HEADING.to_string(), Editing::text_heading),
-    };
-    let (tabs, tab) = if dialog.settings_tabs() {
-        (Page::ALL.iter().map(|page| page.name().to_string()).collect(), Page::Flows.index())
-    } else {
-        (edit.map(Editing::tabs).unwrap_or_default(), edit.map_or(0, Editing::tab_index))
-    };
+    let (tabs, tab) = flows_tabs(dialog, edit);
     ui::Overlay::Flows(Box::new(ui::Flows {
         title: dialog.title(),
-        heading,
+        heading: flows_heading(dialog, edit),
         tabs,
         tab,
-        rows,
+        rows: texts.iter().map(settings_row).collect(),
         cursor: edit.map_or(dialog.cursor, |e| e.cursor),
         label: if edit.is_some() { FORM_LABEL } else { LIST_LABEL },
         edit: field,
-        pick,
-        text: match &dialog.importing {
-            Some(importing) => Some(importing.editor.clone()),
-            None => edit.and_then(|e| e.text.as_ref().map(|t| t.editor.clone())),
-        },
+        pick: edit.and_then(pick_view),
+        text: flows_text(dialog, edit),
         warnings: dialog.warnings(),
         note: dialog.error().map(ui::Note::Error),
         hint: dialog.hint(),

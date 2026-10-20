@@ -286,17 +286,7 @@ impl App {
                 .map(|(version, text)| Notes { version: version.clone(), text: text.clone() })
                 .collect(),
         });
-        let none = release.is_none().then(|| {
-            if !updates.enabled {
-                NoUpdate::Disabled
-            } else if updates.answered.is_some() {
-                if updates.error.is_some() { NoUpdate::Failed } else { NoUpdate::UpToDate }
-            } else if !self.config.check_updates {
-                NoUpdate::Off
-            } else {
-                NoUpdate::Unchecked
-            }
-        });
+        let none = release.is_none().then(|| self.no_update());
         let install = match updates.install.on(update::target()) {
             Install::Replace(path) => InstallInfo::Replace { path },
             Install::Command(command) => InstallInfo::Command { command: command.into() },
@@ -311,6 +301,19 @@ impl App {
             installing: updates.installing,
             installed: updates.installed,
             install_error: updates.install_error.clone(),
+        }
+    }
+
+    fn no_update(&self) -> NoUpdate {
+        let updates = &self.update.updates;
+        if !updates.enabled {
+            NoUpdate::Disabled
+        } else if updates.answered.is_some() {
+            if updates.error.is_some() { NoUpdate::Failed } else { NoUpdate::UpToDate }
+        } else if !self.config.check_updates {
+            NoUpdate::Off
+        } else {
+            NoUpdate::Unchecked
         }
     }
 

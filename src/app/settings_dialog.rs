@@ -115,6 +115,10 @@ impl App {
         let Some(Overlay::Settings(s)) = &mut self.overlay else { return };
         let action = s.key(key, Self::settings_pick_rows(area));
         self.settings_page = s.page;
+        self.settings_handled(action, area);
+    }
+
+    fn settings_handled(&mut self, action: settings::Action, area: Rect) {
         if self.settings_page == Page::Flows {
             self.open_flows_tab();
             return;
@@ -138,44 +142,9 @@ impl App {
             _ => {}
         }
         let MouseEventKind::Down(MouseButton::Left) = ev.kind else { return };
-        let rows_now = s.rows();
-        let sections: Vec<&'static str> = rows_now.iter().map(settings::Row::section).collect();
-        let removable: Vec<bool> = (0..rows_now.len()).map(|i| s.removal(i).is_some()).collect();
-        let movable: Vec<bool> = rows_now.iter().map(settings::Row::movable).collect();
-        let pick = s.pick.as_ref().map(|p| (s.pick_choices().len(), p.search.scroll()));
-        let tabs = Page::ALL.map(Page::name);
-        let layout = ui::SettingsLayout {
-            tabs: &tabs,
-            sections: &sections,
-            removable: &removable,
-            movable: &movable,
-            cursor: s.cursor,
-            pick,
-        };
-        let action = match ui::settings_hit(area, &layout, pos) {
-            Some(ui::SettingsHit::Done) => settings::Action::Close,
-            Some(ui::SettingsHit::Restart) => settings::Action::Restart,
-            Some(ui::SettingsHit::Tab(i)) => {
-                s.open_page(Page::ALL[i]);
-                settings::Action::None
-            }
-            Some(ui::SettingsHit::Pick(i)) => s.choose(Some(i)),
-            Some(ui::SettingsHit::Remove(i)) => s.removal(i).unwrap_or(settings::Action::None),
-            Some(ui::SettingsHit::MoveUp(i)) => s.move_tab(i, settings::Move::Up),
-            Some(ui::SettingsHit::MoveDown(i)) => s.move_tab(i, settings::Move::Down),
-            Some(ui::SettingsHit::Row(i)) => {
-                s.edit = None;
-                s.select(i);
-                s.activate()
-            }
-            None => settings::Action::None,
-        };
+        let action = settings_click(s, area, pos);
         self.settings_page = s.page;
-        if self.settings_page == Page::Flows {
-            self.open_flows_tab();
-            return;
-        }
-        self.settings_act(action, area);
+        self.settings_handled(action, area);
     }
 
     pub(super) fn remove_token(&mut self, source: Source) -> Result<String, String> {
@@ -191,46 +160,45 @@ impl App {
         Ok(format!("the {} {} was removed", source.name(), source.token_name()))
     }
 
+    fn settings_message(&mut self, notice: String) {
+        if let Some(Overlay::Settings(s)) = &mut self.overlay {
+            s.notice = Some(notice);
+        }
+    }
+
     fn settings_act(&mut self, action: settings::Action, area: Rect) {
         match action {
             settings::Action::None => {}
             settings::Action::Close => self.overlay = None,
             settings::Action::Restart => self.open_restart(),
             settings::Action::Save(config) => {
-                if let (Err(e), Some(Overlay::Settings(s))) = (self.write_config(&config), &mut self.overlay) {
-                    s.notice = Some(e);
+                if let Err(e) = self.write_config(&config) {
+                    self.settings_message(e);
                 }
             }
             settings::Action::CheckToken(source, token) => self.check_token(source, token),
             settings::Action::ForgetBrowsers => {
                 let forgotten = self.forget_browsers();
-                if let Some(Overlay::Settings(s)) = &mut self.overlay {
-                    s.notice = Some(forgotten.map_or_else(|e| e, String::from));
-                }
+                self.settings_message(forgotten.map_or_else(|e| e, String::from));
             }
             settings::Action::CheckBot(via, token) => self.check_messenger(via, token),
             settings::Action::RemoveBot(via) => {
                 let removed = self.remove_messenger(via);
-                if let Some(Overlay::Settings(s)) = &mut self.overlay {
-                    s.notice = Some(removed.unwrap_or_else(|e| e));
-                }
+                self.settings_message(removed.unwrap_or_else(|e| e));
             }
             settings::Action::Pair(via) => {
-                let refused = self.pair(via);
-                if let (Some(why), Some(Overlay::Settings(s))) = (refused, &mut self.overlay) {
-                    s.notice = Some(why.into());
+                if let Some(why) = self.pair(via) {
+                    self.settings_message(why.into());
                 }
             }
             settings::Action::ForgetChat(via) => {
                 let forgotten = self.forget_chat(via);
-                if let Some(Overlay::Settings(s)) = &mut self.overlay {
-                    s.notice = Some(forgotten);
-                }
+                self.settings_message(forgotten);
             }
             settings::Action::Plugin(id, on) => self.switch_plugin(&id, on),
             settings::Action::RemoveToken(source) => {
-                if let (Err(e), Some(Overlay::Settings(s))) = (self.remove_token(source), &mut self.overlay) {
-                    s.notice = Some(e);
+                if let Err(e) = self.remove_token(source) {
+                    self.settings_message(e);
                 }
             }
             settings::Action::Accounts(order) => self.account_order(&order, area),
@@ -240,39 +208,73 @@ impl App {
     }
 }
 
-pub(super) fn settings_view(settings: &Settings) -> ui::Settings {
-    let rows: Vec<ui::SettingsRow> = settings
-        .rows()
-        .iter()
-        .enumerate()
-        .map(|(i, row)| {
-            let text = settings.row_text(row);
-            ui::SettingsRow {
-                section: row.section(),
-                label: text.label,
-                value: text.value,
-                note: text.note,
-                dangerous: text.dangerous,
-                muted: false,
-                removable: settings.removal(i).is_some(),
-                movable: row.movable(),
-            }
-        })
-        .collect();
-    let edit = settings.edit_field().map(|(label, value)| ui::SettingsEdit { label, value });
-    let pick = settings.pick.as_ref().map(|pick| {
-        let choices = settings.pick_choices();
-        ui::SettingsPick {
-            title: settings.pick_title(),
-            filter: pick.search.query().to_string(),
-            items: choices.iter().map(|item| (item.value.clone(), item.note.clone(), item.dangerous)).collect(),
-            selected: settings.pick_selected(),
-            scroll: pick.search.scroll(),
+fn settings_click(s: &mut Settings, area: Rect, pos: Position) -> settings::Action {
+    let rows_now = s.rows();
+    let sections: Vec<&'static str> = rows_now.iter().map(settings::Row::section).collect();
+    let removable: Vec<bool> = (0..rows_now.len()).map(|i| s.removal(i).is_some()).collect();
+    let movable: Vec<bool> = rows_now.iter().map(settings::Row::movable).collect();
+    let pick = s.pick.as_ref().map(|p| (s.pick_choices().len(), p.search.scroll()));
+    let tabs = Page::ALL.map(Page::name);
+    let layout = ui::SettingsLayout {
+        tabs: &tabs,
+        sections: &sections,
+        removable: &removable,
+        movable: &movable,
+        cursor: s.cursor,
+        pick,
+    };
+    match ui::settings_hit(area, &layout, pos) {
+        Some(ui::SettingsHit::Done) => settings::Action::Close,
+        Some(ui::SettingsHit::Restart) => settings::Action::Restart,
+        Some(ui::SettingsHit::Tab(i)) => {
+            s.open_page(Page::ALL[i]);
+            settings::Action::None
         }
-    });
+        Some(ui::SettingsHit::Pick(i)) => s.choose(Some(i)),
+        Some(ui::SettingsHit::Remove(i)) => s.removal(i).unwrap_or(settings::Action::None),
+        Some(ui::SettingsHit::MoveUp(i)) => s.move_tab(i, settings::Move::Up),
+        Some(ui::SettingsHit::MoveDown(i)) => s.move_tab(i, settings::Move::Down),
+        Some(ui::SettingsHit::Row(i)) => {
+            s.edit = None;
+            s.select(i);
+            s.activate()
+        }
+        None => settings::Action::None,
+    }
+}
+
+fn row_view(settings: &Settings, i: usize, row: &settings::Row) -> ui::SettingsRow {
+    let text = settings.row_text(row);
+    ui::SettingsRow {
+        section: row.section(),
+        label: text.label,
+        value: text.value,
+        note: text.note,
+        dangerous: text.dangerous,
+        muted: false,
+        removable: settings.removal(i).is_some(),
+        movable: row.movable(),
+    }
+}
+
+fn pick_view(settings: &Settings, pick: &settings::Pick) -> ui::SettingsPick {
+    let choices = settings.pick_choices();
+    ui::SettingsPick {
+        title: settings.pick_title(),
+        filter: pick.search.query().to_string(),
+        items: choices.iter().map(|item| (item.value.clone(), item.note.clone(), item.dangerous)).collect(),
+        selected: settings.pick_selected(),
+        scroll: pick.search.scroll(),
+    }
+}
+
+pub(super) fn settings_view(settings: &Settings) -> ui::Settings {
+    let rows: Vec<ui::SettingsRow> =
+        settings.rows().iter().enumerate().map(|(i, row)| row_view(settings, i, row)).collect();
+    let edit = settings.edit_field().map(|(label, value)| ui::SettingsEdit { label, value });
+    let pick = settings.pick.as_ref().map(|pick| pick_view(settings, pick));
     let error = settings.edit.as_ref().and_then(|e| e.error.clone());
     let note = if settings.busy() { Some(ui::Note::Busy("checking…")) } else { error.map(ui::Note::Error) };
-    let hint = settings.hint();
     ui::Settings {
         tabs: Page::ALL.iter().map(|p| p.name()).collect(),
         tab: settings.page.index(),
@@ -281,7 +283,7 @@ pub(super) fn settings_view(settings: &Settings) -> ui::Settings {
         edit,
         pick,
         note,
-        hint,
+        hint: settings.hint(),
         submit: DONE,
     }
 }

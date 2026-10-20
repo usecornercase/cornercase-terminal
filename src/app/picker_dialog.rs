@@ -130,21 +130,28 @@ impl App {
             MouseEventKind::ScrollUp => picker.scroll_by(-WHEEL_ROWS, rows),
             MouseEventKind::ScrollDown => picker.scroll_by(WHEEL_ROWS, rows),
             MouseEventKind::Down(MouseButton::Left) => {
-                match ui::picker_hit(area, PICKER_SUBMIT, picker.items().len(), picker.scroll(), pos) {
-                    Some(PickerHit::Item(i)) => {
-                        if let Some(path) = picker.choose(i) {
-                            return self.open_chosen(path, group, area);
-                        }
-                    }
-                    Some(PickerHit::Submit) => {
-                        let dir = picker.dir().to_path_buf();
-                        return self.open_chosen(dir, group, area);
-                    }
-                    Some(PickerHit::Cancel) => self.overlay = None,
-                    None => {}
-                }
+                let hit = ui::picker_hit(area, PICKER_SUBMIT, picker.items().len(), picker.scroll(), pos);
+                return self.picker_clicked(hit, group, area);
             }
             _ => {}
+        }
+        Ok(())
+    }
+
+    fn picker_clicked(&mut self, hit: Option<PickerHit>, group: Option<u64>, area: Rect) -> Result<()> {
+        let Some(Overlay::Picker { picker, .. }) = &mut self.overlay else { return Ok(()) };
+        match hit {
+            Some(PickerHit::Item(i)) => {
+                if let Some(path) = picker.choose(i) {
+                    return self.open_chosen(path, group, area);
+                }
+            }
+            Some(PickerHit::Submit) => {
+                let dir = picker.dir().to_path_buf();
+                return self.open_chosen(dir, group, area);
+            }
+            Some(PickerHit::Cancel) => self.overlay = None,
+            None => {}
         }
         Ok(())
     }
