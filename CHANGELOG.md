@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.171
+
+- **Each pane shows and changes its own account.** Once you have an account, every pane has a row under it with its accounts: a Claude Code, Codex or Gemini CLI pane shows that agent's button, such as ` claude: work ▾ `, and a shell one button per agent, the accounts a `claude` typed there would use. Pick another account there and only that pane changes: an agent restarts on it in the same conversation (Gemini CLI starts a new one), and a shell at its prompt starts again in the same folder with that account. An agent that is working restarts once its turn is over; pick its account again to cancel. With another program in front, such as `vim`, the buttons are dimmed and the menu says to stop it first. The right-click menu of a pane and a tab's ` ⋯ ` menu have **account ›** too, also when **Settings › UI › account switcher** is off.
+- **The account bar at the bottom of the window is gone.** It chose the account new tabs used; now **+ Tab** takes the accounts of the workspace's active pane, like a split, so a tab next to a personal agent is personal too. The account picked in **Settings › Accounts** (or with `cornercase account use`) is the default for new workspaces and projects, scheduled and issue agents and scripts run outside a pane, and changing it no longer says that open tabs keep theirs, since it changes none of them.
+
 ## 0.12.170
 
 - **Discard a file's changes.** In the changes panel's Uncommitted mode and in Every project, hover a file and click the **`↺`** left of its `✓` to put it back as it is in the last commit; a file git doesn't track is deleted, and a renamed one gets its old name back. A confirmation names the file and nothing changes until you click **discard**; if the file changed after your click (an agent kept writing), nothing is discarded and a message says so.
