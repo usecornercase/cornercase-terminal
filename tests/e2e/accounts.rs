@@ -40,15 +40,22 @@ fn an_account_in_the_active_profile_reaches_new_tabs_and_another_profile_is_used
     assert_ne!(config_dir(&system), Some(path.as_str()));
     assert!(session.says(&["profile", "list"]).contains("* Work"), "the active profile stays");
 
+    assert_unknown_profile_refused(&session);
+    assert_account_removed(&session, &path);
+    let _ = std::fs::remove_dir_all(files);
+}
+
+fn assert_unknown_profile_refused(session: &Session) {
     let refused = session.cli(&["start", "claude", "--profile", "Nope"]);
     assert!(!refused.status.success());
     assert!(String::from_utf8_lossy(&refused.stderr).contains("there is no profile `Nope`"), "{refused:?}");
+}
 
+fn assert_account_removed(session: &Session, path: &str) {
     let removed = session.says(&["account", "remove", "claude", "work", "--yes"]);
     assert_eq!(removed, "removed the claude account work");
-    assert!(!std::path::Path::new(&path).exists());
+    assert!(!std::path::Path::new(path).exists());
     assert!(session.says(&["profile", "list"]).contains("* Work  the system's logins"));
-    let _ = std::fs::remove_dir_all(files);
 }
 
 #[test]

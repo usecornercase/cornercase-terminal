@@ -5,33 +5,11 @@ const MARKER: &str = "zq-body-marker";
 #[test]
 fn the_issues_are_read_and_started_through_the_server_and_never_logged() {
     let session = Session::new();
-    let worktrees = session.dir.join("worktrees");
-    let gh = session.dir.join("gh");
-    let list = r#"[{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"author":{"login":"ana"},"updatedAt":"2026-09-19T12:00:00Z","url":"https://github.com/acme/shop/issues/7"}]"#;
     let view = format!(
         r#"{{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"assignees":[],"author":{{"login":"ana"}},"updatedAt":"","url":"https://github.com/acme/shop/issues/7","body":"It breaks {MARKER}","comments":[]}}"#
     );
-    let script =
-        format!("#!/bin/sh\nif [ \"$2\" = view ]; then cat <<'EOF'\n{view}\nEOF\nelse cat <<'EOF'\n{list}\nEOF\nfi\n");
-    write_executable(&gh, &script);
-    let agent = session.dir.join("agent");
-    write_executable(
-        &agent,
-        "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\n\
-         printf '\\033[2J\\033[Hagent ready> '\nread line\nprintf '%s' \"$line\" > got\n",
-    );
-    let config = format!(
-        r#"{{"worktrees_dir": "{}", "gh": "{}", "agent": "fake", "accept_trust_prompts": true, "agent_commands": {{"fake": "{}"}}}}"#,
-        worktrees.display(),
-        gh.display(),
-        agent.display()
-    );
-    std::fs::write(session.dir.join("config.json"), config).expect("write config");
     let repo = session.dir.join("repo");
-    std::fs::create_dir_all(&repo).expect("create repo dir");
-    let repo_name = repo.file_name().and_then(|n| n.to_str()).expect("repo name").to_string();
-    git(&repo, &["init", "--quiet"]);
-    git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "init"]);
+    let (worktrees, repo_name) = fake_issue_tracker(&session, &view, r#""accept_trust_prompts": true, "#, &repo);
     let mut app = Harness::open(Arc::clone(&session), ROWS, COLS);
     app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
     let project = session.says(&["open", &repo.display().to_string()]);

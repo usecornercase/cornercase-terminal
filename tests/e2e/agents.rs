@@ -86,29 +86,9 @@ fn clicking_a_notification_shows_the_agent_that_sent_it() {
 #[test]
 fn an_issue_is_read_then_handed_to_its_agent_in_its_own_worktree() {
     let session = Session::new();
-    let worktrees = session.dir.join("worktrees");
-    let gh = session.dir.join("gh");
-    let list = r#"[{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"author":{"login":"ana"},"updatedAt":"2026-09-19T12:00:00Z","url":"https://github.com/acme/shop/issues/7"}]"#;
     let view = r#"{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"assignees":[],"author":{"login":"ana"},"updatedAt":"","url":"u","body":"The form **breaks** after:\n\n- typing\n- waiting","comments":[{"author":{"login":"bo"},"body":"Same here","createdAt":""}]}"#;
-    let script =
-        format!("#!/bin/sh\nif [ \"$2\" = view ]; then cat <<'EOF'\n{view}\nEOF\nelse cat <<'EOF'\n{list}\nEOF\nfi\n");
-    write_executable(&gh, &script);
-    let agent = session.dir.join("agent");
-    let agent_script = "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\n\
-        printf '\\033[2J\\033[Hagent ready> '\nread line\nprintf '%s' \"$line\" > got\n";
-    write_executable(&agent, agent_script);
-    let config = format!(
-        r#"{{"worktrees_dir": "{}", "gh": "{}", "agent": "fake", "agent_commands": {{"fake": "{}"}}}}"#,
-        worktrees.display(),
-        gh.display(),
-        agent.display()
-    );
-    std::fs::write(session.dir.join("config.json"), config).expect("write config");
     let repo = std::env::temp_dir().join(format!("ccis-{}", std::process::id()));
-    std::fs::create_dir_all(&repo).expect("create repo dir");
-    let repo_name = repo.file_name().and_then(|n| n.to_str()).expect("repo name").to_string();
-    git(&repo, &["init", "--quiet"]);
-    git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "init"]);
+    let (worktrees, repo_name) = fake_issue_tracker(&session, view, "", &repo);
     let mut app = Harness::open(session, ROWS, COLS);
     app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
     app.open_project(1, &repo);

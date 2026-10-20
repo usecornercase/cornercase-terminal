@@ -226,6 +226,15 @@ impl Drop for Session {
     }
 }
 
+#[derive(Clone, Copy)]
+struct Terminal<'a> {
+    bin: &'a std::path::Path,
+    args: &'a [&'a str],
+    size: (u16, u16),
+    env: &'a [(&'a str, &'a str)],
+    reply: &'a [u8],
+}
+
 struct Harness {
     session: Arc<Session>,
     cols: u16,
@@ -264,7 +273,8 @@ impl Harness {
     fn answering(reply: &[u8]) -> Self {
         let bin = std::path::Path::new(env!("CARGO_BIN_EXE_cornercase"));
         let env = [("TERM", "xterm-256color")];
-        let mut harness = Self::run_answering(bin, &[], Session::new(), (ROWS, COLS), &env, reply);
+        let terminal = Terminal { bin, args: &[], size: (ROWS, COLS), env: &env, reply };
+        let mut harness = Self::run_answering(Session::new(), &terminal);
         harness.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
         harness
     }
@@ -276,17 +286,11 @@ impl Harness {
         size: (u16, u16),
         env: &[(&str, &str)],
     ) -> Self {
-        Self::run_answering(bin, args, session, size, env, HOST_THEME_REPLY)
+        Self::run_answering(session, &Terminal { bin, args, size, env, reply: HOST_THEME_REPLY })
     }
 
-    fn run_answering(
-        bin: &std::path::Path,
-        args: &[&str],
-        session: Arc<Session>,
-        (rows, cols): (u16, u16),
-        env: &[(&str, &str)],
-        reply: &[u8],
-    ) -> Self {
+    fn run_answering(session: Arc<Session>, terminal: &Terminal) -> Self {
+        let Terminal { bin, args, size: (rows, cols), env, reply } = *terminal;
         let pair =
             native_pty_system().openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }).expect("open pty");
         let mut cmd = CommandBuilder::new(bin);
@@ -583,4 +587,31 @@ fn bin() -> &'static str {
 
 fn refused(out: &std::process::Output, code: i32, message: &str) -> bool {
     out.status.code() == Some(code) && String::from_utf8_lossy(&out.stderr).contains(message)
+}
+
+const ISSUES_LIST: &str = r#"[{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"author":{"login":"ana"},"updatedAt":"2026-09-19T12:00:00Z","url":"https://github.com/acme/shop/issues/7"}]"#;
+
+fn fake_issue_tracker(session: &Session, view: &str, trust: &str, repo: &std::path::Path) -> (PathBuf, String) {
+    let worktrees = session.dir.join("worktrees");
+    let gh = session.dir.join("gh");
+    let script = format!(
+        "#!/bin/sh\nif [ \"$2\" = view ]; then cat <<'EOF'\n{view}\nEOF\nelse cat <<'EOF'\n{ISSUES_LIST}\nEOF\nfi\n"
+    );
+    write_executable(&gh, &script);
+    let agent = session.dir.join("agent");
+    let agent_script = "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\n\
+        printf '\\033[2J\\033[Hagent ready> '\nread line\nprintf '%s' \"$line\" > got\n";
+    write_executable(&agent, agent_script);
+    let config = format!(
+        r#"{{"worktrees_dir": "{}", "gh": "{}", "agent": "fake", {trust}"agent_commands": {{"fake": "{}"}}}}"#,
+        worktrees.display(),
+        gh.display(),
+        agent.display()
+    );
+    std::fs::write(session.dir.join("config.json"), config).expect("write config");
+    std::fs::create_dir_all(repo).expect("create repo dir");
+    let repo_name = repo.file_name().and_then(|n| n.to_str()).expect("repo name").to_string();
+    git(repo, &["init", "--quiet"]);
+    git(repo, &["commit", "--quiet", "--allow-empty", "-m", "init"]);
+    (worktrees, repo_name)
 }
