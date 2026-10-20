@@ -12,7 +12,6 @@ use crate::project::Project;
 use crate::project::search::{Finder, Goto};
 use crate::project::split::{self, Place};
 use crate::shortcuts::{self, Action, Group, Step};
-use crate::todo::Field;
 use crate::ui::{self, keys};
 
 const NO_AGENT_WAITS: &str = "no agent needs you";
@@ -169,7 +168,7 @@ impl App {
         let opening = self.screen.side != Some(Side::Todo);
         self.toggle_todo();
         if opening {
-            self.panels.todo.field = Some(Field::default());
+            self.panels.todo.start_adding();
         }
     }
 

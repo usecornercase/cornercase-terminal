@@ -63,7 +63,7 @@ mod sending_a_todo_to_an_agent {
         let todo = add(&mut agent.app, "fix the login");
         ask(&mut agent.app, None, todo_send(todo, Some(id)));
         let editor = todo::editor::Editor::new("fix the logout");
-        agent.app.panels.todo.field = Some(todo::Field { item: Some(todo), editor });
+        agent.app.panels.todo.start_editing(todo, editor);
 
         let sent = done(agent.answered("the agent records the prompt"));
 

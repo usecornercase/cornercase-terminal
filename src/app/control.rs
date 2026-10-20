@@ -387,8 +387,7 @@ impl App {
 
     fn orphan_todo_send(&mut self, client: u64) {
         let Some(sending) = self.clients.requests.todo_sends.remove(&client) else { return };
-        let orphan = crate::app::todo_panel::CLIENTS + self.panels.todo.next_client;
-        self.panels.todo.next_client += 1;
+        let orphan = self.todo_client();
         let mut kept = false;
         for pending in self.clients.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
             pending.client = Some(orphan);
@@ -396,7 +395,7 @@ impl App {
         }
         if kept {
             self.clients.requests.todo_sends.insert(orphan, sending);
-            self.panels.todo.sending.insert(orphan, String::new());
+            self.panels.todo.send(orphan, String::new());
         }
     }
 
@@ -448,7 +447,7 @@ impl App {
     }
 
     fn todo_sent(&mut self, sending: &Sending, mut value: Value) -> Value {
-        let editing = self.panels.todo.field.as_ref().filter(|field| field.item == Some(sending.todo));
+        let editing = self.panels.todo.field().filter(|field| field.item == Some(sending.todo));
         let same = self.panels.todos.item(sending.todo).is_some_and(|item| !item.done && item.text == sending.text)
             && editing.is_none_or(|field| field.editor.text() == sending.text);
         let checked = sending.confirmed && same;

@@ -29,10 +29,10 @@ fn resetting_the_interaction_drops_the_todo_field_and_gives_the_filter_keys_back
     let mut filter = changes::filter::Filter::default();
     filter.push('a');
     app.panels.changes.filter = Some(filter);
-    app.panels.todo.field = Some(todo::Field::default());
+    app.panels.todo.start_adding();
 
     app.reset_interaction();
 
     let filter = app.panels.changes.filter.as_ref().map(|f| (f.query(), f.focused));
-    assert_eq!((app.panels.todo.field.is_none(), filter), (true, Some(("a", false))));
+    assert_eq!((app.panels.todo.field().is_none(), filter), (true, Some(("a", false))));
 }

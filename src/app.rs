@@ -270,7 +270,7 @@ impl App {
         self.screen.nav = None;
         self.screen.hover = None;
         self.screen.drag = None;
-        self.panels.todo.field = None;
+        self.panels.todo.cancel();
         self.panels.files.unfocus();
         self.panels.files.set_full_screen(false);
         if let Some(filter) = &mut self.panels.changes.filter {

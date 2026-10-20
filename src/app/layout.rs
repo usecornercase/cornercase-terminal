@@ -78,7 +78,7 @@ impl App {
     }
 
     pub(super) fn close_panel(&mut self) {
-        self.panels.todo.field = None;
+        self.panels.todo.cancel();
         self.show_side(None);
     }
 

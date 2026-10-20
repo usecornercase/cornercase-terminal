@@ -107,7 +107,7 @@ fn enter_adds_an_item_and_keeps_the_field_open_for_the_next() {
     new_todo(&mut app);
     submit_text(&mut app, "fix login");
     submit_text(&mut app, "write docs");
-    let field = app.panels.todo.field.as_ref().map(|f| f.editor.text());
+    let field = app.panels.todo.field().map(|f| f.editor.text());
     assert_eq!((texts(&app), field), (vec!["fix login".into(), "write docs".into()], Some(String::new())));
 }
 
@@ -116,7 +116,7 @@ fn enter_on_an_empty_field_closes_it() {
     let (mut app, _rx, _dirs) = opened();
     new_todo(&mut app);
     send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
-    assert_eq!((app.panels.todo.field.is_none(), texts(&app)), (true, Vec::<String>::new()));
+    assert_eq!((app.panels.todo.field().is_none(), texts(&app)), (true, Vec::<String>::new()));
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn esc_drops_what_was_typed() {
     new_todo(&mut app);
     type_text(&mut app, "renew the domain");
     send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
-    assert_eq!((app.panels.todo.field.is_none(), texts(&app)), (true, Vec::<String>::new()));
+    assert_eq!((app.panels.todo.field().is_none(), texts(&app)), (true, Vec::<String>::new()));
 }
 
 #[test]
@@ -143,7 +143,7 @@ fn a_press_on_the_pane_saves_the_field_and_gives_the_keys_back() {
     new_todo(&mut app);
     type_text(&mut app, "renew the domain");
     click(&mut app, areas().pane.as_position());
-    assert_eq!((app.panels.todo.field.is_none(), texts(&app)), (true, vec!["renew the domain".into()]));
+    assert_eq!((app.panels.todo.field().is_none(), texts(&app)), (true, vec!["renew the domain".into()]));
     type_in_pane(&mut app, &rx, "shell");
 }
 
@@ -153,9 +153,9 @@ fn clicking_the_text_edits_it_with_the_cursor_where_clicked() {
     add(&mut app, &["fix logn"]);
     let row = item_row(&app, 0);
     click(&mut app, Position::new(row.x + panel::TEXT_X + 7, row.y));
-    assert_eq!(app.panels.todo.field.as_ref().map(|f| f.editor.cursor()), Some(7));
+    assert_eq!(app.panels.todo.field().map(|f| f.editor.cursor()), Some(7));
     submit_text(&mut app, "i");
-    assert_eq!((app.panels.todo.field.is_none(), texts(&app)), (true, vec!["fix login".into()]));
+    assert_eq!((app.panels.todo.field().is_none(), texts(&app)), (true, vec!["fix login".into()]));
 }
 
 #[test]
@@ -184,14 +184,14 @@ fn checking_an_item_moves_it_to_the_bottom() {
 fn checking_an_item_being_edited_saves_the_text_and_checks_it() {
     let (mut app, _rx, _dirs) = edited_typo();
     tap(&mut app, |a| panel::check(item_row(a, 0)));
-    assert_eq!((app.panels.todo.field.is_none(), texts(&app)), (true, vec!["b".into(), "[x] fix login".into()]));
+    assert_eq!((app.panels.todo.field().is_none(), texts(&app)), (true, vec!["b".into(), "[x] fix login".into()]));
 }
 
 #[test]
 fn deleting_an_item_being_edited_saves_the_text_and_undo_brings_it_back() {
     let (mut app, _rx, _dirs) = edited_typo();
     tap(&mut app, |a| panel::delete(item_row(a, 0)));
-    assert_eq!((app.panels.todo.field.is_none(), texts(&app)), (true, vec!["b".into()]));
+    assert_eq!((app.panels.todo.field().is_none(), texts(&app)), (true, vec!["b".into()]));
     undo(&mut app, "deleted");
     assert_eq!(texts(&app), ["fix login", "b"]);
 }
@@ -265,7 +265,7 @@ fn dragging_an_item_reorders_the_list() {
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), to);
     assert_eq!(view(&app).drag, Some((app.panels.todos.items()[0].id, Some(3))));
     mouse(&mut app, MouseEventKind::Up(MouseButton::Left), to);
-    assert_eq!((texts(&app), app.panels.todo.field.is_none()), (vec!["b".into(), "c".into(), "a".into()], true));
+    assert_eq!((texts(&app), app.panels.todo.field().is_none()), (vec!["b".into(), "c".into(), "a".into()], true));
 }
 
 #[test]

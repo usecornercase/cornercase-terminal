@@ -43,9 +43,9 @@ mod editing {
         let (mut app, _rx) = app();
         let id = add(&mut app, "a");
         let editor = todo::editor::Editor::new("a");
-        app.panels.todo.field = Some(todo::Field { item: Some(id), editor });
+        app.panels.todo.start_editing(id, editor);
         todo(&mut app, &json!({"edit": {"id": id, "text": "b"}}));
-        assert!(app.panels.todo.field.is_none());
+        assert!(app.panels.todo.field().is_none());
         assert_eq!(texts(&app), ["b"]);
     }
 
@@ -162,8 +162,8 @@ mod removing {
         let (mut app, _rx) = app();
         let id = add(&mut app, "a");
         let editor = todo::editor::Editor::new("a");
-        app.panels.todo.field = Some(todo::Field { item: Some(id), editor });
+        app.panels.todo.start_editing(id, editor);
         todo(&mut app, &json!({"rm": id}));
-        assert!(app.panels.todo.field.is_none());
+        assert!(app.panels.todo.field().is_none());
     }
 }

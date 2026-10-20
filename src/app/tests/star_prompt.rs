@@ -163,7 +163,7 @@ mod getting_in_the_way {
     fn a_todo_field_keeps_it_away() {
         let mut s = Star::due();
         s.app.show_side(Some(Side::Todo));
-        s.app.panels.todo.field = Some(todo::Field::default());
+        s.app.panels.todo.start_adding();
         s.offer(T0);
         assert!(!s.shows());
     }

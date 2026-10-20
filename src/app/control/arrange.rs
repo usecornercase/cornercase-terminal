@@ -138,8 +138,8 @@ impl App {
         if !self.panels.todos.edit(id, text) {
             return Err("the todo needs a text".into());
         }
-        if self.panels.todo.field.as_ref().is_some_and(|field| field.item == Some(id)) {
-            self.panels.todo.field = None;
+        if self.panels.todo.field().is_some_and(|field| field.item == Some(id)) {
+            self.panels.todo.cancel();
         }
         Ok(Some(json(&Done::default())))
     }
@@ -157,7 +157,7 @@ impl App {
     }
 
     fn todo_restored(&mut self, undo: u64) -> Handled {
-        let removed = self.panels.todo.undos.take(undo).ok_or_else(|| {
+        let removed = self.panels.todo.take_removed(undo).ok_or_else(|| {
             Refusal::new(
                 Code::NotFound,
                 format!(
@@ -177,12 +177,12 @@ impl App {
 
     fn removed_by_request(&mut self, removed: crate::todo::Removed) -> TodoList {
         let todos = removed.items().map(todo_item).collect();
-        if let Some(field) = &self.panels.todo.field
+        if let Some(field) = self.panels.todo.field()
             && field.item.is_some_and(|open| removed.items().any(|item| item.id == open))
         {
-            self.panels.todo.field = None;
+            self.panels.todo.cancel();
         }
-        let undo = self.panels.todo.undos.keep(removed);
+        let undo = self.panels.todo.keep_removed(removed);
         TodoList { todos, undo: Some(undo) }
     }
 
