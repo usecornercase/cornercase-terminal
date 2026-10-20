@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.165
+
+- **Agents started by an agent use its accounts.** An agent that starts another with `cornercase start` or `cornercase new-tab` from its pane now gives it that pane's accounts, as splitting a pane already did, instead of the ones picked in the window: a Claude Code logged in as `personal` no longer starts its helpers on `work`. `--account` still picks another account for the agent it names, and `--profile` still replaces the pane's accounts. Scripts run outside a pane, the window, the queue and the chat bots keep using the account picked in the window.
+
 ## 0.12.164
 
 - No changes in the app. Each part of the app's state is changed through its own methods.
