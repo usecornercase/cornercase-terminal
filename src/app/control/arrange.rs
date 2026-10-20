@@ -91,7 +91,7 @@ impl App {
         if message.is_empty() {
             return Err("the notification needs a text".into());
         }
-        self.outbox.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
+        self.outbox.notify(Notification::new(&message, &self.config.desktop_notifications));
         self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Check));
         Ok(Some(json(&Done::default())))
     }

@@ -406,7 +406,7 @@ impl App {
             control::theme::check(theme).map_err(|message| Refusal::new(Code::Malformed, message))?;
             self.give_theme(Some((**theme).clone()));
         }
-        self.outbox.start = Some((client, size));
+        self.outbox.start(client, size);
         Ok(None)
     }
 

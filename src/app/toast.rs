@@ -4,7 +4,6 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
-use crate::host::clipboard;
 use crate::queue;
 use crate::todo::{self};
 use crate::ui::{self};
@@ -76,7 +75,7 @@ impl App {
     }
 
     pub(super) fn copy(&mut self, text: &str) {
-        self.outbox.host_writes.push(clipboard::osc52(text));
+        self.outbox.copy(text);
         self.messages.toast = Some(Toast::new(COPIED, ui::ToastIcon::Check));
     }
 }

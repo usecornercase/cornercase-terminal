@@ -15,7 +15,6 @@ use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::git;
 use crate::highlight::markdown;
-use crate::host::clipboard;
 use crate::issues::browser::{
     self, Action, Browser, Connection, Field, IssuesHit, Listing, Naming, Pick, Place, Room, Screen, Step, Tab,
     TokenForm,
@@ -303,7 +302,7 @@ impl App {
     }
 
     fn copy_link(&mut self, url: &str) {
-        self.outbox.host_writes.push(clipboard::osc52(url));
+        self.outbox.copy(url);
         if let Some(Overlay::Issues(b)) = &mut self.overlay {
             b.notice = Some(format!("copied {url}"));
         }

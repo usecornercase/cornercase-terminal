@@ -71,7 +71,7 @@ fn quit_detaches() {
     let (mut app, _rx) = with_bar();
     let at = button(&app, ui::ActivityItem::Quit);
     click(&mut app, at);
-    assert!(app.outbox.detach);
+    assert!(app.take_detach());
 }
 
 #[test]

@@ -442,7 +442,7 @@ impl App {
             "{role} waits for you in {place}: accept or refuse Claude Code's bypass permissions mode in its tab"
         ));
         log::info!("flow", "a member waits for you", workspace = workspace, role = role);
-        self.outbox.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
+        self.outbox.notify(Notification::new(&message, &self.config.desktop_notifications));
         self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Agent(activity::Status::Waiting)));
     }
 

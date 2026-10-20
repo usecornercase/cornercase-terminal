@@ -247,8 +247,7 @@ impl App {
         let message = format!("setup failed in {place}{tail}");
         if unseen {
             self.outbox
-                .notifications
-                .extend(Notification::new(&crate::host::notify::clean(&message), &self.config.desktop_notifications));
+                .notify(Notification::new(&crate::host::notify::clean(&message), &self.config.desktop_notifications));
         }
         self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Agent(Status::Failed)));
     }

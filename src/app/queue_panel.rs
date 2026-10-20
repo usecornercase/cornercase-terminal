@@ -109,7 +109,7 @@ impl App {
 
     fn queue_notice(&mut self, message: &str, icon: ui::ToastIcon) {
         self.messages.toast = Some(Toast::new(message, icon));
-        self.outbox.notifications.extend(Notification::new(message, &self.config.desktop_notifications));
+        self.outbox.notify(Notification::new(message, &self.config.desktop_notifications));
     }
 
     pub(super) fn queue_prepared(&mut self, event: QueueEvent) {

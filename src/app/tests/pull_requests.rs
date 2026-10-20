@@ -328,7 +328,7 @@ mod dialog {
         click(&mut repo.app, ui::update_extra(AREA, COPY_LINK, DONE, ASK_AGENT).as_position());
 
         let text = "pull request #486 has merge conflicts with main";
-        assert_eq!(repo.app.outbox.host_writes, [clipboard::osc52(text)]);
+        assert_eq!(repo.app.take_host_writes(), [clipboard::osc52(text)]);
         assert_eq!(toast(&repo.app), Some(NO_AGENT));
     }
 
@@ -360,7 +360,7 @@ mod dialog {
         click(&mut repo.app, ui::update_buttons(AREA, COPY_LINK, DONE)[0].as_position());
 
         assert!(repo.app.overlay.is_none());
-        assert_eq!(repo.app.outbox.host_writes, [clipboard::osc52(URL)]);
+        assert_eq!(repo.app.take_host_writes(), [clipboard::osc52(URL)]);
         assert_eq!(toast(&repo.app), Some(COPIED));
     }
 
@@ -373,7 +373,7 @@ mod dialog {
 
         let text = "pull request #482 failed its checks: tests (ubuntu-24.04) \
                     https://github.com/acme/web-shop/actions/runs/1001/job/2001";
-        assert_eq!(repo.app.outbox.host_writes, [clipboard::osc52(text)]);
+        assert_eq!(repo.app.take_host_writes(), [clipboard::osc52(text)]);
         assert_eq!(toast(&repo.app), Some(NO_AGENT));
     }
 

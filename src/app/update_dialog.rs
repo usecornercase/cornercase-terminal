@@ -203,7 +203,7 @@ impl App {
     }
 
     pub(super) fn submit_restart(&mut self) -> Option<Overlay> {
-        self.outbox.restart = true;
+        self.outbox.restart();
         None
     }
 
@@ -214,7 +214,7 @@ impl App {
                 Some(Overlay::Update(UpdateStep::Updating))
             }
             UpdateStep::Installed => {
-                self.outbox.restart = true;
+                self.outbox.restart();
                 None
             }
             UpdateStep::Manual(command) => {

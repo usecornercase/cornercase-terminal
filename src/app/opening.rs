@@ -45,7 +45,7 @@ impl App {
     }
 
     pub(crate) fn take_opens(&mut self) -> Vec<(u64, Open)> {
-        std::mem::take(&mut self.outbox.opens)
+        self.outbox.take_opens()
     }
 
     pub(crate) fn open_failed(&mut self, client: u64, failed: &Failed) {
@@ -106,7 +106,7 @@ impl App {
         let client = self.opening.window;
         log::info!("ui", "open in", client = client, opener = opener.id(), folder = place.kind == Kind::Folder);
         let open = Open { opener, path: path.to_string(), line: place.line };
-        self.outbox.opens.push((client, open));
+        self.outbox.open(client, open);
     }
 
     pub(super) fn copy_path(&mut self, subject: Subject) {

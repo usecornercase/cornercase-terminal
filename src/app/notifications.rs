@@ -98,7 +98,7 @@ impl App {
                 sound::Kind::NeedsYou => &self.config.sound_waiting,
                 sound::Kind::Finished => &self.config.sound_done,
             };
-            self.outbox.sounds.push(Cue { kind, path: path.clone() });
+            self.outbox.play(Cue { kind, path: path.clone() });
         }
         let event = notice_event(token, &notice, said.sound);
         self.messages.notices.sent.push_back(notice);
@@ -108,7 +108,7 @@ impl App {
 
     fn alert_windows(&mut self, message: &str, token: &str) {
         if let Some(n) = Notification::new(message, &self.config.desktop_notifications) {
-            self.outbox.notifications.push(Notification { token: Some(token.to_string()), ..n });
+            self.outbox.notify(Some(Notification { token: Some(token.to_string()), ..n }));
             for window in self.messages.notices.windows.values_mut().filter(|w| w.unfocused) {
                 window.missed = Some(token.to_string());
             }

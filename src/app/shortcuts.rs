@@ -125,7 +125,7 @@ impl App {
             Action::NewWorkspace => self.new_workspace_by_key(),
             Action::CloseWorkspace => self.ask_close_workspace(),
             Action::Away => self.toggle_away_everywhere(),
-            Action::Quit => self.outbox.detach = true,
+            Action::Quit => self.outbox.detach(),
             other => return Some(other),
         }
         None

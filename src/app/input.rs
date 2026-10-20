@@ -363,7 +363,7 @@ impl App {
             ui::ActivityItem::Remote => self.open_remote_menu(pos),
             ui::ActivityItem::Usage => self.open_usage(),
             ui::ActivityItem::Settings => self.open_settings(),
-            ui::ActivityItem::Quit => self.outbox.detach = true,
+            ui::ActivityItem::Quit => self.outbox.detach(),
         }
         Ok(())
     }
@@ -391,7 +391,7 @@ impl App {
             } else if let Some(index) = pill {
                 self.open_pill_menu(index, pos);
             } else if areas.quit.contains(pos) {
-                self.outbox.detach = true;
+                self.outbox.detach();
             } else if areas.usage.contains(pos) {
                 self.open_usage();
             } else {

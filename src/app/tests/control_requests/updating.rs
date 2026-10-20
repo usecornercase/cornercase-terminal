@@ -223,7 +223,7 @@ mod installing {
         assert_eq!(info(&answer)["installed"], true);
         assert_eq!(std::fs::read_to_string(&exe).expect("binary"), NEW);
         assert_eq!(app.update_label().as_deref(), Some(RESTART_LABEL));
-        app.outbox.restart = true;
+        app.outbox.restart();
         assert_eq!(app.take_restart(), Some(exe));
     }
 

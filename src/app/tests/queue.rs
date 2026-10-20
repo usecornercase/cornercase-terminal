@@ -552,7 +552,7 @@ mod panel {
         assert!(matches!(app.overlay, Some(Overlay::Issues(_))));
         let Some(Overlay::Issues(b)) = &app.overlay else { panic!("issues") };
         assert_eq!(b.labels(usize::MAX), ["new", "cancel"]);
-        assert_eq!(app.outbox.notifications.len(), 0);
+        assert_eq!(app.take_notifications().len(), 0);
     }
 
     #[test]

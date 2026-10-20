@@ -13,7 +13,6 @@ use crate::accounts::{self, Account};
 use crate::agents;
 use crate::agents::usage;
 use crate::config::Config;
-use crate::host::clipboard;
 use crate::log::{Job, Level};
 use crate::time;
 use crate::ui;
@@ -140,7 +139,7 @@ impl App {
         } else if let Some(i) = ui::usage_tabs(area, &view).iter().position(|r| r.contains(pos)) {
             self.switch_usage(if i == 0 { usage::Page::Limits } else { usage::Page::Stats });
         } else if view.page == usage::Page::Stats && !view.stats.empty && ui::usage_share(area, &view).contains(pos) {
-            self.outbox.host_writes.push(clipboard::osc52(&view.stats.share_link()));
+            self.outbox.copy(&view.stats.share_link());
             self.messages.toast = Some(Toast::new("copied a link to your stats", ui::ToastIcon::Check));
         }
     }

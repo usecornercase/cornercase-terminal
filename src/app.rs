@@ -27,7 +27,6 @@ use crate::error::{Error, Result};
 #[cfg(test)]
 use crate::files;
 use crate::host::notify::Notification;
-use crate::host::open::Open;
 use crate::host::pointer;
 use crate::host::sound::Cue;
 use crate::host::theme::HostTheme;
@@ -100,6 +99,7 @@ mod merged_pull_requests;
 mod messenger;
 mod notifications;
 mod opening;
+mod outbox;
 mod overlay;
 mod panes;
 mod picker_dialog;
@@ -139,17 +139,6 @@ pub(crate) use images::{Placed, Sight};
 pub(crate) use surfaces::FRAME_EVERY;
 pub(crate) use surfaces::Surfaced;
 
-#[derive(Default)]
-struct Outbox {
-    host_writes: Vec<Vec<u8>>,
-    notifications: Vec<Notification>,
-    sounds: Vec<Cue>,
-    opens: Vec<(u64, Open)>,
-    detach: bool,
-    restart: bool,
-    start: Option<(u64, (u16, u16))>,
-}
-
 pub(crate) struct App {
     screen: groups::Screen,
     git: groups::Git,
@@ -160,7 +149,7 @@ pub(crate) struct App {
     clients: control::Clients,
     usages: usage_dialog::Usages,
     scroll: Scrolls,
-    outbox: Outbox,
+    outbox: outbox::Outbox,
     opening: opening::Opening,
     agents: AgentRuntime,
     update: UpdateState,
@@ -203,7 +192,7 @@ impl App {
             usages: usage_dialog::Usages::default(),
             themes: theme::Themes::new(theme),
             scroll: Scrolls::default(),
-            outbox: Outbox::default(),
+            outbox: outbox::Outbox::default(),
             opening: opening::Opening::default(),
             agents: AgentRuntime::new(home.as_deref()),
             update: UpdateState::from_env(),
@@ -233,11 +222,11 @@ impl App {
     }
 
     pub(crate) fn take_detach(&mut self) -> bool {
-        std::mem::take(&mut self.outbox.detach)
+        self.outbox.take_detach()
     }
 
     pub(crate) fn take_restart(&mut self) -> Option<PathBuf> {
-        if !std::mem::take(&mut self.outbox.restart) {
+        if !self.outbox.take_restart() {
             return None;
         }
         Some(match &self.update.updates.install {
@@ -247,7 +236,7 @@ impl App {
     }
 
     pub(crate) fn take_start(&mut self) -> Option<(u64, (u16, u16))> {
-        self.outbox.start.take()
+        self.outbox.take_start()
     }
 
     pub(crate) fn set_theme(&mut self, theme: HostTheme) {
@@ -632,20 +621,20 @@ impl App {
     }
 
     pub(crate) fn take_host_writes(&mut self) -> Vec<Vec<u8>> {
-        std::mem::take(&mut self.outbox.host_writes)
+        self.outbox.take_host_writes()
     }
 
     pub(crate) fn take_notifications(&mut self) -> Vec<Notification> {
-        std::mem::take(&mut self.outbox.notifications)
+        self.outbox.take_notifications()
     }
 
     pub(crate) fn take_sounds(&mut self) -> Vec<Cue> {
-        std::mem::take(&mut self.outbox.sounds)
+        self.outbox.take_sounds()
     }
 
     #[cfg(test)]
     pub(crate) fn queue_sound(&mut self, cue: Cue) {
-        self.outbox.sounds.push(cue);
+        self.outbox.play(cue);
     }
 
     pub(crate) fn set_stats(&mut self, stats: agents::stats::Stats) {
