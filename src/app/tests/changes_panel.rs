@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::changes_panel::Hunk;
 use crate::changes;
 use crate::test_util::{git, write_executable};
 
@@ -458,7 +459,7 @@ fn the_panel_is_saved_and_restored() {
 fn copy_puts_the_hunk_on_the_clipboard() {
     let (_repo, mut app, _rx) = open_changes();
     let (target, file) = first_changed_file(&app);
-    app.hunk_action(&target, &file, 0, HunkAction::Copy, AREA).expect("copy");
+    app.hunk_action(&target, &file, Hunk { index: 0, action: HunkAction::Copy }, AREA).expect("copy");
     let patch = file.hunks[0].patch();
     assert_eq!((app.take_host_writes(), toast(&app)), (vec![clipboard::osc52(&patch)], Some(COPIED)));
 }
@@ -479,7 +480,7 @@ fn with_an_agent() -> (TempDir, TempDir, App) {
 
 fn ask_about_the_first_hunk(app: &mut App) {
     let (target, file) = first_changed_file(app);
-    app.hunk_action(&target, &file, 0, HunkAction::Ask, AREA).expect("ask");
+    app.hunk_action(&target, &file, Hunk { index: 0, action: HunkAction::Ask }, AREA).expect("ask");
 }
 
 #[test]
@@ -509,7 +510,7 @@ fn without_an_agent_the_reference_is_copied() {
     let (mut app, rx) = app_in(repo.path(), no_config());
     refresh_until_loaded(&mut app, &rx);
     let (target, file) = first_changed_file(&app);
-    app.hunk_action(&target, &file, 0, HunkAction::Ask, AREA).expect("ask");
+    app.hunk_action(&target, &file, Hunk { index: 0, action: HunkAction::Ask }, AREA).expect("ask");
     assert_eq!(app.take_host_writes(), vec![clipboard::osc52("a.txt:2")]);
 }
 
@@ -601,7 +602,7 @@ fn open_starts_the_editor_in_a_new_tab() {
     refresh_until_loaded(&mut app, &rx);
     let (target, file) = first_changed_file(&app);
     let tabs = app.projects[0].workspaces[0].tabs.len();
-    app.hunk_action(&target, &file, 0, HunkAction::Open, AREA).expect("open");
+    app.hunk_action(&target, &file, Hunk { index: 0, action: HunkAction::Open }, AREA).expect("open");
     let workspace = &app.projects[0].workspaces[0];
     assert_eq!((workspace.tabs.len(), workspace.active), (tabs + 1, tabs));
 }

@@ -111,57 +111,59 @@ impl App {
     ) -> Content {
         let mut content = Content { scope, mode, ..Content::default() };
         match scope {
-            Scope::Project => {
-                let Some((p, w)) = workspace.and_then(|id| self.projects.workspace_index(id)) else { return content };
-                let ws = &self.projects[p].workspaces[w];
-                match self.changes.model_in(ws.id, mode, ws.base.as_deref()).map(|m| &m.result) {
-                    None => {}
-                    Some(Err(e)) => {
-                        content.state = State::Failed;
-                        content.error = Some(e.clone());
-                    }
-                    Some(Ok(diff)) => {
-                        content.state = State::Ready;
-                        let base = (mode != Mode::Uncommitted)
-                            .then(|| self.changes.label_in(ws.id, mode).or_else(|| ws.base.clone()))
-                            .flatten();
-                        let viewed = |f: &changes::diff::File| self.changes.viewed(ws.id, f);
-                        content.workspaces.push(WorkspaceChanges::of(self.projects[p].id, ws.id, base, diff, viewed));
-                    }
-                }
-            }
-            Scope::Every => {
-                let (body, owners, _) = self.every_body(targets);
-                match body {
-                    Body::Loading => {}
-                    Body::Failed(e) => {
-                        content.state = State::Failed;
-                        content.error = Some(e);
-                    }
-                    Body::Ready(diff) => {
-                        content.state = State::Ready;
-                        let mut start = 0;
-                        while start < owners.len() {
-                            let owner = owners[start];
-                            let len = owners[start..].iter().take_while(|o| **o == owner).count();
-                            let part = changes::diff::Diff { files: diff.files[start..start + len].to_vec() };
-                            if let Some((p, _)) = self.projects.workspace_index(owner) {
-                                let viewed = |f: &changes::diff::File| self.changes.viewed(owner, f);
-                                content.workspaces.push(WorkspaceChanges::of(
-                                    self.projects[p].id,
-                                    owner,
-                                    None,
-                                    &part,
-                                    viewed,
-                                ));
-                            }
-                            start += len;
-                        }
-                    }
-                }
-            }
+            Scope::Project => self.project_content(&mut content, workspace, mode),
+            Scope::Every => self.every_content(&mut content, targets),
         }
         content
+    }
+
+    fn project_content(&self, content: &mut Content, workspace: Option<u64>, mode: Mode) {
+        let Some((p, w)) = workspace.and_then(|id| self.projects.workspace_index(id)) else { return };
+        let ws = &self.projects[p].workspaces[w];
+        match self.changes.model_in(ws.id, mode, ws.base.as_deref()).map(|m| &m.result) {
+            None => {}
+            Some(Err(e)) => {
+                content.state = State::Failed;
+                content.error = Some(e.clone());
+            }
+            Some(Ok(diff)) => {
+                content.state = State::Ready;
+                let base = (mode != Mode::Uncommitted)
+                    .then(|| self.changes.label_in(ws.id, mode).or_else(|| ws.base.clone()))
+                    .flatten();
+                let viewed = |f: &changes::diff::File| self.changes.viewed(ws.id, f);
+                content.workspaces.push(WorkspaceChanges::of(self.projects[p].id, ws.id, base, diff, viewed));
+            }
+        }
+    }
+
+    fn every_content(&self, content: &mut Content, targets: &[(Checkout, bool)]) {
+        let (body, owners, _) = self.every_body(targets);
+        match body {
+            Body::Loading => {}
+            Body::Failed(e) => {
+                content.state = State::Failed;
+                content.error = Some(e);
+            }
+            Body::Ready(diff) => {
+                content.state = State::Ready;
+                self.owner_runs(content, &diff, &owners);
+            }
+        }
+    }
+
+    fn owner_runs(&self, content: &mut Content, diff: &changes::diff::Diff, owners: &[u64]) {
+        let mut start = 0;
+        while start < owners.len() {
+            let owner = owners[start];
+            let len = owners[start..].iter().take_while(|o| **o == owner).count();
+            let part = changes::diff::Diff { files: diff.files[start..start + len].to_vec() };
+            if let Some((p, _)) = self.projects.workspace_index(owner) {
+                let viewed = |f: &changes::diff::File| self.changes.viewed(owner, f);
+                content.workspaces.push(WorkspaceChanges::of(self.projects[p].id, owner, None, &part, viewed));
+            }
+            start += len;
+        }
     }
 
     pub(in crate::app) fn publish_change_streams(&mut self, targets: &[(Checkout, bool)], now: Instant) {

@@ -142,11 +142,7 @@ impl App {
         }
         match hit {
             Some(Hit::Close) => self.show_side(None),
-            Some(Hit::ClearDone) => {
-                if let Some(removed) = self.todos.clear_done() {
-                    self.removed_todos(format!("cleared {} done", removed.len()), removed);
-                }
-            }
+            Some(Hit::ClearDone) => self.clear_done_todos(),
             Some(Hit::Add) => self.todo.field = Some(Field::default()),
             Some(Hit::Field { line, col, .. }) => {
                 if let Some(field) = &mut self.todo.field {
@@ -154,23 +150,25 @@ impl App {
                 }
             }
             Some(Hit::Check(id)) => self.todos.toggle(id),
-            Some(Hit::Delete(id)) => {
-                if let Some(removed) = self.todos.remove(id) {
-                    self.removed_todos(DELETED.into(), removed);
-                }
-            }
+            Some(Hit::Delete(id)) => self.delete_todo(id),
             Some(Hit::Send(id)) => self.ask_todo_agent(id, pos),
             Some(Hit::Item { id, row, .. }) => {
-                self.drag = Some(Drag::Row(RowDrag {
-                    target: Grab::Todo(id),
-                    row,
-                    moved: false,
-                    area,
-                    scrolled: None,
-                    fold: false,
-                }));
+                let target = Grab::Todo(id);
+                self.drag = Some(Drag::Row(RowDrag { target, row, moved: false, area, scrolled: None, fold: false }));
             }
             None => {}
+        }
+    }
+
+    fn clear_done_todos(&mut self) {
+        if let Some(removed) = self.todos.clear_done() {
+            self.removed_todos(format!("cleared {} done", removed.len()), removed);
+        }
+    }
+
+    fn delete_todo(&mut self, id: u64) {
+        if let Some(removed) = self.todos.remove(id) {
+            self.removed_todos(DELETED.into(), removed);
         }
     }
 

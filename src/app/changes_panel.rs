@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
@@ -25,7 +26,7 @@ pub(super) use streams::Streams;
 
 const CHANGES_LABEL: &str = "Changes";
 
-pub(crate) type Gapped = Option<(std::sync::Arc<ChangedFile>, Option<Vec<changes::GapLine>>)>;
+pub(crate) type Gapped = Option<(Arc<ChangedFile>, Option<Vec<changes::GapLine>>)>;
 
 #[derive(Debug)]
 pub(crate) enum ChangesEvent {
@@ -42,7 +43,7 @@ pub(crate) enum ChangesEvent {
     },
     Gap {
         workspace: u64,
-        file: std::sync::Arc<ChangedFile>,
+        file: Arc<ChangedFile>,
         hunk: usize,
         lines: Vec<changes::GapLine>,
     },
@@ -51,7 +52,7 @@ pub(crate) enum ChangesEvent {
         workspace: u64,
         mode: Mode,
         path: String,
-        result: Result<Option<std::sync::Arc<ChangedFile>>>,
+        result: Result<Option<Arc<ChangedFile>>>,
     },
     GapRead {
         request: u64,
@@ -124,17 +125,7 @@ impl App {
         let tui_every = self.changes.scope == changes::Scope::Every && self.changes_shown();
         let every = tui_every || self.change_streams.wants_every();
         let targets = if every { self.every_targets() } else { Vec::new() };
-        let request = if tui_every {
-            self.changes.request_every(&targets, now)
-        } else {
-            self.changes_target().and_then(|target| {
-                if self.changes.workspace != Some(target.workspace) {
-                    self.changes.workspace = Some(target.workspace);
-                    self.changes.scroll = 0;
-                }
-                self.changes.request(&target, now).map(|(generation, request)| (target.workspace, generation, request))
-            })
-        };
+        let request = if tui_every { self.changes.request_every(&targets, now) } else { self.project_request(now) };
         let request = request
             .or_else(|| self.feed_request(now))
             .or_else(|| if every && !tui_every { self.changes.request_sweep(&targets, now, false) } else { None });
@@ -142,6 +133,15 @@ impl App {
             self.spawn_changes(workspace, generation, request);
         }
         self.publish_change_streams(&targets, now);
+    }
+
+    fn project_request(&mut self, now: Instant) -> Option<(u64, u64, changes::git::Request)> {
+        let target = self.changes_target()?;
+        if self.changes.workspace != Some(target.workspace) {
+            self.changes.workspace = Some(target.workspace);
+            self.changes.scroll = 0;
+        }
+        self.changes.request(&target, now).map(|(generation, request)| (target.workspace, generation, request))
     }
 
     fn feed_request(&mut self, now: Instant) -> Option<(u64, u64, changes::git::Request)> {
@@ -222,7 +222,7 @@ impl App {
         self.changes.scroll = 0;
     }
 
-    pub(super) fn changed_diff(&self, target: &Checkout) -> Option<std::sync::Arc<changes::diff::Diff>> {
+    pub(super) fn changed_diff(&self, target: &Checkout) -> Option<Arc<changes::diff::Diff>> {
         self.changes.model(target.workspace, target.base.as_deref()).and_then(|m| m.diff()).cloned()
     }
 
@@ -240,56 +240,13 @@ impl App {
         let target = if every { None } else { self.changes_target() };
         let model = target.as_ref().and_then(|t| self.changes.model(t.workspace, t.base.as_deref()));
         let targets = if every { self.every_targets() } else { Vec::new() };
-        let (body, owners, headers) = if every {
-            self.every_body(&targets)
-        } else {
-            let target = target.as_ref()?;
-            let body = match model.map(|m| &m.result) {
-                None => changes::Body::Loading,
-                Some(Ok(diff)) => changes::Body::Ready(std::sync::Arc::clone(diff)),
-                Some(Err(e)) => changes::Body::Failed(e.clone()),
-            };
-            let owners = match &body {
-                changes::Body::Ready(d) => vec![target.workspace; d.files.len()],
-                _ => Vec::new(),
-            };
-            (body, owners, Vec::new())
-        };
-        let (mut folded, mut viewed, mut gaps) = (Vec::new(), Vec::new(), HashMap::new());
-        if let changes::Body::Ready(diff) = &body {
-            for (i, file) in diff.files.iter().enumerate() {
-                let ws = owners[i];
-                folded.push(self.changes.folded(ws, diff, file));
-                viewed.push(self.changes.viewed(ws, file));
-                for h in 1..file.hunks.len() {
-                    if let Some(lines) = self.changes.gap(ws, file, h) {
-                        gaps.insert((i, h), std::sync::Arc::clone(lines));
-                    }
-                }
-            }
-        }
-        let filter = self.changes.filter.as_ref().map(|f| panel::FilterView {
-            query: f.query().to_string(),
-            focused: f.focused && self.overlay.is_none(),
-            kept: match &body {
-                changes::Body::Ready(diff) => changes::filter::kept(diff, f.query()),
-                _ => Vec::new(),
-            },
-        });
-        let project = self.project().map_or_else(
-            || "Project".into(),
-            |p| {
-                let name = self.project_label(p);
-                if p.workspaces.len() > 1 {
-                    p.workspace().map_or(name.clone(), |w| format!("{name} › {}", w.label()))
-                } else {
-                    name
-                }
-            },
-        );
+        let (body, owners, headers) =
+            if every { self.every_body(&targets) } else { single_body(target.as_ref()?, model) };
+        let (folded, viewed, gaps) = self.panel_marks(&body, &owners);
+        let filter = self.panel_filter(&body);
         Some(panel::View {
             scope: self.changes.scope,
-            project,
+            project: self.panel_project(),
             owners,
             headers,
             mode: if every { Mode::Uncommitted } else { self.changes.mode },
@@ -299,11 +256,7 @@ impl App {
             viewed,
             gaps,
             scroll: self.changes.scroll,
-            live: if every {
-                targets.iter().all(|(t, _)| self.changes.summary(t.workspace).is_some_and(|m| m.live(Instant::now())))
-            } else {
-                model.is_some_and(|m| m.live(Instant::now()))
-            },
+            live: self.panel_live(every, &targets, model),
             light: self.theme.is_light() == Some(true),
             muted: ui::muted(&self.theme),
             soft: ui::soft(&self.theme),
@@ -311,6 +264,52 @@ impl App {
             filter,
             glyphs: ui::glyphs(self.config.icon_bar),
         })
+    }
+
+    fn panel_marks(&self, body: &changes::Body, owners: &[u64]) -> Marks {
+        let (mut folded, mut viewed, mut gaps) = (Vec::new(), Vec::new(), HashMap::new());
+        if let changes::Body::Ready(diff) = body {
+            for (i, file) in diff.files.iter().enumerate() {
+                let ws = owners[i];
+                folded.push(self.changes.folded(ws, diff, file));
+                viewed.push(self.changes.viewed(ws, file));
+                gaps.extend(self.file_gaps(ws, file).map(|(h, lines)| ((i, h), lines)));
+            }
+        }
+        (folded, viewed, gaps)
+    }
+
+    fn file_gaps(&self, ws: u64, file: &ChangedFile) -> impl Iterator<Item = (usize, Arc<Vec<changes::GapLine>>)> {
+        (1..file.hunks.len()).filter_map(move |h| self.changes.gap(ws, file, h).map(|lines| (h, Arc::clone(lines))))
+    }
+
+    fn panel_filter(&self, body: &changes::Body) -> Option<panel::FilterView> {
+        self.changes.filter.as_ref().map(|f| panel::FilterView {
+            query: f.query().to_string(),
+            focused: f.focused && self.overlay.is_none(),
+            kept: match body {
+                changes::Body::Ready(diff) => changes::filter::kept(diff, f.query()),
+                _ => Vec::new(),
+            },
+        })
+    }
+
+    fn panel_project(&self) -> String {
+        let Some(p) = self.project() else { return "Project".into() };
+        let name = self.project_label(p);
+        if p.workspaces.len() > 1 {
+            p.workspace().map_or(name.clone(), |w| format!("{name} › {}", w.label()))
+        } else {
+            name
+        }
+    }
+
+    fn panel_live(&self, every: bool, targets: &[(Checkout, bool)], model: Option<&changes::Model>) -> bool {
+        if every {
+            targets.iter().all(|(t, _)| self.changes.summary(t.workspace).is_some_and(|m| m.live(Instant::now())))
+        } else {
+            model.is_some_and(|m| m.live(Instant::now()))
+        }
     }
 
     pub(super) fn changes_mouse(&mut self, ev: MouseEvent, pos: Position, panel_area: Rect, area: Rect) -> Result<()> {
@@ -323,99 +322,101 @@ impl App {
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
             return Ok(());
         }
-        let diff = match &view.body {
-            changes::Body::Ready(d) => Some(d.clone()),
-            _ => None,
-        };
-        let file = |i: usize| {
-            let file = diff.as_ref()?.files.get(i)?.clone();
-            let workspace = *view.owners.get(i)?;
-            let (p, w) = self.projects.workspace_index(workspace)?;
-            let ws = &self.projects[p].workspaces[w];
-            Some((Checkout { workspace, dir: ws.path.clone(), base: ws.base.clone() }, file))
-        };
         let hit = panel::hit(panel_area, &view, pos);
-        let selected = match hit {
-            Some(PanelHit::File(i) | PanelHit::Viewed(i) | PanelHit::Gap(i, _) | PanelHit::Action(i, _, _)) => file(i),
+        let chosen = match hit {
+            Some(PanelHit::File(i) | PanelHit::Viewed(i) | PanelHit::Gap(i, _) | PanelHit::Action(i, _, _)) => {
+                self.chosen_file(&view, i)
+            }
             _ => None,
         };
-        match hit {
-            Some(PanelHit::Scope(scope)) => self.changes.set_scope(scope),
-            Some(PanelHit::Header(i)) => {
-                self.changes.toggle_header(view.headers[i].id);
-                for workspace in &view.owners[view.headers[i].files.clone()] {
-                    self.changes.invalidate_summary(*workspace);
-                }
-            }
-            Some(PanelHit::Mode(mode)) => self.changes.set_mode(mode),
-            Some(PanelHit::Close) => self.show_side(None),
-            Some(PanelHit::Filter | PanelHit::Query) => self.changes.filter.get_or_insert_default().focused = true,
-            Some(PanelHit::ClearFilter) => self.changes.filter = None,
-            Some(PanelHit::Base) => {
-                if let Some(target) = self.changes_target() {
-                    self.open_branches(&target);
-                }
-            }
-            Some(PanelHit::FoldAll) => {
-                if let Some(diff) = &diff {
-                    let fold = view.folded.iter().any(|f| !f);
-                    if !fold {
-                        self.changes.headers.clear();
-                    }
-                    for (file, workspace) in diff.files.iter().zip(&view.owners) {
-                        self.changes.set_fold(*workspace, file, fold);
-                    }
-                }
-            }
-            Some(PanelHit::File(_)) => {
-                if let (Some(diff), Some((target, f))) = (&diff, selected) {
-                    self.changes.toggle_fold(target.workspace, diff, &f);
-                }
-            }
-            Some(PanelHit::Viewed(_)) => {
-                if let Some((target, f)) = selected {
-                    self.changes.toggle_viewed(target.workspace, &f);
-                }
-            }
-            Some(PanelHit::Gap(_, h)) => {
-                if let Some((target, f)) = selected {
-                    let (mode, workspace, dir) = (view.mode, target.workspace, target.dir);
-                    let job = Job::new(Level::Debug, "changes", "unchanged lines").with("workspace", workspace);
-                    self.spawn_job(
-                        job,
-                        move || Ok(changes::gap(&dir, mode, &f, h).map(|lines| (f, lines))),
-                        move |found, _| {
-                            let (file, lines) = found.ok().flatten()?;
-                            Some(AppEvent::Changes(ChangesEvent::Gap { workspace, file, hunk: h, lines }))
-                        },
-                    );
-                }
-            }
-            Some(PanelHit::Action(_, h, action)) => {
-                if let Some((target, f)) = selected {
-                    return self.hunk_action(&target, &f, h, action, area);
-                }
-            }
-            None => {}
+        if let (Some(PanelHit::Action(_, index, action)), Some(chosen)) = (hit, &chosen) {
+            return self.hunk_action(&chosen.target, &chosen.file, Hunk { index, action }, area);
         }
+        self.changes_hit(hit, &view, chosen);
         if self.changes.scope == changes::Scope::Every && self.changes_shown() {
             self.refresh_changes(Instant::now());
         }
         Ok(())
     }
 
-    pub(super) fn hunk_action(
-        &mut self,
-        target: &Checkout,
-        file: &ChangedFile,
-        h: usize,
-        action: HunkAction,
-        area: Rect,
-    ) -> Result<()> {
-        let Some(hunk) = file.hunks.get(h) else { return Ok(()) };
-        let (first, last) = hunk.changed();
-        match action {
-            HunkAction::Copy => self.copy(&hunk.patch()),
+    fn chosen_file(&self, view: &panel::View, i: usize) -> Option<Chosen> {
+        let file = ready(view)?.files.get(i)?.clone();
+        let workspace = *view.owners.get(i)?;
+        let (p, w) = self.projects.workspace_index(workspace)?;
+        let ws = &self.projects[p].workspaces[w];
+        Some(Chosen { target: Checkout { workspace, dir: ws.path.clone(), base: ws.base.clone() }, file })
+    }
+
+    fn changes_hit(&mut self, hit: Option<PanelHit>, view: &panel::View, chosen: Option<Chosen>) {
+        match hit {
+            Some(PanelHit::Scope(scope)) => self.changes.set_scope(scope),
+            Some(PanelHit::Header(i)) => self.toggle_changes_header(view, i),
+            Some(PanelHit::Mode(mode)) => self.changes.set_mode(mode),
+            Some(PanelHit::Close) => self.show_side(None),
+            Some(PanelHit::Filter | PanelHit::Query) => self.changes.filter.get_or_insert_default().focused = true,
+            Some(PanelHit::ClearFilter) => self.changes.filter = None,
+            Some(PanelHit::Base) => self.pick_changes_base(),
+            Some(PanelHit::FoldAll) => self.fold_all_files(view),
+            Some(PanelHit::File(_)) => self.toggle_file_fold(view, chosen),
+            Some(PanelHit::Viewed(_)) => {
+                if let Some(chosen) = chosen {
+                    self.changes.toggle_viewed(chosen.target.workspace, &chosen.file);
+                }
+            }
+            Some(PanelHit::Gap(_, h)) => self.read_gap(view.mode, chosen, h),
+            Some(PanelHit::Action(..)) | None => {}
+        }
+    }
+
+    fn toggle_changes_header(&mut self, view: &panel::View, i: usize) {
+        self.changes.toggle_header(view.headers[i].id);
+        for workspace in &view.owners[view.headers[i].files.clone()] {
+            self.changes.invalidate_summary(*workspace);
+        }
+    }
+
+    fn pick_changes_base(&mut self) {
+        if let Some(target) = self.changes_target() {
+            self.open_branches(&target);
+        }
+    }
+
+    fn fold_all_files(&mut self, view: &panel::View) {
+        let Some(diff) = ready(view) else { return };
+        let fold = view.folded.iter().any(|f| !f);
+        if !fold {
+            self.changes.headers.clear();
+        }
+        for (file, workspace) in diff.files.iter().zip(&view.owners) {
+            self.changes.set_fold(*workspace, file, fold);
+        }
+    }
+
+    fn toggle_file_fold(&mut self, view: &panel::View, chosen: Option<Chosen>) {
+        if let (Some(diff), Some(chosen)) = (ready(view), chosen) {
+            self.changes.toggle_fold(chosen.target.workspace, diff, &chosen.file);
+        }
+    }
+
+    fn read_gap(&mut self, mode: Mode, chosen: Option<Chosen>, h: usize) {
+        let Some(Chosen { target, file }) = chosen else { return };
+        let (workspace, dir) = (target.workspace, target.dir);
+        let job = Job::new(Level::Debug, "changes", "unchanged lines").with("workspace", workspace);
+        self.spawn_job(
+            job,
+            move || Ok(changes::gap(&dir, mode, &file, h).map(|lines| (file, lines))),
+            move |found, _| {
+                let (file, lines) = found.ok().flatten()?;
+                Some(AppEvent::Changes(ChangesEvent::Gap { workspace, file, hunk: h, lines }))
+            },
+        );
+    }
+
+    pub(super) fn hunk_action(&mut self, target: &Checkout, file: &ChangedFile, hunk: Hunk, area: Rect) -> Result<()> {
+        let Some(found) = file.hunks.get(hunk.index) else { return Ok(()) };
+        let (first, last) = found.changed();
+        match hunk.action {
+            HunkAction::Copy => self.copy(&found.patch()),
             HunkAction::Open => return self.open_in_editor(target, &file.path, first, area),
             HunkAction::Ask => {
                 let lines = if first == last { first.to_string() } else { format!("{first}-{last}") };
@@ -441,6 +442,39 @@ impl App {
             self.changes.set_gap(workspace, file, hunk, lines);
         }
     }
+}
+
+type Marks = (Vec<bool>, Vec<bool>, HashMap<(usize, usize), Arc<Vec<changes::GapLine>>>);
+
+#[derive(Clone, Copy)]
+pub(in crate::app) struct Hunk {
+    pub(in crate::app) index: usize,
+    pub(in crate::app) action: HunkAction,
+}
+
+struct Chosen {
+    target: Checkout,
+    file: Arc<ChangedFile>,
+}
+
+fn ready(view: &panel::View) -> Option<&Arc<changes::diff::Diff>> {
+    match &view.body {
+        changes::Body::Ready(diff) => Some(diff),
+        _ => None,
+    }
+}
+
+fn single_body(target: &Checkout, model: Option<&changes::Model>) -> (changes::Body, Vec<u64>, Vec<every::Header>) {
+    let body = match model.map(|m| &m.result) {
+        None => changes::Body::Loading,
+        Some(Ok(diff)) => changes::Body::Ready(Arc::clone(diff)),
+        Some(Err(e)) => changes::Body::Failed(e.clone()),
+    };
+    let owners = match &body {
+        changes::Body::Ready(d) => vec![target.workspace; d.files.len()],
+        _ => Vec::new(),
+    };
+    (body, owners, Vec::new())
 }
 
 pub(super) fn changes_label(files: usize) -> String {

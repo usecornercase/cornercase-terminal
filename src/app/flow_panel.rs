@@ -229,15 +229,7 @@ impl App {
         }
         match flow::hit(panel, &view, pos) {
             Some(flow::Hit::Close) => self.show_side(None),
-            Some(flow::Hit::Role(role)) => {
-                let Some(pane) = self.shown_run().and_then(|run| run.pane_of(&role)) else { return };
-                if self.projects.pane_by(pane).is_some() {
-                    if self.drawn.compact() {
-                        self.show_side(None);
-                    }
-                    self.jump_to_pane(pane);
-                }
-            }
+            Some(flow::Hit::Role(role)) => self.jump_to_role(&role),
             Some(flow::Hit::File(index)) => self.open_run_file(index),
             Some(flow::Hit::Pull) => {
                 if let Some(workspace) = self.shown_run().map(|run| run.workspace) {
@@ -250,6 +242,17 @@ impl App {
             }
             None => {}
         }
+    }
+
+    fn jump_to_role(&mut self, role: &str) {
+        let Some(pane) = self.shown_run().and_then(|run| run.pane_of(role)) else { return };
+        if self.projects.pane_by(pane).is_none() {
+            return;
+        }
+        if self.drawn.compact() {
+            self.show_side(None);
+        }
+        self.jump_to_pane(pane);
     }
 
     fn flow_message(&self, workspace: u64, edge: Edge, to: Option<&str>) -> Option<&Message> {
@@ -330,21 +333,10 @@ impl App {
         else {
             return Vec::new();
         };
-        let (kind, targets, text, answered) = match command {
-            Command::Send(send) => (Kind::Send, vec![(send.pane, send.tab)], send.text.clone(), false),
-            Command::Keys(keys) => (Kind::Keys, vec![(keys.pane, keys.tab)], Some(keys.keys.join(" ")), false),
-            Command::Read(read) => (Kind::Read, vec![(read.pane, read.tab)], None, false),
-            Command::LastMessage(last) => (Kind::Read, vec![(last.pane, last.tab)], None, true),
-            Command::Wait(wait) => (Kind::Wait, vec![(wait.pane, wait.tab)], None, false),
-            Command::WaitSeveral(wait) => {
-                let panes = wait.panes.iter().map(|&pane| (Some(pane), None));
-                (Kind::Wait, panes.chain(wait.tabs.iter().map(|&tab| (None, Some(tab)))).collect(), None, false)
-            }
-            _ => return Vec::new(),
-        };
+        let Some(step) = FlowStep::of(command) else { return Vec::new() };
         let mut panes: Vec<u64> = Vec::new();
-        for (pane, tab) in targets {
-            if let Ok(to) = self.target(Some(caller), pane, tab)
+        for (pane, tab) in &step.targets {
+            if let Ok(to) = self.target(Some(caller), *pane, *tab)
                 && to != caller
                 && !panes.contains(&to)
             {
@@ -357,18 +349,8 @@ impl App {
             .map(|(pane, to)| Noted {
                 run: run.id,
                 panes: (caller, pane),
-                message: Message {
-                    from: from.to_string(),
-                    to: to.to_string(),
-                    kind,
-                    text: text.as_deref().map(kept),
-                    bytes: text.as_ref().map_or(0, String::len),
-                    at: now,
-                    time: SystemTime::now(),
-                    seq: 0,
-                    edge: None,
-                },
-                answered,
+                message: step.message(from, to, now),
+                answered: step.answered,
             })
             .collect()
     }
@@ -379,14 +361,18 @@ impl App {
         }
         for noted in noted {
             if noted.answered {
-                if self.flow.reads.len() == MAX_READS {
-                    self.flow.reads.remove(0);
-                }
-                self.flow.reads.push((client, noted));
+                self.hold_flow_read(client, noted);
             } else {
                 self.record_flow(noted);
             }
         }
+    }
+
+    fn hold_flow_read(&mut self, client: u64, noted: Noted) {
+        if self.flow.reads.len() == MAX_READS {
+            self.flow.reads.remove(0);
+        }
+        self.flow.reads.push((client, noted));
     }
 
     pub(super) fn flow_answered(&mut self, client: u64, reply: &std::result::Result<Value, String>) {
@@ -411,5 +397,45 @@ impl App {
         let message = run.record(message).clone();
         let wire = FlowMessage::of(run, &message);
         self.publish_flow_message(&wire);
+    }
+}
+
+struct FlowStep {
+    kind: Kind,
+    targets: Vec<(Option<u64>, Option<u64>)>,
+    text: Option<String>,
+    answered: bool,
+}
+
+impl FlowStep {
+    fn of(command: &Command) -> Option<Self> {
+        let one = |kind, target, text, answered| Self { kind, targets: vec![target], text, answered };
+        Some(match command {
+            Command::Send(send) => one(Kind::Send, (send.pane, send.tab), send.text.clone(), false),
+            Command::Keys(keys) => one(Kind::Keys, (keys.pane, keys.tab), Some(keys.keys.join(" ")), false),
+            Command::Read(read) => one(Kind::Read, (read.pane, read.tab), None, false),
+            Command::LastMessage(last) => one(Kind::Read, (last.pane, last.tab), None, true),
+            Command::Wait(wait) => one(Kind::Wait, (wait.pane, wait.tab), None, false),
+            Command::WaitSeveral(wait) => {
+                let panes = wait.panes.iter().map(|&pane| (Some(pane), None));
+                let targets = panes.chain(wait.tabs.iter().map(|&tab| (None, Some(tab)))).collect();
+                Self { kind: Kind::Wait, targets, text: None, answered: false }
+            }
+            _ => return None,
+        })
+    }
+
+    fn message(&self, from: &str, to: &str, now: Instant) -> Message {
+        Message {
+            from: from.to_string(),
+            to: to.to_string(),
+            kind: self.kind,
+            text: self.text.as_deref().map(kept),
+            bytes: self.text.as_ref().map_or(0, String::len),
+            at: now,
+            time: SystemTime::now(),
+            seq: 0,
+            edge: None,
+        }
     }
 }

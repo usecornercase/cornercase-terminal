@@ -130,46 +130,48 @@ impl App {
 
     pub(super) fn queued_rows(&self) -> Vec<Queued> {
         let zone = if self.queued.zone.is_empty() { "UTC" } else { &self.queued.zone };
-        self.queued
-            .queue
-            .entries
-            .iter()
-            .map(|entry| {
-                let status = match &entry.state {
-                    State::Pending => "pending".into(),
-                    State::Starting => "starting…".into(),
-                    State::Started { pane, server } => {
-                        if server == control::server_token() && self.projects.pane_by(*pane).is_some() {
-                            format!("started · pane {pane}")
-                        } else {
-                            "started · pane closed".into()
-                        }
-                    }
-                    State::Failed { reason } => format!("failed · {reason}"),
-                    State::Missed => "missed".into(),
-                };
-                let place = &entry.task.place;
-                let project = self.projects.iter().find(|project| project.path == place.project).map_or_else(
-                    || crate::text::folder_name(&place.project, self.home.as_deref()),
-                    |project| self.project_label(project),
-                );
-                let place = match (&place.branch, &place.workspace_name, &place.workspace) {
-                    (Some(branch), ..) => format!("{project} › {branch}"),
-                    (None, Some(name), _) => format!("{project} › {name}"),
-                    (None, None, Some(path)) if *path != place.project => {
-                        format!("{project} › {}", crate::text::folder_name(path, self.home.as_deref()))
-                    }
-                    _ => project,
-                };
-                Queued {
-                    id: entry.id,
-                    when: queue::clock::display(entry.task.at, zone),
-                    label: entry.task.label.clone(),
-                    meta: format!("{status} · {} · {place}", entry.task.agent),
-                    state: entry.state.clone(),
-                }
-            })
-            .collect()
+        self.queued.queue.entries.iter().map(|entry| self.queued_row(entry, zone)).collect()
+    }
+
+    fn queued_row(&self, entry: &queue::Entry, zone: &str) -> Queued {
+        let place = self.queued_place(&entry.task.place);
+        Queued {
+            id: entry.id,
+            when: queue::clock::display(entry.task.at, zone),
+            label: entry.task.label.clone(),
+            meta: format!("{} · {} · {place}", self.queued_status(&entry.state), entry.task.agent),
+            state: entry.state.clone(),
+        }
+    }
+
+    fn queued_status(&self, state: &State) -> String {
+        match state {
+            State::Pending => "pending".into(),
+            State::Starting => "starting…".into(),
+            State::Started { pane, server }
+                if server == control::server_token() && self.projects.pane_by(*pane).is_some() =>
+            {
+                format!("started · pane {pane}")
+            }
+            State::Started { .. } => "started · pane closed".into(),
+            State::Failed { reason } => format!("failed · {reason}"),
+            State::Missed => "missed".into(),
+        }
+    }
+
+    fn queued_place(&self, place: &queue::Place) -> String {
+        let project = self.projects.iter().find(|project| project.path == place.project).map_or_else(
+            || crate::text::folder_name(&place.project, self.home.as_deref()),
+            |project| self.project_label(project),
+        );
+        match (&place.branch, &place.workspace_name, &place.workspace) {
+            (Some(branch), ..) => format!("{project} › {branch}"),
+            (None, Some(name), _) => format!("{project} › {name}"),
+            (None, None, Some(path)) if *path != place.project => {
+                format!("{project} › {}", crate::text::folder_name(path, self.home.as_deref()))
+            }
+            _ => project,
+        }
     }
 
     pub(super) fn sync_queued(&mut self) {

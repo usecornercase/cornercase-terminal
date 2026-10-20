@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
@@ -19,6 +20,55 @@ use crate::panics;
 use crate::project::Hierarchy;
 use crate::ui;
 use crate::ui::files::{self as panel, Action, Bar, FileView, Found, Hit, Screen, SearchView, TreeRow, TreeView};
+
+fn text_rows(text: &search::Text) -> Vec<Found> {
+    let mut rows = Vec::new();
+    for file in &text.files {
+        rows.push(Found::File { path: file.path.clone(), count: file.lines.len() });
+        rows.extend(file.lines.iter().map(|line| Found::Line {
+            path: file.path.clone(),
+            number: line.number,
+            text: line.text.clone(),
+            ranges: line.ranges.clone(),
+        }));
+    }
+    rows
+}
+
+fn text_note(text: &search::Text, waiting: bool) -> String {
+    let first = if text.capped { format!("the first {MAX_MATCHES} matches") } else { plural(text.matches, "match") };
+    match text.matches {
+        _ if waiting => "searching…".into(),
+        0 => "nothing found".into(),
+        _ => format!("{first} in {}", plural(text.files.len(), "file")),
+    }
+}
+
+fn read_and_send(tx: &Sender<AppEvent>, job: Job, workspace: u64, generation: u64, load: &files::Load) {
+    let send = |content, done| {
+        let path = load.path.clone();
+        let _ = tx.send(AppEvent::Files(FilesEvent::Read { workspace, generation, path, content, done }));
+    };
+    let read = panics::contain(|| disk::read(&load.file, load.previous));
+    job.done();
+    if let Some(Some(disk::Content { body: disk::Body::Unreadable { reason, .. }, .. })) = &read {
+        log::info!("files", "image unreadable", path = &load.path, reason = reason);
+    }
+    let Some(Some(content)) = read else {
+        send(None, true);
+        return;
+    };
+    if !matches!(content.body, disk::Body::Text { .. }) {
+        send(Some(content), true);
+        return;
+    }
+    if load.previous.is_none() {
+        send(Some(content.clone()), false);
+    }
+    let plain = content.clone();
+    let styled = panics::contain(|| disk::highlighted(content)).flatten();
+    send(Some(styled.unwrap_or(plain)), true);
+}
 
 fn plural(n: usize, what: &str) -> String {
     match (n, what) {
@@ -90,50 +140,26 @@ impl App {
         self.changes.watched = self.side == Some(Side::Changes) || shown;
         let Some((workspace, root)) = self.files_target().filter(|_| shown) else { return };
         if let Some((generation, list)) = self.files.list(workspace, &root, now) {
-            let job = Job::new(Level::Debug, "files", "list").with("workspace", workspace);
-            let job = job.with("folders", list.folders.len());
-            let listing = move || {
-                Ok(list.folders.iter().map(|folder| (folder.clone(), disk::list(&list.root, folder).ok())).collect())
-            };
-            self.spawn_job(job, listing, move |folders, _| {
-                Some(AppEvent::Files(FilesEvent::Listed {
-                    workspace,
-                    generation,
-                    folders: folders.unwrap_or_default(),
-                }))
-            });
+            self.spawn_listing(workspace, generation, list);
         }
         if let Some((generation, load)) = self.files.load(workspace, &root, now) {
             let tx = self.tx.clone();
             let job = Job::new(Level::Debug, "files", "read").with("workspace", workspace).with("path", &load.path);
             let job = job.begin();
-            std::thread::spawn(move || {
-                let send = |content, done| {
-                    let path = load.path.clone();
-                    let _ = tx.send(AppEvent::Files(FilesEvent::Read { workspace, generation, path, content, done }));
-                };
-                let read = panics::contain(|| disk::read(&load.file, load.previous));
-                job.done();
-                if let Some(Some(disk::Content { body: disk::Body::Unreadable { reason, .. }, .. })) = &read {
-                    log::info!("files", "image unreadable", path = &load.path, reason = reason);
-                }
-                let Some(Some(content)) = read else {
-                    send(None, true);
-                    return;
-                };
-                if !matches!(content.body, disk::Body::Text { .. }) {
-                    send(Some(content), true);
-                    return;
-                }
-                if load.previous.is_none() {
-                    send(Some(content.clone()), false);
-                }
-                let plain = content.clone();
-                let styled = panics::contain(|| disk::highlighted(content)).flatten();
-                send(Some(styled.unwrap_or(plain)), true);
-            });
+            std::thread::spawn(move || read_and_send(&tx, job, workspace, generation, &load));
         }
         self.refresh_search(workspace, &root, now);
+    }
+
+    fn spawn_listing(&mut self, workspace: u64, generation: u64, list: files::List) {
+        let job = Job::new(Level::Debug, "files", "list").with("workspace", workspace);
+        let job = job.with("folders", list.folders.len());
+        let listing = move || {
+            Ok(list.folders.iter().map(|folder| (folder.clone(), disk::list(&list.root, folder).ok())).collect())
+        };
+        self.spawn_job(job, listing, move |folders, _| {
+            Some(AppEvent::Files(FilesEvent::Listed { workspace, generation, folders: folders.unwrap_or_default() }))
+        });
     }
 
     fn refresh_search(&mut self, workspace: u64, root: &Path, now: Instant) {
@@ -253,32 +279,10 @@ impl App {
                 };
                 (rows, note)
             }
-            Mode::Text => {
-                let Some((answered, text)) = self.files.found_text(workspace) else {
-                    return (Vec::new(), "searching…".into());
-                };
-                let mut rows = Vec::new();
-                for file in &text.files {
-                    rows.push(Found::File { path: file.path.clone(), count: file.lines.len() });
-                    rows.extend(file.lines.iter().map(|line| Found::Line {
-                        path: file.path.clone(),
-                        number: line.number,
-                        text: line.text.clone(),
-                        ranges: line.ranges.clone(),
-                    }));
-                }
-                let first = if text.capped {
-                    format!("the first {MAX_MATCHES} matches")
-                } else {
-                    plural(text.matches, "match")
-                };
-                let note = match text.matches {
-                    _ if answered != wanted && searching => "searching…".into(),
-                    0 => "nothing found".into(),
-                    _ => format!("{first} in {}", plural(text.files.len(), "file")),
-                };
-                (rows, note)
-            }
+            Mode::Text => match self.files.found_text(workspace) {
+                Some((answered, text)) => (text_rows(text), text_note(text, answered != wanted && searching)),
+                None => (Vec::new(), "searching…".into()),
+            },
         }
     }
 
@@ -317,26 +321,11 @@ impl App {
     pub(super) fn files_mouse(&mut self, ev: MouseEvent, pos: Position, panel_area: Rect, area: Rect) -> Result<()> {
         let (Some((workspace, root)), Some(view)) = (self.files_target(), self.files_view()) else { return Ok(()) };
         if let Some(delta) = wheel(ev.kind) {
-            let max = panel::max_scroll(panel_area, &view);
-            let scrolled = |scroll: usize| scroll.min(max).saturating_add_signed(delta).min(max);
-            if let Some(viewer) = self.files.viewer_mut(workspace) {
-                viewer.scroll = scrolled(viewer.scroll);
-            } else if matches!(view.screen, Screen::Search(_)) {
-                let query = self.files.query_mut(workspace);
-                query.scroll = scrolled(query.scroll);
-            } else {
-                let scroll = scrolled(self.files.scroll(workspace));
-                self.files.set_scroll(workspace, scroll);
-            }
+            self.files_wheel(workspace, &view, panel_area, delta);
             return Ok(());
         }
         if ev.kind == MouseEventKind::Down(MouseButton::Right) {
-            if let Some(Hit::Row(i)) = panel::hit(panel_area, &view, pos)
-                && let Screen::Tree(tree) = &view.screen
-                && let Some(row) = tree.rows.get(i)
-            {
-                self.open_row_menu(workspace, &row.path, pos);
-            }
+            self.files_right_click(workspace, &view, panel_area, pos);
             return Ok(());
         }
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
@@ -350,33 +339,64 @@ impl App {
             Some(Hit::Found(i)) => self.open_found(workspace, &view, i),
             Some(Hit::Back) => self.files.close_file(workspace),
             Some(Hit::FullScreen) => self.files.set_full_screen(!self.files.full_screen()),
-            Some(Hit::Row(i)) => {
-                let Screen::Tree(tree) = &view.screen else { return Ok(()) };
-                let Some(row) = tree.rows.get(i) else { return Ok(()) };
-                if row.dir {
-                    self.files.toggle(workspace, &row.path);
-                } else {
-                    self.files.open_file(workspace, &row.path);
-                }
+            Some(Hit::Row(i)) => self.click_file_row(workspace, &view, i),
+            Some(Hit::Line(n)) => self.press_file_line(workspace, n, area),
+            Some(Hit::Fold(key)) => self.toggle_unfolded(workspace, key),
+            Some(Hit::Action(action)) => {
+                return self.file_action(&Checkout { workspace, dir: root, base: None }, action, pos, area);
             }
-            Some(Hit::Line(n)) => {
-                if let Some(viewer) = self.files.viewer_mut(workspace) {
-                    viewer.selection = Some((n, n));
-                    let path = viewer.path.clone();
-                    self.drag = Some(Drag::Lines { workspace, path, anchor: n, area, moved: false, scrolled: None });
-                }
-            }
-            Some(Hit::Fold(key)) => {
-                if let Some(viewer) = self.files.viewer_mut(workspace)
-                    && !viewer.unfolded.remove(&key)
-                {
-                    viewer.unfolded.insert(key);
-                }
-            }
-            Some(Hit::Action(action)) => return self.file_action(workspace, root, action, pos, area),
             None => {}
         }
         Ok(())
+    }
+
+    fn files_wheel(&mut self, workspace: u64, view: &panel::View, panel_area: Rect, delta: isize) {
+        let max = panel::max_scroll(panel_area, view);
+        let scrolled = |scroll: usize| scroll.min(max).saturating_add_signed(delta).min(max);
+        if let Some(viewer) = self.files.viewer_mut(workspace) {
+            viewer.scroll = scrolled(viewer.scroll);
+        } else if matches!(view.screen, Screen::Search(_)) {
+            let query = self.files.query_mut(workspace);
+            query.scroll = scrolled(query.scroll);
+        } else {
+            let scroll = scrolled(self.files.scroll(workspace));
+            self.files.set_scroll(workspace, scroll);
+        }
+    }
+
+    fn files_right_click(&mut self, workspace: u64, view: &panel::View, panel_area: Rect, pos: Position) {
+        if let Some(Hit::Row(i)) = panel::hit(panel_area, view, pos)
+            && let Screen::Tree(tree) = &view.screen
+            && let Some(row) = tree.rows.get(i)
+        {
+            self.open_row_menu(workspace, &row.path, pos);
+        }
+    }
+
+    fn click_file_row(&mut self, workspace: u64, view: &panel::View, i: usize) {
+        let Screen::Tree(tree) = &view.screen else { return };
+        let Some(row) = tree.rows.get(i) else { return };
+        if row.dir {
+            self.files.toggle(workspace, &row.path);
+        } else {
+            self.files.open_file(workspace, &row.path);
+        }
+    }
+
+    fn press_file_line(&mut self, workspace: u64, n: u32, area: Rect) {
+        if let Some(viewer) = self.files.viewer_mut(workspace) {
+            viewer.selection = Some((n, n));
+            let path = viewer.path.clone();
+            self.drag = Some(Drag::Lines { workspace, path, anchor: n, area, moved: false, scrolled: None });
+        }
+    }
+
+    fn toggle_unfolded(&mut self, workspace: u64, key: u32) {
+        if let Some(viewer) = self.files.viewer_mut(workspace)
+            && !viewer.unfolded.remove(&key)
+        {
+            viewer.unfolded.insert(key);
+        }
     }
 
     pub(super) fn files_typing(&self) -> bool {
@@ -542,7 +562,8 @@ impl App {
         }
     }
 
-    fn file_action(&mut self, workspace: u64, root: PathBuf, action: Action, pos: Position, area: Rect) -> Result<()> {
+    fn file_action(&mut self, target: &Checkout, action: Action, pos: Position, area: Rect) -> Result<()> {
+        let workspace = target.workspace;
         let Some(viewer) = self.files.viewer(workspace) else { return Ok(()) };
         let path = viewer.path.clone();
         let image = viewer.content.as_ref().is_some_and(|c| c.is_image());
@@ -550,8 +571,7 @@ impl App {
         match action {
             Action::Open => {
                 let line = selected.map_or(1, |(first, _)| first);
-                let target = Checkout { workspace, dir: root, base: None };
-                return self.open_in_editor(&target, &path, line, area);
+                return self.open_in_editor(target, &path, line, area);
             }
             Action::OpenIn => self.open_file_menu(workspace, pos),
             Action::Ask => {
