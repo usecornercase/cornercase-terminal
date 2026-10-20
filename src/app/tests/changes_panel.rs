@@ -297,7 +297,7 @@ mod every_project {
         app.goto(Goto::Place { project: app.projects[active].id, workspace: None, tab: None });
         app.projects[0].collapsed = true;
         app.projects[0].workspaces[0].collapsed = true;
-        app.spawn.editor_env = vec![("VISUAL".into(), owners.editor.display().to_string())];
+        app.shells.editor_env = vec![("VISUAL".into(), owners.editor.display().to_string())];
         let open = panel::actions(hunk)[0].1.as_position();
         click(&mut app, open);
         wait_until("the editor runs in the owning workspace", || owners.second.path().join("editor-got").exists());
@@ -631,7 +631,7 @@ fn closing_the_panel_gives_the_keys_back() {
 fn open_starts_the_editor_in_a_new_tab() {
     let repo = repo_with_edit();
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.spawn.editor_env = vec![("VISUAL".into(), "true".into())];
+    app.shells.editor_env = vec![("VISUAL".into(), "true".into())];
     refresh_until_loaded(&mut app, &rx);
     let (target, file) = first_changed_file(&app);
     let tabs = app.projects[0].workspaces[0].tabs.len();

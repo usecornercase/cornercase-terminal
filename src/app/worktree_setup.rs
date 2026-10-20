@@ -59,7 +59,7 @@ impl App {
         let status = setup::status_file(&self.paths.setup_dir, id);
         let _ = std::fs::remove_file(&status);
         let branch = git::branch(&path).unwrap_or_default();
-        let args = setup::args(script, &status, &self.shell, &self.projects[project].path, &branch);
+        let args = setup::args(script, &status, &self.shells.shell, &self.projects[project].path, &branch);
         let spawning = Spawning { id, size, shell: "/bin/sh", args: &args, cwd: path, run };
         let mut term = self.spawn_term(spawning, accounts)?;
         self.spawn.setups.insert(id, (workspace, status.clone()));

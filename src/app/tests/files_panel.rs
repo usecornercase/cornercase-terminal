@@ -688,7 +688,7 @@ mod full_screen {
     #[test]
     fn open_and_jumps_end_it() {
         let (_repo, mut app, _rx) = with_file();
-        app.spawn.editor_env = vec![("VISUAL".into(), "true".into())];
+        app.shells.editor_env = vec![("VISUAL".into(), "true".into())];
         toggle(&mut app);
         let pos = action_pos(&app, Action::Open);
         click(&mut app, pos);

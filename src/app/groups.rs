@@ -39,8 +39,6 @@ pub(super) struct Git {
 pub(super) struct Spawn {
     pub(super) setups: HashMap<u64, (u64, PathBuf)>,
     pub(super) pending_run_dirs: Vec<(u64, Vec<PathBuf>)>,
-    pub(super) pane_socket: Option<String>,
-    pub(super) editor_env: Vec<(String, String)>,
 }
 
 #[derive(Default)]
