@@ -5,6 +5,7 @@ use std::time::Instant;
 use ratatui::layout::Rect;
 
 use super::App;
+use super::tabs::Spawning;
 use super::toast::Toast;
 use crate::accounts::Accounts;
 use crate::agents::activity::Status;
@@ -13,9 +14,17 @@ use crate::git;
 use crate::git::worktree::setup;
 use crate::host::notify::Notification;
 use crate::log;
-use crate::project::{Hierarchy, Tab};
-use crate::term::{SpawnOptions, Term};
+use crate::project::{Hierarchy, Project};
+use crate::term::Term;
 use crate::ui;
+
+pub(super) struct SetupRun<'a> {
+    pub(super) project: usize,
+    pub(super) workspace: u64,
+    pub(super) path: PathBuf,
+    pub(super) script: &'a str,
+    pub(super) run: Option<&'a Path>,
+}
 
 impl App {
     pub(crate) fn set_setup_dir(&mut self, dir: &Path) {
@@ -40,15 +49,9 @@ impl App {
         (!text.trim().is_empty()).then_some(text)
     }
 
-    pub(super) fn spawn_setup(
-        &mut self,
-        area: Rect,
-        (p, workspace): (usize, u64),
-        path: PathBuf,
-        script: &str,
-        (run, accounts): (Option<&Path>, Accounts),
-    ) -> Result<Term> {
-        let (rows, cols) = self.pane_size(area);
+    pub(super) fn spawn_setup(&mut self, area: Rect, setup: SetupRun, accounts: Accounts) -> Result<Term> {
+        let SetupRun { project, workspace, path, script, run } = setup;
+        let size = self.pane_size(area);
         let id = self.take_id();
         if let Err(e) = std::fs::create_dir_all(&self.setup_dir) {
             log::warning!("worktree", "cannot make the setup folder", error = e);
@@ -56,23 +59,9 @@ impl App {
         let status = setup::status_file(&self.setup_dir, id);
         let _ = std::fs::remove_file(&status);
         let branch = git::branch(&path).unwrap_or_default();
-        let args = setup::args(script, &status, &self.shell, &self.projects[p].path, &branch);
-        accounts.link(|kind| self.default_home(kind));
-        let env = self.pane_env(id, run, &accounts);
-        let removed = accounts.removed();
-        let opts = SpawnOptions {
-            id,
-            shell: "/bin/sh",
-            args: &args,
-            env: &env,
-            remove: &removed,
-            rows,
-            cols,
-            cwd: Some(path),
-            theme: self.terminal_theme(),
-        };
-        let mut term = Term::spawn(opts, self.tx.clone())?;
-        term.set_accounts(accounts);
+        let args = setup::args(script, &status, &self.shell, &self.projects[project].path, &branch);
+        let spawning = Spawning { id, size, shell: "/bin/sh", args: &args, cwd: path, run };
+        let mut term = self.spawn_term(spawning, accounts)?;
         self.setups.insert(id, (workspace, status.clone()));
         term.setup = Some(setup::Pane::Running { status, since: Instant::now() });
         log::info!("worktree", "setup started", pane = id, bytes = script.len());
@@ -81,26 +70,24 @@ impl App {
 
     pub(super) fn push_setup_tab(&mut self, p: usize, w: usize, area: Rect, name: Option<String>) -> Result<usize> {
         let accounts = self.active_accounts();
-        self.push_setup_tab_in(p, w, area, name, accounts)
+        self.push_setup_tab_in((p, w), area, name, accounts)
     }
 
     pub(super) fn push_setup_tab_in(
         &mut self,
-        p: usize,
-        w: usize,
+        place: (usize, usize),
         area: Rect,
         name: Option<String>,
         accounts: Accounts,
     ) -> Result<usize> {
+        let (p, w) = place;
         self.projects[p].workspaces[w].clear_failed_setups();
-        let Some(script) = self.setup_script(p) else { return self.push_tab_in(p, w, area, name, accounts) };
+        let Some(script) = self.setup_script(p) else { return self.push_tab_in(place, area, name, accounts) };
         let path = self.projects[p].workspaces[w].path.clone();
         let workspace = self.projects[p].workspaces[w].id;
-        let term = self.spawn_setup(area, (p, workspace), path, &script, (None, accounts))?;
-        let tab = Tab::new(self.take_id(), name, term);
-        let workspace = &mut self.projects[p].workspaces[w];
-        workspace.tabs.push(tab);
-        Ok(workspace.tabs.len() - 1)
+        let setup = SetupRun { project: p, workspace, path, script: &script, run: None };
+        let term = self.spawn_setup(area, setup, accounts)?;
+        Ok(self.insert_tab(place, name, term))
     }
 
     pub(super) fn setup_action(&self, project: u64, workspace: u64) -> Option<super::menus::MenuAction> {
@@ -151,28 +138,7 @@ impl App {
 
     pub(super) fn watch_setups(&mut self, now: Instant) {
         let seen = self.seen_tabs();
-        let mut ended = Vec::new();
-        let mut running = HashMap::new();
-        for project in &mut self.projects {
-            for workspace in &mut project.workspaces {
-                let id = workspace.id;
-                for tab in &mut workspace.tabs {
-                    let shown = seen.contains(&tab.id);
-                    for term in &mut tab.panes {
-                        match &mut term.setup {
-                            Some(setup::Pane::Running { status, .. }) => {
-                                running.insert(term.id, (id, status.clone()));
-                                if let Some(code) = setup::read_status(status) {
-                                    ended.push((term.id, code));
-                                }
-                            }
-                            Some(setup::Pane::Failed { unseen, .. }) if shown => *unseen = false,
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        }
+        let (running, ended) = scan_setups(&mut self.projects, &seen);
         let vanished: Vec<_> = self
             .setups
             .iter()
@@ -180,19 +146,23 @@ impl App {
             .map(|(pane, (workspace, status))| (*pane, *workspace, status.clone()))
             .collect();
         for (pane, workspace, status) in vanished {
-            let _ = std::fs::remove_file(&status);
-            let (dropped, ended) = self.drop_workspace_launches(workspace, Some(pane), "setup closed");
-            log::info!("worktree", "setup pane closed", pane = pane, dropped = dropped);
-            if dropped + ended > 0
-                && let Some(place) = self.workspace_place(workspace)
-            {
-                let message = format!("setup was closed in {place}: its agent did not start");
-                self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(Status::Failed)));
-            }
+            self.setup_vanished(pane, workspace, &status);
         }
         self.setups = running;
         for (pane, code) in ended {
             self.setup_finished(pane, code, now);
+        }
+    }
+
+    fn setup_vanished(&mut self, pane: u64, workspace: u64, status: &Path) {
+        let _ = std::fs::remove_file(status);
+        let (dropped, ended) = self.drop_workspace_launches(workspace, Some(pane), "setup closed");
+        log::info!("worktree", "setup pane closed", pane = pane, dropped = dropped);
+        if dropped + ended > 0
+            && let Some(place) = self.workspace_place(workspace)
+        {
+            let message = format!("setup was closed in {place}: its agent did not start");
+            self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(Status::Failed)));
         }
     }
 
@@ -212,15 +182,17 @@ impl App {
         (dropped.len(), ended)
     }
 
-    fn setup_finished(&mut self, pane: u64, code: i32, now: Instant) {
-        let seen = self.seen_tabs();
-        let Some((project, workspace, tab)) = self.projects.iter().find_map(|p| {
+    fn pane_tab(&self, pane: u64) -> Option<(u64, u64, u64)> {
+        self.projects.iter().find_map(|p| {
             p.workspaces
                 .iter()
                 .find_map(|w| w.tabs.iter().find(|t| t.index_of(pane).is_some()).map(|t| (p.id, w.id, t.id)))
-        }) else {
-            return;
-        };
+        })
+    }
+
+    fn setup_finished(&mut self, pane: u64, code: i32, now: Instant) {
+        let seen = self.seen_tabs();
+        let Some((project, workspace, tab)) = self.pane_tab(pane) else { return };
         let Some(term) = self.projects.pane_by_mut(pane) else { return };
         let Some(setup::Pane::Running { status, since }) = term.setup.take() else { return };
         term.became_shell();
@@ -228,27 +200,35 @@ impl App {
         self.setups.remove(&pane);
         let ms = u64::try_from(now.saturating_duration_since(since).as_millis()).unwrap_or(u64::MAX);
         if code == 0 {
-            log::info!("worktree", "setup finished", pane = pane, status = 0, ms = ms);
-            if let Some((p, w)) = self.projects.workspace_in(project, workspace) {
-                self.projects[p].workspaces[w].clear_failed_setups();
-            }
-            let panes = self.workspace_panes(workspace);
-            for launch in self.agents.launches.iter_mut().filter(|l| panes.contains(&l.term)) {
-                launch.wait_from(now);
-            }
+            self.setup_succeeded(pane, (project, workspace), ms, now);
             return;
         }
         let failed = format!("exit status {code}");
         log::warning!("worktree", "setup failed", pane = pane, status = failed, ms = ms);
+        self.setup_failed(pane, failed, (project, workspace), !seen.contains(&tab));
+    }
+
+    fn setup_succeeded(&mut self, pane: u64, (project, workspace): (u64, u64), ms: u64, now: Instant) {
+        log::info!("worktree", "setup finished", pane = pane, status = 0, ms = ms);
+        if let Some((p, w)) = self.projects.workspace_in(project, workspace) {
+            self.projects[p].workspaces[w].clear_failed_setups();
+        }
+        let panes = self.workspace_panes(workspace);
+        for launch in self.agents.launches.iter_mut().filter(|l| panes.contains(&l.term)) {
+            launch.wait_from(now);
+        }
+    }
+
+    fn setup_failed(&mut self, pane: u64, failed: String, (project, workspace): (u64, u64), unseen: bool) {
         if let Some(term) = self.projects.pane_by_mut(pane) {
-            term.setup = Some(setup::Pane::Failed { code: failed, unseen: !seen.contains(&tab), blame: true });
+            term.setup = Some(setup::Pane::Failed { code: failed, unseen, blame: true });
         }
         let (dropped, ended) = self.drop_workspace_launches(workspace, None, "setup failed");
         let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return };
         let place = format!("{} › {}", self.project_label(&self.projects[p]), self.projects[p].workspaces[w].label());
         let tail = if dropped == 0 && ended == 0 { "" } else { ": its agent did not start" };
         let message = format!("setup failed in {place}{tail}");
-        if !seen.contains(&tab) {
+        if unseen {
             self.outbox
                 .notifications
                 .extend(Notification::new(&crate::host::notify::clean(&message), &self.config.desktop_notifications));
@@ -265,5 +245,36 @@ impl App {
     fn workspace_panes(&self, workspace: u64) -> Vec<u64> {
         let found = self.projects.iter().flat_map(|p| &p.workspaces).find(|w| w.id == workspace);
         found.into_iter().flat_map(|w| w.tabs.iter().flat_map(|t| t.panes.iter().map(|term| term.id))).collect()
+    }
+}
+
+type Running = HashMap<u64, (u64, PathBuf)>;
+
+fn scan_setups(projects: &mut [Project], seen: &[u64]) -> (Running, Vec<(u64, i32)>) {
+    let mut running = Running::new();
+    let mut ended = Vec::new();
+    let workspaces = projects.iter_mut().flat_map(|project| project.workspaces.iter_mut());
+    for (workspace, tab) in workspaces.flat_map(|w| {
+        let id = w.id;
+        w.tabs.iter_mut().map(move |tab| (id, tab))
+    }) {
+        let shown = seen.contains(&tab.id);
+        for term in &mut tab.panes {
+            scan_pane(term, workspace, shown, &mut running, &mut ended);
+        }
+    }
+    (running, ended)
+}
+
+fn scan_pane(term: &mut Term, workspace: u64, shown: bool, running: &mut Running, ended: &mut Vec<(u64, i32)>) {
+    match &mut term.setup {
+        Some(setup::Pane::Running { status, .. }) => {
+            running.insert(term.id, (workspace, status.clone()));
+            if let Some(code) = setup::read_status(status) {
+                ended.push((term.id, code));
+            }
+        }
+        Some(setup::Pane::Failed { unseen, .. }) if shown => *unseen = false,
+        _ => {}
     }
 }

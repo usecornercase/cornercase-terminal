@@ -288,8 +288,12 @@ fn a_split_tab_with_one_pane_that_cannot_start_is_left_out_whole() {
 fn a_tab_that_cannot_start_names_the_folder_and_why() {
     let (dir, locked, mut app, _rx, ws) = locked_restore();
 
-    let Err(e) = app.restore_tab(&ws.tabs[0], dir.path(), AREA, |_| None, None, &mut session::Parents::default())
-    else {
+    let Err(e) = app.restore_tab(
+        &ws.tabs[0],
+        session::Restoring { dir: dir.path(), area: AREA, run: None },
+        |_| None,
+        &mut session::Parents::default(),
+    ) else {
         panic!("the second pane cannot start");
     };
 

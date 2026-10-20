@@ -584,7 +584,7 @@ impl App {
         let open = self.projects[p].workspaces.iter().position(|w| git::branch(&w.path).as_deref() == Some(&branch));
         if let Some(w) = open {
             self.overlay = None;
-            return self.open_workspace(p, w, Some(start), area, false);
+            return self.open_workspace((p, w), Some(start), area, false);
         }
         self.spawn_worktree(p, branch, Some(start), None);
         if let Some(Overlay::Issues(b)) = &mut self.overlay {

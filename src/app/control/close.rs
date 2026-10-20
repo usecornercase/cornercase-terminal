@@ -1,5 +1,6 @@
 use super::{Handled, Pending, Stage, json, malformed, none};
 use crate::app::App;
+use crate::app::worktrees::RemoveOptions;
 use crate::control::arrange::{Locked, Removal, RemovalCheck, RoleTree};
 use crate::control::contract::Refusal;
 use crate::control::{self, Done, Item};
@@ -130,7 +131,7 @@ impl App {
             return;
         }
         let clear = (status.lock.is_none() || unlock) && (force || !status.changed);
-        if clear && self.start_removal(project, workspace, force, unlock, Some(key)) {
+        if clear && self.start_removal(project, workspace, RemoveOptions { force, unlock }, Some(key)) {
             return;
         }
         let Some(pending) = self.requests.take(key) else { return };

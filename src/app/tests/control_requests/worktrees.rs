@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::worktrees::RemoveOptions;
 use crate::config::ProjectSettings;
 use crate::control::arrange::Removal;
 use crate::test_util::git;
@@ -17,7 +18,7 @@ fn locked_workspace(app: &mut App, rx: &Receiver<AppEvent>, repo: &Path) -> (u64
 
 fn removing_workspace(app: &mut App, rx: &Receiver<AppEvent>) -> u64 {
     let (id, _) = made(app, rx);
-    app.start_removal(app.projects[0].id, id, false, false, None);
+    app.start_removal(app.projects[0].id, id, RemoveOptions::default(), None);
     id
 }
 
@@ -95,7 +96,7 @@ fn a_removal_that_starts_while_git_status_runs_is_not_started_twice() {
     let (id, _) = made(&mut app, &rx);
     ask(&mut app, None, remove(id));
 
-    app.start_removal(app.projects[0].id, id, false, false, None);
+    app.start_removal(app.projects[0].id, id, RemoveOptions::default(), None);
 
     let message = error(answered(&mut app, &rx, "git status answers"));
     assert!(message.contains("is being removed"), "{message}");

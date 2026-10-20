@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::changes_panel::Hunk;
+use crate::app::worktrees::RemoveOptions;
 use crate::changes;
 use crate::test_util::{git, write_executable};
 
@@ -172,7 +173,7 @@ mod every_project {
         match action {
             "closed" => app.drop_workspace(project, workspace),
             "removed" => {
-                assert!(app.start_removal(project, workspace, true, false, None));
+                assert!(app.start_removal(project, workspace, RemoveOptions { force: true, unlock: false }, None));
                 pump_until(&mut app, &rx, "the worktree is removed", |a| {
                     a.projects.workspace_index(workspace).is_none()
                 });

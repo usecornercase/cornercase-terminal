@@ -105,7 +105,7 @@ impl App {
             None => self.here_workspace(asker)?,
         };
         let accounts = self.requested_accounts(new.profile.as_deref(), &new.accounts)?;
-        let t = self.push_tab_in(p, w, area, name_of(new.name), accounts).map_err(|e| e.to_string())?;
+        let t = self.push_tab_in((p, w), area, name_of(new.name), accounts).map_err(|e| e.to_string())?;
         let ids = self.ids(p, Some(w), Some(t));
         let pane = ids.pane.unwrap_or_default();
         self.adopt(pane, asker.caller);
@@ -178,7 +178,7 @@ impl App {
                 return Ok(None);
             }
         };
-        let t = self.push_tab_in(p, w, area, name, accounts).map_err(|e| e.to_string())?;
+        let t = self.push_tab_in((p, w), area, name, accounts).map_err(|e| e.to_string())?;
         let ids = self.ids(p, Some(w), Some(t));
         let pane = ids.pane.unwrap_or_default();
         self.adopt(pane, asker.caller);
@@ -321,11 +321,11 @@ impl App {
         }
         let launch = match then.start {
             Some((spec, name)) => {
-                let t = self.push_setup_tab_in(p, w, area, name, then.accounts.clone()).map_err(|e| e.to_string())?;
+                let t = self.push_setup_tab_in((p, w), area, name, then.accounts.clone()).map_err(|e| e.to_string())?;
                 Some((spec, t))
             }
             None if self.projects[p].workspaces[w].tabs.is_empty() => {
-                self.push_setup_tab_in(p, w, area, None, then.accounts.clone()).map_err(|e| e.to_string())?;
+                self.push_setup_tab_in((p, w), area, None, then.accounts.clone()).map_err(|e| e.to_string())?;
                 None
             }
             None => None,

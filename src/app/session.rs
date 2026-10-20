@@ -26,6 +26,13 @@ pub(super) struct Parents {
     wanted: Vec<(u64, Option<u64>, u64)>,
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct Restoring<'a> {
+    pub(super) dir: &'a Path,
+    pub(super) area: Rect,
+    pub(super) run: Option<&'a Path>,
+}
+
 const SENDING: &str = "a message from `cornercase send` is going into this pane; wait a moment, so the two do not join";
 
 impl App {
@@ -45,7 +52,7 @@ impl App {
         let mut lost = 0;
         for (t, saved_tab) in saved.tabs.iter().enumerate().filter(|(_, t)| !t.panes.is_empty()) {
             let roles = |pane: usize| saved.run.as_ref().and_then(|run| run.role_at(t, pane));
-            match self.restore_tab(saved_tab, &path, area, roles, run_dir.as_deref(), parents) {
+            match self.restore_tab(saved_tab, Restoring { dir: &path, area, run: run_dir.as_deref() }, roles, parents) {
                 Ok(tab) => tabs.push((t, tab)),
                 Err(e) => {
                     log::error!("server", "could not restore a tab", workspace = path.display(), error = e);
@@ -81,12 +88,11 @@ impl App {
     pub(super) fn restore_tab<'a>(
         &mut self,
         saved: &TabState,
-        dir: &Path,
-        area: Rect,
+        at: Restoring,
         roles: impl Fn(usize) -> Option<&'a Role>,
-        run: Option<&Path>,
         parents: &mut Parents,
     ) -> Result<Tab> {
+        let Restoring { dir, area, run } = at;
         let mut panes = Vec::new();
         for (i, pane) in saved.panes.iter().enumerate() {
             let cwd = pane.cwd.clone().filter(|cwd| cwd.is_dir()).unwrap_or_else(|| dir.to_path_buf());

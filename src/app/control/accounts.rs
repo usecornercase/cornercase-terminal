@@ -326,7 +326,7 @@ impl App {
         let chosen = BTreeMap::from([(kind.name().to_string(), add.name.clone())]);
         let given = Accounts::of(&self.accounts_dir, &chosen);
         let t = self
-            .push_tab_in(p, w, area, Some(format!("{} login", add.name)), given)
+            .push_tab_in((p, w), area, Some(format!("{} login", add.name)), given)
             .map_err(|e| format!("the account `{}` was added, but its login tab could not open: {e}", add.name))?;
         let ids = self.ids(p, Some(w), Some(t));
         let pane = ids.pane.unwrap_or_default();
