@@ -164,8 +164,8 @@ fn closing_the_setup_tab_drops_the_agent_and_its_status_file() {
     pump_until(&mut team.app, &team.rx, "the setup starts", |a| {
         a.projects[0].workspaces.iter().any(Workspace::setting_up)
     });
-    refreshing(&mut team.app, &team.rx, "it is watched", |a| !a.setups.running.is_empty());
-    let (pane, (_, status)) = team.app.setups.running.iter().next().map(|(p, v)| (*p, v.clone())).expect("watched");
+    refreshing(&mut team.app, &team.rx, "it is watched", |a| !a.setups.running().is_empty());
+    let (pane, (_, status)) = team.app.setups.running().iter().next().map(|(p, v)| (*p, v.clone())).expect("watched");
     std::fs::write(&status, "").expect("status");
     let tab = team.app.projects[0]
         .workspaces
@@ -206,8 +206,8 @@ fn a_setup_closed_before_the_first_watch_still_drops_the_agent() {
     pump_until(&mut team.app, &team.rx, "the setup starts", |a| {
         a.projects[0].workspaces.iter().any(Workspace::setting_up)
     });
-    assert_eq!(team.app.setups.running.len(), 1);
-    let pane = *team.app.setups.running.keys().next().expect("a setup");
+    assert_eq!(team.app.setups.running().len(), 1);
+    let pane = *team.app.setups.running().keys().next().expect("a setup");
     let tab = team.app.projects[0]
         .workspaces
         .iter()

@@ -19,11 +19,16 @@ use crate::term::Term;
 use crate::ui;
 
 pub(super) struct Setups {
-    pub(super) running: HashMap<u64, (u64, PathBuf)>,
-    pub(super) dir: PathBuf,
+    running: HashMap<u64, (u64, PathBuf)>,
+    dir: PathBuf,
 }
 
 impl Setups {
+    #[cfg(test)]
+    pub(super) fn running(&self) -> &HashMap<u64, (u64, PathBuf)> {
+        &self.running
+    }
+
     pub(super) fn new(config_path: &Path) -> Self {
         Self { running: HashMap::new(), dir: config_path.parent().map(Path::to_path_buf).unwrap_or_default() }
     }
