@@ -77,7 +77,7 @@ impl App {
             now,
             read,
             config: &self.config,
-            dirs: (self.agents.claude_dir.as_deref(), self.paths.accounts_dir.as_path()),
+            dirs: (self.agents.claude_dir.as_deref(), self.accounts.dir.as_path()),
             seen_tabs,
             folds: tree || self.screen.drawn.tab_bar.is_empty(),
             members,

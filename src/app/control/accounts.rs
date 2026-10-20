@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime};
 
 use ratatui::layout::Rect;
@@ -31,6 +32,18 @@ pub(in crate::app) struct Logins {
     waiting: Vec<u64>,
     pub(in crate::app) generation: u64,
     pub(in crate::app) page_checked: Option<Instant>,
+}
+
+pub(in crate::app) struct AccountState {
+    pub(in crate::app) dir: PathBuf,
+    pub(in crate::app) default_homes: Option<PathBuf>,
+    pub(in crate::app) logins: Logins,
+}
+
+impl AccountState {
+    pub(in crate::app) fn new(config_path: &Path) -> Self {
+        Self { dir: config_path.with_file_name("accounts"), default_homes: None, logins: Logins::default() }
+    }
 }
 
 const PROFILE_MAX: usize = 32;
@@ -94,11 +107,11 @@ impl App {
                 picked.insert(kind.name().to_string(), account.clone());
             }
         }
-        Ok(Accounts::of(&self.paths.accounts_dir, &picked))
+        Ok(Accounts::of(&self.accounts.dir, &picked))
     }
 
     pub(in crate::app) fn accounts_info(&self, login: Option<Ids>) -> AccountsInfo {
-        let providers = accounts::list(&self.paths.accounts_dir)
+        let providers = accounts::list(&self.accounts.dir)
             .into_iter()
             .map(|(kind, names)| self.provider_info(kind, names))
             .collect();
@@ -128,29 +141,29 @@ impl App {
             system_label: self.saved_label(kind, "").to_string(),
             active: self.config.selected_accounts().get(kind.name()).cloned().unwrap_or_default(),
             system_path: default,
-            system_login: self.logins.seen.get(&(kind, String::new())).cloned(),
+            system_login: self.accounts.logins.seen.get(&(kind, String::new())).cloned(),
         }
     }
 
-    fn account_info(&self, kind: Known, name: String, default: Option<&std::path::Path>) -> AccountInfo {
-        let path = accounts::path(&self.paths.accounts_dir, kind, &name);
+    fn account_info(&self, kind: Known, name: String, default: Option<&Path>) -> AccountInfo {
+        let path = accounts::path(&self.accounts.dir, kind, &name);
         let path = path.canonicalize().unwrap_or(path);
         let unshared = default.map(|default| links::status(kind, default, &path)).unwrap_or_default();
-        let login = self.logins.seen.get(&(kind, name.clone())).cloned();
+        let login = self.accounts.logins.seen.get(&(kind, name.clone())).cloned();
         let label = self.saved_label(kind, &name).to_string();
         AccountInfo { name, path, unshared, login, label }
     }
 
     fn account_marks(&self) -> Vec<Option<SystemTime>> {
-        let modified = |path: std::path::PathBuf| fs::metadata(path).and_then(|meta| meta.modified()).ok();
-        std::iter::once(modified(self.paths.accounts_dir.clone()))
-            .chain(accounts::supported().map(|kind| modified(self.paths.accounts_dir.join(kind.name()))))
+        let modified = |path: PathBuf| fs::metadata(path).and_then(|meta| meta.modified()).ok();
+        std::iter::once(modified(self.accounts.dir.clone()))
+            .chain(accounts::supported().map(|kind| modified(self.accounts.dir.join(kind.name()))))
             .collect()
     }
 
     pub(in crate::app) fn watch_accounts(&mut self) {
         let marks = self.account_marks();
-        if marks != self.logins.marks {
+        if marks != self.accounts.logins.marks {
             self.relist_accounts_with(marks);
         }
     }
@@ -161,24 +174,25 @@ impl App {
     }
 
     fn relist_accounts_with(&mut self, marks: Vec<Option<SystemTime>>) {
-        let listed = accounts::list(&self.paths.accounts_dir);
+        let listed = accounts::list(&self.accounts.dir);
         let known = |key: &Key| known_login(&listed, key);
-        self.logins.seen.retain(|key, _| known(key));
-        if listed != self.logins.listed {
-            self.logins.generation += 1;
+        self.accounts.logins.seen.retain(|key, _| known(key));
+        if listed != self.accounts.logins.listed {
+            self.accounts.logins.generation += 1;
         }
-        self.logins.listed = listed;
-        self.logins.marks = marks;
+        self.accounts.logins.listed = listed;
+        self.accounts.logins.marks = marks;
     }
 
     pub(in crate::app) fn checking_logins(&self) -> Vec<(Known, String)> {
-        let mut running: Vec<(Known, String)> = self.logins.running.iter().cloned().collect();
+        let mut running: Vec<(Known, String)> = self.accounts.logins.running.iter().cloned().collect();
         running.sort_by(|a, b| (a.0.name(), &a.1).cmp(&(b.0.name(), &b.1)));
         running
     }
 
     pub(in crate::app) fn check_logins(&mut self) -> bool {
         let wanted: Vec<Key> = self
+            .accounts
             .logins
             .listed
             .iter()
@@ -188,19 +202,19 @@ impl App {
         for key in wanted {
             self.check_login(key);
         }
-        !self.logins.running.is_empty()
+        !self.accounts.logins.running.is_empty()
     }
 
     fn check_login(&mut self, (kind, name): Key) {
-        if !self.logins.running.insert((kind, name.clone())) {
+        if !self.accounts.logins.running.insert((kind, name.clone())) {
             return;
         }
         let home = if name.is_empty() {
             None
         } else {
             let chosen = BTreeMap::from([(kind.name().to_string(), name.clone())]);
-            let Some(account) = Accounts::of(&self.paths.accounts_dir, &chosen).get(kind).cloned() else {
-                self.logins.running.remove(&(kind, name));
+            let Some(account) = Accounts::of(&self.accounts.dir, &chosen).get(kind).cloned() else {
+                self.accounts.logins.running.remove(&(kind, name));
                 return;
             };
             Some(account.home)
@@ -225,19 +239,19 @@ impl App {
 
     pub(in crate::app) fn login_checked(&mut self, kind: Known, name: String, found: Login) {
         let key = (kind, name);
-        self.logins.running.remove(&key);
+        self.accounts.logins.running.remove(&key);
         log::debug!("accounts", "login checked", provider = kind.name(), account = key.1, state = found.state.name());
-        if known_login(&self.logins.listed, &key) {
+        if known_login(&self.accounts.logins.listed, &key) {
             let checked = Stamp(SystemTime::now()).to_string();
             let info = LoginInfo { state: found.state, email: found.email, plan: found.plan, checked };
-            self.logins.seen.insert(key, info);
+            self.accounts.logins.seen.insert(key, info);
         }
         self.refresh_accounts_page();
-        if !self.logins.running.is_empty() {
+        if !self.accounts.logins.running.is_empty() {
             return;
         }
         let reply = Ok(json(&self.accounts_info(None)));
-        for key in std::mem::take(&mut self.logins.waiting) {
+        for key in std::mem::take(&mut self.accounts.logins.waiting) {
             if let Some(pending) = self.clients.requests.take(key) {
                 self.refuse_or_answer(pending.client, reply.clone());
             }
@@ -251,12 +265,12 @@ impl App {
         }
         let key = self.clients.requests.key();
         self.pend_reading(client, key);
-        self.logins.waiting.push(key);
+        self.accounts.logins.waiting.push(key);
         None
     }
 
     fn account_exists(&self, kind: Known, name: &str) -> Result<(), Refusal> {
-        if accounts::names(&self.paths.accounts_dir, kind).iter().any(|known| known == name) {
+        if accounts::names(&self.accounts.dir, kind).iter().any(|known| known == name) {
             return Ok(());
         }
         Err(Refusal::new(
@@ -276,8 +290,7 @@ impl App {
         self.check_new_account(kind, &add.name)?;
         let place = if add.login { Some(self.login_place(asker, add, area)?) } else { None };
         let default = self.default_home(kind);
-        let dir =
-            accounts::add(&self.paths.accounts_dir, kind, &add.name, default.as_deref()).map_err(|e| e.to_string())?;
+        let dir = accounts::add(&self.accounts.dir, kind, &add.name, default.as_deref()).map_err(|e| e.to_string())?;
         log::info!("accounts", "account added", provider = kind.name(), account = add.name, path = dir.display());
         self.relist_accounts();
         let Some(place) = place else { return Ok(Some(json(&self.accounts_info(None)))) };
@@ -292,7 +305,7 @@ impl App {
                 accounts::NAME_MAX
             )));
         }
-        let names = accounts::names(&self.paths.accounts_dir, kind);
+        let names = accounts::names(&self.accounts.dir, kind);
         if names.iter().any(|known| known == name) {
             return Err(conflict(self.config.account_taken(kind.name(), name)));
         }
@@ -325,7 +338,7 @@ impl App {
     ) -> Result<Ids, Refusal> {
         let kind = provider(&add.provider)?;
         let chosen = BTreeMap::from([(kind.name().to_string(), add.name.clone())]);
-        let given = Accounts::of(&self.paths.accounts_dir, &chosen);
+        let given = Accounts::of(&self.accounts.dir, &chosen);
         let t = self
             .push_tab_in((p, w), area, Some(format!("{} login", add.name)), given)
             .map_err(|e| format!("the account `{}` was added, but its login tab could not open: {e}", add.name))?;
@@ -347,7 +360,7 @@ impl App {
         let kind = provider(&remove.provider)?;
         self.account_exists(kind, &remove.name)?;
         self.readable_config()?;
-        accounts::remove(&self.paths.accounts_dir, kind, &remove.name).map_err(|e| e.to_string())?;
+        accounts::remove(&self.accounts.dir, kind, &remove.name).map_err(|e| e.to_string())?;
         log::info!("accounts", "account removed", provider = kind.name(), account = remove.name);
         self.relist_accounts();
         let (provider, name) = (kind.name(), remove.name.as_str());
@@ -376,7 +389,7 @@ impl App {
         }
         let account = rename.account.clone();
         if !label.is_empty() {
-            let names = accounts::names(&self.paths.accounts_dir, kind);
+            let names = accounts::names(&self.accounts.dir, kind);
             if let Some(taken) = self.config.label_taken(kind.name(), &label, &names, &account) {
                 return Err(conflict(taken));
             }
@@ -500,21 +513,21 @@ impl App {
 
 impl App {
     pub(in crate::app) fn has_accounts(&self) -> bool {
-        self.logins.listed.iter().any(|(_, names)| !names.is_empty())
+        self.accounts.logins.listed.iter().any(|(_, names)| !names.is_empty())
     }
 
     pub(in crate::app) fn listed_accounts(&self) -> &[(Known, Vec<String>)] {
-        &self.logins.listed
+        &self.accounts.logins.listed
     }
 }
 
 #[cfg(test)]
 impl App {
     pub(in crate::app) fn account_login(&self, kind: Known, name: &str) -> Option<&LoginInfo> {
-        self.logins.seen.get(&(kind, name.to_string()))
+        self.accounts.logins.seen.get(&(kind, name.to_string()))
     }
 
     pub(in crate::app) fn checking_login(&self, kind: Known, name: &str) -> bool {
-        self.logins.running.contains(&(kind, name.to_string()))
+        self.accounts.logins.running.contains(&(kind, name.to_string()))
     }
 }

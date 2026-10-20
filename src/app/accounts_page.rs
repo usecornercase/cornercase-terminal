@@ -31,15 +31,15 @@ impl App {
 
     pub(super) fn watch_accounts_page(&mut self, now: Instant) {
         if !matches!(&self.overlay, Some(Overlay::Settings(s)) if s.page == Page::Accounts) {
-            self.logins.page_checked = None;
+            self.accounts.logins.page_checked = None;
             return;
         }
-        let due = self.logins.page_checked.is_none_or(|at| now.duration_since(at) >= CHECK_EVERY);
+        let due = self.accounts.logins.page_checked.is_none_or(|at| now.duration_since(at) >= CHECK_EVERY);
         if due {
-            if self.logins.page_checked.is_none() {
+            if self.accounts.logins.page_checked.is_none() {
                 self.relist_accounts();
             }
-            self.logins.page_checked = Some(now);
+            self.accounts.logins.page_checked = Some(now);
             self.check_logins();
         }
         self.refresh_accounts_page();

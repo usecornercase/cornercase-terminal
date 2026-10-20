@@ -62,8 +62,6 @@ pub(super) struct Paths {
     pub(super) config_path: PathBuf,
     pub(super) setup_dir: PathBuf,
     pub(super) runs_dir: PathBuf,
-    pub(super) accounts_dir: PathBuf,
-    pub(super) default_homes: Option<PathBuf>,
     pub(super) home: Option<PathBuf>,
 }
 
@@ -72,8 +70,6 @@ impl Paths {
         Self {
             setup_dir: config_path.parent().map(Path::to_path_buf).unwrap_or_default(),
             runs_dir: config_path.with_file_name("runs"),
-            accounts_dir: config_path.with_file_name("accounts"),
-            default_homes: None,
             config_path,
             home,
         }

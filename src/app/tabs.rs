@@ -42,23 +42,23 @@ impl App {
     }
 
     pub(crate) fn set_accounts_dir(&mut self, dir: &Path) {
-        self.paths.accounts_dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
+        self.accounts.dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
     }
 
     #[cfg(test)]
     pub(crate) fn set_default_homes(&mut self, dir: &Path) {
-        self.paths.default_homes = Some(dir.to_path_buf());
+        self.accounts.default_homes = Some(dir.to_path_buf());
     }
 
     pub(super) fn default_home(&self, kind: Known) -> Option<PathBuf> {
-        match &self.paths.default_homes {
+        match &self.accounts.default_homes {
             Some(root) => kind.account().map(|_| root.join(kind.name())),
             None => accounts::default_home(kind),
         }
     }
 
     pub(super) fn active_accounts(&self) -> Accounts {
-        Accounts::of(&self.paths.accounts_dir, self.config.selected_accounts())
+        Accounts::of(&self.accounts.dir, self.config.selected_accounts())
     }
 
     pub(super) fn pane_env(&self, id: u64, run: Option<&Path>, accounts: &Accounts) -> Vec<(String, String)> {
@@ -156,7 +156,7 @@ impl App {
         let source = tab.pane_by(pane);
         let cwd = source.and_then(Term::cwd).filter(|dir| dir.is_dir()).unwrap_or_else(|| path.to_path_buf());
         let accounts =
-            source.map(|term| Accounts::of(&self.paths.accounts_dir, &term.accounts().chosen())).unwrap_or_default();
+            source.map(|term| Accounts::of(&self.accounts.dir, &term.accounts().chosen())).unwrap_or_default();
         let term = self.spawn_in(area, cwd, None, accounts)?;
         let id = term.id;
         if let Some((_, tab)) = self.projects.tab_with_pane_mut(pane) {
