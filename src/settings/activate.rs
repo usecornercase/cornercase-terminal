@@ -33,6 +33,7 @@ impl Settings {
     fn activate_worktrees(&mut self, row: Row) -> Action {
         match row {
             Row::Folder => self.start_edit(row, self.config.worktrees_dir.clone()),
+            Row::IssueBranch => self.start_edit(row, self.config.issue_branch.clone()),
             Row::Fetch => self.start_edit(row, self.config.fetch_minutes.to_string()),
             Row::PullRequests => self.flip(
                 |c| &mut c.pull_requests,

@@ -64,7 +64,10 @@ mod pages {
 
     #[test]
     fn the_first_one_is_worktrees() {
-        assert_eq!(settings().rows(), [Row::Folder, Row::Fetch, Row::PullRequests, Row::MergedPullRequests]);
+        assert_eq!(
+            settings().rows(),
+            [Row::Folder, Row::IssueBranch, Row::Fetch, Row::PullRequests, Row::MergedPullRequests]
+        );
     }
 
     #[rstest]

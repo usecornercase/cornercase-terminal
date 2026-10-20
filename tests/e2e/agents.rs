@@ -106,6 +106,10 @@ fn an_issue_is_read_then_handed_to_its_agent_in_its_own_worktree() {
         String::from_utf8(cornercase::host::clipboard::osc52("https://github.com/acme/shop/issues/7")).expect("utf-8");
     app.wait_for_raw("the URL reaches the outer terminal's clipboard", |raw| raw.contains(&osc52));
     app.send(b"\r");
+    app.wait_for("start asks for the branch and the workspace's name", |s| {
+        s.contains("› branch    issue-7-fix-the-login") && s.contains("› workspace #7 Fix the login")
+    });
+    app.send(b"\r");
 
     app.wait_for("the agent asks whether to trust the folder", |s| {
         s.contains("#7 Fix the login") && s.contains("Do you trust the files") && !s.contains("cancel")

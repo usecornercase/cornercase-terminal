@@ -46,9 +46,7 @@ fn flow_list(list: &args::FlowListArgs) -> Result<()> {
 }
 
 fn flow_run(run: args::FlowRunArgs) -> Result<()> {
-    if run.issue.key.is_some() {
-        client::use_issues()?;
-    }
+    super::issue_features(&run.issue)?;
     let (profile, accounts) = super::accounts::profile_arg(run.profile)?;
     let request = control::FlowRun {
         name: run.name,
@@ -57,6 +55,7 @@ fn flow_run(run: args::FlowRunArgs) -> Result<()> {
         project: run.project,
         issue: run.issue.key,
         source: run.issue.source,
+        workspace_name: run.issue.workspace_name,
         focus: run.create.focus,
         profile,
         accounts,

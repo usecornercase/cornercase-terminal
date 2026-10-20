@@ -40,15 +40,15 @@ Unless a role asks for a worktree of its own, the whole team works in one worktr
 
 A flow works in a worktree of its own, so its project must be the root of a git repository. Start one:
 
-- **From an issue**: select it in the [issue browser](../issues-and-agents/) list, or open it, and click **`start a flow`**, after **`start`** and **`schedule`** (a narrow window drops it from the list, and the issue's page keeps it). The prompt is the issue's, made from your [prompt template](../../reference/prompt/), and the branch is the one **`start`** would make (`issue-482-…`).
+- **From an issue**: select it in the [issue browser](../issues-and-agents/) list, or open it, and click **`start a flow`**, after **`start`** and **`schedule`** (a narrow window drops it from the list, and the issue's page keeps it). The prompt is the issue's, made from your [prompt template](../../reference/prompt/), and the branch is the one **`start`** would make (`issue-482-…`, or what [**issue branches**](../issues-and-agents/#your-teams-branch-names) names). Under the branch, **workspace** is the name the run's workspace gets in the sidebar, the issue's key and title to begin with; `Tab` reaches both, and either can be changed. A branch git would refuse is pointed out before anything is made, and an empty workspace name keeps the issue's.
 - **From the workspaces' `+ New`**: **start a flow…**, for that project, with a prompt of your own. In the tree, each project's own `+ New` offers it too.
 - **From the [keys menu](../../reference/keyboard-and-mouse/#keyboard-shortcuts)**: `w` `s`.
-- **From a script or another program**: `cornercase flow run NAME --issue KEY` (a key such as `#482` or `ENG-42`, or the issue's URL) takes the task and the branch from the issue as **`start a flow`** does; `--project ID` says where when the issue isn't tied to a repository and several projects are repositories. See [Scripts and agents](../scripts-and-agents/#issues).
+- **From a script or another program**: `cornercase flow run NAME --issue KEY` (a key such as `#482` or `ENG-42`, or the issue's URL) takes the task and the branch from the issue as **`start a flow`** does (`--worktree BRANCH` and `--workspace-name NAME` name them yourself); `--project ID` says where when the issue isn't tied to a repository and several projects are repositories. See [Scripts and agents](../scripts-and-agents/#issues).
 
 <Screen
   name="flow-start"
-  alt="The Start a flow dialog for #482 Returns page crashes on empty address: Full issue in web-shop, in a worktree of its own; under Flow templates, the built-in flows, each with its number of agents and its description, with Full issue selected, and its diagram on the right; the prompt, the issue's address; the branch issue-482-returns-page-crashes-on-empty-address; the buttons edit, cancel and start"
-  caption="Starting Full issue on issue #482: the plan on the right, the issue's prompt and branch below."
+  alt="The Start a flow dialog for #482 Returns page crashes on empty address: Full issue in web-shop, in a worktree of its own; under Flow templates, the built-in flows, each with its number of agents and its description, with Full issue selected, and its diagram on the right; the prompt, the issue's address; the branch issue-482-returns-page-crashes-on-empty-address and the workspace #482 Returns page crashes on empty addr…; the buttons edit, cancel and start"
+  caption="Starting Full issue on issue #482: the plan on the right, the issue's prompt, its branch and its workspace's name below."
   crop={[2, 1, 136, 36]}
 />
 

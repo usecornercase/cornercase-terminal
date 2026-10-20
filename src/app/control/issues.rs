@@ -265,7 +265,8 @@ impl App {
         if entries.len() > 1 {
             issues::sort_by_updated(&mut merged);
         }
-        Lists { project, issues: merged.into_iter().map(IssueInfo::from).collect(), sources }
+        let info = |issue: &Issue| IssueInfo { branch: self.issue_branch(issue, project), ..IssueInfo::from(issue) };
+        Lists { project, issues: merged.into_iter().map(info).collect(), sources }
     }
 
     pub(super) fn issue_read_request(&mut self, client: u64, asker: Asker, read: &IssueRead) -> Handled {
@@ -376,7 +377,7 @@ impl App {
                 Err(conflict(stale(issue.source, "it was read")))
             }
             Ok((issue, detail)) => {
-                let branch = issues::branch(&issue);
+                let branch = self.issue_branch(&issue, ticket.project);
                 let comments = detail
                     .comments
                     .into_iter()
@@ -384,7 +385,7 @@ impl App {
                     .collect();
                 Ok(json(&ReadIssue {
                     prompt: issues::prompt(&self.config.prompt, &issue, &branch),
-                    issue: IssueInfo::from(&issue),
+                    issue: IssueInfo { branch: branch.clone(), ..IssueInfo::from(&issue) },
                     info: detail.info,
                     body: detail.body,
                     comments,
@@ -519,6 +520,7 @@ impl App {
             trees: Vec::new(),
             parent: caller,
             accounts,
+            name: run.workspace_name.clone(),
         };
         self.run_refusal(p, &starting)?;
         starting.task.clear();
@@ -573,23 +575,37 @@ impl App {
             AfterIssue::Flow { project, starting } => {
                 let mut starting = *starting;
                 if starting.branch.trim().is_empty() {
-                    starting.branch = issues::branch(issue);
+                    starting.branch = self.issue_branch(issue, project);
                 }
+                let name = starting.name.take().map(|name| name.trim().to_string()).filter(|name| !name.is_empty());
+                starting.name = Some(name.unwrap_or_else(|| issues::workspace_name(issue)));
                 starting.task = issues::prompt(&self.config.prompt, issue, &starting.branch);
                 self.run_flow(Some(found.client), project, starting, found.area)
             }
         }
     }
 
+    fn start_branch(&self, start: &Start, issue: &Issue) -> String {
+        let project = start.project.or_else(|| {
+            let (p, _) = self.projects.workspace_index(start.workspace?)?;
+            Some(self.projects[p].id)
+        });
+        let given = start.worktree.as_deref().map(str::trim).filter(|branch| !branch.is_empty());
+        given.map_or_else(
+            || project.map_or_else(|| issues::branch(issue), |p| self.issue_branch(issue, p)),
+            String::from,
+        )
+    }
+
     fn found_start(&mut self, found: Found, mut start: Start, accounts: Accounts, issue: &Issue) -> Handled {
         let Found { client, asker, area, timeout } = found;
-        let name = issues::workspace_name(issue);
-        let branch = start
-            .worktree
-            .as_deref()
-            .map(str::trim)
-            .filter(|branch| !branch.is_empty())
-            .map_or_else(|| issues::branch(issue), String::from);
+        let branch = self.start_branch(&start, issue);
+        let name = start
+            .workspace_name
+            .take()
+            .map(|name| name.trim().to_string())
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| issues::workspace_name(issue));
         start.prompt = Some(issues::prompt(&self.config.prompt, issue, &branch));
         start.issue = None;
         start.source = None;

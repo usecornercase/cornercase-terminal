@@ -139,7 +139,7 @@ impl App {
             Some(Overlay::Issues(browser)) => Some(browser.project),
             _ => None,
         });
-        let branch = issues::branch(issue);
+        let branch = project.map_or_else(|| issues::branch(issue), |project| self.issue_branch(issue, project));
         let prompt = issues::prompt(&self.config.prompt, issue, &branch);
         let chosen = self.chosen_accounts();
         self.new_queue_form(None);

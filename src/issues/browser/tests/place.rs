@@ -12,7 +12,7 @@ fn a_story_asks_where_first_with_the_current_project_preselected() {
     let first = press(&mut b, KeyCode::Enter);
     let started = press(&mut b, KeyCode::Enter);
     assert_eq!(first, Action::None);
-    assert!(matches!(&started, Action::Start(_, _, Some(place)) if *place == shop()), "{started:?}");
+    assert!(matches!(&started, Action::Name(_, _, Some(place)) if *place == shop()), "{started:?}");
 }
 
 #[test]
@@ -55,7 +55,7 @@ fn a_gitlab_issue_starts_in_its_repository_like_a_github_one() {
     b.loaded(Source::Gitlab, &Query::default(), Ok(vec![issue(Source::Gitlab, 5, "Checkout fails")]));
     press(&mut b, KeyCode::Enter);
     assert!(!b.labels(ROOM.buttons).contains(&"where…"), "{:?}", b.labels(ROOM.buttons));
-    assert!(matches!(press(&mut b, KeyCode::Enter), Action::Start(i, _, None) if i.key == "#5"));
+    assert!(matches!(press(&mut b, KeyCode::Enter), Action::Name(i, _, None) if i.key == "#5"));
 }
 
 #[test]
@@ -84,5 +84,5 @@ fn a_github_issue_starts_in_its_repository() {
     press(&mut b, KeyCode::Esc);
     press(&mut b, KeyCode::Down);
     press(&mut b, KeyCode::Enter);
-    assert!(matches!(press(&mut b, KeyCode::Enter), Action::Start(i, _, None) if i.key == "#1"));
+    assert!(matches!(press(&mut b, KeyCode::Enter), Action::Name(i, _, None) if i.key == "#1"));
 }

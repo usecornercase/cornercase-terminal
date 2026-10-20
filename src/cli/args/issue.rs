@@ -92,7 +92,7 @@ pub(crate) struct IssueArg {
         long = "issue",
         value_name = "KEY",
         conflicts_with_all = ["prompt", "prompt_file"],
-        help = "Work on this issue instead: a key such as #482, sc-48 or ENG-42, or its URL, with the branch and prompt the Issues dialog's start uses"
+        help = "Work on this issue instead: a key such as #482, sc-48 or ENG-42, or its URL, with the prompt the Issues dialog's start uses and its branch (settings → Worktrees → issue branches; --worktree names another)"
     )]
     pub(crate) key: Option<String>,
     #[arg(
@@ -102,4 +102,11 @@ pub(crate) struct IssueArg {
         help = "The tracker, for a key that more than one could have"
     )]
     pub(crate) source: Option<String>,
+    #[arg(
+        long,
+        value_name = "NAME",
+        requires = "issue",
+        help = "The workspace's name when the issue makes a worktree [default: the issue's key and title]"
+    )]
+    pub(crate) workspace_name: Option<String>,
 }

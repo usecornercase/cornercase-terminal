@@ -3,15 +3,21 @@ use ratatui::text::{Line, Span};
 
 use super::{Browser, Room, Screen};
 use crate::highlight::markdown;
-use crate::issues::{Detail, Issue, branch};
+use crate::issues::{Detail, Issue, naming};
 use crate::time;
 
 impl Browser {
+    fn branch(&self, issue: &Issue) -> String {
+        naming::branch(issue, &self.agents.branch, &self.agents.user)
+    }
+
     pub(crate) fn start_hint(&self, issue: &Issue) -> String {
         match self.place_for(issue) {
-            Some(place) if place.worktree => format!("in its own worktree, on {}, in {}", branch(issue), place.label),
+            Some(place) if place.worktree => {
+                format!("in its own worktree, on {}, in {}", self.branch(issue), place.label)
+            }
             Some(place) => format!("in a new tab in {}", place.label),
-            None if self.worktrees => format!("in its own worktree, on {}", branch(issue)),
+            None if self.worktrees => format!("in its own worktree, on {}", self.branch(issue)),
             None => "in a new tab".into(),
         }
     }
@@ -44,7 +50,7 @@ impl Browser {
             Line::from([vec![Span::styled(format!("{label:<8}"), dim)], spans].concat())
         };
         let agent = self.agent_spans(dim);
-        let prompt = crate::issues::prompt(&self.agents.prompt, issue, &branch(issue));
+        let prompt = crate::issues::prompt(&self.agents.prompt, issue, &self.branch(issue));
         let send = if self.agents.submit { "sent for you" } else { "typed, you press enter" };
         let mut lines = vec![row("start", vec![Span::raw(self.start_hint(issue))]), row("agent", agent)];
         if let Some((kind, agent)) = self.agent_accounts() {

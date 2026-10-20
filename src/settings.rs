@@ -31,6 +31,7 @@ pub(crate) enum Refused {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Row {
     Folder,
+    IssueBranch,
     Fetch,
     PullRequests,
     MergedPullRequests,
@@ -90,6 +91,7 @@ impl Row {
     pub(crate) fn section(&self) -> &'static str {
         match self {
             Self::Folder
+            | Self::IssueBranch
             | Self::Fetch
             | Self::PullRequests
             | Self::MergedPullRequests
@@ -130,7 +132,9 @@ impl Row {
 
     pub(crate) fn page(&self) -> Page {
         match self {
-            Self::Folder | Self::Fetch | Self::PullRequests | Self::MergedPullRequests => Page::Worktrees,
+            Self::Folder | Self::IssueBranch | Self::Fetch | Self::PullRequests | Self::MergedPullRequests => {
+                Page::Worktrees
+            }
             Self::DefaultAgent
             | Self::Submit
             | Self::Trust
@@ -476,7 +480,7 @@ impl Settings {
     pub(crate) fn every_row(&self) -> Vec<Row> {
         let shown = self.shown_tabs();
         let hidden = TAB_IDS.iter().filter(|id| !shown.contains(id)).copied();
-        let mut rows = vec![Row::Folder, Row::Fetch, Row::PullRequests, Row::MergedPullRequests];
+        let mut rows = vec![Row::Folder, Row::IssueBranch, Row::Fetch, Row::PullRequests, Row::MergedPullRequests];
         rows.extend(self.token_rows());
         rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
         rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust, Row::Resume, Row::KeepAwake]);

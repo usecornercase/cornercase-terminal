@@ -1,6 +1,6 @@
 use crate::agents;
 use crate::config::{self, Config};
-use crate::issues::{Secret, Source, asana, gitlab, jira, plane};
+use crate::issues::{Secret, Source, asana, gitlab, jira, naming, plane};
 use crate::messenger::Via;
 
 use super::{Action, EXTRA_ARGS, PickItem, Row, Settings};
@@ -115,10 +115,30 @@ impl Settings {
         }
     }
 
+    fn submit_issue_branch(&mut self) -> Action {
+        let Some(edit) = &mut self.edit else { return Action::None };
+        match naming::check(&edit.input) {
+            Ok(issue_branch) => {
+                self.edit = None;
+                let notice = if issue_branch.is_empty() {
+                    "issue branches follow each tracker's own name".into()
+                } else {
+                    format!("issue branches are named {issue_branch}")
+                };
+                self.save(Config { issue_branch, ..self.config.clone() }, notice)
+            }
+            Err(message) => {
+                edit.error = Some(message);
+                Action::None
+            }
+        }
+    }
+
     pub(super) fn submit_edit(&mut self) -> Action {
         let Some(edit) = &self.edit else { return Action::None };
         match edit.row.clone() {
             Row::Folder => self.submit_folder(),
+            Row::IssueBranch => self.submit_issue_branch(),
             Row::Fetch => self.submit_fetch(),
             Row::Token(source) => self.submit_token(source),
             Row::Bot(via) => self.submit_bot(via),

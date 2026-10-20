@@ -46,6 +46,19 @@ pub(crate) fn issue_detail(issues: Rect) -> Rect {
     Rect::new(tabs.x, tabs.y, tabs.width, note.y.saturating_sub(tabs.y))
 }
 
+pub(crate) fn issue_name_fields(issues: Rect) -> [Rect; 2] {
+    let [_, input, list, _, _] = issues_rows(issues);
+    [input, Rect::new(list.x, list.y, list.width, list.height.min(1))]
+}
+
+pub(crate) fn issue_name_hit(area: Rect, buttons: &[&str], pos: Position) -> Option<IssuesHit> {
+    let issues = issues_area(area);
+    if let Some(i) = issue_name_fields(issues).iter().position(|r| r.contains(pos)) {
+        return Some(IssuesHit::Field(i));
+    }
+    issue_button_hit(area, buttons, pos).map(IssuesHit::Button)
+}
+
 pub(crate) fn issue_tabs(issues: Rect, names: &[&str]) -> Vec<Rect> {
     tabs_in(issues_rows(issues)[0], names)
 }
@@ -119,6 +132,7 @@ pub(crate) enum IssuesBody {
     List { filter: String, items: Vec<IssueRow>, selected: Option<usize>, scroll: usize, empty: String },
     Token { label: &'static str, input: String, help: Vec<String> },
     Detail { lines: Vec<Line<'static>>, scroll: usize },
+    Name { heading: String, fields: [(&'static str, String); 2], focus: usize, help: Vec<String> },
 }
 
 pub(crate) struct Issues {
@@ -154,6 +168,23 @@ pub(in crate::ui) fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
                 f.render_widget(Paragraph::new(Span::styled(format!(" {empty}"), dim)), list);
             }
             draw_issue_rows(f, view, list, RowsShown { items, selected: *selected, scroll: *scroll });
+            cursor
+        }
+        IssuesBody::Name { heading, fields, focus, help } => {
+            let [tabs, _, list, _, _] = issues_rows(r);
+            let heading = truncate_right(heading, usize::from(tabs.width));
+            f.render_widget(Paragraph::new(Span::styled(heading, Style::default().add_modifier(Modifier::BOLD))), tabs);
+            let rects = issue_name_fields(r);
+            let mut cursor = None;
+            for (i, (rect, (label, value))) in rects.iter().zip(fields).enumerate() {
+                let at = draw_input(f, view.muted, *rect, label, value);
+                if i == *focus {
+                    cursor = at;
+                }
+            }
+            let text: Vec<Line> = help.iter().map(|h| Line::from(Span::styled(h.as_str(), dim))).collect();
+            let below = Rect::new(list.x, list.y.saturating_add(2), list.width, list.height.saturating_sub(2));
+            f.render_widget(Paragraph::new(text).wrap(Wrap { trim: false }), below.inner(Margin::new(1, 0)));
             cursor
         }
         IssuesBody::Token { label, input: typed, help } => {

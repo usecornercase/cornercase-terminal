@@ -37,11 +37,12 @@ pub(super) struct Starting {
     pub(super) trees: Vec<(RoleWorktree, bool)>,
     pub(super) parent: Option<u64>,
     pub(super) accounts: Accounts,
+    pub(super) name: Option<String>,
 }
 
 impl Starting {
     pub(super) fn new(flow: Flow, task: String, branch: String, accounts: Accounts) -> Self {
-        Self { flow, task, branch, focus: true, note: None, trees: Vec::new(), parent: None, accounts }
+        Self { flow, task, branch, focus: true, note: None, trees: Vec::new(), parent: None, accounts, name: None }
     }
 }
 
@@ -175,7 +176,7 @@ impl App {
     }
 
     pub(super) fn start_run(&mut self, project: u64, mut starting: Starting, area: Rect) -> Result<(), String> {
-        if starting.branch.trim() == flows::branch(&starting.task) {
+        if starting.name.is_none() && starting.branch.trim() == flows::branch(&starting.task) {
             starting.branch = String::new();
         }
         self.run_flow(None, project, starting, area).map(drop).map_err(String::from)
@@ -313,7 +314,7 @@ impl App {
     ) -> Result<RunInfo, String> {
         let (p, w) = place;
         let id = self.open_check(p, w)?;
-        let Starting { flow, task, branch, focus, note, trees, parent, accounts } = starting;
+        let Starting { flow, task, branch, focus, note, trees, parent, accounts, name } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
         run.id = self.take_id();
@@ -326,6 +327,7 @@ impl App {
         self.projects[p].workspaces[w].run_dirs.push(dir.clone());
         let panes = RunPanes { roles: &roles, trees: &trees, setup, dir: &dir, accounts: &accounts };
         let terms = self.spawn_run_panes(area, place, &panes)?;
+        self.name_flow_workspace(place, name);
         let seats: Vec<RoleWorktree> = trees.iter().map(|(tree, _)| tree.clone()).collect();
         log::info!("flow", "run folder made", workspace = id, path = dir.display());
         run.dir = Some(dir.clone());
@@ -340,6 +342,13 @@ impl App {
             self.show_flow();
         }
         Ok(info)
+    }
+
+    fn name_flow_workspace(&mut self, (p, w): (usize, usize), name: Option<String>) {
+        let workspace = &mut self.projects[p].workspaces[w];
+        if workspace.name.is_none() {
+            workspace.name = name;
+        }
     }
 
     fn seat_members(

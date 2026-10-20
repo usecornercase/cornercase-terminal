@@ -57,6 +57,16 @@ fn type_in(app: &mut App, text: &str, area: Rect) {
     }
 }
 
+fn from_issue(s: &mut Setup) {
+    s.app.open_issues(WIDE).expect("open the issues");
+    let Some(Overlay::Issues(b)) = &mut s.app.overlay else { panic!("no issues") };
+    let issue = issues::issue(Source::Github, 7, "Fix the login");
+    b.screen = Screen::Detail { issue: Box::new(issue), detail: None, scroll: 0, raw: false };
+    let labels = b.labels(usize::MAX);
+    let i = labels.iter().position(|l| *l == "start a flow").expect("the button");
+    click_in(&mut s.app, ui::issue_buttons(ui::issues_area(WIDE), &labels)[i].as_position(), WIDE);
+}
+
 fn click_flow(app: &mut App, name: &str, line: u16) {
     let i = start(app).flows.iter().position(|saved| saved.flow.name == name).expect("the flow is listed");
     let list = ui::start_list(WIDE, view(app, WIDE).shape());
@@ -104,13 +114,7 @@ mod entries {
     #[test]
     fn an_issue_starts_one_with_its_prompt_and_branch_and_cancel_goes_back_to_it() {
         let mut s = setup(true);
-        s.app.open_issues(WIDE).expect("open the issues");
-        let Some(Overlay::Issues(b)) = &mut s.app.overlay else { panic!("no issues") };
-        let issue = issues::issue(Source::Github, 7, "Fix the login");
-        b.screen = Screen::Detail { issue: Box::new(issue), detail: None, scroll: 0, raw: false };
-        let labels = b.labels(usize::MAX);
-        let i = labels.iter().position(|l| *l == "start a flow").expect("the button");
-        click_in(&mut s.app, ui::issue_buttons(ui::issues_area(WIDE), &labels)[i].as_position(), WIDE);
+        from_issue(&mut s);
         let start = start(&s.app);
         assert_eq!(start.prompt.text(), "https://github.com/acme/shop/issues/7");
         assert_eq!(
@@ -265,6 +269,53 @@ mod running {
         assert_eq!(tabs, ["orchestrator", "coder", "reviewer", "security", "tester"]);
         assert_eq!((workspace.active, s.app.runs[0].task.as_str()), (0, "Fix the login form"));
         assert_eq!(s.app.screen.side, Some(Side::Flow));
+    }
+
+    #[test]
+    fn a_flow_from_an_issue_takes_the_template_and_names_its_workspace() {
+        let mut s = setup(true);
+        let _dirs = with_claude(&mut s);
+        s.app.config.issue_branch = "feat/{key}-{slug}".into();
+        from_issue(&mut s);
+        assert_eq!(start(&s.app).branch, "feat/7-fix-the-login");
+        assert_eq!(view(&s.app, WIDE).workspace.as_deref(), Some("#7 Fix the login"));
+        let field = ui::start_workspace(WIDE, view(&s.app, WIDE).shape());
+        click_in(&mut s.app, field.as_position(), WIDE);
+        for _ in 0.."#7 Fix the login".len() {
+            send_key(&mut s.app, KeyCode::Backspace, KeyModifiers::NONE);
+        }
+        type_in(&mut s.app, "Login", WIDE);
+        button(&mut s.app, WIDE, START);
+        pump_until(&mut s.app, &s.rx, "the team's tabs open", |a| !a.runs.is_empty());
+        let workspace = s.app.project().and_then(Project::workspace).expect("the run's workspace");
+        assert_eq!(git::branch(&workspace.path).as_deref(), Some("feat/7-fix-the-login"));
+        assert_eq!(workspace.name.as_deref(), Some("Login"));
+    }
+
+    #[test]
+    fn a_flow_from_an_issue_keeps_its_branch_when_the_prompt_would_name_the_same_one() {
+        let mut s = setup(true);
+        let _dirs = with_claude(&mut s);
+        s.app.config.prompt = "{branch}".into();
+        crate::test_util::git(&s.app.projects[0].path, &["branch", "issue-7-fix-the-login"]);
+        from_issue(&mut s);
+        button(&mut s.app, WIDE, START);
+        pump_until(&mut s.app, &s.rx, "the team's tabs open", |a| !a.runs.is_empty());
+        let workspace = s.app.project().and_then(Project::workspace).expect("the run's workspace");
+        assert_eq!(git::branch(&workspace.path).as_deref(), Some("issue-7-fix-the-login"));
+    }
+
+    #[test]
+    fn a_flow_from_an_issue_refuses_a_branch_git_would_refuse() {
+        let mut s = setup(true);
+        from_issue(&mut s);
+        let field = ui::start_branch(WIDE, view(&s.app, WIDE).shape());
+        click_in(&mut s.app, field.as_position(), WIDE);
+        type_in(&mut s.app, " x", WIDE);
+        button(&mut s.app, WIDE, START);
+        let note = start(&s.app).notice.clone().unwrap_or_default();
+        assert!(note.contains("cannot be a branch"), "{note}");
+        assert_eq!(s.app.projects[0].workspaces.len(), 1);
     }
 
     #[test]

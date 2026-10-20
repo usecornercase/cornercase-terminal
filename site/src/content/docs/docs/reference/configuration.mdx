@@ -186,6 +186,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "fetch_minutes": 5,
   "pull_requests": true,
   "merged_pull_requests": true,
+  "issue_branch": "",
   "issue_tabs": ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"],
   "gitlab_url": "",
   "jira_site": "",
@@ -247,6 +248,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`fetch_minutes`](#fetch_minutes) | number | `5` |
 | [`pull_requests`](#pull_requests) | boolean | `true` |
 | [`merged_pull_requests`](#merged_pull_requests) | boolean | `true` |
+| [`issue_branch`](#issue_branch) | string | `""` |
 | [`issue_tabs`](#issue_tabs) | array of strings | `["all", "github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"]` |
 | [`gitlab_url`](#gitlab_url) | string | `""` |
 | [`jira_site`](#jira_site) | string | `""` |
@@ -315,6 +317,10 @@ Whether each workspace shows the pull request of its branch and the state of its
 #### `merged_pull_requests`
 
 Whether Usage → Stats counts the pull requests and merge requests you opened that were merged, read with [`gh`](#gh) and [`glab`](#glab). On by default; off asks nothing. See [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats).
+
+#### `issue_branch`
+
+The branch an issue's worktree is made on, as a template such as `"feat/{key}-{slug}"` or `"{user}/{key}"`, with the placeholders `{key}`, `{number}`, `{slug}`, `{source}` and `{user}` (your git `user.name`). It must hold `{key}` or `{number}`; the result is cleaned into a name git takes. Empty keeps each tracker's own name (`issue-482-…`, `482-…` on GitLab, `sc-48-…`, `ENG-123-…`). Start in the issue browser shows it filled in and lets you change it for that issue. See [Your team's branch names](../../guides/issues-and-agents/#your-teams-branch-names).
 
 #### `issue_tabs`
 

@@ -57,6 +57,39 @@ pub(crate) fn remote_urls(dir: &Path) -> Vec<(String, String)> {
     urls
 }
 
+pub(crate) fn user_name(dir: &Path) -> Option<String> {
+    let home = std::env::var_os("HOME").filter(|home| !home.is_empty()).map(PathBuf::from);
+    let xdg = std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .filter(|xdg| xdg.is_absolute())
+        .or_else(|| home.as_ref().map(|home| home.join(".config")));
+    let mut files: Vec<PathBuf> = common_dir(dir).map(|common| common.join("config")).into_iter().collect();
+    files.extend(home.map(|home| home.join(".gitconfig")));
+    files.extend(xdg.map(|xdg| xdg.join("git/config")));
+    user_name_in(&files)
+}
+
+pub(crate) fn user_name_in(files: &[PathBuf]) -> Option<String> {
+    files.iter().find_map(|file| std::fs::read_to_string(file).ok().and_then(|text| config_user(&text)))
+}
+
+fn config_user(config: &str) -> Option<String> {
+    let mut in_user = false;
+    let mut name = None;
+    for line in config.lines().map(str::trim) {
+        if line.starts_with('[') {
+            in_user = line.trim_start_matches('[').trim_end_matches(']').trim().eq_ignore_ascii_case("user");
+        } else if in_user
+            && let Some((key, value)) = line.split_once('=')
+            && key.trim().eq_ignore_ascii_case("name")
+        {
+            let value = value.trim().trim_matches('"').trim();
+            name = (!value.is_empty()).then(|| value.to_string());
+        }
+    }
+    name
+}
+
 fn common_dir(dir: &Path) -> Option<PathBuf> {
     let git = git_dir(dir)?;
     Some(std::fs::read_to_string(git.join("commondir")).map_or_else(|_| git.clone(), |c| git.join(c.trim())))

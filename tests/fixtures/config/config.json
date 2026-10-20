@@ -3,6 +3,7 @@
   "fetch_minutes": 12,
   "pull_requests": false,
   "merged_pull_requests": false,
+  "issue_branch": "feat/{key}-{slug}",
   "issue_tabs": [
     "shortcut",
     "github",

@@ -118,7 +118,9 @@ impl App {
         let repo_root = crate::git::is_repo_root(&task.place.project);
         let (named, follow) = (add.label.is_some(), add.worktree.is_none());
         let template = self.config.prompt.clone();
-        Ok(Prepared { task, at, kept_at, issue, probe, clock: crate::time::now(), template, named, follow, repo_root })
+        let naming = (self.config.issue_branch.clone(), self.branch_user(Some(&task.place.project)));
+        let clock = crate::time::now();
+        Ok(Prepared { task, at, kept_at, issue, probe, clock, template, naming, named, follow, repo_root })
     }
 
     fn add_queue_now(&mut self, edit: Option<u64>, prepared: &mut Prepared) -> Handled {
@@ -249,6 +251,7 @@ struct Prepared {
     probe: Option<(agents::Known, String, Duration)>,
     clock: i64,
     template: String,
+    naming: (String, String),
     named: bool,
     follow: bool,
     repo_root: bool,
@@ -256,10 +259,10 @@ struct Prepared {
 
 impl Prepared {
     fn finish(self) -> Result<queue::Task, Error> {
-        let Self { mut task, at, kept_at, issue, probe, clock, template, named, follow, repo_root } = self;
+        let Self { mut task, at, kept_at, issue, probe, clock, template, naming, named, follow, repo_root } = self;
         if let Some((api, locator)) = issue {
             let issue = issues::locate::find(&api, &locator)?;
-            let branch = issues::branch(&issue);
+            let branch = issues::naming::branch(&issue, &naming.0, &naming.1);
             task.prompt = issues::prompt(&template, &issue, &branch);
             if !named {
                 task.label = format!("{} {}", issue.key, issue.title);

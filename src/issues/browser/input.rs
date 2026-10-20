@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventK
 
 use crate::issues::Source;
 
-use super::{Action, After, Browser, IssuesHit, Pick, Room, Screen, Tab};
+use super::{Action, After, Browser, IssuesHit, Pick, Room, Screen, Tab, naming};
 
 const WHEEL_ROWS: isize = 3;
 
@@ -14,6 +14,9 @@ impl Browser {
         self.notice = None;
         if self.picker.is_some() {
             return self.picker_key(key, room);
+        }
+        if self.naming.is_some() {
+            return self.naming_key(key);
         }
         if self.filtering.is_some() {
             return self.people_key(key);
@@ -98,7 +101,15 @@ impl Browser {
             text.chars().filter(|c| !c.is_control()).for_each(|c| picker.search.push(c));
             return;
         }
-        if self.starting || matches!(self.screen, Screen::Detail { .. }) {
+        if self.starting {
+            return;
+        }
+        if let Some(naming) = &mut self.naming {
+            naming::typed(naming, text);
+            self.error = None;
+            return;
+        }
+        if matches!(self.screen, Screen::Detail { .. }) {
             return;
         }
         let chars = text.chars().filter(|c| !c.is_control());
@@ -119,6 +130,9 @@ impl Browser {
         }
         if matches!(kind, MouseEventKind::Down(_)) {
             self.notice = None;
+        }
+        if self.naming.is_some() {
+            return self.naming_mouse(kind, hit, room);
         }
         if self.picker.is_some() || self.filtering.is_some() {
             return self.chooser_mouse(kind, hit, room);
@@ -186,7 +200,7 @@ impl Browser {
                 Some(IssuesHit::Toggle(i)) => return self.toggle(i),
                 Some(IssuesHit::Item(i)) => return self.open_item(i),
                 Some(IssuesHit::Button(i)) => return self.press(self.buttons(room.buttons)[i]),
-                None => {}
+                Some(IssuesHit::Field(_)) | None => {}
             },
             _ => {}
         }

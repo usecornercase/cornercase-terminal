@@ -116,6 +116,7 @@ const ACCOUNT_SWITCHES = [
   ['accountPicker', 'account picker', 'in issues, flows and the queue; only once you add an account'],
 ] as const;
 
+const BRANCHES_NEED = 'naming issue branches needs cornercase on your computer; start an issue to edit its branch here';
 const PULL_REQUESTS_NEED = 'this needs cornercase on your computer: the demo has no GitHub';
 
 const OPEN_IN_NEEDS = 'this needs cornercase on your computer: the demo opens no other apps';
@@ -152,6 +153,7 @@ export interface IssuesView {
   buttons: string[];
   detail?: Line[];
   token?: { label: string; input: string; help: string[] };
+  naming?: { heading: string; fields: [string, string][]; focus: number; help: string[] };
   picking: boolean;
   error?: boolean;
 }
@@ -2786,6 +2788,7 @@ export class App {
     if (page === PAGE.worktrees) {
       return [
         { id: 'folder', section: '', label: 'worktrees folder', value: c.worktreesDir, note: 'new worktrees go in <folder>/<repo>/<branch>' },
+        { id: 'branches', section: '', label: 'issue branches', value: 'per tracker', note: 'empty: issue-482-…, 482-… on GitLab, sc-482-…, ENG-482-…' },
         { id: 'fetch', section: '', label: 'fetch branches every', value: c.fetchMinutes ? `${c.fetchMinutes} min` : 'off', note: 'commits to pull show as ↓n' },
         { id: 'pulls', section: '', label: 'pull requests', value: '[ ] hidden', note: "each workspace's pull request and its checks, from gh" },
         { id: 'merged', section: '', label: 'merged PRs in stats', value: '[ ] hidden', note: 'your merged pull requests, from gh and glab' },
@@ -2991,6 +2994,8 @@ export class App {
       o.notice = SOUND_NEEDS;
     } else if (row.id === 'pulls') {
       o.notice = PULL_REQUESTS_NEED;
+    } else if (row.id === 'branches') {
+      o.notice = BRANCHES_NEED;
     } else if (row.id === 'merged') {
       o.notice = MERGED_NEED;
     } else if (row.id.startsWith('flow:')) {
@@ -3260,6 +3265,7 @@ export class App {
       token: { input: '', checking: false },
       agentPick: null,
       chosen: null,
+      naming: null,
     };
     this.overlay.token = this.freshToken(this.issuesSource(this.overlay));
     this.emit('narrate', this.narration.issues);
@@ -3449,6 +3455,28 @@ export class App {
     ];
     const source = this.issuesSource(o);
     const width = Math.min(this.cols - 4, 110) - 4;
+    const naming = o.naming;
+    const named = naming && ISSUES.find((i) => i.key === naming.issue);
+    if (naming && named) {
+      return {
+        tabs,
+        toggles,
+        items: [],
+        selected: 0,
+        scroll: 0,
+        empty: '',
+        hint: naming.error ?? (naming.field === 0 ? "the worktree's branch · tab moves to its name · enter starts" : "the workspace's name in the sidebar · tab moves to the branch · enter starts"),
+        error: !!naming.error,
+        buttons: ['start', 'back'],
+        naming: {
+          heading: `Start ${named.key} ${named.title} in a new worktree`,
+          fields: [['branch   ', naming.branch], ['workspace', naming.name]],
+          focus: naming.field,
+          help: ['A branch that exists is checked out; one a workspace has open gets a new tab there.', 'Settings → Worktrees → issue branches sets the name it starts with.'],
+        },
+        picking: false,
+      };
+    }
     if (o.detail) {
       const issue = ISSUES.find((i) => i.key === o.detail);
       if (issue) {
@@ -3583,6 +3611,13 @@ export class App {
     this.dirty();
   }
 
+  issuesNamingField(field: 0 | 1): void {
+    const o = this.overlay;
+    if (o?.kind !== 'issues' || !o.naming) return;
+    o.naming.field = field;
+    this.dirty();
+  }
+
   issuesToggle(i: number): void {
     const o = this.overlay;
     if (o?.kind !== 'issues') return;
@@ -3647,6 +3682,10 @@ export class App {
       else if (label === 'remove' && entry) this.removeQueued((item) => item.id === entry.id, `removed queue entry ${entry.id}`);
       else if (label === 'clear started') this.removeQueued((item) => item.state === 'started', 'cleared {n} started');
       return;
+    }
+    if (label === 'back' && o.naming) {
+      o.naming = null;
+      return this.dirty();
     }
     if (label === 'back' && !o.agentPick && !o.detail && o.token.step === 'token' && this.issuesSource(o) === 'plane') {
       o.token = { input: this.config.planeWorkspace, checking: false, step: 'workspace' };
@@ -3713,6 +3752,17 @@ export class App {
       if (o.chosen && o.chosen !== this.config.agent) o.notice = `${o.chosen} takes this one`;
       return this.dirty();
     }
+    if (label === 'start' && o.naming) {
+      const naming = o.naming;
+      const issue = ISSUES.find((i) => i.key === naming.issue);
+      const branch = naming.branch.trim();
+      if (!branch || /[\s~^:?*[\\]|\.\.|@\{|^[-/]|[/.]$/.test(branch)) {
+        naming.error = branch ? `${branch} cannot be a branch` : 'the worktree needs a branch';
+        return this.dirty();
+      }
+      if (issue) this.startIssue(issue, o, { branch, name: naming.name.trim() || truncateRight(`${issue.key} ${issue.title}`, 40) });
+      return;
+    }
     if (label === 'start' || label === 'schedule') {
       const list = this.issuesList(o);
       const issue = o.detail ? ISSUES.find((i) => i.key === o.detail) : list[Math.min(o.selected, list.length - 1)];
@@ -3731,6 +3781,9 @@ export class App {
           chooseCombo(form.openIn, this.projects.find((p) => p.id === o.project)?.repo ? 1 : 0);
           this.queueModes(form);
         }
+      } else if (issue && this.pickedAgent(o) && this.projects.find((p) => p.id === o.project)?.repo) {
+        o.naming = { issue: issue.key, branch: this.branchFor(issue), name: truncateRight(`${issue.key} ${issue.title}`, 40), field: 0 };
+        this.dirty();
       } else if (issue) this.startIssue(issue, o);
     }
   }
@@ -3790,7 +3843,7 @@ export class App {
     this.dirty();
   }
 
-  startIssue(issue: Issue, o: IssuesOverlay): void {
+  startIssue(issue: Issue, o: IssuesOverlay, names?: { branch: string; name: string }): void {
     const kind = this.pickedAgent(o);
     if (!kind) {
       o.agentPick = { selected: 0, filter: '' };
@@ -3803,10 +3856,10 @@ export class App {
     this.dirty();
     this.after(650, () => {
       this.overlay = null;
-      const branch = this.branchFor(issue);
+      const branch = names?.branch ?? this.branchFor(issue);
       let w: Workspace;
       if (p.repo) {
-        w = p.workspaces.find((x) => x.branch === branch) ?? this.addWorkspace(p, branch, true, truncateRight(`${issue.key} ${issue.title}`, 40));
+        w = p.workspaces.find((x) => x.branch === branch) ?? this.addWorkspace(p, branch, true, names?.name ?? truncateRight(`${issue.key} ${issue.title}`, 40));
       } else w = p.workspaces[p.active];
       const pane = this.newPane(p, w);
       const tab = this.newTab([pane]);
@@ -4505,9 +4558,22 @@ export class App {
     if (o.busy) return true;
     const view = this.issuesView(o);
     if (k.key === 'Escape') {
-      if (o.agentPick) o.agentPick = null;
+      if (o.naming) o.naming = null;
+      else if (o.agentPick) o.agentPick = null;
       else if (o.detail) o.detail = null;
       else this.closeOverlay();
+      this.dirty();
+      return true;
+    }
+    if (o.naming) {
+      const naming = o.naming;
+      const at = naming.field === 0 ? 'branch' : 'name';
+      if (k.key === 'Enter') this.issuesButton('start');
+      else if (k.key === 'Tab' || k.key === 'ArrowDown' || k.key === 'ArrowUp') naming.field = naming.field === 0 ? 1 : 0;
+      else if (k.key === 'Backspace' || ch) {
+        naming[at] = k.key === 'Backspace' ? naming[at].slice(0, -1) : naming[at] + ch;
+        naming.error = undefined;
+      }
       this.dirty();
       return true;
     }

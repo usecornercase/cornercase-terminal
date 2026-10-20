@@ -1,6 +1,6 @@
 use crate::agents;
 use crate::config::{Config, Sidebar, Tabs, WorkingIcon};
-use crate::issues::Source;
+use crate::issues::{Source, naming};
 use crate::messenger::Via;
 use crate::shortcuts::Prefix;
 
@@ -42,6 +42,11 @@ impl Settings {
                 "new worktrees go in <folder>/<repo>/<branch>".to_string(),
                 false,
             ),
+            Row::IssueBranch => {
+                let value = if config.issue_branch.is_empty() { "per tracker" } else { &config.issue_branch };
+                let (note, warns) = naming::note(&config.issue_branch);
+                ("issue branches".into(), value.to_string(), note, warns)
+            }
             Row::Fetch => {
                 let value =
                     if config.fetch_minutes == 0 { "off".into() } else { format!("{} min", config.fetch_minutes) };
@@ -249,6 +254,11 @@ impl Settings {
     pub(crate) fn field_label(row: &Row) -> String {
         match row {
             Row::Folder => "worktrees folder".to_string(),
+            Row::IssueBranch => {
+                "branch of an issue's worktree, with {key} {number} {slug} {source} {user}, such as feat/{key}-{slug} \
+                 (empty is each tracker's own)"
+                    .to_string()
+            }
             Row::Fetch => "fetch branches every (minutes, 0 turns it off)".to_string(),
             Row::Token(source) => format!("{} {}", source.name(), source.token_name()),
             Row::GitlabUrl => "GitLab URL for a self-hosted server (empty is gitlab.com)".to_string(),

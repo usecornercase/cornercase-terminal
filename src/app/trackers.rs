@@ -12,8 +12,8 @@ use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
 use crate::issues::locate::{self, Locator};
 use crate::issues::secrets;
 use crate::issues::{
-    Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, asana, gitlab, jira, linear, plane,
-    shortcut,
+    Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, asana, gitlab, jira, linear, naming,
+    plane, shortcut,
 };
 use crate::log::{Job, Level};
 use crate::project::{Hierarchy, Project};
@@ -72,6 +72,16 @@ impl Apis {
 }
 
 impl App {
+    pub(super) fn branch_user(&self, dir: Option<&std::path::Path>) -> String {
+        let wanted = naming::uses_user(&self.config.issue_branch);
+        dir.filter(|_| wanted).and_then(git::user_name).unwrap_or_default()
+    }
+
+    pub(super) fn issue_branch(&self, issue: &Issue, project: u64) -> String {
+        let dir = self.projects.project_index(project).map(|p| self.projects[p].path.as_path());
+        naming::branch(issue, &self.config.issue_branch, &self.branch_user(dir))
+    }
+
     pub(super) fn token(&self, source: Source) -> Option<(String, bool)> {
         if let Some(token) = self.issues.env_tokens.get(&source) {
             return Some((token.clone(), true));

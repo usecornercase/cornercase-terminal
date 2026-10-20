@@ -145,3 +145,58 @@ test('the Asana tab lists your tasks without projects, and the tasks of the proj
   assert.ok(!other.textAt('Fix the empty cart message'));
   other.destroy();
 });
+
+test('start asks for the branch and the workspace name, prefilled, and starts with what was typed', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openIssues();
+  app.advance(500);
+  inputKey(app, key('Enter'));
+  inputKey(app, key('Enter'));
+  app.render();
+  assert.ok(app.textAt('Start #482 Returns page crashes on empty address in a new worktree'));
+  assert.ok(app.textAt('issue-482-returns-page-crashes-on-empty-address'));
+  for (let i = 0; i < 'issue-482-returns-page-crashes-on-empty-address'.length; i++) inputKey(app, key('Backspace'));
+  type(app, 'ana/482');
+  inputKey(app, key('Tab'));
+  for (let i = 0; i < 60; i++) inputKey(app, key('Backspace'));
+  type(app, 'Returns');
+  inputKey(app, key('Enter'));
+  app.advance(1000);
+  const shop = app.projects[app.active];
+  const made = shop.workspaces.find((w) => w.branch === 'ana/482');
+  assert.equal(made?.name, 'Returns');
+  app.destroy();
+});
+
+test('a branch git would refuse is not started', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openIssues();
+  app.advance(500);
+  inputKey(app, key('Enter'));
+  inputKey(app, key('Enter'));
+  type(app, ' x');
+  inputKey(app, key('Enter'));
+  app.render();
+  assert.ok(app.textAt('cannot be a branch'));
+  assert.equal(app.overlay?.kind, 'issues');
+  app.destroy();
+});
+
+test('back on the names goes back to the issue on a connected GitLab tab', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openIssues();
+  app.advance(500);
+  app.issuesTab(app.config.sources.indexOf('gitlab'));
+  inputKey(app, key('Enter'));
+  type(app, 'glpat');
+  inputKey(app, key('Enter'));
+  app.advance(1500);
+  inputKey(app, key('Enter'));
+  inputKey(app, key('Enter'));
+  const o = app.overlay;
+  assert.ok(o?.kind === 'issues' && o.naming, 'the names are asked');
+  app.issuesButton('back');
+  assert.ok(o.kind === 'issues' && !o.naming && o.detail);
+  assert.equal(o.token.step, 'server');
+  app.destroy();
+});

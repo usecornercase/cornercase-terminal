@@ -524,6 +524,7 @@ pub(crate) struct Start {
     pub(crate) prompt: Option<String>,
     pub(crate) issue: Option<String>,
     pub(crate) source: Option<String>,
+    pub(crate) workspace_name: Option<String>,
     pub(crate) wait: bool,
     pub(crate) until: Until,
     pub(crate) timeout: Option<f64>,

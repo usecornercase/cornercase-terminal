@@ -68,6 +68,7 @@ mod file {
             fetch_minutes: 12,
             pull_requests: false,
             merged_pull_requests: false,
+            issue_branch: "feat/{key}-{slug}".into(),
             issue_tabs: vec!["shortcut".into(), "github".into(), "gitlab".into()],
             gitlab_url: "https://gitlab.acme.dev".into(),
             jira_site: "acme.atlassian.net".into(),
