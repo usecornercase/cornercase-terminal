@@ -78,7 +78,24 @@ fn inside(home: &Path, relative: &Path) -> Result<PathBuf, Error> {
     if !plain || relative.as_os_str().is_empty() {
         return Err(Error::Account(format!("`{}` is not a path inside the account", relative.display())));
     }
+    no_link_on_the_way(home, relative)?;
     Ok(home.join(relative))
+}
+
+fn no_link_on_the_way(home: &Path, relative: &Path) -> Result<(), Error> {
+    let mut at = home.to_path_buf();
+    for part in relative.parent().into_iter().flat_map(Path::components) {
+        at.push(part);
+        match fs::symlink_metadata(&at) {
+            Ok(meta) if meta.is_symlink() => {
+                return Err(Error::Account(format!("`{}`: {}", at.display(), super::LINKED)));
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == io::ErrorKind::NotFound => break,
+            Err(e) => return Err(failed("read", &at, &e)),
+        }
+    }
+    Ok(())
 }
 
 fn folder(source: &Path, dest: &Path, linker: &dyn Linker, apply: bool, tally: &mut Tally) -> Result<(), Error> {

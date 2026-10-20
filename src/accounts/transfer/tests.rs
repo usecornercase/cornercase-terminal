@@ -184,16 +184,22 @@ mod refusing {
         }
     }
 
-    #[test]
-    fn a_linked_folder_on_the_way_is_refused_and_says_so() {
+    #[rstest::rstest]
+    #[case::to_an_empty_folder(&[])]
+    #[case::to_a_folder_that_holds_the_next_one(&["-code-web"])]
+    fn a_linked_folder_on_the_way_is_refused_and_says_so(#[case] inside: &[&str]) {
         let setup = Setup::new();
         let (source, relative) = setup.transcript();
         let elsewhere = setup.old.join("elsewhere");
+        for name in inside {
+            fs::create_dir_all(elsewhere.join(name)).expect("inside elsewhere");
+        }
         fs::create_dir_all(&elsewhere).expect("elsewhere");
         std::os::unix::fs::symlink(&elsewhere, setup.new.join("projects")).expect("symlink");
         let error = conversation(&setup.new, &[(source, relative)], &Disk).expect_err("refused");
         assert!(error.to_string().contains("does not write through links"), "{error}");
-        assert_eq!(entries(&elsewhere), Vec::<String>::new());
+        assert_eq!(entries(&elsewhere), inside.iter().map(ToString::to_string).collect::<Vec<_>>());
+        assert_eq!(inside.iter().flat_map(|name| entries(&elsewhere.join(name))).count(), 0);
     }
 
     #[test]
