@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.170
+
+- **Discard a file's changes.** In the changes panel's Uncommitted mode and in Every project, hover a file and click the **`↺`** left of its `✓` to put it back as it is in the last commit; a file git doesn't track is deleted, and a renamed one gets its old name back. A confirmation names the file and nothing changes until you click **discard**; if the file changed after your click (an agent kept writing), nothing is discarded and a message says so.
+- **`cornercase changes discard PATH`** does the same from a script: it asks on a terminal, and `--yes` skips the question.
+
 ## 0.12.169
 
 - **Restart open agents on another account, keeping their conversation.** After choosing another account for an agent, the agents already open kept the old one. `cornercase account restart claude` now restarts them on the account in use (or `cornercase account restart claude personal` on another): each one comes back in the same pane, in the same conversation, with the mode it ran in. Claude Code's and Codex's conversations are added to the other account's folder first (as hard links, never overwriting a file); Gemini CLI starts a new conversation. An agent that is working, or waiting for your answer, restarts once its turn is over, and its pane shows that with a ` cancel ` button. Agents of a flow are left as they are.
