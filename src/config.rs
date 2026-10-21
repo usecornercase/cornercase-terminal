@@ -135,7 +135,7 @@ pub(crate) struct ProjectSettings {
 }
 
 impl ProjectSettings {
-    fn normalised(self) -> Self {
+    pub(crate) fn normalised(self) -> Self {
         let clean = |text: String| {
             let text = text.replace("\r\n", "\n");
             let text: String = text.chars().map(|c| if c.is_control() && c != '\n' { ' ' } else { c }).collect();

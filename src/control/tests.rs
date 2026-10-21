@@ -154,6 +154,7 @@ fn last_commands() -> Vec<Command> {
         Command::AgentsForget(AgentsForget::default()),
         Command::Tour(tour::TourRequest::default()),
         Command::ConfigExport(ConfigExport::default()),
+        Command::ConfigImport(ConfigImport::default()),
     ]
 }
 

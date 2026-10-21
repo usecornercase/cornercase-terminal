@@ -46,6 +46,7 @@ use crate::project::search::Goto;
 use crate::project::{Hierarchy, Phase, Tab, TabAt, Workspace, WorkspaceAt};
 use crate::term::Term;
 pub(in crate::app) use changes::{BaseChange, Replied};
+pub(in crate::app) use config::needs_a_repository;
 use create::Then;
 use held::Held;
 use issues::Asking;
@@ -652,6 +653,7 @@ impl App {
         ControlFlow::Break(match command {
             Command::Config(config) => self.config_request(client, config),
             Command::ConfigExport(_) => self.config_export_request(),
+            Command::ConfigImport(import) => self.config_import_request(&import),
             Command::Theme(theme) => self.theme_request(&theme),
             Command::Go(go) => self.go_request(asker, &go),
             Command::UpdateCheck(_) => {

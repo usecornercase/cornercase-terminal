@@ -9,6 +9,7 @@ pub(crate) const VERSION: u64 = 1;
 pub(crate) const MAX_BYTES: usize = 256 * 1024;
 pub(crate) const HEADER: &str =
     "# A cornercase setup: import it with `cornercase config import <file>` or Settings → share";
+#[cfg(test)]
 pub(crate) const LEFT_OUT: [&str; 10] = [
     "jira_email",
     "remote",
@@ -279,6 +280,7 @@ fn note_unknown(unknown: &mut Vec<String>, name: String) {
     }
 }
 
+pub(crate) mod preview;
 pub(crate) mod secrets;
 
 #[cfg(test)]

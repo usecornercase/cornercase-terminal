@@ -43,7 +43,7 @@ pub(super) fn set(s: &mut Setup, entry: &Value) -> Described {
     ok(s, &json!({"action": "set", "entry": entry}))
 }
 
-fn file(s: &Setup) -> Value {
+pub(super) fn file(s: &Setup) -> Value {
     let text = std::fs::read_to_string(s.config.path().join("config.json")).unwrap_or_else(|_| "{}".into());
     serde_json::from_str(&text).expect("json")
 }

@@ -1,28 +1,52 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use super::{Handled, Pending, Stage, json};
+use super::{Handled, Pending, Stage, json, malformed};
 use crate::app::App;
 use crate::config::{self, Config, ProjectSettings};
 use crate::control::Done;
-use crate::control::config::{Configure, Described, ProjectChange, ProjectEntry, SecretChange};
+use crate::control::config::{ConfigImport, Configure, Described, ProjectChange, ProjectEntry, SecretChange};
 use crate::control::contract::{Code, Refusal};
 use crate::error::Error;
 use crate::git;
 use crate::issues::{Account, Secret, Source};
 use crate::project::Hierarchy;
+use crate::settings::share::{self, Section};
 use crate::settings::{Action, Page, Refused};
 use crate::text;
 
-fn refusal(refused: Refused) -> Refusal {
-    match refused {
-        Refused::Unknown(message) => Refusal::new(Code::NotFound, message),
-        Refused::Invalid(message) => Refusal::new(Code::Malformed, message),
-        Refused::Blocked(message) => Refusal::new(Code::Conflict, message),
+impl From<Refused> for Refusal {
+    fn from(refused: Refused) -> Self {
+        match refused {
+            Refused::Unknown(message) => Self::new(Code::NotFound, message),
+            Refused::Invalid(message) => Self::new(Code::Malformed, message),
+            Refused::Blocked(message) => Self::new(Code::Conflict, message),
+        }
     }
 }
 
 fn failed(message: impl Into<String>) -> Refusal {
     Refusal::new(Code::Failed, message)
+}
+
+pub(in crate::app) fn needs_a_repository(folder: &Path, settings: &ProjectSettings) -> Result<(), Refusal> {
+    if settings.is_empty() || git::is_repo_root(folder) {
+        return Ok(());
+    }
+    let message =
+        format!("{} is not the root of a git repository: setup and teardown run in its worktrees", folder.display());
+    Err(Refusal::new(Code::Conflict, message))
+}
+
+fn sections_of(ids: Option<&[String]>) -> Result<Vec<Section>, Refusal> {
+    let Some(ids) = ids else { return Ok(Section::ALL.to_vec()) };
+    ids.iter()
+        .map(|id| {
+            Section::of(id).ok_or_else(|| {
+                let all: Vec<&str> = Section::ALL.iter().map(|section| section.id()).collect();
+                malformed(format!("`{id}` is not a section; use: {}", all.join(", ")))
+            })
+        })
+        .collect()
 }
 
 impl App {
@@ -40,6 +64,16 @@ impl App {
         self.export_setup().map(|exported| Some(json(&exported))).map_err(failed)
     }
 
+    pub(super) fn config_import_request(&mut self, import: &ConfigImport) -> Handled {
+        let shared = share::parse(&import.text).map_err(malformed)?;
+        let sections = sections_of(import.sections.as_deref())?;
+        if import.apply {
+            let notices = self.import_setup(&shared, &sections)?;
+            return Ok(Some(json(&self.described(notices))));
+        }
+        self.preview_setup(&shared, &sections).map(|preview| Some(json(&preview)))
+    }
+
     fn described(&self, notices: Vec<String>) -> Described {
         let model = self.settings_model(Page::default());
         Described {
@@ -55,8 +89,7 @@ impl App {
 
     fn project_settings_entries(&self) -> Vec<ProjectEntry> {
         let home = self.home.as_deref();
-        let open =
-            |folder: &std::path::Path| self.projects.iter().find(|p| !p.closing && p.path == folder).map(|p| p.id);
+        let open = |folder: &Path| self.projects.iter().find(|p| !p.closing && p.path == folder).map(|p| p.id);
         let mut entries: Vec<ProjectEntry> = self
             .config
             .projects
@@ -92,7 +125,7 @@ impl App {
         let mut model = self.settings_model(Page::default());
         let mut notices = Vec::new();
         for (key, value) in values {
-            notices.extend(model.apply(key, value).map_err(refusal)?);
+            notices.extend(model.apply(key, value).map_err(Refusal::from)?);
         }
         if model.config != self.config {
             self.write_config(&model.config).map_err(|e| self.config_refusal(e))?;
@@ -100,7 +133,7 @@ impl App {
         Ok(Some(json(&self.described(notices))))
     }
 
-    pub(super) fn readable_config(&mut self) -> Result<(), Refusal> {
+    pub(in crate::app) fn readable_config(&mut self) -> Result<(), Refusal> {
         self.reload_config().map_err(|e| Refusal::new(Code::Conflict, e))
     }
 
@@ -109,7 +142,7 @@ impl App {
         self.change_config(change).map_err(|e| self.config_refusal(e))
     }
 
-    fn config_refusal(&self, message: String) -> Refusal {
+    pub(in crate::app) fn config_refusal(&self, message: String) -> Refusal {
         let code = if self.config_file.problem().is_some() { Code::Conflict } else { Code::Failed };
         Refusal::new(code, message)
     }
@@ -141,13 +174,7 @@ impl App {
             setup: change.setup.unwrap_or(current.setup),
             teardown: change.teardown.unwrap_or(current.teardown),
         };
-        if !settings.is_empty() && !git::is_repo_root(&folder) {
-            let message = format!(
-                "{} is not the root of a git repository: setup and teardown run in its worktrees",
-                folder.display()
-            );
-            return Err(Refusal::new(Code::Conflict, message));
-        }
+        needs_a_repository(&folder, &settings)?;
         self.change_config(|config| config.set_project(&folder, home.as_deref(), settings))
             .map_err(|e| self.config_refusal(e))?;
         let name = text::display_path(&folder, home.as_deref());
@@ -156,7 +183,7 @@ impl App {
     }
 
     fn config_secret(&mut self, client: u64, secret: &SecretChange) -> Handled {
-        let action = self.settings_model(Page::default()).secret(&secret.key, &secret.value).map_err(refusal)?;
+        let action = self.settings_model(Page::default()).secret(&secret.key, &secret.value).map_err(Refusal::from)?;
         let key = self.clients.requests.key();
         match action {
             Action::CheckToken(source, token) => self.check_token_for(source, token, Some(key)),
@@ -214,7 +241,7 @@ impl App {
 
     fn config_remove(&mut self, key: &str) -> Handled {
         let model = self.settings_model(Page::default());
-        let notice = match model.removal_of(key).map_err(refusal)? {
+        let notice = match model.removal_of(key).map_err(Refusal::from)? {
             None => format!("`{key}` is not set"),
             Some(Action::RemoveToken(source)) => self.remove_token(source).map_err(failed)?,
             Some(Action::RemoveBot(via)) => self.remove_messenger(via).map_err(failed)?,

@@ -46,7 +46,7 @@ pub(crate) use changes::{
     ChangesViewed,
 };
 pub(crate) use closed_agents::{AgentsClose, AgentsForget, AgentsReopen};
-pub(crate) use config::{ConfigExport, ConfigInfo, Configure};
+pub(crate) use config::{ConfigExport, ConfigImport, ConfigInfo, Configure};
 pub(crate) use contract::Contract;
 pub(crate) use events::{Event, Events, Go, Kind, What};
 #[cfg(test)]
@@ -209,6 +209,7 @@ pub(crate) enum Command {
     AgentsForget(AgentsForget),
     Tour(tour::TourRequest),
     ConfigExport(ConfigExport),
+    ConfigImport(ConfigImport),
 }
 
 impl Command {
@@ -373,11 +374,12 @@ impl Command {
             Self::PluginActions(_) => 69,
             Self::PluginRun(_) => 70,
             Self::ConfigExport(_) => 96,
+            Self::ConfigImport(_) => 97,
             _ => return None,
         })
     }
 
-    pub(crate) const NAMES: [&str; 97] = [
+    pub(crate) const NAMES: [&str; 98] = [
         "status",
         "open",
         "new-workspace",
@@ -475,6 +477,7 @@ impl Command {
         "agents-forget",
         "tour",
         "config-export",
+        "config-import",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

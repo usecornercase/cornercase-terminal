@@ -192,3 +192,41 @@ mod export {
         assert_eq!((read.settings, read.repositories, read.left_out.len()), (3, 0, 0));
     }
 }
+
+mod import {
+    use super::*;
+    use crate::control::{Command, Request, command_name};
+
+    #[test]
+    fn it_is_a_command_of_its_own_that_previews_by_default() {
+        let read: Request =
+            serde_json::from_value(json!({"command": "config-import", "args": {"text": "version = 1\n"}}))
+                .expect("a request");
+
+        let wanted = ConfigImport { text: "version = 1\n".into(), sections: None, apply: false };
+        assert_eq!(read.command, Command::ConfigImport(wanted));
+        assert_eq!(command_name(&serde_json::to_value(&read).expect("json")), Some("config-import"));
+    }
+
+    #[test]
+    fn logs_the_size_of_the_text_never_the_text() {
+        let import =
+            ConfigImport { text: "secret".into(), sections: Some(vec!["agents".into(), "issues".into()]), apply: true };
+
+        let fields = Command::ConfigImport(import).fields();
+
+        assert_eq!(
+            fields,
+            [("text_bytes", "6".to_string()), ("sections", "agents,issues".to_string()), ("apply", "true".to_string())]
+        );
+    }
+
+    #[test]
+    fn its_preview_reads_leniently() {
+        let text = r#"{"sections": [{"id": "agents", "changes": [{"key": "agent"}]}], "notes": [{"kind": "later", "text": "x"}]}"#;
+
+        let read: SetupPreview = serde_json::from_str(text).expect("lenient");
+
+        assert_eq!((read.sections[0].changes[0].key.as_str(), read.notes[0].kind), ("agent", NoteKind::Other));
+    }
+}

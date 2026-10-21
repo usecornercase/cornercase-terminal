@@ -6,6 +6,7 @@ use crate::control::config::SetupExported;
 use crate::git;
 use crate::log;
 use crate::settings::Status;
+use crate::settings::share::preview::{Here, OpenRepository};
 use crate::settings::share::{self, Repository, Shared};
 use crate::text;
 
@@ -36,6 +37,21 @@ impl App {
             left_out.extend(share_or_name(&mut found, folder, settings, home));
         }
         found.into_iter().map(|(_, repository)| repository).collect()
+    }
+
+    pub(super) fn setup_here(&self) -> Here {
+        let projects = self
+            .projects
+            .iter()
+            .filter(|project| !project.closing && git::is_repo_root(&project.path))
+            .map(|project| OpenRepository {
+                id: project.id,
+                folder: project.path.clone(),
+                remotes: remotes_of(&project.path),
+            })
+            .filter(|open| !open.remotes.is_empty())
+            .collect();
+        Here { home: self.home.clone(), projects, connected: self.connected_trackers() }
     }
 
     fn connected_trackers(&self) -> Vec<String> {
@@ -78,6 +94,14 @@ fn repository_of(folder: &Path, settings: &ProjectSettings) -> Result<Repository
     if !git::is_repo_root(folder) {
         return Err("is not a repository any more");
     }
+    let remotes = remotes_of(folder);
+    if remotes.is_empty() {
+        return Err("has no git remote");
+    }
+    Ok(Repository { remotes, setup: settings.setup.clone(), teardown: settings.teardown.clone() })
+}
+
+fn remotes_of(folder: &Path) -> Vec<String> {
     let mut remotes = git::remote::of(folder);
     remotes.sort_by_key(|remote| remote.name != "origin");
     let mut names: Vec<String> = Vec::new();
@@ -87,8 +111,7 @@ fn repository_of(folder: &Path, settings: &ProjectSettings) -> Result<Repository
             names.push(name);
         }
     }
-    if names.is_empty() {
-        return Err("has no git remote");
-    }
-    Ok(Repository { remotes: names, setup: settings.setup.clone(), teardown: settings.teardown.clone() })
+    names
 }
+
+mod apply;
