@@ -506,6 +506,7 @@ mod accounts_page;
 mod agent_status;
 mod click_outside;
 mod close_agent;
+mod closed_agents;
 mod compact;
 mod context_menu;
 mod dispatch;

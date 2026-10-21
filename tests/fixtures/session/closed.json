@@ -1,0 +1,93 @@
+{
+  "version": 5,
+  "projects": [
+    {
+      "path": "projects/team",
+      "workspaces": [
+        {
+          "path": "projects/team",
+          "worktree": false,
+          "tabs": [
+            {
+              "panes": [
+                {
+                  "cwd": "projects/team"
+                }
+              ],
+              "active": 0
+            }
+          ],
+          "active": 0,
+          "closed": {
+            "tabs": [
+              {
+                "panes": [
+                  {
+                    "cwd": "projects/team",
+                    "agent": {
+                      "kind": "claude",
+                      "conversation": "s1",
+                      "mode": "plan"
+                    },
+                    "id": 4,
+                    "parent": 3,
+                    "closed": {
+                      "kind": "claude",
+                      "mode": "plan",
+                      "cut": true
+                    }
+                  }
+                ],
+                "active": 0
+              },
+              {
+                "panes": [
+                  {
+                    "cwd": "projects/team",
+                    "id": 5,
+                    "closed": {
+                      "kind": "opencode"
+                    }
+                  },
+                  {
+                    "cwd": "projects/team",
+                    "id": 6,
+                    "parent": 5
+                  }
+                ],
+                "active": 0
+              }
+            ],
+            "run": {
+              "flow": {
+                "version": 2,
+                "name": "",
+                "end": "pull_request",
+                "orchestrator": {
+                  "name": "orchestrator",
+                  "agent": "",
+                  "prompt": ""
+                }
+              },
+              "task": "fix the login",
+              "members": [
+                {
+                  "role": "coder",
+                  "tab": 0,
+                  "pane": 0
+                }
+              ],
+              "stage": 0,
+              "rounds": [
+                1
+              ],
+              "dir": "2026-10-21-fix"
+            }
+          }
+        }
+      ],
+      "active": 0
+    }
+  ],
+  "active": 0
+}

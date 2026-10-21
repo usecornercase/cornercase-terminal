@@ -16,6 +16,7 @@ fn with_agents() -> View<'static> {
                 pull: None,
                 removing: false,
                 setting_up: false,
+                closed: 0,
             },
             WorkspaceEntry {
                 collapsed: false,
@@ -25,6 +26,7 @@ fn with_agents() -> View<'static> {
                 pull: None,
                 removing: false,
                 setting_up: false,
+                closed: 0,
             },
         ],
         active_tab: Some(0),

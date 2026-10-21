@@ -73,6 +73,7 @@ pub(super) mod a_bug {
                 parent: None,
                 collapsed: false,
                 accounts: std::collections::BTreeMap::new(),
+                closed: None,
             }],
             active: 0,
             layout: None,
@@ -89,6 +90,7 @@ pub(super) mod a_bug {
             run: None,
             role_worktrees: Vec::new(),
             run_dirs: Vec::new(),
+            closed: None,
         };
         let project =
             ProjectState { path, name: None, group: None, workspaces: vec![workspace], active: 0, collapsed: false };

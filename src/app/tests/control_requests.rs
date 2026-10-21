@@ -518,6 +518,7 @@ mod agents;
 mod arranging;
 mod changes;
 mod close_agent;
+mod closed_agents;
 mod config;
 mod contract;
 mod copilot;

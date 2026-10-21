@@ -19,7 +19,7 @@ Code: `src/`, `tests/layers.rs`
   |---|---|---|
   | `issues` | `IssueConnections`, `app/trackers.rs` | Issue and people caches, accounts, connection epochs, API endpoints, token variables and secrets path, remembered browser tab, closed switch and people filters. |
   | `update` | `UpdateState`, `app/update_dialog.rs` | `updates`, changelog `scroll`, `restart_list` and when it was `listed`. |
-  | `agents` | `AgentRuntime`, `app/agent_watch.rs` | Pending launches and the cached trust pattern (`Launches`, `app/launches.rs`), last `watched` time, awake lock, `claude_dir`, stats, and the restarts on another account waiting or moving their conversation (`Restarts`, `app/account_restart/pending.rs`). |
+  | `agents` | `AgentRuntime`, `app/agent_watch.rs` | Pending launches and the cached trust pattern (`Launches`, `app/launches.rs`), last `watched` time, awake lock, `claude_dir`, stats, the restarts on another account waiting or moving their conversation (`Restarts`, `app/account_restart/pending.rs`), and the closed agents of each workspace (`ClosedAgents`, `app/closed_agents/kept.rs`). |
   | `outbox` | `Outbox`, `app/outbox.rs` | OSC 52 copies, notifications, sounds, opens, and the detach, restart and start requests taken by the server. |
   | `scroll` | `Scrolls`, `app/layout.rs` | Projects, workspaces, agents and tab-bar offsets, and the `followed` focus. |
   | `git.upstream` | `Upstream`, `app/worktrees.rs` | Fetch times, projects being counted and the last count time, and the projects whose linked worktrees could not be read. |

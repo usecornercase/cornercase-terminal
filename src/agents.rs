@@ -313,6 +313,10 @@ fn line(config: &Config, kind: &str, args: Vec<String>) -> String {
     std::iter::once(command(config, kind)).chain(args).map(|a| quote(&a)).collect::<Vec<_>>().join(" ")
 }
 
+pub(crate) fn fresh_line(config: &Config, kind: &str, mode: Option<&str>) -> String {
+    start_line(config, kind, mode, None, None).unwrap_or_else(|_| command_line(config, kind))
+}
+
 pub(crate) fn start_line(
     config: &Config,
     kind: &str,

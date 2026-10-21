@@ -74,6 +74,8 @@ import {
   type TreeSpot,
   type Workspace,
   MAX_AGENT_DEPTH,
+  REOPEN_ICON,
+  agentsLabel,
   NOTIFY_AFTER,
   NOTIFY_CHOICES,
   activePane,
@@ -135,6 +137,8 @@ const BUILT_IN_FLOWS: [string, number, string][] = [
 const FLOWS_NEED = 'this needs cornercase on your computer: the demo only plays the flow in payments';
 
 const NO_RUN = 'this workspace runs no flow';
+const NO_AGENT_TO_CLOSE = 'no agent to close in this workspace';
+const NO_CLOSED_AGENTS = 'this workspace has no closed agents';
 
 export interface SettingsRow {
   id: string;
@@ -462,7 +466,7 @@ export class App {
   agentsScroll = 0;
   overlay: Overlay | null = null;
   hover: Pos | null = null;
-  toast: { text: string; until: number; status?: Status; undo?: () => void; go?: () => void; bug?: boolean } | null = null;
+  toast: { text: string; until: number; status?: Status; undo?: () => void; label?: string; go?: () => void; bug?: boolean } | null = null;
   focused = false;
   selection: { pane: number; from: Pos; to: Pos; rect: Rect } | null = null;
   dragging: Drag | null = null;
@@ -1182,6 +1186,78 @@ export class App {
     return `Close the project ${projectLabel(p)}?${stopped} Folders and worktrees stay on disk.`;
   }
 
+  private workspaceById(id: number): { p: Project; w: Workspace } | null {
+    for (const p of this.projects) {
+      const w = p.workspaces.find((x) => x.id === id);
+      if (w) return { p, w };
+    }
+    return null;
+  }
+
+  closedCount(workspace: number): number {
+    const ws = this.workspaceById(workspace)?.w;
+    return (ws?.closed ?? []).reduce((n, t) => n + t.panes.filter((x) => paneStatus(x)).length, 0);
+  }
+
+  private agentTabs(ws: Workspace): Tab[] {
+    return ws.tabs.filter((t) => t.panes.some((x) => paneStatus(x)));
+  }
+
+  private closedAgentsMenu(workspace: number): MenuAction[] {
+    const ws = this.workspaceById(workspace)?.w;
+    if (!ws || ws.removing) return [];
+    const close: MenuAction[] = this.agentTabs(ws).length ? [{ kind: 'closeAgents', workspace }] : [];
+    const kept: MenuAction[] = this.closedCount(workspace) ? [{ kind: 'reopenAgents', workspace }, { kind: 'forgetAgents', workspace }] : [];
+    return [...close, ...kept];
+  }
+
+  private notice(text: string, undo?: () => void, label?: string): void {
+    this.toast = { text, until: this.now() + (undo ? 6000 : 2000), undo, label };
+    this.after((undo ? 6000 : 2000) + 50, () => this.dirty());
+    this.dirty();
+  }
+
+  closeAgents(workspace: number): void {
+    const found = this.workspaceById(workspace);
+    const tabs = found ? this.agentTabs(found.w) : [];
+    if (!found || !tabs.length) return this.notice(NO_AGENT_TO_CLOSE);
+    const ws = found.w;
+    const count = tabs.reduce((n, t) => n + t.panes.filter((x) => paneStatus(x)).length, 0);
+    ws.tabs = ws.tabs.filter((t) => !tabs.includes(t));
+    ws.closed = [...(ws.closed ?? []), ...tabs];
+    ws.active = Math.max(0, Math.min(ws.active, ws.tabs.length - 1));
+    this.notice(`${agentsLabel(count)} closed · ${REOPEN_ICON} on the workspace reopens ${count === 1 ? 'it' : 'them'}`, () => this.reopenAgents(workspace), 'reopen');
+  }
+
+  reopenAgents(workspace: number): void {
+    const found = this.workspaceById(workspace);
+    const count = this.closedCount(workspace);
+    if (!found || !count) return this.notice(NO_CLOSED_AGENTS);
+    const { p, w } = found;
+    w.tabs.push(...(w.closed ?? []));
+    w.closed = undefined;
+    this.notice(`${agentsLabel(count)} reopened in ${projectLabel(p)} › ${workspaceLabel(w)}`);
+  }
+
+  askForgetAgents(workspace: number): void {
+    if (!this.closedCount(workspace)) return this.notice(NO_CLOSED_AGENTS);
+    this.overlay = { kind: 'forgetAgents', workspace };
+    this.dirty();
+  }
+
+  forgetAgentsMessage(workspace: number): string {
+    const found = this.workspaceById(workspace);
+    if (!found) return '';
+    const kept = agentsLabel(this.closedCount(workspace)).replace(' agent', ' closed agent');
+    return `Forget the ${kept} of ${projectLabel(found.p)} › ${workspaceLabel(found.w)}? They can no longer be reopened here; their conversations stay in each agent's own history.`;
+  }
+
+  forgetAgents(workspace: number): void {
+    const ws = this.workspaceById(workspace)?.w;
+    if (ws) ws.closed = undefined;
+    this.dirty();
+  }
+
   askCloseWorkspace(p: number, w: number): void {
     const project = this.projects[p];
     const ws = project?.workspaces[w];
@@ -1233,6 +1309,7 @@ export class App {
     if (o?.kind === 'closeWorkspace') return { title: 'Close workspace', message: this.closeWorkspaceMessage(o.project, o.workspace), submit: 'close' };
     if (o?.kind === 'closeTab') return { title: 'Close tab', message: this.closeTabMessage(o.project, o.workspace, o.tab), submit: 'close' };
     if (o?.kind === 'closePane') return { title: 'Close pane', message: this.closePaneMessage(o.pane), submit: 'close' };
+    if (o?.kind === 'forgetAgents') return { title: 'Forget closed agents', message: this.forgetAgentsMessage(o.workspace), submit: 'forget' };
     if (o?.kind === 'discard') return { title: 'Discard changes', message: discardQuestion(o), submit: 'discard', dangerous: true };
     return null;
   }
@@ -1250,6 +1327,7 @@ export class App {
       if (at) this.closeTab(at.p, at.w, at.t);
     } else if (o?.kind === 'deleteGroup') this.deleteGroup(o.group);
     else if (o?.kind === 'closePane') this.paneAction(o.pane, 'close pane');
+    else if (o?.kind === 'forgetAgents') this.forgetAgents(o.workspace);
     else if (o?.kind === 'discard') this.submitDiscard(o);
   }
 
@@ -2305,6 +2383,7 @@ export class App {
     const mark = tab && this.markAction(tab.panes);
     if (mark) actions.push(mark);
     if (target.kind === 'workspace' && this.runOf(target.workspace)) actions.push({ kind: 'showFlow', workspace: target.workspace });
+    if (target.kind === 'workspace') actions.push(...this.closedAgentsMenu(target.workspace));
     if (target.kind === 'project' || target.kind === 'workspace') actions.push({ kind: 'openIn' });
     this.overlay = { kind: 'menu', at, actions };
     this.dirty();
@@ -2341,6 +2420,9 @@ export class App {
     if (a.kind === 'agentFold') return a.collapsed ? 'collapse' : 'expand';
     if (a.kind === 'closeAgent') return 'close agent';
     if (a.kind === 'showFlow') return 'show flow';
+    if (a.kind === 'closeAgents') return 'close agents';
+    if (a.kind === 'reopenAgents') return `reopen ${agentsLabel(this.closedCount(a.workspace))}`;
+    if (a.kind === 'forgetAgents') return 'forget closed agents';
     if (a.kind === 'newWorkspace') return 'new workspace';
     if (a.kind === 'startFlow') return 'start a flow…';
     if (a.kind === 'projectSettings') return 'project settings';
@@ -2407,6 +2489,9 @@ export class App {
     else if (a.kind === 'closeAgent') this.askCloseAgent(a.pane);
     else if (a.kind === 'sendTodo') this.sendTodo(a.todo, a.pane);
     else if (a.kind === 'showFlow') return this.showFlowOf(a.workspace);
+    else if (a.kind === 'closeAgents') this.closeAgents(a.workspace);
+    else if (a.kind === 'reopenAgents') this.reopenAgents(a.workspace);
+    else if (a.kind === 'forgetAgents') this.askForgetAgents(a.workspace);
     else if (a.kind === 'newWorkspace') {
       this.nav = null;
       this.openNewWorkspace(this.projects.findIndex((x) => x.id === a.project));
@@ -2905,6 +2990,12 @@ export class App {
       if (project) this.openNewWorkspace(p);
     } else if (a.kind === 'closeWorkspace') {
       if (ws) this.askCloseWorkspace(p, w);
+    } else if (a.kind === 'closeAgents') {
+      this.nav = null;
+      if (ws) this.closeAgents(ws.id);
+    } else if (a.kind === 'reopenAgents') {
+      this.nav = null;
+      if (ws) this.reopenAgents(ws.id);
     } else if (a.kind === 'issues') this.openIssues();
     else if (a.kind === 'todo') {
       const opening = !this.todo.open;

@@ -343,9 +343,12 @@ impl App {
         let project = &self.projects[at.project()];
         project.workspaces.iter().filter(|owner| owner.open()).find_map(|owner| {
             let tree = owner.role_worktrees.iter().find(|tree| &tree.path == path)?;
-            self.runs.of_workspace(owner.id).is_some().then(|| {
+            let running = self.runs.of_workspace(owner.id).is_some();
+            let closed = self.agents.closed.has_run(owner.id);
+            let state = if running { "running" } else { "whose agents are closed" };
+            (running || closed).then(|| {
                 format!(
-                    "this worktree belongs to `{}` in the flow running in {} › {}: it is removed with that workspace",
+                    "this worktree belongs to `{}` in the flow {state} in {} › {}: it is removed with that workspace",
                     tree.role,
                     self.project_label(project),
                     owner.label()
@@ -532,7 +535,9 @@ impl App {
         let kept = if roles == 0 { "The branch is kept." } else { "The branches are kept." };
         let with_roles = if roles == 0 { String::new() } else { format!(", with the worktrees of its {roles} roles") };
         let first = if teardown { "Its teardown runs first. " } else { "" };
-        format!("Remove the workspace {label} and delete its worktree folder {path}{with_roles}? {first}{kept}")
+        let id = found.map_or(0, |w| w.id);
+        let closed = self.forgotten_note(id);
+        format!("Remove the workspace {label} and delete its worktree folder {path}{with_roles}? {first}{kept}{closed}")
     }
 }
 

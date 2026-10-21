@@ -98,18 +98,72 @@ fn team_line(role: &Role, pane: Option<u64>, trees: &[RoleWorktree]) -> String {
     format!("- {} ({at}): {}, {edits}{place}\n", role.name, role.summary())
 }
 
-pub(crate) fn restored(members: &[Member], dir: Option<&Path>) -> String {
-    let own = members.iter().find(|m| m.role == ORCHESTRATOR).map(|m| m.pane);
+fn ids(members: &[Member]) -> String {
     let team: Vec<String> =
         members.iter().filter(|m| m.role != ORCHESTRATOR).map(|m| format!("{} is pane {}", m.role, m.pane)).collect();
+    let own = members.iter().find(|m| m.role == ORCHESTRATOR).map(|m| m.pane);
     let you = own.map_or_else(String::new, |id| format!(", and you are pane {id}"));
-    let folder = dir.map_or_else(String::new, |dir| format!(" The run's folder is still {}.", dir.display()));
+    format!("{}{you}", team.join(", "))
+}
+
+fn folder_note(dir: Option<&Path>) -> String {
+    dir.map_or_else(String::new, |dir| format!(" The run's folder is still {}.", dir.display()))
+}
+
+pub(crate) fn restored(members: &[Member], dir: Option<&Path>) -> String {
     format!(
-        "cornercase restarted, so your team has new pane ids: {}{you}. Use these from now on.{folder} Any wait you had \
+        "cornercase restarted, so your team has new pane ids: {}. Use these from now on.{} Any wait you had \
          running ended, and an agent may have lost the turn it was in: check what each one last answered with \
          `cornercase read --last-message`, then go on with the plan. If the plan was already done, answer `ok` and \
          do nothing else.",
-        team.join(", ")
+        ids(members),
+        folder_note(dir)
+    )
+}
+
+pub(crate) struct Closed<'a> {
+    pub(crate) cut: &'a [String],
+    pub(crate) fresh: &'a [String],
+}
+
+fn who(roles: &[String], singular: &str, plural: &str, rest: &str) -> String {
+    match roles {
+        [] => String::new(),
+        [one] => format!(" {one} {singular} {rest}"),
+        many => format!(" {} {plural} {rest}", names(many)),
+    }
+}
+
+fn reopened_notes(closed: &Closed) -> String {
+    let cut = |roles: &[String]| if roles.len() == 1 { "its" } else { "their" };
+    let mut notes = who(closed.cut, "was", "were", &format!("cut in the middle of {} turn.", cut(closed.cut)));
+    notes.push_str(&who(
+        closed.fresh,
+        "starts",
+        "start",
+        &format!("over in a new conversation with only {} role.", cut(closed.fresh)),
+    ));
+    notes
+}
+
+pub(crate) fn reopened(members: &[Member], dir: Option<&Path>, closed: &Closed) -> String {
+    format!(
+        "Your team was closed and reopened, so it has new pane ids: {}. Use these from now on.{}{} Any wait you had \
+         running ended: check what each one last answered with `cornercase read --last-message`, then go on with \
+         the plan. If the plan was already done, answer `ok` and do nothing else.",
+        ids(members),
+        folder_note(dir),
+        reopened_notes(closed)
+    )
+}
+
+pub(crate) fn where_it_stands(members: &[Member], dir: Option<&Path>, closed: &Closed) -> String {
+    format!(
+        "\n## Where the run stands\n\nYour team was closed and reopened before you started, so it has these pane \
+         ids: {}.{}{} Check what each one last answered with `cornercase read --last-message` before you go on.\n",
+        ids(members),
+        folder_note(dir),
+        reopened_notes(closed)
     )
 }
 

@@ -532,6 +532,7 @@ mod output {
             custom_name: None,
             collapsed: false,
             changes: None,
+            closed_agents: None,
             tabs: vec![tab()],
         }
     }

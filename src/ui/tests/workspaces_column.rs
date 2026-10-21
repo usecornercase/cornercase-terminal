@@ -24,6 +24,7 @@ fn with_workspaces(active_tab: Option<usize>) -> View<'static> {
                 pull: None,
                 removing: false,
                 setting_up: false,
+                closed: 0,
             },
             WorkspaceEntry {
                 collapsed: false,
@@ -33,6 +34,7 @@ fn with_workspaces(active_tab: Option<usize>) -> View<'static> {
                 pull: None,
                 removing: false,
                 setting_up: false,
+                closed: 0,
             },
         ],
         active_tab,
@@ -117,6 +119,7 @@ fn renders_a_workspace_being_removed_without_its_buttons() {
         pull: None,
         removing: true,
         setting_up: false,
+        closed: 0,
         tabs: Vec::new(),
         name: "login".into(),
     };
@@ -156,6 +159,7 @@ fn an_empty_workspace_says_so_in_the_pane() {
             pull: None,
             removing: false,
             setting_up: false,
+            closed: 0,
         }],
         ..with_workspaces(None)
     };
@@ -240,12 +244,12 @@ mod pull_request_tag {
     }
 
     fn badge_text(v: &View) -> Option<String> {
-        let r = workspace_pull(
+        let r = workspace_tag(
             &workspace_layout(wlist(), areas().pitch, &v.tab_lines(), v.workspaces_scroll),
             areas().pitch,
             &v.tab_lines(),
             0,
-            &v.workspaces[0],
+            (&v.workspaces[0], Tag::Pull),
         )?;
         let terminal = render(v);
         let buffer = terminal.backend().buffer();
@@ -284,12 +288,12 @@ mod pull_request_tag {
         let mut v = tagged("login", 3, mark(State::Open, Some(Ci::Failing)));
         v.workspaces[0].tabs[0].status = Some(Status::Waiting);
         let list = Rect { width: 20, ..wlist() };
-        let r = workspace_pull(
+        let r = workspace_tag(
             &workspace_layout(list, areas().pitch, &v.tab_lines(), 0),
             areas().pitch,
             &v.tab_lines(),
             0,
-            &v.workspaces[0],
+            (&v.workspaces[0], Tag::Pull),
         )
         .expect("a target");
         let row = workspace_row(list, areas().pitch, &v.tab_lines(), 0, WorkspaceRow::Workspace(0));
@@ -317,12 +321,12 @@ mod pull_request_tag {
         let v = tagged("login", 0, mark(State::Open, Some(Ci::Failing)));
         let pitch = 3;
 
-        let r = workspace_pull(
+        let r = workspace_tag(
             &workspace_layout(wlist(), pitch, &v.tab_lines(), 0),
             pitch,
             &v.tab_lines(),
             0,
-            &v.workspaces[0],
+            (&v.workspaces[0], Tag::Pull),
         )
         .expect("a target");
 
@@ -331,7 +335,7 @@ mod pull_request_tag {
     }
 
     fn pull_badge_for(row: Rect, entry: &WorkspaceEntry) -> Option<Rect> {
-        workspaces::pull_badge(row, 1, 4, entry, workspaces::Badge::Attention)
+        workspaces::tag_badge(row, 1, 4, (entry, workspaces::Badge::Attention), Tag::Pull)
     }
 
     #[test]
@@ -352,12 +356,12 @@ mod pull_request_tag {
     }
 
     fn badge_cell(v: &View) -> ratatui::buffer::Cell {
-        let r = workspace_pull(
+        let r = workspace_tag(
             &workspace_layout(wlist(), areas().pitch, &v.tab_lines(), 0),
             areas().pitch,
             &v.tab_lines(),
             0,
-            &v.workspaces[0],
+            (&v.workspaces[0], Tag::Pull),
         )
         .expect("a target");
         render(v).backend().buffer()[(r.x, r.y)].clone()
@@ -366,12 +370,12 @@ mod pull_request_tag {
     #[test]
     fn hovering_it_underlines_it_and_keeps_its_colour() {
         let mut v = tagged("login", 0, mark(State::Open, Some(Ci::Failing)));
-        let r = workspace_pull(
+        let r = workspace_tag(
             &workspace_layout(wlist(), areas().pitch, &v.tab_lines(), 0),
             areas().pitch,
             &v.tab_lines(),
             0,
-            &v.workspaces[0],
+            (&v.workspaces[0], Tag::Pull),
         )
         .expect("a target");
         v.hover = Some(r.as_position());
@@ -393,12 +397,12 @@ mod pull_request_tag {
     #[test]
     fn no_underline_while_an_overlay_is_open() {
         let mut v = tagged("login", 0, mark(State::Open, Some(Ci::Failing)));
-        let r = workspace_pull(
+        let r = workspace_tag(
             &workspace_layout(wlist(), areas().pitch, &v.tab_lines(), 0),
             areas().pitch,
             &v.tab_lines(),
             0,
-            &v.workspaces[0],
+            (&v.workspaces[0], Tag::Pull),
         )
         .expect("a target");
         v.hover = Some(r.as_position());
@@ -412,5 +416,166 @@ mod pull_request_tag {
         let mut v = tagged("login", 3, mark(State::Open, Some(Ci::Failing)));
         v.workspaces[1].pull = Some(mark(State::Merged, None));
         insta::assert_snapshot!(render(&v).backend());
+    }
+}
+
+mod reopen_tag {
+    use super::*;
+    use crate::pull_request::{Ci, Mark, State};
+
+    fn closed(name: &str, count: usize) -> View<'static> {
+        let mut v = with_workspaces(Some(0));
+        (v.workspaces[0].name, v.workspaces[0].closed) = (name.into(), count);
+        v
+    }
+
+    fn tag_rect(v: &View, tag: Tag) -> Option<Rect> {
+        let tabs = v.tab_lines();
+        let layout = workspace_layout(wlist(), areas().pitch, &tabs, 0);
+        workspace_tag(&layout, areas().pitch, &tabs, 0, (&v.workspaces[0], tag))
+    }
+
+    #[test]
+    fn sits_at_the_end_of_the_row() {
+        let v = closed("login", 2);
+
+        assert_eq!(row_text(&v, WorkspaceRow::Workspace(0)).trim_end(), format!("  ▾ login{:>10}", "▶"));
+    }
+
+    #[test]
+    fn a_workspace_with_nothing_closed_has_none() {
+        let v = closed("login", 0);
+
+        assert_eq!(tag_rect(&v, Tag::Reopen), None);
+        assert!(!row_text(&v, WorkspaceRow::Workspace(0)).contains('▶'));
+    }
+
+    #[test]
+    fn goes_before_the_pull_request_and_the_commits_to_pull() {
+        let mut v = closed("login", 1);
+        v.workspaces[0].behind = 3;
+        v.workspaces[0].pull = Some(Mark { number: 482, state: State::Open, ci: Some(Ci::Passing), conflicts: false });
+
+        assert_eq!(row_text(&v, WorkspaceRow::Workspace(0)).trim_end(), "  ▾ log… ▶ #482✓ ↓3");
+    }
+
+    #[test]
+    fn goes_after_the_attention_icon_and_is_the_cell_drawn() {
+        let mut v = closed("login", 1);
+        v.workspaces[0].tabs[0].status = Some(Status::Waiting);
+
+        let r = tag_rect(&v, Tag::Reopen).expect("a target");
+
+        let terminal = render(&v);
+        assert_eq!(terminal.backend().buffer()[(r.x, r.y)].symbol(), "▶");
+        assert_eq!((r.width, r.height), (1, areas().pitch));
+    }
+
+    #[test]
+    fn stays_when_the_row_is_too_narrow_for_the_pull_request_tag() {
+        let mut v = closed("login", 1);
+        v.workspaces[0].pull = Some(Mark { number: 482, state: State::Open, ci: Some(Ci::Passing), conflicts: false });
+        let tabs = v.tab_lines();
+        let list = Rect { width: 14, ..wlist() };
+        let layout = workspace_layout(list, areas().pitch, &tabs, 0);
+
+        let reopen = workspace_tag(&layout, areas().pitch, &tabs, 0, (&v.workspaces[0], Tag::Reopen));
+        let pull = workspace_tag(&layout, areas().pitch, &tabs, 0, (&v.workspaces[0], Tag::Pull));
+
+        assert!(reopen.is_some());
+        assert_eq!(pull, None);
+    }
+
+    #[test]
+    fn is_cyan_and_bold_and_underlined_when_hovered() {
+        let mut v = closed("login", 1);
+        let r = tag_rect(&v, Tag::Reopen).expect("a target");
+        let idle = render(&v).backend().buffer()[(r.x, r.y)].clone();
+        v.hover = Some(r.as_position());
+
+        let lit = render(&v).backend().buffer()[(r.x, r.y)].clone();
+
+        assert_eq!(idle.fg, Color::Cyan);
+        assert!(!idle.modifier.contains(Modifier::UNDERLINED));
+        assert!(lit.modifier.contains(Modifier::BOLD | Modifier::UNDERLINED));
+    }
+
+    #[test]
+    fn shows_in_every_layout_of_the_tree_too() {
+        let mut v = closed("login", 1);
+        v.tree = None;
+        v.workspaces[0].closed = 1;
+
+        assert_eq!(tag_rect(&v, Tag::Reopen).map(|r| r.width), Some(1));
+    }
+}
+
+mod empty_pane_with_closed_agents {
+    use super::*;
+
+    fn text(v: &View) -> String {
+        let pane = areas().pane;
+        let t = render(v);
+        (pane.y..pane.bottom())
+            .map(|y| {
+                (pane.x..pane.right()).map(|x| t.backend().buffer()[(x, y)].symbol().to_string()).collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn with_closed(count: usize) -> View<'static> {
+        let mut v = with_workspaces(None);
+        v.closed_agents = count;
+        v
+    }
+
+    #[test]
+    fn says_how_many_and_offers_them_back() {
+        let text = text(&with_closed(4));
+
+        assert!(
+            text.contains("4 agents closed")
+                && text.contains(" ▶ reopen agents ")
+                && text.contains("+ Tab opens a shell here"),
+            "{text}"
+        );
+        assert!(!text.contains("no tab open"));
+    }
+
+    #[test]
+    fn says_one_agent_in_the_singular() {
+        let text = text(&with_closed(1));
+
+        assert!(text.contains("1 agent closed") && text.contains(" ▶ reopen agent "), "{text}");
+    }
+
+    #[test]
+    fn the_button_is_the_pill_drawn() {
+        let v = with_closed(4);
+        let button = reopen_button(areas().pane, 4).expect("it fits");
+
+        let t = render(&v);
+
+        let drawn: String =
+            (button.x..button.right()).map(|x| t.backend().buffer()[(x, button.y)].symbol().to_string()).collect();
+        assert_eq!(drawn, " ▶ reopen agents ");
+        assert_eq!(t.backend().buffer()[(button.x + 1, button.y)].fg, Color::Cyan);
+    }
+
+    #[test]
+    fn the_button_is_lit_on_hover() {
+        let button = reopen_button(areas().pane, 4).expect("it fits");
+        let v = View { hover: Some(button.as_position()), ..with_closed(4) };
+
+        assert_eq!(render(&v).backend().buffer()[(button.x + 1, button.y)].bg, Color::Cyan);
+    }
+
+    #[test]
+    fn a_pane_too_short_for_it_draws_nothing_and_has_no_button() {
+        let short = Rect { height: 2, ..areas().pane };
+
+        assert_eq!(reopen_button(short, 4), None);
+        assert_eq!(reopen_button(areas().pane, 0), None);
     }
 }

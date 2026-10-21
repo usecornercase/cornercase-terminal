@@ -180,7 +180,7 @@ test('the keys menu lists the flow keys, and a workspace without a run says so',
   const app = demo(110, 38);
   assert.deepEqual(
     keysItems('workspace').map((item) => item.key),
-    ['n', 's', 'r', 'f', 'x'],
+    ['n', 's', 'r', 'f', 'a', 'o', 'x'],
   );
   app.config.prefix = 'ctrl+]';
   for (const k of [key(']', true), key('w'), key('f')]) inputKey(app, k);

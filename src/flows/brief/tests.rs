@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use super::{Team, brief, member, restored};
+use super::{Closed, Team, brief, member, reopened, restored, where_it_stands};
 use crate::agents::Known;
 use crate::flows::run::{Member, RoleWorktree};
 use crate::flows::{Back, End, Flow, ORCHESTRATOR, Role, builtin, role_branch};
@@ -235,6 +235,51 @@ fn a_member_with_a_folder_writes_a_file_per_answer_and_still_waits_last() {
     assert!(text.contains("`second-reviewer-1.md`, then `second-reviewer-2.md`"), "{text}");
     assert_eq!(text.matches("Wait for the orchestrator's first message").count(), 1, "{text}");
     assert!(text.ends_with("before doing anything."), "{text}");
+}
+
+fn names(roles: &[&str]) -> Vec<String> {
+    roles.iter().map(ToString::to_string).collect()
+}
+
+#[test]
+fn a_reopened_brief_names_the_new_panes_the_folder_and_how_to_check_the_team() {
+    let closed = Closed { cut: &names(&["coder", "reviewer"]), fresh: &names(&["tester"]) };
+
+    let text = reopened(&members(), Some(folder()), &closed);
+
+    assert_holds(
+        &text,
+        &[
+            "Your team was closed and reopened, so it has new pane ids: coder is pane 14, reviewer is pane 15, \
+             security is pane 16, tester is pane 17, and you are pane 12.",
+            &format!("The run's folder is still {DIR}."),
+            "coder and reviewer were cut in the middle of their turn.",
+            "tester starts over in a new conversation with only its role.",
+            "`cornercase read --last-message`",
+            "If the plan was already done, answer `ok`",
+        ],
+    );
+}
+
+#[test]
+fn a_reopened_brief_has_the_singular_forms_and_leaves_out_what_did_not_happen() {
+    let closed = Closed { cut: &names(&["coder"]), fresh: &[] };
+
+    let text = reopened(&members(), None, &closed);
+
+    assert!(text.contains(" coder was cut in the middle of its turn."), "{text}");
+    assert!(!text.contains("starts over") && !text.contains("folder"), "{text}");
+    assert!(!reopened(&members(), None, &Closed { cut: &[], fresh: &[] }).contains("cut in the middle"));
+}
+
+#[test]
+fn a_fresh_orchestrator_is_told_where_the_run_stands() {
+    let closed = Closed { cut: &[], fresh: &names(&["coder", "tester"]) };
+
+    let text = where_it_stands(&members(), Some(folder()), &closed);
+
+    assert!(text.starts_with("\n## Where the run stands\n"), "{text}");
+    assert!(text.contains("coder and tester start over in a new conversation with only their role."), "{text}");
 }
 
 #[test]

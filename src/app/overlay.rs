@@ -3,6 +3,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::close_agent::CloseAgent;
+use super::closed_agents::dialog::{CLOSE_AGENTS_SUBMIT, CloseAgents, FORGET_SUBMIT};
 use super::flow_panel::COPY;
 use super::flows_dialog::flows_view;
 use super::issues_dialog::{room, view};
@@ -89,6 +90,8 @@ pub(super) enum Overlay {
     Keys(Option<KeysGroup>),
     Worktrees(Box<crate::worktrees::Dialog>),
     CloseAgent(Box<CloseAgent>),
+    CloseAgents(Box<CloseAgents>),
+    ForgetAgents { project: u64, workspace: u64 },
 }
 
 impl Overlay {
@@ -126,6 +129,8 @@ impl Overlay {
             Self::Keys(_) => "keys",
             Self::Worktrees(_) => "worktrees",
             Self::CloseAgent(_) => "close agent",
+            Self::CloseAgents(_) => "close agents",
+            Self::ForgetAgents { .. } => "forget agents",
         }
     }
 
@@ -160,6 +165,7 @@ impl Overlay {
                 | Overlay::CloseWorkspace { .. }
                 | Overlay::CloseTab { .. }
                 | Overlay::ClosePane { .. }
+                | Overlay::ForgetAgents { .. }
         )
     }
 
@@ -172,6 +178,8 @@ impl Overlay {
             Self::DiscardChanges(_) => DISCARD_SUBMIT,
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
             Self::CloseAgent(dialog) => dialog.submit_label(),
+            Self::CloseAgents(_) => CLOSE_AGENTS_SUBMIT,
+            Self::ForgetAgents { .. } => FORGET_SUBMIT,
             Self::CloseProject { .. }
             | Self::CloseWorkspace { .. }
             | Self::CloseTab { .. }
@@ -249,6 +257,7 @@ impl App {
             Some(Overlay::Keys(group)) => return self.keys_mouse(*group, ev, pos, area),
             Some(Overlay::Worktrees(_)) => self.worktrees_mouse(ev, pos, area),
             Some(Overlay::CloseAgent(_)) => self.close_agent_mouse(ev, pos, area),
+            Some(Overlay::CloseAgents(_)) => self.close_agents_mouse(ev, pos, area),
             Some(overlay) if overlay.is_form() => return self.form_mouse(ev, pos, area),
             _ => (),
         }
@@ -280,6 +289,7 @@ impl App {
             Overlay::Keys(group) => ui::Overlay::Keys(self.keys_view(*group)),
             Overlay::Worktrees(dialog) => ui::Overlay::Worktrees(self.worktrees_view(dialog, area)),
             Overlay::CloseAgent(dialog) => self.close_agent_view(dialog, area),
+            Overlay::CloseAgents(_) | Overlay::ForgetAgents { .. } => self.closed_agents_view(overlay, area)?,
             Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), home),
             Overlay::Queue(form) => ui::Overlay::Queue(Self::queue_form_view(form)),
             Overlay::Issues(b) => view(b, room(area), time::now()),

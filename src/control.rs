@@ -10,6 +10,7 @@ pub(crate) mod accounts;
 mod app_state;
 pub(crate) mod arrange;
 pub(crate) mod changes;
+pub(crate) mod closed_agents;
 pub(crate) mod config;
 pub(crate) mod contract;
 mod events;
@@ -43,6 +44,7 @@ pub(crate) use changes::{
     Changes, ChangesBase, ChangesCount, ChangesDiscard, ChangesFile, ChangesGap, ChangesMode, ChangesStage,
     ChangesViewed,
 };
+pub(crate) use closed_agents::{AgentsClose, AgentsForget, AgentsReopen};
 pub(crate) use config::{ConfigInfo, Configure};
 pub(crate) use contract::Contract;
 pub(crate) use events::{Event, Events, Go, Kind, What};
@@ -201,6 +203,9 @@ pub(crate) enum Command {
     AccountUse(AccountUse),
     CloseAgent(CloseAgent),
     AccountRestart(AccountRestart),
+    AgentsClose(AgentsClose),
+    AgentsReopen(AgentsReopen),
+    AgentsForget(AgentsForget),
 }
 
 impl Command {
@@ -245,6 +250,9 @@ impl Command {
             Self::Rename(_) => 11,
             Self::RemovalCheck(_) => 53,
             Self::CloseAgent(_) => 88,
+            Self::AgentsClose(_) => 92,
+            Self::AgentsReopen(_) => 93,
+            Self::AgentsForget(_) => 94,
             Self::Move(_) => 46,
             Self::MovePane(_) => 47,
             Self::Collapse(_) => 48,
@@ -364,7 +372,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 92] = [
+    pub(crate) const NAMES: [&str; 95] = [
         "status",
         "open",
         "new-workspace",
@@ -457,6 +465,9 @@ impl Command {
         "account-restart",
         "changes-discard",
         "changes-stage",
+        "agents-close",
+        "agents-reopen",
+        "agents-forget",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

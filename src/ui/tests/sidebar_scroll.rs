@@ -89,6 +89,7 @@ fn hidden_workspace_rows_count_workspaces_and_tabs_only() {
             pull: None,
             removing: false,
             setting_up: false,
+            closed: 0,
         }],
         active_tab: Some(0),
         ..view(&["cornercase"])

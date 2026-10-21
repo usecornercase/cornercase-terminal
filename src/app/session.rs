@@ -24,6 +24,13 @@ pub(super) const RESUME_GRACE: Duration = Duration::from_secs(30);
 pub(super) struct Parents {
     ids: HashMap<u64, u64>,
     wanted: Vec<(u64, Option<u64>, u64)>,
+    pub(super) outside: Vec<(u64, (usize, usize), u64)>,
+}
+
+impl Parents {
+    pub(super) fn new_id(&self, old: u64) -> Option<u64> {
+        self.ids.get(&old).copied()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -31,6 +38,7 @@ pub(super) struct Restoring<'a> {
     pub(super) dir: &'a Path,
     pub(super) area: Rect,
     pub(super) run: Option<&'a Path>,
+    pub(super) reopen: bool,
 }
 
 const SENDING: &str = "a message from `cornercase send` is going into this pane; wait a moment, so the two do not join";
@@ -52,7 +60,12 @@ impl App {
         let mut lost = 0;
         for (t, saved_tab) in saved.tabs.iter().enumerate().filter(|(_, t)| !t.panes.is_empty()) {
             let roles = |pane: usize| saved.run.as_ref().and_then(|run| run.role_at(t, pane));
-            match self.restore_tab(saved_tab, Restoring { dir: &path, area, run: run_dir.as_deref() }, roles, parents) {
+            match self.restore_tab(
+                saved_tab,
+                Restoring { dir: &path, area, run: run_dir.as_deref(), reopen: false },
+                roles,
+                parents,
+            ) {
                 Ok(tab) => tabs.push((t, tab)),
                 Err(e) => {
                     log::error!("server", "could not restore a tab", workspace = path.display(), error = e);
@@ -63,6 +76,9 @@ impl App {
         if let Some(run) = &saved.run {
             self.restore_run(id, run, &mut tabs, run_dir.as_deref());
         }
+        if let Some(closed) = &saved.closed {
+            self.restore_closed(id, closed, parents);
+        }
         let tabs = tabs.into_iter().map(|(_, tab)| tab).collect();
         let mut workspace = saved.restore(id, path, tabs, self.runs.dir());
         if let Some(dir) = run_dir.filter(|dir| !workspace.run_dirs.contains(dir)) {
@@ -72,7 +88,11 @@ impl App {
     }
 
     fn restore_run_dir(&self, saved: &WorkspaceState) -> Option<PathBuf> {
-        let name = saved.run.as_ref()?.dir.as_deref().filter(|name| folder::valid(name))?;
+        self.ensure_run_dir(saved.run.as_ref()?.dir.as_deref())
+    }
+
+    pub(super) fn ensure_run_dir(&self, name: Option<&str>) -> Option<PathBuf> {
+        let name = name.filter(|name| folder::valid(name))?;
         let dir = self.runs.dir().join(name);
         match folder::ensure(&dir) {
             Ok(true) => log::info!("flow", "run folder made again", path = dir.display()),
@@ -92,7 +112,7 @@ impl App {
         roles: impl Fn(usize) -> Option<&'a Role>,
         parents: &mut Parents,
     ) -> Result<Tab> {
-        let Restoring { dir, area, run } = at;
+        let Restoring { dir, area, run, reopen } = at;
         let mut panes = Vec::new();
         for (i, pane) in saved.panes.iter().enumerate() {
             let cwd = pane.cwd.clone().filter(|cwd| cwd.is_dir()).unwrap_or_else(|| dir.to_path_buf());
@@ -108,7 +128,7 @@ impl App {
                 let name = role.map(|role| role.name.as_str()).unwrap_or_default();
                 let message = format!("the worktree of {name} is gone: it works in the run's worktree now");
                 self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
-            } else if !lost && self.resume(&mut term, pane.agent.as_ref(), role, run) {
+            } else if !lost && self.resume(&mut term, pane.agent.as_ref(), role, (run, reopen)) {
                 term.agent.restore(pane.done, pane.pending);
             }
             if let Some(old) = pane.id {
@@ -151,6 +171,17 @@ impl App {
         lost
     }
 
+    pub(super) fn adopt_reopened(&mut self, parents: Parents) {
+        for (child, _, parent) in parents.wanted {
+            let found = parents.ids.get(&parent).copied().unwrap_or(parent);
+            let live = found != child && self.projects.pane_by(found).is_some();
+            match (live, self.projects.pane_by_mut(child)) {
+                (true, Some(term)) => term.parent = Some(found),
+                _ => log::debug!("agents", "a closed pane's parent is gone", pane = child, parent = parent),
+            }
+        }
+    }
+
     pub(super) fn adopt_saved(&mut self, parents: Parents) {
         for (child, old, parent) in parents.wanted {
             let found = parents.ids.get(&parent).copied().filter(|_| old.is_none_or(|old| parent < old));
@@ -162,8 +193,14 @@ impl App {
         }
     }
 
-    fn resume(&mut self, term: &mut Term, agent: Option<&AgentState>, role: Option<&Role>, run: Option<&Path>) -> bool {
-        let Some(agent) = agent.filter(|_| self.config.resume_agents) else { return false };
+    fn resume(
+        &mut self,
+        term: &mut Term,
+        agent: Option<&AgentState>,
+        role: Option<&Role>,
+        (run, reopen): (Option<&Path>, bool),
+    ) -> bool {
+        let Some(agent) = agent.filter(|_| reopen || self.config.resume_agents) else { return false };
         let Some(line) = self.resume_line(role, agent, run) else { return false };
         log::info!("app", "resuming a conversation", pane = term.id, agent = agent.kind);
         let now = Instant::now();

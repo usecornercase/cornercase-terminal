@@ -64,6 +64,6 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Plugins](design/plugins.md) (`plugins/`, `app/plugins.rs`, `cli/plugin.rs`, `client/window.rs`): manifests, trust, actions, hooks, services, installing, the catalogue.
 - [Updates](design/updates.md) (`update.rs`, `cli/update.rs`, `version.rs`, `http.rs`, `app/update_dialog.rs`): checking, installing and restarting, also once agents are idle.
 - [Releases](design/releases.md) (`.github/`, `dist-workspace.toml`): how a push to `main` becomes a release.
-- [Saved session](design/saved-session.md) (`state.rs`, `persist.rs`, `app.rs`, `app/session.rs`): `session.json`, restoring, resuming agents.
+- [Saved session](design/saved-session.md) (`state.rs`, `persist.rs`, `app.rs`, `app/session.rs`, `app/closed_agents.rs`, `app/closed_agents/`, `control/closed_agents.rs`, `cli/agents.rs`, #430): `session.json`, restoring, resuming agents, closing a workspace's agents and reopening them.
 - [Website](design/website.md) (`site/`): the brand, the landing demo, captures, translations.
 - [Test helpers](design/test-helpers.md) (`test_util.rs`, `agents/{claude,codex,gemini,opencode,grok,cursor,copilot}/fake.rs`, `app/tests.rs`): fakes, fixtures, keeping tests away from the user's files.

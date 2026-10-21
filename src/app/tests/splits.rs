@@ -507,6 +507,7 @@ fn tab_without_layout() -> TabState {
         parent: None,
         collapsed: false,
         accounts: std::collections::BTreeMap::new(),
+        closed: None,
     };
     TabState { name: None, panes: vec![pane_state.clone(), pane_state], active: 1, layout: None }
 }
@@ -523,6 +524,7 @@ fn workspace_with(tab: TabState, dir: &Path) -> WorkspaceState {
         run: None,
         role_worktrees: Vec::new(),
         run_dirs: Vec::new(),
+        closed: None,
     }
 }
 

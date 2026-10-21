@@ -8,7 +8,7 @@ use ratatui::layout::Rect;
 
 use super::{Handled, NO_PROJECT, Pending, Stage, json, none, sized};
 use crate::app::App;
-use crate::app::flow_runs::{Made, RunTrees, Starting};
+use crate::app::flow_runs::{Made, RunTrees, Starting, closed_run_refusal};
 use crate::control::contract::Refusal;
 use crate::control::{self, BrokenFlow, Done, Exported, FlowInfo, FlowSpec, Flows, Imported, RoleInfo, RunInfo};
 use crate::error;
@@ -152,6 +152,9 @@ impl App {
             return Err(format!("a flow is already starting on branch {branch}").into());
         }
         let existing = self.workspace_on(p, &branch);
+        if let Some(id) = existing.filter(|id| self.agents.closed.has_run(*id)) {
+            return Err(closed_run_refusal(id).into());
+        }
         let roles: Vec<(String, String)> = starting
             .flow
             .roles

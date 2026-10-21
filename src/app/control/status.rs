@@ -112,6 +112,7 @@ impl App {
             custom_name: ws.name.clone(),
             collapsed: ws.collapsed,
             changes: self.changes_count(ws.id, seen.counted, seen.sweeping),
+            closed_agents: Some(self.agents.closed.count(ws.id)).filter(|count| *count > 0),
         }
     }
 
@@ -174,6 +175,7 @@ impl App {
             pull_refreshed(pull, hash);
         }
         self.run_status(workspace.id).hash(hash);
+        self.agents.closed.count(workspace.id).hash(hash);
         for tab in &workspace.tabs {
             self.tab_refreshed(tab, live, hash);
         }

@@ -63,6 +63,15 @@ impl Runs {
         self.list.iter_mut().find(|run| run.id == id)
     }
 
+    pub(super) fn take_of(&mut self, workspace: u64) -> Option<Run> {
+        let i = self.list.iter().position(|run| run.workspace == workspace)?;
+        Some(self.list.remove(i))
+    }
+
+    pub(super) fn put(&mut self, run: Run) {
+        self.list.push(run);
+    }
+
     pub(super) fn end_in(&mut self, workspace: u64) -> usize {
         let ended = self.list.iter().filter(|run| run.workspace == workspace).count();
         self.list.retain(|run| run.workspace != workspace);
@@ -158,6 +167,10 @@ fn make_trees(
             Err(e)
         }
     }
+}
+
+pub(super) fn closed_run_refusal(workspace: u64) -> String {
+    format!("workspace {workspace} has a flow's agents closed: reopen or forget them")
 }
 
 fn folder_removed(result: &crate::error::Result<(usize, u64)>, job: &mut Job) -> Option<AppEvent> {
@@ -275,24 +288,15 @@ impl App {
             return Err(format!("flow {} cannot run: {}", starting.flow.name, problems.join("; ")));
         }
         let flow = &starting.flow;
-        let missing: Vec<String> = std::iter::once(&flow.orchestrator)
-            .chain(&flow.roles)
-            .map(|role| agents::command(&self.config, &role.agent))
-            .filter(|program| !agents::installed(program))
-            .fold(Vec::new(), |mut seen, program| {
-                if !seen.contains(&program) {
-                    seen.push(program);
-                }
-                seen
-            });
-        if !missing.is_empty() {
-            return Err(format!(
+        let kinds = std::iter::once(&flow.orchestrator).chain(&flow.roles).map(|role| role.agent.as_str());
+        self.agents_missing(kinds).map_err(|missing| {
+            format!(
                 "flow {} needs {}, which this server cannot find on its PATH; install it, or set its command in \
                  settings → agents",
                 flow.name,
                 missing.join(", ")
-            ));
-        }
+            )
+        })?;
         if starting.task.trim().is_empty() {
             return Err("the flow needs a task: say what the team should do".into());
         }
@@ -307,6 +311,18 @@ impl App {
             ));
         }
         Ok(())
+    }
+
+    pub(super) fn agents_missing<'a>(&self, kinds: impl Iterator<Item = &'a str>) -> Result<(), Vec<String>> {
+        let mut missing: Vec<String> = Vec::new();
+        for program in
+            kinds.map(|kind| agents::command(&self.config, kind)).filter(|program| !agents::installed(program))
+        {
+            if !missing.contains(&program) {
+                missing.push(program);
+            }
+        }
+        if missing.is_empty() { Ok(()) } else { Err(missing) }
     }
 
     fn spawn_run_panes(&mut self, area: Rect, at: WorkspaceAt, panes: &RunPanes) -> Result<Vec<Term>, String> {
@@ -359,6 +375,9 @@ impl App {
         }
         if self.runs.list.iter().any(|run| run.workspace == id) {
             return Err(format!("workspace {id} already runs a flow, and a workspace runs one at a time"));
+        }
+        if self.agents.closed.has_run(id) {
+            return Err(closed_run_refusal(id));
         }
         Ok(id)
     }
@@ -497,7 +516,7 @@ impl App {
         }
     }
 
-    fn flow_spec(&self, role: &Role, prompt: String, dir: Option<&Path>) -> launch::Spec {
+    pub(super) fn flow_spec(&self, role: &Role, prompt: String, dir: Option<&Path>) -> launch::Spec {
         let command = flows::command(&self.config, role, dir).unwrap_or_default();
         launch::Spec { command, prompt: Some(prompt), submit: true, trusted: true }
     }
@@ -583,12 +602,12 @@ impl App {
             }
         }
         if let Some(term) = tabs.iter().flat_map(|(_, tab)| &tab.panes).find(|term| Some(term.id) == own) {
-            self.brief_again(&run, term);
+            self.brief_again(&run, term, brief::restored(&run.members, run.dir.as_deref()));
         }
         self.runs.list.push(run);
     }
 
-    fn brief_again(&mut self, run: &Run, term: &Term) {
+    pub(super) fn brief_again(&mut self, run: &Run, term: &Term, prompt: String) {
         let briefed = |agent: &&agents::AgentState| agent.kind == run.flow.orchestrator.agent;
         let Some(agent) =
             term.resume.as_ref().filter(|_| term.resuming.is_some() && !term.agent.pending()).filter(briefed)
@@ -596,12 +615,7 @@ impl App {
             return;
         };
         let Some(line) = self.resume_line(Some(&run.flow.orchestrator), agent, run.dir.as_deref()) else { return };
-        let spec = launch::Spec {
-            command: line,
-            prompt: Some(brief::restored(&run.members, run.dir.as_deref())),
-            submit: true,
-            trusted: true,
-        };
+        let spec = launch::Spec { command: line, prompt: Some(prompt), submit: true, trusted: true };
         let mut launch = Launch::new(term.id, spec, Instant::now());
         launch.after = run.members.iter().map(|m| m.pane).filter(|pane| *pane != term.id).collect();
         launch.resume = term.resuming;

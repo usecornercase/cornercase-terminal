@@ -111,6 +111,12 @@ It takes the column on the right that the [changes](../changes/), [files](../fil
 
 The messages are kept in memory only, at most the first 32 KiB of each: they never reach the [log](../../help/troubleshooting/#the-server-log), which keeps their sizes, nor the saved session. After a restart the panel shows the plan and the agents' status again, without the history; what the roles wrote to [the run's folder](#the-runs-folder) is still there.
 
+## Close the team and reopen it later
+
+A flow's agents close like any workspace's: **close agents** in the workspace's menu (or `w a`, or [`cornercase agents close`](../scripts-and-agents/#close-and-reopen-a-workspaces-agents)) closes the orchestrator and its team together. The run is kept whole, with its messages, where the plan stands and its folder, and the run's worktrees stay. While they are closed the Flow panel hides, the run is not marked as ended, and a new run in that workspace is refused (`reopen or forget them` first).
+
+The workspace's **`▶`** brings the whole team back: each role in its own conversation, and the orchestrator last, told its team's new pane ids and which roles were cut in the middle of a turn. A role you had closed with its `×` starts again from its role's prompt, in a tab named after it. **forget closed agents** ends the run instead.
+
 ## The run's folder
 
 Every run gets a folder for its files, so long reports don't pile up in the orchestrator's context and the run leaves a record of what each role produced. It is outside the worktree, so nothing in it is ever committed, and every pane of the team has its path in **`$CORNERCASE_RUN_DIR`**.

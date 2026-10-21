@@ -145,6 +145,7 @@ fn example_run() -> RunState {
         outside: Some(RunEdge::Outside { from: Some(0), to: 1 }),
         ended: true,
         messages: 4,
+        state: None,
     }
 }
 
@@ -228,4 +229,13 @@ fn an_edge_names_its_kind_and_its_stages() {
             serde_json::json!({"kind": "outside", "from": null, "to": 3}),
         ]
     );
+}
+
+#[test]
+fn a_closed_run_says_so_and_a_running_one_has_no_state_key() {
+    let running = serde_json::to_value(example_run()).expect("json");
+    let closed = serde_json::to_value(RunState { state: Some("closed".into()), ..example_run() }).expect("json");
+
+    assert!(running.get("state").is_none());
+    assert_eq!(closed["state"], "closed");
 }

@@ -38,6 +38,8 @@ fn every_action() -> Vec<Action> {
         Action::StartFlow,
         Action::RenameWorkspace,
         Action::CloseWorkspace,
+        Action::CloseAgents,
+        Action::ReopenAgents,
         Action::Issues,
         Action::Todo,
         Action::Settings,
@@ -76,12 +78,14 @@ fn action_index(action: &Action) -> usize {
         Action::StartFlow => 24,
         Action::RenameWorkspace => 25,
         Action::CloseWorkspace => 26,
-        Action::Issues => 27,
-        Action::Todo => 28,
-        Action::Settings => 29,
-        Action::Usage => 30,
-        Action::Away => 31,
-        Action::Quit => 32,
+        Action::CloseAgents => 27,
+        Action::ReopenAgents => 28,
+        Action::Issues => 29,
+        Action::Todo => 30,
+        Action::Settings => 31,
+        Action::Usage => 32,
+        Action::Away => 33,
+        Action::Quit => 34,
     }
 }
 
@@ -98,7 +102,10 @@ fn every_shortcut_is_answered_by_a_stage_or_the_last_match() {
             .and_then(|action| app.edit_shortcut(action));
         left.extend(rest);
     }
-    assert_eq!(left, [Action::NewTab, Action::Split(Dir::Right), Action::Issues]);
+    assert_eq!(
+        left,
+        [Action::NewTab, Action::Split(Dir::Right), Action::CloseAgents, Action::ReopenAgents, Action::Issues]
+    );
 }
 
 fn every_menu_action() -> Vec<MenuAction> {
@@ -135,6 +142,9 @@ fn every_menu_action() -> Vec<MenuAction> {
         MenuAction::AccountNote(AccountItem { pane: 1, generation: 0, kind, index: 0 }),
         MenuAction::AccountsOf(AccountItem { pane: 1, generation: 0, kind, index: 0 }),
         MenuAction::AccountMenu(1),
+        MenuAction::CloseAgents(1),
+        MenuAction::ReopenAgents(1),
+        MenuAction::ForgetAgents(1),
     ]
 }
 
@@ -171,6 +181,9 @@ fn menu_index(action: &MenuAction) -> usize {
         MenuAction::AccountNote(_) => 28,
         MenuAction::AccountsOf(_) => 29,
         MenuAction::AccountMenu(_) => 30,
+        MenuAction::CloseAgents(_) => 31,
+        MenuAction::ReopenAgents(_) => 32,
+        MenuAction::ForgetAgents(_) => 33,
     }
 }
 

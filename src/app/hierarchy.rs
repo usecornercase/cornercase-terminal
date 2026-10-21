@@ -100,7 +100,7 @@ impl App {
     fn closing_gone(&self) -> bool {
         match self.overlay {
             Some(Overlay::CloseProject { project }) => self.projects.project_index(project).is_none(),
-            Some(Overlay::CloseWorkspace { project, workspace }) => {
+            Some(Overlay::CloseWorkspace { project, workspace } | Overlay::ForgetAgents { project, workspace }) => {
                 self.projects.workspace_in(project, workspace).is_none()
             }
             Some(Overlay::CloseTab { project, workspace, tab }) => {

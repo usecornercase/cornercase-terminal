@@ -113,6 +113,15 @@ mod keys {
     }
 
     #[test]
+    fn the_workspace_group_closes_and_reopens_agents() {
+        let keys: String = items(Some(Group::Workspace)).iter().map(|item| item.key).collect();
+
+        assert_eq!(keys, "nsrfaox");
+        assert_eq!(press(Some(Group::Workspace), 'a'), Some(Step::Run(Action::CloseAgents)));
+        assert_eq!(press(Some(Group::Workspace), 'o'), Some(Step::Run(Action::ReopenAgents)));
+    }
+
+    #[test]
     fn digits_go_to_a_tab_from_one() {
         assert_eq!(press(None, '1'), Some(Step::Run(Action::Tab(0))));
     }

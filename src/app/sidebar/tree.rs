@@ -85,9 +85,9 @@ impl App {
         let scroll = self.scroll.of(List::Projects);
         let hit = self.tree_hit(list, &shape, pos);
         if let Some(ui::TreeHit::Select(ui::TreeRow::Workspace(p, w))) = hit
-            && let Some(id) = self.pull_in_tree(list, &shape, (p, w), pos)
+            && let Some(tag) = self.tag_in_tree(list, &shape, (p, w), pos)
         {
-            self.open_pull_request(id);
+            self.press_tag(tag, area);
             return Ok(());
         }
         match hit {

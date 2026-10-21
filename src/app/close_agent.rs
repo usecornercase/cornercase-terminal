@@ -17,6 +17,7 @@ mod message;
 
 pub(crate) use check::Findings;
 pub(in crate::app) use check::MAY_BE_LOST;
+pub(in crate::app) use message::section;
 
 pub(super) const CLOSE_AND_REMOVE_SUBMIT: &str = "close and remove";
 

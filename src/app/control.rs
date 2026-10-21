@@ -3,6 +3,7 @@ pub(in crate::app) mod accounts;
 mod arrange;
 mod changes;
 mod close;
+mod closed_agents;
 mod config;
 mod contract;
 mod create;
@@ -531,6 +532,9 @@ impl App {
             Command::Rename(rename) => self.rename_request(asker, rename),
             Command::RemovalCheck(check) => self.removal_check_request(client, &check),
             Command::CloseAgent(close) => self.close_agent_request(client, close),
+            Command::AgentsClose(close) => self.agents_close_request(asker, &close),
+            Command::AgentsReopen(reopen) => self.agents_reopen_request(asker, &reopen, area),
+            Command::AgentsForget(forget) => self.agents_forget_request(asker, &forget),
             Command::Move(moving) => self.move_request(&moving),
             Command::MovePane(moving) => self.move_pane_request(&moving, area),
             Command::Collapse(fold) => self.fold_request("collapse", fold.item, true),

@@ -8,6 +8,7 @@ fn copied() -> Toast<'static> {
 #[case::undo("deleted", ToastIcon::Check, ToastButton::Undo, " undo ")]
 #[case::go("claude needs you in shop › main", ToastIcon::Agent(Status::Waiting), ToastButton::Go, " go ")]
 #[case::cancel("restart pending", ToastIcon::Restart, ToastButton::Cancel, " cancel ")]
+#[case::reopen("2 agents closed", ToastIcon::Check, ToastButton::Reopen, " reopen ")]
 fn a_button_sits_at_its_end(
     #[case] message: &str,
     #[case] icon: ToastIcon,

@@ -124,6 +124,10 @@ fn workspace_parts(workspace: &WorkspaceInfo, home: Option<&Path>) -> Vec<String
         format!("{} {noun} changed", c.files)
     }));
     parts.extend(workspace.pull_request.as_ref().map(pull_request_part));
+    parts.extend(workspace.closed_agents.filter(|count| *count > 0).map(|count| {
+        let noun = if count == 1 { "agent" } else { "agents" };
+        format!("{count} {noun} closed")
+    }));
     parts
 }
 
@@ -191,3 +195,6 @@ fn line(depth: usize, kind: &str, id: u64, parts: &[String], marks: &[&str]) -> 
     }
     text
 }
+
+#[cfg(test)]
+mod tests;

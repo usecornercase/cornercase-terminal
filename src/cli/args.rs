@@ -1,4 +1,5 @@
 pub(crate) mod accounts;
+pub(crate) mod agents;
 pub(crate) mod arrange;
 pub(crate) mod changes;
 pub(crate) mod config;
@@ -16,7 +17,6 @@ use std::path::PathBuf;
 
 use clap::{ArgGroup, Args, Parser, Subcommand, ValueEnum};
 
-use super::help::CHANGES_HELP;
 use super::help::{
     ABOUT, ACCOUNT_HELP, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, CONFIG_HELP, CONTRACT_HELP,
     EVENTS_HELP, FLOW_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP, HERE_PANE, HERE_WORKSPACE, INPUT_HELP,
@@ -27,6 +27,7 @@ use super::help::{
     SURFACE_HELP, THEME_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP,
     WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
+use super::help::{AGENTS_HELP, CHANGES_HELP};
 use crate::control::Until;
 use crate::term::keys;
 
@@ -223,6 +224,11 @@ pub(crate) enum Control {
         after_help = USAGE_HELP
     )]
     Usage(usage::UsageArgs),
+    #[command(
+        about = "Close a workspace's agents and reopen them later, each in its conversation",
+        after_help = AGENTS_HELP
+    )]
+    Agents(agents::AgentsArgs),
     #[command(about = "Add, list and remove the accounts agents log in with", after_help = ACCOUNT_HELP)]
     Account(accounts::AccountArgs),
     #[command(about = "Make, change and switch profiles: which account each agent uses", after_help = PROFILE_HELP)]

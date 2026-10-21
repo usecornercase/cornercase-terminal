@@ -84,6 +84,7 @@ mod agent_watch;
 mod changes_panel;
 mod clock;
 mod close_agent;
+mod closed_agents;
 mod config_file;
 mod control;
 mod dialogs;
@@ -427,6 +428,7 @@ impl App {
         self.watch_accounts_page(now);
         self.sync_worktrees();
         self.forget_runs();
+        self.forget_gone_closed();
         self.forget_moved_run_ends();
         self.forget_files();
         self.count_behind(now);
@@ -439,13 +441,14 @@ impl App {
     }
 
     pub(crate) fn state(&self) -> State {
-        let parents = state::named_parents(&self.projects);
-        let projects = self
+        let parents = state::named_parents(&self.projects, self.agents.closed.kept_tabs());
+        let mut projects: Vec<ProjectState> = self
             .projects
             .iter()
             .zip(crate::project::group_indices(&self.projects, &self.groups))
             .map(|(p, group)| ProjectState::of(p, group, self.runs.all(), &parents))
             .collect();
+        self.save_closed(&mut projects);
         let groups = self.groups.iter().map(|g| g.entry.clone()).collect();
         let changes = (self.screen.side == Some(Side::Changes)
             || self.panels.changes.mode() != changes::Mode::default()
@@ -485,6 +488,7 @@ impl App {
         }
         let mut parents = session::Parents::default();
         let missed = self.restore_projects(saved, first_group, area, &mut parents);
+        self.adopt_closed(&parents);
         self.adopt_saved(parents);
         self.sync_worktrees();
         if saved.flow {

@@ -254,10 +254,9 @@ impl App {
             self.screen.nav = None;
         }
         if let Some(WorkspaceHit::Workspace(w)) = hit
-            && let Some((rect, id)) = self.pull_in_list(list, pitch, &tabs, w)
-            && rect.contains(pos)
+            && let Some(tag) = self.tag_in_list(list, pitch, &tabs, (w, pos))
         {
-            self.open_pull_request(id);
+            self.press_tag(tag, area);
             return Ok(());
         }
         let Some(hit) = hit else { return Ok(()) };
@@ -305,7 +304,7 @@ impl App {
     fn close_workspace_row(&mut self, p: usize, w: usize, ask: bool) {
         let Some(at) = self.projects.workspace_at(p, w) else { return };
         let workspace = self.projects.workspace(at);
-        if ask && !workspace.worktree {
+        if (ask || self.agents.closed.count(workspace.id) > 0) && !workspace.worktree {
             self.overlay = Some(Overlay::CloseWorkspace { project: self.projects[p].id, workspace: workspace.id });
         } else {
             self.close_workspace(at);

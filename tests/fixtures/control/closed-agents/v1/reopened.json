@@ -1,0 +1,27 @@
+{
+  "project": 1,
+  "workspace": 2,
+  "tabs": [
+    7,
+    8
+  ],
+  "panes": [
+    {
+      "pane": 41,
+      "tab": 7,
+      "agent": "claude",
+      "role": "coder",
+      "status": "working",
+      "resumes": true
+    },
+    {
+      "pane": 42,
+      "tab": 8,
+      "agent": "claude",
+      "role": null,
+      "status": "working",
+      "resumes": false
+    }
+  ],
+  "run": 9
+}

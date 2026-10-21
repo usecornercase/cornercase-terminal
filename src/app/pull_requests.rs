@@ -202,25 +202,42 @@ impl App {
         }
     }
 
-    pub(super) fn pull_in_list(&self, list: Rect, pitch: u16, tabs: &ui::TabLines, w: usize) -> Option<(Rect, u64)> {
+    pub(super) fn tag_in_list(
+        &self,
+        list: Rect,
+        pitch: u16,
+        tabs: &ui::TabLines,
+        (w, pos): (usize, Position),
+    ) -> Option<(ui::Tag, u64)> {
         let workspace = self.projects.get(self.active)?.workspaces.get(w)?;
         let entry = self.workspace_entry(workspace);
         let layout = ui::workspace_layout(list, pitch, tabs, self.scroll.of(List::Workspaces));
-        ui::workspace_pull(&layout, pitch, tabs, w, &entry).map(|rect| (rect, workspace.id))
+        [ui::Tag::Pull, ui::Tag::Reopen].into_iter().find_map(|tag| {
+            let rect = ui::workspace_tag(&layout, pitch, tabs, w, (&entry, tag))?;
+            rect.contains(pos).then_some((tag, workspace.id))
+        })
     }
 
-    pub(super) fn pull_in_tree(
+    pub(super) fn tag_in_tree(
         &self,
         list: Rect,
         shape: &ui::TreeShape,
         (p, w): (usize, usize),
         pos: Position,
-    ) -> Option<u64> {
+    ) -> Option<(ui::Tag, u64)> {
         let workspace = self.projects.get(p)?.workspaces.get(w)?;
         let entry = self.workspace_entry(workspace);
-        ui::tree_pull(list, shape, self.scroll.of(List::Projects), (p, w), &entry)
-            .filter(|rect| rect.contains(pos))
-            .map(|_| workspace.id)
+        [ui::Tag::Pull, ui::Tag::Reopen].into_iter().find_map(|tag| {
+            let rect = ui::tree_tag(list, shape, self.scroll.of(List::Projects), (p, w), (&entry, tag))?;
+            rect.contains(pos).then_some((tag, workspace.id))
+        })
+    }
+
+    pub(super) fn press_tag(&mut self, (tag, workspace): (ui::Tag, u64), area: Rect) {
+        match tag {
+            ui::Tag::Pull => self.open_pull_request(workspace),
+            ui::Tag::Reopen => self.reopen_from_window(workspace, area),
+        }
     }
 
     pub(super) fn open_pull_request(&mut self, workspace: u64) {

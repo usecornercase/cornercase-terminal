@@ -23,6 +23,9 @@ use crate::ui::{self};
 
 impl App {
     pub(super) fn pane_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
+        if self.reopen_button_mouse(ev, pos, area) {
+            return;
+        }
         if self.pane_footer_mouse(ev, pos, area)
             || self.pane_notice_mouse(ev, pos, area)
             || self.pane_chosen_mouse(ev, pos, area)

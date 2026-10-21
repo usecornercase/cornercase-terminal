@@ -32,6 +32,8 @@ export type KeysAction =
   | { kind: 'flow' }
   | { kind: 'renameWorkspace' }
   | { kind: 'closeWorkspace' }
+  | { kind: 'closeAgents' }
+  | { kind: 'reopenAgents' }
   | { kind: 'issues' }
   | { kind: 'todo' }
   | { kind: 'settings' }
@@ -96,6 +98,8 @@ const GROUPS: Record<KeysGroup, KeysItem[]> = {
     run('s', 'start a flow', { kind: 'startFlow' }),
     run('r', 'rename workspace', { kind: 'renameWorkspace' }),
     run('f', 'flow of this workspace', { kind: 'flow' }),
+    run('a', 'close agents', { kind: 'closeAgents' }),
+    run('o', 'reopen agents', { kind: 'reopenAgents' }),
     run('x', 'close workspace', { kind: 'closeWorkspace' }),
   ],
 };

@@ -61,6 +61,7 @@ fn with_panel() -> View<'static> {
             pull: None,
             removing: false,
             setting_up: false,
+            closed: 0,
         }],
         active_tab: Some(0),
         changes: Some(panel),

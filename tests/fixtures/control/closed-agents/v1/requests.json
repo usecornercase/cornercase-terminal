@@ -1,0 +1,9 @@
+[
+  {"command": "agents-close", "args": {}},
+  {"command": "agents-close", "args": {"workspace": 2, "check": true, "force": false}},
+  {"command": "agents-close", "args": {"workspace": 2, "check": false, "force": true}},
+  {"command": "agents-reopen", "args": {}},
+  {"command": "agents-reopen", "args": {"workspace": 2}},
+  {"command": "agents-forget", "args": {}},
+  {"command": "agents-forget", "args": {"workspace": 2}}
+]

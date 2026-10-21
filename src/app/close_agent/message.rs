@@ -45,11 +45,11 @@ impl App {
         wrap(lines, ui::update_notes(area).width)
     }
 
-    fn closing_agent_name(&self, term: &Term) -> String {
+    pub(in crate::app) fn closing_agent_name(&self, term: &Term) -> String {
         term.agent.agent().map(str::to_string).or_else(|| term.program(&self.config)).unwrap_or_else(|| "agent".into())
     }
 
-    fn closing_place(&self, (project, workspace): (u64, u64)) -> String {
+    pub(in crate::app) fn closing_place(&self, (project, workspace): (u64, u64)) -> String {
         let Some(at) = self.projects.workspace_in(project, workspace) else { return String::new() };
         format!("{} › {}", self.project_label(&self.projects[at.project()]), self.projects.workspace(at).label())
     }
@@ -115,7 +115,7 @@ impl App {
         .collect()
     }
 
-    fn closing_programs(&self, panes: &[&Term]) -> String {
+    pub(in crate::app) fn closing_programs(&self, panes: &[&Term]) -> String {
         let running: Vec<String> = panes
             .iter()
             .filter(|term| term.agent.status().is_some() || !term.shell_in_foreground())
@@ -124,7 +124,7 @@ impl App {
         if running.is_empty() { String::new() } else { format!(", running {}", running.join(", ")) }
     }
 
-    fn closing_pane(&self, term: &Term) -> String {
+    pub(in crate::app) fn closing_pane(&self, term: &Term) -> String {
         if let Some(agent) = term.agent.agent().filter(|_| term.agent.status().is_some()) {
             return agent.to_string();
         }
@@ -161,6 +161,8 @@ impl App {
         let found = dialog.plan.remove.and_then(|(project, workspace)| self.projects.workspace_in(project, workspace));
         let Some(at) = found else { return Vec::new() };
         let mut lines = Vec::new();
+        let closed = self.forgotten_note(self.projects.workspace(at).id);
+        lines.extend((!closed.is_empty()).then(|| Line::from(closed.trim().to_string())));
         let roles = self.projects.workspace(at).role_worktrees.iter().filter(|tree| tree.path.is_dir()).count();
         match roles {
             0 => {}
@@ -186,7 +188,7 @@ fn closing_child(plan: &Plan, term: &Term) -> bool {
     term.agent.status().is_some() && plan.closing.inside.contains(&term.id)
 }
 
-fn section(title: &str, items: Vec<String>) -> Vec<Line<'static>> {
+pub(in crate::app) fn section(title: &str, items: Vec<String>) -> Vec<Line<'static>> {
     if items.is_empty() {
         return Vec::new();
     }
