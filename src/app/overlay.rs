@@ -1,4 +1,4 @@
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::MouseEvent;
 use ratatui::layout::{Position, Rect};
 
 use super::App;
@@ -68,6 +68,7 @@ pub(super) enum Overlay {
     ClosePane { pane: u64 },
     NewWorkspace { project: u64, input: String, worktree: Option<bool>, error: Option<String>, creating: bool },
     Settings(Box<Settings>),
+    ShareSettings(Box<crate::settings::share::dialog::Dialog>),
     RemoveAccount { kind: Known, name: String },
     DiscardChanges(changes::discard::Target),
     Flows { dialog: Box<Dialog>, back: Option<Box<Overlay>> },
@@ -107,6 +108,7 @@ impl Overlay {
             Self::ClosePane { .. } => "close pane",
             Self::NewWorkspace { .. } => "new workspace",
             Self::Settings(_) => "settings",
+            Self::ShareSettings(_) => "share settings",
             Self::RemoveAccount { .. } => "remove account",
             Self::DiscardChanges(_) => "discard changes",
             Self::Flows { .. } => "flows",
@@ -232,8 +234,7 @@ impl Overlay {
 
 impl App {
     pub(super) fn overlay_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> Result<()> {
-        if ev.kind == MouseEventKind::Down(MouseButton::Left) && self.outside_dialog(pos, area) {
-            self.cancel_form();
+        if self.closed_from_outside(ev, pos, area) {
             return Ok(());
         }
         match &self.overlay {
@@ -244,6 +245,7 @@ impl App {
             Some(Overlay::Issues(_)) => return self.issues_mouse(ev, pos, area),
             Some(Overlay::Queue(_)) => self.queue_form_mouse(ev, pos, area),
             Some(Overlay::Settings(_)) => self.settings_mouse(ev, pos, area),
+            Some(Overlay::ShareSettings(_)) => self.share_settings_mouse(ev, pos, area),
             Some(Overlay::Flows { .. }) => self.flows_mouse(ev, pos, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_mouse(ev, pos, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_mouse(ev, pos, area),
@@ -272,6 +274,7 @@ impl App {
             Overlay::NewGroup { input } => Self::new_group_view(input),
             Overlay::NewWorkspace { .. } => self.new_workspace_view(overlay)?,
             Overlay::Settings(s) => ui::Overlay::Settings(settings_view(s)),
+            Overlay::ShareSettings(dialog) => ui::Overlay::ShareSettings(Box::new(ui::ShareSettings::of(dialog))),
             Overlay::RemoveAccount { kind, name } => Self::remove_account_view(*kind, name),
             Overlay::DiscardChanges(target) => Self::discard_view(target),
             Overlay::Flows { dialog, .. } => flows_view(dialog, area),

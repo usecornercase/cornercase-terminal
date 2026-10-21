@@ -127,6 +127,10 @@ impl Settings {
         }
     }
 
+    pub(crate) fn idle(&self) -> bool {
+        self.edit.is_none() && self.pick.is_none() && !self.capturing && !self.busy()
+    }
+
     pub(crate) fn paste(&mut self, text: &str) {
         if let Some(edit) = &mut self.edit {
             let token = matches!(edit.row, Row::Token(_) | Row::Bot(_));

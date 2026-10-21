@@ -8,6 +8,7 @@ pub(super) mod project_settings;
 pub(crate) mod queue;
 pub(super) mod search;
 pub(super) mod settings;
+pub(super) mod share_settings;
 pub(super) mod start_flow;
 pub(super) mod update;
 pub(super) mod usage;
@@ -134,6 +135,7 @@ pub(crate) enum Overlay {
     Picker(Picker),
     Issues(Issues),
     Settings(Settings),
+    ShareSettings(Box<share_settings::ShareSettings>),
     Flows(Box<Flows>),
     StartFlow(Box<StartFlow>),
     ProjectSettings(Box<project_settings::ProjectSettings>),
@@ -155,7 +157,7 @@ impl Overlay {
             Self::Usage(usage) => Some(usage_area(area, usage)),
             Self::Remote(remote) => Some(remote_access::area(area, remote)),
             Self::Issues(_) => Some(issues_area(area)),
-            Self::Settings(_) => Some(settings_area(area)),
+            Self::Settings(_) | Self::ShareSettings(_) => Some(settings_area(area)),
             Self::Flows(_) | Self::StartFlow(_) => Some(flows_area(area)),
             Self::ProjectSettings(_) => Some(project_settings::project_settings_area(area)),
             Self::Worktrees(w) => Some(worktrees_area(area, w.compact)),

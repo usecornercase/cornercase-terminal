@@ -1,17 +1,5 @@
 use super::*;
-use crate::control::config::{SectionPreview, SetupChange, SetupNote};
-
-fn change(key: &str, label: &str, from: &str, to: &str) -> SetupChange {
-    SetupChange { key: key.into(), label: label.into(), from: from.into(), to: to.into() }
-}
-
-fn note(kind: NoteKind, text: &str) -> SetupNote {
-    SetupNote { kind, text: text.into() }
-}
-
-fn section(id: &str, changes: Vec<SetupChange>, notes: Vec<SetupNote>) -> SectionPreview {
-    SectionPreview { id: id.into(), changes, notes }
-}
+use crate::control::config::{change, note, section};
 
 fn preview() -> SetupPreview {
     SetupPreview {

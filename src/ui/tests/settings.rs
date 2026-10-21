@@ -151,6 +151,7 @@ fn the_edit_line_puts_the_cursor_after_the_value() {
 #[case::move_up(settings_moves(settings_row(AREA, &sections(), 0, 3))[0].as_position(), Some(SettingsHit::MoveUp(3)))]
 #[case::move_down(settings_moves(settings_row(AREA, &sections(), 0, 3))[1].as_position(), Some(SettingsHit::MoveDown(3)))]
 #[case::done(settings_done(settings_area(AREA)).as_position(), Some(SettingsHit::Done))]
+#[case::share(settings_share(settings_area(AREA)).as_position(), Some(SettingsHit::Share))]
 #[case::a_header(settings_body(settings_area(AREA)).as_position(), None)]
 fn maps_clicks(#[case] pos: Position, #[case] expected: Option<SettingsHit>) {
     let sections = sections();

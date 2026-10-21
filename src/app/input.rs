@@ -45,6 +45,7 @@ impl App {
             Some(Overlay::Queue(_)) => self.queue_key(key, area),
             Some(Overlay::Issues(_)) => return self.issues_key(key, area),
             Some(Overlay::Settings(_)) => self.settings_key(key, area),
+            Some(Overlay::ShareSettings(_)) => self.share_settings_key(key, area),
             Some(Overlay::Flows { .. }) => self.flows_key(key, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_key(key, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_key(key, area),
@@ -421,6 +422,10 @@ impl App {
     }
 
     fn overlay_paste(&mut self, text: &str, area: Rect) {
+        if matches!(&self.overlay, Some(Overlay::Settings(s)) if s.idle()) {
+            self.share_pasted(text, area);
+            return;
+        }
         let clean = || text.chars().filter(|c| !c.is_control());
         match &mut self.overlay {
             Some(Overlay::Picker { picker, .. }) => clean().for_each(|c| picker.push(c)),
@@ -437,6 +442,7 @@ impl App {
             }
             Some(Overlay::Issues(b)) => b.paste(text),
             Some(Overlay::Settings(s)) => s.paste(text),
+            Some(Overlay::ShareSettings(_)) => self.share_settings_paste(text, area),
             Some(Overlay::Flows { .. }) => self.flows_paste(text, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_paste(text, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_paste(text, area),

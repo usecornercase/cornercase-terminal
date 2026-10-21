@@ -94,7 +94,15 @@ impl App {
         Some(confirm_view("Close pane", self.close_pane_message(pane)?, CLOSE_SUBMIT, None))
     }
 
-    pub(super) fn outside_dialog(&self, pos: Position, area: Rect) -> bool {
+    pub(super) fn closed_from_outside(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> bool {
+        let outside = ev.kind == MouseEventKind::Down(MouseButton::Left) && self.outside_dialog(pos, area);
+        if outside {
+            self.cancel_form();
+        }
+        outside
+    }
+
+    fn outside_dialog(&self, pos: Position, area: Rect) -> bool {
         let Some(overlay) = &self.overlay else { return false };
         self.overlay_view(overlay, area).and_then(|o| o.area(area)).is_some_and(|r| !r.contains(pos))
     }

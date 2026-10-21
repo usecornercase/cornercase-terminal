@@ -280,6 +280,7 @@ fn note_unknown(unknown: &mut Vec<String>, name: String) {
     }
 }
 
+pub(crate) mod dialog;
 pub(crate) mod preview;
 pub(crate) mod secrets;
 

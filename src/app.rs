@@ -124,6 +124,7 @@ mod search_dialog;
 mod session;
 mod settings_dialog;
 mod share_settings;
+mod share_settings_dialog;
 mod shortcuts;
 mod sidebar;
 mod star_prompt;

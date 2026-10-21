@@ -252,4 +252,19 @@ pub(crate) struct ConfigInfo {
 }
 
 #[cfg(test)]
+pub(crate) fn change(key: &str, label: &str, from: &str, to: &str) -> SetupChange {
+    SetupChange { key: key.into(), label: label.into(), from: from.into(), to: to.into() }
+}
+
+#[cfg(test)]
+pub(crate) fn note(kind: NoteKind, text: &str) -> SetupNote {
+    SetupNote { kind, text: text.into() }
+}
+
+#[cfg(test)]
+pub(crate) fn section(id: &str, changes: Vec<SetupChange>, notes: Vec<SetupNote>) -> SectionPreview {
+    SectionPreview { id: id.into(), changes, notes }
+}
+
+#[cfg(test)]
 mod tests;

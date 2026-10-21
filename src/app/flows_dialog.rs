@@ -139,6 +139,7 @@ impl App {
             Action::Tab(i) => self.open_settings_page(Page::ALL[i]),
             Action::StepTab(delta) => self.open_settings_page(Page::Flows.step(delta)),
             Action::Restart => self.open_restart(),
+            Action::Share => self.open_share_settings(),
             Action::Export(flow) => self.flow_exported(&flow),
             Action::ReadModels(kind) => self.read_models(kind),
             Action::Fetch(source) => self.fetch_flow(source),

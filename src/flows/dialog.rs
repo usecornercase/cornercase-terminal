@@ -57,6 +57,7 @@ pub(crate) enum Action {
     Tab(usize),
     StepTab(isize),
     Restart,
+    Share,
     ReadModels(Known),
     Fetch(registry::Source),
 }
@@ -561,10 +562,10 @@ impl Dialog {
         }
         buttons.extend([IMPORT, NEW]);
         if self.in_settings {
-            buttons.push(crate::settings::RESTART);
+            buttons.extend([crate::settings::SHARE, crate::settings::RESTART]);
         }
         buttons.push(DONE);
-        for dropped in [IMPORT, EXPORT, DUPLICATE] {
+        for dropped in [crate::settings::SHARE, IMPORT, EXPORT, DUPLICATE] {
             if !room.wide && room.width > 0 && row_width(&buttons) > room.width {
                 buttons.retain(|label| *label != dropped);
             }
@@ -636,6 +637,7 @@ impl Dialog {
             RESTORE => self.ask_restore(),
             RESTORE_BUILT_IN => return self.unhide(),
             crate::settings::RESTART => return Action::Restart,
+            crate::settings::SHARE => return Action::Share,
             NEW => self.open_new(),
             DONE => return Action::Close,
             _ => {}

@@ -195,6 +195,7 @@ impl App {
             }
             settings::Action::Plugin(id, on) => self.switch_plugin(&id, on),
             settings::Action::Worktrees => self.open_worktrees(None),
+            settings::Action::Share => self.open_share_settings(),
             settings::Action::RemoveToken(source) => {
                 if let Err(e) = self.remove_token(source) {
                     self.settings_message(e);
@@ -226,6 +227,7 @@ fn settings_click(s: &mut Settings, area: Rect, pos: Position) -> settings::Acti
     match ui::settings_hit(area, &layout, pos) {
         Some(ui::SettingsHit::Done) => settings::Action::Close,
         Some(ui::SettingsHit::Restart) => settings::Action::Restart,
+        Some(ui::SettingsHit::Share) => settings::Action::Share,
         Some(ui::SettingsHit::Tab(i)) => {
             s.open_page(Page::ALL[i]);
             settings::Action::None

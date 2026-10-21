@@ -143,6 +143,7 @@ mod row_hover;
 mod scrollback;
 mod search;
 mod settings;
+mod share_settings;
 mod sidebar_hit;
 mod sidebar_scroll;
 mod splits;

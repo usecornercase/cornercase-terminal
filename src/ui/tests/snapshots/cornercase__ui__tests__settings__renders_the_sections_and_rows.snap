@@ -17,6 +17,6 @@ expression: render(&with(settings(1))).backend()
 "  │                                                                                              │  "
 "  │                                                                                              │  "
 " ─│ enter changes the selected setting                                                           │  "
-"  │                                                                              restart   done  │  "
+"  │                                                                      share   restart   done  │  "
 "  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  "
 "  Quit                   Help  │                         │                                          "

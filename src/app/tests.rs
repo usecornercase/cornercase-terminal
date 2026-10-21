@@ -535,6 +535,7 @@ mod search;
 mod search_sessions;
 mod select_text;
 mod settings;
+mod share_settings;
 mod shortcuts;
 mod shows;
 mod sidebar_clicks;

@@ -124,12 +124,16 @@ fn a_click_on_a_settings_tab_is_passed_on() {
 }
 
 #[test]
-fn the_list_is_titled_settings_and_ends_with_restart_and_done() {
+fn the_list_is_titled_settings_and_ends_with_share_restart_and_done() {
     let mut d = settings_dialog();
     assert_eq!(d.title(), "Settings");
     assert!(d.settings_tabs());
-    assert_eq!(d.buttons(ROOM), [EDIT, DUPLICATE, EXPORT, DELETE, IMPORT, NEW, crate::settings::RESTART, DONE]);
+    assert_eq!(
+        d.buttons(ROOM),
+        [EDIT, DUPLICATE, EXPORT, DELETE, IMPORT, NEW, crate::settings::SHARE, crate::settings::RESTART, DONE]
+    );
     assert_eq!(d.press(crate::settings::RESTART), Action::Restart);
+    assert_eq!(d.press(crate::settings::SHARE), Action::Share);
     d.open(mine());
     assert_eq!(d.title(), "Flows › Mine");
     assert!(!d.settings_tabs());

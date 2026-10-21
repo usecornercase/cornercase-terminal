@@ -80,7 +80,12 @@ pub(crate) use dialog::settings::{
 #[cfg(test)]
 pub(crate) use dialog::settings::{
     SettingsLine, line_rect, pick_list_in, settings_body, settings_done, settings_edit, settings_lines, settings_moves,
-    settings_remove, settings_restart, settings_row, settings_scroll, settings_tabs,
+    settings_remove, settings_restart, settings_row, settings_scroll, settings_share, settings_tabs,
+};
+#[cfg(test)]
+pub(crate) use dialog::share_settings::share_settings_buttons;
+pub(crate) use dialog::share_settings::{
+    ShareHit, ShareSettings, share_settings_hit, share_settings_list, share_settings_text,
 };
 pub(crate) use dialog::start_flow::{
     AccountField as StartAccount, Shape as StartShape, StartFlow, StartHit, start_hit, start_preview, start_prompt,
@@ -156,6 +161,7 @@ use dialog::picker::draw_picker;
 use dialog::project_settings::draw_project_settings;
 use dialog::search::draw_results;
 use dialog::settings::draw_settings;
+use dialog::share_settings::draw_share_settings;
 use dialog::start_flow::draw_start_flow;
 use dialog::update::draw_update;
 use dialog::usage::draw_usage;
@@ -415,6 +421,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::Picker(picker)) => draw_picker(f, view, picker),
         Some(Overlay::Issues(issues)) => draw_issues(f, view, issues),
         Some(Overlay::Settings(settings)) => draw_settings(f, view, settings),
+        Some(Overlay::ShareSettings(share)) => draw_share_settings(f, view, share),
         Some(Overlay::Flows(flows)) => draw_flows(f, view, flows),
         Some(Overlay::StartFlow(start)) => draw_start_flow(f, view, start),
         Some(Overlay::ProjectSettings(settings)) => draw_project_settings(f, view, settings),

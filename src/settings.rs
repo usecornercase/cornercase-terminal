@@ -10,6 +10,7 @@ pub(crate) use self::accounts::{Listed, Order};
 
 pub(crate) const DONE: &str = "done";
 pub(crate) const RESTART: &str = "restart";
+pub(crate) const SHARE: &str = "share";
 const TAB_IDS: [&str; 8] = DEFAULT_ISSUE_TABS;
 const EXTRA_ARGS: &str = "extra arguments…";
 const NO_PLUGINS: &str = "`cornercase plugin install <owner/repo>` adds one, then enter turns it on here";
@@ -325,6 +326,7 @@ pub(crate) enum Action {
     RemoveAccount(Known, String),
     Tour { reset: bool },
     Worktrees,
+    Share,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

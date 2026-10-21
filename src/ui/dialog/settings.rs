@@ -6,7 +6,8 @@ use ratatui::widgets::{Clear, Paragraph};
 
 use super::issues::issue_buttons_in;
 use super::{
-    Note, draw_dialog_buttons, draw_input, draw_tabs, first_visible, form_inner, list_item, pick_background, tabs_in,
+    Note, draw_dialog_buttons, draw_input, draw_secondary, draw_tabs, first_visible, form_inner, list_item,
+    pick_background, tabs_in,
 };
 use crate::text::truncate_right;
 use crate::ui::View;
@@ -46,16 +47,21 @@ pub(crate) fn settings_edit(settings: Rect) -> Rect {
 }
 
 pub(crate) fn settings_done(settings: Rect) -> Rect {
-    settings_buttons(settings)[1]
+    settings_buttons(settings)[2]
 }
 
 pub(crate) fn settings_restart(settings: Rect) -> Rect {
+    settings_buttons(settings)[1]
+}
+
+pub(crate) fn settings_share(settings: Rect) -> Rect {
     settings_buttons(settings)[0]
 }
 
-fn settings_buttons(settings: Rect) -> [Rect; 2] {
-    let rects = issue_buttons_in(settings_rows(settings)[4], &[crate::settings::RESTART, crate::settings::DONE]);
-    [rects[0], rects[1]]
+fn settings_buttons(settings: Rect) -> [Rect; 3] {
+    let labels = [crate::settings::SHARE, crate::settings::RESTART, crate::settings::DONE];
+    let rects = issue_buttons_in(settings_rows(settings)[4], &labels);
+    [rects[0], rects[1], rects[2]]
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -142,6 +148,7 @@ pub(crate) enum SettingsHit {
     Pick(usize),
     Done,
     Restart,
+    Share,
 }
 
 pub(crate) struct SettingsLayout<'a> {
@@ -160,6 +167,9 @@ pub(crate) fn settings_hit(area: Rect, layout: &SettingsLayout, pos: Position) -
     }
     if settings_restart(settings).contains(pos) {
         return Some(SettingsHit::Restart);
+    }
+    if settings_share(settings).contains(pos) {
+        return Some(SettingsHit::Share);
     }
     if let Some(i) = settings_tabs(settings, layout.tabs).iter().position(|r| r.contains(pos)) {
         return Some(SettingsHit::Tab(i));
@@ -275,6 +285,7 @@ pub(in crate::ui) fn draw_settings(f: &mut Frame, view: &View, settings: &Settin
     f.render_widget(Paragraph::new(Span::styled(truncate_right(text, usize::from(note.width)), style)), note);
     let buttons = [settings_done(r), settings_restart(r)];
     draw_dialog_buttons(f, view, buttons, settings.submit, crate::settings::RESTART);
+    draw_secondary(f, view, settings_share(r), crate::settings::SHARE);
     if let Some(pos) = cursor.filter(|_| !matches!(settings.note, Some(Note::Busy(_)))) {
         f.set_cursor_position(pos);
     }
