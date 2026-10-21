@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.174
+
+- **Close a workspace's agents and reopen them later.** Right-click a workspace, or use its ` ⋯ `, and pick **close agents**: every tab running an agent closes, your shells stay, and a cyan **`▶`** on the workspace row brings them back, each in its own conversation, with the mode and account it had. It asks first only when it matters: an agent still working, one that can't resume its conversation (opencode starts a new one), or other programs in those tabs. Closed agents stay closed through `kill-server` and a reboot. A flow's team closes with its orchestrator and comes back whole, the orchestrator last with its team's new pane ids. The row's menu also has **reopen agents** and **forget closed agents**, and the keys menu has `w a` and `w o`. Removing or closing the workspace forgets its closed agents, and says so first.
+- Scripts and other apps: `cornercase agents close`, `agents reopen` and `agents forget` (the `agents-close`, `agents-reopen` and `agents-forget` requests); `closed_agents` on each workspace of `status --json`, `watch` and `view`; a closed run in `flow runs` with `state: "closed"`.
+
 ## 0.12.173
 
 - **Select and copy lines in the changes panel.** Click a line of a diff to select it, or press and drag over several lines of one file; hold the pointer on the first or last row shown, or past it, and the panel scrolls with the selection. The bottom of the panel then says which lines, such as `lines 9-12`, with **ask agent**, which types a reference such as `src/returns/address.rs:9-12 ` into the workspace's agent, and **copy**, which copies their code as it is in the file, tabs included, without the `+`/`-` bar and the line numbers. A click on an empty spot of the diff clears the selection.
