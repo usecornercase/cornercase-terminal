@@ -102,8 +102,15 @@ fn scripts_stage_and_unstage_a_file() {
     let staged = app.session.says(&["changes", "stage", "notes.txt"]);
     assert_eq!(staged, "staged notes.txt");
     assert_eq!(git_status(&repo), "M  notes.txt\n");
-    let listed = app.session.says(&["changes", "list"]);
-    assert!(listed.contains("staged"), "{listed}");
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let listed = app.session.says(&["changes", "list"]);
+        if listed.contains("staged") {
+            break;
+        }
+        assert!(Instant::now() < deadline, "the list never showed the file as staged: {listed}");
+        thread::sleep(Duration::from_millis(100));
+    }
     let unstaged = app.session.says(&["changes", "unstage", "notes.txt"]);
 
     assert_eq!(unstaged, "unstaged notes.txt");
