@@ -174,7 +174,7 @@ mod the_import_page {
         let mut dialog = previewed();
         dialog.toggle(0);
         let lines: Vec<(String, Tone, Option<usize>)> =
-            dialog.lines().into_iter().map(|line| (line.text, line.tone, line.section)).collect();
+            dialog.lines(80).into_iter().map(|line| (line.text, line.tone, line.section)).collect();
         assert_eq!(
             lines,
             [
@@ -190,6 +190,44 @@ mod the_import_page {
                 (String::new(), Tone::Plain, None),
                 ("this cornercase does not know future".to_string(), Tone::Muted, None),
             ]
+        );
+    }
+
+    fn with_scripts(setup: &str) -> Dialog {
+        let mut dialog = Dialog::new("version = 1");
+        let changes = vec![
+            change("repositories.setup", "~/code/web-shop", "nothing", setup),
+            change("repositories.teardown", "~/code/web-shop", "./clean.sh", "nothing"),
+        ];
+        let preview = SetupPreview { sections: vec![section("repositories", changes, Vec::new())], notes: Vec::new() };
+        dialog.previewed(Ok((Shared::default(), preview)));
+        dialog
+    }
+
+    fn texts(dialog: &Dialog, width: usize) -> Vec<(String, Tone)> {
+        dialog.lines(width).into_iter().map(|line| (line.text, line.tone)).collect()
+    }
+
+    #[test]
+    fn shows_a_setup_line_by_line_in_red() {
+        assert_eq!(
+            texts(&with_scripts("npm ci\ncp .env.example .env"), 80),
+            [
+                ("[x] repositories · 2 changes".to_string(), Tone::Section),
+                ("      ~/code/web-shop setup: nothing →".to_string(), Tone::Plain),
+                ("          npm ci".to_string(), Tone::Red),
+                ("          cp .env.example .env".to_string(), Tone::Red),
+                ("      ~/code/web-shop teardown: ./clean.sh → nothing".to_string(), Tone::Plain),
+            ]
+        );
+    }
+
+    #[test]
+    fn wraps_a_long_red_line_instead_of_cutting_it() {
+        let lines = texts(&with_scripts("npm run build:all"), 20);
+        assert_eq!(
+            lines[2..4],
+            [("          npm run bu".to_string(), Tone::Red), ("          ild:all".to_string(), Tone::Red)]
         );
     }
 
@@ -219,7 +257,7 @@ mod the_import_page {
         let mut dialog = previewed();
         dialog.scroll(100, ROOM);
         let Page::Preview { scroll, .. } = &dialog.page else { panic!("not on the import page") };
-        assert_eq!(*scroll, dialog.lines().len() - ROOM.height);
+        assert_eq!(*scroll, dialog.lines(ROOM.width).len() - ROOM.height);
     }
 }
 

@@ -49,11 +49,11 @@ impl App {
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
             return;
         }
-        let view = ui::ShareSettings::of(dialog);
+        let view = ui::ShareSettings::of(dialog, area);
         let action = match ui::share_settings_hit(area, &view, pos) {
             Some(ui::ShareHit::Button(i)) => dialog.press(view.buttons[i]),
             Some(ui::ShareHit::Line(i)) => {
-                if let Some(section) = dialog.lines().get(i).and_then(|line| line.section) {
+                if let Some(section) = dialog.lines(room.width).get(i).and_then(|line| line.section) {
                     dialog.toggle(section);
                 }
                 Action::None

@@ -50,9 +50,9 @@ fn shown(app: &mut App) -> String {
 }
 
 fn click_section(app: &mut App, id: &str) {
-    let lines = dialog(app).lines();
-    let line = lines.iter().position(|line| line.text.contains(id) && line.section.is_some()).expect("its line");
     let list = ui::share_settings_list(AREA);
+    let lines = dialog(app).lines(usize::from(list.width));
+    let line = lines.iter().position(|line| line.text.contains(id) && line.section.is_some()).expect("its line");
     click(app, Position::new(list.x, list.y + u16::try_from(line).expect("a line")));
 }
 

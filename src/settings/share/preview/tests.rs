@@ -86,12 +86,38 @@ mod changes {
         let preview = preview(&shared, &settings(), &here);
 
         let wanted = SetupChange {
-            key: "repositories".into(),
+            key: "repositories.setup".into(),
             label: "/work/web-shop".into(),
             from: "nothing".into(),
-            to: "setup: npm ci".into(),
+            to: "npm ci".into(),
         };
         assert_eq!(section(&preview, "repositories").changes, [wanted]);
+    }
+
+    #[test]
+    fn a_setup_and_a_teardown_are_changes_of_their_own_in_full() {
+        let here = Here { projects: vec![open(1, "/work/web-shop", &[SHOP])], ..nobody() };
+        let repository = Repository { teardown: "./clean.sh".into(), ..shop("npm ci\ncp .env.example .env") };
+        let shared = Shared { repositories: vec![repository], ..Shared::default() };
+
+        let preview = preview(&shared, &settings(), &here);
+
+        let changes: Vec<(&str, &str)> = section(&preview, "repositories")
+            .changes
+            .iter()
+            .map(|change| (change.key.as_str(), change.to.as_str()))
+            .collect();
+        assert_eq!(
+            changes,
+            [("repositories.setup", "npm ci\ncp .env.example .env"), ("repositories.teardown", "./clean.sh")]
+        );
+        assert_eq!(
+            notes_of(&preview, NoteKind::Risk),
+            [
+                "runs these setup commands in every new worktree of /work/web-shop",
+                "runs these teardown commands before a worktree of /work/web-shop is removed",
+            ]
+        );
     }
 }
 

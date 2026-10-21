@@ -32,6 +32,16 @@ fn the_preview_shows_each_change_and_note_by_section() {
 }
 
 #[test]
+fn a_setup_is_printed_a_line_at_a_time_under_its_project() {
+    let changes = vec![change("repositories.setup", "~/code/web-shop", "nothing", "npm ci\ncp .env.example .env")];
+    let preview = SetupPreview { sections: vec![section("repositories", changes, Vec::new())], notes: Vec::new() };
+    assert_eq!(
+        preview_text(&preview),
+        "repositories\n  ~/code/web-shop setup: nothing →\n      npm ci\n      cp .env.example .env\n"
+    );
+}
+
+#[test]
 fn a_preview_without_changes_imports_nothing() {
     let mut nothing = preview();
     assert!(changes_anything(&nothing));

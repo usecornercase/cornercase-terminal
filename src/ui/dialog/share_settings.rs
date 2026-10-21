@@ -55,10 +55,11 @@ pub(crate) struct ShareSettings {
 }
 
 impl ShareSettings {
-    pub(crate) fn of(dialog: &Dialog) -> Self {
+    pub(crate) fn of(dialog: &Dialog, area: Rect) -> Self {
+        let width = usize::from(share_settings_list(area).width);
         let body = match &dialog.page {
             Page::Paste { editor, .. } => ShareBody::Text(editor.clone()),
-            Page::Preview { scroll, .. } => ShareBody::Lines { lines: dialog.lines(), scroll: *scroll },
+            Page::Preview { scroll, .. } => ShareBody::Lines { lines: dialog.lines(width), scroll: *scroll },
         };
         Self {
             title: dialog.title(),

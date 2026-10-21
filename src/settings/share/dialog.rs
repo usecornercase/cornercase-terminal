@@ -1,7 +1,9 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
+use super::preview::change_text;
 use super::{MAX_BYTES, Section, Shared, too_large};
-use crate::control::config::{NoteKind, SectionPreview, SetupExported, SetupNote, SetupPreview};
+use crate::control::config::{NoteKind, SectionPreview, SetupChange, SetupExported, SetupNote, SetupPreview};
+use crate::text;
 use crate::todo::editor::Editor;
 
 pub(crate) const COPY: &str = "copy my setup";
@@ -19,6 +21,7 @@ const IMPORT_HINT: &str = "a click on a section ticks or unticks it · enter imp
 const SHARE_TITLE: &str = "Settings › Share";
 const IMPORT_TITLE: &str = "Settings › Import";
 const INDENT: &str = "      ";
+const SCRIPT_INDENT: &str = "          ";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct Room {
@@ -180,7 +183,7 @@ impl Dialog {
     }
 
     pub(crate) fn scroll(&mut self, delta: isize, room: Room) {
-        let most = self.lines().len().saturating_sub(room.height);
+        let most = self.lines(room.width).len().saturating_sub(room.height);
         match &mut self.page {
             Page::Paste { editor, .. } => editor.scroll_by(delta, room.width, room.height),
             Page::Preview { scroll, .. } => *scroll = scroll.saturating_add_signed(delta).min(most),
@@ -250,7 +253,7 @@ impl Dialog {
         error.clone().or_else(|| (!self.warnings.is_empty()).then(|| self.warnings.join(" · ")))
     }
 
-    pub(crate) fn lines(&self) -> Vec<Line> {
+    pub(crate) fn lines(&self, width: usize) -> Vec<Line> {
         let Page::Preview { preview, ticked, .. } = &self.page else { return Vec::new() };
         let mut lines = Vec::new();
         for (i, (section, ticked)) in preview.sections.iter().zip(ticked).enumerate() {
@@ -258,19 +261,14 @@ impl Dialog {
                 lines.push(Line::new(String::new(), Tone::Plain));
             }
             lines.push(Line { section: Some(i), ..heading(section, *ticked) });
-            lines.extend(section.changes.iter().map(|change| {
-                Line::new(
-                    format!("{INDENT}{}: {} → {}", change.label, shown(&change.from), shown(&change.to)),
-                    Tone::Plain,
-                )
-            }));
+            lines.extend(section.changes.iter().flat_map(change_lines));
             lines.extend(section.notes.iter().map(|note| note_line(note, INDENT)));
         }
         if !preview.notes.is_empty() {
             lines.push(Line::new(String::new(), Tone::Plain));
             lines.extend(preview.notes.iter().map(|note| note_line(note, "")));
         }
-        lines
+        lines.into_iter().flat_map(|line| wrapped(line, width)).collect()
     }
 }
 
@@ -309,8 +307,23 @@ fn note_line(note: &SetupNote, indent: &str) -> Line {
     Line::new(format!("{indent}{}", note.text), tone)
 }
 
-fn shown(value: &str) -> &str {
-    if value.is_empty() { "-" } else { value }
+fn change_lines(change: &SetupChange) -> Vec<Line> {
+    let text = change_text(change);
+    let script = text.script.into_iter().map(|line| Line::new(format!("{SCRIPT_INDENT}{line}"), Tone::Red));
+    std::iter::once(Line::new(format!("{INDENT}{}", text.head), Tone::Plain)).chain(script).collect()
+}
+
+fn wrapped(line: Line, width: usize) -> Vec<Line> {
+    if line.tone != Tone::Red || width == 0 || text::cells(&line.text) <= width {
+        return vec![line];
+    }
+    let body = line.text.trim_start_matches(' ');
+    let indent = &line.text[..line.text.len() - body.len()];
+    let room = width.saturating_sub(indent.len()).max(1);
+    text::wrap_cells(body, room)
+        .into_iter()
+        .map(|part| Line { text: format!("{indent}{part}"), ..line.clone() })
+        .collect()
 }
 
 #[cfg(test)]

@@ -11,6 +11,14 @@ use crate::settings::Settings;
 use crate::text;
 
 const NOTHING: &str = "nothing";
+const SETUP: &str = "repositories.setup";
+const TEARDOWN: &str = "repositories.teardown";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ChangeText {
+    pub(crate) head: String,
+    pub(crate) script: Vec<String>,
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct OpenRepository {
@@ -57,6 +65,27 @@ pub(crate) fn with_value(config: &Config, key: &str, value: &Value) -> Result<Co
     serde_json::from_value(Value::Object(keys)).map_err(|e| unread(&e))
 }
 
+pub(crate) fn change_text(change: &SetupChange) -> ChangeText {
+    let name = match change.key.as_str() {
+        SETUP => "setup",
+        TEARDOWN => "teardown",
+        _ => {
+            let head = format!("{}: {} → {}", change.label, dash(&change.from), dash(&change.to));
+            return ChangeText { head, script: Vec::new() };
+        }
+    };
+    let from = change.from.lines().map(text::escape_hidden).collect::<Vec<_>>().join("; ");
+    if change.to == NOTHING {
+        return ChangeText { head: format!("{} {name}: {from} → {NOTHING}", change.label), script: Vec::new() };
+    }
+    let script = change.to.lines().map(text::escape_hidden).collect();
+    ChangeText { head: format!("{} {name}: {from} →", change.label), script }
+}
+
+fn dash(value: &str) -> &str {
+    if value.is_empty() { "-" } else { value }
+}
+
 pub(crate) fn unknown(key: &str) -> String {
     format!("this cornercase does not know {key}; update it to import that setting")
 }
@@ -92,13 +121,18 @@ fn compact(value: Option<&Value>) -> String {
     value.map_or_else(String::new, Value::to_string)
 }
 
-fn commands(settings: &ProjectSettings) -> String {
-    let parts: Vec<String> = [("setup", &settings.setup), ("teardown", &settings.teardown)]
-        .into_iter()
-        .filter(|(_, commands)| !commands.is_empty())
-        .map(|(name, commands)| format!("{name}: {commands}"))
-        .collect();
-    if parts.is_empty() { NOTHING.into() } else { parts.join("; ") }
+fn script(commands: &str) -> String {
+    if commands.is_empty() { NOTHING.into() } else { commands.into() }
+}
+
+fn runs(change: &SetupChange) -> Option<SetupNote> {
+    let place = &change.label;
+    match change.key.as_str() {
+        _ if change.to == NOTHING => None,
+        SETUP => Some(risk(format!("runs these setup commands in every new worktree of {place}"))),
+        TEARDOWN => Some(risk(format!("runs these teardown commands before a worktree of {place} is removed"))),
+        _ => None,
+    }
 }
 
 fn mode_in(config: &Config, kind: &str) -> Option<String> {
@@ -252,27 +286,29 @@ impl Compared<'_> {
             .flat_map(|repository| {
                 matches(repository, self.here)
                     .into_iter()
-                    .filter_map(|project| self.repository_change(repository, project))
+                    .flat_map(|project| self.repository_changes(repository, project))
             })
             .collect();
-        let risky = changes.iter().filter(|change| change.to != NOTHING);
-        notes.extend(
-            risky.map(|change| risk(format!("runs these setup commands in every new worktree of {}", change.label))),
-        );
+        notes.extend(changes.iter().filter_map(runs));
         (changes, notes)
     }
 
-    fn repository_change(&self, repository: &Repository, project: &OpenRepository) -> Option<SetupChange> {
+    fn repository_changes(&self, repository: &Repository, project: &OpenRepository) -> Vec<SetupChange> {
         let home = self.here.home.as_deref();
         let now = self.now.project(&project.folder, home);
         let wanted =
             ProjectSettings { setup: repository.setup.clone(), teardown: repository.teardown.clone() }.normalised();
-        (wanted != now).then(|| SetupChange {
-            key: Section::Repositories.id().into(),
-            label: text::display_path(&project.folder, home),
-            from: commands(&now),
-            to: commands(&wanted),
-        })
+        let label = text::display_path(&project.folder, home);
+        [(SETUP, now.setup, wanted.setup), (TEARDOWN, now.teardown, wanted.teardown)]
+            .into_iter()
+            .filter(|(_, from, to)| from != to)
+            .map(|(key, from, to)| SetupChange {
+                key: key.into(),
+                label: label.clone(),
+                from: script(&from),
+                to: script(&to),
+            })
+            .collect()
     }
 
     fn notes(&self) -> Vec<SetupNote> {

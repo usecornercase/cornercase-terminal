@@ -8,7 +8,9 @@ use super::render;
 use crate::cli::{print_json, print_out, read_limited};
 use crate::client::{answer, ask, confirm};
 use crate::control::Command;
-use crate::control::config::{ConfigExport, ConfigImport, Described, NoteKind, SetupExported, SetupNote, SetupPreview};
+use crate::control::config::{
+    ConfigExport, ConfigImport, Described, NoteKind, SetupChange, SetupExported, SetupNote, SetupPreview,
+};
 use crate::error::{Error, Result};
 use crate::settings::share::{self, MAX_BYTES};
 
@@ -102,7 +104,7 @@ pub(super) fn preview_text(preview: &SetupPreview) -> String {
             let _ = writeln!(out, "{}", section.id);
         }
         for change in &section.changes {
-            let _ = writeln!(out, "  {}: {} → {}", change.label, shown(&change.from), shown(&change.to));
+            write_change(&mut out, change);
         }
         write_notes(&mut out, &section.notes, "  ");
     }
@@ -110,8 +112,12 @@ pub(super) fn preview_text(preview: &SetupPreview) -> String {
     out
 }
 
-fn shown(value: &str) -> &str {
-    if value.is_empty() { "-" } else { value }
+fn write_change(out: &mut String, change: &SetupChange) {
+    let text = share::preview::change_text(change);
+    let _ = writeln!(out, "  {}", text.head);
+    for line in &text.script {
+        let _ = writeln!(out, "      {line}");
+    }
 }
 
 fn write_notes(out: &mut String, notes: &[SetupNote], indent: &str) {

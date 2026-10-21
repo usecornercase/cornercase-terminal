@@ -1,11 +1,13 @@
 use super::*;
+use crate::control::config::{SetupPreview, change, section};
+use crate::settings::share::Shared;
 use crate::settings::share::dialog::tests::previewed;
 use crate::settings::share::dialog::{BACK, Dialog, IMPORT};
 
 const WIDE: Rect = Rect { x: 0, y: 0, width: 144, height: 42 };
 
 fn paste_page(text: &str) -> ShareSettings {
-    ShareSettings::of(&Dialog::new(text))
+    ShareSettings::of(&Dialog::new(text), WIDE)
 }
 
 fn import_page(untick: &[usize]) -> ShareSettings {
@@ -13,7 +15,7 @@ fn import_page(untick: &[usize]) -> ShareSettings {
     for section in untick {
         dialog.toggle(*section);
     }
-    ShareSettings::of(&dialog)
+    ShareSettings::of(&dialog, WIDE)
 }
 
 fn with(share: ShareSettings) -> View<'static> {
@@ -54,6 +56,23 @@ fn draws_risks_in_red() {
     let t = render_sized(&with(import_page(&[])), WIDE.width, WIDE.height);
     let list = share_settings_list(WIDE);
     assert_eq!(cell_of(&t, Rect { y: list.y + 3, ..list }).fg, Color::Red);
+}
+
+#[test]
+fn draws_each_line_of_a_setup_on_its_own_row_in_red() {
+    let mut dialog = Dialog::new("version = 1");
+    let changes = vec![change("repositories.setup", "~/code/web-shop", "nothing", "npm ci\ncp .env.example .env")];
+    let preview = SetupPreview { sections: vec![section("repositories", changes, Vec::new())], notes: Vec::new() };
+    dialog.previewed(Ok((Shared::default(), preview)));
+    let t = render_sized(&with(ShareSettings::of(&dialog, WIDE)), WIDE.width, WIDE.height);
+    let list = share_settings_list(WIDE);
+    let buffer = t.backend().buffer();
+    let row = |y: u16| (list.x..list.right()).map(|x| buffer[(x, list.y + y)].symbol()).collect::<String>();
+    let script = |y: u16| (row(y).trim_end().to_string(), buffer[(list.x + 10, list.y + y)].fg);
+    assert_eq!(
+        (script(2), script(3)),
+        (("          npm ci".to_string(), Color::Red), ("          cp .env.example .env".to_string(), Color::Red))
+    );
 }
 
 #[test]
