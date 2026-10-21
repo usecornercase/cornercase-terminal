@@ -123,7 +123,7 @@ impl App {
 
     pub(in crate::app) fn close_agents(&mut self, plan: &Plan) {
         let live = self.pane_ids();
-        let run = plan.run.and(self.runs.take_of(plan.place.1));
+        let run = plan.run.and_then(|_| self.runs.take_of(plan.place.1));
         let (mut tabs, mut seats, mut panes) = (Vec::new(), Vec::new(), Vec::new());
         for &id in &plan.tabs {
             let Some(at) = self.projects.tab_index(id) else { continue };
