@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
+CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
 
 pane_in() {
   cc status --json | node -e '
@@ -848,6 +848,63 @@ screen_settings_ui() {
   cc_wait 'counts'
   cc_hover '╭─ Settings'
   cc_shot settings-ui
+}
+
+share_open() {
+  cc_config '{}'
+  cc_session "$CC_CAPTURE/sessions/$CC_SESSION.json"
+  cc_start 140 38
+  cc_wait 'web-shop'
+  cc_click 'Settings'
+  cc_wait 'Worktrees'
+  cc_click ' share ' 1
+  cc_wait 'copy my setup'
+}
+
+screen_settings_share() {
+  share_open
+  cc_hover '╭─ Settings'
+  cc_shot settings-share
+}
+
+screen_settings_import() {
+  git -C "$CC_HOME/code/web-shop" remote set-url origin git@github.com:acme/web-shop.git
+  share_open
+  local file="$CC_TMP/team-setup.toml"
+  cat > "$file" <<'TOML'
+# A cornercase setup: import it with `cornercase config import <file>` or Settings → share
+version = 1
+connect = ["linear"]
+
+[agents]
+agent = "claude"
+agent_args = { claude = ["--model", "opus"] }
+prompt = "Work on {url}. Run the tests before you commit."
+submit = true
+
+[issues]
+issue_branch = "{source}-{number}-{slug}"
+issue_tabs = ["github", "linear"]
+
+[worktrees]
+fetch_minutes = 10
+
+[interface]
+sidebar = "tree"
+counts = false
+
+[[repositories]]
+remotes = ["github.com/acme/web-shop"]
+setup = "npm ci && cp ../.env.example .env"
+teardown = ""
+TOML
+  tmux -L "$CC_TMUX" load-buffer "$file"
+  tmux -L "$CC_TMUX" paste-buffer -p -t 0
+  cc_wait 'version = 1'
+  cc_click ' preview ' 1 -1
+  cc_wait 'Settings › Import'
+  cc_hover '╭─ Settings'
+  cc_shot settings-import
 }
 
 screen_usage() {

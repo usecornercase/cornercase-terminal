@@ -157,6 +157,7 @@ const WELCOME_HINT = ' opens a folder';
 const NEW_BUTTON = '+ New';
 const ROW_MENU_ICON = '⋯';
 const RESTART = 'restart';
+const SHARE = 'share';
 const RESTART_TITLE = 'Restart';
 const RESTART_MESSAGE = 'Restart cornercase now? Its server starts again and every client comes back.';
 const RESTART_SUBMIT = 'restart now';
@@ -1434,7 +1435,9 @@ export class Painter {
     const note = o.busy ?? o.edit?.error ?? o.notice ?? app.settingsHint(o);
     this.span(noteRow.x, noteRow.y, truncateRight(note, noteRow.w), o.edit?.error && !o.busy ? { fg: 1 } : DARK);
     if (o.busy) this.cursor = null;
-    const [restart, done] = rightAligned(buttonsRow, [RESTART, DONE], buttonWidth, 1);
+    const [share, restart, done] = rightAligned(buttonsRow, [SHARE, RESTART, DONE], buttonWidth, 1);
+    this.span(share.x, share.y, ` ${SHARE} `, this.pill(share, false), share.w);
+    this.region({ r: share, click: () => app.shareSettings(), cursor: 'pointer' });
     this.span(restart.x, restart.y, ` ${RESTART} `, this.pill(restart, false), restart.w);
     this.region({ r: restart, click: () => app.openRestart(), cursor: 'pointer' });
     this.submitButton(done, DONE, () => app.closeOverlay());

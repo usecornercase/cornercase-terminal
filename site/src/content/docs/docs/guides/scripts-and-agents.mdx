@@ -85,6 +85,7 @@ group 9  personal  collapsed
 | `notify TEXT` | Shows a message in the window, with a desktop notification. |
 | `todo` | Adds, lists, edits, checks off and back, reorders and removes items of the [TODO list](../todo/) (with undo), and sends one to an agent as `send --enter` would. |
 | `config` | Reads every setting, connection and project's commands, and changes them with the Settings dialog's own checks: [settings for a program that draws its own preferences](#settings). |
+| `config export`, `config import FILE` | Writes the settings to hand to a colleague, without tokens or personal ones, and imports such a file after showing what it changes: [share your setup](#share-your-setup). |
 | `away` | Has agents message you [on Telegram](../telegram/) or [Discord](../discord/); `--off` stops it. |
 | `usage` | Prints your Claude Code and Codex [plan limits](#plan-usage) as the Usage dialog's Limits tab shows them; `--cached` prints the last answer without asking the agents again. |
 | `plugin actions`, `plugin run PLUGIN ACTION` | List the actions your [plugins](../plugins/) add to the menus, and run one on a project, workspace, tab or pane as its menu entry does, waiting for it to end. See [Plugins](#plugins). |
@@ -855,6 +856,28 @@ Over the socket, every answer has the same shape and the request is `{"command":
 `revision` goes up when a setting, a project's commands or a connection changes, however it changed (the dialog, a request, or an edit of the file), and `status --json`, `status --follow` and `view` lines carry it as `config.revision`: a program that mirrors the session reads the settings again when it grows. Notes that change by themselves, such as the keep-awake state, don't move it.
 
 A refusal has a code: `not-found` for a key that names no setting or connection, `malformed` for a value of the wrong type or one the dialog's check refuses (the message is the dialog's), `conflict` for what the current state blocks (a token set by an environment variable, Jira's site and email missing, a folder that isn't a repository, a `config.json` cornercase cannot read), and `failed` when the service refused a token. Changes made through `set` never write over a `config.json` that cannot be read.
+
+#### Share your setup
+
+```sh
+cornercase config export --to team.toml
+cornercase config import team.toml
+cornercase config import team.toml --only agents,worktrees
+cornercase config import - --yes < team.toml
+```
+
+`config export` prints the settings you can hand to a colleague, as the TOML text that ` copy my setup ` copies in the [settings](../../reference/configuration/#share-your-setup), or writes it to the file `--to` names. Standard error says what it left out (tokens, bots, paired chats and browsers, accounts and profiles, `jira_email`, remote access and keep awake, and each project that has no git remote) and, after a `!`, every place where a setup, an argument or a prompt looks like it holds a secret.
+
+`config import` shows on standard error what the file would change, section by section, with the same notes as **Settings › Import**, then asks `Import these settings? [y/N]`. Reading standard input (`-`), or with no terminal to ask on, it imports only with `--yes`. `--only` takes some of the sections: `agents`, `issues`, `worktrees`, `interface` and `repositories`. Either the ticked sections are all saved, or nothing is: a file from a newer cornercase's format, a value the settings refuse or two repositories matching one project leave `config.json` as it was, and the command exits with `1` and the reason. A setting this cornercase does not know is skipped and named, not refused.
+
+Over the socket, `config-export` answers `text`, the counts of `settings` and `repositories`, `left_out` and `warnings`. `config-import` takes the `text`, `sections` (every one when left out) and `apply`:
+
+```json
+{"command": "config-export", "args": {}}
+{"command": "config-import", "args": {"text": "version = 1\n[interface]\nsidebar = \"tree\"\n", "sections": ["interface"], "apply": false}}
+```
+
+Without `apply` nothing is saved and the answer is the preview: `sections`, each with its `id`, its `changes` (`key`, `label`, `from` and `to`, as the dialog shows them) and its `notes`, then the `notes` that belong to no section; each note has a `kind` (`risk`, `secret`, `missing`, `connect`, `repository` or `unknown`) and its `text`. With `apply` it saves the sections and answers as `config` does, with the `notices`. An import is refused with `malformed` for a file that is no setup, a newer format or a value the settings refuse, and `conflict` for a project that stopped being a repository or a `config.json` cornercase cannot read; a preview is refused for the same reasons, but the last, so what it shows can be imported.
 
 ### Plugins
 

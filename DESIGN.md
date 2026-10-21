@@ -49,7 +49,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Stats](design/stats.md) (`agents/stats.rs`, `agents/known.rs`, `app/agent_watch.rs`, `app/usage_dialog.rs`): counters, the heatmap, `cornercase stats`, the share card.
 - [Keeping awake](design/keeping-awake.md) (`agents/awake.rs`, `app/agent_watch.rs`): holding off idle sleep while agents work.
 - [Flows](design/flows.md) (`flows/`, `app/flow_runs.rs`, `app/flow_panel.rs`, `app/flows_dialog.rs`, `app/start_flow_dialog.rs`, `app/control/flow.rs`, `app/control/flow/`, `control/flow.rs`, `cli/flow.rs`, `ui/flow.rs`, `ui/flow/`, `ui/dialog/flows.rs`, `ui/dialog/start_flow.rs`, #263): teams of agents run by an orchestrator, the Flow panel.
-- [Settings](design/settings.md) (`config.rs`, `settings.rs`, `settings/`, `app/settings_dialog.rs`): the settings modal, `config.json` watched, the `config` request.
+- [Settings](design/settings.md) (`config.rs`, `settings.rs`, `settings/`, `settings/share.rs`, `app/settings_dialog.rs`, `app/share_settings.rs`, `app/share_settings_dialog.rs`, `ui/dialog/share_settings.rs`, #414): the settings modal, `config.json` watched, the `config` request, sharing settings with a colleague.
 - [Terminals](design/terminals.md) (`term.rs`, `term/emulator.rs`): libghostty-vt, writes to a PTY, colours, snapshots.
 - [Keys and mouse](design/keys-and-mouse.md) (`term/keys.rs`, `term/mouse.rs`, `app/input.rs`, `app/panes.rs`): decoding input, encoding keys and mouse, selection.
 - [Scrollback](design/scrollback.md) (`term/emulator.rs`, `app/panes.rs`, `ui/pane.rs`): the wheel in a pane's history.

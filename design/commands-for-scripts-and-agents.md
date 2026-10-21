@@ -28,7 +28,7 @@ Code: `cli.rs`, `cli/`, `control.rs`, `app/control.rs`, `app/control/`, `app/eve
 - [Streaming a tab's terminals](commands-for-scripts-and-agents/surfaces.md): #286: frames, cells and styles, What else a cell carries, sizes, pacing, Patches.
 - [Views of your own, and what a view sees](commands-for-scripts-and-agents/views.md): Views of your own; What a view shows counts as seen, and agent notices for other programs.
 - [Driving a tab's terminals](commands-for-scripts-and-agents/driving-terminals.md): #287: `input`, `scroll`, `selection`, `ratio`, `resize`; The path under a cell (`link`).
-- [Reading and changing settings](commands-for-scripts-and-agents/config.md): #336: the `config` request, secrets, the revision.
+- [Reading and changing settings](commands-for-scripts-and-agents/config.md): #336: the `config` request, secrets, the revision; #414: sharing a setup, `config-export` and `config-import`.
 - [Colours for programs](commands-for-scripts-and-agents/colours.md): #331: the `theme` request, precedence, mode 2031.
 - [Arranging the session](commands-for-scripts-and-agents/arranging.md): #335: groups, `move`, `collapse` and `expand`, `move-pane`, the removal check; #399: closing an agent.
 - [Following the changes panel](commands-for-scripts-and-agents/changes.md): #339: the `changes` stream, a file's patch, gaps, the base, viewed marks, discarding a file (#421), staging a file (#426).

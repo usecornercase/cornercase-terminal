@@ -12,7 +12,7 @@ cornercase is configured from the **Settings** modal, opened with the `Settings`
 
 The modal has eight tabs: Worktrees, Agents, Accounts, Flows, Issues, UI, Remote and Plugins. Click a row, or select it and press `Enter`, to change it; the line at the bottom explains what the selected row does and confirms every change.
 
-The ` restart ` button next to ` done ` restarts cornercase. It first lists what is running in your terminals, since restarting stops every program in them; your projects, workspaces, tabs and splits come back, each tab with a new shell in its folder. See [Restart the server](../../guides/sessions/#restart-the-server).
+The ` share ` button hands your settings to a colleague, or imports theirs: see [Share your setup](#share-your-setup). The ` restart ` button next to ` done ` restarts cornercase. It first lists what is running in your terminals, since restarting stops every program in them; your projects, workspaces, tabs and splits come back, each tab with a new shell in its folder. See [Restart the server](../../guides/sessions/#restart-the-server).
 
 ### Worktrees
 
@@ -72,7 +72,7 @@ Your [agent accounts](../../guides/accounts/). One section per agent that takes 
 
 <Screen
   name="settings-flows"
-  alt="The Flows tab: the built-in flows Arena, Bug, test first, Cross review, Full issue and Quick, each with its number of agents and its plan, and the selected one's diagram beside the list; the buttons edit, duplicate, export, delete, import, new, restart and done"
+  alt="The Flows tab: the built-in flows Arena, Bug, test first, Cross review, Full issue and Quick, each with its number of agents and its plan, and the selected one's diagram beside the list; the buttons edit, duplicate, export, delete, import, new, share, restart and done"
   crop={[2, 1, 136, 35]}
 />
 
@@ -173,6 +173,42 @@ Plugins run as you, with your rights: what they ask for is shown, not enforced. 
 | `Esc` | Close the modal, or leave a list or a text field. |
 
 In a list, type to filter it and press `Enter` to pick. In a text field, `Enter` saves and `Esc` cancels.
+
+Pasting while no text field is open opens [Share](#share-your-setup) with what you pasted, ready for ` preview `.
+
+## Share your setup
+
+To set up a colleague's cornercase the way yours is, click ` share ` in the settings and then **` copy my setup `**: your settings are copied as a short text that you can send in a chat. The toast says how many settings and repositories it holds, and what it left out.
+
+<Screen
+  name="settings-share"
+  alt="Settings › Share: copy your setup to send it to a colleague, or paste one they sent you; tokens and personal settings are never shared. An empty field to paste into, and the buttons back, copy my setup and preview"
+  crop={[2, 1, 136, 36]}
+/>
+
+The text holds five sections, each of which the other person can leave out:
+
+| Section | What it carries |
+| --- | --- |
+| `agents` | [`agent`](#agent), [`agent_args`](#agent_args), [`agent_modes`](#agent_modes), [`agent_commands`](#agent_commands), [`prompt`](#prompt), [`submit`](#submit), [`accept_trust_prompts`](#accept_trust_prompts), [`resume_agents`](#resume_agents), [`trust_prompt_pattern`](#trust_prompt_pattern) |
+| `issues` | [`issue_branch`](#issue_branch), [`issue_tabs`](#issue_tabs), [`gitlab_url`](#gitlab_url), [`jira_site`](#jira_site), [`jira_jql`](#jira_jql), [`plane_url`](#plane_url), [`plane_workspace`](#plane_workspace), [`plane_filter`](#plane_filter), [`asana_workspace`](#asana_workspace), [`asana_projects`](#asana_projects) |
+| `worktrees` | [`worktrees_dir`](#worktrees_dir), [`fetch_minutes`](#fetch_minutes), [`pull_requests`](#pull_requests), [`merged_pull_requests`](#merged_pull_requests), [`gh`](#gh), [`glab`](#glab) |
+| `interface` | Every switch of the UI tab, from [`sidebar`](#sidebar) to [`star_prompt`](#star_prompt), with the sounds and the [prefix key](#prefix_key) |
+| `repositories` | Each project's [setup and teardown](../../guides/worktrees/#set-up-each-new-worktree), found by the project's git remotes (such as `github.com/acme/web-shop`) rather than its folder, so it reaches the same repository wherever your colleague cloned it |
+
+It never holds a token, a chat bot, a paired chat or browser, your accounts and profiles, [`jira_email`](#jira_email), [`remote`](#remote), [`remote_port`](#remote_port) or [`keep_awake`](#keep_awake). It lists the trackers you are connected to, by name only, so the other side is told which to connect. A setup or a prompt is copied as you typed it, so when one looks like it holds a secret (`NPM_TOKEN=…`, `--api-key …`, `Bearer …`) the toast says where, in red: check before you send it.
+
+To import one, paste it on Share (or anywhere on a settings tab) and click **` preview `**. **Settings › Import** shows every setting that would change, as its value now → the shared one, grouped by section:
+
+<Screen
+  name="settings-import"
+  alt="Settings › Import: agents with 4 changes (default agent auto to claude, agent_args, prompt, send the prompt), issues with 2, worktrees with 1, interface with 2 (sidebar to tree, counts hidden) and repositories with 1 (the setup of ~/code/web-shop, with a note that it runs in every new worktree), each ticked, then connect linear in Settings › Issues; the buttons back and import"
+  crop={[2, 1, 136, 36]}
+/>
+
+Click a section to untick it, then **` import `**: the ticked sections are saved at once, and the rest stay as they are, as do the settings the text does not mention. The notes say what to check first: in red, the commands that will run on their own (a repository's setup and teardown, `agent_commands`, `gh` and `glab`, an agent mode that skips permission prompts, trust prompts answered for you) and what looks like a secret; then a path or a program this computer lacks, a tracker to connect, a repository with no open project (open it and import again), and a setting this cornercase does not know yet (update it to get that one; the rest still imports). If anything in the text cannot be used, such as a value the settings would refuse, nothing at all is imported and the page says why.
+
+From a terminal, `cornercase config export` and `cornercase config import` do the same: see [Share your setup](../../guides/scripts-and-agents/#share-your-setup) in Scripts and agents.
 
 ## config.json
 

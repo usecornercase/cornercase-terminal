@@ -164,3 +164,25 @@ test('the Accounts tab and the account switches need a real cornercase, and noth
   assert.ok(!app.textAt('claude: System'));
   app.destroy();
 });
+
+test('share sits before restart on every settings tab and says it needs a real cornercase', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openSettings();
+  for (const page of [0, 3, 5]) {
+    app.settingsPage(page);
+    app.render();
+    const share = app.textAt(' share ');
+    const restart = app.textAt(' restart ');
+    assert.ok(share && restart);
+    assert.equal(share.y, restart.y);
+    assert.ok(share.x < restart.x);
+  }
+  const share = app.textAt(' share ');
+  assert.ok(share);
+  app.pointerDown(share.x + 1, share.y, 0);
+  app.pointerUp();
+  app.render();
+  assert.equal(app.toast?.text, 'sharing settings needs a real cornercase');
+  assert.equal(app.overlay?.kind, 'settings');
+  app.destroy();
+});
