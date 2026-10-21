@@ -1,6 +1,5 @@
 ---
 source: src/app/tests/accounts_page.rs
-assertion_line: 173
 expression: "format!(\"{}\", render(&mut s.app, AREA).backend())"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -22,4 +21,4 @@ expression: "format!(\"{}\", render(&mut s.app, AREA).backend())"
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                         │                         │                                          "
+"  Quit                   Help  │                         │                                          "

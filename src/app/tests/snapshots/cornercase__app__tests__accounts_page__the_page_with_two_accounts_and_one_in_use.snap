@@ -1,6 +1,5 @@
 ---
 source: src/app/tests/accounts_page.rs
-assertion_line: 143
 expression: "format!(\"{}\", render(&mut s.app, WIDE).backend())"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                  "
@@ -42,4 +41,4 @@ expression: "format!(\"{}\", render(&mut s.app, WIDE).backend())"
 " ─│ enter makes an account the default · backspace removes it · each pane keeps its own                                                  │  "
 "  │                                                                                                                      restart   done  │  "
 "  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  "
-"  Quit                         │                         │                                                                                  "
+"  Quit                   Help  │                         │                                                                                  "
