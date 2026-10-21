@@ -54,7 +54,7 @@ similar = "3.2.0"
 syntect = { version = "5.3.0", default-features = false, features = ["default-syntaxes", "regex-fancy", "parsing"] }
 tar = { version = "0.4.46", default-features = false }
 thiserror = "2.0.21"
-toml = "1.1.8"
+toml = { version = "1.1.8", features = ["preserve_order"] }
 tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots"] }
 unicode-width = "0.2.2"
 ureq = "3.4.2"
