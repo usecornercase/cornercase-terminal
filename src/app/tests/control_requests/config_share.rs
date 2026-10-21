@@ -50,7 +50,7 @@ mod exporting {
     #[test]
     fn keys_a_repository_by_its_remotes() {
         let mut s = setup();
-        let remotes = [("origin", "git@github.com:acme/web-shop.git"), ("upstream", "https://github.com/up/web-shop")];
+        let remotes = [("alpha", "https://github.com/up/web-shop"), ("origin", "git@github.com:acme/web-shop.git")];
         let _repo = repository(&mut s, &remotes, "npm ci");
 
         let exported = export(&mut s);
@@ -121,6 +121,7 @@ mod exporting {
         for secret in [MARKER, "me@acme.com", "profiles", "keep_awake", "remote_port"] {
             assert!(!exported.text.contains(secret), "{secret} in {}", exported.text);
         }
+        assert!(!exported.text.lines().any(|line| line.starts_with("remote =")), "{}", exported.text);
         assert_eq!(read(&exported).connect, ["shortcut"]);
     }
 
