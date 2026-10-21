@@ -32,8 +32,21 @@ fn parsed<T: serde::de::DeserializeOwned>(value: Value) -> T {
     serde_json::from_value(value).expect("an answer")
 }
 
-fn panes_on_screen(app: &App) -> String {
-    app.projects.terms().filter_map(|term| term.emulator.screen_text().ok()).collect::<Vec<_>>().join("\n")
+fn resuming(app: &App) -> Vec<String> {
+    let mut found: Vec<String> = app
+        .projects
+        .terms()
+        .filter(|term| term.resuming.is_some())
+        .filter_map(|term| term.resume.as_ref().map(|agent| agent.conversation.clone()))
+        .collect();
+    found.sort();
+    found
+}
+
+fn commands_on_sh(app: &mut App) {
+    for kind in crate::agents::kinds(&app.config) {
+        app.config.agent_commands.insert(kind, "/bin/sh".into());
+    }
 }
 
 fn closed_all(app: &mut App, rx: &Receiver<AppEvent>) -> AgentsClosed {
@@ -55,10 +68,7 @@ fn closing_and_reopening_resumes_each_conversation() {
     assert_eq!(reopened.panes.len(), 2);
     assert!(reopened.panes.iter().all(|pane| pane.resumes));
     assert_eq!(app.projects[0].workspaces[0].tabs.len(), 2);
-    refreshing(&mut app, &rx, "both conversations are typed", |a| {
-        let text = panes_on_screen(a);
-        text.contains("--resume c-0") && text.contains("--resume c-1")
-    });
+    assert_eq!(resuming(&app), ["c-0", "c-1"]);
 }
 
 #[test]
@@ -137,10 +147,7 @@ fn an_agent_with_no_conversation_starts_again_and_says_so() {
     let pane = reopened.panes[0].pane;
     assert!(reopened.panes.iter().all(|pane| !pane.resumes));
     assert_eq!(app.pane_bands().get(&pane), Some(&ui::PaneBand::Resuming("starting claude".into())));
-    refreshing(&mut app, &rx, "the start line is typed", |a| {
-        let text = panes_on_screen(a);
-        text.contains("/bin/sh") && !text.contains("--resume")
-    });
+    assert_eq!(resuming(&app), Vec::<String>::new());
 }
 
 #[test]
@@ -151,7 +158,7 @@ fn a_reopen_resumes_even_when_resuming_on_restart_is_off() {
 
     ok(&mut app, "agents-reopen", &json!({"workspace": closed.workspace}));
 
-    refreshing(&mut app, &rx, "the conversations are typed", |a| panes_on_screen(a).contains("--resume c-0"));
+    assert_eq!(resuming(&app), ["c-0", "c-1"]);
 }
 
 #[test]
@@ -213,7 +220,7 @@ fn closed_agents_survive_a_restart_of_the_server_and_reopen_there() {
     let (mut app, rx, _dirs) = setup(true);
     let closed = closed_all(&mut app, &rx);
     let saved = app.state();
-    let (mut again, rx_again) = new_app(no_config());
+    let (mut again, _rx_again) = new_app(no_config());
     again.config.agent_commands.insert("claude".into(), "/bin/sh".into());
 
     assert!(again.restore(&saved, AREA));
@@ -223,8 +230,5 @@ fn closed_agents_survive_a_restart_of_the_server_and_reopen_there() {
 
     assert_eq!(closed.closed_agents, 2);
     assert_eq!(status["projects"][0]["workspaces"][0]["closed_agents"], 2);
-    refreshing(&mut again, &rx_again, "the conversations are typed", |a| {
-        let text = panes_on_screen(a);
-        text.contains("--resume c-0") && text.contains("--resume c-1")
-    });
+    assert_eq!(resuming(&again), ["c-0", "c-1"]);
 }

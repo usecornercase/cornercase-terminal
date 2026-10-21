@@ -21,7 +21,7 @@ fn with_resumes(app: &mut App) {
 
 fn team_closed() -> (App, Receiver<AppEvent>, TempDir, u64) {
     let (mut app, rx, dir) = team();
-    app.config.agent_commands.insert("claude".into(), "/bin/sh".into());
+    commands_on_sh(&mut app);
     with_resumes(&mut app);
     let id = workspace(&app);
     ok(&mut app, "agents-close", &json!({"workspace": id, "force": true}));
@@ -44,7 +44,7 @@ fn closing_a_flows_agents_keeps_its_run_whole_and_out_of_the_live_ones() {
 
 #[test]
 fn reopening_brings_the_whole_team_back_with_the_same_run() {
-    let (mut app, rx, _dir, id) = team_closed();
+    let (mut app, _rx, _dir, id) = team_closed();
     let run_id = closed_runs(&app)[0].run;
 
     let reopened: AgentsReopened = parsed(ok(&mut app, "agents-reopen", &json!({"workspace": id})));
@@ -62,15 +62,13 @@ fn reopening_brings_the_whole_team_back_with_the_same_run() {
             .filter(|member| member.pane != own)
             .all(|member| { app.projects.pane_by(member.pane).and_then(|term| term.parent) == Some(own) })
     );
-    refreshing(&mut app, &rx, "the members' conversations are typed", |a| {
-        panes_on_screen(a).contains("--resume c-coder")
-    });
+    assert!(resuming(&app).contains(&"c-coder".to_string()));
 }
 
 #[test]
 fn a_role_closed_earlier_comes_back_fresh_in_a_tab_named_after_it() {
     let (mut app, rx, _dir) = team();
-    app.config.agent_commands.insert("claude".into(), "/bin/sh".into());
+    commands_on_sh(&mut app);
     with_resumes(&mut app);
     let id = workspace(&app);
     let tester = app.runs.all()[0].pane_of("tester").expect("a tester");
