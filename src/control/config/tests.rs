@@ -166,3 +166,29 @@ mod answer {
         assert_eq!((read.revision, read.settings[0].kind), (9, Kind::Other));
     }
 }
+
+mod export {
+    use super::*;
+    use crate::control::{Command, Request, command_name};
+
+    #[test]
+    fn it_is_a_command_of_its_own_with_no_arguments() {
+        let asked = Request {
+            caller: None,
+            server: None,
+            contract: None,
+            boot: None,
+            view: None,
+            command: Command::ConfigExport(ConfigExport {}),
+        };
+        let sent = serde_json::to_value(asked).expect("json");
+        assert_eq!((command_name(&sent), &sent["args"]), (Some("config-export"), &json!({})));
+    }
+
+    #[test]
+    fn its_answer_reads_leniently() {
+        let text = r#"{"text": "version = 1\n", "settings": 3, "later": true}"#;
+        let read: SetupExported = serde_json::from_str(text).expect("lenient");
+        assert_eq!((read.settings, read.repositories, read.left_out.len()), (3, 0, 0));
+    }
+}

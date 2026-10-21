@@ -520,6 +520,7 @@ mod changes;
 mod close_agent;
 mod closed_agents;
 mod config;
+mod config_share;
 mod contract;
 mod copilot;
 mod creating;

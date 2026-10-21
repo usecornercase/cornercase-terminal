@@ -36,6 +36,10 @@ impl App {
         }
     }
 
+    pub(super) fn config_export_request(&self) -> Handled {
+        self.export_setup().map(|exported| Some(json(&exported))).map_err(failed)
+    }
+
     fn described(&self, notices: Vec<String>) -> Described {
         let model = self.settings_model(Page::default());
         Described {

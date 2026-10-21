@@ -153,6 +153,7 @@ fn last_commands() -> Vec<Command> {
         Command::AgentsReopen(AgentsReopen::default()),
         Command::AgentsForget(AgentsForget::default()),
         Command::Tour(tour::TourRequest::default()),
+        Command::ConfigExport(ConfigExport::default()),
     ]
 }
 

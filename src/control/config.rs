@@ -53,6 +53,20 @@ impl Configure {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct ConfigExport {}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct SetupExported {
+    pub(crate) text: String,
+    pub(crate) settings: usize,
+    pub(crate) repositories: usize,
+    pub(crate) left_out: Vec<String>,
+    pub(crate) warnings: Vec<String>,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Kind {

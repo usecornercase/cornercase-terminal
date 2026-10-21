@@ -5,16 +5,16 @@ use crate::control::config::Described;
 use crate::issues::secrets;
 use crate::test_util::{SHORTCUT_MEMBER, git_repo};
 
-const MARKER: &str = "t0k-marker";
+pub(super) const MARKER: &str = "t0k-marker";
 
-struct Setup {
-    app: App,
-    rx: Receiver<AppEvent>,
-    config: TempDir,
-    folder: TempDir,
+pub(super) struct Setup {
+    pub(super) app: App,
+    pub(super) rx: Receiver<AppEvent>,
+    pub(super) config: TempDir,
+    pub(super) folder: TempDir,
 }
 
-fn setup() -> Setup {
+pub(super) fn setup() -> Setup {
     let (config, folder) = (TempDir::new(), TempDir::new());
     let (mut app, rx) = app_in(folder.path(), config.path().join("config.json"));
     app.issues.clear_env_tokens();
@@ -25,7 +25,7 @@ fn call(s: &mut Setup, args: &Value) -> std::result::Result<Value, Refused> {
     asked(&mut s.app, &s.rx, "config", args)
 }
 
-fn ok(s: &mut Setup, args: &Value) -> Described {
+pub(super) fn ok(s: &mut Setup, args: &Value) -> Described {
     match call(s, args) {
         Ok(value) => serde_json::from_value(value).expect("a description"),
         Err(e) => panic!("refused: {} {}", e.code, e.message),
@@ -39,7 +39,7 @@ fn refused(s: &mut Setup, args: &Value) -> Refused {
     }
 }
 
-fn set(s: &mut Setup, entry: &Value) -> Described {
+pub(super) fn set(s: &mut Setup, entry: &Value) -> Described {
     ok(s, &json!({"action": "set", "entry": entry}))
 }
 
@@ -52,7 +52,7 @@ fn setting<'a>(described: &'a Described, key: &str) -> &'a crate::control::confi
     described.settings.iter().find(|s| s.key == key).expect("a setting")
 }
 
-fn shortcut(s: &mut Setup, status: u16) -> crate::test_util::FakeHttp {
+pub(super) fn shortcut(s: &mut Setup, status: u16) -> crate::test_util::FakeHttp {
     fake_shortcut(&mut s.app, vec![("GET /api/v3/member", status, SHORTCUT_MEMBER)])
 }
 

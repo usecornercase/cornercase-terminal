@@ -651,6 +651,7 @@ impl App {
         let Asked { client, asker, now, .. } = asked;
         ControlFlow::Break(match command {
             Command::Config(config) => self.config_request(client, config),
+            Command::ConfigExport(_) => self.config_export_request(),
             Command::Theme(theme) => self.theme_request(&theme),
             Command::Go(go) => self.go_request(asker, &go),
             Command::UpdateCheck(_) => {

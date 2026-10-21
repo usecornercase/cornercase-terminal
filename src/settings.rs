@@ -571,7 +571,7 @@ mod activate;
 mod apply;
 mod describe;
 mod input;
-#[cfg_attr(not(test), expect(dead_code, reason = "the config-export and config-import requests of #414 use it next"))]
+#[cfg_attr(not(test), expect(dead_code, reason = "the config-import request of #414 reads setups next"))]
 pub(crate) mod share;
 mod submit;
 mod trackers;

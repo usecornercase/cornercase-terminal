@@ -55,7 +55,7 @@ impl App {
         self.overlay = Some(Overlay::Settings(Box::new(settings)));
     }
 
-    fn token_statuses(&self) -> Vec<(Source, Status)> {
+    pub(super) fn token_statuses(&self) -> Vec<(Source, Status)> {
         Source::REMOTE
             .into_iter()
             .map(|source| {
