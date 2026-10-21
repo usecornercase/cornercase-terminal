@@ -96,8 +96,9 @@ pub(crate) fn hosts(glab: &Path, dir: &Path) -> std::result::Result<Vec<Host>, U
         Err(Error::RunGlab(e)) if e.kind() == io::ErrorKind::NotFound => return Err(Unlisted::Missing),
         Err(e) => return Err(Unlisted::Failed(e.to_string())),
     };
-    let Ok(status) = serde_json::from_slice::<Status>(&out.stdout) else {
-        return Err(unlisted(&said(&out)));
+    let status = match serde_json::from_slice::<Status>(&out.stdout) {
+        Ok(status) if envelope(&out.stdout).is_none() => status,
+        _ => return Err(unlisted(&said(&out))),
     };
     let mut hosts: Vec<Host> = Vec::new();
     for host in status.hosts.into_iter().filter(|h| !h.host.is_empty()) {

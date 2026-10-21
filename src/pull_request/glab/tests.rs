@@ -91,6 +91,14 @@ mod hosts {
     #[case::fang_old("printf '\\n  ERROR  \\n\\n  Unknown flag: --output.\\n' >&2; exit 1", Unlisted::Old)]
     #[case::none("echo 'no GitLab instances have been authenticated' >&2; exit 1", Unlisted::LoggedOut)]
     #[case::empty(r#"echo '{"hosts":[]}'"#, Unlisted::LoggedOut)]
+    #[case::an_error_envelope(
+        r#"echo '{"error":{"message":"dial tcp: i/o timeout"}}'; exit 1"#,
+        Unlisted::Failed("dial tcp: i/o timeout".into())
+    )]
+    #[case::an_envelope_saying_nobody_logged_in(
+        r#"echo '{"error":{"message":"no GitLab instances have been authenticated"}}'; exit 1"#,
+        Unlisted::LoggedOut
+    )]
     #[case::other("echo 'dial tcp: i/o timeout' >&2; exit 1", Unlisted::Failed("dial tcp: i/o timeout".into()))]
     fn says_why_nothing_is_listed(#[case] script: &str, #[case] expected: Unlisted) {
         let tmp = TempDir::new();
