@@ -88,6 +88,45 @@ mod keeps_the_review_identity {
     }
 }
 
+mod keeps_the_review_identity_of_untracked_files_whose_counts_change {
+    use super::*;
+
+    #[rstest]
+    #[case::binary(b"a\0b\n".to_vec())]
+    #[case::oversized(b"x\n".repeat(usize::try_from(crate::changes::diff::MAX_UNTRACKED_BYTES / 2).expect("fits") + 1))]
+    fn when_staged(#[case] bytes: Vec<u8>) {
+        let repo = git_repo(&[("a.txt", "one\n")]);
+        let dir = repo.path();
+        std::fs::write(dir.join("b.bin"), bytes).expect("write");
+        let seen = digest(dir, "b.bin");
+        stage(dir, "b.bin", seen, true).expect("stage");
+        assert_eq!(digest(dir, "b.bin"), seen);
+    }
+}
+
+mod refuses {
+    use super::*;
+
+    #[rstest]
+    #[case::stage(true)]
+    #[case::unstage(false)]
+    fn a_file_with_a_merge_conflict(#[case] staged: bool) {
+        let repo = git_repo(&[("a.txt", "one\n")]);
+        let dir = repo.path();
+        git(dir, &["switch", "--quiet", "-c", "other"]);
+        write(dir, "a.txt", "other\n");
+        git(dir, &["commit", "--quiet", "-am", "other"]);
+        git(dir, &["switch", "--quiet", "-"]);
+        write(dir, "a.txt", "mine\n");
+        git(dir, &["commit", "--quiet", "-am", "mine"]);
+        let merged = std::process::Command::new("git").arg("-C").arg(dir).args(["merge", "other"]).output();
+        assert!(!merged.expect("merge").status.success());
+        let error = stage(dir, "a.txt", digest(dir, "a.txt"), staged).expect_err("refused");
+        assert!(error.to_string().contains("resolve the conflict first"), "{error}");
+        assert_eq!(status(dir, &["a.txt"]), "UU a.txt\n");
+    }
+}
+
 mod says {
     use super::*;
 

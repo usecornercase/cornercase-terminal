@@ -251,7 +251,8 @@ pub(super) fn fingerprint(dir: &Path, from: &str, file: &File) -> u64 {
     let stamp = stamp(&dir.join(&file.path));
     let status = if file.status == Status::Untracked { Status::Added } else { file.status };
     let mut hasher = DefaultHasher::new();
-    (from, &file.path, &file.old_path, status, file.added, file.removed, stamp).hash(&mut hasher);
+    let counts = (status != Status::Added).then_some((file.added, file.removed));
+    (from, &file.path, &file.old_path, status, counts, stamp).hash(&mut hasher);
     hasher.finish()
 }
 
