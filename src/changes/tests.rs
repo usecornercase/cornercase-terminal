@@ -1,5 +1,65 @@
+use std::path::Path;
+
 use super::*;
 use crate::changes::diff::{Fold, Hunk, Kind, Line, Status};
+use crate::test_util;
+
+pub(super) fn digest(dir: &Path, path: &str) -> u64 {
+    let request = git::Request {
+        dir: dir.to_path_buf(),
+        mode: Mode::Uncommitted,
+        base: None,
+        last: None,
+        previous: Vec::new(),
+        expanded: None,
+    };
+    let diff = git::load(&request).expect("load").diff.expect("diff");
+    diff.files.iter().find(|f| f.path == path).expect("the file is listed").viewed_digest
+}
+
+pub(super) fn status(dir: &Path, paths: &[&str]) -> String {
+    let mut args = vec!["status", "--porcelain", "--"];
+    args.extend(paths);
+    let out = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().expect("run git");
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+pub(super) fn write(dir: &Path, path: &str, text: &str) {
+    std::fs::write(dir.join(path), text).expect("write file");
+}
+
+pub(super) fn tracked_change(dir: &Path, kind: &str) {
+    match kind {
+        "modified" => write(dir, "a.txt", "one\nTWO\n"),
+        "staged_and_unstaged" => {
+            write(dir, "a.txt", "one\nTWO\n");
+            test_util::git(dir, &["add", "a.txt"]);
+            write(dir, "a.txt", "one\nTWO\nthree\n");
+        }
+        "deleted" => std::fs::remove_file(dir.join("a.txt")).expect("remove"),
+        "deleted_with_git_rm" => test_util::git(dir, &["rm", "--quiet", "a.txt"]),
+        "renamed" => test_util::git(dir, &["mv", "a.txt", "c.txt"]),
+        _ => {
+            test_util::git(dir, &["mv", "a.txt", "c.txt"]);
+            write(dir, "c.txt", "one\ntwo\nthree\n");
+        }
+    }
+}
+
+pub(super) fn new_change(dir: &Path, kind: &str) {
+    match kind {
+        "added_in_a_new_folder" => {
+            std::fs::create_dir(dir.join("new")).expect("folder");
+            write(dir, "new/b.txt", "b\n");
+            test_util::git(dir, &["add", "new/b.txt"]);
+        }
+        "intent_to_add" => {
+            write(dir, "b.txt", "b\n");
+            test_util::git(dir, &["add", "-N", "b.txt"]);
+        }
+        _ => write(dir, "b.txt", "b\n"),
+    }
+}
 
 fn file(path: &str, digest: u64, lines: usize) -> File {
     let line = |n| Line {
@@ -21,6 +81,7 @@ fn file(path: &str, digest: u64, lines: usize) -> File {
         hunks: vec![Hunk { old_start: 1, new_start: 1, context: String::new(), lines }],
         digest,
         viewed_digest: digest,
+        staged: None,
     }
 }
 
@@ -518,5 +579,32 @@ mod viewed {
         panel.loaded(1, fresh, &request, Ok(loaded(Some(diff(Vec::new())), 3)));
         let model = panel.model_in(1, Mode::Uncommitted, None).expect("model");
         assert_eq!(model.diff().map(|d| d.files.len()), Some(0));
+    }
+}
+
+mod rescan {
+    use super::*;
+
+    #[test]
+    fn keeps_the_viewed_mark_and_drops_the_pacing() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        let (generation, request) = panel.request(&target(1), now).expect("first");
+        panel.loaded(1, generation, &request, Ok(loaded(Some(diff(vec![file("a.rs", 5, 3)])), 7)));
+        panel.set_viewed(1, "a.rs", Some(5));
+        assert!(panel.request(&target(1), now + Duration::from_millis(10)).is_none());
+        panel.rescan(1);
+        assert!(panel.request(&target(1), now + Duration::from_millis(10)).is_some());
+        assert!(panel.viewed(1, &file("a.rs", 5, 3)));
+    }
+
+    #[test]
+    fn ignores_a_load_that_started_before() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        let (generation, request) = panel.request(&target(1), now).expect("first");
+        panel.rescan(1);
+        panel.loaded(1, generation, &request, Ok(loaded(Some(diff(vec![file("a.rs", 5, 3)])), 7)));
+        assert!(panel.models.is_empty());
     }
 }

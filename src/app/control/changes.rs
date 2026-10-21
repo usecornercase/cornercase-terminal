@@ -6,11 +6,14 @@ use serde_json::Value;
 use super::{Asker, Handled, Pending, Stage, conflict, json, malformed};
 use crate::app::changes_panel::{Gapped, Seen};
 use crate::app::{App, AppEvent, ChangesEvent};
+use crate::changes::act::{FileAction, Outcome};
 use crate::changes::diff::File;
-use crate::changes::{self, Mode, Scope, discard};
+use crate::changes::{self, Mode, Scope};
 use crate::control::changes::{self as wire, Base, Gap, Patch, Viewed};
 use crate::control::contract::{Code, Refusal};
-use crate::control::{Changes, ChangesBase, ChangesDiscard, ChangesFile, ChangesGap, ChangesMode, ChangesViewed};
+use crate::control::{
+    Changes, ChangesBase, ChangesDiscard, ChangesFile, ChangesGap, ChangesMode, ChangesStage, ChangesViewed,
+};
 use crate::error::Result;
 use crate::git;
 use crate::log::{Job, Level};
@@ -28,6 +31,12 @@ pub(in crate::app) struct Replied<'a> {
     pub(in crate::app) key: u64,
     pub(in crate::app) workspace: u64,
     pub(in crate::app) path: &'a str,
+}
+
+struct Wanted<'a> {
+    workspace: Option<u64>,
+    path: &'a str,
+    digest: Option<&'a str>,
 }
 
 type Answer = std::result::Result<Value, Refusal>;
@@ -275,30 +284,55 @@ impl App {
     }
 
     pub(super) fn changes_discard_request(&mut self, client: u64, asker: Asker, request: &ChangesDiscard) -> Handled {
-        let place = self.changes_place(asker, request.workspace)?;
-        if request.path.is_empty() {
-            return Err(malformed("`changes-discard` needs the file's path"));
+        let wanted = Wanted { workspace: request.workspace, path: &request.path, digest: request.digest.as_deref() };
+        self.file_action_request(client, asker, &wanted, FileAction::Discard)
+    }
+
+    pub(super) fn changes_stage_request(&mut self, client: u64, asker: Asker, request: &ChangesStage) -> Handled {
+        let wanted = Wanted { workspace: request.workspace, path: &request.path, digest: request.digest.as_deref() };
+        let action = if request.staged { FileAction::Stage } else { FileAction::Unstage };
+        self.file_action_request(client, asker, &wanted, action)
+    }
+
+    fn file_action_request(&mut self, client: u64, asker: Asker, wanted: &Wanted, action: FileAction) -> Handled {
+        let place = self.changes_place(asker, wanted.workspace)?;
+        if wanted.path.is_empty() {
+            return Err(malformed(format!("`{}` needs the file's path", action.command())));
         }
-        let digest = seen_digest(request.digest.as_deref(), "discarding a file")?;
+        let digest = seen_digest(wanted.digest, action.doing())?;
         let key = self.clients.requests.key();
-        self.spawn_discard(Some(key), place.dir, Seen { workspace: place.id, path: request.path.clone(), digest });
+        let seen = Seen { workspace: place.id, path: wanted.path.to_string(), digest };
+        self.spawn_file_action(Some(key), place.dir, seen, action);
         self.reading(client, key);
         Ok(None)
     }
 
-    pub(in crate::app) fn changes_discard_replied(&mut self, at: Replied<'_>, result: Result<discard::Outcome>) {
+    pub(in crate::app) fn changes_action_replied(
+        &mut self,
+        at: Replied<'_>,
+        action: FileAction,
+        result: Result<Outcome>,
+    ) {
         self.answer_read(at.key, |_| match result {
-            Err(e) => Err(Refusal::from(format!("cannot discard {}: {e}", at.path))),
-            Ok(discard::Outcome::Gone) => Err(missing(at.path, at.workspace)),
-            Ok(discard::Outcome::Changed) => Err(conflict(format!(
-                "{} changed since that digest, so nothing was discarded; read it again with `cornercase changes file`",
-                at.path
+            Err(e) => Err(Refusal::from(format!("cannot {} {}: {e}", action.name(), at.path))),
+            Ok(Outcome::Gone) => Err(missing(at.path, at.workspace)),
+            Ok(Outcome::Changed) => Err(conflict(format!(
+                "{} changed since that digest, so nothing was {}; read it again with `cornercase changes file`",
+                at.path,
+                action.past()
             ))),
-            Ok(discard::Outcome::Discarded(file)) => Ok(json(&wire::Discarded {
+            Ok(Outcome::Done(file)) if action == FileAction::Discard => Ok(json(&wire::Discarded {
                 workspace: at.workspace,
                 path: file.path.clone(),
                 old_path: file.old_path.clone(),
                 status: file.status.into(),
+            })),
+            Ok(Outcome::Done(file)) => Ok(json(&wire::StagedFile {
+                workspace: at.workspace,
+                path: file.path.clone(),
+                old_path: file.old_path.clone(),
+                status: file.status.into(),
+                staged: action == FileAction::Stage,
             })),
         });
     }

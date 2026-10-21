@@ -148,6 +148,7 @@ fn last_commands() -> Vec<Command> {
         Command::CloseAgent(CloseAgent::default()),
         Command::AccountRestart(AccountRestart::default()),
         Command::ChangesDiscard(ChangesDiscard::default()),
+        Command::ChangesStage(ChangesStage::default()),
     ]
 }
 

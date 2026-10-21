@@ -447,6 +447,7 @@ export class App {
   private folded = new Map<string, boolean>();
   private viewed = new Set<string>();
   private discarded = new Set<string>();
+  private staged = new Set<string>();
   nav: Nav = null;
   narration: Demo['narrate'] = english.narrate;
   groups: Group[] = [];
@@ -1211,6 +1212,7 @@ export class App {
 
   private submitDiscard(o: { key: string; path: string; status: string; untracked: boolean }): void {
     this.discarded.add(o.key);
+    this.staged.delete(o.key);
     this.viewed.delete(o.key);
     this.folded.delete(`project:${o.key}`);
     this.folded.delete(`every:${o.key}`);
@@ -2070,6 +2072,16 @@ export class App {
 
   toggleChangesFile(f: FileDiff): void {
     this.folded.set(this.foldKey(f), !this.changesFolded(f));
+    this.dirty();
+  }
+
+  changesStaged(f: FileDiff): boolean {
+    return this.staged.has(this.fileKey(f));
+  }
+
+  toggleChangesStaged(f: FileDiff): void {
+    const key = this.fileKey(f);
+    if (!this.staged.delete(key)) this.staged.add(key);
     this.dirty();
   }
 

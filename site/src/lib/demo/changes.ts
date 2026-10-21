@@ -527,7 +527,9 @@ function fileRow(p: Painter, f: FileDiff, r: Rect, surface: number): void {
   const check = rect(right(r) - 3, r.y, 3, 1);
   if (viewed || p.hovered(r)) p.span(check.x + 1, r.y, '✓', viewed || p.hovered(check) ? { fg: 2 } : DARK);
   const discardable = app.changesScope === 'every' || app.changesMode === 'uncommitted';
-  const discard = discardable ? rect(check.x - 3, r.y, 3, 1) : null;
+  const stage = discardable ? rect(check.x - 3, r.y, 3, 1) : null;
+  const discard = discardable ? rect(check.x - 6, r.y, 3, 1) : null;
+  if (stage) stageMark(p, app.changesStaged(f), stage, r);
   if (discard && p.hovered(r)) p.span(discard.x + 1, r.y, '↺', p.hovered(discard) ? { fg: 1 } : DARK);
   const end = discard ? discard.x : check.x;
   const tag = f.change.lockfile ? 'lockfile' : f.change.untracked ? 'new' : '';
@@ -542,9 +544,16 @@ function fileRow(p: Painter, f: FileDiff, r: Rect, surface: number): void {
   const cut = path.lastIndexOf('/') + 1;
   const px = p.span(r.x + 6 + indent, r.y, path.slice(0, cut), DARK);
   p.span(px, r.y, path.slice(cut), muted ? DARK : { fg: DEFAULT, add: BOLD });
-  p.region({ r: rect(r.x, r.y, r.w - (discard ? 6 : 3), 1), click: () => app.toggleChangesFile(f), cursor: 'pointer' });
+  p.region({ r: rect(r.x, r.y, r.w - (discard ? 9 : 3), 1), click: () => app.toggleChangesFile(f), cursor: 'pointer' });
+  if (stage) p.region({ r: stage, click: () => app.toggleChangesStaged(f), cursor: 'pointer' });
   if (discard) p.region({ r: discard, click: () => app.askDiscard(f), cursor: 'pointer' });
   p.region({ r: check, click: () => app.toggleChangesViewed(f), cursor: 'pointer' });
+}
+
+function stageMark(p: Painter, staged: boolean, cell: Rect, r: Rect): void {
+  const under = p.hovered(cell);
+  if (staged) p.span(cell.x + 1, r.y, under ? '−' : '●', { fg: under ? 3 : 2 });
+  else if (p.hovered(r)) p.span(cell.x + 1, r.y, '+', under ? { fg: 2 } : DARK);
 }
 
 function hunkRow(p: Painter, f: FileDiff, h: number, r: Rect, hot: boolean): void {

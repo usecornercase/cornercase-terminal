@@ -17,6 +17,7 @@ fn file(path: &str) -> Arc<File> {
         hunks: Vec::new(),
         digest: 1,
         viewed_digest: 1,
+        staged: None,
     })
 }
 

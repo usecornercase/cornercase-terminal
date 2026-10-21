@@ -419,20 +419,48 @@ fn discard_puts_the_file_back() {
     assert_eq!(toast(&app), None);
 }
 
-#[test]
-fn discard_refuses_what_it_cannot_discard() {
+#[rstest::rstest]
+#[case::discard("changes-discard")]
+#[case::stage("changes-stage")]
+fn the_file_actions_refuse_what_they_cannot_do(#[case] request: &str) {
     let repo = repo_with_edit();
     let (mut app, rx) = started(&repo);
 
-    let stale = call_later(&mut app, &rx, "changes-discard", &json!({"path": "a.txt", "digest": "0000000000000000"}));
+    let stale = call_later(&mut app, &rx, request, &json!({"path": "a.txt", "digest": "0000000000000000"}));
     assert_eq!(stale.expect_err("refused").code, "conflict");
     assert_eq!(std::fs::read_to_string(repo.path().join("a.txt")).expect("read"), "one\nTWO\n");
-    let unknown =
-        call_later(&mut app, &rx, "changes-discard", &json!({"path": "nope.txt", "digest": "0000000000000000"}));
+    let unknown = call_later(&mut app, &rx, request, &json!({"path": "nope.txt", "digest": "0000000000000000"}));
     assert_eq!(unknown.expect_err("refused").code, "not-found");
-    for request in
+    for bad in
         [json!({"digest": "0000000000000000"}), json!({"path": "a.txt"}), json!({"path": "a.txt", "digest": "zz"})]
     {
-        assert_eq!(refused(&mut app, "changes-discard", &request).code, "malformed");
+        assert_eq!(refused(&mut app, request, &bad).code, "malformed");
     }
+}
+
+#[test]
+fn stage_and_unstage_a_file() {
+    let repo = repo_with_edit();
+    let (mut app, rx) = started(&repo);
+    let digest = seen_digest(&mut app, &rx, "a.txt");
+    let status = || {
+        let out = std::process::Command::new("git").arg("-C").arg(repo.path()).args(["status", "--porcelain"]).output();
+        String::from_utf8_lossy(&out.expect("git").stdout).into_owned()
+    };
+
+    let done = call_later(&mut app, &rx, "changes-stage", &json!({"path": "a.txt", "digest": digest})).expect("staged");
+
+    let workspace = workspace_id(&app);
+    let answer =
+        json!({"workspace": workspace, "path": "a.txt", "old_path": null, "status": "modified", "staged": true});
+    assert_eq!(done, answer);
+    assert_eq!(status(), "M  a.txt\n");
+    ok(&mut app, "changes", &json!({}));
+    summary_until(&mut app, &rx, "the file is staged", |l| l["workspaces"][0]["files"][0]["staged"] == json!("yes"));
+    let digest = seen_digest(&mut app, &rx, "a.txt");
+    let undone =
+        call_later(&mut app, &rx, "changes-stage", &json!({"path": "a.txt", "digest": digest, "staged": false}));
+    assert_eq!(undone.expect("unstaged")["staged"], json!(false));
+    assert_eq!(status(), " M a.txt\n");
+    assert_eq!(toast(&app), None);
 }

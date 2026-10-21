@@ -1,8 +1,7 @@
 use std::path::Path;
-use std::sync::Arc;
 
+use super::act::{self, Outcome};
 use super::diff::{File, Status};
-use super::git;
 use crate::error::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,13 +29,6 @@ impl Target {
     }
 }
 
-#[derive(Debug)]
-pub(crate) enum Outcome {
-    Discarded(Arc<File>),
-    Changed,
-    Gone,
-}
-
 pub(crate) fn question(path: &str, old_path: Option<&str>, status: Status) -> String {
     match (status, old_path) {
         (Status::Untracked, _) => format!("Delete {path}? It is not in git, so this cannot be undone."),
@@ -60,24 +52,14 @@ pub(crate) fn done(path: &str, old_path: Option<&str>, status: Status) -> String
 }
 
 pub(crate) fn discard(dir: &Path, path: &str, digest: u64) -> Result<Outcome> {
-    let from = git::head(dir)?;
-    let Some(file) = git::listed(dir, path)? else { return Ok(Outcome::Gone) };
-    if file.viewed_digest != digest {
-        return Ok(Outcome::Changed);
-    }
-    if file.status == Status::Untracked {
-        std::fs::remove_file(dir.join(&file.path))?;
-    } else {
-        restore(dir, &from, &file)?;
-    }
-    Ok(Outcome::Discarded(file))
-}
-
-fn restore(dir: &Path, from: &str, file: &File) -> Result<()> {
-    let source = format!("--source={from}");
-    let mut args = vec!["--literal-pathspecs", "restore", &source, "--staged", "--worktree", "--", file.path.as_str()];
-    args.extend(file.old_path.as_deref());
-    git::run(dir, &args).map(drop)
+    act::on_seen(dir, path, digest, |from, file| {
+        if file.status == Status::Untracked {
+            std::fs::remove_file(dir.join(&file.path))?;
+            Ok(())
+        } else {
+            act::restore(dir, from, file, true)
+        }
+    })
 }
 
 #[cfg(test)]

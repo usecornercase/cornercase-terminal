@@ -26,6 +26,9 @@ mod parsing {
     #[case::discard(&["changes", "discard", "src/main.rs"])]
     #[case::discard_without_asking(&["changes", "discard", "src/main.rs", "--yes", "--workspace", "3"])]
     #[case::discard_in_a_branch(&["changes", "discard", "src/main.rs", "--worktree", "x"])]
+    #[case::stage(&["changes", "stage", "a.rs"])]
+    #[case::unstage_in_a_workspace(&["changes", "unstage", "a.rs", "--workspace", "3"])]
+    #[case::stage_in_a_branch(&["changes", "stage", "a.rs", "--worktree", "x"])]
     fn these_are_taken(#[case] args: &[&str]) {
         let parsed = parse(args).expect("parse");
 
@@ -42,6 +45,9 @@ mod parsing {
     #[case::an_unknown_mode(&["changes", "list", "--mode", "some"])]
     #[case::discard_in_a_mode(&["changes", "discard", "a.rs", "--mode", "commits"])]
     #[case::discard_without_a_path(&["changes", "discard"])]
+    #[case::stage_without_a_path(&["changes", "stage"])]
+    #[case::stage_in_a_mode(&["changes", "stage", "a.rs", "--mode", "commits"])]
+    #[case::stage_in_two_places(&["changes", "stage", "a.rs", "--workspace", "1", "--worktree", "x"])]
     #[case::discard_in_two_places(&["changes", "discard", "a.rs", "--workspace", "1", "--worktree", "x"])]
     fn these_are_refused(#[case] args: &[&str]) {
         assert!(parse(args).is_err());
@@ -87,6 +93,27 @@ mod text {
              R  src/old.rs → src/new.rs  +4 −3\n\
              A  notes.txt  +4 −3  untracked\n"
         );
+    }
+
+    #[test]
+    fn a_list_tags_staged_files() {
+        let staged =
+            |staged| FileInfo { staged: Some(staged), ..file("a.rs", FileStatus::Modified, FoldClass::Open, true) };
+        let content = Content {
+            state: State::Ready,
+            workspaces: vec![WorkspaceChanges {
+                workspace: 2,
+                files: vec![staged(Staging::Yes), staged(Staging::Partly), staged(Staging::No)],
+                ..WorkspaceChanges::default()
+            }],
+            ..Content::default()
+        };
+
+        let text = list_text(&content, None);
+
+        assert!(text.contains("+4 −3  staged, viewed\n"), "{text}");
+        assert!(text.contains("+4 −3  partly staged, viewed\n"), "{text}");
+        assert_eq!(text.matches("+4 −3  viewed\n").count(), 1, "{text}");
     }
 
     #[test]

@@ -641,22 +641,27 @@ fn open_starts_the_editor_in_a_new_tab() {
     assert_eq!((workspace.tabs.len(), workspace.active), (tabs + 1, tabs));
 }
 
+fn cell(app: &App, file: usize, which: fn(&panel::View, Rect) -> Rect) -> Position {
+    let view = app.panel_view().expect("panel");
+    let at = every_project::row(app, panel::Row::File(file));
+    let line = Rect::new(panel::parts(panel_area(app), &view).body.x, at.y, panel_area(app).width, 1);
+    let cell = which(&view, line);
+    Position::new(cell.x + 1, cell.y)
+}
+
+fn marked(app: &App, file: usize) -> Option<changes::diff::Staged> {
+    let changes::Body::Ready(diff) = app.panel_view().expect("panel").body else { panic!("ready") };
+    diff.files[file].staged
+}
+
 mod discarding {
     use super::every_project::{loaded_every, row};
     use super::*;
 
     const QUESTION: &str = "Discard the changes to a.txt? This cannot be undone.";
 
-    fn cell(app: &App, file: usize) -> Position {
-        let view = app.panel_view().expect("panel");
-        let at = row(app, panel::Row::File(file));
-        let line = Rect::new(panel::parts(panel_area(app), &view).body.x, at.y, panel_area(app).width, 1);
-        let cell = panel::discard_cell(&view, line);
-        Position::new(cell.x + 1, cell.y)
-    }
-
     fn ask(app: &mut App, file: usize) {
-        let at = cell(app, file);
+        let at = cell(app, file, panel::discard_cell);
         click(app, at);
     }
 
@@ -668,6 +673,11 @@ mod discarding {
         let ui::Overlay::Confirm(confirm) = overlay_shown(app, AREA) else { panic!("a confirmation") };
         assert_eq!((confirm.title, confirm.submit, confirm.dangerous), ("Discard changes", "discard", true));
         confirm.message
+    }
+
+    fn git_out(dir: &Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().expect("git");
+        String::from_utf8_lossy(&out.stdout).into_owned()
     }
 
     fn read(repo: &TempDir, path: &str) -> String {
@@ -740,7 +750,7 @@ mod discarding {
     }
 
     #[test]
-    fn commits_has_no_discard() {
+    fn commits_has_neither_discard_nor_stage() {
         let repo = repo_with_edit();
         git(repo.path(), &["checkout", "--quiet", "-b", "feat"]);
         git(repo.path(), &["commit", "--quiet", "-am", "edit"]);
@@ -751,9 +761,15 @@ mod discarding {
         let view = app.panel_view().expect("panel");
         let at = row(&app, panel::Row::File(0));
         let line = Rect::new(panel::parts(panel_area(&app), &view).body.x, at.y, panel_area(&app).width, 1);
-        assert_eq!(panel::discard_cell(&view, line), Rect::default());
+        assert_eq!(
+            (panel::discard_cell(&view, line), panel::stage_cell(&view, line)),
+            (Rect::default(), Rect::default())
+        );
         click(&mut app, Position::new(line.right().saturating_sub(5), at.y));
+        click(&mut app, Position::new(line.right().saturating_sub(8), at.y));
         assert!(app.overlay.is_none());
+        assert_eq!(read(&repo, "a.txt"), "one\nTWO\n");
+        assert_eq!(git_out(repo.path(), &["status", "--porcelain"]), "");
     }
 
     #[test]
@@ -764,5 +780,101 @@ mod discarding {
         confirm(&mut app);
         assert!(toast(&app).is_some_and(|t| t.contains("not in a git repository")), "{:?}", toast(&app));
         assert_eq!(read(&repo, "a.txt"), "one\nTWO\n");
+    }
+}
+
+mod staging {
+    use super::every_project::loaded_every;
+    use super::*;
+
+    fn stage(app: &mut App, file: usize) {
+        let at = cell(app, file, panel::stage_cell);
+        click(app, at);
+    }
+
+    fn index(repo: &TempDir) -> String {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo.path())
+            .args(["status", "--porcelain", "--", "a.txt"])
+            .output()
+            .expect("git");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    fn until_marked(app: &mut App, rx: &Receiver<AppEvent>, want: changes::diff::Staged) {
+        wait_until("the mark follows", || {
+            drain(app, rx);
+            app.refresh(Instant::now());
+            marked(app, 0) == Some(want)
+        });
+    }
+
+    #[test]
+    fn a_click_stages_with_no_question_and_no_toast_then_unstages() {
+        let (repo, mut app, rx) = open_changes();
+        assert_eq!(marked(&app, 0), Some(changes::diff::Staged::No));
+        stage(&mut app, 0);
+        assert!(app.overlay.is_none());
+        until_marked(&mut app, &rx, changes::diff::Staged::Yes);
+        assert_eq!(index(&repo), "M  a.txt\n");
+        assert_eq!(toast(&app), None);
+        stage(&mut app, 0);
+        until_marked(&mut app, &rx, changes::diff::Staged::No);
+        assert_eq!(index(&repo), " M a.txt\n");
+        assert_eq!(toast(&app), None);
+    }
+
+    #[test]
+    fn a_file_that_changed_after_the_view_is_left_alone() {
+        let (repo, mut app, rx) = open_changes();
+        std::fs::write(repo.path().join("a.txt"), "one\nTWO\nthree\n").expect("rewrite");
+        stage(&mut app, 0);
+        pump_until(&mut app, &rx, "the answer", |a| toast(a).is_some());
+        assert_eq!(toast(&app), Some("a.txt changed meanwhile: nothing was staged"));
+        assert_eq!(index(&repo), " M a.txt\n");
+    }
+
+    #[test]
+    fn the_viewed_mark_stays() {
+        let (_repo, mut app, rx) = open_changes();
+        let (target, file) = first_changed_file(&app);
+        app.panels.changes.toggle_viewed(target.workspace, &file);
+        stage(&mut app, 0);
+        until_marked(&mut app, &rx, changes::diff::Staged::Yes);
+        let (_, file) = first_changed_file(&app);
+        assert!(app.panels.changes.viewed(target.workspace, &file));
+    }
+
+    #[test]
+    fn every_project_stages_in_the_owning_workspace() {
+        let (shop, worktree) = shop_with_topic_worktree();
+        let (mut app, rx) = app_in(shop.path(), no_config());
+        loaded_every(&mut app, &rx);
+        let changes::Body::Ready(diff) = app.panel_view().expect("panel").body else { panic!("ready") };
+        let new = diff.files.iter().position(|f| f.path == "new.txt").expect("new.txt");
+        stage(&mut app, new);
+        wait_until("it is staged", || {
+            drain(&mut app, &rx);
+            app.refresh(Instant::now());
+            marked(&app, new) == Some(changes::diff::Staged::Yes)
+        });
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(worktree.path().join("topic"))
+            .args(["status", "--porcelain", "--", "new.txt"])
+            .output()
+            .expect("git");
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "A  new.txt\n");
+        assert_eq!(index(&shop), " M a.txt\n");
+    }
+
+    #[test]
+    fn a_held_index_lock_shows_gits_message() {
+        let (repo, mut app, rx) = open_changes();
+        std::fs::write(repo.path().join(".git/index.lock"), "").expect("lock");
+        stage(&mut app, 0);
+        pump_until(&mut app, &rx, "the answer", |a| toast(a).is_some());
+        assert!(toast(&app).is_some_and(|t| t.contains("index.lock")), "{:?}", toast(&app));
     }
 }

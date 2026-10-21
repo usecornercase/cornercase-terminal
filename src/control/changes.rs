@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::Fields;
 use super::surface::{Style, Table};
-use crate::changes::diff::{self, Diff, File};
+use crate::changes::diff::{self, Diff, File, Staged};
 use crate::changes::{GapLine, Mode, Scope};
 use crate::term::emulator::Decor;
 
@@ -107,6 +107,26 @@ impl ChangesDiscard {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct ChangesStage {
+    pub(crate) workspace: Option<u64>,
+    pub(crate) path: String,
+    pub(crate) digest: Option<String>,
+    #[serde(default = "to_stage")]
+    pub(crate) staged: bool,
+}
+
+fn to_stage() -> bool {
+    true
+}
+
+impl ChangesStage {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.maybe("workspace", self.workspace).add("path", &self.path).add("staged", self.staged);
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum State {
@@ -114,6 +134,25 @@ pub(crate) enum State {
     Loading,
     Ready,
     Failed,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Staging {
+    #[default]
+    No,
+    Partly,
+    Yes,
+}
+
+impl From<Staged> for Staging {
+    fn from(staged: Staged) -> Self {
+        match staged {
+            Staged::No => Self::No,
+            Staged::Partly => Self::Partly,
+            Staged::Yes => Self::Yes,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -201,6 +240,8 @@ pub(crate) struct FileInfo {
     pub(crate) removed: usize,
     pub(crate) fold: FoldClass,
     pub(crate) viewed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) staged: Option<Staging>,
     pub(crate) digest: String,
 }
 
@@ -214,6 +255,7 @@ impl FileInfo {
             removed: file.removed,
             fold: file.fold.into(),
             viewed,
+            staged: file.staged.map(Into::into),
             digest: digest(file.viewed_digest),
         }
     }
@@ -416,6 +458,16 @@ pub(crate) struct Viewed {
     pub(crate) workspace: u64,
     pub(crate) path: String,
     pub(crate) viewed: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct StagedFile {
+    pub(crate) workspace: u64,
+    pub(crate) path: String,
+    pub(crate) old_path: Option<String>,
+    pub(crate) status: FileStatus,
+    pub(crate) staged: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -5,50 +5,8 @@ use std::sync::Arc;
 
 use super::diff::{self, Diff, File, Fold, Status};
 use super::git::{self, Loaded, Request};
+use super::porcelain::{Porcelain, path_prefix};
 use crate::error::Result;
-
-fn statuses(raw: &[u8], prefix: &str) -> (Statuses, Vec<String>, HashMap<String, String>) {
-    let mut records = raw.split(|b| *b == 0);
-    let mut statuses = HashMap::new();
-    let mut untracked = Vec::new();
-    let mut renames = HashMap::new();
-    while let Some(record) = records.next() {
-        let text = String::from_utf8_lossy(record);
-        let old_path = if record.first() == Some(&b'2') {
-            records.next().map(|old| String::from_utf8_lossy(old).into_owned())
-        } else {
-            None
-        };
-        let fields: Vec<&str> = match record.first() {
-            Some(b'1') => text.splitn(9, ' ').collect(),
-            Some(b'2') => text.splitn(10, ' ').collect(),
-            Some(b'?') => {
-                if let Some(path) = text.strip_prefix("? ").and_then(|p| p.strip_prefix(prefix)) {
-                    untracked.push(path.to_string());
-                }
-                continue;
-            }
-            Some(b'u') => text.splitn(11, ' ').collect(),
-            _ => continue,
-        };
-        let (Some(xy), Some(path)) = (fields.get(1), fields.last()) else { continue };
-        let Some(path) = path.strip_prefix(prefix) else { continue };
-        if let Some(old) = old_path.and_then(|old| old.strip_prefix(prefix).map(str::to_string)) {
-            renames.insert(path.to_string(), old);
-        }
-        let status = if xy.contains('R') {
-            Status::Renamed
-        } else if xy.contains('D') {
-            Status::Deleted
-        } else if xy.contains('A') {
-            Status::Added
-        } else {
-            Status::Modified
-        };
-        statuses.insert(path.to_string(), status);
-    }
-    (statuses, untracked, renames)
-}
 
 fn counted(raw: &[u8], statuses: &Statuses) -> Vec<File> {
     let mut records = raw.split(|b| *b == 0);
@@ -79,6 +37,7 @@ fn counted(raw: &[u8], statuses: &Statuses) -> Vec<File> {
             hunks: Vec::new(),
             digest: 0,
             viewed_digest: 0,
+            staged: None,
         });
     }
     files
@@ -90,18 +49,18 @@ type Previous<'a> = HashMap<&'a str, &'a Arc<File>>;
 pub(super) fn load(request: &Request, expanded: &[String]) -> Result<Loaded> {
     let dir = request.dir.as_path();
     let from = git::head(dir)?;
-    let status = git::run(dir, &["status", "--porcelain=v2", "-z", "--untracked-files=all", "--", "."])?;
+    let status = git::status(dir)?;
     let numstat = numstat(dir, &from)?;
-    let (statuses, paths, renames) = statuses(&status, &path_prefix(dir));
-    let untracked = git::read_untracked(dir, paths);
+    let porcelain = Porcelain::parse(&status, &path_prefix(dir));
+    let untracked = git::read_untracked(dir, porcelain.untracked.clone());
     let previous: Previous = request.previous.iter().map(|f| (f.path.as_str(), f)).collect();
-    let paths = patch_paths(expanded, &untracked, &renames, &previous);
+    let paths = patch_paths(expanded, &untracked, &porcelain.renames, &previous);
     let patch = if paths.is_empty() { Vec::new() } else { git::patch(dir, &from, &paths)? };
-    let digest = digest_of(dir, &statuses, (&from, &status, &numstat, &untracked, expanded, &patch));
+    let digest = digest_of(dir, &porcelain.statuses, (&from, &status, &numstat, &untracked, expanded, &patch));
     if request.last == Some(digest) {
         return Ok(Loaded { base: None, digest, diff: None });
     }
-    let files = summarized(dir, &from, &numstat, &statuses, &untracked);
+    let files = summarized(dir, &from, &numstat, &porcelain, &untracked);
     let mut patches: HashMap<String, File> =
         diff::parse(&String::from_utf8_lossy(&patch)).into_iter().map(|f| (f.path.clone(), f)).collect();
     let mut files: Vec<_> = files
@@ -120,14 +79,6 @@ fn numstat(dir: &Path, from: &str) -> Result<Vec<u8>> {
         dir,
         &["diff", "--numstat", "-z", "--find-renames", "--relative", "--no-ext-diff", "--no-textconv", from, "--", "."],
     )
-}
-
-fn path_prefix(dir: &Path) -> String {
-    dir.ancestors()
-        .find(|root| root.join(".git").exists())
-        .and_then(|root| dir.strip_prefix(root).ok())
-        .filter(|prefix| !prefix.as_os_str().is_empty())
-        .map_or_else(String::new, |prefix| format!("{}/", prefix.display()))
 }
 
 fn patch_paths<'a>(
@@ -160,12 +111,19 @@ fn digest_of(dir: &Path, statuses: &Statuses, parts: impl Hash) -> u64 {
     hasher.finish()
 }
 
-fn summarized(dir: &Path, from: &str, numstat: &[u8], statuses: &Statuses, untracked: &[git::Untracked]) -> Vec<File> {
-    let mut files = counted(numstat, statuses);
+fn summarized(
+    dir: &Path,
+    from: &str,
+    numstat: &[u8],
+    porcelain: &Porcelain,
+    untracked: &[git::Untracked],
+) -> Vec<File> {
+    let mut files = counted(numstat, &porcelain.statuses);
     files.extend(untracked.iter().map(|u| diff::untracked_file(&u.path, u.size, u.bytes.as_deref(), false)));
     for file in &mut files {
         file.viewed_digest = git::fingerprint(dir, from, file);
         file.digest = file.viewed_digest;
+        file.staged = Some(porcelain.staged(file));
     }
     files
 }
@@ -179,6 +137,7 @@ fn opened(file: File, untracked: &[git::Untracked], patches: &mut HashMap<String
     match loaded {
         Some(mut loaded) => {
             loaded.viewed_digest = file.viewed_digest;
+            loaded.staged = file.staged;
             loaded
         }
         None => file,

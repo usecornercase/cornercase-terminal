@@ -8,7 +8,8 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use super::Mode;
-use super::diff::{self, Diff, File, MAX_UNTRACKED_BYTES};
+use super::diff::{self, Diff, File, MAX_UNTRACKED_BYTES, Status};
+use super::porcelain::{Porcelain, path_prefix};
 use crate::error::{Error, Result};
 use crate::git::worktree;
 
@@ -74,6 +75,10 @@ pub(crate) fn branches(dir: &Path) -> Vec<String> {
         .filter_map(|r| r.strip_prefix("refs/heads/").or_else(|| r.strip_prefix("refs/remotes/")))
         .map(str::to_string)
         .collect()
+}
+
+pub(super) fn status(dir: &Path) -> Result<Vec<u8>> {
+    run(dir, &["status", "--porcelain=v2", "-z", "--untracked-files=all", "--", "."])
 }
 
 pub(super) fn head(dir: &Path) -> Result<String> {
@@ -158,15 +163,33 @@ pub(crate) fn load(request: &Request) -> Result<Loaded> {
     }
     args.extend(DIFF);
     let patch = run(dir, &args)?;
-    let untracked = if request.mode == Mode::Commits { Vec::new() } else { untracked(dir)? };
+    let listing = listing(request.mode, dir)?;
     let mut hasher = DefaultHasher::new();
-    (&base, &patch, &untracked).hash(&mut hasher);
+    (&base, &patch, &listing.untracked, &listing.raw).hash(&mut hasher);
     let digest = hasher.finish();
     if request.last == Some(digest) {
         return Ok(Loaded { base, digest, diff: None });
     }
-    let files = files_of(request, &from, &patch, &untracked);
+    let files = files_of(request, &from, &patch, &listing);
     Ok(Loaded { base, digest, diff: Some(Diff { files }) })
+}
+
+struct Listing {
+    untracked: Vec<Untracked>,
+    raw: Vec<u8>,
+    porcelain: Option<Porcelain>,
+}
+
+fn listing(mode: Mode, dir: &Path) -> Result<Listing> {
+    match mode {
+        Mode::Commits => Ok(Listing { untracked: Vec::new(), raw: Vec::new(), porcelain: None }),
+        Mode::All => Ok(Listing { untracked: untracked(dir)?, raw: Vec::new(), porcelain: None }),
+        Mode::Uncommitted => {
+            let raw = status(dir)?;
+            let porcelain = Porcelain::parse(&raw, &path_prefix(dir));
+            Ok(Listing { untracked: read_untracked(dir, porcelain.untracked.clone()), raw, porcelain: Some(porcelain) })
+        }
+    }
 }
 
 fn comparison(request: &Request, dir: &Path) -> Result<(Option<String>, String)> {
@@ -187,17 +210,18 @@ fn comparison(request: &Request, dir: &Path) -> Result<(Option<String>, String)>
     Ok((base, from))
 }
 
-fn files_of(request: &Request, from: &str, patch: &[u8], untracked: &[Untracked]) -> Vec<Arc<File>> {
+fn files_of(request: &Request, from: &str, patch: &[u8], listing: &Listing) -> Vec<Arc<File>> {
     let dir = request.dir.as_path();
     let previous = request.previous.iter().map(|f| (f.path.as_str(), f)).collect();
     let reviewed = |mut file: File| {
         if request.mode == Mode::Uncommitted {
             file.viewed_digest = fingerprint(dir, from, &file);
         }
+        file.staged = listing.porcelain.as_ref().map(|p| p.staged(&file));
         reuse(file, &previous)
     };
     let mut files: Vec<Arc<File>> = diff::parse(&String::from_utf8_lossy(patch)).into_iter().map(reviewed).collect();
-    files.extend(untracked.iter().map(|u| reviewed(diff::untracked(&u.path, u.size, u.bytes.as_deref()))));
+    files.extend(listing.untracked.iter().map(|u| reviewed(diff::untracked(&u.path, u.size, u.bytes.as_deref()))));
     files.sort_by(|a, b| a.path.cmp(&b.path));
     files
 }
@@ -207,11 +231,12 @@ pub(super) fn reuse(mut file: File, previous: &HashMap<&str, &Arc<File>>) -> Arc
         .get(file.path.as_str())
         .filter(|old| old.digest == file.digest && old.hunks.is_empty() == file.hunks.is_empty())
     {
-        if old.viewed_digest == file.viewed_digest {
+        if old.viewed_digest == file.viewed_digest && old.staged == file.staged {
             return Arc::clone(old);
         }
         let mut reused = File::clone(old);
         reused.viewed_digest = file.viewed_digest;
+        reused.staged = file.staged;
         return Arc::new(reused);
     }
     diff::finish(&mut file);
@@ -224,8 +249,9 @@ pub(super) fn stamp(path: &Path) -> Option<(u64, i64, i64, i64, i64)> {
 
 pub(super) fn fingerprint(dir: &Path, from: &str, file: &File) -> u64 {
     let stamp = stamp(&dir.join(&file.path));
+    let status = if file.status == Status::Untracked { Status::Added } else { file.status };
     let mut hasher = DefaultHasher::new();
-    (from, &file.path, &file.old_path, file.status, file.added, file.removed, stamp).hash(&mut hasher);
+    (from, &file.path, &file.old_path, status, file.added, file.removed, stamp).hash(&mut hasher);
     hasher.finish()
 }
 

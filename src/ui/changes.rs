@@ -10,7 +10,7 @@ use ratatui::style::{Color, Modifier, Style};
 use super::icons::Glyphs;
 use super::{action_style, dim, draw_close, hovered_at as hovered, put};
 use crate::changes::Body;
-use crate::changes::diff::{Diff, File, Hunk, Kind, Line, Segments, Status};
+use crate::changes::diff::{Diff, File, Hunk, Kind, Line, Segments, Staged, Status};
 use crate::changes::every::Header;
 use crate::changes::{GapLine, Mode, Scope, Tints};
 
@@ -20,8 +20,12 @@ const HEADER_ROWS: u16 = 4;
 const FOOTER_ROWS: u16 = 2;
 const BAR_CELLS: usize = 8;
 const VIEWED_WIDTH: u16 = 3;
-const DISCARD_WIDTH: u16 = 3;
+const SLOT_WIDTH: u16 = 3;
 const DISCARD: &str = "↺";
+const STAGE: &str = "+";
+const UNSTAGE: &str = "−";
+const STAGED: &str = "●";
+const PARTLY_STAGED: &str = "◐";
 const LOADING: &str = "reading changes…";
 const COLLAPSE_ALL: &str = "collapse all";
 const EXPAND_ALL: &str = "expand all";
@@ -303,12 +307,20 @@ fn viewed_cell(row: Rect) -> Rect {
     Rect::new(row.right().saturating_sub(VIEWED_WIDTH), row.y, VIEWED_WIDTH.min(row.width), 1)
 }
 
-pub(crate) fn discard_cell(view: &View, row: Rect) -> Rect {
+fn slot_left_of(view: &View, row: Rect, next: Rect) -> Rect {
     if view.mode != Mode::Uncommitted {
         return Rect::default();
     }
-    let x = viewed_cell(row).x.saturating_sub(DISCARD_WIDTH).max(row.x);
-    Rect::new(x, row.y, DISCARD_WIDTH, 1).intersection(row)
+    let x = next.x.saturating_sub(SLOT_WIDTH).max(row.x);
+    Rect::new(x, row.y, SLOT_WIDTH, 1).intersection(row)
+}
+
+pub(crate) fn stage_cell(view: &View, row: Rect) -> Rect {
+    slot_left_of(view, row, viewed_cell(row))
+}
+
+pub(crate) fn discard_cell(view: &View, row: Rect) -> Rect {
+    slot_left_of(view, row, stage_cell(view, row))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -324,6 +336,7 @@ pub(crate) enum Hit {
     FoldAll,
     File(usize),
     Viewed(usize),
+    Stage(usize),
     Discard(usize),
     Gap(usize, usize),
     Action(usize, usize, Action),
@@ -358,6 +371,7 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     match row {
         Row::Header(i) => Some(Hit::Header(i)),
         Row::File(i) if viewed_cell(r).contains(pos) => Some(Hit::Viewed(i)),
+        Row::File(i) if stage_cell(view, r).contains(pos) => Some(Hit::Stage(i)),
         Row::File(i) if discard_cell(view, r).contains(pos) => Some(Hit::Discard(i)),
         Row::File(i) => Some(Hit::File(i)),
         Row::Gap(i, h) => Some(Hit::Gap(i, h)),
@@ -644,7 +658,7 @@ impl Painter<'_> {
         }
         let status = if muted { dim(view.muted) } else { status_style(file.status) };
         put(self.buf, (r.x + 4 + indent, r.y), file.status.letter(), status, r.right());
-        let end = self.marks(r, viewed);
+        let end = self.marks(r, file.staged, viewed);
         let right = file_tags(view, file, muted);
         let right_width: u16 = right.iter().map(|(t, _)| width(t) + 1).sum();
         let mut x = end.saturating_sub(right_width);
@@ -655,18 +669,34 @@ impl Painter<'_> {
         self.path(file, (r.x + 6 + indent, r.y), path_end, muted);
     }
 
-    fn marks(&mut self, r: Rect, viewed: bool) -> u16 {
+    fn marks(&mut self, r: Rect, staged: Option<Staged>, viewed: bool) -> u16 {
         let check = viewed_cell(r);
         self.viewed_mark(check, r, viewed);
+        let stage = stage_cell(self.view, r);
         let cell = discard_cell(self.view, r);
         if cell.width == 0 {
             return check.x;
         }
+        self.stage_mark(stage, r, staged);
         if self.lit(r) {
             let style = if self.lit(cell) { Style::default().fg(Color::Red) } else { dim(self.view.muted) };
             put(self.buf, (cell.x + 1, r.y), DISCARD, style, r.right());
         }
         cell.x
+    }
+
+    fn stage_mark(&mut self, cell: Rect, r: Rect, staged: Option<Staged>) {
+        let green = Style::default().fg(Color::Green);
+        let under = self.lit(cell);
+        let (glyph, style) = match (staged, under) {
+            (Some(Staged::Yes), true) => (UNSTAGE, Style::default().fg(Color::Yellow)),
+            (Some(Staged::Yes), false) => (STAGED, green),
+            (Some(Staged::Partly), false) => (PARTLY_STAGED, green),
+            (_, true) => (STAGE, green),
+            (_, false) if self.lit(r) => (STAGE, dim(self.view.muted)),
+            _ => return,
+        };
+        put(self.buf, (cell.x + 1, r.y), glyph, style, r.right());
     }
 
     fn viewed_mark(&mut self, check: Rect, r: Rect, viewed: bool) {

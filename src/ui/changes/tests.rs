@@ -226,17 +226,24 @@ fn clicks_on_a_file_row() {
         (hit(AREA, &view, Position::new(10, r.y)), hit(AREA, &view, Position::new(r.right() - 2, r.y))),
         (Some(Hit::File(1)), Some(Hit::Viewed(1)))
     );
-    let cell = discard_cell(&view, r);
-    assert_eq!(hit(AREA, &view, Position::new(cell.x + 1, r.y)), Some(Hit::Discard(1)));
+}
+
+fn glyph_at(terminal: &Terminal<TestBackend>, cell: Rect) -> (String, Color) {
+    let c = &terminal.backend().buffer()[(cell.x + 1, cell.y)];
+    (c.symbol().to_string(), c.fg)
+}
+
+fn staged(staged: Staged) -> View {
+    let mut view = sample();
+    if let Body::Ready(diff) = &mut view.body {
+        let files = &mut Arc::make_mut(diff).files;
+        Arc::make_mut(&mut files[1]).staged = Some(staged);
+    }
+    view
 }
 
 mod discard {
     use super::*;
-
-    fn glyph_at(terminal: &Terminal<TestBackend>, cell: Rect) -> (String, Color) {
-        let c = &terminal.backend().buffer()[(cell.x + 1, cell.y)];
-        (c.symbol().to_string(), c.fg)
-    }
 
     #[test]
     fn the_icon_shows_on_a_hovered_row_and_turns_red_under_the_pointer() {
@@ -258,28 +265,90 @@ mod discard {
         let terminal = render(&view, Some(Position::new(10, r.y)));
         assert_eq!(glyph_at(&terminal, discard_cell(&view, r)).0, "↺");
     }
+}
+
+mod slots {
+    use super::*;
+
+    #[test]
+    fn sit_in_order_before_the_viewed_mark() {
+        let view = sample();
+        let r = row_of(&view, Row::File(1));
+        let (discard, stage) = (discard_cell(&view, r), stage_cell(&view, r));
+        assert_eq!((discard.right(), stage.right()), (stage.x, viewed_cell(r).x));
+    }
 
     #[rstest::rstest]
-    #[case::commits(Mode::Commits)]
-    #[case::all(Mode::All)]
-    fn commits_and_all_have_none(#[case] mode: Mode) {
-        let view = View { mode, ..sample() };
+    #[case::commits(Mode::Commits, Scope::Project)]
+    #[case::all(Mode::All, Scope::Project)]
+    fn commits_and_all_have_none(#[case] mode: Mode, #[case] scope: Scope) {
+        let view = View { scope, mode, ..sample() };
         let r = row_of(&view, Row::File(1));
         let hovered = render(&view, Some(Position::new(10, r.y)));
         let line: String =
             (r.x..r.right()).map(|x| hovered.backend().buffer()[(x, r.y)].symbol().to_string()).collect();
         assert!(!line.contains('↺'), "{line}");
-        assert_eq!(discard_cell(&view, r), Rect::default());
+        assert_eq!((discard_cell(&view, r), stage_cell(&view, r)), (Rect::default(), Rect::default()));
         let at = Position::new(viewed_cell(r).x.saturating_sub(2), r.y);
         assert_eq!(hit(AREA, &view, at), Some(Hit::File(1)));
     }
 
-    #[test]
-    fn every_project_has_it_too() {
-        let view = View { scope: Scope::Every, ..sample() };
+    #[rstest::rstest]
+    #[case::project(Scope::Project)]
+    #[case::every_project(Scope::Every)]
+    fn are_hit_in_uncommitted_and_every_project(#[case] scope: Scope) {
+        let view = View { scope, ..sample() };
         let r = row_of(&view, Row::File(1));
-        let cell = discard_cell(&view, r);
-        assert_eq!(hit(AREA, &view, Position::new(cell.x + 1, r.y)), Some(Hit::Discard(1)));
+        let (discard, stage) = (discard_cell(&view, r), stage_cell(&view, r));
+        assert_eq!(hit(AREA, &view, Position::new(discard.x + 1, r.y)), Some(Hit::Discard(1)));
+        assert_eq!(hit(AREA, &view, Position::new(stage.x + 1, r.y)), Some(Hit::Stage(1)));
+    }
+}
+
+mod stage {
+    use super::*;
+
+    const GREEN: Color = Color::Green;
+
+    #[rstest::rstest]
+    #[case::unstaged_at_rest(Staged::No, false, false, " ", GREEN)]
+    #[case::unstaged_on_the_row(Staged::No, true, false, "+", Color::DarkGray)]
+    #[case::unstaged_under_the_pointer(Staged::No, true, true, "+", GREEN)]
+    #[case::partly_at_rest(Staged::Partly, false, false, "◐", GREEN)]
+    #[case::partly_on_the_row(Staged::Partly, true, false, "◐", GREEN)]
+    #[case::partly_under_the_pointer(Staged::Partly, true, true, "+", GREEN)]
+    #[case::staged_at_rest(Staged::Yes, false, false, "●", GREEN)]
+    #[case::staged_on_the_row(Staged::Yes, true, false, "●", GREEN)]
+    #[case::staged_under_the_pointer(Staged::Yes, true, true, "−", Color::Yellow)]
+    fn the_glyph(
+        #[case] state: Staged,
+        #[case] on_row: bool,
+        #[case] under: bool,
+        #[case] glyph: &str,
+        #[case] colour: Color,
+    ) {
+        let view = staged(state);
+        let r = row_of(&view, Row::File(1));
+        let cell = stage_cell(&view, r);
+        let pointer = match (on_row, under) {
+            (_, true) => Some(Position::new(cell.x + 1, r.y)),
+            (true, false) => Some(Position::new(10, r.y)),
+            _ => None,
+        };
+        let (shown, fg) = glyph_at(&render(&view, pointer), cell);
+        assert_eq!(shown, glyph);
+        if glyph != " " {
+            assert_eq!(fg, colour);
+        }
+    }
+
+    #[test]
+    fn an_unread_file_counts_as_unstaged() {
+        let view = sample();
+        let r = row_of(&view, Row::File(1));
+        let cell = stage_cell(&view, r);
+        let under = render(&view, Some(Position::new(cell.x + 1, r.y)));
+        assert_eq!(glyph_at(&under, cell), ("+".to_string(), GREEN));
     }
 }
 

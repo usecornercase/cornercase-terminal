@@ -586,6 +586,7 @@ impl App {
             Command::ChangesBase(base) => self.changes_base_request(client, asker, &base),
             Command::ChangesViewed(viewed) => self.changes_viewed_request(asker, &viewed),
             Command::ChangesDiscard(discard) => self.changes_discard_request(client, asker, &discard),
+            Command::ChangesStage(stage) => self.changes_stage_request(client, asker, &stage),
             other => return ControlFlow::Continue(other),
         })
     }

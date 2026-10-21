@@ -40,7 +40,8 @@ pub(crate) use app_state::{
 };
 pub(crate) use arrange::{CloseAgent, Fold, GroupDelete, GroupNew, GroupStyle, Move, MovePane, RemovalCheck};
 pub(crate) use changes::{
-    Changes, ChangesBase, ChangesCount, ChangesDiscard, ChangesFile, ChangesGap, ChangesMode, ChangesViewed,
+    Changes, ChangesBase, ChangesCount, ChangesDiscard, ChangesFile, ChangesGap, ChangesMode, ChangesStage,
+    ChangesViewed,
 };
 pub(crate) use config::{ConfigInfo, Configure};
 pub(crate) use contract::Contract;
@@ -176,6 +177,7 @@ pub(crate) enum Command {
     ChangesBase(ChangesBase),
     ChangesViewed(ChangesViewed),
     ChangesDiscard(ChangesDiscard),
+    ChangesStage(ChangesStage),
     Usage(Usage),
     PluginList(PluginList),
     PluginActions(PluginActions),
@@ -295,6 +297,7 @@ impl Command {
             Self::ChangesBase(_) => 65,
             Self::ChangesViewed(_) => 66,
             Self::ChangesDiscard(_) => 90,
+            Self::ChangesStage(_) => 91,
             _ => return None,
         })
     }
@@ -361,7 +364,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 91] = [
+    pub(crate) const NAMES: [&str; 92] = [
         "status",
         "open",
         "new-workspace",
@@ -453,6 +456,7 @@ impl Command {
         "close-agent",
         "account-restart",
         "changes-discard",
+        "changes-stage",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

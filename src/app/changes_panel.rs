@@ -19,11 +19,11 @@ use crate::project::Hierarchy;
 use crate::ui::changes::{self as panel, Action as HunkAction, Hit as PanelHit};
 use crate::ui::{self};
 
+mod actions;
 mod branches;
-mod discard;
 pub(super) mod streams;
 
-pub(super) use discard::Seen;
+pub(super) use actions::Seen;
 pub(super) use streams::Streams;
 
 const CHANGES_LABEL: &str = "Changes";
@@ -69,11 +69,12 @@ pub(crate) enum ChangesEvent {
         change: BaseChange,
         listed: Result<(Vec<String>, Option<String>)>,
     },
-    Discarded {
+    Acted {
         request: Option<u64>,
         workspace: u64,
         path: String,
-        result: Result<changes::discard::Outcome>,
+        action: changes::act::FileAction,
+        result: Result<changes::act::Outcome>,
     },
 }
 
@@ -86,7 +87,11 @@ impl ChangesEvent {
             Self::File { .. } => "changes file",
             Self::GapRead { .. } => "changes gap",
             Self::Base { .. } => "changes base",
-            Self::Discarded { .. } => "changes discard",
+            Self::Acted { action, .. } => match action {
+                changes::act::FileAction::Discard => "changes discard",
+                changes::act::FileAction::Stage => "changes stage",
+                changes::act::FileAction::Unstage => "changes unstage",
+            },
         }
     }
 }
@@ -113,8 +118,8 @@ impl App {
             ChangesEvent::Base { request, workspace, change, listed } => {
                 self.changes_base_replied(request, workspace, &change, listed);
             }
-            ChangesEvent::Discarded { request, workspace, path, result } => {
-                self.discard_answered(request, workspace, &path, result);
+            ChangesEvent::Acted { request, workspace, path, action, result } => {
+                self.file_action_answered(request, (workspace, &path), action, result);
             }
         }
     }
@@ -347,6 +352,7 @@ impl App {
             Some(
                 PanelHit::File(i)
                 | PanelHit::Viewed(i)
+                | PanelHit::Stage(i)
                 | PanelHit::Discard(i)
                 | PanelHit::Gap(i, _)
                 | PanelHit::Action(i, _, _),
@@ -388,6 +394,7 @@ impl App {
                     self.panels.changes.toggle_viewed(chosen.target.workspace, &chosen.file);
                 }
             }
+            Some(PanelHit::Stage(_)) => self.stage_clicked(chosen),
             Some(PanelHit::Discard(_)) => self.ask_discard(chosen),
             Some(PanelHit::Gap(_, h)) => self.read_gap(view.mode, chosen, h),
             Some(PanelHit::Action(..)) | None => {}

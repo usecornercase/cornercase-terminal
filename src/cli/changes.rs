@@ -3,12 +3,13 @@ use std::io::{self, IsTerminal};
 
 use super::args::changes::{ChangesAction, ChangesArgs, ModeFlag, Where};
 use super::{print_json, print_out, stream_json, workspace};
-use crate::changes::{Mode, Scope, discard};
+use crate::changes::{Mode, Scope, discard, stage as staging};
 use crate::client::{self, answer, ask};
 use crate::control::changes::{
-    Base, Content, Discarded, FileInfo, FileStatus, FoldClass, Gap, LineKind, Patch, State, Summary,
+    Base, Content, Discarded, FileInfo, FileStatus, FoldClass, Gap, LineKind, Patch, StagedFile, Staging, State,
+    Summary,
 };
-use crate::control::{Changes, ChangesBase, ChangesDiscard, ChangesFile, ChangesGap, ChangesViewed};
+use crate::control::{Changes, ChangesBase, ChangesDiscard, ChangesFile, ChangesGap, ChangesStage, ChangesViewed};
 use crate::control::{Command, Report};
 use crate::error::{Error, Result};
 
@@ -22,6 +23,8 @@ pub(super) fn run(args: ChangesArgs) -> Result<()> {
         ChangesAction::Base { branch, default, place, print } => base(branch, default, &place, print.json),
         ChangesAction::Viewed { path, clear, place, mode } => viewed(&path, clear, &place, &mode),
         ChangesAction::Discard { path, place, yes } => discard(&path, &place, yes),
+        ChangesAction::Stage { path, place } => stage(&path, &place, true),
+        ChangesAction::Unstage { path, place } => stage(&path, &place, false),
     }
 }
 
@@ -90,6 +93,11 @@ fn tags(file: &FileInfo) -> String {
         FoldClass::Lockfile => tags.push("lockfile"),
         FoldClass::Binary => tags.push("binary"),
         FoldClass::Large => tags.push("too large"),
+    }
+    match file.staged {
+        Some(Staging::Yes) => tags.push("staged"),
+        Some(Staging::Partly) => tags.push("partly staged"),
+        _ => {}
     }
     if file.viewed {
         tags.push("viewed");
@@ -211,23 +219,21 @@ fn base(branch: Option<String>, default: bool, at: &Where, json: bool) -> Result
     print_out(&text)
 }
 
+fn seen(workspace: Option<u64>, path: &str, mode: Mode) -> Result<Patch> {
+    let request = ChangesFile { workspace, path: path.to_string(), mode };
+    answer(ask("changes-file", Command::ChangesFile(request))?)
+}
+
 fn viewed(path: &str, clear: bool, at: &Where, mode: &ModeFlag) -> Result<()> {
     let workspace = place("changes viewed", at)?;
-    let digest = if clear {
-        None
-    } else {
-        let request = ChangesFile { workspace, path: path.to_string(), mode: mode.mode.into() };
-        let seen: Patch = answer(ask("changes-file", Command::ChangesFile(request))?)?;
-        Some(seen.file.digest)
-    };
+    let digest = if clear { None } else { Some(seen(workspace, path, mode.mode.into())?.file.digest) };
     let request = ChangesViewed { workspace, path: path.to_string(), digest, clear };
     ask("changes-viewed", Command::ChangesViewed(request)).map(drop)
 }
 
 fn discard(path: &str, at: &Where, yes: bool) -> Result<()> {
     let workspace = place("changes discard", at)?;
-    let request = ChangesFile { workspace, path: path.to_string(), mode: Mode::Uncommitted };
-    let seen: Patch = answer(ask("changes-file", Command::ChangesFile(request))?)?;
+    let seen = seen(workspace, path, Mode::Uncommitted)?;
     let (status, old) = (seen.file.status.into(), seen.file.old_path.as_deref());
     if !yes && !confirmed_discard(&discard::question(path, old, status))? {
         return print_out("nothing discarded\n");
@@ -235,6 +241,14 @@ fn discard(path: &str, at: &Where, yes: bool) -> Result<()> {
     let request = ChangesDiscard { workspace, path: path.to_string(), digest: Some(seen.file.digest.clone()) };
     let done: Discarded = answer(ask("changes-discard", Command::ChangesDiscard(request))?)?;
     print_out(&format!("{}\n", discard::done(&done.path, done.old_path.as_deref(), done.status.into())))
+}
+
+fn stage(path: &str, at: &Where, staged: bool) -> Result<()> {
+    let workspace = place(if staged { "changes stage" } else { "changes unstage" }, at)?;
+    let seen = seen(workspace, path, Mode::Uncommitted)?;
+    let request = ChangesStage { workspace, path: path.to_string(), digest: Some(seen.file.digest), staged };
+    let done: StagedFile = answer(ask("changes-stage", Command::ChangesStage(request))?)?;
+    print_out(&format!("{}\n", staging::done(&done.path, done.old_path.as_deref(), done.staged)))
 }
 
 fn confirmed_discard(question: &str) -> Result<bool> {

@@ -1,67 +1,8 @@
-use std::path::Path;
-
 use rstest::rstest;
 
 use super::*;
-use crate::changes::Mode;
+use crate::changes::tests::{digest, new_change, status, tracked_change, write};
 use crate::test_util::{TempDir, git, git_repo};
-
-fn digest(dir: &Path, path: &str) -> u64 {
-    let request = git::Request {
-        dir: dir.to_path_buf(),
-        mode: Mode::Uncommitted,
-        base: None,
-        last: None,
-        previous: Vec::new(),
-        expanded: None,
-    };
-    let diff = git::load(&request).expect("load").diff.expect("diff");
-    diff.files.iter().find(|f| f.path == path).expect("the file is listed").viewed_digest
-}
-
-fn status(dir: &Path, paths: &[&str]) -> String {
-    let mut args = vec!["status", "--porcelain", "--"];
-    args.extend(paths);
-    let out = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().expect("run git");
-    String::from_utf8_lossy(&out.stdout).into_owned()
-}
-
-fn write(dir: &Path, path: &str, text: &str) {
-    std::fs::write(dir.join(path), text).expect("write file");
-}
-
-fn tracked_change(dir: &Path, kind: &str) {
-    match kind {
-        "modified" => write(dir, "a.txt", "one\nTWO\n"),
-        "staged_and_unstaged" => {
-            write(dir, "a.txt", "one\nTWO\n");
-            git(dir, &["add", "a.txt"]);
-            write(dir, "a.txt", "one\nTWO\nthree\n");
-        }
-        "deleted" => std::fs::remove_file(dir.join("a.txt")).expect("remove"),
-        "deleted_with_git_rm" => git(dir, &["rm", "--quiet", "a.txt"]),
-        "renamed" => git(dir, &["mv", "a.txt", "c.txt"]),
-        _ => {
-            git(dir, &["mv", "a.txt", "c.txt"]);
-            write(dir, "c.txt", "one\ntwo\nthree\n");
-        }
-    }
-}
-
-fn new_change(dir: &Path, kind: &str) {
-    match kind {
-        "added_in_a_new_folder" => {
-            std::fs::create_dir(dir.join("new")).expect("folder");
-            write(dir, "new/b.txt", "b\n");
-            git(dir, &["add", "new/b.txt"]);
-        }
-        "intent_to_add" => {
-            write(dir, "b.txt", "b\n");
-            git(dir, &["add", "-N", "b.txt"]);
-        }
-        _ => write(dir, "b.txt", "b\n"),
-    }
-}
 
 mod puts_the_path_back {
     use super::*;
@@ -86,77 +27,10 @@ mod puts_the_path_back {
             tracked_change(dir, kind);
         }
         let outcome = discard(dir, path, digest(dir, path)).expect("discard");
-        assert!(matches!(outcome, Outcome::Discarded(_)), "{outcome:?}");
+        assert!(matches!(outcome, Outcome::Done(_)), "{outcome:?}");
         assert_eq!(status(dir, &["a.txt", "b.txt", "c.txt", "new"]), "");
         assert_eq!(status(dir, &["other.txt"]), " M other.txt\n");
         assert_eq!(std::fs::read_to_string(dir.join("other.txt")).expect("other"), "changed\n");
-    }
-
-    #[test]
-    fn a_name_with_glob_characters_touches_no_other_file() {
-        let repo = git_repo(&[("star*.txt", "one\n"), ("starA.txt", "one\n")]);
-        let dir = repo.path();
-        write(dir, "star*.txt", "two\n");
-        write(dir, "starA.txt", "two\n");
-        let outcome = discard(dir, "star*.txt", digest(dir, "star*.txt")).expect("discard");
-        assert!(matches!(outcome, Outcome::Discarded(_)));
-        assert_eq!(status(dir, &[":(literal)star*.txt"]), "");
-        assert_eq!(std::fs::read_to_string(dir.join("starA.txt")).expect("read"), "two\n");
-    }
-
-    #[test]
-    fn a_workspace_in_a_subfolder_discards_its_own_path() {
-        let repo = git_repo(&[("proj/p.txt", "one\n"), ("top.txt", "one\n")]);
-        let (dir, sub) = (repo.path(), repo.path().join("proj"));
-        write(dir, "proj/p.txt", "two\n");
-        write(dir, "top.txt", "two\n");
-        let outcome = discard(&sub, "p.txt", digest(&sub, "p.txt")).expect("discard");
-        assert!(matches!(outcome, Outcome::Discarded(_)));
-        assert_eq!(status(dir, &["proj"]), "");
-        assert_eq!(std::fs::read_to_string(dir.join("top.txt")).expect("read"), "two\n");
-    }
-}
-
-mod refuses {
-    use super::*;
-
-    #[test]
-    fn a_file_changed_after_the_digest() {
-        let repo = git_repo(&[("a.txt", "one\n")]);
-        let dir = repo.path();
-        write(dir, "a.txt", "two\n");
-        let seen = digest(dir, "a.txt");
-        write(dir, "a.txt", "three, longer\n");
-        assert!(matches!(discard(dir, "a.txt", seen).expect("discard"), Outcome::Changed));
-        assert_eq!(std::fs::read_to_string(dir.join("a.txt")).expect("read"), "three, longer\n");
-    }
-
-    #[test]
-    fn a_path_git_does_not_list() {
-        let outer = TempDir::new();
-        let dir = outer.path().join("repo");
-        std::fs::create_dir(&dir).expect("folder");
-        git(&dir, &["init", "--quiet"]);
-        write(&dir, "a.txt", "one\n");
-        git(&dir, &["add", "--all"]);
-        git(&dir, &["commit", "--quiet", "-m", "init"]);
-        write(outer.path(), "outside.txt", "keep\n");
-        for path in ["../outside.txt", "nope.txt"] {
-            assert!(matches!(discard(&dir, path, 0).expect("discard"), Outcome::Gone), "{path}");
-        }
-        assert_eq!(std::fs::read_to_string(outer.path().join("outside.txt")).expect("read"), "keep\n");
-    }
-
-    #[test]
-    fn a_held_index_lock_with_gits_message() {
-        let repo = git_repo(&[("a.txt", "one\n")]);
-        let dir = repo.path();
-        write(dir, "a.txt", "two\n");
-        let seen = digest(dir, "a.txt");
-        write(dir, ".git/index.lock", "");
-        let error = discard(dir, "a.txt", seen).expect_err("locked");
-        assert!(error.to_string().contains("index.lock"), "{error}");
-        assert_eq!(std::fs::read_to_string(dir.join("a.txt")).expect("read"), "two\n");
     }
 }
 
@@ -171,7 +45,7 @@ mod deletes {
         let link = repo.path().join("link");
         std::os::unix::fs::symlink(elsewhere.path().join("target.txt"), &link).expect("symlink");
         let outcome = discard(repo.path(), "link", digest(repo.path(), "link")).expect("discard");
-        assert!(matches!(outcome, Outcome::Discarded(_)));
+        assert!(matches!(outcome, Outcome::Done(_)));
         assert!(std::fs::symlink_metadata(&link).is_err());
         assert_eq!(std::fs::read_to_string(elsewhere.path().join("target.txt")).expect("read"), "keep\n");
     }
@@ -184,7 +58,7 @@ mod deletes {
         write(dir, "a.txt", "one\n");
         git(dir, &["add", "a.txt"]);
         let outcome = discard(dir, "a.txt", digest(dir, "a.txt")).expect("discard");
-        assert!(matches!(outcome, Outcome::Discarded(_)));
+        assert!(matches!(outcome, Outcome::Done(_)));
         assert!(!dir.join("a.txt").exists());
         assert_eq!(status(dir, &[]), "");
     }

@@ -1,8 +1,11 @@
+pub(crate) mod act;
 pub(crate) mod diff;
 pub(crate) mod discard;
 pub(crate) mod every;
 pub(crate) mod filter;
 pub(crate) mod git;
+mod porcelain;
+pub(crate) mod stage;
 mod summary;
 
 use std::collections::{HashMap, HashSet};
@@ -461,6 +464,11 @@ impl Panel {
     pub(crate) fn discarded(&mut self, workspace: u64, path: &str) {
         self.set_viewed(workspace, path, None);
         self.gaps.retain(|(k, _, _), _| k.workspace != workspace || k.path != path);
+        self.rescan(workspace);
+    }
+
+    pub(crate) fn rescan(&mut self, workspace: u64) {
+        self.invalidate_summary(workspace);
         self.requested.retain(|(w, _), _| *w != workspace);
         self.superseded.insert(workspace, self.generation);
         if self.loading.is_some_and(|(w, _, _)| w == workspace) {

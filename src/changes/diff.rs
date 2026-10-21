@@ -171,6 +171,13 @@ impl Hunk {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Staged {
+    No,
+    Partly,
+    Yes,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct File {
     pub(crate) path: String,
@@ -182,6 +189,7 @@ pub(crate) struct File {
     pub(crate) hunks: Vec<Hunk>,
     pub(crate) digest: u64,
     pub(crate) viewed_digest: u64,
+    pub(crate) staged: Option<Staged>,
 }
 
 impl File {
@@ -290,7 +298,7 @@ fn parse_file(lines: &[&str]) -> Option<File> {
     }
     let old_path = renamed_from.filter(|from| *from != path);
     let digest = digest((&path, lines));
-    Some(File { digest, viewed_digest: digest, path, old_path, status, added, removed, fold, hunks })
+    Some(File { digest, viewed_digest: digest, staged: None, path, old_path, status, added, removed, fold, hunks })
 }
 
 fn parse_hunks(lines: &[&str]) -> Vec<Hunk> {
@@ -399,6 +407,7 @@ pub(super) fn untracked_file(path: &str, size: u64, bytes: Option<&[u8]>, materi
         hunks: Vec::new(),
         digest: digest((path, size, bytes)),
         viewed_digest: digest((path, size, bytes)),
+        staged: None,
     };
     let Some(bytes) = bytes.filter(|_| size <= MAX_UNTRACKED_BYTES) else { return file };
     if bytes[..bytes.len().min(BINARY_PROBE)].contains(&0) {

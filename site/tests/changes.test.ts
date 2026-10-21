@@ -41,6 +41,15 @@ function hover(app: App): { icon: number; check: number; y: number } {
   return { icon: onRow(app, '↺', row.y), check: onRow(app, '✓', row.y), y: row.y };
 }
 
+function slot(app: App, glyph: string): { x: number; y: number } {
+  const row = fileRow(app);
+  app.pointerMove(row.x + 6, row.y, 0);
+  app.render();
+  const x = onRow(app, `${glyph}  ✓`, row.y);
+  assert.ok(x >= 0);
+  return { x, y: row.y };
+}
+
 function press(app: App, x: number, y: number): void {
   app.pointerDown(x, y, 0);
   app.pointerUp();
@@ -74,6 +83,44 @@ for (const columns of [140, 80]) {
     press(app, discard.x + 1, discard.y);
     assert.equal(app.changesDiff().length, files - 1);
     assert.match(app.toast?.text ?? '', /^(discarded the changes to|deleted) /);
+    app.destroy();
+  });
+
+  test(`a hovered row reads ↺, +, ✓ in that order at ${columns} columns`, () => {
+    const app = demo(columns);
+    const { icon, check, y } = hover(app);
+    assert.ok(onRow(app, '↺  +  ✓', y) >= 0);
+    assert.equal(check - icon, 6);
+    assert.equal(slot(app, '+').x, check - 3);
+    app.destroy();
+  });
+
+  test(`the + stages with no dialog, the row shows ● and a second click unstages at ${columns} columns`, () => {
+    const app = demo(columns);
+    const file = app.changesDiff()[0];
+    const { x, y } = slot(app, '+');
+    press(app, x, y);
+    assert.equal(app.confirmView(), null);
+    assert.equal(app.toast, null);
+    assert.equal(app.changesStaged(file), true);
+    app.pointerMove(0, 0, 0);
+    app.render();
+    assert.ok(onRow(app, '●', y) >= 0);
+    app.pointerMove(x, y, 0);
+    app.render();
+    assert.ok(onRow(app, '−  ✓', y) >= 0);
+    press(app, x, y);
+    assert.equal(app.changesStaged(file), false);
+    app.destroy();
+  });
+
+  test(`Commits shows neither the discard icon nor the stage slot at ${columns} columns`, () => {
+    const app = demo(columns);
+    app.setChangesMode('commits');
+    const { icon, check, y } = hover(app);
+    assert.equal(icon, -1);
+    assert.equal(onRow(app, '+  ✓', y), -1);
+    assert.ok(check >= 0);
     app.destroy();
   });
 

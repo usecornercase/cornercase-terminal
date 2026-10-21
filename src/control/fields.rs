@@ -121,6 +121,7 @@ impl Command {
             Self::ChangesBase(base) => base.fields(fields),
             Self::ChangesViewed(viewed) => viewed.fields(fields),
             Self::ChangesDiscard(discard) => discard.fields(fields),
+            Self::ChangesStage(stage) => stage.fields(fields),
             _ => return false,
         }
         true
