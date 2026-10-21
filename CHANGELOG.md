@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.175
+
+- **GitLab merge requests on workspace rows.** When a workspace's branch has a merge request on GitLab (gitlab.com or your own instance), its row shows it the way it shows a GitHub pull request: the number coloured by its pipeline (`✓` passed, `•` running, `✗` failed), an orange `!` when it has merge conflicts, purple once merged. Click it to see the pipeline's jobs, failed ones first, copy its link, or hand the failed jobs and the conflict to the agent. It is read with `glab`, GitLab's CLI, which must be installed and logged in (`glab auth login`); **Settings → Worktrees → pull requests** says why when it can't be read. A flow whose end is a pull request now also lights up from a merge request, and its brief says to open a merge request with `glab mr create` on GitLab.
+- Scripts: `pull_request` in `status --json`, `watch` and `view` gains `provider` (`github` or `gitlab`); for GitLab, `number` is the merge request's number in its project (`!486`).
+- Stats' merged merge requests now read glab's errors correctly when glab styles them (an old glab is told to update, a missing login is explained).
+
 ## 0.12.174
 
 - **Close a workspace's agents and reopen them later.** Right-click a workspace, or use its ` ⋯ `, and pick **close agents**: every tab running an agent closes, your shells stay, and a cyan **`▶`** on the workspace row brings them back, each in its own conversation, with the mode and account it had. It asks first only when it matters: an agent still working, one that can't resume its conversation (opencode starts a new one), or other programs in those tabs. Closed agents stay closed through `kill-server` and a reboot. A flow's team closes with its orchestrator and comes back whole, the orchestrator last with its team's new pane ids. The row's menu also has **reopen agents** and **forget closed agents**, and the keys menu has `w a` and `w o`. Removing or closing the workspace forgets its closed agents, and says so first.
