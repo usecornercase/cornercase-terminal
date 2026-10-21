@@ -127,6 +127,29 @@ mod refuses {
     }
 }
 
+mod does_not_confuse {
+    use super::*;
+
+    #[test]
+    fn a_glob_name_with_a_conflicted_file_it_matches() {
+        let repo = git_repo(&[("starA.txt", "one\n"), ("star*.txt", "one\n")]);
+        let dir = repo.path();
+        git(dir, &["switch", "--quiet", "-c", "other"]);
+        write(dir, "starA.txt", "other\n");
+        git(dir, &["commit", "--quiet", "-am", "other"]);
+        git(dir, &["switch", "--quiet", "-"]);
+        write(dir, "starA.txt", "mine\n");
+        git(dir, &["commit", "--quiet", "-am", "mine"]);
+        let merged = std::process::Command::new("git").arg("-C").arg(dir).args(["merge", "other"]).output();
+        assert!(!merged.expect("merge").status.success());
+        write(dir, "star*.txt", "two\n");
+        let outcome = stage(dir, "star*.txt", digest(dir, "star*.txt"), true).expect("stage");
+        assert!(matches!(outcome, Outcome::Done(_)), "{outcome:?}");
+        assert_eq!(status(dir, &[":(literal)star*.txt"]), "M  star*.txt\n");
+        assert_eq!(status(dir, &[":(literal)starA.txt"]), "UU starA.txt\n");
+    }
+}
+
 mod says {
     use super::*;
 

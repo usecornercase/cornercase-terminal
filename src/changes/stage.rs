@@ -13,7 +13,7 @@ pub(crate) fn stage(dir: &Path, path: &str, digest: u64, staged: bool) -> Result
 }
 
 fn refuse_unmerged(dir: &Path, file: &File) -> Result<()> {
-    let mut args = vec!["ls-files", "--unmerged", "-z", "--", file.path.as_str()];
+    let mut args = vec!["--literal-pathspecs", "ls-files", "--unmerged", "-z", "--", file.path.as_str()];
     args.extend(file.old_path.as_deref());
     if git::run(dir, &args)?.is_empty() {
         return Ok(());
