@@ -7,6 +7,21 @@ use crate::test_util::{TempDir, git, git_repo};
 
 const PATHS: [&str; 4] = ["a.txt", "b.txt", "c.txt", "new"];
 
+fn conflict(dir: &Path, path: &str) {
+    git(dir, &["switch", "--quiet", "-c", "other"]);
+    write(dir, path, "other\n");
+    git(dir, &["commit", "--quiet", "-am", "other"]);
+    git(dir, &["switch", "--quiet", "-"]);
+    write(dir, path, "mine\n");
+    git(dir, &["commit", "--quiet", "-am", "mine"]);
+    let merged = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["-c", "user.name=test", "-c", "user.email=test@example.com", "merge", "other"])
+        .output();
+    assert!(!merged.expect("merge").status.success());
+}
+
 fn unstaged_side(text: &str) -> bool {
     text.lines().all(|line| line.as_bytes().get(1) == Some(&b' '))
 }
@@ -113,14 +128,7 @@ mod refuses {
     fn a_file_with_a_merge_conflict(#[case] staged: bool) {
         let repo = git_repo(&[("a.txt", "one\n")]);
         let dir = repo.path();
-        git(dir, &["switch", "--quiet", "-c", "other"]);
-        write(dir, "a.txt", "other\n");
-        git(dir, &["commit", "--quiet", "-am", "other"]);
-        git(dir, &["switch", "--quiet", "-"]);
-        write(dir, "a.txt", "mine\n");
-        git(dir, &["commit", "--quiet", "-am", "mine"]);
-        let merged = std::process::Command::new("git").arg("-C").arg(dir).args(["merge", "other"]).output();
-        assert!(!merged.expect("merge").status.success());
+        conflict(dir, "a.txt");
         let error = stage(dir, "a.txt", digest(dir, "a.txt"), staged).expect_err("refused");
         assert!(error.to_string().contains("resolve the conflict first"), "{error}");
         assert_eq!(status(dir, &["a.txt"]), "UU a.txt\n");
@@ -134,14 +142,7 @@ mod does_not_confuse {
     fn a_glob_name_with_a_conflicted_file_it_matches() {
         let repo = git_repo(&[("starA.txt", "one\n"), ("star*.txt", "one\n")]);
         let dir = repo.path();
-        git(dir, &["switch", "--quiet", "-c", "other"]);
-        write(dir, "starA.txt", "other\n");
-        git(dir, &["commit", "--quiet", "-am", "other"]);
-        git(dir, &["switch", "--quiet", "-"]);
-        write(dir, "starA.txt", "mine\n");
-        git(dir, &["commit", "--quiet", "-am", "mine"]);
-        let merged = std::process::Command::new("git").arg("-C").arg(dir).args(["merge", "other"]).output();
-        assert!(!merged.expect("merge").status.success());
+        conflict(dir, "starA.txt");
         write(dir, "star*.txt", "two\n");
         let outcome = stage(dir, "star*.txt", digest(dir, "star*.txt"), true).expect("stage");
         assert!(matches!(outcome, Outcome::Done(_)), "{outcome:?}");
