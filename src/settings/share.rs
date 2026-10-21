@@ -279,5 +279,7 @@ fn note_unknown(unknown: &mut Vec<String>, name: String) {
     }
 }
 
+pub(crate) mod secrets;
+
 #[cfg(test)]
 mod tests;
