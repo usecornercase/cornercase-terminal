@@ -141,6 +141,19 @@ impl Session {
         self.command().args(args).output().expect("run cornercase")
     }
 
+    fn fed(&self, args: &[&str], input: &str) -> std::process::Output {
+        let mut child = self
+            .command()
+            .args(args)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("run cornercase");
+        child.stdin.take().expect("stdin").write_all(input.as_bytes()).expect("write to cornercase");
+        child.wait_with_output().expect("wait for cornercase")
+    }
+
     fn cold(&self, args: &[&str]) -> std::process::Output {
         let mut cmd = self.command();
         cmd.args(args).env("SHELL", "/bin/sh").env("PS1", "$ ").env(CLAUDE_DIR_ENV, self.claude_dir());

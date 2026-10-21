@@ -1,11 +1,11 @@
 use std::fmt::Write as _;
-use std::io::{IsTerminal as _, Read as _};
+use std::io::IsTerminal as _;
 use std::path::Path;
 
 use super::args::{
     self, FlowAction, FlowDeleteArgs, FlowFilesArgs, FlowImportArgs, FlowMessagesArgs, FlowRunsArgs, ImportTo,
 };
-use super::{print_json, print_out, quietly, read_prompt, stream_json, workspace};
+use super::{print_json, print_out, quietly, read_limited, read_prompt, stream_json, workspace};
 use crate::client::{self, answer, ask, confirm};
 use crate::control::{
     self, Exported, FlowBacklog, FlowInfo, FlowMessage, FlowRemoved, FlowRuns, Flows, Imported, RoleInfo, RunEdge,
@@ -211,19 +211,7 @@ pub(super) fn fetched(source: &Source, risks: Option<String>) -> String {
 }
 
 fn read_shared(file: &Path) -> Result<String> {
-    let limit = share::MAX_BYTES as u64 + 1;
-    let mut bytes = Vec::new();
-    if file == Path::new("-") {
-        std::io::stdin().take(limit).read_to_end(&mut bytes)?;
-    } else {
-        let open =
-            std::fs::File::open(file).map_err(|e| Error::Control(format!("cannot read `{}`: {e}", file.display())))?;
-        open.take(limit).read_to_end(&mut bytes)?;
-    }
-    if bytes.len() > share::MAX_BYTES {
-        return Err(Error::Control(format!("`{}` is too long for a flow (at most 256 KiB)", file.display())));
-    }
-    String::from_utf8(bytes).map_err(|_| Error::Control(format!("`{}` is not text", file.display())))
+    read_limited(file, share::MAX_BYTES, "is too long for a flow (at most 256 KiB)")
 }
 
 pub(super) fn confirmation(risks: &str, to: ImportTo) -> String {

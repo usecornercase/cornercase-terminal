@@ -1,0 +1,14 @@
+---
+source: src/cli/config/share/tests.rs
+expression: preview_text(&preview())
+---
+agents
+  Default agent: claude → codex
+  Codex arguments: - → --yolo
+  ! Codex runs without asking for permission
+worktrees
+  Worktrees folder: ~/.cornercase/worktrees → ~/wt
+  - ~/wt does not exist here
+interface: no changes
+- connect linear in Settings › Issues to use it
+! the setup sets GITHUB_TOKEN: check no secret goes with it

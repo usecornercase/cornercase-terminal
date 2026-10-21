@@ -37,3 +37,41 @@ fn settings_are_changed_through_the_server_and_an_edit_of_the_file_is_picked_up(
     assert!(!refused.status.success());
     assert!(String::from_utf8_lossy(&refused.stderr).contains("use an absolute path"), "{refused:?}");
 }
+
+fn started() -> Arc<Session> {
+    let session = Session::new();
+    let started = session.cold(&["start-server"]);
+    assert!(started.status.success(), "start-server failed: {started:?}");
+    session
+}
+
+fn colleague_with_a_tree() -> Arc<Session> {
+    let colleague = started();
+    colleague.says(&["config", "set", "sidebar", "tree"]);
+    colleague
+}
+
+#[test]
+fn a_setup_exported_by_one_server_imports_into_another() {
+    let colleague = colleague_with_a_tree();
+    let file = colleague.dir.join("setup.toml");
+    colleague.says(&["config", "export", "--to", &file.display().to_string()]);
+    assert!(std::fs::read_to_string(&file).expect("the exported file").contains("sidebar = \"tree\""));
+
+    let session = started();
+    assert_ne!(setting(&session, "sidebar"), Value::from("tree"));
+    session.says(&["config", "import", &file.display().to_string(), "--yes"]);
+    assert_eq!(setting(&session, "sidebar"), Value::from("tree"));
+}
+
+#[test]
+fn import_from_standard_input_needs_yes() {
+    let text = colleague_with_a_tree().says(&["config", "export"]);
+    let session = started();
+    let before = setting(&session, "sidebar");
+    let out = session.fed(&["config", "import", "-"], &text);
+
+    assert!(!out.status.success(), "{out:?}");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("add --yes"), "{out:?}");
+    assert_eq!(setting(&session, "sidebar"), before);
+}

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{Args, Subcommand};
 
 #[derive(Debug, Args)]
@@ -35,5 +37,24 @@ pub(crate) enum ConfigAction {
     Remove {
         #[arg(value_name = "KEY", help = "The connection, such as linear, telegram.chat or browsers")]
         key: String,
+    },
+    #[command(about = "Write the settings to share with a colleague, without tokens or personal ones")]
+    Export {
+        #[arg(long, value_name = "FILE", help = "Write them to FILE instead of standard output")]
+        to: Option<PathBuf>,
+    },
+    #[command(about = "Import settings a colleague shared, after showing what changes")]
+    Import {
+        #[arg(value_name = "FILE", help = "A file `config export` made, or - for standard input")]
+        source: String,
+        #[arg(
+            long,
+            value_delimiter = ',',
+            value_name = "SECTIONS",
+            help = "Only these sections: agents, issues, worktrees, interface, repositories"
+        )]
+        only: Vec<String>,
+        #[arg(long, help = "Import without asking")]
+        yes: bool,
     },
 }

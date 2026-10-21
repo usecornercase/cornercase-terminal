@@ -13,6 +13,8 @@ use crate::control::config::{Configure, Connection, Described, Kind, ProjectChan
 use crate::error::{Error, Result};
 use crate::issues::Secret;
 
+mod share;
+
 fn request(change: Configure) -> Result<Value> {
     ask("config", Command::Config(change))
 }
@@ -34,6 +36,10 @@ pub(super) fn run(args: ConfigArgs) -> Result<()> {
             request(Configure::Secret(SecretChange { key, value }))?
         }
         Some(ConfigAction::Remove { key }) => request(Configure::Remove(key))?,
+        Some(ConfigAction::Export { to }) => return share::export(to.as_deref(), args.json),
+        Some(ConfigAction::Import { source, only, yes }) => {
+            return share::import(&share::Import { source, only, yes }, args.json);
+        }
     };
     if args.json {
         return print_json(&value);

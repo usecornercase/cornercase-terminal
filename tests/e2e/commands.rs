@@ -639,24 +639,11 @@ fn a_flow_is_exported_to_a_file_imported_under_another_name_and_listed() {
 
 #[test]
 fn an_import_that_sets_variables_needs_yes_without_a_terminal() {
-    use std::io::Write as _;
-
     let (session, mut server) = windowless();
     let exported = session.says(&["flow", "export", "Quick"]);
     let risky = exported.replacen("[orchestrator]\n", "[orchestrator]\nenv = { AWS_PROFILE = \"work\" }\n", 1);
     assert_ne!(risky, exported, "{exported}");
-    let run = |args: &[&str]| {
-        let mut child = session
-            .command()
-            .args(args)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn()
-            .expect("run cornercase");
-        child.stdin.take().expect("stdin").write_all(risky.as_bytes()).expect("write");
-        child.wait_with_output().expect("wait")
-    };
+    let run = |args: &[&str]| session.fed(args, &risky);
 
     let refused_import = run(&["flow", "import", "-", "--name", "Risky"]);
     assert!(refused(&refused_import, 1, "pass --yes to import it"), "{refused_import:?}");

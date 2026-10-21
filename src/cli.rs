@@ -580,6 +580,22 @@ fn trimmed(text: &str) -> String {
     text.trim_end_matches(['\n', '\r']).to_string()
 }
 
+fn read_limited(file: &Path, limit: usize, too_long: &str) -> Result<String> {
+    let most = limit as u64 + 1;
+    let mut bytes = Vec::new();
+    if file == Path::new("-") {
+        io::stdin().take(most).read_to_end(&mut bytes)?;
+    } else {
+        let open =
+            std::fs::File::open(file).map_err(|e| Error::Control(format!("cannot read `{}`: {e}", file.display())))?;
+        open.take(most).read_to_end(&mut bytes)?;
+    }
+    if bytes.len() > limit {
+        return Err(Error::Control(format!("`{}` {too_long}", file.display())));
+    }
+    String::from_utf8(bytes).map_err(|_| Error::Control(format!("`{}` is not text", file.display())))
+}
+
 fn stdin() -> Result<String> {
     let mut text = String::new();
     io::stdin().read_to_string(&mut text)?;
