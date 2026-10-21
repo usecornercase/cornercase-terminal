@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.173
+
+- **Select and copy lines in the changes panel.** Click a line of a diff to select it, or press and drag over several lines of one file; hold the pointer on the first or last row shown, or past it, and the panel scrolls with the selection. The bottom of the panel then says which lines, such as `lines 9-12`, with **ask agent**, which types a reference such as `src/returns/address.rs:9-12 ` into the workspace's agent, and **copy**, which copies their code as it is in the file, tabs included, without the `+`/`-` bar and the line numbers. A click on an empty spot of the diff clears the selection.
+
 ## 0.12.172
 
 - **Stage a file from the changes panel.** In Uncommitted and in Every project, hover a file and click the **`+`** between `↺` and `✓` to put its changes in git's index, as `git add` does; a green **`●`** then marks it staged, and **`◐`** a file only partly staged (it changed after you staged it). Click a staged file's mark (it shows **`−`** under the pointer) to unstage it. Nothing asks first, since it is easy to undo; if the file changed after the panel showed it, nothing is staged and a message says so.
