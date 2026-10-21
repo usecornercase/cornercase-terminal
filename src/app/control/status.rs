@@ -35,11 +35,13 @@ fn pull_request_info(pull: &PullRequest) -> PullRequestInfo {
         failed: pull.failed().map(|check| check.name.clone()).collect(),
         conflicts: pull.conflicts(),
         base: Some(pull.base.clone()).filter(|base| !base.is_empty()),
+        provider: pull.provider.id().into(),
     }
 }
 
 fn pull_refreshed(pull: &PullRequest, hash: &mut DefaultHasher) {
     (pull.number, &pull.title, pull.state.name(), pull.ci().map(Ci::name), pull.conflicts(), &pull.base).hash(hash);
+    pull.provider.id().hash(hash);
     pull.failed().for_each(|check| check.name.hash(hash));
 }
 

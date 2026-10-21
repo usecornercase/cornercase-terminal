@@ -173,9 +173,7 @@ impl App {
             MenuAction::AgentFold(_, true) => "collapse".into(),
             MenuAction::AgentFold(_, false) => "expand".into(),
             MenuAction::CloseAgent(_) => "close agent".into(),
-            MenuAction::PullRequest(workspace) => {
-                self.pull_request(workspace).map(|p| format!("pull request #{}", p.number)).unwrap_or_default()
-            }
+            MenuAction::PullRequest(workspace) => self.pull_request_label(workspace),
             MenuAction::ShowFlow(_) => "show flow".into(),
             MenuAction::Browser if self.config.remote => "open in your phone's browser".into(),
             MenuAction::Browser => "set up your phone's browser…".into(),

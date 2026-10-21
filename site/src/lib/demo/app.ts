@@ -3052,7 +3052,7 @@ export class App {
         { id: 'folder', section: '', label: 'worktrees folder', value: c.worktreesDir, note: 'new worktrees go in <folder>/<repo>/<branch>' },
         { id: 'branches', section: '', label: 'issue branches', value: 'per tracker', note: 'empty: issue-482-…, 482-… on GitLab, sc-482-…, ENG-482-…' },
         { id: 'fetch', section: '', label: 'fetch branches every', value: c.fetchMinutes ? `${c.fetchMinutes} min` : 'off', note: 'commits to pull show as ↓n' },
-        { id: 'pulls', section: '', label: 'pull requests', value: '[ ] hidden', note: "each workspace's pull request and its checks, from gh" },
+        { id: 'pulls', section: '', label: 'pull requests', value: '[ ] hidden', note: "each workspace's pull request and its checks, from gh or glab" },
         { id: 'merged', section: '', label: 'merged PRs in stats', value: '[ ] hidden', note: 'your merged pull requests, from gh and glab' },
         { id: 'worktrees', section: '', label: 'worktrees on disk', value: '', note: 'enter lists every worktree and removes several at once' },
       ];

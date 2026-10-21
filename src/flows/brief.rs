@@ -216,8 +216,8 @@ fn stage_line(flow: &Flow, stage: &Stage) -> String {
 fn end_line(end: End, branch: &str) -> String {
     match end {
         End::PullRequest => format!(
-            "push branch {branch} and open a pull request with `gh pr create`, saying what changed and what the \
-             reviews and tests found"
+            "push branch {branch} and open a pull request with `gh pr create` (a merge request with `glab mr create` \
+             when the repository is on GitLab), saying what changed and what the reviews and tests found"
         ),
         End::Commits => format!("leave the commits on branch {branch}; do not push and do not open a pull request"),
     }

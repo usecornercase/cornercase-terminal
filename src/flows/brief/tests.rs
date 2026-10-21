@@ -39,6 +39,7 @@ fn the_brief_holds_the_task_the_team_the_plan_and_the_end() {
              stage 1; at most 3 times,",
             "3. tester. If it reports failures, send them to coder and go back to stage 1; at most 2",
             "At the end: push branch fix-login and open a pull request",
+            "(a merge request with `glab mr create` when the repository is on GitLab)",
             "Do not change the public API.\n\nKeep every message",
             "`cornercase wait --all --pane 14 --pane 15 --pane 16 --pane 17 --until turn-over",
             "run `cornercase mark --pane 12`",

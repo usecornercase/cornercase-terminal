@@ -1,0 +1,167 @@
+{
+  "id": 9486,
+  "iid": 486,
+  "target_branch": "main",
+  "source_branch": "feat/saved-address",
+  "project_id": 4101,
+  "title": "Draft: Remember the last address used at checkout",
+  "state": "opened",
+  "imported": false,
+  "imported_from": "none",
+  "created_at": "2026-10-13T19:27:58.036Z",
+  "updated_at": "2026-10-14T20:21:45.784Z",
+  "upvotes": 0,
+  "downvotes": 0,
+  "author": {
+    "id": 501,
+    "username": "ana",
+    "name": "Ana",
+    "state": "active",
+    "created_at": null,
+    "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+    "web_url": "https://gitlab.com/ana"
+  },
+  "assignee": {
+    "id": 501,
+    "username": "ana",
+    "name": "Ana",
+    "state": "active",
+    "created_at": null,
+    "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+    "web_url": "https://gitlab.com/ana"
+  },
+  "assignees": [
+    {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana"
+    }
+  ],
+  "reviewers": [],
+  "source_project_id": 4101,
+  "target_project_id": 4101,
+  "labels": [
+    "checkout"
+  ],
+  "label_details": null,
+  "description": "Keeps the address a customer used last.",
+  "draft": true,
+  "milestone": null,
+  "merge_when_pipeline_succeeds": false,
+  "detailed_merge_status": "draft_status",
+  "merge_user": null,
+  "merged_at": null,
+  "merge_after": null,
+  "prepared_at": "2026-10-14T09:34:21.547Z",
+  "closed_by": null,
+  "closed_at": null,
+  "sha": "ebebebebebebebebebebebebebebebebebebebeb",
+  "merge_commit_sha": "",
+  "squash_commit_sha": "",
+  "user_notes_count": 13,
+  "should_remove_source_branch": false,
+  "force_remove_source_branch": true,
+  "allow_collaboration": false,
+  "allow_maintainer_to_push": false,
+  "web_url": "https://gitlab.com/acme/web-shop/-/merge_requests/486",
+  "references": {
+    "short": "!486",
+    "relative": "!486",
+    "full": "acme/web-shop!486"
+  },
+  "discussion_locked": false,
+  "time_stats": {
+    "human_time_estimate": "",
+    "human_total_time_spent": "",
+    "time_estimate": 0,
+    "total_time_spent": 0
+  },
+  "squash": true,
+  "squash_on_merge": true,
+  "task_completion_status": {
+    "count": 0,
+    "completed_count": 0
+  },
+  "has_conflicts": true,
+  "blocking_discussions_resolved": false,
+  "merged_by": null,
+  "merge_error": "",
+  "subscribed": false,
+  "changes_count": "8",
+  "user": {
+    "can_merge": false
+  },
+  "latest_build_started_at": "2026-10-14T09:34:21.547Z",
+  "latest_build_finished_at": null,
+  "first_deployed_to_production_at": null,
+  "pipeline": {
+    "id": 70486,
+    "iid": 619,
+    "project_id": 4101,
+    "status": "failed",
+    "source": "merge_request_event",
+    "ref": "refs/merge-requests/486/merge",
+    "sha": "ebebebebebebebebebebebebebebebebebebebeb",
+    "name": "",
+    "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70486",
+    "updated_at": "2026-10-14T09:43:29.085Z",
+    "created_at": "2026-10-14T09:34:19.148Z"
+  },
+  "head_pipeline": {
+    "id": 70486,
+    "iid": 619,
+    "project_id": 4101,
+    "status": "failed",
+    "source": "merge_request_event",
+    "ref": "refs/merge-requests/486/merge",
+    "name": "",
+    "sha": "ebebebebebebebebebebebebebebebebebebebeb",
+    "before_sha": "ebebebebebebebebebebebebebebebebebebebeb",
+    "tag": false,
+    "yaml_errors": "",
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana"
+    },
+    "updated_at": "2026-10-14T09:43:29.085Z",
+    "created_at": "2026-10-14T09:34:19.148Z",
+    "started_at": "2026-10-14T09:34:21.547Z",
+    "finished_at": "2026-10-14T09:43:29.070Z",
+    "committed_at": null,
+    "duration": 785,
+    "queued_duration": 1,
+    "coverage": "81.20",
+    "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70486",
+    "detailed_status": {
+      "icon": "status_failed",
+      "text": "Failed",
+      "label": "failed",
+      "group": "failed",
+      "tooltip": "failed",
+      "has_details": true,
+      "details_path": "/acme/web-shop/-/pipelines/70486",
+      "illustration": {
+        "image": ""
+      },
+      "favicon": "/assets/ci_favicons/favicon_status_failed-41304d7f7e3828808b0c26771f0309e55296819a9beea3ea9fbf6689d9857c12.png"
+    }
+  },
+  "diff_refs": {
+    "base_sha": "0101010101010101010101010101010101010101",
+    "head_sha": "ebebebebebebebebebebebebebebebebebebebeb",
+    "start_sha": "0101010101010101010101010101010101010101"
+  },
+  "rebase_in_progress": false,
+  "diverged_commits_count": 47,
+  "first_contribution": false,
+  "work_in_progress": true
+}

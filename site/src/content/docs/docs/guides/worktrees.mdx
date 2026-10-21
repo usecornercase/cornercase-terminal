@@ -1,6 +1,6 @@
 ---
 title: Git worktrees
-description: Give each workspace its own checkout and branch, see its pull request and checks, carry your ignored files along with .worktreeinclude, and remove worktrees safely.
+description: Give each workspace its own checkout and branch, see its pull request or merge request and its checks, carry your ignored files along with .worktreeinclude, and remove worktrees safely.
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
@@ -69,7 +69,7 @@ To fetch more or less often, change **settings → Worktrees → fetch branches 
 
 ## Pull requests and their checks
 
-When a workspace's branch has a pull request on GitHub, its row ends with the pull request's number, coloured by its checks, or marked when it has merge conflicts, so you see from the sidebar which line of work is green, still running or broken, without opening a browser:
+When a workspace's branch has a pull request on GitHub, or a merge request on GitLab, its row ends with the pull request's number, coloured by its checks, or marked when it has merge conflicts, so you see from the sidebar which line of work is green, still running or broken, without opening a browser:
 
 <Screen
   name="pull-requests"
@@ -87,7 +87,9 @@ When a workspace's branch has a pull request on GitHub, its row ends with the pu
 | `#482` in purple | merged |
 | `#482` crossed out | closed without merging |
 
-Click the number on the row, or click the row's ` ⋯ ` (or right-click it) and pick **pull request #485**, to see each check, failed ones first, with the workflow it belongs to:
+On GitLab the number is the merge request's own and the colour is its pipeline's. Elsewhere cornercase writes the merge request as `!486`, GitLab's own reference; on the row it stays `#486`, since `!` already means "needs you". A job allowed to fail counts as skipped, as GitLab's "passed with warnings", and a pipeline that failed without any of its jobs failing (a failed child pipeline, an error in `.gitlab-ci.yml`) counts as one failed check named `pipeline`.
+
+Click the number on the row, or click the row's ` ⋯ ` (or right-click it) and pick **pull request #485** (**merge request !485** on GitLab), to see each check, failed ones first, with the workflow it belongs to (the stage, on GitLab):
 
 <Screen
   name="pull-request-checks"
@@ -97,19 +99,20 @@ Click the number on the row, or click the row's ` ⋯ ` (or right-click it) and 
 
 A [flow run](../flows/#the-flow-panel) shows the same number at the end of its diagram, and a click on it opens the same dialog.
 
-A pull request with merge conflicts says so at the top (`open · conflicts with main · 1 passed`). GitHub runs no `pull_request` workflows until the conflict is resolved, so its list of checks may be missing some, often all but an app's commit status.
+A pull request with merge conflicts says so at the top (`open · conflicts with main · 1 passed`). GitHub runs no `pull_request` workflows until the conflict is resolved, so its list of checks may be missing some, often all but an app's commit status. GitLab runs the pipeline anyway.
 
 - **copy link** copies the pull request's address, to open it in your browser.
-- **ask agent**, shown when a check failed or the pull request has merge conflicts, pastes into the workspace's agent that it has merge conflicts with its base and which checks failed and the links to their logs, so it can read them (with `gh run view`, for example) and fix them. It is not sent: add what you want and press `Enter`. Without an agent in the workspace, the text is copied instead.
+- **ask agent**, shown when a check failed or the pull request has merge conflicts, pastes into the workspace's agent that it has merge conflicts with its base and which checks failed and the links to their logs, so it can read them (with `gh run view` or `glab ci trace`, for example) and fix them. It is not sent: add what you want and press `Enter`. Without an agent in the workspace, the text is copied instead.
 
 With a [prefix key](../../reference/keyboard-and-mouse/#keyboard-shortcuts), `g` `p` opens the dialog for the workspace on screen.
 
 How it works:
 
 - cornercase runs [`gh`](https://cli.github.com/), GitHub's CLI, in each workspace's folder: `gh pr view` finds the pull request of the branch checked out there, also one an agent opened with `gh pr create`. `gh` must be installed and logged in (`gh auth login`); without it nothing shows, and **settings → Worktrees → pull requests** says why.
-- Only workspaces on a branch of a repository with a remote are asked, and not the default branch (`origin`'s `HEAD`). A workspace is asked again every 20 seconds while its checks run and every minute otherwise; a merged or closed pull request, and a project where `gh` failed, every 5 minutes. Opening the dialog asks at once.
-- GitHub works out whether a pull request can merge in the background. Right after a push to the branch or its base it may not know yet, so a new conflict can take up to a minute to show, and until then the row keeps what it showed.
-- Turn it off in **settings → Worktrees → pull requests**; nothing is asked then. Scripts and agents find the same in `cornercase status --json`, under each workspace's `pull_request`, with `conflicts` and `base`.
+- A project whose `origin` remote (else its first) is on GitLab, gitlab.com or your own instance, uses [`glab`](https://gitlab.com/gitlab-org/cli), GitLab's CLI, instead: `glab mr view` finds the merge request of the branch, in any state, and `glab api` reads the jobs of its latest pipeline. A host counts as GitLab when its name has `gitlab` in it or when `glab auth status` lists it (its SSH host too); everything else, GitHub Enterprise included, stays on `gh`, and `github.com` never runs `glab`. `glab` must be installed and logged in to that host (`glab auth login`); without it nothing shows on the rows, and the settings note says why. If several merge requests come from branches of that name, the newest is shown.
+- Only workspaces on a branch of a repository with a remote are asked, and not the default branch (`origin`'s `HEAD`). A workspace is asked again every 20 seconds while its checks run and every minute otherwise; a merged or closed pull request, and a project where `gh` or `glab` failed, every 5 minutes. Opening the dialog asks at once.
+- GitHub works out whether a pull request can merge in the background, and so does GitLab (`checking`, `unchecked`). Right after a push to the branch or its base it may not know yet, so a new conflict can take up to a minute to show, and until then the row keeps what it showed.
+- Turn it off in **settings → Worktrees → pull requests**; nothing is asked then. Scripts and agents find the same in `cornercase status --json`, under each workspace's `pull_request`, with `conflicts`, `base` and `provider` (`github` or `gitlab`).
 
 ## Worktrees you made elsewhere
 
@@ -182,7 +185,7 @@ Each row has a checkbox, the project, the branch, the folder, how long ago it la
 | --- | --- |
 | `●3` | 3 files changed or untracked |
 | `↑2` | 2 commits that no remote branch has, so removing the branch loses them |
-| `merged` | its commits are already in the base branch (the workspace's base, else the default branch) and it was pushed, or its pull request is merged |
+| `merged` | its commits are already in the base branch (the workspace's base, else the default branch) and it was pushed, or its pull request (or merge request) is merged |
 | `no commits` | it has no commits of its own and was never pushed, such as a worktree just made; it sorts with the rest, not with the merged ones |
 | `upstream gone` | the branch's remote branch no longer exists, usually deleted after a squash merge. Its commits still count as not pushed (`↑n`), since no remote branch holds them any more, and with **also delete the branch** the red line says they would be lost from this machine |
 | `locked` | `git worktree lock` or Claude Code locked it |

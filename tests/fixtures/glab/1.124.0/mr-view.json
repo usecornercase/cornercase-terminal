@@ -1,0 +1,177 @@
+{
+  "id": 9482,
+  "iid": 482,
+  "target_branch": "main",
+  "source_branch": "feat/gift-cards",
+  "project_id": 4101,
+  "title": "Pay with a gift card at checkout",
+  "state": "opened",
+  "imported": false,
+  "imported_from": "none",
+  "created_at": "2026-10-13T19:27:58.036Z",
+  "updated_at": "2026-10-14T20:21:45.784Z",
+  "upvotes": 0,
+  "downvotes": 0,
+  "author": {
+    "id": 501,
+    "username": "ana",
+    "name": "Ana",
+    "state": "active",
+    "created_at": null,
+    "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+    "web_url": "https://gitlab.com/ana"
+  },
+  "assignee": {
+    "id": 501,
+    "username": "ana",
+    "name": "Ana",
+    "state": "active",
+    "created_at": null,
+    "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+    "web_url": "https://gitlab.com/ana"
+  },
+  "assignees": [
+    {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana"
+    }
+  ],
+  "reviewers": [
+    {
+      "id": 502,
+      "username": "luis",
+      "name": "Luis",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/502/avatar.png",
+      "web_url": "https://gitlab.com/luis"
+    }
+  ],
+  "source_project_id": 4101,
+  "target_project_id": 4101,
+  "labels": [
+    "checkout"
+  ],
+  "label_details": null,
+  "description": "Lets a customer pay with a gift card.",
+  "draft": false,
+  "milestone": null,
+  "merge_when_pipeline_succeeds": false,
+  "detailed_merge_status": "not_approved",
+  "merge_user": null,
+  "merged_at": null,
+  "merge_after": null,
+  "prepared_at": "2026-10-14T09:34:21.547Z",
+  "closed_by": null,
+  "closed_at": null,
+  "sha": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+  "merge_commit_sha": "",
+  "squash_commit_sha": "",
+  "user_notes_count": 7,
+  "should_remove_source_branch": false,
+  "force_remove_source_branch": true,
+  "allow_collaboration": false,
+  "allow_maintainer_to_push": false,
+  "web_url": "https://gitlab.com/acme/web-shop/-/merge_requests/482",
+  "references": {
+    "short": "!482",
+    "relative": "!482",
+    "full": "acme/web-shop!482"
+  },
+  "discussion_locked": false,
+  "time_stats": {
+    "human_time_estimate": "",
+    "human_total_time_spent": "",
+    "time_estimate": 0,
+    "total_time_spent": 0
+  },
+  "squash": true,
+  "squash_on_merge": true,
+  "task_completion_status": {
+    "count": 0,
+    "completed_count": 0
+  },
+  "has_conflicts": false,
+  "blocking_discussions_resolved": true,
+  "merged_by": null,
+  "merge_error": "",
+  "subscribed": false,
+  "changes_count": "4",
+  "user": {
+    "can_merge": false
+  },
+  "latest_build_started_at": "2026-10-14T09:34:21.547Z",
+  "latest_build_finished_at": "2026-10-14T09:34:21.547Z",
+  "first_deployed_to_production_at": null,
+  "pipeline": {
+    "id": 70482,
+    "iid": 615,
+    "project_id": 4101,
+    "status": "success",
+    "source": "merge_request_event",
+    "ref": "refs/merge-requests/482/merge",
+    "sha": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+    "name": "",
+    "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70482",
+    "updated_at": "2026-10-14T09:43:29.085Z",
+    "created_at": "2026-10-14T09:34:19.148Z"
+  },
+  "head_pipeline": {
+    "id": 70482,
+    "iid": 615,
+    "project_id": 4101,
+    "status": "success",
+    "source": "merge_request_event",
+    "ref": "refs/merge-requests/482/merge",
+    "name": "",
+    "sha": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+    "before_sha": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+    "tag": false,
+    "yaml_errors": "",
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana"
+    },
+    "updated_at": "2026-10-14T09:43:29.085Z",
+    "created_at": "2026-10-14T09:34:19.148Z",
+    "started_at": "2026-10-14T09:34:21.547Z",
+    "finished_at": "2026-10-14T09:43:29.070Z",
+    "committed_at": null,
+    "duration": 547,
+    "queued_duration": 2,
+    "coverage": "81.20",
+    "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70482",
+    "detailed_status": {
+      "icon": "status_success",
+      "text": "Passed",
+      "label": "passed",
+      "group": "success",
+      "tooltip": "passed",
+      "has_details": true,
+      "details_path": "/acme/web-shop/-/pipelines/70482",
+      "illustration": {
+        "image": ""
+      },
+      "favicon": "/assets/ci_favicons/favicon_status_success-8451333011eee8ce9f2ab25dc487fe24a8758c694827a582f17f42b0a90446a2.png"
+    }
+  },
+  "diff_refs": {
+    "base_sha": "0101010101010101010101010101010101010101",
+    "head_sha": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+    "start_sha": "0101010101010101010101010101010101010101"
+  },
+  "rebase_in_progress": false,
+  "diverged_commits_count": 22,
+  "first_contribution": true,
+  "work_in_progress": false
+}
