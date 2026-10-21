@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
 use super::preview::change_text;
-use super::{MAX_BYTES, Section, Shared, too_large};
+use super::{MAX_BYTES, NEVER_SHARED, Section, Shared, too_large};
 use crate::control::config::{NoteKind, SectionPreview, SetupChange, SetupExported, SetupNote, SetupPreview};
 use crate::text;
 use crate::todo::editor::Editor;
@@ -274,11 +274,23 @@ impl Dialog {
 
 pub(crate) fn copied(exported: &SetupExported) -> String {
     let (settings, repositories) = super::counts(exported.settings, exported.repositories);
-    let copied = format!("setup copied: {settings}, {repositories} · left out: tokens, personal settings");
+    let mut copied = format!("setup copied: {settings}, {repositories} · left out: tokens, personal settings");
+    let not_shared = not_shared(exported).len();
+    if not_shared > 0 {
+        copied = format!("{copied} · {} not shared", text::plural(not_shared, "repository", "repositories"));
+    }
     match exported.warnings.first() {
         Some(warning) => format!("{copied} · check: {warning}"),
         None => copied,
     }
+}
+
+pub(crate) fn copy_notes(exported: &SetupExported) -> Vec<String> {
+    not_shared(exported).into_iter().chain(&exported.warnings).cloned().collect()
+}
+
+fn not_shared(exported: &SetupExported) -> Vec<&String> {
+    exported.left_out.iter().filter(|entry| !NEVER_SHARED.contains(&entry.as_str())).collect()
 }
 
 fn changes(section: &SectionPreview) -> bool {

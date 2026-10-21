@@ -283,6 +283,21 @@ mod the_copy_toast {
     }
 
     #[test]
+    fn counts_the_repositories_left_out() {
+        let mut exported = exported(&["a secret"]);
+        exported.left_out = vec![
+            "jira_email".into(),
+            "~/code/a has no git remote, so its setup is not shared".into(),
+            "~/code/b shares a remote with ~/code/c, so only the first is shared".into(),
+        ];
+        assert_eq!(
+            copied(&exported),
+            "setup copied: 12 settings, 1 repository · left out: tokens, personal settings · 2 repositories not \
+             shared · check: a secret"
+        );
+    }
+
+    #[test]
     fn names_the_first_warning() {
         assert_eq!(
             copied(&exported(&["setup of a sets NPM_TOKEN: check no secret goes with it", "second"])),

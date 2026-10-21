@@ -1,4 +1,5 @@
 use super::*;
+use crate::config::ProjectSettings;
 use crate::settings::share::HEADER;
 use crate::settings::share::dialog::{BACK, COPY, Dialog, IMPORT, PREVIEW, Page as SharePage};
 use crate::settings::{Edit, Row};
@@ -81,6 +82,22 @@ fn copy_puts_the_setup_on_the_clipboard() {
     assert!(text.starts_with(HEADER), "{text}");
     assert_eq!(s.app.take_host_writes(), vec![clipboard::osc52(&text)]);
     assert!(toast(&s.app).is_some_and(|t| t.starts_with("setup copied: ")), "{:?}", toast(&s.app));
+}
+
+#[test]
+fn copy_names_a_repository_it_left_out() {
+    let mut s = share();
+    let repo = git_repo(&[("a", "1")]);
+    let home = s.app.home.clone();
+    let settings = ProjectSettings { setup: "npm ci".into(), teardown: String::new() };
+    s.app.config.set_project(repo.path(), home.as_deref(), settings);
+    press(&mut s.app, COPY);
+    let left_out = format!(
+        "{} has no git remote, so its setup is not shared",
+        crate::text::display_path(repo.path(), home.as_deref())
+    );
+    assert_eq!(dialog(&s.app).note(), Some(left_out));
+    assert!(toast(&s.app).is_some_and(|t| t.ends_with(" · 1 repository not shared")), "{:?}", toast(&s.app));
 }
 
 #[test]

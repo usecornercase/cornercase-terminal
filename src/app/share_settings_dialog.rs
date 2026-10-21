@@ -5,7 +5,7 @@ use super::App;
 use super::input::wheel;
 use super::overlay::Overlay;
 use super::toast::Toast;
-use crate::settings::share::dialog::{Action, Dialog, Page, Room, copied};
+use crate::settings::share::dialog::{Action, Dialog, Page, Room, copied, copy_notes};
 use crate::settings::share::{self, Section, Shared};
 use crate::ui;
 
@@ -91,7 +91,7 @@ impl App {
         let icon = if exported.warnings.is_empty() { ui::ToastIcon::Check } else { ui::ToastIcon::Bug };
         self.messages.toast = Some(Toast::new(copied(&exported), icon));
         if let Some(dialog) = self.share_dialog() {
-            dialog.warnings = exported.warnings;
+            dialog.warnings = copy_notes(&exported);
         }
     }
 

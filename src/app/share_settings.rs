@@ -10,12 +10,9 @@ use crate::settings::share::preview::{Here, OpenRepository};
 use crate::settings::share::{self, Repository, Shared};
 use crate::text;
 
-const NEVER_SHARED: [&str; 4] =
-    ["tokens, bots, paired chats and browsers", "jira_email", "accounts and profiles", "remote access and keep awake"];
-
 impl App {
     pub(super) fn export_setup(&self) -> Result<SetupExported, String> {
-        let mut left_out: Vec<String> = NEVER_SHARED.map(String::from).to_vec();
+        let mut left_out: Vec<String> = share::NEVER_SHARED.map(String::from).to_vec();
         let shared = Shared {
             settings: share::settings_of(&self.config),
             repositories: self.shared_repositories(&mut left_out),
