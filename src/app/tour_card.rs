@@ -7,10 +7,11 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::overlay::Overlay;
 use super::toast::Toast;
+use crate::git;
 use crate::log;
 use crate::project::Hierarchy;
 use crate::todo::editor::Editor;
-use crate::tour::{self, Dialog, Facts, Offer, Saved, Show, Step, TOURS, Tour};
+use crate::tour::{self, Dialog, Done, Facts, Offer, Saved, Show, Step, TOURS, Tour};
 use crate::ui::{self, TourButton};
 
 mod prompt;
@@ -42,6 +43,7 @@ struct Active {
     idea: usize,
     note: Option<String>,
     opened: Option<Show>,
+    agent: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,7 +120,7 @@ impl App {
             dialog: self.tour_dialog(),
             todos: self.panels.todos.items().len(),
             agents_section: self.config.agents_section,
-            repository: self.project().is_some_and(|p| crate::git::is_repo_root(&p.path)),
+            repository: false,
             compact: self.screen.drawn.compact(),
         }
     }
@@ -185,19 +187,23 @@ impl App {
         }
         log::info!("tour", "started", tour = t.id, step = step);
         let start = self.tour_facts();
-        let opened = None;
-        let active = Active { tour, step, start, card, field: None, focused: false, idea: 0, note: None, opened };
+        let (opened, agent) = (None, None);
+        let active =
+            Active { tour, step, start, card, field: None, focused: false, idea: 0, note: None, opened, agent };
         self.messages.tour.active = Some(active);
         self.enter_step();
     }
 
     fn enter_step(&mut self) {
         let facts = self.tour_facts();
+        let asks = self.messages.tour.active.as_ref().is_some_and(|a| a.step().offer == Some(Offer::Prompt));
+        let agent = asks.then(|| self.tour_agent()).flatten();
         let Some(active) = &mut self.messages.tour.active else { return };
         active.start = facts;
         active.note = None;
         active.focused = false;
-        active.field = (active.step().offer == Some(Offer::Prompt)).then(|| prompt::idea(active.idea));
+        active.agent = agent;
+        active.field = asks.then(|| prompt::idea(active.idea));
         self.show_section();
     }
 
@@ -251,9 +257,10 @@ impl App {
         }
     }
 
-    fn tour_offers(&self, step: &Step, facts: &Facts) -> (Vec<TourButton>, Option<String>, Option<String>) {
+    fn tour_offers(&self, active: &Active, facts: &Facts) -> (Vec<TourButton>, Option<String>, Option<String>) {
+        let step = active.step();
         let prompt = step.offer == Some(Offer::Prompt);
-        let agent = prompt.then(|| self.tour_agent()).flatten();
+        let agent = active.agent.clone();
         let project = self.project().is_some();
         let actions = match step.offer {
             Some(Offer::Prompt) if agent.is_some() && project => vec![TourButton::Idea, TourButton::Start],
@@ -284,9 +291,10 @@ impl App {
     pub(super) fn tour_card(&self, area: Rect) -> Option<ui::TourCard> {
         let active = self.messages.tour.active.as_ref().filter(|a| a.card)?;
         let (tour, step) = (active.tour(), active.step());
-        let facts = self.tour_facts();
+        let repository = step.done == Done::WorkspaceMade && self.project().is_some_and(|p| git::is_repo_root(&p.path));
+        let facts = Facts { repository, ..self.tour_facts() };
         let (target, button) = self.tour_target(&self.layout(area).shown(self.screen.nav), step.target);
-        let (actions, note, agent) = self.tour_offers(step, &facts);
+        let (actions, note, agent) = self.tour_offers(active, &facts);
         Some(ui::TourCard {
             title: format!("{} · {}/{}", tour.title, active.step + 1, tour.steps.len()),
             step: step.title.into(),
