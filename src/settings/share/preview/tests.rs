@@ -5,6 +5,7 @@ use crate::control::config::SectionPreview;
 use crate::settings::Page;
 
 const SHOP: &str = "github.com/acme/web-shop";
+const SKIP: &str = "--dangerously-skip-permissions";
 
 fn settings() -> Settings {
     Settings::new(Config::default(), None, Vec::new(), Page::default())
@@ -187,6 +188,17 @@ mod notes {
                 "runs these setup commands in every new worktree of /work/web-shop",
             ]
         );
+    }
+
+    #[rstest::rstest]
+    #[case::a_renamed_mode_with_the_same_args(json!({"claude": {"fast": [SKIP, "--verbose"]}}), json!([SKIP, "--verbose"]))]
+    #[case::the_built_in_mode_blanked(json!({"claude": {"skip permissions (dangerous)": []}}), json!([SKIP]))]
+    fn judge_a_dangerous_mode_by_the_built_in_ones(#[case] modes: Value, #[case] args: Value) {
+        let shared = with(&json!({"agent_modes": modes, "agent_args": {"claude": args}}));
+
+        let preview = preview(&shared, &settings(), &nobody());
+
+        assert_eq!(notes_of(&preview, NoteKind::Risk), ["starts claude in skip permissions (dangerous) mode"]);
     }
 
     #[test]

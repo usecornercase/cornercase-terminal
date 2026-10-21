@@ -135,8 +135,8 @@ fn runs(change: &SetupChange) -> Option<SetupNote> {
     }
 }
 
-fn mode_in(config: &Config, kind: &str) -> Option<String> {
-    agents::mode_of(kind, &agents::args(config, kind), &agents::modes(config, kind))
+fn holds_mode(kind: &str, args: &[String], mode: &agents::Mode) -> bool {
+    agents::mode_of(kind, args, std::slice::from_ref(mode)).is_some()
 }
 
 struct Rows(BTreeMap<String, (String, String)>);
@@ -222,14 +222,15 @@ impl Compared<'_> {
     }
 
     fn dangerous_modes(&self) -> Vec<SetupNote> {
-        let kinds: BTreeSet<&String> = self.next.agent_args.keys().chain(self.next.agent_modes.keys()).collect();
-        kinds
-            .into_iter()
-            .filter_map(|kind| {
-                let mode = mode_in(&self.next, kind).filter(|mode| agents::is_dangerous(mode))?;
-                (mode_in(self.now, kind).as_ref() != Some(&mode)).then(|| risk(format!("starts {kind} in {mode} mode")))
-            })
-            .collect()
+        let built_in = Config::default();
+        let mut notes = Vec::new();
+        for (kind, args) in &self.next.agent_args {
+            let now = agents::args(self.now, kind);
+            let dangerous = agents::modes(&built_in, kind).into_iter().filter(|(name, _)| agents::is_dangerous(name));
+            let added = dangerous.filter(|mode| holds_mode(kind, args, mode) && !holds_mode(kind, &now, mode));
+            notes.extend(added.map(|(name, _)| risk(format!("starts {kind} in {name} mode"))));
+        }
+        notes
     }
 
     fn worktree_notes(&self) -> Vec<SetupNote> {
