@@ -137,7 +137,7 @@ const HELP_LABELS: Record<HelpItem, string> = {
 const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
 const WORKTREES_NEED = 'this needs cornercase on your computer: the demo has no worktrees on disk to list';
 const SETUP_NEEDS = 'this needs cornercase on your computer: the demo runs no setup scripts';
-const SHARE_NEEDS = 'sharing settings needs a real cornercase';
+const SHARE_NEEDS = 'this needs cornercase on your computer: the demo has no settings to copy or import';
 
 const BUILT_IN_FLOWS: [string, number, string][] = [
   ['Arena', 7, 'coder A + coder B + coder C → judge → integrator → reviewer'],
