@@ -67,6 +67,7 @@ fn file(path: &str, digest: u64, lines: usize) -> File {
         old: None,
         new: Some(n),
         text: String::new(),
+        raw: None,
         syntax: None,
         emphasis: Vec::new(),
     };
@@ -353,7 +354,8 @@ fn forgetting_a_workspace_releases_all_its_caches_and_ignores_an_in_flight_answe
 #[test]
 fn gap_lines_come_from_the_new_side_between_two_hunks() {
     let mut f = file("a.txt", 1, 0);
-    let line = |kind, old, new| Line { kind, old, new, text: "x".into(), syntax: None, emphasis: Vec::new() };
+    let line =
+        |kind, old, new| Line { kind, old, new, text: "x".into(), raw: None, syntax: None, emphasis: Vec::new() };
     f.hunks = vec![
         Hunk { old_start: 1, new_start: 1, context: String::new(), lines: vec![line(Kind::Added, None, Some(1))] },
         Hunk { old_start: 4, new_start: 5, context: String::new(), lines: vec![line(Kind::Context, Some(4), Some(5))] },
@@ -362,6 +364,21 @@ fn gap_lines_come_from_the_new_side_between_two_hunks() {
     let gap: Vec<(u32, u32, String)> =
         gap_lines(&f, 1, &new_side).into_iter().map(|g| (g.old, g.new, g.text)).collect();
     assert_eq!(gap, [(1, 2, "line 2".into()), (2, 3, "line 3".into()), (3, 4, "line 4".into())]);
+}
+
+#[test]
+fn gap_lines_show_tabs_expanded_and_keep_their_own_text() {
+    let mut f = file("a.txt", 1, 0);
+    let line =
+        |kind, old, new| Line { kind, old, new, text: "x".into(), raw: None, syntax: None, emphasis: Vec::new() };
+    f.hunks = vec![
+        Hunk { old_start: 1, new_start: 1, context: String::new(), lines: vec![line(Kind::Added, None, Some(1))] },
+        Hunk { old_start: 3, new_start: 4, context: String::new(), lines: vec![line(Kind::Context, Some(3), Some(4))] },
+    ];
+    let new_side: Vec<String> = ["one", "\ttwo", "three", "four"].map(String::from).to_vec();
+    let gap = gap_lines(&f, 1, &new_side);
+    assert_eq!(gap.iter().map(|g| g.text.as_str()).collect::<Vec<_>>(), ["    two", "three"]);
+    assert_eq!(gap.iter().map(GapLine::source).collect::<Vec<_>>(), ["\ttwo", "three"]);
 }
 
 mod branch_picker {

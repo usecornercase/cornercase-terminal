@@ -102,13 +102,18 @@ pub(crate) struct Line {
     pub(crate) old: Option<u32>,
     pub(crate) new: Option<u32>,
     pub(crate) text: String,
+    pub(crate) raw: Option<Box<str>>,
     pub(crate) syntax: Option<Segments>,
     pub(crate) emphasis: Vec<Range<usize>>,
 }
 
 impl Line {
     fn new(kind: Kind, old: Option<u32>, new: Option<u32>, text: &str) -> Self {
-        Self { kind, old, new, text: expand(text), syntax: None, emphasis: Vec::new() }
+        Self { kind, old, new, text: expand(text), raw: own(text), syntax: None, emphasis: Vec::new() }
+    }
+
+    pub(crate) fn source(&self) -> &str {
+        self.raw.as_deref().unwrap_or(&self.text)
     }
 }
 
@@ -222,6 +227,10 @@ impl Diff {
 
 pub(crate) fn expand(text: &str) -> String {
     text.trim_end_matches('\r').replace('\t', TAB)
+}
+
+pub(crate) fn own(text: &str) -> Option<Box<str>> {
+    text.contains('\t').then(|| text.into())
 }
 
 fn digest(value: impl Hash) -> u64 {

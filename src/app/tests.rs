@@ -107,6 +107,13 @@ fn drag(app: &mut App, from: Position, to: Position) {
     mouse(app, MouseEventKind::Up(MouseButton::Left), to);
 }
 
+fn hold(app: &mut App, from: Instant, steps: u32) -> Instant {
+    for step in 1..=steps {
+        app.refresh(from + LINES_SCROLL_EVERY * step);
+    }
+    from + LINES_SCROLL_EVERY * steps
+}
+
 fn panel_area(app: &App) -> Rect {
     app.layout(AREA).changes
 }

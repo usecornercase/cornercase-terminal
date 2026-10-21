@@ -7,7 +7,7 @@ import type { Cursor } from '../term/canvas';
 import { BOLD, Grid, type Rect, contains, rect } from '../term/grid';
 import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
-import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, workspaceDiff } from './changes';
+import { BASES, type ChangesMode, type ChangesSelection, type FileDiff, type HunkAction, type LinesAction, changesLineEdge, changesLineNear, hasChanges, hunkLines, linesReference, linesText, selectedLines, shownChanges, workspaceDiff } from './changes';
 import { TodoPanel, todoWidth } from './todo';
 import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
 import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
@@ -423,6 +423,9 @@ export class App {
   changesHeaders = new Set<number>();
   changesBase = BASES[0];
   changesScroll = 0;
+  changesSelection: ChangesSelection | null = null;
+  private changesSelecting = false;
+  private changesScrolled = -Infinity;
   changesFilter: { query: string; focused: boolean } | null = null;
   todo = new TodoPanel([
     ['Review the gift cards branch before Friday', false],
@@ -1009,6 +1012,52 @@ export class App {
     this.after(LINES_SCROLL_EVERY, () => this.autoScrollLines());
   }
 
+  private autoScrollChangesLines(): void {
+    const h = this.hover;
+    const picked = this.changesSelection && selectedLines(this, shownChanges(this, this.areas()));
+    if (!this.changesSelecting || !this.changesSelection || !picked || !h || this.now() - this.changesScrolled < LINES_SCROLL_EVERY) return;
+    const edge = changesLineEdge(this, h.y);
+    if (!edge) return;
+    this.scrollChanges(edge.delta, edge.max);
+    this.extendChangesSelection(picked.file, h.y);
+    this.changesScrolled = this.now();
+    this.dirty();
+    this.after(LINES_SCROLL_EVERY, () => this.autoScrollChangesLines());
+  }
+
+  private extendChangesSelection(file: number, y: number): void {
+    const end = changesLineNear(this, file, y);
+    if (end && this.changesSelection) this.changesSelection.end = end;
+  }
+
+  selectChangesLine(f: FileDiff, h: number, l: number): void {
+    this.changesSelection = { key: this.fileKey(f), before: f.change.before, after: f.change.after, anchor: [h, l], end: [h, l] };
+    this.changesSelecting = true;
+    this.dirty();
+  }
+
+  clearChangesSelection(): void {
+    if (!this.changesSelection) return;
+    this.changesSelection = null;
+    this.dirty();
+  }
+
+  private dropChangesSelection(key: string): void {
+    if (this.changesSelection?.key === key) this.changesSelection = null;
+  }
+
+  changesLinesAction(action: LinesAction): void {
+    const picked = selectedLines(this, shownChanges(this, this.areas()));
+    const f = picked && this.changesDiff()[picked.file];
+    const w = f && (f.owner?.workspace ?? this.workspace());
+    if (!picked || !f || !w) return;
+    if (action === 'copy') {
+      this.emit('copy', linesText(f, picked.from, picked.to));
+      this.notify('copied to clipboard');
+    } else this.askAgent(w, linesReference(f, picked.from, picked.to));
+    this.dirty();
+  }
+
   private autoScroll(): void {
     const d = this.rowDrag;
     const h = this.hover;
@@ -1211,6 +1260,7 @@ export class App {
   }
 
   private submitDiscard(o: { key: string; path: string; status: string; untracked: boolean }): void {
+    this.dropChangesSelection(o.key);
     this.discarded.add(o.key);
     this.staged.delete(o.key);
     this.viewed.delete(o.key);
@@ -1599,7 +1649,7 @@ export class App {
     return `${this.changesScope}:${this.fileKey(f)}`;
   }
 
-  private fileKey(f: FileDiff): string {
+  fileKey(f: FileDiff): string {
     return `${f.owner?.workspace.id ?? this.workspace()?.id}:${f.change.path}`;
   }
 
@@ -2071,6 +2121,7 @@ export class App {
   }
 
   toggleChangesFile(f: FileDiff): void {
+    this.dropChangesSelection(this.fileKey(f));
     this.folded.set(this.foldKey(f), !this.changesFolded(f));
     this.dirty();
   }
@@ -2087,6 +2138,7 @@ export class App {
 
   toggleChangesViewed(f: FileDiff): void {
     const key = this.fileKey(f);
+    this.dropChangesSelection(key);
     if (!this.viewed.delete(key)) this.viewed.add(key);
     this.folded.delete(`project:${key}`);
     this.folded.delete(`every:${key}`);
@@ -2097,6 +2149,7 @@ export class App {
     const files = this.changesDiff();
     const fold = files.some((f) => !this.changesFolded(f));
     if (!fold) this.changesHeaders.clear();
+    this.changesSelection = null;
     for (const f of files) this.folded.set(this.foldKey(f), fold);
     this.dirty();
   }
@@ -2117,8 +2170,7 @@ export class App {
 
   hunkAction(action: HunkAction, f: FileDiff, h: number): void {
     const hunk = f.hunks[h];
-    const added = hunk.lines.filter((l) => l.kind === '+').map((l) => l.new ?? 0);
-    const lines = added.length ? (added.length > 1 ? `${added[0]}-${added[added.length - 1]}` : `${added[0]}`) : `${hunk.newStart}`;
+    const lines = hunkLines(hunk);
     const p = f.owner?.project ?? this.project();
     const w = f.owner?.workspace ?? this.workspace();
     if (!p || !w) return;
@@ -4261,6 +4313,13 @@ export class App {
       this.dirty();
       return;
     }
+    if (this.changesSelecting && buttons & 1) {
+      const picked = selectedLines(this, shownChanges(this, this.areas()));
+      if (picked) this.extendChangesSelection(picked.file, y);
+      this.autoScrollChangesLines();
+      this.dirty();
+      return;
+    }
     if (this.files.selecting !== null && buttons & 1) {
       const line = lineNear(this, y);
       const viewer = this.filesPlace()?.viewer;
@@ -4380,6 +4439,7 @@ export class App {
 
   pointerUp(): void {
     this.files.selecting = null;
+    this.changesSelecting = false;
     const paneDrag = this.paneDrag;
     if (paneDrag) {
       this.paneDrag = null;
@@ -4427,6 +4487,14 @@ export class App {
   }
 
   wheel(x: number, y: number, dy: number): boolean {
+    const shown = this.changesSelecting ? shownChanges(this, this.areas()) : null;
+    const picked = shown && selectedLines(this, shown);
+    if (shown && picked) {
+      this.scrollChanges(dy > 0 ? 3 : -3, shown.max);
+      this.extendChangesSelection(picked.file, y);
+      this.dirty();
+      return true;
+    }
     const from = this.files.selecting;
     const viewer = this.filesPlace()?.viewer;
     const max = fileMax(this);

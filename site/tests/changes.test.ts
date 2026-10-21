@@ -236,3 +236,99 @@ for (const columns of [140, 80]) {
     app.destroy();
   });
 }
+
+function lineRows(app: App): number[] {
+  app.render();
+  const rows: number[] = [];
+  for (let nth = 0; ; nth++) {
+    const at = app.textAt('▎', nth);
+    if (!at) return rows;
+    rows.push(at.y);
+  }
+}
+
+function pressAt(app: App, y: number): void {
+  const bar = app.textAt('▎');
+  assert.ok(bar);
+  app.pointerDown(bar.x, y, 0);
+  app.render();
+}
+
+test('pressing and dragging over diff lines selects them, and copy and ask agent act on them', () => {
+  const app = demo(140);
+  const copied: string[] = [];
+  app.on((event, detail) => {
+    if (event === 'copy') copied.push(detail ?? '');
+  });
+  const rows = lineRows(app);
+  const first = rows[0];
+  const last = rows[rows.length - 1];
+  assert.ok(first !== undefined && last !== undefined && first < last);
+  assert.ok(app.textAt('collapse all'));
+  pressAt(app, first);
+  app.pointerMove(app.areas().changes.x + 10, last, 1);
+  app.render();
+  assert.ok(app.changesSelection);
+  assert.ok(app.textAt('lines 10-16'));
+  assert.ok(app.textAt('ask agent') && app.textAt(' copy '));
+  assert.equal(app.textAt('collapse all'), null);
+  app.pointerUp();
+  const copy = app.textAt(' copy ');
+  assert.ok(copy);
+  app.pointerDown(copy.x + 1, copy.y, 0);
+  app.pointerUp();
+  assert.ok(copied.at(-1) && !copied.at(-1)?.includes('▎'));
+  assert.equal(copied.at(-1)?.split('\n').length, 12);
+  app.render();
+  const ask = app.textAt('ask agent');
+  assert.ok(ask);
+  app.pointerDown(ask.x + 1, ask.y, 0);
+  app.pointerUp();
+  assert.ok(app.toast);
+  app.destroy();
+});
+
+test('a click on a hunk header outside its buttons clears the selection', () => {
+  const app = demo(140);
+  const [first] = lineRows(app);
+  pressAt(app, first);
+  app.pointerUp();
+  app.render();
+  assert.ok(app.changesSelection && app.textAt('collapse all') === null);
+  const hunk = app.textAt('┄');
+  assert.ok(hunk);
+  app.pointerDown(hunk.x, hunk.y, 0);
+  app.pointerUp();
+  app.render();
+  assert.ok(app.textAt('collapse all'));
+  app.destroy();
+});
+
+test('folding the file drops a selection', () => {
+  const app = demo(140);
+  const [first] = lineRows(app);
+  pressAt(app, first);
+  app.pointerUp();
+  app.render();
+  const file = app.textAt('▾ M');
+  assert.ok(file && app.changesSelection);
+  press(app, file.x + 6, file.y);
+  assert.equal(app.changesSelection, null);
+  app.destroy();
+});
+
+test('a selection held at the bottom of a short panel scrolls it and moves the end', () => {
+  const app = demo(140);
+  app.resize(140, 14);
+  const [first] = lineRows(app);
+  assert.ok(first !== undefined);
+  pressAt(app, first);
+  const before = app.changesSelection?.end;
+  const panel = app.areas().changes;
+  app.pointerMove(panel.x + 10, panel.y + panel.h - 3, 1);
+  app.advance(1000);
+  assert.ok(app.changesScroll > 0);
+  assert.notDeepEqual(app.changesSelection?.end, before);
+  app.pointerUp();
+  app.destroy();
+});

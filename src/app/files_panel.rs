@@ -8,7 +8,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::{Position, Rect};
 
 use super::input::wheel;
-use super::interaction::{Drag, LINES_SCROLL_EVERY};
+use super::interaction::{Anchor, Drag};
 use super::layout::Side;
 use super::{App, AppEvent};
 use crate::changes::{Checkout, Tints};
@@ -403,7 +403,8 @@ impl App {
         if let Some(viewer) = self.panels.files.viewer_mut(workspace) {
             viewer.selection = Some((n, n));
             let path = viewer.path.clone();
-            self.screen.drag = Some(Drag::Lines { workspace, path, anchor: n, area, moved: false, scrolled: None });
+            self.screen.drag =
+                Some(Drag::Lines { workspace, path, anchor: Anchor::File(n), area, moved: false, scrolled: None });
         }
     }
 
@@ -521,60 +522,13 @@ impl App {
         }
     }
 
-    pub(super) fn drag_lines(&mut self, ev: MouseEvent, panel_area: Rect) {
-        let Some(Drag::Lines { workspace, path, anchor, .. }) = self.screen.drag.clone() else { return };
-        if !self.shows_file(workspace, &path) {
-            self.screen.drag = None;
-            return;
-        }
-        match ev.kind {
-            MouseEventKind::Drag(MouseButton::Left) => {
-                if let Some(Drag::Lines { moved, .. }) = &mut self.screen.drag {
-                    *moved = true;
-                }
-                self.select_lines(workspace, anchor, ev.row, panel_area);
-                self.auto_scroll_lines(Instant::now());
-            }
-            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-                if let Some(delta) = wheel(ev.kind) {
-                    self.scroll_viewer(workspace, panel_area, delta);
-                }
-                self.select_lines(workspace, anchor, ev.row, panel_area);
-            }
-            _ => self.screen.drag = None,
-        }
-    }
-
-    pub(super) fn lines_edge(&self) -> Option<(Rect, u16, isize)> {
-        let Some(Drag::Lines { workspace, path, area, moved: true, .. }) = &self.screen.drag else { return None };
-        let pos = self.screen.hover?;
-        if !self.shows_file(*workspace, path) {
-            return None;
-        }
-        let panel_area = self.layout(*area).shown(self.screen.nav).changes;
-        let delta = panel::edge(panel_area, &self.files_view()?, pos.y)?;
-        Some((panel_area, pos.y, delta))
-    }
-
-    pub(super) fn auto_scroll_lines(&mut self, now: Instant) {
-        let Some((panel_area, row, delta)) = self.lines_edge() else { return };
-        let Some(Drag::Lines { workspace, anchor, scrolled, .. }) = &mut self.screen.drag else { return };
-        if scrolled.is_some_and(|at| now.duration_since(at) < LINES_SCROLL_EVERY) {
-            return;
-        }
-        *scrolled = Some(now);
-        let (workspace, anchor) = (*workspace, *anchor);
-        self.scroll_viewer(workspace, panel_area, delta);
-        self.select_lines(workspace, anchor, row, panel_area);
-    }
-
-    fn shows_file(&self, workspace: u64, path: &str) -> bool {
+    pub(super) fn shows_file(&self, workspace: u64, path: &str) -> bool {
         self.files_shown()
             && self.files_target().is_some_and(|(id, _)| id == workspace)
             && self.panels.files.viewer(workspace).is_some_and(|viewer| viewer.path == path)
     }
 
-    fn scroll_viewer(&mut self, workspace: u64, panel_area: Rect, delta: isize) {
+    pub(super) fn scroll_viewer(&mut self, workspace: u64, panel_area: Rect, delta: isize) {
         let Some(view) = self.files_view() else { return };
         let max = panel::max_scroll(panel_area, &view);
         if let Some(viewer) = self.panels.files.viewer_mut(workspace) {
@@ -582,7 +536,7 @@ impl App {
         }
     }
 
-    fn select_lines(&mut self, workspace: u64, anchor: u32, row: u16, panel_area: Rect) {
+    pub(super) fn select_file_lines(&mut self, workspace: u64, anchor: u32, row: u16, panel_area: Rect) {
         let Some(view) = self.files_view() else { return };
         let Some(line) = panel::line_near(panel_area, &view, row) else { return };
         if let Some(viewer) = self.panels.files.viewer_mut(workspace) {

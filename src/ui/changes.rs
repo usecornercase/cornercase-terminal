@@ -7,12 +7,17 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 
+pub(crate) use self::selection::{LinesAction, Selected, edge, line_near, lines_actions, picked, selected};
+use self::selection::{covers, numbers_style, spot_of};
 use super::icons::Glyphs;
-use super::{action_style, dim, draw_close, hovered_at as hovered, put};
+use super::{action_style, dim, draw_close, fit, hovered_at as hovered, put, scroll_edge};
 use crate::changes::Body;
 use crate::changes::diff::{Diff, File, Hunk, Kind, Line, Segments, Staged, Status};
 use crate::changes::every::Header;
+use crate::changes::selection::Spot;
 use crate::changes::{GapLine, Mode, Scope, Tints};
+
+mod selection;
 
 pub(crate) const DEFAULT_WIDTH: u16 = 64;
 pub(crate) const MIN_WIDTH: u16 = 36;
@@ -71,6 +76,7 @@ pub(crate) struct View {
     pub(crate) soft: Color,
     pub(crate) tints: Tints,
     pub(crate) filter: Option<FilterView>,
+    pub(crate) selection: Option<Selected>,
     pub(crate) glyphs: &'static Glyphs,
 }
 
@@ -260,7 +266,7 @@ fn fold_label(view: &View) -> &'static str {
 }
 
 pub(crate) fn fold_all(area: Rect, view: &View) -> Rect {
-    if !view.foldable() {
+    if !view.foldable() || view.selection.is_some() {
         return Rect::default();
     }
     let row = parts(area, view).footer;
@@ -340,6 +346,8 @@ pub(crate) enum Hit {
     Discard(usize),
     Gap(usize, usize),
     Action(usize, usize, Action),
+    Line(usize, Spot),
+    Lines(LinesAction),
 }
 
 pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
@@ -364,8 +372,8 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     if base(area, view).contains(pos) {
         return Some(Hit::Base);
     }
-    if fold_all(area, view).contains(pos) {
-        return Some(Hit::FoldAll);
+    if let Some(hit) = footer_hit(area, view, pos) {
+        return Some(hit);
     }
     let (row, r) = visible(area, view).into_iter().find(|(_, r)| r.contains(pos))?;
     match row {
@@ -376,8 +384,16 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
         Row::File(i) => Some(Hit::File(i)),
         Row::Gap(i, h) => Some(Hit::Gap(i, h)),
         Row::Hunk(i, h) => actions(r).into_iter().find(|(_, a)| a.contains(pos)).map(|(a, _)| Hit::Action(i, h, a)),
-        _ => None,
+        Row::Line(..) | Row::GapLine(..) => spot_of(row).map(|(i, spot)| Hit::Line(i, spot)),
+        Row::Spacer => None,
     }
+}
+
+fn footer_hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
+    if fold_all(area, view).contains(pos) {
+        return Some(Hit::FoldAll);
+    }
+    lines_actions(area, view).into_iter().find(|(_, r)| r.contains(pos)).map(|(action, _)| Hit::Lines(action))
 }
 
 fn fill(buf: &mut Buffer, r: Rect, bg: Color) {
@@ -442,6 +458,10 @@ impl Painter<'_> {
         let p = parts(area, view);
         let line = "─".repeat(usize::from(p.separator.width));
         put(self.buf, (p.separator.x, p.separator.y), &line, dim(super::line_colour(view.light)), p.separator.right());
+        if let Some(selected) = &view.selection {
+            self.selection_footer(selected);
+            return;
+        }
         let fold = fold_all(area, view);
         if !fold.is_empty() {
             let style =
@@ -578,9 +598,8 @@ impl Painter<'_> {
                 let Some(line) = view.gaps.get(&(i, h)).and_then(|g| g.get(k)) else { return };
                 let digits = number_width(&diff.files[i]);
                 let (old, new, text) = (Some(line.old), Some(line.new), line.text.as_str());
-                let code =
-                    Code { kind: Kind::Context, old, new, text, digits, syntax: line.syntax.as_ref(), emphasis: &[] };
-                self.code(r, code);
+                let (syntax, selected) = (line.syntax.as_ref(), covers(view, row));
+                self.code(r, Code { kind: Kind::Context, old, new, text, digits, syntax, emphasis: &[], selected });
             }
             Row::Hunk(i, h) => self.hunk(&diff.files[i].hunks[h], r, hovered_hunk == Some((i, h))),
             Row::Line(i, h, l) => {
@@ -588,7 +607,8 @@ impl Painter<'_> {
                 let (kind, old, new, text) = (line.kind, line.old, line.new, line.text.as_str());
                 let digits = number_width(&diff.files[i]);
                 let (syntax, emphasis) = (line.syntax.as_ref(), line.emphasis.as_slice());
-                self.code(r, Code { kind, old, new, text, digits, syntax, emphasis });
+                let selected = covers(view, row);
+                self.code(r, Code { kind, old, new, text, digits, syntax, emphasis, selected });
             }
             Row::Spacer => {}
         }
@@ -736,6 +756,10 @@ impl Painter<'_> {
             (None, Some(colour)) => Style::default().fg(colour),
             _ => dim(view.muted),
         };
+        let numbers = numbers_style(code.selected, numbers);
+        if code.selected {
+            self.selected_mark(r);
+        }
         let mut x = put(self.buf, (r.x + 1, r.y), &number(code.old), numbers, r.right());
         x = put(self.buf, (x + 1, r.y), &number(code.new), numbers, r.right());
         if let Some(bar) = bar {
@@ -816,6 +840,7 @@ struct Code<'a> {
     digits: usize,
     syntax: Option<&'a Segments>,
     emphasis: &'a [Range<usize>],
+    selected: bool,
 }
 
 fn paint(style: Style, tint: Option<Color>, word: Option<Color>, strong: bool) -> Style {

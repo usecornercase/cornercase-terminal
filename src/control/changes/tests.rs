@@ -82,6 +82,7 @@ fn file() -> File {
         old,
         new,
         text: text.into(),
+        raw: None,
         syntax: Some(vec![(text.into(), Look::default().fg(ratatui::style::Color::Indexed(5)))]),
         emphasis: Vec::new(),
     };

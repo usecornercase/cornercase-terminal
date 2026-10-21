@@ -234,13 +234,6 @@ fn long_file() -> (TempDir, App, Receiver<AppEvent>) {
     file_with(&(1..=200).map(|n| format!("let line_{n} = {n};\n")).collect::<Vec<_>>().concat())
 }
 
-fn hold(app: &mut App, from: Instant, steps: u32) -> Instant {
-    for step in 1..=steps {
-        app.refresh(from + LINES_SCROLL_EVERY * step);
-    }
-    from + LINES_SCROLL_EVERY * steps
-}
-
 #[test]
 fn a_selection_held_at_an_edge_scrolls_the_file() {
     let (_repo, mut app, _rx) = long_file();

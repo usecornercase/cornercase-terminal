@@ -272,7 +272,7 @@ pub(crate) fn new_side(dir: &Path, mode: Mode, path: &str) -> Option<Vec<String>
     if bytes.len() as u64 > MAX_UNTRACKED_BYTES {
         return None;
     }
-    Some(String::from_utf8_lossy(&bytes).lines().map(diff::expand).collect())
+    Some(String::from_utf8_lossy(&bytes).lines().map(str::to_string).collect())
 }
 
 #[cfg(test)]

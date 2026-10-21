@@ -29,7 +29,7 @@ mod every_project {
         Position::new(body.x + 8, body.y + u16::try_from(index).expect("row index"))
     }
 
-    fn open_file(app: &mut App, rx: &Receiver<AppEvent>, path: &str) -> usize {
+    pub(super) fn open_file(app: &mut App, rx: &Receiver<AppEvent>, path: &str) -> usize {
         let view = app.panel_view().expect("panel");
         let changes::Body::Ready(diff) = view.body else { panic!("ready") };
         let file = diff.files.iter().position(|f| f.path == path).expect("file");
@@ -222,9 +222,9 @@ mod every_project {
         assert_eq!(headers.len(), 1);
     }
 
-    struct Owners {
+    pub(super) struct Owners {
         first: TempDir,
-        second: TempDir,
+        pub(super) second: TempDir,
         scripts: TempDir,
         agent: PathBuf,
         editor: PathBuf,
@@ -255,7 +255,7 @@ mod every_project {
         assert!(app.screen.side == Some(Side::Changes) && app.panels.changes.scope() == changes::Scope::Every);
     }
 
-    fn assert_agent_got_the_reference(app: &mut App, owners: &Owners, agent_pane: u64) {
+    pub(super) fn assert_agent_got_the_reference(app: &mut App, owners: &Owners, agent_pane: u64) {
         assert_eq!(app.active, 0);
         assert_eq!(app.term().expect("visible agent").id, agent_pane);
         assert_shown_in_every_scope(app);
@@ -276,8 +276,17 @@ mod every_project {
         assert_shown_in_every_scope(app);
     }
 
-    #[test]
-    fn file_actions_reach_the_workspace_that_owns_the_file() {
+    pub(super) struct Collapsed {
+        pub(super) owners: Owners,
+        pub(super) app: App,
+        pub(super) rx: Receiver<AppEvent>,
+        pub(super) owner: u64,
+        pub(super) agent_pane: u64,
+        pub(super) active: usize,
+        pub(super) file: usize,
+    }
+
+    pub(super) fn collapsed_owner() -> Collapsed {
         let owners = Owners::new();
         let (mut app, rx) = app_in(owners.second.path(), owners.config());
         exec_agent(&mut app, &owners.agent);
@@ -289,6 +298,12 @@ mod every_project {
         app.projects[0].workspaces[0].collapsed = true;
         loaded_every(&mut app, &rx);
         let file = open_file(&mut app, &rx, "b.txt");
+        Collapsed { owners, app, rx, owner, agent_pane, active, file }
+    }
+
+    #[test]
+    fn file_actions_reach_the_workspace_that_owns_the_file() {
+        let Collapsed { owners, mut app, rx: _rx, owner, agent_pane, active, file } = collapsed_owner();
         let position = row(&app, panel::Row::Hunk(file, 0));
         let hunk = Rect::new(panel_area(&app).x, position.y, panel_area(&app).width, 1);
         let ask = panel::actions(hunk)[1].1.as_position();
@@ -327,12 +342,15 @@ fn exec_agent(app: &mut App, agent: &Path) {
     });
 }
 
-fn open_changes() -> (TempDir, App, Receiver<AppEvent>) {
-    let repo = repo_with_edit();
+fn opened(repo: TempDir) -> (TempDir, App, Receiver<AppEvent>) {
     let (mut app, rx) = app_in(repo.path(), no_config());
     app.screen.side = Some(Side::Changes);
     refresh_until_loaded(&mut app, &rx);
     (repo, app, rx)
+}
+
+fn open_changes() -> (TempDir, App, Receiver<AppEvent>) {
+    opened(repo_with_edit())
 }
 
 fn loaded(app: &mut App, rx: &Receiver<AppEvent>) {
@@ -878,3 +896,5 @@ mod staging {
         assert!(toast(&app).is_some_and(|t| t.contains("index.lock")), "{:?}", toast(&app));
     }
 }
+
+mod selection;

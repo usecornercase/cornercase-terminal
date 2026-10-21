@@ -21,6 +21,7 @@ use crate::ui::{self};
 
 mod actions;
 mod branches;
+mod selection;
 pub(super) mod streams;
 
 pub(super) use actions::Seen;
@@ -258,6 +259,12 @@ impl App {
     }
 
     pub(super) fn panel_view(&self) -> Option<panel::View> {
+        let mut view = self.plain_view()?;
+        view.selection = self.panels.changes.selection().and_then(|s| panel::selected(&view, s));
+        Some(view)
+    }
+
+    fn plain_view(&self) -> Option<panel::View> {
         let every = self.panels.changes.scope() == changes::Scope::Every;
         let target = if every { None } else { self.changes_target() };
         let model = target.as_ref().and_then(|t| self.panels.changes.model(t.workspace, t.base.as_deref()));
@@ -284,6 +291,7 @@ impl App {
             soft: ui::soft(self.themes.host()),
             tints: Tints::of(self.themes.host()),
             filter,
+            selection: None,
             glyphs: ui::glyphs(self.config.icon_bar),
         })
     }
@@ -348,6 +356,9 @@ impl App {
             return Ok(());
         }
         let hit = panel::hit(panel_area, &view, pos);
+        if self.press_selection(&view, hit, panel_area, (pos, area)) {
+            return Ok(());
+        }
         let chosen = match hit {
             Some(
                 PanelHit::File(i)
@@ -367,6 +378,22 @@ impl App {
             self.refresh_changes(Instant::now());
         }
         Ok(())
+    }
+
+    fn press_selection(
+        &mut self,
+        view: &panel::View,
+        hit: Option<PanelHit>,
+        panel_area: Rect,
+        at: (Position, Rect),
+    ) -> bool {
+        match hit {
+            Some(PanelHit::Line(i, spot)) => self.press_diff_line(view, (i, spot), at.1),
+            Some(PanelHit::Lines(action)) => self.selected_lines_action(view, action),
+            None if panel::parts(panel_area, view).body.contains(at.0) => self.panels.changes.clear_selection(),
+            _ => return false,
+        }
+        true
     }
 
     fn chosen_file(&self, view: &panel::View, i: usize) -> Option<Chosen> {
@@ -397,7 +424,7 @@ impl App {
             Some(PanelHit::Stage(_)) => self.stage_clicked(chosen),
             Some(PanelHit::Discard(_)) => self.ask_discard(chosen),
             Some(PanelHit::Gap(_, h)) => self.read_gap(view.mode, chosen, h),
-            Some(PanelHit::Action(..)) | None => {}
+            Some(PanelHit::Action(..) | PanelHit::Line(..) | PanelHit::Lines(_)) | None => {}
         }
     }
 

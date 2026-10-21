@@ -20,6 +20,23 @@ pub(super) fn hovered(view: &View, r: Rect) -> bool {
     view.hover.is_some_and(|p| r.contains(p))
 }
 
+pub(super) fn fit(texts: &[String], room: usize) -> String {
+    let fitting = texts.iter().find(|t| t.chars().count() <= room).or(texts.last());
+    crate::text::truncate_right(fitting.map_or("", String::as_str), room)
+}
+
+pub(super) fn scroll_edge(body: Rect, first: usize, max: usize, y: u16) -> Option<isize> {
+    if body.is_empty() {
+        None
+    } else if y <= body.y && first > 0 {
+        Some(-1)
+    } else if y >= body.bottom() - 1 && first < max {
+        Some(1)
+    } else {
+        None
+    }
+}
+
 pub(super) fn dim(muted: Color) -> Style {
     Style::default().fg(muted)
 }

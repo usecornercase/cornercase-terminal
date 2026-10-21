@@ -124,6 +124,15 @@ mod parse {
     }
 
     #[test]
+    fn keeps_the_lines_own_text_for_copying() {
+        let patch = "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1,2 +1,2 @@\n-\tx\r\n+\ty\r\n z\n";
+        let lines = &parse(patch)[0].hunks[0].lines;
+        assert_eq!((lines[1].text.as_str(), lines[1].source()), ("    y", "\ty"));
+        assert_eq!(lines[1].raw.as_deref(), Some("\ty"));
+        assert_eq!((lines[2].raw.as_deref(), lines[2].source()), (None, "z"));
+    }
+
+    #[test]
     fn reads_quoted_paths() {
         let patch = "diff --git \"a/caf\\303\\251.txt\" \"b/caf\\303\\251.txt\"\n--- \"a/caf\\303\\251.txt\"\n+++ \"b/caf\\303\\251.txt\"\n@@ -1 +1 @@\n-a\n+b\n";
         assert_eq!(parse(patch)[0].path, "café.txt");

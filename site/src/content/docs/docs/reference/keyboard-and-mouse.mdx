@@ -84,10 +84,13 @@ Programs that use the mouse get clicks, releases, drags, movement and the wheel,
 | Hover, then click `↺` | A file row, in Uncommitted and Every project | Asks, then puts the file back as it is in the last commit, or deletes it when git doesn't track it. |
 | Click | `↕ n unchanged lines` | Shows the code between two hunks. |
 | Hover, then click | `open`, `ask agent`, `copy` on a hunk | Opens it in your editor, types its reference into the workspace's agent, copies it as a patch. |
+| Click, or press and drag | The lines of a diff | Selects a line, or several, of one file. Held on the first or last row shown, or past it, the panel scrolls with the selection. |
+| Click | `ask agent`, `copy` at the bottom, with lines selected | Types the file's path and the lines into the workspace's agent, copies their code. |
+| Click | An empty spot in the diff | Clears the selection. |
 | Click | `expand all` / `collapse all`, `×` | Expands or collapses every file, closes the panel. |
 | Click | `⌕` | Opens the field to [filter the files](../../guides/changes/#filter-the-files), or gives it the keys back. |
 | Click | `×` in the filter field | Closes it and shows every file again. |
-| Wheel | The panel | Scrolls the diff. |
+| Wheel | The panel | Scrolls the diff, also while you select lines. |
 | Drag, double-click | The panel's left border | Resizes it, gives it back its automatic width. |
 
 See [Changes panel](../../guides/changes/).

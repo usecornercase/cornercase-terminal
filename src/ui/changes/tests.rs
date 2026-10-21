@@ -62,6 +62,7 @@ fn sample() -> View {
         soft: Color::Gray,
         tints: TINTS,
         filter: None,
+        selection: None,
         glyphs: &crate::ui::icons::PLAIN,
     }
 }
@@ -466,4 +467,133 @@ mod filter {
 fn shows_an_error() {
     let view = View { body: Body::Failed("cannot compare with nope".into()), ..sample() };
     insta::assert_snapshot!(render(&view, None).backend());
+}
+
+mod selecting {
+    use super::*;
+    use crate::changes::selection::{At, Spot};
+
+    fn spot(hunk: usize, line: usize) -> Spot {
+        Spot { hunk, at: At::Line(line) }
+    }
+
+    fn selecting(from: Spot, to: Spot) -> View {
+        let view = sample();
+        View { selection: Some(Selected { file: 0, from, to }), ..view }
+    }
+
+    fn text_of(terminal: &Terminal<TestBackend>, y: u16) -> String {
+        (0..AREA.width).map(|x| terminal.backend().buffer()[(x, y)].symbol().to_string()).collect()
+    }
+
+    #[test]
+    fn line_rows_are_pressable_and_the_other_rows_keep_their_hits() {
+        let view = sample();
+        let line = row_of(&view, Row::Line(0, 0, 2));
+        assert_eq!(hit(AREA, &view, Position::new(20, line.y)), Some(Hit::Line(0, spot(0, 2))));
+        let hunk = row_of(&view, Row::Hunk(0, 0));
+        assert_eq!(hit(AREA, &view, Position::new(hunk.x + 2, hunk.y)), None);
+        let file = row_of(&view, Row::File(0));
+        assert_eq!(hit(AREA, &view, Position::new(10, file.y)), Some(Hit::File(0)));
+    }
+
+    #[test]
+    fn unchanged_lines_a_gap_shows_are_pressable() {
+        let mut view = sample();
+        let lines: Vec<GapLine> =
+            (14..44).map(|n| GapLine { old: n, new: n, text: format!("line {n}"), raw: None, syntax: None }).collect();
+        view.gaps.insert((0, 1), Arc::new(lines));
+        let r = row_of(&view, Row::GapLine(0, 1, 2));
+        assert_eq!(hit(AREA, &view, Position::new(20, r.y)), Some(Hit::Line(0, Spot { hunk: 1, at: At::Gap(2) })));
+    }
+
+    #[test]
+    fn a_selection_marks_its_rows_only_and_keeps_the_tint() {
+        let view = selecting(spot(0, 1), spot(0, 3));
+        let terminal = render(&view, None);
+        let buffer = terminal.backend().buffer();
+        let marked = |l| {
+            let r = row_of(&view, Row::Line(0, 0, l));
+            (buffer[(r.x, r.y)].symbol().to_string(), buffer[(r.x + 1, r.y)].fg, buffer[(r.x + 2, r.y)].bg)
+        };
+        assert_eq!(marked(0).0, " ");
+        assert_eq!(marked(1).0, "▌");
+        assert_eq!(marked(2).0, "▌");
+        assert_eq!(marked(3), ("▌".to_string(), Color::Cyan, TINTS.added.expect("tint")));
+        assert_eq!(marked(4).0, " ");
+    }
+
+    #[test]
+    fn the_footer_names_the_lines_and_offers_ask_agent_and_copy() {
+        let view = selecting(spot(0, 3), spot(0, 4));
+        let footer = text_of(&render(&view, None), parts(AREA, &view).footer.y);
+        assert!(footer.contains("lines 10-11") && footer.contains(" ask agent   copy "), "{footer}");
+        assert!(!footer.contains("collapse all") && !footer.contains("viewed"), "{footer}");
+        assert_eq!(fold_all(AREA, &view), Rect::default());
+    }
+
+    #[rstest::rstest]
+    #[case::one_line(spot(0, 3), spot(0, 3), "line 10 ")]
+    #[case::a_range(spot(0, 3), spot(0, 5), "lines 10-12")]
+    #[case::only_removed(spot(0, 1), spot(0, 2), "removed lines 10-")]
+    fn the_footer_label(#[case] from: Spot, #[case] to: Spot, #[case] expected: &str) {
+        let view = selecting(from, to);
+        let footer = text_of(&render(&view, None), parts(AREA, &view).footer.y);
+        assert!(footer.contains(expected), "{footer}");
+    }
+
+    #[test]
+    fn the_footer_buttons_hit() {
+        let view = selecting(spot(0, 2), spot(0, 2));
+        let actions = lines_actions(AREA, &view);
+        let hits: Vec<_> = actions.iter().map(|(_, r)| hit(AREA, &view, Position::new(r.x + 1, r.y))).collect();
+        assert_eq!(hits, [Some(Hit::Lines(LinesAction::Ask)), Some(Hit::Lines(LinesAction::Copy))]);
+        assert_eq!(lines_actions(AREA, &sample()).len(), 0);
+    }
+
+    #[rstest::rstest]
+    #[case::above_the_file_is_its_first_line(Row::Header(0), spot(0, 0))]
+    #[case::a_line(Row::Line(0, 0, 2), spot(0, 2))]
+    #[case::a_hunk_header_is_the_line_above(Row::Hunk(0, 1), spot(0, 5))]
+    #[case::the_spacer_is_the_last_line(Row::Spacer, spot(1, 4))]
+    fn line_near_maps_a_row_to_a_line_of_the_file(#[case] row: Row, #[case] expected: Spot) {
+        let view = sample();
+        let y = if row == Row::Header(0) { 0 } else { row_of(&view, row).y };
+        assert_eq!(line_near(AREA, &view, 0, y), Some(expected));
+    }
+
+    #[test]
+    fn the_edge_scrolls_only_where_there_is_more_to_show() {
+        let short = Rect { height: 8, ..AREA };
+        let view = sample();
+        let body = parts(short, &view).body;
+        assert_eq!(edge(short, &view, body.y), None);
+        assert_eq!(edge(short, &view, body.bottom() - 1), Some(1));
+        let scrolled = View { scroll: 2, ..sample() };
+        assert_eq!(edge(short, &scrolled, body.y), Some(-1));
+    }
+
+    #[test]
+    fn it_is_none_for_a_folded_file_a_filtered_file_or_another_patch() {
+        use crate::changes::selection::Selection;
+        let view = sample();
+        let file = &ready(&view).files[0];
+        let selection = Selection {
+            workspace: 1,
+            path: file.path.clone(),
+            digest: file.digest,
+            anchor: spot(0, 1),
+            end: spot(0, 2),
+        };
+        assert!(selected(&view, &selection).is_some());
+        assert!(selected(&View { folded: vec![true; 3], ..sample() }, &selection).is_none());
+        assert!(selected(&sample(), &Selection { digest: file.digest + 1, ..selection.clone() }).is_none());
+        let filter = FilterView { query: "tests/".into(), focused: false, kept: vec![false, false, true] };
+        assert!(selected(&View { filter: Some(filter), ..sample() }, &selection).is_none());
+        assert!(selected(&sample(), &Selection { workspace: 2, ..selection }).is_none());
+    }
+
+    fn ready(view: &View) -> &Diff {
+        view.diff().expect("ready")
+    }
 }

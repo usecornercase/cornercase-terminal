@@ -280,6 +280,7 @@ impl App {
         self.panels.files.unfocus();
         self.panels.files.set_full_screen(false);
         self.panels.changes.unfocus();
+        self.panels.changes.clear_selection();
     }
 
     pub(crate) fn pointer(&self, area: Rect) -> pointer::Shape {

@@ -11,7 +11,7 @@ use ratatui::style::{Color, Modifier, Style};
 use self::find::{draw_find, find_hit, find_slot};
 use super::changes::{buttons, close};
 use super::icons::Glyphs;
-use super::{action_style, dim, draw_close, hovered_at as hovered, put};
+use super::{action_style, dim, draw_close, fit, hovered_at as hovered, put, scroll_edge};
 use crate::changes::diff::Status;
 use crate::files::disk::{Body, Content};
 use crate::files::find::{Find, Occurrence};
@@ -390,18 +390,10 @@ pub(crate) fn line_near(area: Rect, view: &View, y: u16) -> Option<u32> {
 }
 
 pub(crate) fn edge(area: Rect, view: &View, y: u16) -> Option<isize> {
-    let body = body(area, view);
-    if !matches!(view.screen, Screen::File(_)) || body.is_empty() {
+    if !matches!(view.screen, Screen::File(_)) {
         return None;
     }
-    let first = first(area, view);
-    if y <= body.y && first > 0 {
-        Some(-1)
-    } else if y >= body.bottom() - 1 && first < max_scroll(area, view) {
-        Some(1)
-    } else {
-        None
-    }
+    scroll_edge(body(area, view), first(area, view), max_scroll(area, view), y)
 }
 
 #[cfg(test)]
@@ -698,9 +690,7 @@ fn draw_header(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover
         None => (summary(file), dim(view.muted)),
     };
     let start = p.info.x + 1;
-    let room = usize::from(end.saturating_sub(start));
-    let fitting = texts.iter().find(|t| t.chars().count() <= room).or(texts.last());
-    let text = truncate_right(fitting.map_or("", String::as_str), room);
+    let text = fit(&texts, usize::from(end.saturating_sub(start)));
     put(buf, (start, p.info.y), &text, style, end);
     for (action, r) in buttons {
         put(buf, (r.x, r.y), &format!(" {} ", action.label()), action_style(hovered(hover, r)), r.right());

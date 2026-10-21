@@ -32,7 +32,7 @@ Click **`Every project`** beside the project's tab to see staged and unstaged ed
   caption="Review changes across projects without switching your active workspace."
 />
 
-Files start collapsed. Click a file to load and expand its diff in place; click a project or workspace header to hide or reveal its files. The path filter, viewed marks, **collapse all**, scrolling and hunk actions work across the collection. **open** creates a tab in the file's workspace, and **ask agent** sends its reference to that workspace's agent. Both actions show the owning project, workspace and destination tab, so you can use the editor or type your question immediately; the panel stays on Every project.
+Files start collapsed. Click a file to load and expand its diff in place; click a project or workspace header to hide or reveal its files. The path filter, viewed marks, **collapse all**, scrolling, hunk actions and selected lines work across the collection. **open** creates a tab in the file's workspace, and **ask agent** sends its reference to that workspace's agent. Both actions show the owning project, workspace and destination tab, so you can use the editor or type your question immediately; the panel stays on Every project.
 
 This scope shows only uncommitted changes, so it has no mode tabs or base selector. Return to the project's tab to see its commits or choose a base. The `Changes n` button still counts only the active workspace's files, and it and `±` remain available only in git workspaces.
 
@@ -148,6 +148,19 @@ Hover a hunk and three buttons appear on its first line:
 | **copy** | Copies the hunk, as a patch, to your clipboard. |
 
 The editor gets the line as `+11`, which `vi`, `vim`, `nvim`, `nano`, `emacs` and `micro` understand.
+
+## Select lines
+
+Click a line of a diff to select it, or press and drag over several: added, removed and unchanged lines, also the ones **`↕ unchanged lines`** shows. A selection stays in one file; dragging past its first or last line, or over another file, keeps the nearest line of that file. Hold the pointer on the first or last row shown, or past it, and the panel scrolls while the selection follows; the wheel scrolls it too while you keep the button pressed.
+
+The bottom of the panel then says which lines, such as `lines 9-12`, and its buttons act on them:
+
+| Button | Does |
+| --- | --- |
+| **ask agent** | Types a reference such as `src/returns/address.rs:9-12 ` into the agent running in the file's workspace and switches to its tab. The numbers are those of the file as it is now; when only removed lines are selected, it types the hunk's reference, as the hunk's **ask agent** does. Without an agent, it copies the reference. |
+| **copy** | Copies the selected lines' code to your clipboard, as it is in the file (tabs included), without the `+`/`-` bar and the line numbers. Removed and added lines are copied in the order shown; unchanged lines between hunks only when they are shown. |
+
+Click an empty spot of the diff (a hunk's top line outside its buttons, or the space between files) to clear the selection and get **collapse all** and the viewed count back. Collapsing the file or marking it viewed clears it too; the filter, another tab or workspace, or closing the panel only hide it until its lines show again, unless the file changed meanwhile.
 
 ## Live, and light on your repository
 

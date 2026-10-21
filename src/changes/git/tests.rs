@@ -220,7 +220,7 @@ fn an_untracked_symlink_shows_its_target_not_its_contents() {
 fn reads_the_new_side_of_a_file() {
     let repo = git_repo(&[("a.txt", "one\n")]);
     write(repo.path(), "a.txt", "one\n\ttwo\n");
-    assert_eq!(new_side(repo.path(), Mode::Uncommitted, "a.txt"), Some(vec!["one".into(), "    two".into()]));
+    assert_eq!(new_side(repo.path(), Mode::Uncommitted, "a.txt"), Some(vec!["one".into(), "\ttwo".into()]));
     assert_eq!(new_side(repo.path(), Mode::Commits, "a.txt"), Some(vec!["one".into()]));
 }
 

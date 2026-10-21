@@ -168,6 +168,7 @@ use widgets::{
     action_style, button_style, button_width, centered, dim, draw_band, draw_close, draw_separator, hovered,
     hovered_at, middle, overlay_block, put, rail, sidebar_hovered, tab_style,
 };
+use widgets::{fit, scroll_edge};
 use workspaces::{DetailLine, draw_details, draw_workspaces};
 
 #[expect(clippy::struct_excessive_bools, reason = "each flag is a state or a setting the drawing follows")]

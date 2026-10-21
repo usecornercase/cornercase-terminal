@@ -5,6 +5,7 @@ pub(crate) mod every;
 pub(crate) mod filter;
 pub(crate) mod git;
 mod porcelain;
+pub(crate) mod selection;
 pub(crate) mod stage;
 mod summary;
 
@@ -78,7 +79,14 @@ pub(crate) struct GapLine {
     pub(crate) old: u32,
     pub(crate) new: u32,
     pub(crate) text: String,
+    pub(crate) raw: Option<Box<str>>,
     pub(crate) syntax: Option<Segments>,
+}
+
+impl GapLine {
+    pub(crate) fn source(&self) -> &str {
+        self.raw.as_deref().unwrap_or(&self.text)
+    }
 }
 
 #[derive(Debug)]
@@ -136,6 +144,7 @@ pub(crate) struct Panel {
     generation: u64,
     superseded: HashMap<u64, u64>,
     requested: HashMap<(u64, Mode), Instant>,
+    selection: Option<selection::Selection>,
 }
 
 pub(crate) struct Checkout {
@@ -178,6 +187,28 @@ impl Panel {
 
     pub(crate) fn scroll_by(&mut self, delta: isize, max: usize) {
         self.scroll = self.scroll.min(max).saturating_add_signed(delta).min(max);
+    }
+
+    pub(crate) fn selection(&self) -> Option<&selection::Selection> {
+        self.selection.as_ref()
+    }
+
+    pub(crate) fn select(&mut self, selection: selection::Selection) {
+        self.selection = Some(selection);
+    }
+
+    pub(crate) fn select_to(&mut self, end: selection::Spot) {
+        if let Some(selection) = &mut self.selection {
+            selection.end = end;
+        }
+    }
+
+    pub(crate) fn clear_selection(&mut self) {
+        self.selection = None;
+    }
+
+    fn drop_selection(&mut self, workspace: u64, path: &str) {
+        self.selection.take_if(|s| s.workspace == workspace && s.path == path);
     }
 
     pub(crate) fn scroll_to_top(&mut self) {
@@ -415,6 +446,7 @@ impl Panel {
         self.gaps.retain(|(k, _, _), _| k.workspace != workspace);
         self.headers.remove(&workspace);
         self.superseded.remove(&workspace);
+        self.selection.take_if(|s| s.workspace == workspace);
         if self.workspace == Some(workspace) {
             self.workspace = None;
         }
@@ -458,6 +490,7 @@ impl Panel {
         }
         self.folded.remove(&key);
         self.every_folded.remove(&key);
+        self.drop_selection(workspace, path);
         self.invalidate_summary(workspace);
     }
 
@@ -496,6 +529,7 @@ impl Panel {
     pub(crate) fn toggle_fold(&mut self, workspace: u64, diff: &Diff, file: &File) {
         let folded = self.folded(workspace, diff, file);
         self.folds_mut().insert(key(workspace, file), !folded);
+        self.drop_selection(workspace, &file.path);
         self.invalidate_summary(workspace);
     }
 
@@ -521,6 +555,7 @@ impl Panel {
 
     pub(crate) fn set_fold(&mut self, workspace: u64, file: &File, folded: bool) {
         self.folds_mut().insert(key(workspace, file), folded);
+        self.drop_selection(workspace, &file.path);
         self.invalidate_summary(workspace);
     }
 
@@ -581,7 +616,7 @@ pub(crate) fn gap_lines(file: &File, hunk: usize, new_side: &[String]) -> Vec<Ga
     let range = before.new_end()..after.new_start;
     let texts: Vec<(u32, &str)> =
         range.filter_map(|n| new_side.get(usize::try_from(n).ok()?.checked_sub(1)?).map(|t| (n, t.as_str()))).collect();
-    let code = texts.iter().map(|(_, t)| *t).collect::<Vec<_>>().join("\n");
+    let code = texts.iter().map(|(_, t)| diff::expand(t)).collect::<Vec<_>>().join("\n");
     let highlighted = crate::highlight::highlight(&code, &diff::language(&file.path));
     texts
         .iter()
@@ -589,7 +624,8 @@ pub(crate) fn gap_lines(file: &File, hunk: usize, new_side: &[String]) -> Vec<Ga
         .map(|(k, (n, text))| GapLine {
             old: u32::try_from(i64::from(*n) + offset).unwrap_or(0),
             new: *n,
-            text: (*text).to_string(),
+            text: diff::expand(text),
+            raw: diff::own(text),
             syntax: highlighted.as_ref().map(|h| h.get(k).cloned().unwrap_or_default()),
         })
         .collect()
