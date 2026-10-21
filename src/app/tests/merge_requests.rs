@@ -185,6 +185,21 @@ mod without_glab {
     }
 
     #[test]
+    fn logging_out_after_a_read_takes_the_merge_request_off_the_row() {
+        let mut repo = found(VIEW, JOBS);
+        set(&repo, "status", LOGGED_OUT_STATUS);
+
+        let later = Instant::now() + Duration::from_mins(16);
+        ask_at(&mut repo, later);
+        pump_until(&mut repo.app, &repo.rx, "glab answers", |a| a.git.pulls.asking.is_empty());
+        ask_at(&mut repo, later);
+
+        assert_eq!(repo.app.pull_request(repo.worktree()), None);
+        assert!(!row(&mut repo).contains('#'));
+        assert_eq!(repo.app.pull_requests_note(), LOGGED_OUT);
+    }
+
+    #[test]
     fn logging_in_is_seen_without_waiting_five_minutes() {
         let mut repo = gitlab(VIEW, JOBS);
         set(&repo, "status", LOGGED_OUT_STATUS);

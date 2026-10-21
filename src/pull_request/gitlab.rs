@@ -74,7 +74,7 @@ fn parse<T: for<'de> Deserialize<'de>>(bytes: &[u8]) -> Result<T> {
 pub(crate) fn explain(error: &Error) -> String {
     match error {
         Error::RunGlab(e) if e.kind() == io::ErrorKind::NotFound => MISSING.into(),
-        Error::Glab(message) if message.contains("glab auth login") || message.contains("401") => {
+        Error::Glab(message) if message.contains("glab auth login") || glab::unauthorized(message) => {
             glab::LOGGED_OUT.into()
         }
         error => error.to_string(),
@@ -164,7 +164,8 @@ impl Job {
 
 impl Pipeline {
     fn check(&self, jobs: &[Check]) -> Option<Check> {
-        let outcome = outcome(self.status.as_deref().unwrap_or_default(), false);
+        let status = self.status.as_deref().filter(|status| !status.is_empty())?;
+        let outcome = outcome(status, false);
         let any = |wanted: Outcome| jobs.iter().any(|c| c.outcome == wanted);
         let worse = match outcome {
             Outcome::Failed => !any(Outcome::Failed),

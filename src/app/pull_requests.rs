@@ -133,7 +133,11 @@ impl App {
         }
         match self.git.pulls.glab.route(self.project_host(p).as_deref()) {
             Route::Wait => {}
-            Route::Explain(why) => self.pull_requests_found(id, Provider::Gitlab, Vec::new(), Some(why)),
+            Route::Explain(why) => {
+                let workspaces: Vec<u64> = self.projects[p].workspaces.iter().map(|w| w.id).collect();
+                self.git.pulls.found.retain(|id, _| !workspaces.contains(id));
+                self.pull_requests_found(id, Provider::Gitlab, Vec::new(), Some(why));
+            }
             Route::Ask(provider) => self.spawn_pull_requests(id, due, provider),
         }
     }

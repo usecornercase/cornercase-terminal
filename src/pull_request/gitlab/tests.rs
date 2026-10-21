@@ -215,6 +215,7 @@ mod explain {
     #[rstest]
     #[case::a_401("glab: 401 Unauthorized (HTTP 401)")]
     #[case::asking_to_log_in("To get started with GitLab CLI, please run: glab auth login")]
+    #[case::the_status_line("GET https://gitlab.com/api/v4/user: 401 {message: 401 Unauthorized}")]
     fn a_logged_out_glab_says_to_log_in(#[case] said: &str) {
         assert_eq!(explain(&Error::Glab(said.into())), glab::LOGGED_OUT);
     }
@@ -292,6 +293,16 @@ mod jobs {
 
         assert_eq!(checks.len(), 2);
         assert!(checks.iter().all(|c| c.outcome == Outcome::Pending));
+    }
+
+    #[rstest]
+    #[case::no_status(r#"{"id":9,"project_id":2}"#)]
+    #[case::null_status(r#"{"id":9,"project_id":2,"status":null}"#)]
+    #[case::empty_status(r#"{"id":9,"project_id":2,"status":""}"#)]
+    fn a_pipeline_without_a_status_adds_no_check(#[case] pipeline: &str) {
+        let view = format!(r#"{{"iid":3,"head_pipeline":{pipeline}}}"#);
+
+        assert_eq!(found(&view, "[]").checks, Vec::<Check>::new());
     }
 
     #[test]

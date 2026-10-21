@@ -110,6 +110,21 @@ mod hosts {
     }
 }
 
+mod unauthorized {
+    use super::*;
+
+    #[rstest]
+    #[case::the_status("GET https://gitlab.com/api/v4/user: 401 {message: 401 Unauthorized}", true)]
+    #[case::glabs_line("glab: 401 Unauthorized (HTTP 401)", true)]
+    #[case::at_the_end("GET https://x/api/v4/user: 401", true)]
+    #[case::a_project_id("GET https://x/api/v4/projects/140123/pipelines: 500", false)]
+    #[case::a_merge_request("GET https://x/api/v4/projects/9/merge_requests/401: 500 oops", false)]
+    #[case::a_port("dial tcp 10.0.0.1:4010: i/o timeout", false)]
+    fn reads_the_status_not_the_digits(#[case] said: &str, #[case] expected: bool) {
+        assert_eq!(unauthorized(said), expected);
+    }
+}
+
 mod serving {
     use super::*;
 
@@ -130,6 +145,7 @@ mod serving {
     #[case::a_401("env", "GET https://x/api/v4/user: 401 Unauthorized", LOGGED_OUT)]
     #[case::no_error("env", "", LOGGED_OUT)]
     #[case::its_own_error("env", "dial tcp: lookup x: no such host", "dial tcp: lookup x: no such host")]
+    #[case::a_number_that_holds_401("env", "GET https://x/projects/140123: 500", "GET https://x/projects/140123: 500")]
     fn explains_a_host_that_is_not_signed_in(#[case] source: &str, #[case] error: &str, #[case] why: &str) {
         let host = Host { token_source: source.into(), error: error.into(), ..Host::default() };
 

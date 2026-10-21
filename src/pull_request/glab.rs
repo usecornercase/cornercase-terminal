@@ -61,7 +61,7 @@ impl Host {
     }
 
     pub(crate) fn why(&self) -> String {
-        if self.token_source == "none" || self.error.is_empty() || self.error.contains("401") {
+        if self.token_source == "none" || self.error.is_empty() || unauthorized(&self.error) {
             LOGGED_OUT.into()
         } else {
             self.error.clone()
@@ -75,6 +75,11 @@ pub(crate) enum Unlisted {
     Old,
     LoggedOut,
     Failed(String),
+}
+
+pub(crate) fn unauthorized(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    ["401 unauthorized", "http 401", ": 401 "].iter().any(|status| lower.contains(status)) || lower.ends_with(": 401")
 }
 
 pub(crate) fn run(glab: &Path, dir: &Path, args: &[&str]) -> Result<Output> {
