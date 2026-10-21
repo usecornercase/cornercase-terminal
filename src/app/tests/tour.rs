@@ -435,3 +435,92 @@ mod help {
         assert_eq!(menu(&app).first().map(String::as_str), Some("tour"));
     }
 }
+
+mod sections {
+    use super::*;
+
+    fn tour_of(id: &str) -> usize {
+        TOURS.iter().position(|t| t.id == id).expect("a tour")
+    }
+
+    fn started(id: &str, step: usize) -> Tour {
+        let mut t = Tour::with(1, false, Some(&Saved::default()));
+        render(&mut t.app, AREA);
+        t.app.start_tour(tour_of(id), Some(step), true);
+        t
+    }
+
+    #[test]
+    fn a_step_about_a_panel_opens_it_and_keeps_it_for_the_next_one() {
+        let mut t = started("todo", 1);
+        assert!(t.app.side == Some(Side::Todo) && t.app.panel_shown());
+        t.press(TourButton::Skip);
+        assert_eq!(t.step(), Some(("todo", "send")));
+        assert_eq!(t.app.side, Some(Side::Todo));
+        t.press(TourButton::Done);
+        assert_eq!(t.app.side, None);
+    }
+
+    #[test]
+    fn back_to_the_step_that_asks_closes_it() {
+        let mut t = started("todo", 1);
+        t.press(TourButton::Back);
+        assert_eq!(t.step(), Some(("todo", "open")));
+        assert_eq!(t.app.side, None);
+    }
+
+    #[test]
+    fn a_panel_the_user_had_open_stays_open() {
+        let mut t = Tour::with(1, false, Some(&Saved::default()));
+        t.app.toggle_todo();
+        t.app.start_tour(tour_of("todo"), Some(1), true);
+        t.press(TourButton::End);
+        assert_eq!(t.app.side, Some(Side::Todo));
+    }
+
+    #[test]
+    fn a_settings_step_opens_its_page_without_changing_a_setting() {
+        let mut t = started(CORE, 5);
+        let config = t.app.config.clone();
+        assert!(matches!(&t.app.overlay, Some(Overlay::Settings(s)) if s.page == Page::Agents));
+        t.press(TourButton::Back);
+        assert_eq!(t.step(), Some((CORE, "status")));
+        assert!(t.app.overlay.is_none());
+        assert_eq!(t.app.config, config);
+    }
+
+    #[test]
+    fn it_never_replaces_a_dialog_the_user_has_open() {
+        let mut t = Tour::with(1, false, Some(&Saved::default()));
+        render(&mut t.app, AREA);
+        t.app.overlay = Some(Overlay::Search(Finder::default()));
+        t.app.start_tour(0, Some(5), true);
+        assert!(matches!(t.app.overlay, Some(Overlay::Search(_))));
+        t.press(TourButton::End);
+        assert!(matches!(t.app.overlay, Some(Overlay::Search(_))));
+    }
+
+    #[test]
+    fn ending_the_tour_closes_what_it_opened() {
+        let mut t = started("keys", 1);
+        assert!(matches!(t.app.overlay, Some(Overlay::Keys(_))));
+        t.press(TourButton::End);
+        assert!(t.app.overlay.is_none());
+    }
+
+    #[test]
+    fn the_last_step_shows_the_help_menu_and_done_closes_it() {
+        let mut t = started(CORE, 6);
+        assert!(matches!(&t.app.overlay, Some(Overlay::Menu { actions, .. }) if actions.len() > 1));
+        t.press(TourButton::Done);
+        assert!(t.app.overlay.is_none());
+    }
+
+    #[test]
+    fn without_the_card_it_opens_nothing() {
+        let mut t = Tour::with(1, false, Some(&Saved::default()));
+        render(&mut t.app, AREA);
+        t.app.start_tour(tour_of("todo"), Some(1), false);
+        assert_eq!(t.app.side, None);
+    }
+}

@@ -313,7 +313,7 @@ impl App {
         Ok(())
     }
 
-    fn open_remote_menu(&mut self, at: Position) {
+    pub(super) fn open_remote_menu(&mut self, at: Position) {
         let away = Via::ALL.into_iter().map(super::menus::MenuAction::Away);
         let actions = std::iter::once(super::menus::MenuAction::Browser).chain(away).collect();
         self.overlay = Some(Overlay::Menu { at, actions });

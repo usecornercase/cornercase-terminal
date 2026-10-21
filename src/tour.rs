@@ -60,6 +60,30 @@ pub(crate) enum Dialog {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum Page {
+    Agents,
+    Accounts,
+    Flows,
+    Ui,
+    Remote,
+    Plugins,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub(crate) enum Show {
+    Panel { panel: Panel },
+    Issues,
+    Queue,
+    Search,
+    Keys,
+    Settings { page: Page },
+    HelpMenu,
+    RemoteMenu,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub(crate) enum Done {
     Next,
@@ -79,7 +103,6 @@ pub(crate) enum Done {
 pub(crate) enum Offer {
     Prompt,
     AgentsSection,
-    Settings,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -90,6 +113,7 @@ pub(crate) struct Step {
     pub(crate) target: Target,
     pub(crate) done: Done,
     pub(crate) offer: Option<Offer>,
+    pub(crate) show: Option<Show>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,7 +1,19 @@
-use super::{Dialog, Done, Offer, Panel, Step, Target, Tour};
+use super::{Dialog, Done, Offer, Page, Panel, Show, Step, Target, Tour};
 
 const fn step(id: &'static str, title: &'static str, text: &'static str, target: Target, done: Done) -> Step {
-    Step { id, title, text, target, done, offer: None }
+    Step { id, title, text, target, done, offer: None, show: None }
+}
+
+const fn shows(step: Step, show: Show) -> Step {
+    Step { show: Some(show), ..step }
+}
+
+const fn settings(page: Page) -> Show {
+    Show::Settings { page }
+}
+
+const fn showing(panel: Panel) -> Show {
+    Show::Panel { panel }
 }
 
 const fn offer(step: Step, offer: Offer) -> Step {
@@ -64,7 +76,7 @@ const CORE: [Step; 7] = [
         ),
         Offer::AgentsSection,
     ),
-    offer(
+    shows(
         step(
             "settings",
             "Essential settings",
@@ -73,15 +85,18 @@ const CORE: [Step; 7] = [
             Target::Settings,
             Done::Next,
         ),
-        Offer::Settings,
+        settings(Page::Agents),
     ),
-    step(
-        "next",
-        "Where to go next",
-        "Help, at the bottom of the sidebar, opens this tour again, a catalogue of short tours for the rest of \
-         cornercase, and the docs.",
-        Target::Help,
-        Done::Next,
+    shows(
+        step(
+            "next",
+            "Where to go next",
+            "Help, at the bottom of the sidebar, opens this tour again, a catalogue of short tours for the rest of \
+             cornercase, and the docs.",
+            Target::Help,
+            Done::Next,
+        ),
+        Show::HelpMenu,
     ),
 ];
 
@@ -93,20 +108,26 @@ const ISSUES: [Step; 3] = [
         Target::Issues,
         opened(Dialog::Issues),
     ),
-    step(
-        "start",
-        "Start an agent on one",
-        "Pick an issue and press start: cornercase makes a worktree on its branch and starts an agent with the \
-         issue as its prompt.",
-        Target::Issues,
-        Done::Next,
+    shows(
+        step(
+            "start",
+            "Start an agent on one",
+            "Pick an issue and press start: cornercase makes a worktree on its branch and starts an agent with the \
+             issue as its prompt.",
+            Target::Issues,
+            Done::Next,
+        ),
+        Show::Issues,
     ),
-    step(
-        "schedule",
-        "Later",
-        "Schedule puts the issue in the queue, to start at a time you choose.",
-        Target::Issues,
-        Done::Next,
+    shows(
+        step(
+            "schedule",
+            "Later",
+            "Schedule puts the issue in the queue, to start at a time you choose.",
+            Target::Issues,
+            Done::Next,
+        ),
+        Show::Issues,
     ),
 ];
 
@@ -118,30 +139,39 @@ const CHANGES: [Step; 3] = [
         Target::Changes,
         panel(Panel::Changes),
     ),
-    step(
-        "ask",
-        "Ask the agent",
-        "Hover a hunk: ask agent pastes its place into the workspace's agent, so you can say what to fix.",
-        Target::Changes,
-        Done::Next,
+    shows(
+        step(
+            "ask",
+            "Ask the agent",
+            "Hover a hunk: ask agent pastes its place into the workspace's agent, so you can say what to fix.",
+            Target::Changes,
+            Done::Next,
+        ),
+        showing(Panel::Changes),
     ),
-    step(
-        "viewed",
-        "Viewed",
-        "Mark a file viewed to fold it; it opens again when it changes. Commits and All compare against a branch.",
-        Target::Changes,
-        Done::Next,
+    shows(
+        step(
+            "viewed",
+            "Viewed",
+            "Mark a file viewed to fold it; it opens again when it changes. Commits and All compare against a branch.",
+            Target::Changes,
+            Done::Next,
+        ),
+        showing(Panel::Changes),
     ),
 ];
 
 const FILES: [Step; 3] = [
     step("open", "Files", "Files shows the workspace's files. Open it.", Target::Files, panel(Panel::Files)),
-    step(
-        "search",
-        "Search",
-        "Type in its bar to search the text in the files; the button at its right searches names.",
-        Target::Files,
-        Done::Next,
+    shows(
+        step(
+            "search",
+            "Search",
+            "Type in its bar to search the text in the files; the button at its right searches names.",
+            Target::Files,
+            Done::Next,
+        ),
+        showing(Panel::Files),
     ),
     step(
         "paths",
@@ -153,38 +183,53 @@ const FILES: [Step; 3] = [
 ];
 
 const FLOWS: [Step; 3] = [
-    step(
-        "what",
-        "Flows",
-        "A flow is a team of agents and the plan they follow: one codes, others review, an orchestrator runs it.",
-        Target::Workspaces,
-        Done::Next,
+    shows(
+        step(
+            "what",
+            "Flows",
+            "A flow is a team of agents and the plan they follow: one codes, others review, an orchestrator runs it.",
+            Target::Workspaces,
+            Done::Next,
+        ),
+        showing(Panel::Flow),
     ),
-    step(
-        "start",
-        "Start one",
-        "In the workspaces column, + New, then start a flow. The team works in a new worktree.",
-        Target::Workspaces,
-        Done::Next,
+    shows(
+        step(
+            "start",
+            "Start one",
+            "In the workspaces column, + New, then start a flow. The team works in a new worktree.",
+            Target::Workspaces,
+            Done::Next,
+        ),
+        showing(Panel::Flow),
     ),
-    step(
-        "edit",
-        "Your own",
-        "Settings, Flows lists the built-in flows; edit one or make your own.",
-        Target::Settings,
-        Done::Next,
+    shows(
+        step(
+            "edit",
+            "Your own",
+            "Settings, Flows lists the built-in flows; edit one or make your own.",
+            Target::Settings,
+            Done::Next,
+        ),
+        settings(Page::Flows),
     ),
 ];
 
 const TODO: [Step; 3] = [
     step("open", "TODO", "TODO keeps a list of what is next. Open it.", Target::Todo, panel(Panel::Todo)),
-    step("add", "Add an item", "Click + New TODO and type one.", Target::Todo, Done::TodoAdded),
-    step(
-        "send",
-        "Send it to an agent",
-        "The ▸ of an item sends its text to an agent as a prompt, and checks it off once the agent takes it.",
-        Target::Todo,
-        Done::Next,
+    shows(
+        step("add", "Add an item", "Click + New TODO and type one.", Target::Todo, Done::TodoAdded),
+        showing(Panel::Todo),
+    ),
+    shows(
+        step(
+            "send",
+            "Send it to an agent",
+            "The ▸ of an item sends its text to an agent as a prompt, and checks it off once the agent takes it.",
+            Target::Todo,
+            Done::Next,
+        ),
+        showing(Panel::Todo),
     ),
 ];
 
@@ -196,19 +241,25 @@ const QUEUE: [Step; 3] = [
         Target::Issues,
         opened(Dialog::Issues),
     ),
-    step(
-        "new",
-        "Schedule",
-        "In the Queue tab, new asks for a prompt, a time and a place: in two hours, tomorrow at 9, or when your plan resets.",
-        Target::Issues,
-        Done::Next,
+    shows(
+        step(
+            "new",
+            "Schedule",
+            "In the Queue tab, new asks for a prompt, a time and a place: in two hours, tomorrow at 9, or when your plan resets.",
+            Target::Issues,
+            Done::Next,
+        ),
+        Show::Queue,
     ),
-    step(
-        "run",
-        "While you are away",
-        "Entries start while the server runs, with or without a window.",
-        Target::None,
-        Done::Next,
+    shows(
+        step(
+            "run",
+            "While you are away",
+            "Entries start while the server runs, with or without a window.",
+            Target::None,
+            Done::Next,
+        ),
+        Show::Queue,
     ),
 ];
 
@@ -220,36 +271,48 @@ const SEARCH: [Step; 3] = [
         Target::Search,
         opened(Dialog::Search),
     ),
-    step(
-        "said",
-        "In sessions",
-        "Tab, or the button at the bar's right, searches what was said in agents and panes instead.",
-        Target::Search,
-        Done::Next,
+    shows(
+        step(
+            "said",
+            "In sessions",
+            "Tab, or the button at the bar's right, searches what was said in agents and panes instead.",
+            Target::Search,
+            Done::Next,
+        ),
+        Show::Search,
     ),
-    step(
-        "go",
-        "Go there",
-        "Click a result, or press Enter: cornercase shows its pane and selects what matched.",
-        Target::Search,
-        Done::Next,
+    shows(
+        step(
+            "go",
+            "Go there",
+            "Click a result, or press Enter: cornercase shows its pane and selects what matched.",
+            Target::Search,
+            Done::Next,
+        ),
+        Show::Search,
     ),
 ];
 
 const PHONE: [Step; 3] = [
-    step(
-        "turn",
-        "Your phone's browser",
-        "Turn on browser access in Settings, Remote. It goes through Tailscale, so only your devices reach it.",
-        Target::Settings,
-        Done::Next,
+    shows(
+        step(
+            "turn",
+            "Your phone's browser",
+            "Turn on browser access in Settings, Remote. It goes through Tailscale, so only your devices reach it.",
+            Target::Settings,
+            Done::Next,
+        ),
+        settings(Page::Remote),
     ),
-    step(
-        "pair",
-        "Pair a phone",
-        "Remote, then open in your phone's browser, shows a code to scan.",
-        Target::Remote,
-        Done::Next,
+    shows(
+        step(
+            "pair",
+            "Pair a phone",
+            "Remote, then open in your phone's browser, shows a code to scan.",
+            Target::Remote,
+            Done::Next,
+        ),
+        Show::RemoteMenu,
     ),
     step(
         "use",
@@ -261,19 +324,25 @@ const PHONE: [Step; 3] = [
 ];
 
 const CHATS: [Step; 3] = [
-    step(
-        "bot",
-        "Telegram and Discord",
-        "A bot of your own tells you when an agent needs you or finished. Set it up in Settings, Remote.",
-        Target::Settings,
-        Done::Next,
+    shows(
+        step(
+            "bot",
+            "Telegram and Discord",
+            "A bot of your own tells you when an agent needs you or finished. Set it up in Settings, Remote.",
+            Target::Settings,
+            Done::Next,
+        ),
+        settings(Page::Remote),
     ),
-    step(
-        "away",
-        "Away",
-        "Remote, then continue on Telegram or Discord, turns messages on until you turn them off.",
-        Target::Remote,
-        Done::Next,
+    shows(
+        step(
+            "away",
+            "Away",
+            "Remote, then continue on Telegram or Discord, turns messages on until you turn them off.",
+            Target::Remote,
+            Done::Next,
+        ),
+        Show::RemoteMenu,
     ),
     step(
         "reply",
@@ -285,12 +354,15 @@ const CHATS: [Step; 3] = [
 ];
 
 const ACCOUNTS: [Step; 3] = [
-    step(
-        "add",
-        "Accounts",
-        "Two logins for one agent, work and personal: add an account in Settings, Accounts.",
-        Target::Settings,
-        Done::Next,
+    shows(
+        step(
+            "add",
+            "Accounts",
+            "Two logins for one agent, work and personal: add an account in Settings, Accounts.",
+            Target::Settings,
+            Done::Next,
+        ),
+        settings(Page::Accounts),
     ),
     step(
         "switch",
@@ -309,21 +381,27 @@ const ACCOUNTS: [Step; 3] = [
 ];
 
 const KEYS: [Step; 3] = [
-    step(
-        "prefix",
-        "The prefix key",
-        "cornercase takes no keys from your programs, unless you set a prefix key in Settings, UI.",
-        Target::Settings,
-        Done::Next,
+    shows(
+        step(
+            "prefix",
+            "The prefix key",
+            "cornercase takes no keys from your programs, unless you set a prefix key in Settings, UI.",
+            Target::Settings,
+            Done::Next,
+        ),
+        settings(Page::Ui),
     ),
-    step(
-        "menu",
-        "The keys menu",
-        "The prefix opens a menu of keys: tabs, panes, panels, search. It lists them, so there is nothing to learn.",
-        Target::None,
-        opened(Dialog::Keys),
+    shows(
+        step(
+            "menu",
+            "The keys menu",
+            "The prefix opens a menu of keys: tabs, panes, panels, search. It lists them, so there is nothing to learn.",
+            Target::None,
+            Done::Next,
+        ),
+        Show::Keys,
     ),
-    step("help", "Help", "h in the keys menu opens Help.", Target::Help, Done::Next),
+    shows(step("help", "Help", "h in the keys menu opens Help.", Target::Help, Done::Next), Show::Keys),
 ];
 
 const SCRIPTS: [Step; 3] = [
@@ -365,7 +443,10 @@ const PLUGINS: [Step; 3] = [
         Target::Pane,
         Done::Next,
     ),
-    step("enable", "Turn it on", "Settings, Plugins turns one on.", Target::Settings, Done::Next),
+    shows(
+        step("enable", "Turn it on", "Settings, Plugins turns one on.", Target::Settings, Done::Next),
+        settings(Page::Plugins),
+    ),
 ];
 
 const fn tour(id: &'static str, title: &'static str, docs: &'static str, steps: &'static [Step]) -> Tour {

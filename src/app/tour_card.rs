@@ -7,15 +7,18 @@ use serde_json::Value;
 
 use super::App;
 use super::layout::Side;
+use super::menus::MenuAction;
 use super::overlay::Overlay;
 use super::toast::Toast;
 use crate::agents;
 use crate::control::{self, Command, Request};
+use crate::issues::browser::Tab;
 use crate::log;
 use crate::project::Hierarchy;
+use crate::project::search::Finder;
 use crate::settings::Page;
 use crate::todo::editor::Editor;
-use crate::tour::{self, Dialog, Facts, Offer, Panel, Saved, TOURS, Tour};
+use crate::tour::{self, Dialog, Facts, Offer, Panel, Saved, Show, TOURS, Target, Tour};
 use crate::ui::{self, TourButton};
 
 pub(in crate::app) const CLIENTS: u64 = 1 << 60;
@@ -51,6 +54,7 @@ pub(super) struct Active {
     pub(super) focused: bool,
     pub(super) idea: usize,
     pub(super) note: Option<String>,
+    pub(super) opened: Option<Show>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,15 +83,18 @@ impl App {
         self.tour.first_run = first_run;
     }
 
+    fn tour_panel(&self) -> Option<Panel> {
+        match self.side.filter(|_| self.panel_shown())? {
+            Side::Changes => Some(Panel::Changes),
+            Side::Files => Some(Panel::Files),
+            Side::Todo => Some(Panel::Todo),
+            Side::Flow => Some(Panel::Flow),
+        }
+    }
+
     pub(super) fn tour_facts(&self) -> Facts {
         let open = || self.projects.iter().filter(|p| !p.closing);
-        let panel = match self.side.filter(|_| self.panel_shown()) {
-            Some(Side::Changes) => Some(Panel::Changes),
-            Some(Side::Files) => Some(Panel::Files),
-            Some(Side::Todo) => Some(Panel::Todo),
-            Some(Side::Flow) => Some(Panel::Flow),
-            None => None,
-        };
+        let panel = self.tour_panel();
         let dialog = match &self.overlay {
             Some(Overlay::Issues(_)) => Some(Dialog::Issues),
             Some(Overlay::Search(_)) => Some(Dialog::Search),
@@ -182,6 +189,7 @@ impl App {
             focused: false,
             idea: 0,
             note: None,
+            opened: None,
         });
         self.enter_step();
     }
@@ -194,6 +202,105 @@ impl App {
         active.focused = false;
         active.field =
             (active.step().offer == Some(Offer::Prompt)).then(|| Editor::new(IDEAS[active.idea % IDEAS.len()]));
+        self.show_section();
+    }
+
+    fn show_section(&mut self) {
+        let Some(active) = &self.tour.active else { return };
+        let want = active.step().show.filter(|_| active.card);
+        if active.opened.is_some_and(|opened| Some(opened) != want) {
+            self.hide_section();
+        }
+        let Some(want) = want.filter(|&want| !self.section_shown(want)) else { return };
+        if self.open_section(want)
+            && self.section_shown(want)
+            && let Some(active) = &mut self.tour.active
+        {
+            active.opened = Some(want);
+        }
+    }
+
+    fn hide_section(&mut self) {
+        let Some(opened) = self.tour.active.as_mut().and_then(|a| a.opened.take()) else { return };
+        if !self.section_shown(opened) {
+            return;
+        }
+        match opened {
+            Show::Panel { .. } => self.close_panel(),
+            _ if self.overlay.as_ref().is_some_and(Overlay::busy) => {}
+            _ => self.overlay = None,
+        }
+    }
+
+    fn section_shown(&self, show: Show) -> bool {
+        match (show, &self.overlay) {
+            (Show::Panel { panel }, _) => self.tour_panel() == Some(panel),
+            (Show::Issues, Some(Overlay::Issues(_)))
+            | (Show::Search, Some(Overlay::Search(_)))
+            | (Show::Keys, Some(Overlay::Keys(_))) => true,
+            (Show::Queue, Some(Overlay::Issues(b))) => b.current() == Tab::Queue,
+            (Show::Settings { page: tour::Page::Flows }, Some(Overlay::Flows { dialog, .. })) => dialog.in_settings,
+            (Show::Settings { page }, Some(Overlay::Settings(s))) => s.page == settings_page(page),
+            (Show::HelpMenu, Some(Overlay::Menu { actions, .. })) => {
+                matches!(actions.first(), Some(MenuAction::Help(_)))
+            }
+            (Show::RemoteMenu, Some(Overlay::Menu { actions, .. })) => {
+                matches!(actions.first(), Some(MenuAction::Browser))
+            }
+            _ => false,
+        }
+    }
+
+    fn open_section(&mut self, show: Show) -> bool {
+        if let Show::Panel { panel } = show {
+            if self.side.is_some() {
+                return false;
+            }
+            self.show_side(Some(match panel {
+                Panel::Changes => Side::Changes,
+                Panel::Files => Side::Files,
+                Panel::Todo => Side::Todo,
+                Panel::Flow => Side::Flow,
+            }));
+            if !self.panel_shown() {
+                self.show_side(None);
+            }
+            return true;
+        }
+        let Some(area) = self.queued.area.filter(|_| self.overlay.is_none()) else { return false };
+        match show {
+            Show::Panel { .. } => {}
+            Show::Issues | Show::Queue => {
+                if let Err(e) = self.open_issues(area) {
+                    log::warning!("tour", "cannot open issues", error = e);
+                }
+                if show == Show::Queue
+                    && let Some(Overlay::Issues(b)) = &mut self.overlay
+                {
+                    b.tab_to(Tab::Queue);
+                }
+            }
+            Show::Search => self.overlay = Some(Overlay::Search(Finder::default())),
+            Show::Keys => self.overlay = Some(Overlay::Keys(None)),
+            Show::Settings { page } => {
+                self.settings_page = settings_page(page);
+                self.open_settings();
+            }
+            Show::HelpMenu | Show::RemoteMenu => {
+                let target = if show == Show::HelpMenu { Target::Help } else { Target::Remote };
+                let (at, _) = self.tour_target(&self.layout(area).shown(self.nav), target);
+                if at.is_empty() {
+                    return false;
+                }
+                let at = Position::new(at.x, at.y);
+                if show == Show::HelpMenu {
+                    self.open_help(at);
+                } else {
+                    self.open_remote_menu(at);
+                }
+            }
+        }
+        true
     }
 
     pub(super) fn move_tour(&mut self, to: Move) {
@@ -207,6 +314,7 @@ impl App {
                 self.tour.saved.finish(tour);
                 self.save_tour();
                 log::info!("tour", "finished", tour = tour.id);
+                self.hide_section();
                 self.tour.active = None;
                 self.toast =
                     Some(Toast::new(format!("{} done: Help has more tours", tour.title), ui::ToastIcon::Check));
@@ -217,6 +325,7 @@ impl App {
     }
 
     pub(super) fn end_tour(&mut self) {
+        self.hide_section();
         if let Some(active) = self.tour.active.take() {
             log::info!("tour", "ended", tour = active.tour().id, step = active.step().id);
         }
@@ -252,7 +361,6 @@ impl App {
                 vec![TourButton::Idea, TourButton::Start]
             }
             Some(Offer::AgentsSection) if !facts.agents_section => vec![TourButton::TurnOn],
-            Some(Offer::Settings) => vec![TourButton::Settings],
             _ => Vec::new(),
         };
         let note = active.note.clone().or_else(|| match step.offer {
@@ -360,10 +468,6 @@ impl App {
                     self.toast = Some(Toast::new(e, ui::ToastIcon::Bug));
                 }
             }
-            TourButton::Settings => {
-                self.settings_page = Page::Agents;
-                self.open_settings();
-            }
             TourButton::Start => self.start_tour_prompt(area),
         }
     }
@@ -425,5 +529,16 @@ impl App {
         if let Some(editor) = self.tour.active.as_mut().and_then(|a| a.field.as_mut()) {
             editor.insert_lines(text);
         }
+    }
+}
+
+const fn settings_page(page: tour::Page) -> Page {
+    match page {
+        tour::Page::Agents => Page::Agents,
+        tour::Page::Accounts => Page::Accounts,
+        tour::Page::Flows => Page::Flows,
+        tour::Page::Ui => Page::Ui,
+        tour::Page::Remote => Page::Remote,
+        tour::Page::Plugins => Page::Plugins,
     }
 }

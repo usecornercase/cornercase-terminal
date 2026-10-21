@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::Fields;
-use crate::tour::{self, Done, Offer, Saved, TOURS, Target};
+use crate::tour::{self, Done, Offer, Saved, Show, TOURS, Target};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -80,6 +80,7 @@ pub(crate) struct StepInfo {
     pub(crate) target: Target,
     pub(crate) done: Done,
     pub(crate) offer: Option<Offer>,
+    pub(crate) show: Option<Show>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,6 +115,7 @@ pub(crate) fn tours() -> Vec<TourInfo> {
                     target: s.target,
                     done: s.done,
                     offer: s.offer,
+                    show: s.show,
                 })
                 .collect(),
         })

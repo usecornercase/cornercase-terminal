@@ -37,6 +37,20 @@ mod steps {
     }
 
     #[test]
+    fn a_step_that_asks_to_open_a_section_leaves_the_opening_to_the_user() {
+        for step in TOURS.iter().flat_map(|t| t.steps) {
+            let asked = match step.done {
+                Done::Panel { panel } => Some(Show::Panel { panel }),
+                Done::Opened { dialog: Dialog::Issues } => Some(Show::Issues),
+                Done::Opened { dialog: Dialog::Search } => Some(Show::Search),
+                Done::Opened { dialog: Dialog::Keys } => Some(Show::Keys),
+                _ => None,
+            };
+            assert!(asked.is_none() || step.show.is_none(), "{}", step.id);
+        }
+    }
+
+    #[test]
     fn every_tour_links_its_docs() {
         for tour in &TOURS {
             assert!(tour.docs_url().starts_with(DOCS) && tour.docs.ends_with('/'), "{}", tour.id);
