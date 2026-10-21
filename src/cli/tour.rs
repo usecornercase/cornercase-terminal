@@ -33,7 +33,7 @@ pub(super) fn run(args: &TourArgs) -> Result<()> {
     let list = request.action == TourAction::List;
     let value = ask("tour", Command::Tour(request))?;
     let answered: TourAnswer = answer(value.clone())?;
-    if args.print.json {
+    if args.json {
         return print_json(&value);
     }
     print_out(&text(&answered, list))

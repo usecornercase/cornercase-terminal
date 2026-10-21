@@ -1,13 +1,11 @@
 use clap::{Args, Subcommand};
 
-use super::Print;
-
 #[derive(Debug, Args)]
 pub(crate) struct TourArgs {
     #[command(subcommand)]
     pub(crate) action: Option<TourCommand>,
-    #[command(flatten)]
-    pub(crate) print: Print,
+    #[arg(long, global = true, help = "Print JSON instead of text")]
+    pub(crate) json: bool,
 }
 
 #[derive(Debug, Subcommand)]

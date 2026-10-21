@@ -1,5 +1,19 @@
+use clap::Parser;
+use rstest::rstest;
+
 use super::*;
+use crate::cli::{Cli, Command, Control};
 use crate::control::tour::{ActiveInfo, ProgressInfo, TourState, tours};
+
+#[rstest]
+#[case::before(&["tour", "--json", "list"])]
+#[case::after(&["tour", "list", "--json"])]
+#[case::after_a_start(&["tour", "start", "todo", "--json"])]
+fn json_goes_on_either_side_of_the_action(#[case] args: &[&str]) {
+    let cli = Cli::try_parse_from(std::iter::once("cornercase").chain(args.iter().copied())).expect("parse");
+    let Some(Command::Control(Control::Tour(tour))) = cli.command else { panic!("not a tour") };
+    assert!(tour.json);
+}
 
 #[test]
 fn a_move_prints_where_the_tour_is() {
