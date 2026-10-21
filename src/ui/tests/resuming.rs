@@ -1,14 +1,14 @@
 use super::*;
 
 fn resuming_view() -> View<'static> {
-    let tab = TabView { bands: vec![Some(PaneBand::Resuming("claude".into()))], ..single(screen(b"$ ")) };
+    let tab = TabView { bands: vec![Some(PaneBand::Resuming("resuming claude".into()))], ..single(screen(b"$ ")) };
     View { tab: Some(tab), ..view(&["~"]) }
 }
 
 #[test]
 fn a_resuming_pane_says_so_with_a_cancel_button_in_its_middle() {
     let pane = areas().pane;
-    let (label, button) = resume_notice(pane, "claude").expect("the notice fits");
+    let (label, button) = resume_notice(pane, "resuming claude").expect("the notice fits");
     let t = render(&resuming_view());
 
     assert_eq!(label.y, pane.y + pane.height / 2);
@@ -17,12 +17,12 @@ fn a_resuming_pane_says_so_with_a_cancel_button_in_its_middle() {
 
 #[test]
 fn a_pane_too_narrow_for_the_notice_has_none() {
-    assert_eq!(resume_notice(Rect::new(0, 0, 20, 5), "claude"), None);
+    assert_eq!(resume_notice(Rect::new(0, 0, 20, 5), "resuming claude"), None);
 }
 
 #[test]
 fn a_pane_that_is_not_resuming_has_no_notice() {
-    let (label, _) = resume_notice(areas().pane, "claude").expect("the notice fits");
+    let (label, _) = resume_notice(areas().pane, "resuming claude").expect("the notice fits");
     let t = render(&View { tab: Some(single(screen(b"$ "))), ..view(&["~"]) });
 
     assert!(!row_text(&t, label).contains("resuming"));
@@ -76,4 +76,16 @@ fn a_narrow_pane_drops_the_text_then_wait_turn_and_keeps_send_now() {
     assert_eq!((bar(25).text.width, bar(25).wait.is_some()), (0, true));
     assert_eq!((bar(15).wait, bar(15).send.x), (None, 5));
     assert!(held_notice(Rect::new(0, 0, 9, 5), 0, false).is_none());
+}
+
+#[test]
+fn a_restart_that_waits_for_the_turn_says_so_with_a_cancel_button() {
+    let text = "restarts on personal after this turn";
+    let tab = TabView { bands: vec![Some(PaneBand::Restarts(text.into()))], ..single(screen(b"$ ")) };
+    let pane = layout(Rect::new(0, 0, 160, H), Widths::default()).pane;
+    let (label, button) = restart_notice(pane, text).expect("the notice fits");
+    let t = render_sized(&View { tab: Some(tab), ..view(&["~"]) }, 160, H);
+
+    assert_eq!(label.y, pane.y + pane.height / 2);
+    assert_eq!((row_text(&t, label), row_text(&t, button)), (format!(" {text} "), " cancel ".into()));
 }

@@ -1,6 +1,6 @@
 use crate::agents;
 use crate::config::{Config, Sidebar, Tabs, WorkingIcon};
-use crate::issues::Source;
+use crate::issues::{Source, naming};
 use crate::messenger::Via;
 use crate::shortcuts::Prefix;
 
@@ -42,11 +42,22 @@ impl Settings {
                 "new worktrees go in <folder>/<repo>/<branch>".to_string(),
                 false,
             ),
+            Row::IssueBranch => {
+                let value = if config.issue_branch.is_empty() { "per tracker" } else { &config.issue_branch };
+                let (note, warns) = naming::note(&config.issue_branch);
+                ("issue branches".into(), value.to_string(), note, warns)
+            }
             Row::Fetch => {
                 let value =
                     if config.fetch_minutes == 0 { "off".into() } else { format!("{} min", config.fetch_minutes) };
                 ("fetch branches every".into(), value, "commits to pull show as ↓n".into(), false)
             }
+            Row::Worktrees => (
+                "worktrees on disk".into(),
+                String::new(),
+                "enter lists every worktree and removes several at once".into(),
+                false,
+            ),
             Row::MergedPullRequests => {
                 let value = if config.merged_pull_requests { "[x] shown" } else { "[ ] hidden" };
                 ("merged PRs in stats".into(), value.into(), self.merged.clone(), false)
@@ -73,20 +84,21 @@ impl Settings {
     }
 
     pub(crate) fn row_text(&self, row: &Row) -> RowText {
+        let (label, value, note, dangerous) = match row.page() {
+            Page::Worktrees => self.worktrees_row(row),
+            Page::Agents => self.agents_row(row),
+            Page::Issues => self.issues_row(row),
+            Page::Ui | Page::Flows => self.ui_row(row),
+            Page::Remote => self.remote_row(row),
+            Page::Plugins => self.plugin_row(row),
+            Page::Accounts => self.account_row(row),
+        };
+        RowText { label, value, note, dangerous }
+    }
+
+    fn agents_row(&self, row: &Row) -> (String, String, String, bool) {
         let config = &self.config;
-        let (label, value, note, dangerous) = match row {
-            Row::Folder | Row::Fetch | Row::PullRequests | Row::MergedPullRequests => self.worktrees_row(row),
-            Row::Token(source) => self.token_row(*source),
-            Row::GitlabUrl
-            | Row::JiraSite
-            | Row::JiraEmail
-            | Row::JiraJql
-            | Row::PlaneWorkspace
-            | Row::PlaneUrl
-            | Row::PlaneFilter
-            | Row::AsanaProjects => tracker_row(config, row),
-            Row::AsanaWorkspace => self.asana_workspace_row(),
-            Row::Tab(id) => self.tab_row(id),
+        match row {
             Row::DefaultAgent => {
                 let note = if config.agent == agents::AUTO {
                     "the agent in your tab, otherwise ask".into()
@@ -99,6 +111,32 @@ impl Settings {
                 let value = if config.submit { "[x] sent for you" } else { "[ ] typed, you press Enter" };
                 ("send the prompt".into(), value.into(), String::new(), false)
             }
+            Row::Trust => {
+                let value = if config.accept_trust_prompts { "[x] accepted for you" } else { "[ ] left to you" };
+                ("trust prompts".into(), value.into(), "saying yes runs the repo's agent config".into(), false)
+            }
+            Row::Resume => {
+                let value = if config.resume_agents { "[x] after a restart" } else { "[ ] never" };
+                ("resume conversations".into(), value.into(), RESUME_NOTE.into(), false)
+            }
+            Row::KeepAwake => self.keep_awake_row(),
+            Row::Kind(kind) => kind_row(config, kind),
+            _ => ("+ another agent…".into(), String::new(), String::new(), false),
+        }
+    }
+
+    fn issues_row(&self, row: &Row) -> (String, String, String, bool) {
+        match row {
+            Row::Token(source) => self.token_row(*source),
+            Row::AsanaWorkspace => self.asana_workspace_row(),
+            Row::Tab(id) => self.tab_row(id),
+            _ => tracker_row(&self.config, row),
+        }
+    }
+
+    fn ui_row(&self, row: &Row) -> (String, String, String, bool) {
+        let config = &self.config;
+        match row {
             Row::AgentsSection => {
                 let value = if config.agents_section { "[x] shown" } else { "[ ] hidden" };
                 ("agents section".into(), value.into(), "every running agent in the sidebar".into(), false)
@@ -125,6 +163,13 @@ impl Settings {
                 let value = if detail.on(config) { "[x] shown" } else { "[ ] hidden" };
                 (detail.label().into(), value.into(), detail.note().into(), false)
             }
+            _ => self.behaviour_row(row),
+        }
+    }
+
+    fn behaviour_row(&self, row: &Row) -> (String, String, String, bool) {
+        let config = &self.config;
+        match row {
             Row::Sidebar | Row::Tabs | Row::IconBar => layout_row(config, row),
             Row::Notifications => (
                 "desktop notifications".into(),
@@ -142,32 +187,22 @@ impl Settings {
                 ("star prompt".into(), value.into(), "asks for a GitHub star after two weeks of use".into(), false)
             }
             Row::Tour | Row::TourStart | Row::TourReset => tour_row(config, row),
-            Row::Trust => {
-                let value = if config.accept_trust_prompts { "[x] accepted for you" } else { "[ ] left to you" };
-                ("trust prompts".into(), value.into(), "saying yes runs the repo's agent config".into(), false)
-            }
-            Row::Resume => {
-                let value = if config.resume_agents { "[x] after a restart" } else { "[ ] never" };
-                ("resume conversations".into(), value.into(), RESUME_NOTE.into(), false)
-            }
-            Row::KeepAwake => self.keep_awake_row(),
-            Row::Prefix => self.prefix_row(),
+            _ => self.prefix_row(),
+        }
+    }
+
+    fn remote_row(&self, row: &Row) -> (String, String, String, bool) {
+        match row {
             Row::Remote => {
-                let value = if config.remote { "[x] over Tailscale" } else { "[ ] off" };
+                let value = if self.config.remote { "[x] over Tailscale" } else { "[ ] off" };
                 ("remote access".into(), value.into(), self.remote.clone(), false)
             }
             Row::Browsers => {
                 ("paired browsers".into(), self.browsers.to_string(), "enter forgets them all".into(), true)
             }
-            Row::Kind(kind) => kind_row(config, kind),
-            Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),
             Row::Bot(via) | Row::Chat(via) => self.messenger_row(row, *via),
-            Row::Plugin(_) | Row::NoPlugins => self.plugin_row(row),
-            Row::ServerTokens | Row::Account(..) | Row::AddAccount(_) | Row::System(_) | Row::RenameAccount(..) => {
-                self.account_row(row)
-            }
-        };
-        RowText { label, value, note, dangerous }
+            _ => (String::new(), String::new(), String::new(), false),
+        }
     }
 
     fn asana_workspace_row(&self) -> (String, String, String, bool) {
@@ -226,6 +261,11 @@ impl Settings {
     pub(crate) fn field_label(row: &Row) -> String {
         match row {
             Row::Folder => "worktrees folder".to_string(),
+            Row::IssueBranch => {
+                "branch of an issue's worktree, with {key} {number} {slug} {source} {user}, such as feat/{key}-{slug} \
+                 (empty is each tracker's own)"
+                    .to_string()
+            }
             Row::Fetch => "fetch branches every (minutes, 0 turns it off)".to_string(),
             Row::Token(source) => format!("{} {}", source.name(), source.token_name()),
             Row::GitlabUrl => "GitLab URL for a self-hosted server (empty is gitlab.com)".to_string(),
@@ -293,7 +333,7 @@ impl Settings {
             } else if self.pick.is_some() {
                 "enter picks · type to filter · esc goes back".into()
             } else if self.page == Page::Accounts {
-                "enter uses an account for new tabs · backspace removes it · open tabs keep theirs".into()
+                "enter makes an account the default · backspace removes it · each pane keeps its own".into()
             } else if self.page == Page::Plugins {
                 "plugins run as you and can do what you can; what they ask for is shown, not enforced".into()
             } else if self.page == Page::Issues {

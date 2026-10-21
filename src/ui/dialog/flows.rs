@@ -6,7 +6,7 @@ use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 use super::issues::issue_buttons_in;
 use super::settings::{
-    Columns, SettingsEdit, SettingsHit, SettingsPick, SettingsRow, draw_pick, draw_rows, hit_in_rows, pick_hit,
+    Columns, SettingsEdit, SettingsHit, SettingsPick, SettingsRow, Table, draw_pick, draw_rows, hit_in_rows, pick_hit,
     pick_list_in,
 };
 use super::{Note, draw_input, draw_secondary, draw_submit, draw_tabs, form_inner, tabs_in};
@@ -176,34 +176,17 @@ pub(in crate::ui) fn draw_flows(f: &mut Frame, view: &View, flows: &Flows) {
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, &flows.title), r);
     let [tabs, _, warnings, edit_row, note, _] = flows_rows(area, flows.warnings.len());
-    let dim = Style::default().fg(view.muted);
     let body = flows.body(area);
     let mut cursor = None;
-    if flows.tabs.is_empty() || flows.text.is_some() {
-        let heading = truncate_right(&flows.heading, usize::from(tabs.width));
-        f.render_widget(Paragraph::new(Span::styled(heading, dim.add_modifier(Modifier::BOLD))), tabs);
-    } else {
-        let names = flows.tab_names();
-        draw_tabs(f, view, &flows_tabs(area, &names), &names, flows.tab);
-    }
-    if let Some(preview) = flows.preview_area(area) {
-        match &flows.preview {
-            Some(FlowPreview::Note(note)) => draw_preview_note(f, view, preview, note),
-            plan => {
-                let flow = match plan {
-                    Some(FlowPreview::Plan(flow)) => Some(&**flow),
-                    _ => None,
-                };
-                draw_preview(f, view, preview, flow, flows.preview_scroll, flows.focus);
-            }
-        }
-    }
+    draw_flows_heading(f, view, flows, area, tabs);
+    draw_flows_preview(f, view, flows, area);
     if let Some(editor) = &flows.text {
         cursor = draw_text(f, view, body, editor);
     } else if let Some(pick) = flows.pick.as_ref().filter(|_| !flows.form_hidden(area)) {
         cursor = draw_pick(f, view, body, pick);
     } else if !flows.form_hidden(area) {
-        draw_rows(f, view, body, &flows.rows, flows.cursor, &Columns { label: flows.label, fill: true });
+        let columns = Columns { label: flows.label, fill: true };
+        draw_rows(f, view, body, Table { rows: &flows.rows, cursor: flows.cursor, columns });
     }
     draw_warnings(f, &flows.warnings, warnings);
     if let Some(edit) = &flows.edit {
@@ -213,6 +196,35 @@ pub(in crate::ui) fn draw_flows(f: &mut Frame, view: &View, flows: &Flows) {
     draw_buttons(f, view, &flows_buttons(area, flows.warnings.len(), &flows.buttons), &flows.buttons, flows.submit);
     if let Some(pos) = cursor {
         f.set_cursor_position(pos);
+    }
+}
+
+fn draw_flows_heading(f: &mut Frame, view: &View, flows: &Flows, area: Rect, tabs: Rect) {
+    if flows.tabs.is_empty() || flows.text.is_some() {
+        let dim = Style::default().fg(view.muted);
+        let heading = truncate_right(&flows.heading, usize::from(tabs.width));
+        f.render_widget(Paragraph::new(Span::styled(heading, dim.add_modifier(Modifier::BOLD))), tabs);
+    } else {
+        let names = flows.tab_names();
+        draw_tabs(f, view, &flows_tabs(area, &names), &names, flows.tab);
+    }
+}
+
+fn draw_flows_preview(f: &mut Frame, view: &View, flows: &Flows, area: Rect) {
+    let Some(preview) = flows.preview_area(area) else { return };
+    match &flows.preview {
+        Some(FlowPreview::Note(note)) => draw_preview_note(f, view, preview, note),
+        Some(FlowPreview::Plan(flow)) => {
+            draw_preview(
+                f,
+                view,
+                preview,
+                Previewed { flow: Some(&**flow), scroll: flows.preview_scroll, focus: flows.focus },
+            );
+        }
+        None => {
+            draw_preview(f, view, preview, Previewed { flow: None, scroll: flows.preview_scroll, focus: flows.focus });
+        }
     }
 }
 
@@ -257,14 +269,15 @@ pub(crate) fn preview_body(r: Rect) -> Rect {
     r.inner(Margin::new(2, 1))
 }
 
-pub(in crate::ui) fn draw_preview(
-    f: &mut Frame,
-    view: &View,
-    r: Rect,
-    flow: Option<&Flow>,
-    scroll: u16,
-    focus: Option<usize>,
-) {
+#[derive(Clone, Copy)]
+pub(in crate::ui) struct Previewed<'a> {
+    pub(in crate::ui) flow: Option<&'a Flow>,
+    pub(in crate::ui) scroll: u16,
+    pub(in crate::ui) focus: Option<usize>,
+}
+
+pub(in crate::ui) fn draw_preview(f: &mut Frame, view: &View, r: Rect, shown: Previewed) {
+    let Previewed { flow, scroll, focus } = shown;
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, "Diagram"), r);
     if let Some(flow) = flow {

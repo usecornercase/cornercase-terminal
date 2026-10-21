@@ -14,13 +14,55 @@ pub(super) struct Focus {
 
 #[derive(Default)]
 pub(super) struct Scrolls {
-    pub(super) projects: usize,
-    pub(super) workspaces: usize,
-    pub(super) agents: usize,
-    pub(super) tab_bar: usize,
-    pub(super) followed: Focus,
-    pub(super) followed_pane: Option<u64>,
-    pub(super) pane_followed: bool,
+    projects: usize,
+    workspaces: usize,
+    agents: usize,
+    tab_bar: usize,
+    followed: Focus,
+    followed_pane: Option<u64>,
+    pane_followed: bool,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum List {
+    Projects,
+    Workspaces,
+    Agents,
+    TabBar,
+}
+
+impl Scrolls {
+    pub(super) fn of(&self, list: List) -> usize {
+        match list {
+            List::Projects => self.projects,
+            List::Workspaces => self.workspaces,
+            List::Agents => self.agents,
+            List::TabBar => self.tab_bar,
+        }
+    }
+
+    pub(super) fn set(&mut self, list: List, offset: usize) {
+        match list {
+            List::Projects => self.projects = offset,
+            List::Workspaces => self.workspaces = offset,
+            List::Agents => self.agents = offset,
+            List::TabBar => self.tab_bar = offset,
+        }
+    }
+
+    pub(super) fn follow_again(&mut self) {
+        self.followed = Focus::default();
+    }
+
+    #[cfg(test)]
+    pub(super) fn forget_followed_pane(&mut self) {
+        self.followed_pane = None;
+    }
+
+    #[cfg(test)]
+    pub(super) fn before_first_follow(&mut self) {
+        self.pane_followed = false;
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,22 +81,13 @@ impl App {
     pub(super) fn layout(&self, area: Rect) -> ui::Areas {
         let (panel, sidebar) = (self.panel_shown(), self.sidebar());
         let (agents, icons) = (self.config.agents_section, self.config.icon_bar);
-        let columns = |main| ui::full_layout(main, self.widths, panel, sidebar, agents, icons);
-        ui::window_layout(area, self.status_bar(), columns)
+        ui::full_layout(area, self.screen.widths, ui::Screen { changes: panel, sidebar, agents, icons })
             .with_tab_bar(config::Tabs::from_setting(&self.config.tabs) == config::Tabs::Top)
             .with_full_screen(self.file_full_screen(), area)
     }
 
-    pub(super) fn status_bar(&self) -> bool {
-        !self.account_pills().is_empty()
-    }
-
-    pub(super) fn above_status_bar(&self, area: Rect) -> Rect {
-        ui::status_split(area, self.status_bar()).0
-    }
-
     pub(super) fn panel_shown(&self) -> bool {
-        match self.side {
+        match self.screen.side {
             Some(Side::Changes) => self.changes_shown(),
             Some(Side::Todo) => true,
             Some(Side::Files) => self.files_shown(),
@@ -64,30 +97,34 @@ impl App {
     }
 
     pub(super) fn show_side(&mut self, side: Option<Side>) {
-        if self.side == side {
+        if self.screen.side == side {
             return;
         }
-        match self.side {
-            Some(Side::Changes) => self.changes.close(),
+        match self.screen.side {
+            Some(Side::Changes) => self.panels.changes.close(),
             Some(Side::Todo) => self.close_todo(),
-            Some(Side::Files) => self.files.close(),
+            Some(Side::Files) => self.panels.files.close(),
             Some(Side::Flow) | None => {}
         }
-        self.side = side;
+        self.screen.side = side;
     }
 
     pub(super) fn close_panel(&mut self) {
-        self.todo.field = None;
+        self.panels.todo.cancel();
         self.show_side(None);
     }
 
     pub(super) fn pane_size(&self, area: Rect) -> (u16, u16) {
-        let pane = self.layout(area).pane;
+        let (pane, _) = ui::split_footer(self.layout(area).pane, self.pane_footer());
         (pane.height.max(1), pane.width.max(1))
     }
 
+    pub(super) fn pane_footer(&self) -> bool {
+        self.config.account_switcher && self.has_accounts()
+    }
+
     pub(super) fn visible_tab(&self) -> Option<u64> {
-        self.focus().tab.filter(|_| self.nav.is_none() && !self.file_full_screen())
+        self.focus().tab.filter(|_| self.screen.nav.is_none() && !self.file_full_screen())
     }
 
     pub(super) fn focus(&self) -> Focus {
@@ -105,18 +142,19 @@ impl App {
         let before = std::mem::replace(&mut self.scroll.followed_pane, pane);
         let seen = std::mem::replace(&mut self.scroll.pane_followed, true);
         if seen && before != pane && pane.is_some_and(|pane| self.reveal_agent(pane)) {
-            self.events.snapshots.changed = true;
+            self.clients.events.snapshots.mark_changed();
         }
     }
 
     pub(super) fn follow(&mut self, area: Rect) {
-        self.queued.area = Some(area);
+        self.set_queue_area(area);
         if self.focus() != self.scroll.followed {
-            self.files.set_full_screen(false);
+            self.panels.files.set_full_screen(false);
         }
         let areas = self.layout(area);
-        let relayout = areas.tree != self.drawn.tree || areas.tab_bar.is_empty() != self.drawn.tab_bar.is_empty();
-        self.drawn = areas;
+        let relayout =
+            areas.tree != self.screen.drawn.tree || areas.tab_bar.is_empty() != self.screen.drawn.tab_bar.is_empty();
+        self.screen.drawn = areas;
         self.follow_pane();
         let focus = self.focus();
         let before = std::mem::replace(&mut self.scroll.followed, focus);
@@ -132,12 +170,20 @@ impl App {
             return;
         }
         if focus.project != before.project || relayout {
-            let sidebar = self.sidebar_rows();
-            let rows = ui::project_rows(areas.list, areas.pitch, &sidebar, self.scroll.projects);
-            if let Some(i) = self.active_row(&sidebar) {
-                self.scroll.projects = rows.reveal(i);
-            }
+            self.reveal_project_row(&areas);
         }
+        self.reveal_workspace_rows(&areas);
+    }
+
+    fn reveal_project_row(&mut self, areas: &ui::Areas) {
+        let sidebar = self.sidebar_rows();
+        let rows = ui::project_rows(areas.list, areas.pitch, &sidebar, self.scroll.projects);
+        if let Some(i) = self.active_row(&sidebar) {
+            self.scroll.projects = rows.reveal(i);
+        }
+    }
+
+    fn reveal_workspace_rows(&mut self, areas: &ui::Areas) {
         let Some(project) = self.project() else { return };
         let w = project.active;
         let mut shown = vec![WorkspaceRow::Workspace(w)];
@@ -155,7 +201,7 @@ impl App {
     }
 
     pub(super) fn unfold_focus(&mut self) {
-        let tree = self.drawn.tree;
+        let tree = self.screen.drawn.tree;
         let Some(project) = self.projects.get_mut(self.active) else { return };
         project.collapsed = false;
         if let Some(workspace) = project.workspace_mut() {

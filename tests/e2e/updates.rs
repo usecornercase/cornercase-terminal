@@ -1,3 +1,5 @@
+use std::net::TcpStream;
+
 use super::*;
 use cornercase::version;
 
@@ -6,22 +8,26 @@ pub(super) fn serve(files: impl FnOnce(&str) -> Vec<(String, Vec<u8>)>) -> Strin
     let url = format!("http://{}", listener.local_addr().expect("its address"));
     let files = files(&url);
     thread::spawn(move || {
-        for mut stream in listener.incoming().flatten() {
-            let mut request = Vec::new();
-            let mut buf = [0u8; 1024];
-            while !request.ends_with(b"\r\n\r\n") {
-                let Ok(n @ 1..) = stream.read(&mut buf) else { break };
-                request.extend_from_slice(&buf[..n]);
-            }
-            let line = String::from_utf8_lossy(&request).into_owned();
-            let path = line.split_whitespace().nth(1).unwrap_or_default();
-            let found = files.iter().find(|(p, _)| p == path).map(|(_, body)| body.as_slice());
-            let (status, body) = found.map_or(("404 Not Found", [].as_slice()), |body| ("200 OK", body));
-            let head = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
-            let _ = stream.write_all(head.as_bytes()).and_then(|()| stream.write_all(body));
+        for stream in listener.incoming().flatten() {
+            answer(stream, &files);
         }
     });
     url
+}
+
+fn answer(mut stream: TcpStream, files: &[(String, Vec<u8>)]) {
+    let mut request = Vec::new();
+    let mut buf = [0u8; 1024];
+    while !request.ends_with(b"\r\n\r\n") {
+        let Ok(n @ 1..) = stream.read(&mut buf) else { break };
+        request.extend_from_slice(&buf[..n]);
+    }
+    let line = String::from_utf8_lossy(&request).into_owned();
+    let path = line.split_whitespace().nth(1).unwrap_or_default();
+    let found = files.iter().find(|(p, _)| p == path).map(|(_, body)| body.as_slice());
+    let (status, body) = found.map_or(("404 Not Found", [].as_slice()), |body| ("200 OK", body));
+    let head = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+    let _ = stream.write_all(head.as_bytes()).and_then(|()| stream.write_all(body));
 }
 
 fn fake_release(version: &str, script: &str) -> String {

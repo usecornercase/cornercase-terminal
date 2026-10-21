@@ -36,10 +36,10 @@ mod workspaces;
 
 #[cfg(test)]
 pub(crate) use accounts_bar::pills as pill_rects;
-pub(crate) use accounts_bar::{Pill as AccountPill, hit as account_pill_hit};
+pub(crate) use accounts_bar::{Pill as AccountPill, Row as AccountRow, hit as account_pill_hit};
 pub(crate) use activity::items as activity_items;
 pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as activity_hit};
-pub(crate) use agents_section::{AgentEntry, AgentsView, agent_fold, agent_hit, agent_row, agent_rows};
+pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold, agent_hit, agent_row, agent_rows};
 pub(crate) use chrome::ChangesButton;
 pub(crate) use chrome::{help_button, quit_button};
 pub(crate) use dialog::flows::{
@@ -55,11 +55,12 @@ pub(crate) use dialog::group_style::{StyleHit, style_hit};
 #[cfg(test)]
 pub(crate) use dialog::group_style::{style_colour, style_done, style_icon};
 pub(crate) use dialog::issues::{
-    IssueRow, Issues, IssuesBody, issue_button_hit, issue_buttons_width, issue_detail, issues_hit, issues_list,
+    IssueRow, Issues, IssuesBody, Labels, Shown, issue_button_hit, issue_buttons_width, issue_detail, issue_name_hit,
+    issues_hit, issues_list,
 };
 pub use dialog::issues::{issue_buttons, issues_area};
 #[cfg(test)]
-pub(crate) use dialog::issues::{issue_tabs, issue_toggles};
+pub(crate) use dialog::issues::{issue_name_fields, issue_tabs, issue_toggles};
 pub(crate) use dialog::menu::menu_hit;
 pub use dialog::menu::{menu_area, menu_item};
 pub(crate) use dialog::picker::{Entry, Picker, PickerHit, picker_hit, picker_list};
@@ -85,18 +86,27 @@ pub(crate) use dialog::start_flow::{
     AccountField as StartAccount, Shape as StartShape, StartFlow, StartHit, start_hit, start_preview, start_prompt,
 };
 #[cfg(test)]
-pub(crate) use dialog::start_flow::{start_account, start_account_list, start_buttons, start_list};
-pub(crate) use dialog::update::{Update, update_buttons, update_extra, update_notes, update_scroll};
+pub(crate) use dialog::start_flow::{
+    start_account, start_account_list, start_branch, start_buttons, start_list, start_workspace,
+};
+pub(crate) use dialog::update::{
+    Update, scroll_in, update_body, update_buttons, update_extra, update_notes, update_scroll, update_toggle,
+};
 #[cfg(test)]
 pub(crate) use dialog::usage::usage_area;
 pub(crate) use dialog::usage::{Usage, UsageSection, UsageWindow, usage_done, usage_share, usage_tabs};
+#[cfg(test)]
+pub(crate) use dialog::worktrees::worktrees_area;
+pub(crate) use dialog::worktrees::{
+    BRANCHES_LABEL, ConfirmView, WorktreeRow, Worktrees, WorktreesHit, worktrees_hit, worktrees_room,
+};
 pub(crate) use dialog::{CANCEL_LABEL, Note, Overlay};
 pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
 pub(crate) use icons::glyphs;
 pub(crate) use layout::COMPACT_BUTTON_WIDTH;
 pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, layout, layout_with};
-pub(crate) use layout::{Nav, full_layout, status_split, window_layout};
-pub(crate) use pane::{PaneBand, TabView, held_notice, resume_notice, scrollback_badge};
+pub(crate) use layout::{Nav, Screen, full_layout};
+pub(crate) use pane::{PaneBand, TabView, held_notice, restart_notice, resume_notice, scrollback_badge, split_footer};
 pub(crate) use remote_access::{RemoteAccess, button as remote_button, done as remote_done};
 pub use rows::row_close_button;
 #[cfg(test)]
@@ -148,6 +158,7 @@ use dialog::settings::draw_settings;
 use dialog::start_flow::draw_start_flow;
 use dialog::update::draw_update;
 use dialog::usage::draw_usage;
+use dialog::worktrees::draw_worktrees;
 use dialog::{FORM_WIDTH, draw_submit, form_inner};
 use pane::{draw_no_tab, draw_tab, draw_welcome};
 use rows::{GAP, Zone, draw_more};
@@ -161,9 +172,11 @@ use widgets::{
     action_style, button_style, button_width, centered, dim, draw_band, draw_close, draw_separator, hovered,
     hovered_at, middle, overlay_block, put, rail, sidebar_hovered, tab_style,
 };
-use workspaces::{draw_details, draw_workspaces};
+use widgets::{fit, scroll_edge};
+use workspaces::{DetailLine, draw_details, draw_workspaces};
 
 #[expect(clippy::struct_excessive_bools, reason = "each flag is a state or a setting the drawing follows")]
+#[derive(Default)]
 pub(crate) struct View<'a> {
     pub(crate) groups: Vec<GroupEntry>,
     pub(crate) projects: Vec<ProjectEntry>,
@@ -190,7 +203,6 @@ pub(crate) struct View<'a> {
     pub(crate) nav: Option<Nav>,
     pub(crate) update: Option<String>,
     pub(crate) remote: Option<bool>,
-    pub(crate) accounts: Vec<AccountPill>,
     pub(crate) changes: Option<changes::View>,
     pub(crate) changes_button: Option<ChangesButton>,
     pub(crate) todo: Option<todo::View>,
@@ -289,25 +301,8 @@ fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
     if let Some(bar) = view.tab_bar.as_ref().filter(|_| view.has_project && !areas.tab_bar.is_empty()) {
         tab_bar::draw(f, view, bar, areas.tab_bar);
     }
-    match &view.tab {
-        Some(tab) => draw_tab(f, view, tab, areas.pane),
-        None if view.has_project => draw_no_tab(f, view.muted, areas.pane),
-        None if view.projects.is_empty() => draw_welcome(f, view.muted, areas.pane),
-        None => {}
-    }
-    if areas.compact() {
-        draw_bar(f, view, areas);
-        if view.nav.is_some() {
-            f.render_widget(Clear, areas.pane);
-        }
-    } else {
-        draw_column_border(f, view.line(), areas.projects_border);
-        draw_column_border(f, view.line(), areas.workspaces_border);
-        draw_separator(f, view.line(), areas.stack_border);
-        draw_borders(f, view, areas);
-        draw_search_bar(f, view, areas.search);
-        activity::draw(f, view, areas.activity);
-    }
+    draw_tab_or_empty(f, view, areas);
+    draw_chrome(f, view, areas);
     if areas.tree {
         draw_tree(f, view, areas);
     } else if !areas.sidebar.is_empty() {
@@ -327,12 +322,37 @@ fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
     }
 }
 
+fn draw_tab_or_empty(f: &mut Frame, view: &View, areas: &Areas) {
+    match &view.tab {
+        Some(tab) => draw_tab(f, view, tab, areas.pane),
+        None if view.has_project => draw_no_tab(f, view.muted, areas.pane),
+        None if view.projects.is_empty() => draw_welcome(f, view.muted, areas.pane),
+        None => {}
+    }
+}
+
+fn draw_chrome(f: &mut Frame, view: &View, areas: &Areas) {
+    if areas.compact() {
+        draw_bar(f, view, areas);
+        if view.nav.is_some() {
+            f.render_widget(Clear, areas.pane);
+        }
+    } else {
+        draw_column_border(f, view.line(), areas.projects_border);
+        draw_column_border(f, view.line(), areas.workspaces_border);
+        draw_separator(f, view.line(), areas.stack_border);
+        draw_borders(f, view, areas);
+        draw_search_bar(f, view, areas.search);
+        activity::draw(f, view, areas.activity);
+    }
+}
+
 pub(crate) fn draw(f: &mut Frame, view: &View) {
     let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some() || view.flow.is_some();
     let full = view.files.as_ref().is_some_and(files::View::full_screen);
     let (agents, icons) = (view.agents.is_some(), view.icons);
-    let columns = |main| full_layout(main, view.widths, panel, view.sidebar, agents, icons);
-    let areas = window_layout(f.area(), !view.accounts.is_empty(), columns)
+    let screen = Screen { changes: panel, sidebar: view.sidebar, agents, icons };
+    let areas = full_layout(f.area(), view.widths, screen)
         .with_tab_bar(view.tab_bar.is_some())
         .with_full_screen(full, f.area())
         .shown(view.nav);
@@ -340,20 +360,8 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
         draw_main(f, view, &areas);
     }
     if panel && !areas.changes.is_empty() {
-        f.render_widget(Clear, areas.changes);
-        let border = areas.changes_border;
-        draw_column_border(f, view.line(), border);
-        draw_border(f, view, border, Border::Changes);
-        let hover = view.hover.filter(|_| view.overlay.is_none());
-        match (&view.changes, &view.todo, &view.files, &view.flow) {
-            (Some(changes), ..) => changes::draw(f, areas.changes, changes, hover.filter(|_| view.drag.is_none())),
-            (None, Some(todo), ..) => todo::draw(f, areas.changes, todo, hover),
-            (None, None, Some(files), _) => files::draw(f, areas.changes, files, hover),
-            (None, None, None, Some(flow)) => flow::draw(f, areas.changes, flow, hover.filter(|_| view.drag.is_none())),
-            (None, None, None, None) => {}
-        }
+        draw_side_panel(f, view, &areas);
     }
-    accounts_bar::draw(f, view, &areas);
     if let Some(card) = &view.tour {
         draw_pointer(f, card);
     }
@@ -364,8 +372,36 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
         let area = f.area();
         f.buffer_mut().set_style(area, Style::default().add_modifier(Modifier::DIM));
     }
+    draw_overlay(f, view, &areas);
+    if view.star {
+        draw_star(f, view);
+    }
+    if let Some(card) = &view.tour {
+        draw_tour(f, view, card);
+    }
+    if let Some(toast) = view.toast {
+        draw_toast(f, view, toast);
+    }
+}
+
+fn draw_side_panel(f: &mut Frame, view: &View, areas: &Areas) {
+    f.render_widget(Clear, areas.changes);
+    let border = areas.changes_border;
+    draw_column_border(f, view.line(), border);
+    draw_border(f, view, border, Border::Changes);
+    let hover = view.hover.filter(|_| view.overlay.is_none());
+    match (&view.changes, &view.todo, &view.files, &view.flow) {
+        (Some(changes), ..) => changes::draw(f, areas.changes, changes, hover.filter(|_| view.drag.is_none())),
+        (None, Some(todo), ..) => todo::draw(f, areas.changes, todo, hover),
+        (None, None, Some(files), _) => files::draw(f, areas.changes, files, hover),
+        (None, None, None, Some(flow)) => flow::draw(f, areas.changes, flow, hover.filter(|_| view.drag.is_none())),
+        (None, None, None, None) => {}
+    }
+}
+
+fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
     match &view.overlay {
-        Some(Overlay::Menu { at, items }) => draw_menu(f, view, *at, items),
+        Some(Overlay::Menu { at, items, disabled }) => draw_menu(f, view, *at, items, disabled),
         Some(Overlay::Form(form)) => draw_form(f, view, form),
         Some(Overlay::Queue(form)) => dialog::queue::draw(f, view, form),
         Some(Overlay::GroupStyle(group)) => draw_group_style(f, view, group),
@@ -379,18 +415,10 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
         Some(Overlay::Flows(flows)) => draw_flows(f, view, flows),
         Some(Overlay::StartFlow(start)) => draw_start_flow(f, view, start),
         Some(Overlay::ProjectSettings(settings)) => draw_project_settings(f, view, settings),
+        Some(Overlay::Worktrees(worktrees)) => draw_worktrees(f, view, worktrees),
         Some(Overlay::Search(search)) if search.showing_results() => draw_results(f, view, search, areas.results),
         Some(Overlay::Keys(menu)) => keys::draw(f, view, menu, areas.pane),
         Some(Overlay::Search(_)) | None => {}
-    }
-    if view.star {
-        draw_star(f, view);
-    }
-    if let Some(card) = &view.tour {
-        draw_tour(f, view, card);
-    }
-    if let Some(toast) = view.toast {
-        draw_toast(f, view, toast);
     }
 }
 

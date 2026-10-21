@@ -1,19 +1,23 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use serde_json::Value;
+
 use super::{Asker, Handled, Pending, Stage, conflict, json, malformed};
-use crate::app::changes_panel::Gapped;
-use crate::app::changes_panel::streams::{Stream, summary_of};
+use crate::app::changes_panel::{Gapped, Seen};
 use crate::app::{App, AppEvent, ChangesEvent};
+use crate::changes::act::{FileAction, Outcome};
 use crate::changes::diff::File;
 use crate::changes::{self, Mode, Scope};
-use crate::control::changes::{self as wire, Base, Following, Gap, Patch, Viewed};
+use crate::control::changes::{self as wire, Base, Gap, Patch, Viewed};
 use crate::control::contract::{Code, Refusal};
-use crate::control::{Changes, ChangesBase, ChangesFile, ChangesGap, ChangesMode, ChangesViewed};
+use crate::control::{
+    Changes, ChangesBase, ChangesDiscard, ChangesFile, ChangesGap, ChangesMode, ChangesStage, ChangesViewed,
+};
 use crate::error::Result;
 use crate::git;
-use crate::log::{self, Job, Level};
-use crate::project::Hierarchy;
+use crate::log::{Job, Level};
+use crate::project::{Hierarchy, Workspace};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BaseChange {
@@ -21,6 +25,21 @@ pub(crate) enum BaseChange {
     Set(String),
     Clear,
 }
+
+#[derive(Clone, Copy)]
+pub(in crate::app) struct Replied<'a> {
+    pub(in crate::app) key: u64,
+    pub(in crate::app) workspace: u64,
+    pub(in crate::app) path: &'a str,
+}
+
+struct Wanted<'a> {
+    workspace: Option<u64>,
+    path: &'a str,
+    digest: Option<&'a str>,
+}
+
+type Answer = std::result::Result<Value, Refusal>;
 
 struct Place {
     id: u64,
@@ -38,44 +57,43 @@ fn missing(path: &str, workspace: u64) -> Refusal {
 }
 
 fn read_file(place: &Place, mode: Mode, path: &str) -> Result<Option<Arc<File>>> {
-    let request = changes::git::Request {
-        dir: place.dir.clone(),
-        mode,
-        base: place.base.clone(),
-        last: None,
-        previous: Vec::new(),
-        expanded: (mode == Mode::Uncommitted).then(|| vec![path.to_string()]),
-    };
-    let loaded = changes::git::load(&request)?;
-    Ok(loaded.diff.and_then(|diff| diff.files.into_iter().find(|f| f.path == path)))
+    changes::git::read_file(&place.dir, mode, place.base.clone(), path)
 }
 
 impl App {
     fn reading(&mut self, client: u64, key: u64) {
         let done = crate::control::Done::default();
-        self.requests.pending.push(Pending { client: Some(client), key, timeout: None, done, stage: Stage::Reading });
+        self.clients.requests.pending.push(Pending {
+            client: Some(client),
+            key,
+            timeout: None,
+            done,
+            stage: Stage::Reading,
+        });
     }
 
     fn changes_place(&self, asker: Asker, id: Option<u64>) -> std::result::Result<Place, Refusal> {
         let id = if let Some(id) = id {
             id
         } else {
-            let here = self.here(asker);
-            let (p, w) = here
-                .project
-                .zip(here.workspace)
-                .ok_or_else(|| Refusal::from("no workspace is open here; pass --workspace"))?;
-            self.projects[p].workspaces[w].id
+            let here = self.here(asker).workspace;
+            let at = here.ok_or_else(|| Refusal::from("no workspace is open here; pass --workspace"))?;
+            self.projects.workspace(at).id
         };
-        let (p, w) = self.usable_workspace(id)?;
-        let ws = &self.projects[p].workspaces[w];
-        if self.projects[p].closing {
+        let ws = self.git_workspace(id)?;
+        Ok(Place { id, dir: ws.path.clone(), base: ws.base.clone() })
+    }
+
+    pub(in crate::app) fn git_workspace(&self, id: u64) -> std::result::Result<&Workspace, Refusal> {
+        let at = self.usable_workspace(id)?;
+        let ws = self.projects.workspace(at);
+        if self.projects[at.project()].closing {
             return Err(format!("workspace {id} is closing").into());
         }
         if git::branch(&ws.path).is_none() {
             return Err(conflict(format!("workspace {id} is not in a git repository")));
         }
-        Ok(Place { id, dir: ws.path.clone(), base: ws.base.clone() })
+        Ok(ws)
     }
 
     fn live_file(
@@ -85,13 +103,13 @@ impl App {
         path: &str,
         now: Instant,
     ) -> std::result::Result<Option<Arc<File>>, Refusal> {
-        let live = self.changes.model_in(place.id, mode, place.base.as_deref()).filter(|m| m.live(now));
+        let live = self.panels.changes.model_in(place.id, mode, place.base.as_deref()).filter(|m| m.live(now));
         let Some(diff) = live.and_then(changes::Model::diff) else { return Ok(None) };
         diff.files.iter().find(|f| f.path == path).cloned().map(Some).ok_or_else(|| missing(path, place.id))
     }
 
     pub(super) fn changes_request(&mut self, client: u64, asker: Asker, request: &Changes) -> Handled {
-        if self.change_streams.open.iter().any(|s| s.client == client) {
+        if self.clients.change_streams.opened_by(client) {
             return Err(conflict("this connection already follows changes; open another connection for another scope"));
         }
         let workspace = match request.scope {
@@ -103,46 +121,17 @@ impl App {
                 None
             }
         };
-        self.change_streams.issued += 1;
         let targets = if workspace.is_none() { self.every_targets() } else { Vec::new() };
         let content = self.change_content(request.scope, workspace, request.mode, &targets);
-        let stream = Stream {
-            id: self.change_streams.issued,
-            client,
-            scope: request.scope,
-            workspace,
-            mode: request.mode,
-            revision: 1,
-            last: Some(content.clone()),
-        };
-        let summary = summary_of(&stream, content);
-        log::info!(
-            "control",
-            "changes",
-            client = client,
-            stream = stream.id,
-            scope = request.scope.name(),
-            workspace = workspace.unwrap_or_default(),
-            mode = request.mode.name()
-        );
-        self.change_streams.open.push(stream);
-        self.changes.follow(self.change_streams.followed());
-        self.change_streams.changed = true;
+        let summary = self.clients.change_streams.start(client, request, workspace, content);
+        self.panels.changes.follow(self.clients.change_streams.followed());
         Ok(Some(json(&summary)))
     }
 
     pub(super) fn changes_mode_request(&mut self, client: u64, request: &ChangesMode) -> Handled {
         let id = request.stream.ok_or_else(|| malformed("`changes-mode` needs the stream to change: pass --stream"))?;
-        let Some(stream) = self.change_streams.open.iter_mut().find(|s| s.id == id && s.client == client) else {
-            return Err(Refusal::new(Code::NotFound, format!("there is no changes stream {id} on this connection")));
-        };
-        if stream.scope == Scope::Every && request.mode != Mode::Uncommitted {
-            return Err(malformed("Every project shows only uncommitted changes"));
-        }
-        stream.mode = request.mode;
-        let following = Following { stream: id, scope: stream.scope, workspace: stream.workspace, mode: stream.mode };
-        self.changes.follow(self.change_streams.followed());
-        self.change_streams.changed = true;
+        let following = self.clients.change_streams.change_mode(id, client, request.mode)?;
+        self.panels.changes.follow(self.clients.change_streams.followed());
         Ok(Some(json(&following)))
     }
 
@@ -156,10 +145,10 @@ impl App {
         let place = self.changes_place(asker, request.workspace)?;
         let mode = request.mode;
         if let Some(file) = self.live_file(&place, mode, &request.path, now)? {
-            let viewed = self.changes.viewed(place.id, &file);
+            let viewed = self.panels.changes.viewed(place.id, &file);
             return Ok(Some(json(&Patch::of(place.id, mode, &file, viewed))));
         }
-        let key = self.requests.key();
+        let key = self.clients.requests.key();
         let (workspace, path) = (place.id, request.path.clone());
         let reading = path.clone();
         let job = Job::new(Level::Debug, "changes", "file").with("workspace", workspace);
@@ -176,20 +165,22 @@ impl App {
 
     pub(in crate::app) fn changes_file_replied(
         &mut self,
-        key: u64,
-        workspace: u64,
+        at: Replied<'_>,
         mode: Mode,
-        path: &str,
         result: Result<Option<Arc<File>>>,
     ) {
-        let Some(pending) = self.requests.take(key) else { return };
-        let reply = match result {
+        self.answer_read(at.key, |app| match result {
             Err(e) => Err(Refusal::from(format!("cannot read the changes: {e}"))),
-            Ok(None) => Err(missing(path, workspace)),
-            Ok(Some(file)) => self
-                .usable_workspace(workspace)
-                .map(|_| json(&Patch::of(workspace, mode, &file, self.changes.viewed(workspace, &file)))),
-        };
+            Ok(None) => Err(missing(at.path, at.workspace)),
+            Ok(Some(file)) => app
+                .usable_workspace(at.workspace)
+                .map(|_| json(&Patch::of(at.workspace, mode, &file, app.panels.changes.viewed(at.workspace, &file)))),
+        });
+    }
+
+    fn answer_read(&mut self, key: u64, reply: impl FnOnce(&mut Self) -> Answer) {
+        let Some(pending) = self.clients.requests.take(key) else { return };
+        let reply = reply(self);
         self.refuse_or_answer(pending.client, reply);
     }
 
@@ -203,7 +194,7 @@ impl App {
         let place = self.changes_place(asker, request.workspace)?;
         let (mode, hunk) = (request.mode, request.hunk);
         let live = self.live_file(&place, mode, &request.path, now)?;
-        let key = self.requests.key();
+        let key = self.clients.requests.key();
         let (workspace, path) = (place.id, request.path.clone());
         let job = Job::new(Level::Debug, "changes", "gap").with("workspace", workspace);
         let read = path.clone();
@@ -229,34 +220,12 @@ impl App {
         Ok(None)
     }
 
-    pub(in crate::app) fn changes_gap_replied(
-        &mut self,
-        key: u64,
-        workspace: u64,
-        path: &str,
-        hunk: usize,
-        result: Result<Gapped>,
-    ) {
-        let Some(pending) = self.requests.take(key) else { return };
-        let reply = match result {
+    pub(in crate::app) fn changes_gap_replied(&mut self, at: Replied<'_>, hunk: usize, result: Result<Gapped>) {
+        self.answer_read(at.key, |_| match result {
             Err(e) => Err(Refusal::from(format!("cannot read the changes: {e}"))),
-            Ok(None) => Err(missing(path, workspace)),
-            Ok(Some((file, lines))) => {
-                if hunk < 1 || hunk >= file.hunks.len() {
-                    Err(Refusal::new(
-                        Code::NotFound,
-                        format!("{path} has no gap before hunk {hunk}: it has {} hunks", file.hunks.len()),
-                    ))
-                } else {
-                    lines.map(|lines| json(&Gap::of(workspace, path, hunk, &lines))).ok_or_else(|| {
-                        Refusal::from(format!(
-                            "cannot read the unchanged lines of {path}: the file is gone or too large"
-                        ))
-                    })
-                }
-            }
-        };
-        self.refuse_or_answer(pending.client, reply);
+            Ok(None) => Err(missing(at.path, at.workspace)),
+            Ok(Some((file, lines))) => gap_reply(at, hunk, file.hunks.len(), lines),
+        });
     }
 
     pub(super) fn changes_base_request(&mut self, client: u64, asker: Asker, request: &ChangesBase) -> Handled {
@@ -267,7 +236,7 @@ impl App {
             (None, false) => BaseChange::Read,
         };
         let place = self.changes_place(asker, request.workspace)?;
-        let key = self.requests.key();
+        let key = self.clients.requests.key();
         let workspace = place.id;
         let job = Job::new(Level::Debug, "changes", "branches").with("workspace", workspace);
         self.spawn_job(
@@ -286,7 +255,7 @@ impl App {
         change: &BaseChange,
         listed: Result<Listed>,
     ) {
-        let Some(pending) = self.requests.take(key) else { return };
+        let Some(pending) = self.clients.requests.take(key) else { return };
         let reply = match listed {
             Err(e) => Err(Refusal::from(format!("cannot list the branches: {e}"))),
             Ok((branches, default)) => self
@@ -307,14 +276,65 @@ impl App {
                     BaseChange::Read => Ok(()),
                 })
                 .map(|()| {
-                    let base = self
-                        .projects
-                        .workspace_index(workspace)
-                        .and_then(|(p, w)| self.projects[p].workspaces[w].base.clone());
+                    let base = self.projects.workspace_by(workspace).and_then(|w| w.base.clone());
                     json(&Base { workspace, base, default, branches })
                 }),
         };
         self.refuse_or_answer(pending.client, reply);
+    }
+
+    pub(super) fn changes_discard_request(&mut self, client: u64, asker: Asker, request: &ChangesDiscard) -> Handled {
+        let wanted = Wanted { workspace: request.workspace, path: &request.path, digest: request.digest.as_deref() };
+        self.file_action_request(client, asker, &wanted, FileAction::Discard)
+    }
+
+    pub(super) fn changes_stage_request(&mut self, client: u64, asker: Asker, request: &ChangesStage) -> Handled {
+        let wanted = Wanted { workspace: request.workspace, path: &request.path, digest: request.digest.as_deref() };
+        let action = if request.staged { FileAction::Stage } else { FileAction::Unstage };
+        self.file_action_request(client, asker, &wanted, action)
+    }
+
+    fn file_action_request(&mut self, client: u64, asker: Asker, wanted: &Wanted, action: FileAction) -> Handled {
+        let place = self.changes_place(asker, wanted.workspace)?;
+        if wanted.path.is_empty() {
+            return Err(malformed(format!("`{}` needs the file's path", action.command())));
+        }
+        let digest = seen_digest(wanted.digest, action.doing())?;
+        let key = self.clients.requests.key();
+        let seen = Seen { workspace: place.id, path: wanted.path.to_string(), digest };
+        self.spawn_file_action(Some(key), place.dir, seen, action);
+        self.reading(client, key);
+        Ok(None)
+    }
+
+    pub(in crate::app) fn changes_action_replied(
+        &mut self,
+        at: Replied<'_>,
+        action: FileAction,
+        result: Result<Outcome>,
+    ) {
+        self.answer_read(at.key, |_| match result {
+            Err(e) => Err(Refusal::from(format!("cannot {} {}: {e}", action.name(), at.path))),
+            Ok(Outcome::Gone) => Err(missing(at.path, at.workspace)),
+            Ok(Outcome::Changed) => Err(conflict(format!(
+                "{} changed since that digest, so nothing was {}; read it again with `cornercase changes file`",
+                at.path,
+                action.past()
+            ))),
+            Ok(Outcome::Done(file)) if action == FileAction::Discard => Ok(json(&wire::Discarded {
+                workspace: at.workspace,
+                path: file.path.clone(),
+                old_path: file.old_path.clone(),
+                status: file.status.into(),
+            })),
+            Ok(Outcome::Done(file)) => Ok(json(&wire::StagedFile {
+                workspace: at.workspace,
+                path: file.path.clone(),
+                old_path: file.old_path.clone(),
+                status: file.status.into(),
+                staged: action == FileAction::Stage,
+            })),
+        });
     }
 
     pub(super) fn changes_viewed_request(&mut self, asker: Asker, request: &ChangesViewed) -> Handled {
@@ -325,13 +345,28 @@ impl App {
         let digest = if request.clear {
             None
         } else {
-            let text = request.digest.as_deref().ok_or_else(|| {
-                malformed("marking a file as viewed needs the digest of the version seen: pass --digest")
-            })?;
-            Some(wire::parse_digest(text).ok_or_else(|| malformed("a digest is 16 hexadecimal digits"))?)
+            Some(seen_digest(request.digest.as_deref(), "marking a file as viewed")?)
         };
-        self.changes.set_viewed(place.id, &request.path, digest);
-        self.change_streams.changed = true;
+        self.panels.changes.set_viewed(place.id, &request.path, digest);
+        self.clients.change_streams.mark_changed();
         Ok(Some(json(&Viewed { workspace: place.id, path: request.path.clone(), viewed: !request.clear })))
     }
+}
+
+fn seen_digest(text: Option<&str>, doing: &str) -> std::result::Result<u64, Refusal> {
+    let text = text.ok_or_else(|| malformed(format!("{doing} needs the digest of the version seen: pass --digest")))?;
+    wire::parse_digest(text).ok_or_else(|| malformed("a digest is 16 hexadecimal digits"))
+}
+
+fn gap_reply(at: Replied<'_>, hunk: usize, hunks: usize, lines: Option<Vec<changes::GapLine>>) -> Answer {
+    let Replied { workspace, path, .. } = at;
+    if hunk < 1 || hunk >= hunks {
+        return Err(Refusal::new(
+            Code::NotFound,
+            format!("{path} has no gap before hunk {hunk}: it has {hunks} hunks"),
+        ));
+    }
+    lines.map(|lines| json(&Gap::of(workspace, path, hunk, &lines))).ok_or_else(|| {
+        Refusal::from(format!("cannot read the unchanged lines of {path}: the file is gone or too large"))
+    })
 }

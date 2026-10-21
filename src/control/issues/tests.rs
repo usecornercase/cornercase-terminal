@@ -22,53 +22,63 @@ fn issue(source: &str, key: &str, title: &str) -> IssueInfo {
     }
 }
 
-fn sources() -> Sources {
+fn connected_sources() -> Vec<SourceInfo> {
     let blank = SourceInfo::default;
+    vec![
+        SourceInfo {
+            source: "github".into(),
+            name: "GitHub".into(),
+            tab: true,
+            repository: true,
+            state: SourceState::Connected,
+            from: Some("gh".into()),
+            fields: ["assignee".into(), "author".into()],
+            ..blank()
+        },
+        SourceInfo {
+            source: "linear".into(),
+            name: "Linear".into(),
+            tab: true,
+            state: SourceState::Connected,
+            account: Some("@ana in acme".into()),
+            from: Some("saved".into()),
+            fields: ["assignee".into(), "creator".into()],
+            people: [Who::Me, Who::Anyone],
+            ..blank()
+        },
+    ]
+}
+
+fn unready_sources() -> Vec<SourceInfo> {
+    let blank = SourceInfo::default;
+    vec![
+        SourceInfo {
+            source: "jira".into(),
+            name: "Jira".into(),
+            state: SourceState::Missing,
+            missing: vec!["site".into(), "email".into(), "token".into()],
+            fields: ["assignee".into(), "reporter".into()],
+            ..blank()
+        },
+        SourceInfo {
+            source: "shortcut".into(),
+            name: "Shortcut".into(),
+            tab: true,
+            state: SourceState::Failing,
+            reason: Some("the token was rejected".into()),
+            from: Some("env".into()),
+            env: Some("SHORTCUT_API_TOKEN".into()),
+            fields: ["owner".into(), "requester".into()],
+            ..blank()
+        },
+    ]
+}
+
+fn sources() -> Sources {
     Sources {
         project: 1,
         closed: false,
-        sources: vec![
-            SourceInfo {
-                source: "github".into(),
-                name: "GitHub".into(),
-                tab: true,
-                repository: true,
-                state: SourceState::Connected,
-                from: Some("gh".into()),
-                fields: ["assignee".into(), "author".into()],
-                ..blank()
-            },
-            SourceInfo {
-                source: "linear".into(),
-                name: "Linear".into(),
-                tab: true,
-                state: SourceState::Connected,
-                account: Some("@ana in acme".into()),
-                from: Some("saved".into()),
-                fields: ["assignee".into(), "creator".into()],
-                people: [Who::Me, Who::Anyone],
-                ..blank()
-            },
-            SourceInfo {
-                source: "jira".into(),
-                name: "Jira".into(),
-                state: SourceState::Missing,
-                missing: vec!["site".into(), "email".into(), "token".into()],
-                fields: ["assignee".into(), "reporter".into()],
-                ..blank()
-            },
-            SourceInfo {
-                source: "shortcut".into(),
-                name: "Shortcut".into(),
-                tab: true,
-                state: SourceState::Failing,
-                reason: Some("the token was rejected".into()),
-                from: Some("env".into()),
-                env: Some("SHORTCUT_API_TOKEN".into()),
-                fields: ["owner".into(), "requester".into()],
-                ..blank()
-            },
-        ],
+        sources: [connected_sources(), unready_sources()].concat(),
         places: vec![
             PlaceInfo { project: 1, workspace: None, label: "web-shop".into(), worktree: true, here: true },
             PlaceInfo {

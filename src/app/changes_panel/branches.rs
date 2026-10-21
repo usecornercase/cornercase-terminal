@@ -31,13 +31,13 @@ impl App {
     pub(in crate::app) fn branches_listed(&mut self, workspace: u64, branches: Vec<String>, default: Option<String>) {
         let Some(target) = self.changes_target().filter(|t| t.workspace == workspace) else { return };
         if self.overlay.is_some()
-            || self.side != Some(Side::Changes)
-            || self.changes.scope == changes::Scope::Every
-            || self.changes.mode == changes::Mode::Uncommitted
+            || self.screen.side != Some(Side::Changes)
+            || self.panels.changes.scope() == changes::Scope::Every
+            || self.panels.changes.mode() == changes::Mode::Uncommitted
         {
             return;
         }
-        let current = self.changes.label(workspace).or(target.base);
+        let current = self.panels.changes.label(workspace).or(target.base);
         self.overlay = Some(Overlay::Branches(BranchPicker::new(workspace, branches, default, current)));
     }
 
@@ -88,10 +88,10 @@ impl App {
 
     pub(in crate::app) fn set_changes_base(&mut self, workspace: u64, branch: Option<String>, default: Option<&str>) {
         let base = branch.filter(|b| default != Some(b.as_str()));
-        if let Some((p, w)) = self.projects.workspace_index(workspace) {
-            self.projects[p].workspaces[w].base = base;
+        if let Some(ws) = self.projects.workspace_by_mut(workspace) {
+            ws.base = base;
         }
-        self.changes.scroll = 0;
+        self.panels.changes.scroll_to_top();
     }
 
     pub(in crate::app) fn branches_view(picker: &BranchPicker) -> ui::Overlay {

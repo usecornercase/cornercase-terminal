@@ -4,6 +4,7 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::input::wheel;
 use super::overlay::Overlay;
+use crate::config::ProjectSettings;
 use crate::project::Hierarchy;
 use crate::project::settings::{Action, Field, Form, Hit, Room};
 use crate::ui::{self, ProjectSettingsHit};
@@ -13,7 +14,7 @@ impl App {
         let Some(p) = self.projects.project_index(project) else { return };
         let saved = self.config.project(&self.projects[p].path, self.home.as_deref());
         let form = Form::new(project, self.project_label(&self.projects[p]), &saved);
-        self.nav = None;
+        self.screen.nav = None;
         self.overlay = Some(Overlay::ProjectSettings(Box::new(form)));
     }
 
@@ -42,11 +43,7 @@ impl App {
         let room = room(area);
         let Some(form) = self.settings_form() else { return };
         if let Some(delta) = wheel(ev.kind) {
-            for field in [Field::Setup, Field::Teardown] {
-                if ui::project_settings_field(area, field).contains(pos) {
-                    form.scroll(field, delta, room);
-                }
-            }
+            scroll_fields(form, area, pos, delta, room);
             return;
         }
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
@@ -66,23 +63,33 @@ impl App {
         match action {
             Action::None => {}
             Action::Close => self.overlay = None,
-            Action::Save(settings) => {
-                let Some(project) = self.settings_form().map(|form| form.project) else { return };
-                let Some(p) = self.projects.project_index(project) else {
-                    self.overlay = None;
-                    return;
-                };
-                let folder = self.projects[p].path.clone();
-                let home = self.home.clone();
-                match self.change_config(|c| c.set_project(&folder, home.as_deref(), settings)) {
-                    Ok(()) => self.overlay = None,
-                    Err(e) => {
-                        if let Some(form) = self.settings_form() {
-                            form.notice = Some(e);
-                        }
-                    }
+            Action::Save(settings) => self.save_project_settings(settings),
+        }
+    }
+
+    fn save_project_settings(&mut self, settings: ProjectSettings) {
+        let Some(project) = self.settings_form().map(|form| form.project) else { return };
+        let Some(p) = self.projects.project_index(project) else {
+            self.overlay = None;
+            return;
+        };
+        let folder = self.projects[p].path.clone();
+        let home = self.home.clone();
+        match self.change_config(|c| c.set_project(&folder, home.as_deref(), settings)) {
+            Ok(()) => self.overlay = None,
+            Err(e) => {
+                if let Some(form) = self.settings_form() {
+                    form.notice = Some(e);
                 }
             }
+        }
+    }
+}
+
+fn scroll_fields(form: &mut Form, area: Rect, pos: Position, delta: isize, room: Room) {
+    for field in [Field::Setup, Field::Teardown] {
+        if ui::project_settings_field(area, field).contains(pos) {
+            form.scroll(field, delta, room);
         }
     }
 }

@@ -161,42 +161,50 @@ impl Combo {
             _ => None,
         };
         if !self.is_open() {
-            if matches!(key.code, KeyCode::Down | KeyCode::Up | KeyCode::Enter | KeyCode::Char(' ')) {
-                self.open();
-            } else if let Some(c) = typed {
-                self.open();
-                self.open.iter_mut().for_each(|open| open.push(c));
-            }
+            self.closed_key(key.code, typed);
             return false;
         }
         match key.code {
             KeyCode::Esc => self.close(),
-            KeyCode::Enter => {
-                let chosen = self.highlighted();
-                let changed = chosen.is_some_and(|i| self.chosen != Some(i));
-                match chosen {
-                    Some(i) => self.choose(i),
-                    None => self.close(),
-                }
-                return changed;
-            }
-            _ => {
-                let len = self.shown().len();
-                let page = isize::try_from(rows.max(1)).unwrap_or(isize::MAX);
-                let Some(open) = &mut self.open else { return false };
-                match key.code {
-                    KeyCode::Up => open.move_selection(-1, len, rows),
-                    KeyCode::Down => open.move_selection(1, len, rows),
-                    KeyCode::PageUp => open.move_selection(-page, len, rows),
-                    KeyCode::PageDown => open.move_selection(page, len, rows),
-                    KeyCode::Home => open.move_selection(isize::MIN, len, rows),
-                    KeyCode::End => open.move_selection(isize::MAX, len, rows),
-                    KeyCode::Backspace => open.pop(),
-                    _ => typed.into_iter().for_each(|c| open.push(c)),
-                }
-            }
+            KeyCode::Enter => return self.choose_highlighted(),
+            code => self.navigate(code, typed, rows),
         }
         false
+    }
+
+    fn closed_key(&mut self, code: KeyCode, typed: Option<char>) {
+        if matches!(code, KeyCode::Down | KeyCode::Up | KeyCode::Enter | KeyCode::Char(' ')) {
+            self.open();
+        } else if let Some(c) = typed {
+            self.open();
+            self.open.iter_mut().for_each(|open| open.push(c));
+        }
+    }
+
+    fn choose_highlighted(&mut self) -> bool {
+        let chosen = self.highlighted();
+        let changed = chosen.is_some_and(|i| self.chosen != Some(i));
+        match chosen {
+            Some(i) => self.choose(i),
+            None => self.close(),
+        }
+        changed
+    }
+
+    fn navigate(&mut self, code: KeyCode, typed: Option<char>, rows: usize) {
+        let len = self.shown().len();
+        let page = isize::try_from(rows.max(1)).unwrap_or(isize::MAX);
+        let Some(open) = &mut self.open else { return };
+        match code {
+            KeyCode::Up => open.move_selection(-1, len, rows),
+            KeyCode::Down => open.move_selection(1, len, rows),
+            KeyCode::PageUp => open.move_selection(-page, len, rows),
+            KeyCode::PageDown => open.move_selection(page, len, rows),
+            KeyCode::Home => open.move_selection(isize::MIN, len, rows),
+            KeyCode::End => open.move_selection(isize::MAX, len, rows),
+            KeyCode::Backspace => open.pop(),
+            _ => typed.into_iter().for_each(|c| open.push(c)),
+        }
     }
 }
 

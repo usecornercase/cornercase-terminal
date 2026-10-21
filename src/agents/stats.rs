@@ -248,44 +248,58 @@ impl Stats {
         let mut simultaneous = 0;
         let mut busy = false;
         for &sample in samples {
-            if self.started.insert(sample.pane, (sample.kind, sample.pid)) != Some((sample.kind, sample.pid))
-                && !sample.resuming
-            {
-                self.add(now, sample.kind, Counts { agents: 1, ..Counts::default() });
-            }
+            self.note_start(now, sample);
             if sample.working() {
                 simultaneous += 1;
             }
-            if let Some(previous) = self.previous.get(&sample.pane).copied()
-                && previous.kind == sample.kind
-                && previous.pid == sample.pid
-            {
-                busy |= previous.working();
-                let counts = Counts {
-                    turns: u64::from(previous.in_turn() && sample.over()),
-                    agent_ms: if previous.working() { ms } else { 0 },
-                    waited_ms: if matches!(previous.status, Some(Status::Waiting | Status::Done)) { ms } else { 0 },
-                    ..Counts::default()
-                };
-                if counts != Counts::default() {
-                    self.add(now, sample.kind, counts);
-                }
-            }
+            busy |= self.note_elapsed(now, ms, sample);
         }
         if simultaneous > 0 || busy {
-            let addition =
-                Bucket { busy_ms: if busy { ms } else { 0 }, most_at_once: simultaneous, ..Bucket::default() };
-            let bucket = self.hours.entry(hour(now)).or_default();
-            if addition.busy_ms > 0
-                || addition.most_at_once > bucket.most_at_once
-                || addition.most_at_once > self.total.most_at_once
-            {
-                self.revision = self.revision.saturating_add(1);
-                self.total.add(&addition);
-                bucket.add(&addition);
-            }
+            self.note_busy(now, if busy { ms } else { 0 }, simultaneous);
         }
         self.previous = samples.iter().map(|s| (s.pane, *s)).collect();
+    }
+
+    fn note_start(&mut self, now: SystemTime, sample: Sample) {
+        if self.started.insert(sample.pane, (sample.kind, sample.pid)) != Some((sample.kind, sample.pid))
+            && !sample.resuming
+        {
+            self.add(now, sample.kind, Counts { agents: 1, ..Counts::default() });
+        }
+    }
+
+    fn note_elapsed(&mut self, now: SystemTime, ms: u64, sample: Sample) -> bool {
+        let Some(previous) = self
+            .previous
+            .get(&sample.pane)
+            .copied()
+            .filter(|previous| previous.kind == sample.kind && previous.pid == sample.pid)
+        else {
+            return false;
+        };
+        let counts = Counts {
+            turns: u64::from(previous.in_turn() && sample.over()),
+            agent_ms: if previous.working() { ms } else { 0 },
+            waited_ms: if matches!(previous.status, Some(Status::Waiting | Status::Done)) { ms } else { 0 },
+            ..Counts::default()
+        };
+        if counts != Counts::default() {
+            self.add(now, sample.kind, counts);
+        }
+        previous.working()
+    }
+
+    fn note_busy(&mut self, now: SystemTime, busy_ms: u64, simultaneous: u64) {
+        let addition = Bucket { busy_ms, most_at_once: simultaneous, ..Bucket::default() };
+        let bucket = self.hours.entry(hour(now)).or_default();
+        if addition.busy_ms > 0
+            || addition.most_at_once > bucket.most_at_once
+            || addition.most_at_once > self.total.most_at_once
+        {
+            self.revision = self.revision.saturating_add(1);
+            self.total.add(&addition);
+            bucket.add(&addition);
+        }
     }
     pub fn saved(&self, now: SystemTime) -> Saved {
         let oldest = hour(now).saturating_sub(RETAIN - 1);
@@ -334,17 +348,17 @@ impl Stats {
     pub(crate) fn days(&self, now: SystemTime) -> u64 {
         now.duration_since(self.since).unwrap_or_default().as_secs() / 86_400
     }
+    fn day_seconds(&self, end: u64) -> f64 {
+        let mut bucket = Bucket::default();
+        for (_, b) in self.hours.range(end.saturating_sub(23)..=end) {
+            bucket.add(b);
+        }
+        seconds(bucket.counts().agent_ms)
+    }
     pub(crate) fn view(&self, now: SystemTime) -> View {
         let blocks: Vec<Block> = (0..BLOCKS)
             .map(|i| {
-                let offset = i as u64 * 24;
-                let seconds = hour(now).checked_sub(offset).map_or(0.0, |end| {
-                    let mut bucket = Bucket::default();
-                    for (_, b) in self.hours.range(end.saturating_sub(23)..=end) {
-                        bucket.add(b);
-                    }
-                    seconds(bucket.counts().agent_ms)
-                });
+                let seconds = hour(now).checked_sub(i as u64 * 24).map_or(0.0, |end| self.day_seconds(end));
                 Block { agent_seconds: seconds }
             })
             .collect();
@@ -628,49 +642,52 @@ impl View {
         let merged = self.merged.as_ref().filter(|m| m.complete);
         let mut link = format!("{SHARE_BASE}#v{}", if merged.is_some() { 3 } else { 2 });
         for (key, name) in [("24h", "24h"), ("7d", "7d"), ("total", "all")] {
-            let w = &self.windows[key];
-            let c = &w.counts;
-            let _ = write!(
-                link,
-                "&{name}={}.{}.{}.{}.{}.{}.{}.{}.{}.{}",
-                c.agents,
-                c.prompts,
-                whole_seconds(c.agent_seconds),
-                whole_seconds(w.busy_seconds),
-                w.most_at_once,
-                c.tokens.out,
-                c.turns,
-                whole_seconds(c.waited_seconds),
-                c.tokens.input.saturating_add(c.tokens.cache_write),
-                c.tokens.cache_read
-            );
-            if let Some(m) = merged {
-                let _ = write!(
-                    link,
-                    ".{}",
-                    match key {
-                        "24h" => m.day,
-                        "7d" => m.week,
-                        _ => m.total,
-                    }
-                );
-            }
+            let merged_count = merged.map(|m| match key {
+                "24h" => m.day,
+                "7d" => m.week,
+                _ => m.total,
+            });
+            push_window(&mut link, name, &self.windows[key], merged_count);
         }
         let counted = usize::try_from(self.days.saturating_add(1)).unwrap_or(usize::MAX);
         let levels: Vec<u8> = self.levels(WEEKS).into_iter().take(counted).collect();
-        let mut bytes = vec![0_u8; (levels.len() * 3).div_ceil(8)];
-        for (i, level) in levels.into_iter().enumerate() {
-            for bit in 0..3 {
-                if level & (1 << (2 - bit)) != 0 {
-                    let at = i * 3 + bit;
-                    bytes[at / 8] |= 1 << (7 - at % 8);
-                }
-            }
-        }
+        let bytes = packed_levels(&levels);
         let _ =
             write!(link, "&days={}&map={}", self.days, base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes));
         link
     }
+}
+fn push_window(link: &mut String, name: &str, w: &Window, merged: Option<u64>) {
+    let c = &w.counts;
+    let _ = write!(
+        link,
+        "&{name}={}.{}.{}.{}.{}.{}.{}.{}.{}.{}",
+        c.agents,
+        c.prompts,
+        whole_seconds(c.agent_seconds),
+        whole_seconds(w.busy_seconds),
+        w.most_at_once,
+        c.tokens.out,
+        c.turns,
+        whole_seconds(c.waited_seconds),
+        c.tokens.input.saturating_add(c.tokens.cache_write),
+        c.tokens.cache_read
+    );
+    if let Some(merged) = merged {
+        let _ = write!(link, ".{merged}");
+    }
+}
+fn packed_levels(levels: &[u8]) -> Vec<u8> {
+    let mut bytes = vec![0_u8; (levels.len() * 3).div_ceil(8)];
+    for (i, level) in levels.iter().enumerate() {
+        for bit in 0..3 {
+            if level & (1 << (2 - bit)) != 0 {
+                let at = i * 3 + bit;
+                bytes[at / 8] |= 1 << (7 - at % 8);
+            }
+        }
+    }
+    bytes
 }
 #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "nonnegative seconds are bounded to u64")]
 fn whole_seconds(n: f64) -> u64 {

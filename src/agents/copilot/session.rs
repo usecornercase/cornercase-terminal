@@ -214,39 +214,45 @@ impl Session {
 
     fn refresh(&mut self) {
         self.working = presence(&self.home, &self.id, self.working);
-        let file = self.path.join("events.jsonl");
-        if let Ok(batch) = self.tail.read(&file) {
-            if batch.reset || !self.seeded {
-                self.fold = Fold::default();
-                for event in seed(&file) {
-                    self.fold.apply(&event);
-                }
-                self.fold.counted.clear();
-                self.seeded = true;
-            }
-            for event in jsonl::values(&batch.bytes) {
-                self.fold.apply(&event);
-            }
-        } else {
-            self.fold = Fold::default();
-            self.seeded = false;
-        }
-        self.activity = if self.held {
-            match self.working {
-                Some(true) if self.fold.waiting() => Some(Activity::Waiting),
-                Some(true) if self.fold.shell_only() => Some(Activity::Shell),
-                Some(true) => Some(Activity::Working),
-                Some(false) => Some(Activity::Idle),
-                None => None,
-            }
-        } else {
-            Some(Activity::Idle)
-        };
+        self.read_events(&self.path.join("events.jsonl"));
+        self.activity = self.current_activity();
         self.subagents = self.fold.subagents(SystemTime::now());
         self.context = self.fold.context();
         self.prompted = self.prompted.max(self.fold.prompted);
         self.resumable = self.fold.resumable;
         self.counted.append(&mut self.fold.counted);
+    }
+
+    fn read_events(&mut self, file: &Path) {
+        let Ok(batch) = self.tail.read(file) else {
+            self.fold = Fold::default();
+            self.seeded = false;
+            return;
+        };
+        if batch.reset || !self.seeded {
+            self.fold = Fold::default();
+            for event in seed(file) {
+                self.fold.apply(&event);
+            }
+            self.fold.counted.clear();
+            self.seeded = true;
+        }
+        for event in jsonl::values(&batch.bytes) {
+            self.fold.apply(&event);
+        }
+    }
+
+    fn current_activity(&self) -> Option<Activity> {
+        if !self.held {
+            return Some(Activity::Idle);
+        }
+        match self.working {
+            Some(true) if self.fold.waiting() => Some(Activity::Waiting),
+            Some(true) if self.fold.shell_only() => Some(Activity::Shell),
+            Some(true) => Some(Activity::Working),
+            Some(false) => Some(Activity::Idle),
+            None => None,
+        }
     }
 }
 

@@ -11,8 +11,12 @@ struct Tour {
 
 impl Tour {
     fn with(projects: usize, first_run: bool, file: Option<&Saved>) -> Self {
-        let (mut app, rx, dirs) = app_with(projects);
         let dir = TempDir::new();
+        let (mut app, rx) = new_app(dir.path().join("config.json"));
+        let dirs: Vec<TempDir> = (0..projects).map(|_| TempDir::new()).collect();
+        for project in &dirs {
+            app.open_project(project.path().to_path_buf(), AREA).expect("open project");
+        }
         let path = dir.path().join("tour.json");
         if let Some(saved) = file {
             tour::save(&path, saved).expect("saved");
@@ -34,9 +38,9 @@ impl Tour {
     }
 
     fn step(&self) -> Option<(&'static str, &'static str)> {
-        let active = self.app.tour.active.as_ref().filter(|a| a.card)?;
-        let tour = &TOURS[active.tour];
-        Some((tour.id, tour.steps[active.step].id))
+        let (tour, step, card) = self.app.messages.tour.current()?;
+        let tour = &TOURS[tour];
+        card.then_some((tour.id, tour.steps[step].id))
     }
 
     fn saved(&self) -> Saved {
@@ -86,7 +90,7 @@ mod when_it_shows {
         assert_eq!(t.step(), None);
         assert_eq!(toast(&t.app), Some(tour_card::ANNOUNCE));
         assert!(t.saved().announced);
-        t.app.toast = None;
+        t.app.messages.toast = None;
         t.offer();
         assert_eq!(toast(&t.app), None);
     }
@@ -133,7 +137,7 @@ mod completing {
     fn a_new_tab_completes_the_tabs_step() {
         let mut t = Tour::with(1, false, Some(&Saved::default()));
         t.app.start_tour(0, Some(2), true);
-        t.app.add_tab(0, 0, AREA).expect("a tab");
+        t.app.add_tab(workspace_at(&t.app, 0, 0), AREA).expect("a tab");
         t.app.offer_tour(Instant::now());
         assert_eq!(t.step(), Some((CORE, "prompt")));
     }
@@ -182,7 +186,6 @@ mod completing {
     #[test]
     fn turning_on_the_agents_section_is_the_only_setting_it_changes() {
         let mut t = Tour::with(1, false, Some(&Saved::default()));
-        t.app.config_path = t.dir.path().join("config.json");
         t.app.start_tour(0, Some(4), true);
         assert!(!t.app.config.agents_section);
         t.press(TourButton::TurnOn);
@@ -356,7 +359,7 @@ mod help {
         assert!(!help.is_empty());
         click(&mut app, help.as_position());
         assert_eq!(menu(&app), ["tour", "catalogue…", "docs", "report a bug"]);
-        assert!(!app.outbox.detach);
+        assert!(!app.take_detach());
     }
 
     #[test]
@@ -365,7 +368,7 @@ mod help {
         render(&mut app, AREA);
         let quit = app_areas(&app).quit.as_position();
         click(&mut app, quit);
-        assert!(app.outbox.detach);
+        assert!(app.take_detach());
     }
 
     #[test]
@@ -453,12 +456,12 @@ mod sections {
     #[test]
     fn a_step_about_a_panel_opens_it_and_keeps_it_for_the_next_one() {
         let mut t = started("todo", 1);
-        assert!(t.app.side == Some(Side::Todo) && t.app.panel_shown());
+        assert!(t.app.screen.side == Some(Side::Todo) && t.app.panel_shown());
         t.press(TourButton::Skip);
         assert_eq!(t.step(), Some(("todo", "send")));
-        assert_eq!(t.app.side, Some(Side::Todo));
+        assert_eq!(t.app.screen.side, Some(Side::Todo));
         t.press(TourButton::Done);
-        assert_eq!(t.app.side, None);
+        assert_eq!(t.app.screen.side, None);
     }
 
     #[test]
@@ -466,7 +469,7 @@ mod sections {
         let mut t = started("todo", 1);
         t.press(TourButton::Back);
         assert_eq!(t.step(), Some(("todo", "open")));
-        assert_eq!(t.app.side, None);
+        assert_eq!(t.app.screen.side, None);
     }
 
     #[test]
@@ -475,7 +478,7 @@ mod sections {
         t.app.toggle_todo();
         t.app.start_tour(tour_of("todo"), Some(1), true);
         t.press(TourButton::End);
-        assert_eq!(t.app.side, Some(Side::Todo));
+        assert_eq!(t.app.screen.side, Some(Side::Todo));
     }
 
     #[test]
@@ -521,6 +524,6 @@ mod sections {
         let mut t = Tour::with(1, false, Some(&Saved::default()));
         render(&mut t.app, AREA);
         t.app.start_tour(tour_of("todo"), Some(1), false);
-        assert_eq!(t.app.side, None);
+        assert_eq!(t.app.screen.side, None);
     }
 }

@@ -42,11 +42,67 @@ pub(crate) struct SavedItem {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Panel {
-    pub(crate) scroll: usize,
-    pub(crate) field: Option<Field>,
-    pub(crate) next_client: u64,
-    pub(crate) sending: std::collections::HashMap<u64, String>,
-    pub(crate) undos: Undos,
+    scroll: usize,
+    field: Option<Field>,
+    next_client: u64,
+    sending: std::collections::HashMap<u64, String>,
+    undos: Undos,
+}
+
+impl Panel {
+    pub(crate) fn scroll(&self) -> usize {
+        self.scroll
+    }
+
+    pub(crate) fn set_scroll(&mut self, scroll: usize) {
+        self.scroll = scroll;
+    }
+
+    pub(crate) fn field(&self) -> Option<&Field> {
+        self.field.as_ref()
+    }
+
+    pub(crate) fn editor_mut(&mut self) -> Option<&mut Editor> {
+        self.field.as_mut().map(|field| &mut field.editor)
+    }
+
+    pub(crate) fn start_adding(&mut self) {
+        self.field = Some(Field::default());
+    }
+
+    pub(crate) fn start_editing(&mut self, item: u64, editor: Editor) {
+        self.field = Some(Field { item: Some(item), editor });
+    }
+
+    pub(crate) fn take_field(&mut self) -> Option<Field> {
+        self.field.take()
+    }
+
+    pub(crate) fn cancel(&mut self) {
+        self.field = None;
+    }
+
+    pub(crate) fn new_client(&mut self) -> u64 {
+        let client = self.next_client;
+        self.next_client += 1;
+        client
+    }
+
+    pub(crate) fn send(&mut self, client: u64, place: String) {
+        self.sending.insert(client, place);
+    }
+
+    pub(crate) fn answered(&mut self, client: u64) -> Option<String> {
+        self.sending.remove(&client)
+    }
+
+    pub(crate) fn keep_removed(&mut self, removed: Removed) -> u64 {
+        self.undos.keep(removed)
+    }
+
+    pub(crate) fn take_removed(&mut self, undo: u64) -> Option<Removed> {
+        self.undos.take(undo)
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

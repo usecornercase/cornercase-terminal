@@ -3,7 +3,7 @@ use crate::project::group;
 
 fn named() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let (mut app, rx, dirs) = app_with(2);
-    app.add_tab(0, 0, AREA).expect("add a tab");
+    app.add_tab(workspace_at(&app, 0, 0), AREA).expect("add a tab");
     app.projects[0].name = Some("alpha".into());
     app.projects[1].name = Some("beta".into());
     app.projects[0].workspaces[0].name = Some("feat/login".into());

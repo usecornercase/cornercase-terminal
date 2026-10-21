@@ -1,5 +1,65 @@
+use std::path::Path;
+
 use super::*;
 use crate::changes::diff::{Fold, Hunk, Kind, Line, Status};
+use crate::test_util;
+
+pub(super) fn digest(dir: &Path, path: &str) -> u64 {
+    let request = git::Request {
+        dir: dir.to_path_buf(),
+        mode: Mode::Uncommitted,
+        base: None,
+        last: None,
+        previous: Vec::new(),
+        expanded: None,
+    };
+    let diff = git::load(&request).expect("load").diff.expect("diff");
+    diff.files.iter().find(|f| f.path == path).expect("the file is listed").viewed_digest
+}
+
+pub(super) fn status(dir: &Path, paths: &[&str]) -> String {
+    let mut args = vec!["status", "--porcelain", "--"];
+    args.extend(paths);
+    let out = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().expect("run git");
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+pub(super) fn write(dir: &Path, path: &str, text: &str) {
+    std::fs::write(dir.join(path), text).expect("write file");
+}
+
+pub(super) fn tracked_change(dir: &Path, kind: &str) {
+    match kind {
+        "modified" => write(dir, "a.txt", "one\nTWO\n"),
+        "staged_and_unstaged" => {
+            write(dir, "a.txt", "one\nTWO\n");
+            test_util::git(dir, &["add", "a.txt"]);
+            write(dir, "a.txt", "one\nTWO\nthree\n");
+        }
+        "deleted" => std::fs::remove_file(dir.join("a.txt")).expect("remove"),
+        "deleted_with_git_rm" => test_util::git(dir, &["rm", "--quiet", "a.txt"]),
+        "renamed" => test_util::git(dir, &["mv", "a.txt", "c.txt"]),
+        _ => {
+            test_util::git(dir, &["mv", "a.txt", "c.txt"]);
+            write(dir, "c.txt", "one\ntwo\nthree\n");
+        }
+    }
+}
+
+pub(super) fn new_change(dir: &Path, kind: &str) {
+    match kind {
+        "added_in_a_new_folder" => {
+            std::fs::create_dir(dir.join("new")).expect("folder");
+            write(dir, "new/b.txt", "b\n");
+            test_util::git(dir, &["add", "new/b.txt"]);
+        }
+        "intent_to_add" => {
+            write(dir, "b.txt", "b\n");
+            test_util::git(dir, &["add", "-N", "b.txt"]);
+        }
+        _ => write(dir, "b.txt", "b\n"),
+    }
+}
 
 fn file(path: &str, digest: u64, lines: usize) -> File {
     let line = |n| Line {
@@ -7,6 +67,7 @@ fn file(path: &str, digest: u64, lines: usize) -> File {
         old: None,
         new: Some(n),
         text: String::new(),
+        raw: None,
         syntax: None,
         emphasis: Vec::new(),
     };
@@ -21,6 +82,7 @@ fn file(path: &str, digest: u64, lines: usize) -> File {
         hunks: vec![Hunk { old_start: 1, new_start: 1, context: String::new(), lines }],
         digest,
         viewed_digest: digest,
+        staged: None,
     }
 }
 
@@ -292,7 +354,8 @@ fn forgetting_a_workspace_releases_all_its_caches_and_ignores_an_in_flight_answe
 #[test]
 fn gap_lines_come_from_the_new_side_between_two_hunks() {
     let mut f = file("a.txt", 1, 0);
-    let line = |kind, old, new| Line { kind, old, new, text: "x".into(), syntax: None, emphasis: Vec::new() };
+    let line =
+        |kind, old, new| Line { kind, old, new, text: "x".into(), raw: None, syntax: None, emphasis: Vec::new() };
     f.hunks = vec![
         Hunk { old_start: 1, new_start: 1, context: String::new(), lines: vec![line(Kind::Added, None, Some(1))] },
         Hunk { old_start: 4, new_start: 5, context: String::new(), lines: vec![line(Kind::Context, Some(4), Some(5))] },
@@ -301,6 +364,21 @@ fn gap_lines_come_from_the_new_side_between_two_hunks() {
     let gap: Vec<(u32, u32, String)> =
         gap_lines(&f, 1, &new_side).into_iter().map(|g| (g.old, g.new, g.text)).collect();
     assert_eq!(gap, [(1, 2, "line 2".into()), (2, 3, "line 3".into()), (3, 4, "line 4".into())]);
+}
+
+#[test]
+fn gap_lines_show_tabs_expanded_and_keep_their_own_text() {
+    let mut f = file("a.txt", 1, 0);
+    let line =
+        |kind, old, new| Line { kind, old, new, text: "x".into(), raw: None, syntax: None, emphasis: Vec::new() };
+    f.hunks = vec![
+        Hunk { old_start: 1, new_start: 1, context: String::new(), lines: vec![line(Kind::Added, None, Some(1))] },
+        Hunk { old_start: 3, new_start: 4, context: String::new(), lines: vec![line(Kind::Context, Some(3), Some(4))] },
+    ];
+    let new_side: Vec<String> = ["one", "\ttwo", "three", "four"].map(String::from).to_vec();
+    let gap = gap_lines(&f, 1, &new_side);
+    assert_eq!(gap.iter().map(|g| g.text.as_str()).collect::<Vec<_>>(), ["    two", "three"]);
+    assert_eq!(gap.iter().map(GapLine::source).collect::<Vec<_>>(), ["\ttwo", "three"]);
 }
 
 mod branch_picker {
@@ -475,5 +553,75 @@ mod viewed {
 
         assert!(panel.model_in(1, Mode::Uncommitted, None).is_none());
         assert!(panel.models.is_empty() && panel.requested.is_empty());
+    }
+
+    #[test]
+    fn discarding_a_file_forgets_it_and_the_pacing_of_its_workspace() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        let (generation, request) = panel.request_in(&target(1), Mode::Uncommitted, OPEN_EVERY, now).expect("request");
+        panel.loaded(1, generation, &request, Ok(loaded(Some(Diff::default()), 1)));
+        let (a, b) = (file("a", 1, 1), file("b", 2, 1));
+        panel.set_viewed(1, "a", Some(1));
+        panel.set_viewed(1, "b", Some(2));
+        panel.set_fold(1, &a, false);
+        assert!(panel.folds().contains_key(&FileKey { workspace: 1, path: "a".into() }));
+        panel.gaps.insert((FileKey { workspace: 1, path: "a".into() }, 1, 1), Arc::new(Vec::new()));
+        panel.gaps.insert((FileKey { workspace: 1, path: "b".into() }, 2, 1), Arc::new(Vec::new()));
+        assert!(panel.request_in(&target(1), Mode::Uncommitted, OPEN_EVERY, now).is_none());
+
+        panel.discarded(1, "a");
+
+        assert!(!panel.folds().contains_key(&FileKey { workspace: 1, path: "a".into() }));
+        assert!(!panel.viewed(1, &a) && panel.viewed(1, &b));
+        assert_eq!(panel.gaps.len(), 1);
+        assert!(panel.request_in(&target(1), Mode::Uncommitted, OPEN_EVERY, now).is_some());
+    }
+
+    #[test]
+    fn a_load_in_flight_during_a_discard_does_not_bring_the_file_back() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        let (generation, request) = panel.request_in(&target(1), Mode::Uncommitted, OPEN_EVERY, now).expect("request");
+        panel.loaded(1, generation, &request, Ok(loaded(Some(diff(vec![file("a", 1, 1)])), 1)));
+        let later = now + OPEN_EVERY;
+        let (stale, request) = panel.request_in(&target(1), Mode::Uncommitted, OPEN_EVERY, later).expect("request");
+
+        panel.discarded(1, "a");
+        panel.loaded(1, stale, &request, Ok(loaded(Some(diff(vec![file("a", 1, 1), file("b", 2, 1)])), 2)));
+
+        let model = panel.model_in(1, Mode::Uncommitted, None).expect("model");
+        assert_eq!(model.diff().map(|d| d.files.len()), Some(1));
+        let (fresh, request) = panel.request_in(&target(1), Mode::Uncommitted, OPEN_EVERY, later).expect("a new load");
+        panel.loaded(1, fresh, &request, Ok(loaded(Some(diff(Vec::new())), 3)));
+        let model = panel.model_in(1, Mode::Uncommitted, None).expect("model");
+        assert_eq!(model.diff().map(|d| d.files.len()), Some(0));
+    }
+}
+
+mod rescan {
+    use super::*;
+
+    #[test]
+    fn keeps_the_viewed_mark_and_drops_the_pacing() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        let (generation, request) = panel.request(&target(1), now).expect("first");
+        panel.loaded(1, generation, &request, Ok(loaded(Some(diff(vec![file("a.rs", 5, 3)])), 7)));
+        panel.set_viewed(1, "a.rs", Some(5));
+        assert!(panel.request(&target(1), now + Duration::from_millis(10)).is_none());
+        panel.rescan(1);
+        assert!(panel.request(&target(1), now + Duration::from_millis(10)).is_some());
+        assert!(panel.viewed(1, &file("a.rs", 5, 3)));
+    }
+
+    #[test]
+    fn ignores_a_load_that_started_before() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        let (generation, request) = panel.request(&target(1), now).expect("first");
+        panel.rescan(1);
+        panel.loaded(1, generation, &request, Ok(loaded(Some(diff(vec![file("a.rs", 5, 3)])), 7)));
+        assert!(panel.models.is_empty());
     }
 }

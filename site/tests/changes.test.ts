@@ -19,7 +19,123 @@ function demo(columns: number): App {
   return app;
 }
 
+function fileRow(app: App): { x: number; y: number } {
+  app.render();
+  const at = app.textAt('▸ M') ?? app.textAt('▾ M');
+  assert.ok(at);
+  return at;
+}
+
+function onRow(app: App, needle: string, y: number): number {
+  for (let nth = 0; ; nth++) {
+    const at = app.textAt(needle, nth);
+    if (!at) return -1;
+    if (at.y === y) return at.x;
+  }
+}
+
+function hover(app: App): { icon: number; check: number; y: number } {
+  const row = fileRow(app);
+  app.pointerMove(row.x + 6, row.y, 0);
+  app.render();
+  return { icon: onRow(app, '↺', row.y), check: onRow(app, '✓', row.y), y: row.y };
+}
+
+function slot(app: App, glyph: string): { x: number; y: number } {
+  const row = fileRow(app);
+  app.pointerMove(row.x + 6, row.y, 0);
+  app.render();
+  const x = onRow(app, `${glyph}  ✓`, row.y);
+  assert.ok(x >= 0);
+  return { x, y: row.y };
+}
+
+function press(app: App, x: number, y: number): void {
+  app.pointerDown(x, y, 0);
+  app.pointerUp();
+  app.render();
+}
+
 for (const columns of [140, 80]) {
+  test(`hovering a file shows the discard icon left of its check at ${columns} columns`, () => {
+    const app = demo(columns);
+    const { icon, check } = hover(app);
+    assert.ok(icon >= 0 && icon < check);
+    app.destroy();
+  });
+
+  test(`the discard icon asks, cancel keeps the file and discard drops it at ${columns} columns`, () => {
+    const app = demo(columns);
+    const files = app.changesDiff().length;
+    const { icon, y } = hover(app);
+    press(app, icon, y);
+    assert.equal(app.confirmView()?.title, 'Discard changes');
+    assert.equal(app.confirmView()?.dangerous, true);
+    assert.match(app.confirmView()?.message ?? '', /cannot be undone/);
+    const cancel = app.textAt(' cancel ');
+    assert.ok(cancel);
+    press(app, cancel.x + 1, cancel.y);
+    assert.equal(app.confirmView(), null);
+    assert.equal(app.changesDiff().length, files);
+    press(app, hover(app).icon, y);
+    const discard = app.textAt(' discard ');
+    assert.ok(discard);
+    press(app, discard.x + 1, discard.y);
+    assert.equal(app.changesDiff().length, files - 1);
+    assert.match(app.toast?.text ?? '', /^(discarded the changes to|deleted) /);
+    app.destroy();
+  });
+
+  test(`a hovered row reads ↺, +, ✓ in that order at ${columns} columns`, () => {
+    const app = demo(columns);
+    const { icon, check, y } = hover(app);
+    assert.ok(onRow(app, '↺  +  ✓', y) >= 0);
+    assert.equal(check - icon, 6);
+    assert.equal(slot(app, '+').x, check - 3);
+    app.destroy();
+  });
+
+  test(`the + stages with no dialog, the row shows ● and a second click unstages at ${columns} columns`, () => {
+    const app = demo(columns);
+    const file = app.changesDiff()[0];
+    const { x, y } = slot(app, '+');
+    press(app, x, y);
+    assert.equal(app.confirmView(), null);
+    assert.equal(app.toast, null);
+    assert.equal(app.changesStaged(file), true);
+    app.pointerMove(0, 0, 0);
+    app.render();
+    assert.ok(onRow(app, '●', y) >= 0);
+    app.pointerMove(x, y, 0);
+    app.render();
+    assert.ok(onRow(app, '−  ✓', y) >= 0);
+    press(app, x, y);
+    assert.equal(app.changesStaged(file), false);
+    app.destroy();
+  });
+
+  test(`Commits shows neither the discard icon nor the stage slot at ${columns} columns`, () => {
+    const app = demo(columns);
+    app.setChangesMode('commits');
+    const { icon, check, y } = hover(app);
+    assert.equal(icon, -1);
+    assert.equal(onRow(app, '+  ✓', y), -1);
+    assert.ok(check >= 0);
+    app.destroy();
+  });
+
+  test(`Commits has no discard icon and a click there folds the file at ${columns} columns`, () => {
+    const app = demo(columns);
+    app.setChangesMode('commits');
+    const { icon, check, y } = hover(app);
+    assert.equal(icon, -1);
+    const folded = app.changesFolded(app.changesDiff()[0]);
+    press(app, check - 2, y);
+    assert.equal(app.confirmView(), null);
+    assert.notEqual(app.changesFolded(app.changesDiff()[0]), folded);
+    app.destroy();
+  });
+
   test(`the last cell of Every project selects its scope at ${columns} columns`, () => {
     const app = demo(columns);
     app.render();
@@ -120,3 +236,99 @@ for (const columns of [140, 80]) {
     app.destroy();
   });
 }
+
+function lineRows(app: App): number[] {
+  app.render();
+  const rows: number[] = [];
+  for (let nth = 0; ; nth++) {
+    const at = app.textAt('▎', nth);
+    if (!at) return rows;
+    rows.push(at.y);
+  }
+}
+
+function pressAt(app: App, y: number): void {
+  const bar = app.textAt('▎');
+  assert.ok(bar);
+  app.pointerDown(bar.x, y, 0);
+  app.render();
+}
+
+test('pressing and dragging over diff lines selects them, and copy and ask agent act on them', () => {
+  const app = demo(140);
+  const copied: string[] = [];
+  app.on((event, detail) => {
+    if (event === 'copy') copied.push(detail ?? '');
+  });
+  const rows = lineRows(app);
+  const first = rows[0];
+  const last = rows[rows.length - 1];
+  assert.ok(first !== undefined && last !== undefined && first < last);
+  assert.ok(app.textAt('collapse all'));
+  pressAt(app, first);
+  app.pointerMove(app.areas().changes.x + 10, last, 1);
+  app.render();
+  assert.ok(app.changesSelection);
+  assert.ok(app.textAt('lines 10-16'));
+  assert.ok(app.textAt('ask agent') && app.textAt(' copy '));
+  assert.equal(app.textAt('collapse all'), null);
+  app.pointerUp();
+  const copy = app.textAt(' copy ');
+  assert.ok(copy);
+  app.pointerDown(copy.x + 1, copy.y, 0);
+  app.pointerUp();
+  assert.ok(copied.at(-1) && !copied.at(-1)?.includes('▎'));
+  assert.equal(copied.at(-1)?.split('\n').length, 12);
+  app.render();
+  const ask = app.textAt('ask agent');
+  assert.ok(ask);
+  app.pointerDown(ask.x + 1, ask.y, 0);
+  app.pointerUp();
+  assert.ok(app.toast);
+  app.destroy();
+});
+
+test('a click on a hunk header outside its buttons clears the selection', () => {
+  const app = demo(140);
+  const [first] = lineRows(app);
+  pressAt(app, first);
+  app.pointerUp();
+  app.render();
+  assert.ok(app.changesSelection && app.textAt('collapse all') === null);
+  const hunk = app.textAt('┄');
+  assert.ok(hunk);
+  app.pointerDown(hunk.x, hunk.y, 0);
+  app.pointerUp();
+  app.render();
+  assert.ok(app.textAt('collapse all'));
+  app.destroy();
+});
+
+test('folding the file drops a selection', () => {
+  const app = demo(140);
+  const [first] = lineRows(app);
+  pressAt(app, first);
+  app.pointerUp();
+  app.render();
+  const file = app.textAt('▾ M');
+  assert.ok(file && app.changesSelection);
+  press(app, file.x + 6, file.y);
+  assert.equal(app.changesSelection, null);
+  app.destroy();
+});
+
+test('a selection held at the bottom of a short panel scrolls it and moves the end', () => {
+  const app = demo(140);
+  app.resize(140, 14);
+  const [first] = lineRows(app);
+  assert.ok(first !== undefined);
+  pressAt(app, first);
+  const before = app.changesSelection?.end;
+  const panel = app.areas().changes;
+  app.pointerMove(panel.x + 10, panel.y + panel.h - 3, 1);
+  app.advance(1000);
+  assert.ok(app.changesScroll > 0);
+  assert.notDeepEqual(app.changesSelection?.end, before);
+  app.pointerUp();
+  app.destroy();
+});

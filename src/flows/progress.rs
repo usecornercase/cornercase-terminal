@@ -85,7 +85,19 @@ impl Progress {
             return None;
         }
         let target = flow.stage_of(&message.to)?;
-        let moved = match self.active {
+        let moved = self.moved(flow, message, target);
+        if self.active != Some(target) {
+            self.entry.clone_from(&moved);
+        }
+        let edge = moved.as_ref().map(|(edge, _)| *edge);
+        self.record(moved, message);
+        self.active = Some(target);
+        self.holder = Some(message.to.clone());
+        edge
+    }
+
+    fn moved(&mut self, flow: &Flow, message: &Message, target: usize) -> Option<(Edge, Option<String>)> {
+        match self.active {
             Some(active) if active == target => self.again(&message.to),
             Some(active) if target == active + 1 => Some((Edge::Forward(active), self.holder.clone())),
             Some(active) if loops_back(flow, active, target) => {
@@ -97,22 +109,17 @@ impl Progress {
             }
             None if target == 0 => None,
             from => Some((Edge::Outside { from, to: target }, self.holder.clone())),
-        };
-        if self.active != Some(target) {
-            self.entry.clone_from(&moved);
         }
-        let edge = moved.as_ref().map(|(edge, _)| *edge);
-        if let Some((edge, from)) = moved {
-            if matches!(edge, Edge::Outside { .. }) {
-                self.outside = Some(edge);
-            }
-            self.along.retain(|(e, m)| *e != edge || m.to != message.to);
-            self.along.push((edge, message.clone()));
-            self.last = Some(Step { edge, from, to: message.to.clone(), at: message.at, time: message.time });
+    }
+
+    fn record(&mut self, moved: Option<(Edge, Option<String>)>, message: &Message) {
+        let Some((edge, from)) = moved else { return };
+        if matches!(edge, Edge::Outside { .. }) {
+            self.outside = Some(edge);
         }
-        self.active = Some(target);
-        self.holder = Some(message.to.clone());
-        edge
+        self.along.retain(|(e, m)| *e != edge || m.to != message.to);
+        self.along.push((edge, message.clone()));
+        self.last = Some(Step { edge, from, to: message.to.clone(), at: message.at, time: message.time });
     }
 
     fn again(&self, to: &str) -> Option<(Edge, Option<String>)> {

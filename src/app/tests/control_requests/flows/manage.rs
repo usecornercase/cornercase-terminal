@@ -313,8 +313,7 @@ fn a_built_in_is_hidden_and_restored() {
     let hidden = removed(ok(&mut team.app, "flow-hide", &json!({"name": "quick"})));
     let again = removed(ok(&mut team.app, "flow-hide", &json!({"name": "Quick"})));
 
-    assert!(hidden.hidden && hidden.changed);
-    assert_eq!(hidden.name, "Quick");
+    assert_eq!((hidden.hidden, hidden.changed, hidden.name.as_str()), (true, true, "Quick"));
     assert!(!again.changed && again.hidden);
     assert_eq!(team.app.config.hidden_flows, ["Quick"]);
     assert!(crate::config::load(&team.config.path().join("config.json")).hidden_flows.contains(&"Quick".to_string()));
@@ -365,12 +364,12 @@ fn restoring_your_version_deletes_it_and_unhides_the_built_in() {
 #[test]
 fn restoring_what_is_shown_and_not_edited_changes_nothing() {
     let mut team = Team::new();
-    let revision = team.app.config_file.revision;
+    let revision = team.app.config_file.revision();
 
     let nothing = removed(ok(&mut team.app, "flow-restore", &json!({"name": "Quick"})));
 
     assert!(!nothing.changed && nothing.deleted.is_none());
-    assert_eq!(team.app.config_file.revision, revision);
+    assert_eq!(team.app.config_file.revision(), revision);
 }
 
 #[test]
@@ -392,7 +391,7 @@ fn a_running_flow_keeps_its_plan_when_its_flow_is_deleted() {
     removed(ok(&mut team.app, "flow-delete", &json!({"name": "Pair"})));
 
     assert_eq!(files(&yours(&team)), Vec::<String>::new());
-    assert_eq!(team.app.runs.len(), 1);
-    assert_eq!(team.app.runs[0].flow.name, "Pair");
-    assert_eq!(team.app.runs[0].workspace, run.workspace);
+    assert_eq!(team.app.runs.all().len(), 1);
+    assert_eq!(team.app.runs.all()[0].flow.name, "Pair");
+    assert_eq!(team.app.runs.all()[0].workspace, run.workspace);
 }

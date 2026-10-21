@@ -17,6 +17,7 @@ fn file(path: &str) -> Arc<File> {
         hunks: Vec::new(),
         digest: 1,
         viewed_digest: 1,
+        staged: None,
     })
 }
 
@@ -34,7 +35,7 @@ fn model(result: Result<Vec<&str>, &str>) -> Model {
 fn project(id: u64, name: &str, workspaces: &[(u64, &TempDir)]) -> Project {
     let mut project = Project::new(id, PathBuf::from(format!("/{name}")), Some(name.into()));
     for (workspace, dir) in workspaces {
-        project.workspaces.push(crate::project::Workspace::new(
+        project.workspaces.push(Workspace::new(
             *workspace,
             dir.path().to_path_buf(),
             Some(format!("w{workspace}")),
@@ -72,7 +73,7 @@ mod targets {
     fn keep_the_given_order_and_only_git_checkouts_of_open_projects() {
         let mut s = setup();
         let plain = TempDir::new();
-        s.projects[1].workspaces.push(crate::project::Workspace::new(22, plain.path().to_path_buf(), None, false));
+        s.projects[1].workspaces.push(Workspace::new(22, plain.path().to_path_buf(), None, false));
         s.projects[2].closing = true;
         let found = targets(&s.projects, &[1, 0, 2], &s.panel);
         let ids: Vec<u64> = found.iter().map(|(t, _)| t.workspace).collect();

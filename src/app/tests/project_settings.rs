@@ -48,7 +48,7 @@ fn only_a_repository_root_offers_project_settings() {
 
     let mut repo = setup(true);
     right_click(&mut repo.app, entry_pos());
-    assert_eq!(menu_labels(&repo.app), ["rename project", "project settings", "copy path"]);
+    assert_eq!(menu_labels(&repo.app), ["rename project", "project settings", "worktrees", "copy path"]);
 }
 
 #[test]

@@ -64,6 +64,7 @@ pub(crate) struct Term {
     pub(crate) setup: Option<setup::Pane>,
     pub(crate) parent: Option<u64>,
     pub(crate) collapsed: bool,
+    generation: u32,
     accounts: Accounts,
     account: accounts::Seen,
     master: Box<dyn MasterPty + Send>,
@@ -75,8 +76,8 @@ pub(crate) struct Term {
 
 #[derive(Debug)]
 pub(crate) enum Event {
-    Output(u64, Vec<u8>),
-    Exited(u64),
+    Output(u64, u32, Vec<u8>),
+    Exited(u64, u32),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,48 +98,21 @@ pub(crate) struct SpawnOptions<'a> {
     pub(crate) theme: &'a HostTheme,
 }
 
-fn pty_size(rows: u16, cols: u16) -> PtySize {
-    PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }
+struct Wired {
+    id: u64,
+    generation: u32,
+    emulator: Emulator,
+    master: Box<dyn MasterPty + Send>,
+    writer: Writer,
+    child: Box<dyn Child + Send + Sync>,
+    size: (u16, u16),
+    interactive: bool,
 }
 
-impl Term {
-    pub(crate) fn spawn<E: From<Event> + Send + 'static>(opts: SpawnOptions, tx: Sender<E>) -> Result<Self> {
-        let SpawnOptions { id, shell, args, env, remove, rows, cols, cwd, theme } = opts;
-        let pair = native_pty_system().openpty(pty_size(rows, cols)).map_err(|e| Error::OpenPty(e.into()))?;
-
-        let mut cmd = CommandBuilder::new(shell);
-        cmd.args(args);
-        cmd.env("TERM", "xterm-256color");
-        for key in agents::claude::CLAUDE_SESSION_ENV.iter().chain(&agents::copilot::SESSION_ENV) {
-            cmd.env_remove(key);
-        }
-        for (key, value) in env {
-            cmd.env(key, value);
-        }
-        for key in remove {
-            cmd.env_remove(key);
-        }
-        let dir = cwd.or_else(|| std::env::current_dir().ok());
-        if let Some(dir) = &dir {
-            cmd.cwd(dir);
-        }
-
-        let child = pair.slave.spawn_command(cmd).map_err(|e| Error::SpawnShell {
-            shell: shell.to_string(),
-            dir: dir.unwrap_or_default(),
-            cause: e.into(),
-        })?;
-        drop(pair.slave);
-
-        let reader = pair.master.try_clone_reader().map_err(|e| Error::AttachPty(e.into()))?;
-        let writer = spawn_writer(pair.master.take_writer().map_err(|e| Error::AttachPty(e.into()))?);
-        let replies = writer.clone();
-        let emulator =
-            Emulator::new(rows, cols, SCROLLBACK_BYTES, theme, Box::new(move |bytes| _ = write_to(&replies, bytes)))
-                .map_err(|e| Error::Emulator(e.into()))?;
-        spawn_reader(id, reader, tx);
-
-        Ok(Self {
+impl From<Wired> for Term {
+    fn from(wired: Wired) -> Self {
+        let Wired { id, generation, emulator, master, writer, child, size, interactive } = wired;
+        Self {
             id,
             emulator,
             agent: activity::Pane::default(),
@@ -156,14 +130,89 @@ impl Term {
             setup: None,
             parent: None,
             collapsed: false,
+            generation,
             accounts: Accounts::default(),
             account: accounts::Seen::default(),
-            master: pair.master,
+            master,
             writer,
             child,
-            size: (rows, cols),
-            interactive: args.is_empty(),
-        })
+            size,
+            interactive,
+        }
+    }
+}
+
+fn command(
+    shell: &str,
+    args: &[String],
+    env: &[(String, String)],
+    remove: &[&str],
+    dir: Option<&Path>,
+) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new(shell);
+    cmd.args(args);
+    cmd.env("TERM", "xterm-256color");
+    for key in agents::claude::CLAUDE_SESSION_ENV.iter().chain(&agents::copilot::SESSION_ENV) {
+        cmd.env_remove(key);
+    }
+    for (key, value) in env {
+        cmd.env(key, value);
+    }
+    for key in remove {
+        cmd.env_remove(key);
+    }
+    if let Some(dir) = dir {
+        cmd.cwd(dir);
+    }
+    cmd
+}
+
+fn pty_size(rows: u16, cols: u16) -> PtySize {
+    PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }
+}
+
+impl Term {
+    pub(crate) fn spawn<E: From<Event> + Send + 'static>(opts: SpawnOptions, tx: Sender<E>) -> Result<Self> {
+        Self::spawn_as(opts, 0, tx)
+    }
+
+    pub(crate) fn spawn_as<E: From<Event> + Send + 'static>(
+        opts: SpawnOptions,
+        generation: u32,
+        tx: Sender<E>,
+    ) -> Result<Self> {
+        let SpawnOptions { id, shell, args, env, remove, rows, cols, cwd, theme } = opts;
+        let pair = native_pty_system().openpty(pty_size(rows, cols)).map_err(|e| Error::OpenPty(e.into()))?;
+
+        let dir = cwd.or_else(|| std::env::current_dir().ok());
+        let cmd = command(shell, args, env, remove, dir.as_deref());
+
+        let child = pair.slave.spawn_command(cmd).map_err(|e| Error::SpawnShell {
+            shell: shell.to_string(),
+            dir: dir.unwrap_or_default(),
+            cause: e.into(),
+        })?;
+        drop(pair.slave);
+
+        let reader = pair.master.try_clone_reader().map_err(|e| Error::AttachPty(e.into()))?;
+        let writer = spawn_writer(pair.master.take_writer().map_err(|e| Error::AttachPty(e.into()))?);
+        let replies = writer.clone();
+        let emulator =
+            Emulator::new(rows, cols, SCROLLBACK_BYTES, theme, Box::new(move |bytes| _ = write_to(&replies, bytes)))
+                .map_err(|e| Error::Emulator(e.into()))?;
+        spawn_reader(id, generation, reader, tx);
+
+        let master = pair.master;
+        Ok(Wired { id, generation, emulator, master, writer, child, size: (rows, cols), interactive: args.is_empty() }
+            .into())
+    }
+
+    pub(crate) fn generation(&self) -> u32 {
+        self.generation
+    }
+
+    pub(crate) fn size(&self) -> (u16, u16) {
+        self.size
     }
 
     pub(crate) fn accounts(&self) -> &Accounts {
@@ -408,15 +457,20 @@ fn spawn_writer(mut pty: Box<dyn Write + Send>) -> Writer {
     Writer { tx, queued }
 }
 
-fn spawn_reader<E: From<Event> + Send + 'static>(id: u64, mut reader: Box<dyn Read + Send>, tx: Sender<E>) {
+fn spawn_reader<E: From<Event> + Send + 'static>(
+    id: u64,
+    generation: u32,
+    mut reader: Box<dyn Read + Send>,
+    tx: Sender<E>,
+) {
     thread::spawn(move || {
         let mut buf = vec![0u8; READ_BUFFER];
         while let Ok(n @ 1..) = reader.read(&mut buf) {
-            if tx.send(E::from(Event::Output(id, buf[..n].to_vec()))).is_err() {
+            if tx.send(E::from(Event::Output(id, generation, buf[..n].to_vec()))).is_err() {
                 return;
             }
         }
-        let _ = tx.send(E::from(Event::Exited(id)));
+        let _ = tx.send(E::from(Event::Exited(id, generation)));
     });
 }
 

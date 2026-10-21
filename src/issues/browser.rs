@@ -6,6 +6,7 @@ use crate::queue::State;
 
 mod buttons;
 mod input;
+mod naming;
 mod people;
 mod picker;
 mod token_form;
@@ -13,6 +14,7 @@ mod view;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum IssuesHit {
+    Field(usize),
     Tab(usize),
     Toggle(usize),
     Item(usize),
@@ -141,6 +143,8 @@ pub(crate) struct Agents {
     pub(crate) starts: HashMap<String, AgentStart>,
     pub(crate) prompt: String,
     pub(crate) submit: bool,
+    pub(crate) branch: String,
+    pub(crate) user: String,
 }
 
 impl Agents {
@@ -205,6 +209,24 @@ pub(crate) struct Place {
     pub(crate) worktree: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum Field {
+    #[default]
+    Branch,
+    Name,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Naming {
+    pub(crate) issue: Issue,
+    pub(crate) kind: String,
+    pub(crate) place: Option<Place>,
+    pub(crate) branch: String,
+    pub(crate) name: String,
+    pub(crate) default_name: String,
+    pub(crate) field: Field,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Pick {
     Agent,
@@ -247,6 +269,8 @@ pub(crate) enum Action {
     Load(Vec<Source>),
     Read(Issue),
     Start(Issue, String, Option<Place>),
+    Name(Issue, String, Option<Place>),
+    StartNamed(Box<Naming>),
     StartFlow(Issue, Option<Place>),
     Schedule(Issue, String, Option<Place>),
     QueueNew,
@@ -296,6 +320,7 @@ pub(crate) struct Browser {
     pub(crate) agents: Agents,
     pub(crate) accounts: Option<Accounts>,
     pub(crate) picker: Option<Picker>,
+    pub(crate) naming: Option<Naming>,
     pub(crate) places: Vec<Place>,
     pub(crate) here: usize,
     pub(crate) place: Option<usize>,

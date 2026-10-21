@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::{Instant, SystemTime};
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
@@ -5,6 +6,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::text::Line;
 
 use super::App;
+use super::agent_watch::WATCH_AGENTS_EVERY;
 use super::control::conflict;
 use super::event::AppEvent;
 use super::input::wheel;
@@ -22,12 +24,12 @@ use crate::update::{self, Install, Release, Updates};
 use crate::version;
 
 pub(super) struct UpdateState {
-    pub(super) updates: Updates,
-    pub(super) scroll: usize,
-    pub(super) restart_list: Vec<restart::Running>,
-    pub(super) listed: Option<Instant>,
-    pub(super) checks: Vec<u64>,
-    pub(super) installs: Vec<u64>,
+    updates: Updates,
+    scroll: usize,
+    restart_list: Vec<restart::Running>,
+    listed: Option<Instant>,
+    checks: Vec<u64>,
+    installs: Vec<u64>,
 }
 
 impl UpdateState {
@@ -40,6 +42,51 @@ impl UpdateState {
             checks: Vec::new(),
             installs: Vec::new(),
         }
+    }
+
+    pub(super) fn restart_exe(&self) -> PathBuf {
+        match &self.updates.install {
+            Install::Replace(exe) if self.updates.installed => exe.clone(),
+            _ => std::env::current_exe().unwrap_or_default(),
+        }
+    }
+
+    pub(super) fn looks_for_releases(&self) -> bool {
+        self.updates.enabled
+    }
+
+    pub(super) fn installed(&self) -> bool {
+        self.updates.installed
+    }
+
+    pub(super) fn available_version(&self) -> &str {
+        self.updates.available.as_ref().map_or("", |release| release.version.as_str())
+    }
+
+    pub(super) fn wait_for_check(&mut self, key: u64) {
+        self.checks.push(key);
+    }
+
+    pub(super) fn wait_for_install(&mut self, key: u64) {
+        self.installs.push(key);
+    }
+
+    pub(super) fn take_checks(&mut self) -> Vec<u64> {
+        std::mem::take(&mut self.checks)
+    }
+
+    pub(super) fn take_installs(&mut self) -> Vec<u64> {
+        std::mem::take(&mut self.installs)
+    }
+
+    #[cfg(test)]
+    pub(super) fn updates_mut(&mut self) -> &mut Updates {
+        &mut self.updates
+    }
+
+    #[cfg(test)]
+    pub(super) fn scroll(&self) -> usize {
+        self.scroll
     }
 }
 
@@ -127,7 +174,7 @@ impl App {
         {
             log::info!("update", "release found", version = release.version);
             if self.update.updates.available.as_ref().is_none_or(|known| known.version != release.version) {
-                self.toast = Some(Toast::new(UPDATE_AVAILABLE, ui::ToastIcon::Check));
+                self.messages.toast = Some(Toast::new(UPDATE_AVAILABLE, ui::ToastIcon::Check));
             }
             self.update.updates.available = Some(release);
         }
@@ -138,7 +185,15 @@ impl App {
         restart::from_report(&self.report(None))
     }
 
-    pub(super) fn list_running(&mut self, now: Instant) {
+    pub(super) fn refresh_restart_list(&mut self, now: Instant) {
+        if self.overlay.as_ref().is_some_and(Overlay::lists_running)
+            && self.update.listed.is_none_or(|at| now.saturating_duration_since(at) >= WATCH_AGENTS_EVERY)
+        {
+            self.list_running(now);
+        }
+    }
+
+    fn list_running(&mut self, now: Instant) {
         self.update.restart_list = self.running();
         self.update.listed = Some(now);
     }
@@ -203,7 +258,7 @@ impl App {
     }
 
     pub(super) fn submit_restart(&mut self) -> Option<Overlay> {
-        self.outbox.restart = true;
+        self.outbox.restart();
         None
     }
 
@@ -214,7 +269,7 @@ impl App {
                 Some(Overlay::Update(UpdateStep::Updating))
             }
             UpdateStep::Installed => {
-                self.outbox.restart = true;
+                self.outbox.restart();
                 None
             }
             UpdateStep::Manual(command) => {
@@ -286,17 +341,7 @@ impl App {
                 .map(|(version, text)| Notes { version: version.clone(), text: text.clone() })
                 .collect(),
         });
-        let none = release.is_none().then(|| {
-            if !updates.enabled {
-                NoUpdate::Disabled
-            } else if updates.answered.is_some() {
-                if updates.error.is_some() { NoUpdate::Failed } else { NoUpdate::UpToDate }
-            } else if !self.config.check_updates {
-                NoUpdate::Off
-            } else {
-                NoUpdate::Unchecked
-            }
-        });
+        let none = release.is_none().then(|| self.no_update());
         let install = match updates.install.on(update::target()) {
             Install::Replace(path) => InstallInfo::Replace { path },
             Install::Command(command) => InstallInfo::Command { command: command.into() },
@@ -311,6 +356,19 @@ impl App {
             installing: updates.installing,
             installed: updates.installed,
             install_error: updates.install_error.clone(),
+        }
+    }
+
+    fn no_update(&self) -> NoUpdate {
+        let updates = &self.update.updates;
+        if !updates.enabled {
+            NoUpdate::Disabled
+        } else if updates.answered.is_some() {
+            if updates.error.is_some() { NoUpdate::Failed } else { NoUpdate::UpToDate }
+        } else if !self.config.check_updates {
+            NoUpdate::Off
+        } else {
+            NoUpdate::Unchecked
         }
     }
 
@@ -350,6 +408,8 @@ impl App {
             submit,
             extra: None,
             cancel,
+            toggle: None,
+            waiting: false,
         })
     }
 
@@ -369,6 +429,8 @@ impl App {
             submit: RESTART_SUBMIT,
             extra: None,
             cancel: ui::CANCEL_LABEL,
+            toggle: None,
+            waiting: false,
         })
     }
 }

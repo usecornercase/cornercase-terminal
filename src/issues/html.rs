@@ -144,31 +144,34 @@ fn attributes(text: &str) -> Vec<(String, String)> {
             i += 1;
         }
         let name: String = chars[start..i].iter().collect::<String>().to_ascii_lowercase();
-        let value: String = if chars.get(i) == Some(&'=') {
-            i += 1;
-            match chars.get(i) {
-                Some(&quote) if quote == '"' || quote == '\'' => {
-                    let from = i + 1;
-                    let len = chars[from..].iter().position(|&c| c == quote).unwrap_or(chars.len() - from);
-                    i = from + len + 1;
-                    chars[from..from + len].iter().collect()
-                }
-                _ => {
-                    let from = i;
-                    while i < chars.len() && !chars[i].is_whitespace() {
-                        i += 1;
-                    }
-                    chars[from..i].iter().collect()
-                }
-            }
-        } else {
-            String::new()
-        };
+        let (value, next) = attribute_value(&chars, i);
+        i = next;
         if !name.is_empty() {
             attrs.push((name, unescape(&value)));
         }
     }
     attrs
+}
+
+fn attribute_value(chars: &[char], mut i: usize) -> (String, usize) {
+    if chars.get(i) != Some(&'=') {
+        return (String::new(), i);
+    }
+    i += 1;
+    match chars.get(i) {
+        Some(&quote) if quote == '"' || quote == '\'' => {
+            let from = i + 1;
+            let len = chars[from..].iter().position(|&c| c == quote).unwrap_or(chars.len() - from);
+            (chars[from..from + len].iter().collect(), from + len + 1)
+        }
+        _ => {
+            let from = i;
+            while i < chars.len() && !chars[i].is_whitespace() {
+                i += 1;
+            }
+            (chars[from..i].iter().collect(), i)
+        }
+    }
 }
 
 fn unescape(text: &str) -> String {

@@ -1,15 +1,17 @@
 ---
-source: src/ui/tests/accounts_bar.rs
-expression: "snapshot(&render_sized(&view, area.width, area.height))"
+source: src/ui/tests/pane_footer.rs
+expression: render(&one(shell())).backend()
 ---
-"  ⌕ search projects, workspaces, tabs                    │                                          "
+"  ⌕ search projects, workspaces, tabs                    │ $                                        "
 "                                                         │                                          "
 " Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
-"▌ cornercase (1)               │                         │                                          "
-"  shop (1)                     │                         │                                          "
+"▌ ~ (1)                        │                         │                                          "
 "                               │                         │                                          "
 "  + New                        │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
@@ -17,6 +19,4 @@ expression: "snapshot(&render_sized(&view, area.width, area.height))"
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                   Help  │                         │                                          "
-"────────────────────────────────────────────────────────────────────────────────────────────────────"
-"  claude: work ▾   codex: System ▾                                                                  "
+"  Quit                   Help  │                         │   claude: personal ▾   codex: System ▾   "

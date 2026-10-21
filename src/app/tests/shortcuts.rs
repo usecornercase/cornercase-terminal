@@ -21,7 +21,7 @@ fn keys(app: &mut App, typed: &str) {
 
 fn add_tabs(app: &mut App, n: usize) {
     for _ in 0..n {
-        app.push_tab(app.active, 0, AREA, None).expect("open a tab");
+        app.push_tab(workspace_at(app, app.active, 0), AREA, None).expect("open a tab");
     }
 }
 
@@ -270,7 +270,7 @@ fn find_opens_the_files_panel_with_its_search_taking_the_keys(#[case] typed: &st
     let mut app = with_prefix(app);
     keys(&mut app, typed);
     let workspace = app.focus().workspace.expect("a workspace");
-    assert_eq!((app.files_typing(), app.files.mode(workspace)), (true, mode));
+    assert_eq!((app.files_typing(), app.panels.files.mode(workspace)), (true, mode));
 }
 
 #[test]

@@ -172,6 +172,7 @@ export type MenuAction =
   | { kind: 'newGroup' }
   | { kind: 'mark'; panes: number[]; pending: boolean }
   | { kind: 'agentFold'; pane: number; collapsed: boolean }
+  | { kind: 'closeAgent'; pane: number }
   | { kind: 'pane'; pane: number; action: PaneAction }
   | { kind: 'base'; branch: string }
   | { kind: 'showFlow'; workspace: number }
@@ -180,6 +181,7 @@ export type MenuAction =
   | { kind: 'projectSettings'; project: number }
   | { kind: 'openIn' }
   | { kind: 'sendTodo'; todo: number; pane: number }
+  | { kind: 'worktrees'; project: number }
   | { kind: 'help'; item: HelpItem };
 
 export type HelpItem = 'tour' | 'catalogue' | 'docs' | 'bug';
@@ -219,6 +221,7 @@ export interface IssuesOverlay {
   token: { input: string; checking: boolean; error?: string; step?: 'site' | 'email' | 'workspace' | 'server' | 'token' };
   agentPick: { selected: number; filter: string } | null;
   chosen: string | null;
+  naming: { issue: string; branch: string; name: string; field: 0 | 1; error?: string } | null;
 }
 
 export interface ConfirmView {
@@ -227,6 +230,7 @@ export interface ConfirmView {
   submit: string;
   extra?: string;
   note?: string;
+  dangerous?: boolean;
 }
 
 export type Overlay =
@@ -246,6 +250,7 @@ export type Overlay =
   | { kind: 'restart'; scroll: number }
   | { kind: 'keys'; group: KeysGroup | null }
   | { kind: 'closePane'; pane: number }
+  | { kind: 'discard'; key: string; path: string; status: string; untracked: boolean; old?: string }
   | { kind: 'flowMessage'; workspace: number; edge: string; to: string | null; scroll: number }
   | import('./queue').QueueForm
   | SettingsOverlay

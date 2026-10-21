@@ -95,7 +95,7 @@ fn folds_are_saved() {
 fn a_collapsed_row_follows_its_agents() {
     let (mut app, rx, _dirs) = app_with(1);
     let claude = FakeClaude::new();
-    app.agents.claude_dir = Some(claude.dir().to_path_buf());
+    app.agents.set_claude_dir(claude.dir());
     type_line(&mut app, &claude.command_line(""));
     let shown = |app: &mut App| {
         let r = row_rect(app, WorkspaceRow::Workspace(0));
@@ -106,7 +106,7 @@ fn a_collapsed_row_follows_its_agents() {
     assert!(app.projects[0].workspaces[0].collapsed);
     wait_until("claude works", || {
         drain(&mut app, &rx);
-        let now = app.agents.watched.map_or_else(Instant::now, |at| at + WATCH_AGENTS_EVERY);
+        let now = app.agents.watched().map_or_else(Instant::now, |at| at + WATCH_AGENTS_EVERY);
         app.watch_agents(now);
         app.projects[0].workspaces[0].tabs[0].status() == Some(Status::Working)
     });

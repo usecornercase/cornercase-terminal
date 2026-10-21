@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::agent_watch::Notice;
 
 fn first_tab(app: &App, pane: u64) -> wire::Ids {
     let workspace = &app.projects[0].workspaces[0];
@@ -78,7 +79,7 @@ fn following_panes_tells_only_about_them_and_ends_once_they_all_closed() {
     let got = until_told(&mut app, &rx, "the followed pane closes", |streamed| streamed.last() == Some(&Streamed::End));
 
     assert_eq!(told(&got), [(wire::What::Closed { kind: wire::Kind::Pane }, ids)]);
-    assert!(!app.events.listening());
+    assert!(!app.clients.events.listening());
 }
 
 #[test]
@@ -89,7 +90,7 @@ fn a_pane_that_does_not_exist_cannot_be_followed() {
         error(now(&mut app, None, Command::Events(wire::Events { panes: vec![999], host: false, notices: false })));
 
     assert!(message.contains("there is no pane 999"), "{message}");
-    assert!(!app.events.listening());
+    assert!(!app.clients.events.listening());
 }
 
 #[test]
@@ -109,7 +110,7 @@ fn a_program_that_ends_is_told_by_its_name() {
     follow(&mut app, &[]);
     let pane = term(&app, 0).id;
     let typed = Launch::command(pane, "sleep 30".into(), Instant::now());
-    app.agents.launches.push(typed);
+    app.agents.launches.add(typed);
     refreshing(&mut app, &rx, "sleep runs", |app| pane_job(app, pane).is_some_and(|job| job.program == "sleep"));
 
     done(now(&mut app, None, press_keys(pane, &["ctrl+c"])));
@@ -125,10 +126,10 @@ fn a_program_that_ends_is_told_by_its_name() {
 fn programs_are_not_looked_up_while_nobody_follows() {
     let (mut app, rx, _dirs) = app_with(1);
     let id = term(&app, 0).id;
-    app.agents.launches.push(Launch::command(id, "sleep 30".into(), Instant::now()));
+    app.agents.launches.add(Launch::command(id, "sleep 30".into(), Instant::now()));
     refreshing(&mut app, &rx, "sleep runs", |app| pane(app, id).program(&app.config).as_deref() == Some("sleep"));
 
-    app.agents.watched = None;
+    app.agents.set_watched(None);
     app.refresh(Instant::now());
 
     assert_eq!(pane_job(&app, id), None);
@@ -243,13 +244,25 @@ fn notices_reach_only_the_readers_that_asked_and_a_pane_reader_gets_those_naming
     let (mut app, _rx, _dirs) = app_with(1);
     let pane = term(&app, 0).id;
     let other = done(now(&mut app, None, new_tab(None))).ids.pane.expect("a pane");
-    app.events.subscribe(CLIENT, vec![pane], false, true);
-    app.events.subscribe(CLIENT + 1, Vec::new(), false, false);
+    app.clients.events.subscribe(CLIENT, vec![pane], false, true);
+    app.clients.events.subscribe(CLIENT + 1, Vec::new(), false, false);
     let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
     let _ = app.take_events();
 
-    app.notify("claude", activity::Status::Waiting, (project, workspace), vec![other], true);
-    app.notify("claude", activity::Status::Waiting, (project, workspace), vec![pane], true);
+    app.notify(Notice {
+        agent: "claude",
+        status: activity::Status::Waiting,
+        at: (project, workspace),
+        panes: vec![other],
+        principal: true,
+    });
+    app.notify(Notice {
+        agent: "claude",
+        status: activity::Status::Waiting,
+        at: (project, workspace),
+        panes: vec![pane],
+        principal: true,
+    });
 
     let tokens: Vec<_> = app
         .take_events()
@@ -271,11 +284,17 @@ fn a_notice_says_whether_it_plays_a_sound(#[case] sound: bool) {
     let (mut app, _rx, _dirs) = app_with(1);
     app.config.sound = sound;
     let pane = term(&app, 0).id;
-    app.events.subscribe(CLIENT, Vec::new(), false, true);
+    app.clients.events.subscribe(CLIENT, Vec::new(), false, true);
     let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
     let _ = app.take_events();
 
-    app.notify("claude", activity::Status::Waiting, (project, workspace), vec![pane], true);
+    app.notify(Notice {
+        agent: "claude",
+        status: activity::Status::Waiting,
+        at: (project, workspace),
+        panes: vec![pane],
+        principal: true,
+    });
 
     let notice = app
         .take_events()
@@ -296,9 +315,21 @@ fn a_subagents_notice_plays_no_sound_unless_asked() {
     let pane = term(&app, 0).id;
     let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
 
-    app.notify("claude", activity::Status::Waiting, (project, workspace), vec![pane], false);
+    app.notify(Notice {
+        agent: "claude",
+        status: activity::Status::Waiting,
+        at: (project, workspace),
+        panes: vec![pane],
+        principal: false,
+    });
     app.config.sound_subagents = true;
-    app.notify("claude", activity::Status::Failed, (project, workspace), vec![pane], false);
+    app.notify(Notice {
+        agent: "claude",
+        status: activity::Status::Failed,
+        at: (project, workspace),
+        panes: vec![pane],
+        principal: false,
+    });
 
     let kinds: Vec<_> = app.take_sounds().into_iter().map(|cue| cue.kind).collect();
     assert_eq!(kinds, [crate::host::sound::Kind::NeedsYou]);

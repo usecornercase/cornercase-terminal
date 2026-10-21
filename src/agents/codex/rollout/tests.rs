@@ -402,3 +402,28 @@ mod counting_records {
         assert_eq!(sum(first.take()).1.out, 50);
     }
 }
+
+#[test]
+fn the_conversation_is_the_open_rollout_at_its_path_under_sessions() {
+    let fake = FakeCodex::new(ID, "gpt-5.4", false);
+    let child =
+        Running::spawn(std::process::Command::new(&fake.script).args(fake.args()).env("CODEX_HOME", fake.dir.path()));
+    let mut pane = Pane::default();
+    wait_until("the fake agent opens its rollout", || {
+        pane.update(Some(Known::Codex), &pane_look(child.pid()));
+        pane.conversation_files().is_some()
+    });
+
+    let files = pane.conversation_files().expect("files");
+
+    let relative = PathBuf::from(format!("sessions/2026/10/05/rollout-2026-10-05T12-00-00-{ID}.jsonl"));
+    assert_eq!(files, vec![(fake.rollout.clone(), relative)]);
+    fake.signal("quit", "");
+}
+
+#[test]
+fn a_rollout_outside_a_sessions_folder_has_no_conversation_to_move() {
+    let record = crate::agents::context::Record::Codex(PathBuf::from("/tmp/rollout.jsonl"));
+
+    assert_eq!(record.conversation_files(), None);
+}

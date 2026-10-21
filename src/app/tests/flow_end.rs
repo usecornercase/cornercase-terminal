@@ -24,7 +24,7 @@ fn with_run(end: End) -> Repo {
 fn answer(repo: &mut Repo, json: &str, step: u64) {
     std::fs::write(repo.tmp.path().join("gh.json"), json).expect("the answer");
     repo.app.ask_pull_requests(Instant::now() + Duration::from_mins(10 * step));
-    pump_until(&mut repo.app, &repo.rx, "gh answers", |a| a.pulls.asking.is_empty());
+    pump_until(&mut repo.app, &repo.rx, "gh answers", |a| a.git.pulls.asking.is_empty());
 }
 
 fn end(app: &App) -> ui::flow::Ending {
@@ -32,7 +32,7 @@ fn end(app: &App) -> ui::flow::Ending {
 }
 
 fn orchestrator(app: &mut App) -> &mut Term {
-    let pane = app.runs[0].pane_of(ORCHESTRATOR).expect("the orchestrator");
+    let pane = app.runs.all()[0].pane_of(ORCHESTRATOR).expect("the orchestrator");
     app.projects.pane_by_mut(pane).expect("its pane")
 }
 
@@ -45,7 +45,7 @@ fn mark(app: &mut App) {
 fn the_end_lights_once_the_pull_request_appears_and_its_tag_follows_the_checks() {
     let mut repo = with_run(End::PullRequest);
     repo.app.ask_pull_requests(Instant::now());
-    pump_until(&mut repo.app, &repo.rx, "gh fails", |a| a.pulls.asking.is_empty());
+    pump_until(&mut repo.app, &repo.rx, "gh fails", |a| a.git.pulls.asking.is_empty());
     assert_eq!((end(&repo.app).reached, end(&repo.app).pull), (false, None));
 
     answer(&mut repo, VIEW, 1);
@@ -77,7 +77,7 @@ fn the_end_stays_lit_once_the_orchestrator_marked_it_even_when_it_works_again_wi
 
     mark(&mut repo.app);
 
-    assert_eq!(repo.app.runs[0].ended.as_deref(), Some("feat/x"));
+    assert_eq!(repo.app.runs.all()[0].ended.as_deref(), Some("feat/x"));
     orchestrator(&mut repo.app).agent.update(Some(Activity::Working), true, now);
     assert!(!orchestrator(&mut repo.app).agent.pending());
     repo.app.config.pull_requests = false;
@@ -107,14 +107,14 @@ fn another_branch_forgets_the_end_and_a_detached_head_keeps_it() {
 
     git(&path, &["checkout", "--quiet", "--detach"]);
     repo.app.forget_moved_run_ends();
-    assert!(repo.app.runs[0].ended.is_some());
+    assert!(repo.app.runs.all()[0].ended.is_some());
 
     git(&path, &["checkout", "--quiet", "-b", "feat/y"]);
     repo.app.forget_moved_run_ends();
-    assert_eq!(repo.app.runs[0].ended, None);
+    assert_eq!(repo.app.runs.all()[0].ended, None);
     assert!(!orchestrator(&mut repo.app).agent.pending());
     repo.app.latch_run_ends();
-    assert_eq!(repo.app.runs[0].ended, None);
+    assert_eq!(repo.app.runs.all()[0].ended, None);
 }
 
 #[test]

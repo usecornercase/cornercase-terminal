@@ -1,0 +1,12 @@
+---
+source: src/ui/files/tests.rs
+expression: "render(&finding(\"n\", true))"
+---
+  ‹  src/main.rs                       ⌕  ▢  ×
+  4 lines · rust      open   ask agent   copy
+  ⌕ n                             1/4  ↑  ↓  ×
+
+   1   fn main() {
+   2 ▎     run();
+   3       done();
+   4   }

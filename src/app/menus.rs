@@ -93,6 +93,7 @@ pub(super) enum MenuAction {
     Pane(u64, PaneAction),
     Mark(Marked, bool),
     AgentFold(u64, bool),
+    CloseAgent(u64),
     PullRequest(u64),
     ShowFlow(u64),
     Browser,
@@ -100,6 +101,7 @@ pub(super) enum MenuAction {
     NewWorkspace(u64),
     StartFlow(u64),
     ProjectSettings(u64),
+    Worktrees(u64),
     RunSetup(u64),
     OpenIn(Subject),
     OpenWith(Subject, Opener),
@@ -107,6 +109,9 @@ pub(super) enum MenuAction {
     SendTodo { todo: u64, pane: u64 },
     Plugin { spot: Spot, index: u16, revision: u32 },
     Account(AccountItem, (u64, u64)),
+    AccountNote(AccountItem),
+    AccountsOf(AccountItem),
+    AccountMenu(u64),
     ManageAccounts,
     Help(HelpItem),
     Tour(u8),
@@ -114,7 +119,9 @@ pub(super) enum MenuAction {
 
 impl App {
     pub(super) fn menu_view(&self, at: Position, actions: &[MenuAction]) -> ui::Overlay {
-        ui::Overlay::Menu { at, items: self.menu_labels(actions) }
+        let blocker = self.menu_blocker(actions);
+        let disabled = actions.iter().map(|&action| Self::account_disabled(action, blocker.is_some())).collect();
+        ui::Overlay::Menu { at, items: self.labels_of(actions, blocker.as_deref()), disabled }
     }
 
     pub(super) fn menu_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> Result<()> {
@@ -131,10 +138,17 @@ impl App {
     }
 
     pub(super) fn menu_labels(&self, actions: &[MenuAction]) -> Vec<String> {
-        actions.iter().map(|&a| self.menu_label(a)).collect()
+        self.labels_of(actions, self.menu_blocker(actions).as_deref())
     }
 
-    fn menu_label(&self, action: MenuAction) -> String {
+    fn labels_of(&self, actions: &[MenuAction], blocker: Option<&str>) -> Vec<String> {
+        actions.iter().map(|&a| self.menu_label(a, blocker)).collect()
+    }
+
+    fn menu_label(&self, action: MenuAction, blocker: Option<&str>) -> String {
+        if let Some(label) = self.account_menu_label(action, blocker).or_else(|| self.help_menu_label(action)) {
+            return label;
+        }
         match action {
             MenuAction::Rename(target) => target.rename_label().into(),
             MenuAction::MoveToGroup(_) => "move to group".into(),
@@ -148,6 +162,7 @@ impl App {
             MenuAction::NewWorkspace(_) => "new workspace".into(),
             MenuAction::StartFlow(_) => "start a flow…".into(),
             MenuAction::ProjectSettings(_) => "project settings".into(),
+            MenuAction::Worktrees(_) => "worktrees".into(),
             MenuAction::RunSetup(_) => "run setup".into(),
             MenuAction::OpenIn(_) => "open in…".into(),
             MenuAction::OpenWith(_, opener) => opener.name().into(),
@@ -157,6 +172,7 @@ impl App {
             MenuAction::Mark(_, false) => "mark as reviewed".into(),
             MenuAction::AgentFold(_, true) => "collapse".into(),
             MenuAction::AgentFold(_, false) => "expand".into(),
+            MenuAction::CloseAgent(_) => "close agent".into(),
             MenuAction::PullRequest(workspace) => {
                 self.pull_request(workspace).map(|p| format!("pull request #{}", p.number)).unwrap_or_default()
             }
@@ -168,10 +184,7 @@ impl App {
             MenuAction::Away(via) => format!("continue on {}", via.name()),
             MenuAction::SendTodo { pane, .. } => self.todo_agent_label(pane),
             MenuAction::Plugin { index, .. } => self.plugin_label(index),
-            MenuAction::Account(item, _) => self.account_item_label(item),
-            MenuAction::ManageAccounts => "manage accounts…".into(),
-            MenuAction::Help(item) => self.help_label(item),
-            MenuAction::Tour(index) => self.tour_label(index),
+            _ => String::new(),
         }
     }
 
@@ -180,6 +193,10 @@ impl App {
             Target::Tab(_, _, tab) => self.mark_action(Marked::Tab(tab)),
             Target::Workspace(_, workspace) => self.pull_request(workspace).map(|_| MenuAction::PullRequest(workspace)),
             Target::Group(_) | Target::Project(_) => None,
+        };
+        let account = match target {
+            Target::Tab(_, _, tab) => self.account_entry(self.tab_pane(tab)),
+            _ => None,
         };
         let flow = match target {
             Target::Workspace(_, workspace) => self.run_of(workspace).map(|_| MenuAction::ShowFlow(workspace)),
@@ -201,6 +218,7 @@ impl App {
         };
         std::iter::once(MenuAction::Rename(target))
             .chain(more)
+            .chain(account)
             .chain(flow)
             .chain(setup)
             .chain(open)
@@ -210,24 +228,21 @@ impl App {
 
     pub(super) fn menu_action(&mut self, action: MenuAction, at: Position, area: Rect) -> Result<()> {
         log::info!("ui", "menu", action = format!("{action:?}"));
+        let Some(action) = self.group_action(action, at) else { return Ok(()) };
+        let Some(action) = self.project_action(action, at, area) else { return Ok(()) };
+        let Some(action) = self.agent_action(action) else { return Ok(()) };
+        match action {
+            MenuAction::Pane(pane, action) => self.pane_action(pane, action, area),
+            _ => Ok(()),
+        }
+    }
+
+    pub(in crate::app) fn group_action(&mut self, action: MenuAction, at: Position) -> Option<MenuAction> {
         match action {
             MenuAction::Rename(target) => {
                 self.overlay = self.current_name(target).map(|input| Overlay::Rename { target, input });
             }
-            MenuAction::MoveToGroup(project) => {
-                let Some(p) = self.projects.project_index(project) else { return Ok(()) };
-                let current = self.projects[p].group;
-                let mut actions: Vec<MenuAction> = self
-                    .groups
-                    .iter()
-                    .filter(|g| Some(g.id) != current)
-                    .map(|g| MenuAction::SetGroup(project, Some(g.id)))
-                    .collect();
-                if current.is_some() {
-                    actions.push(MenuAction::SetGroup(project, None));
-                }
-                self.overlay = Some(Overlay::Menu { at, actions });
-            }
+            MenuAction::MoveToGroup(project) => self.move_to_group_menu(project, at),
             MenuAction::SetGroup(project, group) => {
                 if let Some(p) = self.projects.project_index(project) {
                     self.projects[p].group = group;
@@ -236,49 +251,87 @@ impl App {
             }
             MenuAction::GroupStyle(group) => self.overlay = Some(Overlay::GroupStyle { group }),
             MenuAction::DeleteGroup(group) => self.overlay = Some(Overlay::DeleteGroup { group }),
-            MenuAction::AddProject(group) => {
-                self.nav = None;
-                self.open_picker(Some(group));
-            }
-            MenuAction::OpenProject => {
-                self.nav = None;
-                self.open_picker(None);
-            }
+            MenuAction::AddProject(group) => self.pick_project(Some(group)),
+            MenuAction::OpenProject => self.pick_project(None),
             MenuAction::NewGroup => {
-                self.nav = None;
+                self.screen.nav = None;
                 self.overlay = Some(Overlay::NewGroup { input: String::new() });
             }
             MenuAction::NewWorkspace(project) => {
                 if let Some(p) = self.projects.project_index(project) {
-                    self.nav = None;
+                    self.screen.nav = None;
                     self.ask_new_workspace(p);
                 }
             }
+            other => return Some(other),
+        }
+        None
+    }
+
+    fn move_to_group_menu(&mut self, project: u64, at: Position) {
+        let Some(p) = self.projects.project_index(project) else { return };
+        let current = self.projects[p].group;
+        let mut actions: Vec<MenuAction> = self
+            .groups
+            .iter()
+            .filter(|g| Some(g.id) != current)
+            .map(|g| MenuAction::SetGroup(project, Some(g.id)))
+            .collect();
+        if current.is_some() {
+            actions.push(MenuAction::SetGroup(project, None));
+        }
+        self.overlay = Some(Overlay::Menu { at, actions });
+    }
+
+    fn pick_project(&mut self, group: Option<u64>) {
+        self.screen.nav = None;
+        self.open_picker(group);
+    }
+
+    pub(in crate::app) fn project_action(
+        &mut self,
+        action: MenuAction,
+        at: Position,
+        area: Rect,
+    ) -> Option<MenuAction> {
+        match action {
             MenuAction::StartFlow(project) => self.open_start_flow(self.start_flow_in(project)),
             MenuAction::ProjectSettings(project) => self.open_project_settings(project),
+            MenuAction::Worktrees(project) => self.open_worktrees(Some(project)),
             MenuAction::RunSetup(workspace) => self.run_setup(workspace, area),
             MenuAction::OpenIn(subject) => self.open_in_menu(subject, at),
             MenuAction::OpenWith(subject, opener) => self.open_with(subject, opener),
             MenuAction::CopyPath(subject) => self.copy_path(subject),
-            MenuAction::Pane(pane, action) => return self.pane_action(pane, action, area),
+            MenuAction::PullRequest(workspace) => self.open_pull_request(workspace),
+            MenuAction::ShowFlow(workspace) => self.show_flow_of(workspace),
+            MenuAction::AccountMenu(pane) => self.open_account_submenu(pane, at),
+            MenuAction::AccountsOf(item) => self.open_accounts_of(item, at),
+            MenuAction::Help(item) => self.help_action(item, at),
+            MenuAction::Tour(index) => self.start_tour(usize::from(index), None, true),
+            other => return Some(other),
+        }
+        None
+    }
+
+    pub(in crate::app) fn agent_action(&mut self, action: MenuAction) -> Option<MenuAction> {
+        match action {
             MenuAction::Mark(marked, pending) => {
                 self.mark(marked, pending);
             }
             MenuAction::AgentFold(pane, collapsed) => {
                 self.set_agent_fold(pane, collapsed);
             }
-            MenuAction::PullRequest(workspace) => self.open_pull_request(workspace),
-            MenuAction::ShowFlow(workspace) => self.show_flow_of(workspace),
+            MenuAction::CloseAgent(pane) => self.ask_close_agent(pane),
             MenuAction::Browser if self.config.remote => self.open_remote(),
             MenuAction::Browser => self.open_settings_on(&settings::Row::Remote),
             MenuAction::Away(via) => self.toggle_away(via),
             MenuAction::SendTodo { todo, pane } => self.send_todo_from_panel(todo, pane, std::time::Instant::now()),
             MenuAction::Plugin { spot, index, revision } => self.run_plugin_action(spot, index, revision),
             MenuAction::Account(item, revision) => self.account_item(item, revision),
+            MenuAction::AccountNote(_) => {}
             MenuAction::ManageAccounts => self.manage_accounts(),
-            MenuAction::Help(item) => self.help_action(item, at),
-            MenuAction::Tour(index) => self.start_tour(usize::from(index), None, true),
+            other => return Some(other),
         }
-        Ok(())
+        None
     }
 }

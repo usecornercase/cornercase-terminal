@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use super::MODEL_FLAG;
 use crate::agents::context::counting::{self, Record as CountRecord, Usage as CountUsage};
-use crate::agents::context::jsonl::Tail;
+use crate::agents::context::jsonl::{Batch, Tail};
 use crate::agents::context::{Context, Look, fresh, percent};
 use crate::process;
 
@@ -60,57 +60,78 @@ pub(in crate::agents) struct Subagents {
     pub(in crate::agents) records: Vec<(PathBuf, Vec<CountRecord>)>,
 }
 
+fn modified(path: &Path) -> Option<SystemTime> {
+    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
+fn agent_files(parent: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(parent) else { return Vec::new() };
+    entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name().and_then(|s| s.to_str()).is_some_and(|s| s.starts_with("agent-"))
+                && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("jsonl"))
+        })
+        .collect()
+}
+
+impl Child {
+    fn refresh_meta(&mut self, path: &Path) {
+        self.written = modified(path);
+        let meta_path = path.with_extension("meta.json");
+        let stamp = modified(&meta_path);
+        if self.meta.as_ref().is_none_or(|(known, _)| *known != stamp) {
+            let meta = std::fs::read_to_string(&meta_path)
+                .ok()
+                .and_then(|text| serde_json::from_str(&text).ok())
+                .unwrap_or_default();
+            self.meta = Some((stamp, meta));
+        }
+    }
+
+    fn records_of(&mut self, batch: &Batch) -> Vec<CountRecord> {
+        if batch.reset {
+            self.replied = false;
+        }
+        let mut records = Vec::new();
+        for line in batch.bytes.split(|b| *b == b'\n') {
+            if line.windows(USER.len()).any(|w| w == USER.as_bytes()) {
+                self.replied = false;
+            }
+            let Some(entry) = claude_entry(line) else { continue };
+            if entry["type"] == "assistant" {
+                self.replied = matches!(entry["message"]["stop_reason"].as_str(), Some("end_turn" | "stop_sequence"));
+            }
+            records.extend(counted_claude(&entry, false));
+        }
+        records
+    }
+}
+
 impl Subagents {
     pub(in crate::agents) fn read(mut self, parent: &Path, since: SystemTime) -> Self {
-        let directory = std::fs::metadata(parent).and_then(|m| m.modified()).ok().map(|at| (parent.to_path_buf(), at));
-        if directory != self.directory {
-            let mut paths = Vec::new();
-            if let Ok(entries) = std::fs::read_dir(parent) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.file_name().and_then(|s| s.to_str()).is_some_and(|s| s.starts_with("agent-"))
-                        && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("jsonl"))
-                    {
-                        paths.push(path);
-                    }
-                }
-            }
-            self.children.retain(|path, _| paths.contains(path));
-            for path in paths {
-                self.children.entry(path).or_default();
-            }
-            self.directory = directory;
-        }
+        self.refresh_directory(parent);
         for (path, child) in &mut self.children {
-            child.written = std::fs::metadata(path).and_then(|m| m.modified()).ok();
-            let stamp = std::fs::metadata(path.with_extension("meta.json")).and_then(|m| m.modified()).ok();
-            if child.meta.as_ref().is_none_or(|(known, _)| *known != stamp) {
-                let meta = std::fs::read_to_string(path.with_extension("meta.json"))
-                    .ok()
-                    .and_then(|text| serde_json::from_str(&text).ok())
-                    .unwrap_or_default();
-                child.meta = Some((stamp, meta));
-            }
+            child.refresh_meta(path);
             if let Ok(batch) = child.tail.read_since(path, Some(since)) {
-                if batch.reset {
-                    child.replied = false;
-                }
-                let mut records = Vec::new();
-                for line in batch.bytes.split(|b| *b == b'\n') {
-                    if line.windows(USER.len()).any(|w| w == USER.as_bytes()) {
-                        child.replied = false;
-                    }
-                    let Some(entry) = claude_entry(line) else { continue };
-                    if entry["type"] == "assistant" {
-                        child.replied =
-                            matches!(entry["message"]["stop_reason"].as_str(), Some("end_turn" | "stop_sequence"));
-                    }
-                    records.extend(counted_claude(&entry, false));
-                }
-                self.records.push((path.clone(), records));
+                self.records.push((path.clone(), child.records_of(&batch)));
             }
         }
         self
+    }
+
+    fn refresh_directory(&mut self, parent: &Path) {
+        let directory = modified(parent).map(|at| (parent.to_path_buf(), at));
+        if directory == self.directory {
+            return;
+        }
+        let paths = agent_files(parent);
+        self.children.retain(|path, _| paths.contains(path));
+        for path in paths {
+            self.children.entry(path).or_default();
+        }
+        self.directory = directory;
     }
 
     pub(in crate::agents) fn running(&self) -> Vec<Running> {
@@ -152,6 +173,16 @@ pub(in crate::agents) fn live(
 pub(in crate::agents) fn transcript_path(dir: &Path, cwd: &Path, id: &str) -> Option<PathBuf> {
     let safe = !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
     safe.then(|| dir.join("projects").join(project_dir(cwd)).join(format!("{id}.jsonl")))
+}
+
+pub(in crate::agents) fn conversation_files(transcript: &Path) -> Option<Vec<(PathBuf, PathBuf)>> {
+    let relative = crate::agents::context::under(transcript, "projects")?;
+    let mut files = vec![(transcript.to_path_buf(), relative.clone())];
+    let folder = transcript.with_extension("");
+    if folder.is_dir() {
+        files.push((folder, relative.with_extension("")));
+    }
+    Some(files)
 }
 
 fn project_dir(cwd: &Path) -> String {

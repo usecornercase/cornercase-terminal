@@ -485,14 +485,17 @@ mod parsing {
 mod output {
     use super::*;
 
-    fn report() -> Report {
-        let pane = |id, program: &str, active| PaneInfo {
+    fn pane(id: u64, program: &str, active: bool) -> PaneInfo {
+        PaneInfo {
             id,
             path: Some(PathBuf::from("/home/ana/shop")),
             program: Some(program.into()),
             active,
             ..PaneInfo::default()
-        };
+        }
+    }
+
+    fn tab() -> TabInfo {
         let claude = PaneInfo {
             agent: Some("claude".into()),
             status: Some("working".into()),
@@ -501,7 +504,7 @@ mod output {
             caller: true,
             ..pane(5, "claude", false)
         };
-        let tab = TabInfo {
+        TabInfo {
             id: 3,
             name: "claude".into(),
             status: Some("working".into()),
@@ -510,8 +513,11 @@ mod output {
             custom_name: None,
             layout: None,
             controller: None,
-        };
-        let workspace = WorkspaceInfo {
+        }
+    }
+
+    fn workspace() -> WorkspaceInfo {
+        WorkspaceInfo {
             id: 2,
             name: "fix/login".into(),
             path: PathBuf::from("/home/ana/.cornercase/worktrees/shop/fix-login"),
@@ -526,15 +532,15 @@ mod output {
             custom_name: None,
             collapsed: false,
             changes: None,
-            tabs: vec![tab],
-        };
-        let project = |id, name: &str, group| ProjectInfo {
-            id,
-            name: name.into(),
-            path: format!("/home/ana/{name}").into(),
-            group,
-            ..ProjectInfo::default()
-        };
+            tabs: vec![tab()],
+        }
+    }
+
+    fn project(id: u64, name: &str, group: Option<u64>) -> ProjectInfo {
+        ProjectInfo { id, name: name.into(), path: format!("/home/ana/{name}").into(), group, ..ProjectInfo::default() }
+    }
+
+    fn report() -> Report {
         Report {
             version: "0.9.0".into(),
             boot: String::new(),
@@ -542,7 +548,7 @@ mod output {
             shown: Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) },
             groups: vec![GroupInfo { id: 8, name: "work".into(), collapsed: true, icon: String::new(), colour: 0 }],
             projects: vec![
-                ProjectInfo { workspaces: vec![workspace], ..project(1, "shop", None) },
+                ProjectInfo { workspaces: vec![workspace()], ..project(1, "shop", None) },
                 project(9, "api", Some(8)),
             ],
             keep_awake: None,
@@ -673,6 +679,7 @@ mod output {
         report.projects[0].workspaces[0].tabs[0].panes[1].role = Some("coder".into());
         report.projects[0].workspaces[0].tabs[0].panes[1].held_sends = 1;
         report.projects[0].workspaces[0].tabs[0].panes[1].draft = true;
+        report.projects[0].workspaces[0].tabs[0].panes[1].account_restart = Some("waiting".into());
 
         let text = pane_table(&report.panes()).expect("a table");
 
@@ -680,11 +687,11 @@ mod output {
             text,
             "pane\ttab\tworkspace\tproject\tprogram\tagent\tstatus\tbackground_shell\tdialog\tat_prompt\tmodel\t\
                  context\tcaller\tshown\tactive\ttab_name\tworkspace_name\tbranch\tworktree\tproject_name\tpath\t\
-                 survey\tresuming\tparent\tsubagents\trole\theld_sends\tdraft\n\
+                 survey\tresuming\tparent\tsubagents\trole\theld_sends\tdraft\taccount_restart\n\
                  4\t3\t2\t1\tzsh\t-\t-\tfalse\tfalse\ttrue\t-\t-\tfalse\ttrue\ttrue\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\tfalse\t-\t0\t-\t0\tfalse\n\
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\tfalse\t-\t0\t-\t0\tfalse\t-\n\
                  5\t3\t2\t1\tclaude\tclaude\tworking\tfalse\tfalse\t-\tOpus 5.5\t23\ttrue\tfalse\tfalse\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\ttrue\t4\t2\tcoder\t1\ttrue\n"
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\ttrue\t4\t2\tcoder\t1\ttrue\twaiting\n"
         );
     }
 
@@ -798,6 +805,19 @@ mod output {
         let pane = &mut report.projects[0].workspaces[0].tabs[0].panes[1];
         pane.status = Some(if background_shell { "working" } else { "idle" }.into());
         (pane.background_shell, pane.dialog, pane.survey) = (background_shell, dialog, survey);
+
+        let text = render(&report, Some(Path::new("/home/ana")));
+
+        assert!(text.contains(&format!("pane 5  claude  {shown}  Opus 5.5 · 23%")), "{text}");
+    }
+
+    #[rstest]
+    #[case::not_waiting(None, "working")]
+    #[case::waiting_to_restart(Some("waiting"), "working (restarts after this turn)")]
+    fn an_agent_waiting_to_restart_says_so_after_its_status(#[case] restart: Option<&str>, #[case] shown: &str) {
+        let mut report = report();
+        let pane = &mut report.projects[0].workspaces[0].tabs[0].panes[1];
+        pane.account_restart = restart.map(str::to_string);
 
         let text = render(&report, Some(Path::new("/home/ana")));
 

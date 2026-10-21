@@ -6,12 +6,7 @@ use super::{Action, Dialog, Entry, Hit, Room};
 impl Dialog {
     pub(crate) fn key(&mut self, key: KeyEvent, room: Room) -> Action {
         if self.confirm.is_some() {
-            match key.code {
-                KeyCode::Enter => return self.confirmed(),
-                KeyCode::Esc => self.confirm = None,
-                _ => {}
-            }
-            return Action::None;
+            return self.confirm_key(key);
         }
         self.notice = None;
         if self.importing.is_some() {
@@ -20,28 +15,7 @@ impl Dialog {
         }
         let typing = !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
         let Some(edit) = &mut self.edit else { return self.list_key(key) };
-        if let Some(text) = &mut edit.text {
-            if key.code == KeyCode::Esc {
-                edit.text = None;
-            } else {
-                text.editor.key(key, room.width, room.height);
-            }
-            return Action::None;
-        }
-        if let Some(field) = &mut edit.field {
-            match key.code {
-                KeyCode::Esc => edit.field = None,
-                KeyCode::Enter => edit.submit_field(),
-                KeyCode::Backspace => {
-                    field.input.pop();
-                    field.error = None;
-                }
-                KeyCode::Char(c) if typing => {
-                    field.input.push(c);
-                    field.error = None;
-                }
-                _ => {}
-            }
+        if typed_key(edit, key, typing, room) {
             return Action::None;
         }
         if edit.pick.is_some() {
@@ -49,6 +23,20 @@ impl Dialog {
             return Action::None;
         }
         edit.notice = None;
+        self.edit_key(key)
+    }
+
+    fn confirm_key(&mut self, key: KeyEvent) -> Action {
+        match key.code {
+            KeyCode::Enter => return self.confirmed(),
+            KeyCode::Esc => self.confirm = None,
+            _ => {}
+        }
+        Action::None
+    }
+
+    fn edit_key(&mut self, key: KeyEvent) -> Action {
+        let Some(edit) = &mut self.edit else { return Action::None };
         let shift = key.modifiers.contains(KeyModifiers::SHIFT);
         match key.code {
             KeyCode::Esc => return self.back(),
@@ -191,4 +179,30 @@ fn pick_key(edit: &mut Editing, key: KeyEvent, typing: bool, room: Room) {
         KeyCode::Char(c) if typing => pick.search.push(c),
         _ => {}
     }
+}
+
+fn typed_key(edit: &mut Editing, key: KeyEvent, typing: bool, room: Room) -> bool {
+    if let Some(text) = &mut edit.text {
+        if key.code == KeyCode::Esc {
+            edit.text = None;
+        } else {
+            text.editor.key(key, room.width, room.height);
+        }
+        return true;
+    }
+    let Some(field) = &mut edit.field else { return false };
+    match key.code {
+        KeyCode::Esc => edit.field = None,
+        KeyCode::Enter => edit.submit_field(),
+        KeyCode::Backspace => {
+            field.input.pop();
+            field.error = None;
+        }
+        KeyCode::Char(c) if typing => {
+            field.input.push(c);
+            field.error = None;
+        }
+        _ => {}
+    }
+    true
 }

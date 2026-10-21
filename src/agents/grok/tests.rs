@@ -116,16 +116,31 @@ fn a_finished_turn_is_idle_with_its_model_and_one_call_of_context() {
 
 #[test]
 fn permission_a_question_and_a_cancelled_turn_come_from_the_session() {
-    assert_eq!(activity_of(fixture!("grok/1.0.52/working-events.jsonl")), Activity::Working);
-    assert_eq!(activity_of(fixture!("grok/1.0.52/permission-events.jsonl")), Activity::Waiting);
-    assert_eq!(activity_of(fixture!("grok/1.0.52/question-events.jsonl")), Activity::Waiting);
-    assert_eq!(activity_of(fixture!("grok/1.0.52/question-answered-events.jsonl")), Activity::Working);
-    assert_eq!(activity_of(fixture!("grok/1.0.52/plan-open-events.jsonl")), Activity::Waiting);
-    assert_eq!(activity_of(fixture!("grok/1.0.52/plan-continued-events.jsonl")), Activity::Working);
-    assert_eq!(activity_of(fixture!("grok/1.0.52/exit-open-events.jsonl")), Activity::Waiting);
-    assert_eq!(activity_of(fixture!("grok/1.0.52/exit-continued-events.jsonl")), Activity::Working);
-    assert_eq!(activity_of(fixture!("grok/1.0.52/permission-late-resolution-events.jsonl")), Activity::Waiting);
-    assert_eq!(activity_of(fixture!("grok/1.0.52/cancelled-events.jsonl")), Activity::Idle);
+    let fixtures = [
+        fixture!("grok/1.0.52/working-events.jsonl"),
+        fixture!("grok/1.0.52/permission-events.jsonl"),
+        fixture!("grok/1.0.52/question-events.jsonl"),
+        fixture!("grok/1.0.52/question-answered-events.jsonl"),
+        fixture!("grok/1.0.52/plan-open-events.jsonl"),
+        fixture!("grok/1.0.52/plan-continued-events.jsonl"),
+        fixture!("grok/1.0.52/exit-open-events.jsonl"),
+        fixture!("grok/1.0.52/exit-continued-events.jsonl"),
+        fixture!("grok/1.0.52/permission-late-resolution-events.jsonl"),
+        fixture!("grok/1.0.52/cancelled-events.jsonl"),
+    ];
+    let expected = [
+        Activity::Working,
+        Activity::Waiting,
+        Activity::Waiting,
+        Activity::Working,
+        Activity::Waiting,
+        Activity::Working,
+        Activity::Waiting,
+        Activity::Working,
+        Activity::Waiting,
+        Activity::Idle,
+    ];
+    assert_eq!(fixtures.map(activity_of), expected);
 }
 
 fn activity_of(events: &str) -> Activity {

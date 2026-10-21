@@ -241,6 +241,18 @@ test('a repository project offers project settings, which need a real cornercase
   app.destroy();
 });
 
+test('a repository project offers worktrees, which need a real cornercase', () => {
+  const app = demo(110, 38);
+  app.openMenu({ x: 2, y: 2 }, { kind: 'project', project: app.projects[app.active].id });
+  if (app.overlay?.kind !== 'menu') return assert.fail('no menu');
+  const at = app.overlay.actions.findIndex((a) => a.kind === 'worktrees');
+  assert.ok(at >= 0);
+  assert.equal(app.menuLabel(app.overlay.actions[at]), 'worktrees');
+  app.chooseMenu(at);
+  assert.ok(shown(app, 'the demo has no worktrees on disk'));
+  app.destroy();
+});
+
 test("the Flow panel lists the run's files as it plays, and a click opens one", () => {
   const app = demo(140, 60);
   toRun(app);

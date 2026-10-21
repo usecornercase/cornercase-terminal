@@ -7,6 +7,7 @@ use crate::control::{
 };
 use crate::error::Result;
 use crate::host::pointer;
+use crate::host::theme::HostTheme;
 use crate::log;
 use crate::persist::{self, Saver};
 use crate::protocol::{self, Hello};
@@ -25,6 +26,32 @@ pub(super) enum Startup {
     Windowed,
 }
 
+fn log_attached(id: u64, hello: &Hello) {
+    log::info!(
+        "server",
+        "client attached",
+        client = id,
+        cols = hello.cols,
+        rows = hello.rows,
+        terminal = hello.terminal.as_deref().unwrap_or("unknown"),
+        notify = hello.notify.id(),
+        pointer = hello.pointer.map_or("none", pointer::Terminal::id),
+        background = if hello.theme.background.is_some() { "known" } else { "unknown" },
+        truecolor = hello.theme.truecolor,
+        images = hello.graphics.images(),
+        cell = hello.graphics.cell_size(),
+        tmux = hello.graphics.tmux.id(),
+        missing = hello.graphics.why_not(),
+        id_hi = hello.graphics.id_hi,
+        probe = hello.probe,
+        openers = if hello.openers.is_empty() {
+            "none".into()
+        } else {
+            hello.openers.iter().map(|opener| opener.id()).collect::<Vec<_>>().join(",")
+        },
+    );
+}
+
 impl Server {
     pub(super) fn started(&self) -> bool {
         self.startup != Startup::Waiting
@@ -36,29 +63,7 @@ impl Server {
             self.reject(id, OTHER_BUILD);
             return;
         }
-        log::info!(
-            "server",
-            "client attached",
-            client = id,
-            cols = hello.cols,
-            rows = hello.rows,
-            terminal = hello.terminal.as_deref().unwrap_or("unknown"),
-            notify = hello.notify.id(),
-            pointer = hello.pointer.map_or("none", pointer::Terminal::id),
-            background = if hello.theme.background.is_some() { "known" } else { "unknown" },
-            truecolor = hello.theme.truecolor,
-            images = hello.graphics.images(),
-            cell = hello.graphics.cell_size(),
-            tmux = hello.graphics.tmux.id(),
-            missing = hello.graphics.why_not(),
-            id_hi = hello.graphics.id_hi,
-            probe = hello.probe,
-            openers = if hello.openers.is_empty() {
-                "none".into()
-            } else {
-                hello.openers.iter().map(|opener| opener.id()).collect::<Vec<_>>().join(",")
-            },
-        );
+        log_attached(id, &hello);
         let Some(client) = self.client_mut(id) else { return };
         client.size = Some((hello.cols, hello.rows));
         client.notify = hello.notify;
@@ -71,16 +76,20 @@ impl Server {
         self.touch(id);
         self.fit(Some(id));
         self.app.window_attached();
+        self.first_window(id, hello.theme);
+    }
+
+    fn first_window(&mut self, id: u64, theme: HostTheme) {
         if !self.started() {
             self.startup = Startup::Windowed;
-            self.app.set_theme(hello.theme);
+            self.app.set_theme(theme);
             if let Err(e) = self.open_first_terminals() {
                 log::error!("server", "could not open a first terminal", error = e);
             }
             self.app.start_plugins();
         } else if self.startup == Startup::Headless {
             self.startup = Startup::Windowed;
-            if self.app.retheme(hello.theme) {
+            if self.app.retheme(theme) {
                 log::info!("server", "first window gives its colours to the open terminals", client = id);
             } else {
                 log::info!("server", "first window keeps the colours a client gave the terminals", client = id);

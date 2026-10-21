@@ -10,11 +10,12 @@ If you have two accounts of one agent, say a work and a personal Claude Code sub
 
 - An **account** is a folder of its own in which the agent keeps its login. cornercase hands the folder to the agent through the variable it already reads: `CLAUDE_CONFIG_DIR` for Claude Code, `CODEX_HOME` for Codex, `GEMINI_CLI_HOME` for Gemini CLI.
 - Each agent also has its **own login**, the usual one in `~/.claude`, `~/.codex` or `~/.gemini`, called *System* until you give it a name.
-- For each agent you choose the account **new tabs** start with. Tabs that are open keep the one they started with.
+- **Each pane has its own accounts**, shown in a row under it. A new tab or a split takes the accounts of the pane it comes from, and you change a pane's account from its row: an agent [restarts on it](#restart-open-agents-on-another-account), in the same conversation (Gemini CLI in a new one).
+- Each agent also has a **default** account, the one a new workspace, a new project and a script run outside cornercase start with.
 
 cornercase never reads, copies or refreshes a token: you log in with the agent itself, in its account's folder.
 
-Everything here can be done in the window (**Settings › Accounts** and the status bar at the bottom of the window) or from the command line (`cornercase account`).
+Everything here can be done in the window (**Settings › Accounts** and the row under each pane) or from the command line (`cornercase account`).
 
 ## Add an account
 
@@ -22,7 +23,7 @@ In **Settings › Accounts**, click **`+ add account`** under the agent and type
 
 <Screen
   name="settings-accounts"
-  alt="Settings › Accounts: under Claude Code its own login, called work and in use, signed in as ana@acme.dev (max) in ~/.claude, then the account personal, signed in as ana@example.com (pro), each with a rename… row, and + add account; Codex and Gemini CLI with System in use, rename… and + add account"
+  alt="Settings › Accounts: under Claude Code its own login, called work and the default, signed in as ana@acme.dev (max) in ~/.claude, then the account personal, signed in as ana@example.com (pro), each with a rename… row, and + add account; Codex and Gemini CLI with System the default, rename… and + add account"
   caption="Claude Code's own login, called work, and a personal account, each logged in."
   crop={[2, 1, 106, 24]}
 />
@@ -35,9 +36,9 @@ From the command line:
 cornercase account add claude personal --login
 ```
 
-This makes the folder and opens a tab named `personal login` that runs `claude auth login` with it. Without `--login`, [use the account](#choose-the-account-new-tabs-use), open a tab and log in as you would anywhere.
+This makes the folder and opens a tab named `personal login` that runs `claude auth login` with it. Without `--login`, [switch a shell to the account](#change-a-panes-account) and log in there as you would anywhere.
 
-An account's folder name is letters, digits, `.`, `_` and `-`, at most 32. `cornercase account list` shows each agent's own login and accounts, with their folders and names, marks the one in use, and `--check` asks each one whether it is logged in first.
+An account's folder name is letters, digits, `.`, `_` and `-`, at most 32. `cornercase account list` shows each agent's own login and accounts, with their folders and names, marks the default, and `--check` asks each one whether it is logged in first.
 
 ## Name an account
 
@@ -67,31 +68,39 @@ They are symbolic links, made again before each agent starts if one is missing. 
 Claude Code keeps your login together with each project's trust and your user-scope MCP servers in one file, `.claude.json`. That file stays with each account, so a new account asks again whether you trust a folder, and does not see MCP servers you added with `claude mcp add --scope user` in the other one. Add them again in that account.
 </Aside>
 
-## Choose the account new tabs use
+## Change a pane's account
 
-Once you have an account, a status bar along the bottom of the window, under the sidebar, the panes and the side panel, has a button per agent with accounts, such as ` claude: work ▾ `. Click it to see that agent's own login and accounts, the one in use with a check mark, and click another to use it. **manage accounts…** opens Settings › Accounts. The bar is there in every layout, the [compact one](../small-terminals/) too, and the panes give it one row while it shows. When there is no room for every button, they shorten to the account's name (` work ▾ `), and then the last ones are left out.
+Once you have an account, every pane gives its last row to its accounts, under its terminal (which is one row shorter while it shows). A pane running Claude Code, Codex or Gemini CLI shows that agent's button, such as ` claude: work ▾ `; a shell shows one button per agent with accounts, such as ` claude: work ▾  codex: System ▾ `, the accounts the agents you start there will use. The row is there in every layout, the [compact one](../small-terminals/) too, and dims with its pane when that pane is not the active one. When there is no room for every button, they shorten to the account's name (` work ▾ `), and then the last ones are left out.
+
+Click a button to see that agent's own login and accounts, the pane's with a check mark, and click another:
+
+- **An agent** [restarts on it](#restart-open-agents-on-another-account) in the same pane and conversation (Gemini CLI in a new one), at once if it is idle, else once its turn is over (` restarts on personal after this turn `, with ` cancel `). Clicking the account it still runs on cancels a waiting restart, and a third account changes where it goes.
+- **A shell at its prompt** starts again in the same place and folder with that account, so the `claude` you type next uses it. Nothing is typed into it; what you ran in it before is gone from its history.
+- **A pane running another program** (`vim`, or an agent without accounts) shows its buttons dimmed, and their menu says why nothing can change: `stop vim first`. An agent of a [flow](../flows/), one whose folder variable you set yourself (`custom`), and a pane still being set up or resuming keep their buttons as they are, but their menu also says why nothing can change, and its accounts cannot be picked.
+
+**manage accounts…** opens Settings › Accounts. Only the pane you clicked changes, even when it is not the active one, and clicking does not make it active. The right-click menu of a pane, and the ` ⋯ ` menu of a tab (for its active pane), have **account ›** with the same accounts, also when the row is turned off.
 
 <Screen
   name="account-pills"
-  alt="The status bar at the bottom of the window with Claude Code's account menu open over it: work with a check mark, personal, and manage accounts…"
-  caption="Claude Code's button opens its accounts."
-  crop={[0, 31, 32, 7]}
+  alt="The bottom of a Claude Code pane: its row with the button claude: work ▾ and Claude Code's account menu open over it: work with a check mark, personal, and manage accounts…"
+  caption="The button under a Claude Code pane opens its accounts."
+  crop={[0, 30, 56, 8]}
 />
 
-In **Settings › Accounts**, `Enter` on a row (or a click) does the same; `●` marks the one in use.
+## The default account
 
-From the command line:
+**+ Tab** opens the new tab with the accounts of the workspace's active pane, and a split with those of the pane it splits, so a tab next to a personal agent is personal too. So does `cornercase start` or `cornercase new-tab` run inside a pane (by you or by an agent there) without `--profile`: an agent on `personal` starts its helpers on `personal` too. `--account` still changes the agent it names.
+
+Each agent's **default** account is for everything that has no pane to take accounts from: a workspace without tabs, a new workspace or project, an [issue](../issues-and-agents/) or [scheduled](../queue/) agent, a [flow](../flows/), and `cornercase start` run from outside cornercase. In **Settings › Accounts**, `Enter` on a row (or a click) makes it the default; `●` marks it. Changing the default leaves every open pane as it is. From the command line:
 
 ```sh
-cornercase account use claude personal   # new claude tabs use personal
+cornercase account use claude personal   # claude's default is personal
 cornercase account use claude --system   # back to its own login
 ```
 
-Choosing changes only what starts afterwards, and only for that agent. Tabs that are open keep the account they started with, so you can have a work agent and a personal agent side by side. A split takes the accounts of the pane it splits. Typing `claude` in a new tab uses the account in use too: the folder is in the tab's environment.
-
 ### Another account once
 
-To start one agent with another account without changing the one in use, pick it in the account list that opens when you [start an issue](../issues-and-agents/) (or ahead with **account…** on its page), in the agent's account list when you start [a flow](../flows/) (one list per agent of the team that has accounts), or in the **Account** list beside the agent when you [schedule](../queue/) one. Each starts on the account in use. From the command line, `--account AGENT=ACCOUNT` (once per agent; `AGENT=` is its own login):
+To start one agent with another account without changing the default, pick it in the account list that opens when you [start an issue](../issues-and-agents/) (or ahead with **account…** on its page), in the agent's account list when you start [a flow](../flows/) (one list per agent of the team that has accounts), or in the **Account** list beside the agent when you [schedule](../queue/) one. Each starts on the default account, except a flow's lists when you start the flow from an issue, which start on the account you picked for the issue. From the command line, `--account AGENT=ACCOUNT` (once per agent; `AGENT=` is its own login):
 
 ```sh
 cornercase start claude --account claude=personal --prompt 'fix the tests'
@@ -100,20 +109,43 @@ cornercase flow run 'Full issue' --account claude=personal --prompt 'add gift ca
 cornercase queue add --at 18:00 --prompt 'update the docs' --account claude=personal
 ```
 
-If the account you picked is removed before the agent starts, nothing starts: the issue's and the flow's dialogs say so, and a scheduled agent fails when its time comes and says why. A scheduled agent with no account picked starts with the one in use at that moment. A flow's team keeps the accounts it started with if you change the one in use while it runs.
+If the account you picked is removed before the agent starts, nothing starts: the issue's and the flow's dialogs say so, and a scheduled agent fails when its time comes and says why. The schedule form keeps the account its list shows, the default when you saved it unless you picked another, even if the default changes later; only an entry added with `cornercase queue add` without `--account` starts with the default at that moment. A flow's team keeps the accounts it started with if you change the default while it runs.
 
 ### Profiles, for scripts
 
-A **profile** picks one account per agent under a name, so a script can switch several agents at once. The window never shows or changes profiles: while one is active, the buttons show its accounts, and choosing an account in the window leaves the profile.
+A **profile** picks one account per agent under a name, so a script can switch several agents at once. The window never shows or changes profiles: while one is active it is the default, and choosing a default in Settings › Accounts leaves the profile.
 
 ```sh
 cornercase profile new Work claude=work codex=work
-cornercase profile use Work        # new tabs use Work's accounts
+cornercase profile use Work        # Work's accounts are the default
 cornercase profile use --system    # every agent back to its own login
 cornercase profile list            # the active one is marked with *
 ```
 
-`profile set Work --provider codex --account personal` changes one agent of a profile, and without `--account` that agent goes back to its own login; `profile set Work --rename Job` renames it; `profile delete Work` deletes it and keeps its accounts. A profile cannot be named `system`, in any case: that name stands for every agent's own login, which `profile use --system` chooses (it also forgets the accounts chosen in the window). `--profile NAME` on `start`, `new-tab` and `flow run` uses a profile once; `--account` wins over it for its agent.
+`profile set Work --provider codex --account personal` changes one agent of a profile, and without `--account` that agent goes back to its own login; `profile set Work --rename Job` renames it; `profile delete Work` deletes it and keeps its accounts. A profile cannot be named `system`, in any case: that name stands for every agent's own login, which `profile use --system` chooses (it also forgets the defaults chosen in the window). `--profile NAME` on `start`, `new-tab` and `flow run` uses a profile once; `--account` wins over it for its agent.
+
+## Restart open agents on another account
+
+An agent reads its account when it starts, so changing it means restarting it. Choosing another account under its pane does that; to move several at once, or from a script, use the command line:
+
+```sh
+cornercase account restart claude                  # restart the open claude agents on the default
+cornercase account restart claude personal         # on personal
+cornercase account restart claude --system         # on the agent's own login
+cornercase account restart claude personal --pane 4 --pane 7
+```
+
+Without `--pane`, every Claude Code agent that runs on another account restarts. With `--pane`, only those panes do, and a pane that is a shell at its prompt, with no agent in it, starts a new shell in the same place and folder with that account, so the `claude` you type next uses it. Nothing is typed into it. A shell running another program is skipped with `stop <program> first`, and one where you are typing a command, or where a script's `send` waits for you, until the line is sent or cleared.
+
+Each agent comes back **in the same pane, in the same conversation**: cornercase stops the pane's shell, starts a new one in the same folder with the other account, and resumes the agent there (`claude --resume`, `codex resume`), with the mode it ran in. The pane keeps its place, its id and its tab. While it comes back the pane shows ` restarting claude on personal… ` with a ` cancel ` button and takes no keys, as after a restart of cornercase.
+
+- **The conversation goes along.** Claude Code and Codex keep a conversation in their account's folder, where the other account cannot see it, so cornercase first adds that conversation's files to the other account's folder (for Claude Code, its transcript and its subagents'; for Codex, its rollout) as hard links, or as checked copies when the two folders are on different disks. It never overwrites or deletes a file: if the other account already has a different file at that place, that agent is not restarted, keeps running as it was, and a message says why. Since a hard link is one file in two folders, what the agent writes after the restart shows in the old account's copy too.
+- **Gemini CLI starts a new conversation**: cornercase cannot hand it the old one, so it starts Gemini without `--resume`.
+- **Busy agents wait for their turn.** An agent that is working, waiting for your answer, or that was just sent a prompt (by you or by a script) it has not taken yet, restarts once its turn is over; meanwhile its pane shows ` restarts on personal after this turn ` with ` cancel `. Changing the default, or a profile, leaves those waiting restarts as they are; removing the account they wait for drops them, and asking to restart one on the account it already uses cancels its waiting restart. They are not saved: `cornercase kill-server` forgets them.
+- **Left as they are**: agents and shells of a [flow](../flows/) (a team keeps the accounts it started with), agents and shells whose folder variable you set yourself (`custom`), and a shell still being set up or resuming an agent. `account restart` lists them as skipped, with the reason.
+- **What does not come along**: Claude Code's rewind of past file edits (its `file-history`), and its trust in the folder, which the other account asks again. A shell in which you exported the old account's variable by hand keeps it.
+
+`cornercase status` marks an agent waiting to restart `(restarts after this turn)`, and `cornercase status --json` gives each pane with accounts its `accounts`, one per agent. Changing the default in Settings › Accounts restarts nothing.
 
 ## Which account an agent uses
 
@@ -121,23 +153,23 @@ Once you have an account, an agent's tab names it on its second line, after the 
 
 <Screen
   name="tab-account"
-  alt="The workspaces list: under feat/dark-mode, a claude tab with Opus 5.5 · work · 7% and a second claude tab with Opus 5… · personal · 12%; on the bottom row the button claude: personal ▾"
-  caption="Two Claude Code agents side by side: the second one started after switching to personal."
+  alt="The workspaces list: under feat/dark-mode, a claude tab with Opus 5.5 · work · 7% and a second claude tab with Opus 5… · personal · 12%"
+  caption="Two Claude Code agents side by side, one on work and one on personal."
   crop={[0, 14, 32, 24]}
 />
 
-**Settings › UI** has three switches, on by default and shown only once you have an account: **account** for that mark, **account switcher** for the buttons above `Usage`, and **account picker** for the account lists in the issue, flow and schedule dialogs.
+**Settings › UI** has three switches, on by default and shown only once you have an account: **account** for that mark, **account switcher** for the row under each pane (the panes' menus keep **account ›**), and **account picker** for the account lists in the issue, flow and schedule dialogs.
 
 `cornercase status --json` gives each agent's pane an `account`: the account's folder name, or `custom` when its folder variable points somewhere else (one you exported by hand). A pane without one has no `account` key. When cornercase restarts, each agent resumes its conversation with the account it had; if that account was removed meanwhile, the pane comes back as a plain shell and a message names the account.
 
 ## Plan usage per account
 
-**Usage › Limits** shows a section for each account of Claude Code and Codex, after the one for their own login, each titled by its name, and marks with `●` the account new tabs use. `cornercase usage` prints the same, and its JSON gives each entry its `account`, its `label` and whether it is `active`.
+**Usage › Limits** shows a section for each account of Claude Code and Codex, after the one for their own login, each titled by its name, and marks with `●` each agent's default account. `cornercase usage` prints the same, and its JSON gives each entry its `account`, its `label` and whether it is `active`.
 
 <Screen
   name="usage-accounts"
   alt="Usage › Limits: ● Claude Code · work · max plan with its session at 34%, then Claude Code · personal · pro plan with its session at 8%, then Codex · plus plan; each with its weekly limits"
-  caption="The limits of each account, the one in use marked."
+  caption="The limits of each account, the default marked."
   crop={[23, 1, 64, 47]}
 />
 
@@ -161,4 +193,4 @@ On macOS, Claude Code and Codex keep the login in the system keychain, under a n
 - **Tokens in the environment win.** `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `CODEX_API_KEY`, `OPENAI_API_KEY` and the like override the folder's login. cornercase leaves them as they are, and Settings › Accounts and `account list` name the ones set (never their values); unset them in the environment the server starts from if you want the accounts to decide.
 - **Gemini CLI with encrypted storage shares one login.** With `GEMINI_FORCE_ENCRYPTED_FILE_STORAGE=true`, Gemini CLI keeps its login in one keychain item for every folder, so its accounts cannot be told apart. Leave it unset to use accounts.
 - **Which agents.** Claude Code, Codex and Gemini CLI. GitHub Copilot CLI, Cursor CLI and Grok Build may keep their login in a place that does not depend on the folder, so they are left out until that is checked; opencode uses providers of its own.
-- **From a program**: the requests are `account-list`, `account-add`, `account-remove`, `account-rename`, `account-use`, `profile-list`, `profile-new`, `profile-set`, `profile-use` and `profile-delete`; `start`, `new-tab` and `flow-run` take `profile` and `accounts`, and the queue's entries `accounts`; `cornercase contract` lists the features `accounts`, `account-login` (`account-list` with `check`) and `account-switch` (`account-rename`, `account-use` and the `accounts` field). See [Scripts and agents](../scripts-and-agents/#accounts-and-profiles).
+- **From a program**: the requests are `account-list`, `account-add`, `account-remove`, `account-rename`, `account-use`, `profile-list`, `profile-new`, `profile-set`, `profile-use`, `profile-delete` and `account-restart`; `start`, `new-tab` and `flow-run` take `profile` and `accounts`, and the queue's entries `accounts`; `cornercase contract` lists the features `accounts`, `account-login` (`account-list` with `check`), `account-switch` (`account-rename`, `account-use` and the `accounts` field) and `account-restart`. See [Scripts and agents](../scripts-and-agents/#accounts-and-profiles).

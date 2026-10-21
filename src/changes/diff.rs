@@ -102,13 +102,18 @@ pub(crate) struct Line {
     pub(crate) old: Option<u32>,
     pub(crate) new: Option<u32>,
     pub(crate) text: String,
+    pub(crate) raw: Option<Box<str>>,
     pub(crate) syntax: Option<Segments>,
     pub(crate) emphasis: Vec<Range<usize>>,
 }
 
 impl Line {
     fn new(kind: Kind, old: Option<u32>, new: Option<u32>, text: &str) -> Self {
-        Self { kind, old, new, text: expand(text), syntax: None, emphasis: Vec::new() }
+        Self { kind, old, new, text: expand(text), raw: own(text), syntax: None, emphasis: Vec::new() }
+    }
+
+    pub(crate) fn source(&self) -> &str {
+        self.raw.as_deref().unwrap_or(&self.text)
     }
 }
 
@@ -171,6 +176,13 @@ impl Hunk {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Staged {
+    No,
+    Partly,
+    Yes,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct File {
     pub(crate) path: String,
@@ -182,6 +194,7 @@ pub(crate) struct File {
     pub(crate) hunks: Vec<Hunk>,
     pub(crate) digest: u64,
     pub(crate) viewed_digest: u64,
+    pub(crate) staged: Option<Staged>,
 }
 
 impl File {
@@ -216,6 +229,10 @@ pub(crate) fn expand(text: &str) -> String {
     text.trim_end_matches('\r').replace('\t', TAB)
 }
 
+pub(crate) fn own(text: &str) -> Option<Box<str>> {
+    text.contains('\t').then(|| text.into())
+}
+
 fn digest(value: impl Hash) -> u64 {
     let mut hasher = DefaultHasher::new();
     value.hash(&mut hasher);
@@ -236,36 +253,67 @@ pub(crate) fn parse(patch: &str) -> Vec<File> {
     files
 }
 
+struct Header {
+    status: Status,
+    old_path: Option<String>,
+    new_path: Option<String>,
+    renamed_from: Option<String>,
+    binary: bool,
+}
+
+impl Header {
+    fn read(lines: &[&str]) -> (Self, usize) {
+        let mut head =
+            Self { status: Status::Modified, old_path: None, new_path: None, renamed_from: None, binary: false };
+        let mut i = 1;
+        while i < lines.len() && !lines[i].starts_with("@@") {
+            head.take(lines[i]);
+            i += 1;
+        }
+        (head, i)
+    }
+
+    fn take(&mut self, line: &str) {
+        if line.starts_with("new file mode") {
+            self.status = Status::Added;
+        } else if line.starts_with("deleted file mode") {
+            self.status = Status::Deleted;
+        } else if let Some(path) = line.strip_prefix("rename from ") {
+            self.renamed_from = Some(unquote(path));
+            self.status = Status::Renamed;
+        } else if let Some(path) = line.strip_prefix("rename to ") {
+            self.new_path = Some(unquote(path));
+        } else if let Some(path) = line.strip_prefix("--- ") {
+            self.old_path = side_path(path, "a/");
+        } else if let Some(path) = line.strip_prefix("+++ ") {
+            self.new_path = side_path(path, "b/").or(self.new_path.take());
+        } else if line.starts_with("Binary files ") || line == "GIT binary patch" {
+            self.binary = true;
+        }
+    }
+}
+
 fn parse_file(lines: &[&str]) -> Option<File> {
     let header = lines.first()?.strip_prefix("diff --git ")?;
-    let mut status = Status::Modified;
-    let (mut old_path, mut new_path, mut renamed_from) = (None, None, None);
-    let mut binary = false;
-    let mut i = 1;
-    while i < lines.len() && !lines[i].starts_with("@@") {
-        let line = lines[i];
-        if line.starts_with("new file mode") {
-            status = Status::Added;
-        } else if line.starts_with("deleted file mode") {
-            status = Status::Deleted;
-        } else if let Some(path) = line.strip_prefix("rename from ") {
-            renamed_from = Some(unquote(path));
-            status = Status::Renamed;
-        } else if let Some(path) = line.strip_prefix("rename to ") {
-            new_path = Some(unquote(path));
-        } else if let Some(path) = line.strip_prefix("--- ") {
-            old_path = side_path(path, "a/");
-        } else if let Some(path) = line.strip_prefix("+++ ") {
-            new_path = side_path(path, "b/").or(new_path);
-        } else if line.starts_with("Binary files ") || line == "GIT binary patch" {
-            binary = true;
-        }
-        i += 1;
-    }
+    let (head, i) = Header::read(lines);
+    let Header { status, old_path, new_path, renamed_from, binary } = head;
     let path = new_path.or_else(|| old_path.clone()).or_else(|| header_path(header))?;
+    let mut hunks = parse_hunks(&lines[i..]);
+    let count = |kind| hunks.iter().flat_map(|h| &h.lines).filter(|l| l.kind == kind).count();
+    let (added, removed) = (count(Kind::Added), count(Kind::Removed));
+    let fold = Fold::of(&path, binary, added, removed);
+    if fold == Fold::Large {
+        hunks.clear();
+    }
+    let old_path = renamed_from.filter(|from| *from != path);
+    let digest = digest((&path, lines));
+    Some(File { digest, viewed_digest: digest, staged: None, path, old_path, status, added, removed, fold, hunks })
+}
+
+fn parse_hunks(lines: &[&str]) -> Vec<Hunk> {
     let mut hunks: Vec<Hunk> = Vec::new();
     let (mut old, mut new) = (0, 0);
-    for &line in &lines[i..] {
+    for &line in lines {
         if let Some((old_start, new_start, context)) = hunk_header(line) {
             (old, new) = (old_start, new_start);
             hunks.push(Hunk { old_start, new_start, context, lines: Vec::new() });
@@ -288,15 +336,7 @@ fn parse_file(lines: &[&str]) -> Option<File> {
         new += u32::from(kind != Kind::Removed);
         hunk.lines.push(Line::new(kind, numbers.0, numbers.1, text));
     }
-    let count = |kind| hunks.iter().flat_map(|h| &h.lines).filter(|l| l.kind == kind).count();
-    let (added, removed) = (count(Kind::Added), count(Kind::Removed));
-    let fold = Fold::of(&path, binary, added, removed);
-    if fold == Fold::Large {
-        hunks.clear();
-    }
-    let old_path = renamed_from.filter(|from| *from != path);
-    let digest = digest((&path, lines));
-    Some(File { digest, viewed_digest: digest, path, old_path, status, added, removed, fold, hunks })
+    hunks
 }
 
 fn hunk_header(line: &str) -> Option<(u32, u32, String)> {
@@ -327,31 +367,34 @@ fn unquote(raw: &str) -> String {
     let mut chars = inner.chars().peekable();
     while let Some(c) = chars.next() {
         if c != '\\' {
-            let mut buf = [0; 4];
-            bytes.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+            push_char(&mut bytes, c);
             continue;
         }
         match chars.next() {
             Some('n') => bytes.push(b'\n'),
             Some('t') => bytes.push(b'\t'),
-            Some(d @ '0'..='7') => {
-                let mut value = d.to_digit(8).unwrap_or(0);
-                for _ in 0..2 {
-                    if let Some(next) = chars.peek().and_then(|c| c.to_digit(8)) {
-                        value = value * 8 + next;
-                        chars.next();
-                    }
-                }
-                bytes.push(u8::try_from(value).unwrap_or(b'?'));
-            }
-            Some(other) => {
-                let mut buf = [0; 4];
-                bytes.extend_from_slice(other.encode_utf8(&mut buf).as_bytes());
-            }
+            Some(d @ '0'..='7') => bytes.push(octal(d, &mut chars)),
+            Some(other) => push_char(&mut bytes, other),
             None => {}
         }
     }
     String::from_utf8_lossy(&bytes).into_owned()
+}
+
+fn push_char(bytes: &mut Vec<u8>, c: char) {
+    let mut buf = [0; 4];
+    bytes.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+}
+
+fn octal(first: char, chars: &mut std::iter::Peekable<std::str::Chars>) -> u8 {
+    let mut value = first.to_digit(8).unwrap_or(0);
+    for _ in 0..2 {
+        if let Some(next) = chars.peek().and_then(|c| c.to_digit(8)) {
+            value = value * 8 + next;
+            chars.next();
+        }
+    }
+    u8::try_from(value).unwrap_or(b'?')
 }
 
 fn is_lockfile(path: &str) -> bool {
@@ -373,6 +416,7 @@ pub(super) fn untracked_file(path: &str, size: u64, bytes: Option<&[u8]>, materi
         hunks: Vec::new(),
         digest: digest((path, size, bytes)),
         viewed_digest: digest((path, size, bytes)),
+        staged: None,
     };
     let Some(bytes) = bytes.filter(|_| size <= MAX_UNTRACKED_BYTES) else { return file };
     if bytes[..bytes.len().min(BINARY_PROBE)].contains(&0) {

@@ -18,7 +18,13 @@ fn open_menu(app: &mut App) {
 }
 
 fn row(app: &App, row: WorkspaceRow) -> Position {
-    let r = ui::workspace_row(small().workspaces_list, small().pitch, &app.tab_lines(), app.scroll.workspaces, row);
+    let r = ui::workspace_row(
+        small().workspaces_list,
+        small().pitch,
+        &app.tab_lines(),
+        app.scroll.of(List::Workspaces),
+        row,
+    );
     Position::new(r.x + 3, r.y)
 }
 
@@ -26,7 +32,7 @@ fn row(app: &App, row: WorkspaceRow) -> Position {
 fn the_bar_opens_the_workspaces_of_the_active_project() {
     let (mut app, _rx) = app();
     open_menu(&mut app);
-    assert_eq!(app.nav, Some(ui::Nav::Workspaces));
+    assert_eq!(app.screen.nav, Some(ui::Nav::Workspaces));
 }
 
 #[test]
@@ -34,7 +40,7 @@ fn the_bar_opens_the_projects_without_a_project() {
     let (mut app, _rx) = app();
     app.projects.clear();
     open_menu(&mut app);
-    assert_eq!(app.nav, Some(ui::Nav::Projects));
+    assert_eq!(app.screen.nav, Some(ui::Nav::Projects));
 }
 
 #[test]
@@ -42,7 +48,7 @@ fn the_bar_closes_an_open_menu() {
     let (mut app, _rx) = app();
     open_menu(&mut app);
     open_menu(&mut app);
-    assert_eq!(app.nav, None);
+    assert_eq!(app.screen.nav, None);
 }
 
 #[test]
@@ -50,7 +56,7 @@ fn back_shows_the_projects() {
     let (mut app, _rx) = app();
     open_menu(&mut app);
     press(&mut app, small().back.as_position());
-    assert_eq!(app.nav, Some(ui::Nav::Projects));
+    assert_eq!(app.screen.nav, Some(ui::Nav::Projects));
 }
 
 #[test]
@@ -58,30 +64,31 @@ fn picking_a_project_shows_its_workspaces() {
     let (mut app, _rx, _dirs) = app_with(2);
     open_menu(&mut app);
     press(&mut app, small().back.as_position());
-    let first = ui::entry_row(small().list, small().pitch, &plain(2), app.scroll.projects, SidebarRow::Project(0))
-        .as_position();
+    let first =
+        ui::entry_row(small().list, small().pitch, &plain(2), app.scroll.of(List::Projects), SidebarRow::Project(0))
+            .as_position();
     press(&mut app, first);
-    assert_eq!((app.active, app.nav), (0, Some(ui::Nav::Workspaces)));
+    assert_eq!((app.active, app.screen.nav), (0, Some(ui::Nav::Workspaces)));
 }
 
 #[test]
 fn picking_a_tab_closes_the_menu() {
     let (mut app, _rx, _dirs) = app_with(1);
-    app.add_tab(0, 0, SMALL).expect("add a tab");
+    app.add_tab(workspace_at(&app, 0, 0), SMALL).expect("add a tab");
     open_menu(&mut app);
     let pos = row(&app, WorkspaceRow::Tab(0, 0));
     press(&mut app, pos);
-    assert_eq!((app.projects[0].workspaces[0].active, app.nav), (0, None));
+    assert_eq!((app.projects[0].workspaces[0].active, app.screen.nav), (0, None));
 }
 
 #[test]
 fn closing_a_tab_keeps_the_menu_open() {
     let (mut app, _rx, _dirs) = app_with(1);
-    app.add_tab(0, 0, SMALL).expect("add a tab");
+    app.add_tab(workspace_at(&app, 0, 0), SMALL).expect("add a tab");
     open_menu(&mut app);
     let r = ui::workspace_row(small().workspaces_list, small().pitch, &app.tab_lines(), 0, WorkspaceRow::Tab(0, 0));
     press(&mut app, ui::row_close_button(r, small().pitch).as_position());
-    assert_eq!(app.nav, Some(ui::Nav::Workspaces));
+    assert_eq!(app.screen.nav, Some(ui::Nav::Workspaces));
 }
 
 #[test]
@@ -103,7 +110,7 @@ fn the_usage_button_opens_the_usage_modal() {
     open_menu(&mut app);
     press(&mut app, small().back.as_position());
     press(&mut app, small().usage.as_position());
-    assert_eq!((matches!(app.overlay, Some(Overlay::Usage)), app.nav), (true, None));
+    assert_eq!((matches!(app.overlay, Some(Overlay::Usage)), app.screen.nav), (true, None));
 }
 
 #[test]
@@ -111,7 +118,7 @@ fn escape_closes_the_menu() {
     let (mut app, _rx) = app();
     open_menu(&mut app);
     send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
-    assert_eq!(app.nav, None);
+    assert_eq!(app.screen.nav, None);
 }
 
 #[test]
@@ -126,7 +133,7 @@ fn a_wide_terminal_closes_the_menu() {
     let (mut app, _rx) = app();
     open_menu(&mut app);
     render(&mut app, AREA);
-    assert_eq!(app.nav, None);
+    assert_eq!(app.screen.nav, None);
 }
 
 #[test]
@@ -146,7 +153,13 @@ fn with_workspace(worktree: bool) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
 }
 
 fn click_close(app: &mut App, row: WorkspaceRow) {
-    let r = ui::workspace_row(small().workspaces_list, small().pitch, &app.tab_lines(), app.scroll.workspaces, row);
+    let r = ui::workspace_row(
+        small().workspaces_list,
+        small().pitch,
+        &app.tab_lines(),
+        app.scroll.of(List::Workspaces),
+        row,
+    );
     press(app, ui::row_close_button(r, small().pitch).as_position());
 }
 
@@ -181,7 +194,7 @@ fn the_question_goes_when_its_tab_exits_by_itself() {
     click_close(&mut app, WorkspaceRow::Tab(1, 0));
     let asked = confirmation(&app).is_some();
 
-    app.close_tab(0, 1, 0);
+    app.close_tab(tab_at(&app, 0, 1, 0));
 
     pump_until(&mut app, &rx, "the question goes", |a| a.overlay.is_none());
     assert!(asked);
@@ -216,7 +229,7 @@ fn cancelling_keeps_everything_running(#[case] row: WorkspaceRow) {
     let asked = confirmation(&app).is_some();
 
     send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
-    app.nav = None;
+    app.screen.nav = None;
     app.projects[0].active = 1;
     type_in_pane(&mut app, &rx, "still");
 

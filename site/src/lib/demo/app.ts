@@ -7,11 +7,12 @@ import type { Cursor } from '../term/canvas';
 import { BOLD, Grid, type Rect, contains, rect } from '../term/grid';
 import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
-import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, workspaceDiff } from './changes';
+import { BASES, type ChangesMode, type ChangesSelection, type FileDiff, type HunkAction, type LinesAction, changesLineEdge, changesLineNear, hasChanges, hunkLines, linesReference, linesText, selectedLines, shownChanges, workspaceDiff } from './changes';
 import { TodoPanel, todoWidth } from './todo';
 import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
 import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
-import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, fileMax, foundRows, lineEdge, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
+import { type FindState, findAll, firstFrom, nearest, start as hitStart } from './find';
+import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, fileLines, fileMax, foundRows, lineEdge, lineNear, linkAt, ordered, resolveLink, reveal, selectable, selectedText, topLine, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
   GROUP_STYLES,
@@ -113,10 +114,11 @@ export const PAGE_NAMES = ['Worktrees', 'Agents', 'Accounts', 'Flows', 'Issues',
 const ACCOUNT_AGENTS = [['Claude Code', 'claude'], ['Codex', 'codex'], ['Gemini CLI', 'gemini']] as const;
 const ACCOUNT_SWITCHES = [
   ['account', 'account', 'the account an agent uses; only once you add an account'],
-  ['accountSwitcher', 'account switcher', "a bar at the bottom; only once you add an account"],
+  ['accountSwitcher', 'account switcher', "a row under each pane; only once you add an account"],
   ['accountPicker', 'account picker', 'in issues, flows and the queue; only once you add an account'],
 ] as const;
 
+const BRANCHES_NEED = 'naming issue branches needs cornercase on your computer; start an issue to edit its branch here';
 const PULL_REQUESTS_NEED = 'this needs cornercase on your computer: the demo has no GitHub';
 
 const OPEN_IN_NEEDS = 'this needs cornercase on your computer: the demo opens no other apps';
@@ -124,6 +126,8 @@ const TOUR_NEEDS = 'the guided tour needs a real cornercase: cornercase tour sta
 export const DOCS_URL = 'https://usecornercase.dev/docs/';
 export const BUG_URL = 'https://github.com/usecornercase/cornercase-terminal/issues/new';
 const HELP_LABELS: Record<HelpItem, string> = { tour: 'tour', catalogue: 'catalogue…', docs: 'docs', bug: 'report a bug' };
+const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
+const WORKTREES_NEED = 'this needs cornercase on your computer: the demo has no worktrees on disk to list';
 const SETUP_NEEDS = 'this needs cornercase on your computer: the demo runs no setup scripts';
 
 const BUILT_IN_FLOWS: [string, number, string][] = [
@@ -157,6 +161,7 @@ export interface IssuesView {
   buttons: string[];
   detail?: Line[];
   token?: { label: string; input: string; help: string[] };
+  naming?: { heading: string; fields: [string, string][]; focus: number; help: string[] };
   picking: boolean;
   error?: boolean;
 }
@@ -224,6 +229,12 @@ const REMOTES: Record<Remote, { name: string; token: string; env: string; help: 
 };
 const isRemote = (s: string): s is Remote => Object.hasOwn(REMOTES, s);
 const tokenName = (s: Remote) => `${REMOTES[s].name} ${REMOTES[s].token}`;
+
+function discardQuestion(o: { path: string; status: string; untracked: boolean }): string {
+  if (o.untracked) return `Delete ${o.path}? It is not in git, so this cannot be undone.`;
+  if (o.status === 'A') return `Discard the changes to ${o.path}? It is new, so it is deleted. This cannot be undone.`;
+  return `Discard the changes to ${o.path}? This cannot be undone.`;
+}
 
 function checkWorkspace(input: string): [string, string?] {
   const slug = input.trim().replace(/^\/+|\/+$/g, '').toLowerCase();
@@ -417,6 +428,9 @@ export class App {
   changesHeaders = new Set<number>();
   changesBase = BASES[0];
   changesScroll = 0;
+  changesSelection: ChangesSelection | null = null;
+  private changesSelecting = false;
+  private changesScrolled = -Infinity;
   changesFilter: { query: string; focused: boolean } | null = null;
   todo = new TodoPanel([
     ['Review the gift cards branch before Friday', false],
@@ -440,6 +454,8 @@ export class App {
   private linkPress: { at: Pos; link: PathLink; held: (() => void) | null } | null = null;
   private folded = new Map<string, boolean>();
   private viewed = new Set<string>();
+  private discarded = new Set<string>();
+  private staged = new Set<string>();
   nav: Nav = null;
   narration: Demo['narrate'] = english.narrate;
   groups: Group[] = [];
@@ -1001,6 +1017,52 @@ export class App {
     this.after(LINES_SCROLL_EVERY, () => this.autoScrollLines());
   }
 
+  private autoScrollChangesLines(): void {
+    const h = this.hover;
+    const picked = this.changesSelection && selectedLines(this, shownChanges(this, this.areas()));
+    if (!this.changesSelecting || !this.changesSelection || !picked || !h || this.now() - this.changesScrolled < LINES_SCROLL_EVERY) return;
+    const edge = changesLineEdge(this, h.y);
+    if (!edge) return;
+    this.scrollChanges(edge.delta, edge.max);
+    this.extendChangesSelection(picked.file, h.y);
+    this.changesScrolled = this.now();
+    this.dirty();
+    this.after(LINES_SCROLL_EVERY, () => this.autoScrollChangesLines());
+  }
+
+  private extendChangesSelection(file: number, y: number): void {
+    const end = changesLineNear(this, file, y);
+    if (end && this.changesSelection) this.changesSelection.end = end;
+  }
+
+  selectChangesLine(f: FileDiff, h: number, l: number): void {
+    this.changesSelection = { key: this.fileKey(f), before: f.change.before, after: f.change.after, anchor: [h, l], end: [h, l] };
+    this.changesSelecting = true;
+    this.dirty();
+  }
+
+  clearChangesSelection(): void {
+    if (!this.changesSelection) return;
+    this.changesSelection = null;
+    this.dirty();
+  }
+
+  private dropChangesSelection(key: string): void {
+    if (this.changesSelection?.key === key) this.changesSelection = null;
+  }
+
+  changesLinesAction(action: LinesAction): void {
+    const picked = selectedLines(this, shownChanges(this, this.areas()));
+    const f = picked && this.changesDiff()[picked.file];
+    const w = f && (f.owner?.workspace ?? this.workspace());
+    if (!picked || !f || !w) return;
+    if (action === 'copy') {
+      this.emit('copy', linesText(f, picked.from, picked.to));
+      this.notify('copied to clipboard');
+    } else this.askAgent(w, linesReference(f, picked.from, picked.to));
+    this.dirty();
+  }
+
   private autoScroll(): void {
     const d = this.rowDrag;
     const h = this.hover;
@@ -1176,6 +1238,7 @@ export class App {
     if (o?.kind === 'closeWorkspace') return { title: 'Close workspace', message: this.closeWorkspaceMessage(o.project, o.workspace), submit: 'close' };
     if (o?.kind === 'closeTab') return { title: 'Close tab', message: this.closeTabMessage(o.project, o.workspace, o.tab), submit: 'close' };
     if (o?.kind === 'closePane') return { title: 'Close pane', message: this.closePaneMessage(o.pane), submit: 'close' };
+    if (o?.kind === 'discard') return { title: 'Discard changes', message: discardQuestion(o), submit: 'discard', dangerous: true };
     return null;
   }
 
@@ -1192,6 +1255,27 @@ export class App {
       if (at) this.closeTab(at.p, at.w, at.t);
     } else if (o?.kind === 'deleteGroup') this.deleteGroup(o.group);
     else if (o?.kind === 'closePane') this.paneAction(o.pane, 'close pane');
+    else if (o?.kind === 'discard') this.submitDiscard(o);
+  }
+
+  askDiscard(f: FileDiff): void {
+    const status = f.change.untracked ? '?' : f.change.status;
+    this.overlay = { kind: 'discard', key: this.fileKey(f), path: f.change.path, status, untracked: !!f.change.untracked };
+    this.dirty();
+  }
+
+  private submitDiscard(o: { key: string; path: string; status: string; untracked: boolean }): void {
+    this.dropChangesSelection(o.key);
+    this.discarded.add(o.key);
+    this.staged.delete(o.key);
+    this.viewed.delete(o.key);
+    this.folded.delete(`project:${o.key}`);
+    this.folded.delete(`every:${o.key}`);
+    this.notify(o.untracked || o.status === 'A' ? `deleted ${o.path}` : `discarded the changes to ${o.path}`, 'done');
+  }
+
+  private kept(p: Project, w: Workspace, mode: ChangesMode): FileDiff[] {
+    return workspaceDiff(p, w, mode).filter((f) => !this.discarded.has(`${w.id}:${f.change.path}`));
   }
 
   closePaneMessage(id: number): string {
@@ -1558,16 +1642,16 @@ export class App {
       return order.flatMap((row) => {
         if (row.kind !== 'project') return [];
         const p = this.projects[row.p];
-        return p.workspaces.filter(hasChanges).flatMap((w) => workspaceDiff(p, w, 'uncommitted'));
+        return p.workspaces.filter(hasChanges).flatMap((w) => this.kept(p, w, 'uncommitted'));
       });
     }
-    return p && w ? workspaceDiff(p, w, this.changesMode) : [];
+    return p && w ? this.kept(p, w, this.changesMode) : [];
   }
 
   activeChangesDiff(): FileDiff[] {
     const p = this.project();
     const w = this.workspace();
-    return p && w ? workspaceDiff(p, w, this.changesScope === 'every' && this.changesShown() ? 'uncommitted' : this.changesMode) : [];
+    return p && w ? this.kept(p, w, this.changesScope === 'every' && this.changesShown() ? 'uncommitted' : this.changesMode) : [];
   }
 
   setChangesScope(scope: 'project' | 'every'): void {
@@ -1585,7 +1669,7 @@ export class App {
     return `${this.changesScope}:${this.fileKey(f)}`;
   }
 
-  private fileKey(f: FileDiff): string {
+  fileKey(f: FileDiff): string {
     return `${f.owner?.workspace.id ?? this.workspace()?.id}:${f.change.path}`;
   }
 
@@ -1735,7 +1819,7 @@ export class App {
   filesMap(): Map<string, string> {
     const p = this.project();
     const w = this.workspace();
-    const files = workspaceFiles(p, w, p && w ? workspaceDiff(p, w, 'all') : []);
+    const files = workspaceFiles(p, w, p && w ? this.kept(p, w, 'all') : []);
     const path = this.filesPlace()?.viewer?.path;
     if (path?.startsWith('/')) {
       const text = this.linkedFiles().get(path);
@@ -1751,7 +1835,7 @@ export class App {
     ]);
     for (const p of this.projects)
       for (const w of p.workspaces)
-        for (const [path, text] of workspaceFiles(p, w, workspaceDiff(p, w, 'all')))
+        for (const [path, text] of workspaceFiles(p, w, this.kept(p, w, 'all')))
           files.set(absolutePath(`${w.root}/${path}`), text);
     for (const run of this.runs) for (const f of run.files) files.set(`${RUN_DIR}/${f.name}`, f.text);
     return files;
@@ -1822,7 +1906,7 @@ export class App {
     this.dirty();
   }
 
-  showFile(path: string, lines: [number, number] | null = null, find: string | null = null): void {
+  showFile(path: string, lines: [number, number] | null = null, find: FindState | null = null): void {
     const place = this.filesPlace();
     if (place) viewFile(place, path, lines, find);
     this.files.full = false;
@@ -1837,10 +1921,11 @@ export class App {
     const query = wanted(place);
     const rows = foundRows(this.filesMap(), place);
     const row = rows.slice(i).find((r) => r.kind !== 'file');
+    const focused = place.focused;
     place.focused = false;
     place.selected = selectable(rows).filter((r) => r < i).length;
     if (row?.kind === 'name') this.showFile(row.path);
-    else if (row?.kind === 'line') this.showFile(row.path, [row.n, row.n], query);
+    else if (row?.kind === 'line') this.showFile(row.path, [row.n, row.n], query ? { query, focused, at: [row.n, 0] } : null);
     else this.dirty();
   }
 
@@ -1860,6 +1945,7 @@ export class App {
   private filesKey(k: Key): boolean {
     const place = this.filesPlace();
     if (!place) return false;
+    if (place.viewer) return this.findKey(k);
     const ch = this.typed(k);
     if (k.key === 'Escape' && !place.query) return this.closePanel();
     if (k.key === 'Escape') Object.assign(place, { query: '', focused: false, selected: 0, scroll: 0 });
@@ -1869,6 +1955,73 @@ export class App {
     } else if (k.key === 'ArrowUp' || k.key === 'ArrowDown') this.moveFound(place, k.key === 'ArrowUp' ? -1 : 1);
     else if (k.key === 'Backspace') this.editFilesQuery([...place.query].slice(0, -1).join(''));
     else if (ch) this.editFilesQuery(place.query + ch);
+    this.dirty();
+    return true;
+  }
+
+  openFind(): void {
+    const viewer = this.filesPlace()?.viewer;
+    if (!viewer) return;
+    if (viewer.find) viewer.find.focused = true;
+    else viewer.find = { query: '', focused: true, at: [topLine(this), 0] };
+    this.dirty();
+  }
+
+  closeFind(): void {
+    const viewer = this.filesPlace()?.viewer;
+    if (viewer) viewer.find = null;
+    this.dirty();
+  }
+
+  private findHits(): ReturnType<typeof findAll> {
+    const viewer = this.filesPlace()?.viewer;
+    return viewer?.find ? findAll(fileLines(this.filesMap(), viewer), viewer.find.query) : [];
+  }
+
+  private revealFind(): void {
+    const viewer = this.filesPlace()?.viewer;
+    const hits = this.findHits();
+    const now = viewer?.find ? nearest(hits, viewer.find.at) : null;
+    const scroll = now === null ? null : reveal(this, hits[now].line);
+    if (viewer && scroll !== null) viewer.scroll = scroll;
+  }
+
+  editFind(query: string): void {
+    const viewer = this.filesPlace()?.viewer;
+    if (!viewer?.find) return;
+    const top = topLine(this);
+    viewer.find.query = query;
+    viewer.find.focused = true;
+    const hits = this.findHits();
+    const first = firstFrom(hits, [top, 0]);
+    viewer.find.at = first === null ? [top, 0] : hitStart(hits[first]);
+    this.revealFind();
+    this.dirty();
+  }
+
+  stepFind(delta: number): void {
+    const viewer = this.filesPlace()?.viewer;
+    if (!viewer?.find) return;
+    const hits = this.findHits();
+    const now = nearest(hits, viewer.find.at);
+    if (now !== null) {
+      viewer.find.at = hitStart(hits[(now + delta + hits.length) % hits.length]);
+      this.revealFind();
+    }
+    this.dirty();
+  }
+
+  private findKey(k: Key): boolean {
+    const find = this.filesPlace()?.viewer?.find;
+    if (!find) return false;
+    const ch = this.typed(k);
+    if (k.key === 'Escape') {
+      if (find.query) this.editFind('');
+      else this.closeFind();
+    } else if (k.key === 'Enter' || k.key === 'ArrowDown') this.stepFind(1);
+    else if (k.key === 'ArrowUp') this.stepFind(-1);
+    else if (k.key === 'Backspace') this.editFind([...find.query].slice(0, -1).join(''));
+    else if (ch) this.editFind(find.query + ch);
     this.dirty();
     return true;
   }
@@ -1988,12 +2141,24 @@ export class App {
   }
 
   toggleChangesFile(f: FileDiff): void {
+    this.dropChangesSelection(this.fileKey(f));
     this.folded.set(this.foldKey(f), !this.changesFolded(f));
+    this.dirty();
+  }
+
+  changesStaged(f: FileDiff): boolean {
+    return this.staged.has(this.fileKey(f));
+  }
+
+  toggleChangesStaged(f: FileDiff): void {
+    const key = this.fileKey(f);
+    if (!this.staged.delete(key)) this.staged.add(key);
     this.dirty();
   }
 
   toggleChangesViewed(f: FileDiff): void {
     const key = this.fileKey(f);
+    this.dropChangesSelection(key);
     if (!this.viewed.delete(key)) this.viewed.add(key);
     this.folded.delete(`project:${key}`);
     this.folded.delete(`every:${key}`);
@@ -2004,6 +2169,7 @@ export class App {
     const files = this.changesDiff();
     const fold = files.some((f) => !this.changesFolded(f));
     if (!fold) this.changesHeaders.clear();
+    this.changesSelection = null;
     for (const f of files) this.folded.set(this.foldKey(f), fold);
     this.dirty();
   }
@@ -2024,8 +2190,7 @@ export class App {
 
   hunkAction(action: HunkAction, f: FileDiff, h: number): void {
     const hunk = f.hunks[h];
-    const added = hunk.lines.filter((l) => l.kind === '+').map((l) => l.new ?? 0);
-    const lines = added.length ? (added.length > 1 ? `${added[0]}-${added[added.length - 1]}` : `${added[0]}`) : `${hunk.newStart}`;
+    const lines = hunkLines(hunk);
     const p = f.owner?.project ?? this.project();
     const w = f.owner?.workspace ?? this.workspace();
     if (!p || !w) return;
@@ -2146,7 +2311,7 @@ export class App {
     const pane = this.findPane(id)?.pane;
     const mark = pane && this.markAction([pane]);
     const row = this.agentShown().find((r) => r.pane === id);
-    const actions: MenuAction[] = [...(mark ? [mark] : []), ...(row && row.fold !== null ? [{ kind: 'agentFold' as const, pane: id, collapsed: !row.fold }] : [])];
+    const actions: MenuAction[] = [...(mark ? [mark] : []), ...(row && row.fold !== null ? [{ kind: 'agentFold' as const, pane: id, collapsed: !row.fold }] : []), ...(row ? [{ kind: 'closeAgent' as const, pane: id }] : [])];
     if (!actions.length) return;
     this.overlay = { kind: 'menu', at, actions };
     this.dirty();
@@ -2155,7 +2320,7 @@ export class App {
   openMenu(at: Pos, target: Target): void {
     const actions: MenuAction[] = [{ kind: 'rename', target }];
     if (target.kind === 'project' && this.groups.length) actions.push({ kind: 'moveToGroup', project: target.project });
-    if (target.kind === 'project' && this.projects.find((x) => x.id === target.project)?.repo) actions.push({ kind: 'projectSettings', project: target.project });
+    if (target.kind === 'project' && this.projects.find((x) => x.id === target.project)?.repo) { actions.push({ kind: 'projectSettings', project: target.project }); actions.push({ kind: 'worktrees', project: target.project }); }
     const tab = target.kind === 'tab' ? this.resolveTarget(target).tab : undefined;
     const mark = tab && this.markAction(tab.panes);
     if (mark) actions.push(mark);
@@ -2194,12 +2359,14 @@ export class App {
     if (a.kind === 'sendTodo') return this.todoAgent(a.pane)?.label ?? '';
     if (a.kind === 'mark') return a.pending ? 'mark as pending review' : 'mark as reviewed';
     if (a.kind === 'agentFold') return a.collapsed ? 'collapse' : 'expand';
+    if (a.kind === 'closeAgent') return 'close agent';
     if (a.kind === 'showFlow') return 'show flow';
     if (a.kind === 'newWorkspace') return 'new workspace';
     if (a.kind === 'startFlow') return 'start a flow…';
     if (a.kind === 'projectSettings') return 'project settings';
     if (a.kind === 'openIn') return 'open in…';
     if (a.kind === 'help') return HELP_LABELS[a.item];
+    if (a.kind === 'worktrees') return 'worktrees';
     return a.action;
   }
 
@@ -2258,6 +2425,7 @@ export class App {
       this.emit('narrate', this.narration.group);
     } else if (a.kind === 'mark') this.mark(a);
     else if (a.kind === 'agentFold') this.setAgentFold(a.pane, a.collapsed);
+    else if (a.kind === 'closeAgent') this.askCloseAgent(a.pane);
     else if (a.kind === 'sendTodo') this.sendTodo(a.todo, a.pane);
     else if (a.kind === 'showFlow') return this.showFlowOf(a.workspace);
     else if (a.kind === 'newWorkspace') {
@@ -2267,6 +2435,7 @@ export class App {
     else if (a.kind === 'projectSettings') this.bug(SETUP_NEEDS);
     else if (a.kind === 'openIn') this.bug(OPEN_IN_NEEDS);
     else if (a.kind === 'help') this.helpAction(a.item);
+    else if (a.kind === 'worktrees') this.bug(WORKTREES_NEED);
     else this.paneAction(a.pane, a.action);
     this.dirty();
   }
@@ -2676,6 +2845,10 @@ export class App {
     else this.shortcut(step.run);
   }
 
+  askCloseAgent(_pane: number): void {
+    this.bug(CLOSE_AGENT_NEEDS);
+  }
+
   private bug(text: string): void {
     this.toast = { text, until: this.now() + 6000, bug: true };
     this.after(6050, () => this.dirty());
@@ -2809,9 +2982,11 @@ export class App {
     if (page === PAGE.worktrees) {
       return [
         { id: 'folder', section: '', label: 'worktrees folder', value: c.worktreesDir, note: 'new worktrees go in <folder>/<repo>/<branch>' },
+        { id: 'branches', section: '', label: 'issue branches', value: 'per tracker', note: 'empty: issue-482-…, 482-… on GitLab, sc-482-…, ENG-482-…' },
         { id: 'fetch', section: '', label: 'fetch branches every', value: c.fetchMinutes ? `${c.fetchMinutes} min` : 'off', note: 'commits to pull show as ↓n' },
         { id: 'pulls', section: '', label: 'pull requests', value: '[ ] hidden', note: "each workspace's pull request and its checks, from gh" },
         { id: 'merged', section: '', label: 'merged PRs in stats', value: '[ ] hidden', note: 'your merged pull requests, from gh and glab' },
+        { id: 'worktrees', section: '', label: 'worktrees on disk', value: '', note: 'enter lists every worktree and removes several at once' },
       ];
     }
     if (page === PAGE.agents) {
@@ -3014,8 +3189,12 @@ export class App {
       o.notice = SOUND_NEEDS;
     } else if (row.id === 'pulls') {
       o.notice = PULL_REQUESTS_NEED;
+    } else if (row.id === 'branches') {
+      o.notice = BRANCHES_NEED;
     } else if (row.id === 'merged') {
       o.notice = MERGED_NEED;
+    } else if (row.id === 'worktrees') {
+      o.notice = WORKTREES_NEED;
     } else if (row.id.startsWith('flow:')) {
       o.notice = FLOWS_NEED;
     } else if (row.id === 'plugins') {
@@ -3283,6 +3462,7 @@ export class App {
       token: { input: '', checking: false },
       agentPick: null,
       chosen: null,
+      naming: null,
     };
     this.overlay.token = this.freshToken(this.issuesSource(this.overlay));
     this.emit('narrate', this.narration.issues);
@@ -3472,6 +3652,28 @@ export class App {
     ];
     const source = this.issuesSource(o);
     const width = Math.min(this.cols - 4, 110) - 4;
+    const naming = o.naming;
+    const named = naming && ISSUES.find((i) => i.key === naming.issue);
+    if (naming && named) {
+      return {
+        tabs,
+        toggles,
+        items: [],
+        selected: 0,
+        scroll: 0,
+        empty: '',
+        hint: naming.error ?? (naming.field === 0 ? "the worktree's branch · tab moves to its name · enter starts" : "the workspace's name in the sidebar · tab moves to the branch · enter starts"),
+        error: !!naming.error,
+        buttons: ['start', 'back'],
+        naming: {
+          heading: `Start ${named.key} ${named.title} in a new worktree`,
+          fields: [['branch   ', naming.branch], ['workspace', naming.name]],
+          focus: naming.field,
+          help: ['A branch that exists is checked out; one a workspace has open gets a new tab there.', 'Settings → Worktrees → issue branches sets the name it starts with.'],
+        },
+        picking: false,
+      };
+    }
     if (o.detail) {
       const issue = ISSUES.find((i) => i.key === o.detail);
       if (issue) {
@@ -3606,6 +3808,13 @@ export class App {
     this.dirty();
   }
 
+  issuesNamingField(field: 0 | 1): void {
+    const o = this.overlay;
+    if (o?.kind !== 'issues' || !o.naming) return;
+    o.naming.field = field;
+    this.dirty();
+  }
+
   issuesToggle(i: number): void {
     const o = this.overlay;
     if (o?.kind !== 'issues') return;
@@ -3670,6 +3879,10 @@ export class App {
       else if (label === 'remove' && entry) this.removeQueued((item) => item.id === entry.id, `removed queue entry ${entry.id}`);
       else if (label === 'clear started') this.removeQueued((item) => item.state === 'started', 'cleared {n} started');
       return;
+    }
+    if (label === 'back' && o.naming) {
+      o.naming = null;
+      return this.dirty();
     }
     if (label === 'back' && !o.agentPick && !o.detail && o.token.step === 'token' && this.issuesSource(o) === 'plane') {
       o.token = { input: this.config.planeWorkspace, checking: false, step: 'workspace' };
@@ -3736,6 +3949,17 @@ export class App {
       if (o.chosen && o.chosen !== this.config.agent) o.notice = `${o.chosen} takes this one`;
       return this.dirty();
     }
+    if (label === 'start' && o.naming) {
+      const naming = o.naming;
+      const issue = ISSUES.find((i) => i.key === naming.issue);
+      const branch = naming.branch.trim();
+      if (!branch || /[\s~^:?*[\\]|\.\.|@\{|^[-/]|[/.]$/.test(branch)) {
+        naming.error = branch ? `${branch} cannot be a branch` : 'the worktree needs a branch';
+        return this.dirty();
+      }
+      if (issue) this.startIssue(issue, o, { branch, name: naming.name.trim() || truncateRight(`${issue.key} ${issue.title}`, 40) });
+      return;
+    }
     if (label === 'start' || label === 'schedule') {
       const list = this.issuesList(o);
       const issue = o.detail ? ISSUES.find((i) => i.key === o.detail) : list[Math.min(o.selected, list.length - 1)];
@@ -3754,6 +3978,9 @@ export class App {
           chooseCombo(form.openIn, this.projects.find((p) => p.id === o.project)?.repo ? 1 : 0);
           this.queueModes(form);
         }
+      } else if (issue && this.pickedAgent(o) && this.projects.find((p) => p.id === o.project)?.repo) {
+        o.naming = { issue: issue.key, branch: this.branchFor(issue), name: truncateRight(`${issue.key} ${issue.title}`, 40), field: 0 };
+        this.dirty();
       } else if (issue) this.startIssue(issue, o);
     }
   }
@@ -3813,7 +4040,7 @@ export class App {
     this.dirty();
   }
 
-  startIssue(issue: Issue, o: IssuesOverlay): void {
+  startIssue(issue: Issue, o: IssuesOverlay, names?: { branch: string; name: string }): void {
     const kind = this.pickedAgent(o);
     if (!kind) {
       o.agentPick = { selected: 0, filter: '' };
@@ -3826,10 +4053,10 @@ export class App {
     this.dirty();
     this.after(650, () => {
       this.overlay = null;
-      const branch = this.branchFor(issue);
+      const branch = names?.branch ?? this.branchFor(issue);
       let w: Workspace;
       if (p.repo) {
-        w = p.workspaces.find((x) => x.branch === branch) ?? this.addWorkspace(p, branch, true, truncateRight(`${issue.key} ${issue.title}`, 40));
+        w = p.workspaces.find((x) => x.branch === branch) ?? this.addWorkspace(p, branch, true, names?.name ?? truncateRight(`${issue.key} ${issue.title}`, 40));
       } else w = p.workspaces[p.active];
       const pane = this.newPane(p, w);
       const tab = this.newTab([pane]);
@@ -4109,6 +4336,13 @@ export class App {
       this.dirty();
       return;
     }
+    if (this.changesSelecting && buttons & 1) {
+      const picked = selectedLines(this, shownChanges(this, this.areas()));
+      if (picked) this.extendChangesSelection(picked.file, y);
+      this.autoScrollChangesLines();
+      this.dirty();
+      return;
+    }
     if (this.files.selecting !== null && buttons & 1) {
       const line = lineNear(this, y);
       const viewer = this.filesPlace()?.viewer;
@@ -4228,6 +4462,7 @@ export class App {
 
   pointerUp(): void {
     this.files.selecting = null;
+    this.changesSelecting = false;
     const paneDrag = this.paneDrag;
     if (paneDrag) {
       this.paneDrag = null;
@@ -4275,6 +4510,14 @@ export class App {
   }
 
   wheel(x: number, y: number, dy: number): boolean {
+    const shown = this.changesSelecting ? shownChanges(this, this.areas()) : null;
+    const picked = shown && selectedLines(this, shown);
+    if (shown && picked) {
+      this.scrollChanges(dy > 0 ? 3 : -3, shown.max);
+      this.extendChangesSelection(picked.file, y);
+      this.dirty();
+      return true;
+    }
     const from = this.files.selecting;
     const viewer = this.filesPlace()?.viewer;
     const max = fileMax(this);
@@ -4317,7 +4560,10 @@ export class App {
       return;
     }
     if (this.filesTyping()) {
-      this.editFilesQuery((this.filesPlace()?.query ?? '') + text.replace(/\p{Cc}/gu, ''));
+      const place = this.filesPlace();
+      const clean = text.replace(/\p{Cc}/gu, '');
+      if (place?.viewer?.find) this.editFind(place.viewer.find.query + clean);
+      else this.editFilesQuery((place?.query ?? '') + clean);
       return;
     }
     if (this.filteringChanges() && this.changesFilter) {
@@ -4528,9 +4774,22 @@ export class App {
     if (o.busy) return true;
     const view = this.issuesView(o);
     if (k.key === 'Escape') {
-      if (o.agentPick) o.agentPick = null;
+      if (o.naming) o.naming = null;
+      else if (o.agentPick) o.agentPick = null;
       else if (o.detail) o.detail = null;
       else this.closeOverlay();
+      this.dirty();
+      return true;
+    }
+    if (o.naming) {
+      const naming = o.naming;
+      const at = naming.field === 0 ? 'branch' : 'name';
+      if (k.key === 'Enter') this.issuesButton('start');
+      else if (k.key === 'Tab' || k.key === 'ArrowDown' || k.key === 'ArrowUp') naming.field = naming.field === 0 ? 1 : 0;
+      else if (k.key === 'Backspace' || ch) {
+        naming[at] = k.key === 'Backspace' ? naming[at].slice(0, -1) : naming[at] + ch;
+        naming.error = undefined;
+      }
       this.dirty();
       return true;
     }

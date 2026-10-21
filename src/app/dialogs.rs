@@ -31,14 +31,9 @@ impl App {
         })
     }
 
-    pub(super) fn new_workspace_view(
-        &self,
-        project: u64,
-        input: &str,
-        worktree: Option<bool>,
-        error: Option<&str>,
-        creating: bool,
-    ) -> ui::Overlay {
+    pub(super) fn new_workspace_view(&self, overlay: &Overlay) -> Option<ui::Overlay> {
+        let Overlay::NewWorkspace { project, input, worktree, error, creating } = overlay else { return None };
+        let (project, worktree, creating) = (*project, *worktree, *creating);
         let home = self.home.as_deref();
         let repo = self.projects.project_index(project).map(|p| self.projects[p].path.clone()).unwrap_or_default();
         let path = if worktree == Some(true) {
@@ -46,7 +41,7 @@ impl App {
         } else {
             repo
         };
-        ui::Overlay::Form(ui::Form {
+        Some(ui::Overlay::Form(ui::Form {
             title: "New workspace",
             label: "name",
             value: input.into(),
@@ -55,10 +50,10 @@ impl App {
             note: if creating {
                 Some(ui::Note::Busy("creating…"))
             } else {
-                error.map(|e| ui::Note::Error(e.into())).or_else(|| self.setup_note(project, worktree))
+                error.as_deref().map(|e| ui::Note::Error(e.into())).or_else(|| self.setup_note(project, worktree))
             },
             submit: CREATE_SUBMIT,
-        })
+        }))
     }
 
     pub(super) fn rename_view(target: Target, input: &str) -> ui::Overlay {
@@ -207,12 +202,17 @@ impl App {
             Overlay::Rename { target, input } => self.submit_rename(target, &input),
             Overlay::NewGroup { input } if input.trim().is_empty() => Some(Overlay::NewGroup { input }),
             Overlay::NewGroup { input } => self.submit_new_group(&input),
-            Overlay::GroupStyle { .. } | Overlay::Usage | Overlay::Remote | Overlay::Pairing(_) => None,
+            Overlay::GroupStyle { .. }
+            | Overlay::Usage
+            | Overlay::Remote
+            | Overlay::Pairing(_)
+            | Overlay::Worktrees(_) => None,
             Overlay::RemoveWorkspace { project, workspace, check, lock } => {
                 self.confirm_removal(project, workspace, check, lock.is_some())
             }
             Overlay::DeleteGroup { group } => self.submit_delete_group(group),
             Overlay::RemoveAccount { kind, name } => Some(self.submit_remove_account(kind, &name)),
+            Overlay::DiscardChanges(target) => self.submit_discard(target),
             Overlay::CloseProject { project } => self.submit_close_project(project),
             Overlay::CloseWorkspace { project, workspace } => self.submit_close_workspace(project, workspace),
             Overlay::CloseTab { project, workspace, tab } => self.submit_close_tab(project, workspace, tab),
@@ -250,15 +250,15 @@ impl App {
     }
 
     fn submit_close_workspace(&mut self, project: u64, workspace: u64) -> Option<Overlay> {
-        if let Some((p, w)) = self.projects.workspace_in(project, workspace) {
-            self.close_workspace(p, w);
+        if let Some(at) = self.projects.workspace_in(project, workspace) {
+            self.close_workspace(at);
         }
         None
     }
 
     fn submit_close_tab(&mut self, project: u64, workspace: u64, tab: u64) -> Option<Overlay> {
-        if let Some((p, w, t)) = self.projects.tab_in(project, workspace, tab) {
-            self.close_tab(p, w, t);
+        if let Some(at) = self.projects.tab_in(project, workspace, tab) {
+            self.close_tab(at);
         }
         None
     }
@@ -295,14 +295,12 @@ impl App {
     }
 
     pub(super) fn close_workspace_message(&self, project: u64, workspace: u64) -> Option<String> {
-        let (p, w) = self.projects.workspace_in(project, workspace)?;
-        let workspace = &self.projects[p].workspaces[w];
+        let workspace = self.projects.workspace(self.projects.workspace_in(project, workspace)?);
         Some(format!("Close the workspace {}?{}", workspace.label(), stopped_tabs(workspace.tabs.len())))
     }
 
     pub(super) fn close_tab_message(&self, project: u64, workspace: u64, tab: u64) -> Option<String> {
-        let (p, w, t) = self.projects.tab_in(project, workspace, tab)?;
-        let name = self.projects[p].workspaces[w].tabs[t].label(&self.config);
+        let name = self.projects.tab(self.projects.tab_in(project, workspace, tab)?).label(&self.config);
         Some(format!("Close the tab {name}? The programs running in it are stopped."))
     }
 
@@ -319,7 +317,7 @@ pub(super) fn confirm_view(
     submit: &'static str,
     extra: Option<&'static str>,
 ) -> ui::Overlay {
-    ui::Overlay::Confirm(ui::Confirm { title, message, note: None, submit, extra })
+    ui::Overlay::Confirm(ui::Confirm { title, message, note: None, submit, extra, dangerous: false })
 }
 
 fn stopped_tabs(tabs: usize) -> String {

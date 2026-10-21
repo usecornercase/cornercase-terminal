@@ -32,7 +32,7 @@ Click **`Every project`** beside the project's tab to see staged and unstaged ed
   caption="Review changes across projects without switching your active workspace."
 />
 
-Files start collapsed. Click a file to load and expand its diff in place; click a project or workspace header to hide or reveal its files. The path filter, viewed marks, **collapse all**, scrolling and hunk actions work across the collection. **open** creates a tab in the file's workspace, and **ask agent** sends its reference to that workspace's agent. Both actions show the owning project, workspace and destination tab, so you can use the editor or type your question immediately; the panel stays on Every project.
+Files start collapsed. Click a file to load and expand its diff in place; click a project or workspace header to hide or reveal its files. The path filter, viewed marks, **collapse all**, scrolling, hunk actions and selected lines work across the collection. **open** creates a tab in the file's workspace, and **ask agent** sends its reference to that workspace's agent. Both actions show the owning project, workspace and destination tab, so you can use the editor or type your question immediately; the panel stays on Every project.
 
 This scope shows only uncommitted changes, so it has no mode tabs or base selector. Return to the project's tab to see its commits or choose a base. The `Changes n` button still counts only the active workspace's files, and it and `±` remain available only in git workspaces.
 
@@ -69,6 +69,7 @@ The branch you pick is remembered for that workspace. Picking the default branch
 - The summary line counts the files and the lines added and removed, with a bar for the proportion.
 - Each file has a row with its status (`M` modified, `A` added, `D` deleted, `R` renamed), its path and its counts. Click it to expand or collapse it.
 - Each hunk starts with a thin line naming the function or block it is in. Lines carry their old and new numbers, a green or red bar, and a stronger colour on the words that changed when a line was edited rather than replaced.
+- In Uncommitted and Every project, a green **`●`** at the right of a row marks a file whose changes are all in git's index (staged), and **`◐`** one that is only partly staged because it changed after you staged it.
 - Code is highlighted with your terminal's palette.
 - Between two hunks, **`↕ 12 unchanged lines`** shows the code in between when you click it.
 - Lockfiles (`Cargo.lock`, `package-lock.json`, `pnpm-lock.yaml` and the like) start collapsed. Binary files and files with more than 3,000 added and removed lines show their counts but no lines in either scope. Every project leaves their patches unread.
@@ -105,6 +106,37 @@ Clicking in a pane also gives it the keys back and keeps the filter; a click on 
 
 Hover a file row and click the **`✓`** at its right to mark it as viewed: it collapses, and the footer counts how many you have viewed. When the file changes again, for example because the agent touched it, the mark goes away and it opens again, so you only review what is new.
 
+### Stage a file
+
+In **Uncommitted** and in **Every project**, hovering a file row shows **`+`** between **`↺`** and `✓`. Click it to put the file's changes in git's index, as `git add` does, ready for `git commit`: the row then shows a green **`●`** (or **`◐`** when the file changed after you staged it; clicking again stages the rest). Under the pointer, the mark of a staged file turns into a yellow **`−`**: click it to take the file out of the index again. The file keeps its changes either way. For a renamed file, both names are staged together.
+
+Nothing asks first, because it is easy to undo, and no message is shown unless something went wrong.
+
+<Screen
+  name="changes-stage"
+  alt="The changes panel with src/returns/mod.rs marked staged by a green dot at the right of its row, and the hovered row of src/returns/address.rs showing the discard, stage and viewed buttons side by side"
+  crop={[95, 3, 45, 15]}
+/>
+
+- Only the version you saw is staged: if the file changes between the panel drawing it and your click, for example because an agent kept writing, nothing is staged and a message says so.
+- Staging writes git's index, so it can fail while an agent commits; the message says why, and you can click again.
+- **Commits** and **All** have no `+`: their changes are already in commits, or not in the index.
+- The panel compares your files with the last commit, so a change that exists only in the index (staged, then put back by hand in the file) isn't listed.
+
+### Discard a file's changes
+
+In **Uncommitted** and in **Every project**, hovering a file row also shows **`↺`**, left of the stage button. Click it to throw the file's changes away and put it back as it is in the last commit: staged and unstaged edits go, a deleted file comes back, a file added since the last commit is deleted, and a renamed file gets its old name back. A file git doesn't track (`new`) is deleted; for a symlink, only the link goes. A confirmation names the file, and nothing changes until you click **discard**.
+
+<Screen
+  name="changes-discard"
+  alt="The Discard changes dialog asking whether to discard the changes to a file, with a red discard button and a cancel button"
+  crop={[34, 7, 72, 24]}
+/>
+
+- Only the version you saw is discarded: if the file changes between your click and **discard**, for example because an agent kept writing, nothing is thrown away and a message says so.
+- Discarding writes git's index, so it can fail while an agent commits; the message says why, and you can try again.
+- There's no undo. **Commits** and **All** have no `↺`: their changes are already in commits.
+
 ## Act on a hunk
 
 Hover a hunk and three buttons appear on its first line:
@@ -117,15 +149,28 @@ Hover a hunk and three buttons appear on its first line:
 
 The editor gets the line as `+11`, which `vi`, `vim`, `nvim`, `nano`, `emacs` and `micro` understand.
 
+## Select lines
+
+Click a line of a diff to select it, or press and drag over several: added, removed and unchanged lines, also the ones **`↕ unchanged lines`** shows. A selection stays in one file; dragging past its first or last line, or over another file, keeps the nearest line of that file. Hold the pointer on the first or last row shown, or past it, and the panel scrolls while the selection follows; the wheel scrolls it too while you keep the button pressed.
+
+The bottom of the panel then says which lines, such as `lines 9-12`, and its buttons act on them:
+
+| Button | Does |
+| --- | --- |
+| **ask agent** | Types a reference such as `src/returns/address.rs:9-12 ` into the agent running in the file's workspace and switches to its tab. The numbers are those of the file as it is now; when only removed lines are selected, it types the hunk's reference, as the hunk's **ask agent** does. Without an agent, it copies the reference. |
+| **copy** | Copies the selected lines' code to your clipboard, as it is in the file (tabs included), without the `+`/`-` bar and the line numbers. Removed and added lines are copied in the order shown; unchanged lines between hunks only when they are shown. |
+
+Click an empty spot of the diff (a hunk's top line outside its buttons, or the space between files) to clear the selection and get **collapse all** and the viewed count back. Collapsing the file or marking it viewed clears it too; the filter, another tab or workspace, or closing the panel only hide it until its lines show again, unless the file changed meanwhile.
+
 ## Live, and light on your repository
 
-In the project scope, while the panel is open it asks git for changes every second, so edits show up shortly after they are saved; while it is closed it checks every three seconds, for the count on the button. It runs git in the background with options that never take git's index lock, so it doesn't get in the way of an agent running `git add` or `git commit` at the same time. When nothing changed, the diff is reused.
+In the project scope, while the panel is open it asks git for changes every second, so edits show up shortly after they are saved; while it is closed it checks every three seconds, for the count on the button. It runs git in the background with options that never take git's index lock, so it doesn't get in the way of an agent running `git add` or `git commit` at the same time. Only **discard** and **stage** write git's index, once, when you confirm or click. When nothing changed, the diff is reused.
 
 While **Every project** is shown, one background job visits the workspaces in turn, no more often than every three seconds per workspace. Collapsed files need only status and line counts; patches are read and refreshed for expanded files. Closing the panel or returning to the project scope stops that sweep. If a git job takes more than 30 seconds, refreshing can continue with another job.
 
 ## From scripts and other apps
 
-The same data is there for programs: `cornercase changes list` prints a workspace's changed files (`--every` for every project, `--follow` to keep printing them as they change), `changes file` a file's diff, `changes base` the branches to compare with and `changes viewed` marks a file. A program that draws its own changes panel reads them over the socket, as [Follow a workspace's changes](../scripts-and-agents/#follow-a-workspaces-changes) describes.
+The same data is there for programs: `cornercase changes list` prints a workspace's changed files (`--every` for every project, `--follow` to keep printing them as they change), `changes file` a file's diff, `changes base` the branches to compare with and `changes viewed` marks a file, `changes stage` and `changes unstage` put a file's changes in git's index or take them out of it, and `changes discard` throws a file's changes away (it asks first, `--yes` skips the question). A program that draws its own changes panel reads them over the socket, as [Follow a workspace's changes](../scripts-and-agents/#follow-a-workspaces-changes) describes.
 
 <Aside type="tip">
 The green and red backgrounds are mixed from your terminal's own background and palette when your terminal supports 24-bit colour and says so in `COLORTERM` (most modern terminals set `COLORTERM=truecolor`). Without it, cornercase uses palette colours: on dark themes the changed lines get only the coloured bar and numbers, with the changed words highlighted.

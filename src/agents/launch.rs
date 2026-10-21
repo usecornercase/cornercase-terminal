@@ -44,6 +44,7 @@ pub(crate) struct Launch {
     pub(crate) told: bool,
     pub(crate) trust: Option<Trust>,
     pub(crate) resume: Option<Instant>,
+    pub(crate) restart: Option<String>,
     spec: Spec,
     agent: bool,
     stage: Stage,
@@ -88,6 +89,7 @@ impl Launch {
             told: false,
             trust: None,
             resume: None,
+            restart: None,
             spec,
             agent: true,
             stage: Stage::Shell,
@@ -113,6 +115,10 @@ impl Launch {
     pub(crate) fn resume(term: u64, command: String, trusted: bool, now: Instant, until: Instant) -> Self {
         let spec = Spec { command, prompt: None, submit: false, trusted };
         Self { trust: Some(Trust::LeftToYou), resume: Some(until), ..Self::new(term, spec, now) }
+    }
+
+    pub(crate) fn restart(term: u64, command: String, label: String, now: Instant, until: Instant) -> Self {
+        Self { restart: Some(label), ..Self::resume(term, command, false, now, until) }
     }
 
     #[cfg(test)]
@@ -182,20 +188,7 @@ impl Launch {
 
     pub(crate) fn step(&mut self, now: Instant, seen: &mut Seen) -> Step {
         match self.stage {
-            Stage::Shell => {
-                let ready = self.output.is_some_and(|at| now.duration_since(at) >= SHELL_QUIET)
-                    || now.duration_since(self.since) >= SHELL_LATEST;
-                if !ready {
-                    return Step::Wait;
-                }
-                let typed = format!("{}\r", self.spec.command).into_bytes();
-                if !self.agent {
-                    return Step::Done(typed);
-                }
-                self.echo = compact(&(seen.screen)()) + &compact(&self.spec.command);
-                self.next(Stage::Agent, now);
-                Step::Write(typed)
-            }
+            Stage::Shell => self.step_shell(now, seen),
             Stage::Agent if seen.shell_in_foreground => {
                 if now.duration_since(self.since) >= AGENT_GONE && self.quiet(now) >= AGENT_GONE {
                     Step::Abandon
@@ -204,45 +197,7 @@ impl Launch {
                 }
             }
             Stage::Agent if self.parked.is_some() => Step::Wait,
-            Stage::Agent => {
-                let latest = now.duration_since(self.since) >= AGENT_LATEST;
-                if (self.quiet(now) < AGENT_QUIET || self.undrawn) && !latest {
-                    return Step::Wait;
-                }
-                let screen = (seen.screen)();
-                if !latest && only_echo(&screen, &self.echo) {
-                    self.undrawn = true;
-                    return Step::Wait;
-                }
-                if claude::screen::bypass_consent(&screen) {
-                    self.next(Stage::Agent, now);
-                    self.parked = Some(Parked::Consent);
-                    return Step::Wait;
-                }
-                if (seen.trust_prompt)(&screen) {
-                    if seen.trust == Trust::LeftToYou && !self.spec.trusted {
-                        self.next(Stage::Agent, now);
-                        self.parked = Some(Parked::Trust);
-                        return Step::Wait;
-                    }
-                    if self.trusts < MAX_TRUSTS && self.trusted_screen.as_ref() != Some(&screen) {
-                        self.trusts += 1;
-                        let keys = answer_keys(&screen, seen.application_cursor);
-                        self.trusted_screen = Some(screen);
-                        self.next(Stage::Agent, now);
-                        return Step::Write(keys);
-                    }
-                }
-                let Some(prompt) = &self.spec.prompt else { return Step::Done(Vec::new()) };
-                let text = if self.spec.submit && seen.bracketed_paste { prompt.clone() } else { one_line(prompt) };
-                let bytes = if seen.bracketed_paste { bracketed(&text) } else { text };
-                if self.spec.submit {
-                    self.next(Stage::Submit, now);
-                    Step::Write(bytes.into_bytes())
-                } else {
-                    Step::Done(bytes.into_bytes())
-                }
-            }
+            Stage::Agent => self.step_agent(now, seen),
             Stage::Submit => {
                 if self.quiet(now) >= SUBMIT_QUIET || now.duration_since(self.since) >= SUBMIT_LATEST {
                     Step::Done(b"\r".to_vec())
@@ -250,6 +205,73 @@ impl Launch {
                     Step::Wait
                 }
             }
+        }
+    }
+
+    fn step_shell(&mut self, now: Instant, seen: &mut Seen) -> Step {
+        let ready = self.output.is_some_and(|at| now.duration_since(at) >= SHELL_QUIET)
+            || now.duration_since(self.since) >= SHELL_LATEST;
+        if !ready {
+            return Step::Wait;
+        }
+        let typed = format!("{}\r", self.spec.command).into_bytes();
+        if !self.agent {
+            return Step::Done(typed);
+        }
+        self.echo = compact(&(seen.screen)()) + &compact(&self.spec.command);
+        self.next(Stage::Agent, now);
+        Step::Write(typed)
+    }
+
+    fn step_agent(&mut self, now: Instant, seen: &mut Seen) -> Step {
+        let latest = now.duration_since(self.since) >= AGENT_LATEST;
+        if (self.quiet(now) < AGENT_QUIET || self.undrawn) && !latest {
+            return Step::Wait;
+        }
+        let screen = (seen.screen)();
+        if !latest && only_echo(&screen, &self.echo) {
+            self.undrawn = true;
+            return Step::Wait;
+        }
+        if let Some(step) = self.consent_or_trust(&screen, now, seen) {
+            return step;
+        }
+        self.send_prompt(now, seen)
+    }
+
+    fn consent_or_trust(&mut self, screen: &str, now: Instant, seen: &mut Seen) -> Option<Step> {
+        if claude::screen::bypass_consent(screen) {
+            self.next(Stage::Agent, now);
+            self.parked = Some(Parked::Consent);
+            return Some(Step::Wait);
+        }
+        if !(seen.trust_prompt)(screen) {
+            return None;
+        }
+        if seen.trust == Trust::LeftToYou && !self.spec.trusted {
+            self.next(Stage::Agent, now);
+            self.parked = Some(Parked::Trust);
+            return Some(Step::Wait);
+        }
+        if self.trusts < MAX_TRUSTS && self.trusted_screen.as_deref() != Some(screen) {
+            self.trusts += 1;
+            let keys = answer_keys(screen, seen.application_cursor);
+            self.trusted_screen = Some(screen.to_string());
+            self.next(Stage::Agent, now);
+            return Some(Step::Write(keys));
+        }
+        None
+    }
+
+    fn send_prompt(&mut self, now: Instant, seen: &Seen) -> Step {
+        let Some(prompt) = &self.spec.prompt else { return Step::Done(Vec::new()) };
+        let text = if self.spec.submit && seen.bracketed_paste { prompt.clone() } else { one_line(prompt) };
+        let bytes = if seen.bracketed_paste { bracketed(&text) } else { text };
+        if self.spec.submit {
+            self.next(Stage::Submit, now);
+            Step::Write(bytes.into_bytes())
+        } else {
+            Step::Done(bytes.into_bytes())
         }
     }
 }

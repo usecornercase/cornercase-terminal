@@ -19,7 +19,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 
 - [Architecture](design/architecture.md): what each file and folder of `src/` holds, the server loop, the client.
 - [Code layout](design/code-layout.md) (`src/`, `tests/layers.rs`): domains, `pub`, the files of `App`, 1,000 lines per file, `tests/layers.rs`.
-- [Layout](design/layout.md) (`config.rs`, `state.rs`, `ui.rs`, `ui/`, `app/layout.rs`, `app/sidebar.rs`, `app/tab_bar.rs`, `app/interaction.rs`): the sidebar layouts, the agents section, borders, bars, text colours, compact mode.
+- [Layout](design/layout.md) (`config.rs`, `state.rs`, `ui.rs`, `ui/`, `app/layout.rs`, `app/sidebar.rs`, `app/tab_bar.rs`, `app/interaction.rs`, `agents/closing.rs`, `app/close_agent.rs`, `app/close_agent/`): the sidebar layouts, the agents section (and its Close agent dialog), borders, bars, text colours, compact mode.
 - [Dialogs](design/dialogs.md) (`ui/dialog.rs`, `ui/dialog/`, `ui/combo.rs`, `list.rs`, `app/overlay.rs`, `app/dialogs.rs`): borders, dimming, buttons, a click outside, comboboxes.
 - [Hierarchy](design/hierarchy.md) (`project.rs`, `project/group.rs`, `project/hierarchy.rs`, `app/hierarchy.rs`, `app/tabs.rs`, `app/menus.rs`, `app/sidebar/drag.rs`): groups, projects, workspaces, tabs and panes; ids, labels, closing, reordering.
 - [Splits](design/splits.md) (`project/split.rs`, `app/panes.rs`): the split tree, minimum sizes, hidden panes, moving panes.
@@ -27,12 +27,13 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Folder picker](design/folder-picker.md) (`project/picker.rs`, `list.rs`, `app/picker_dialog.rs`): where it starts and how it is walked.
 - [Worktrees](design/worktrees.md) (`git/worktree.rs`, `app/worktrees.rs`): one worktree per workspace, removal in the background, locks, `↓n`.
 - [Worktree setup](design/worktree-setup.md) (`git/worktree/setup.rs`, `project/settings.rs`, `app/worktree_setup.rs`, `app/project_settings_dialog.rs`, `ui/dialog/project_settings.rs`, #250): a project's setup and teardown scripts.
+- [Worktrees dialog](design/worktrees-dialog.md) (`worktrees/`, `app/worktrees_dialog.rs`, `app/worktrees_dialog/`, `ui/dialog/worktrees.rs`, #256): every worktree on disk with when it last changed and what makes it safe to remove, removing several at once.
 - [Pull requests](design/pull-requests.md) (`pull_request.rs`, `gh.rs`, `app/pull_requests.rs`, `ui/workspaces.rs`, #251): a workspace's pull request and its checks, from `gh`.
 - [Merged pull requests](design/merged-pull-requests.md) (`pull_request/merged.rs`, `pull_request/merged/`, `git/remote.rs`, `app/merged_pull_requests.rs`, #293): the Stats row of merged pull requests, from `gh` and `glab`.
 - [Changes panel](design/changes-panel.md) (`changes/`, `ui/changes.rs`, `app/changes_panel.rs`): the git diff, its modes, filter, scope, pacing and digests.
 - [TODO panel](design/todo-panel.md) (`todo/`, `ui/todo.rs`, `app/todo_panel.rs`): the TODO list, its requests, sending an item to an agent.
 - [Star prompt](design/star-prompt.md) (`star.rs`, `app/star_prompt.rs`, `ui/star.rs`, #276): the card that asks for a GitHub star now and then.
-- [Tour](design/tour.md) (`tour.rs`, `tour/steps.rs`, `app/tour_card.rs`, `app/help_menu.rs`, `ui/tour.rs`, `control/tour.rs`, `app/control/tour.rs`, `cli/tour.rs`, #400): the guided tour on first run, the catalogue of short tours, the Help button.
+- [Tour](design/tour.md) (`tour.rs`, `tour/steps.rs`, `app/tour_card.rs`, `app/tour_card/`, `app/help_menu.rs`, `ui/tour.rs`, `control/tour.rs`, `app/control/tour.rs`, `cli/tour.rs`, #400): the guided tour on first run, the catalogue of short tours, the Help button.
 - [Queue](design/queue.md) (`queue/`, `issues/browser.rs`, `ui/dialog/queue.rs`, `app/queue_panel.rs`, `app/queue_dialog.rs`, `app/control/queue/`): scheduled agent starts, their times, places and form.
 - [Files panel](design/files-panel.md) (`files/`, `highlight/syntax.rs`, `ui/files.rs`, `app/files_panel.rs`, `app/links.rs`): tree, viewer, highlighting, search, paths in panes, full screen.
 - [Images](design/images.md) (`graphics/`, files panel): pictures in the files panel, by kitty, iTerm2 or sixel.

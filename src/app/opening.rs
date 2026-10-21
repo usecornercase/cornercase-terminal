@@ -45,14 +45,14 @@ impl App {
     }
 
     pub(crate) fn take_opens(&mut self) -> Vec<(u64, Open)> {
-        std::mem::take(&mut self.outbox.opens)
+        self.outbox.take_opens()
     }
 
     pub(crate) fn open_failed(&mut self, client: u64, failed: &Failed) {
         let reason = text::one_line(&failed.reason);
         log::warning!("ui", "could not open", client = client, opener = failed.opener.id(), reason = reason);
         let message = format!("could not open in {}: {reason}", failed.opener.name());
-        self.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
+        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
     }
 
     pub(super) fn open_entry(&self, subject: Subject) -> MenuAction {
@@ -100,30 +100,29 @@ impl App {
             return;
         }
         let Some(path) = place.path.to_str() else {
-            self.toast = Some(Toast::new(NOT_UTF8, ui::ToastIcon::Bug));
+            self.messages.toast = Some(Toast::new(NOT_UTF8, ui::ToastIcon::Bug));
             return;
         };
         let client = self.opening.window;
         log::info!("ui", "open in", client = client, opener = opener.id(), folder = place.kind == Kind::Folder);
         let open = Open { opener, path: path.to_string(), line: place.line };
-        self.outbox.opens.push((client, open));
+        self.outbox.open(client, open);
     }
 
     pub(super) fn copy_path(&mut self, subject: Subject) {
         let Some(place) = self.place(subject) else { return };
         let Some(path) = place.path.to_str() else {
-            self.toast = Some(Toast::new(NOT_UTF8, ui::ToastIcon::Bug));
+            self.messages.toast = Some(Toast::new(NOT_UTF8, ui::ToastIcon::Bug));
             return;
         };
         self.copy(path);
         let what = if place.kind == Kind::Folder { "folder" } else { "file" };
         let message = format!("copied the {what}'s path: it is on the server's machine");
-        self.toast = Some(Toast::new(message, ui::ToastIcon::Check));
+        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Check));
     }
 
     fn workspace_path(&self, workspace: u64) -> Option<&Path> {
-        let (p, w) = self.projects.workspace_index(workspace)?;
-        Some(&self.projects[p].workspaces[w].path)
+        Some(&self.projects.workspace_by(workspace)?.path)
     }
 
     fn place(&self, subject: Subject) -> Option<Place> {
@@ -136,12 +135,12 @@ impl App {
                 if let Some(cwd) = cwd.filter(|cwd| cwd.is_dir()) {
                     return Some(folder(cwd));
                 }
-                let (p, w, _) = self.projects.tab_of_pane(id)?;
-                Some(folder(self.projects[p].workspaces[w].path.clone()))
+                let at = self.projects.tab_of_pane(id)?.workspace();
+                Some(folder(self.projects.workspace(at).path.clone()))
             }
             Subject::File(workspace) => {
                 let root = self.workspace_path(workspace)?;
-                let viewer = self.files.viewer(workspace)?;
+                let viewer = self.panels.files.viewer(workspace)?;
                 let path = root.join(&viewer.path);
                 let image = viewer.content.as_ref().is_some_and(|content| content.is_image());
                 let line = viewer.selected().filter(|_| !image).map(|(first, _)| first);

@@ -8,44 +8,31 @@ use crate::app::overlay::Overlay;
 use crate::log::{Job, Level};
 use crate::project::search::said::{self, Found, MAX_MATCHES, Match, Place, Source};
 use crate::project::search::{Finder, Mode};
-use crate::project::{Hierarchy, sidebar_order};
+use crate::project::{Group, Hierarchy, Project, Tab, Workspace, sidebar_order};
+use crate::term::Term;
 use crate::text::{CRUMB_SEPARATOR, Needle};
 use crate::ui;
 
 impl App {
     pub(in crate::app) fn build_sources(&mut self, cached: bool) -> Vec<Source> {
         let mut sources = Vec::new();
-        for p in sidebar_order(&self.projects, &self.groups) {
-            let project = &self.projects[p];
-            if project.closing {
-                continue;
-            }
-            let project_label = project.label(self.home.as_deref());
-            for workspace in project.workspaces.iter().filter(|w| w.open()) {
-                let workspace_label = workspace.label();
-                for tab in &workspace.tabs {
-                    let label =
-                        [project_label.clone(), workspace_label.clone(), tab.label(&self.config)].join(CRUMB_SEPARATOR);
-                    for term in &tab.panes {
-                        let kind = term.agent.agent().map(str::to_string);
-                        let who = kind.clone().or_else(|| term.program(&self.config)).unwrap_or_else(|| "shell".into());
-                        let record = kind.as_deref().and_then(Known::of).and_then(|kind| term.context.record_for(kind));
-                        let read = || term.emulator.text().unwrap_or_default();
-                        let screen: Arc<str> = match term.emulator.size() {
-                            Ok(size) if cached => self.sessions.screen(term.id, term.output_at, size, read),
-                            _ => read().into(),
-                        };
-                        let place = Place {
-                            project: project.id,
-                            workspace: workspace.id,
-                            tab: tab.id,
-                            pane: term.id,
-                            label: label.clone(),
-                            who,
-                        };
-                        sources.push(Source { place, screen, record });
-                    }
-                }
+        for (project, workspace, tab) in open_tabs(&self.projects, &self.groups) {
+            let label =
+                [project.label(self.home.as_deref()), workspace.label(), tab.label(&self.config)].join(CRUMB_SEPARATOR);
+            for term in &tab.panes {
+                let kind = term.agent.agent().map(str::to_string);
+                let who = kind.clone().or_else(|| term.program(&self.config)).unwrap_or_else(|| "shell".into());
+                let record = kind.as_deref().and_then(Known::of).and_then(|kind| term.context.record_for(kind));
+                let screen = pane_screen(&mut self.sessions, term, cached);
+                let place = Place {
+                    project: project.id,
+                    workspace: workspace.id,
+                    tab: tab.id,
+                    pane: term.id,
+                    label: label.clone(),
+                    who,
+                };
+                sources.push(Source { place, screen, record });
             }
         }
         sources
@@ -140,5 +127,25 @@ impl App {
         if let Some(term) = self.projects.pane_by_mut(pane) {
             let _ = term.emulator.reveal(&needle, found.line);
         }
+    }
+}
+
+fn open_tabs<'a>(projects: &'a [Project], groups: &[Group]) -> Vec<(&'a Project, &'a Workspace, &'a Tab)> {
+    sidebar_order(projects, groups)
+        .into_iter()
+        .map(|p| &projects[p])
+        .filter(|project| !project.closing)
+        .flat_map(|project| {
+            let open = project.workspaces.iter().filter(|w| w.open());
+            open.flat_map(move |workspace| workspace.tabs.iter().map(move |tab| (project, workspace, tab)))
+        })
+        .collect()
+}
+
+fn pane_screen(sessions: &mut said::Sessions, term: &Term, cached: bool) -> Arc<str> {
+    let read = || term.emulator.text().unwrap_or_default();
+    match term.emulator.size() {
+        Ok(size) if cached => sessions.screen(term.id, term.output_at, size, read),
+        _ => read().into(),
     }
 }

@@ -28,7 +28,7 @@ pub(super) fn run_in(app: &mut App, (p, w): (usize, usize), flow: crate::flows::
     let workspace = app.projects[p].workspaces[w].id;
     let mut run = Run::new(workspace, flow, "fix the login\nand the rest".into());
     for role in ROLES {
-        let t = app.push_tab(p, w, AREA, Some(role.into())).expect("a tab for the role");
+        let t = app.push_tab(workspace_at(app, p, w), AREA, Some(role.into())).expect("a tab for the role").index();
         let pane = app.projects[p].workspaces[w].tabs[t].panes[0].id;
         run.members.push(Member { role: role.into(), pane });
     }
@@ -36,7 +36,7 @@ pub(super) fn run_in(app: &mut App, (p, w): (usize, usize), flow: crate::flows::
 }
 
 fn pane(app: &App, role: &str) -> u64 {
-    app.runs[0].pane_of(role).expect("a member")
+    app.runs.all()[0].pane_of(role).expect("a member")
 }
 
 fn ask(app: &mut App, caller: Option<u64>, command: Command) {
@@ -53,7 +53,7 @@ fn send(app: &mut App, from: &str, to: &str, text: &str) {
 }
 
 fn messages(app: &App) -> Vec<(String, String, Kind, Option<String>)> {
-    let run = &app.runs[0];
+    let run = &app.runs.all()[0];
     run.messages.iter().map(|m| (m.from.clone(), m.to.clone(), m.kind, m.text.clone())).collect()
 }
 
@@ -79,9 +79,9 @@ mod opening {
     fn a_workspace_without_a_run_offers_none() {
         let (mut app, _rx) = app();
         app.flow_by_key();
-        assert_eq!((app.side, toast(&app)), (None, Some("this workspace runs no flow")));
+        assert_eq!((app.screen.side, toast(&app)), (None, Some("this workspace runs no flow")));
         app.show_flow();
-        assert_eq!(app.side, None);
+        assert_eq!(app.screen.side, None);
     }
 
     #[test]
@@ -96,19 +96,19 @@ mod opening {
             send_key(app, KeyCode::Char('f'), KeyModifiers::NONE);
         };
         keys(&mut app);
-        assert_eq!((app.side, app.panel_shown()), (Some(Side::Flow), true));
+        assert_eq!((app.screen.side, app.panel_shown()), (Some(Side::Flow), true));
         keys(&mut app);
-        assert_eq!(app.side, None);
+        assert_eq!(app.screen.side, None);
     }
 
     #[test]
     fn the_workspace_menu_shows_it() {
         let (mut app, _rx, _dir) = team();
-        let (project, workspace) = (app.projects[0].id, app.runs[0].workspace);
+        let (project, workspace) = (app.projects[0].id, app.runs.all()[0].workspace);
         let menu = app.target_menu(Target::Workspace(project, workspace));
         assert!(menu.contains(&MenuAction::ShowFlow(workspace)), "{menu:?}");
         app.menu_action(MenuAction::ShowFlow(workspace), Position::default(), AREA).expect("the action");
-        assert_eq!(app.side, Some(Side::Flow));
+        assert_eq!(app.screen.side, Some(Side::Flow));
     }
 
     #[test]
@@ -127,7 +127,7 @@ mod opening {
             ui::activity_items(bar, app.activity_shown()).into_iter().find(|(i, _)| *i == ui::ActivityItem::Flow);
         let (_, r) = slot.expect("a flow slot");
         click(&mut app, Position::new(r.x + 1, r.y));
-        assert_eq!(app.side, Some(Side::Flow));
+        assert_eq!(app.screen.side, Some(Side::Flow));
         app.runs.clear();
         assert!(!app.activity_shown().flow);
         assert!(!app.panel_shown());
@@ -138,7 +138,7 @@ mod opening {
         let (mut app, _rx, _dir) = team();
         app.show_flow();
         send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
-        assert_eq!(app.side, None);
+        assert_eq!(app.screen.side, None);
     }
 
     #[test]
@@ -147,7 +147,7 @@ mod opening {
         app.show_flow();
         let close = ui::flow::close(app.layout(AREA).changes).as_position();
         click(&mut app, close);
-        assert_eq!(app.side, None);
+        assert_eq!(app.screen.side, None);
     }
 
     #[test]
@@ -169,7 +169,7 @@ mod recording {
         send(&mut app, ORCHESTRATOR, "coder", "fix the login");
         let expected = (ORCHESTRATOR.into(), "coder".into(), Kind::Send, Some("fix the login".into()));
         assert_eq!(messages(&app), vec![expected]);
-        assert_eq!(app.runs[0].progress.active, Some(0));
+        assert_eq!(app.runs.all()[0].progress.active, Some(0));
     }
 
     #[test]
@@ -211,7 +211,7 @@ mod recording {
                 ("security".into(), Kind::Wait, None),
             ]
         );
-        assert_eq!(app.runs[0].progress.active, None);
+        assert_eq!(app.runs.all()[0].progress.active, None);
     }
 
     #[test]
@@ -236,9 +236,7 @@ mod recording {
         let noted = app.flow_steps(Some(pane(&app, ORCHESTRATOR)), &Command::LastMessage(last), Instant::now());
         app.flow_requested(CLIENT, noted, true);
         if replaced {
-            let mut next = app.runs.remove(0);
-            next.id += 1;
-            app.runs.push(next);
+            app.runs.first_mut().id += 1;
         } else {
             app.forget(CLIENT);
         }
@@ -258,7 +256,7 @@ mod recording {
 
         assert!(again.restore(&saved, AREA));
 
-        assert_eq!((again.runs.len(), again.side), (1, Some(Side::Flow)));
+        assert_eq!((again.runs.all().len(), again.screen.side), (1, Some(Side::Flow)));
     }
 
     #[test]
@@ -275,7 +273,7 @@ mod recording {
         let (mut app, _rx, _dir) = team();
         let text = "x".repeat(40 * 1024);
         send(&mut app, ORCHESTRATOR, "coder", &text);
-        let message = &app.runs[0].messages[0];
+        let message = &app.runs.all()[0].messages[0];
         assert_eq!((message.text.as_ref().map(String::len), message.bytes), (Some(32 * 1024), text.len()));
     }
 
@@ -284,7 +282,7 @@ mod recording {
         let (mut app, _rx, _dir) = team();
         let text = "é".repeat(20 * 1024);
         send(&mut app, ORCHESTRATOR, "coder", &text);
-        let kept = app.runs[0].messages[0].text.clone().expect("the text");
+        let kept = app.runs.all()[0].messages[0].text.clone().expect("the text");
         assert!(kept.len() <= 32 * 1024 && kept.len() > 32 * 1024 - 4, "{}", kept.len());
         assert!(text.starts_with(&kept));
     }
@@ -300,7 +298,7 @@ mod clicks {
         let at = spot(&mut app, "reviewer");
         click_in(&mut app, at, TALL);
         assert_eq!(app.tab().and_then(Tab::pane).map(|t| t.id), Some(pane(&app, "reviewer")));
-        assert_eq!(app.side, Some(Side::Flow));
+        assert_eq!(app.screen.side, Some(Side::Flow));
     }
 
     #[test]
@@ -344,7 +342,7 @@ mod clicks {
         let (mut app, _rx, _dir) = team();
         send(&mut app, ORCHESTRATOR, "coder", "fix the login");
         send(&mut app, ORCHESTRATOR, "reviewer", "review the fix");
-        let workspace = app.runs[0].workspace;
+        let workspace = app.runs.all()[0].workspace;
         app.overlay = Some(Overlay::FlowMessage { workspace, edge: Edge::Forward(0), to: None, scroll: 0 });
         app.runs.clear();
         app.refresh(Instant::now());
@@ -396,7 +394,7 @@ mod files {
             let file = std::fs::File::create(folder.join(name)).expect("a file");
             file.set_modified(SystemTime::now() - Duration::from_secs(*age)).expect("a time");
         }
-        app.runs[0].dir = Some(folder.clone());
+        app.runs.first_mut().dir = Some(folder.clone());
         folder
     }
 
@@ -438,7 +436,7 @@ mod files {
         let at = spot(&mut app, "coder-1.md");
         click_in(&mut app, at, TALL);
 
-        assert_eq!(app.side, Some(Side::Files));
+        assert_eq!(app.screen.side, Some(Side::Files));
         wait_until_within("the file is read", Duration::from_secs(10), || {
             drain(&mut app, &rx);
             app.refresh(Instant::now());

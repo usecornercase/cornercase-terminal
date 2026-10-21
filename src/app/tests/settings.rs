@@ -20,7 +20,7 @@ struct Setup {
 fn open() -> Setup {
     let (dir, config) = (TempDir::new(), TempDir::new());
     let (mut app, rx) = app_in(dir.path(), config.path().join("config.json"));
-    app.issues.env_tokens.clear();
+    app.issues.clear_env_tokens();
     click(&mut app, areas().settings.as_position());
     Setup { app, rx, config, _dir: dir }
 }
@@ -193,7 +193,7 @@ fn a_saved_token_shows_as_connected() {
     let (dir, config) = (TempDir::new(), TempDir::new());
     secrets::write(&paths::secrets(&config.path().join("config.json")), "linear_api_key", "k").expect("save");
     let (mut app, _rx) = app_in(dir.path(), config.path().join("config.json"));
-    app.issues.env_tokens.clear();
+    app.issues.clear_env_tokens();
 
     click(&mut app, areas().settings.as_position());
 
@@ -272,13 +272,13 @@ mod config_file {
     #[test]
     fn an_edit_from_outside_is_applied_and_shown_in_the_open_modal() {
         let mut s = open();
-        let before = s.app.config_file.revision;
+        let before = s.app.config_file.revision();
         edit_outside(&s, |c| c.counts = false);
 
         later(&mut s);
 
         assert_eq!(
-            (s.app.config.counts, form(&s.app).config.counts, s.app.config_file.revision > before),
+            (s.app.config.counts, form(&s.app).config.counts, s.app.config_file.revision() > before),
             (false, false, true)
         );
     }
@@ -292,13 +292,13 @@ mod config_file {
     #[test]
     fn a_profile_chosen_outside_is_applied_and_raises_the_revision() {
         let mut s = open();
-        let before = s.app.config_file.revision;
+        let before = s.app.config_file.revision();
         edit_outside(&s, work_profile);
 
         later(&mut s);
 
         assert_eq!(s.app.config.active_profile().map(|(name, _)| name), Some("Work"));
-        assert!(s.app.config_file.revision > before);
+        assert!(s.app.config_file.revision() > before);
     }
 
     #[test]
@@ -306,12 +306,12 @@ mod config_file {
         let mut s = open();
         edit_outside(&s, work_profile);
         later(&mut s);
-        let before = s.app.config_file.revision;
+        let before = s.app.config_file.revision();
         edit_outside(&s, |c| c.profile.clear());
 
         s.app.refresh(Instant::now() + Duration::from_secs(4));
 
-        assert_eq!((s.app.config.profile.as_str(), s.app.config_file.revision > before), ("", true));
+        assert_eq!((s.app.config.profile.as_str(), s.app.config_file.revision() > before), ("", true));
     }
 
     #[test]
@@ -347,7 +347,7 @@ mod config_file {
         assert_eq!(
             (
                 s.app.config.memory,
-                s.app.config_file.problem.is_some(),
+                s.app.config_file.problem().is_some(),
                 toast(&s.app).is_some_and(|t| t.contains("cannot be read")),
                 std::fs::read_to_string(config_path(&s)).expect("read").as_str(),
             ),
@@ -364,7 +364,7 @@ mod config_file {
         write_config(s.config.path(), &Config { counts: false, ..s.app.config.clone() });
         s.app.refresh(Instant::now() + Duration::from_secs(4));
 
-        assert_eq!((s.app.config.counts, s.app.config_file.problem.is_none()), (false, true));
+        assert_eq!((s.app.config.counts, s.app.config_file.problem().is_none()), (false, true));
     }
 
     #[test]

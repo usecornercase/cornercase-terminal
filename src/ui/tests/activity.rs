@@ -38,7 +38,7 @@ mod layout {
     #[case::projects_on_top(Sidebar::ProjectsOnTop)]
     #[case::tree(Sidebar::Tree)]
     fn takes_the_left_edge_and_the_buttons_under_the_lists_go(#[case] sidebar: Sidebar) {
-        let a = full_layout(TALL, Widths::default(), false, sidebar, false, true);
+        let a = full_layout(TALL, Widths::default(), Screen { changes: false, sidebar, agents: false, icons: true });
         let footer = [a.separator, a.settings, a.usage, a.quit, a.issues, a.todo_button, a.files_button];
         assert_eq!(
             (a.activity, a.sidebar.x, footer.iter().all(|r| r.is_empty())),
@@ -48,8 +48,16 @@ mod layout {
 
     #[test]
     fn the_lists_reach_the_bottom() {
-        let without = full_layout(TALL, Widths::default(), false, Sidebar::SideBySide, false, false);
-        let with = full_layout(TALL, Widths::default(), false, Sidebar::SideBySide, false, true);
+        let without = full_layout(
+            TALL,
+            Widths::default(),
+            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icons: false },
+        );
+        let with = full_layout(
+            TALL,
+            Widths::default(),
+            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icons: true },
+        );
         assert_eq!((without.list.bottom(), with.list.bottom()), (TALL.height - 4, TALL.height));
     }
 
@@ -60,7 +68,11 @@ mod layout {
 
     #[test]
     fn compact_mode_keeps_its_bar() {
-        let a = full_layout(SMALL, Widths::default(), false, Sidebar::SideBySide, false, true);
+        let a = full_layout(
+            SMALL,
+            Widths::default(),
+            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icons: true },
+        );
         assert_eq!((a.activity, a.compact()), (Rect::default(), true));
     }
 }
@@ -195,7 +207,11 @@ mod drawing {
     fn the_compact_bar_draws_the_same_icons() {
         let v = View { icons: true, has_project: true, ..with_bar(None) };
         let t = render_sized(&v, SMALL.width, SMALL.height);
-        let a = full_layout(SMALL, Widths::default(), false, Sidebar::SideBySide, false, true);
+        let a = full_layout(
+            SMALL,
+            Widths::default(),
+            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icons: true },
+        );
         let middle = |r: Rect| row_text(&t, Rect { y: r.y + 1, ..r }).trim().to_string();
         assert_eq!(
             [middle(a.changes_button), middle(a.files_button), middle(a.search_button)],

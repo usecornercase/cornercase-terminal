@@ -30,7 +30,7 @@ impl Repo {
 
     pub(super) fn ask(&mut self, what: &str) {
         self.app.ask_pull_requests(Instant::now());
-        pump_until(&mut self.app, &self.rx, what, |a| a.pulls.asking.is_empty());
+        pump_until(&mut self.app, &self.rx, what, |a| a.git.pulls.asking.is_empty());
     }
 }
 
@@ -152,7 +152,7 @@ mod asking {
         app.ask_pull_requests(Instant::now());
         drain(&mut app, &rx);
 
-        assert!(app.pulls.asking.is_empty());
+        assert!(app.git.pulls.asking.is_empty());
         assert!(!tmp.path().join("gh.calls").exists());
     }
 
@@ -260,13 +260,13 @@ mod conflicts {
         std::fs::write(&json, CONFLICTING.replace("CONFLICTING", "UNKNOWN")).expect("json");
 
         repo.app.ask_pull_requests(Instant::now() + Duration::from_mins(10));
-        pump_until(&mut repo.app, &repo.rx, "second answer", |a| a.pulls.asking.is_empty());
+        pump_until(&mut repo.app, &repo.rx, "second answer", |a| a.git.pulls.asking.is_empty());
 
         assert!(row_text(&mut repo.app, WorkspaceRow::Workspace(1)).contains("#486!"));
         assert_eq!(repo.calls().len(), 2);
         std::fs::write(&json, CONFLICTING.replace("CONFLICTING", "MERGEABLE")).expect("json");
         repo.app.ask_pull_requests(Instant::now() + Duration::from_mins(20));
-        pump_until(&mut repo.app, &repo.rx, "third answer", |a| a.pulls.asking.is_empty());
+        pump_until(&mut repo.app, &repo.rx, "third answer", |a| a.git.pulls.asking.is_empty());
         assert!(row_text(&mut repo.app, WorkspaceRow::Workspace(1)).contains("#486✓"));
     }
 
@@ -293,7 +293,7 @@ mod conflicts {
         std::fs::write(&json, CONFLICTING).expect("json");
 
         repo.app.ask_pull_requests(Instant::now() + Duration::from_mins(10));
-        pump_until(&mut repo.app, &repo.rx, "second answer", |a| a.pulls.asking.is_empty());
+        pump_until(&mut repo.app, &repo.rx, "second answer", |a| a.git.pulls.asking.is_empty());
 
         assert_ne!(repo.app.refreshed(), before);
     }
@@ -328,7 +328,7 @@ mod dialog {
         click(&mut repo.app, ui::update_extra(AREA, COPY_LINK, DONE, ASK_AGENT).as_position());
 
         let text = "pull request #486 has merge conflicts with main";
-        assert_eq!(repo.app.outbox.host_writes, [clipboard::osc52(text)]);
+        assert_eq!(repo.app.take_host_writes(), [clipboard::osc52(text)]);
         assert_eq!(toast(&repo.app), Some(NO_AGENT));
     }
 
@@ -360,7 +360,7 @@ mod dialog {
         click(&mut repo.app, ui::update_buttons(AREA, COPY_LINK, DONE)[0].as_position());
 
         assert!(repo.app.overlay.is_none());
-        assert_eq!(repo.app.outbox.host_writes, [clipboard::osc52(URL)]);
+        assert_eq!(repo.app.take_host_writes(), [clipboard::osc52(URL)]);
         assert_eq!(toast(&repo.app), Some(COPIED));
     }
 
@@ -373,7 +373,7 @@ mod dialog {
 
         let text = "pull request #482 failed its checks: tests (ubuntu-24.04) \
                     https://github.com/acme/web-shop/actions/runs/1001/job/2001";
-        assert_eq!(repo.app.outbox.host_writes, [clipboard::osc52(text)]);
+        assert_eq!(repo.app.take_host_writes(), [clipboard::osc52(text)]);
         assert_eq!(toast(&repo.app), Some(NO_AGENT));
     }
 
@@ -403,7 +403,7 @@ mod dialog {
         let mut repo = found();
 
         open_dialog(&mut repo);
-        pump_until(&mut repo.app, &repo.rx, "gh answers", |a| a.pulls.asking.is_empty());
+        pump_until(&mut repo.app, &repo.rx, "gh answers", |a| a.git.pulls.asking.is_empty());
 
         assert_eq!(repo.calls().len(), 2);
     }
@@ -462,7 +462,7 @@ mod badge {
         let pos = badge_pos(&mut repo.app, '#');
 
         click(&mut repo.app, pos);
-        pump_until(&mut repo.app, &repo.rx, "gh answers", |a| a.pulls.asking.is_empty());
+        pump_until(&mut repo.app, &repo.rx, "gh answers", |a| a.git.pulls.asking.is_empty());
 
         assert_eq!(repo.calls().len(), 2);
     }
@@ -508,7 +508,7 @@ mod badge {
         render(&mut repo.app, area);
         let list = ui::layout_with(area, state::Widths::default(), false, config::Sidebar::Tree).list;
         let shape = repo.app.tree_shape();
-        let r = ui::tree_row(list, &shape, repo.app.scroll.projects, ui::TreeRow::Workspace(0, 1));
+        let r = ui::tree_row(list, &shape, repo.app.scroll.of(List::Projects), ui::TreeRow::Workspace(0, 1));
         let pos = find_in(&mut repo.app, r, area, '#');
 
         click_in(&mut repo.app, pos, area);
@@ -523,12 +523,12 @@ mod badge {
         let mut repo = found();
         let small = Rect::new(0, 0, 80, 40);
         let areas = ui::layout(small, state::Widths::default());
-        repo.app.nav = Some(ui::Nav::Workspaces);
+        repo.app.screen.nav = Some(ui::Nav::Workspaces);
         let r = ui::workspace_row(
             areas.workspaces_list,
             areas.pitch,
             &repo.app.tab_lines(),
-            repo.app.scroll.workspaces,
+            repo.app.scroll.of(List::Workspaces),
             WorkspaceRow::Workspace(1),
         );
         let pos = find_in(&mut repo.app, r, small, '#');
@@ -536,7 +536,7 @@ mod badge {
         click_in(&mut repo.app, Position::new(pos.x, r.y + r.height - 1), small);
 
         assert!(matches!(repo.app.overlay, Some(Overlay::PullRequest { .. })));
-        assert_eq!(repo.app.nav, None);
+        assert_eq!(repo.app.screen.nav, None);
     }
 }
 

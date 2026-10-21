@@ -35,6 +35,14 @@ pub(crate) struct Api {
     pub(crate) projects: Vec<String>,
 }
 
+struct Paged<'a> {
+    path: &'a str,
+    query: &'a [(&'a str, &'a str)],
+    missing: &'a str,
+    pages: usize,
+    cap: usize,
+}
+
 struct Me {
     gid: String,
     name: String,
@@ -50,26 +58,18 @@ impl Api {
         into_json(answer, missing, failure)
     }
 
-    fn rows(
-        &self,
-        path: &str,
-        query: &[(&str, &str)],
-        missing: &str,
-        pages: usize,
-        wanted: impl Fn(&Value) -> bool,
-        cap: usize,
-    ) -> Result<Vec<Value>> {
+    fn rows(&self, paged: &Paged, wanted: impl Fn(&Value) -> bool) -> Result<Vec<Value>> {
         let mut rows = Vec::new();
         let mut offset = String::new();
-        for _ in 0..pages {
-            let mut pairs = query.to_vec();
+        for _ in 0..paged.pages {
+            let mut pairs = paged.query.to_vec();
             if !offset.is_empty() {
                 pairs.push(("offset", offset.as_str()));
             }
-            let page = self.get(path, &pairs, missing)?;
+            let page = self.get(paged.path, &pairs, paged.missing)?;
             rows.extend(page["data"].as_array().into_iter().flatten().filter(|row| wanted(row)).cloned());
             offset = text(&page, "/next_page/offset");
-            if rows.len() >= cap || offset.is_empty() {
+            if rows.len() >= paged.cap || offset.is_empty() {
                 break;
             }
         }
@@ -100,7 +100,8 @@ impl Api {
     fn users(&self, me: &Me) -> Result<Vec<Value>> {
         let path = format!("/workspaces/{}/users", path_segment(&me.workspace));
         let query = [("opt_fields", "name,email"), ("limit", PAGE)];
-        self.rows(&path, &query, "the workspace users were not found", PEOPLE_PAGES, |_| true, usize::MAX)
+        let missing = "the workspace users were not found";
+        self.rows(&Paged { path: &path, query: &query, missing, pages: PEOPLE_PAGES, cap: usize::MAX }, |_| true)
     }
 
     pub(crate) fn whoami(&self) -> Result<Account> {
@@ -132,18 +133,8 @@ impl Api {
         let me = self.me()?;
         let names = names(&self.users(&me)?);
         let account = Account { handle: me.name.clone(), workspace: me.workspace_name.clone() };
-        let mut assignee = person(&query.people[0], &me.gid);
+        let assignee = self.assignee_filter(query, &me)?;
         let creator = person(&query.people[1], &me.gid);
-        if self.projects.is_empty() {
-            if !matches!(query.people[0], Who::Anyone | Who::Me) {
-                return Err(Error::Api(
-                    "this list is your tasks: set Asana projects in Settings → Issues → Asana to filter by someone \
-                     else"
-                        .into(),
-                ));
-            }
-            assignee = None;
-        }
         let wanted = |task: &Value| {
             text(task, "/resource_subtype") == "default_task"
                 && task["is_rendered_as_separator"].as_bool() != Some(true)
@@ -155,28 +146,55 @@ impl Api {
             let now = Stamp(SystemTime::now()).to_string();
             format!("{}Z", now.get(..19).unwrap_or_default())
         });
-        let mut base = vec![("opt_fields", LIST_FIELDS), ("limit", PAGE)];
-        base.extend(since.as_deref().map(|since| ("completed_since", since)));
-        let sources: Vec<(String, Vec<(&str, &str)>)> = if self.projects.is_empty() {
-            let mut query = base.clone();
-            query.extend([("assignee", "me"), ("workspace", me.workspace.as_str())]);
-            vec![("/tasks".to_string(), query)]
-        } else {
-            let project = |gid: &String| (format!("/projects/{}/tasks", path_segment(gid)), base.clone());
-            self.projects.iter().take(PROJECTS).map(project).collect()
-        };
-        let mut seen = HashSet::new();
-        let mut issues = Vec::new();
-        for (path, query) in &sources {
-            for task in self.rows(path, query, "the tasks were not found", LIST_PAGES, wanted, LIMIT)? {
-                if seen.insert(text(&task, "/gid")) {
-                    issues.extend(issue(&task, &names));
-                }
-            }
-        }
+        let sources = self.list_sources(since.as_deref(), &me.workspace);
+        let mut issues = self.collect_tasks(&sources, wanted, &names)?;
         issues.sort_by_key(|i| std::cmp::Reverse(parse_time(&i.updated_at).unwrap_or(0)));
         issues.truncate(LIMIT);
         Ok(Listed { account: Some(account), issues })
+    }
+
+    fn assignee_filter(&self, query: &Query, me: &Me) -> Result<Option<String>> {
+        if !self.projects.is_empty() {
+            return Ok(person(&query.people[0], &me.gid));
+        }
+        if !matches!(query.people[0], Who::Anyone | Who::Me) {
+            return Err(Error::Api(
+                "this list is your tasks: set Asana projects in Settings → Issues → Asana to filter by someone else"
+                    .into(),
+            ));
+        }
+        Ok(None)
+    }
+
+    fn list_sources<'a>(&self, since: Option<&'a str>, workspace: &'a str) -> Vec<(String, Vec<(&'a str, &'a str)>)> {
+        let mut base = vec![("opt_fields", LIST_FIELDS), ("limit", PAGE)];
+        base.extend(since.map(|since| ("completed_since", since)));
+        if self.projects.is_empty() {
+            let mut query = base;
+            query.extend([("assignee", "me"), ("workspace", workspace)]);
+            return vec![("/tasks".to_string(), query)];
+        }
+        let project = |gid: &String| (format!("/projects/{}/tasks", path_segment(gid)), base.clone());
+        self.projects.iter().take(PROJECTS).map(project).collect()
+    }
+
+    fn collect_tasks(
+        &self,
+        sources: &[(String, Vec<(&str, &str)>)],
+        wanted: impl Fn(&Value) -> bool,
+        names: &HashMap<String, String>,
+    ) -> Result<Vec<Issue>> {
+        let mut seen = HashSet::new();
+        let mut issues = Vec::new();
+        for (path, query) in sources {
+            let missing = "the tasks were not found";
+            let paged = Paged { path, query, missing, pages: LIST_PAGES, cap: LIMIT };
+            let tasks = self.rows(&paged, &wanted)?;
+            issues.extend(
+                tasks.iter().filter(|task| seen.insert(text(task, "/gid"))).filter_map(|task| issue(task, names)),
+            );
+        }
+        Ok(issues)
     }
 
     fn node(&self, me: &Me, key: &str) -> Result<Value> {
@@ -212,7 +230,9 @@ impl Api {
         let path = format!("/tasks/{}/stories", path_segment(gid));
         let query = [("resource_subtype", "comment_added"), ("opt_fields", COMMENT_FIELDS), ("limit", PAGE)];
         let wanted = |story: &Value| text(story, "/resource_subtype") == "comment_added";
-        let stories = self.rows(&path, &query, "the comments were not found", COMMENT_PAGES, wanted, usize::MAX)?;
+        let missing = "the comments were not found";
+        let stories =
+            self.rows(&Paged { path: &path, query: &query, missing, pages: COMMENT_PAGES, cap: usize::MAX }, wanted)?;
         let mut comments: Vec<Comment> = stories
             .iter()
             .map(|c| Comment {

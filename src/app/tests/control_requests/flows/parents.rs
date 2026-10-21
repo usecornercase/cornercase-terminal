@@ -50,9 +50,9 @@ fn restored_members_hang_from_the_restored_orchestrator() {
 
     assert!(again.restore(&saved, AREA));
 
-    let own = again.runs[0].pane_of(ORCHESTRATOR).expect("the orchestrator");
+    let own = again.runs.all()[0].pane_of(ORCHESTRATOR).expect("the orchestrator");
     let members: Vec<(String, Option<u64>)> =
-        again.runs[0].members.iter().map(|m| (m.role.clone(), pane(&again, m.pane).parent)).collect();
+        again.runs.all()[0].members.iter().map(|m| (m.role.clone(), pane(&again, m.pane).parent)).collect();
     let expected =
         [(ORCHESTRATOR.to_string(), None), ("coder".to_string(), Some(own)), ("reviewer".to_string(), Some(own))];
     assert_eq!(members, expected);

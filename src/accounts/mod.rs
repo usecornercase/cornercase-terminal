@@ -11,6 +11,7 @@ use crate::log;
 pub(crate) mod links;
 pub(crate) mod login;
 mod pick;
+pub(crate) mod transfer;
 
 pub(crate) use pick::AgentAccounts;
 
@@ -104,13 +105,22 @@ fn private(path: &Path) -> io::Result<()> {
     fs::set_permissions(path, fs::Permissions::from_mode(0o700))
 }
 
+pub(crate) const LINKED: &str = "it is a symbolic link, and cornercase does not write through links";
+
 fn private_folder(dir: &Path) -> io::Result<()> {
     match fs::symlink_metadata(dir) {
         Ok(meta) if meta.is_dir() => Ok(()),
+        Ok(meta) if meta.is_symlink() => Err(io::Error::new(io::ErrorKind::AlreadyExists, LINKED)),
         Ok(_) => Err(io::Error::new(io::ErrorKind::AlreadyExists, "it is not a folder")),
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
-            DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
-            private(dir)
+            if let Some(parent) = dir.parent() {
+                private_folder(parent)?;
+            }
+            match DirBuilder::new().mode(0o700).create(dir) {
+                Ok(()) => private(dir),
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists && dir.is_dir() => Ok(()),
+                Err(e) => Err(e),
+            }
         }
         Err(e) => Err(e),
     }

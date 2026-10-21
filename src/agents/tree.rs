@@ -31,14 +31,20 @@ pub(crate) fn order(rows: &[(u64, Option<u64>)], folded: &HashSet<u64>, narrow: 
         }
     }
     let folded: Vec<bool> = rows.iter().map(|(id, _)| folded.contains(id)).collect();
-    let mut visited = vec![false; rows.len()];
-    let mut nodes = Vec::with_capacity(rows.len());
+    let mut walker = Walker {
+        children: &children,
+        folded: &folded,
+        cap,
+        visited: vec![false; rows.len()],
+        nodes: Vec::with_capacity(rows.len()),
+    };
     for index in (0..rows.len()).filter(|&index| parent[index].is_none()) {
-        walk(index, &children, &folded, &mut visited, cap, &mut nodes);
+        walker.walk(index);
     }
-    while let Some(index) = (0..rows.len()).find(|&index| !visited[index]) {
-        walk(index, &children, &folded, &mut visited, cap, &mut nodes);
+    while let Some(index) = (0..rows.len()).find(|&index| !walker.visited[index]) {
+        walker.walk(index);
     }
+    let mut nodes = walker.nodes;
     shape(&mut nodes);
     nodes
 }
@@ -55,37 +61,38 @@ fn shape(nodes: &mut [Node]) {
     }
 }
 
-fn walk(
-    root: usize,
-    children: &[Vec<usize>],
-    folded: &[bool],
-    visited: &mut [bool],
+struct Walker<'a> {
+    children: &'a [Vec<usize>],
+    folded: &'a [bool],
     cap: usize,
-    nodes: &mut Vec<Node>,
-) {
-    visited[root] = true;
-    let mut stack = vec![(root, 0)];
-    while let Some((index, depth)) = stack.pop() {
-        let next: Vec<usize> = children[index].iter().copied().filter(|&child| !visited[child]).collect();
-        for &child in &next {
-            visited[child] = true;
-        }
-        let mut node = Node {
-            index,
-            depth: depth.min(cap),
-            last: true,
-            rails: Vec::new(),
-            has_children: !next.is_empty(),
-            hidden: Vec::new(),
-        };
-        if folded[index] {
-            node.hidden = hide(next, children, visited);
-        } else {
-            for &child in next.iter().rev() {
-                stack.push((child, depth + 1));
+    visited: Vec<bool>,
+    nodes: Vec<Node>,
+}
+
+impl Walker<'_> {
+    fn walk(&mut self, root: usize) {
+        self.visited[root] = true;
+        let mut stack = vec![(root, 0)];
+        while let Some((index, depth)) = stack.pop() {
+            let next: Vec<usize> = self.children[index].iter().copied().filter(|&child| !self.visited[child]).collect();
+            for &child in &next {
+                self.visited[child] = true;
             }
+            let mut node = Node {
+                index,
+                depth: depth.min(self.cap),
+                last: true,
+                rails: Vec::new(),
+                has_children: !next.is_empty(),
+                hidden: Vec::new(),
+            };
+            if self.folded[index] {
+                node.hidden = hide(next, self.children, &mut self.visited);
+            } else {
+                stack.extend(next.iter().rev().map(|&child| (child, depth + 1)));
+            }
+            self.nodes.push(node);
         }
-        nodes.push(node);
     }
 }
 

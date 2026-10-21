@@ -52,7 +52,7 @@ fn restart_when_idle_waits_for_the_subagents() {
 
     ask(&mut agent.app, None, Command::RestartWhenIdle(wire::RestartWhenIdle { timeout: None }));
     let since = Instant::now();
-    agent.refreshing("another look at the agents", |a| a.agents.watched.is_some_and(|at| at > since));
+    agent.refreshing("another look at the agents", |a| a.agents.watched().is_some_and(|at| at > since));
     let held = (answers(&mut agent.app), agent.app.take_restart().is_none());
     agent.finish();
     assert!(matches!(agent.answered("the subagent ends"), Response::Ok(_)));

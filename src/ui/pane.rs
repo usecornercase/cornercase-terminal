@@ -8,12 +8,13 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use super::View;
+use super::accounts_bar::{Row as AccountRow, draw_row};
 use super::dialog::dialog_button_style;
 use super::sidebar::NEW_BUTTON;
 use super::theme::{BRAND_COLOR, status_icon};
 use super::widgets::sidebar_hovered;
 use crate::agents::activity::Status;
-use crate::project::split::{Dir, Node, Place};
+use crate::project::split::{Dir, Divider, Node, Place};
 use crate::term::emulator::Snapshot;
 use crate::text::truncate_right;
 
@@ -41,11 +42,14 @@ pub(crate) struct TabView {
     pub(crate) link: Option<(u16, Range<u16>)>,
     pub(crate) landing: Option<(Rect, Place)>,
     pub(crate) bands: Vec<Option<PaneBand>>,
+    pub(crate) footer: bool,
+    pub(crate) accounts: Vec<AccountRow>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PaneBand {
     Resuming(String),
+    Restarts(String),
     Held { text: String, queued: bool },
 }
 
@@ -106,6 +110,14 @@ pub(super) fn wordmark() -> Vec<Span<'static>> {
     vec![Span::styled("c", mark), Span::styled("ornercase", Style::default().add_modifier(Modifier::BOLD))]
 }
 
+pub(crate) fn split_footer(leaf: Rect, footer: bool) -> (Rect, Option<Rect>) {
+    if !footer || leaf.height < 2 {
+        return (leaf, None);
+    }
+    let terminal = Rect { height: leaf.height - 1, ..leaf };
+    (terminal, Some(Rect { y: terminal.bottom(), height: 1, ..leaf }))
+}
+
 pub(crate) fn scrollback_label(below: usize) -> String {
     format!(" ↓ {below} more ")
 }
@@ -126,13 +138,25 @@ const HELD_SEND: &str = " send now ";
 const HELD_WAIT: &str = " wait turn ";
 const HELD_TEXT_MIN: u16 = 6;
 
-fn resume_label(agent: &str) -> String {
-    format!(" resuming {agent}… ")
+fn resume_label(text: &str) -> String {
+    format!(" {text}… ")
 }
 
 pub(crate) fn resume_notice(pane: Rect, agent: &str) -> Option<(Rect, Rect)> {
-    let label = u16::try_from(resume_label(agent).chars().count()).unwrap_or(u16::MAX);
-    let button = u16::try_from(RESUME_CANCEL.chars().count()).unwrap_or(u16::MAX);
+    notice(pane, &resume_label(agent))
+}
+
+pub(crate) fn restart_notice(pane: Rect, text: &str) -> Option<(Rect, Rect)> {
+    notice(pane, &restart_label(text))
+}
+
+fn restart_label(text: &str) -> String {
+    format!(" {text} ")
+}
+
+fn notice(pane: Rect, label: &str) -> Option<(Rect, Rect)> {
+    let label = width_of(label);
+    let button = width_of(RESUME_CANCEL);
     let width = label.saturating_add(button).saturating_add(1);
     if pane.height == 0 || width > pane.width {
         return None;
@@ -169,12 +193,12 @@ pub(crate) fn held_notice(pane: Rect, below: usize, queued: bool) -> Option<Held
     Some(HeldBar { text, send: Rect::new(send_x, y, send_w, 1), wait })
 }
 
-fn draw_resume_notice(f: &mut Frame, view: &View, pane: Rect, agent: &str) {
-    let Some((label, button)) = resume_notice(pane, agent) else { return };
+fn draw_notice(f: &mut Frame, view: &View, pane: Rect, text: String) {
+    let Some((label, button)) = notice(pane, &text) else { return };
     let band = Rect { y: label.y, height: 1, ..pane };
     f.buffer_mut().set_style(band, Style::default().bg(view.surface()));
-    let text = Style::default().bg(view.surface()).add_modifier(Modifier::BOLD);
-    f.render_widget(Paragraph::new(Span::styled(resume_label(agent), text)), label);
+    let bold = Style::default().bg(view.surface()).add_modifier(Modifier::BOLD);
+    f.render_widget(Paragraph::new(Span::styled(text, bold)), label);
     let style = dialog_button_style(view, button, false);
     f.render_widget(Paragraph::new(Span::styled(RESUME_CANCEL, style)), button);
 }
@@ -214,17 +238,23 @@ fn draw_scrollback_badge(f: &mut Frame, view: &View, pane: Rect, below: usize) {
 pub(super) fn draw_tab(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
     let panes = tab.layout.visible(area, tab.active);
     let split = panes.len() > 1;
-    for (i, pane) in panes {
+    for (i, leaf) in panes {
         let Some(screen) = tab.screens.get(i) else { continue };
+        let (pane, row) = split_footer(leaf, tab.footer);
         let active = i == tab.active;
-        draw_screen(f, screen, pane, active && view.overlay.is_none(), split && !active && tab.dim_inactive);
+        let dim = split && !active && tab.dim_inactive;
+        draw_screen(f, screen, pane, active && view.overlay.is_none(), dim);
+        if let (Some(row), Some(shown)) = (row, tab.accounts.get(i)) {
+            draw_row(f, view, row, shown, dim);
+        }
         if let Some((row, cols)) = tab.link.as_ref().filter(|_| active) {
             let r = Rect::new(pane.x + cols.start, pane.y + row, cols.end - cols.start, 1).intersection(pane);
             f.buffer_mut().set_style(r, Style::default().fg(Color::Cyan).add_modifier(Modifier::UNDERLINED));
         }
         draw_scrollback_badge(f, view, pane, screen.below);
         match tab.bands.get(i) {
-            Some(Some(PaneBand::Resuming(agent))) => draw_resume_notice(f, view, pane, agent),
+            Some(Some(PaneBand::Resuming(agent))) => draw_notice(f, view, pane, resume_label(agent)),
+            Some(Some(PaneBand::Restarts(text))) => draw_notice(f, view, pane, restart_label(text)),
             Some(Some(PaneBand::Held { text, queued })) => {
                 draw_held_notice(f, view, (pane, screen.below), text, *queued);
             }
@@ -285,23 +315,41 @@ fn divider_symbol(links: u8) -> &'static str {
     }
 }
 
+type DividerCells = HashMap<(u16, u16), (u8, bool)>;
+
 fn draw_dividers(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
     let dividers = tab.layout.dividers(area);
-    let mut cells: HashMap<(u16, u16), (u8, bool)> = HashMap::new();
+    let mut cells = DividerCells::new();
     for d in &dividers {
         let lit = tab.dragging.as_ref() == Some(&d.path) || (tab.dragging.is_none() && sidebar_hovered(view, d.line));
-        let links = match d.dir {
-            Dir::Right => UP | DOWN,
-            Dir::Down => LEFT | RIGHT,
-        };
-        for y in d.line.top()..d.line.bottom() {
-            for x in d.line.left()..d.line.right() {
-                let cell = cells.entry((x, y)).or_default();
-                cell.0 |= links;
-                cell.1 |= lit;
-            }
+        mark_line(&mut cells, d, lit);
+    }
+    bridge_dividers(&mut cells, &dividers);
+    for d in &dividers {
+        join_ends(&mut cells, d);
+    }
+    let buf = f.buffer_mut();
+    for ((x, y), (links, lit)) in cells {
+        let color = if lit { Color::Cyan } else { view.line() };
+        buf[(x, y)].set_symbol(divider_symbol(links)).set_style(Style::default().fg(color));
+    }
+}
+
+fn mark_line(cells: &mut DividerCells, d: &Divider, lit: bool) {
+    let links = match d.dir {
+        Dir::Right => UP | DOWN,
+        Dir::Down => LEFT | RIGHT,
+    };
+    for y in d.line.top()..d.line.bottom() {
+        for x in d.line.left()..d.line.right() {
+            let cell = cells.entry((x, y)).or_default();
+            cell.0 |= links;
+            cell.1 |= lit;
         }
     }
+}
+
+fn bridge_dividers(cells: &mut DividerCells, dividers: &[Divider]) {
     let bridges: Vec<(u16, u16)> = dividers
         .iter()
         .filter(|d| d.dir == Dir::Down)
@@ -319,23 +367,19 @@ fn draw_dividers(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
             bar.0 |= RIGHT;
         }
     }
-    for d in &dividers {
-        let Rect { x, y, .. } = d.line;
-        let ends = match d.dir {
-            Dir::Right => [(Some(x), y.checked_sub(1), DOWN), (Some(x), Some(d.line.bottom()), UP)],
-            Dir::Down => [(x.checked_sub(1), Some(y), RIGHT), (Some(d.line.right()), Some(y), LEFT)],
-        };
-        for (x, y, link) in ends {
-            if let (Some(x), Some(y)) = (x, y)
-                && let Some(cell) = cells.get_mut(&(x, y))
-            {
-                cell.0 |= link;
-            }
+}
+
+fn join_ends(cells: &mut DividerCells, d: &Divider) {
+    let Rect { x, y, .. } = d.line;
+    let ends = match d.dir {
+        Dir::Right => [(Some(x), y.checked_sub(1), DOWN), (Some(x), Some(d.line.bottom()), UP)],
+        Dir::Down => [(x.checked_sub(1), Some(y), RIGHT), (Some(d.line.right()), Some(y), LEFT)],
+    };
+    for (x, y, link) in ends {
+        if let (Some(x), Some(y)) = (x, y)
+            && let Some(cell) = cells.get_mut(&(x, y))
+        {
+            cell.0 |= link;
         }
-    }
-    let buf = f.buffer_mut();
-    for ((x, y), (links, lit)) in cells {
-        let color = if lit { Color::Cyan } else { view.line() };
-        buf[(x, y)].set_symbol(divider_symbol(links)).set_style(Style::default().fg(color));
     }
 }

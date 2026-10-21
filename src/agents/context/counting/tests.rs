@@ -63,29 +63,20 @@ fn evicted_conversations_keep_only_cutoffs_and_their_cumulative_baseline() {
     let mut ledger = Ledger::default();
     let record = |usage| Record { at: since(), id: "one".into(), usage };
     let tokens = Tokens { out: 10, ..Tokens::default() };
-    for i in 0..20 {
-        ledger.apply(
-            &i.to_string(),
-            since(),
-            [
-                record(Usage::Prompt),
-                record(Usage::Tokens(tokens)),
-                record(Usage::Cumulative { total: tokens, last: tokens }),
-            ],
-        );
-    }
-    assert_eq!(ledger.conversations.len(), CONVERSATIONS);
-    assert_eq!(ledger.forgotten.len(), 4);
-    assert_eq!(sum(ledger.take()), (20, Tokens { out: 400, ..Tokens::default() }));
-    ledger.apply(
-        "0",
-        since(),
+    let all_three = || {
         [
             record(Usage::Prompt),
             record(Usage::Tokens(tokens)),
             record(Usage::Cumulative { total: tokens, last: tokens }),
-        ],
-    );
+        ]
+    };
+    for i in 0..20 {
+        ledger.apply(&i.to_string(), since(), all_three());
+    }
+    assert_eq!(ledger.conversations.len(), CONVERSATIONS);
+    assert_eq!(ledger.forgotten.len(), 4);
+    assert_eq!(sum(ledger.take()), (20, Tokens { out: 400, ..Tokens::default() }));
+    ledger.apply("0", since(), all_three());
     assert_eq!(sum(ledger.take()), (0, Tokens::default()));
     let later = since() + Duration::from_secs(1);
     ledger.apply(

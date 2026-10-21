@@ -157,3 +157,88 @@ test('a narrow viewer leaves open in… out so the line info keeps its room', ()
   assert.ok(app.textAt('ask agent'));
   app.destroy();
 });
+
+function viewer(app: App) {
+  const found = app.files.place(app.workspace()?.id ?? -1).viewer;
+  assert.ok(found);
+  return found;
+}
+
+function key(app: App, name: string): void {
+  app.key({ key: name } as never);
+  app.render();
+}
+
+test('the find field lights the matches, steps through them and closes with Esc', () => {
+  const app = demo(140);
+  click(app, '⌕  ▢');
+  assert.ok(app.textAt('text in this file'));
+  for (const c of 'line') app.key({ key: c } as never);
+  app.render();
+  assert.ok(app.textAt('1/3'));
+  key(app, 'ArrowDown');
+  assert.ok(app.textAt('2/3'));
+  click(app, '↑');
+  assert.ok(app.textAt('1/3'));
+  assert.deepEqual(viewer(app).selection, [11, 12]);
+  key(app, 'Escape');
+  assert.ok(app.textAt('text in this file'));
+  assert.equal(viewer(app).find?.query, '');
+  key(app, 'Escape');
+  assert.equal(viewer(app).find, null);
+  assert.equal(app.filesShown(), true);
+  key(app, 'Escape');
+  assert.equal(app.filesShown(), false);
+  app.destroy();
+});
+
+test('typing in the find field says when nothing matches and wraps at the ends', () => {
+  const app = demo(140);
+  click(app, '⌕  ▢');
+  for (const c of 'zzz') app.key({ key: c } as never);
+  app.render();
+  assert.ok(app.textAt('no matches'));
+  for (let i = 0; i < 3; i++) key(app, 'Backspace');
+  for (const c of 'line') app.key({ key: c } as never);
+  key(app, 'ArrowUp');
+  assert.ok(app.textAt('3/3'));
+  key(app, 'Enter');
+  assert.ok(app.textAt('1/3'));
+  app.destroy();
+});
+
+test('a press outside the panel gives the find keys back and keeps the query', () => {
+  const app = demo(140);
+  click(app, '⌕  ▢');
+  for (const c of 'fn') app.key({ key: c } as never);
+  assert.equal(app.filesTyping(), true);
+  const pane = app.areas().pane;
+  app.pointerDown(pane.x + 2, pane.y + 2, 0);
+  app.pointerUp();
+  assert.equal(app.filesTyping(), false);
+  assert.equal(viewer(app).find?.query, 'fn');
+  app.destroy();
+});
+
+test('a text search result opens the file with the field holding the query', () => {
+  const app = new App();
+  app.virtual = true;
+  app.scripted = true;
+  app.resize(140, 34);
+  world(app, { scripted: true });
+  app.files.open = true;
+  app.render();
+  click(app, 'text in the files');
+  for (const c of 'first_line') app.key({ key: c } as never);
+  app.render();
+  key(app, 'ArrowDown');
+  key(app, 'Enter');
+  const opened = viewer(app);
+  assert.equal(opened.find?.query, 'first_line');
+  assert.equal(opened.find?.focused, true);
+  assert.deepEqual(opened.selection && opened.selection[0] === opened.selection[1], true);
+  assert.ok(app.textAt('1/1'));
+  click(app, '‹');
+  assert.equal(app.files.place(app.workspace()?.id ?? -1).viewer, null);
+  app.destroy();
+});

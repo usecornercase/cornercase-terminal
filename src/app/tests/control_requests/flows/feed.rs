@@ -5,14 +5,14 @@ use serde_json::json;
 use super::*;
 use crate::agents::activity::{Activity, Status};
 use crate::app::tests::flow_panel::team as lightweight;
-use crate::control::{FlowBacklog, FlowMessage, FlowRuns, RunEdge, RunFiles, Snapshot};
+use crate::control::{FlowBacklog, FlowMessage, FlowRuns, RunEdge, RunFiles, RunInfo, Snapshot};
 use crate::flows::progress::Progress;
 
 type Fed = Snapshot<FlowRuns>;
 type Shown<'a> = (u64, &'a str, &'a str, &'a str, Option<&'a str>, usize, Option<RunEdge>);
 
 fn follow(app: &mut App) -> Fed {
-    app.events.runs.every = Duration::ZERO;
+    app.clients.events.runs.set_every(Duration::ZERO);
     let answer = value(app, None, Command::FlowRuns(wire::FlowRunsWatch::default()));
     serde_json::from_value(answer).expect("a runs snapshot")
 }
@@ -30,7 +30,7 @@ fn role<'a>(fed: &'a Fed, name: &str) -> &'a wire::RoleState {
 }
 
 fn pane_of(app: &App, role: &str) -> u64 {
-    app.runs[0].pane_of(role).expect("a member")
+    app.runs.all()[0].pane_of(role).expect("a member")
 }
 
 fn tell(app: &mut App, from: &str, to: &str, text: &str) {
@@ -56,17 +56,8 @@ fn backlog(app: &mut App) -> FlowBacklog {
     serde_json::from_value(ok(app, "flow-messages", &json!({}))).expect("a backlog")
 }
 
-#[test]
-fn a_run_with_the_fake_claude_is_followed_from_its_start_to_its_end() {
-    let mut team = Team::new();
-    let first = follow(&mut team.app);
-    assert_eq!(first.report.runs, Vec::new());
-    assert_eq!(first.report.boot, wire::server_token());
-
-    let started = team.started();
-    team.until_got(3);
-
-    let begun = last(&mut team.app);
+fn assert_run_begun(app: &mut App, started: &RunInfo) {
+    let begun = last(app);
     let run = &begun.report.runs[0];
     assert_eq!((run.run, run.workspace, run.project), (started.run, started.workspace, started.project));
     assert_eq!((run.stage, run.holder.clone(), run.last.clone(), run.ended), (None, None, None, false));
@@ -76,7 +67,9 @@ fn a_run_with_the_fake_claude_is_followed_from_its_start_to_its_end() {
     let members: Vec<(&str, Option<u64>)> = started.members.iter().map(|m| (m.role.as_str(), Some(m.pane))).collect();
     assert_eq!(roles, members);
     assert!(run.roles.iter().all(|r| r.tab.is_some() && !r.closed));
+}
 
+fn send_around(team: &mut Team, started: &RunInfo) {
     let orchestrator = started.members[0].pane;
     let (coder, reviewer) = (started.members[1].pane, started.members[2].pane);
     for (to, pane) in [("coder", coder), ("reviewer", reviewer), ("coder", coder)] {
@@ -84,8 +77,9 @@ fn a_run_with_the_fake_claude_is_followed_from_its_start_to_its_end() {
         ask(&mut team.app, Some(orchestrator), Command::Send(send));
         answered(&mut team.app, &team.rx, "the send");
     }
+}
 
-    let stood = last(&mut team.app);
+fn assert_run_stood(stood: &Fed) {
     let run = &stood.report.runs[0];
     assert_eq!(
         (run.stage, run.holder.as_deref(), run.rounds.clone(), run.messages),
@@ -96,12 +90,28 @@ fn a_run_with_the_fake_claude_is_followed_from_its_start_to_its_end() {
         (step.edge, step.from.as_deref(), step.to.as_str()),
         (RunEdge::Loop { stage: 1 }, Some("reviewer"), "coder")
     );
+}
+
+#[test]
+fn a_run_with_the_fake_claude_is_followed_from_its_start_to_its_end() {
+    let mut team = Team::new();
+    let first = follow(&mut team.app);
+    assert_eq!(first.report.runs, Vec::new());
+    assert_eq!(first.report.boot, wire::server_token());
+
+    let started = team.started();
+    team.until_got(3);
+    assert_run_begun(&mut team.app, &started);
+    send_around(&mut team, &started);
+
+    let stood = last(&mut team.app);
+    assert_run_stood(&stood);
 
     let tabs: Vec<u64> = stood.report.runs[0].roles.iter().filter_map(|r| r.tab).collect();
     for tab in tabs {
         ok(&mut team.app, "close", &json!({"item": {"tab": tab}}));
     }
-    refreshing(&mut team.app, &team.rx, "the run ends", |app| app.runs.is_empty());
+    refreshing(&mut team.app, &team.rx, "the run ends", |app| app.runs.all().is_empty());
     let ended = last(&mut team.app);
     assert_eq!(ended.report.runs, Vec::new());
     assert!(ended.revision > stood.revision);
@@ -160,13 +170,16 @@ fn a_member_whose_tab_closed_is_closed_and_the_rest_are_not() {
 #[test]
 fn a_run_restored_with_its_stage_and_rounds_has_no_messages_and_a_new_id() {
     let (mut app, _rx, _dir) = lightweight();
-    let flow = app.runs[0].flow.clone();
-    app.runs[0].progress = Progress::resumed(&flow, Some(1), &[0, 2, 0]);
-    app.runs[0].id += 100;
+    let flow = app.runs.all()[0].flow.clone();
+    app.runs.first_mut().progress = Progress::resumed(&flow, Some(1), &[0, 2, 0]);
+    app.runs.first_mut().id += 100;
 
     let run = &follow(&mut app).report.runs[0];
 
-    assert_eq!((run.run, run.stage, run.rounds.clone(), run.messages), (app.runs[0].id, Some(1), vec![0, 2, 0], 0));
+    assert_eq!(
+        (run.run, run.stage, run.rounds.clone(), run.messages),
+        (app.runs.all()[0].id, Some(1), vec![0, 2, 0], 0)
+    );
     assert_eq!(run.last, None);
     assert_eq!(backlog(&mut app).messages.len(), 0);
 }
@@ -181,7 +194,7 @@ fn the_messages_of_a_run_come_with_what_was_sent_before() {
 
     assert_eq!(
         (kept.boot.as_str(), kept.run, kept.workspace),
-        (wire::server_token(), app.runs[0].id, app.runs[0].workspace)
+        (wire::server_token(), app.runs.all()[0].id, app.runs.all()[0].workspace)
     );
     let shown: Vec<Shown> = kept
         .messages
@@ -207,7 +220,7 @@ fn the_messages_of_a_run_come_with_what_was_sent_before() {
     let told: Vec<(u64, &str, &str)> = live.iter().map(|m| (m.seq, m.kind.as_str(), m.to.as_str())).collect();
     assert_eq!(told, [(3, "send", "coder"), (4, "read", "coder")]);
     assert_eq!(live[0].edge, Some(RunEdge::Loop { stage: 1 }));
-    assert_eq!((live[1].text.clone(), live[0].run), (None, app.runs[0].id));
+    assert_eq!((live[1].text.clone(), live[0].run), (None, app.runs.all()[0].id));
 }
 
 #[test]
@@ -231,7 +244,7 @@ fn a_messages_stream_ends_when_its_run_does() {
 
     let ended: Vec<Streamed> = streamed(&mut app);
     assert!(ended.contains(&Streamed::End), "{ended:?}");
-    assert_eq!(app.events.flow_messages, []);
+    assert!(!app.clients.events.follows_flow_messages(CLIENT));
 }
 
 #[test]
@@ -267,7 +280,7 @@ mod files {
             let at = SystemTime::now() - Duration::from_secs(100 * (age as u64 + 1));
             std::fs::File::options().write(true).open(&path).expect("open").set_modified(at).expect("a time");
         }
-        app.runs[0].dir = Some(dir.path().to_path_buf());
+        app.runs.first_mut().dir = Some(dir.path().to_path_buf());
         dir
     }
 
@@ -284,7 +297,10 @@ mod files {
 
         let names: Vec<&str> = files.files.iter().map(|f| f.name.as_str()).collect();
         assert_eq!(names, ["newest.md", "older.md", "oldest.md"]);
-        assert_eq!((files.run, files.workspace, files.more), (Some(app.runs[0].id), app.runs[0].workspace, false));
+        assert_eq!(
+            (files.run, files.workspace, files.more),
+            (Some(app.runs.all()[0].id), app.runs.all()[0].workspace, false)
+        );
         assert_eq!(files.dir, dir.path());
         assert_eq!(files.files[0].path, dir.path().join("newest.md"));
         assert_eq!(files.files[0].bytes, 9);
@@ -306,8 +322,9 @@ mod files {
     fn the_last_folder_is_listed_after_the_run_ended() {
         let (mut app, rx, _dir) = lightweight();
         let dir = folder(&mut app, &["answer.md"]);
-        let workspace = app.runs[0].workspace;
-        let (p, w) = app.projects.workspace_index(workspace).expect("the workspace");
+        let workspace = app.runs.all()[0].workspace;
+        let (p, w) =
+            app.projects.workspace_index(workspace).map(|at| (at.project(), at.index())).expect("the workspace");
         app.projects[p].workspaces[w].run_dirs.push(dir.path().to_path_buf());
         app.runs.clear();
 

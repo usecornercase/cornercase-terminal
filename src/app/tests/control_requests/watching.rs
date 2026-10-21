@@ -13,7 +13,7 @@ fn watch(app: &mut App) -> Snapshot {
 }
 
 fn watching(app: &mut App) -> Snapshot {
-    app.events.snapshots.every = Duration::ZERO;
+    app.clients.events.snapshots.set_every(Duration::ZERO);
     watch(app)
 }
 
@@ -106,7 +106,7 @@ fn the_answer_is_the_whole_session_with_its_revision_and_nothing_else_is_sent() 
 #[test]
 fn nothing_is_built_while_nobody_watches() {
     let (mut app, _rx, _dirs) = app_with(1);
-    app.events.snapshots.every = Duration::ZERO;
+    app.clients.events.snapshots.set_every(Duration::ZERO);
 
     for name in ["one", "two", "three"] {
         app.projects[0].name = Some(name.into());
@@ -254,7 +254,7 @@ fn changes_within_the_throttle_wait_and_go_out_as_one_snapshot() {
     let revision = watching(&mut app).revision;
     let revision = settled(&mut app, &rx, revision);
     let every = Duration::from_secs(3600);
-    app.events.snapshots.every = every;
+    app.clients.events.snapshots.set_every(every);
     assert_eq!(app.tick(Instant::now()), None, "nothing waits before a step");
 
     rename(&mut app, Item::Tab(tab), "first");
@@ -263,7 +263,7 @@ fn changes_within_the_throttle_wait_and_go_out_as_one_snapshot() {
     app.trace();
     let waited = app.take_events();
     let wake = app.tick(Instant::now()).expect("a wake-up for the snapshot");
-    app.events.snapshots.every = Duration::ZERO;
+    app.clients.events.snapshots.set_every(Duration::ZERO);
     let snapshot = next(&mut app, revision);
 
     assert_eq!(waited, []);
@@ -291,10 +291,10 @@ fn output_alone_does_not_build_the_session_again_even_when_the_refresh_reads_the
     let pane = term(&app, 0).id;
     let revision = watching(&mut app).revision;
     settled(&mut app, &rx, revision);
-    app.agents.watched = Some(Instant::now());
+    app.agents.set_watched(Some(Instant::now()));
     app.trace_refresh();
     app.take_events();
-    let built = app.events.snapshots.built;
+    let built = app.clients.events.snapshots.built();
 
     let wrote = app.projects[0].workspaces[0].tabs[0].panes[0].write(b"echo cells-\"\"only\n");
     wait_until("the shell prints", || {
@@ -302,13 +302,13 @@ fn output_alone_does_not_build_the_session_again_even_when_the_refresh_reads_the
         pane_screen(&app, pane).contains("cells-only")
     });
     app.trace_refresh();
-    let after_output = (app.events.snapshots.built, app.take_events());
-    app.agents.watched = Some(Instant::now());
+    let after_output = (app.clients.events.snapshots.built(), app.take_events());
+    app.agents.set_watched(Some(Instant::now()));
     app.trace_refresh();
 
     assert!(wrote);
     assert_eq!(after_output, (built, Vec::new()));
-    assert_eq!((app.events.snapshots.built, app.take_events()), (built, Vec::new()));
+    assert_eq!((app.clients.events.snapshots.built(), app.take_events()), (built, Vec::new()));
 }
 
 #[test]
@@ -423,4 +423,24 @@ fn a_fold_of_an_agents_children_reaches_watchers() {
     let opened = next(&mut app, folded.revision);
 
     assert_eq!((collapsed(&folded), collapsed(&opened)), (vec![ids[0]], Vec::<u64>::new()));
+}
+
+#[test]
+fn a_pane_s_account_changing_sends_its_accounts() {
+    let (mut app, rx, _dirs) = app_with(1);
+    let root = TempDir::new();
+    crate::accounts::add(root.path(), crate::agents::Known::Claude, "work", None).expect("an account");
+    let chosen: std::collections::BTreeMap<String, String> = [("claude".to_string(), "work".to_string())].into();
+    let revision = watching(&mut app).revision;
+    let revision = settled(&mut app, &rx, revision);
+    let accounts = |snapshot: &Snapshot| snapshot.report.projects[0].workspaces[0].tabs[0].panes[0].accounts.clone();
+
+    let before = app.refreshed();
+
+    let shell = app.projects[0].workspaces[0].tabs[0].pane_mut().expect("a pane");
+    shell.set_accounts(crate::accounts::Accounts::of(root.path(), &chosen));
+    let changed = next(&mut app, revision);
+
+    assert_ne!(app.refreshed(), before);
+    assert_eq!(accounts(&changed), chosen);
 }

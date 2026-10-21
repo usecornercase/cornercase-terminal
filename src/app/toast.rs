@@ -4,7 +4,6 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
-use crate::host::clipboard;
 use crate::queue;
 use crate::todo::{self};
 use crate::ui::{self};
@@ -61,13 +60,13 @@ impl Toast {
 
 impl App {
     pub(super) fn toast_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> bool {
-        let Some(toast) = &self.toast else { return false };
+        let Some(toast) = &self.messages.toast else { return false };
         if ev.kind != MouseEventKind::Down(MouseButton::Left) || !ui::toast_button(area, toast.view()).contains(pos) {
             return false;
         }
-        match self.toast.take() {
-            Some(Toast { undo: Some(Undo::Todos(removed)), .. }) => self.todos.restore(removed),
-            Some(Toast { undo: Some(Undo::Queue(entries)), .. }) => self.queued.queue.restore(entries),
+        match self.messages.toast.take() {
+            Some(Toast { undo: Some(Undo::Todos(removed)), .. }) => self.panels.todos.restore(removed),
+            Some(Toast { undo: Some(Undo::Queue(entries)), .. }) => self.panels.queued.restore(entries),
             Some(Toast { go: Some(token), .. }) => self.notification_clicked(&token),
             Some(Toast { icon: ui::ToastIcon::Restart, .. }) => self.cancel_restarts(),
             _ => {}
@@ -76,7 +75,7 @@ impl App {
     }
 
     pub(super) fn copy(&mut self, text: &str) {
-        self.outbox.host_writes.push(clipboard::osc52(text));
-        self.toast = Some(Toast::new(COPIED, ui::ToastIcon::Check));
+        self.outbox.copy(text);
+        self.messages.toast = Some(Toast::new(COPIED, ui::ToastIcon::Check));
     }
 }

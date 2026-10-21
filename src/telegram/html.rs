@@ -147,39 +147,13 @@ impl Builder {
                 self.level += 1;
                 self.block.tag("<b>");
             }
-            Tag::CodeBlock(kind) => {
-                self.level += 1;
-                self.block.code = self.level == 1;
-                self.block.line();
-                let language = match kind {
-                    CodeBlockKind::Fenced(lang) => lang.split_whitespace().next().unwrap_or_default().to_string(),
-                    CodeBlockKind::Indented => String::new(),
-                };
-                self.fenced = !language.is_empty() && language.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
-                if self.fenced {
-                    self.block.tag(&format!("<pre><code class=\"language-{language}\">"));
-                } else {
-                    self.block.tag("<pre>");
-                }
-            }
+            Tag::CodeBlock(kind) => self.start_code(&kind),
             Tag::List(first) => {
                 self.level += 1;
                 self.block.line();
                 self.lists.push(first);
             }
-            Tag::Item => {
-                self.level += 1;
-                self.block.line();
-                let indent = "  ".repeat(self.lists.len().saturating_sub(1));
-                let marker = match self.lists.last_mut() {
-                    Some(Some(n)) => {
-                        *n += 1;
-                        format!("{}. ", *n - 1)
-                    }
-                    _ => "• ".into(),
-                };
-                self.block.text(&format!("{indent}{marker}"));
-            }
+            Tag::Item => self.start_item(),
             Tag::BlockQuote(_) => {
                 self.level += 1;
                 self.block.tag("<blockquote>");
@@ -187,15 +161,47 @@ impl Builder {
             Tag::Emphasis => self.block.tag("<i>"),
             Tag::Strong => self.block.tag("<b>"),
             Tag::Strikethrough => self.block.tag("<s>"),
-            Tag::Link { dest_url, .. } => {
-                let web = dest_url.starts_with("https://") || dest_url.starts_with("http://");
-                if web {
-                    self.block.tag(&format!("<a href=\"{}\">", escape(&dest_url)));
-                }
-                self.links.push(web);
-            }
+            Tag::Link { dest_url, .. } => self.start_link(&dest_url),
             _ => {}
         }
+    }
+
+    fn start_code(&mut self, kind: &CodeBlockKind) {
+        self.level += 1;
+        self.block.code = self.level == 1;
+        self.block.line();
+        let language = match kind {
+            CodeBlockKind::Fenced(lang) => lang.split_whitespace().next().unwrap_or_default().to_string(),
+            CodeBlockKind::Indented => String::new(),
+        };
+        self.fenced = !language.is_empty() && language.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+        if self.fenced {
+            self.block.tag(&format!("<pre><code class=\"language-{language}\">"));
+        } else {
+            self.block.tag("<pre>");
+        }
+    }
+
+    fn start_item(&mut self) {
+        self.level += 1;
+        self.block.line();
+        let indent = "  ".repeat(self.lists.len().saturating_sub(1));
+        let marker = match self.lists.last_mut() {
+            Some(Some(n)) => {
+                *n += 1;
+                format!("{}. ", *n - 1)
+            }
+            _ => "• ".into(),
+        };
+        self.block.text(&format!("{indent}{marker}"));
+    }
+
+    fn start_link(&mut self, dest_url: &str) {
+        let web = dest_url.starts_with("https://") || dest_url.starts_with("http://");
+        if web {
+            self.block.tag(&format!("<a href=\"{}\">", escape(dest_url)));
+        }
+        self.links.push(web);
     }
 
     fn end(&mut self, end: TagEnd) {

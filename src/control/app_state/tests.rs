@@ -5,8 +5,8 @@ use crate::control::{Snapshot, TodoItem, contract};
 use crate::queue::{Entry, Place, State, Task};
 use crate::test_util::fixture;
 
-fn snapshot() -> Snapshot<AppState> {
-    let entry = Entry {
+fn queued() -> Entry {
+    Entry {
         id: 3,
         task: Task {
             at: 1_760_000_000,
@@ -22,7 +22,30 @@ fn snapshot() -> Snapshot<AppState> {
             accounts: BTreeMap::new(),
         },
         state: State::Pending,
-    };
+    }
+}
+
+fn update_info() -> UpdateInfo {
+    UpdateInfo {
+        release: Some(ReleaseInfo {
+            version: "9.0.0".into(),
+            notes: vec![
+                Notes { version: "9.0.0".into(), text: "- Faster.".into() },
+                Notes { version: "8.0.0".into(), text: "- Skipped one.".into() },
+            ],
+        }),
+        none: None,
+        checking: false,
+        checked: Some("2026-10-18T10:00:00.000Z".into()),
+        error: None,
+        install: InstallInfo::Replace { path: "/home/me/.local/bin/cornercase".into() },
+        installing: false,
+        installed: false,
+        install_error: None,
+    }
+}
+
+fn snapshot() -> Snapshot<AppState> {
     Snapshot {
         revision: 4,
         report: AppState {
@@ -32,28 +55,12 @@ fn snapshot() -> Snapshot<AppState> {
                 TodoItem { id: 1, text: "write the docs".into(), done: false },
                 TodoItem { id: 2, text: "review the login fix".into(), done: true },
             ],
-            queue: vec![entry],
+            queue: vec![queued()],
             away: vec![
                 AwayInfo { platform: "telegram".into(), ready: true, away: true },
                 AwayInfo { platform: "discord".into(), ready: false, away: false },
             ],
-            update: UpdateInfo {
-                release: Some(ReleaseInfo {
-                    version: "9.0.0".into(),
-                    notes: vec![
-                        Notes { version: "9.0.0".into(), text: "- Faster.".into() },
-                        Notes { version: "8.0.0".into(), text: "- Skipped one.".into() },
-                    ],
-                }),
-                none: None,
-                checking: false,
-                checked: Some("2026-10-18T10:00:00.000Z".into()),
-                error: None,
-                install: InstallInfo::Replace { path: "/home/me/.local/bin/cornercase".into() },
-                installing: false,
-                installed: false,
-                install_error: None,
-            },
+            update: update_info(),
             keep_awake: Some(KeepAwake { held: true, by: Some("caffeinate".into()), unavailable: None }),
             tour: crate::control::tour::TourState {
                 active: Some(crate::control::tour::ActiveInfo {

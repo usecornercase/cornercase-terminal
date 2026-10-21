@@ -122,34 +122,44 @@ pub(crate) fn tour_layout(area: Rect, card: &TourCard) -> TourLayout {
     } else {
         Rect::default()
     };
+    let buttons = place_buttons(card, inner, one_row, action_rows > 0);
+    TourLayout { area: rect, text, field, buttons }
+}
+
+fn place_buttons(card: &TourCard, inner: Rect, one_row: bool, actions: bool) -> Vec<(TourButton, Rect)> {
     let row = |from_bottom: u16| Rect { y: inner.bottom().saturating_sub(from_bottom), height: 1, ..inner };
+    let (left, right) = card.nav();
     let mut buttons = Vec::new();
-    let put_right = |row: Rect, labels: &[TourButton], buttons: &mut Vec<(TourButton, Rect)>| {
-        let mut x = row.right();
-        for &b in labels.iter().rev() {
-            let bw = button_width(&card.label(b));
-            x = x.saturating_sub(bw);
-            buttons.push((b, Rect { x, width: bw, ..row }.intersection(row)));
-            x = x.saturating_sub(1);
-        }
-    };
+    put_right(card, row(1), &right, &mut buttons);
     if one_row {
-        put_right(row(1), &right, &mut buttons);
-        let mut x = inner.x;
-        for &b in &left {
-            let bw = button_width(&card.label(b));
-            buttons.push((b, Rect { x, width: bw, ..row(1) }.intersection(row(1))));
-            x += bw + 1;
-        }
+        put_left(card, row(1), &left, &mut buttons);
     } else {
-        put_right(row(1), &right, &mut buttons);
-        put_right(row(2), &left, &mut buttons);
+        put_right(card, row(2), &left, &mut buttons);
     }
-    if action_rows > 0 {
-        put_right(row(nav_rows + 1), &card.actions, &mut buttons);
+    if actions {
+        put_right(card, row(if one_row { 2 } else { 3 }), &card.actions, &mut buttons);
     }
     buttons.retain(|(_, r)| !r.is_empty() && inner.contains(Position::new(r.x, r.y)));
-    TourLayout { area: rect, text, field, buttons }
+    buttons
+}
+
+fn put_right(card: &TourCard, row: Rect, labels: &[TourButton], buttons: &mut Vec<(TourButton, Rect)>) {
+    let mut x = row.right();
+    for &b in labels.iter().rev() {
+        let bw = button_width(&card.label(b));
+        x = x.saturating_sub(bw);
+        buttons.push((b, Rect { x, width: bw, ..row }.intersection(row)));
+        x = x.saturating_sub(1);
+    }
+}
+
+fn put_left(card: &TourCard, row: Rect, labels: &[TourButton], buttons: &mut Vec<(TourButton, Rect)>) {
+    let mut x = row.x;
+    for &b in labels {
+        let bw = button_width(&card.label(b));
+        buttons.push((b, Rect { x, width: bw, ..row }.intersection(row)));
+        x += bw + 1;
+    }
 }
 
 pub(crate) fn tour_hit(area: Rect, card: &TourCard, pos: Position) -> Option<TourButton> {
@@ -177,7 +187,7 @@ fn draw_field(buf: &mut Buffer, view: &View, editor: &Editor, r: Rect, focused: 
     for (i, range) in editor.lines(width).into_iter().skip(scroll).take(usize::from(r.height)).enumerate() {
         let line: String = text[range].iter().collect();
         let y = r.y + u16::try_from(i).unwrap_or(0);
-        put(buf, r.x, y, &line, Style::default().bg(view.surface()), r.right());
+        put(buf, (r.x, y), &line, Style::default().bg(view.surface()), r.right());
     }
     if !focused {
         return None;

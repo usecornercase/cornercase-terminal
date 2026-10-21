@@ -1,10 +1,9 @@
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::{Color, Style};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::widgets::Paragraph;
 
 use super::View;
-use super::layout::Areas;
 use super::widgets::button_style;
 use crate::text::{cells, truncate_cells};
 
@@ -16,6 +15,12 @@ const MIN_NAME: usize = 3;
 pub(crate) struct Pill {
     pub(crate) agent: String,
     pub(crate) account: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Row {
+    pub(crate) pills: Vec<Pill>,
+    pub(crate) blocked: bool,
 }
 
 fn full(pill: &Pill) -> String {
@@ -44,9 +49,8 @@ fn fitting(texts: impl IntoIterator<Item = String>, room: u16) -> Vec<String> {
     kept
 }
 
-pub(crate) fn pills(areas: &Areas, pills: &[Pill]) -> Vec<(usize, Rect, String)> {
-    let bar = areas.accounts;
-    let row = Rect { y: bar.bottom().saturating_sub(1), height: bar.height.min(1), ..bar };
+pub(crate) fn pills(row: Rect, pills: &[Pill]) -> Vec<(usize, Rect, String)> {
+    let row = Rect { height: row.height.min(1), ..row };
     if row.is_empty() || pills.is_empty() {
         return Vec::new();
     }
@@ -74,19 +78,15 @@ pub(crate) fn pills(areas: &Areas, pills: &[Pill]) -> Vec<(usize, Rect, String)>
         .collect()
 }
 
-pub(crate) fn hit(areas: &Areas, shown: &[Pill], pos: Position) -> Option<usize> {
-    pills(areas, shown).into_iter().find_map(|(i, r, _)| r.contains(pos).then_some(i))
+pub(crate) fn hit(row: Rect, shown: &[Pill], pos: Position) -> Option<usize> {
+    pills(row, shown).into_iter().find_map(|(i, r, _)| r.contains(pos).then_some(i))
 }
 
-pub(super) fn draw(f: &mut Frame, view: &View, areas: &Areas) {
-    if areas.accounts.is_empty() || view.accounts.is_empty() {
-        return;
-    }
-    let bar = Style::default().fg(view.muted);
-    let top = Rect { height: 1, ..areas.accounts };
-    f.render_widget(Block::default().borders(Borders::TOP).border_style(Style::default().fg(view.line())), top);
-    for (_, r, text) in pills(areas, &view.accounts) {
-        let style = button_style(view, r, bar, Color::Cyan);
+pub(super) fn draw_row(f: &mut Frame, view: &View, row: Rect, shown: &Row, dim: bool) {
+    let idle = Style::default().fg(view.muted);
+    let idle = if dim || shown.blocked { idle.add_modifier(Modifier::DIM) } else { idle };
+    for (_, r, text) in pills(row, &shown.pills) {
+        let style = button_style(view, r, idle, Color::Cyan);
         f.render_widget(Paragraph::new(text).style(style), r);
     }
 }

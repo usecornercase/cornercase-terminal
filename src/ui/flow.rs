@@ -11,7 +11,7 @@ use super::todo::header;
 use super::{dim, draw_close, put};
 use crate::agents::activity::Status;
 use crate::flows::progress::{Edge, Progress};
-use crate::flows::{Flow, ORCHESTRATOR, Role};
+use crate::flows::{Flow, ORCHESTRATOR, Role, Stage};
 use crate::project::group::GROUP_STYLES;
 use crate::pull_request::Mark;
 use crate::text;
@@ -24,6 +24,7 @@ mod paint;
 pub(crate) use files::{FileRow, Files};
 
 use geometry::{Geometry, Place, layout};
+use paint::Canvas;
 
 pub(crate) const LABEL: &str = "Flow";
 const RED: u8 = 9;
@@ -119,32 +120,26 @@ pub(crate) fn role_colour(index: usize) -> Color {
     kept.cycle().nth(index).unwrap_or(Color::Indexed(GROUP_STYLES[0].1))
 }
 
+fn node_of(role: &Role, colour: Color) -> Node {
+    Node { role: role.name.clone(), text: role.summary(), colour, state: None, own: role.own_worktree() }
+}
+
+fn stage_nodes(flow: &Flow, n: usize, stage: &Stage, muted: Color) -> Vec<Node> {
+    if stage.roles.is_empty() {
+        let role = format!("stage {}", n + 1);
+        return vec![Node { role, text: "no roles".into(), colour: muted, state: None, own: false }];
+    }
+    let colour = |name: &str| flow.roles.iter().position(|r| r.name == name).map(|i| role_colour(i + 1));
+    let found = |name: &String| match (flow.role(name), colour(name)) {
+        (Some(role), Some(colour)) => node_of(role, colour),
+        _ => Node { role: name.clone(), text: "not a role".into(), colour: muted, state: None, own: false },
+    };
+    stage.roles.iter().map(found).collect()
+}
+
 impl Diagram {
     pub(crate) fn plan(flow: &Flow, muted: Color, light: bool) -> Self {
-        let node = |role: &Role, colour| Node {
-            role: role.name.clone(),
-            text: role.summary(),
-            colour,
-            state: None,
-            own: role.own_worktree(),
-        };
-        let colour = |name: &str| flow.roles.iter().position(|r| r.name == name).map(|i| role_colour(i + 1));
-        let stages = flow
-            .stages
-            .iter()
-            .enumerate()
-            .map(|(n, stage)| {
-                if stage.roles.is_empty() {
-                    let role = format!("stage {}", n + 1);
-                    return vec![Node { role, text: "no roles".into(), colour: muted, state: None, own: false }];
-                }
-                let found = |name: &String| match (flow.role(name), colour(name)) {
-                    (Some(role), Some(colour)) => node(role, colour),
-                    _ => Node { role: name.clone(), text: "not a role".into(), colour: muted, state: None, own: false },
-                };
-                stage.roles.iter().map(found).collect()
-            })
-            .collect();
+        let stages = flow.stages.iter().enumerate().map(|(n, stage)| stage_nodes(flow, n, stage, muted)).collect();
         let loops = flow
             .stages
             .iter()
@@ -155,7 +150,7 @@ impl Diagram {
             })
             .collect();
         Self {
-            orchestrator: node(&flow.orchestrator, role_colour(0)),
+            orchestrator: node_of(&flow.orchestrator, role_colour(0)),
             stages,
             loops,
             end: flow.end.label(),
@@ -307,7 +302,7 @@ pub(crate) fn draw_scrolled(buf: &mut Buffer, area: Rect, diagram: &Diagram, scr
 fn markers(buf: &mut Buffer, area: Rect, muted: Color, scroll: u16, total: u16) {
     let more = |buf: &mut Buffer, y: u16, text: &str| {
         let x = area.right().saturating_sub(u16::try_from(text::cells(text)).unwrap_or(0));
-        put(buf, x, y, text, dim(muted), area.right());
+        put(buf, (x, y), text, dim(muted), area.right());
     };
     if scroll > 0 && area.height > 0 {
         more(buf, area.y, MORE_ABOVE);
@@ -319,7 +314,7 @@ fn markers(buf: &mut Buffer, area: Rect, muted: Color, scroll: u16, total: u16) 
 
 pub(crate) fn draw_diagram(buf: &mut Buffer, area: Rect, diagram: &Diagram, scroll: u16, hover: Option<Position>) {
     let (geometry, area) = placed(diagram, area);
-    paint::paint(buf, area, diagram, &geometry, scroll, hover);
+    paint::paint(&mut Canvas::new(buf, area, scroll), diagram, &geometry, hover);
 }
 
 pub(crate) fn diagram_hit(area: Rect, diagram: &Diagram, scroll: u16, pos: Position) -> Option<Hit> {
@@ -374,17 +369,23 @@ pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Positio
     let buf = f.buffer_mut();
     let row = header(area);
     let name = text::truncate_cells(&view.name, usize::from(row.width.saturating_sub(4)));
-    put(buf, row.x, row.y, &name, Style::default().add_modifier(Modifier::BOLD), row.right());
+    put(buf, (row.x, row.y), &name, Style::default().add_modifier(Modifier::BOLD), row.right());
     draw_close(buf, close(area), hover, view.diagram.muted);
     let task = text::truncate_cells(view.task.lines().next().unwrap_or_default(), usize::from(row.width));
-    put(buf, row.x, row.y + 1, &task, dim(view.diagram.muted), row.right().min(area.right()));
+    put(buf, (row.x, row.y + 1), &task, dim(view.diagram.muted), row.right().min(area.right()));
     let body = body(area);
     let scroll = scrolled(area, view, 0);
     let hover = hover.filter(|p| body.contains(*p));
     draw_diagram(buf, body, &view.diagram, scroll, hover);
     let top = diagram_height(&view.diagram, body.width);
     if let Some(files) = &view.files {
-        files::draw(buf, body, files, (top, scroll), view.diagram.muted, view.diagram.light, hover);
+        files::draw(
+            buf,
+            body,
+            files,
+            (top, scroll),
+            files::Look { muted: view.diagram.muted, light: view.diagram.light, hover },
+        );
     }
     markers(buf, body, view.diagram.muted, scroll, content_height(view, body.width));
 }

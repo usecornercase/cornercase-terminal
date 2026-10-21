@@ -18,7 +18,7 @@ fn with(overlay: Overlay) -> View<'static> {
 
 #[test]
 fn renders_the_menu_where_it_was_opened() {
-    let v = with(Overlay::Menu { at: Position::new(4, 4), items: vec!["new worktree".into()] });
+    let v = with(Overlay::Menu { at: Position::new(4, 4), items: vec!["new worktree".into()], disabled: Vec::new() });
     insta::assert_snapshot!(render(&v).backend());
 }
 
@@ -32,14 +32,32 @@ fn menu_stays_inside_the_screen() {
 fn menu_item_is_highlighted_on_hover() {
     let at = Position::new(4, 4);
     let item = menu_item(menu_area(AREA, at, &["new worktree"]), 0).as_position();
-    let v = View { hover: Some(item), ..with(Overlay::Menu { at, items: vec!["new worktree".into()] }) };
+    let v = View {
+        hover: Some(item),
+        ..with(Overlay::Menu { at, items: vec!["new worktree".into()], disabled: Vec::new() })
+    };
     assert_eq!(render(&v).backend().buffer()[item].bg, DARK_SURFACE);
+}
+
+#[test]
+fn a_disabled_item_is_dim_and_does_not_light_on_hover() {
+    let at = Position::new(4, 4);
+    let labels = ["  home", "stop vim first"];
+    let menu = menu_area(AREA, at, &labels);
+    let (on, off) = (menu_item(menu, 0).as_position(), menu_item(menu, 1));
+    let items = labels.iter().map(ToString::to_string).collect();
+    let v = View { hover: Some(off.as_position()), ..with(Overlay::Menu { at, items, disabled: vec![false, true] }) };
+    let t = render(&v);
+    let text = Position::new(off.x + 2, off.y);
+    assert!(t.backend().buffer()[text].modifier.contains(Modifier::DIM));
+    assert_ne!(t.backend().buffer()[off.as_position()].bg, DARK_SURFACE);
+    assert!(!t.backend().buffer()[Position::new(on.x + 2, on.y)].modifier.contains(Modifier::DIM));
 }
 
 #[test]
 fn a_menu_leaves_what_is_behind_it_bright() {
     let at = Position::new(4, 4);
-    let t = render(&with(Overlay::Menu { at, items: vec!["new worktree".into()] }));
+    let t = render(&with(Overlay::Menu { at, items: vec!["new worktree".into()], disabled: Vec::new() }));
     assert!(!t.backend().buffer()[areas().title.as_position()].modifier.contains(Modifier::DIM));
 }
 
@@ -87,7 +105,10 @@ fn buttons_behind_the_menu_are_not_highlighted() {
     let at = Position::new(4, list().y);
     let new = new_project_button(list(), 1, &plain(1));
     let over_new = Position::new(menu_area(AREA, at, &["new worktree"]).x + 2, new.y);
-    let v = View { hover: Some(over_new), ..with(Overlay::Menu { at, items: vec!["new worktree".into()] }) };
+    let v = View {
+        hover: Some(over_new),
+        ..with(Overlay::Menu { at, items: vec!["new worktree".into()], disabled: Vec::new() })
+    };
     assert_eq!(render(&v).backend().buffer()[new.as_position()].bg, Color::Reset);
 }
 

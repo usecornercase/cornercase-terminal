@@ -297,6 +297,50 @@ pub(crate) fn clone_of(remote: &Path) -> (TempDir, PathBuf) {
     (dir, path)
 }
 
+type Route = (&'static str, u16, Vec<u8>);
+
+fn answer(stream: &mut std::net::TcpStream, routes: &[Route], used: &mut [bool]) -> String {
+    let request = read_request(stream);
+    let line = request.lines().next().unwrap_or_default().to_string();
+    let mut parts = line.split(' ');
+    let method = parts.next().unwrap_or_default();
+    let path = parts.next().unwrap_or_default().split('?').next().unwrap_or_default();
+    let key = format!("{method} {path}");
+    let matching: Vec<usize> = (0..routes.len()).filter(|&i| routes[i].0 == key).collect();
+    let pick = matching.iter().copied().find(|&i| !used[i]).or_else(|| matching.last().copied());
+    let (status, body) = pick.map_or((404, b"{}".as_slice()), |i| {
+        used[i] = true;
+        (routes[i].1, routes[i].2.as_slice())
+    });
+    let (location, body) = if (300..400).contains(&status) {
+        (format!("Location: {}\r\n", String::from_utf8_lossy(body)), b"".as_slice())
+    } else {
+        (String::new(), body)
+    };
+    let head = format!(
+        "HTTP/1.1 {status} X\r\n{location}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    let _ = std::io::Write::write_all(stream, &[head.as_bytes(), body].concat());
+    request
+}
+
+fn serve(
+    listener: &std::net::TcpListener,
+    routes: &[Route],
+    log: &parking_lot::Mutex<Vec<String>>,
+    stopped: &std::sync::atomic::AtomicBool,
+) {
+    let mut used = vec![false; routes.len()];
+    for stream in listener.incoming() {
+        if stopped.load(Ordering::Relaxed) {
+            return;
+        }
+        let Ok(mut stream) = stream else { continue };
+        log.lock().push(answer(&mut stream, routes, &mut used));
+    }
+}
+
 pub(crate) struct FakeHttp {
     addr: std::net::SocketAddr,
     requests: std::sync::Arc<parking_lot::Mutex<Vec<String>>>,
@@ -305,44 +349,13 @@ pub(crate) struct FakeHttp {
 
 impl FakeHttp {
     pub(crate) fn start<B: Into<Vec<u8>>>(routes: Vec<(&'static str, u16, B)>) -> Self {
-        let routes: Vec<(&'static str, u16, Vec<u8>)> = routes.into_iter().map(|(k, s, b)| (k, s, b.into())).collect();
+        let routes: Vec<Route> = routes.into_iter().map(|(k, s, b)| (k, s, b.into())).collect();
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind fake http");
         let addr = listener.local_addr().expect("fake http address");
         let requests = std::sync::Arc::new(parking_lot::Mutex::new(Vec::new()));
         let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let (log, stopped) = (std::sync::Arc::clone(&requests), std::sync::Arc::clone(&stop));
-        std::thread::spawn(move || {
-            let mut used = vec![false; routes.len()];
-            for stream in listener.incoming() {
-                if stopped.load(Ordering::Relaxed) {
-                    return;
-                }
-                let Ok(mut stream) = stream else { continue };
-                let request = read_request(&mut stream);
-                let line = request.lines().next().unwrap_or_default().to_string();
-                let mut parts = line.split(' ');
-                let method = parts.next().unwrap_or_default();
-                let path = parts.next().unwrap_or_default().split('?').next().unwrap_or_default();
-                let key = format!("{method} {path}");
-                let matching: Vec<usize> = (0..routes.len()).filter(|&i| routes[i].0 == key).collect();
-                let pick = matching.iter().copied().find(|&i| !used[i]).or_else(|| matching.last().copied());
-                let (status, body) = pick.map_or((404, b"{}".as_slice()), |i| {
-                    used[i] = true;
-                    (routes[i].1, routes[i].2.as_slice())
-                });
-                log.lock().push(request);
-                let (location, body) = if (300..400).contains(&status) {
-                    (format!("Location: {}\r\n", String::from_utf8_lossy(body)), b"".as_slice())
-                } else {
-                    (String::new(), body)
-                };
-                let head = format!(
-                    "HTTP/1.1 {status} X\r\n{location}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                    body.len()
-                );
-                let _ = std::io::Write::write_all(&mut stream, &[head.as_bytes(), body].concat());
-            }
-        });
+        std::thread::spawn(move || serve(&listener, &routes, &log, &stopped));
         Self { addr, requests, stop }
     }
 

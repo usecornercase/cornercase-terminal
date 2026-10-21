@@ -170,7 +170,7 @@ pub(super) fn draw(f: &mut Frame, view: &View, bar: Rect) {
         let bg = if lit { Style::default().bg(view.hover_fill()) } else { Style::default() };
         buf.set_style(r, bg);
         if open {
-            put(buf, r.x, r.y, "▌", bg.fg(Color::Cyan), r.right());
+            put(buf, (r.x, r.y), "▌", bg.fg(Color::Cyan), r.right());
         }
         let fg = match item {
             Item::Quit if lit => Color::Red,
@@ -180,9 +180,9 @@ pub(super) fn draw(f: &mut Frame, view: &View, bar: Rect) {
             _ => view.soft,
         };
         let style = if open || lit { bg.fg(fg).add_modifier(Modifier::BOLD) } else { bg.fg(fg) };
-        put(buf, r.x + 1, r.y, item.icon(), style, r.right());
+        put(buf, (r.x + 1, r.y), item.icon(), style, r.right());
         if let Some(badge) = item.badge(view).filter(|_| r.bottom() < bar.bottom()) {
-            put(buf, r.right() - 1, r.bottom(), &badge.content, badge.style, r.right());
+            put(buf, (r.right() - 1, r.bottom()), &badge.content, badge.style, r.right());
         }
     }
 }

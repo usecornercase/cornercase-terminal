@@ -17,18 +17,18 @@ use crate::version;
 
 impl App {
     pub(in crate::app) fn workspace_run_dir(&self, workspace: &Workspace) -> Option<std::path::PathBuf> {
-        let run = self.runs.iter().find(|run| run.workspace == workspace.id);
+        let run = self.runs.of_workspace(workspace.id);
         run.and_then(|run| run.dir.clone()).or_else(|| workspace.run_dirs.last().cloned())
     }
 
     pub(in crate::app) fn flow_runs_state(&self) -> FlowRuns {
-        let runs = self.runs.iter().filter_map(|run| self.run_state(run)).collect();
+        let runs = self.runs.all().iter().filter_map(|run| self.run_state(run)).collect();
         FlowRuns { version: version::CURRENT.to_string(), boot: control::server_token().to_string(), runs }
     }
 
     fn run_state(&self, run: &Run) -> Option<RunState> {
-        let (p, w) = self.projects.workspace_index(run.workspace)?;
-        let workspace = &self.projects[p].workspaces[w];
+        let at = self.projects.workspace_index(run.workspace)?;
+        let workspace = self.projects.workspace(at);
         let roles: Vec<RoleState> = std::iter::once(&run.flow.orchestrator)
             .chain(&run.flow.roles)
             .map(|role| self.run_role(run, workspace, &role.name))
@@ -37,7 +37,7 @@ impl App {
         let progress = &run.progress;
         Some(RunState {
             run: run.id,
-            project: self.projects[p].id,
+            project: self.projects[at.project()].id,
             workspace: run.workspace,
             flow: (&run.flow).into(),
             task: run.task.clone(),
@@ -66,7 +66,7 @@ impl App {
         match self.projects.pane_by(pane) {
             Some(term) => {
                 state.status = term.agent.status().map(|status| status.name().to_string());
-                state.tab = self.projects.tab_of_pane(pane).map(|(p, w, t)| self.projects[p].workspaces[w].tabs[t].id);
+                state.tab = self.projects.tab_of_pane(pane).map(|at| self.projects.tab(at).id);
             }
             None => state.closed = true,
         }
@@ -77,10 +77,9 @@ impl App {
         if let Some(id) = workspace {
             return self.projects.workspace_index(id).map(|_| id).ok_or_else(|| none("workspace", id));
         }
-        let here = self.here(caller);
-        here.project
-            .zip(here.workspace)
-            .map(|(p, w)| self.projects[p].workspaces[w].id)
+        self.here(caller)
+            .workspace
+            .map(|at| self.projects.workspace(at).id)
             .ok_or_else(|| conflict("no workspace is open here; pass --workspace ID or --worktree BRANCH"))
     }
 
@@ -94,7 +93,7 @@ impl App {
         let Some(run) = self.run_of(workspace) else {
             return Err(conflict(format!("workspace {workspace} runs no flow; `cornercase flow runs` lists the runs")));
         };
-        if self.events.flow_messages.iter().any(|(follower, _)| *follower == client) {
+        if self.clients.events.follows_flow_messages(client) {
             return Err(conflict("this connection already follows a run's messages; open another connection"));
         }
         let backlog = FlowBacklog {
@@ -111,18 +110,12 @@ impl App {
             workspace = workspace,
             kept = backlog.messages.len()
         );
-        self.events.flow_messages.push((client, backlog.run));
+        self.clients.events.follow_flow_messages(client, backlog.run);
         Ok(Some(json(&backlog)))
     }
 
     pub(in crate::app) fn publish_flow_message(&mut self, message: &FlowMessage) {
-        let followers: Vec<u64> = self
-            .events
-            .flow_messages
-            .iter()
-            .filter(|(_, run)| *run == message.run)
-            .map(|(client, _)| *client)
-            .collect();
+        let followers = self.clients.events.flow_message_followers(message.run);
         if followers.is_empty() {
             return;
         }
@@ -133,21 +126,16 @@ impl App {
             return;
         };
         for client in followers {
-            self.events.push(client, Streamed::Event(text.clone()));
+            self.clients.events.push(client, Streamed::Event(text.clone()));
         }
     }
 
     pub(in crate::app) fn end_flow_messages(&mut self) {
         let runs = &self.runs;
-        let ended: Vec<u64> = self
-            .events
-            .flow_messages
-            .extract_if(.., |(_, run)| !runs.iter().any(|other| other.id == *run))
-            .map(|(client, _)| client)
-            .collect();
+        let ended = self.clients.events.stop_flow_messages(|run| runs.has(run));
         for client in ended {
             log::info!("control", "flow messages ended", client = client, reason = "run ended");
-            self.events.push(client, Streamed::End);
+            self.clients.events.push(client, Streamed::End);
         }
     }
 
@@ -158,12 +146,12 @@ impl App {
         files: &control::FlowFiles,
     ) -> Handled {
         let workspace = self.flow_workspace(caller, files.workspace)?;
-        let (p, w) = self.projects.workspace_index(workspace).ok_or_else(|| none("workspace", workspace))?;
-        let Some(dir) = self.workspace_run_dir(&self.projects[p].workspaces[w]) else {
+        let found = self.projects.workspace_by(workspace).ok_or_else(|| none("workspace", workspace))?;
+        let Some(dir) = self.workspace_run_dir(found) else {
             return Err(conflict(format!("workspace {workspace} has no run folder: it never ran a flow")));
         };
         let run = self.run_of(workspace).map(|run| run.id);
-        let key = self.requests.key();
+        let key = self.clients.requests.key();
         let job = Job::new(Level::Debug, "flow", "list files").with("workspace", workspace);
         let listed = dir.clone();
         self.spawn_job(
@@ -200,7 +188,7 @@ impl App {
     }
 
     pub(in crate::app) fn flow_files_listed(&mut self, key: u64, result: std::result::Result<RunFiles, String>) {
-        let Some(pending) = self.requests.take(key) else { return };
+        let Some(pending) = self.clients.requests.take(key) else { return };
         self.answer(pending.client, result.map(|files| json(&files)));
     }
 }

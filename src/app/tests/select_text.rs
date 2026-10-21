@@ -78,7 +78,7 @@ fn a_program_that_wants_the_mouse_gets_the_drag_instead() {
 
     drag(&mut app, cell(0, 0), cell(4, 0));
 
-    assert_eq!((app.drag.clone(), app.take_host_writes()), (None, Vec::<Vec<u8>>::new()));
+    assert_eq!((app.screen.drag.clone(), app.take_host_writes()), (None, Vec::<Vec<u8>>::new()));
 }
 
 #[test]
@@ -86,7 +86,7 @@ fn a_program_that_copies_reaches_the_clipboard_with_a_toast() {
     let (mut app, _rx) = app();
     let id = term(&app, 0).id;
 
-    app.handle_event(AppEvent::Output(id, b"\x1b]52;c;aGVsbG8=\x07".to_vec()), AREA).expect("handle output");
+    app.handle_event(AppEvent::Output(id, 0, b"\x1b]52;c;aGVsbG8=\x07".to_vec()), AREA).expect("handle output");
 
     assert_eq!((app.take_host_writes(), toast(&app)), (vec![clipboard::osc52("hello")], Some(COPIED)));
 }
@@ -94,9 +94,9 @@ fn a_program_that_copies_reaches_the_clipboard_with_a_toast() {
 #[test]
 fn the_toast_goes_away_after_a_while() {
     let (mut app, _rx) = showing("hello world");
-    app.toast =
+    app.messages.toast =
         Instant::now().checked_sub(TOAST_FOR).map(|at| Toast { at, ..Toast::new(COPIED, ui::ToastIcon::Check) });
     render(&mut app, AREA);
 
-    assert_eq!(app.toast, None);
+    assert_eq!(app.messages.toast, None);
 }

@@ -26,6 +26,13 @@ pub(super) struct Parents {
     wanted: Vec<(u64, Option<u64>, u64)>,
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct Restoring<'a> {
+    pub(super) dir: &'a Path,
+    pub(super) area: Rect,
+    pub(super) run: Option<&'a Path>,
+}
+
 const SENDING: &str = "a message from `cornercase send` is going into this pane; wait a moment, so the two do not join";
 
 impl App {
@@ -45,7 +52,7 @@ impl App {
         let mut lost = 0;
         for (t, saved_tab) in saved.tabs.iter().enumerate().filter(|(_, t)| !t.panes.is_empty()) {
             let roles = |pane: usize| saved.run.as_ref().and_then(|run| run.role_at(t, pane));
-            match self.restore_tab(saved_tab, &path, area, roles, run_dir.as_deref(), parents) {
+            match self.restore_tab(saved_tab, Restoring { dir: &path, area, run: run_dir.as_deref() }, roles, parents) {
                 Ok(tab) => tabs.push((t, tab)),
                 Err(e) => {
                     log::error!("server", "could not restore a tab", workspace = path.display(), error = e);
@@ -57,7 +64,7 @@ impl App {
             self.restore_run(id, run, &mut tabs, run_dir.as_deref());
         }
         let tabs = tabs.into_iter().map(|(_, tab)| tab).collect();
-        let mut workspace = saved.restore(id, path, tabs, &self.runs_dir);
+        let mut workspace = saved.restore(id, path, tabs, self.runs.dir());
         if let Some(dir) = run_dir.filter(|dir| !workspace.run_dirs.contains(dir)) {
             workspace.run_dirs.push(dir);
         }
@@ -66,7 +73,7 @@ impl App {
 
     fn restore_run_dir(&self, saved: &WorkspaceState) -> Option<PathBuf> {
         let name = saved.run.as_ref()?.dir.as_deref().filter(|name| folder::valid(name))?;
-        let dir = self.runs_dir.join(name);
+        let dir = self.runs.dir().join(name);
         match folder::ensure(&dir) {
             Ok(true) => log::info!("flow", "run folder made again", path = dir.display()),
             Ok(false) => {}
@@ -81,12 +88,11 @@ impl App {
     pub(super) fn restore_tab<'a>(
         &mut self,
         saved: &TabState,
-        dir: &Path,
-        area: Rect,
+        at: Restoring,
         roles: impl Fn(usize) -> Option<&'a Role>,
-        run: Option<&Path>,
         parents: &mut Parents,
     ) -> Result<Tab> {
+        let Restoring { dir, area, run } = at;
         let mut panes = Vec::new();
         for (i, pane) in saved.panes.iter().enumerate() {
             let cwd = pane.cwd.clone().filter(|cwd| cwd.is_dir()).unwrap_or_else(|| dir.to_path_buf());
@@ -101,7 +107,7 @@ impl App {
                 log::warning!("server", "a role's worktree is gone, so its agent does not resume", pane = term.id);
                 let name = role.map(|role| role.name.as_str()).unwrap_or_default();
                 let message = format!("the worktree of {name} is gone: it works in the run's worktree now");
-                self.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
+                self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
             } else if !lost && self.resume(&mut term, pane.agent.as_ref(), role, run) {
                 term.agent.restore(pane.done, pane.pending);
             }
@@ -124,7 +130,7 @@ impl App {
         {
             wanted.entry(agent.kind.clone()).or_insert_with(|| name.clone());
         }
-        let accounts = Accounts::of(&self.accounts_dir, &wanted);
+        let accounts = self.accounts.picked(&wanted);
         let gone = wanted
             .into_iter()
             .filter(|(provider, name)| Known::of(provider).and_then(|kind| accounts.name(kind)) != Some(name.as_str()))
@@ -141,7 +147,7 @@ impl App {
         log::warning!("accounts", "a saved account is gone", pane = pane, provider = provider, account = name);
         let what = if lost { "its conversation does not resume" } else { "the pane opens without it" };
         let message = format!("the {provider} account `{name}` is gone: {what}");
-        self.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
+        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
         lost
     }
 
@@ -162,15 +168,24 @@ impl App {
         log::info!("app", "resuming a conversation", pane = term.id, agent = agent.kind);
         let now = Instant::now();
         let trusted = role.is_some_and(|role| role.agent == agent.kind);
-        self.agents.launches.push(Launch::resume(term.id, line, trusted, now, now + RESUME_GRACE));
+        self.agents.launches.add(Launch::resume(term.id, line, trusted, now, now + RESUME_GRACE));
         term.resume = Some(agent.clone());
         term.resuming = Some(now + RESUME_GRACE);
         true
     }
 
     pub(super) fn resume_holds(&self, pane: u64) -> bool {
+        self.resume_notice(pane).is_some()
+    }
+
+    fn resume_notice(&self, pane: u64) -> Option<String> {
+        if let Some(notice) = self.moving_notice(pane) {
+            return Some(notice.to_string());
+        }
         let now = Instant::now();
-        self.agents.launches.iter().any(|launch| launch.term == pane && launch.holds(now))
+        let launch = self.agents.launches.of_pane(pane).find(|launch| launch.holds(now))?;
+        let term = self.projects.pane_by(pane)?;
+        Some(launch.restart.clone().unwrap_or_else(|| format!("resuming {}", resumed(term))))
     }
 
     pub(super) fn pane_bands(&self) -> HashMap<u64, ui::PaneBand> {
@@ -180,9 +195,14 @@ impl App {
             .into_iter()
             .map(|(pane, (text, queued))| (pane, ui::PaneBand::Held { text, queued }))
             .collect();
-        for launch in self.agents.launches.iter().filter(|launch| launch.holds(now)) {
-            if let Some(term) = self.projects.pane_by(launch.term) {
-                bands.insert(term.id, ui::PaneBand::Resuming(resumed(term)));
+        for pane in self.agents.launches.holding(now).chain(self.agents.restarts.moving_panes()) {
+            if let Some(text) = self.resume_notice(pane) {
+                bands.insert(pane, ui::PaneBand::Resuming(text));
+            }
+        }
+        for pane in self.agents.restarts.waiting_panes() {
+            if let Some(text) = self.waiting_notice(pane) {
+                bands.entry(pane).or_insert(ui::PaneBand::Restarts(text));
             }
         }
         bands
@@ -190,20 +210,25 @@ impl App {
 
     pub(super) fn holds_input(&mut self) -> bool {
         let Some(term) = self.term() else { return false };
-        let message = if self.resume_holds(term.id) {
-            format!("{} is resuming its conversation in this pane; wait for it, or press cancel", resumed(term))
+        let message = if let Some(notice) = self.resume_notice(term.id) {
+            match notice.strip_prefix("resuming ") {
+                Some(agent) => {
+                    format!("{agent} is resuming its conversation in this pane; wait for it, or press cancel")
+                }
+                None => format!("{notice} in this pane; wait for it, or press cancel"),
+            }
         } else if self.sending(term.id) {
             SENDING.to_string()
         } else {
             return false;
         };
-        self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(Status::Working)));
+        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Agent(Status::Working)));
         true
     }
 
     pub(super) fn press_held_notice(&mut self, area: Rect, pos: Position) -> bool {
         let Some(tab) = self.tab() else { return false };
-        let pressed = tab.shown(area).into_iter().find_map(|(id, rect)| {
+        let pressed = self.terminals(area).into_iter().find_map(|(id, rect)| {
             let (_, queued) = self.held_label(id).filter(|_| !self.resume_holds(id))?;
             let bar = ui::held_notice(rect, tab.pane_by(id)?.emulator.below(), queued)?;
             match (bar.send.contains(pos), bar.wait.is_some_and(|wait| wait.contains(pos))) {
@@ -221,24 +246,29 @@ impl App {
     }
 
     pub(super) fn press_resume_notice(&mut self, area: Rect, pos: Position) -> bool {
-        let Some(tab) = self.tab() else { return false };
-        let pressed = tab.shown(area).into_iter().find_map(|(id, rect)| {
-            let term = tab.pane_by(id)?;
-            ui::resume_notice(rect, &resumed(term))
-                .filter(|(_, button)| self.resume_holds(id) && button.contains(pos))
-                .map(|_| id)
+        let pressed = self.terminals(area).into_iter().find_map(|(id, rect)| {
+            let notice = match self.resume_notice(id) {
+                Some(notice) => ui::resume_notice(rect, &notice),
+                None if self.held_label(id).is_none() => ui::restart_notice(rect, &self.waiting_notice(id)?),
+                None => return None,
+            };
+            notice.filter(|(_, button)| button.contains(pos)).map(|_| id)
         });
         let Some(pane) = pressed else { return false };
-        self.cancel_resume(pane);
+        if self.resume_holds(pane) {
+            self.cancel_resume(pane);
+        } else {
+            self.cancel_restart(pane);
+        }
         true
     }
 
     fn cancel_resume(&mut self, pane: u64) {
-        let Some(i) = self.agents.launches.iter().position(|launch| launch.term == pane && launch.resume.is_some())
-        else {
+        if self.cancel_move(pane) {
             return;
-        };
-        let typed = self.agents.launches.remove(i).typed();
+        }
+        let Some(launch) = self.agents.launches.take_resume(pane) else { return };
+        let typed = launch.typed();
         if !typed && let Some(term) = self.projects.pane_by_mut(pane) {
             term.resuming = None;
             term.resume = None;

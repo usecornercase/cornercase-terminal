@@ -2,11 +2,78 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.161
+## 0.12.174
 
 - **A guided tour for your first steps.** The first time you run cornercase, a card at the bottom right shows you around: projects, workspaces, tabs and panes, then your first prompt to an agent (an idea you can edit, and a button that starts the agent with it), the status icons, and the settings worth a look. It points at the part of the window it talks about, and opens it when it is a panel, a dialog or a page of Settings (closing it again when you move on, unless you had it open), and a step that asks you to do something moves on as soon as you do it. Skip any step, or end the tour; it never takes the keys from your shell. If you already use cornercase, it does not pop up: a toast says it is in Help.
 - **Help, beside Quit.** The new ` Help ` button (in the icon bar too, and `h` in the keys menu) opens the tour again, a catalogue of short tours (issues to agents, reviewing changes, files, flows, TODO, the queue, search, your phone, Telegram and Discord, accounts, keys, scripts and plugins), and copies the link to the docs or to report a bug.
 - Settings › UI has **guided tour** (whether it shows by itself on a new install), **start the tour** and **reset tour progress**. `cornercase tour` opens it from a shell; `tour list --json` gives every step as data for other apps, and the app feed (`status --app`) carries where you are.
+
+## 0.12.173
+
+- **Select and copy lines in the changes panel.** Click a line of a diff to select it, or press and drag over several lines of one file; hold the pointer on the first or last row shown, or past it, and the panel scrolls with the selection. The bottom of the panel then says which lines, such as `lines 9-12`, with **ask agent**, which types a reference such as `src/returns/address.rs:9-12 ` into the workspace's agent, and **copy**, which copies their code as it is in the file, tabs included, without the `+`/`-` bar and the line numbers. A click on an empty spot of the diff clears the selection.
+
+## 0.12.172
+
+- **Stage a file from the changes panel.** In Uncommitted and in Every project, hover a file and click the **`+`** between `↺` and `✓` to put its changes in git's index, as `git add` does; a green **`●`** then marks it staged, and **`◐`** a file only partly staged (it changed after you staged it). Click a staged file's mark (it shows **`−`** under the pointer) to unstage it. Nothing asks first, since it is easy to undo; if the file changed after the panel showed it, nothing is staged and a message says so.
+- **`cornercase changes stage PATH`** and **`cornercase changes unstage PATH`** do the same from a script, and `cornercase changes list` tags staged files.
+
+## 0.12.171
+
+- **Each pane shows and changes its own account.** Once you have an account, every pane has a row under it with its accounts: a Claude Code, Codex or Gemini CLI pane shows that agent's button, such as ` claude: work ▾ `, and a shell one button per agent, the accounts a `claude` typed there would use. Pick another account there and only that pane changes: an agent restarts on it in the same conversation (Gemini CLI starts a new one), and a shell at its prompt starts again in the same folder with that account. An agent that is working restarts once its turn is over; pick its account again to cancel. With another program in front, such as `vim`, the buttons are dimmed and the menu says to stop it first. The right-click menu of a pane and a tab's ` ⋯ ` menu have **account ›** too, also when **Settings › UI › account switcher** is off.
+- **The account bar at the bottom of the window is gone.** It chose the account new tabs used; now **+ Tab** takes the accounts of the workspace's active pane, like a split, so a tab next to a personal agent is personal too. The account picked in **Settings › Accounts** (or with `cornercase account use`) is the default for new workspaces and projects, scheduled and issue agents and scripts run outside a pane, and changing it no longer says that open tabs keep theirs, since it changes none of them.
+
+## 0.12.170
+
+- **Discard a file's changes.** In the changes panel's Uncommitted mode and in Every project, hover a file and click the **`↺`** left of its `✓` to put it back as it is in the last commit; a file git doesn't track is deleted, and a renamed one gets its old name back. A confirmation names the file and nothing changes until you click **discard**; if the file changed after your click (an agent kept writing), nothing is discarded and a message says so.
+- **`cornercase changes discard PATH`** does the same from a script: it asks on a terminal, and `--yes` skips the question.
+
+## 0.12.169
+
+- **Restart open agents on another account, keeping their conversation.** After choosing another account for an agent, the agents already open kept the old one. `cornercase account restart claude` now restarts them on the account in use (or `cornercase account restart claude personal` on another): each one comes back in the same pane, in the same conversation, with the mode it ran in. Claude Code's and Codex's conversations are added to the other account's folder first (as hard links, never overwriting a file); Gemini CLI starts a new conversation. An agent that is working, or waiting for your answer, restarts once its turn is over, and its pane shows that with a ` cancel ` button. Agents of a flow are left as they are.
+- **A shell on another account.** `cornercase account restart claude personal --pane 5` on a shell at its prompt starts a new shell in its place, in the same folder, with that account, so the `claude` you type next uses it. A shell running a program is left alone until you stop it.
+- `cornercase status` says `(restarts after this turn)` on an agent waiting to restart. Scripts and other apps: the `account-restart` request, and `accounts` (each pane's account per agent) and `account_restart` on each pane of `status --json`, `watch` and `view`.
+
+## 0.12.168
+
+- **Find text in the open file.** In the files panel, **`⌕`** next to **`▢`** opens a field under the file's header: what you type lights up every match in the file (case is ignored unless you type an uppercase letter, as in the files search), the one you're on in cyan, and the file jumps to the first match from the top of what you see. `↓` or `Enter` goes to the next match and `↑` to the previous one, as do the field's **`↑`** and **`↓`**, with a count such as `2/17`. `Esc` clears the field, then closes it. Opening a text match from the files search opens the file with the field already holding your search, so `↓` takes you to the next match in that file. The matches follow the file while an agent edits it, and your selected lines stay selected.
+
+## 0.12.167
+
+- **Close an agent from the agents section.** Every agent row has a `×` (it shows on hover, and always, dimmed, in the compact layout), and its right-click menu a **close agent**. A confirmation says what will stop, what keeps running and what could be lost, and nothing stops until you confirm. An agent in a worktree of its own (or in a flow's run) closes its whole workspace and removes the worktree, after checking for uncommitted files, commits no remote has and locks; the branch is deleted only if you tick **also delete the branch**. An agent in a project's main checkout closes its tab and the tabs of the agents it started there, and the other tabs stay. Agents it started in another worktree or project keep running.
+- **`cornercase close --agent --pane ID`** does the same from a script, with `--check` to see first what it would stop and lose, `--delete-branch`, `--force` and `--unlock`, and `--json` for the answer.
+
+## 0.12.166
+
+- No changes in the app. The app reaches workspaces and tabs through one set of lookups.
+
+## 0.12.165
+
+- **Agents started by an agent use its accounts.** An agent that starts another with `cornercase start` or `cornercase new-tab` from its pane now gives it that pane's accounts, as splitting a pane already did, instead of the ones picked in the window: a Claude Code logged in as `personal` no longer starts its helpers on `work`. `--account` still picks another account for the agent it names, and `--profile` still replaces the pane's accounts. Scripts run outside a pane, the window, the queue and the chat bots keep using the account picked in the window.
+
+## 0.12.164
+
+- No changes in the app. Each part of the app's state is changed through its own methods.
+
+## 0.12.163
+
+- **Clean up your worktrees in one place.** The new **Worktrees** dialog lists the worktrees of your open projects, and those in the worktrees folder (`~/.cornercase/worktrees` by default) whose project you have closed, with the project, branch, folder, how long ago it last changed and what it has: `●n` changed files, `↑n` commits no remote has, `merged`, `no commits` for a branch never pushed that has nothing of its own yet, `upstream gone`, `locked`, the program running in it (`claude`, or `2 running`), `n outside` for processes using its folder from another terminal or another tab, `open`, and `prunable`, `repository gone` or `unknown to git` for leftovers. Leftovers come first, then the merged ones, then the oldest. Open it from **Settings → Worktrees → worktrees on disk**, or from a project's `⋯` menu → **worktrees** for that project alone. On a row of an open project, **changes** opens that workspace's changes panel.
+- **Remove several at once, safely.** Tick the rows and click **remove n**: the confirmation checks them again, then names for each what it would lose (uncommitted files, unpushed commits, a lock, agents and shells that stop, processes outside cornercase or in another tab using the folder). Nothing stops before you confirm. Removal runs in the background. Branches are only deleted if you tick **also delete the branch**, the ones with commits nobody has are listed in red first, and a branch is kept if the worktree switched to another one since the confirmation.
+
+## 0.12.162
+
+- No changes in the app. The app's state is kept with the part of the app that uses it.
+
+## 0.12.161
+
+- No changes in the app. Its functions are split into smaller ones.
+
+## 0.12.160
+
+- **Name the branch before an issue's worktree is made.** **start** in the Issues tab now shows the branch and the workspace's name, filled in as before: change them to follow your team's convention, or press `Enter` to keep them. A branch that already exists is checked out, and one a workspace has open gets a new tab there, as before. Starting in a new tab asks nothing.
+- **Set your team's convention once.** Settings › Worktrees › **issue branches** takes a template such as `feat/{key}-{slug}` or `{user}/{key}`, with `{key}`, `{number}`, `{slug}`, `{source}` and `{user}` (your git `user.name`). It names the branch everywhere an issue starts: the Issues tab, scheduled issues, flows and `cornercase start --issue`. Empty keeps each tracker's own names, and the setting warns when a template would stop GitLab from closing its issues by itself.
+- **The same for a flow started from an issue.** **start a flow**'s dialog fills its branch from the same template, and now also has the workspace's name under it; both can be changed, and a branch git would refuse is pointed out before the team starts.
+- Scripts and other apps: `cornercase start --issue` and `cornercase flow run --issue` take `--workspace-name`, and `--worktree` names the branch; the template is the `issue_branch` setting of `cornercase config`.
+- The docs now say that workspaces are listed in the order you made or dragged them, not by name.
 
 ## 0.12.159
 

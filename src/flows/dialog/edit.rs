@@ -90,6 +90,14 @@ pub(crate) struct Editing {
     followed: Option<usize>,
 }
 
+fn open_stage_rows(i: usize, stage: &Stage) -> Vec<Row> {
+    let mut rows = vec![Row::Roles(i), Row::Back(i)];
+    if stage.back.is_some() {
+        rows.extend([Row::When(i), Row::AtMost(i)]);
+    }
+    rows
+}
+
 impl Editing {
     pub(crate) fn new(flow: Flow, place: Place, path: Option<PathBuf>) -> Self {
         Self {
@@ -172,22 +180,21 @@ impl Editing {
         }
     }
 
+    fn flow_rows(&self) -> Vec<Row> {
+        let mut rows = vec![Row::Name, Row::Description, Row::Place];
+        for (i, stage) in self.flow.stages.iter().enumerate() {
+            rows.push(Row::Stage(i));
+            if self.open == Some(i) {
+                rows.extend(open_stage_rows(i, stage));
+            }
+        }
+        rows.extend([Row::AddStage, Row::End, Row::Notes]);
+        rows
+    }
+
     pub(crate) fn rows(&self) -> Vec<Row> {
         match self.tab {
-            Tab::Flow => {
-                let mut rows = vec![Row::Name, Row::Description, Row::Place];
-                for (i, stage) in self.flow.stages.iter().enumerate() {
-                    rows.push(Row::Stage(i));
-                    if self.open == Some(i) {
-                        rows.extend([Row::Roles(i), Row::Back(i)]);
-                        if stage.back.is_some() {
-                            rows.extend([Row::When(i), Row::AtMost(i)]);
-                        }
-                    }
-                }
-                rows.extend([Row::AddStage, Row::End, Row::Notes]);
-                rows
-            }
+            Tab::Flow => self.flow_rows(),
             Tab::Orchestrator => vec![Row::Agent, Row::Model, Row::Effort, Row::Args, Row::Env, Row::Prompt],
             Tab::Role(_) => {
                 vec![
@@ -346,15 +353,17 @@ impl Editing {
         if let Some(text) = self.text.take() {
             let value = text.editor.text().trim_end().to_string();
             match text.row {
-                Row::Prompt => {
-                    if let Some(role) = self.role_mut() {
-                        role.prompt = value;
-                    }
-                }
+                Row::Prompt => self.set_prompt(value),
                 _ => self.flow.notes = value,
             }
         } else if self.field.is_some() {
             self.submit_field();
+        }
+    }
+
+    fn set_prompt(&mut self, value: String) {
+        if let Some(role) = self.role_mut() {
+            role.prompt = value;
         }
     }
 
@@ -446,12 +455,8 @@ impl Editing {
             return Some(format!("another role is named `{name}`"));
         }
         let old = std::mem::replace(&mut self.flow.roles[i].name, name.to_string());
-        for stage in &mut self.flow.stages {
-            for role in &mut stage.roles {
-                if *role == old {
-                    name.clone_into(role);
-                }
-            }
+        for role in self.flow.stages.iter_mut().flat_map(|stage| stage.roles.iter_mut()).filter(|role| **role == old) {
+            name.clone_into(role);
         }
         None
     }
@@ -493,13 +498,11 @@ impl Editing {
             return;
         }
         self.flow.stages.swap(i, j);
-        for stage in &mut self.flow.stages {
-            if let Some(back) = &mut stage.back {
-                if back.to == i + 1 {
-                    back.to = j + 1;
-                } else if back.to == j + 1 {
-                    back.to = i + 1;
-                }
+        for back in self.flow.stages.iter_mut().filter_map(|stage| stage.back.as_mut()) {
+            if back.to == i + 1 {
+                back.to = j + 1;
+            } else if back.to == j + 1 {
+                back.to = i + 1;
             }
         }
         self.fix_loops();
@@ -699,6 +702,10 @@ impl Editing {
             return;
         }
         self.pick = None;
+        self.apply_choice(row, value);
+    }
+
+    fn apply_choice(&mut self, row: Row, value: String) {
         match row {
             Row::Place => self.place = if value == "project" { Place::Project } else { Place::Yours },
             Row::Back(stage) => self.set_back(stage, &value),

@@ -62,6 +62,7 @@ fn sample() -> View {
         soft: Color::Gray,
         tints: TINTS,
         filter: None,
+        selection: None,
         glyphs: &crate::ui::icons::PLAIN,
     }
 }
@@ -228,6 +229,130 @@ fn clicks_on_a_file_row() {
     );
 }
 
+fn glyph_at(terminal: &Terminal<TestBackend>, cell: Rect) -> (String, Color) {
+    let c = &terminal.backend().buffer()[(cell.x + 1, cell.y)];
+    (c.symbol().to_string(), c.fg)
+}
+
+fn staged(staged: Staged) -> View {
+    let mut view = sample();
+    if let Body::Ready(diff) = &mut view.body {
+        let files = &mut Arc::make_mut(diff).files;
+        Arc::make_mut(&mut files[1]).staged = Some(staged);
+    }
+    view
+}
+
+mod discard {
+    use super::*;
+
+    #[test]
+    fn the_icon_shows_on_a_hovered_row_and_turns_red_under_the_pointer() {
+        let view = sample();
+        let r = row_of(&view, Row::File(1));
+        let cell = discard_cell(&view, r);
+        let on_row = render(&view, Some(Position::new(10, r.y)));
+        assert_eq!(glyph_at(&on_row, cell), ("↺".to_string(), Color::DarkGray));
+        let on_cell = render(&view, Some(Position::new(cell.x + 1, r.y)));
+        assert_eq!(glyph_at(&on_cell, cell), ("↺".to_string(), Color::Red));
+        assert_eq!(glyph_at(&render(&view, None), cell).0, " ");
+        insta::assert_snapshot!(on_row.backend());
+    }
+
+    #[test]
+    fn it_shows_on_a_viewed_row_too() {
+        let view = View { viewed: vec![false, true, false], ..sample() };
+        let r = row_of(&view, Row::File(1));
+        let terminal = render(&view, Some(Position::new(10, r.y)));
+        assert_eq!(glyph_at(&terminal, discard_cell(&view, r)).0, "↺");
+    }
+}
+
+mod slots {
+    use super::*;
+
+    #[test]
+    fn sit_in_order_before_the_viewed_mark() {
+        let view = sample();
+        let r = row_of(&view, Row::File(1));
+        let (discard, stage) = (discard_cell(&view, r), stage_cell(&view, r));
+        assert_eq!((discard.right(), stage.right()), (stage.x, viewed_cell(r).x));
+    }
+
+    #[rstest::rstest]
+    #[case::commits(Mode::Commits, Scope::Project)]
+    #[case::all(Mode::All, Scope::Project)]
+    fn commits_and_all_have_none(#[case] mode: Mode, #[case] scope: Scope) {
+        let view = View { scope, mode, ..sample() };
+        let r = row_of(&view, Row::File(1));
+        let hovered = render(&view, Some(Position::new(10, r.y)));
+        let line: String =
+            (r.x..r.right()).map(|x| hovered.backend().buffer()[(x, r.y)].symbol().to_string()).collect();
+        assert!(!line.contains('↺'), "{line}");
+        assert_eq!((discard_cell(&view, r), stage_cell(&view, r)), (Rect::default(), Rect::default()));
+        let at = Position::new(viewed_cell(r).x.saturating_sub(2), r.y);
+        assert_eq!(hit(AREA, &view, at), Some(Hit::File(1)));
+    }
+
+    #[rstest::rstest]
+    #[case::project(Scope::Project)]
+    #[case::every_project(Scope::Every)]
+    fn are_hit_in_uncommitted_and_every_project(#[case] scope: Scope) {
+        let view = View { scope, ..sample() };
+        let r = row_of(&view, Row::File(1));
+        let (discard, stage) = (discard_cell(&view, r), stage_cell(&view, r));
+        assert_eq!(hit(AREA, &view, Position::new(discard.x + 1, r.y)), Some(Hit::Discard(1)));
+        assert_eq!(hit(AREA, &view, Position::new(stage.x + 1, r.y)), Some(Hit::Stage(1)));
+    }
+}
+
+mod stage {
+    use super::*;
+
+    const GREEN: Color = Color::Green;
+
+    #[rstest::rstest]
+    #[case::unstaged_at_rest(Staged::No, false, false, " ", GREEN)]
+    #[case::unstaged_on_the_row(Staged::No, true, false, "+", Color::DarkGray)]
+    #[case::unstaged_under_the_pointer(Staged::No, true, true, "+", GREEN)]
+    #[case::partly_at_rest(Staged::Partly, false, false, "◐", GREEN)]
+    #[case::partly_on_the_row(Staged::Partly, true, false, "◐", GREEN)]
+    #[case::partly_under_the_pointer(Staged::Partly, true, true, "+", GREEN)]
+    #[case::staged_at_rest(Staged::Yes, false, false, "●", GREEN)]
+    #[case::staged_on_the_row(Staged::Yes, true, false, "●", GREEN)]
+    #[case::staged_under_the_pointer(Staged::Yes, true, true, "−", Color::Yellow)]
+    fn the_glyph(
+        #[case] state: Staged,
+        #[case] on_row: bool,
+        #[case] under: bool,
+        #[case] glyph: &str,
+        #[case] colour: Color,
+    ) {
+        let view = staged(state);
+        let r = row_of(&view, Row::File(1));
+        let cell = stage_cell(&view, r);
+        let pointer = match (on_row, under) {
+            (_, true) => Some(Position::new(cell.x + 1, r.y)),
+            (true, false) => Some(Position::new(10, r.y)),
+            _ => None,
+        };
+        let (shown, fg) = glyph_at(&render(&view, pointer), cell);
+        assert_eq!(shown, glyph);
+        if glyph != " " {
+            assert_eq!(fg, colour);
+        }
+    }
+
+    #[test]
+    fn an_unread_file_counts_as_unstaged() {
+        let view = sample();
+        let r = row_of(&view, Row::File(1));
+        let cell = stage_cell(&view, r);
+        let under = render(&view, Some(Position::new(cell.x + 1, r.y)));
+        assert_eq!(glyph_at(&under, cell), ("+".to_string(), GREEN));
+    }
+}
+
 #[test]
 fn hunk_actions_are_clickable() {
     let view = sample();
@@ -342,4 +467,133 @@ mod filter {
 fn shows_an_error() {
     let view = View { body: Body::Failed("cannot compare with nope".into()), ..sample() };
     insta::assert_snapshot!(render(&view, None).backend());
+}
+
+mod selecting {
+    use super::*;
+    use crate::changes::selection::{At, Spot};
+
+    fn spot(hunk: usize, line: usize) -> Spot {
+        Spot { hunk, at: At::Line(line) }
+    }
+
+    fn selecting(from: Spot, to: Spot) -> View {
+        let view = sample();
+        View { selection: Some(Selected { file: 0, from, to }), ..view }
+    }
+
+    fn text_of(terminal: &Terminal<TestBackend>, y: u16) -> String {
+        (0..AREA.width).map(|x| terminal.backend().buffer()[(x, y)].symbol().to_string()).collect()
+    }
+
+    #[test]
+    fn line_rows_are_pressable_and_the_other_rows_keep_their_hits() {
+        let view = sample();
+        let line = row_of(&view, Row::Line(0, 0, 2));
+        assert_eq!(hit(AREA, &view, Position::new(20, line.y)), Some(Hit::Line(0, spot(0, 2))));
+        let hunk = row_of(&view, Row::Hunk(0, 0));
+        assert_eq!(hit(AREA, &view, Position::new(hunk.x + 2, hunk.y)), None);
+        let file = row_of(&view, Row::File(0));
+        assert_eq!(hit(AREA, &view, Position::new(10, file.y)), Some(Hit::File(0)));
+    }
+
+    #[test]
+    fn unchanged_lines_a_gap_shows_are_pressable() {
+        let mut view = sample();
+        let lines: Vec<GapLine> =
+            (14..44).map(|n| GapLine { old: n, new: n, text: format!("line {n}"), raw: None, syntax: None }).collect();
+        view.gaps.insert((0, 1), Arc::new(lines));
+        let r = row_of(&view, Row::GapLine(0, 1, 2));
+        assert_eq!(hit(AREA, &view, Position::new(20, r.y)), Some(Hit::Line(0, Spot { hunk: 1, at: At::Gap(2) })));
+    }
+
+    #[test]
+    fn a_selection_marks_its_rows_only_and_keeps_the_tint() {
+        let view = selecting(spot(0, 1), spot(0, 3));
+        let terminal = render(&view, None);
+        let buffer = terminal.backend().buffer();
+        let marked = |l| {
+            let r = row_of(&view, Row::Line(0, 0, l));
+            (buffer[(r.x, r.y)].symbol().to_string(), buffer[(r.x + 1, r.y)].fg, buffer[(r.x + 2, r.y)].bg)
+        };
+        assert_eq!(marked(0).0, " ");
+        assert_eq!(marked(1).0, "▌");
+        assert_eq!(marked(2).0, "▌");
+        assert_eq!(marked(3), ("▌".to_string(), Color::Cyan, TINTS.added.expect("tint")));
+        assert_eq!(marked(4).0, " ");
+    }
+
+    #[test]
+    fn the_footer_names_the_lines_and_offers_ask_agent_and_copy() {
+        let view = selecting(spot(0, 3), spot(0, 4));
+        let footer = text_of(&render(&view, None), parts(AREA, &view).footer.y);
+        assert!(footer.contains("lines 10-11") && footer.contains(" ask agent   copy "), "{footer}");
+        assert!(!footer.contains("collapse all") && !footer.contains("viewed"), "{footer}");
+        assert_eq!(fold_all(AREA, &view), Rect::default());
+    }
+
+    #[rstest::rstest]
+    #[case::one_line(spot(0, 3), spot(0, 3), "line 10 ")]
+    #[case::a_range(spot(0, 3), spot(0, 5), "lines 10-12")]
+    #[case::only_removed(spot(0, 1), spot(0, 2), "removed lines 10-")]
+    fn the_footer_label(#[case] from: Spot, #[case] to: Spot, #[case] expected: &str) {
+        let view = selecting(from, to);
+        let footer = text_of(&render(&view, None), parts(AREA, &view).footer.y);
+        assert!(footer.contains(expected), "{footer}");
+    }
+
+    #[test]
+    fn the_footer_buttons_hit() {
+        let view = selecting(spot(0, 2), spot(0, 2));
+        let actions = lines_actions(AREA, &view);
+        let hits: Vec<_> = actions.iter().map(|(_, r)| hit(AREA, &view, Position::new(r.x + 1, r.y))).collect();
+        assert_eq!(hits, [Some(Hit::Lines(LinesAction::Ask)), Some(Hit::Lines(LinesAction::Copy))]);
+        assert_eq!(lines_actions(AREA, &sample()).len(), 0);
+    }
+
+    #[rstest::rstest]
+    #[case::above_the_file_is_its_first_line(Row::Header(0), spot(0, 0))]
+    #[case::a_line(Row::Line(0, 0, 2), spot(0, 2))]
+    #[case::a_hunk_header_is_the_line_above(Row::Hunk(0, 1), spot(0, 5))]
+    #[case::the_spacer_is_the_last_line(Row::Spacer, spot(1, 4))]
+    fn line_near_maps_a_row_to_a_line_of_the_file(#[case] row: Row, #[case] expected: Spot) {
+        let view = sample();
+        let y = if row == Row::Header(0) { 0 } else { row_of(&view, row).y };
+        assert_eq!(line_near(AREA, &view, 0, y), Some(expected));
+    }
+
+    #[test]
+    fn the_edge_scrolls_only_where_there_is_more_to_show() {
+        let short = Rect { height: 8, ..AREA };
+        let view = sample();
+        let body = parts(short, &view).body;
+        assert_eq!(edge(short, &view, body.y), None);
+        assert_eq!(edge(short, &view, body.bottom() - 1), Some(1));
+        let scrolled = View { scroll: 2, ..sample() };
+        assert_eq!(edge(short, &scrolled, body.y), Some(-1));
+    }
+
+    #[test]
+    fn it_is_none_for_a_folded_file_a_filtered_file_or_another_patch() {
+        use crate::changes::selection::Selection;
+        let view = sample();
+        let file = &ready(&view).files[0];
+        let selection = Selection {
+            workspace: 1,
+            path: file.path.clone(),
+            digest: file.digest,
+            anchor: spot(0, 1),
+            end: spot(0, 2),
+        };
+        assert!(selected(&view, &selection).is_some());
+        assert!(selected(&View { folded: vec![true; 3], ..sample() }, &selection).is_none());
+        assert!(selected(&sample(), &Selection { digest: file.digest + 1, ..selection.clone() }).is_none());
+        let filter = FilterView { query: "tests/".into(), focused: false, kept: vec![false, false, true] };
+        assert!(selected(&View { filter: Some(filter), ..sample() }, &selection).is_none());
+        assert!(selected(&sample(), &Selection { workspace: 2, ..selection }).is_none());
+    }
+
+    fn ready(view: &View) -> &Diff {
+        view.diff().expect("ready")
+    }
 }

@@ -90,43 +90,56 @@ fn an_unknown_plugin_is_an_error() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("no plugin called `acme.missing`"), "{out:?}");
 }
 
-#[test]
-fn a_plugin_installs_from_a_repository_after_its_preview_updates_and_goes() {
-    let app = Harness::start();
-    let base = temp_dir_named(&format!("ccinstall-{}", std::process::id()));
+fn write_plugin(folder: &Path, version: &str) {
+    let manifest = MANIFEST.replace("0.1.0", version);
+    std::fs::write(folder.join("cornercase-plugin.toml"), manifest).expect("manifest");
+}
+
+fn plugin_repository(base: &Path) -> (PathBuf, PathBuf, String) {
     let work = base.join("work");
     std::fs::create_dir_all(&work).expect("work");
     git(&work, &["init", "--quiet", "--initial-branch=main"]);
     let folder = work.join("plugins/e2e");
     std::fs::create_dir_all(&folder).expect("plugin folder");
-    let write = |version: &str| {
-        let manifest = MANIFEST.replace("0.1.0", version);
-        std::fs::write(folder.join("cornercase-plugin.toml"), manifest).expect("manifest");
-    };
-    write("0.1.0");
+    write_plugin(&folder, "0.1.0");
     std::fs::write(folder.join("run"), "#!/bin/sh\nexec sleep 60\n").expect("script");
     std::fs::set_permissions(folder.join("run"), std::fs::Permissions::from_mode(0o755)).expect("executable");
     git(&work, &["add", "--all"]);
     git(&work, &["commit", "--quiet", "-m", "one"]);
-    git(&base, &["clone", "--quiet", "--bare", "work", "repo.git"]);
+    git(base, &["clone", "--quiet", "--bare", "work", "repo.git"]);
     let repo = base.join("repo.git").display().to_string();
-    let plugin = format!("{repo}//plugins/e2e");
+    (work, folder, repo)
+}
 
-    let asked = app.session.cli(&["plugin", "install", &plugin]);
+fn assert_install_asks_first(session: &Session, plugin: &str) {
+    let asked = session.cli(&["plugin", "install", plugin]);
     let (out, err) = (String::from_utf8_lossy(&asked.stdout), String::from_utf8_lossy(&asked.stderr));
     assert!(!asked.status.success(), "{out}{err}");
     assert!(out.contains("service serve: ./run service"), "{out}");
     assert!(err.contains("pass --yes"), "{err}");
-    assert!(app.session.says(&["plugin", "list"]).starts_with("no plugins"));
+    assert!(session.says(&["plugin", "list"]).starts_with("no plugins"));
+}
 
-    let installed = app.session.says(&["plugin", "install", &plugin, "--yes"]);
+fn assert_installed_and_current(session: &Session, plugin: &str, repo: &str) {
+    let installed = session.says(&["plugin", "install", plugin, "--yes"]);
     assert!(installed.contains("installed E2E 0.1.0 (acme.e2e), turned off"), "{installed}");
-    let listed = app.session.says(&["plugin", "list"]);
+    let listed = session.says(&["plugin", "list"]);
     assert!(listed.starts_with("acme.e2e  0.1.0  off  E2E"), "{listed}");
     assert!(listed.contains(&format!("installed from {repo}, folder plugins/e2e, at")), "{listed}");
-    assert!(app.session.says(&["plugin", "update", "acme.e2e"]).contains("acme.e2e is up to date"));
+    assert!(session.says(&["plugin", "update", "acme.e2e"]).contains("acme.e2e is up to date"));
+}
 
-    write("0.2.0");
+#[test]
+fn a_plugin_installs_from_a_repository_after_its_preview_updates_and_goes() {
+    let app = Harness::start();
+    let base = temp_dir_named(&format!("ccinstall-{}", std::process::id()));
+    let (work, folder, repo) = plugin_repository(&base);
+    let plugin = format!("{repo}//plugins/e2e");
+
+    assert_install_asks_first(&app.session, &plugin);
+    assert_installed_and_current(&app.session, &plugin, &repo);
+
+    write_plugin(&folder, "0.2.0");
     git(&work, &["commit", "--quiet", "-am", "two"]);
     git(&work, &["push", "--quiet", &repo, "HEAD:main"]);
     let updated = app.session.says(&["plugin", "update", "--yes"]);
@@ -150,8 +163,7 @@ fn another_client_lists_and_runs_the_actions_as_the_menu_does() {
 
     let listed: serde_json::Value =
         serde_json::from_str(&app.session.says(&["plugin", "actions", "--context", "pane", "--json"])).expect("json");
-    assert_eq!(listed["actions"][0]["action"], "note");
-    assert_eq!(listed["actions"][1]["action"], "fail");
+    assert_eq!((&listed["actions"][0]["action"], &listed["actions"][1]["action"]), (&"note".into(), &"fail".into()));
     assert!(listed["revision"].as_u64().is_some_and(|revision| revision > 0), "{listed}");
     let text = app.session.says(&["plugin", "actions"]);
     assert!(text.starts_with("plugin\taction\tcontexts\ttitle\nacme.e2e\tnote\tpane,tab\ttake a note"), "{text}");

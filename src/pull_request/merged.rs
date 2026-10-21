@@ -137,33 +137,21 @@ impl Cache {
             Read::Accounts(accounts) => {
                 self.unavailable[slot] = None;
                 self.failed[slot] = None;
-                let mut old: HashMap<_, _> = self
-                    .entries
-                    .iter()
-                    .filter(|e| e.source.provider == provider)
-                    .map(|e| (e.source.id(), e.clone()))
-                    .collect();
-                self.entries.retain(|e| e.source.provider != provider);
-                for account in accounts {
-                    if self.entries.iter().any(|e| e.source.id() == account.source.id()) {
-                        continue;
-                    }
-                    let mut entry = old.remove(&account.source.id()).unwrap_or(Entry {
-                        source: account.source.clone(),
-                        last: None,
-                        error: None,
-                    });
-                    entry.source = account.source;
-                    match account.listed {
-                        Ok(listed) => {
-                            entry.last = Some(listed);
-                            entry.error = None;
-                        }
-                        Err(why) => entry.error = Some(why),
-                    }
-                    self.entries.push(entry);
-                }
+                self.merge_accounts(provider, accounts);
             }
+        }
+    }
+
+    fn merge_accounts(&mut self, provider: Provider, accounts: Vec<Account>) {
+        let mut old: HashMap<_, _> =
+            self.entries.iter().filter(|e| e.source.provider == provider).map(|e| (e.source.id(), e.clone())).collect();
+        self.entries.retain(|e| e.source.provider != provider);
+        for account in accounts {
+            if self.entries.iter().any(|e| e.source.id() == account.source.id()) {
+                continue;
+            }
+            let entry = old.remove(&account.source.id());
+            self.entries.push(refreshed(entry, account));
         }
     }
 
@@ -214,19 +202,32 @@ impl Cache {
             return None;
         }
         let scope = Scope::of(remotes, &self.entries);
-        let mut found: HashMap<&Key, SystemTime> = HashMap::new();
-        for listed in self.entries.iter().filter_map(|e| e.last.as_ref()) {
-            for merged in &listed.merged {
-                if scope.has(&merged.key) {
-                    found.insert(&merged.key, merged.at);
-                }
-            }
-        }
+        let found: HashMap<&Key, SystemTime> = self
+            .entries
+            .iter()
+            .filter_map(|e| e.last.as_ref())
+            .flat_map(|listed| &listed.merged)
+            .filter(|merged| scope.has(&merged.key))
+            .map(|merged| (&merged.key, merged.at))
+            .collect();
         let [day, week, total] = stats::windows(found.values().copied(), since, now);
         let complete = self.entries.iter().all(|e| e.error.is_none() && e.last.as_ref().is_some_and(|l| !l.truncated))
             && self.failed.iter().all(Option::is_none);
         Some(MergedRow { day, week, total, complete, accounts: self.accounts() })
     }
+}
+
+fn refreshed(old: Option<Entry>, account: Account) -> Entry {
+    let mut entry = old.unwrap_or(Entry { source: account.source.clone(), last: None, error: None });
+    entry.source = account.source;
+    match account.listed {
+        Ok(listed) => {
+            entry.last = Some(listed);
+            entry.error = None;
+        }
+        Err(why) => entry.error = Some(why),
+    }
+    entry
 }
 
 struct Scope {

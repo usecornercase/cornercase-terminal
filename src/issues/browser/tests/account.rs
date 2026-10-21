@@ -120,7 +120,7 @@ fn starting_asks_for_the_account_and_then_starts_with_the_one_chosen() {
     click(&mut b, pos);
     assert_eq!(b.picker.as_ref().map(|p| p.pick), Some(Pick::Account));
     type_text(&mut b, "Main");
-    assert!(matches!(press(&mut b, KeyCode::Enter), Action::Start(..)));
+    assert!(matches!(press(&mut b, KeyCode::Enter), Action::Name(..)));
     assert_eq!(b.accounts.as_ref().and_then(|a| a.chosen.clone()), Some(("claude".into(), String::new())));
 }
 

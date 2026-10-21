@@ -22,7 +22,7 @@ fn asana(s: &mut Setup, me: &'static str) -> FakeHttp {
         ("GET /workspaces/w-2/users", 200, USERS),
         ("GET /tasks", 200, TASKS),
     ]);
-    s.app.issues.apis.asana = server.url();
+    s.app.issues.api_at(Source::Asana, &server.url());
     server
 }
 
@@ -87,7 +87,7 @@ fn a_workspace_that_is_not_the_tokens_stays_in_the_step() {
 fn a_token_from_the_environment_lists_without_a_form() {
     let mut s = setup(false, "echo '[]'");
     let _server = asana(&mut s, ONE);
-    s.app.issues.env_tokens.insert(Source::Asana, "env-token".into());
+    s.app.issues.set_env_token(Source::Asana, "env-token");
 
     open_list(&mut s);
     to_tab(&mut s, IssueTab::One(Source::Asana));

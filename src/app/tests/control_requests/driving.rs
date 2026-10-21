@@ -14,7 +14,7 @@ fn sent(app: &mut App, pane: u64, events: &Value) -> Sent {
 fn hidden_tab(app: &mut App) -> u64 {
     let active = app.active;
     let workspace = app.projects[active].active;
-    let tab = app.push_tab(active, workspace, AREA, None).expect("a hidden tab");
+    let tab = app.push_tab(workspace_at(app, active, workspace), AREA, None).expect("a hidden tab").index();
     app.projects[active].workspaces[workspace].tabs[tab].pane().expect("a pane").id
 }
 

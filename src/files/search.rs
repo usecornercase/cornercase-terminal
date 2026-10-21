@@ -99,7 +99,7 @@ pub(crate) struct Text {
     pub(crate) capped: bool,
 }
 
-fn matcher(query: &str) -> Option<RegexMatcher> {
+pub(super) fn matcher(query: &str) -> Option<RegexMatcher> {
     RegexMatcherBuilder::new().case_smart(true).fixed_strings(true).build(query).ok()
 }
 
@@ -123,60 +123,56 @@ pub(crate) fn text(root: &Path, paths: &[String], query: &str, cancel: &AtomicBo
     text_on(root, paths, query, cancel, threads)
 }
 
+struct Scan<'a> {
+    root: &'a Path,
+    paths: &'a [String],
+    cancel: &'a AtomicBool,
+    next: AtomicUsize,
+    seen: AtomicUsize,
+    found: Mutex<Vec<(usize, Found)>>,
+}
+
+impl Scan<'_> {
+    fn work(&self, finder: &RegexMatcher) {
+        let mut searcher = SearcherBuilder::new().binary_detection(BinaryDetection::quit(0)).line_number(true).build();
+        while !self.cancel.load(Ordering::Relaxed) && self.seen.load(Ordering::Relaxed) <= MAX_MATCHES {
+            let i = self.next.fetch_add(1, Ordering::Relaxed);
+            let Some(path) = self.paths.get(i) else { break };
+            let mut lines = Vec::new();
+            let sink = Lossy(|number, raw| {
+                let kept = self.seen.fetch_add(1, Ordering::Relaxed) < MAX_MATCHES;
+                let _ = kept.then(|| lines.push(line(finder, number, raw)));
+                Ok(kept)
+            });
+            let _ = searcher.search_path(finder, self.root.join(path), sink);
+            if !lines.is_empty() {
+                self.found.lock().push((i, Found { path: path.clone(), lines }));
+            }
+        }
+    }
+}
+
 fn text_on(root: &Path, paths: &[String], query: &str, cancel: &AtomicBool, threads: usize) -> Text {
     let Some(finder) = matcher(query) else { return Text::default() };
-    let (next, seen) = (AtomicUsize::new(0), AtomicUsize::new(0));
-    let found = Mutex::new(Vec::new());
+    let scan = Scan {
+        root,
+        paths,
+        cancel,
+        next: AtomicUsize::new(0),
+        seen: AtomicUsize::new(0),
+        found: Mutex::new(Vec::new()),
+    };
     std::thread::scope(|scope| {
         for _ in 0..threads {
-            scope.spawn(|| {
-                let mut searcher =
-                    SearcherBuilder::new().binary_detection(BinaryDetection::quit(0)).line_number(true).build();
-                while !cancel.load(Ordering::Relaxed) && seen.load(Ordering::Relaxed) <= MAX_MATCHES {
-                    let i = next.fetch_add(1, Ordering::Relaxed);
-                    let Some(path) = paths.get(i) else { break };
-                    let mut lines = Vec::new();
-                    let sink = Lossy(|number, raw| {
-                        let kept = seen.fetch_add(1, Ordering::Relaxed) < MAX_MATCHES;
-                        if kept {
-                            lines.push(line(&finder, number, raw));
-                        }
-                        Ok(kept)
-                    });
-                    let _ = searcher.search_path(&finder, root.join(path), sink);
-                    if !lines.is_empty() {
-                        found.lock().push((i, Found { path: path.clone(), lines }));
-                    }
-                }
-            });
+            scope.spawn(|| scan.work(&finder));
         }
     });
+    let (found, seen) = (scan.found, scan.seen);
     let mut files = found.into_inner();
     files.sort_unstable_by_key(|(i, _)| *i);
     let files: Vec<Found> = files.into_iter().map(|(_, f)| f).collect();
     let matches = files.iter().map(|f| f.lines.len()).sum();
     Text { files, matches, capped: seen.into_inner() > MAX_MATCHES }
-}
-
-pub(crate) fn occurrences(text: &str, query: &str) -> Vec<Range<usize>> {
-    if query.is_empty() {
-        return Vec::new();
-    }
-    let fold = !query.chars().any(char::is_uppercase);
-    let norm = |c: char| if fold { c.to_lowercase().next().unwrap_or(c) } else { c };
-    let needle: Vec<char> = query.chars().map(norm).collect();
-    let hay: Vec<char> = text.chars().map(norm).collect();
-    let mut ranges = Vec::new();
-    let mut i = 0;
-    while i + needle.len() <= hay.len() {
-        if hay[i..i + needle.len()] == needle[..] {
-            ranges.push(i..i + needle.len());
-            i += needle.len();
-        } else {
-            i += 1;
-        }
-    }
-    ranges
 }
 
 #[cfg(test)]

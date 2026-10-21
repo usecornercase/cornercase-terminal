@@ -38,6 +38,7 @@ import {
   landingIndent,
   menuArea,
   menuButton,
+  EMPTY,
   MIN_MENU_ROW_WIDTH,
   moreAbove,
   pickerArea,
@@ -645,9 +646,9 @@ export class Painter {
     this.region({ r, click: close, right: menu, cursor: 'pointer' });
   }
 
-  private details(row: Rect, pitch: number, d: Details, indent: number, agent: string | null = null): void {
+  private details(row: Rect, pitch: number, d: Details, indent: number, agent: string | null = null, buttons?: Rect): void {
     const r = intersect(rect(row.x, middle(row).y + 1, row.w, 1), row);
-    const close = closeButton(row, pitch);
+    const close = buttons ?? closeButton(row, pitch);
     const free = r.w - (bottom(close) > r.y ? close.w : 0) - 1;
     const lead: Seg[] = agent === null ? [] : [seg(agent, DARK)];
     const fixed: Seg[] = [];
@@ -891,6 +892,8 @@ export class Painter {
       const click = (x: number, y: number) =>
         entry.fold !== null && contains(lead, x, y) ? app.toggleAgentFold(entry.pane) : app.jumpToPane(entry.pane);
       this.region({ r, click, right, hold: true, cursor: 'pointer' });
+      const close = r.w < MIN_MENU_ROW_WIDTH ? EMPTY : closeButton(r, areas.pitch);
+      if (this.sidebarHovered(r) || close.h > 1) this.region({ r: close, click: () => app.askCloseAgent(entry.pane), right, cursor: 'pointer' });
     });
     this.more(list, rows, entries, () => true);
   }
@@ -900,19 +903,29 @@ export class Painter {
     const depth = entry.depth;
     const line: Line = [marker(entry.active), seg(' '.repeat(2 * depth)), statusIcon(entry.status, spinAt(this.app)), seg(' ')];
     const indent = width(line);
-    const room = Math.max(0, r.w - indent - 1);
+    const close = r.w < MIN_MENU_ROW_WIDTH ? EMPTY : closeButton(r, pitch);
+    const room = Math.max(0, r.w - indent - close.w - 1);
     const tags = fitTags(foldTags(entry, spinAt(this.app)), room);
     const place = agentPlace(entry, room - tags.reserved, { fg: entry.active ? DEFAULT : 7 });
     line.push(...place);
     pushTags(line, tags, width(place), room);
     this.band(r, line, bg);
     if (entry.fold !== null) this.span(r.x + 2 * depth + 1, middle(r).y, entry.fold ? '▸' : '▾', DARK, 1);
-    this.details(r, pitch, entry.details, indent, entry.agent);
+    this.agentClose(r, close, bg);
+    this.details(r, pitch, entry.details, indent, entry.agent, close);
     if (depth > 0) {
       for (const level of entry.bars) this.guide(r.x + 2 * level, r, 'bar');
       this.guide(r.x + 2 * depth, r, entry.last ? 'end' : 'tee');
     }
     if (entry.active) this.rail(r);
+  }
+
+  private agentClose(row: Rect, close: Rect, bg: Style): void {
+    const hover = this.sidebarHovered(row);
+    if (isEmpty(close) || (!hover && close.h === 1)) return;
+    const lit = hover && this.hovered(close);
+    const style: Style = lit ? { ...bg, fg: 1, add: BOLD } : { ...bg, fg: 8 };
+    this.band(close, [seg(centered('×', close.w))], style);
   }
 
   private back(areas: Areas, name: string): void {
@@ -1093,32 +1106,33 @@ export class Painter {
     if (menu.h >= 4) this.span(menu.x + 2, menu.y + menu.h - 2, truncateRight(hint, Math.max(0, menu.w - 4)), DARK);
   }
 
-  dialogButtons(row: Rect, submit: string, onSubmit: () => void, onCancel: () => void, label = 'cancel'): void {
+  dialogButtons(row: Rect, submit: string, onSubmit: () => void, onCancel: () => void, label = 'cancel', dangerous = false): void {
     const cancel = intersect(rect(right(row) - buttonWidth(label), row.y, buttonWidth(label), 1), row);
     const ok = intersect(rect(cancel.x - buttonWidth(submit) - 1, row.y, buttonWidth(submit), 1), row);
-    this.submitButton(ok, submit, onSubmit);
+    this.submitButton(ok, submit, onSubmit, dangerous);
     this.span(cancel.x, cancel.y, ` ${label} `, this.pill(cancel, false));
     this.region({ r: cancel, click: onCancel, cursor: 'pointer' });
   }
 
-  private pill(r: Rect, primary: boolean): Style {
+  private pill(r: Rect, primary: boolean, dangerous = false): Style {
+    if (primary && dangerous) return this.hovered(r) ? { fg: 0, bg: 1, add: BOLD } : { fg: 1, bg: this.surface, add: BOLD };
     if (primary) return this.hovered(r) ? PRESSED : { fg: 6, bg: this.surface, add: BOLD };
     return this.hovered(r) ? { fg: 0, bg: 7 } : { fg: 7, bg: this.surface };
   }
 
-  private submitButton(r: Rect, label: string, onClick: () => void): void {
-    this.span(r.x, r.y, ` ${label} `, this.pill(r, true), r.w);
+  private submitButton(r: Rect, label: string, onClick: () => void, dangerous = false): void {
+    this.span(r.x, r.y, ` ${label} `, this.pill(r, true, dangerous), r.w);
     this.region({ r, click: onClick, cursor: 'pointer' });
   }
 
-  private input(row: Rect, label: string, value: string): void {
+  private input(row: Rect, label: string, value: string, focused = true): void {
     const lbl = label ? `${label} ` : '';
     const max = Math.max(0, row.w - INPUT_PROMPT.length - [...lbl].length - 1);
     const v = truncateLeft(value, max);
     let x = this.span(row.x, row.y, INPUT_PROMPT, CYAN);
     x = this.span(x, row.y, lbl, DARK);
     x = this.span(x, row.y, v, { add: BOLD });
-    if (x < right(row)) this.cursor = { x, y: row.y, shape: 'block' };
+    if (focused && x < right(row)) this.cursor = { x, y: row.y, shape: 'block' };
   }
 
   private form(): void {
@@ -1238,7 +1252,7 @@ export class Painter {
     return lines;
   }
 
-  private confirm({ title, message, submit, extra, note }: ConfirmView): void {
+  private confirm({ title, message, submit, extra, note, dangerous }: ConfirmView): void {
     const app = this.app;
     const r = formArea(app.cols, app.rows);
     this.dialogBackdrop(r);
@@ -1248,7 +1262,7 @@ export class Painter {
     rows.slice(0, 4).forEach((row, i) => row.forEach((cell, x) => this.g.put(c.x + x, c.y + i, cell.ch, {})));
     if (note) this.span(c.x, c.y + 4, note, DARK);
     const row = rect(c.x, bottom(c) - 1, c.w, 1);
-    this.dialogButtons(row, submit, () => app.submitConfirm(), () => app.closeOverlay());
+    this.dialogButtons(row, submit, () => app.submitConfirm(), () => app.closeOverlay(), 'cancel', dangerous);
     if (extra) {
       const end = Math.max(row.x, right(row) - buttonWidth('cancel') - 1 - buttonWidth(submit) - 1);
       const x = Math.max(row.x, end - buttonWidth(extra));
@@ -1417,7 +1431,17 @@ export class Painter {
     const noteRow = rect(c.x, bottom(c) - 2, c.w, 1);
     const buttonsRow = rect(c.x, bottom(c) - 1, c.w, 1);
     const view = app.issuesView(o);
-    if (view.detail) {
+    if (view.naming) {
+      const naming = view.naming;
+      this.span(tabsRow.x, tabsRow.y, truncateRight(naming.heading, tabsRow.w), { add: BOLD });
+      [inputRow, rect(list.x, list.y, list.w, 1)].forEach((row, i) => {
+        const [label, value] = naming.fields[i];
+        this.input(row, label, value, i === naming.focus);
+        this.region({ r: row, click: () => app.issuesNamingField(i as 0 | 1), cursor: 'text' });
+      });
+      const help = wrapAll(naming.help.map((h) => [seg(h)]), list.w - 2);
+      help.slice(0, Math.max(0, list.h - 2)).forEach((row, i) => row.forEach((cell, x) => this.g.put(list.x + 1 + x, list.y + 2 + i, cell.ch, DARK)));
+    } else if (view.detail) {
       const area = rect(c.x, c.y, c.w, noteRow.y - c.y);
       const lines = view.detail;
       lines.slice(o.detailScroll, o.detailScroll + area.h).forEach((line, i) => drawLine(this.g, area.x, area.y + i, line, area.w));

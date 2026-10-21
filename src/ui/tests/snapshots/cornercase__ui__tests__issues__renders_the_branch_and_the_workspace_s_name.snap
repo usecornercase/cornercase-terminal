@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/issues.rs
+expression: render(&with(naming())).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"  ╭─ Issues · shop ──────────────────────────────────────────────────────────────────────────────╮  "
+" P│ Start #482 Returns page crashes in a new worktree                                            │  "
+"  │                                                                                              │  "
+"▌ │ › branch    issue-482-returns-page-crashes                                                   │  "
+"  │                                                                                              │  "
+"  │ › workspace #482 Returns page crashes                                                        │  "
+"  │                                                                                              │  "
+"  │  A branch that exists is checked out.                                                        │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+" ─│ enter starts                                                                                 │  "
+"  │                                                                                start   back  │  "
+"  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  "
+"  Quit                   Help  │                         │                                          "

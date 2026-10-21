@@ -31,6 +31,10 @@ fn run_with(team: &mut Team, profile: &str) -> Response {
 }
 
 fn run_choosing(team: &mut Team, profile: Option<&str>, accounts: BTreeMap<String, String>) -> Response {
+    run_by(team, None, profile, accounts)
+}
+
+fn run_by(team: &mut Team, caller: Option<u64>, profile: Option<&str>, accounts: BTreeMap<String, String>) -> Response {
     let run = wire::FlowRun {
         name: "Pair".into(),
         prompt: "Fix the login form".into(),
@@ -38,7 +42,7 @@ fn run_choosing(team: &mut Team, profile: Option<&str>, accounts: BTreeMap<Strin
         accounts,
         ..wire::FlowRun::default()
     };
-    ask(&mut team.app, None, Command::FlowRun(run));
+    ask(&mut team.app, caller, Command::FlowRun(run));
     answered(&mut team.app, &team.rx, "the flow's tabs are open")
 }
 
@@ -96,6 +100,19 @@ fn an_account_named_for_a_run_reaches_every_role_over_the_profile() {
 
     let response = run_choosing(&mut team, Some("Work"), chosen);
     every_role_on(&mut team, response, &home);
+}
+
+#[test]
+fn a_run_started_from_a_pane_takes_the_selection_not_the_pane_s_accounts() {
+    let (mut team, work) = team();
+    accounts::add(&team.config.path().join("accounts"), Known::Claude, "home", None).expect("the account");
+    let opened = ok(&mut team.app, "new-tab", &json!({"accounts": {"claude": "home"}}));
+    let caller = serde_json::from_value::<Done>(opened).expect("done").ids.pane;
+    ok(&mut team.app, "account-use", &json!({"provider": "claude", "account": "work"}));
+
+    let response = run_by(&mut team, caller, None, BTreeMap::new());
+
+    every_role_on(&mut team, response, &work);
 }
 
 #[test]

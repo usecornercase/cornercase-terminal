@@ -18,53 +18,71 @@ pub(crate) fn start<E: From<(Via, Event)> + Send + 'static>(
     wait: Duration,
     since: i64,
 ) -> Link {
-    let poller = bot.clone();
-    let poll_tx = tx.clone();
-    Link::start(id, VIA, tx, bot.clone(), move |stop| poll(id, &poller, &poll_tx, stop, wait, since))
+    let poller = Poller { id, bot: bot.clone(), tx: tx.clone(), wait, since };
+    Link::start(id, VIA, tx, bot.clone(), move |stop| poller.poll(stop))
 }
 
-fn poll<E: From<(Via, Event)>>(id: u64, bot: &Bot, tx: &Sender<E>, stop: &AtomicBool, wait: Duration, since: i64) {
-    let mut offset = 0;
-    let mut failed = 0u32;
-    while !stop.load(Ordering::Relaxed) {
-        let answer =
-            panics::job(|| Ok(bot.updates(offset, wait))).unwrap_or_else(|e| Err(Failure::Unreachable(e.to_string())));
-        if stop.load(Ordering::Relaxed) {
-            return;
-        }
-        match answer {
-            Ok(values) => {
-                if failed > 0 {
-                    failed = 0;
-                    log::info!("telegram", "reached again", link = id);
-                    if tx.send((VIA, Event::Problem(id, None)).into()).is_err() {
-                        return;
-                    }
-                }
-                let (updates, next) = super::parse(&values);
-                offset = next.unwrap_or(offset);
-                let fresh: Vec<Update> = updates.into_iter().filter(|u| u.date().is_none_or(|d| d >= since)).collect();
-                if !fresh.is_empty() && tx.send((VIA, Event::Updates(id, fresh)).into()).is_err() {
-                    return;
-                }
-            }
-            Err(Failure::Rejected) => {
-                log::warning!("telegram", "token refused", link = id);
-                let _ = tx.send((VIA, Event::Rejected(id)).into());
+struct Poller<E> {
+    id: u64,
+    bot: Bot,
+    tx: Sender<E>,
+    wait: Duration,
+    since: i64,
+}
+
+impl<E: From<(Via, Event)>> Poller<E> {
+    fn poll(&self, stop: &AtomicBool) {
+        let mut offset = 0;
+        let mut failed = 0u32;
+        while !stop.load(Ordering::Relaxed) {
+            let answer = panics::job(|| Ok(self.bot.updates(offset, self.wait)))
+                .unwrap_or_else(|e| Err(Failure::Unreachable(e.to_string())));
+            if stop.load(Ordering::Relaxed) {
                 return;
             }
-            Err(Failure::Wait(seconds)) => nap(stop, Duration::from_secs(seconds.min(MOST_WAIT))),
-            Err(failure) => {
-                failed += 1;
-                if failed.is_power_of_two() {
-                    log::warning!("telegram", "cannot read messages", link = id, failed = failed, error = failure);
+            let go_on = match answer {
+                Ok(values) => self.read(&values, &mut offset, &mut failed),
+                Err(Failure::Rejected) => {
+                    log::warning!("telegram", "token refused", link = self.id);
+                    let _ = self.tx.send((VIA, Event::Rejected(self.id)).into());
+                    false
                 }
-                if tx.send((VIA, Event::Problem(id, Some(failure.to_string()))).into()).is_err() {
-                    return;
+                Err(Failure::Wait(seconds)) => {
+                    nap(stop, Duration::from_secs(seconds.min(MOST_WAIT)));
+                    true
                 }
-                nap(stop, backoff(failed));
+                Err(failure) => self.fail(&failure, &mut failed, stop),
+            };
+            if !go_on {
+                return;
             }
         }
+    }
+
+    fn read(&self, values: &[serde_json::Value], offset: &mut i64, failed: &mut u32) -> bool {
+        if *failed > 0 {
+            *failed = 0;
+            log::info!("telegram", "reached again", link = self.id);
+            if self.tx.send((VIA, Event::Problem(self.id, None)).into()).is_err() {
+                return false;
+            }
+        }
+        let (updates, next) = super::parse(values);
+        *offset = next.unwrap_or(*offset);
+        let fresh: Vec<Update> = updates.into_iter().filter(|u| u.date().is_none_or(|d| d >= self.since)).collect();
+        fresh.is_empty() || self.tx.send((VIA, Event::Updates(self.id, fresh)).into()).is_ok()
+    }
+
+    fn fail(&self, failure: &Failure, failed: &mut u32, stop: &AtomicBool) -> bool {
+        *failed += 1;
+        if failed.is_power_of_two() {
+            log::warning!("telegram", "cannot read messages", link = self.id, failed = *failed, error = failure);
+        }
+        if self.tx.send((VIA, Event::Problem(self.id, Some(failure.to_string()))).into()).is_err() {
+            return false;
+        }
+        nap(stop, backoff(*failed));
+        true
     }
 }
 

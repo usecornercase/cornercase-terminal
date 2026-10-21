@@ -137,7 +137,7 @@ impl Team {
     fn state(&mut self) -> String {
         let order = self.order().join("\n");
         let launches: Vec<String> =
-            self.app.agents.launches.iter().map(|l| format!("{} {}", l.term, l.stage())).collect();
+            self.app.agents.launches.list().iter().map(|l| format!("{} {}", l.term, l.stage())).collect();
         let screens: Vec<String> = self
             .app
             .projects
@@ -173,7 +173,12 @@ fn a_flow_opens_a_tab_per_role_in_a_new_worktree_and_leaves_the_window_as_it_is(
 
     let run = team.started();
 
-    let (p, w) = team.app.projects.workspace_index(run.workspace).expect("the run's workspace");
+    let (p, w) = team
+        .app
+        .projects
+        .workspace_index(run.workspace)
+        .map(|at| (at.project(), at.index()))
+        .expect("the run's workspace");
     let workspace = &team.app.projects[p].workspaces[w];
     let names: Vec<Option<&str>> = workspace.tabs.iter().map(|t| t.name.as_deref()).collect();
     assert_eq!(names, [Some(ORCHESTRATOR), Some("coder"), Some("reviewer")]);
@@ -183,9 +188,10 @@ fn a_flow_opens_a_tab_per_role_in_a_new_worktree_and_leaves_the_window_as_it_is(
     let panes: Vec<(String, u64)> = run.members.iter().map(|m| (m.role.clone(), m.pane)).collect();
     let tabs: Vec<u64> = workspace.tabs.iter().filter_map(|t| t.pane().map(|term| term.id)).collect();
     assert_eq!(panes.iter().map(|(_, pane)| *pane).collect::<Vec<_>>(), tabs);
-    assert_eq!(team.app.runs.len(), 1);
-    let recorded: Vec<(String, u64)> = team.app.runs[0].members.iter().map(|m| (m.role.clone(), m.pane)).collect();
-    assert_eq!((team.app.runs[0].workspace, recorded), (run.workspace, panes));
+    assert_eq!(team.app.runs.all().len(), 1);
+    let recorded: Vec<(String, u64)> =
+        team.app.runs.all()[0].members.iter().map(|m| (m.role.clone(), m.pane)).collect();
+    assert_eq!((team.app.runs.all()[0].workspace, recorded), (run.workspace, panes));
 }
 
 #[test]
@@ -252,7 +258,7 @@ fn a_member_asked_to_accept_bypass_permissions_waits_for_you_and_holds_the_orche
             .iter()
             .all(|role| sent.iter().any(|text| text.starts_with(&format!("{role} waits for you"))))
     });
-    let coder = team.app.runs[0].pane_of("coder").expect("the coder's pane");
+    let coder = team.app.runs.all()[0].pane_of("coder").expect("the coder's pane");
     team.app.projects.pane_by_mut(coder).expect("its pane").write(b"j");
     let later = Instant::now() + Duration::from_secs(2);
     refreshing(&mut team.app, &team.rx, "a while passes", |_| Instant::now() >= later);
@@ -393,7 +399,7 @@ fn a_projects_flow_never_shadows_yours_and_says_so() {
         Response::Ok(value) => serde_json::from_value(value).expect("a run"),
         Response::Error(message) => panic!("the flow did not start: {message}"),
     };
-    assert_eq!(team.app.runs[0].flow.notes, "Keep it small.");
+    assert_eq!(team.app.runs.all()[0].flow.notes, "Keep it small.");
     assert_eq!(
         run.note.as_deref(),
         Some(
@@ -414,7 +420,7 @@ fn yours_replaces_a_built_in_of_its_name_and_a_projects_comes_after_the_built_in
     let mut team = Team::new();
     let mut quick = pair();
     quick.name = "Quick".into();
-    store::save(&paths::flows(&team.app.config_path), &quick, None).expect("save your Quick");
+    store::save(&paths::flows(team.app.config_file.path()), &quick, None).expect("save your Quick");
     let mut theirs = pair();
     theirs.name = "Full issue".into();
     store::save(&store::project_dir(team.repo.path()), &theirs, None).expect("save the project's flow");
@@ -433,7 +439,7 @@ fn yours_replaces_a_built_in_of_its_name_and_a_projects_comes_after_the_built_in
         Response::Ok(value) => serde_json::from_value(value).expect("a run"),
         Response::Error(message) => panic!("your Quick did not start: {message}"),
     };
-    assert_eq!((team.app.runs[0].flow.notes.as_str(), run.note), ("Keep it small.", None));
+    assert_eq!((team.app.runs.all()[0].flow.notes.as_str(), run.note), ("Keep it small.", None));
 }
 
 fn branch_of(response: Response) -> String {
@@ -486,7 +492,7 @@ fn a_chosen_branch_that_is_the_projects_own_or_a_default_one_is_refused() {
 
     assert!(mine.contains("is checked out in the project's own folder"), "{mine}");
     assert!(default.contains("is a default branch"), "{default}");
-    assert!(team.app.runs.is_empty());
+    assert!(team.app.runs.all().is_empty());
 }
 
 #[test]
@@ -523,8 +529,13 @@ fn a_worktree_that_comes_back_once_its_project_is_closing_opens_nothing() {
 
     let refused = error(got.remove(0));
     assert_eq!(refused, format!("project {project} is closing"));
-    assert!(team.app.runs.is_empty());
-    let (p, _) = team.app.projects.workspace_index(team.app.projects[0].workspaces[0].id).expect("still closing");
+    assert!(team.app.runs.all().is_empty());
+    let p = team
+        .app
+        .projects
+        .workspace_index(team.app.projects[0].workspaces[0].id)
+        .map(WorkspaceAt::project)
+        .expect("still closing");
     assert!(team.app.projects[p].workspaces.iter().all(|w| w.tabs.len() <= 1), "a tab opened in a closing project");
 }
 
@@ -551,12 +562,13 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         trees: Vec::new(),
         parent: None,
         accounts: crate::accounts::Accounts::default(),
+        name: None,
     };
 
-    let refused = team.app.open_run(0, 0, starting, AREA, false).expect_err("refused");
+    let refused = team.app.open_run(workspace_at(&team.app, 0, 0), starting, AREA, false).expect_err("refused");
 
     assert!(refused.contains(said), "{refused}");
-    assert_eq!((team.app.projects[0].workspaces[0].tabs.len(), team.app.runs.len()), (1, 0));
+    assert_eq!((team.app.projects[0].workspaces[0].tabs.len(), team.app.runs.all().len()), (1, 0));
 }
 
 #[test]
@@ -581,7 +593,7 @@ fn a_run_whose_shells_cannot_start_leaves_no_tab_and_no_workspace_behind() {
     chmod(0o755);
     let refused = error(answers(&mut team.app).remove(0));
     assert!(refused.starts_with("failed to spawn shell"), "{refused}");
-    assert!(team.app.runs.is_empty());
+    assert!(team.app.runs.all().is_empty());
     let root = runs_root(&team);
     assert_eq!(std::fs::read_dir(&root).map_or(0, Iterator::count), 0, "the run's empty folder is removed");
     assert!(team.app.projects[0].workspaces.iter().all(|w| w.path != path), "the new workspace stayed");
@@ -597,14 +609,10 @@ fn the_run_ends_with_its_workspace() {
         wire::Close { item: Item::Workspace(run.workspace), remove_worktree: false, force: false, unlock: false };
     done(now(&mut team.app, None, Command::Close(close)));
 
-    refreshing(&mut team.app, &team.rx, "the run goes with its workspace", |a| a.runs.is_empty());
+    refreshing(&mut team.app, &team.rx, "the run goes with its workspace", |a| a.runs.all().is_empty());
 }
 
-#[test]
-fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_told_its_new_panes() {
-    let mut team = Team::new();
-    team.started();
-    team.until_got(3);
+fn saved_run_with_conversations(team: &Team) -> State {
     let mut saved = team.app.state();
     let workspace = saved.projects[0].workspaces.iter_mut().find(|w| w.run.is_some()).expect("the run is saved");
     let state = workspace.run.as_ref().expect("the run");
@@ -615,27 +623,40 @@ fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_tol
         tab.panes[0].agent =
             Some(AgentState { kind: "claude".into(), conversation: format!("c{i}"), mode: None, account: None });
     }
+    saved
+}
+
+#[test]
+fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_told_its_new_panes() {
+    let mut team = Team::new();
+    team.started();
+    team.until_got(3);
+    let saved = saved_run_with_conversations(&team);
     std::fs::write(team.log.path().join("order"), "").expect("empty the log");
     let (mut again, rx) = new_app(team.config.path().join("config.json"));
 
     assert!(again.restore(&saved, AREA));
 
-    assert_eq!(again.runs.len(), 1);
-    let (p, w) = again.projects.workspace_index(again.runs[0].workspace).expect("the workspace");
+    assert_eq!(again.runs.all().len(), 1);
+    let (p, w) = again
+        .projects
+        .workspace_index(again.runs.all()[0].workspace)
+        .map(|at| (at.project(), at.index()))
+        .expect("the workspace");
     let tabs: Vec<(Option<String>, u64)> = again.projects[p].workspaces[w]
         .tabs
         .iter()
         .map(|t| (t.name.clone(), t.pane().map_or(0, |term| term.id)))
         .collect();
     let members: Vec<(Option<String>, u64)> =
-        again.runs[0].members.iter().map(|m| (Some(m.role.clone()), m.pane)).collect();
+        again.runs.all()[0].members.iter().map(|m| (Some(m.role.clone()), m.pane)).collect();
     assert_eq!(members, tabs);
     let log = team.log.path().join("order");
     until_logged(&mut again, &rx, "the orchestrator is told", || {
         std::fs::read_to_string(&log).unwrap_or_default().lines().any(|l| l.starts_with("got cornercase restarted"))
     });
     let order = team.order();
-    let dir = again.runs[0].dir.as_ref().expect("the run's folder").display().to_string();
+    let dir = again.runs.all()[0].dir.as_ref().expect("the run's folder").display().to_string();
     for line in [
         format!("start --dangerously-skip-permissions --add-dir {dir} --resume c1"),
         format!("start --dangerously-skip-permissions --model sonnet --add-dir {dir} --resume c2"),
@@ -646,7 +667,7 @@ fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_tol
     assert!(order.contains(&format!("env {dir}")), "{order:#?}");
     assert!(told_with_folder(&order, &dir), "{order:#?}");
     let told = &order[position(&order, "got cornercase restarted")];
-    let coder = again.runs[0].pane_of("coder").expect("the coder");
+    let coder = again.runs.all()[0].pane_of("coder").expect("the coder");
     assert!(told.contains(&format!("coder is pane {coder}")), "{told}");
 }
 
@@ -679,11 +700,12 @@ fn every_pane_of_a_run_has_its_private_folder_outside_the_worktree() {
 
     assert_eq!(dir.parent(), Some(runs_root(&team).as_path()));
     assert_eq!(mode(&dir), 0o700);
-    let (p, w) = team.app.projects.workspace_index(run.workspace).expect("the workspace");
+    let (p, w) =
+        team.app.projects.workspace_index(run.workspace).map(|at| (at.project(), at.index())).expect("the workspace");
     let workspace = &team.app.projects[p].workspaces[w];
     assert!(!dir.starts_with(&workspace.path));
     assert_eq!(workspace.run_dirs, std::slice::from_ref(&dir));
-    assert_eq!(team.app.runs[0].dir.as_deref(), Some(dir.as_path()));
+    assert_eq!(team.app.runs.all()[0].dir.as_deref(), Some(dir.as_path()));
     assert_eq!(order.iter().filter(|l| **l == format!("env {}", dir.display())).count(), 3, "{order:#?}");
     std::fs::write(dir.join("coder-1.md"), "done").expect("write into the folder");
     let status = std::process::Command::new("git")
@@ -772,7 +794,7 @@ fn a_restore_makes_a_deleted_folder_again_and_keeps_the_one_that_is_there() {
 
     assert!(again.restore(&saved, AREA));
 
-    assert_eq!(again.runs[0].dir.as_deref(), Some(dir.as_path()));
+    assert_eq!(again.runs.all()[0].dir.as_deref(), Some(dir.as_path()));
     assert_eq!(mode(&dir), 0o700);
     std::fs::write(dir.join("coder-1.md"), "kept").expect("a file");
     let (mut third, _rx) = new_app(team.config.path().join("config.json"));
@@ -792,7 +814,7 @@ fn a_saved_folder_that_is_not_a_plain_name_is_never_used() {
 
     assert!(again.restore(&saved, AREA));
 
-    assert_eq!(again.runs[0].dir, None);
+    assert_eq!(again.runs.all()[0].dir, None);
     assert!(again.projects.iter().flat_map(|p| &p.workspaces).all(|w| w.run_dirs.is_empty()));
 }
 
@@ -845,7 +867,7 @@ fn a_flow_runs_on_an_issue_with_the_branch_its_start_would_use() {
     let gh_dir = TempDir::new();
     let gh = crate::test_util::fake_gh(gh_dir.path(), &format!("cat <<'EOF'\n{ISSUE}\nEOF"));
     let mut team = Team::configured(FAKE, |config, _| config.gh = gh.display().to_string());
-    team.app.issues.env_tokens.clear();
+    team.app.issues.clear_env_tokens();
     let run = wire::FlowRun { name: "Pair".into(), issue: Some("#7".into()), ..wire::FlowRun::default() };
     ask(&mut team.app, None, Command::FlowRun(run));
 
@@ -860,7 +882,7 @@ fn a_flow_runs_on_an_issue_with_the_branch_its_start_would_use() {
 #[test]
 fn a_flow_on_an_issue_of_a_remote_tracker_asks_which_project() {
     let mut team = Team::new();
-    team.app.issues.env_tokens.clear();
+    team.app.issues.clear_env_tokens();
     let other = git_repo(&[("README", "hi")]);
     team.app.open_project(other.path().to_path_buf(), AREA).expect("a second repository");
     crate::issues::secrets::write(&paths::secrets(&team.config.path().join("config.json")), "shortcut_token", "t0k")
@@ -873,5 +895,5 @@ fn a_flow_on_an_issue_of_a_remote_tracker_asks_which_project() {
     let refused = error(answered(&mut team.app, &team.rx, "the flow is refused"));
 
     assert!(refused.contains("say which project the team works in with --project ID"), "{refused}");
-    assert!(team.app.runs.is_empty());
+    assert!(team.app.runs.all().is_empty());
 }

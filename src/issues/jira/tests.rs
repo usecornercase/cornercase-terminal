@@ -163,14 +163,13 @@ fn people_are_the_active_atlassian_accounts_by_name() {
     assert!(server.request(0).contains("maxResults=1000"), "{}", server.request(0));
 }
 
-#[test]
-fn view_reads_the_description_sub_tasks_and_comments() {
+fn view_node() -> String {
     let doc = |text: &str| {
         format!(
             r#"{{"type":"doc","version":1,"content":[{{"type":"paragraph","content":[{{"type":"text","text":"{text}","marks":[{{"type":"strong"}}]}}]}}]}}"#
         )
     };
-    let node = format!(
+    format!(
         r#"{{"key":"SHOP-482","fields":{{"summary":"Returns page crashes",
             "status":{{"name":"In Progress","statusCategory":{{"key":"indeterminate"}}}},
             "assignee":{{"displayName":"Luis"}},"reporter":{{"displayName":"Ana"}},"labels":[],
@@ -187,7 +186,12 @@ fn view_reads_the_description_sub_tasks_and_comments() {
         doc("It crashes."),
         doc("earlier"),
         doc("later")
-    );
+    )
+}
+
+#[test]
+fn view_reads_the_description_sub_tasks_and_comments() {
+    let node = view_node();
     let server = FakeHttp::start(vec![("GET /rest/api/3/issue/SHOP-482", 200, node)]);
 
     let detail = api(&server, "").view("SHOP-482").expect("view");

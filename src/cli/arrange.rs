@@ -1,8 +1,10 @@
+use super::args::CloseArgs;
 use super::args::arrange::{FoldArgs, GroupAction, MoveArgs, MovePaneArgs};
 use super::{id, print_json, print_out, say, workspace};
 use crate::client::{answer, ask, use_agent_folds};
 use crate::control::arrange::{
-    Fold, GroupDelete, GroupNew, GroupStyle, Locked, Move, MovePane, Removal, RemovalCheck, Styled,
+    AgentClosing, BranchFate, CloseAgent, Fold, GroupDelete, GroupNew, GroupStyle, Locked, Move, MovePane, PaneRef,
+    Removal, RemovalCheck, Styled,
 };
 use crate::control::{Command, Item};
 use crate::error::{Error, Result};
@@ -98,6 +100,69 @@ pub(super) fn check_removal(item: Item, json: bool) -> Result<()> {
     }
     let removal: Removal = answer(value)?;
     print_out(&(removal_lines(&removal).join("\n") + "\n"))
+}
+
+pub(super) fn close_agent(args: &CloseArgs) -> Result<()> {
+    let pane = args.which.pane.ok_or_else(|| Error::WrongUsage("--agent needs the agent's --pane ID".into()))?;
+    let request = CloseAgent {
+        pane,
+        check: args.check,
+        delete_branch: args.delete_branch,
+        force: args.force,
+        unlock: args.unlock,
+    };
+    let value = ask("close-agent", Command::CloseAgent(request))?;
+    if args.json {
+        return print_json(&value);
+    }
+    let closing: AgentClosing = answer(value)?;
+    if let Some(warning) = &closing.warning {
+        eprintln!("warning: {warning}");
+    }
+    if args.check {
+        return print_out(&(closing_lines(&closing).join("\n") + "\n"));
+    }
+    Ok(())
+}
+
+fn closing_lines(closing: &AgentClosing) -> Vec<String> {
+    let agent = closing.agent.as_deref().unwrap_or("-");
+    let mut lines = vec![format!("pane {}  {agent}  workspace {}", closing.pane, closing.workspace)];
+    let tabs: Vec<String> = closing.tabs.iter().map(u64::to_string).collect();
+    lines.push(closing.removes.as_ref().map_or_else(
+        || format!("closes: tabs {}; nothing is removed from disk", tabs.join(", ")),
+        |removal| format!("closes: workspace {} and its worktree, removed from disk", removal.workspace),
+    ));
+    lines.push(format!("stops: {}", pane_list(&closing.stops, false)));
+    if !closing.keeps.is_empty() {
+        lines.push(format!("keeps running: {}", pane_list(&closing.keeps, true)));
+    }
+    lines.extend(closing.run.map(|run| format!("flow run {run} ends")));
+    if let Some(removal) = &closing.removes {
+        lines.extend(removal_lines(removal).into_iter().skip(1));
+    }
+    lines.extend(closing.branches.iter().map(branch_line));
+    lines
+}
+
+fn pane_list(panes: &[PaneRef], places: bool) -> String {
+    let named = panes.iter().map(|pane| {
+        let agent = pane.agent.as_ref().map(|agent| format!(" ({agent})")).unwrap_or_default();
+        let place = if places { format!(" in workspace {}", pane.workspace) } else { String::new() };
+        format!("pane {}{agent}{place}", pane.pane)
+    });
+    named.collect::<Vec<_>>().join(", ")
+}
+
+fn branch_line(fate: &BranchFate) -> String {
+    let Some(branch) = &fate.branch else { return format!("branch: none in {}", fate.path.display()) };
+    let lost = "its commits are in no remote branch";
+    match (fate.deletes, fate.lost) {
+        (false, false) => format!("branch {branch}: kept (--delete-branch deletes it)"),
+        (false, true) => format!("branch {branch}: kept; {lost}"),
+        (true, false) => format!("branch {branch}: would be deleted"),
+        (true, true) => format!("branch {branch}: would be deleted, and {lost}, so they would be lost (--force)"),
+    }
 }
 
 fn lock_line(lock: &Locked) -> String {

@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
 use super::App;
+use super::account_restart::Restarts;
+use super::launches::Launches;
 use super::menus::{Marked, MenuAction};
 use super::notifications::Said;
 use super::overlay::Overlay;
@@ -12,40 +14,61 @@ use crate::agents::AgentState;
 use crate::agents::activity;
 use crate::agents::awake::{self, Awake};
 use crate::agents::context::Look;
-use crate::agents::launch::Launch;
 use crate::agents::tree;
 use crate::config::Config;
 use crate::host::{notify, sound};
 use crate::log::{self};
 use crate::process;
-use crate::project::Hierarchy;
 use crate::project::search::Goto;
+use crate::project::{Hierarchy, Project, TabAt};
 use crate::term::Term;
 
-pub(super) type AgentPlace = (usize, usize, usize, usize);
+pub(super) type AgentPlace = (TabAt, usize);
 
 type Listed = (Vec<AgentPlace>, Vec<(u64, Option<u64>)>, HashSet<u64>);
 
 pub(super) struct AgentRuntime {
-    pub(super) launches: Vec<Launch>,
-    pub(super) trust_prompt: agents::TrustPrompt,
-    pub(super) claude_dir: Option<PathBuf>,
-    pub(super) watched: Option<Instant>,
+    pub(super) launches: Launches,
+    claude_dir: Option<PathBuf>,
+    watched: Option<Instant>,
     pub(super) awake: Awake,
     pub(super) stats: agents::stats::Stats,
+    pub(super) restarts: Restarts,
 }
 
 impl AgentRuntime {
     pub(super) fn new(home: Option<&Path>) -> Self {
         Self {
-            launches: Vec::new(),
-            trust_prompt: agents::TrustPrompt::default(),
+            launches: Launches::default(),
             claude_dir: agents::claude::claude_dir(home),
             watched: None,
             awake: Awake::new(awake::tools()),
             stats: agents::stats::Stats::new(SystemTime::now()),
+            restarts: Restarts::default(),
         }
     }
+
+    pub(super) fn watched(&self) -> Option<Instant> {
+        self.watched
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_claude_dir(&mut self, dir: &Path) {
+        self.claude_dir = Some(dir.to_path_buf());
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_watched(&mut self, at: Option<Instant>) {
+        self.watched = at;
+    }
+}
+
+pub(super) struct Notice<'a> {
+    pub(super) agent: &'a str,
+    pub(super) status: activity::Status,
+    pub(super) at: (u64, u64),
+    pub(super) panes: Vec<u64>,
+    pub(super) principal: bool,
 }
 
 type NoticeKey = (String, activity::Status, u64, u64);
@@ -54,95 +77,35 @@ pub(super) const WATCH_AGENTS_EVERY: Duration = Duration::from_millis(500);
 
 impl App {
     pub(super) fn watch_agents(&mut self, now: Instant) {
-        let seen_tabs = self.seen_tabs();
         let read = self.agents.watched.is_none_or(|at| now.duration_since(at) >= WATCH_AGENTS_EVERY);
         let elapsed = self.agents.watched.map_or(Duration::ZERO, |at| now.saturating_duration_since(at));
         let clock = SystemTime::now();
-        let mut samples = Vec::new();
         if read {
             self.agents.watched = Some(now);
         }
+        let seen_tabs = self.seen_tabs();
         let active = self.project().map(|p| p.id);
         let open = self.tree_open();
-        let (config, dir, tree) = (&self.config, self.agents.claude_dir.as_deref(), self.drawn.tree);
-        let root = self.accounts_dir.as_path();
-        let folds = tree || self.drawn.tab_bar.is_empty();
-        let jobs = self.following();
-        let mut notices: Vec<(NoticeKey, Vec<u64>)> = Vec::new();
+        let tree = self.screen.drawn.tree;
         let (members, orchestrators) = (self.run_panes(false), self.run_panes(true));
+        let mut round = Round {
+            now,
+            read,
+            config: &self.config,
+            dirs: (self.agents.claude_dir.as_deref(), self.accounts.dir()),
+            seen_tabs,
+            folds: tree || self.screen.drawn.tab_bar.is_empty(),
+            members,
+            orchestrators,
+            jobs: self.following(),
+            stats: &mut self.agents.stats,
+            samples: Vec::new(),
+            notices: Vec::new(),
+        };
         for (project, open) in self.projects.iter_mut().zip(open) {
-            let shown = if tree { open } else { active == Some(project.id) };
-            for workspace in &mut project.workspaces {
-                let measure = config.memory && shown && !(folds && workspace.collapsed);
-                for tab in &mut workspace.tabs {
-                    let seen = seen_tabs.contains(&tab.id);
-                    for term in &mut tab.panes {
-                        if read {
-                            let resuming = term.resuming.is_some();
-                            let found = agent_in(config, (dir, root), term, now);
-                            let activity = found.as_ref().map(|(_, activity)| *activity);
-                            let before = term.agent.state();
-                            let was_waiting = term.agent.waits_on_subagents();
-                            term.agent.follow(found.as_ref().map(|(agent, _)| agent.as_str()));
-                            if term.resuming.is_some_and(|until| now >= until) {
-                                term.agent.give_up();
-                            }
-                            let notice = term.agent.update(activity, seen, now);
-                            if members.contains(&term.id) && term.agent.status() == Some(activity::Status::Done) {
-                                term.agent.see();
-                            }
-                            let state = term.agent.state();
-                            if let Some(kind) = term.context.kind()
-                                && let Some((pid, _)) = term.context.agent()
-                            {
-                                self.agents.stats.counted(kind, term.context.take_counted());
-                                samples.push(agents::stats::Sample {
-                                    pane: term.id,
-                                    kind,
-                                    pid,
-                                    status: term.agent.status(),
-                                    background: term.agent.background_shell(),
-                                    resuming,
-                                });
-                            }
-                            if state != before {
-                                log::info!(
-                                    "activity",
-                                    "status",
-                                    pane = term.id,
-                                    agent = found.as_ref().map_or("none", |(agent, _)| agent.as_str()),
-                                    from = before.unwrap_or("none"),
-                                    to = state.unwrap_or("none"),
-                                );
-                            }
-                            log_subagents(term, was_waiting);
-                            let routine = members.contains(&term.id) && notice == Some(activity::Status::Done);
-                            let ended = orchestrators.contains(&term.id)
-                                && !seen
-                                && matches!(before, Some("working" | "shell"))
-                                && state == Some("pending");
-                            let notice =
-                                notice.filter(|_| !routine).or_else(|| ended.then_some(activity::Status::Done));
-                            if let Some(status) = notice
-                                && let Some((agent, _)) = found
-                            {
-                                let key = (agent, status, project.id, workspace.id);
-                                match notices.iter_mut().find(|(k, _)| *k == key) {
-                                    Some((_, panes)) => panes.push(term.id),
-                                    None => notices.push((key, vec![term.id])),
-                                }
-                            }
-                            term.job = if jobs { term.current_job(config) } else { None };
-                        } else if seen {
-                            term.agent.see();
-                        }
-                        if measure && let Some(pid) = term.shell_pid() {
-                            term.memory.update(pid, now);
-                        }
-                    }
-                }
-            }
+            round.project(project, if tree { open } else { active == Some(project.id) });
         }
+        let Round { samples, notices, .. } = round;
         if read {
             self.agents.stats.sample(clock, elapsed, &samples);
             self.agents.stats.prune(clock);
@@ -158,7 +121,7 @@ impl App {
         };
         for ((agent, status, project, workspace), panes) in notices {
             let principal = panes.iter().any(|pane| !subagents.contains(pane));
-            self.notify(&agent, status, (project, workspace), panes, principal);
+            self.notify(Notice { agent: &agent, status, at: (project, workspace), panes, principal });
         }
     }
 
@@ -176,20 +139,13 @@ impl App {
         self.agent_tree(false)
             .into_iter()
             .filter(|(_, node)| node.depth > 0)
-            .map(|((p, w, t, i), _)| self.projects[p].workspaces[w].tabs[t].panes[i].id)
+            .map(|(place, _)| self.placed(place).id)
             .collect()
     }
 
-    pub(super) fn notify(
-        &mut self,
-        agent: &str,
-        status: activity::Status,
-        at: (u64, u64),
-        panes: Vec<u64>,
-        principal: bool,
-    ) {
-        let (project, workspace) = at;
-        let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return };
+    pub(super) fn notify(&mut self, notice: Notice<'_>) {
+        let Notice { agent, status, at: (project, workspace), panes, principal } = notice;
+        let Some(at) = self.projects.workspace_in(project, workspace) else { return };
         let what = match status {
             activity::Status::Waiting => "needs you",
             activity::Status::Failed => "failed",
@@ -200,8 +156,8 @@ impl App {
             _ => sound::Kind::Finished,
         };
         let sound = (self.config.sound && (principal || self.config.sound_subagents)).then_some(kind);
-        let project = &self.projects[p];
-        let place = format!("{} › {}", self.project_label(project), project.workspaces[w].label());
+        let place = self.place_name(at);
+        let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at));
         let message = notify::clean(&format!("{agent} {what} in {place}"));
         log::info!(
             "activity",
@@ -209,26 +165,19 @@ impl App {
             agent = agent,
             status = status.name(),
             project = project.id,
-            workspace = project.workspaces[w].id,
+            workspace = workspace.id,
             panes = panes.len(),
             sound = sound.map_or("none", sound::Kind::id)
         );
-        self.tell(Said {
-            agent,
-            status,
-            place,
-            message,
-            project: project.id,
-            workspace: project.workspaces[w].id,
-            panes,
-            sound,
-        });
+        self.tell(Said { agent, status, place, message, project: project.id, workspace: workspace.id, panes, sound });
     }
 
     fn marked_panes(&self, marked: Marked) -> Vec<&Term> {
         let terms: Vec<&Term> = match marked {
             Marked::Pane(pane) => self.projects.pane_by(pane).into_iter().collect(),
-            Marked::Tab(tab) => self.projects.tabs().filter(|t| t.id == tab).flat_map(|t| &t.panes).collect(),
+            Marked::Tab(tab) => {
+                self.projects.tab_index(tab).into_iter().flat_map(|at| &self.projects.tab(at).panes).collect()
+            }
         };
         terms.into_iter().filter(|term| term.agent.agent().is_some()).collect()
     }
@@ -246,6 +195,10 @@ impl App {
             }
         }
         panes.len()
+    }
+
+    pub(super) fn placed(&self, (at, i): AgentPlace) -> &Term {
+        &self.projects.tab(at).panes[i]
     }
 
     pub(super) fn agent_places(&self) -> Vec<AgentPlace> {
@@ -267,31 +220,161 @@ impl App {
         let mut rows = Vec::new();
         let mut folded = HashSet::new();
         let live = self.pane_ids();
-        for p in crate::project::sidebar_order(&self.projects, &self.groups) {
-            for (w, workspace) in self.projects[p].workspaces.iter().enumerate() {
-                for (t, tab) in workspace.tabs.iter().enumerate() {
-                    for (i, term) in tab.panes.iter().enumerate().filter(|(_, term)| term.agent.status().is_some()) {
-                        places.push((p, w, t, i));
-                        rows.push((term.id, Self::live_parent(term, &live)));
-                        if term.collapsed {
-                            folded.insert(term.id);
-                        }
-                    }
-                }
+        for (place, term) in self.agent_terms() {
+            places.push(place);
+            rows.push((term.id, Self::live_parent(term, &live)));
+            if term.collapsed {
+                folded.insert(term.id);
             }
         }
         (places, rows, folded)
     }
 
+    fn agent_terms(&self) -> impl Iterator<Item = (AgentPlace, &Term)> {
+        let order = crate::project::sidebar_order(&self.projects, &self.groups);
+        let tabs = order.into_iter().flat_map(|p| self.projects.project_tabs(p));
+        tabs.flat_map(|(at, tab)| {
+            let live = tab.panes.iter().enumerate().filter(|(_, term)| term.agent.status().is_some());
+            live.map(move |(i, term)| ((at, i), term))
+        })
+    }
+
     pub(super) fn jump_to_pane(&mut self, pane: u64) {
-        let Some((p, w, t)) = self.projects.tab_of_pane(pane) else { return };
-        let project = &self.projects[p];
-        let workspace = &project.workspaces[w];
-        let place = Goto::Place { project: project.id, workspace: Some(workspace.id), tab: Some(workspace.tabs[t].id) };
+        let Some(at) = self.projects.tab_of_pane(pane) else { return };
+        let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at.workspace()));
+        let place =
+            Goto::Place { project: project.id, workspace: Some(workspace.id), tab: Some(self.projects.tab(at).id) };
         self.goto(place);
         if let Some(tab) = self.tab_mut() {
             tab.focus(pane);
         }
+    }
+}
+
+struct Round<'a> {
+    now: Instant,
+    read: bool,
+    config: &'a Config,
+    dirs: (Option<&'a Path>, &'a Path),
+    seen_tabs: Vec<u64>,
+    folds: bool,
+    members: Vec<u64>,
+    orchestrators: Vec<u64>,
+    jobs: bool,
+    stats: &'a mut agents::stats::Stats,
+    samples: Vec<agents::stats::Sample>,
+    notices: Vec<(NoticeKey, Vec<u64>)>,
+}
+
+impl Round<'_> {
+    fn project(&mut self, project: &mut Project, shown: bool) {
+        for workspace in &mut project.workspaces {
+            let measure = self.config.memory && shown && !(self.folds && workspace.collapsed);
+            for tab in &mut workspace.tabs {
+                let seen = self.seen_tabs.contains(&tab.id);
+                self.tab(&mut tab.panes, seen, measure, (project.id, workspace.id));
+            }
+        }
+    }
+
+    fn tab(&mut self, panes: &mut [Term], seen: bool, measure: bool, at: (u64, u64)) {
+        for term in panes {
+            if self.read {
+                self.read_term(term, seen, at);
+            } else if seen {
+                term.agent.see();
+            }
+            if measure && let Some(pid) = term.shell_pid() {
+                term.memory.update(pid, self.now);
+            }
+        }
+    }
+
+    fn read_term(&mut self, term: &mut Term, seen: bool, at: (u64, u64)) {
+        let resuming = term.resuming.is_some();
+        let found = agent_in(self.config, self.dirs, term, self.now);
+        let before = term.agent.state();
+        let was_waiting = term.agent.waits_on_subagents();
+        let notice = self.follow(term, found.as_ref(), seen);
+        let state = term.agent.state();
+        self.sample(term, resuming);
+        log_status(term, found.as_ref(), before, state);
+        log_subagents(term, was_waiting);
+        let notice = self.settled_notice(term.id, notice, seen, (before, state));
+        if let Some(status) = notice
+            && let Some((agent, _)) = found
+        {
+            self.add_notice((agent, status, at.0, at.1), term.id);
+        }
+        term.job = if self.jobs { term.current_job(self.config) } else { None };
+    }
+
+    fn follow(
+        &self,
+        term: &mut Term,
+        found: Option<&(String, activity::Activity)>,
+        seen: bool,
+    ) -> Option<activity::Status> {
+        term.agent.follow(found.map(|(agent, _)| agent.as_str()));
+        if term.resuming.is_some_and(|until| self.now >= until) {
+            term.agent.give_up();
+        }
+        let notice = term.agent.update(found.map(|(_, activity)| *activity), seen, self.now);
+        if self.members.contains(&term.id) && term.agent.status() == Some(activity::Status::Done) {
+            term.agent.see();
+        }
+        notice
+    }
+
+    fn sample(&mut self, term: &mut Term, resuming: bool) {
+        if let Some(kind) = term.context.kind()
+            && let Some((pid, _)) = term.context.agent()
+        {
+            self.stats.counted(kind, term.context.take_counted());
+            self.samples.push(agents::stats::Sample {
+                pane: term.id,
+                kind,
+                pid,
+                status: term.agent.status(),
+                background: term.agent.background_shell(),
+                resuming,
+            });
+        }
+    }
+
+    fn settled_notice(
+        &self,
+        pane: u64,
+        notice: Option<activity::Status>,
+        seen: bool,
+        (before, state): (Option<&str>, Option<&str>),
+    ) -> Option<activity::Status> {
+        let routine = self.members.contains(&pane) && notice == Some(activity::Status::Done);
+        let ended = self.orchestrators.contains(&pane)
+            && !seen
+            && matches!(before, Some("working" | "shell"))
+            && state == Some("pending");
+        notice.filter(|_| !routine).or_else(|| ended.then_some(activity::Status::Done))
+    }
+
+    fn add_notice(&mut self, key: NoticeKey, pane: u64) {
+        match self.notices.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, panes)) => panes.push(pane),
+            None => self.notices.push((key, vec![pane])),
+        }
+    }
+}
+
+fn log_status(term: &Term, found: Option<&(String, activity::Activity)>, before: Option<&str>, state: Option<&str>) {
+    if state != before {
+        log::info!(
+            "activity",
+            "status",
+            pane = term.id,
+            agent = found.map_or("none", |(agent, _)| agent.as_str()),
+            from = before.unwrap_or("none"),
+            to = state.unwrap_or("none"),
+        );
     }
 }
 

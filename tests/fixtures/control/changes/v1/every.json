@@ -22,6 +22,7 @@
           "removed": 3,
           "fold": "open",
           "viewed": false,
+          "staged": "yes",
           "digest": "00c0ffee12345678"
         }
       ]
@@ -41,6 +42,7 @@
           "removed": 3,
           "fold": "open",
           "viewed": false,
+          "staged": "partly",
           "digest": "00c0ffee12345678"
         }
       ]
@@ -60,6 +62,7 @@
           "removed": 3,
           "fold": "open",
           "viewed": false,
+          "staged": "no",
           "digest": "00c0ffee12345678"
         }
       ]

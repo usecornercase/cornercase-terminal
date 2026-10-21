@@ -8,7 +8,8 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use super::Mode;
-use super::diff::{self, Diff, File, MAX_UNTRACKED_BYTES};
+use super::diff::{self, Diff, File, MAX_UNTRACKED_BYTES, Status};
+use super::porcelain::{Porcelain, path_prefix};
 use crate::error::{Error, Result};
 use crate::git::worktree;
 
@@ -76,6 +77,10 @@ pub(crate) fn branches(dir: &Path) -> Vec<String> {
         .collect()
 }
 
+pub(super) fn status(dir: &Path) -> Result<Vec<u8>> {
+    run(dir, &["status", "--porcelain=v2", "-z", "--untracked-files=all", "--", "."])
+}
+
 pub(super) fn head(dir: &Path) -> Result<String> {
     text(dir, &["rev-parse", "--verify", "--quiet", "HEAD"])
         .or_else(|| text(dir, &["hash-object", "-t", "tree", "/dev/null"]))
@@ -128,11 +133,66 @@ fn read(path: &Path) -> Option<Vec<u8>> {
     Some(bytes)
 }
 
+fn find(request: &Request, path: &str) -> Result<Option<Arc<File>>> {
+    let loaded = load(request)?;
+    Ok(loaded.diff.and_then(|diff| diff.files.into_iter().find(|f| f.path == path)))
+}
+
+fn single(dir: &Path, mode: Mode, base: Option<String>, expanded: Option<Vec<String>>) -> Request {
+    Request { dir: dir.to_path_buf(), mode, base, last: None, previous: Vec::new(), expanded }
+}
+
+pub(crate) fn read_file(dir: &Path, mode: Mode, base: Option<String>, path: &str) -> Result<Option<Arc<File>>> {
+    let expanded = (mode == Mode::Uncommitted).then(|| vec![path.to_string()]);
+    find(&single(dir, mode, base, expanded), path)
+}
+
+pub(crate) fn listed(dir: &Path, path: &str) -> Result<Option<Arc<File>>> {
+    find(&single(dir, Mode::Uncommitted, None, Some(Vec::new())), path)
+}
+
 pub(crate) fn load(request: &Request) -> Result<Loaded> {
     if let Some(expanded) = &request.expanded {
         return super::summary::load(request, expanded);
     }
     let dir = request.dir.as_path();
+    let (base, from) = comparison(request, dir)?;
+    let mut args = vec!["diff", from.as_str()];
+    if request.mode == Mode::Commits {
+        args.push("HEAD");
+    }
+    args.extend(DIFF);
+    let patch = run(dir, &args)?;
+    let listing = listing(request.mode, dir)?;
+    let mut hasher = DefaultHasher::new();
+    (&base, &patch, &listing.untracked, &listing.raw).hash(&mut hasher);
+    let digest = hasher.finish();
+    if request.last == Some(digest) {
+        return Ok(Loaded { base, digest, diff: None });
+    }
+    let files = files_of(request, &from, &patch, &listing);
+    Ok(Loaded { base, digest, diff: Some(Diff { files }) })
+}
+
+struct Listing {
+    untracked: Vec<Untracked>,
+    raw: Vec<u8>,
+    porcelain: Option<Porcelain>,
+}
+
+fn listing(mode: Mode, dir: &Path) -> Result<Listing> {
+    match mode {
+        Mode::Commits => Ok(Listing { untracked: Vec::new(), raw: Vec::new(), porcelain: None }),
+        Mode::All => Ok(Listing { untracked: untracked(dir)?, raw: Vec::new(), porcelain: None }),
+        Mode::Uncommitted => {
+            let raw = status(dir)?;
+            let porcelain = Porcelain::parse(&raw, &path_prefix(dir));
+            Ok(Listing { untracked: read_untracked(dir, porcelain.untracked.clone()), raw, porcelain: Some(porcelain) })
+        }
+    }
+}
+
+fn comparison(request: &Request, dir: &Path) -> Result<(Option<String>, String)> {
     let base = match request.mode {
         Mode::Uncommitted => None,
         Mode::Commits | Mode::All => Some(
@@ -147,30 +207,23 @@ pub(crate) fn load(request: &Request) -> Result<Loaded> {
         (Some(base), Mode::Commits | Mode::All) => merge_base(dir, base)?,
         _ => head(dir)?,
     };
-    let mut args = vec!["diff", from.as_str()];
-    if request.mode == Mode::Commits {
-        args.push("HEAD");
-    }
-    args.extend(DIFF);
-    let patch = run(dir, &args)?;
-    let untracked = if request.mode == Mode::Commits { Vec::new() } else { untracked(dir)? };
-    let mut hasher = DefaultHasher::new();
-    (&base, &patch, &untracked).hash(&mut hasher);
-    let digest = hasher.finish();
-    if request.last == Some(digest) {
-        return Ok(Loaded { base, digest, diff: None });
-    }
+    Ok((base, from))
+}
+
+fn files_of(request: &Request, from: &str, patch: &[u8], listing: &Listing) -> Vec<Arc<File>> {
+    let dir = request.dir.as_path();
     let previous = request.previous.iter().map(|f| (f.path.as_str(), f)).collect();
     let reviewed = |mut file: File| {
         if request.mode == Mode::Uncommitted {
-            file.viewed_digest = fingerprint(dir, &from, &file);
+            file.viewed_digest = fingerprint(dir, from, &file);
         }
+        file.staged = listing.porcelain.as_ref().map(|p| p.staged(&file));
         reuse(file, &previous)
     };
-    let mut files: Vec<Arc<File>> = diff::parse(&String::from_utf8_lossy(&patch)).into_iter().map(reviewed).collect();
-    files.extend(untracked.iter().map(|u| reviewed(diff::untracked(&u.path, u.size, u.bytes.as_deref()))));
+    let mut files: Vec<Arc<File>> = diff::parse(&String::from_utf8_lossy(patch)).into_iter().map(reviewed).collect();
+    files.extend(listing.untracked.iter().map(|u| reviewed(diff::untracked(&u.path, u.size, u.bytes.as_deref()))));
     files.sort_by(|a, b| a.path.cmp(&b.path));
-    Ok(Loaded { base, digest, diff: Some(Diff { files }) })
+    files
 }
 
 pub(super) fn reuse(mut file: File, previous: &HashMap<&str, &Arc<File>>) -> Arc<File> {
@@ -178,11 +231,12 @@ pub(super) fn reuse(mut file: File, previous: &HashMap<&str, &Arc<File>>) -> Arc
         .get(file.path.as_str())
         .filter(|old| old.digest == file.digest && old.hunks.is_empty() == file.hunks.is_empty())
     {
-        if old.viewed_digest == file.viewed_digest {
+        if old.viewed_digest == file.viewed_digest && old.staged == file.staged {
             return Arc::clone(old);
         }
         let mut reused = File::clone(old);
         reused.viewed_digest = file.viewed_digest;
+        reused.staged = file.staged;
         return Arc::new(reused);
     }
     diff::finish(&mut file);
@@ -195,8 +249,10 @@ pub(super) fn stamp(path: &Path) -> Option<(u64, i64, i64, i64, i64)> {
 
 pub(super) fn fingerprint(dir: &Path, from: &str, file: &File) -> u64 {
     let stamp = stamp(&dir.join(&file.path));
+    let status = if file.status == Status::Untracked { Status::Added } else { file.status };
     let mut hasher = DefaultHasher::new();
-    (from, &file.path, &file.old_path, file.status, file.added, file.removed, stamp).hash(&mut hasher);
+    let counts = (status != Status::Added).then_some((file.added, file.removed));
+    (from, &file.path, &file.old_path, status, counts, stamp).hash(&mut hasher);
     hasher.finish()
 }
 
@@ -216,7 +272,7 @@ pub(crate) fn new_side(dir: &Path, mode: Mode, path: &str) -> Option<Vec<String>
     if bytes.len() as u64 > MAX_UNTRACKED_BYTES {
         return None;
     }
-    Some(String::from_utf8_lossy(&bytes).lines().map(diff::expand).collect())
+    Some(String::from_utf8_lossy(&bytes).lines().map(str::to_string).collect())
 }
 
 #[cfg(test)]

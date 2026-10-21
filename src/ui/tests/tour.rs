@@ -28,7 +28,7 @@ fn tall() -> Areas {
 fn help_menu() -> Overlay {
     let at = help_button(tall().quit).as_position();
     let items = ["tour", "catalogue…", "docs", "report a bug"].map(String::from).to_vec();
-    Overlay::Menu { at, items }
+    Overlay::Menu { at, disabled: vec![false; items.len()], items }
 }
 
 #[test]

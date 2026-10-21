@@ -11,8 +11,10 @@ use super::dialog::form::form_rows;
 use super::dialog::group_style::ICON_CELL;
 use super::dialog::issues::issues_rows;
 use super::dialog::picker::picker_rows;
+use super::dialog::settings::settings_area;
 use super::dialog::usage::usage_rows;
-use super::dialog::{INPUT_PROMPT, list_item, tabs_in};
+use super::dialog::worktrees::list_rows;
+use super::dialog::{INPUT_PROMPT, list_item, list_item_by, tabs_in};
 use super::drop::landed;
 use super::layout::{COMPACT_BUTTON_WIDTH, HEADER_HEIGHT};
 use super::pane::TAGLINE;
@@ -33,51 +35,16 @@ const SMALL: Rect = Rect { x: 0, y: 0, width: 80, height: 30 };
 
 fn view(names: &[&str]) -> View<'static> {
     View {
-        groups: Vec::new(),
         projects: names
             .iter()
             .map(|n| ProjectEntry { name: (*n).to_string(), workspaces: 1, group: None, status: None })
             .collect(),
-        active: 0,
-        has_project: false,
-        workspaces: Vec::new(),
-        active_workspace: 0,
-        active_tab: None,
-        issues: false,
-        hover: None,
-        widths: Widths::default(),
         sidebar: Sidebar::SideBySide,
-        resizing: None,
-        light: false,
         muted: Color::DarkGray,
         soft: Color::Gray,
-        projects_scroll: 0,
-        workspaces_scroll: 0,
-        tab: None,
-        overlay: None,
-        toast: None,
-        star: false,
-        tour: None,
-        nav: None,
-        update: None,
-        remote: None,
-        changes: None,
-        changes_button: None,
-        todo: None,
-        flow: None,
-        flow_run: false,
         todo_dot: true,
-        todo_pending: false,
-        accounts: Vec::new(),
-        files: None,
-        attention: None,
-        spin: None,
-        drag: None,
-        tree: None,
-        agents: None,
         counts: true,
-        icons: false,
-        tab_bar: None,
+        ..View::default()
     }
 }
 
@@ -141,6 +108,8 @@ fn single(screen: Snapshot) -> TabView {
         link: None,
         landing: None,
         bands: Vec::new(),
+        footer: false,
+        accounts: Vec::new(),
     }
 }
 
@@ -165,6 +134,7 @@ mod issues;
 mod layout;
 mod muted;
 mod overlay;
+mod pane_footer;
 mod picker;
 mod queue;
 mod reorder;
@@ -190,3 +160,4 @@ mod tree_rows;
 mod widths;
 mod workspace_folds;
 mod workspaces_column;
+mod worktrees_dialog;

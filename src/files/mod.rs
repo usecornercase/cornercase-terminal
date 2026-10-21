@@ -1,4 +1,5 @@
 pub(crate) mod disk;
+pub(crate) mod find;
 pub(crate) mod link;
 pub(crate) mod search;
 
@@ -8,10 +9,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use self::disk::{Content, Entry, Stamp};
-use crate::changes::diff::{Diff, File as Changed, Kind, Status};
+use self::disk::{Body, Content, Entry, Stamp};
+use self::find::Find;
+use crate::changes::diff::{Diff, File as Changed, Hunk, Kind, Status};
 
 pub(crate) const LIST_EVERY: Duration = Duration::from_secs(2);
+pub(crate) const CONTEXT: usize = 3;
 pub(crate) const CHECK_EVERY: Duration = Duration::from_secs(1);
 pub(crate) const INDEX_EVERY: Duration = Duration::from_secs(10);
 const GIVE_UP_AFTER: Duration = Duration::from_secs(30);
@@ -57,6 +60,18 @@ pub(crate) struct Search {
     pub(crate) index: Arc<Vec<String>>,
 }
 
+struct Walk<'a> {
+    workspace: u64,
+    expanded: Option<&'a HashSet<String>>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct Reading<'a> {
+    pub(crate) workspace: u64,
+    pub(crate) generation: u64,
+    pub(crate) path: &'a str,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Row {
     pub(crate) path: String,
@@ -73,12 +88,17 @@ pub(crate) struct Viewer {
     pub(crate) content: Option<Arc<Content>>,
     pub(crate) selection: Option<(u32, u32)>,
     pub(crate) unfolded: HashSet<u32>,
-    pub(crate) find: Option<String>,
+    pub(crate) find: Option<Find>,
 }
 
 impl Viewer {
     pub(crate) fn selected(&self) -> Option<(u32, u32)> {
         self.selection.map(|(a, b)| (a.min(b), a.max(b)))
+    }
+
+    pub(crate) fn finding(&self) -> Option<&Find> {
+        let shown = self.content.as_deref().is_none_or(|c| matches!(c.body, Body::Text { .. }));
+        self.find.as_ref().filter(|_| shown)
     }
 }
 
@@ -169,18 +189,18 @@ impl Panel {
     pub(crate) fn rows(&self, workspace: u64) -> Vec<Row> {
         let mut rows = Vec::new();
         let expanded = self.places.get(&workspace).map(|p| &p.expanded);
-        self.walk(workspace, "", 0, expanded, &mut rows);
+        self.walk(&Walk { workspace, expanded }, "", 0, &mut rows);
         rows
     }
 
-    fn walk(&self, workspace: u64, folder: &str, depth: u16, expanded: Option<&HashSet<String>>, rows: &mut Vec<Row>) {
-        let Some(entries) = self.listings.get(&(workspace, folder.to_string())) else { return };
+    fn walk(&self, walk: &Walk, folder: &str, depth: u16, rows: &mut Vec<Row>) {
+        let Some(entries) = self.listings.get(&(walk.workspace, folder.to_string())) else { return };
         for entry in entries.iter() {
             let path = child(folder, &entry.name);
-            let open = entry.dir && expanded.is_some_and(|e| e.contains(&path));
+            let open = entry.dir && walk.expanded.is_some_and(|e| e.contains(&path));
             rows.push(Row { path: path.clone(), name: entry.name.clone(), depth, dir: entry.dir, open });
             if open {
-                self.walk(workspace, &path, depth + 1, expanded, rows);
+                self.walk(walk, &path, depth + 1, rows);
             }
         }
     }
@@ -218,7 +238,10 @@ impl Panel {
     }
 
     pub(crate) fn typing(&self, workspace: u64) -> bool {
-        self.viewer(workspace).is_none() && self.query(workspace).is_some_and(|q| q.focused)
+        match self.viewer(workspace) {
+            Some(viewer) => viewer.finding().is_some_and(|f| f.focused),
+            None => self.query(workspace).is_some_and(|q| q.focused),
+        }
     }
 
     pub(crate) fn full_screen(&self) -> bool {
@@ -232,12 +255,18 @@ impl Panel {
     pub(crate) fn close(&mut self) {
         self.full_screen = false;
         self.unfocus();
+        for viewer in self.places.values_mut().filter_map(|p| p.viewer.as_mut()) {
+            viewer.find = None;
+        }
     }
 
     pub(crate) fn unfocus(&mut self) {
         for place in self.places.values_mut() {
             place.query.focused = false;
             place.query.enter = false;
+            if let Some(find) = place.viewer.as_mut().and_then(|v| v.find.as_mut()) {
+                find.focused = false;
+            }
         }
     }
 
@@ -341,11 +370,11 @@ impl Panel {
         answer(&mut self.places, &mut self.texts, workspace, search, found);
     }
 
-    pub(crate) fn open_at(&mut self, workspace: u64, path: &str, lines: (u32, u32), find: Option<String>) {
+    pub(crate) fn open_at(&mut self, workspace: u64, path: &str, lines: (u32, u32), find: Option<Find>) {
         self.open_file(workspace, path);
         if let Some(viewer) = self.viewer_mut(workspace) {
             viewer.selection = Some(lines);
-            viewer.scroll = usize::try_from(lines.0).unwrap_or(usize::MAX).saturating_sub(4);
+            viewer.scroll = usize::try_from(lines.0.saturating_sub(1)).unwrap_or(usize::MAX).saturating_sub(CONTEXT);
             viewer.find = find;
         }
     }
@@ -401,14 +430,16 @@ impl Panel {
                 Some(entries) if self.listings.get(&key).is_some_and(|known| **known == entries) => {}
                 Some(entries) => _ = self.listings.insert(key, Arc::new(entries)),
                 None if key.1.is_empty() => _ = self.listings.insert(key, Arc::default()),
-                None => {
-                    if let Some(place) = self.places.get_mut(&workspace) {
-                        place.expanded.remove(&key.1);
-                    }
-                    self.listings.remove(&key);
-                }
+                None => self.drop_folder(&key),
             }
         }
+    }
+
+    fn drop_folder(&mut self, key: &(u64, String)) {
+        if let Some(place) = self.places.get_mut(&key.0) {
+            place.expanded.remove(&key.1);
+        }
+        self.listings.remove(key);
     }
 
     pub(crate) fn load(&mut self, workspace: u64, root: &Path, now: Instant) -> Option<(u64, Load)> {
@@ -430,7 +461,8 @@ impl Panel {
         Some((self.generation, load))
     }
 
-    pub(crate) fn read(&mut self, workspace: u64, generation: u64, path: &str, content: Option<Content>, done: bool) {
+    pub(crate) fn read(&mut self, which: Reading, content: Option<Content>, done: bool) {
+        let Reading { workspace, generation, path } = which;
         if self.reading.is_none_or(|(g, _)| g != generation) {
             return;
         }
@@ -439,6 +471,10 @@ impl Panel {
         }
         let viewer = self.places.get_mut(&workspace).and_then(|p| p.viewer.as_mut()).filter(|v| v.path == path);
         if let (Some(viewer), Some(content)) = (viewer, content) {
+            let old = viewer.content.as_ref();
+            if let Some(find) = viewer.find.as_mut().filter(|_| old.is_none_or(|old| old.lines() != content.lines())) {
+                find.recount(content.lines());
+            }
             viewer.content = Some(Arc::new(content));
         }
     }
@@ -506,44 +542,46 @@ impl Gutter {
     }
 }
 
+fn mark_hunk(gutter: &mut Gutter, hunk: &Hunk) {
+    let mut next = hunk.new_start.max(1);
+    let mut i = 0;
+    while let Some(line) = hunk.lines.get(i) {
+        if line.kind == Kind::Context {
+            next = line.new.map_or(next, |n| n + 1);
+            i += 1;
+            continue;
+        }
+        let mut gone = Vec::new();
+        while let Some(l) = hunk.lines.get(i).filter(|l| l.kind == Kind::Removed) {
+            gone.push(l.text.clone());
+            i += 1;
+        }
+        let mut added = Vec::new();
+        while let Some(l) = hunk.lines.get(i).filter(|l| l.kind == Kind::Added) {
+            added.extend(l.new);
+            i += 1;
+        }
+        let key = added.first().copied().unwrap_or(next);
+        match (gone.is_empty(), added.is_empty()) {
+            (true, _) => added.iter().for_each(|&n| gutter.set(n, Mark::Added, key)),
+            (false, false) => added.iter().for_each(|&n| gutter.set(n, Mark::Modified, key)),
+            (false, true) if next > 1 => gutter.set(next - 1, Mark::Deleted, key),
+            (false, true) => gutter.set(1, Mark::DeletedAbove, key),
+        }
+        if !gone.is_empty() {
+            gutter.removed.insert(key, gone);
+        }
+        next = added.last().map_or(next, |n| n + 1);
+    }
+}
+
 pub(crate) fn gutter(file: &Changed, lines: usize) -> Gutter {
     let mut gutter = Gutter { marks: vec![None; lines], removed: BTreeMap::new() };
     if matches!(file.status, Status::Added | Status::Untracked) {
         gutter.marks.iter_mut().zip(1..).for_each(|(m, n)| *m = Some((Mark::Added, n)));
         return gutter;
     }
-    for hunk in &file.hunks {
-        let mut next = hunk.new_start.max(1);
-        let mut i = 0;
-        while let Some(line) = hunk.lines.get(i) {
-            if line.kind == Kind::Context {
-                next = line.new.map_or(next, |n| n + 1);
-                i += 1;
-                continue;
-            }
-            let mut gone = Vec::new();
-            while let Some(l) = hunk.lines.get(i).filter(|l| l.kind == Kind::Removed) {
-                gone.push(l.text.clone());
-                i += 1;
-            }
-            let mut added = Vec::new();
-            while let Some(l) = hunk.lines.get(i).filter(|l| l.kind == Kind::Added) {
-                added.extend(l.new);
-                i += 1;
-            }
-            let key = added.first().copied().unwrap_or(next);
-            match (gone.is_empty(), added.is_empty()) {
-                (true, _) => added.iter().for_each(|&n| gutter.set(n, Mark::Added, key)),
-                (false, false) => added.iter().for_each(|&n| gutter.set(n, Mark::Modified, key)),
-                (false, true) if next > 1 => gutter.set(next - 1, Mark::Deleted, key),
-                (false, true) => gutter.set(1, Mark::DeletedAbove, key),
-            }
-            if !gone.is_empty() {
-                gutter.removed.insert(key, gone);
-            }
-            next = added.last().map_or(next, |n| n + 1);
-        }
-    }
+    file.hunks.iter().for_each(|hunk| mark_hunk(&mut gutter, hunk));
     gutter
 }
 
@@ -592,7 +630,6 @@ impl<'a> Lines<'a> {
         self.blocks.iter().find(|(b, _)| *b == key).and_then(|(_, lines)| lines.get(k)).map(String::as_str)
     }
 
-    #[cfg(test)]
     pub(crate) fn row_of(&self, line: u32) -> usize {
         let before: usize = self.blocks.iter().filter(|(key, _)| *key <= line).map(|(_, l)| l.len()).sum();
         usize::try_from(line).unwrap_or(usize::MAX).saturating_sub(1) + before

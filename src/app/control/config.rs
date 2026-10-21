@@ -8,7 +8,7 @@ use crate::control::config::{Configure, Described, ProjectChange, ProjectEntry, 
 use crate::control::contract::{Code, Refusal};
 use crate::error::Error;
 use crate::git;
-use crate::issues::{Account, Secret, Source, secrets};
+use crate::issues::{Account, Secret, Source};
 use crate::project::Hierarchy;
 use crate::settings::{Action, Page, Refused};
 use crate::text;
@@ -39,9 +39,9 @@ impl App {
     fn described(&self, notices: Vec<String>) -> Described {
         let model = self.settings_model(Page::default());
         Described {
-            revision: self.config_file.revision,
-            path: self.config_path.clone(),
-            problem: self.config_file.problem.clone(),
+            revision: self.config_file.revision(),
+            path: self.config_file.path().to_path_buf(),
+            problem: self.config_file.problem().map(str::to_owned),
             settings: model.describe(),
             connections: model.connections(),
             projects: self.project_settings_entries(),
@@ -106,7 +106,7 @@ impl App {
     }
 
     fn config_refusal(&self, message: String) -> Refusal {
-        let code = if self.config_file.problem.is_some() { Code::Conflict } else { Code::Failed };
+        let code = if self.config_file.problem().is_some() { Code::Conflict } else { Code::Failed };
         Refusal::new(code, message)
     }
 
@@ -153,7 +153,7 @@ impl App {
 
     fn config_secret(&mut self, client: u64, secret: &SecretChange) -> Handled {
         let action = self.settings_model(Page::default()).secret(&secret.key, &secret.value).map_err(refusal)?;
-        let key = self.requests.key();
+        let key = self.clients.requests.key();
         match action {
             Action::CheckToken(source, token) => self.check_token_for(source, token, Some(key)),
             Action::CheckBot(via, token) => self.check_messenger_for(via, token, Some(key)),
@@ -161,12 +161,12 @@ impl App {
         }
         let pending =
             Pending { client: Some(client), key, timeout: None, done: Done::default(), stage: Stage::Reading };
-        self.requests.pending.push(pending);
+        self.clients.requests.pending.push(pending);
         Ok(None)
     }
 
     pub(in crate::app) fn secret_answered(&mut self, key: u64, result: Result<String, String>) {
-        let Some(pending) = self.requests.take(key) else { return };
+        let Some(pending) = self.clients.requests.take(key) else { return };
         let reply = match result {
             Ok(notice) => Ok(json(&self.described(vec![notice]))),
             Err(e) => Err(failed(e)),
@@ -191,7 +191,8 @@ impl App {
         };
         let saved = result.and_then(|account| {
             let name = source.secret_key().ok_or_else(|| Error::Api("nothing to save".into()))?;
-            secrets::write(&self.issues.secrets_path, name, &token.0)
+            self.issues
+                .save_token(name, token)
                 .map_err(|e| Error::Api(format!("failed to save the {}: {e}", source.token_name())))?;
             Ok(account)
         });
@@ -199,7 +200,7 @@ impl App {
             self.forget_issues(source);
             self.learn_account(source, account);
             if let Some(message) = unchosen {
-                self.issues.failures.insert((source, None), message);
+                self.issues.note_failure(source, message);
             }
             self.refresh_open_settings();
         }

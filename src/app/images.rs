@@ -136,7 +136,7 @@ impl App {
             return None;
         }
         let workspace = self.project()?.workspace()?.id;
-        let viewer = self.files.viewer(workspace)?;
+        let viewer = self.panels.files.viewer(workspace)?;
         Some((viewer.path.clone(), Arc::clone(viewer.content.as_ref()?)))
     }
 
@@ -147,7 +147,7 @@ impl App {
             let missing = sight.support.missing.clone().unwrap_or(Missing::Unknown { name: None });
             return Some((Image::Message(missing.lines()), None));
         };
-        let room = panel::image_room(self.layout(area).shown(self.nav).changes, sight.visible);
+        let room = panel::image_room(self.layout(area).shown(self.screen.nav).changes, sight.visible);
         let fit = encode::fit(picture.width, picture.height, sight.support.cell, (room.width, room.height), protocol)?;
         let rect = panel::image_rect(room, fit.cols, fit.rows);
         let kitty_id = if protocol == Protocol::Kitty { kitty::id(sight.support.id_hi, sight.lo) } else { 0 };

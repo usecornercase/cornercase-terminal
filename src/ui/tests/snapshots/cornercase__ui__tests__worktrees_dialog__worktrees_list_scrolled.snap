@@ -1,0 +1,16 @@
+---
+source: src/ui/tests/worktrees_dialog.rs
+expression: "snapshot(w, (70, 12))"
+---
+"                                                                      "
+"  ╭─ Worktrees ────────────────────────────────────────────────────╮  "
+"  │ › filter                                                       │  "
+"  │                                                                │  "
+"  │  ○ web-shop feat/branch-2 …b-shop/x 3 days ago                 │  "
+"  │  ○ web-shop feat/branch-3 …b-shop/x 3 days ago                 │  "
+"  │  ○ web-shop feat/branch-4 …b-shop/x 3 days ago                 │  "
+"  │  ○ web-shop feat/branch-5 …b-shop/x 3 days ago                 │  "
+"  │                                            ↑ 2 more  ↓ 3 more  │  "
+"  │                                                 remove   done  │  "
+"  ╰────────────────────────────────────────────────────────────────╯  "
+"                                                                      "

@@ -16,12 +16,48 @@ const WINDOW_GAP: Duration = Duration::from_secs(2);
 
 #[derive(Default)]
 pub(super) struct StarPrompt {
-    pub(super) saved: Saved,
-    pub(super) path: Option<PathBuf>,
-    pub(super) window: Option<Instant>,
-    pub(super) card: bool,
-    pub(super) opened: Option<i64>,
-    pub(super) swallowed: bool,
+    saved: Saved,
+    path: Option<PathBuf>,
+    window: Option<Instant>,
+    card: bool,
+    opened: Option<i64>,
+    swallowed: bool,
+}
+
+impl StarPrompt {
+    pub(super) fn load(&mut self, path: PathBuf) {
+        self.saved = star::load(&path);
+        self.path = Some(path);
+    }
+
+    pub(super) fn shows_card(&self) -> bool {
+        self.card
+    }
+
+    pub(super) fn window_open(&self, now: Instant) -> bool {
+        self.window.is_some_and(|at| now.saturating_duration_since(at) <= WINDOW_GAP)
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_saved(&mut self, saved: Saved, path: PathBuf) {
+        self.saved = saved;
+        self.path = Some(path);
+    }
+
+    #[cfg(test)]
+    pub(super) fn saved(&self) -> &Saved {
+        &self.saved
+    }
+
+    #[cfg(test)]
+    pub(super) fn forget_window(&mut self) {
+        self.window = None;
+    }
+
+    #[cfg(test)]
+    pub(super) fn swallowing(&self) -> bool {
+        self.swallowed
+    }
 }
 
 impl App {
@@ -30,29 +66,30 @@ impl App {
             self.close_star("turned off");
             return;
         }
-        if self.star.saved.settled() {
+        if self.messages.star.saved.settled() {
             return;
         }
-        let window = self.star.window.is_some_and(|at| now.saturating_duration_since(at) <= WINDOW_GAP);
-        if window && self.projects.terms().any(|t| t.agent.status().is_some()) && self.star.saved.count(clock) {
+        let window = self.messages.star.window_open(now);
+        if window && self.projects.terms().any(|t| t.agent.status().is_some()) && self.messages.star.saved.count(clock)
+        {
             self.save_star();
-            log::info!("star", "active day", days = self.star.saved.days);
+            log::info!("star", "active day", days = self.messages.star.saved.days);
         }
         let in_the_way = self.star_in_the_way();
-        if self.star.card && in_the_way {
+        if self.messages.star.card && in_the_way {
             self.close_star("unanswered");
-        } else if window && !in_the_way && !self.star.card && self.star.saved.due(clock) {
-            self.star.card = true;
-            self.star.opened = Some(clock);
+        } else if window && !in_the_way && !self.messages.star.card && self.messages.star.saved.due(clock) {
+            self.messages.star.card = true;
+            self.messages.star.opened = Some(clock);
         }
     }
 
     fn star_in_the_way(&self) -> bool {
         self.overlay.is_some()
-            || self.nav.is_some()
-            || self.drag.is_some()
-            || self.drawn.compact()
-            || self.toast.is_some()
+            || self.screen.nav.is_some()
+            || self.screen.drag.is_some()
+            || self.screen.drawn.compact()
+            || self.messages.toast.is_some()
             || self.todo_typing()
             || self.files_typing()
             || self.filtering()
@@ -61,33 +98,34 @@ impl App {
             })
     }
 
-    pub(super) fn star_seen(&mut self) {
-        if let Some(clock) = self.star.opened.take().filter(|_| self.star.card) {
-            self.star.saved.shown(clock);
+    pub(super) fn star_seen(&mut self, now: Instant) {
+        self.messages.star.window = Some(now);
+        if let Some(clock) = self.messages.star.opened.take().filter(|_| self.messages.star.card) {
+            self.messages.star.saved.shown(clock);
             self.save_star();
-            log::info!("star", "shown", days = self.star.saved.days);
+            log::info!("star", "shown", days = self.messages.star.saved.days);
         }
     }
 
     fn close_star(&mut self, why: &str) {
-        self.star.opened = None;
-        if std::mem::take(&mut self.star.card) {
+        self.messages.star.opened = None;
+        if std::mem::take(&mut self.messages.star.card) {
             log::info!("star", "closed", why = why);
         }
     }
 
     pub(super) fn star_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> bool {
-        if self.star.swallowed {
+        if self.messages.star.swallowed {
             match ev.kind {
                 MouseEventKind::Drag(MouseButton::Left) => return true,
                 MouseEventKind::Up(MouseButton::Left) => {
-                    self.star.swallowed = false;
+                    self.messages.star.swallowed = false;
                     return true;
                 }
-                _ => self.star.swallowed = false,
+                _ => self.messages.star.swallowed = false,
             }
         }
-        if !self.star.card || !ui::star_area(area).contains(pos) {
+        if !self.messages.star.card || !ui::star_area(area).contains(pos) {
             return false;
         }
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
@@ -99,21 +137,21 @@ impl App {
             StarButton::Later => Answer::Later,
             StarButton::Never => Answer::Never,
         };
-        self.star.saved.answered(answer);
-        self.star.card = false;
-        self.star.swallowed = true;
+        self.messages.star.saved.answered(answer);
+        self.messages.star.card = false;
+        self.messages.star.swallowed = true;
         self.save_star();
         log::info!("star", "answered", answer = format!("{answer:?}").to_lowercase());
         if button == StarButton::Star {
             self.copy(star::URL);
-            self.toast = Some(Toast::new(format!("copied {}", star::URL), ui::ToastIcon::Check));
+            self.messages.toast = Some(Toast::new(format!("copied {}", star::URL), ui::ToastIcon::Check));
         }
         true
     }
 
     fn save_star(&self) {
-        let Some(path) = &self.star.path else { return };
-        if let Err(e) = star::save(path, &self.star.saved) {
+        let Some(path) = &self.messages.star.path else { return };
+        if let Err(e) = star::save(path, &self.messages.star.saved) {
             log::warning!("star", "failed to save", error = e);
         }
     }

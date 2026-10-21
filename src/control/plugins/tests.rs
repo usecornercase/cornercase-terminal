@@ -162,14 +162,8 @@ fn the_outcome_of_each_ending() {
     use std::os::unix::process::ExitStatusExt as _;
     use std::process::ExitStatus;
     let at = |ended| {
-        ActionRan::of(
-            "p",
-            "a",
-            Context::Tab,
-            Ids::default(),
-            &Ran { ended, took: Duration::from_millis(7) },
-            "/log".into(),
-        )
+        let invoked = Invoked { plugin: "p", action: "a", context: Context::Tab, ids: Ids::default() };
+        ActionRan::of(invoked, &Ran { ended, took: Duration::from_millis(7) }, "/log".into())
     };
     let signal = at(Ended::Status(ExitStatus::from_raw(9)));
     assert_eq!((signal.ended.as_str(), signal.code, signal.signal), ("signal", None, Some(9)));

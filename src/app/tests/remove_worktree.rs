@@ -42,16 +42,6 @@ fn gone(s: &mut Setup) {
     pump_until(&mut s.app, &s.rx, "the workspace goes away", |a| a.projects[0].workspaces.len() == 1);
 }
 
-fn branch_exists(repo: &Path, branch: &str) -> bool {
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")])
-        .status()
-        .expect("run git")
-        .success()
-}
-
 #[test]
 fn asks_first() {
     let s = with_worktree();

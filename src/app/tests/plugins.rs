@@ -140,7 +140,7 @@ mod hooks {
     #[test]
     fn opening_a_tab_runs_the_hook_with_the_event_and_nothing_older() {
         let mut p = plugged(true);
-        p.app.add_tab(0, 0, AREA).expect("new tab");
+        p.app.add_tab(workspace_at(&p.app, 0, 0), AREA).expect("new tab");
         p.app.trace();
         wait_until("both hooks ran", || p.read("events").lines().count() == 2);
         let events: Vec<serde_json::Value> =
@@ -154,7 +154,7 @@ mod hooks {
     #[test]
     fn a_plugin_that_is_off_hears_nothing() {
         let mut p = plugged(false);
-        p.app.add_tab(0, 0, AREA).expect("new tab");
+        p.app.add_tab(workspace_at(&p.app, 0, 0), AREA).expect("new tab");
         p.app.trace();
         assert!(!p.app.following());
     }
@@ -184,7 +184,7 @@ mod settings_page {
         let mut p = plugged(false);
         open_plugins(&mut p.app);
         send_key(&mut p.app, KeyCode::Enter, KeyModifiers::NONE);
-        let registry = Registry::load(&paths::plugins(&p.app.config_path));
+        let registry = Registry::load(&paths::plugins(p.app.config_file.path()));
         assert!(registry.entries[0].enabled);
         let Some(Overlay::Settings(s)) = &p.app.overlay else { panic!("settings stay open") };
         assert_eq!(s.notice.as_deref(), Some("Notes is on: it runs as you"));

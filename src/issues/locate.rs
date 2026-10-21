@@ -20,49 +20,62 @@ pub(crate) fn locator(text: &str, source: Option<&str>, available: &[Source]) ->
                 .ok_or_else(|| Error::Api(format!("unknown issue source {source}")))
         })
         .transpose()?;
-    if let Some(url) = text.strip_prefix("https://").or_else(|| text.strip_prefix("http://")) {
-        let (host, path) = url.split_once('/').ok_or_else(|| Error::Api("the issue URL has no path".into()))?;
-        let parts: Vec<_> = path.trim_matches('/').split('/').collect();
-        let inferred = if host == "github.com" {
-            Some(Source::Github)
-        } else if parts.windows(2).any(|parts| parts == ["-", "issues"] || parts == ["-", "work_items"]) {
-            Some(Source::Gitlab)
-        } else if host == "app.shortcut.com" {
-            Some(Source::Shortcut)
-        } else if host == "linear.app" {
-            Some(Source::Linear)
-        } else if host.ends_with(".atlassian.net") {
-            Some(Source::Jira)
-        } else if host == "app.plane.so" {
-            Some(Source::Plane)
-        } else if host == "app.asana.com" {
-            Some(Source::Asana)
-        } else {
-            None
-        };
-        let source = selected.or(inferred).ok_or_else(|| Error::Api("use --source for this issue URL".into()))?;
-        if inferred.is_some_and(|inferred| inferred != source) {
-            return Err(Error::Api("the issue URL and --source disagree".into()));
-        }
-        if source == Source::Asana {
-            let key = asana_task(path).ok_or_else(|| Error::Api("the issue URL has no readable issue key".into()))?;
-            return Ok(Locator { source, key: key.into(), url: Some(text.into()) });
-        }
-        let marker = match source {
-            Source::Github | Source::Gitlab => "issues",
-            Source::Shortcut => "story",
-            Source::Linear => "issue",
-            Source::Jira | Source::Plane => "browse",
-            Source::Asana => unreachable!("an Asana URL returns above"),
-        };
-        let key = parts
-            .windows(2)
-            .find(|parts| parts[0] == marker || (marker == "issues" && parts[0] == "work_items"))
-            .map(|parts| parts[1])
-            .filter(|key| !key.is_empty())
-            .ok_or_else(|| Error::Api("the issue URL has no readable issue key".into()))?;
+    match text.strip_prefix("https://").or_else(|| text.strip_prefix("http://")) {
+        Some(url) => url_locator(text, url, selected),
+        None => key_locator(text, selected, available),
+    }
+}
+
+fn inferred_source(host: &str, parts: &[&str]) -> Option<Source> {
+    if host == "github.com" {
+        Some(Source::Github)
+    } else if parts.windows(2).any(|parts| parts == ["-", "issues"] || parts == ["-", "work_items"]) {
+        Some(Source::Gitlab)
+    } else if host == "app.shortcut.com" {
+        Some(Source::Shortcut)
+    } else if host == "linear.app" {
+        Some(Source::Linear)
+    } else if host.ends_with(".atlassian.net") {
+        Some(Source::Jira)
+    } else if host == "app.plane.so" {
+        Some(Source::Plane)
+    } else if host == "app.asana.com" {
+        Some(Source::Asana)
+    } else {
+        None
+    }
+}
+
+fn url_locator(text: &str, url: &str, selected: Option<Source>) -> Result<Locator> {
+    let (host, path) = url.split_once('/').ok_or_else(|| Error::Api("the issue URL has no path".into()))?;
+    let parts: Vec<_> = path.trim_matches('/').split('/').collect();
+    let inferred = inferred_source(host, &parts);
+    let source = selected.or(inferred).ok_or_else(|| Error::Api("use --source for this issue URL".into()))?;
+    if inferred.is_some_and(|inferred| inferred != source) {
+        return Err(Error::Api("the issue URL and --source disagree".into()));
+    }
+    let unreadable = || Error::Api("the issue URL has no readable issue key".into());
+    if source == Source::Asana {
+        let key = asana_task(path).ok_or_else(unreadable)?;
         return Ok(Locator { source, key: key.into(), url: Some(text.into()) });
     }
+    let marker = match source {
+        Source::Github | Source::Gitlab => "issues",
+        Source::Shortcut => "story",
+        Source::Linear => "issue",
+        Source::Jira | Source::Plane => "browse",
+        Source::Asana => unreachable!("an Asana URL returns above"),
+    };
+    let key = parts
+        .windows(2)
+        .find(|parts| parts[0] == marker || (marker == "issues" && parts[0] == "work_items"))
+        .map(|parts| parts[1])
+        .filter(|key| !key.is_empty())
+        .ok_or_else(unreadable)?;
+    Ok(Locator { source, key: key.into(), url: Some(text.into()) })
+}
+
+fn key_locator(text: &str, selected: Option<Source>, available: &[Source]) -> Result<Locator> {
     let source = match selected {
         Some(source) => source,
         None if text.starts_with("sc-") => Source::Shortcut,

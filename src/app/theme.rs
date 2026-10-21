@@ -1,18 +1,53 @@
 use super::App;
 use super::control::{Handled, json};
 use crate::control::contract::{Code, Refusal};
-use crate::control::theme::{Asked, Scheme, Theme};
+use crate::control::theme::{Asked, Scheme, Theme, ThemeFrom};
 use crate::host::theme::HostTheme;
 use crate::log;
 use crate::project::Hierarchy;
 
+pub(super) struct Themes {
+    theme: HostTheme,
+    window_theme: bool,
+    client_theme: Option<HostTheme>,
+}
+
+impl Themes {
+    pub(super) fn new(theme: HostTheme) -> Self {
+        Self { theme, window_theme: false, client_theme: None }
+    }
+
+    pub(super) fn host(&self) -> &HostTheme {
+        &self.theme
+    }
+
+    pub(super) fn light(&self) -> bool {
+        self.theme.is_light() == Some(true)
+    }
+
+    pub(super) fn reported(&mut self, theme: HostTheme) {
+        self.theme = theme;
+        self.window_theme = true;
+    }
+
+    pub(super) fn source(&self) -> ThemeFrom {
+        if self.client_theme.is_some() {
+            ThemeFrom::Client
+        } else if self.window_theme {
+            ThemeFrom::Window
+        } else {
+            ThemeFrom::Default
+        }
+    }
+}
+
 impl App {
     pub(super) fn terminal_theme(&self) -> &HostTheme {
-        self.client_theme.as_ref().unwrap_or(&self.theme)
+        self.themes.client_theme.as_ref().unwrap_or(self.themes.host())
     }
 
     pub(super) fn paint_terminals(&mut self) -> usize {
-        let theme = self.client_theme.as_ref().unwrap_or(&self.theme);
+        let theme = self.themes.client_theme.as_ref().unwrap_or(self.themes.host());
         let mut panes = 0;
         for term in self.projects.terms_mut() {
             term.set_theme(theme);
@@ -22,7 +57,7 @@ impl App {
     }
 
     pub(super) fn give_theme(&mut self, theme: Option<HostTheme>) {
-        self.client_theme = theme;
+        self.themes.client_theme = theme;
         let panes = self.paint_terminals();
         let info = self.theme_info();
         log::info!(

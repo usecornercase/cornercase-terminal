@@ -236,6 +236,10 @@ impl Reader {
     pub(in crate::agents) fn conversation(&self) -> Option<&str> {
         self.transcript.as_ref().filter(|t| t.len > 0).and_then(|t| t.path.file_stem()?.to_str())
     }
+
+    pub(in crate::agents) fn folder(&self) -> Option<&Path> {
+        self.session.as_ref()?.cwd.as_deref()
+    }
 }
 
 pub(crate) fn claude_dir(home: Option<&Path>) -> Option<PathBuf> {

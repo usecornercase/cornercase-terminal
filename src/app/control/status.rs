@@ -13,92 +13,123 @@ use crate::control::{
 use crate::git;
 use crate::log::{self, Level};
 use crate::process;
-use crate::project::{Hierarchy, Tab, Workspace};
-use crate::pull_request::Ci;
+use crate::project::{Group, Hierarchy, Project, Tab, Workspace};
+use crate::pull_request::{Ci, PullRequest};
 use crate::term::Term;
 use crate::version;
 
+struct Seen {
+    caller: Option<u64>,
+    live: HashSet<u64>,
+    counted: Option<u64>,
+    sweeping: bool,
+}
+
+fn pull_request_info(pull: &PullRequest) -> PullRequestInfo {
+    PullRequestInfo {
+        number: pull.number,
+        title: pull.title.clone(),
+        url: pull.url.clone(),
+        state: pull.state.name().into(),
+        checks: pull.ci().map(|ci| ci.name().into()),
+        failed: pull.failed().map(|check| check.name.clone()).collect(),
+        conflicts: pull.conflicts(),
+        base: Some(pull.base.clone()).filter(|base| !base.is_empty()),
+    }
+}
+
+fn pull_refreshed(pull: &PullRequest, hash: &mut DefaultHasher) {
+    (pull.number, &pull.title, pull.state.name(), pull.ci().map(Ci::name), pull.conflicts(), &pull.base).hash(hash);
+    pull.failed().for_each(|check| check.name.hash(hash));
+}
+
 impl App {
     pub(in crate::app) fn report(&self, caller: Option<u64>) -> Report {
-        let caller = caller.filter(|id| self.projects.tab_of_pane(*id).is_some());
-        let live = self.pane_ids();
-        let counted = self.changes_target().map(|t| t.workspace);
-        let sweeping = self.change_streams.wants_every();
-        let tab_info = |t: usize, tab: &Tab, active: usize| TabInfo {
-            id: tab.id,
-            name: tab.label(&self.config),
-            status: tab.status().map(|s| s.name().to_string()),
-            active: t == active,
-            panes: tab
-                .panes
-                .iter()
-                .enumerate()
-                .map(|(i, term)| self.pane_info(term, i == tab.active, caller, &live))
-                .collect(),
-            custom_name: tab.name.clone(),
-            layout: Some(control::Layout::from(&tab.layout)),
-            controller: self.tab_controller(tab.id),
+        let seen = Seen {
+            caller: caller.filter(|id| self.projects.tab_of_pane(*id).is_some()),
+            live: self.pane_ids(),
+            counted: self.changes_target().map(|t| t.workspace),
+            sweeping: self.clients.change_streams.wants_every(),
         };
-        let workspace_info = |w: usize, ws: &Workspace, active: usize| WorkspaceInfo {
+        Report {
+            version: version::CURRENT.to_string(),
+            boot: control::server_token().to_string(),
+            caller: seen.caller,
+            shown: self.project().map(|_| self.shown_ids(self.active)).unwrap_or_default(),
+            groups: self.groups_info(),
+            projects: self.projects_info(&seen),
+            keep_awake: self.keep_awake_info(),
+            view: None,
+            theme: Some(self.theme_info()),
+            config: Some(ConfigInfo { revision: self.config_file.revision() }),
+        }
+    }
+
+    fn groups_info(&self) -> Vec<GroupInfo> {
+        let info = |g: &Group| GroupInfo {
+            id: g.id,
+            name: g.entry.name.clone(),
+            collapsed: g.entry.collapsed,
+            icon: g.entry.icon.to_string(),
+            colour: g.entry.colour,
+        };
+        self.groups.iter().map(info).collect()
+    }
+
+    fn projects_info(&self, seen: &Seen) -> Vec<ProjectInfo> {
+        let shown = self.projects.iter().enumerate().filter(|(_, p)| !p.closing);
+        shown.map(|(p, project)| self.project_info(project, p == self.active, seen)).collect()
+    }
+
+    fn project_info(&self, project: &Project, active: bool, seen: &Seen) -> ProjectInfo {
+        let workspaces = project.workspaces.iter().enumerate().filter(|(_, w)| !w.closing());
+        ProjectInfo {
+            id: project.id,
+            name: self.project_label(project),
+            path: project.path.clone(),
+            group: project.group,
+            active,
+            workspaces: workspaces.map(|(w, ws)| self.workspace_info(ws, w == project.active, seen)).collect(),
+            custom_name: project.name.clone(),
+            collapsed: project.collapsed,
+        }
+    }
+
+    fn workspace_info(&self, ws: &Workspace, active: bool, seen: &Seen) -> WorkspaceInfo {
+        WorkspaceInfo {
             id: ws.id,
             name: ws.label(),
             path: ws.path.clone(),
             branch: git::branch(&ws.path),
             worktree: ws.worktree,
             behind: ws.behind,
-            pull_request: self.pull_request(ws.id).map(|pull| PullRequestInfo {
-                number: pull.number,
-                title: pull.title.clone(),
-                url: pull.url.clone(),
-                state: pull.state.name().into(),
-                checks: pull.ci().map(|ci| ci.name().into()),
-                failed: pull.failed().map(|check| check.name.clone()).collect(),
-                conflicts: pull.conflicts(),
-                base: Some(pull.base.clone()).filter(|base| !base.is_empty()),
-            }),
+            pull_request: self.pull_request(ws.id).map(pull_request_info),
             setup: ws.setup().map(|(_, state)| if state.running() { "running" } else { "failed" }.to_string()),
             run_dir: self.workspace_run_dir(ws),
             run: self.run_status(ws.id),
-            active: w == active,
-            tabs: ws.tabs.iter().enumerate().map(|(t, tab)| tab_info(t, tab, ws.active)).collect(),
+            active,
+            tabs: ws.tabs.iter().enumerate().map(|(t, tab)| self.tab_info(tab, t == ws.active, seen)).collect(),
             custom_name: ws.name.clone(),
             collapsed: ws.collapsed,
-            changes: self.changes_count(ws.id, counted, sweeping),
-        };
-        let projects = self.projects.iter().enumerate().filter(|(_, p)| !p.closing).map(|(p, project)| ProjectInfo {
-            id: project.id,
-            name: self.project_label(project),
-            path: project.path.clone(),
-            group: project.group,
-            active: p == self.active,
-            workspaces: project
-                .workspaces
+            changes: self.changes_count(ws.id, seen.counted, seen.sweeping),
+        }
+    }
+
+    fn tab_info(&self, tab: &Tab, active: bool, seen: &Seen) -> TabInfo {
+        TabInfo {
+            id: tab.id,
+            name: tab.label(&self.config),
+            status: tab.status().map(|s| s.name().to_string()),
+            active,
+            panes: tab
+                .panes
                 .iter()
                 .enumerate()
-                .filter(|(_, w)| !w.closing())
-                .map(|(w, ws)| workspace_info(w, ws, project.active))
+                .map(|(i, term)| self.pane_info(term, i == tab.active, seen.caller, &seen.live))
                 .collect(),
-            custom_name: project.name.clone(),
-            collapsed: project.collapsed,
-        });
-        let groups = self.groups.iter().map(|g| GroupInfo {
-            id: g.id,
-            name: g.entry.name.clone(),
-            collapsed: g.entry.collapsed,
-            icon: g.entry.icon.to_string(),
-            colour: g.entry.colour,
-        });
-        Report {
-            version: version::CURRENT.to_string(),
-            boot: control::server_token().to_string(),
-            caller,
-            shown: self.project().map(|_| self.shown_ids(self.active)).unwrap_or_default(),
-            groups: groups.collect(),
-            projects: projects.collect(),
-            keep_awake: self.keep_awake_info(),
-            view: None,
-            theme: Some(self.theme_info()),
-            config: Some(ConfigInfo { revision: self.config_file.revision }),
+            custom_name: tab.name.clone(),
+            layout: Some(control::Layout::from(&tab.layout)),
+            controller: self.tab_controller(tab.id),
         }
     }
 
@@ -107,7 +138,7 @@ impl App {
             version: version::CURRENT.to_string(),
             boot: control::server_token().to_string(),
             todos: self.todo_items(),
-            queue: self.queued.queue.entries.clone(),
+            queue: self.panels.queued.queue().entries.clone(),
             away: self.away_info(),
             update: self.update_info(),
             keep_awake: self.keep_awake_info(),
@@ -128,36 +159,36 @@ impl App {
         for project in self.projects.iter().filter(|p| !p.closing) {
             project.id.hash(&mut hash);
             for workspace in project.workspaces.iter().filter(|w| !w.closing()) {
-                (workspace.id, workspace.behind, git::branch(&workspace.path)).hash(&mut hash);
-                workspace.setup().map(|(_, state)| state.running()).hash(&mut hash);
-                if let Some(pull) = self.pull_request(workspace.id) {
-                    (
-                        pull.number,
-                        &pull.title,
-                        pull.state.name(),
-                        pull.ci().map(Ci::name),
-                        pull.conflicts(),
-                        &pull.base,
-                    )
-                        .hash(&mut hash);
-                    pull.failed().for_each(|check| check.name.hash(&mut hash));
-                }
-                self.run_status(workspace.id).hash(&mut hash);
-                for tab in &workspace.tabs {
-                    (tab.id, tab.status().map(Status::name)).hash(&mut hash);
-                    for term in &tab.panes {
-                        let parent = Self::live_parent(term, &live);
-                        self.seat(term.id).map(|(_, role)| role).hash(&mut hash);
-                        Self::pane_refreshed(term, self.resume_holds(term.id), parent, &mut hash);
-                        (self.held_sends(term.id), term.typing.drafting()).hash(&mut hash);
-                    }
-                }
+                self.workspace_refreshed(workspace, &live, &mut hash);
             }
         }
         if let Some(awake) = self.keep_awake_info() {
             (awake.held, awake.by, awake.unavailable).hash(&mut hash);
         }
         hash.finish()
+    }
+
+    fn workspace_refreshed(&self, workspace: &Workspace, live: &HashSet<u64>, hash: &mut DefaultHasher) {
+        (workspace.id, workspace.behind, git::branch(&workspace.path)).hash(hash);
+        workspace.setup().map(|(_, state)| state.running()).hash(hash);
+        if let Some(pull) = self.pull_request(workspace.id) {
+            pull_refreshed(pull, hash);
+        }
+        self.run_status(workspace.id).hash(hash);
+        for tab in &workspace.tabs {
+            self.tab_refreshed(tab, live, hash);
+        }
+    }
+
+    fn tab_refreshed(&self, tab: &Tab, live: &HashSet<u64>, hash: &mut DefaultHasher) {
+        (tab.id, tab.status().map(Status::name)).hash(hash);
+        for term in &tab.panes {
+            let parent = Self::live_parent(term, live);
+            self.seat(term.id).map(|(_, role)| role).hash(hash);
+            Self::pane_refreshed(term, self.resume_holds(term.id), parent, hash);
+            (self.held_sends(term.id), term.typing.drafting()).hash(hash);
+            self.restart_waiting(term.id).is_some().hash(hash);
+        }
     }
 
     fn pane_refreshed(term: &Term, resuming: bool, parent: Option<u64>, hash: &mut DefaultHasher) {
@@ -169,6 +200,7 @@ impl App {
         (term.dialog(), term.survey(), term.resume.is_some(), resuming, parent).hash(hash);
         term.emulator.title().hash(hash);
         term.account().hash(hash);
+        term.accounts().chosen().hash(hash);
     }
 
     fn pane_info(&self, term: &Term, active: bool, caller: Option<u64>, live: &HashSet<u64>) -> PaneInfo {
@@ -197,6 +229,8 @@ impl App {
             draft: term.draft(Instant::now()),
             collapsed: term.collapsed,
             account: term.account().map(str::to_string),
+            accounts: term.accounts().chosen(),
+            account_restart: self.restart_waiting(term.id).map(|_| "waiting".to_string()),
         }
     }
 
@@ -214,7 +248,7 @@ impl App {
             return Err(none("pane", *pane));
         }
         self.publish(log::enabled(Level::Info));
-        self.events.subscribe(client, events.panes, events.host, events.notices);
+        self.clients.events.subscribe(client, events.panes, events.host, events.notices);
         Ok(Some(json(&Done::default())))
     }
 }

@@ -37,6 +37,7 @@ pub(crate) mod term;
 pub(crate) mod todo;
 pub(crate) mod tour;
 pub mod update;
+pub(crate) mod worktrees;
 
 pub mod ui;
 

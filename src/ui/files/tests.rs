@@ -3,6 +3,7 @@ use ratatui::backend::TestBackend;
 
 use super::*;
 use crate::changes::diff;
+use crate::files::find::Find;
 use crate::files::{self, disk};
 
 const AREA: Rect = Rect { x: 0, y: 0, width: 48, height: 12 };
@@ -177,16 +178,13 @@ fn hits_the_bar_its_buttons_and_the_results() {
 
 #[test]
 fn the_viewer_lights_what_was_searched() {
-    let mut view = opened(None, &[]);
-    if let Screen::File(file) = &mut view.screen {
-        file.find = Some("done".into());
-    }
-    let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("terminal");
-    terminal.draw(|f| draw(f, AREA, &view, None)).expect("draw");
-    let row = parts(AREA).body.y + 2;
-    let buffer = terminal.backend().buffer();
-    let lit: String =
-        (0..AREA.width).filter(|&x| buffer[(x, row)].bg == Color::Yellow).map(|x| buffer[(x, row)].symbol()).collect();
+    let view = finding("done", false);
+    let buffer = drawn_at(&view);
+    let row = body(AREA, &view).y + 2;
+    let lit: String = (0..AREA.width)
+        .filter(|&x| buffer[(x, row)].bg == Color::Cyan && buffer[(x, row)].fg == Color::Black)
+        .map(|x| buffer[(x, row)].symbol())
+        .collect();
     assert_eq!(lit, "done");
 }
 
@@ -284,8 +282,7 @@ mod images {
     }
 
     fn drawn(view: &View) -> Buffer {
-        let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("terminal");
-        terminal.draw(|f| draw(f, AREA, view, None)).expect("draw").buffer.clone()
+        drawn_at(view)
     }
 
     fn picture(buffer: &Buffer) -> String {
@@ -440,4 +437,187 @@ fn the_full_screen_button_never_covers_the_back_button() {
     assert!(back(narrow).contains(Position::new(3, 0)));
     assert_eq!(hit(narrow, &view, Position::new(3, 0)), Some(Hit::Back));
     assert!(full_screen_button(narrow).is_empty());
+}
+
+fn drawn_at(view: &View) -> Buffer {
+    let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("terminal");
+    terminal.draw(|f| draw(f, AREA, view, None)).expect("draw").buffer.clone()
+}
+
+fn finding(query: &str, focused: bool) -> View {
+    let mut view = opened(None, &[]);
+    if let Screen::File(file) = &mut view.screen {
+        let mut find = Find::new(query, 1, focused);
+        find.recount(file.content.as_ref().map_or(&[][..], |c| c.lines()));
+        file.find = Some(find);
+    }
+    view
+}
+
+mod find {
+    use super::*;
+    use crate::graphics::Picture;
+
+    fn cell(buffer: &Buffer, x: u16, y: u16) -> (String, Option<Color>, Option<Color>) {
+        let c = &buffer[(x, y)];
+        (c.symbol().to_string(), c.fg.into(), c.bg.into())
+    }
+
+    #[test]
+    fn draws_the_field_with_its_count() {
+        insta::assert_snapshot!(render(&finding("n", true)));
+    }
+
+    #[test]
+    fn says_when_nothing_matches() {
+        insta::assert_snapshot!(render(&finding("zzz", false)));
+    }
+
+    #[test]
+    fn shows_the_placeholder_while_empty() {
+        let view = finding("", true);
+        assert!(render(&view).contains("text in this file"));
+        assert!(!render(&view).contains("no matches"));
+    }
+
+    #[test]
+    fn the_current_match_stands_out_from_the_others() {
+        let view = finding("n", false);
+        let buffer = drawn_at(&view);
+        let body = body(AREA, &view);
+        let painted: Vec<&ratatui::buffer::Cell> =
+            body.positions().map(|p| &buffer[p]).filter(|c| c.bg == Color::Cyan || c.bg == Color::Yellow).collect();
+        let current: Vec<_> = painted.iter().filter(|c| c.bg == Color::Cyan).collect();
+        assert_eq!((current.len(), painted.len() - current.len()), (1, 3));
+        assert!(current[0].modifier.contains(Modifier::BOLD));
+        assert_eq!(buffer[(body.x + 2 + 3 + 2 + 1, body.y)].bg, Color::Cyan, "the n of fn, on the first line");
+    }
+
+    #[test]
+    fn the_button_shows_on_a_text_file_only() {
+        let at = find_button(AREA).as_position();
+        assert_eq!(hit(AREA, &opened(None, &[]), at), Some(Hit::Find));
+        assert_ne!(hit(AREA, &tree(), at), Some(Hit::Find));
+        assert_ne!(hit(AREA, &texts(), at), Some(Hit::Find));
+        let mut loading = opened(None, &[]);
+        if let Screen::File(file) = &mut loading.screen {
+            file.content = None;
+        }
+        assert_ne!(hit(AREA, &loading, at), Some(Hit::Find));
+        let picture = Picture {
+            id: 1,
+            format: "png",
+            width: 4,
+            height: 4,
+            bytes: 10,
+            rgba: image::RgbaImage::new(1, 1),
+            opaque: true,
+        };
+        let mut image = opened(None, &[]);
+        if let Screen::File(file) = &mut image.screen {
+            file.content = Some(Arc::new(Content {
+                stamp: disk::Stamp::default(),
+                language: None,
+                body: Body::Image(Arc::new(picture)),
+            }));
+        }
+        assert_ne!(hit(AREA, &image, at), Some(Hit::Find));
+    }
+
+    #[test]
+    fn the_button_turns_cyan_while_the_field_is_open() {
+        let button = find_button(AREA);
+        let colour = |view: &View| cell(&drawn_at(view), button.x + 1, button.y).1;
+        assert_eq!(colour(&opened(None, &[])), dim(Color::DarkGray).fg);
+        assert_eq!(colour(&finding("", false)), Some(Color::Cyan));
+    }
+
+    #[test]
+    fn hits_the_field_its_buttons_and_the_lines_below_it() {
+        let view = finding("n", true);
+        let y = find_field(AREA).y;
+        assert_eq!(hit(AREA, &view, find_close(AREA).as_position()), Some(Hit::FindClose));
+        assert_eq!(hit(AREA, &view, find_next(AREA).as_position()), Some(Hit::FindNext));
+        assert_eq!(hit(AREA, &view, find_previous(AREA).as_position()), Some(Hit::FindPrevious));
+        assert_eq!(hit(AREA, &view, Position::new(5, y)), Some(Hit::FindField));
+        assert_eq!(hit(AREA, &view, Position::new(2, body(AREA, &view).y)), Some(Hit::Line(1)));
+        assert_eq!(body(AREA, &view).y, body(AREA, &opened(None, &[])).y + 1);
+        assert_eq!(hit(AREA, &opened(None, &[]), Position::new(5, y)), None);
+    }
+
+    #[test]
+    fn a_long_path_stops_before_the_find_button() {
+        let mut view = finding("", false);
+        if let Screen::File(file) = &mut view.screen {
+            file.path = "a/very/long/folder/path/that/does/not/fit/in/the/panel/main.rs".into();
+        }
+        let buffer = drawn_at(&view);
+        let button = find_button(AREA);
+        assert_eq!(buffer[(button.x - 1, button.y)].symbol(), " ");
+    }
+
+    #[test]
+    fn the_find_button_never_covers_the_back_button() {
+        let narrow = Rect::new(0, 0, 9, 12);
+        let view = opened(None, &[]);
+        assert_eq!(find_button(narrow), Rect::default());
+        assert_eq!(hit(narrow, &view, back(narrow).as_position()), Some(Hit::Back));
+    }
+
+    #[test]
+    fn a_long_line_draws_only_what_shows() {
+        let source = "ab".repeat(2500);
+        let content = Content {
+            stamp: disk::Stamp::default(),
+            language: None,
+            body: Body::Text { lines: vec![source.clone()], styles: None, source: source.as_str().into() },
+        };
+        let mut view = finding("b", false);
+        if let Screen::File(file) = &mut view.screen {
+            file.content = Some(Arc::new(content));
+            let mut find = Find::new("b", 1, false);
+            find.recount(file.content.as_ref().map_or(&[][..], |c| c.lines()));
+            file.find = Some(find);
+        }
+        let buffer = drawn_at(&view);
+        let y = body(AREA, &view).y;
+        let lit = (0..AREA.width).filter(|&x| buffer[(x, y)].bg != Color::Reset).count();
+        assert!(lit > 10 && lit < usize::from(AREA.width));
+        assert!((0..AREA.width).any(|x| buffer[(x, y)].symbol() == "…"));
+    }
+
+    #[test]
+    fn jumps_scroll_only_to_reveal_an_off_screen_line() {
+        let source = (1..=60).map(|n| format!("line {n}")).collect::<Vec<_>>().join("\n");
+        let lines: Vec<String> = source.lines().map(String::from).collect();
+        let content = Content {
+            stamp: disk::Stamp::default(),
+            language: None,
+            body: Body::Text { lines, styles: None, source: source.as_str().into() },
+        };
+        let mut view = finding("line", false);
+        if let Screen::File(file) = &mut view.screen {
+            file.content = Some(Arc::new(content));
+        }
+        let shown = u32::from(body(AREA, &view).height);
+        assert_eq!(reveal(AREA, &view, shown), None);
+        assert_eq!(reveal(AREA, &view, 40), Some(36));
+        assert_eq!(top_line(AREA, &view), 1);
+        if let Screen::File(file) = &mut view.screen {
+            file.scroll = 20;
+        }
+        assert_eq!(top_line(AREA, &view), 21);
+        assert_eq!(reveal(AREA, &view, 22), None);
+        assert_eq!(reveal(AREA, &view, 3), Some(0));
+    }
+
+    #[test]
+    fn a_removed_row_at_the_top_leads_to_the_line_it_sits_before() {
+        let mut view = finding("n", false);
+        if let Screen::File(file) = &mut view.screen {
+            file.unfolded = HashSet::from([2]);
+            file.scroll = 1;
+        }
+        assert_eq!(top_line(Rect::new(0, 0, 48, 6), &view), 2);
+    }
 }

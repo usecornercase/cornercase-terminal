@@ -50,7 +50,7 @@ fn add(app: &mut App, texts: &[&str]) {
 }
 
 fn texts(app: &App) -> Vec<String> {
-    app.todos.items().iter().map(|i| if i.done { format!("[x] {}", i.text) } else { i.text.clone() }).collect()
+    app.panels.todos.items().iter().map(|i| if i.done { format!("[x] {}", i.text) } else { i.text.clone() }).collect()
 }
 
 fn undo(app: &mut App, message: &str) {
@@ -72,14 +72,14 @@ fn the_button_opens_the_list_beside_the_pane() {
     let (mut app, _rx, _dirs) = app_with(1);
     let before = app.layout(AREA).pane.width;
     open(&mut app);
-    assert_eq!((app.side == Some(Side::Todo), app.layout(AREA).pane.width < before), (true, true));
+    assert_eq!((app.screen.side == Some(Side::Todo), app.layout(AREA).pane.width < before), (true, true));
 }
 
 #[test]
 fn the_close_button_hides_the_panel() {
     let (mut app, _rx, _dirs) = opened();
     tap(&mut app, |a| panel::close(panel_area(a)));
-    assert_ne!(app.side, Some(Side::Todo));
+    assert_ne!(app.screen.side, Some(Side::Todo));
 }
 
 #[test]
@@ -88,9 +88,9 @@ fn the_todo_and_changes_panels_take_turns() {
     let (mut app, _rx) = app_in(repo.path(), no_config());
     open(&mut app);
     tap(&mut app, |a| ui::changes_button(a.layout(AREA).issues, &a.changes_label().expect("changes")));
-    assert_eq!((app.side == Some(Side::Todo), app.side == Some(Side::Changes)), (false, true));
+    assert_eq!((app.screen.side == Some(Side::Todo), app.screen.side == Some(Side::Changes)), (false, true));
     open(&mut app);
-    assert_eq!((app.side == Some(Side::Todo), app.side == Some(Side::Changes)), (true, false));
+    assert_eq!((app.screen.side == Some(Side::Todo), app.screen.side == Some(Side::Changes)), (true, false));
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn the_compact_bar_has_a_button_too() {
     let small = Rect { width: 80, ..AREA };
     let (mut app, _rx, _dirs) = app_with(1);
     click_in(&mut app, ui::layout(small, state::Widths::default()).todo_button.as_position(), small);
-    assert_eq!(app.side, Some(Side::Todo));
+    assert_eq!(app.screen.side, Some(Side::Todo));
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn enter_adds_an_item_and_keeps_the_field_open_for_the_next() {
     new_todo(&mut app);
     submit_text(&mut app, "fix login");
     submit_text(&mut app, "write docs");
-    let field = app.todo.field.as_ref().map(|f| f.editor.text());
+    let field = app.panels.todo.field().map(|f| f.editor.text());
     assert_eq!((texts(&app), field), (vec!["fix login".into(), "write docs".into()], Some(String::new())));
 }
 
@@ -116,7 +116,7 @@ fn enter_on_an_empty_field_closes_it() {
     let (mut app, _rx, _dirs) = opened();
     new_todo(&mut app);
     send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
-    assert_eq!((app.todo.field.is_none(), texts(&app)), (true, Vec::<String>::new()));
+    assert_eq!((app.panels.todo.field().is_none(), texts(&app)), (true, Vec::<String>::new()));
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn esc_drops_what_was_typed() {
     new_todo(&mut app);
     type_text(&mut app, "renew the domain");
     send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
-    assert_eq!((app.todo.field.is_none(), texts(&app)), (true, Vec::<String>::new()));
+    assert_eq!((app.panels.todo.field().is_none(), texts(&app)), (true, Vec::<String>::new()));
 }
 
 #[test]
@@ -143,7 +143,7 @@ fn a_press_on_the_pane_saves_the_field_and_gives_the_keys_back() {
     new_todo(&mut app);
     type_text(&mut app, "renew the domain");
     click(&mut app, areas().pane.as_position());
-    assert_eq!((app.todo.field.is_none(), texts(&app)), (true, vec!["renew the domain".into()]));
+    assert_eq!((app.panels.todo.field().is_none(), texts(&app)), (true, vec!["renew the domain".into()]));
     type_in_pane(&mut app, &rx, "shell");
 }
 
@@ -153,9 +153,9 @@ fn clicking_the_text_edits_it_with_the_cursor_where_clicked() {
     add(&mut app, &["fix logn"]);
     let row = item_row(&app, 0);
     click(&mut app, Position::new(row.x + panel::TEXT_X + 7, row.y));
-    assert_eq!(app.todo.field.as_ref().map(|f| f.editor.cursor()), Some(7));
+    assert_eq!(app.panels.todo.field().map(|f| f.editor.cursor()), Some(7));
     submit_text(&mut app, "i");
-    assert_eq!((app.todo.field.is_none(), texts(&app)), (true, vec!["fix login".into()]));
+    assert_eq!((app.panels.todo.field().is_none(), texts(&app)), (true, vec!["fix login".into()]));
 }
 
 #[test]
@@ -184,14 +184,14 @@ fn checking_an_item_moves_it_to_the_bottom() {
 fn checking_an_item_being_edited_saves_the_text_and_checks_it() {
     let (mut app, _rx, _dirs) = edited_typo();
     tap(&mut app, |a| panel::check(item_row(a, 0)));
-    assert_eq!((app.todo.field.is_none(), texts(&app)), (true, vec!["b".into(), "[x] fix login".into()]));
+    assert_eq!((app.panels.todo.field().is_none(), texts(&app)), (true, vec!["b".into(), "[x] fix login".into()]));
 }
 
 #[test]
 fn deleting_an_item_being_edited_saves_the_text_and_undo_brings_it_back() {
     let (mut app, _rx, _dirs) = edited_typo();
     tap(&mut app, |a| panel::delete(item_row(a, 0)));
-    assert_eq!((app.todo.field.is_none(), texts(&app)), (true, vec!["b".into()]));
+    assert_eq!((app.panels.todo.field().is_none(), texts(&app)), (true, vec!["b".into()]));
     undo(&mut app, "deleted");
     assert_eq!(texts(&app), ["fix login", "b"]);
 }
@@ -211,7 +211,7 @@ fn the_undo_toast_lasts_longer_than_the_others() {
     let (mut app, _rx, _dirs) = opened();
     add(&mut app, &["a"]);
     tap(&mut app, |a| panel::delete(item_row(a, 0)));
-    assert_eq!(app.toast.as_ref().map(Toast::lasts), Some(UNDO_FOR));
+    assert_eq!(app.messages.toast.as_ref().map(Toast::lasts), Some(UNDO_FOR));
 }
 
 #[test]
@@ -227,10 +227,10 @@ fn clearing_done_items_can_be_undone() {
 }
 
 fn todo_button(app: &mut App) -> String {
-    let side = app.side.take();
+    let side = app.screen.side.take();
     let r = app.layout(AREA).todo_button;
     let t = render(app, AREA);
-    app.side = side;
+    app.screen.side = side;
     (r.x - 2..r.right()).map(|x| t.backend().buffer()[(x, r.y)].symbol().to_string()).collect()
 }
 
@@ -263,9 +263,9 @@ fn dragging_an_item_reorders_the_list() {
     let (from, to) = (item_row(&app, 0), item_row(&app, 2).as_position());
     press(&mut app, from.as_position());
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), to);
-    assert_eq!(view(&app).drag, Some((app.todos.items()[0].id, Some(3))));
+    assert_eq!(view(&app).drag, Some((app.panels.todos.items()[0].id, Some(3))));
     mouse(&mut app, MouseEventKind::Up(MouseButton::Left), to);
-    assert_eq!((texts(&app), app.todo.field.is_none()), (vec!["b".into(), "c".into(), "a".into()], true));
+    assert_eq!((texts(&app), app.panels.todo.field().is_none()), (vec!["b".into(), "c".into(), "a".into()], true));
 }
 
 #[test]
@@ -285,5 +285,5 @@ fn the_panel_and_the_list_come_back_after_a_restart() {
     let (mut back, _rx2) = empty_app();
     back.set_todos(Todos::from(saved));
     back.restore(&state, AREA);
-    assert_eq!((state.todo, back.side == Some(Side::Todo), texts(&back)), (true, true, vec!["a".into()]));
+    assert_eq!((state.todo, back.screen.side == Some(Side::Todo), texts(&back)), (true, true, vec!["a".into()]));
 }

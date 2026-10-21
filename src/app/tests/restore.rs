@@ -48,7 +48,11 @@ fn restoring_multiple_panels_prefers_files_then_todo_then_changes(
     assert!(app.restore(&saved, AREA));
 
     assert_eq!(
-        (app.side == Some(Side::Changes), app.side == Some(Side::Todo), app.side == Some(Side::Files)),
+        (
+            app.screen.side == Some(Side::Changes),
+            app.screen.side == Some(Side::Todo),
+            app.screen.side == Some(Side::Files)
+        ),
         expected
     );
     let again = app.state();
@@ -288,8 +292,12 @@ fn a_split_tab_with_one_pane_that_cannot_start_is_left_out_whole() {
 fn a_tab_that_cannot_start_names_the_folder_and_why() {
     let (dir, locked, mut app, _rx, ws) = locked_restore();
 
-    let Err(e) = app.restore_tab(&ws.tabs[0], dir.path(), AREA, |_| None, None, &mut session::Parents::default())
-    else {
+    let Err(e) = app.restore_tab(
+        &ws.tabs[0],
+        session::Restoring { dir: dir.path(), area: AREA, run: None },
+        |_| None,
+        &mut session::Parents::default(),
+    ) else {
         panic!("the second pane cannot start");
     };
 
@@ -391,7 +399,7 @@ fn a_window_that_comes_later_gives_its_colours_to_the_panes_already_open() {
     app.retheme(HostTheme { background: Some(background), ..HostTheme::default() });
 
     assert!(app.projects.terms().all(|term| term.emulator.default_background() == Some(background)));
-    assert_eq!(app.theme.background, Some(background));
+    assert_eq!(app.themes.host().background, Some(background));
 }
 
 mod parents {
@@ -487,7 +495,7 @@ mod parents {
         };
         assert_eq!((under_root, under_child), (Some(root), Some(child)));
 
-        app.close_tab(0, 0, 0);
+        app.close_tab(tab_at(&app, 0, 0, 0));
         pump_until(&mut app, &rx, "the parent's tab closes", |a| a.projects.pane_by(ids[0]).is_none());
         assert_eq!(saved_parents(&app.state()), [(Some(ids[1]), None), (None, Some(ids[1]))]);
     }

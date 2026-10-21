@@ -59,6 +59,7 @@ use crate::project::search::Finder;
 use crate::project::search::{Goto, Kind};
 use crate::project::split::{self};
 use crate::project::{Phase, Workspace};
+use crate::project::{Tab, TabAt, WorkspaceAt};
 use crate::settings::{Settings, Status};
 use crate::state;
 use crate::state::{PaneState, TabState, WorkspaceState};
@@ -106,13 +107,20 @@ fn drag(app: &mut App, from: Position, to: Position) {
     mouse(app, MouseEventKind::Up(MouseButton::Left), to);
 }
 
+fn hold(app: &mut App, from: Instant, steps: u32) -> Instant {
+    for step in 1..=steps {
+        app.refresh(from + LINES_SCROLL_EVERY * step);
+    }
+    from + LINES_SCROLL_EVERY * steps
+}
+
 fn panel_area(app: &App) -> Rect {
     app.layout(AREA).changes
 }
 
 fn fake_shortcut<B: Into<Vec<u8>>>(app: &mut App, routes: Vec<(&'static str, u16, B)>) -> crate::test_util::FakeHttp {
     let server = crate::test_util::FakeHttp::start(routes);
-    app.issues.apis.shortcut = format!("{}/api/v3", server.url());
+    app.issues.api_at(Source::Shortcut, &format!("{}/api/v3", server.url()));
     server
 }
 
@@ -154,7 +162,7 @@ fn new_app(config_path: PathBuf) -> (App, Receiver<AppEvent>) {
     let mut app = App::new("/bin/sh".into(), HostTheme::default(), config_path, tx);
     app.config.sidebar = config::Sidebar::SideBySide.id().into();
     app.config.sound = false;
-    app.typing_holds = Duration::ZERO;
+    app.clients.set_typing_holds(Duration::ZERO);
     app.set_default_homes(&std::env::temp_dir().join("cornercase-test-no-default-homes"));
     if app.config.gh == config::DEFAULT_GH {
         app.config.gh = "/nonexistent/gh".into();
@@ -206,6 +214,14 @@ fn shop_with_topic_worktree() -> (TempDir, TempDir) {
     (shop, worktree)
 }
 
+fn workspace_at(app: &App, p: usize, w: usize) -> WorkspaceAt {
+    app.projects.workspace_at(p, w).expect("the workspace")
+}
+
+fn tab_at(app: &App, p: usize, w: usize, t: usize) -> TabAt {
+    app.projects.tab_at(p, w, t).expect("the tab")
+}
+
 fn term(app: &App, p: usize) -> &Term {
     app.projects[p].workspace().and_then(Workspace::tab).and_then(Tab::pane).expect("the project has a pane")
 }
@@ -228,7 +244,7 @@ fn overlay_shown(app: &App, area: Rect) -> ui::Overlay {
 }
 
 fn toast(app: &App) -> Option<&str> {
-    app.toast.as_ref().map(|t| t.message.as_str())
+    app.messages.toast.as_ref().map(|t| t.message.as_str())
 }
 
 fn screen(app: &mut App) -> String {
@@ -301,6 +317,13 @@ fn press(app: &mut App, pos: Position) {
     mouse_down(app, MouseButton::Left, pos);
 }
 
+fn right_click_first_agent(app: &mut App) {
+    app.config.agents_section = true;
+    let a = app.layout(AREA);
+    let row = ui::agent_row(a.agents_list, a.pitch, app.agent_places().len(), app.scroll.of(List::Agents), 0);
+    right_click(app, Position::new(row.x + 4, row.y));
+}
+
 fn right_click(app: &mut App, pos: Position) {
     mouse_down(app, MouseButton::Right, pos);
     mouse(app, MouseEventKind::Up(MouseButton::Right), pos);
@@ -330,16 +353,16 @@ fn entry_pos() -> Position {
 }
 
 fn sidebar_pos(app: &App, row: SidebarRow) -> Position {
-    let r = ui::entry_row(list(), 1, &app.sidebar_rows(), app.scroll.projects, row);
+    let r = ui::entry_row(list(), 1, &app.sidebar_rows(), app.scroll.of(List::Projects), row);
     Position::new(r.x + 3, r.y)
 }
 
 fn sidebar_close(app: &App, row: SidebarRow) -> Position {
-    ui::close_button(list(), 1, &app.sidebar_rows(), app.scroll.projects, row).as_position()
+    ui::close_button(list(), 1, &app.sidebar_rows(), app.scroll.of(List::Projects), row).as_position()
 }
 
 fn row_rect(app: &App, row: WorkspaceRow) -> Rect {
-    ui::workspace_row(areas().workspaces_list, areas().pitch, &app.tab_lines(), app.scroll.workspaces, row)
+    ui::workspace_row(areas().workspaces_list, areas().pitch, &app.tab_lines(), app.scroll.of(List::Workspaces), row)
 }
 
 fn row_pos(app: &App, row: WorkspaceRow) -> Position {
@@ -414,6 +437,13 @@ fn menu_labels(app: &App) -> Vec<String> {
     app.menu_labels(actions)
 }
 
+fn menu_disabled(app: &App) -> Vec<bool> {
+    match overlay_shown(app, AREA) {
+        ui::Overlay::Menu { disabled, .. } => disabled,
+        _ => panic!("the menu is not shown"),
+    }
+}
+
 fn menu_item_at(app: &App, i: usize) -> Position {
     let Some(Overlay::Menu { at, .. }) = &app.overlay else { panic!("the menu is not open") };
     ui::menu_item(ui::menu_area(AREA, *at, &menu_labels(app)), i).as_position()
@@ -423,6 +453,15 @@ fn pick(app: &mut App, label: &str) {
     let i = menu_labels(app).iter().position(|l| l == label).expect("the menu has the item");
     let pos = menu_item_at(app, i);
     click(app, pos);
+}
+
+fn click_pill(app: &mut App, pane: u64, pill: usize) {
+    let shown = app.tab().expect("a tab").shown(app.layout(AREA).pane);
+    let leaf = shown.into_iter().find_map(|(id, leaf)| (id == pane).then_some(leaf)).expect("the pane is shown");
+    let row = ui::split_footer(leaf, true).1.expect("the pane has a row");
+    let pills = app.pane_pills(app.projects.pane_by(pane).expect("the pane")).pills;
+    let (_, rect, _) = ui::pill_rects(row, &pills).swap_remove(pill);
+    click(app, rect.as_position());
 }
 
 fn plain(projects: usize) -> Vec<SidebarRow> {
@@ -450,13 +489,26 @@ fn with_worktrees_config() -> (TempDir, TempDir, PathBuf) {
     (worktrees, config, config_path)
 }
 
+fn branch_exists(repo: &Path, branch: &str) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")])
+        .status()
+        .expect("run git")
+        .success()
+}
+
 mod account_pills;
+mod account_restart;
 mod accounts;
 mod accounts_page;
 mod agent_status;
 mod click_outside;
+mod close_agent;
 mod compact;
 mod context_menu;
+mod dispatch;
 mod groups;
 mod icon_bar;
 mod keys;
@@ -464,6 +516,7 @@ mod lock_text;
 mod merged_pull_requests;
 mod muted_text;
 mod opening;
+mod pane_footer;
 mod picker;
 mod plugins;
 mod project_settings;
@@ -492,6 +545,7 @@ mod tour;
 mod tree_sidebar;
 mod workspace_folds;
 mod workspaces;
+mod worktrees_dialog;
 
 #[test]
 fn resize_fits_terminals_to_the_pane() {
@@ -515,6 +569,7 @@ mod flows_dialog;
 mod issue_account;
 mod issue_asana;
 mod issue_list;
+mod issue_naming;
 mod path_links;
 mod pull_requests;
 mod queue;

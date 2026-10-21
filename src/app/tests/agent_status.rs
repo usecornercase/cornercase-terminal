@@ -45,13 +45,13 @@ trait StartClaude {
 
 impl StartClaude for FakeClaude {
     fn start_with(&self, app: &mut App, args: &str) {
-        app.agents.claude_dir = Some(self.dir().to_path_buf());
+        app.agents.set_claude_dir(self.dir());
         type_line(app, &self.command_line(args));
     }
 }
 
 fn tick(app: &mut App) {
-    let now = app.agents.watched.map_or_else(Instant::now, |at| at + WATCH_AGENTS_EVERY);
+    let now = app.agents.watched().map_or_else(Instant::now, |at| at + WATCH_AGENTS_EVERY);
     app.watch_agents(now);
 }
 
@@ -111,12 +111,12 @@ fn a_tab_follows_what_claude_says_it_is_doing() {
 #[test]
 fn finishing_out_of_sight_marks_the_tab_done_until_it_is_opened() {
     let (mut app, rx, _dirs, claude) = working_claude();
-    app.add_tab(0, 0, AREA).expect("add a tab");
+    app.add_tab(workspace_at(&app, 0, 0), AREA).expect("add a tab");
     claude.signal("finish");
     watch_until(&mut app, &rx, "claude finishes out of sight", |a| status(a, 0, 0) == Some(Status::Done));
 
     click_row(&mut app, WorkspaceRow::Tab(0, 0));
-    let now = app.agents.watched.expect("watched");
+    let now = app.agents.watched().expect("watched");
     app.watch_agents(now);
 
     assert_eq!(status(&app, 0, 0), Some(Status::Idle));
@@ -125,14 +125,14 @@ fn finishing_out_of_sight_marks_the_tab_done_until_it_is_opened() {
 #[test]
 fn the_compact_menu_hides_the_tab_beneath_it() {
     let (mut app, rx, _dirs, claude) = working_claude();
-    app.nav = Some(ui::Nav::Workspaces);
+    app.screen.nav = Some(ui::Nav::Workspaces);
     claude.signal("finish");
     watch_until(&mut app, &rx, "claude finishes under the menu", |a| status(a, 0, 0) == Some(Status::Done));
     let small = Rect::new(0, 0, 80, 30);
     let bar = text(&render(&mut app, small), Rect::new(0, 1, 7, 1));
 
-    app.nav = None;
-    let now = app.agents.watched.expect("watched");
+    app.screen.nav = None;
+    let now = app.agents.watched().expect("watched");
     app.watch_agents(now);
 
     assert_eq!((bar.as_str(), status(&app, 0, 0)), ("   ≡ ✓ ", Some(Status::Idle)));
@@ -261,7 +261,7 @@ fn concurrent_codex_sessions_in_one_directory_keep_their_own_context_and_cleanup
     let context = |app: &App, t: usize| app.projects[0].workspaces[0].tabs[t].context().cloned();
     type_line(&mut app, &first.command_line());
     watch_until(&mut app, &rx, "first Codex answers", |a| context(a, 0).is_some());
-    app.add_tab(0, 0, AREA).expect("add a concurrent session");
+    app.add_tab(workspace_at(&app, 0, 0), AREA).expect("add a concurrent session");
     type_line(&mut app, &second.command_line());
     watch_until(&mut app, &rx, "wrapper Codex answers", |a| context(a, 1).is_some());
 
@@ -350,6 +350,110 @@ fn opencode_says(app: &mut App, rx: &Receiver<AppEvent>, opencode: &FakeOpencode
     });
 }
 
+fn start_fake(app: &mut App, rx: &Receiver<AppEvent>, command_line: &str, agent: agents::Known) {
+    type_line(app, command_line);
+    pump_until(app, rx, &format!("{} runs", agent.name()), |a| runs(a, agent.name()));
+}
+
+fn start_codex(app: &mut App, rx: &Receiver<AppEvent>) -> Fake {
+    let codex = FakeCodex::new("019a1234-5678-7000-8000-000000000001", "gpt-5.4", false);
+    type_line(app, &codex.command_line());
+    watch_until(app, rx, "codex runs", |a| a.tab().is_some_and(|t| t.context().is_some()));
+    Fake::Codex(codex, app.projects[0].workspaces[0].active)
+}
+
+fn start_copilot(app: &mut App, rx: &Receiver<AppEvent>, tab: usize) -> Fake {
+    let copilot = FakeCopilot::new(&app.projects[0].path);
+    start_fake(app, rx, &copilot.command_line(), agents::Known::Copilot);
+    watch_until(app, rx, "copilot holds its session", |a| {
+        tab_term(a, 0, tab).context.record_for(agents::Known::Copilot).is_some()
+    });
+    Fake::Copilot(copilot, tab)
+}
+
+fn title_shows(app: &mut App, rx: &Receiver<AppEvent>, what: &str, tab: usize, title: &str) {
+    pump_until(app, rx, what, |a| tab_term(a, 0, tab).emulator.title() == title);
+}
+
+fn turn_shows(app: &mut App, rx: &Receiver<AppEvent>, what: &str, tab: usize, wanted: Activity) {
+    watch_until(app, rx, what, |a| tab_term(a, 0, tab).context.activity("") == Some(wanted));
+}
+
+fn wanted_activity(status: &str) -> Activity {
+    match status {
+        "busy" => Activity::Working,
+        "waiting" => Activity::Waiting,
+        _ => Activity::Idle,
+    }
+}
+
+fn report_codex(app: &mut App, rx: &Receiver<AppEvent>, (codex, tab): (&FakeCodex, usize), status: &str) {
+    let (title, event) = match status {
+        "busy" => ("⠴ fix the login | shop", TURN_STARTED),
+        "waiting" => ("[ ! ] Action Required | fix the login | shop", ""),
+        _ => ("fix the login | shop", TURN_COMPLETE),
+    };
+    codex.append(event);
+    codex.signal("title", title);
+    title_shows(app, rx, "codex sets its title", tab, title);
+}
+
+fn report_opencode(app: &mut App, rx: &Receiver<AppEvent>, (opencode, tab): (&FakeOpencode, usize), status: &str) {
+    let messages = if status == "busy" { OPENCODE_WORKING } else { OPENCODE_REPLY };
+    opencode_says(app, rx, opencode, tab, messages);
+}
+
+fn report_gemini(app: &mut App, rx: &Receiver<AppEvent>, (gemini, tab): (&FakeGemini, usize), status: &str) {
+    let title = match status {
+        "busy" => "✦  Working… (project)",
+        "waiting" => "✋  Action Required (project)",
+        _ => "◇  Ready (project)",
+    };
+    gemini.signal(title);
+    title_shows(app, rx, "Gemini sets its title", tab, title);
+}
+
+fn report_cursor(app: &mut App, rx: &Receiver<AppEvent>, (cursor, tab): (&FakeCursor, usize), status: &str) {
+    let title = match status {
+        "busy" => {
+            cursor.turn("fix the login");
+            "Cursor Agent - ⏳ Working ···"
+        }
+        "waiting" => "Cursor Agent - 🔐 Waiting for confirmation",
+        _ => {
+            cursor.reply("done");
+            cursor.end("success");
+            "Cursor Agent - ✅ Ready"
+        }
+    };
+    cursor.title(title);
+    title_shows(app, rx, "cursor sets its title", tab, title);
+}
+
+fn report_copilot(app: &mut App, rx: &Receiver<AppEvent>, (copilot, tab): (&FakeCopilot, usize), status: &str) {
+    match status {
+        "busy" => {
+            copilot.permission(false);
+            copilot.prompt("fix the login");
+            copilot.turn(true);
+            copilot.working(true);
+        }
+        "waiting" => copilot.permission(true),
+        _ => {
+            copilot.permission(false);
+            copilot.reply("done", "gpt-4.1");
+            copilot.turn(false);
+            copilot.working(false);
+        }
+    }
+    turn_shows(app, rx, "copilot's turn shows", tab, wanted_activity(status));
+}
+
+fn report_grok(app: &mut App, rx: &Receiver<AppEvent>, (grok, tab): (&FakeGrok, usize), status: &str) {
+    grok.report(status);
+    turn_shows(app, rx, "grok's turn shows", tab, wanted_activity(status));
+}
+
 struct Watched {
     app: App,
     rx: Receiver<AppEvent>,
@@ -364,147 +468,55 @@ impl Watched {
         watched.run(agent);
         watched.report("busy", 1);
         if hidden {
-            watched.app.add_tab(0, 0, AREA).expect("add a tab");
+            watched.app.add_tab(workspace_at(&watched.app, 0, 0), AREA).expect("add a tab");
         }
         watched
     }
 
     fn run(&mut self, agent: agents::Known) {
         let (app, rx) = (&mut self.app, &self.rx);
+        let tab = app.projects[0].workspaces[0].active;
         let fake = match agent {
-            agents::Known::Codex => {
-                let codex = FakeCodex::new("019a1234-5678-7000-8000-000000000001", "gpt-5.4", false);
-                type_line(app, &codex.command_line());
-                watch_until(app, rx, "codex runs", |a| a.tab().is_some_and(|t| t.context().is_some()));
-                Fake::Codex(codex, app.projects[0].workspaces[0].active)
-            }
+            agents::Known::Codex => start_codex(app, rx),
             agents::Known::Gemini => {
                 let gemini = FakeGemini::new(&app.projects[0].path);
-                type_line(app, &gemini.command_line());
-                pump_until(app, rx, "Gemini runs", |a| runs(a, agents::Known::Gemini.name()));
-                Fake::Gemini(gemini, app.projects[0].workspaces[0].active)
+                start_fake(app, rx, &gemini.command_line(), agents::Known::Gemini);
+                Fake::Gemini(gemini, tab)
             }
-            agents::Known::Opencode => Fake::Opencode(start_opencode(app, rx), app.projects[0].workspaces[0].active),
+            agents::Known::Opencode => Fake::Opencode(start_opencode(app, rx), tab),
             agents::Known::Grok => {
                 let grok = FakeGrok::new(&app.projects[0].path);
-                type_line(app, &grok.command_line());
-                pump_until(app, rx, "grok runs", |a| runs(a, agents::Known::Grok.name()));
-                let pid = app.term().and_then(Term::foreground_pid).expect("the pid of grok");
-                grok.bind(pid);
-                Fake::Grok(grok, app.projects[0].workspaces[0].active)
+                start_fake(app, rx, &grok.command_line(), agents::Known::Grok);
+                grok.bind(app.term().and_then(Term::foreground_pid).expect("the pid of grok"));
+                Fake::Grok(grok, tab)
             }
             agents::Known::Cursor => {
                 let cursor = FakeCursor::new(&app.projects[0].path);
-                type_line(app, &cursor.command_line());
-                pump_until(app, rx, "cursor runs", |a| runs(a, agents::Known::Cursor.name()));
-                Fake::Cursor(cursor, app.projects[0].workspaces[0].active)
+                start_fake(app, rx, &cursor.command_line(), agents::Known::Cursor);
+                Fake::Cursor(cursor, tab)
             }
-            agents::Known::Copilot => {
-                let copilot = FakeCopilot::new(&app.projects[0].path);
-                type_line(app, &copilot.command_line());
-                pump_until(app, rx, "copilot runs", |a| runs(a, agents::Known::Copilot.name()));
-                let tab = app.projects[0].workspaces[0].active;
-                watch_until(app, rx, "copilot holds its session", |a| {
-                    tab_term(a, 0, tab).context.record_for(agents::Known::Copilot).is_some()
-                });
-                Fake::Copilot(copilot, tab)
-            }
+            agents::Known::Copilot => start_copilot(app, rx, tab),
             agents::Known::Claude => {
                 let claude = FakeClaude::running(FakeClaude::SILENT);
                 claude.start(app);
                 pump_until(app, rx, "claude runs", |a| runs(a, agents::Known::Claude.name()));
-                let pid = app.term().and_then(Term::foreground_pid).expect("the pid of claude");
-                Fake::Claude(claude, pid)
+                Fake::Claude(claude, app.term().and_then(Term::foreground_pid).expect("the pid of claude"))
             }
         };
         self.agents.push(fake);
     }
 
     fn report(&mut self, status: &str, ticks: usize) {
+        let (app, rx) = (&mut self.app, &self.rx);
         for fake in &self.agents {
             match fake {
                 Fake::Claude(claude, pid) => claude.report(*pid, status),
-                Fake::Codex(codex, tab) => {
-                    let (title, event) = match status {
-                        "busy" => ("⠴ fix the login | shop", TURN_STARTED),
-                        "waiting" => ("[ ! ] Action Required | fix the login | shop", ""),
-                        _ => ("fix the login | shop", TURN_COMPLETE),
-                    };
-                    codex.append(event);
-                    codex.signal("title", title);
-                    pump_until(&mut self.app, &self.rx, "codex sets its title", |a| {
-                        tab_term(a, 0, *tab).emulator.title() == title
-                    });
-                }
-                Fake::Gemini(gemini, tab) => {
-                    let title = match status {
-                        "busy" => "✦  Working… (project)",
-                        "waiting" => "✋  Action Required (project)",
-                        _ => "◇  Ready (project)",
-                    };
-                    gemini.signal(title);
-                    pump_until(&mut self.app, &self.rx, "Gemini sets its title", |a| {
-                        tab_term(a, 0, *tab).emulator.title() == title
-                    });
-                }
-                Fake::Opencode(opencode, tab) => {
-                    let messages = if status == "busy" { OPENCODE_WORKING } else { OPENCODE_REPLY };
-                    opencode_says(&mut self.app, &self.rx, opencode, *tab, messages);
-                }
-                Fake::Cursor(cursor, tab) => {
-                    let title = match status {
-                        "busy" => {
-                            cursor.turn("fix the login");
-                            "Cursor Agent - ⏳ Working ···"
-                        }
-                        "waiting" => "Cursor Agent - 🔐 Waiting for confirmation",
-                        _ => {
-                            cursor.reply("done");
-                            cursor.end("success");
-                            "Cursor Agent - ✅ Ready"
-                        }
-                    };
-                    cursor.title(title);
-                    pump_until(&mut self.app, &self.rx, "cursor sets its title", |a| {
-                        tab_term(a, 0, *tab).emulator.title() == title
-                    });
-                }
-                Fake::Copilot(copilot, tab) => {
-                    let wanted = match status {
-                        "busy" => {
-                            copilot.permission(false);
-                            copilot.prompt("fix the login");
-                            copilot.turn(true);
-                            copilot.working(true);
-                            Activity::Working
-                        }
-                        "waiting" => {
-                            copilot.permission(true);
-                            Activity::Waiting
-                        }
-                        _ => {
-                            copilot.permission(false);
-                            copilot.reply("done", "gpt-4.1");
-                            copilot.turn(false);
-                            copilot.working(false);
-                            Activity::Idle
-                        }
-                    };
-                    watch_until(&mut self.app, &self.rx, "copilot's turn shows", |a| {
-                        tab_term(a, 0, *tab).context.activity("") == Some(wanted)
-                    });
-                }
-                Fake::Grok(grok, tab) => {
-                    grok.report(status);
-                    let wanted = match status {
-                        "busy" => Activity::Working,
-                        "waiting" => Activity::Waiting,
-                        _ => Activity::Idle,
-                    };
-                    watch_until(&mut self.app, &self.rx, "grok's turn shows", |a| {
-                        tab_term(a, 0, *tab).context.activity("") == Some(wanted)
-                    });
-                }
+                Fake::Codex(codex, tab) => report_codex(app, rx, (codex, *tab), status),
+                Fake::Gemini(gemini, tab) => report_gemini(app, rx, (gemini, *tab), status),
+                Fake::Opencode(opencode, tab) => report_opencode(app, rx, (opencode, *tab), status),
+                Fake::Cursor(cursor, tab) => report_cursor(app, rx, (cursor, *tab), status),
+                Fake::Copilot(copilot, tab) => report_copilot(app, rx, (copilot, *tab), status),
+                Fake::Grok(grok, tab) => report_grok(app, rx, (grok, *tab), status),
             }
         }
         for _ in 0..ticks {
@@ -517,7 +529,7 @@ impl Watched {
     }
 
     fn token(&self) -> Option<String> {
-        self.app.toast.as_ref().and_then(|toast| toast.go.clone())
+        self.app.messages.toast.as_ref().and_then(|toast| toast.go.clone())
     }
 
     fn told(&mut self) -> (Option<String>, Vec<Notification>) {
@@ -663,7 +675,7 @@ fn gemini_context_reaches_both_layouts_and_ambiguity_hides_only_conversation_dat
     fake.append(crate::test_util::fixture!("gemini/0.63.0/reply.jsonl"));
     watch_until(&mut w.app, &w.rx, "Gemini's context shows", |a| a.tab().is_some_and(|t| t.context().is_some()));
     assert!(second_row(&mut w.app).1.contains("1%"));
-    w.app.nav = Some(ui::Nav::Workspaces);
+    w.app.screen.nav = Some(ui::Nav::Workspaces);
     let compact = render(&mut w.app, Rect::new(0, 0, 80, 30));
     let contents: String = compact.backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect();
     assert!(contents.contains("gemini-"));
@@ -790,7 +802,7 @@ fn claude_and_codex_in_one_workspace_each_say_who_needs_you() {
     let mut w = Watched::start(agents::Known::Claude, true);
     w.run(agents::Known::Codex);
     w.report("busy", 1);
-    w.app.add_tab(0, 0, AREA).expect("hide the codex tab");
+    w.app.add_tab(workspace_at(&w.app, 0, 0), AREA).expect("hide the codex tab");
 
     w.report("waiting", 6);
 

@@ -6,8 +6,8 @@ fn project(name: &str, workspaces: usize, group: Option<usize>, status: Option<S
     ProjectEntry { name: name.into(), workspaces, group, status }
 }
 
-fn with_tree() -> View<'static> {
-    let shape = TreeShape {
+fn tree_shape() -> TreeShape {
+    TreeShape {
         groups: vec![false],
         tab_bar: false,
         projects: vec![
@@ -22,35 +22,31 @@ fn with_tree() -> View<'static> {
             },
             ProjectShape { group: Some(0), collapsed: true, workspaces: Vec::new() },
         ],
-    };
+    }
+}
+
+fn tree_workspaces() -> Vec<Vec<WorkspaceEntry>> {
     let details =
         Details { model: Some("Opus 5.5".into()), percent: Some(23), subagents: 0, memory: None, account: None };
     let claude = TabEntry { status: Some(Status::Working), details, ..TabEntry::from("claude") };
     let finished = TabEntry { status: Some(Status::Done), ..TabEntry::from("") };
-    let workspaces = vec![
+    let workspace = |name: &str, tabs: Vec<TabEntry>, behind: u32| WorkspaceEntry {
+        collapsed: false,
+        name: name.into(),
+        tabs,
+        behind,
+        pull: None,
+        removing: false,
+        setting_up: false,
+    };
+    vec![
         Vec::new(),
-        vec![
-            WorkspaceEntry {
-                collapsed: false,
-                name: "main".into(),
-                tabs: vec![claude, "zsh".into()],
-                behind: 0,
-                pull: None,
-                removing: false,
-                setting_up: false,
-            },
-            WorkspaceEntry {
-                collapsed: false,
-                name: "issue-50-reorder".into(),
-                tabs: vec![finished],
-                behind: 2,
-                pull: None,
-                removing: false,
-                setting_up: false,
-            },
-        ],
+        vec![workspace("main", vec![claude, "zsh".into()], 0), workspace("issue-50-reorder", vec![finished], 2)],
         Vec::new(),
-    ];
+    ]
+}
+
+fn with_tree() -> View<'static> {
     View {
         has_project: true,
         issues: true,
@@ -63,7 +59,7 @@ fn with_tree() -> View<'static> {
             project("cornercase", 2, Some(0), Some(Status::Done)),
             project("api", 1, Some(0), Some(Status::Waiting)),
         ],
-        tree: Some(TreeView { shape, workspaces }),
+        tree: Some(TreeView { shape: tree_shape(), workspaces: tree_workspaces() }),
         ..view(&[])
     }
 }

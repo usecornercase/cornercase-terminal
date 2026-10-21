@@ -1,6 +1,7 @@
 use super::*;
 use crate::changes::diff::Status;
 use crate::files::Mark;
+use crate::files::find::Find;
 use crate::state;
 use crate::ui::changes::close;
 use crate::ui::files::{self as panel, Action, Screen};
@@ -73,7 +74,7 @@ fn lines(view: &panel::View) -> Vec<String> {
 
 fn line_pos(app: &App, line: u32) -> Position {
     let view = view(app);
-    let body = panel::parts(panel_area(app)).body;
+    let body = panel::body(panel_area(app), &view);
     let row = panel::row_of(&view, line) - file(app).scroll;
     Position::new(body.x + 2, body.y + u16::try_from(row).expect("the line is on screen"))
 }
@@ -104,7 +105,7 @@ fn the_button_opens_the_tree_beside_the_pane() {
     let (mut app, _rx) = app_in(repo.path(), no_config());
     let before = app.layout(AREA).pane.width;
     open(&mut app);
-    assert_eq!((app.side == Some(Side::Files), app.layout(AREA).pane.width < before), (true, true));
+    assert_eq!((app.screen.side == Some(Side::Files), app.layout(AREA).pane.width < before), (true, true));
 }
 
 #[test]
@@ -114,12 +115,12 @@ fn the_files_todo_and_changes_panels_take_turns() {
     open(&mut app);
     let todo = app.layout(AREA).todo_button.as_position();
     click(&mut app, todo);
-    assert_eq!((app.side == Some(Side::Files), app.side == Some(Side::Todo)), (false, true));
+    assert_eq!((app.screen.side == Some(Side::Files), app.screen.side == Some(Side::Todo)), (false, true));
     open(&mut app);
-    assert_eq!((app.side == Some(Side::Files), app.side == Some(Side::Todo)), (true, false));
+    assert_eq!((app.screen.side == Some(Side::Files), app.screen.side == Some(Side::Todo)), (true, false));
     let changes = ui::changes_button(app.layout(AREA).issues, &app.changes_label().expect("a changes button"));
     click(&mut app, changes.as_position());
-    assert_eq!((app.side == Some(Side::Files), app.side == Some(Side::Changes)), (false, true));
+    assert_eq!((app.screen.side == Some(Side::Files), app.screen.side == Some(Side::Changes)), (false, true));
 }
 
 #[test]
@@ -128,7 +129,7 @@ fn the_compact_bar_has_a_button_too() {
     let repo = repo();
     let (mut app, _rx) = app_in(repo.path(), no_config());
     click_in(&mut app, ui::layout(small, state::Widths::default()).files_button.as_position(), small);
-    assert_eq!(app.side, Some(Side::Files));
+    assert_eq!(app.screen.side, Some(Side::Files));
 }
 
 #[test]
@@ -184,7 +185,7 @@ fn dragging_over_the_numbers_selects_lines_for_the_agent() {
     assert_eq!(file(&app).selection, Some((1, 3)));
     let ask = action_pos(&app, Action::Ask);
     click(&mut app, ask);
-    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("src/main.rs:1-3")));
+    assert_eq!(app.take_host_writes().last(), Some(&clipboard::osc52("src/main.rs:1-3")));
     assert_eq!(toast(&app), Some(NO_AGENT));
 }
 
@@ -205,7 +206,7 @@ fn copy_takes_the_selected_lines() {
     click(&mut app, pos);
     let copy = action_pos(&app, Action::Copy);
     click(&mut app, copy);
-    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("    run();")));
+    assert_eq!(app.take_host_writes().last(), Some(&clipboard::osc52("    run();")));
 }
 
 #[test]
@@ -215,26 +216,22 @@ fn copy_without_a_selection_takes_the_whole_file_as_it_is() {
     show(&mut app, &rx, "src/main.rs");
     let copy = action_pos(&app, Action::Copy);
     click(&mut app, copy);
-    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("fn main() {\n\trun();\n}\n")));
+    assert_eq!(app.take_host_writes().last(), Some(&clipboard::osc52("fn main() {\n\trun();\n}\n")));
     let pos = line_pos(&app, 2);
     click(&mut app, pos);
     click(&mut app, copy);
-    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("\trun();")));
+    assert_eq!(app.take_host_writes().last(), Some(&clipboard::osc52("\trun();")));
 }
 
-fn long_file() -> (TempDir, App, Receiver<AppEvent>) {
-    let source = (1..=200).map(|n| format!("let line_{n} = {n};\n")).collect::<Vec<_>>().concat();
-    let repo = git_repo(&[("src/main.rs", &source)]);
+fn file_with(source: &str) -> (TempDir, App, Receiver<AppEvent>) {
+    let repo = git_repo(&[("src/main.rs", source)]);
     let (mut app, rx) = opened(&repo);
     show(&mut app, &rx, "src/main.rs");
     (repo, app, rx)
 }
 
-fn hold(app: &mut App, from: Instant, steps: u32) -> Instant {
-    for step in 1..=steps {
-        app.refresh(from + LINES_SCROLL_EVERY * step);
-    }
-    from + LINES_SCROLL_EVERY * steps
+fn long_file() -> (TempDir, App, Receiver<AppEvent>) {
+    file_with(&(1..=200).map(|n| format!("let line_{n} = {n};\n")).collect::<Vec<_>>().concat())
 }
 
 #[test]
@@ -274,6 +271,23 @@ fn the_wheel_scrolls_a_selection_without_ending_it() {
     assert_eq!(file(&app).selection, Some((1, 8)));
 }
 
+fn ask_and_copy_from_the_outside_file(app: &mut App, path: &str) -> u64 {
+    assert!(file(app).gutter.is_none());
+    let ask = action_pos(app, Action::Ask);
+    click(app, ask);
+    assert_eq!(app.take_host_writes().last(), Some(&clipboard::osc52(&format!("{path}:1-2"))));
+    let copy = action_pos(app, Action::Copy);
+    click(app, copy);
+    assert_eq!(app.take_host_writes().last(), Some(&clipboard::osc52("# Note\nRead this.")));
+    let workspace = app.project().expect("project").workspace().expect("workspace").id;
+    app.panels.files.viewer_mut(workspace).expect("viewer").selection = None;
+    click(app, copy);
+    assert_eq!(app.take_host_writes().last(), Some(&clipboard::osc52("# Note\nRead this.\n")));
+    click(app, ask);
+    assert_eq!(app.take_host_writes().last(), Some(&clipboard::osc52(path)));
+    workspace
+}
+
 #[test]
 fn an_outside_file_keeps_its_absolute_path_for_actions_and_the_previous_search() {
     let (repo, other) = (repo(), TempDir::new());
@@ -283,26 +297,14 @@ fn an_outside_file_keeps_its_absolute_path_for_actions_and_the_previous_search()
     search(&mut app, &rx, files::Mode::Text, "shop");
     app.open_link(&files::link::Target { path: path.clone(), real: path.clone().into(), lines: Some((1, 2)) });
     settle(&mut app, &rx, "the outside file is read", |v| lines(v) == ["# Note", "Read this."]);
-    assert!(file(&app).gutter.is_none());
-    let ask = action_pos(&app, Action::Ask);
-    click(&mut app, ask);
-    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52(&format!("{path}:1-2"))));
-    let copy = action_pos(&app, Action::Copy);
-    click(&mut app, copy);
-    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("# Note\nRead this.")));
-    let workspace = app.project().expect("project").workspace().expect("workspace").id;
-    app.files.viewer_mut(workspace).expect("viewer").selection = None;
-    click(&mut app, copy);
-    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("# Note\nRead this.\n")));
-    click(&mut app, ask);
-    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52(&path)));
+    let workspace = ask_and_copy_from_the_outside_file(&mut app, &path);
     open(&mut app);
     open(&mut app);
     assert_eq!(file(&app).path, path, "reopening the panel keeps the outside file");
     let back = panel::back(panel_area(&app)).as_position();
     click(&mut app, back);
     assert!(!results(&view(&app)).is_empty(), "back returns to the previous search");
-    assert_eq!(app.files.last(workspace), Some(path.as_str()));
+    assert_eq!(app.panels.files.last(workspace), Some(path.as_str()));
     let field = panel::field(panel_area(&app)).as_position();
     click(&mut app, field);
     send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
@@ -356,7 +358,7 @@ fn a_text_search_opens_the_file_at_the_line() {
     click(&mut app, Position::new(body.x + 4, body.y + u16::try_from(row).expect("on screen")));
     let opened = file(&app);
     assert_eq!(
-        (opened.path.as_str(), opened.selection, opened.find.as_deref()),
+        (opened.path.as_str(), opened.selection, opened.find.as_ref().map(Find::text)),
         ("src/main.rs", Some((2, 2)), Some("run"))
     );
     let back = panel::back(panel_area(&app)).as_position();
@@ -385,12 +387,15 @@ fn the_search_field_takes_the_keys_until_a_press_outside() {
     let (mut app, rx) = opened(&repo);
     search(&mut app, &rx, files::Mode::Name, "ma");
     assert_eq!(
-        app.files.query(app.project().and_then(Project::workspace).map(|w| w.id).expect("ws")).map(|q| q.text.as_str()),
+        app.panels
+            .files
+            .query(app.project().and_then(Project::workspace).map(|w| w.id).expect("ws"))
+            .map(|q| q.text.as_str()),
         Some("ma")
     );
     click(&mut app, areas().pane.as_position());
     type_text(&mut app, "x");
-    let query = app.files.query(app.project().and_then(Project::workspace).map(|w| w.id).expect("ws"));
+    let query = app.panels.files.query(app.project().and_then(Project::workspace).map(|w| w.id).expect("ws"));
     assert_eq!(query.map(|q| (q.text.as_str(), q.focused)), Some(("ma", false)));
 }
 
@@ -413,7 +418,11 @@ fn the_open_panel_is_saved() {
     let (mut restored, _rx) = empty_app();
     restored.restore(&saved, AREA);
     assert_eq!(
-        (restored.side == Some(Side::Files), restored.side == Some(Side::Todo), restored.side == Some(Side::Changes)),
+        (
+            restored.screen.side == Some(Side::Files),
+            restored.screen.side == Some(Side::Todo),
+            restored.screen.side == Some(Side::Changes)
+        ),
         (true, false, false)
     );
 }
@@ -611,18 +620,18 @@ mod full_screen {
     #[case::dragged(Some(50))]
     fn the_button_brings_back_the_panel_at_its_width(#[case] width: Option<u16>) {
         let (_repo, mut app, _rx) = with_file();
-        app.widths.changes = width;
+        app.screen.widths.changes = width;
         let before = panel_area(&app);
         toggle(&mut app);
         toggle(&mut app);
-        assert_eq!((panel_area(&app), app.widths.changes, file(&app).full_screen), (before, width, false));
+        assert_eq!((panel_area(&app), app.screen.widths.changes, file(&app).full_screen), (before, width, false));
     }
 
     #[test]
     fn scroll_selection_and_highlights_survive_both_ways() {
         let (_repo, mut app, _rx) = with_file();
         let ws = app.projects[0].workspaces[0].id;
-        app.files.open_at(ws, "src/main.rs", (2, 3), Some("run".into()));
+        app.panels.files.open_at(ws, "src/main.rs", (2, 3), Some(Find::new("run", 2, false)));
         let before = file(&app);
         toggle(&mut app);
         let full = file(&app);
@@ -652,10 +661,10 @@ mod full_screen {
     fn the_wheel_scrolls_the_file_anywhere() {
         let (_repo, mut app, _rx) = with_file();
         toggle(&mut app);
-        let projects = app.scroll.projects;
+        let projects = app.scroll.of(List::Projects);
         let at = app.layout(AREA).sidebar.as_position();
         mouse(&mut app, MouseEventKind::ScrollDown, at);
-        assert_eq!((app.scroll.projects, file(&app).full_screen), (projects, true));
+        assert_eq!((app.scroll.of(List::Projects), file(&app).full_screen), (projects, true));
     }
 
     #[test]
@@ -676,7 +685,7 @@ mod full_screen {
     #[test]
     fn open_and_jumps_end_it() {
         let (_repo, mut app, _rx) = with_file();
-        app.editor_env = vec![("VISUAL".into(), "true".into())];
+        app.shells.set_editor("true");
         toggle(&mut app);
         let pos = action_pos(&app, Action::Open);
         click(&mut app, pos);
@@ -691,7 +700,7 @@ mod full_screen {
     fn another_tab_ends_it() {
         let (_repo, mut app, _rx) = with_file();
         toggle(&mut app);
-        app.add_tab(0, 0, AREA).expect("a tab");
+        app.add_tab(workspace_at(&app, 0, 0), AREA).expect("a tab");
         render(&mut app, AREA);
         assert!(!app.file_full_screen());
     }
@@ -699,11 +708,11 @@ mod full_screen {
     #[test]
     fn a_tab_closing_behind_it_ends_it() {
         let (_repo, mut app, rx) = with_file();
-        app.add_tab(0, 0, AREA).expect("a tab");
+        app.add_tab(workspace_at(&app, 0, 0), AREA).expect("a tab");
         render(&mut app, AREA);
         toggle(&mut app);
         let active = app.projects[0].workspaces[0].active;
-        app.close_tab(0, 0, active);
+        app.close_tab(tab_at(&app, 0, 0, active));
         wait_until("the tab is gone", || {
             app.refresh(Instant::now());
             drain(&mut app, &rx);
@@ -740,9 +749,11 @@ mod full_screen {
         let pos = app.layout(small).files_button.as_position();
         click_in(&mut app, pos, small);
         let workspace = app.projects[0].workspaces[0].id;
-        app.files.open_file(workspace, "src/main.rs");
+        app.panels.files.open_file(workspace, "src/main.rs");
         let button = panel::full_screen_button(app.layout(small).changes).as_position();
         click_in(&mut app, button, small);
         assert_eq!(app.layout(small).changes, small);
     }
 }
+
+mod find;

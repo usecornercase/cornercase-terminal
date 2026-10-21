@@ -7,7 +7,7 @@ use super::args::StatusArgs;
 use super::{print_json, print_out};
 use crate::agents::activity;
 use crate::client::{answer, ask};
-use crate::control::{self, PaneRow, PaneRows, ProjectInfo, Report};
+use crate::control::{self, PaneInfo, PaneRow, PaneRows, ProjectInfo, PullRequestInfo, Report, WorkspaceInfo};
 use crate::error::{Error, Result};
 
 pub(super) fn run_status(status: &StatusArgs) -> Result<()> {
@@ -75,85 +75,109 @@ pub(super) fn cell(value: &Value) -> String {
     }
 }
 
+struct Marks {
+    shown: control::Ids,
+    word: &'static str,
+}
+
+impl Marks {
+    fn of(&self, is_shown: bool) -> Vec<&'static str> {
+        if is_shown { vec![self.word] } else { Vec::new() }
+    }
+}
+
 fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo, depth: usize, home: Option<&Path>) {
     let shown = report.view.as_ref().map_or(report.shown, |view| view.shown);
-    let shown_mark = if report.view.is_some() { "view" } else { "shown" };
-    let place = |path: &Path| crate::text::display_path(path, home);
-    let marks = |is_shown: bool| if is_shown { vec![shown_mark] } else { Vec::new() };
-    let parts = [project.name.clone(), place(&project.path)];
-    lines.push(line(depth, "project", project.id, &parts, &marks(shown.project == Some(project.id))));
+    let marks = Marks { shown, word: if report.view.is_some() { "view" } else { "shown" } };
+    let parts = [project.name.clone(), crate::text::display_path(&project.path, home)];
+    lines.push(line(depth, "project", project.id, &parts, &marks.of(shown.project == Some(project.id))));
     for workspace in &project.workspaces {
-        let mut parts = vec![workspace.name.clone(), place(&workspace.path)];
-        parts.extend(workspace.branch.as_ref().map(|branch| format!("branch {branch}")));
-        parts.extend(workspace.worktree.then(|| "worktree".to_string()));
-        parts.extend(workspace.setup.as_deref().map(|state| match state {
-            "running" => "setting up".to_string(),
-            _ => "setup failed".to_string(),
-        }));
-        parts.extend((workspace.behind > 0).then(|| format!("{} behind", workspace.behind)));
-        parts.extend(workspace.changes.filter(|c| c.files > 0).map(|c| {
-            let noun = if c.files == 1 { "file" } else { "files" };
-            format!("{} {noun} changed", c.files)
-        }));
-        parts.extend(workspace.pull_request.as_ref().map(|pull| {
-            let mut said = vec![format!("pull request #{} {}", pull.number, pull.state)];
-            if pull.conflicts {
-                said.push(pull.base.as_ref().map_or("conflicts".to_string(), |base| format!("conflicts with {base}")));
-            }
-            said.extend(pull.checks.as_ref().map(|checks| format!("checks {checks}")));
-            said.join(", ")
-        }));
-        lines.push(line(depth + 1, "workspace", workspace.id, &parts, &marks(shown.workspace == Some(workspace.id))));
+        let parts = workspace_parts(workspace, home);
+        lines.push(line(
+            depth + 1,
+            "workspace",
+            workspace.id,
+            &parts,
+            &marks.of(shown.workspace == Some(workspace.id)),
+        ));
         for tab in &workspace.tabs {
             let parts = [tab.name.clone(), tab.status.clone().unwrap_or_default()];
-            lines.push(line(depth + 2, "tab", tab.id, &parts, &marks(shown.tab == Some(tab.id))));
+            lines.push(line(depth + 2, "tab", tab.id, &parts, &marks.of(shown.tab == Some(tab.id))));
             for pane in &tab.panes {
-                let details = match (&pane.model, pane.context) {
-                    (Some(model), Some(percent)) => format!("{model} · {percent}%"),
-                    (Some(model), None) => model.clone(),
-                    (None, Some(percent)) => format!("{percent}%"),
-                    (None, None) => String::new(),
-                };
-                let subagents = (pane.subagents > 0).then(|| activity::subagents_text(pane.subagents as usize));
-                let held = match pane.held_sends {
-                    0 => None,
-                    1 => Some("1 message held".to_string()),
-                    n => Some(format!("{n} messages held")),
-                };
-                let notes: Vec<String> = subagents
-                    .into_iter()
-                    .chain(held)
-                    .chain(
-                        [
-                            (pane.background_shell, "background shell"),
-                            (pane.dialog, "dialog open"),
-                            (pane.survey, "survey open"),
-                            (pane.resuming, "resuming"),
-                            (pane.draft, "draft"),
-                        ]
-                        .into_iter()
-                        .filter(|(on, _)| *on)
-                        .map(|(_, note)| note.to_string()),
-                    )
-                    .collect();
-                let status = pane.status.clone().unwrap_or_default();
-                let parts = [
-                    pane.program.clone().unwrap_or_else(|| "?".into()),
-                    if notes.is_empty() { status } else { format!("{status} ({})", notes.join(", ")) },
-                    details,
-                    pane.path.as_deref().map(place).unwrap_or_default(),
-                ];
-                let parent = pane.parent.map(|parent| format!("parent {parent}"));
-                let mut marked = marks(shown.pane == Some(pane.id));
-                marked.extend(parent.as_deref());
-                let role = pane.role.as_deref().map(|role| format!("role {role}"));
-                marked.extend(role.as_deref());
-                marked.extend(pane.collapsed.then_some("collapsed"));
-                marked.extend(pane.caller.then_some("you"));
-                lines.push(line(depth + 3, "pane", pane.id, &parts, &marked));
+                lines.push(pane_line(pane, depth + 3, &marks, home));
             }
         }
     }
+}
+
+fn workspace_parts(workspace: &WorkspaceInfo, home: Option<&Path>) -> Vec<String> {
+    let mut parts = vec![workspace.name.clone(), crate::text::display_path(&workspace.path, home)];
+    parts.extend(workspace.branch.as_ref().map(|branch| format!("branch {branch}")));
+    parts.extend(workspace.worktree.then(|| "worktree".to_string()));
+    parts.extend(workspace.setup.as_deref().map(|state| match state {
+        "running" => "setting up".to_string(),
+        _ => "setup failed".to_string(),
+    }));
+    parts.extend((workspace.behind > 0).then(|| format!("{} behind", workspace.behind)));
+    parts.extend(workspace.changes.filter(|c| c.files > 0).map(|c| {
+        let noun = if c.files == 1 { "file" } else { "files" };
+        format!("{} {noun} changed", c.files)
+    }));
+    parts.extend(workspace.pull_request.as_ref().map(pull_request_part));
+    parts
+}
+
+fn pull_request_part(pull: &PullRequestInfo) -> String {
+    let mut said = vec![format!("pull request #{} {}", pull.number, pull.state)];
+    if pull.conflicts {
+        said.push(pull.base.as_ref().map_or("conflicts".to_string(), |base| format!("conflicts with {base}")));
+    }
+    said.extend(pull.checks.as_ref().map(|checks| format!("checks {checks}")));
+    said.join(", ")
+}
+
+fn pane_line(pane: &PaneInfo, depth: usize, marks: &Marks, home: Option<&Path>) -> String {
+    let details = match (&pane.model, pane.context) {
+        (Some(model), Some(percent)) => format!("{model} · {percent}%"),
+        (Some(model), None) => model.clone(),
+        (None, Some(percent)) => format!("{percent}%"),
+        (None, None) => String::new(),
+    };
+    let notes = pane_notes(pane);
+    let status = pane.status.clone().unwrap_or_default();
+    let parts = [
+        pane.program.clone().unwrap_or_else(|| "?".into()),
+        if notes.is_empty() { status } else { format!("{status} ({})", notes.join(", ")) },
+        details,
+        pane.path.as_deref().map(|path| crate::text::display_path(path, home)).unwrap_or_default(),
+    ];
+    let parent = pane.parent.map(|parent| format!("parent {parent}"));
+    let mut marked = marks.of(marks.shown.pane == Some(pane.id));
+    marked.extend(parent.as_deref());
+    let role = pane.role.as_deref().map(|role| format!("role {role}"));
+    marked.extend(role.as_deref());
+    marked.extend(pane.collapsed.then_some("collapsed"));
+    marked.extend(pane.caller.then_some("you"));
+    line(depth, "pane", pane.id, &parts, &marked)
+}
+
+fn pane_notes(pane: &PaneInfo) -> Vec<String> {
+    let subagents = (pane.subagents > 0).then(|| activity::subagents_text(pane.subagents as usize));
+    let held = match pane.held_sends {
+        0 => None,
+        1 => Some("1 message held".to_string()),
+        n => Some(format!("{n} messages held")),
+    };
+    let flags = [
+        (pane.background_shell, "background shell"),
+        (pane.dialog, "dialog open"),
+        (pane.survey, "survey open"),
+        (pane.resuming, "resuming"),
+        (pane.draft, "draft"),
+        (pane.account_restart.as_deref() == Some("waiting"), "restarts after this turn"),
+    ];
+    let flagged = flags.into_iter().filter(|(on, _)| *on).map(|(_, note)| note.to_string());
+    subagents.into_iter().chain(held).chain(flagged).collect()
 }
 
 fn line(depth: usize, kind: &str, id: u64, parts: &[String], marks: &[&str]) -> String {

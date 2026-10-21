@@ -242,21 +242,20 @@ impl Session {
 
     fn follow_transcript(&mut self) {
         let Some(path) = self.transcript.clone() else { return };
-        match self.tail.read(&path) {
-            Ok(batch) => {
-                if batch.reset {
-                    self.turn_open = false;
-                }
-                for line in batch.bytes.split(|b| *b == b'\n') {
-                    let Ok(entry) = serde_json::from_slice::<Value>(line) else { continue };
-                    if entry["type"] == "turn_ended" {
-                        self.turn_open = false;
-                    } else if entry["role"] == "user" {
-                        self.turn_open = true;
-                    }
-                }
+        let Ok(batch) = self.tail.read(&path) else {
+            self.turn_open = false;
+            return;
+        };
+        if batch.reset {
+            self.turn_open = false;
+        }
+        for line in batch.bytes.split(|b| *b == b'\n') {
+            let Ok(entry) = serde_json::from_slice::<Value>(line) else { continue };
+            if entry["type"] == "turn_ended" {
+                self.turn_open = false;
+            } else if entry["role"] == "user" {
+                self.turn_open = true;
             }
-            Err(_) => self.turn_open = false,
         }
     }
 }

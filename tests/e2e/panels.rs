@@ -26,9 +26,8 @@ fn a_todo_typed_in_the_panel_is_saved_next_to_the_session() {
     app.session.wait_for_file("todos.json", "the item is saved", |saved| saved.contains("buy milk"));
 }
 
-#[test]
-fn the_changes_panel_shows_what_changed_in_the_repo() {
-    let repo = std::env::temp_dir().join(format!("ccch-{}", std::process::id()));
+fn edited_repo(prefix: &str) -> (PathBuf, String) {
+    let repo = std::env::temp_dir().join(format!("{prefix}-{}", std::process::id()));
     std::fs::create_dir_all(&repo).expect("create repo dir");
     let repo_name = repo.file_name().and_then(|n| n.to_str()).expect("repo name").to_string();
     git(&repo, &["init", "--quiet"]);
@@ -36,6 +35,12 @@ fn the_changes_panel_shows_what_changed_in_the_repo() {
     git(&repo, &["add", "notes.txt"]);
     git(&repo, &["commit", "--quiet", "-m", "init"]);
     std::fs::write(repo.join("notes.txt"), "one\nTWO\n").expect("edit file");
+    (repo, repo_name)
+}
+
+#[test]
+fn the_changes_panel_shows_what_changed_in_the_repo() {
+    let (repo, repo_name) = edited_repo("ccch");
     let mut app = Harness::start();
     app.open_project(1, &repo);
     app.wait_for("the repo opens as project 2", |s| s.contains(&entry(&repo_name)));
@@ -49,19 +54,17 @@ fn the_changes_panel_shows_what_changed_in_the_repo() {
     let _ = std::fs::remove_dir_all(&repo);
 }
 
-#[test]
-fn scripts_see_the_changes_of_a_workspace() {
-    let repo = std::env::temp_dir().join(format!("ccsc-{}", std::process::id()));
-    std::fs::create_dir_all(&repo).expect("create repo dir");
-    let repo_name = repo.file_name().and_then(|n| n.to_str()).expect("repo name").to_string();
-    git(&repo, &["init", "--quiet"]);
-    std::fs::write(repo.join("notes.txt"), "one\ntwo\n").expect("write file");
-    git(&repo, &["add", "notes.txt"]);
-    git(&repo, &["commit", "--quiet", "-m", "init"]);
-    std::fs::write(repo.join("notes.txt"), "one\nTWO\n").expect("edit file");
+fn opened_repo(prefix: &str) -> (PathBuf, Harness) {
+    let (repo, repo_name) = edited_repo(prefix);
     let mut app = Harness::start();
     app.open_project(1, &repo);
     app.wait_for("the repo opens as project 2", |s| s.contains(&entry(&repo_name)));
+    (repo, app)
+}
+
+#[test]
+fn scripts_see_the_changes_of_a_workspace() {
+    let (repo, app) = opened_repo("ccsc");
 
     let list = app.session.says(&["changes", "list", "--json"]);
     let summary: serde_json::Value = serde_json::from_str(&list).expect("a summary");
@@ -69,6 +72,49 @@ fn scripts_see_the_changes_of_a_workspace() {
 
     assert_eq!(summary["workspaces"][0]["files"][0]["path"], "notes.txt", "{list}");
     assert!(diff.contains("-two") && diff.contains("+TWO"), "{diff}");
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+#[test]
+fn scripts_discard_a_file_only_when_told_to() {
+    let (repo, app) = opened_repo("ccdc");
+
+    let asked = app.session.cli(&["changes", "discard", "notes.txt"]);
+    assert_eq!(asked.status.code(), Some(1), "{asked:?}");
+    assert!(String::from_utf8_lossy(&asked.stderr).contains("pass --yes"), "{asked:?}");
+    assert_eq!(std::fs::read_to_string(repo.join("notes.txt")).expect("read"), "one\nTWO\n");
+    let done = app.session.says(&["changes", "discard", "notes.txt", "--yes"]);
+
+    assert_eq!(done, "discarded the changes to notes.txt");
+    assert_eq!(std::fs::read_to_string(repo.join("notes.txt")).expect("read"), "one\ntwo\n");
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+fn git_status(repo: &std::path::Path) -> String {
+    let out = std::process::Command::new("git").arg("-C").arg(repo).args(["status", "--porcelain"]).output();
+    String::from_utf8_lossy(&out.expect("git").stdout).into_owned()
+}
+
+#[test]
+fn scripts_stage_and_unstage_a_file() {
+    let (repo, app) = opened_repo("ccst");
+
+    let staged = app.session.says(&["changes", "stage", "notes.txt"]);
+    assert_eq!(staged, "staged notes.txt");
+    assert_eq!(git_status(&repo), "M  notes.txt\n");
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let listed = app.session.says(&["changes", "list"]);
+        if listed.contains("staged") {
+            break;
+        }
+        assert!(Instant::now() < deadline, "the list never showed the file as staged: {listed}");
+        thread::sleep(Duration::from_millis(100));
+    }
+    let unstaged = app.session.says(&["changes", "unstage", "notes.txt"]);
+
+    assert_eq!(unstaged, "unstaged notes.txt");
+    assert_eq!(git_status(&repo), " M notes.txt\n");
     let _ = std::fs::remove_dir_all(&repo);
 }
 

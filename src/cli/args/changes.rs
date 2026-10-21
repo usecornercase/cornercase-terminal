@@ -112,4 +112,27 @@ pub(crate) enum ChangesAction {
         #[command(flatten)]
         mode: ModeFlag,
     },
+    #[command(about = "Throw away a file's uncommitted changes, after asking")]
+    Discard {
+        #[arg(value_name = "PATH", help = "The file, relative to the workspace")]
+        path: String,
+        #[command(flatten)]
+        place: Where,
+        #[arg(short, long, help = "Discard without asking")]
+        yes: bool,
+    },
+    #[command(about = "Put a file's changes in git's index, as `git add` does")]
+    Stage {
+        #[arg(value_name = "PATH", help = "The file, relative to the workspace")]
+        path: String,
+        #[command(flatten)]
+        place: Where,
+    },
+    #[command(about = "Take a file's changes out of git's index; the file keeps them")]
+    Unstage {
+        #[arg(value_name = "PATH", help = "The file, relative to the workspace")]
+        path: String,
+        #[command(flatten)]
+        place: Where,
+    },
 }

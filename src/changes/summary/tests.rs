@@ -4,7 +4,7 @@ use super::*;
 use crate::changes::{Checkout, Mode, Panel, Scope};
 use crate::test_util::{TempDir, git, git_repo};
 
-fn request(dir: &std::path::Path, paths: &[&str]) -> Request {
+fn request(dir: &Path, paths: &[&str]) -> Request {
     Request {
         dir: dir.to_path_buf(),
         mode: Mode::Uncommitted,
@@ -66,7 +66,9 @@ fn folded_counts_match_the_project_diff(#[case] change: &str) {
     let counts = |diff: &Diff| {
         diff.files
             .iter()
-            .map(|f| (f.path.clone(), f.old_path.clone(), f.status, f.added, f.removed, f.fold, f.viewed_digest))
+            .map(|f| {
+                (f.path.clone(), f.old_path.clone(), f.status, f.added, f.removed, f.fold, f.viewed_digest, f.staged)
+            })
             .collect::<Vec<_>>()
     };
     assert_eq!(counts(&summary), counts(&full));

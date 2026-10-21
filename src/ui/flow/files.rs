@@ -38,15 +38,15 @@ pub(super) fn hit(area: Rect, files: &Files, top: u16, scroll: u16, pos: Positio
     (index < files.rows.len()).then_some(Hit::File(index))
 }
 
-pub(super) fn draw(
-    buf: &mut Buffer,
-    area: Rect,
-    files: &Files,
-    (top, scroll): (u16, u16),
-    muted: Color,
-    light: bool,
-    hover: Option<Position>,
-) {
+#[derive(Clone, Copy)]
+pub(super) struct Look {
+    pub(super) muted: Color,
+    pub(super) light: bool,
+    pub(super) hover: Option<Position>,
+}
+
+pub(super) fn draw(buf: &mut Buffer, area: Rect, files: &Files, (top, scroll): (u16, u16), look: Look) {
+    let Look { muted, light, hover } = look;
     let at = |row: u16| {
         let content = top.saturating_add(row);
         let y = content.checked_sub(scroll)?;
@@ -54,13 +54,13 @@ pub(super) fn draw(
     };
     if let Some(y) = at(1) {
         let count = if files.more { format!("{}+", files.rows.len()) } else { files.rows.len().to_string() };
-        put(buf, area.x, y, TITLE, Style::default().add_modifier(Modifier::BOLD), area.right());
+        put(buf, (area.x, y), TITLE, Style::default().add_modifier(Modifier::BOLD), area.right());
         let after = area.x + u16::try_from(text::cells(TITLE)).unwrap_or(0);
-        put(buf, after, y, &format!(" · {count}"), dim(muted), area.right());
+        put(buf, (after, y), &format!(" · {count}"), dim(muted), area.right());
     }
     if files.rows.is_empty() {
         if let Some(y) = at(LEAD) {
-            put(buf, area.x, y, EMPTY, dim(muted), area.right());
+            put(buf, (area.x, y), EMPTY, dim(muted), area.right());
         }
         return;
     }
@@ -72,7 +72,7 @@ pub(super) fn draw(
         }
         let age = u16::try_from(text::cells(&row.age)).unwrap_or(0).min(area.width);
         let room = usize::from(area.width.saturating_sub(age.saturating_add(1)));
-        put(buf, area.x, y, &text::truncate_cells(&row.name, room), Style::default(), area.right());
-        put(buf, area.right() - age, y, &row.age, dim(muted), area.right());
+        put(buf, (area.x, y), &text::truncate_cells(&row.name, room), Style::default(), area.right());
+        put(buf, (area.right() - age, y), &row.age, dim(muted), area.right());
     }
 }

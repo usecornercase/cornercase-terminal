@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-full files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
+CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
 
 pane_in() {
   cc status --json | node -e '
@@ -192,6 +192,20 @@ screen_sidebar_agents() {
   cc_shot sidebar-agents
 }
 
+screen_close_agent() {
+  agents_knobs
+  cc_s1_at 110 44
+  cc_wait 'Sonnet 5.5'
+  cc_wheel 'feat/dark-mode' down 1
+  cc_wait '│   gpt-5.4 · 20%'
+  cc_hover 'web-shop › feat/dark'
+  cc_wait '×'
+  cc_click '×'
+  cc_wait 'Close agent'
+  cc_wait ' close and remove '
+  cc_shot close-agent
+}
+
 screen_agent_failed() {
   agents_knobs
   CC_BLOG_COMMAND='CC_AGENT_STATE=failed CC_AGENT_PERCENT=2 CC_AGENT_MODEL=claude-sonnet-5-5 claude'
@@ -328,6 +342,31 @@ screen_remove_workspace() {
   cc_shot remove-workspace
 }
 
+worktrees_open() {
+  cc_s1
+  cc_rclick 'web-shop'
+  cc_click 'worktrees'
+  cc_wait 'Worktrees › web-shop'
+  cc_wait 'feat/gift-cards'
+  cc_hover '╭─ Worktrees'
+}
+
+screen_worktrees() {
+  worktrees_open
+  cc_shot worktrees
+}
+
+screen_worktrees_confirm() {
+  worktrees_open
+  cc_click '○' 0 1
+  cc_click '○' 0 1
+  cc_wait ' remove 2 '
+  cc_click ' remove 2 '
+  cc_wait ' also delete the branch '
+  cc_hover '╭─ Worktrees'
+  cc_shot worktrees-confirm
+}
+
 pulls_shown() {
   touch "$CC_DATA/gh/pulls"
   cc_s1
@@ -421,11 +460,22 @@ screen_issue_agent_picker() {
   cc_shot issue-agent-picker
 }
 
+screen_issue_names() {
+  open_issue_482
+  cc_click 'start   schedule   start a flow'
+  cc_wait 'aider'
+  cc_click 'claude    claude'
+  cc_wait '› workspace #482'
+  cc_shot issue-names
+}
+
 screen_issue_started() {
   open_issue_482
   cc_click 'start   schedule   start a flow'
   cc_wait 'aider'
   cc_click 'claude    claude'
+  cc_wait '› workspace #482'
+  cc_keys Enter
   cc_wait '> https://github.com/acme/web-shop/issues/482' 40
   cc_wait_status 'claude  idle  Opus 5.5 · 7%'
   cc_wheel 'feat/dark-mode' down 3
@@ -558,6 +608,29 @@ screen_changes_every() {
   cc_shot changes-every
 }
 
+screen_changes_discard() {
+  changes_open
+  cc_hover 'address.rs' 0 1 95
+  cc_click '↺' 0 1 95
+  cc_wait 'Discard changes'
+  cc_shot changes-discard
+}
+
+screen_changes_stage() {
+  changes_open
+  cc_hover 'mod.rs' 0 1 95
+  cc_click '+  ✓' 0 1 95
+  i=0
+  while ! cc changes list --json 2>/dev/null | grep -qE '"staged": ?"yes"'; do
+    i=$((i + 1))
+    [ "$i" -lt 100 ] || { echo "capture: nothing was staged"; cc_text; exit 1; }
+    sleep 0.2
+  done
+  cc_hover 'address.rs' 0 1 95
+  cc_wait '↺'
+  cc_shot changes-stage
+}
+
 files_open() {
   cc_s2_shell
   cc_click 'Files' 0 -1
@@ -600,6 +673,19 @@ screen_files_full() {
   cc_wait '❐'
   cc_hover 'lines 11-12'
   cc_shot files-full
+}
+
+screen_files_find() {
+  files_open
+  cc_click 'address.rs' 0 1 95
+  cc_wait 'first_line'
+  cc_click '⌕' 0 1 95
+  cc_type line
+  cc_wait '1/3'
+  cc_keys Down
+  cc_wait '2/3'
+  cc_hover 'Workspaces'
+  cc_shot files-find
 }
 
 screen_files_search() {
@@ -793,9 +879,11 @@ screen_account_pills() {
   accounts_knobs
   cc_s1
   accounts_add
+  cc_click 'Opus 5.5 · work'
+  cc_wait 'esc to interrupt'
   cc_click ' claude: work ▾'
   cc_wait 'manage accounts'
-  cc_hover 'manage accounts'
+  cc_hover '  personal'
   cc_shot account-pills
 }
 
@@ -803,9 +891,7 @@ screen_tab_account() {
   accounts_knobs
   cc_s1
   accounts_add
-  cc account use claude personal >/dev/null
-  cc_wait ' claude: personal ▾'
-  cc new-tab --workspace "$(ws_in feat-dark-mode)" -- CC_AGENT_STATE=busy CC_AGENT_TASK=dark CC_AGENT_PERCENT=12 claude >/dev/null
+  cc new-tab --workspace "$(ws_in feat-dark-mode)" --account claude=personal -- CC_AGENT_STATE=busy CC_AGENT_TASK=dark CC_AGENT_PERCENT=12 claude >/dev/null
   cc_click 'feat/dark-mode'
   cc_wait '· personal · 12%'
   cc_hover 'Workspaces'

@@ -13,93 +13,73 @@ use crate::git;
 use crate::issues::browser::{Place, Screen, Tab};
 use crate::issues::{self, Issue};
 use crate::list::{COMBO_ROWS, Combo};
-use crate::project::Hierarchy;
+use crate::project::{Hierarchy, Project, Workspace};
 use crate::queue;
-use crate::queue::form::{Choice, Control, Form, Step, When};
+use crate::queue::form::{Choice, Choices, Control, Form, Step, When};
 use crate::todo::editor::Editor;
 use crate::ui;
 
 impl App {
     pub(super) fn new_queue_form(&mut self, id: Option<u64>) {
-        let entry = id.and_then(|id| self.queued.queue.entry(id)).cloned();
+        let entry = id.and_then(|id| self.panels.queued.queue().entry(id)).cloned();
         let places = self.queue_places();
-        let matching: Vec<usize> = entry
-            .as_ref()
-            .map(|entry| {
-                places
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, choice)| {
-                        if entry.task.place.server == crate::control::server_token()
-                            && entry.task.place.workspace_id.is_some()
-                        {
-                            choice.place.workspace_id == entry.task.place.workspace_id
-                        } else {
-                            choice.place.project == entry.task.place.project
-                                && choice.place.workspace == entry.task.place.workspace
-                                && choice.place.workspace_name == entry.task.place.workspace_name
-                        }
-                    })
-                    .map(|(i, _)| i)
-                    .collect()
-            })
-            .unwrap_or_default();
-        let place = matching
-            .first()
-            .copied()
-            .or_else(|| {
-                self.project().and_then(|project| {
-                    places.iter().position(|choice| {
-                        choice.place.project == project.path
-                            && choice.place.workspace_id == project.workspace().map(|workspace| workspace.id)
-                    })
-                })
-            })
-            .unwrap_or_default();
+        let matching = matching_places(&places, entry.as_ref());
+        let place = self.current_place(&places, &matching);
         let confirmed = if entry.is_some() { matching.len() == 1 } else { !places.is_empty() };
         let kinds = self.queue_kinds(entry.as_ref());
         let agent = entry
             .as_ref()
             .and_then(|entry| kinds.iter().position(|kind| *kind == entry.task.agent))
             .unwrap_or_default();
-        let zone = entry.as_ref().map_or_else(
-            || if self.queued.zone.is_empty() { queue::clock::local_zone() } else { self.queued.zone.clone() },
-            |entry| entry.task.zone.clone(),
-        );
+        let zone = self.queue_zone(entry.as_ref());
         let at = entry.as_ref().map_or_else(crate::time::now, |entry| entry.task.at);
         let shown = queue::clock::display(at, &zone);
         let (date, clock) = shown.split_once(' ').unwrap_or((&shown, "09:00"));
-        let mut form = Form::new(places, confirmed.then_some(place), kinds, agent, zone.clone(), date);
+        let choices = Choices { places, place: confirmed.then_some(place), kinds, agent };
+        let mut form = Form::new(choices, zone, date);
         if let Some(entry) = &entry {
-            form.id = id;
-            form.label = (entry.task.label != entry.task.prompt.lines().next().unwrap_or_default())
-                .then(|| entry.task.label.clone());
-            form.prompt = Editor::new(&entry.task.prompt);
-            form.when = When::On.combo();
-            form.clock = Editor::new(clock);
-            form.open_in.choose(usize::from(entry.task.place.branch.is_some()));
-            form.branch = Editor::new(entry.task.place.branch.as_deref().unwrap_or_default());
+            fill_from_entry(&mut form, entry, id, clock);
         }
-        self.queued.back = match self.overlay.take() {
-            Some(Overlay::Issues(browser)) => Some(browser),
-            other => {
-                self.overlay = other;
-                None
-            }
-        };
+        self.stash_browser();
         self.overlay = Some(Overlay::Queue(Box::new(form)));
         self.queue_modes();
         self.queue_accounts(entry.as_ref().map(|entry| &entry.task.accounts));
         if let Some(Overlay::Queue(form)) = &mut self.overlay
             && let Some(mode) = entry.as_ref().and_then(|entry| entry.task.mode.as_ref())
         {
-            let mut modes = form.mode.options().to_vec();
-            let chosen = modes.iter().position(|name| name == mode).unwrap_or_else(|| {
-                modes.push(mode.clone());
-                modes.len() - 1
-            });
-            form.mode = Combo::new(modes, Some(chosen));
+            keep_mode(form, mode);
         }
+    }
+
+    fn current_place(&self, places: &[Choice], matching: &[usize]) -> usize {
+        if let Some(&first) = matching.first() {
+            return first;
+        }
+        let Some(project) = self.project() else { return 0 };
+        let workspace = project.workspace().map(|workspace| workspace.id);
+        places
+            .iter()
+            .position(|choice| choice.place.project == project.path && choice.place.workspace_id == workspace)
+            .unwrap_or_default()
+    }
+
+    fn queue_zone(&self, entry: Option<&queue::Entry>) -> String {
+        match entry {
+            Some(entry) => entry.task.zone.clone(),
+            None if self.panels.queued.zone().is_empty() => queue::clock::local_zone(),
+            None => self.panels.queued.zone().to_string(),
+        }
+    }
+
+    fn stash_browser(&mut self) {
+        let back = match self.overlay.take() {
+            Some(Overlay::Issues(browser)) => Some(browser),
+            other => {
+                self.overlay = other;
+                None
+            }
+        };
+        self.panels.queued.keep_browser(back);
     }
 
     fn queue_kinds(&self, entry: Option<&queue::Entry>) -> Vec<String> {
@@ -127,32 +107,32 @@ impl App {
                 },
                 worktree: git::is_repo_root(&project.path),
             });
-            for workspace in project.workspaces.iter().filter(|workspace| workspace.open()) {
-                places.push(Choice {
-                    label: if project
-                        .workspaces
-                        .iter()
-                        .filter(|other| other.open() && other.label() == workspace.label())
-                        .count()
-                        > 1
-                    {
-                        format!("{} › {} (workspace {})", self.project_label(project), workspace.label(), workspace.id)
-                    } else {
-                        format!("{} › {}", self.project_label(project), workspace.label())
-                    },
-                    place: queue::Place {
-                        project: project.path.clone(),
-                        workspace: Some(workspace.path.clone()),
-                        workspace_name: workspace.name.clone(),
-                        workspace_id: Some(workspace.id),
-                        server: crate::control::server_token().into(),
-                        branch: None,
-                    },
-                    worktree: false,
-                });
-            }
+            let open = project.workspaces.iter().filter(|workspace| workspace.open());
+            places.extend(open.map(|workspace| self.workspace_choice(project, workspace)));
         }
         places
+    }
+
+    fn workspace_choice(&self, project: &Project, workspace: &Workspace) -> Choice {
+        let twins =
+            project.workspaces.iter().filter(|other| other.open() && other.label() == workspace.label()).count();
+        let label = if twins > 1 {
+            format!("{} › {} (workspace {})", self.project_label(project), workspace.label(), workspace.id)
+        } else {
+            format!("{} › {}", self.project_label(project), workspace.label())
+        };
+        Choice {
+            label,
+            place: queue::Place {
+                project: project.path.clone(),
+                workspace: Some(workspace.path.clone()),
+                workspace_name: workspace.name.clone(),
+                workspace_id: Some(workspace.id),
+                server: crate::control::server_token().into(),
+                branch: None,
+            },
+            worktree: false,
+        }
     }
 
     pub(super) fn schedule_issue(&mut self, issue: &Issue, agent: &str, place: Option<Place>) {
@@ -160,7 +140,7 @@ impl App {
             Some(Overlay::Issues(browser)) => Some(browser.project),
             _ => None,
         });
-        let branch = issues::branch(issue);
+        let branch = project.map_or_else(|| issues::branch(issue), |project| self.issue_branch(issue, project));
         let prompt = issues::prompt(&self.config.prompt, issue, &branch);
         let chosen = self.chosen_accounts();
         self.new_queue_form(None);
@@ -173,11 +153,8 @@ impl App {
                 form.agent.choose(i);
             }
             let path = project.and_then(|id| self.projects.project_index(id)).map(|p| &self.projects[p].path);
-            let workspace = place
-                .as_ref()
-                .and_then(|place| place.workspace)
-                .and_then(|id| self.projects.workspace_index(id))
-                .map(|(p, w)| &self.projects[p].workspaces[w]);
+            let workspace =
+                place.as_ref().and_then(|place| place.workspace).and_then(|id| self.projects.workspace_by(id));
             let found = form.places.iter().position(|choice| {
                 Some(&choice.place.project) == path
                     && choice.place.workspace_id == workspace.map(|workspace| workspace.id)
@@ -249,10 +226,7 @@ impl App {
             return;
         }
         if let Some(delta) = super::input::wheel(event.kind) {
-            let rows = ui::queue_form::list(area, form).map(ui::combo::rows);
-            if let (Some(open), Some(rows)) = (form.opened(), rows) {
-                form.combo(open).into_iter().for_each(|combo| combo.scroll_by(delta, rows));
-            }
+            wheel_lists(form, delta, area);
             return;
         }
         if event.kind != MouseEventKind::Down(MouseButton::Left) {
@@ -263,28 +237,11 @@ impl App {
             Some(ui::queue_form::Hit::Submit) => self.submit_queue(),
             Some(ui::queue_form::Hit::Close) | None => form.close_lists(),
             Some(ui::queue_form::Hit::Choose(i)) => {
-                let Some(open) = form.opened() else { return };
-                let changed = form.combo(open).is_some_and(|combo| {
-                    let changed = combo.chosen() != Some(i);
-                    combo.choose(i);
-                    changed
-                });
-                if changed {
-                    form.chose(open);
+                if let Some(open) = choose_in_list(form, i) {
                     self.queue_chose(open);
                 }
             }
-            Some(ui::queue_form::Hit::Control(control, row, col)) => {
-                let r = ui::queue_form::text(area, form, control);
-                let opening = form.combo_of(control).is_some_and(|combo| !combo.is_open());
-                form.focus_on(control);
-                if let Some(editor) = form.editor(control) {
-                    let line = ui::queue_form::first_line(editor, r) + row;
-                    editor.place(usize::from(r.width.max(1)), line, col);
-                } else if opening {
-                    form.combo(control).into_iter().for_each(Combo::open);
-                }
-            }
+            Some(ui::queue_form::Hit::Control(control, row, col)) => press_control(form, area, (control, row, col)),
         }
     }
 
@@ -293,53 +250,14 @@ impl App {
         if form.busy {
             return;
         }
-        let Some(place) = form.choice() else {
-            let reason = if form.places.is_empty() {
-                "open a project before scheduling an agent"
-            } else {
-                "choose an open place before scheduling"
-            };
-            self.queue_form_done(Err(reason.into()));
-            return;
-        };
-        let Some(project) =
-            self.projects.iter().find(|project| !project.closing && project.path == place.place.project)
-        else {
-            self.queue_form_done(Err("the selected project closed; choose an open place".into()));
-            return;
-        };
-        let workspace = place.place.workspace.as_ref().and_then(|path| {
-            project.workspaces.iter().find(|workspace| {
-                workspace.open() && workspace.path == *path && Some(workspace.id) == place.place.workspace_id
-            })
-        });
-        if place.place.workspace.is_some() && workspace.is_none() {
-            self.queue_form_done(Err("the selected workspace closed; choose an open place".into()));
-            return;
-        }
-        let agent = form.agent.label().map(str::to_string);
-        let mode = form.mode.label().unwrap_or("default").to_string();
-        let captured_default = mode == "default"
-            && form
-                .id
-                .and_then(|id| self.queued.queue.entry(id))
-                .is_some_and(|entry| agent.as_ref() == Some(&entry.task.agent) && entry.task.mode.is_none());
-        let accounts = self.queue_chosen_accounts(form);
-        let add = QueueAdd {
-            at: form.at(),
-            zone: form.zone.clone(),
-            agent,
-            mode: (!captured_default).then_some(mode),
-            project: Some(project.id),
-            workspace: workspace.map(|workspace| workspace.id),
-            worktree: form.worktree().then(|| form.branch.text()),
-            prompt: Some(form.prompt.text()),
-            label: form.label.clone(),
-            submit: form.id.is_none().then_some(true),
-            accounts,
-            ..QueueAdd::default()
-        };
         let id = form.id;
+        let add = match self.form_target(form) {
+            Ok((project, workspace)) => self.queue_add(form, project, workspace),
+            Err(reason) => {
+                self.queue_form_done(Err(reason.into()));
+                return;
+            }
+        };
         match self.add_queue_request(None, None, id, &add) {
             Ok(Some(value)) => {
                 self.queue_form_done(value["id"].as_u64().ok_or_else(|| "the queue returned no id".into()));
@@ -353,9 +271,56 @@ impl App {
         }
     }
 
+    fn form_target(&self, form: &Form) -> Result<(u64, Option<u64>), &'static str> {
+        let Some(place) = form.choice() else {
+            return Err(if form.places.is_empty() {
+                "open a project before scheduling an agent"
+            } else {
+                "choose an open place before scheduling"
+            });
+        };
+        let Some(project) =
+            self.projects.iter().find(|project| !project.closing && project.path == place.place.project)
+        else {
+            return Err("the selected project closed; choose an open place");
+        };
+        let workspace = place.place.workspace.as_ref().and_then(|path| {
+            let at = self.projects.workspace_in(project.id, place.place.workspace_id?)?;
+            Some(self.projects.workspace(at)).filter(|workspace| workspace.open() && workspace.path == *path)
+        });
+        if place.place.workspace.is_some() && workspace.is_none() {
+            return Err("the selected workspace closed; choose an open place");
+        }
+        Ok((project.id, workspace.map(|workspace| workspace.id)))
+    }
+
+    fn queue_add(&self, form: &Form, project: u64, workspace: Option<u64>) -> QueueAdd {
+        let agent = form.agent.label().map(str::to_string);
+        let mode = form.mode.label().unwrap_or("default").to_string();
+        let captured_default = mode == "default"
+            && form
+                .id
+                .and_then(|id| self.panels.queued.queue().entry(id))
+                .is_some_and(|entry| agent.as_ref() == Some(&entry.task.agent) && entry.task.mode.is_none());
+        QueueAdd {
+            at: form.at(),
+            zone: form.zone.clone(),
+            agent,
+            mode: (!captured_default).then_some(mode),
+            project: Some(project),
+            workspace,
+            worktree: form.worktree().then(|| form.branch.text()),
+            prompt: Some(form.prompt.text()),
+            label: form.label.clone(),
+            submit: form.id.is_none().then_some(true),
+            accounts: self.queue_chosen_accounts(form),
+            ..QueueAdd::default()
+        }
+    }
+
     fn queue_chosen_accounts(&self, form: &Form) -> BTreeMap<String, String> {
         let Some((kind, name)) = form.chosen_account() else { return BTreeMap::new() };
-        let entry = form.id.and_then(|id| self.queued.queue.entry(id));
+        let entry = form.id.and_then(|id| self.panels.queued.queue().entry(id));
         if entry.is_some_and(|entry| !entry.task.accounts.contains_key(kind)) {
             let active = self.account_choices().and_then(|choices| Some(choices.of(kind)?.active.clone()));
             if active.as_deref() == Some(name) {
@@ -375,20 +340,20 @@ impl App {
                 if form.is_some() {
                     self.close_queue_form(true);
                 }
-                self.toast = Some(Toast::new(format!("scheduled queue entry {id}"), ui::ToastIcon::Check));
+                self.messages.toast = Some(Toast::new(format!("scheduled queue entry {id}"), ui::ToastIcon::Check));
             }
             (Err(reason), Some(form)) => {
                 form.busy = false;
                 form.error = Some(reason);
             }
             (Err(reason), None) => {
-                self.toast = Some(Toast::new(format!("could not schedule: {reason}"), ui::ToastIcon::Bug));
+                self.messages.toast = Some(Toast::new(format!("could not schedule: {reason}"), ui::ToastIcon::Bug));
             }
         }
     }
 
     pub(super) fn close_queue_form(&mut self, scheduled: bool) {
-        self.overlay = self.queued.back.take().map(|mut browser| {
+        self.overlay = self.panels.queued.take_browser().map(|mut browser| {
             browser.scheduling = false;
             if scheduled {
                 browser.screen = Screen::List;
@@ -402,5 +367,74 @@ impl App {
 
     pub(super) fn queue_form_view(form: &Form) -> Box<Form> {
         Box::new(form.clone())
+    }
+}
+
+fn matches_place(choice: &Choice, entry: &queue::Entry) -> bool {
+    let place = &entry.task.place;
+    if place.server == crate::control::server_token() && place.workspace_id.is_some() {
+        choice.place.workspace_id == place.workspace_id
+    } else {
+        choice.place.project == place.project
+            && choice.place.workspace == place.workspace
+            && choice.place.workspace_name == place.workspace_name
+    }
+}
+
+fn matching_places(places: &[Choice], entry: Option<&queue::Entry>) -> Vec<usize> {
+    let Some(entry) = entry else { return Vec::new() };
+    places.iter().enumerate().filter(|(_, choice)| matches_place(choice, entry)).map(|(i, _)| i).collect()
+}
+
+fn fill_from_entry(form: &mut Form, entry: &queue::Entry, id: Option<u64>, clock: &str) {
+    form.id = id;
+    form.label =
+        (entry.task.label != entry.task.prompt.lines().next().unwrap_or_default()).then(|| entry.task.label.clone());
+    form.prompt = Editor::new(&entry.task.prompt);
+    form.when = When::On.combo();
+    form.clock = Editor::new(clock);
+    form.open_in.choose(usize::from(entry.task.place.branch.is_some()));
+    form.branch = Editor::new(entry.task.place.branch.as_deref().unwrap_or_default());
+}
+
+fn keep_mode(form: &mut Form, mode: &String) {
+    let mut modes = form.mode.options().to_vec();
+    let chosen = modes.iter().position(|name| name == mode).unwrap_or_else(|| {
+        modes.push(mode.clone());
+        modes.len() - 1
+    });
+    form.mode = Combo::new(modes, Some(chosen));
+}
+
+fn wheel_lists(form: &mut Form, delta: isize, area: Rect) {
+    let rows = ui::queue_form::list(area, form).map(ui::combo::rows);
+    if let (Some(open), Some(rows)) = (form.opened(), rows) {
+        form.combo(open).into_iter().for_each(|combo| combo.scroll_by(delta, rows));
+    }
+}
+
+fn choose_in_list(form: &mut Form, i: usize) -> Option<Control> {
+    let open = form.opened()?;
+    let changed = form.combo(open).is_some_and(|combo| {
+        let changed = combo.chosen() != Some(i);
+        combo.choose(i);
+        changed
+    });
+    if !changed {
+        return None;
+    }
+    form.chose(open);
+    Some(open)
+}
+
+fn press_control(form: &mut Form, area: Rect, (control, row, col): (Control, usize, usize)) {
+    let r = ui::queue_form::text(area, form, control);
+    let opening = form.combo_of(control).is_some_and(|combo| !combo.is_open());
+    form.focus_on(control);
+    if let Some(editor) = form.editor(control) {
+        let line = ui::queue_form::first_line(editor, r) + row;
+        editor.place(usize::from(r.width.max(1)), line, col);
+    } else if opening {
+        form.combo(control).into_iter().for_each(Combo::open);
     }
 }

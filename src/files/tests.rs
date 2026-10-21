@@ -14,6 +14,12 @@ fn panel_with_listings() -> Panel {
     panel
 }
 
+fn content(lines: &[&str]) -> Content {
+    let source = lines.join("\n").into();
+    let lines = lines.iter().map(|l| (*l).to_string()).collect();
+    Content { stamp: Stamp::default(), language: None, body: Body::Text { lines, styles: None, source } }
+}
+
 fn paths(rows: &[Row]) -> Vec<(&str, u16)> {
     rows.iter().map(|r| (r.path.as_str(), r.depth)).collect()
 }
@@ -72,12 +78,6 @@ mod tree {
 mod viewer {
     use super::*;
 
-    fn content(lines: &[&str]) -> Content {
-        let source = lines.join("\n").into();
-        let lines = lines.iter().map(|l| (*l).to_string()).collect();
-        Content { stamp: Stamp::default(), language: None, body: disk::Body::Text { lines, styles: None, source } }
-    }
-
     #[test]
     fn reads_the_open_file_and_drops_answers_for_another() {
         let mut panel = Panel::default();
@@ -86,10 +86,10 @@ mod viewer {
         let (first, load) = panel.load(1, Path::new("/repo"), now).expect("a read");
         assert_eq!(load.file, Path::new("/repo/a.rs"));
         panel.open_file(1, "b.rs");
-        panel.read(1, first, "a.rs", Some(content(&["old"])), true);
+        panel.read(Reading { workspace: 1, generation: first, path: "a.rs" }, Some(content(&["old"])), true);
         assert!(panel.viewer(1).and_then(|v| v.content.as_ref()).is_none());
         let (second, _) = panel.load(1, Path::new("/repo"), now).expect("b is read");
-        panel.read(1, second, "b.rs", Some(content(&["new"])), true);
+        panel.read(Reading { workspace: 1, generation: second, path: "b.rs" }, Some(content(&["new"])), true);
         assert_eq!(
             panel.viewer(1).and_then(|v| v.content.as_ref()).map(|c| c.lines().to_vec()),
             Some(vec!["new".to_string()])
@@ -102,9 +102,9 @@ mod viewer {
         let now = Instant::now();
         panel.open_file(1, "a.rs");
         let (generation, _) = panel.load(1, Path::new("/repo"), now).expect("a read");
-        panel.read(1, generation, "a.rs", Some(content(&["a"])), false);
+        panel.read(Reading { workspace: 1, generation, path: "a.rs" }, Some(content(&["a"])), false);
         assert!(panel.load(1, Path::new("/repo"), now + CHECK_EVERY).is_none(), "the highlighting is still on its way");
-        panel.read(1, generation, "a.rs", None, true);
+        panel.read(Reading { workspace: 1, generation, path: "a.rs" }, None, true);
         assert!(panel.load(1, Path::new("/repo"), now + CHECK_EVERY / 2).is_none());
         let (_, load) = panel.load(1, Path::new("/repo"), now + CHECK_EVERY).expect("checked again");
         assert!(load.previous.is_some());
@@ -187,9 +187,67 @@ mod searching {
     #[test]
     fn opening_a_line_selects_it_and_remembers_the_text() {
         let mut panel = Panel::default();
-        panel.open_at(1, "src/main.rs", (40, 40), Some("run".into()));
+        panel.open_at(1, "src/main.rs", (40, 40), Some(Find::new("run", 40, false)));
         let viewer = panel.viewer(1).expect("a viewer");
-        assert_eq!((viewer.selection, viewer.scroll, viewer.find.as_deref()), (Some((40, 40)), 36, Some("run")));
+        assert_eq!(
+            (viewer.selection, viewer.scroll, viewer.find.as_ref().map(Find::text)),
+            (Some((40, 40)), 36, Some("run"))
+        );
+    }
+
+    fn finding(panel: &mut Panel, text: &str, focused: bool) {
+        panel.open_file(1, "a.rs");
+        let viewer = panel.viewer_mut(1).expect("a viewer");
+        viewer.find = Some(Find::new(text, 1, focused));
+    }
+
+    #[test]
+    fn the_find_field_takes_the_keys_until_unfocused() {
+        let mut panel = Panel::default();
+        finding(&mut panel, "run", true);
+        assert!(panel.typing(1));
+        panel.unfocus();
+        assert!(!panel.typing(1));
+        finding(&mut panel, "run", false);
+        assert!(!panel.typing(1));
+    }
+
+    #[test]
+    fn a_find_on_a_file_that_is_not_text_takes_no_keys() {
+        let mut panel = Panel::default();
+        finding(&mut panel, "run", true);
+        let viewer = panel.viewer_mut(1).expect("a viewer");
+        viewer.content = Some(Arc::new(Content { stamp: Stamp::default(), language: None, body: Body::Binary }));
+        assert!(!panel.typing(1));
+        assert!(panel.viewer(1).and_then(Viewer::finding).is_none());
+    }
+
+    #[test]
+    fn closing_the_panel_or_opening_a_file_drops_the_find() {
+        let mut panel = Panel::default();
+        finding(&mut panel, "run", true);
+        panel.close();
+        assert!(panel.viewer(1).is_some_and(|v| v.find.is_none()));
+        finding(&mut panel, "run", true);
+        panel.open_file(1, "b.rs");
+        assert!(panel.viewer(1).is_some_and(|v| v.find.is_none()));
+    }
+
+    #[test]
+    fn a_reread_counts_again_with_the_new_lines() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        panel.open_file(1, "a.rs");
+        let (first, _) = panel.load(1, Path::new("/repo"), now).expect("a read");
+        let reading = Reading { workspace: 1, generation: first, path: "a.rs" };
+        panel.read(reading, Some(content(&["run", "x"])), false);
+        let viewer = panel.viewer_mut(1).expect("a viewer");
+        viewer.find = Some(Find::new("run", 1, false));
+        panel.read(reading, Some(content(&["run", "x"])), false);
+        assert_eq!(panel.viewer(1).and_then(|v| v.find.as_ref()).map(Find::count), Some(0), "the same lines");
+        panel.read(reading, Some(content(&["x", "run", "run"])), true);
+        let find = panel.viewer(1).and_then(|v| v.find.as_ref()).expect("a find");
+        assert_eq!((find.count(), find.current().map(|(_, o)| o.line)), (2, Some(2)));
     }
 }
 

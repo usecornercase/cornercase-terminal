@@ -56,7 +56,8 @@ fn ran(root: &TempDir, script: &str, within: Duration) -> Ran {
     let home = TempDir::new();
     let places = Places::new(&home.path().join("config.json"), &home.path().join("session.json"));
     write_executable(&root.path().join("go"), script);
-    run_to_end(&places, &plugin(root.path()), &["./go".into()], &[], None, within)
+    let invocation = Invocation { argv: &["./go".into()], env: &[], cwd: None };
+    run_to_end(&places, &plugin(root.path()), invocation, within)
 }
 
 #[test]
@@ -92,7 +93,8 @@ fn a_command_that_runs_too_long_times_out() {
 fn a_program_that_is_missing_cannot_start() {
     let (home, root) = (TempDir::new(), TempDir::new());
     let places = Places::new(&home.path().join("config.json"), &home.path().join("session.json"));
-    let ran = run_to_end(&places, &plugin(root.path()), &["./absent".into()], &[], None, Duration::from_secs(5));
+    let invocation = Invocation { argv: &["./absent".into()], env: &[], cwd: None };
+    let ran = run_to_end(&places, &plugin(root.path()), invocation, Duration::from_secs(5));
     assert!(matches!(ran.ended, Ended::Failed(_)));
     assert!(ran.failure().is_some_and(|why| why.starts_with("cannot start ./absent: ")));
 }

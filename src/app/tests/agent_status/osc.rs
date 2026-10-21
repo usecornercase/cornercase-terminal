@@ -39,7 +39,7 @@ fn an_explicit_done_needs_no_working_transition_and_stays_acknowledged() {
     click_row(&mut w.app, WorkspaceRow::Tab(0, 0));
     tick(&mut w.app);
     assert_eq!(status(&w.app, 0, 0), Some(Status::Idle));
-    w.app.add_tab(0, 0, AREA).expect("hide the finished tab");
+    w.app.add_tab(workspace_at(&w.app, 0, 0), AREA).expect("hide the finished tab");
     tick(&mut w.app);
     assert_eq!(status(&w.app, 0, 0), Some(Status::Idle));
 }

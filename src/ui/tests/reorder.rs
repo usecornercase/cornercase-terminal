@@ -14,7 +14,7 @@ fn grouped() -> View<'static> {
 
 fn sidebar_at(dragged: SidebarRow, y: u16) -> Option<Landing> {
     let rows = grouped().sidebar_rows();
-    sidebar_drop(list(), 1, &rows, 0, dragged, Position::new(list().x + 3, y))
+    sidebar_drop(&project_rows(list(), 1, &rows, 0), &rows, dragged, Position::new(list().x + 3, y))
 }
 
 fn row(i: u16) -> u16 {
@@ -83,7 +83,7 @@ fn a_group_lands_among_groups(#[case] dragged: SidebarRow, #[case] y: u16, #[cas
 fn workspaces_at(dragged: WorkspaceRow, row: WorkspaceRow) -> Option<Landing> {
     let (list, tabs) = (Rect { height: 20, ..areas().workspaces_list }, tabs(&[2, 1, 2]));
     let y = workspace_row(list, 1, &tabs, 0, row).y;
-    workspace_drop(list, 1, &tabs, 0, dragged, Position::new(list.x + 3, y))
+    workspace_drop(&workspace_layout(list, 1, &tabs, 0), &tabs, dragged, Position::new(list.x + 3, y))
 }
 
 #[rstest]
@@ -196,7 +196,8 @@ fn dragging(view: View<'static>, drag: Drag) -> View<'static> {
 fn renders_the_landing_line_between_projects() {
     const TALL: Rect = Rect { x: 0, y: 0, width: W, height: 22 };
     let (rows, list) = (grouped().sidebar_rows(), layout(TALL, Widths::default()).list);
-    let landing = sidebar_drop(list, 1, &rows, 0, SidebarRow::Project(0), Position::new(3, list.y + 3));
+    let landing =
+        sidebar_drop(&project_rows(list, 1, &rows, 0), &rows, SidebarRow::Project(0), Position::new(3, list.y + 3));
     let v = dragging(grouped(), Drag::Sidebar(SidebarRow::Project(0), landing));
     insta::assert_snapshot!(render_sized(&v, TALL.width, TALL.height).backend());
 }

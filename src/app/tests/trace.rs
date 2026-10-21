@@ -61,7 +61,7 @@ fn tells_each_new_item_once_with_where_it_sits() {
 #[test]
 fn tells_what_closed_from_the_inside_out() {
     let (mut app, _rx, _dirs) = app_with(1);
-    app.add_tab(0, 0, AREA).expect("a second tab");
+    app.add_tab(workspace_at(&app, 0, 0), AREA).expect("a second tab");
     told(&mut app);
     let (_, _, tab, pane) = ids(&app);
 

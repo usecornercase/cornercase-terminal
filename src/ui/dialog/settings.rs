@@ -259,7 +259,8 @@ pub(in crate::ui) fn draw_settings(f: &mut Frame, view: &View, settings: &Settin
     if let Some(pick) = &settings.pick {
         cursor = draw_pick(f, view, body, pick);
     } else {
-        draw_rows(f, view, body, &settings.rows, settings.cursor, &Columns { label: LABEL_WIDTH, fill: false });
+        let columns = Columns { label: LABEL_WIDTH, fill: false };
+        draw_rows(f, view, body, Table { rows: &settings.rows, cursor: settings.cursor, columns });
     }
 
     if let Some(edit) = &settings.edit {
@@ -311,14 +312,14 @@ pub(in crate::ui) struct Columns {
     pub(in crate::ui) fill: bool,
 }
 
-pub(in crate::ui) fn draw_rows(
-    f: &mut Frame,
-    view: &View,
-    body: Rect,
-    rows: &[SettingsRow],
-    cursor: usize,
-    columns: &Columns,
-) {
+pub(in crate::ui) struct Table<'a> {
+    pub(in crate::ui) rows: &'a [SettingsRow],
+    pub(in crate::ui) cursor: usize,
+    pub(in crate::ui) columns: Columns,
+}
+
+pub(in crate::ui) fn draw_rows(f: &mut Frame, view: &View, body: Rect, table: Table) {
+    let Table { rows, cursor, columns } = table;
     let dim = Style::default().fg(view.muted);
     let sections: Vec<&str> = rows.iter().map(|r| r.section).collect();
     let scroll = settings_scroll(&sections, cursor, usize::from(body.height));
@@ -330,14 +331,37 @@ pub(in crate::ui) fn draw_rows(
             SettingsLine::Header(i) => {
                 f.render_widget(Paragraph::new(Span::styled(rows[*i].section, dim.add_modifier(Modifier::BOLD))), rect);
             }
-            SettingsLine::Row(i) => draw_settings_row(f, view, &rows[*i], *i == cursor, rect, columns),
+            SettingsLine::Row(i) => {
+                draw_settings_row(f, view, &rows[*i], Placed { r: rect, selected: *i == cursor }, &columns);
+            }
         }
     }
 }
 
-fn draw_settings_row(f: &mut Frame, view: &View, row: &SettingsRow, selected: bool, r: Rect, columns: &Columns) {
+#[derive(Clone, Copy)]
+struct Placed {
+    r: Rect,
+    selected: bool,
+}
+
+fn draw_settings_row(f: &mut Frame, view: &View, row: &SettingsRow, at: Placed, columns: &Columns) {
+    let Placed { r, selected } = at;
+    let bg = if selected { Style::default().bg(view.surface()) } else { Style::default() };
+    let spans = settings_row_spans(view, row, selected, r.width, columns);
+    f.render_widget(Paragraph::new(Line::from(spans)).style(bg), r);
+    if hovered(view, r) {
+        draw_row_buttons(f, view, row, r, bg);
+    }
+}
+
+fn settings_row_spans(
+    view: &View,
+    row: &SettingsRow,
+    selected: bool,
+    width: u16,
+    columns: &Columns,
+) -> Vec<Span<'static>> {
     let label = columns.label;
-    let dim = Style::default().fg(view.muted);
     let (marker, bg) = if selected { ("▌ ", Style::default().bg(view.surface())) } else { ("  ", Style::default()) };
     let (label_style, value_style) = if row.muted {
         (bg.fg(view.muted), bg.fg(view.muted))
@@ -347,7 +371,7 @@ fn draw_settings_row(f: &mut Frame, view: &View, row: &SettingsRow, selected: bo
             if row.dangerous { bg.fg(Color::Red) } else { bg },
         )
     };
-    let width = usize::from(r.width);
+    let width = usize::from(width);
     let room = if columns.fill {
         let buttons = if row.removable || row.movable { 9 } else { 0 };
         let note = if row.note.is_empty() { 0 } else { row.note.chars().count() + 2 };
@@ -357,17 +381,17 @@ fn draw_settings_row(f: &mut Frame, view: &View, row: &SettingsRow, selected: bo
     };
     let value = truncate_right(&row.value, room);
     let padded = format!("{:<label$}", truncate_right(&row.label, label.saturating_sub(2)));
-    let spans = vec![
+    vec![
         Span::styled(marker, bg.fg(Color::Cyan)),
         Span::styled(padded, label_style),
         Span::styled(value.clone(), value_style),
         Span::styled(if value.is_empty() || row.note.is_empty() { String::new() } else { "  ".into() }, bg),
         Span::styled(row.note.clone(), bg.fg(view.muted)),
-    ];
-    f.render_widget(Paragraph::new(Line::from(spans)).style(bg), r);
-    if !hovered(view, r) {
-        return;
-    }
+    ]
+}
+
+fn draw_row_buttons(f: &mut Frame, view: &View, row: &SettingsRow, r: Rect, bg: Style) {
+    let dim = Style::default().fg(view.muted);
     if row.removable {
         let close = settings_remove(r);
         let style = if hovered(view, close) { bg.fg(Color::Red).add_modifier(Modifier::BOLD) } else { bg.patch(dim) };

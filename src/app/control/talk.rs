@@ -4,7 +4,7 @@ use crossterm::event::KeyCode;
 
 use super::held::Held;
 use super::wait::Condition;
-use super::{Asker, Handled, Pending, Stage, deadline, json, none, pane_ids};
+use super::{Asker, Handled, Pending, Stage, Waits, deadline, json, none, pane_ids};
 use crate::agents;
 use crate::agents::activity::{self, Status};
 use crate::agents::context;
@@ -55,11 +55,14 @@ impl App {
         }
         let held = Held { text, enter: send.enter, wait, from: asker.caller, force: send.force };
         if (!send.force && self.holding_back(pane, now).is_some()) || (send.force && self.sending(pane)) {
-            return Ok(self.hold(client, pane, held, timeout, now));
+            let waits = Waits { done: pane_ids(pane), stage: Stage::Held(Box::new(held)), timeout };
+            return Ok(self.hold(client, pane, waits, now));
         }
         Ok(match self.put_through(pane, held, now)? {
             None => Some(json(&pane_ids(pane))),
-            Some((launch, stage)) => self.launch_within(client, pane_ids(pane), Some(launch), stage, timeout),
+            Some((launch, stage)) => {
+                self.launch_within(client, Some(launch), Waits { done: pane_ids(pane), stage, timeout })
+            }
         })
     }
 
@@ -74,7 +77,7 @@ impl App {
         }
         if !force && self.resume_holds(pane) {
             return Err(format!(
-                "pane {pane} is resuming its agent's conversation, and what you send would reach its shell or its \
+                "pane {pane} is restarting or resuming its agent, and what you send would reach its shell or its \
                  start-up instead; send again once `cornercase status` no longer shows it resuming, or with --force"
             )
             .into());
@@ -182,7 +185,7 @@ impl App {
             .into());
         };
         let record = term.context.record_for(agent).ok_or_else(|| unfound(pane, agent))?;
-        let key = self.requests.key();
+        let key = self.clients.requests.key();
         let job = Job::new(Level::Debug, "control", "last message").with("pane", pane).with("agent", agent.name());
         self.spawn_job(
             job,
@@ -193,12 +196,18 @@ impl App {
             },
         );
         let done = Done { agent: Some(agent.name().to_string()), ..pane_ids(pane) };
-        self.requests.pending.push(Pending { client: Some(client), key, timeout: None, done, stage: Stage::Reading });
+        self.clients.requests.pending.push(Pending {
+            client: Some(client),
+            key,
+            timeout: None,
+            done,
+            stage: Stage::Reading,
+        });
         Ok(None)
     }
 
     pub(in crate::app) fn message_read(&mut self, key: u64, result: error::Result<Option<context::Said>>) {
-        let Some(mut pending) = self.requests.take(key) else { return };
+        let Some(mut pending) = self.clients.requests.take(key) else { return };
         let pane = pending.done.ids.pane.unwrap_or_default();
         let agent = pending.done.agent.clone().unwrap_or_default();
         let reply = match result {

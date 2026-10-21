@@ -99,15 +99,19 @@ mod cells {
         assert!(DIACRITICS.windows(2).all(|pair| pair[0] < pair[1]));
     }
 
+    fn assert_row_is_one_column_wide(hi: u8, row: u16) {
+        for col in 0..MAX_CELLS {
+            let (symbol, _) = cell(id(hi, 0xf0), row, col);
+
+            assert_eq!(Span::raw(symbol.as_str()).width(), 1, "row {row} col {col} hi {hi}");
+        }
+    }
+
     #[test]
     fn every_cell_is_one_column_wide() {
         for hi in [1, 42, 255] {
             for row in 0..MAX_CELLS {
-                for col in 0..MAX_CELLS {
-                    let (symbol, _) = cell(id(hi, 0xf0), row, col);
-
-                    assert_eq!(Span::raw(symbol.as_str()).width(), 1, "row {row} col {col} hi {hi}");
-                }
+                assert_row_is_one_column_wide(hi, row);
             }
         }
     }

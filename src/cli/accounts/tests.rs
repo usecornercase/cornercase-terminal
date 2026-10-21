@@ -130,6 +130,29 @@ mod parsing {
     }
 
     #[test]
+    fn use_no_longer_takes_restart() {
+        assert!(parse(&["account", "use", "claude", "home", "--restart"]).is_err());
+    }
+
+    #[rstest::rstest]
+    #[case::the_one_in_use(&["account", "restart", "claude"], None, &[])]
+    #[case::an_account(&["account", "restart", "claude", "home"], Some("home"), &[])]
+    #[case::the_system(&["account", "restart", "codex", "--system"], Some(""), &[])]
+    #[case::some_panes(&["account", "restart", "claude", "--pane", "4", "--pane", "7"], None, &[4, 7])]
+    fn restart_takes_an_account_and_panes(#[case] args: &[&str], #[case] account: Option<&str>, #[case] panes: &[u64]) {
+        let Control::Account(parsed) = control(args) else { panic!("account") };
+        let AccountAction::Restart(restart) = parsed.action else { panic!("restart") };
+        let given = if restart.system { Some(String::new()) } else { restart.account };
+
+        assert_eq!((given.as_deref(), restart.panes.as_slice()), (account, panes));
+    }
+
+    #[test]
+    fn restart_refuses_an_account_with_the_system() {
+        assert!(parse(&["account", "restart", "claude", "home", "--system"]).is_err());
+    }
+
+    #[test]
     fn use_system_sends_the_empty_name() {
         let Control::Profile(args) = control(&["profile", "use", "--system"]) else { panic!("profile") };
 
@@ -138,6 +161,33 @@ mod parsing {
 }
 
 mod text {
+    use crate::control::{RestartInfo, SkippedPane};
+
+    #[test]
+    fn a_restart_names_what_restarted_what_waits_and_what_was_skipped() {
+        let info = RestartInfo {
+            provider: "claude".into(),
+            account: "home".into(),
+            restarted: vec![4, 7],
+            waiting: vec![9],
+            skipped: vec![SkippedPane { pane: 5, why: "it runs in a flow".into() }],
+        };
+
+        assert_eq!(
+            restart_text(&info),
+            "restarted panes 4, 7 on the claude account home\n\
+             pane 9 restarts on the claude account home once its turn is over\n\
+             skipped pane 5: it runs in a flow\n"
+        );
+    }
+
+    #[test]
+    fn a_restart_with_nothing_to_do_says_so() {
+        let info = RestartInfo { provider: "codex".into(), ..RestartInfo::default() };
+
+        assert_eq!(restart_text(&info), "every open codex agent already runs on its own codex login\n");
+    }
+
     use super::*;
 
     fn info() -> AccountsInfo {

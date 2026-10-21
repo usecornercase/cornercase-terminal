@@ -39,6 +39,10 @@ pub(crate) fn use_issues() -> Result<()> {
     require("issues", "cannot start work from an issue")
 }
 
+pub(crate) fn use_issue_names() -> Result<()> {
+    require("issue-names", "cannot name the workspace an issue starts in")
+}
+
 pub(crate) fn use_todo_panel() -> Result<()> {
     require("todo-panel", "cannot edit, uncheck, reorder or restore TODO items")
 }
@@ -57,6 +61,10 @@ pub(crate) fn use_account_login() -> Result<()> {
 
 pub(crate) fn use_account_switch() -> Result<()> {
     require("account-switch", "cannot rename or switch accounts")
+}
+
+pub(crate) fn use_account_restart() -> Result<()> {
+    require("account-restart", "cannot restart agents on another account")
 }
 
 fn require(feature: &str, lacks: &str) -> Result<()> {

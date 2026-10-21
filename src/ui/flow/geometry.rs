@@ -108,25 +108,44 @@ impl Geometry {
         }
     }
 
-    fn across(&mut self, y: u16, from: u16, to: u16, edge: Option<Edge>, dashed: bool) -> Vec<At> {
-        let step: Vec<u16> = if from <= to { (from..=to).collect() } else { (to..=from).rev().collect() };
-        let (low, high) = (from.min(to), from.max(to));
+    fn across(&mut self, y: u16, from: u16, to: u16, stroke: Stroke) -> Vec<At> {
+        let (step, low, high) = stretch(from, to);
         for &x in &step {
             let dirs = if x > low { W } else { 0 } | if x < high { E } else { 0 };
-            self.connect((x, y), dirs, edge, dashed);
+            self.connect((x, y), dirs, stroke.edge, stroke.dashed);
         }
         step.into_iter().map(|x| (x, y)).collect()
     }
 
-    fn down(&mut self, x: u16, from: u16, to: u16, edge: Option<Edge>, dashed: bool) -> Vec<At> {
-        let step: Vec<u16> = if from <= to { (from..=to).collect() } else { (to..=from).rev().collect() };
-        let (low, high) = (from.min(to), from.max(to));
+    fn down(&mut self, x: u16, from: u16, to: u16, stroke: Stroke) -> Vec<At> {
+        let (step, low, high) = stretch(from, to);
         for &y in &step {
             let dirs = if y > low { N } else { 0 } | if y < high { S } else { 0 };
-            self.connect((x, y), dirs, edge, dashed);
+            self.connect((x, y), dirs, stroke.edge, stroke.dashed);
         }
         step.into_iter().map(|y| (x, y)).collect()
     }
+}
+
+#[derive(Clone, Copy)]
+struct Stroke {
+    edge: Option<Edge>,
+    dashed: bool,
+}
+
+impl Stroke {
+    fn solid(edge: Option<Edge>) -> Self {
+        Self { edge, dashed: false }
+    }
+
+    fn dashed(edge: Option<Edge>) -> Self {
+        Self { edge, dashed: true }
+    }
+}
+
+fn stretch(from: u16, to: u16) -> (Vec<u16>, u16, u16) {
+    let step: Vec<u16> = if from <= to { (from..=to).collect() } else { (to..=from).rev().collect() };
+    (step, from.min(to), from.max(to))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -252,7 +271,7 @@ impl Builder {
             return vec![Vec::new()];
         }
         let y = self.y;
-        let paths = exits.iter().map(|&x| self.geometry.across(y, x, self.cx, edge, false)).collect();
+        let paths = exits.iter().map(|&x| self.geometry.across(y, x, self.cx, Stroke::solid(edge))).collect();
         for &x in exits {
             self.geometry.connect((x, y), N, edge, false);
         }
@@ -280,7 +299,7 @@ impl Builder {
                 }
                 let mut paths = Vec::new();
                 for &x in &centres {
-                    let mut path = self.geometry.across(y, self.cx, x, edge, false);
+                    let mut path = self.geometry.across(y, self.cx, x, Stroke::solid(edge));
                     self.geometry.connect((x, y), S, edge, false);
                     self.geometry.arrow((x, y + 1), "▼", edge, false);
                     path.push((x, y + 1));
@@ -292,12 +311,12 @@ impl Builder {
             }
             Shape::Stack(width) => {
                 let bx = self.centred(width).max(self.left + 2) - 2;
-                let turn = self.geometry.across(y, self.cx, bx, edge, false);
+                let turn = self.geometry.across(y, self.cx, bx, Stroke::solid(edge));
                 self.geometry.connect((self.cx, y), N, edge, false);
                 self.y += 1;
                 let top = self.y;
                 let last = top + BOX_HEIGHT * u16::try_from(k.max(1) - 1).unwrap_or(0) + 1;
-                let line = self.geometry.down(bx, y, last, edge, false);
+                let line = self.geometry.down(bx, y, last, Stroke::solid(edge));
                 (0..k)
                     .map(|j| {
                         let row = top + BOX_HEIGHT * u16::try_from(j).unwrap_or(0) + 1;
@@ -325,12 +344,21 @@ pub(super) fn layout(d: &Diagram, width: u16) -> Geometry {
     let x = b.centred(preferred);
     b.place(Place::Orchestrator, x, preferred);
     b.y += BOX_HEIGHT + 1;
-    let mut previous: Option<(Shape, Vec<Rect>)> = None;
-    let mut shapes = Vec::new();
+    let shapes = stage_shapes(&mut b, d);
+    close_diagram(&mut b, d, width, &shapes);
+    loops(&mut b, &shapes, &lanes);
+    labels(&mut b, d, &lanes);
+    outside(&mut b, d, &shapes);
+    b.geometry.height = b.y;
+    b.geometry
+}
+
+fn stage_shapes(b: &mut Builder, d: &Diagram) -> Vec<(Shape, Vec<Rect>)> {
+    let mut shapes: Vec<(Shape, Vec<Rect>)> = Vec::new();
     for (stage, nodes) in d.stages.iter().enumerate() {
         let k = nodes.len().max(1);
-        let next = shape(k, room, preferred);
-        if let Some((shape, rects)) = &previous {
+        let next = shape(k, b.room, b.preferred);
+        if let Some((shape, rects)) = shapes.last() {
             let edge = Some(Edge::Forward(stage - 1));
             let exits = b.exits(*shape, rects);
             let merges = b.merge(&exits, edge);
@@ -339,10 +367,13 @@ pub(super) fn layout(d: &Diagram, width: u16) -> Geometry {
             b.geometry.gaps.push(Gap { merges, middle, entries });
         }
         let placed = b.stage(stage, k);
-        shapes.push(placed.clone());
-        previous = Some(placed);
+        shapes.push(placed);
     }
-    if let Some((shape, rects)) = &previous {
+    shapes
+}
+
+fn close_diagram(b: &mut Builder, d: &Diagram, width: u16, shapes: &[(Shape, Vec<Rect>)]) {
+    if let Some((shape, rects)) = shapes.last() {
         let exits = b.exits(*shape, rects);
         b.merge(&exits, None);
         b.geometry.arrow((b.cx, b.y), "▼", None, false);
@@ -353,15 +384,10 @@ pub(super) fn layout(d: &Diagram, width: u16) -> Geometry {
     let end_row = b.y - 1;
     let words = d.end_cells();
     if b.cx + 2 + words > width {
-        b.geometry.below = Some((b.cx.saturating_sub(words / 2).max(left), b.y));
+        b.geometry.below = Some((b.cx.saturating_sub(words / 2).max(b.left), b.y));
         b.y += 1;
     }
-    end_words(&mut b, d, width, end_row);
-    loops(&mut b, &shapes, &lanes);
-    labels(&mut b, d, &lanes);
-    outside(&mut b, d, &shapes);
-    b.geometry.height = b.y;
-    b.geometry
+    end_words(b, d, width, end_row);
 }
 
 fn end_words(b: &mut Builder, d: &Diagram, width: u16, end_row: u16) {
@@ -405,9 +431,9 @@ fn loops(b: &mut Builder, shapes: &[(Shape, Vec<Rect>)], lanes: &[Lane]) {
         let (Some(from), Some(into)) = (port(shapes, lane.stage, false), port(shapes, lane.to, true)) else { continue };
         let edge = Some(Edge::Loop(lane.stage));
         let (ys, yt) = (from.y + 1, targets.get(&i).copied().unwrap_or(into.y + 1));
-        let mut path = b.geometry.across(ys, from.right(), lane.x, edge, false);
-        path.extend(b.geometry.down(lane.x, ys, yt, edge, false).into_iter().skip(1));
-        path.extend(b.geometry.across(yt, lane.x, into.right(), edge, false).into_iter().skip(1));
+        let mut path = b.geometry.across(ys, from.right(), lane.x, Stroke::solid(edge));
+        path.extend(b.geometry.down(lane.x, ys, yt, Stroke::solid(edge)).into_iter().skip(1));
+        path.extend(b.geometry.across(yt, lane.x, into.right(), Stroke::solid(edge)).into_iter().skip(1));
         b.geometry.arrow((into.right(), yt), "◀", edge, false);
         b.geometry.loops.push((lane.stage, path));
     }
@@ -449,9 +475,9 @@ fn outside(b: &mut Builder, d: &Diagram, shapes: &[(Shape, Vec<Rect>)]) {
     let (Some(source), Some(target)) = (source, target) else { return };
     let (ys, yt) = (source.y + 1, target.y + 1);
     let edge = Some(edge);
-    let mut path = b.geometry.across(ys, source.x.saturating_sub(1), 0, edge, true);
-    path.extend(b.geometry.down(0, ys, yt, edge, true).into_iter().skip(1));
-    path.extend(b.geometry.across(yt, 0, target.x.saturating_sub(1), edge, true).into_iter().skip(1));
+    let mut path = b.geometry.across(ys, source.x.saturating_sub(1), 0, Stroke::dashed(edge));
+    path.extend(b.geometry.down(0, ys, yt, Stroke::dashed(edge)).into_iter().skip(1));
+    path.extend(b.geometry.across(yt, 0, target.x.saturating_sub(1), Stroke::dashed(edge)).into_iter().skip(1));
     b.geometry.arrow((target.x.saturating_sub(1), yt), "▶", edge, true);
     b.geometry.outside = edge.map(|edge| (edge, path));
 }

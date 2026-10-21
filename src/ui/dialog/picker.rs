@@ -95,8 +95,21 @@ pub(in crate::ui) fn draw_picker(f: &mut Frame, view: &View, picker: &Picker) {
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, picker.title), r);
     let [input, list, note, _] = picker_rows(r);
-    let dim = Style::default().fg(view.muted);
+    let cursor_x = draw_picker_input(f, input, picker);
+    draw_picker_items(f, view, r, list, picker);
+    let style = match &picker.error {
+        Some(_) => Style::default().fg(Color::Red),
+        None => Style::default().fg(view.muted),
+    };
+    let text = picker.error.as_deref().unwrap_or(&picker.hint);
+    f.render_widget(Paragraph::new(Span::styled(truncate_left(text, usize::from(note.width)), style)), note);
+    draw_dialog_buttons(f, view, picker_buttons(r, picker.submit), picker.submit, CANCEL_LABEL);
+    if cursor_x < input.right() {
+        f.set_cursor_position(Position::new(cursor_x, input.y));
+    }
+}
 
+fn draw_picker_input(f: &mut Frame, input: Rect, picker: &Picker) -> u16 {
     let max = usize::from(input.width).saturating_sub(INPUT_PROMPT.chars().count() + 1);
     let filter = truncate_left(&picker.filter, max);
     let path = truncate_left(&picker.path, max.saturating_sub(filter.chars().count()));
@@ -110,9 +123,13 @@ pub(in crate::ui) fn draw_picker(f: &mut Frame, view: &View, picker: &Picker) {
         ])),
         input,
     );
+    cursor_x
+}
 
+fn draw_picker_items(f: &mut Frame, view: &View, r: Rect, list: Rect, picker: &Picker) {
     if picker.items.is_empty() {
         let text = if picker.filter.is_empty() { picker.empty } else { "no matches" };
+        let dim = Style::default().fg(view.muted);
         f.render_widget(Paragraph::new(Span::styled(format!(" {text}"), dim)), list);
     }
     for (i, item) in picker.items.iter().enumerate() {
@@ -137,25 +154,5 @@ pub(in crate::ui) fn draw_picker(f: &mut Frame, view: &View, picker: &Picker) {
             .style(bg),
             row,
         );
-    }
-
-    match &picker.error {
-        Some(error) => f.render_widget(
-            Paragraph::new(Span::styled(
-                truncate_left(error, usize::from(note.width)),
-                Style::default().fg(Color::Red),
-            )),
-            note,
-        ),
-        None => f.render_widget(
-            Paragraph::new(Span::styled(truncate_left(&picker.hint, usize::from(note.width)), dim)),
-            note,
-        ),
-    }
-
-    draw_dialog_buttons(f, view, picker_buttons(r, picker.submit), picker.submit, CANCEL_LABEL);
-
-    if cursor_x < input.right() {
-        f.set_cursor_position(Position::new(cursor_x, input.y));
     }
 }

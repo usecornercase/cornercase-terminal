@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::agent_watch::Notice;
 use crate::flows::run::{Member, Run};
 use crate::flows::{Flow, ORCHESTRATOR};
 
@@ -16,8 +17,8 @@ struct Family {
 fn family(activity: Activity) -> Family {
     let (mut app, rx, dirs) = app_with(1);
     app.config.agents_section = true;
-    app.push_tab(0, 0, TALL, None).expect("a second tab");
-    app.push_tab(0, 0, TALL, None).expect("a third tab");
+    app.push_tab(workspace_at(&app, 0, 0), TALL, None).expect("a second tab");
+    app.push_tab(workspace_at(&app, 0, 0), TALL, None).expect("a third tab");
     let mut ids = Vec::new();
     for tab in &mut app.projects[0].workspaces[0].tabs {
         let term = tab.pane_mut().expect("a pane");
@@ -32,7 +33,7 @@ fn family(activity: Activity) -> Family {
 }
 
 fn listed(app: &App) -> Vec<u64> {
-    app.agent_places().into_iter().map(|(p, w, t, i)| app.projects[p].workspaces[w].tabs[t].panes[i].id).collect()
+    app.agent_places().into_iter().map(|place| app.placed(place).id).collect()
 }
 
 fn shape(app: &App) -> Vec<(usize, bool, Vec<bool>)> {
@@ -40,8 +41,8 @@ fn shape(app: &App) -> Vec<(usize, bool, Vec<bool>)> {
 }
 
 fn row_pos(app: &App, i: usize) -> Position {
-    let a = app.layout(TALL).shown(app.nav);
-    let r = ui::agent_row(a.agents_list, a.pitch, app.agent_places().len(), app.scroll.agents, i);
+    let a = app.layout(TALL).shown(app.screen.nav);
+    let r = ui::agent_row(a.agents_list, a.pitch, app.agent_places().len(), app.scroll.of(List::Agents), i);
     Position::new(r.x + 4, r.y + r.height / 2)
 }
 
@@ -76,7 +77,7 @@ fn a_right_click_on_a_child_offers_marking_its_pane() {
 
     mouse_in(&mut f.app, MouseEventKind::Down(MouseButton::Right), at, TALL);
     mouse_in(&mut f.app, MouseEventKind::Up(MouseButton::Right), at, TALL);
-    assert_eq!(menu_labels(&f.app), ["mark as pending review"]);
+    assert_eq!(menu_labels(&f.app), ["mark as pending review", "close agent"]);
     pick(&mut f.app, "mark as pending review");
 
     assert_eq!(
@@ -89,7 +90,7 @@ fn a_right_click_on_a_child_offers_marking_its_pane() {
 fn closing_the_parent_puts_the_child_back_in_its_place() {
     let mut f = family(Activity::Idle);
 
-    f.app.close_tab(0, 0, 0);
+    f.app.close_tab(tab_at(&f.app, 0, 0, 0));
     wait_until("the parent's tab closes", || {
         drain(&mut f.app, &f.rx);
         f.app.projects[0].workspaces[0].tabs.len() == 2
@@ -149,7 +150,7 @@ fn a_member_whose_orchestrator_is_not_listed_shows_its_place_and_its_role(#[case
     in_a_run(&mut f);
 
     if close {
-        f.app.close_tab(0, 0, 0);
+        f.app.close_tab(tab_at(&f.app, 0, 0, 0));
         wait_until("the parent's tab closes", || {
             drain(&mut f.app, &f.rx);
             f.app.projects[0].workspaces[0].tabs.len() == 2
@@ -176,7 +177,7 @@ fn a_renamed_tab_does_not_change_the_role() {
 fn an_agent_a_member_starts_keeps_its_line() {
     let mut f = family(Activity::Idle);
     in_a_run(&mut f);
-    f.app.push_tab(0, 0, TALL, None).expect("a fourth tab");
+    f.app.push_tab(workspace_at(&f.app, 0, 0), TALL, None).expect("a fourth tab");
     let term = f.app.projects[0].workspaces[0].tabs[3].pane_mut().expect("a pane");
     term.agent.follow(Some(agents::Known::Claude.name()));
     term.agent.update(Some(Activity::Idle), true, Instant::now());
@@ -222,7 +223,7 @@ fn a_role_that_goes_changes_what_watchers_see() {
     in_a_run(&mut f);
     let before = f.app.refreshed();
 
-    f.app.runs[0].members.retain(|member| member.role != "coder");
+    f.app.runs.first_mut().members.retain(|member| member.role != "coder");
 
     assert_ne!(f.app.refreshed(), before);
 }
@@ -232,18 +233,12 @@ mod folds {
 
     fn shown_ids(app: &App) -> Vec<u64> {
         let (places, nodes) = app.shown_agents(false);
-        nodes
-            .into_iter()
-            .map(|node| {
-                let (p, w, t, i) = places[node.index];
-                app.projects[p].workspaces[w].tabs[t].panes[i].id
-            })
-            .collect()
+        nodes.into_iter().map(|node| app.placed(places[node.index]).id).collect()
     }
 
     fn row_at(app: &App, i: usize, on_arrow: bool) -> Position {
-        let a = app.layout(TALL).shown(app.nav);
-        let r = ui::agent_row(a.agents_list, a.pitch, app.shown_agents(false).1.len(), app.scroll.agents, i);
+        let a = app.layout(TALL).shown(app.screen.nav);
+        let r = ui::agent_row(a.agents_list, a.pitch, app.shown_agents(false).1.len(), app.scroll.of(List::Agents), i);
         let depth = app.agents_view().entries[i].depth;
         let x = if on_arrow { ui::agent_fold(r, depth).right() - 1 } else { r.x + 4 };
         Position::new(x, r.y + r.height / 2)
@@ -254,7 +249,7 @@ mod folds {
     }
 
     fn fourth(f: &mut Family, parent: u64, activity: Activity) -> u64 {
-        f.app.push_tab(0, 0, TALL, None).expect("a fourth tab");
+        f.app.push_tab(workspace_at(&f.app, 0, 0), TALL, None).expect("a fourth tab");
         let term = f.app.projects[0].workspaces[0].tabs.last_mut().and_then(Tab::pane_mut).expect("a pane");
         term.agent.follow(Some(agents::Known::Claude.name()));
         term.agent.update(Some(activity), activity != Activity::Waiting, Instant::now());
@@ -294,26 +289,26 @@ mod folds {
 
         mouse_in(&mut f.app, MouseEventKind::Down(MouseButton::Right), at, TALL);
         mouse_in(&mut f.app, MouseEventKind::Up(MouseButton::Right), at, TALL);
-        assert_eq!(menu_labels(&f.app), ["mark as pending review", "collapse"]);
+        assert_eq!(menu_labels(&f.app), ["mark as pending review", "collapse", "close agent"]);
         pick(&mut f.app, "collapse");
         render(&mut f.app, TALL);
         let at = row_at(&f.app, 0, false);
         mouse_in(&mut f.app, MouseEventKind::Down(MouseButton::Right), at, TALL);
         mouse_in(&mut f.app, MouseEventKind::Up(MouseButton::Right), at, TALL);
 
-        assert_eq!(menu_labels(&f.app), ["mark as pending review", "expand"]);
+        assert_eq!(menu_labels(&f.app), ["mark as pending review", "expand", "close agent"]);
         assert!(collapsed(&f.app, f.parent));
     }
 
     #[test]
-    fn a_row_without_children_offers_only_the_mark() {
+    fn a_row_without_children_offers_no_fold() {
         let mut f = family(Activity::Idle);
         let at = row_at(&f.app, 1, false);
 
         mouse_in(&mut f.app, MouseEventKind::Down(MouseButton::Right), at, TALL);
         mouse_in(&mut f.app, MouseEventKind::Up(MouseButton::Right), at, TALL);
 
-        assert_eq!(menu_labels(&f.app), ["mark as pending review"]);
+        assert_eq!(menu_labels(&f.app), ["mark as pending review", "close agent"]);
     }
 
     #[rstest]
@@ -371,7 +366,7 @@ mod folds {
     fn a_focus_that_lands_after_none_was_open_still_opens_the_way() {
         let mut f = family(Activity::Idle);
         f.app.set_agent_fold(f.parent, true);
-        f.app.scroll.followed_pane = None;
+        f.app.scroll.forget_followed_pane();
 
         f.app.jump_to_pane(f.child);
         render(&mut f.app, TALL);
@@ -383,7 +378,7 @@ mod folds {
     fn the_first_follow_unfolds_nothing() {
         let mut f = family(Activity::Idle);
         f.app.set_agent_fold(f.parent, true);
-        f.app.scroll.pane_followed = false;
+        f.app.scroll.before_first_follow();
 
         render(&mut f.app, TALL);
 
@@ -397,8 +392,14 @@ mod folds {
         render(&mut f.app, TALL);
         f.app.set_agent_fold(f.parent, true);
         let (project, workspace) = (f.app.projects[0].id, f.app.projects[0].workspaces[0].id);
-        f.app.notify("claude", Status::Waiting, (project, workspace), vec![f.child], true);
-        let token = f.app.toast.as_ref().and_then(|toast| toast.go.clone()).expect("a go");
+        f.app.notify(Notice {
+            agent: "claude",
+            status: Status::Waiting,
+            at: (project, workspace),
+            panes: vec![f.child],
+            principal: true,
+        });
+        let token = f.app.messages.toast.as_ref().and_then(|toast| toast.go.clone()).expect("a go");
 
         f.app.notification_clicked(&token);
         render(&mut f.app, TALL);
@@ -440,17 +441,17 @@ mod folds {
         for _ in 0..5 {
             fourth(&mut f, under, Activity::Idle);
         }
-        f.app.widths.agents = Some(6);
+        f.app.screen.widths.agents = Some(6);
         render(&mut f.app, TALL);
         let areas = f.app.layout(TALL);
-        f.app.scroll.agents = f.app.agent_layout(&areas).scrolled(100);
-        let high = f.app.scroll.agents;
+        f.app.scroll.set(List::Agents, f.app.agent_layout(&areas).scrolled(100));
+        let high = f.app.scroll.of(List::Agents);
 
         f.app.set_agent_fold(f.parent, true);
 
         assert!(high > 0);
-        assert_eq!(f.app.scroll.agents, f.app.agent_layout(&f.app.drawn).scrolled(0));
-        assert!(f.app.scroll.agents < high);
+        assert_eq!(f.app.scroll.of(List::Agents), f.app.agent_layout(&f.app.screen.drawn).scrolled(0));
+        assert!(f.app.scroll.of(List::Agents) < high);
     }
 
     #[test]

@@ -57,6 +57,87 @@ fn retain<T>(map: &mut HashMap<String, T>, time: impl Fn(&T) -> SystemTime) -> O
     Some(at)
 }
 
+impl Conversation {
+    fn count(&mut self, record: Record, since: SystemTime, counted: &mut Counted) {
+        let Record { at, id, usage } = record;
+        match usage {
+            Usage::Cumulative { total, last } => {
+                if let Some(delta) = self.count_cumulative(at, total, last)
+                    && at >= since
+                    && !delta.is_empty()
+                {
+                    counted.tokens.push((at, delta));
+                }
+            }
+            _ if at < since => {}
+            Usage::Prompt => {
+                if self.count_prompt(id, at) {
+                    counted.prompts.push(at);
+                }
+            }
+            Usage::Tokens(tokens) | Usage::Completed(tokens) => {
+                let completed = matches!(usage, Usage::Completed(_));
+                if let Some(delta) = self.count_reply(id, at, tokens, completed)
+                    && !delta.is_empty()
+                {
+                    counted.tokens.push((at, delta));
+                }
+            }
+        }
+    }
+
+    fn count_cumulative(&mut self, at: SystemTime, total: Tokens, last: Tokens) -> Option<Tokens> {
+        if self.cumulative.is_some_and(|(latest, before)| at < latest || (at == latest && total.decreased(before))) {
+            return None;
+        }
+        let delta = match self.cumulative {
+            Some((_, before)) if total.decreased(before) => Tokens::default(),
+            Some((_, before)) => total.difference(before),
+            None => last,
+        };
+        self.cumulative = Some((at, total));
+        Some(delta)
+    }
+
+    fn count_prompt(&mut self, id: String, at: SystemTime) -> bool {
+        if self.prompts.contains_key(&id)
+            || self.prompt_time.is_some_and(|latest| at < latest)
+            || self.forgotten_prompt.is_some_and(|forgotten| at <= forgotten)
+        {
+            return false;
+        }
+        self.prompts.insert(id, at);
+        self.prompt_time = self.prompt_time.max(Some(at));
+        self.forgotten_prompt = self.forgotten_prompt.max(retain(&mut self.prompts, |time| *time));
+        true
+    }
+
+    fn count_reply(&mut self, id: String, at: SystemTime, tokens: Tokens, completed: bool) -> Option<Tokens> {
+        let previous = self.replies.get(&id).copied();
+        if completed && previous.is_some() {
+            return None;
+        }
+        if previous.is_some_and(|(latest, _)| at < latest)
+            || (previous.is_none()
+                && (self.reply_time.is_some_and(|latest| at < latest)
+                    || self.forgotten_reply.is_some_and(|forgotten| at <= forgotten)))
+        {
+            return None;
+        }
+        let before = previous.map_or_else(Tokens::default, |(_, tokens)| tokens);
+        let greatest = Tokens {
+            input: tokens.input.max(before.input),
+            out: tokens.out.max(before.out),
+            cache_read: tokens.cache_read.max(before.cache_read),
+            cache_write: tokens.cache_write.max(before.cache_write),
+        };
+        self.replies.insert(id, (at, greatest));
+        self.reply_time = self.reply_time.max(Some(at));
+        self.forgotten_reply = self.forgotten_reply.max(retain(&mut self.replies, |(time, _)| *time));
+        Some(tokens.difference(before))
+    }
+}
+
 impl Ledger {
     pub(in crate::agents) fn apply(
         &mut self,
@@ -70,99 +151,45 @@ impl Ledger {
         }
         self.used = self.used.saturating_add(1);
         if !self.conversations.contains_key(conversation) {
-            if self.conversations.len() >= CONVERSATIONS {
-                let oldest = self.conversations.iter().min_by_key(|(_, state)| state.used).map(|(id, _)| id.clone());
-                if let Some((id, state)) = oldest.and_then(|id| self.conversations.remove(&id).map(|state| (id, state)))
-                {
-                    self.forgotten.insert(
-                        id,
-                        Forgotten {
-                            prompt: state.prompt_time.max(state.forgotten_prompt),
-                            reply: state.reply_time.max(state.forgotten_reply),
-                            cumulative: state.cumulative,
-                        },
-                    );
-                }
-            }
-            let forgotten = self.forgotten.remove(conversation).unwrap_or_default();
-            self.conversations.insert(
-                conversation.into(),
-                Conversation {
-                    forgotten_prompt: forgotten.prompt,
-                    forgotten_reply: forgotten.reply,
-                    cumulative: forgotten.cumulative,
-                    ..Conversation::default()
-                },
-            );
+            self.open(conversation);
         }
         let Some(state) = self.conversations.get_mut(conversation) else { return };
         state.used = self.used;
-        for Record { at, id, usage } in records {
-            if let Usage::Cumulative { total, last } = usage {
-                if state
-                    .cumulative
-                    .is_some_and(|(latest, before)| at < latest || (at == latest && total.decreased(before)))
-                {
-                    continue;
-                }
-                let delta = match state.cumulative {
-                    Some((_, before)) if total.decreased(before) => Tokens::default(),
-                    Some((_, before)) => total.difference(before),
-                    None => last,
-                };
-                state.cumulative = Some((at, total));
-                if at >= since && !delta.is_empty() {
-                    self.counted.tokens.push((at, delta));
-                }
-                continue;
-            }
-            if at < since {
-                continue;
-            }
-            match usage {
-                Usage::Prompt => {
-                    if state.prompts.contains_key(&id)
-                        || state.prompt_time.is_some_and(|latest| at < latest)
-                        || state.forgotten_prompt.is_some_and(|forgotten| at <= forgotten)
-                    {
-                        continue;
-                    }
-                    state.prompts.insert(id, at);
-                    state.prompt_time = state.prompt_time.max(Some(at));
-                    state.forgotten_prompt = state.forgotten_prompt.max(retain(&mut state.prompts, |time| *time));
-                    self.counted.prompts.push(at);
-                }
-                Usage::Tokens(tokens) | Usage::Completed(tokens) => {
-                    let previous = state.replies.get(&id).copied();
-                    if matches!(usage, Usage::Completed(_)) && previous.is_some() {
-                        continue;
-                    }
-                    if previous.is_some_and(|(latest, _)| at < latest)
-                        || (previous.is_none()
-                            && (state.reply_time.is_some_and(|latest| at < latest)
-                                || state.forgotten_reply.is_some_and(|forgotten| at <= forgotten)))
-                    {
-                        continue;
-                    }
-                    let before = previous.map_or_else(Tokens::default, |(_, tokens)| tokens);
-                    let delta = tokens.difference(before);
-                    let greatest = Tokens {
-                        input: tokens.input.max(before.input),
-                        out: tokens.out.max(before.out),
-                        cache_read: tokens.cache_read.max(before.cache_read),
-                        cache_write: tokens.cache_write.max(before.cache_write),
-                    };
-                    state.replies.insert(id, (at, greatest));
-                    state.reply_time = state.reply_time.max(Some(at));
-                    state.forgotten_reply = state.forgotten_reply.max(retain(&mut state.replies, |(time, _)| *time));
-                    if !delta.is_empty() {
-                        self.counted.tokens.push((at, delta));
-                    }
-                }
-                Usage::Cumulative { .. } => {}
-            }
+        for record in records {
+            state.count(record, since, &mut self.counted);
         }
     }
+
+    fn open(&mut self, conversation: &str) {
+        if self.conversations.len() >= CONVERSATIONS {
+            self.forget_oldest();
+        }
+        let forgotten = self.forgotten.remove(conversation).unwrap_or_default();
+        self.conversations.insert(
+            conversation.into(),
+            Conversation {
+                forgotten_prompt: forgotten.prompt,
+                forgotten_reply: forgotten.reply,
+                cumulative: forgotten.cumulative,
+                ..Conversation::default()
+            },
+        );
+    }
+
+    fn forget_oldest(&mut self) {
+        let oldest = self.conversations.iter().min_by_key(|(_, state)| state.used).map(|(id, _)| id.clone());
+        if let Some((id, state)) = oldest.and_then(|id| self.conversations.remove(&id).map(|state| (id, state))) {
+            self.forgotten.insert(
+                id,
+                Forgotten {
+                    prompt: state.prompt_time.max(state.forgotten_prompt),
+                    reply: state.reply_time.max(state.forgotten_reply),
+                    cumulative: state.cumulative,
+                },
+            );
+        }
+    }
+
     pub(in crate::agents) fn take(&mut self) -> Counted {
         std::mem::take(&mut self.counted)
     }

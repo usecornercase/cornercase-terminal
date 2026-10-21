@@ -4,7 +4,7 @@ use crate::config::Config;
 use crate::git;
 use crate::list;
 use crate::project::group::Group;
-use crate::project::{Project, group_indices};
+use crate::project::{Project, Workspace, group_indices};
 
 pub(crate) mod said;
 
@@ -88,39 +88,42 @@ pub(crate) fn candidates(
         .collect();
     for (p, group) in projects.iter().zip(group_indices(projects, groups)) {
         let project = p.label(home);
-        let place = |workspace, tab| Goto::Place { project: p.id, workspace, tab };
         candidates.push(Candidate {
             kind: Kind::Project,
-            goto: place(None, None),
+            goto: Goto::Place { project: p.id, workspace: None, tab: None },
             name: project.clone(),
             context: group.map(|g| groups[g].entry.name.clone()).unwrap_or_default(),
             keys: vec![project.clone()],
         });
         for w in p.workspaces.iter().filter(|w| w.open()) {
-            let label = w.label();
-            let mut keys = vec![label.clone()];
-            keys.extend(w.name.as_ref().and_then(|_| git::branch(&w.path)));
-            let goto = place(Some(w.id), None);
-            candidates.push(Candidate {
-                kind: Kind::Workspace,
-                goto,
-                name: label.clone(),
-                context: project.clone(),
-                keys: keys.clone(),
-            });
-            for t in &w.tabs {
-                let name = t.label(config);
-                candidates.push(Candidate {
-                    kind: Kind::Tab,
-                    goto: place(Some(w.id), Some(t.id)),
-                    context: format!("{project} › {label}"),
-                    keys: std::iter::once(name.clone()).chain(keys.iter().cloned()).collect(),
-                    name,
-                });
-            }
+            workspace_candidates(&mut candidates, p, w, &project, config);
         }
     }
     candidates
+}
+
+fn workspace_candidates(candidates: &mut Vec<Candidate>, p: &Project, w: &Workspace, project: &str, config: &Config) {
+    let place = |tab| Goto::Place { project: p.id, workspace: Some(w.id), tab };
+    let label = w.label();
+    let mut keys = vec![label.clone()];
+    keys.extend(w.name.as_ref().and_then(|_| git::branch(&w.path)));
+    candidates.push(Candidate {
+        kind: Kind::Workspace,
+        goto: place(None),
+        name: label.clone(),
+        context: project.to_string(),
+        keys: keys.clone(),
+    });
+    for t in &w.tabs {
+        let name = t.label(config);
+        candidates.push(Candidate {
+            kind: Kind::Tab,
+            goto: place(Some(t.id)),
+            context: format!("{project} › {label}"),
+            keys: std::iter::once(name.clone()).chain(keys.iter().cloned()).collect(),
+            name,
+        });
+    }
 }
 
 pub(crate) fn rank(candidates: Vec<Candidate>, query: &str) -> Vec<Candidate> {

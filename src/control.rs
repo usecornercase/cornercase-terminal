@@ -13,6 +13,7 @@ pub(crate) mod changes;
 pub(crate) mod config;
 pub(crate) mod contract;
 mod events;
+mod fields;
 mod flow;
 pub(crate) mod issues;
 pub(crate) mod plugins;
@@ -28,17 +29,21 @@ pub(crate) mod usage;
 pub(crate) mod view;
 mod watch;
 
+use fields::{Fields, chosen};
 pub(crate) use todo::{Todo, TodoSend};
 
 pub(crate) use accounts::{
-    AccountAdd, AccountList, AccountRemove, AccountRename, AccountUse, AccountsInfo, ProfileDelete, ProfileList,
-    ProfileNew, ProfileSet, ProfileUse,
+    AccountAdd, AccountList, AccountRemove, AccountRename, AccountRestart, AccountUse, AccountsInfo, ProfileDelete,
+    ProfileList, ProfileNew, ProfileSet, ProfileUse, RestartInfo, SkippedPane,
 };
 pub(crate) use app_state::{
     AppState, AppWatch, AwayInfo, InstallInfo, NoUpdate, Notes, ReleaseInfo, UpdateCheck, UpdateInfo, UpdateInstall,
 };
-pub(crate) use arrange::{Fold, GroupDelete, GroupNew, GroupStyle, Move, MovePane, RemovalCheck};
-pub(crate) use changes::{Changes, ChangesBase, ChangesCount, ChangesFile, ChangesGap, ChangesMode, ChangesViewed};
+pub(crate) use arrange::{CloseAgent, Fold, GroupDelete, GroupNew, GroupStyle, Move, MovePane, RemovalCheck};
+pub(crate) use changes::{
+    Changes, ChangesBase, ChangesCount, ChangesDiscard, ChangesFile, ChangesGap, ChangesMode, ChangesStage,
+    ChangesViewed,
+};
 pub(crate) use config::{ConfigInfo, Configure};
 pub(crate) use contract::Contract;
 pub(crate) use events::{Event, Events, Go, Kind, What};
@@ -172,6 +177,8 @@ pub(crate) enum Command {
     ChangesGap(ChangesGap),
     ChangesBase(ChangesBase),
     ChangesViewed(ChangesViewed),
+    ChangesDiscard(ChangesDiscard),
+    ChangesStage(ChangesStage),
     Usage(Usage),
     PluginList(PluginList),
     PluginActions(PluginActions),
@@ -193,58 +200,53 @@ pub(crate) enum Command {
     ProfileDelete(ProfileDelete),
     AccountRename(AccountRename),
     AccountUse(AccountUse),
+    CloseAgent(CloseAgent),
+    AccountRestart(AccountRestart),
     Tour(tour::TourRequest),
 }
 
 impl Command {
     pub(crate) fn name(&self) -> &'static str {
-        Self::NAMES[match self {
-            Self::Status(_) => 0,
+        let at = self
+            .pane_name()
+            .or_else(|| self.row_name())
+            .or_else(|| self.stream_name())
+            .or_else(|| self.terminal_name())
+            .or_else(|| self.change_name())
+            .or_else(|| self.issue_name())
+            .or_else(|| self.flow_name())
+            .or_else(|| self.account_name())
+            .or_else(|| self.server_name());
+        Self::NAMES[at.unwrap_or_default()]
+    }
+
+    fn pane_name(&self) -> Option<usize> {
+        Some(match self {
             Self::Open(_) => 1,
             Self::NewWorkspace(_) => 2,
             Self::NewTab(_) => 3,
             Self::Split(_) => 4,
             Self::Start(_) => 5,
+            Self::StartWith(_) => 23,
             Self::Send(_) => 6,
             Self::Keys(_) => 7,
             Self::Read(_) => 8,
+            Self::LastMessage(_) => 17,
             Self::Wait(_) => 9,
+            Self::WaitSeveral(_) => 15,
+            Self::Mark(_) => 21,
+            Self::Notify(_) => 13,
+            Self::Focus(_) => 12,
+            _ => return None,
+        })
+    }
+
+    fn row_name(&self) -> Option<usize> {
+        Some(match self {
             Self::Close(_) => 10,
             Self::Rename(_) => 11,
-            Self::Focus(_) => 12,
-            Self::Notify(_) => 13,
-            Self::Todo(_) => 14,
-            Self::WaitSeveral(_) => 15,
-            Self::Events(_) => 16,
-            Self::LastMessage(_) => 17,
-            Self::RestartWhenIdle(_) => 18,
-            Self::Stats(_) => 19,
-            Self::Away(_) => 20,
-            Self::Mark(_) => 21,
-            Self::Queue(_) => 22,
-            Self::StartWith(_) => 23,
-            Self::FlowList(_) => 24,
-            Self::FlowRun(_) => 25,
-            Self::FlowExport(_) => 26,
-            Self::FlowImport(_) => 27,
-            Self::Search(_) => 28,
-            Self::Contract(_) => 29,
-            Self::StartServer(_) => 30,
-            Self::Watch(_) => 31,
-            Self::Surface(_) => 32,
-            Self::View(_) => 33,
-            Self::ViewSet(_) => 34,
-            Self::Input(_) => 35,
-            Self::Scroll(_) => 36,
-            Self::Selection(_) => 37,
-            Self::Resize(_) => 38,
-            Self::Ratio(_) => 39,
-            Self::Link(_) => 40,
-            Self::TodoSend(_) => 41,
-            Self::Theme(_) => 42,
-            Self::Go(_) => 43,
-            Self::Redraw(_) => 44,
-            Self::Config(_) => 45,
+            Self::RemovalCheck(_) => 53,
+            Self::CloseAgent(_) => 88,
             Self::Move(_) => 46,
             Self::MovePane(_) => 47,
             Self::Collapse(_) => 48,
@@ -252,205 +254,120 @@ impl Command {
             Self::GroupNew(_) => 50,
             Self::GroupStyle(_) => 51,
             Self::GroupDelete(_) => 52,
-            Self::RemovalCheck(_) => 53,
-            Self::IssueSources(_) => 54,
-            Self::IssueList(_) => 55,
-            Self::IssueRead(_) => 56,
-            Self::IssuePeople(_) => 57,
-            Self::UpdateCheck(_) => 58,
-            Self::UpdateInstall(_) => 59,
+            Self::Todo(_) => 14,
+            Self::TodoSend(_) => 41,
+            _ => return None,
+        })
+    }
+
+    fn stream_name(&self) -> Option<usize> {
+        Some(match self {
+            Self::Status(_) => 0,
+            Self::Stats(_) => 19,
+            Self::Contract(_) => 29,
+            Self::Watch(_) => 31,
             Self::App(_) => 60,
+            Self::Events(_) => 16,
+            Self::FlowRuns(_) => 75,
+            Self::Surface(_) => 32,
+            Self::View(_) => 33,
+            Self::ViewSet(_) => 34,
+            Self::Search(_) => 28,
+            _ => return None,
+        })
+    }
+
+    fn terminal_name(&self) -> Option<usize> {
+        Some(match self {
+            Self::Input(_) => 35,
+            Self::Scroll(_) => 36,
+            Self::Selection(_) => 37,
+            Self::Resize(_) => 38,
+            Self::Redraw(_) => 44,
+            Self::Ratio(_) => 39,
+            Self::Link(_) => 40,
+            _ => return None,
+        })
+    }
+
+    fn change_name(&self) -> Option<usize> {
+        Some(match self {
             Self::Changes(_) => 61,
             Self::ChangesMode(_) => 62,
             Self::ChangesFile(_) => 63,
             Self::ChangesGap(_) => 64,
             Self::ChangesBase(_) => 65,
             Self::ChangesViewed(_) => 66,
-            Self::Usage(_) => 67,
-            Self::PluginList(_) => 68,
-            Self::PluginActions(_) => 69,
-            Self::PluginRun(_) => 70,
+            Self::ChangesDiscard(_) => 90,
+            Self::ChangesStage(_) => 91,
+            _ => return None,
+        })
+    }
+
+    fn issue_name(&self) -> Option<usize> {
+        Some(match self {
+            Self::IssueSources(_) => 54,
+            Self::IssueList(_) => 55,
+            Self::IssueRead(_) => 56,
+            Self::IssuePeople(_) => 57,
+            Self::Queue(_) => 22,
+            _ => return None,
+        })
+    }
+
+    fn flow_name(&self) -> Option<usize> {
+        Some(match self {
+            Self::FlowList(_) => 24,
+            Self::FlowRun(_) => 25,
+            Self::FlowExport(_) => 26,
+            Self::FlowImport(_) => 27,
             Self::FlowSave(_) => 71,
             Self::FlowDelete(_) => 72,
             Self::FlowHide(_) => 73,
             Self::FlowRestore(_) => 74,
-            Self::FlowRuns(_) => 75,
             Self::FlowMessages(_) => 76,
             Self::FlowFiles(_) => 77,
+            _ => return None,
+        })
+    }
+
+    fn account_name(&self) -> Option<usize> {
+        Some(match self {
             Self::AccountList(_) => 78,
             Self::AccountAdd(_) => 79,
             Self::AccountRemove(_) => 80,
+            Self::AccountRename(_) => 86,
+            Self::AccountUse(_) => 87,
             Self::ProfileList(_) => 81,
             Self::ProfileNew(_) => 82,
             Self::ProfileSet(_) => 83,
             Self::ProfileUse(_) => 84,
             Self::ProfileDelete(_) => 85,
-            Self::AccountRename(_) => 86,
-            Self::AccountUse(_) => 87,
-            Self::Tour(_) => 88,
-        }]
+            Self::AccountRestart(_) => 89,
+            _ => return None,
+        })
     }
 
-    #[expect(clippy::too_many_lines, reason = "one arm per request")]
-    pub(crate) fn fields(&self) -> Vec<(&'static str, String)> {
-        let mut fields = Fields::default();
-        match self {
-            Self::Queue(_) => drop(fields.add("queue", true)),
-            Self::Status(_)
-            | Self::Stats(_)
-            | Self::Contract(_)
-            | Self::Watch(_)
-            | Self::Go(_)
-            | Self::UpdateCheck(_)
-            | Self::UpdateInstall(_)
-            | Self::PluginList(_)
-            | Self::FlowRuns(_)
-            | Self::App(_)
-            | Self::ProfileList(_) => {}
-            Self::Open(open) => {
-                fields.add("path", open.path.display()).add("focus", open.focus);
-            }
-            Self::NewWorkspace(new) => {
-                fields.add("name", &new.name).maybe("project", new.project).add("worktree", new.worktree);
-                fields.add("focus", new.focus);
-            }
-            Self::NewTab(new) => {
-                fields.maybe("workspace", new.workspace).maybe("name", new.name.as_ref());
-                fields.add("command", new.command.is_some()).add("focus", new.focus);
-                fields.maybe("profile", new.profile.as_ref()).maybe("accounts", chosen(&new.accounts));
-            }
-            Self::Split(split) => {
-                fields.maybe("pane", split.pane).add("down", split.down).add("command", split.command.is_some());
-                fields.add("focus", split.focus);
-            }
-            Self::Start(start) | Self::StartWith(start) => {
-                fields.maybe("agent", start.agent.as_ref()).maybe("model", start.model.as_ref());
-                fields.maybe("mode", start.mode.as_ref()).maybe("effort", start.effort.as_ref());
-                fields.maybe("worktree", start.worktree.as_ref());
-                fields.maybe("project", start.project);
-                fields.maybe("workspace", start.workspace).add("prompt", start.prompt.is_some());
-                fields.add("issue", start.issue.is_some()).maybe("source", start.source.as_ref());
-                fields.add("wait", start.wait).maybe("until", start.wait.then(|| start.until.name()));
-                fields.maybe("timeout", start.timeout).add("focus", start.focus);
-                fields.maybe("profile", start.profile.as_ref()).maybe("accounts", chosen(&start.accounts));
-            }
-            Self::Send(send) => {
-                fields.maybe("pane", send.pane).maybe("tab", send.tab);
-                fields.add("bytes", send.text.as_ref().map_or(0, String::len)).add("enter", send.enter);
-                fields.add("wait", send.wait).maybe("until", send.wait.then(|| send.until.name()));
-                fields.maybe("timeout", send.timeout).add("force", send.force);
-            }
-            Self::Keys(keys) => {
-                fields.maybe("pane", keys.pane).maybe("tab", keys.tab).add("keys", keys.keys.len());
-            }
-            Self::Read(read) => {
-                fields.maybe("pane", read.pane).maybe("tab", read.tab).maybe("lines", read.lines);
-            }
-            Self::LastMessage(last) => {
-                fields.maybe("pane", last.pane).maybe("tab", last.tab);
-            }
-            Self::Wait(wait) | Self::WaitSeveral(wait) => {
-                fields.maybe("pane", wait.pane).maybe("tab", wait.tab).add("until", wait.until.name());
-                fields.maybe("timeout", wait.timeout);
-                if let Self::WaitSeveral(_) = self {
-                    fields.add("panes", listed(&wait.panes)).add("tabs", listed(&wait.tabs));
-                    fields.add("mode", if wait.all { "all" } else { "any" });
-                }
-            }
-            Self::Close(close) => {
-                fields.add("item", close.item).add("remove_worktree", close.remove_worktree).add("force", close.force);
-                fields.add("unlock", close.unlock);
-            }
-            Self::Rename(rename) => {
-                fields.maybe("item", rename.item).add("name", &rename.name);
-            }
-            Self::Focus(focus) => {
-                fields.add("item", focus.item);
-            }
-            Self::Notify(notify) => {
-                fields.add("bytes", notify.text.len());
-            }
-            Self::Todo(todo) => todo.fields(&mut fields),
-            Self::TodoSend(send) => send.fields(&mut fields),
-            Self::Events(events) => events.fields(&mut fields),
-            Self::RestartWhenIdle(restart) => {
-                fields.maybe("timeout", restart.timeout);
-            }
-            Self::Away(away) => {
-                fields.add("off", away.off);
-            }
-            Self::Mark(mark) => {
-                fields.maybe("pane", mark.pane).maybe("tab", mark.tab).add("reviewed", mark.reviewed);
-            }
-            Self::FlowList(list) => list.fields(&mut fields),
-            Self::FlowRun(run) => run.fields(&mut fields),
-            Self::FlowExport(export) => export.fields(&mut fields),
-            Self::FlowImport(import) => import.fields(&mut fields),
-            Self::Search(search) => {
-                fields.add("bytes", search.query.len());
-            }
-            Self::Surface(surface) => surface.fields(&mut fields),
-            Self::View(view) => view.fields(&mut fields),
-            Self::ViewSet(set) => set.fields(&mut fields),
-            Self::Input(input) => input.fields(&mut fields),
-            Self::Scroll(scroll) => scroll.fields(&mut fields),
-            Self::Selection(selection) => selection.fields(&mut fields),
-            Self::Resize(resize) => resize.fields(&mut fields),
-            Self::Redraw(redraw) => redraw.fields(&mut fields),
-            Self::Ratio(ratio) => ratio.fields(&mut fields),
-            Self::Link(link) => link.fields(&mut fields),
-            Self::StartServer(start) => start.fields(&mut fields),
-            Self::Theme(theme) => theme.fields(&mut fields),
-            Self::Config(config) => config.fields(&mut fields),
-            Self::Move(moving) => moving.fields(&mut fields),
-            Self::MovePane(moving) => moving.fields(&mut fields),
-            Self::Collapse(fold) | Self::Expand(fold) => {
-                fields.add("item", fold.item);
-            }
-            Self::GroupNew(new) => {
-                fields.add("name", &new.name);
-            }
-            Self::GroupStyle(style) => style.fields(&mut fields),
-            Self::GroupDelete(delete) => delete.fields(&mut fields),
-            Self::RemovalCheck(check) => {
-                fields.maybe("workspace", check.workspace);
-            }
-            Self::IssueSources(sources) => sources.fields(&mut fields),
-            Self::IssueList(list) => list.fields(&mut fields),
-            Self::IssueRead(read) => read.fields(&mut fields),
-            Self::IssuePeople(people) => people.fields(&mut fields),
-            Self::Changes(changes) => changes.fields(&mut fields),
-            Self::ChangesMode(mode) => mode.fields(&mut fields),
-            Self::ChangesFile(file) => file.fields(&mut fields),
-            Self::ChangesGap(gap) => gap.fields(&mut fields),
-            Self::ChangesBase(base) => base.fields(&mut fields),
-            Self::ChangesViewed(viewed) => viewed.fields(&mut fields),
-            Self::Usage(usage) => usage.fields(&mut fields),
-            Self::PluginActions(actions) => actions.fields(&mut fields),
-            Self::PluginRun(run) => run.fields(&mut fields),
-            Self::FlowSave(save) => save.fields(&mut fields),
-            Self::FlowDelete(delete) => delete.fields(&mut fields),
-            Self::FlowHide(hide) => hide.fields(&mut fields),
-            Self::FlowRestore(restore) => restore.fields(&mut fields),
-            Self::FlowMessages(messages) => messages.fields(&mut fields),
-            Self::FlowFiles(files) => files.fields(&mut fields),
-            Self::AccountList(list) => list.fields(&mut fields),
-            Self::AccountAdd(add) => add.fields(&mut fields),
-            Self::AccountRemove(remove) => remove.fields(&mut fields),
-            Self::ProfileSet(set) => set.fields(&mut fields),
-            Self::AccountRename(rename) => rename.fields(&mut fields),
-            Self::AccountUse(chosen) => chosen.fields(&mut fields),
-            Self::Tour(tour) => tour.fields(&mut fields),
-            Self::ProfileNew(ProfileNew { name, .. })
-            | Self::ProfileUse(ProfileUse { name })
-            | Self::ProfileDelete(ProfileDelete { name }) => {
-                fields.add("name", name);
-            }
-        }
-        fields.0
+    fn server_name(&self) -> Option<usize> {
+        Some(match self {
+            Self::Config(_) => 45,
+            Self::Theme(_) => 42,
+            Self::Go(_) => 43,
+            Self::UpdateCheck(_) => 58,
+            Self::UpdateInstall(_) => 59,
+            Self::RestartWhenIdle(_) => 18,
+            Self::StartServer(_) => 30,
+            Self::Away(_) => 20,
+            Self::Usage(_) => 67,
+            Self::Tour(_) => 92,
+            Self::PluginList(_) => 68,
+            Self::PluginActions(_) => 69,
+            Self::PluginRun(_) => 70,
+            _ => return None,
+        })
     }
 
-    pub(crate) const NAMES: [&str; 89] = [
+    pub(crate) const NAMES: [&str; 93] = [
         "status",
         "open",
         "new-workspace",
@@ -539,6 +456,10 @@ impl Command {
         "profile-delete",
         "account-rename",
         "account-use",
+        "close-agent",
+        "account-restart",
+        "changes-discard",
+        "changes-stage",
         "tour",
     ];
 
@@ -556,32 +477,6 @@ impl Command {
                 | "flow-files"
         )
     }
-}
-
-fn listed(ids: &[u64]) -> String {
-    ids.iter().map(u64::to_string).collect::<Vec<_>>().join(",")
-}
-
-#[derive(Default)]
-struct Fields(Vec<(&'static str, String)>);
-
-impl Fields {
-    fn add(&mut self, key: &'static str, value: impl std::fmt::Display) -> &mut Self {
-        self.0.push((key, value.to_string()));
-        self
-    }
-
-    fn maybe(&mut self, key: &'static str, value: Option<impl std::fmt::Display>) -> &mut Self {
-        if let Some(value) = value {
-            self.add(key, value);
-        }
-        self
-    }
-}
-
-fn chosen(accounts: &BTreeMap<String, String>) -> Option<String> {
-    (!accounts.is_empty())
-        .then(|| accounts.iter().map(|(agent, account)| format!("{agent}={account}")).collect::<Vec<_>>().join(","))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -648,6 +543,7 @@ pub(crate) struct Start {
     pub(crate) prompt: Option<String>,
     pub(crate) issue: Option<String>,
     pub(crate) source: Option<String>,
+    pub(crate) workspace_name: Option<String>,
     pub(crate) wait: bool,
     pub(crate) until: Until,
     pub(crate) timeout: Option<f64>,
@@ -868,7 +764,7 @@ pub(crate) fn command_name(request: &Value) -> Option<&str> {
 pub(crate) struct Stats {}
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "action", content = "entry", rename_all = "kebab-case")]

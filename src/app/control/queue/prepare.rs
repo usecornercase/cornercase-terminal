@@ -1,10 +1,13 @@
+use std::collections::BTreeMap;
+
 use crate::agents;
 use crate::app::App;
+use crate::config::Config;
 use crate::control::QueueAdd;
 use crate::git;
 use crate::issues::Client;
 use crate::issues::locate::Locator;
-use crate::project::Hierarchy;
+use crate::project::{Hierarchy, WorkspaceAt};
 use crate::queue::{Entry, Place, Task};
 
 impl App {
@@ -26,50 +29,24 @@ impl App {
             |entry| Ok(entry.task.agent.clone()),
         )?;
         let mut config = self.config.clone();
-        let mode = match add.mode.as_deref() {
-            Some("default") => agents::mode_of(&agent, &agents::args(&config, &agent), &agents::modes(&config, &agent)),
-            Some(mode) => Some(mode.to_string()),
-            None => old.filter(|entry| entry.task.agent == agent).map_or_else(
-                || agents::mode_of(&agent, &agents::args(&config, &agent), &agents::modes(&config, &agent)),
-                |entry| entry.task.mode.clone(),
-            ),
-        };
+        let mode = queue_mode(&config, &agent, add, old);
         let preserve = old.filter(|entry| {
             entry.task.agent == agent && entry.task.mode == mode && add.agent.as_deref() != Some(agents::AUTO)
         });
         if preserve.is_none()
             && let Some(mode) = &mode
         {
-            let modes = agents::modes(&config, &agent);
-            if !modes.iter().any(|(name, _)| name == mode) {
-                return Err(format!("unknown {agent} mode {mode}"));
-            }
-            let args = agents::args(&config, &agent);
-            config.agent_args.insert(agent.clone(), agents::with_mode(&agent, &args, &modes, Some(mode)));
+            apply_mode(&mut config, &agent, mode)?;
         }
         let place = self.queue_target(caller, add, old)?;
         let prompt = add.prompt.clone().or_else(|| old.map(|entry| entry.task.prompt.clone())).unwrap_or_default();
-        let mut label =
-            add.label.clone().unwrap_or_else(|| prompt.lines().next().unwrap_or_default().trim().to_string());
-        if add.label.is_none()
-            && add.issue.is_none()
-            && let Some(old) = old.filter(|entry| entry.task.prompt == prompt)
-        {
-            label.clone_from(&old.task.label);
-        }
-        label = crate::text::one_line(&label.chars().filter(|character| !character.is_control()).collect::<String>());
         let command =
             preserve.map_or_else(|| agents::command_line(&config, &agent), |entry| entry.task.command.clone());
         let program = preserve.map_or_else(|| agents::command(&config, &agent), |entry| entry.task.program.clone());
-        let zone = if add.zone.is_empty() {
-            old.map_or_else(crate::queue::clock::local_zone, |entry| entry.task.zone.clone())
-        } else {
-            add.zone.clone()
-        };
         Ok(Task {
             at: 0,
-            zone,
-            label,
+            zone: queue_zone(add, old),
+            label: queue_label(add, &prompt, old),
             agent,
             command,
             program,
@@ -77,13 +54,19 @@ impl App {
             prompt,
             submit: add.submit.unwrap_or_else(|| old.is_none_or(|entry| entry.task.submit)),
             place,
-            accounts: old
-                .map(|entry| entry.task.accounts.clone())
-                .unwrap_or_default()
-                .into_iter()
-                .chain(add.accounts.clone())
-                .collect(),
+            accounts: merged_accounts(add, old),
         })
+    }
+
+    fn queue_workspace(&mut self, caller: Option<u64>, add: &QueueAdd) -> Result<WorkspaceAt, String> {
+        if let Some(workspace) = add.workspace {
+            return Ok(self.usable_workspace(workspace)?);
+        }
+        if let Some(project) = add.project {
+            let p = self.projects.project_index(project).ok_or_else(|| super::super::none("project", project))?;
+            return Ok(self.ensure_workspace(p));
+        }
+        self.here_workspace(caller)
     }
 
     fn queue_target(&mut self, caller: Option<u64>, add: &QueueAdd, old: Option<&Entry>) -> Result<Place, String> {
@@ -94,15 +77,8 @@ impl App {
         {
             return Ok(old.task.place.clone());
         }
-        let (p, w) = if let Some(workspace) = add.workspace {
-            self.usable_workspace(workspace)?
-        } else if let Some(project) = add.project {
-            let p = self.projects.project_index(project).ok_or_else(|| super::super::none("project", project))?;
-            (p, self.ensure_workspace(p))
-        } else {
-            self.here_workspace(caller)?
-        };
-        let project = &self.projects[p];
+        let at = self.queue_workspace(caller, add)?;
+        let (project, found) = (&self.projects[at.project()], self.projects.workspace(at));
         let branch = add.worktree.clone();
         if let Some(branch) = &branch {
             if branch.trim().is_empty() {
@@ -118,10 +94,10 @@ impl App {
         {
             None
         } else {
-            Some(project.workspaces[w].path.clone())
+            Some(found.path.clone())
         };
-        let workspace_name = workspace.as_ref().and_then(|_| project.workspaces[w].name.clone());
-        let workspace_id = workspace.as_ref().map(|_| project.workspaces[w].id);
+        let workspace_name = workspace.as_ref().and_then(|_| found.name.clone());
+        let workspace_id = workspace.as_ref().map(|_| found.id);
         Ok(Place {
             project: project.path.clone(),
             workspace,
@@ -131,4 +107,46 @@ impl App {
             server: crate::control::server_token().into(),
         })
     }
+}
+
+fn queue_mode(config: &Config, agent: &str, add: &QueueAdd, old: Option<&Entry>) -> Option<String> {
+    let default = || agents::mode_of(agent, &agents::args(config, agent), &agents::modes(config, agent));
+    match add.mode.as_deref() {
+        Some("default") => default(),
+        Some(mode) => Some(mode.to_string()),
+        None => old.filter(|entry| entry.task.agent == agent).map_or_else(default, |entry| entry.task.mode.clone()),
+    }
+}
+
+fn apply_mode(config: &mut Config, agent: &str, mode: &str) -> Result<(), String> {
+    let modes = agents::modes(config, agent);
+    if !modes.iter().any(|(name, _)| name == mode) {
+        return Err(format!("unknown {agent} mode {mode}"));
+    }
+    let args = agents::args(config, agent);
+    config.agent_args.insert(agent.to_string(), agents::with_mode(agent, &args, &modes, Some(mode)));
+    Ok(())
+}
+
+fn queue_label(add: &QueueAdd, prompt: &str, old: Option<&Entry>) -> String {
+    let mut label = add.label.clone().unwrap_or_else(|| prompt.lines().next().unwrap_or_default().trim().to_string());
+    if add.label.is_none()
+        && add.issue.is_none()
+        && let Some(old) = old.filter(|entry| entry.task.prompt == prompt)
+    {
+        label.clone_from(&old.task.label);
+    }
+    crate::text::one_line(&label.chars().filter(|character| !character.is_control()).collect::<String>())
+}
+
+fn queue_zone(add: &QueueAdd, old: Option<&Entry>) -> String {
+    if add.zone.is_empty() {
+        old.map_or_else(crate::queue::clock::local_zone, |entry| entry.task.zone.clone())
+    } else {
+        add.zone.clone()
+    }
+}
+
+fn merged_accounts(add: &QueueAdd, old: Option<&Entry>) -> BTreeMap<String, String> {
+    old.map(|entry| entry.task.accounts.clone()).unwrap_or_default().into_iter().chain(add.accounts.clone()).collect()
 }

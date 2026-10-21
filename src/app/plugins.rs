@@ -8,7 +8,7 @@ use super::event::AppEvent;
 use super::menus::MenuAction;
 use super::overlay::Overlay;
 use crate::control;
-use crate::control::plugins::{ActionInfo, ActionRan, ActionsInfo, PluginInfo, PluginsInfo, ServiceInfo};
+use crate::control::plugins::{ActionInfo, ActionRan, ActionsInfo, Invoked, PluginInfo, PluginsInfo, ServiceInfo};
 use crate::error::Error;
 use crate::log::{self, Job, Level};
 use crate::plugins::manifest::Action;
@@ -139,7 +139,7 @@ impl App {
     }
 
     pub(super) fn following(&self) -> bool {
-        self.events.listening() || self.plugins.hooked()
+        self.clients.events.listening() || self.plugins.hooked()
     }
 
     pub(super) fn watch_plugins(&mut self, now: Instant) {
@@ -177,7 +177,7 @@ impl App {
     }
 
     pub(super) fn spot_env(&self, spot: Spot) -> Option<(control::Ids, PathBuf)> {
-        let (p, w, t, pane) = match spot {
+        let (at, tab, pane) = match spot {
             Spot::Project(project) => {
                 let p = self.projects.project_index(project)?;
                 return Some((
@@ -185,24 +185,21 @@ impl App {
                     self.projects[p].path.clone(),
                 ));
             }
-            Spot::Workspace(project, workspace) => {
-                let (p, w) = self.projects.workspace_in(project, workspace)?;
-                (p, w, None, None)
-            }
+            Spot::Workspace(project, workspace) => (self.projects.workspace_in(project, workspace)?, None, None),
             Spot::Tab(project, workspace, tab) => {
-                let (p, w, t) = self.projects.tab_in(project, workspace, tab)?;
-                (p, w, Some(t), None)
+                let at = self.projects.tab_in(project, workspace, tab)?;
+                (at.workspace(), Some(at), None)
             }
             Spot::Pane(pane) => {
-                let (p, w, t) = self.projects.tab_of_pane(pane)?;
-                (p, w, Some(t), Some(pane))
+                let at = self.projects.tab_of_pane(pane)?;
+                (at.workspace(), Some(at), Some(pane))
             }
         };
-        let workspace = &self.projects[p].workspaces[w];
+        let workspace = self.projects.workspace(at);
         let ids = control::Ids {
-            project: Some(self.projects[p].id),
+            project: Some(self.projects[at.project()].id),
             workspace: Some(workspace.id),
-            tab: t.map(|t| workspace.tabs[t].id),
+            tab: tab.map(|t| self.projects.tab(t).id),
             pane,
         };
         Some((ids, workspace.path.clone()))
@@ -229,12 +226,16 @@ impl App {
             job,
             move || {
                 places.note(&plugin.entry.id, "action started", &[("action", &action.id)]);
-                let ran = run::run_to_end(&places, &plugin, &action.command, &env, Some(&cwd), ACTION_WITHIN);
+                let invocation = run::Invocation { argv: &action.command, env: &env, cwd: Some(&cwd) };
+                let ran = run::run_to_end(&places, &plugin, invocation, ACTION_WITHIN);
                 if let Some(e) = ran.failure() {
                     places.note(&plugin.entry.id, "action failed", &[("action", &action.id), ("error", &e)]);
                 }
                 let log = places.log(&plugin.entry.id);
-                Ok((ActionRan::of(&plugin.entry.id, &action.id, context, ids, &ran, log), ran.failure()))
+                Ok((
+                    ActionRan::of(Invoked { plugin: &plugin.entry.id, action: &action.id, context, ids }, &ran, log),
+                    ran.failure(),
+                ))
             },
             move |result, job| {
                 let failure = result.as_ref().ok().and_then(|(_, failure)| failure.clone());
@@ -261,7 +262,7 @@ impl App {
             PluginEvent::Ran { request, ran } => self.plugin_ran(request, *ran),
             PluginEvent::Failed { plugin, title, reason } => {
                 let message = format!("{plugin}: {title} failed: {reason}");
-                self.toast = Some(super::Toast::new(message, ui::ToastIcon::Bug));
+                self.messages.toast = Some(super::Toast::new(message, ui::ToastIcon::Bug));
             }
         }
     }
@@ -270,13 +271,18 @@ impl App {
         for event in events {
             let Some(on) = hook_name(event) else { continue };
             let Ok(json) = serde_json::to_string(event) else { continue };
-            for plugin in &self.plugins.loaded {
-                let Some(manifest) = plugin.runs() else { continue };
-                for hook in manifest.events.iter().filter(|hook| hook.on.name() == on) {
-                    self.run_hook(plugin, &hook.command, on, &json);
-                }
+            for (plugin, command) in self.hooks_on(on) {
+                self.run_hook(plugin, command, on, &json);
             }
         }
+    }
+
+    fn hooks_on(&self, on: &'static str) -> impl Iterator<Item = (&Plugin, &[String])> {
+        let runs = self.plugins.loaded.iter().filter_map(|plugin| Some((plugin, plugin.runs()?)));
+        runs.flat_map(move |(plugin, manifest)| {
+            let hooks = manifest.events.iter().filter(move |hook| hook.on.name() == on);
+            hooks.map(move |hook| (plugin, hook.command.as_slice()))
+        })
     }
 
     fn run_hook(&self, plugin: &Plugin, command: &[String], on: &'static str, json: &str) {
@@ -293,7 +299,8 @@ impl App {
         self.spawn_job(
             job,
             move || {
-                let ran = run::run_to_end(&places, &plugin, &command, &env, None, HOOK_WITHIN);
+                let invocation = run::Invocation { argv: &command, env: &env, cwd: None };
+                let ran = run::run_to_end(&places, &plugin, invocation, HOOK_WITHIN);
                 let failure = ran.failure();
                 if let Some(e) = &failure {
                     places.note(&plugin.entry.id, "hook failed", &[("on", &on), ("error", e)]);

@@ -1,4 +1,6 @@
 use super::*;
+use crate::app::changes_panel::Hunk;
+use crate::app::worktrees::RemoveOptions;
 use crate::changes;
 use crate::test_util::{git, write_executable};
 
@@ -6,28 +8,28 @@ mod every_project {
     use super::*;
 
     fn filter_changes(app: &mut App, query: &str) {
-        let mut filter = changes::filter::Filter::default();
-        query.chars().for_each(|c| filter.push(c));
-        app.changes.filter = Some(filter);
+        app.panels.changes.clear_filter();
+        app.panels.changes.focus_filter();
+        query.chars().for_each(|c| app.panels.changes.push_filter(c));
     }
 
-    fn loaded_every(app: &mut App, rx: &Receiver<AppEvent>) {
-        app.side = Some(Side::Changes);
-        app.changes.set_scope(changes::Scope::Every);
+    pub(super) fn loaded_every(app: &mut App, rx: &Receiver<AppEvent>) {
+        app.screen.side = Some(Side::Changes);
+        app.panels.changes.set_scope(changes::Scope::Every);
         app.refresh_changes(Instant::now());
         pump_until(app, rx, "every workspace has a summary", |a| {
-            a.every_targets().iter().all(|(t, _)| a.changes.summary(t.workspace).is_some())
+            a.every_targets().iter().all(|(t, _)| a.panels.changes.summary(t.workspace).is_some())
         });
     }
 
-    fn row(app: &App, wanted: panel::Row) -> Position {
+    pub(super) fn row(app: &App, wanted: panel::Row) -> Position {
         let view = app.panel_view().expect("panel");
         let index = panel::rows(&view).iter().position(|r| *r == wanted).expect("row");
         let body = panel::parts(panel_area(app), &view).body;
         Position::new(body.x + 8, body.y + u16::try_from(index).expect("row index"))
     }
 
-    fn open_file(app: &mut App, rx: &Receiver<AppEvent>, path: &str) -> usize {
+    pub(super) fn open_file(app: &mut App, rx: &Receiver<AppEvent>, path: &str) -> usize {
         let view = app.panel_view().expect("panel");
         let changes::Body::Ready(diff) = view.body else { panic!("ready") };
         let file = diff.files.iter().position(|f| f.path == path).expect("file");
@@ -39,12 +41,9 @@ mod every_project {
         file
     }
 
-    #[test]
-    fn groups_projects_and_changed_worktrees_and_leaves_out_clean_and_plain_folders() {
-        let (shop, _worktree) = shop_with_topic_worktree();
-        let api = repo_with_edit();
-        let clean = git_repo(&[]);
-        let plain = TempDir::new();
+    fn shop_api_and_notes() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+        let (shop, worktree) = shop_with_topic_worktree();
+        let (api, clean, plain) = (repo_with_edit(), git_repo(&[]), TempDir::new());
         let (mut app, rx) = app_in(shop.path(), no_config());
         for (path, name) in [(api.path(), "api"), (clean.path(), "clean"), (plain.path(), "notes")] {
             let p = app.add_project(path.to_path_buf(), AREA).expect("project");
@@ -52,6 +51,14 @@ mod every_project {
         }
         app.projects[0].name = Some("shop".into());
         loaded_every(&mut app, &rx);
+        (app, rx, vec![shop, worktree, api, clean, plain])
+    }
+
+    fn rows_of(app: &App) -> Vec<panel::Row> {
+        panel::rows(&app.panel_view().expect("panel"))
+    }
+
+    fn assert_folded_overview(app: &App) {
         let view = app.panel_view().expect("panel");
         assert_eq!(
             view.headers.iter().map(|h| (h.label.as_str(), h.workspace)).collect::<Vec<_>>(),
@@ -60,39 +67,34 @@ mod every_project {
         assert_eq!(view.folded, [true; 3]);
         let changes::Body::Ready(diff) = view.body else { panic!("ready") };
         assert!(diff.files.iter().all(|f| f.hunks.is_empty()));
+    }
+
+    #[test]
+    fn groups_projects_and_changed_worktrees_and_leaves_out_clean_and_plain_folders() {
+        let (mut app, rx, dirs) = shop_api_and_notes();
+        assert_folded_overview(&app);
         let before = app.active;
         let header = row(&app, panel::Row::Header(0));
         click(&mut app, header);
         assert_eq!(app.active, before);
-        assert_eq!(
-            panel::rows(&app.panel_view().expect("panel")),
-            [panel::Row::Header(0), panel::Row::Header(3), panel::Row::File(2)]
-        );
+        assert_eq!(rows_of(&app), [panel::Row::Header(0), panel::Row::Header(3), panel::Row::File(2)]);
         let header = row(&app, panel::Row::Header(0));
         click(&mut app, header);
         let sub = row(&app, panel::Row::Header(2));
         click(&mut app, sub);
-        assert!(!panel::rows(&app.panel_view().expect("panel")).contains(&panel::Row::File(1)));
+        assert!(!rows_of(&app).contains(&panel::Row::File(1)));
         filter_changes(&mut app, "new.txt");
-        assert_eq!(panel::rows(&app.panel_view().expect("panel")), [panel::Row::Header(0), panel::Row::Header(2)]);
+        assert_eq!(rows_of(&app), [panel::Row::Header(0), panel::Row::Header(2)]);
         filter_changes(&mut app, "a.txt");
-        assert_eq!(
-            panel::rows(&app.panel_view().expect("panel")),
-            [
-                panel::Row::Header(0),
-                panel::Row::Header(1),
-                panel::Row::File(0),
-                panel::Row::Header(3),
-                panel::Row::File(2)
-            ]
-        );
-        git(shop.path(), &["checkout", "--", "a.txt"]);
+        let (header, file) = (panel::Row::Header, panel::Row::File);
+        assert_eq!(rows_of(&app), [header(0), header(1), file(0), header(3), file(2)]);
+        git(dirs[0].path(), &["checkout", "--", "a.txt"]);
         let main = app.projects[0].workspaces[0].id;
         let topic = app.projects[0].workspaces[1].id;
-        app.changes.invalidate_summary(main);
+        app.panels.changes.invalidate_summary(main);
         app.refresh_changes(Instant::now());
         pump_until(&mut app, &rx, "the clean workspace loses its sub-header", |a| {
-            a.changes.summary(main).and_then(changes::Model::diff).is_some_and(|d| d.files.is_empty())
+            a.panels.changes.summary(main).and_then(changes::Model::diff).is_some_and(|d| d.files.is_empty())
         });
         assert!(app.every_targets().iter().any(|(t, hidden)| t.workspace == topic && !hidden));
     }
@@ -102,19 +104,19 @@ mod every_project {
         let repo = repo_with_edit();
         let (mut app, rx) = app_in(repo.path(), no_config());
         loaded_every(&mut app, &rx);
-        app.changes.mode = changes::Mode::Commits;
+        app.panels.changes.set_mode(changes::Mode::Commits);
         let saved = app.state();
         let (mut restored, _) = new_app(no_config());
         restored.restore(&saved, AREA);
         assert_eq!(
-            (saved.version, restored.changes.scope, restored.changes.mode),
+            (saved.version, restored.panels.changes.scope(), restored.panels.changes.mode()),
             (5, changes::Scope::Every, changes::Mode::Commits)
         );
         let mut old = serde_json::to_value(saved).expect("json");
         old["changes"].as_object_mut().expect("changes").remove("scope");
         let old: State = serde_json::from_value(old).expect("older session");
         restored.restore(&old, AREA);
-        assert_eq!(restored.changes.scope, changes::Scope::Project);
+        assert_eq!(restored.panels.changes.scope(), changes::Scope::Project);
     }
 
     #[test]
@@ -132,10 +134,11 @@ mod every_project {
         let repo = git_repo(&[]);
         let (mut app, _) = app_in(repo.path(), no_config());
         app.projects[0].name = Some("shop".into());
-        app.changes.scope = changes::Scope::Every;
+        app.panels.changes.set_scope(changes::Scope::Every);
         let targets = app.every_targets();
-        let (workspace, generation, request) = app.changes.request_every(&targets, Instant::now()).expect("summary");
-        app.changes.loaded(workspace, generation, &request, Err(Error::Git("cannot read status".into())));
+        let (workspace, generation, request) =
+            app.panels.changes.request_every(&targets, Instant::now()).expect("summary");
+        app.panels.changes.loaded(workspace, generation, &request, Err(Error::Git("cannot read status".into())));
         assert_eq!(app.panel_view().expect("panel").body, changes::Body::Failed("shop: cannot read status".into()));
     }
 
@@ -167,11 +170,11 @@ mod every_project {
         let (mut app, rx) = app_in(repo.path(), no_config());
         loaded_every(&mut app, &rx);
         let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[1].id);
-        app.changes.headers.insert(workspace);
+        app.panels.changes.toggle_header(workspace);
         match action {
             "closed" => app.drop_workspace(project, workspace),
             "removed" => {
-                assert!(app.start_removal(project, workspace, true, false, None));
+                assert!(app.start_removal(project, workspace, RemoveOptions { force: true, unlock: false }, None));
                 pump_until(&mut app, &rx, "the worktree is removed", |a| {
                     a.projects.workspace_index(workspace).is_none()
                 });
@@ -181,8 +184,8 @@ mod every_project {
                 app.sync_worktrees();
             }
         }
-        assert!(app.changes.summary(workspace).is_none());
-        assert!(!app.changes.headers.contains(&workspace));
+        assert!(app.panels.changes.summary(workspace).is_none());
+        assert!(!app.panels.changes.header_folded(workspace));
         assert!(!app.panel_view().expect("panel").owners.contains(&workspace));
     }
 
@@ -194,14 +197,15 @@ mod every_project {
         let (mut app, rx) = app_in(repo.path(), no_config());
         loaded_every(&mut app, &rx);
         let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
-        app.changes.headers.extend([project, workspace]);
+        app.panels.changes.toggle_header(project);
+        app.panels.changes.toggle_header(workspace);
         if close {
             app.close_project(project);
         } else {
             app.remove_project(0);
         }
-        assert!(app.changes.summary(workspace).is_none());
-        assert!(app.changes.headers.is_empty());
+        assert!(app.panels.changes.summary(workspace).is_none());
+        assert!(!app.panels.changes.header_folded(project) && !app.panels.changes.header_folded(workspace));
         assert!(app.every_targets().is_empty());
     }
 
@@ -218,59 +222,102 @@ mod every_project {
         assert_eq!(headers.len(), 1);
     }
 
-    #[test]
-    fn file_actions_reach_the_workspace_that_owns_the_file() {
-        let first = repo_with_edit();
-        let second = git_repo(&[("b.txt", "one\n")]);
-        std::fs::write(second.path().join("b.txt"), "two\n").expect("edit");
-        let scripts = TempDir::new();
-        let agent = scripts.path().join("agent");
-        let editor = scripts.path().join("editor");
-        write_executable(&agent, "#!/bin/sh\nIFS= read -r line\nprintf '%s' \"$line\" > got\nIFS= read -r line\n");
-        write_executable(&editor, "#!/bin/sh\nprintf '%s\n' \"$PWD\" \"$@\" > editor-got\nIFS= read -r line\n");
-        let config_path = write_config(
-            scripts.path(),
-            &Config { agent_commands: [("fake".into(), agent.display().to_string())].into(), ..Config::default() },
-        );
-        let (mut app, rx) = app_in(second.path(), config_path);
-        exec_agent(&mut app, &agent);
+    pub(super) struct Owners {
+        first: TempDir,
+        pub(super) second: TempDir,
+        scripts: TempDir,
+        agent: PathBuf,
+        editor: PathBuf,
+    }
+
+    impl Owners {
+        fn new() -> Self {
+            let first = repo_with_edit();
+            let second = git_repo(&[("b.txt", "one\n")]);
+            std::fs::write(second.path().join("b.txt"), "two\n").expect("edit");
+            let scripts = TempDir::new();
+            let agent = scripts.path().join("agent");
+            let editor = scripts.path().join("editor");
+            let reads = "#!/bin/sh\nIFS= read -r line\nprintf '%s' \"$line\" > got\nIFS= read -r line\n";
+            write_executable(&agent, reads);
+            write_executable(&editor, "#!/bin/sh\nprintf '%s\n' \"$PWD\" \"$@\" > editor-got\nIFS= read -r line\n");
+            Self { first, second, scripts, agent, editor }
+        }
+
+        fn config(&self) -> PathBuf {
+            let agent_commands = [("fake".into(), self.agent.display().to_string())].into();
+            write_config(self.scripts.path(), &Config { agent_commands, ..Config::default() })
+        }
+    }
+
+    fn assert_shown_in_every_scope(app: &App) {
+        assert!(!app.projects[0].collapsed && !app.projects[0].workspaces[0].collapsed);
+        assert!(app.screen.side == Some(Side::Changes) && app.panels.changes.scope() == changes::Scope::Every);
+    }
+
+    pub(super) fn assert_agent_got_the_reference(app: &mut App, owners: &Owners, agent_pane: u64) {
+        assert_eq!(app.active, 0);
+        assert_eq!(app.term().expect("visible agent").id, agent_pane);
+        assert_shown_in_every_scope(app);
+        app.term_mut().expect("visible agent").write(b"\r");
+        wait_until("the owning agent receives the reference", || {
+            std::fs::read_to_string(owners.second.path().join("got")).is_ok_and(|s| s == "b.txt:1 ")
+        });
+        assert!(!owners.first.path().join("got").exists());
+    }
+
+    fn assert_editor_opened_in_owner(app: &App, second: &Path, active: usize) {
+        let got = std::fs::read_to_string(second.join("editor-got")).expect("editor arguments");
+        assert_eq!(got, format!("{}\n+1\n{}\n", second.display(), second.join("b.txt").display()));
+        assert_eq!((app.projects[0].workspaces[0].tabs.len(), app.projects[active].workspaces[0].tabs.len()), (2, 1));
+        assert_eq!(app.active, 0);
+        assert_eq!(app.projects[0].workspace().expect("owning workspace").active, 1);
+        assert_eq!(app.term().expect("visible editor").cwd(), Some(second.to_path_buf()));
+        assert_shown_in_every_scope(app);
+    }
+
+    pub(super) struct Collapsed {
+        pub(super) owners: Owners,
+        pub(super) app: App,
+        pub(super) rx: Receiver<AppEvent>,
+        pub(super) owner: u64,
+        pub(super) agent_pane: u64,
+        pub(super) active: usize,
+        pub(super) file: usize,
+    }
+
+    pub(super) fn collapsed_owner() -> Collapsed {
+        let owners = Owners::new();
+        let (mut app, rx) = app_in(owners.second.path(), owners.config());
+        exec_agent(&mut app, &owners.agent);
         let owner = app.projects[0].workspaces[0].id;
         let agent_pane = app.term().expect("agent pane").id;
-        app.open_project(first.path().to_path_buf(), AREA).expect("other project");
+        app.open_project(owners.first.path().to_path_buf(), AREA).expect("other project");
         let active = app.active;
         app.projects[0].collapsed = true;
         app.projects[0].workspaces[0].collapsed = true;
         loaded_every(&mut app, &rx);
         let file = open_file(&mut app, &rx, "b.txt");
+        Collapsed { owners, app, rx, owner, agent_pane, active, file }
+    }
+
+    #[test]
+    fn file_actions_reach_the_workspace_that_owns_the_file() {
+        let Collapsed { owners, mut app, rx: _rx, owner, agent_pane, active, file } = collapsed_owner();
         let position = row(&app, panel::Row::Hunk(file, 0));
         let hunk = Rect::new(panel_area(&app).x, position.y, panel_area(&app).width, 1);
         let ask = panel::actions(hunk)[1].1.as_position();
         click(&mut app, ask);
-        assert_eq!(app.active, 0);
-        assert_eq!(app.term().expect("visible agent").id, agent_pane);
-        assert!(!app.projects[0].collapsed && !app.projects[0].workspaces[0].collapsed);
-        assert!(app.side == Some(Side::Changes) && app.changes.scope == changes::Scope::Every);
-        app.term_mut().expect("visible agent").write(b"\r");
-        wait_until("the owning agent receives the reference", || {
-            std::fs::read_to_string(second.path().join("got")).is_ok_and(|s| s == "b.txt:1 ")
-        });
-        assert!(!first.path().join("got").exists());
+        assert_agent_got_the_reference(&mut app, &owners, agent_pane);
         assert_eq!(app.panel_view().expect("panel").owners[file], owner);
         app.goto(Goto::Place { project: app.projects[active].id, workspace: None, tab: None });
         app.projects[0].collapsed = true;
         app.projects[0].workspaces[0].collapsed = true;
-        app.editor_env = vec![("VISUAL".into(), editor.display().to_string())];
+        app.shells.set_editor(&owners.editor.display().to_string());
         let open = panel::actions(hunk)[0].1.as_position();
         click(&mut app, open);
-        wait_until("the editor runs in the owning workspace", || second.path().join("editor-got").exists());
-        let got = std::fs::read_to_string(second.path().join("editor-got")).expect("editor arguments");
-        assert_eq!(got, format!("{}\n+1\n{}\n", second.path().display(), second.path().join("b.txt").display()));
-        assert_eq!((app.projects[0].workspaces[0].tabs.len(), app.projects[active].workspaces[0].tabs.len()), (2, 1));
-        assert_eq!(app.active, 0);
-        assert_eq!(app.projects[0].workspace().expect("owning workspace").active, 1);
-        assert_eq!(app.term().expect("visible editor").cwd(), Some(second.path().to_path_buf()));
-        assert!(!app.projects[0].collapsed && !app.projects[0].workspaces[0].collapsed);
-        assert!(app.side == Some(Side::Changes) && app.changes.scope == changes::Scope::Every);
+        wait_until("the editor runs in the owning workspace", || owners.second.path().join("editor-got").exists());
+        assert_editor_opened_in_owner(&app, owners.second.path(), active);
     }
 }
 
@@ -295,18 +342,21 @@ fn exec_agent(app: &mut App, agent: &Path) {
     });
 }
 
-fn open_changes() -> (TempDir, App, Receiver<AppEvent>) {
-    let repo = repo_with_edit();
+fn opened(repo: TempDir) -> (TempDir, App, Receiver<AppEvent>) {
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.side = Some(Side::Changes);
+    app.screen.side = Some(Side::Changes);
     refresh_until_loaded(&mut app, &rx);
     (repo, app, rx)
+}
+
+fn open_changes() -> (TempDir, App, Receiver<AppEvent>) {
+    opened(repo_with_edit())
 }
 
 fn loaded(app: &mut App, rx: &Receiver<AppEvent>) {
     pump_until(app, rx, "the changes load", |a| {
         let Some(target) = a.changes_target() else { return false };
-        a.changes.model(target.workspace, target.base.as_deref()).is_some()
+        a.panels.changes.model(target.workspace, target.base.as_deref()).is_some()
     });
 }
 
@@ -344,7 +394,7 @@ fn the_button_opens_the_panel_and_narrows_the_pane() {
     click(&mut app, pos);
     let shown = app.layout(AREA);
     assert_eq!(
-        (app.side == Some(Side::Changes), shown.pane.width < before, shown.changes.is_empty()),
+        (app.screen.side == Some(Side::Changes), shown.pane.width < before, shown.changes.is_empty()),
         (true, true, false)
     );
 }
@@ -362,7 +412,7 @@ fn the_panel_shows_the_changed_file() {
 fn clicking_a_tab_changes_what_is_compared() {
     let repo = repo_with_edit();
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.side = Some(Side::Changes);
+    app.screen.side = Some(Side::Changes);
     let (_, commits) = panel::tabs(panel_area(&app))[1];
     click(&mut app, commits.as_position());
     refresh_until_loaded(&mut app, &rx);
@@ -375,8 +425,8 @@ fn the_picked_base_is_kept_for_the_workspace() {
     let repo = repo_with_edit();
     git(repo.path(), &["branch", "release"]);
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.side = Some(Side::Changes);
-    app.changes.set_mode(changes::Mode::All);
+    app.screen.side = Some(Side::Changes);
+    app.panels.changes.set_mode(changes::Mode::All);
     refresh_until_loaded(&mut app, &rx);
     let view = app.panel_view().expect("panel");
     let pos = panel::base(panel_area(&app), &view).as_position();
@@ -391,11 +441,11 @@ fn the_picked_base_is_kept_for_the_workspace() {
 fn branches_that_arrive_after_the_panel_closes_are_dropped() {
     let repo = repo_with_edit();
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.side = Some(Side::Changes);
-    app.changes.set_mode(changes::Mode::Commits);
+    app.screen.side = Some(Side::Changes);
+    app.panels.changes.set_mode(changes::Mode::Commits);
     let target = app.changes_target().expect("target");
     app.open_branches(&target);
-    app.side = None;
+    app.screen.side = None;
     loop {
         let ev = rx.recv_timeout(Duration::from_secs(5)).expect("the branches arrive");
         let branches = matches!(ev, AppEvent::Changes(ChangesEvent::Branches { .. }));
@@ -411,8 +461,8 @@ fn branches_that_arrive_after_the_panel_closes_are_dropped() {
 fn picking_the_default_branch_forgets_the_choice() {
     let repo = repo_with_edit();
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.side = Some(Side::Changes);
-    app.changes.set_mode(changes::Mode::All);
+    app.screen.side = Some(Side::Changes);
+    app.panels.changes.set_mode(changes::Mode::All);
     app.projects[0].workspaces[0].base = Some("old".into());
     let target = app.changes_target().expect("target");
     app.open_branches(&target);
@@ -428,7 +478,7 @@ fn unchanged_lines_open_from_a_thread() {
     let edited = lines.replace("line 2\n", "LINE 2\n").replace("line 19\n", "LINE 19\n");
     std::fs::write(repo.path().join("a.txt"), edited).expect("edit");
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.side = Some(Side::Changes);
+    app.screen.side = Some(Side::Changes);
     refresh_until_loaded(&mut app, &rx);
     let view = app.panel_view().expect("panel");
     let gap = panel::rows(&view).iter().position(|r| matches!(r, panel::Row::Gap(0, 1))).expect("a gap");
@@ -438,7 +488,7 @@ fn unchanged_lines_open_from_a_thread() {
     pump_until(&mut app, &rx, "the unchanged lines open", |a| {
         let target = a.changes_target().expect("target");
         let file = a.changed_diff(&target).expect("diff").files[0].clone();
-        a.changes.gap(target.workspace, &file, 1).is_some()
+        a.panels.changes.gap(target.workspace, &file, 1).is_some()
     });
 }
 
@@ -446,19 +496,22 @@ fn unchanged_lines_open_from_a_thread() {
 fn the_panel_is_saved_and_restored() {
     let repo = repo_with_edit();
     let (mut app, _rx) = app_in(repo.path(), no_config());
-    app.side = Some(Side::Changes);
-    app.changes.set_mode(changes::Mode::Commits);
+    app.screen.side = Some(Side::Changes);
+    app.panels.changes.set_mode(changes::Mode::Commits);
     let saved = app.state();
     let (mut restored, _rx) = empty_app();
     restored.restore(&saved, AREA);
-    assert_eq!((restored.side == Some(Side::Changes), restored.changes.mode), (true, changes::Mode::Commits));
+    assert_eq!(
+        (restored.screen.side == Some(Side::Changes), restored.panels.changes.mode()),
+        (true, changes::Mode::Commits)
+    );
 }
 
 #[test]
 fn copy_puts_the_hunk_on_the_clipboard() {
     let (_repo, mut app, _rx) = open_changes();
     let (target, file) = first_changed_file(&app);
-    app.hunk_action(&target, &file, 0, HunkAction::Copy, AREA).expect("copy");
+    app.hunk_action(&target, &file, Hunk { index: 0, action: HunkAction::Copy }, AREA).expect("copy");
     let patch = file.hunks[0].patch();
     assert_eq!((app.take_host_writes(), toast(&app)), (vec![clipboard::osc52(&patch)], Some(COPIED)));
 }
@@ -479,7 +532,7 @@ fn with_an_agent() -> (TempDir, TempDir, App) {
 
 fn ask_about_the_first_hunk(app: &mut App) {
     let (target, file) = first_changed_file(app);
-    app.hunk_action(&target, &file, 0, HunkAction::Ask, AREA).expect("ask");
+    app.hunk_action(&target, &file, Hunk { index: 0, action: HunkAction::Ask }, AREA).expect("ask");
 }
 
 #[test]
@@ -509,18 +562,18 @@ fn without_an_agent_the_reference_is_copied() {
     let (mut app, rx) = app_in(repo.path(), no_config());
     refresh_until_loaded(&mut app, &rx);
     let (target, file) = first_changed_file(&app);
-    app.hunk_action(&target, &file, 0, HunkAction::Ask, AREA).expect("ask");
+    app.hunk_action(&target, &file, Hunk { index: 0, action: HunkAction::Ask }, AREA).expect("ask");
     assert_eq!(app.take_host_writes(), vec![clipboard::osc52("a.txt:2")]);
 }
 
 fn open_filter(app: &mut App, rx: &Receiver<AppEvent>) {
-    app.side = Some(Side::Changes);
+    app.screen.side = Some(Side::Changes);
     refresh_until_loaded(app, rx);
     click(app, panel::filter_button(panel_area(app)).as_position());
 }
 
 fn query(app: &App) -> Option<&str> {
-    app.changes.filter.as_ref().map(changes::filter::Filter::query)
+    app.panels.changes.filter().map(changes::filter::Filter::query)
 }
 
 #[test]
@@ -589,7 +642,7 @@ fn closing_the_panel_gives_the_keys_back() {
     open_filter(&mut app, &rx);
     let close = panel::close(panel_area(&app)).as_position();
     click(&mut app, close);
-    app.side = Some(Side::Changes);
+    app.screen.side = Some(Side::Changes);
     assert!(!app.filtering());
 }
 
@@ -597,11 +650,251 @@ fn closing_the_panel_gives_the_keys_back() {
 fn open_starts_the_editor_in_a_new_tab() {
     let repo = repo_with_edit();
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.editor_env = vec![("VISUAL".into(), "true".into())];
+    app.shells.set_editor("true");
     refresh_until_loaded(&mut app, &rx);
     let (target, file) = first_changed_file(&app);
     let tabs = app.projects[0].workspaces[0].tabs.len();
-    app.hunk_action(&target, &file, 0, HunkAction::Open, AREA).expect("open");
+    app.hunk_action(&target, &file, Hunk { index: 0, action: HunkAction::Open }, AREA).expect("open");
     let workspace = &app.projects[0].workspaces[0];
     assert_eq!((workspace.tabs.len(), workspace.active), (tabs + 1, tabs));
 }
+
+fn cell(app: &App, file: usize, which: fn(&panel::View, Rect) -> Rect) -> Position {
+    let view = app.panel_view().expect("panel");
+    let at = every_project::row(app, panel::Row::File(file));
+    let line = Rect::new(panel::parts(panel_area(app), &view).body.x, at.y, panel_area(app).width, 1);
+    let cell = which(&view, line);
+    Position::new(cell.x + 1, cell.y)
+}
+
+fn marked(app: &App, file: usize) -> Option<changes::diff::Staged> {
+    let changes::Body::Ready(diff) = app.panel_view().expect("panel").body else { panic!("ready") };
+    diff.files[file].staged
+}
+
+mod discarding {
+    use super::every_project::{loaded_every, row};
+    use super::*;
+
+    const QUESTION: &str = "Discard the changes to a.txt? This cannot be undone.";
+
+    fn ask(app: &mut App, file: usize) {
+        let at = cell(app, file, panel::discard_cell);
+        click(app, at);
+    }
+
+    fn confirm(app: &mut App) {
+        click(app, ui::form_buttons(ui::form_area(AREA), "discard")[0].as_position());
+    }
+
+    fn asked(app: &App) -> String {
+        let ui::Overlay::Confirm(confirm) = overlay_shown(app, AREA) else { panic!("a confirmation") };
+        assert_eq!((confirm.title, confirm.submit, confirm.dangerous), ("Discard changes", "discard", true));
+        confirm.message
+    }
+
+    fn git_out(dir: &Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().expect("git");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    fn read(repo: &TempDir, path: &str) -> String {
+        std::fs::read_to_string(repo.path().join(path)).expect("read file")
+    }
+
+    #[test]
+    fn a_click_asks_and_changes_nothing() {
+        let (repo, mut app, _rx) = open_changes();
+        ask(&mut app, 0);
+        assert_eq!(asked(&app), QUESTION);
+        assert_eq!(read(&repo, "a.txt"), "one\nTWO\n");
+        send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+        assert!(app.overlay.is_none());
+        assert_eq!(read(&repo, "a.txt"), "one\nTWO\n");
+    }
+
+    #[test]
+    fn confirming_puts_the_file_back_and_the_row_goes() {
+        let (repo, mut app, rx) = open_changes();
+        ask(&mut app, 0);
+        confirm(&mut app);
+        wait_until("the row goes", || {
+            drain(&mut app, &rx);
+            app.refresh(Instant::now());
+            let target = app.changes_target().expect("target");
+            app.changed_diff(&target).is_some_and(|d| d.files.is_empty())
+        });
+        assert_eq!(read(&repo, "a.txt"), "one\ntwo\n");
+        assert_eq!(toast(&app), Some("discarded the changes to a.txt"));
+    }
+
+    #[test]
+    fn a_file_that_changed_after_the_click_is_kept() {
+        let (repo, mut app, rx) = open_changes();
+        ask(&mut app, 0);
+        std::fs::write(repo.path().join("a.txt"), "one\nTWO\nthree\n").expect("rewrite");
+        confirm(&mut app);
+        pump_until(&mut app, &rx, "the answer", |a| toast(a).is_some());
+        assert_eq!(toast(&app), Some("a.txt changed meanwhile: nothing was discarded"));
+        assert_eq!(read(&repo, "a.txt"), "one\nTWO\nthree\n");
+    }
+
+    #[test]
+    fn the_viewed_mark_is_forgotten() {
+        let (_repo, mut app, rx) = open_changes();
+        let (target, file) = first_changed_file(&app);
+        app.panels.changes.toggle_viewed(target.workspace, &file);
+        assert!(app.panels.changes.viewed(target.workspace, &file));
+        ask(&mut app, 0);
+        confirm(&mut app);
+        pump_until(&mut app, &rx, "the answer", |a| toast(a).is_some());
+        assert!(!app.panels.changes.viewed(target.workspace, &file));
+    }
+
+    #[test]
+    fn every_project_discards_in_the_owning_workspace() {
+        let (shop, worktree) = shop_with_topic_worktree();
+        let (mut app, rx) = app_in(shop.path(), no_config());
+        loaded_every(&mut app, &rx);
+        let view = app.panel_view().expect("panel");
+        let changes::Body::Ready(diff) = &view.body else { panic!("ready") };
+        let new = diff.files.iter().position(|f| f.path == "new.txt").expect("new.txt");
+        ask(&mut app, new);
+        assert_eq!(asked(&app), "Delete new.txt? It is not in git, so this cannot be undone.");
+        confirm(&mut app);
+        pump_until(&mut app, &rx, "the answer", |a| toast(a).is_some());
+        assert!(!worktree.path().join("topic/new.txt").exists());
+        assert_eq!(read(&shop, "a.txt"), "one\nTWO\n");
+    }
+
+    #[test]
+    fn commits_has_neither_discard_nor_stage() {
+        let repo = repo_with_edit();
+        git(repo.path(), &["checkout", "--quiet", "-b", "feat"]);
+        git(repo.path(), &["commit", "--quiet", "-am", "edit"]);
+        let (mut app, rx) = app_in(repo.path(), no_config());
+        app.screen.side = Some(Side::Changes);
+        app.panels.changes.set_mode(changes::Mode::Commits);
+        refresh_until_loaded(&mut app, &rx);
+        let view = app.panel_view().expect("panel");
+        let at = row(&app, panel::Row::File(0));
+        let line = Rect::new(panel::parts(panel_area(&app), &view).body.x, at.y, panel_area(&app).width, 1);
+        assert_eq!(
+            (panel::discard_cell(&view, line), panel::stage_cell(&view, line)),
+            (Rect::default(), Rect::default())
+        );
+        click(&mut app, Position::new(line.right().saturating_sub(5), at.y));
+        click(&mut app, Position::new(line.right().saturating_sub(8), at.y));
+        assert!(app.overlay.is_none());
+        assert_eq!(read(&repo, "a.txt"), "one\nTWO\n");
+        assert_eq!(git_out(repo.path(), &["status", "--porcelain"]), "");
+    }
+
+    #[test]
+    fn a_workspace_gone_before_confirming_discards_nothing() {
+        let (repo, mut app, _rx) = open_changes();
+        ask(&mut app, 0);
+        std::fs::remove_dir_all(repo.path().join(".git")).expect("remove .git");
+        confirm(&mut app);
+        assert!(toast(&app).is_some_and(|t| t.contains("not in a git repository")), "{:?}", toast(&app));
+        assert_eq!(read(&repo, "a.txt"), "one\nTWO\n");
+    }
+}
+
+mod staging {
+    use super::every_project::loaded_every;
+    use super::*;
+
+    fn stage(app: &mut App, file: usize) {
+        let at = cell(app, file, panel::stage_cell);
+        click(app, at);
+    }
+
+    fn index(repo: &TempDir) -> String {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo.path())
+            .args(["status", "--porcelain", "--", "a.txt"])
+            .output()
+            .expect("git");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    fn until_marked(app: &mut App, rx: &Receiver<AppEvent>, want: changes::diff::Staged) {
+        wait_until("the mark follows", || {
+            drain(app, rx);
+            app.refresh(Instant::now());
+            marked(app, 0) == Some(want)
+        });
+    }
+
+    #[test]
+    fn a_click_stages_with_no_question_and_no_toast_then_unstages() {
+        let (repo, mut app, rx) = open_changes();
+        assert_eq!(marked(&app, 0), Some(changes::diff::Staged::No));
+        stage(&mut app, 0);
+        assert!(app.overlay.is_none());
+        until_marked(&mut app, &rx, changes::diff::Staged::Yes);
+        assert_eq!(index(&repo), "M  a.txt\n");
+        assert_eq!(toast(&app), None);
+        stage(&mut app, 0);
+        until_marked(&mut app, &rx, changes::diff::Staged::No);
+        assert_eq!(index(&repo), " M a.txt\n");
+        assert_eq!(toast(&app), None);
+    }
+
+    #[test]
+    fn a_file_that_changed_after_the_view_is_left_alone() {
+        let (repo, mut app, rx) = open_changes();
+        std::fs::write(repo.path().join("a.txt"), "one\nTWO\nthree\n").expect("rewrite");
+        stage(&mut app, 0);
+        pump_until(&mut app, &rx, "the answer", |a| toast(a).is_some());
+        assert_eq!(toast(&app), Some("a.txt changed meanwhile: nothing was staged"));
+        assert_eq!(index(&repo), " M a.txt\n");
+    }
+
+    #[test]
+    fn the_viewed_mark_stays() {
+        let (_repo, mut app, rx) = open_changes();
+        let (target, file) = first_changed_file(&app);
+        app.panels.changes.toggle_viewed(target.workspace, &file);
+        stage(&mut app, 0);
+        until_marked(&mut app, &rx, changes::diff::Staged::Yes);
+        let (_, file) = first_changed_file(&app);
+        assert!(app.panels.changes.viewed(target.workspace, &file));
+    }
+
+    #[test]
+    fn every_project_stages_in_the_owning_workspace() {
+        let (shop, worktree) = shop_with_topic_worktree();
+        let (mut app, rx) = app_in(shop.path(), no_config());
+        loaded_every(&mut app, &rx);
+        let changes::Body::Ready(diff) = app.panel_view().expect("panel").body else { panic!("ready") };
+        let new = diff.files.iter().position(|f| f.path == "new.txt").expect("new.txt");
+        stage(&mut app, new);
+        wait_until("it is staged", || {
+            drain(&mut app, &rx);
+            app.refresh(Instant::now());
+            marked(&app, new) == Some(changes::diff::Staged::Yes)
+        });
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(worktree.path().join("topic"))
+            .args(["status", "--porcelain", "--", "new.txt"])
+            .output()
+            .expect("git");
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "A  new.txt\n");
+        assert_eq!(index(&shop), " M a.txt\n");
+    }
+
+    #[test]
+    fn a_held_index_lock_shows_gits_message() {
+        let (repo, mut app, rx) = open_changes();
+        std::fs::write(repo.path().join(".git/index.lock"), "").expect("lock");
+        stage(&mut app, 0);
+        pump_until(&mut app, &rx, "the answer", |a| toast(a).is_some());
+        assert!(toast(&app).is_some_and(|t| t.contains("index.lock")), "{:?}", toast(&app));
+    }
+}
+
+mod selection;

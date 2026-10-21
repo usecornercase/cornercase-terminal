@@ -4,7 +4,7 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::agents::usage::{Report, Window, window};
+use crate::agents::usage::{Reading, Report, Window, window};
 use crate::error::{Error, Result};
 
 const ARGS: [&str; 1] = ["app-server"];
@@ -75,7 +75,12 @@ fn snapshot_windows(id: &str, snapshot: &Snapshot) -> impl Iterator<Item = Windo
         let limit = limit.as_ref()?;
         let label = duration(limit.window_duration_mins, slot);
         let label = scope.as_ref().map_or_else(|| label.clone(), |scope| format!("{label} · {scope}"));
-        Some(window(label, slot.into(), scope.clone(), Some(limit.used_percent), None, limit.resets_at))
+        Some(window(
+            label,
+            slot.into(),
+            scope.clone(),
+            Reading { percent: Some(limit.used_percent), severity: None, resets_at: limit.resets_at },
+        ))
     })
 }
 

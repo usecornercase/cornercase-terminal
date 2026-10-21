@@ -1,57 +1,52 @@
 mod prepare;
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ratatui::layout::Rect;
 use serde_json::json;
 
-use super::{Handled, Pending, Stage};
+use super::{Asked, Asker, Handled, Stage, Waits};
 use crate::agents;
 use crate::agents::usage;
 use crate::app::App;
-use crate::app::queue_panel::{CLIENTS, QueueEvent};
+use crate::app::queue_panel::QueueEvent;
+use crate::control::contract::Refusal;
 use crate::control::{self, QueueAdd};
 use crate::error::Error;
 use crate::issues;
+use crate::issues::Client;
+use crate::issues::locate::Locator;
 use crate::log::{Job, Level};
+use crate::project::{Hierarchy, WorkspaceAt};
 use crate::queue::{self, Place, State};
 
 impl App {
-    pub(super) fn queue_request(
-        &mut self,
-        client: u64,
-        caller: Option<u64>,
-        command: control::Queue,
-        area: Option<Rect>,
-        now: Instant,
-    ) -> Handled {
+    pub(super) fn queue_request(&mut self, asked: Asked, command: control::Queue) -> Handled {
+        let Asked { client, asker, area, now } = asked;
         match command {
-            control::Queue::List => Ok(Some(json!({ "entries": self.queued.queue.entries }))),
-            control::Queue::Remove(id) => {
-                if self.queued.running.values().any(|running| *running == id) {
-                    return Err("this entry is already starting".into());
-                }
-                self.queued.queue.remove(id)?;
-                Ok(Some(json!({})))
-            }
-            control::Queue::Run(id) => {
-                self.queued.area = Some(super::sized(area)?);
-                if let Err(reason) = self.run_queued(id, now) {
-                    if self
-                        .queued
-                        .queue
-                        .entry(id)
-                        .is_some_and(|entry| !matches!(entry.state, State::Starting | State::Started { .. }))
-                    {
-                        self.fail_queued(id, &reason);
-                    }
-                    return Err(reason.into());
-                }
-                Ok(Some(json!({ "id": id })))
-            }
-            control::Queue::Add(add) => self.add_queue_request(Some(client), caller, None, &add),
-            control::Queue::Edit { id, add } => self.add_queue_request(Some(client), caller, Some(id), &add),
+            control::Queue::List => Ok(Some(json!({ "entries": self.panels.queued.queue().entries }))),
+            control::Queue::Remove(id) => self.remove_queue_request(id),
+            control::Queue::Run(id) => self.run_queue_request(id, area, now),
+            control::Queue::Add(add) => self.add_queue_request(Some(client), asker.caller, None, &add),
+            control::Queue::Edit { id, add } => self.add_queue_request(Some(client), asker.caller, Some(id), &add),
         }
+    }
+
+    fn remove_queue_request(&mut self, id: u64) -> Handled {
+        self.panels.queued.remove(id)?;
+        Ok(Some(json!({})))
+    }
+
+    fn run_queue_request(&mut self, id: u64, area: Option<Rect>, now: Instant) -> Handled {
+        self.set_queue_area(super::sized(area)?);
+        if let Err(reason) = self.run_queued(id, now) {
+            let unfinished = |entry: &queue::Entry| !matches!(entry.state, State::Starting | State::Started { .. });
+            if self.panels.queued.queue().entry(id).is_some_and(unfinished) {
+                self.fail_queued(id, &reason);
+            }
+            return Err(reason.into());
+        }
+        Ok(Some(json!({ "id": id })))
     }
 
     pub(in crate::app) fn add_queue_request(
@@ -61,19 +56,50 @@ impl App {
         edit: Option<u64>,
         add: &QueueAdd,
     ) -> Handled {
-        if edit.is_some_and(|id| self.queued.running.values().any(|running| *running == id)) {
+        if edit.is_some_and(|id| self.panels.queued.starting(id)) {
             return Err("this entry is already starting".into());
         }
-        let old = edit.map(|id| self.queued.queue.entry(id).cloned().ok_or_else(|| queue::missing(id))).transpose()?;
-        let mut task = self.queue_task(caller, add, old.as_ref())?;
+        let old = edit
+            .map(|id| self.panels.queued.queue().entry(id).cloned().ok_or_else(|| queue::missing(id)))
+            .transpose()?;
+        let mut prepared = self.prepare_queue(caller, add, old.as_ref())?;
+        if prepared.issue.is_none() && prepared.probe.is_none() {
+            return self.add_queue_now(edit, &mut prepared);
+        }
+        if let Some(client) = client {
+            let key = self.clients.requests.key();
+            self.clients.requests.push(
+                client,
+                key,
+                Waits { done: control::Done::default(), stage: Stage::Reading, timeout: None },
+            );
+        }
+        let job = Job::new(Level::Info, "queue", "prepare");
+        self.spawn_job(
+            job,
+            move || prepared.finish(),
+            move |result, _| {
+                let result = result.map_err(|error| error.to_string());
+                Some(crate::app::AppEvent::Queue(Box::new(QueueEvent { client, edit, result })))
+            },
+        );
+        Ok(None)
+    }
+
+    fn prepare_queue(
+        &mut self,
+        caller: Option<u64>,
+        add: &QueueAdd,
+        old: Option<&queue::Entry>,
+    ) -> Result<Prepared, Refusal> {
+        let task = self.queue_task(caller, add, old)?;
         self.requested_accounts(None, &task.accounts)?;
         let at = if add.at.is_empty() {
-            old.as_ref().map(|entry| queue::clock::display(entry.task.at, &task.zone)).unwrap_or_default()
+            old.map(|entry| queue::clock::display(entry.task.at, &task.zone)).unwrap_or_default()
         } else {
             add.at.clone()
         };
         let kept_at = old
-            .as_ref()
             .filter(|entry| add.at.is_empty() || add.at == queue::clock::display(entry.task.at, &task.zone))
             .map(|entry| entry.task.at);
         let project = self
@@ -86,98 +112,51 @@ impl App {
         if issue.is_none() && task.prompt.trim().is_empty() {
             return Err("a queue entry needs --prompt or --issue".into());
         }
-        let template = self.config.prompt.clone();
         let reset = reset_agent(&at)?;
-        let probe = reset.map(|agent| (agent, agents::command(&self.config, agent.name()), self.usage_timeout));
-        let clock = crate::time::now();
-        if issue.is_none() && probe.is_none() {
-            task.at = kept_at.map_or_else(|| queue::clock::parse(&at, &task.zone, clock), Ok)?;
-            if task.at <= clock {
-                return Err("choose a time in the future".into());
-            }
-            let id = match edit {
-                Some(id) => {
-                    self.queued.queue.edit(id, task)?;
-                    id
-                }
-                None => self.queued.queue.add(task)?,
-            };
-            return Ok(Some(json!({ "id": id })));
-        }
-        if let Some(client) = client {
-            let key = self.requests.key();
-            self.requests.pending.push(Pending {
-                client: Some(client),
-                key,
-                timeout: None,
-                done: control::Done::default(),
-                stage: Stage::Reading,
-            });
-        }
-        let named = add.label.is_some();
-        let follow = add.worktree.is_none();
+        let probe = reset.map(|agent| (agent, agents::command(&self.config, agent.name()), self.usages.timeout()));
         let repo_root = crate::git::is_repo_root(&task.place.project);
-        let job = Job::new(Level::Info, "queue", "prepare");
-        self.spawn_job(
-            job,
-            move || {
-                if let Some((api, locator)) = issue {
-                    let issue = issues::locate::find(&api, &locator)?;
-                    let branch = issues::branch(&issue);
-                    task.prompt = issues::prompt(&template, &issue, &branch);
-                    if !named {
-                        task.label = format!("{} {}", issue.key, issue.title);
-                    }
-                    if repo_root && task.place.workspace.is_none() && (follow || task.place.branch.is_none()) {
-                        task.place.branch = Some(branch);
-                    }
-                }
-                task.at = match probe {
-                    Some((agent, command, timeout)) => {
-                        let report = usage::probe(agent, &command, None, timeout)?;
-                        reset_time(&report, clock).map_err(Error::Api)?
-                    }
-                    None => {
-                        kept_at.map_or_else(|| queue::clock::parse(&at, &task.zone, clock), Ok).map_err(Error::Api)?
-                    }
-                };
-                Ok(task)
-            },
-            move |result, _| {
-                Some(crate::app::AppEvent::Queue(Box::new(QueueEvent {
-                    client,
-                    edit,
-                    result: result.map_err(|error| error.to_string()),
-                })))
-            },
-        );
-        Ok(None)
+        let (named, follow) = (add.label.is_some(), add.worktree.is_none());
+        let template = self.config.prompt.clone();
+        let naming = (self.config.issue_branch.clone(), self.branch_user(Some(&task.place.project)));
+        let clock = crate::time::now();
+        Ok(Prepared { task, at, kept_at, issue, probe, clock, template, naming, named, follow, repo_root })
+    }
+
+    fn add_queue_now(&mut self, edit: Option<u64>, prepared: &mut Prepared) -> Handled {
+        let Prepared { task, at, kept_at, clock, .. } = prepared;
+        task.at = kept_at.map_or_else(|| queue::clock::parse(at, &task.zone, *clock), Ok)?;
+        if task.at <= *clock {
+            return Err("choose a time in the future".into());
+        }
+        let task = task.clone();
+        let id = self.panels.queued.schedule(edit, task)?;
+        Ok(Some(json!({ "id": id })))
     }
 
     pub(in crate::app) fn queue_reply(&mut self, client: u64, reply: Result<u64, String>) {
-        self.requests.pending.retain(|pending| pending.client != Some(client));
+        self.clients.requests.pending.retain(|pending| pending.client != Some(client));
         self.answer(Some(client), reply.map(|id| json!({ "id": id })));
     }
 
-    fn queue_place(&self, place: &Place) -> Result<(usize, usize), String> {
+    fn queue_place(&self, place: &Place) -> Result<(usize, Option<WorkspaceAt>), String> {
         let p = self
             .projects
             .iter()
             .position(|project| !project.closing && project.path == place.project)
             .ok_or_else(|| format!("the queued project {} is closed", place.project.display()))?;
-        let w = match (&place.workspace, place.workspace_id) {
+        let at = match (&place.workspace, place.workspace_id) {
             (Some(path), Some(id)) if place.server == control::server_token() => {
-                let (found, w) = self.usable_workspace(id)?;
-                if found != p || self.projects[p].workspaces[w].path != *path {
+                let at = self.usable_workspace(id)?;
+                if at.project() != p || self.projects.workspace(at).path != *path {
                     return Err("the queued workspace moved to another folder".into());
                 }
-                w
+                Some(at)
             }
             (Some(path), _) => {
-                let mut matching = self.projects[p].workspaces.iter().enumerate().filter(|(_, workspace)| {
+                let mut matching = self.projects[p].workspaces.iter().filter(|workspace| {
                     workspace.open() && workspace.path == *path && workspace.name == place.workspace_name
                 });
-                let (_, workspace) = matching
+                let workspace = matching
                     .next()
                     .ok_or_else(|| format!("the queued workspace {} is closed or renamed", path.display()))?;
                 let id = workspace.id;
@@ -187,70 +166,101 @@ impl App {
                             .into(),
                     );
                 }
-                self.projects[p].index_of(id).ok_or("the queued workspace is closed")?
+                Some(self.projects.workspace_in(self.projects[p].id, id).ok_or("the queued workspace is closed")?)
             }
-            (None, _) => self.projects[p].active,
+            (None, _) => None,
         };
-        Ok((p, w))
+        Ok((p, at))
     }
 
     pub(in crate::app) fn run_queued(&mut self, id: u64, now: Instant) -> Result<(), String> {
-        let entry = self.queued.queue.entry(id).ok_or_else(|| queue::missing(id))?.clone();
-        if matches!(entry.state, State::Starting | State::Started { .. })
-            || self.queued.running.values().any(|running| *running == id)
-        {
+        let entry = self.panels.queued.queue().entry(id).ok_or_else(|| queue::missing(id))?.clone();
+        if matches!(entry.state, State::Starting | State::Started { .. }) || self.panels.queued.starting(id) {
             return Err("this queue entry has already started".into());
         }
-        let (p, w) = self.queue_place(&entry.task.place)?;
+        let (p, at) = self.queue_place(&entry.task.place)?;
         if !agents::installed(&entry.task.program) {
             return Err(format!("{} is not installed", entry.task.agent));
         }
         let start = control::Start {
             agent: Some(entry.task.agent.clone()),
             project: Some(self.projects[p].id),
-            workspace: entry.task.place.workspace.as_ref().map(|_| self.projects[p].workspaces[w].id),
+            workspace: at.map(|at| self.projects.workspace(at).id),
             worktree: entry.task.place.branch.clone(),
             name: Some(entry.task.label.clone()),
             accounts: entry.task.accounts.clone(),
             ..control::Start::default()
         };
-        self.queued.next_client += 1;
-        let client = CLIENTS + self.queued.next_client;
-        self.queued.running.insert(client, id);
-        if let Some(entry) = self.queued.queue.entry_mut(id) {
-            entry.state = State::Starting;
-        }
-        if let Some(path) = &self.queued.path
-            && let Err(error) = crate::persist::save(path, &self.queue_saved())
-        {
-            self.queued.running.remove(&client);
-            let reason = format!("cannot save the queue before starting: {error}");
-            if let Some(entry) = self.queued.queue.entry_mut(id) {
-                entry.state = State::Failed { reason: reason.clone() };
-            }
-            return Err(reason);
-        }
-        match self.start_request(client, None.into(), start, self.queued.area, now) {
+        let client = self.mark_starting(id)?;
+        let asked = Asked { client, asker: Asker::default(), area: self.panels.queued.area(), now };
+        match self.start_request(asked, start) {
             Ok(Some(value)) => {
                 self.queue_answered(client, &Ok(value));
             }
             Ok(None) => {}
-            Err(reason) => {
-                let reason = String::from(reason);
-                self.queued.running.remove(&client);
-                if let Some(entry) = self.queued.queue.entry_mut(id) {
-                    entry.state = State::Failed { reason: reason.clone() };
-                }
-                return Err(reason);
-            }
+            Err(reason) => return Err(self.fail_starting(client, id, String::from(reason))),
         }
         Ok(())
+    }
+
+    fn mark_starting(&mut self, id: u64) -> Result<u64, String> {
+        let client = self.panels.queued.start(id);
+        if let Err(error) = self.panels.queued.save() {
+            let reason = format!("cannot save the queue before starting: {error}");
+            return Err(self.fail_starting(client, id, reason));
+        }
+        Ok(client)
+    }
+
+    fn fail_starting(&mut self, client: u64, id: u64, reason: String) -> String {
+        self.panels.queued.finish(client);
+        self.panels.queued.fail(id, &reason);
+        reason
     }
 
     pub(in crate::app) fn focus_queued(&mut self, pane: u64, area: Rect) {
         if self.show(control::Item::Pane(pane)).is_ok() {
             self.resize(area);
         }
+    }
+}
+
+struct Prepared {
+    task: queue::Task,
+    at: String,
+    kept_at: Option<i64>,
+    issue: Option<(Client, Locator)>,
+    probe: Option<(agents::Known, String, Duration)>,
+    clock: i64,
+    template: String,
+    naming: (String, String),
+    named: bool,
+    follow: bool,
+    repo_root: bool,
+}
+
+impl Prepared {
+    fn finish(self) -> Result<queue::Task, Error> {
+        let Self { mut task, at, kept_at, issue, probe, clock, template, naming, named, follow, repo_root } = self;
+        if let Some((api, locator)) = issue {
+            let issue = issues::locate::find(&api, &locator)?;
+            let branch = issues::naming::branch(&issue, &naming.0, &naming.1);
+            task.prompt = issues::prompt(&template, &issue, &branch);
+            if !named {
+                task.label = format!("{} {}", issue.key, issue.title);
+            }
+            if repo_root && task.place.workspace.is_none() && (follow || task.place.branch.is_none()) {
+                task.place.branch = Some(branch);
+            }
+        }
+        task.at = match probe {
+            Some((agent, command, timeout)) => {
+                let report = usage::probe(agent, &command, None, timeout)?;
+                reset_time(&report, clock).map_err(Error::Api)?
+            }
+            None => kept_at.map_or_else(|| queue::clock::parse(&at, &task.zone, clock), Ok).map_err(Error::Api)?,
+        };
+        Ok(task)
     }
 }
 

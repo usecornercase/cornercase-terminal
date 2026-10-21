@@ -66,8 +66,21 @@ fn send_waiting(
     args: &Value,
 ) -> Vec<(u64, String)> {
     let server = caller.map(|_| wire::server_token());
-    let text = json!({"contract": 1, "caller": caller, "server": server, "command": command, "args": args}).to_string();
-    app.request(CLIENT, &text, Some(AREA), Instant::now());
+    send_headed(app, rx, &json!({"caller": caller, "server": server}), command, args)
+}
+
+fn send_headed(
+    app: &mut App,
+    rx: &Receiver<AppEvent>,
+    head: &Value,
+    command: &str,
+    args: &Value,
+) -> Vec<(u64, String)> {
+    let mut text = head.clone();
+    text["contract"] = json!(1);
+    text["command"] = json!(command);
+    text["args"] = args.clone();
+    app.request(CLIENT, &text.to_string(), Some(AREA), Instant::now());
     let mut got = Vec::new();
     wait_until("the answer", || {
         drain(app, rx);
@@ -173,7 +186,7 @@ impl Agent {
         };
         let config_path = write_config(config.path(), &settings);
         let (mut app, rx) = app_in(project.path(), config_path);
-        app.agents.claude_dir = Some(fake.dir().to_path_buf());
+        app.agents.set_claude_dir(fake.dir());
         Self { app, rx, fake, config_dir: config, _project: project }
     }
 
@@ -291,7 +304,7 @@ fn a_local_command_needs_no_record(app: &mut App, rx: &Receiver<AppEvent>, text:
 }
 
 fn an_unconfirmed_send_gives_up(app: &mut App, rx: &Receiver<AppEvent>) {
-    app.confirm_within = Duration::from_millis(300);
+    app.clients.set_confirm_within(Duration::from_millis(300));
     send_enter(app, "fix the login");
     let message = error(answered(app, rx, "the send gives up"));
     assert!(message.contains("not confirmed"), "{message}");
@@ -504,6 +517,7 @@ mod accounts;
 mod agents;
 mod arranging;
 mod changes;
+mod close_agent;
 mod config;
 mod contract;
 mod copilot;

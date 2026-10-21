@@ -21,14 +21,20 @@ fn a_server_started_without_a_window_runs_agents_and_a_window_finds_them_later()
     let again = started(&session, &["--cols", "200", "--rows", "60"]);
 
     assert_eq!(
-        (&first["already"], &first["size"], &first["cols"], &first["rows"], &first["restored"]),
-        (&false.into(), &"start-server".into(), &160.into(), &48.into(), &false.into())
+        (
+            &first["already"],
+            &first["size"],
+            &first["cols"],
+            &first["rows"],
+            &first["restored"],
+            &first["theme"]["from"]
+        ),
+        (&false.into(), &"start-server".into(), &160.into(), &48.into(), &false.into(), &"default".into())
     );
     assert_eq!((&again["already"], &again["cols"], &again["rows"]), (&true.into(), &160.into(), &48.into()));
     assert_eq!(pane_ids(&session), opened);
     assert_eq!(opened.len(), 1, "one shell opens in the current folder");
 
-    assert_eq!(first["theme"]["from"], "default");
     let tab = session.says(&["new-tab", "--name", "build"]);
     let start = session.spawn(&["start", "claude", "--prompt", "fix the login", "--wait", "--timeout", "30"]);
     session.wait_for_working();
@@ -49,6 +55,10 @@ fn a_server_started_without_a_window_runs_agents_and_a_window_finds_them_later()
     assert!(before.contains(&tab.parse().expect("a pane id")), "{before:?}");
     assert_eq!(before.len(), 3);
     assert_eq!(pane_ids(&session), before, "the window opened no other shell");
+    assert_restored_once(&session);
+}
+
+fn assert_restored_once(session: &Session) {
     let log = std::fs::read_to_string(session.dir.join("server.log")).expect("the server log");
     let restores = log.matches("session restored").count() + log.matches("no session to restore").count();
     assert_eq!(restores, 1, "{log}");

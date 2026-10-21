@@ -7,6 +7,7 @@ use super::App;
 use super::interaction::Drag;
 use super::interaction::Grab;
 use super::interaction::RowDrag;
+use super::layout::List;
 use super::menus::Marked;
 use super::menus::MenuAction;
 use super::menus::Target;
@@ -28,6 +29,7 @@ struct AgentAt {
     row: Rect,
     fold: Option<bool>,
     on_fold: bool,
+    on_close: bool,
 }
 
 impl App {
@@ -43,8 +45,8 @@ impl App {
 
     pub(super) fn click_projects(&mut self, list: Rect, pitch: u16, pos: Position, area: Rect) {
         let rows = self.sidebar_rows();
-        let rect = |row: SidebarRow| ui::entry_row(list, pitch, &rows, self.scroll.projects, row);
-        match ui::sidebar_hit(list, pitch, &rows, self.scroll.projects, pos) {
+        let rect = |row: SidebarRow| ui::entry_row(list, pitch, &rows, self.scroll.of(List::Projects), row);
+        match ui::sidebar_hit(list, pitch, &rows, self.scroll.of(List::Projects), pos) {
             Some(SidebarHit::Select(i)) => {
                 self.grab(Target::Project(self.projects[i].id), rect(SidebarRow::Project(i)), area, false);
             }
@@ -73,7 +75,7 @@ impl App {
         if areas.tree {
             self.tree_layout(areas.list)
         } else {
-            ui::project_rows(areas.list, areas.pitch, &self.sidebar_rows(), self.scroll.projects)
+            ui::project_rows(areas.list, areas.pitch, &self.sidebar_rows(), self.scroll.of(List::Projects))
         }
     }
 
@@ -81,8 +83,8 @@ impl App {
         match row {
             ui::TreeRow::Group(g) => self.overlay = Some(Overlay::DeleteGroup { group: self.groups[g].id }),
             ui::TreeRow::Project(p) => self.overlay = Some(Overlay::CloseProject { project: self.projects[p].id }),
-            ui::TreeRow::Workspace(p, w) => self.close_workspace(p, w),
-            ui::TreeRow::Tab(p, w, t) => self.close_tab(p, w, t),
+            ui::TreeRow::Workspace(p, w) => self.close_workspace_row(p, w, false),
+            ui::TreeRow::Tab(p, w, t) => self.close_tab_row((p, w, t), false),
             _ => {}
         }
     }
@@ -110,22 +112,14 @@ impl App {
     pub(super) fn agents_view(&self) -> ui::AgentsView {
         let focus = self.focus();
         let focused = self.term().map(|term| term.id);
-        let narrow = self.drawn.agents_list.width < ui::MIN_MENU_ROW_WIDTH;
+        let narrow = self.screen.drawn.agents_list.width < ui::MIN_MENU_ROW_WIDTH;
         let (places, nodes) = self.shown_agents(narrow);
         let entries = nodes.into_iter().map(|node| {
-            let (p, w, t, i) = places[node.index];
-            let project = &self.projects[p];
-            let workspace = &project.workspaces[w];
-            let tab = &workspace.tabs[t];
+            let (at, i) = places[node.index];
+            let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at.workspace()));
+            let tab = self.projects.tab(at);
             let term = &tab.panes[i];
-            let hidden: Vec<&Term> = node
-                .hidden
-                .iter()
-                .map(|&h| {
-                    let (p, w, t, i) = places[h];
-                    &self.projects[p].workspaces[w].tabs[t].panes[i]
-                })
-                .collect();
+            let hidden: Vec<&Term> = node.hidden.iter().map(|&h| self.placed(places[h])).collect();
             let context = term.context.context();
             let (role, place) = self.seated(term, node.depth);
             ui::AgentEntry {
@@ -146,21 +140,20 @@ impl App {
                 attention: activity::attention(hidden.iter().map(|term| term.agent.status())),
             }
         });
-        ui::AgentsView { entries: entries.collect(), scroll: self.scroll.agents }
+        ui::AgentsView { entries: entries.collect(), scroll: self.scroll.of(List::Agents) }
     }
 
     pub(super) fn agent_layout(&self, areas: &ui::Areas) -> ui::Rows {
-        ui::agent_rows(areas.agents_list, areas.pitch, self.shown_agents(false).1.len(), self.scroll.agents)
+        ui::agent_rows(areas.agents_list, areas.pitch, self.shown_agents(false).1.len(), self.scroll.of(List::Agents))
     }
 
     fn agent_row_at(&self, areas: &ui::Areas, pos: Position) -> Option<AgentAt> {
         let narrow = areas.agents_list.width < ui::MIN_MENU_ROW_WIDTH;
         let (places, nodes) = self.shown_agents(narrow);
-        let (list, pitch, scroll) = (areas.agents_list, areas.pitch, self.scroll.agents);
+        let (list, pitch, scroll) = (areas.agents_list, areas.pitch, self.scroll.of(List::Agents));
         let i = ui::agent_hit(list, pitch, nodes.len(), scroll, pos)?;
         let node = &nodes[i];
-        let (p, w, t, pane) = places[node.index];
-        let term = &self.projects[p].workspaces[w].tabs[t].panes[pane];
+        let term = self.placed(places[node.index]);
         let row = ui::agent_row(list, pitch, nodes.len(), scroll, i);
         let fold = node.has_children.then_some(term.collapsed);
         Some(AgentAt {
@@ -168,6 +161,7 @@ impl App {
             row,
             fold,
             on_fold: fold.is_some() && ui::agent_fold(row, node.depth).contains(pos),
+            on_close: ui::agent_close(row, pitch).contains(pos),
         })
     }
 
@@ -186,15 +180,18 @@ impl App {
             .mark_action(Marked::Pane(at.pane))
             .into_iter()
             .chain(at.fold.map(|collapsed| MenuAction::AgentFold(at.pane, !collapsed)))
+            .chain(std::iter::once(MenuAction::CloseAgent(at.pane)))
             .collect();
-        if !actions.is_empty() {
-            self.overlay = Some(Overlay::Menu { at: pos, actions });
-        }
+        self.overlay = Some(Overlay::Menu { at: pos, actions });
     }
 
     fn press_agent(&mut self, areas: &ui::Areas, pos: Position, area: Rect) {
         let Some(at) = self.agent_row_at(areas, pos) else { return };
-        self.drag = Some(Drag::Row(RowDrag {
+        if at.on_close {
+            self.ask_close_agent(at.pane);
+            return;
+        }
+        self.screen.drag = Some(Drag::Row(RowDrag {
             target: Grab::Agent(at.pane),
             row: at.row,
             moved: false,
@@ -207,7 +204,7 @@ impl App {
     pub(super) fn set_agent_fold(&mut self, pane: u64, collapsed: bool) -> bool {
         let Some(term) = self.projects.pane_by_mut(pane) else { return false };
         term.collapsed = collapsed;
-        self.scroll.agents = self.agent_layout(&self.drawn).scrolled(0);
+        self.scroll.set(List::Agents, self.agent_layout(&self.screen.drawn).scrolled(0));
         true
     }
 
@@ -244,7 +241,7 @@ impl App {
         let lines = |w: &Workspace| -> Vec<u16> { w.tabs.iter().map(|t| self.tab_details(t).lines()).collect() };
         let lines = self.project().map(|p| p.workspaces.iter().map(lines).collect()).unwrap_or_default();
         let folded = self.project().map(|p| p.workspaces.iter().map(|w| w.collapsed).collect()).unwrap_or_default();
-        ui::TabLines::new(lines, self.drawn.tab_bar.is_empty()).folded(folded)
+        ui::TabLines::new(lines, self.screen.drawn.tab_bar.is_empty()).folded(folded)
     }
 
     pub(super) fn click_workspaces(&mut self, list: Rect, pitch: u16, pos: Position, area: Rect) -> Result<()> {
@@ -254,57 +251,79 @@ impl App {
         let tabs = self.tab_lines();
         let hit = self.workspace_hit(list, pitch, &tabs, pos);
         if matches!(hit, Some(WorkspaceHit::NewTab(_))) {
-            self.nav = None;
+            self.screen.nav = None;
         }
-        let p = self.active;
-        let ask = pitch > 1;
-        let rect = |row: WorkspaceRow| ui::workspace_row(list, pitch, &tabs, self.scroll.workspaces, row);
-        let pull = match hit {
-            Some(WorkspaceHit::Workspace(w)) => self.pull_in_list(list, pitch, &tabs, w, pos),
-            _ => None,
-        };
-        if let Some(id) = pull {
+        if let Some(WorkspaceHit::Workspace(w)) = hit
+            && let Some((rect, id)) = self.pull_in_list(list, pitch, &tabs, w)
+            && rect.contains(pos)
+        {
             self.open_pull_request(id);
             return Ok(());
         }
-        let project = &self.projects[p];
-        match hit {
-            Some(WorkspaceHit::Workspace(w)) => {
-                let target = Target::Workspace(project.id, project.workspaces[w].id);
-                self.grab(target, rect(WorkspaceRow::Workspace(w)), area, false);
+        let Some(hit) = hit else { return Ok(()) };
+        let (p, ask) = (self.active, pitch > 1);
+        let rect = |row: WorkspaceRow| ui::workspace_row(list, pitch, &tabs, self.scroll.of(List::Workspaces), row);
+        let target = self.workspace_hit_target(p, hit);
+        match (hit, target) {
+            (WorkspaceHit::Workspace(w) | WorkspaceHit::Fold(w), Some(target)) => {
+                let fold = matches!(hit, WorkspaceHit::Fold(_));
+                self.grab(target, rect(WorkspaceRow::Workspace(w)), area, fold);
             }
-            Some(WorkspaceHit::Fold(w)) => {
-                let target = Target::Workspace(project.id, project.workspaces[w].id);
-                self.grab(target, rect(WorkspaceRow::Workspace(w)), area, true);
-            }
-            Some(WorkspaceHit::CloseWorkspace(w)) if ask && !project.workspaces[w].worktree => {
-                self.overlay =
-                    Some(Overlay::CloseWorkspace { project: project.id, workspace: project.workspaces[w].id });
-            }
-            Some(WorkspaceHit::CloseWorkspace(w)) => self.close_workspace(p, w),
-            Some(WorkspaceHit::Tab(w, t)) => {
-                let workspace = &project.workspaces[w];
-                let target = Target::Tab(project.id, workspace.id, workspace.tabs[t].id);
-                self.grab(target, rect(WorkspaceRow::Tab(w, t)), area, false);
-            }
-            Some(WorkspaceHit::CloseTab(w, t)) if ask => {
-                let workspace = &project.workspaces[w];
-                let (project, workspace, tab) = (project.id, workspace.id, workspace.tabs[t].id);
-                self.overlay = Some(Overlay::CloseTab { project, workspace, tab });
-            }
-            Some(WorkspaceHit::CloseTab(w, t)) => self.close_tab(p, w, t),
-            Some(WorkspaceHit::NewTab(w)) => self.add_tab(p, w, area)?,
-            Some(WorkspaceHit::NewWorkspace) => self.new_workspace_menu(p, pos),
-            Some(WorkspaceHit::WorkspaceMenu(_) | WorkspaceHit::TabMenu(..)) => {
+            (WorkspaceHit::Tab(w, t), Some(target)) => self.grab(target, rect(WorkspaceRow::Tab(w, t)), area, false),
+            (WorkspaceHit::CloseWorkspace(w), _) => self.close_workspace_row(p, w, ask),
+            (WorkspaceHit::CloseTab(w, t), _) => self.close_tab_row((p, w, t), ask),
+            (WorkspaceHit::NewTab(w), _) => return self.add_tab_row(p, w, area),
+            (WorkspaceHit::NewWorkspace, _) => self.new_workspace_menu(p, pos),
+            (WorkspaceHit::WorkspaceMenu(_) | WorkspaceHit::TabMenu(..), _) => {
                 self.open_workspace_menu(list, pitch, pos);
             }
-            None => {}
+            _ => {}
         }
         Ok(())
     }
 
+    fn workspace_hit_target(&self, p: usize, hit: WorkspaceHit) -> Option<Target> {
+        match hit {
+            WorkspaceHit::Workspace(w)
+            | WorkspaceHit::Fold(w)
+            | WorkspaceHit::CloseWorkspace(w)
+            | WorkspaceHit::WorkspaceMenu(w) => Some(self.workspace_target(self.projects.workspace_at(p, w)?)),
+            WorkspaceHit::Tab(w, t) | WorkspaceHit::CloseTab(w, t) | WorkspaceHit::TabMenu(w, t) => {
+                Some(self.tab_target(self.projects.tab_at(p, w, t)?))
+            }
+            WorkspaceHit::NewTab(_) | WorkspaceHit::NewWorkspace => None,
+        }
+    }
+
+    pub(super) fn add_tab_row(&mut self, p: usize, w: usize, area: Rect) -> Result<()> {
+        match self.projects.workspace_at(p, w) {
+            Some(at) => self.add_tab(at, area),
+            None => Ok(()),
+        }
+    }
+
+    fn close_workspace_row(&mut self, p: usize, w: usize, ask: bool) {
+        let Some(at) = self.projects.workspace_at(p, w) else { return };
+        let workspace = self.projects.workspace(at);
+        if ask && !workspace.worktree {
+            self.overlay = Some(Overlay::CloseWorkspace { project: self.projects[p].id, workspace: workspace.id });
+        } else {
+            self.close_workspace(at);
+        }
+    }
+
+    pub(super) fn close_tab_row(&mut self, (p, w, t): (usize, usize, usize), ask: bool) {
+        let Some(at) = self.projects.tab_at(p, w, t) else { return };
+        if !ask {
+            return self.close_tab(at);
+        }
+        let workspace = self.projects.workspace(at.workspace()).id;
+        let (project, tab) = (self.projects[p].id, self.projects.tab(at).id);
+        self.overlay = Some(Overlay::CloseTab { project, workspace, tab });
+    }
+
     pub(super) fn open_project_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
-        let actions = match ui::sidebar_hit(list, pitch, &self.sidebar_rows(), self.scroll.projects, pos) {
+        let actions = match ui::sidebar_hit(list, pitch, &self.sidebar_rows(), self.scroll.of(List::Projects), pos) {
             Some(SidebarHit::Select(i) | SidebarHit::Close(i) | SidebarHit::Menu(i)) => self.project_menu(i),
             Some(SidebarHit::Group(g) | SidebarHit::CloseGroup(g) | SidebarHit::GroupMenu(g)) => self.group_menu(g),
             _ => return,
@@ -320,6 +339,7 @@ impl App {
         }
         if git::is_repo_root(&self.projects[p].path) {
             actions.push(MenuAction::ProjectSettings(id));
+            actions.push(MenuAction::Worktrees(id));
         }
         actions.push(self.open_entry(super::opening::Subject::Project(id)));
         actions.extend(self.plugin_menu(Spot::Project(id)));
@@ -352,25 +372,16 @@ impl App {
     }
 
     pub(super) fn open_workspace_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
-        let Some(project) = self.project() else { return };
-        let target = match self.workspace_hit(list, pitch, &self.tab_lines(), pos) {
-            Some(
-                WorkspaceHit::Workspace(w)
-                | WorkspaceHit::Fold(w)
-                | WorkspaceHit::CloseWorkspace(w)
-                | WorkspaceHit::WorkspaceMenu(w),
-            ) => Target::Workspace(project.id, project.workspaces[w].id),
-            Some(WorkspaceHit::Tab(w, t) | WorkspaceHit::CloseTab(w, t) | WorkspaceHit::TabMenu(w, t)) => {
-                let workspace = &project.workspaces[w];
-                Target::Tab(project.id, workspace.id, workspace.tabs[t].id)
-            }
-            _ => return,
-        };
+        if self.project().is_none() {
+            return;
+        }
+        let hit = self.workspace_hit(list, pitch, &self.tab_lines(), pos);
+        let Some(target) = hit.and_then(|hit| self.workspace_hit_target(self.active, hit)) else { return };
         self.overlay = Some(Overlay::Menu { at: pos, actions: self.target_menu(target) });
     }
 
     fn workspace_hit(&self, list: Rect, pitch: u16, tabs: &ui::TabLines, pos: Position) -> Option<WorkspaceHit> {
-        ui::workspace_hit(list, pitch, tabs, self.scroll.workspaces, pos)
+        ui::workspace_hit(list, pitch, tabs, self.scroll.of(List::Workspaces), pos)
             .filter(|hit| !hit.workspace().is_some_and(|w| self.removing(self.active, w)))
     }
 }

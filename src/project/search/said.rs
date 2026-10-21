@@ -104,23 +104,30 @@ fn normal(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
 }
 
-fn pane(source: &Source, needle: &Needle, cancel: &AtomicBool) -> (Vec<Match>, bool) {
-    let mut found: Vec<Match> = Vec::new();
-    let mut capped = false;
-    let mut said = Vec::new();
-    if let Some(record) = &source.record {
+struct Hits<'a> {
+    source: &'a Source,
+    needle: &'a Needle,
+    cancel: &'a AtomicBool,
+    found: Vec<Match>,
+    said: Vec<String>,
+    capped: bool,
+}
+
+impl Hits<'_> {
+    fn scan_record(&mut self, record: &Record) {
+        let (source, needle, cancel) = (self.source, self.needle, self.cancel);
         let _ = record.said(&mut |spoken| {
             if cancel.load(Ordering::Relaxed) {
                 return false;
             }
             let Some((_, snippet, hit)) = first_hit(&spoken.said.text, needle) else { return true };
-            if found.len() == MAX_PER_PANE {
-                capped = true;
+            if self.found.len() == MAX_PER_PANE {
+                self.capped = true;
                 return false;
             }
             let origin = if spoken.role == Role::Prompt { Origin::Prompt } else { Origin::Reply };
-            said.push(normal(&spoken.said.text));
-            found.push(Match {
+            self.said.push(normal(&spoken.said.text));
+            self.found.push(Match {
                 place: source.place.clone(),
                 origin,
                 line: None,
@@ -131,34 +138,57 @@ fn pane(source: &Source, needle: &Needle, cancel: &AtomicBool) -> (Vec<Match>, b
             true
         });
     }
-    if capped {
-        return (found, capped);
+
+    fn scan_screen(&mut self) {
+        let lines: Vec<&str> = self.source.screen.lines().collect();
+        for (i, line) in lines.iter().enumerate().rev() {
+            if self.cancel.load(Ordering::Relaxed) {
+                break;
+            }
+            let Some(range) = self.needle.find(line) else { continue };
+            let line_normal = normal(line);
+            if !line_normal.is_empty() && self.said.iter().any(|text| text.contains(&line_normal)) {
+                continue;
+            }
+            if self.found.len() == MAX_PER_PANE {
+                self.capped = true;
+                break;
+            }
+            let (snippet, hit) = snippet(line, &range);
+            self.found.push(Match {
+                place: self.source.place.clone(),
+                origin: Origin::Screen,
+                line: Some(i),
+                snippet,
+                hit,
+                written: None,
+            });
+        }
     }
-    let lines: Vec<&str> = source.screen.lines().collect();
-    for (i, line) in lines.iter().enumerate().rev() {
-        if cancel.load(Ordering::Relaxed) {
-            break;
-        }
-        let Some(range) = needle.find(line) else { continue };
-        let line_normal = normal(line);
-        if !line_normal.is_empty() && said.iter().any(|text| text.contains(&line_normal)) {
-            continue;
-        }
-        if found.len() == MAX_PER_PANE {
-            capped = true;
-            break;
-        }
-        let (snippet, hit) = snippet(line, &range);
-        found.push(Match {
-            place: source.place.clone(),
-            origin: Origin::Screen,
-            line: Some(i),
-            snippet,
-            hit,
-            written: None,
-        });
+}
+
+fn pane(source: &Source, needle: &Needle, cancel: &AtomicBool) -> (Vec<Match>, bool) {
+    let mut hits = Hits { source, needle, cancel, found: Vec::new(), said: Vec::new(), capped: false };
+    if let Some(record) = &source.record {
+        hits.scan_record(record);
     }
-    (found, capped)
+    if !hits.capped {
+        hits.scan_screen();
+    }
+    (hits.found, hits.capped)
+}
+
+type Done = Mutex<Vec<(usize, Vec<Match>, bool)>>;
+
+fn work(sources: &[Source], needle: &Needle, cancel: &AtomicBool, next: &AtomicUsize, done: &Done) {
+    while !cancel.load(Ordering::Relaxed) {
+        let i = next.fetch_add(1, Ordering::Relaxed);
+        let Some(source) = sources.get(i) else { break };
+        let (found, capped) = pane(source, needle, cancel);
+        if !found.is_empty() {
+            done.lock().push((i, found, capped));
+        }
+    }
 }
 
 pub(crate) fn search(sources: &[Source], query: &str, cancel: &AtomicBool) -> Found {
@@ -168,16 +198,7 @@ pub(crate) fn search(sources: &[Source], query: &str, cancel: &AtomicBool) -> Fo
     let done = Mutex::new(Vec::new());
     std::thread::scope(|scope| {
         for _ in 0..threads {
-            scope.spawn(|| {
-                while !cancel.load(Ordering::Relaxed) {
-                    let i = next.fetch_add(1, Ordering::Relaxed);
-                    let Some(source) = sources.get(i) else { break };
-                    let (found, capped) = pane(source, &needle, cancel);
-                    if !found.is_empty() {
-                        done.lock().push((i, found, capped));
-                    }
-                }
-            });
+            scope.spawn(|| work(sources, &needle, cancel, &next, &done));
         }
     });
     let mut done = done.into_inner();

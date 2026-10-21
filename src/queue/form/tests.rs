@@ -8,8 +8,8 @@ fn choice(label: &str, worktree: bool) -> Choice {
 
 fn form(when: When) -> Form {
     let places = vec![choice("web-shop · root", true), choice("web-shop › main", false)];
-    let mut form =
-        Form::new(places, Some(0), vec!["auto".into(), "claude".into()], 1, "Europe/Madrid".into(), "2026-10-20");
+    let choices = Choices { places, place: Some(0), kinds: vec!["auto".into(), "claude".into()], agent: 1 };
+    let mut form = Form::new(choices, "Europe/Madrid".into(), "2026-10-20");
     form.prompt = Editor::new("fix the login");
     form.when = when.combo();
     form.clock = Editor::new("14:30");

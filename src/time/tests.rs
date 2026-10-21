@@ -65,3 +65,20 @@ mod parse_time {
         );
     }
 }
+
+mod ago {
+    use super::*;
+
+    #[rstest]
+    #[case::now(0, "just now")]
+    #[case::under_a_minute(59, "just now")]
+    #[case::a_minute(60, "1 min ago")]
+    #[case::an_hour_short(3599, "59 min ago")]
+    #[case::an_hour(3600, "1h ago")]
+    #[case::a_day_short(86_399, "23h ago")]
+    #[case::a_day(86_400, "1 day ago")]
+    #[case::days(86_400 * 3, "3 days ago")]
+    fn reads_like_a_person(#[case] secs: u64, #[case] shown: &str) {
+        assert_eq!(ago(Duration::from_secs(secs)), shown);
+    }
+}

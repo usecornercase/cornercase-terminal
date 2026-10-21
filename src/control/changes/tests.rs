@@ -13,6 +13,7 @@ fn info(path: &str, status: FileStatus, fold: FoldClass, viewed: bool) -> FileIn
         removed: 3,
         fold,
         viewed,
+        staged: None,
         digest: digest(0x00c0_ffee_1234_5678),
     }
 }
@@ -49,13 +50,13 @@ fn summary() -> Summary {
 }
 
 fn every() -> Summary {
-    let one = |project, workspace, path: &str| WorkspaceChanges {
+    let one = |project, workspace, path: &str, staged| WorkspaceChanges {
         project,
         workspace,
         base: None,
         added: 4,
         removed: 3,
-        files: vec![info(path, FileStatus::Modified, FoldClass::Open, false)],
+        files: vec![FileInfo { staged: Some(staged), ..info(path, FileStatus::Modified, FoldClass::Open, false) }],
     };
     Summary {
         boot: "4242-1700000000".into(),
@@ -66,7 +67,11 @@ fn every() -> Summary {
             mode: Mode::Uncommitted,
             state: State::Ready,
             error: None,
-            workspaces: vec![one(1, 2, "src/a.rs"), one(1, 3, "src/b.rs"), one(4, 5, "lib.rs")],
+            workspaces: vec![
+                one(1, 2, "src/a.rs", Staging::Yes),
+                one(1, 3, "src/b.rs", Staging::Partly),
+                one(4, 5, "lib.rs", Staging::No),
+            ],
         },
     }
 }
@@ -77,6 +82,7 @@ fn file() -> File {
         old,
         new,
         text: text.into(),
+        raw: None,
         syntax: Some(vec![(text.into(), Look::default().fg(ratatui::style::Color::Indexed(5)))]),
         emphasis: Vec::new(),
     };
@@ -100,6 +106,7 @@ fn file() -> File {
         }],
         digest: 7,
         viewed_digest: 0x00c0_ffee_1234_5678,
+        staged: None,
     }
 }
 
@@ -169,6 +176,22 @@ mod requests {
             keys(serde_json::to_value(ChangesViewed::default()).expect("json")),
             ["clear", "digest", "path", "workspace"]
         );
+        assert_eq!(
+            keys(serde_json::to_value(ChangesDiscard::default()).expect("json")),
+            ["digest", "path", "workspace"]
+        );
+        assert_eq!(
+            keys(serde_json::to_value(ChangesStage::default()).expect("json")),
+            ["digest", "path", "staged", "workspace"]
+        );
+    }
+
+    #[test]
+    fn staging_is_the_default_of_a_stage_request() {
+        let request: ChangesStage = serde_json::from_value(json!({})).expect("a request");
+
+        assert!(request.staged);
+        assert!(!ChangesStage::default().staged);
     }
 
     #[test]
@@ -176,6 +199,54 @@ mod requests {
         let request: Changes = serde_json::from_value(json!({})).expect("a request");
 
         assert_eq!((request.scope, request.mode, request.workspace), (Scope::Project, Mode::Uncommitted, None));
+    }
+}
+
+mod discarded {
+    use super::*;
+
+    #[test]
+    fn the_answer_survives_a_round_trip() {
+        let answer = Discarded {
+            workspace: 3,
+            path: "b.txt".into(),
+            old_path: Some("a.txt".into()),
+            status: FileStatus::Renamed,
+        };
+
+        let text = serde_json::to_string(&answer).expect("json");
+
+        assert_eq!(serde_json::from_str::<Discarded>(&text).expect("answer"), answer);
+        assert_eq!(Status::from(FileStatus::Renamed), Status::Renamed);
+    }
+}
+
+mod staged_file {
+    use super::*;
+
+    #[test]
+    fn the_answer_survives_a_round_trip() {
+        let answer = StagedFile {
+            workspace: 3,
+            path: "b.txt".into(),
+            old_path: Some("a.txt".into()),
+            status: FileStatus::Renamed,
+            staged: true,
+        };
+
+        let text = serde_json::to_string(&answer).expect("json");
+
+        assert_eq!(serde_json::from_str::<StagedFile>(&text).expect("answer"), answer);
+    }
+
+    #[test]
+    fn a_file_names_its_staging_only_when_it_is_known() {
+        let known =
+            FileInfo { staged: Some(Staging::Partly), ..info("a", FileStatus::Modified, FoldClass::Open, false) };
+
+        assert_eq!(serde_json::to_value(&known).expect("json")["staged"], "partly");
+        let unknown = serde_json::to_value(info("a", FileStatus::Modified, FoldClass::Open, false)).expect("json");
+        assert!(unknown.get("staged").is_none());
     }
 }
 

@@ -45,10 +45,8 @@ fn fields_an_older_command_lacks_take_their_defaults() {
     assert_eq!(request.command, Command::NewTab(NewTab::default()));
 }
 
-#[test]
-#[expect(clippy::too_many_lines, reason = "one entry per request")]
-fn every_command_is_listed_by_name() {
-    let commands = vec![
+fn first_commands() -> Vec<Command> {
+    vec![
         Command::Status(Status::default()),
         Command::Open(Open::default()),
         Command::NewWorkspace(NewWorkspace::default()),
@@ -79,6 +77,11 @@ fn every_command_is_listed_by_name() {
         Command::FlowImport(FlowImport::default()),
         Command::Search(Search::default()),
         Command::Contract(Contract::default()),
+    ]
+}
+
+fn middle_commands() -> Vec<Command> {
+    vec![
         Command::StartServer(StartServer::default()),
         Command::Watch(Watch::default()),
         Command::Surface(Surface::default()),
@@ -109,6 +112,11 @@ fn every_command_is_listed_by_name() {
         Command::IssuePeople(IssuePeople::default()),
         Command::UpdateCheck(UpdateCheck::default()),
         Command::UpdateInstall(UpdateInstall::default()),
+    ]
+}
+
+fn last_commands() -> Vec<Command> {
+    vec![
         Command::App(AppWatch::default()),
         Command::Changes(Changes::default()),
         Command::ChangesMode(ChangesMode::default()),
@@ -137,8 +145,21 @@ fn every_command_is_listed_by_name() {
         Command::ProfileDelete(ProfileDelete::default()),
         Command::AccountRename(AccountRename::default()),
         Command::AccountUse(AccountUse::default()),
+        Command::CloseAgent(CloseAgent::default()),
+        Command::AccountRestart(AccountRestart::default()),
+        Command::ChangesDiscard(ChangesDiscard::default()),
+        Command::ChangesStage(ChangesStage::default()),
         Command::Tour(tour::TourRequest::default()),
-    ];
+    ]
+}
+
+pub(crate) fn every_command() -> Vec<Command> {
+    [first_commands(), middle_commands(), last_commands()].concat()
+}
+
+#[test]
+fn every_command_is_listed_by_name() {
+    let commands = every_command();
 
     let names: Vec<String> = commands
         .iter()
@@ -438,8 +459,8 @@ mod events_v1 {
         Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) }
     }
 
-    fn samples() -> [(Event, &'static str); 11] {
-        [
+    fn plain_samples() -> Vec<(Event, &'static str)> {
+        vec![
             (
                 event(
                     What::Opened { kind: Kind::Tab, parent: None, accounts: BTreeMap::new() },
@@ -462,6 +483,11 @@ mod events_v1 {
                 fixture!("control/events/v1/clipboard.json"),
             ),
             (event(What::Bell { count: 3 }, pane()), fixture!("control/events/v1/bell.json")),
+        ]
+    }
+
+    fn rich_samples() -> Vec<(Event, &'static str)> {
+        vec![
             (
                 event(
                     What::Notice {
@@ -481,6 +507,11 @@ mod events_v1 {
                 event(What::Opened { kind: Kind::Pane, parent: Some(2), accounts: BTreeMap::new() }, pane()),
                 fixture!("control/events/v1/opened-parent.json"),
             ),
+        ]
+    }
+
+    fn sound_and_accounts() -> Vec<(Event, &'static str)> {
+        vec![
             (
                 event(
                     What::Notice {
@@ -511,6 +542,10 @@ mod events_v1 {
                 fixture!("control/events/v1/opened-accounts.json"),
             ),
         ]
+    }
+
+    fn samples() -> Vec<(Event, &'static str)> {
+        [plain_samples(), rich_samples(), sound_and_accounts()].concat()
     }
 
     #[test]
@@ -665,8 +700,19 @@ mod watch_v1 {
         assert!(!serde_json::from_value::<PaneInfo>(plain).expect("a pane").collapsed);
     }
 
-    fn snapshot() -> Snapshot {
-        let tab = TabInfo {
+    #[test]
+    fn a_pane_leaves_its_accounts_out_unless_it_has_some() {
+        let accounts: BTreeMap<String, String> = [("claude".to_string(), "work".to_string())].into();
+        let plain = serde_json::to_value(pane(4, false)).expect("a pane");
+        let given = serde_json::to_value(PaneInfo { accounts: accounts.clone(), ..pane(4, false) }).expect("a pane");
+
+        assert!(plain.get("accounts").is_none(), "{plain}");
+        assert_eq!(given["accounts"], serde_json::json!({ "claude": "work" }));
+        assert_eq!(serde_json::from_value::<PaneInfo>(given).expect("a pane").accounts, accounts);
+    }
+
+    fn agents_tab() -> TabInfo {
+        TabInfo {
             id: 3,
             name: "agents".into(),
             status: Some("working".into()),
@@ -678,7 +724,10 @@ mod watch_v1 {
             custom_name: Some("agents".into()),
             layout: Some(split()),
             controller: None,
-        };
+        }
+    }
+
+    fn shop_project() -> ProjectInfo {
         let workspace = WorkspaceInfo {
             id: 2,
             name: "feat/dark-mode".into(),
@@ -686,11 +735,11 @@ mod watch_v1 {
             branch: Some("feat/dark-mode".into()),
             worktree: true,
             active: true,
-            tabs: vec![tab],
+            tabs: vec![agents_tab()],
             collapsed: true,
             ..WorkspaceInfo::default()
         };
-        let project = ProjectInfo {
+        ProjectInfo {
             id: 1,
             name: "shop".into(),
             path: PathBuf::from("/home/me/web-shop"),
@@ -699,7 +748,10 @@ mod watch_v1 {
             workspaces: vec![workspace],
             custom_name: Some("shop".into()),
             collapsed: false,
-        };
+        }
+    }
+
+    fn snapshot() -> Snapshot {
         let group = GroupInfo { id: 10, name: "work".into(), collapsed: false, icon: "●".into(), colour: 33 };
         Snapshot {
             revision: 7,
@@ -709,7 +761,7 @@ mod watch_v1 {
                 caller: None,
                 shown: Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) },
                 groups: vec![group],
-                projects: vec![project],
+                projects: vec![shop_project()],
                 keep_awake: None,
                 view: None,
                 theme: None,

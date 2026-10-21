@@ -40,7 +40,7 @@ fn with_workspaces(names: &[&str]) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
 fn with_tabs(names: &[&str]) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let (mut app, rx, dirs) = app_with(1);
     for _ in 1..names.len() {
-        app.add_tab(0, 0, AREA).expect("add a tab");
+        app.add_tab(workspace_at(&app, 0, 0), AREA).expect("add a tab");
     }
     for (tab, name) in app.projects[0].workspaces[0].tabs.iter_mut().zip(names) {
         tab.name = Some((*name).into());
@@ -222,21 +222,21 @@ fn holding_a_drag_on_the_more_line_scrolls_the_list() {
     app.active = 0;
     app.follow(SHORT);
     let short = ui::layout(SHORT, state::Widths::default());
-    let rows = ui::project_rows(short.list, short.pitch, &app.sidebar_rows(), app.scroll.projects);
+    let rows = ui::project_rows(short.list, short.pitch, &app.sidebar_rows(), app.scroll.of(List::Projects));
 
     mouse_in(&mut app, MouseEventKind::Down(MouseButton::Left), short.list.as_position(), SHORT);
     mouse_in(&mut app, MouseEventKind::Drag(MouseButton::Left), rows.more_below().as_position(), SHORT);
-    let dragged = app.scroll.projects;
+    let dragged = app.scroll.of(List::Projects);
     app.refresh(Instant::now() + AUTO_SCROLL_EVERY);
 
-    assert_eq!((dragged, app.scroll.projects), (1, 2));
+    assert_eq!((dragged, app.scroll.of(List::Projects)), (1, 2));
 }
 
 #[test]
 fn a_drag_in_the_compact_menu_reorders_and_keeps_it_open() {
     const SMALL: Rect = Rect { x: 0, y: 0, width: 80, height: 40 };
     let (mut app, _rx, paths, _dirs) = grouped(2, &[]);
-    app.nav = Some(ui::Nav::Projects);
+    app.screen.nav = Some(ui::Nav::Projects);
     let small = ui::layout(SMALL, state::Widths::default());
     let entry = |p| ui::entry_row(small.list, small.pitch, &app.sidebar_rows(), 0, SidebarRow::Project(p));
     let (from, to) = (entry(1).as_position(), entry(0).as_position());
@@ -246,7 +246,7 @@ fn a_drag_in_the_compact_menu_reorders_and_keeps_it_open() {
     mouse_in(&mut app, MouseEventKind::Up(MouseButton::Left), to, SMALL);
 
     let expected = vec![(paths[1].clone(), None), (paths[0].clone(), None)];
-    assert_eq!((saved_projects(&app), app.nav), (expected, Some(ui::Nav::Projects)));
+    assert_eq!((saved_projects(&app), app.screen.nav), (expected, Some(ui::Nav::Projects)));
 }
 
 #[test]

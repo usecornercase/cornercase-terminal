@@ -65,47 +65,64 @@ fn shell_of(content: &str) -> Option<String> {
 impl Fold {
     pub(in crate::agents) fn apply(&mut self, event: &Value) {
         let at = counting::timestamp(event);
+        self.touch(&event["data"], at);
+        let kind = event["type"].as_str().unwrap_or_default();
+        if !self.session_event(kind, event, at) && !self.turn_event(kind, event, at) {
+            self.tool_event(kind, event);
+        }
+    }
+
+    fn clear_session(&mut self) {
+        self.permissions.clear();
+        self.asks.clear();
+        self.shells.clear();
+        self.subagents.clear();
+        self.open = false;
+    }
+
+    fn session_event(&mut self, kind: &str, event: &Value, at: Option<SystemTime>) -> bool {
         let data = &event["data"];
-        self.touch(data, at);
-        match event["type"].as_str() {
-            Some("session.start" | "session.resume") => {
+        match kind {
+            "session.start" | "session.resume" => {
                 self.select(text(data, "selectedModel"), at);
-                self.permissions.clear();
-                self.asks.clear();
-                self.shells.clear();
-                self.subagents.clear();
-                self.open = false;
+                self.clear_session();
             }
-            Some("subagent.started") => {
-                if let Some((id, at)) = text(data, "toolCallId").zip(at)
-                    && (self.subagents.len() < OPEN || self.subagents.contains_key(id))
-                {
-                    self.subagents.insert(id.to_string(), at);
-                }
-            }
-            Some("subagent.completed" | "subagent.failed") => {
-                if let Some(id) = text(data, "toolCallId") {
-                    self.subagents.remove(id);
-                }
-            }
-            Some("session.model_change") => {
+            "session.model_change" => {
                 self.selected = text(data, "newModel").map(str::to_string);
                 self.concrete = None;
                 if text(data, "source") != Some("startup") {
                     self.boundary = at.or(self.boundary);
                 }
             }
-            Some("session.auto_mode_resolved") => self.concrete = text(data, "chosenModel").map(str::to_string),
-            Some("assistant.turn_start") => self.open = true,
-            Some("assistant.turn_end") => self.open = false,
-            Some("assistant.message") if data.get("parentToolCallId").is_none_or(Value::is_null) => {
+            "session.auto_mode_resolved" => self.concrete = text(data, "chosenModel").map(str::to_string),
+            "session.usage_record" => self.usage_record(event, at),
+            "session.shutdown" => self.clear_session(),
+            "session.context_cleared" | "session.truncation" => {
+                self.boundary = at.or(self.boundary);
+                self.permissions.clear();
+                self.asks.clear();
+            }
+            "session.compaction_complete" if data["success"].as_bool() != Some(false) => {
+                self.boundary = at.or(self.boundary);
+            }
+            "session.compaction_complete" => {}
+            _ => return false,
+        }
+        true
+    }
+
+    fn turn_event(&mut self, kind: &str, event: &Value, at: Option<SystemTime>) -> bool {
+        let data = &event["data"];
+        match kind {
+            "assistant.turn_start" => self.open = true,
+            "assistant.turn_end" => self.open = false,
+            "assistant.message" if data.get("parentToolCallId").is_none_or(Value::is_null) => {
                 self.resumable = true;
                 if self.selected.as_deref() == Some(AUTO) {
                     self.concrete = text(data, "model").map(str::to_string).or_else(|| self.concrete.take());
                 }
             }
-            Some("session.usage_record") => self.usage_record(event, at),
-            Some("user.message") if is_prompt(data) => {
+            "user.message" if is_prompt(data) => {
                 let id = text(data, "messageId").or_else(|| text(event, "id")).unwrap_or_default();
                 if let Some(at) = at {
                     self.counted.push(Record { at, id: id.to_string(), usage: Usage::Prompt });
@@ -113,42 +130,47 @@ impl Fold {
                 }
                 self.resumable = true;
             }
-            Some("permission.requested") => insert(&mut self.permissions, text(data, "requestId")),
-            Some("permission.completed") => {
+            "abort" => {
+                self.permissions.clear();
+                self.asks.clear();
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    fn tool_event(&mut self, kind: &str, event: &Value) {
+        let data = &event["data"];
+        match kind {
+            "subagent.started" => {
+                if let Some((id, at)) = text(data, "toolCallId").zip(counting::timestamp(event))
+                    && (self.subagents.len() < OPEN || self.subagents.contains_key(id))
+                {
+                    self.subagents.insert(id.to_string(), at);
+                }
+            }
+            "subagent.completed" | "subagent.failed" => {
+                if let Some(id) = text(data, "toolCallId") {
+                    self.subagents.remove(id);
+                }
+            }
+            "permission.requested" => insert(&mut self.permissions, text(data, "requestId")),
+            "permission.completed" => {
                 if let Some(id) = text(data, "requestId") {
                     self.permissions.remove(id);
                 }
             }
-            Some("tool.execution_start") if text(data, "toolName").is_some_and(|name| ASKS.contains(&name)) => {
+            "tool.execution_start" if text(data, "toolName").is_some_and(|name| ASKS.contains(&name)) => {
                 insert(&mut self.asks, text(data, "toolCallId"));
             }
-            Some("tool.execution_complete") => self.tool_complete(data),
-            Some("system.notification") => {
+            "tool.execution_complete" => self.tool_complete(data),
+            "system.notification" => {
                 let kind = &data["kind"];
                 if matches!(kind["type"].as_str(), Some("shell_completed" | "shell_detached_completed"))
                     && let Some(id) = kind["shellId"].as_str()
                 {
                     self.shells.remove(id);
                 }
-            }
-            Some("abort") => {
-                self.permissions.clear();
-                self.asks.clear();
-            }
-            Some("session.shutdown") => {
-                self.permissions.clear();
-                self.asks.clear();
-                self.shells.clear();
-                self.subagents.clear();
-                self.open = false;
-            }
-            Some("session.context_cleared" | "session.truncation") => {
-                self.boundary = at.or(self.boundary);
-                self.permissions.clear();
-                self.asks.clear();
-            }
-            Some("session.compaction_complete") if data["success"].as_bool() != Some(false) => {
-                self.boundary = at.or(self.boundary);
             }
             _ => {}
         }

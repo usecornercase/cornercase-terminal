@@ -5,8 +5,8 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 use super::{
-    CANCEL_LABEL, FORM_WIDTH, INPUT_PROMPT, Note, buttons_in, draw_dialog_buttons, draw_note, draw_secondary,
-    form_inner, left_of,
+    CANCEL_LABEL, FORM_WIDTH, INPUT_PROMPT, Note, buttons_in, draw_danger, draw_dialog_buttons, draw_note,
+    draw_secondary, draw_submit, form_inner, left_of,
 };
 use crate::text::truncate_left;
 use crate::ui::View;
@@ -92,6 +92,7 @@ pub(crate) struct Confirm {
     pub(crate) note: Option<Note>,
     pub(crate) submit: &'static str,
     pub(crate) extra: Option<&'static str>,
+    pub(crate) dangerous: bool,
 }
 
 pub(in crate::ui) fn draw_form(f: &mut Frame, view: &View, form: &Form) {
@@ -136,7 +137,13 @@ pub(in crate::ui) fn draw_confirm(f: &mut Frame, view: &View, confirm: &Confirm)
     let message = Rect::new(label.x, label.y, label.width, toggle.bottom().saturating_sub(label.y));
     f.render_widget(Paragraph::new(confirm.message.as_str()).wrap(Wrap { trim: true }), message);
     draw_note(f, view.muted, confirm.note.as_ref(), note);
-    draw_dialog_buttons(f, view, form_buttons(r, confirm.submit), confirm.submit, CANCEL_LABEL);
+    let [submit, cancel] = form_buttons(r, confirm.submit);
+    if confirm.dangerous {
+        draw_danger(f, view, submit, confirm.submit);
+    } else {
+        draw_submit(f, view, submit, confirm.submit);
+    }
+    draw_secondary(f, view, cancel, CANCEL_LABEL);
     if let Some(extra) = confirm.extra {
         draw_secondary(f, view, form_extra_button(r, confirm.submit, extra), extra);
     }

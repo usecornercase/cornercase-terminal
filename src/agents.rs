@@ -1,6 +1,7 @@
 pub(crate) mod activity;
 pub(crate) mod awake;
 pub mod claude;
+pub(crate) mod closing;
 pub(crate) mod codex;
 pub(crate) mod context;
 pub mod copilot;

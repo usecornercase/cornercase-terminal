@@ -8,7 +8,18 @@ fn three(dim_inactive: bool) -> TabView {
     layout.split(0, Dir::Right, 1);
     layout.split(1, Dir::Down, 2);
     let screens = vec![screen(b"$ left"), screen(b"$ top"), screen(b"$ bottom")];
-    TabView { layout, screens, active: 1, dim_inactive, dragging: None, link: None, landing: None, bands: Vec::new() }
+    TabView {
+        layout,
+        screens,
+        active: 1,
+        dim_inactive,
+        dragging: None,
+        link: None,
+        landing: None,
+        bands: Vec::new(),
+        footer: false,
+        accounts: Vec::new(),
+    }
 }
 
 fn style_at(v: &View, at: Position) -> Style {

@@ -149,9 +149,18 @@ pub(crate) struct ActionRan {
     pub(crate) log: PathBuf,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct Invoked<'a> {
+    pub(crate) plugin: &'a str,
+    pub(crate) action: &'a str,
+    pub(crate) context: Context,
+    pub(crate) ids: Ids,
+}
+
 impl ActionRan {
-    pub(crate) fn of(plugin: &str, action: &str, context: Context, ids: Ids, ran: &Ran, log: PathBuf) -> Self {
+    pub(crate) fn of(invoked: Invoked, ran: &Ran, log: PathBuf) -> Self {
         use std::os::unix::process::ExitStatusExt as _;
+        let Invoked { plugin, action, context, ids } = invoked;
         let (ended, code, signal) = match &ran.ended {
             Ended::Status(status) => match status.signal() {
                 Some(signal) => ("signal", None, Some(signal)),

@@ -31,24 +31,7 @@ impl Origin {
             return Ok(Self { repo: path.to_string(), url: path.to_string(), reference, subdir });
         }
         if let Some(rest) = place.strip_prefix("https://") {
-            let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
-            if host.is_empty() || host.contains('@') || path.is_empty() || host.starts_with('-') {
-                return Err(format!(
-                    "`{place}` is not a repository address; credentials go in git's credential helper, not the address"
-                ));
-            }
-            let marker = rest.find("//").map(|at| at + "https://".len());
-            if marker.is_none()
-                && let Some(path) = place.strip_prefix(GITHUB)
-            {
-                return github(path, reference);
-            }
-            let (url, subdir) = split_subdir(place, marker)?;
-            let repo = match url.strip_prefix(GITHUB) {
-                Some(path) => path.trim_end_matches('/').trim_end_matches(".git").to_string(),
-                None => url.to_string(),
-            };
-            return Ok(Self { repo, url: url.to_string(), reference, subdir });
+            return Self::https(place, rest, reference);
         }
         if place.contains("://") || place.contains("::") || place.contains(':') {
             return Err(format!(
@@ -60,6 +43,27 @@ impl Origin {
             return Err(format!("`{place}` is not owner/repo, an https:// address or a folder"));
         }
         github(place, reference)
+    }
+
+    fn https(place: &str, rest: &str, reference: Option<String>) -> Result<Self, String> {
+        let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
+        if host.is_empty() || host.contains('@') || path.is_empty() || host.starts_with('-') {
+            return Err(format!(
+                "`{place}` is not a repository address; credentials go in git's credential helper, not the address"
+            ));
+        }
+        let marker = rest.find("//").map(|at| at + "https://".len());
+        if marker.is_none()
+            && let Some(path) = place.strip_prefix(GITHUB)
+        {
+            return github(path, reference);
+        }
+        let (url, subdir) = split_subdir(place, marker)?;
+        let repo = match url.strip_prefix(GITHUB) {
+            Some(path) => path.trim_end_matches('/').trim_end_matches(".git").to_string(),
+            None => url.to_string(),
+        };
+        Ok(Self { repo, url: url.to_string(), reference, subdir })
     }
 
     pub(crate) fn local(&self) -> bool {

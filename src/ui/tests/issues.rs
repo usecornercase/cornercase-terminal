@@ -68,6 +68,33 @@ fn renders_the_token_form() {
     insta::assert_snapshot!(render(&with(i)).backend());
 }
 
+fn naming() -> Issues {
+    let body = IssuesBody::Name {
+        heading: "Start #482 Returns page crashes in a new worktree".into(),
+        fields: [
+            ("branch   ", "issue-482-returns-page-crashes".into()),
+            ("workspace", "#482 Returns page crashes".into()),
+        ],
+        focus: 1,
+        help: vec!["A branch that exists is checked out.".into()],
+    };
+    Issues { buttons: vec!["start", "back"], hint: "enter starts".into(), ..issues(body) }
+}
+
+#[test]
+fn renders_the_branch_and_the_workspace_s_name() {
+    insta::assert_snapshot!(render(&with(naming())).backend());
+}
+
+#[rstest]
+#[case::branch(issue_name_fields(issues_area(AREA))[0].as_position(), Some(IssuesHit::Field(0)))]
+#[case::name(issue_name_fields(issues_area(AREA))[1].as_position(), Some(IssuesHit::Field(1)))]
+#[case::start(issue_buttons(issues_area(AREA), &["start", "back"])[0].as_position(), Some(IssuesHit::Button(0)))]
+#[case::nothing(Position::new(0, 0), None)]
+fn maps_clicks_on_the_names(#[case] pos: Position, #[case] expected: Option<IssuesHit>) {
+    assert_eq!(issue_name_hit(AREA, &["start", "back"], pos), expected);
+}
+
 #[test]
 fn renders_an_issue_from_its_scroll() {
     let lines = (0..40).map(|n| Line::from(format!("line {n}"))).collect();
@@ -130,7 +157,15 @@ fn an_error_replaces_the_hint() {
 #[case::start(issue_buttons(issues_area(AREA), &["start", "cancel"])[0].as_position(), Some(IssuesHit::Button(0)))]
 #[case::cancel(issue_buttons(issues_area(AREA), &["start", "cancel"])[1].as_position(), Some(IssuesHit::Button(1)))]
 fn maps_clicks(#[case] pos: Position, #[case] expected: Option<IssuesHit>) {
-    assert_eq!(issues_hit(AREA, &TABS, &TOGGLES, &["start", "cancel"], 2, 0, pos), expected);
+    assert_eq!(
+        issues_hit(
+            AREA,
+            Labels { tabs: &TABS, toggles: &TOGGLES, buttons: &["start", "cancel"] },
+            Shown { items: 2, scroll: 0 },
+            pos
+        ),
+        expected
+    );
 }
 
 #[test]

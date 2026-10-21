@@ -8,7 +8,7 @@ use libghostty_vt::error::Error;
 use libghostty_vt::fmt::{Format, Formatter, FormatterOptions};
 use libghostty_vt::key::{Encoder, KittyKeyFlags};
 use libghostty_vt::render::CursorVisualStyle;
-use libghostty_vt::render::{CellIterator, RenderState, RowIterator};
+use libghostty_vt::render::{CellIteration, CellIterator, RenderState, RowIteration, RowIterator};
 use libghostty_vt::screen::{CellContentTag, CellWide, Screen, TrackedGridRef};
 use libghostty_vt::selection::{FormatOptions, Selection};
 use libghostty_vt::style::{Palette, StyleColor, Underline};
@@ -394,11 +394,18 @@ impl Emulator {
 
     pub(crate) fn reveal(&mut self, needle: &Needle, near: Option<usize>) -> Result<bool> {
         let text = self.text()?;
-        let hits = text.lines().enumerate().filter_map(|(i, line)| Some((i, line, needle.find(line)?)));
-        let pick = |(i, ..): &(usize, &str, Range<usize>)| near.map_or(usize::MAX - i, |near| i.abs_diff(near));
-        let Some((line, text, found)) = hits.min_by_key(pick) else { return Ok(false) };
+        let Some(hit) = best_hit(&text, needle, near) else { return Ok(false) };
+        let Some(first) = self.line_row(hit.0)? else { return Ok(false) };
+        if !self.select_hit(hit, first, needle)? {
+            return Ok(false);
+        }
+        let (rows, _) = self.size()?;
+        self.vt.scroll_viewport(ScrollViewport::Row(first.saturating_sub(usize::from(rows) / 3)));
+        Ok(true)
+    }
+
+    fn select_hit(&mut self, (_, text, found): Hit<'_>, first: usize, needle: &Needle) -> Result<bool> {
         let (_, cols) = self.size()?;
-        let Some(first) = self.line_row(line)? else { return Ok(false) };
         let last = text[found.clone()].chars().next_back().map_or(found.start, |c| found.end - c.len_utf8());
         let (from, to) = (locate(text, found.start, cols), locate(text, last, cols));
         let point = |(row, x): (usize, u16)| {
@@ -412,8 +419,6 @@ impl Emulator {
             self.vt.set_selection(None)?;
             return Ok(false);
         }
-        let (rows, _) = self.size()?;
-        self.vt.scroll_viewport(ScrollViewport::Row(first.saturating_sub(usize::from(rows) / 3)));
         Ok(true)
     }
 
@@ -471,54 +476,84 @@ impl Emulator {
         let snap = self.render.update(&self.vt)?;
         let cursor =
             if snap.cursor_visible()? { snap.cursor_viewport()?.map(|vp| Position::new(vp.x, vp.y)) } else { None };
-        let shape = match snap.cursor_visual_style() {
-            Ok(CursorVisualStyle::Bar) => CursorShape::Bar,
-            Ok(CursorVisualStyle::Underline) => CursorShape::Underline,
-            Ok(CursorVisualStyle::BlockHollow) => CursorShape::BlockHollow,
-            _ => CursorShape::Block,
-        };
+        let shape = shape_of(snap.cursor_visual_style());
         let blinking = snap.cursor_blinking().unwrap_or(false);
+        let mut capture =
+            RowCapture { vt: &self.vt, links, text: String::new(), uri: vec![0u8; 2048], found: Vec::new() };
         let mut rows = Vec::new();
-        let mut text = String::new();
-        let mut found = Vec::new();
-        let mut uri = vec![0u8; 2048];
         let mut row_it = self.rows.update(&snap)?;
         let mut y = 0u32;
         while let Some(row) = row_it.next() {
-            let linked_row = links && row.raw_row()?.has_hyperlink()?;
-            let mut cells = Vec::new();
-            let mut spacer = false;
-            let mut cell_it = self.cells.update(row)?;
-            while let Some(cell) = cell_it.next() {
-                text.clear();
-                if cell.graphemes_len()? > 0 {
-                    cell.graphemes_utf8(&mut text)?;
-                }
-                text.retain(|c| !c.is_control());
-                let symbol = if text.is_empty() { " ".to_string() } else { text.clone() };
-                let raw = cell.raw_cell()?;
-                let (style, decor) = if cell.has_styling()? {
-                    let s = cell.style()?;
-                    (to_style(s), to_decor(s))
-                } else {
-                    (background(raw)?, Decor::default())
-                };
-                let style = if cell.is_selected()? { selected(style) } else { style };
-                let tail = std::mem::take(&mut spacer);
-                spacer = cell.graphemes_len()? > 0 && raw.wide()? == CellWide::Wide;
-                let link = if linked_row && raw.has_hyperlink()? {
-                    let x = u16::try_from(cells.len()).unwrap_or(u16::MAX);
-                    link_at(&self.vt, x, y, &mut uri, &mut found)?
-                } else {
-                    None
-                };
-                cells.push(Cell { symbol, style, spacer: tail, decor, link });
-            }
-            rows.push(cells);
+            rows.push(capture.row(&mut self.cells, row, y)?);
             y += 1;
         }
+        let links = capture.found;
         let scroll = self.scrollbar();
-        Ok(Snapshot { rows, cursor, shape, blinking, scroll, below: scroll.below(), links: found })
+        Ok(Snapshot { rows, cursor, shape, blinking, scroll, below: scroll.below(), links })
+    }
+}
+
+type Hit<'a> = (usize, &'a str, Range<usize>);
+
+fn best_hit<'a>(text: &'a str, needle: &Needle, near: Option<usize>) -> Option<Hit<'a>> {
+    let hits = text.lines().enumerate().filter_map(|(i, line)| Some((i, line, needle.find(line)?)));
+    let pick = |(i, ..): &Hit<'_>| near.map_or(usize::MAX - i, |near| i.abs_diff(near));
+    hits.min_by_key(pick)
+}
+
+fn shape_of(style: Result<CursorVisualStyle>) -> CursorShape {
+    match style {
+        Ok(CursorVisualStyle::Bar) => CursorShape::Bar,
+        Ok(CursorVisualStyle::Underline) => CursorShape::Underline,
+        Ok(CursorVisualStyle::BlockHollow) => CursorShape::BlockHollow,
+        _ => CursorShape::Block,
+    }
+}
+
+struct RowCapture<'a> {
+    vt: &'a Terminal<'static, 'static>,
+    links: bool,
+    text: String,
+    uri: Vec<u8>,
+    found: Vec<String>,
+}
+
+impl RowCapture<'_> {
+    fn row(&mut self, cells: &mut CellIterator<'static>, row: &RowIteration<'static, '_>, y: u32) -> Result<Vec<Cell>> {
+        let linked = self.links && row.raw_row()?.has_hyperlink()?;
+        let mut captured = Vec::new();
+        let mut spacer = false;
+        let mut cell_it = cells.update(row)?;
+        while let Some(cell) = cell_it.next() {
+            let at = linked.then(|| (u16::try_from(captured.len()).unwrap_or(u16::MAX), y));
+            let (one, wide) = self.cell(cell, at, std::mem::take(&mut spacer))?;
+            spacer = wide;
+            captured.push(one);
+        }
+        Ok(captured)
+    }
+
+    fn cell(&mut self, cell: &CellIteration<'static, '_>, at: Option<(u16, u32)>, tail: bool) -> Result<(Cell, bool)> {
+        self.text.clear();
+        if cell.graphemes_len()? > 0 {
+            cell.graphemes_utf8(&mut self.text)?;
+        }
+        self.text.retain(|c| !c.is_control());
+        let symbol = if self.text.is_empty() { " ".to_string() } else { self.text.clone() };
+        let raw = cell.raw_cell()?;
+        let (style, decor) = if cell.has_styling()? {
+            let s = cell.style()?;
+            (to_style(s), to_decor(s))
+        } else {
+            (background(raw)?, Decor::default())
+        };
+        let style = if cell.is_selected()? { selected(style) } else { style };
+        let wide = cell.graphemes_len()? > 0 && raw.wide()? == CellWide::Wide;
+        let link = match at {
+            Some((x, y)) if raw.has_hyperlink()? => link_at(self.vt, x, y, &mut self.uri, &mut self.found)?,
+            _ => None,
+        };
+        Ok((Cell { symbol, style, spacer: tail, decor, link }, wide))
     }
 }
 

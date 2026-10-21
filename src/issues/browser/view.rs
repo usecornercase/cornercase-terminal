@@ -3,17 +3,45 @@ use ratatui::text::{Line, Span};
 
 use super::{Browser, Room, Screen};
 use crate::highlight::markdown;
-use crate::issues::{Detail, Issue, branch};
+use crate::issues::{Detail, Issue, naming};
 use crate::time;
 
 impl Browser {
+    fn branch(&self, issue: &Issue) -> String {
+        naming::branch(issue, &self.agents.branch, &self.agents.user)
+    }
+
     pub(crate) fn start_hint(&self, issue: &Issue) -> String {
         match self.place_for(issue) {
-            Some(place) if place.worktree => format!("in its own worktree, on {}, in {}", branch(issue), place.label),
+            Some(place) if place.worktree => {
+                format!("in its own worktree, on {}, in {}", self.branch(issue), place.label)
+            }
             Some(place) => format!("in a new tab in {}", place.label),
-            None if self.worktrees => format!("in its own worktree, on {}", branch(issue)),
+            None if self.worktrees => format!("in its own worktree, on {}", self.branch(issue)),
             None => "in a new tab".into(),
         }
+    }
+
+    fn agent_spans(&self, dim: Style) -> Vec<Span<'static>> {
+        let Some(kind) = self.agents.pick() else {
+            return vec![Span::styled("none chosen yet: start asks which one", dim)];
+        };
+        let start = self.agents.starts.get(&kind);
+        let mut spans = vec![Span::styled(kind.clone(), Style::default().add_modifier(Modifier::BOLD))];
+        if let Some(mode) = start.and_then(|s| s.mode.clone()) {
+            let style =
+                if crate::agents::is_dangerous(&mode) { Style::default().fg(Color::Red) } else { Style::default() };
+            spans.push(Span::raw(" · "));
+            spans.push(Span::styled(mode, style));
+        }
+        if let Some(start) = start {
+            spans.push(Span::styled(format!("  {}", start.command), dim));
+        }
+        let notes = self.agents.notes(&kind);
+        if !notes.is_empty() {
+            spans.push(Span::styled(format!("  ({notes})"), dim));
+        }
+        spans
     }
 
     fn start_lines(&self, issue: &Issue) -> Vec<Line<'static>> {
@@ -21,31 +49,8 @@ impl Browser {
         let row = |label: &str, spans: Vec<Span<'static>>| {
             Line::from([vec![Span::styled(format!("{label:<8}"), dim)], spans].concat())
         };
-        let agent = match self.agents.pick() {
-            Some(kind) => {
-                let start = self.agents.starts.get(&kind);
-                let mut spans = vec![Span::styled(kind.clone(), Style::default().add_modifier(Modifier::BOLD))];
-                if let Some(mode) = start.and_then(|s| s.mode.clone()) {
-                    let style = if crate::agents::is_dangerous(&mode) {
-                        Style::default().fg(Color::Red)
-                    } else {
-                        Style::default()
-                    };
-                    spans.push(Span::raw(" · "));
-                    spans.push(Span::styled(mode, style));
-                }
-                if let Some(start) = start {
-                    spans.push(Span::styled(format!("  {}", start.command), dim));
-                }
-                let notes = self.agents.notes(&kind);
-                if !notes.is_empty() {
-                    spans.push(Span::styled(format!("  ({notes})"), dim));
-                }
-                spans
-            }
-            None => vec![Span::styled("none chosen yet: start asks which one", dim)],
-        };
-        let prompt = crate::issues::prompt(&self.agents.prompt, issue, &branch(issue));
+        let agent = self.agent_spans(dim);
+        let prompt = crate::issues::prompt(&self.agents.prompt, issue, &self.branch(issue));
         let send = if self.agents.submit { "sent for you" } else { "typed, you press enter" };
         let mut lines = vec![row("start", vec![Span::raw(self.start_hint(issue))]), row("agent", agent)];
         if let Some((kind, agent)) = self.agent_accounts() {
@@ -67,7 +72,8 @@ impl Browser {
         let Screen::Detail { issue, detail, raw, .. } = &self.screen else { return Vec::new() };
         let width = room.detail_width;
         let start = self.start_lines(issue);
-        detail_lines(issue, detail.as_ref().and_then(|d| d.as_ref().ok()), width, time::now(), *raw, start)
+        let detail = detail.as_ref().and_then(|d| d.as_ref().ok());
+        detail_lines(Shown { issue, detail, width, now: time::now(), raw: *raw }, start)
     }
 }
 
@@ -85,14 +91,17 @@ fn raw_lines(text: &str, width: usize) -> Vec<Line<'static>> {
         .collect()
 }
 
-pub(super) fn detail_lines(
-    issue: &Issue,
-    detail: Option<&Detail>,
-    width: usize,
-    now: i64,
-    raw: bool,
-    start: Vec<Line<'static>>,
-) -> Vec<Line<'static>> {
+#[derive(Clone, Copy)]
+pub(super) struct Shown<'a> {
+    pub(super) issue: &'a Issue,
+    pub(super) detail: Option<&'a Detail>,
+    pub(super) width: usize,
+    pub(super) now: i64,
+    pub(super) raw: bool,
+}
+
+pub(super) fn detail_lines(shown: Shown, start: Vec<Line<'static>>) -> Vec<Line<'static>> {
+    let Shown { issue, detail, width, now, raw } = shown;
     let body = |text: &str| if raw { raw_lines(text, width) } else { markdown::render(text, width) };
     let dim = Style::default().fg(Color::DarkGray);
     let bold = Style::default().add_modifier(Modifier::BOLD);

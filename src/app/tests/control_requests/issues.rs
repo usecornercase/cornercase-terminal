@@ -77,7 +77,7 @@ fn an_asana_token_for_several_workspaces_is_saved_and_says_to_choose_one() {
     let mut s = setup(true, "");
     let two = r#"{"data":{"gid":"u-me","name":"Ana","workspaces":[{"gid":"w-1","name":"Acme"},{"gid":"w-2","name":"Beta"}]}}"#;
     let server = crate::test_util::FakeHttp::start(vec![("GET /users/me", 200, two)]);
-    s.app.issues.apis.asana = server.url();
+    s.app.issues.api_at(Source::Asana, &server.url());
     let secret = json!({"action": "secret", "entry": {"key": "asana", "value": "t0k"}});
     good::<Value>(&mut s, "config", &secret);
     let got = sources(&mut s);
@@ -99,7 +99,7 @@ fn a_folder_that_is_not_a_repository_has_no_github() {
 #[test]
 fn a_token_from_the_environment_says_so() {
     let mut s = setup(true, "");
-    s.app.issues.env_tokens.insert(Source::Linear, "x".into());
+    s.app.issues.set_env_token(Source::Linear, "x");
     let got = sources(&mut s);
     let linear = info(&got, "linear");
     assert_eq!(
@@ -113,7 +113,7 @@ fn a_failing_list_marks_the_source_until_one_works_or_it_is_forgotten() {
     let mut s = setup(true, "");
     let broken = with_token(&mut s, Vec::new());
     drop(broken);
-    s.app.issues.apis.shortcut = "http://127.0.0.1:1/api/v3".into();
+    s.app.issues.api_at(Source::Shortcut, "http://127.0.0.1:1/api/v3");
     let lists: Lists = good(&mut s, "issue-list", &json!({"source": "shortcut"}));
     assert!(lists.sources[0].error.is_some(), "{lists:?}");
     let got = sources(&mut s);
@@ -372,8 +372,86 @@ fn a_profile_changed_during_the_lookup_still_gives_the_tab_its_accounts() {
 }
 
 #[test]
+fn an_issue_started_from_a_pane_takes_that_pane_s_accounts() {
+    let mut s = listing();
+    let root = s.config.path().join("accounts");
+    for name in ["personal", "work"] {
+        crate::accounts::add(&root, crate::agents::Known::Claude, name, None).expect("add the account");
+    }
+    let opened: Done = good(&mut s, "new-tab", &json!({"accounts": {"claude": "personal"}}));
+    s.app.config.active_accounts.insert("claude".into(), "work".into());
+
+    let started = asked_by(&mut s.app, &s.rx, opened.ids.pane, "start", &json!({"issue": "#7"}));
+
+    let done: Done = serde_json::from_value(started.expect("started")).expect("done");
+    let term = pane(&s.app, done.ids.pane.expect("the new pane"));
+    assert_eq!(term.accounts().name(crate::agents::Known::Claude), Some("personal"));
+}
+
+#[test]
 fn the_contract_lists_the_issues_feature() {
     let mut s = listing();
     let described = good::<Value>(&mut s, "contract", &json!({}));
     assert!(described["features"].as_array().expect("features").contains(&json!("issues")));
+}
+
+mod branch_names {
+    use super::*;
+
+    fn branches(s: &Setup) -> Vec<String> {
+        let mut found: Vec<String> = s.app.projects[0].workspaces.iter().filter_map(|w| git::branch(&w.path)).collect();
+        found.sort();
+        found
+    }
+
+    #[test]
+    fn the_template_names_what_lists_reads_and_starts_say() {
+        let mut s = listing();
+        s.app.config.issue_branch = "feat/{key}-{slug}".into();
+        let lists: Lists = good(&mut s, "issue-list", &json!({"source": "github"}));
+        assert_eq!(lists.issues[0].branch, "feat/7-fix-the-login");
+        let read: Value = good(&mut s, "issue-read", &json!({"issue": "#7"}));
+        assert_eq!(read["issue"]["branch"], "feat/7-fix-the-login");
+        let _: Done = good(&mut s, "start", &json!({"issue": "#7"}));
+        assert!(branches(&s).contains(&"feat/7-fix-the-login".to_string()), "{:?}", branches(&s));
+    }
+
+    #[test]
+    fn an_explicit_branch_and_name_win_over_the_template() {
+        let mut s = listing();
+        s.app.config.issue_branch = "feat/{key}-{slug}".into();
+        let project = s.app.projects[0].id;
+        let args = json!({"issue": "#7", "project": project, "worktree": "ana/7", "workspace_name": "login"});
+        let _: Done = good(&mut s, "start", &args);
+        let workspace = &s.app.projects[0].workspaces[1];
+        assert_eq!((git::branch(&workspace.path), workspace.name.as_deref()), (Some("ana/7".into()), Some("login")));
+    }
+
+    #[test]
+    fn a_flow_from_an_issue_takes_the_template_and_the_workspace_s_name() {
+        let mut s = listing();
+        let fake = s.config.path().join("claude");
+        write_executable(&fake, "#!/bin/sh\nexec sleep 60\n");
+        s.app.config.agent = "claude".into();
+        s.app.config.agent_commands.insert("claude".into(), fake.display().to_string());
+        s.app.config.issue_branch = "feat/{key}-{slug}".into();
+        let _: Value = good(&mut s, "flow-run", &json!({"name": "Quick", "issue": "#7", "workspace_name": "Login"}));
+        let workspace = &s.app.projects[0].workspaces[1];
+        assert_eq!(git::branch(&workspace.path).as_deref(), Some("feat/7-fix-the-login"));
+        assert_eq!(workspace.name.as_deref(), Some("Login"));
+    }
+
+    #[test]
+    fn a_workspace_name_needs_an_issue() {
+        let mut s = listing();
+        let refusal = bad(&mut s, "flow-run", &json!({"name": "Quick", "prompt": "x", "workspace_name": "Login"}));
+        assert_eq!(refusal.code, "malformed");
+    }
+
+    #[test]
+    fn the_contract_lists_the_feature() {
+        let mut s = listing();
+        let described = good::<Value>(&mut s, "contract", &json!({}));
+        assert!(described["features"].as_array().expect("features").contains(&json!("issue-names")));
+    }
 }

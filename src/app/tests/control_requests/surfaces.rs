@@ -44,7 +44,7 @@ fn subscribe(app: &mut App, at: Instant, tab: u64) -> Frame {
 }
 
 fn output(app: &mut App, pane: u64, bytes: &str) {
-    app.handle_event(AppEvent::Output(pane, bytes.as_bytes().to_vec()), AREA).expect("output");
+    app.handle_event(AppEvent::Output(pane, 0, bytes.as_bytes().to_vec()), AREA).expect("output");
 }
 
 fn frames(rendered: Vec<(u64, Surfaced)>) -> Vec<Frame> {

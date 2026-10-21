@@ -8,6 +8,7 @@ pub(crate) mod jira;
 pub(crate) mod linear;
 pub(crate) mod locate;
 pub(crate) mod md;
+pub(crate) mod naming;
 pub(crate) mod plane;
 pub(crate) mod secrets;
 pub(crate) mod shortcut;

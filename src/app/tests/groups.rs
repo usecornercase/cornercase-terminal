@@ -492,12 +492,14 @@ fn the_scroll_reveals_the_header_of_a_collapsed_group_holding_the_active_project
     let last = group_label(&app, 5);
     move_to(&mut app, 0, &last);
     app.groups[5].entry.collapsed = true;
-    app.scroll.projects = 0;
-    app.scroll.followed = Focus::default();
+    app.scroll.set(List::Projects, 0);
+    app.scroll.follow_again();
 
     app.follow(AREA);
 
-    assert!(!ui::entry_row(list(), 1, &app.sidebar_rows(), app.scroll.projects, SidebarRow::Group(5)).is_empty());
+    assert!(
+        !ui::entry_row(list(), 1, &app.sidebar_rows(), app.scroll.of(List::Projects), SidebarRow::Group(5)).is_empty()
+    );
 }
 
 #[test]

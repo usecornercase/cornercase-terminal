@@ -34,7 +34,7 @@ fn notices(w: &mut Watched) -> Vec<serde_json::Value> {
 }
 
 fn listen(w: &mut Watched) {
-    w.app.events.subscribe(READER, Vec::new(), false, true);
+    w.app.clients.events.subscribe(READER, Vec::new(), false, true);
 }
 
 #[rstest]
@@ -80,7 +80,7 @@ fn a_view_without_a_size_or_inactive_or_hidden_sees_nothing(#[case] view: OpenVi
 fn each_notice_reaches_the_readers_that_asked_once_per_settle() {
     let mut w = Watched::start(agents::Known::Claude, true);
     listen(&mut w);
-    w.app.events.subscribe(READER + 1, Vec::new(), false, false);
+    w.app.clients.events.subscribe(READER + 1, Vec::new(), false, false);
 
     w.report("waiting", 6);
     let token = w.token().expect("a token");
@@ -159,7 +159,7 @@ fn with_a_view_open_the_windows_tab_counts_only_while_a_window_is_attached() {
 
     w.app.window_attached();
     w.report("busy", 1);
-    w.app.toast = None;
+    w.app.messages.toast = None;
     w.report("waiting", 6);
 
     assert!(w.token().is_none());
@@ -174,7 +174,7 @@ fn a_view_set_hidden_notifies_again_and_visible_sees_again() {
     assert!(w.token().is_some());
 
     w.app.view_set_request(view, &SetView { visible: Some(true), ..SetView::default() }, Some(AREA)).expect("set");
-    w.app.toast = None;
+    w.app.messages.toast = None;
     w.report("busy", 1);
     w.report("waiting", 6);
 

@@ -10,8 +10,7 @@ fn queue_commands_add_list_edit_and_remove_without_starting_an_agent() {
     let list: Value = serde_json::from_str(&app.session.says(&["queue", "list", "--json"])).expect("queue JSON");
     let entry = &list["entries"][0];
     assert_eq!(entry["id"].as_u64().expect("id").to_string(), id);
-    assert_eq!(entry["state"], "pending");
-    assert_eq!(entry["prompt"], "fix the login");
+    assert_eq!((&entry["state"], &entry["prompt"]), (&"pending".into(), &"fix the login".into()));
     assert!(app.session.says(&["queue", "list"]).contains("fix the login"));
     app.session.says(&["queue", "edit", &id, "--at", "in 3h", "--prompt", "fix logout"]);
     let edited: Value = serde_json::from_str(&app.session.says(&["queue", "list", "--json"])).expect("edited JSON");
@@ -19,9 +18,11 @@ fn queue_commands_add_list_edit_and_remove_without_starting_an_agent() {
     assert!(edited["entries"][0]["at"].as_i64().expect("new time") > entry["at"].as_i64().expect("old time"));
     app.session.says(&["queue", "edit", &id, "--name", "logout fix"]);
     let renamed: Value = serde_json::from_str(&app.session.says(&["queue", "list", "--json"])).expect("renamed JSON");
-    assert_eq!(renamed["entries"][0]["label"], "logout fix");
-    assert_eq!(renamed["entries"][0]["at"], edited["entries"][0]["at"]);
-    assert_eq!(renamed["entries"][0]["prompt"], edited["entries"][0]["prompt"]);
+    let (renamed, edited) = (&renamed["entries"][0], &edited["entries"][0]);
+    assert_eq!(
+        (&renamed["label"], &renamed["at"], &renamed["prompt"]),
+        (&"logout fix".into(), &edited["at"], &edited["prompt"])
+    );
     app.session.says(&["queue", "remove", &id]);
     let list: Value = serde_json::from_str(&app.session.says(&["queue", "list", "--json"])).expect("empty JSON");
     assert_eq!(list["entries"], serde_json::json!([]));

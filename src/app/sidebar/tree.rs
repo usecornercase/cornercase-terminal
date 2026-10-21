@@ -1,6 +1,7 @@
 use ratatui::layout::{Position, Rect};
 
 use crate::app::App;
+use crate::app::layout::List;
 use crate::app::menus::Target;
 use crate::error::Result;
 use crate::project::Hierarchy;
@@ -16,7 +17,10 @@ impl App {
         let shown =
             [rows.iter().position(|r| *r == ui::TreeRow::Project(p)), ui::tree_active_row(&rows, &shape, (p, w, t))];
         for i in shown.into_iter().flatten() {
-            self.scroll.projects = ui::tree_layout_rows(list, &shape, &rows, self.scroll.projects).reveal(i);
+            self.scroll.set(
+                List::Projects,
+                ui::tree_layout_rows(list, &shape, &rows, self.scroll.of(List::Projects)).reveal(i),
+            );
         }
     }
 
@@ -43,28 +47,20 @@ impl App {
                 });
                 ui::ProjectShape { group, collapsed: p.collapsed, workspaces: workspaces.collect() }
             });
-        ui::TreeShape { groups, projects: projects.collect(), tab_bar: !self.drawn.tab_bar.is_empty() }
+        ui::TreeShape { groups, projects: projects.collect(), tab_bar: !self.screen.drawn.tab_bar.is_empty() }
     }
 
     pub(in crate::app) fn tree_layout(&self, list: Rect) -> ui::Rows {
         let shape = self.tree_shape();
-        ui::tree_layout_rows(list, &shape, &ui::tree_rows(&shape), self.scroll.projects)
+        ui::tree_layout_rows(list, &shape, &ui::tree_rows(&shape), self.scroll.of(List::Projects))
     }
 
     pub(in crate::app) fn tree_target(&self, row: ui::TreeRow) -> Option<Target> {
-        let project = |p: usize| self.projects.get(p);
         Some(match row {
             ui::TreeRow::Group(g) => Target::Group(self.groups.get(g)?.id),
-            ui::TreeRow::Project(p) => Target::Project(project(p)?.id),
-            ui::TreeRow::Workspace(p, w) => {
-                let project = project(p)?;
-                Target::Workspace(project.id, project.workspaces.get(w)?.id)
-            }
-            ui::TreeRow::Tab(p, w, t) => {
-                let project = project(p)?;
-                let workspace = project.workspaces.get(w)?;
-                Target::Tab(project.id, workspace.id, workspace.tabs.get(t)?.id)
-            }
+            ui::TreeRow::Project(p) => Target::Project(self.projects.get(p)?.id),
+            ui::TreeRow::Workspace(p, w) => self.workspace_target(self.projects.workspace_at(p, w)?),
+            ui::TreeRow::Tab(p, w, t) => self.tab_target(self.projects.tab_at(p, w, t)?),
             _ => return None,
         })
     }
@@ -74,19 +70,19 @@ impl App {
             Target::Group(id) => ui::TreeRow::Group(self.group_index(id)?),
             Target::Project(id) => ui::TreeRow::Project(self.projects.project_index(id)?),
             Target::Workspace(project, workspace) => {
-                let (p, w) = self.projects.workspace_in(project, workspace)?;
-                ui::TreeRow::Workspace(p, w)
+                let at = self.projects.workspace_in(project, workspace)?;
+                ui::TreeRow::Workspace(at.project(), at.index())
             }
             Target::Tab(project, workspace, tab) => {
-                let (p, w, t) = self.projects.tab_in(project, workspace, tab)?;
-                ui::TreeRow::Tab(p, w, t)
+                let at = self.projects.tab_in(project, workspace, tab)?;
+                ui::TreeRow::Tab(at.project(), at.workspace().index(), at.index())
             }
         })
     }
 
     pub(in crate::app) fn click_tree(&mut self, list: Rect, pos: Position, area: Rect) -> Result<()> {
         let shape = self.tree_shape();
-        let scroll = self.scroll.projects;
+        let scroll = self.scroll.of(List::Projects);
         let hit = self.tree_hit(list, &shape, pos);
         if let Some(ui::TreeHit::Select(ui::TreeRow::Workspace(p, w))) = hit
             && let Some(id) = self.pull_in_tree(list, &shape, (p, w), pos)
@@ -103,7 +99,7 @@ impl App {
             }
             Some(ui::TreeHit::Close(row)) => self.close_row(row),
             Some(ui::TreeHit::Menu(_)) => self.open_tree_menu(list, pos),
-            Some(ui::TreeHit::NewTab(p, w)) => self.add_tab(p, w, area)?,
+            Some(ui::TreeHit::NewTab(p, w)) => self.add_tab_row(p, w, area)?,
             Some(ui::TreeHit::NewWorkspace(p)) => self.new_workspace_menu(p, pos),
             Some(ui::TreeHit::NewProject) => self.new_project_menu(pos),
             None => {}
@@ -112,7 +108,7 @@ impl App {
     }
 
     pub(in crate::app) fn tree_hit(&self, list: Rect, shape: &ui::TreeShape, pos: Position) -> Option<ui::TreeHit> {
-        ui::tree_hit(list, shape, self.scroll.projects, pos)
+        ui::tree_hit(list, shape, self.scroll.of(List::Projects), pos)
             .filter(|hit| !hit.workspace().is_some_and(|(p, w)| self.removing(p, w)))
     }
 }

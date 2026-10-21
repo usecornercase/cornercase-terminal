@@ -47,18 +47,18 @@ impl App {
                 spot.context().name()
             )));
         }
-        let key = self.requests.key();
+        let key = self.clients.requests.key();
         if !self.start_plugin_action(spot, plugin, action, Some(key)) {
             return Err(not_found(format!("{} is gone", request.item)));
         }
         let pending =
             Pending { client: Some(client), key, timeout: None, done: Done::default(), stage: Stage::Reading };
-        self.requests.pending.push(pending);
+        self.clients.requests.pending.push(pending);
         Ok(None)
     }
 
     pub(in crate::app) fn plugin_ran(&mut self, request: u64, ran: Result<ActionRan, String>) {
-        let Some(pending) = self.requests.take(request) else { return };
+        let Some(pending) = self.clients.requests.take(request) else { return };
         self.refuse_or_answer(pending.client, ran.map(|ran| json(&ran)).map_err(Refusal::from));
     }
 
@@ -75,13 +75,12 @@ impl App {
                 return Ok(Spot::Project(id));
             }
             Item::Workspace(id) => {
-                let (p, w) = self.projects.workspace_index(id).ok_or_else(|| none("workspace", id))?;
-                Spot::Workspace(self.projects[p].id, self.projects[p].workspaces[w].id)
+                let at = self.projects.workspace_index(id).ok_or_else(|| none("workspace", id))?;
+                Spot::Workspace(self.projects[at.project()].id, id)
             }
             Item::Tab(id) => {
-                let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
-                let workspace = &self.projects[p].workspaces[w];
-                Spot::Tab(self.projects[p].id, workspace.id, workspace.tabs[t].id)
+                let at = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
+                Spot::Tab(self.projects[at.project()].id, self.projects.workspace(at.workspace()).id, id)
             }
             Item::Pane(id) => {
                 self.projects.tab_of_pane(id).ok_or_else(|| none("pane", id))?;
@@ -91,13 +90,12 @@ impl App {
         let workspace = match spot {
             Spot::Workspace(_, w) | Spot::Tab(_, w, _) => w,
             Spot::Pane(pane) => {
-                let (p, w, _) = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
-                self.projects[p].workspaces[w].id
+                let at = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
+                self.projects.workspace(at.workspace()).id
             }
             Spot::Project(_) => return Ok(spot),
         };
-        let (p, _) = self.usable_workspace(workspace)?;
-        if self.projects[p].closing {
+        if self.projects[self.usable_workspace(workspace)?.project()].closing {
             return Err(format!("workspace {workspace} is closing").into());
         }
         Ok(spot)

@@ -67,10 +67,7 @@ impl Stderr {
 
     fn collect(self, from: ChildStderr) -> JoinHandle<()> {
         thread::spawn(move || {
-            for line in BufReader::new(from).lines() {
-                let Ok(line) = line else { return };
-                self.keep(&line);
-            }
+            BufReader::new(from).lines().map_while(io::Result::ok).for_each(|line| self.keep(&line));
         })
     }
 }

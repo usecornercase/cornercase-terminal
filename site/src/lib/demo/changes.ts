@@ -40,6 +40,19 @@ interface Hunk {
   lines: DiffLine[];
 }
 
+export type Spot = [number, number];
+
+export interface ChangesSelection {
+  key: string;
+  before: string;
+  after: string;
+  anchor: Spot;
+  end: Spot;
+}
+
+export const LINES_ACTIONS = ['ask agent', 'copy'] as const;
+export type LinesAction = (typeof LINES_ACTIONS)[number];
+
 export interface FileDiff {
   owner?: { project: Project; workspace: Workspace };
   change: Change;
@@ -357,6 +370,86 @@ function rows(app: App, files: FileDiff[], kept: Set<number> | null, groups: Hea
   return out;
 }
 
+function inOrder(a: Spot, b: Spot): [Spot, Spot] {
+  return a[0] < b[0] || (a[0] === b[0] && a[1] <= b[1]) ? [a, b] : [b, a];
+}
+
+export function shownChanges(app: App, areas: Areas) {
+  const files = app.changesDiff();
+  const filter = app.changesFilter;
+  const kept = filter ? keptFiles(files, filter.query) : null;
+  const top = filter ? 5 : 4;
+  const area = areas.changes;
+  const body = rect(area.x, area.y + top, area.w, Math.max(0, area.h - top - 2));
+  const groups = app.changesScope === 'every' ? headers(files) : [];
+  const list = rows(app, files, kept, groups);
+  const max = Math.max(0, list.length - body.h);
+  return { files, kept, groups, list, body, first: Math.min(app.changesScroll, max), max };
+}
+
+type Shown = ReturnType<typeof shownChanges>;
+
+export function selectedLines(app: App, shown: Shown): { file: number; from: Spot; to: Spot } | null {
+  const s = app.changesSelection;
+  if (!s) return null;
+  const file = shown.files.findIndex((f) => app.fileKey(f) === s.key && f.change.before === s.before && f.change.after === s.after);
+  if (file < 0) return null;
+  const [from, to] = inOrder(s.anchor, s.end);
+  const has = ([h, l]: Spot) => shown.list.some((row) => row.kind === 'line' && row.i === file && row.h === h && row.l === l);
+  return has(from) && has(to) ? { file, from, to } : null;
+}
+
+export function changesLineNear(app: App, file: number, y: number): Spot | null {
+  const { list, body, first } = shownChanges(app, app.areas());
+  if (!list.length || !body.h) return null;
+  const at = Math.min(first + Math.max(0, Math.min(body.h - 1, y - body.y)), list.length - 1);
+  const spot = (row: Row): Spot | null => (row.kind === 'line' && row.i === file ? [row.h, row.l] : null);
+  for (let i = at; i >= 0; i--) {
+    const found = spot(list[i]);
+    if (found) return found;
+  }
+  return list.map(spot).find((found) => found) ?? null;
+}
+
+export function changesLineEdge(app: App, y: number): { delta: number; max: number } | null {
+  const { body, first, max } = shownChanges(app, app.areas());
+  if (!body.h) return null;
+  if (y <= body.y && first > 0) return { delta: -1, max };
+  if (y >= bottom(body) - 1 && first < max) return { delta: 1, max };
+  return null;
+}
+
+function pickedLines(file: FileDiff, from: Spot, to: Spot): DiffLine[] {
+  return file.hunks.flatMap((hunk, h) => hunk.lines.filter((_, l) => (h > from[0] || (h === from[0] && l >= from[1])) && (h < to[0] || (h === to[0] && l <= to[1]))));
+}
+
+export function hunkLines(hunk: Hunk): string {
+  const added = hunk.lines.filter((l) => l.kind === '+').map((l) => l.new ?? 0);
+  return added.length ? (added.length > 1 ? `${added[0]}-${added[added.length - 1]}` : `${added[0]}`) : `${hunk.newStart}`;
+}
+
+export function linesReference(file: FileDiff, from: Spot, to: Spot): string {
+  const numbers = pickedLines(file, from, to).flatMap((l) => (l.new === undefined ? [] : [l.new]));
+  if (!numbers.length) return `${file.change.path}:${hunkLines(file.hunks[from[0]])}`;
+  const [first, last] = [Math.min(...numbers), Math.max(...numbers)];
+  return `${file.change.path}:${first === last ? first : `${first}-${last}`}`;
+}
+
+export function linesText(file: FileDiff, from: Spot, to: Spot): string {
+  return pickedLines(file, from, to)
+    .map((l) => l.text)
+    .join('\n');
+}
+
+function linesLabel(file: FileDiff, from: Spot, to: Spot): string {
+  const lines = pickedLines(file, from, to);
+  const news = lines.flatMap((l) => (l.new === undefined ? [] : [l.new]));
+  const numbers = news.length ? news : lines.flatMap((l) => (l.old === undefined ? [] : [l.old]));
+  const [first, last] = [Math.min(...numbers), Math.max(...numbers)];
+  const noun = first === last ? 'line' : 'lines';
+  return `${news.length ? '' : 'removed '}${noun} ${first === last ? first : `${first}-${last}`}`;
+}
+
 export function drawPanelBorder(p: Painter, areas: Areas): void {
   const app = p.app;
   const border = areas.changesBorder;
@@ -373,12 +466,13 @@ export function drawChanges(p: Painter, areas: Areas): void {
   const area = areas.changes;
   g.clear(area);
   const inner = rect(area.x + 1, area.y, Math.max(0, area.w - 2), area.h);
-  const files = app.changesDiff();
+  const layout = shownChanges(app, areas);
+  const { files, kept } = layout;
   const tints = tintsOf(app);
   const surface = app.light ? 254 : 236;
 
   const filter = app.changesFilter;
-  const kept = filter ? keptFiles(files, filter.query) : null;
+  const picked = selectedLines(app, layout);
 
   const close = rect(right(inner) - 3, inner.y, 3, 1);
   const button = rect(close.x - 3, inner.y, 3, 1);
@@ -438,13 +532,8 @@ export function drawChanges(p: Painter, areas: Areas): void {
     p.span(lx, sy, ' live', DARK);
   }
 
-  const top = filter ? 5 : 4;
-  const body = rect(area.x, area.y + top, area.w, Math.max(0, area.h - top - 2));
-  const groups = app.changesScope === 'every' ? headers(files) : [];
-  const list = rows(app, files, kept, groups);
-  const max = Math.max(0, list.length - body.h);
-  const first = Math.min(app.changesScroll, max);
-  p.region({ r: body, wheel: (dy) => app.scrollChanges(dy, max) });
+  const { body, groups, list, first, max } = layout;
+  p.region({ r: body, wheel: (dy) => app.scrollChanges(dy, max), click: () => app.clearChangesSelection() });
   if (!files.length) {
     const text = app.changesScope === 'every' ? 'no changes in any project' : app.changesMode === 'uncommitted' ? 'no changes' : app.changesMode === 'commits' ? `no commits since ${app.changesBase}` : `nothing changed since ${app.changesBase}`;
     p.span(body.x + 1, body.y, text, DARK);
@@ -473,14 +562,20 @@ export function drawChanges(p: Painter, areas: Areas): void {
       const digits = numberWidth(files[row.i]);
       p.span(r.x + 3 + digits * 2, r.y, '↕', { fg: 6 });
       p.span(r.x + 5 + digits * 2, r.y, row.n === 1 ? '1 unchanged line' : `${row.n} unchanged lines`, p.hovered(r) ? { fg: 6 } : DARK);
+      p.region({ r, click: () => {} });
     } else if (row.kind === 'hunk') hunkRow(p, files[row.i], row.h, r, hotHunk === `${row.i}:${row.h}`);
-    else if (row.kind === 'line') codeRow(p, files[row.i], files[row.i].hunks[row.h].lines[row.l], r, tints);
+    else if (row.kind === 'line') {
+      const marked = !!picked && picked.file === row.i && inRange([row.h, row.l], picked.from, picked.to);
+      codeRow(p, files[row.i], files[row.i].hunks[row.h].lines[row.l], r, tints, marked);
+      p.region({ r, click: () => app.selectChangesLine(files[row.i], row.h, row.l) });
+    }
   }
 
   const sep = rect(inner.x, bottom(area) - 2, inner.w, 1);
   p.span(sep.x, sep.y, '─'.repeat(sep.w), { fg: p.lineColour });
   const foot = bottom(area) - 1;
-  if (files.length) {
+  if (picked) linesFooter(p, files[picked.file], picked, rect(inner.x, foot, inner.w, 1));
+  else if (files.length) {
     const label = files.every((f) => app.changesFolded(f)) ? 'expand all' : 'collapse all';
     const r = rect(inner.x, foot, label.length + 2, 1);
     p.span(r.x, foot, ` ${label} `, p.hovered(r) ? { fg: 0, bg: 6 } : DARK);
@@ -489,6 +584,24 @@ export function drawChanges(p: Painter, areas: Areas): void {
     const text = `${viewed} of ${files.length} viewed`;
     p.span(right(inner) - text.length, foot, text, DARK);
   }
+}
+
+function inRange(at: Spot, from: Spot, to: Spot): boolean {
+  const [a, b] = inOrder(from, to);
+  return inOrder(a, at)[0] === a && inOrder(at, b)[0] === at;
+}
+
+function linesFooter(p: Painter, file: FileDiff, picked: { from: Spot; to: Spot }, row: Rect): void {
+  let bx = right(row) - 1;
+  let start = right(row);
+  for (const action of [...LINES_ACTIONS].reverse()) {
+    const r = rect(bx - action.length - 2, row.y, action.length + 2, 1);
+    p.span(r.x, r.y, ` ${action} `, p.hovered(r) ? { fg: 0, bg: 6, add: BOLD } : { fg: 6 });
+    p.region({ r, click: () => p.app.changesLinesAction(action), cursor: 'pointer' });
+    bx = r.x - 1;
+    start = r.x;
+  }
+  p.span(row.x + 1, row.y, truncateRight(linesLabel(file, picked.from, picked.to), Math.max(0, start - row.x - 2)), { fg: 6 });
 }
 
 function filterField(p: Painter, row: Rect, filter: { query: string; focused: boolean }, surface: number): void {
@@ -526,20 +639,34 @@ function fileRow(p: Painter, f: FileDiff, r: Rect, surface: number): void {
   p.span(r.x + 4 + indent, r.y, f.change.status, muted ? DARK : { fg: colour, add: BOLD });
   const check = rect(right(r) - 3, r.y, 3, 1);
   if (viewed || p.hovered(r)) p.span(check.x + 1, r.y, '✓', viewed || p.hovered(check) ? { fg: 2 } : DARK);
+  const discardable = app.changesScope === 'every' || app.changesMode === 'uncommitted';
+  const stage = discardable ? rect(check.x - 3, r.y, 3, 1) : null;
+  const discard = discardable ? rect(check.x - 6, r.y, 3, 1) : null;
+  if (stage) stageMark(p, app.changesStaged(f), stage, r);
+  if (discard && p.hovered(r)) p.span(discard.x + 1, r.y, '↺', p.hovered(discard) ? { fg: 1 } : DARK);
+  const end = discard ? discard.x : check.x;
   const tag = f.change.lockfile ? 'lockfile' : f.change.untracked ? 'new' : '';
   const parts: [string, Style][] = [];
   if (tag) parts.push([tag, { fg: 8, add: ITALIC }]);
   if (f.added) parts.push([`+${f.added}`, muted ? DARK : { fg: 2 }]);
   if (f.removed) parts.push([`−${f.removed}`, muted ? DARK : { fg: 1 }]);
-  let x = check.x - parts.reduce((n, [t]) => n + [...t].length + 1, 0);
+  let x = end - parts.reduce((n, [t]) => n + [...t].length + 1, 0);
   const pathEnd = x - 1;
   for (const [t, s] of parts) x = p.span(x, r.y, t, s) + 1;
   const path = truncateLeft(f.change.path, Math.max(0, pathEnd - (r.x + 6 + indent)));
   const cut = path.lastIndexOf('/') + 1;
   const px = p.span(r.x + 6 + indent, r.y, path.slice(0, cut), DARK);
   p.span(px, r.y, path.slice(cut), muted ? DARK : { fg: DEFAULT, add: BOLD });
-  p.region({ r: rect(r.x, r.y, r.w - 3, 1), click: () => app.toggleChangesFile(f), cursor: 'pointer' });
+  p.region({ r: rect(r.x, r.y, r.w - (discard ? 9 : 3), 1), click: () => app.toggleChangesFile(f), cursor: 'pointer' });
+  if (stage) p.region({ r: stage, click: () => app.toggleChangesStaged(f), cursor: 'pointer' });
+  if (discard) p.region({ r: discard, click: () => app.askDiscard(f), cursor: 'pointer' });
   p.region({ r: check, click: () => app.toggleChangesViewed(f), cursor: 'pointer' });
+}
+
+function stageMark(p: Painter, staged: boolean, cell: Rect, r: Rect): void {
+  const under = p.hovered(cell);
+  if (staged) p.span(cell.x + 1, r.y, under ? '−' : '●', { fg: under ? 3 : 2 });
+  else if (p.hovered(r)) p.span(cell.x + 1, r.y, '+', under ? { fg: 2 } : DARK);
 }
 
 function hunkRow(p: Painter, f: FileDiff, h: number, r: Rect, hot: boolean): void {
@@ -568,14 +695,16 @@ function hunkRow(p: Painter, f: FileDiff, h: number, r: Rect, hot: boolean): voi
   });
 }
 
-function codeRow(p: Painter, f: FileDiff, line: DiffLine, r: Rect, tints: ReturnType<typeof tintsOf>): void {
+function codeRow(p: Painter, f: FileDiff, line: DiffLine, r: Rect, tints: ReturnType<typeof tintsOf>, marked: boolean): void {
   const tint = line.kind === '-' ? tints.removed : line.kind === '+' ? tints.added : undefined;
   const word = line.kind === '-' ? tints.removedWord : tints.addedWord;
   if (tint !== undefined) p.g.fill(r, { bg: tint });
   const digits = numberWidth(f);
   const num = (n?: number) => (n === undefined ? ' '.repeat(digits) : String(n).padStart(digits));
-  let x = p.span(r.x + 1, r.y, num(line.old), DARK);
-  x = p.span(x + 1, r.y, num(line.new), DARK);
+  const numbers: Style = marked ? { fg: 6, add: BOLD } : DARK;
+  if (marked) p.span(r.x, r.y, '▌', { fg: 6 });
+  let x = p.span(r.x + 1, r.y, num(line.old), numbers);
+  x = p.span(x + 1, r.y, num(line.new), numbers);
   if (line.kind !== ' ') p.span(x + 1, r.y, '▎', { fg: line.kind === '-' ? 1 : 2 });
   const start = x + 3;
   const end = right(r) - 1;

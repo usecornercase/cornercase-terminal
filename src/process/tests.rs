@@ -35,6 +35,23 @@ mod descendants {
     }
 }
 
+mod parent {
+    use super::*;
+    use crate::test_util::Family;
+
+    #[test]
+    fn is_the_process_that_started_it() {
+        let family = Family::new();
+        let child = family.child().expect("a child");
+        assert_eq!((parent(family.pid()), parent(child)), (Some(this_pid()), Some(family.pid())));
+    }
+
+    #[test]
+    fn is_unknown_for_a_process_that_exited() {
+        assert_eq!(parent(exited_pid()), None);
+    }
+}
+
 mod started {
     use super::*;
 

@@ -44,7 +44,7 @@ impl MergedPulls {
 impl App {
     pub(super) fn merged_note(&self) -> String {
         let (github, gitlab) =
-            (self.merged.cache.sources(Provider::Github), self.merged.cache.sources(Provider::Gitlab));
+            (self.git.merged.cache.sources(Provider::Github), self.git.merged.cache.sources(Provider::Gitlab));
         let plural = |n: usize| if n == 1 { "" } else { "s" };
         let mut parts = Vec::new();
         if github > 0 {
@@ -56,7 +56,7 @@ impl App {
         if !parts.is_empty() {
             return format!("from {}", parts.join(" and "));
         }
-        let note = self.merged.cache.note();
+        let note = self.git.merged.cache.note();
         if note.is_empty() { NOTE.into() } else { note }
     }
 
@@ -70,31 +70,33 @@ impl App {
 
     fn ask_merged_within(&mut self, now: Instant, stale: Option<Duration>) {
         if !self.config.merged_pull_requests {
-            self.merged = MergedPulls::default();
+            self.git.merged = MergedPulls::default();
             return;
         }
         let mut remotes: Vec<Remote> = Vec::new();
-        for project in self.projects.iter().filter(|p| !p.closing) {
-            for found in remote::of(&project.path) {
-                if !remotes.contains(&found) {
-                    remotes.push(found);
-                }
+        for found in self.projects.iter().filter(|p| !p.closing).flat_map(|project| remote::of(&project.path)) {
+            if !remotes.contains(&found) {
+                remotes.push(found);
             }
         }
         let hosts: BTreeSet<String> = remotes.iter().map(|r| r.host.clone()).collect();
-        let changed = hosts != self.merged.hosts;
-        self.merged.remotes = remotes;
-        if self.merged.remotes.is_empty() || self.merged.asking {
+        let changed = hosts != self.git.merged.hosts;
+        self.git.merged.remotes = remotes;
+        if self.git.merged.remotes.is_empty() || self.git.merged.asking {
             return;
         }
-        let every = stale.unwrap_or(if self.merged.failed { FAILED_EVERY } else { EVERY });
-        let due = self.merged.asked.is_none_or(|at| now.saturating_duration_since(at) >= every);
+        let every = stale.unwrap_or(if self.git.merged.failed { FAILED_EVERY } else { EVERY });
+        let due = self.git.merged.asked.is_none_or(|at| now.saturating_duration_since(at) >= every);
         if !(due || (changed && stale.is_none())) {
             return;
         }
-        self.merged.hosts = hosts;
-        self.merged.asking = true;
-        self.merged.asked = Some(now);
+        self.git.merged.hosts = hosts;
+        self.git.merged.asking = true;
+        self.git.merged.asked = Some(now);
+        self.spawn_merged();
+    }
+
+    fn spawn_merged(&self) {
         let gh = self.config.gh(self.home.as_deref());
         let glab = self.config.glab(self.home.as_deref());
         let dir = self.home.clone().unwrap_or_else(|| PathBuf::from("/"));
@@ -114,18 +116,18 @@ impl App {
     }
 
     pub(super) fn merged_answered(&mut self, answer: Answer) {
-        self.merged.asking = false;
-        self.merged.asked = Some(Instant::now());
+        self.git.merged.asking = false;
+        self.git.merged.asked = Some(Instant::now());
         if !self.config.merged_pull_requests {
             return;
         }
-        self.merged.cache.apply(answer);
-        let problems = self.merged.cache.problems();
+        self.git.merged.cache.apply(answer);
+        let problems = self.git.merged.cache.problems();
         let reasons: BTreeSet<String> =
             problems.iter().map(|(p, host, why)| format!("{}\u{0}{host}\u{0}{why}", p.name())).collect();
         for (provider, host, why) in &problems {
             let key = format!("{}\u{0}{host}\u{0}{why}", provider.name());
-            if !self.merged.reasons.contains(&key) {
+            if !self.git.merged.reasons.contains(&key) {
                 log::warning!(
                     "pr",
                     "cannot read merged pull requests",
@@ -136,16 +138,16 @@ impl App {
             }
         }
         let failed = !problems.is_empty();
-        if self.merged.failed && !failed {
+        if self.git.merged.failed && !failed {
             log::info!("pr", "merged pull requests read again");
         }
-        self.merged.failed = failed;
-        self.merged.reasons = reasons;
+        self.git.merged.failed = failed;
+        self.git.merged.reasons = reasons;
         log::info!(
             "pr",
             "merged pull requests read",
-            github = self.merged.cache.sources(Provider::Github),
-            gitlab = self.merged.cache.sources(Provider::Gitlab)
+            github = self.git.merged.cache.sources(Provider::Github),
+            gitlab = self.git.merged.cache.sources(Provider::Gitlab)
         );
     }
 }

@@ -21,20 +21,20 @@ impl App {
         let waiting = keys
             .into_iter()
             .map(|key| {
-                let answers = self.usage.probe_of(key.0, key.1.as_deref()).answers();
+                let answers = self.usages.state.probe_of(key.0, key.1.as_deref()).answers();
                 (key, answers)
             })
             .collect();
-        let key = self.requests.key();
+        let key = self.clients.requests.key();
         let pending =
             Pending { client: Some(client), key, timeout: None, done: Done::default(), stage: Stage::Usage(waiting) };
-        self.requests.pending.push(pending);
+        self.clients.requests.pending.push(pending);
         None
     }
 
     pub(super) fn usage_read(&self, waiting: &[(Key, u64)], now: Instant) -> Option<Plans> {
         let answered = |((agent, account), before): &(Key, u64)| {
-            self.usage.probe_of(*agent, account.as_deref()).answers() > *before
+            self.usages.state.probe_of(*agent, account.as_deref()).answers() > *before
         };
         waiting.iter().all(answered).then(|| {
             let keys: Vec<Key> = waiting.iter().map(|(key, _)| key.clone()).collect();
@@ -51,7 +51,7 @@ impl App {
             agents: listed
                 .iter()
                 .map(|&(agent, account)| {
-                    let probe = self.usage.probe_of(agent, account);
+                    let probe = self.usages.state.probe_of(agent, account);
                     let key = (agent, account);
                     let label = labelled(&self.config, &listed, key);
                     PlanInfo::of(agent, probe, now, clock).for_account(account, label, active(&listed, chosen, key))

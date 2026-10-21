@@ -26,19 +26,19 @@ pub(super) struct Events {
     pub(super) snapshots: Snapshots,
     pub(super) app: Snapshots<AppState>,
     pub(super) runs: Snapshots<FlowRuns>,
-    pub(super) flow_messages: Vec<(u64, u64)>,
+    flow_messages: Vec<(u64, u64)>,
 }
 
 pub(super) struct Snapshots<T = Report> {
     watchers: Vec<u64>,
     last: Option<T>,
     revision: u64,
-    pub(super) built: Option<Instant>,
+    built: Option<Instant>,
     due: bool,
-    pub(super) changed: bool,
+    changed: bool,
     read: Option<Instant>,
     refreshed: Option<u64>,
-    pub(super) every: Duration,
+    every: Duration,
 }
 
 impl<T> Default for Snapshots<T> {
@@ -62,6 +62,25 @@ impl<T: Clone + PartialEq + Serialize + Default> Snapshots<T> {
         self.revision
     }
 
+    pub(super) fn mark_changed(&mut self) {
+        self.changed = true;
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_every(&mut self, every: Duration) {
+        self.every = every;
+    }
+
+    #[cfg(test)]
+    pub(super) fn built(&self) -> Option<Instant> {
+        self.built
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_built(&mut self, built: Instant) {
+        self.built = Some(built);
+    }
+
     fn take(&mut self, report: T, now: Instant) -> Option<Snapshot<T>> {
         self.built = Some(now);
         self.due = false;
@@ -80,15 +99,7 @@ impl<T: Clone + PartialEq + Serialize + Default> Snapshots<T> {
         out.extend(self.watchers.iter().map(|watcher| (*watcher, Streamed::Snapshot(text.clone()))));
     }
 
-    fn join(
-        &mut self,
-        client: u64,
-        report: T,
-        now: Instant,
-        out: &mut Vec<(u64, Streamed)>,
-        stream: &str,
-    ) -> Snapshot<T> {
-        self.offer(report, now, out, stream);
+    fn join(&mut self, client: u64) -> Snapshot<T> {
         self.watchers.push(client);
         self.current().unwrap_or_default()
     }
@@ -234,9 +245,7 @@ impl Events {
                 && let Some(pane) = event.ids.pane
             {
                 bells.panes.remove(&pane);
-                for panes in subscribers.iter_mut().filter_map(|subscriber| subscriber.panes.as_mut()) {
-                    panes.retain(|watched| *watched != pane);
-                }
+                unwatch_pane(subscribers, pane);
             }
         }
         for ended in subscribers.extract_if(.., |subscriber| subscriber.panes.as_ref().is_some_and(Vec::is_empty)) {
@@ -250,21 +259,31 @@ impl Events {
     pub(super) fn push(&mut self, client: u64, streamed: Streamed) {
         self.out.push((client, streamed));
     }
+
+    pub(super) fn follows_flow_messages(&self, client: u64) -> bool {
+        self.flow_messages.iter().any(|(follower, _)| *follower == client)
+    }
+
+    pub(super) fn follow_flow_messages(&mut self, client: u64, run: u64) {
+        self.flow_messages.push((client, run));
+    }
+
+    pub(super) fn flow_message_followers(&self, run: u64) -> Vec<u64> {
+        self.flow_messages.iter().filter(|(_, followed)| *followed == run).map(|(client, _)| *client).collect()
+    }
+
+    pub(super) fn stop_flow_messages(&mut self, running: impl Fn(u64) -> bool) -> Vec<u64> {
+        self.flow_messages.extract_if(.., |(_, run)| !running(*run)).map(|(client, _)| client).collect()
+    }
 }
 
 impl App {
     pub(super) fn tell_host(&mut self, pane: u64, copied: Vec<String>, rang: u32, now: Instant) {
-        if !self.events.hosting() || (copied.is_empty() && rang == 0) {
+        if !self.clients.events.hosting() || (copied.is_empty() && rang == 0) {
             return;
         }
-        let Some((p, w, t)) = self.projects.tab_of_pane(pane) else { return };
-        let workspace = &self.projects[p].workspaces[w];
-        let ids = Ids {
-            project: Some(self.projects[p].id),
-            workspace: Some(workspace.id),
-            tab: Some(workspace.tabs[t].id),
-            pane: Some(pane),
-        };
+        let Some(at) = self.projects.tab_of_pane(pane) else { return };
+        let ids = Ids { pane: Some(pane), ..self.ids_of_tab(at) };
         let time = crate::time::Stamp(SystemTime::now()).to_string();
         let mut events: Vec<Event> = copied
             .into_iter()
@@ -274,83 +293,86 @@ impl App {
             })
             .collect();
         if rang > 0
-            && let Some(count) = self.events.bells.ring(pane, ids, u64::from(rang), now)
+            && let Some(count) = self.clients.events.bells.ring(pane, ids, u64::from(rang), now)
         {
             events.push(Event { time, what: What::Bell { count }, ids });
         }
-        self.events.publish(&events);
+        self.clients.events.publish(&events);
     }
 
     pub(super) fn ring_bells(&mut self, now: Instant) {
-        let due = self.events.bells.due(now);
+        let due = self.clients.events.bells.due(now);
         if due.is_empty() {
             return;
         }
         let time = crate::time::Stamp(SystemTime::now()).to_string();
         let events: Vec<Event> =
             due.into_iter().map(|(ids, count)| Event { time: time.clone(), what: What::Bell { count }, ids }).collect();
-        self.events.publish(&events);
+        self.clients.events.publish(&events);
     }
 
     pub(crate) fn take_events(&mut self) -> Vec<(u64, Streamed)> {
-        std::mem::take(&mut self.events.out)
+        std::mem::take(&mut self.clients.events.out)
     }
 
     pub(super) fn watch_snapshots(&mut self, client: u64, now: Instant) -> Snapshot {
         let report = self.report(None);
-        let Events { snapshots, out, .. } = &mut self.events;
-        let snapshot = snapshots.join(client, report, now, out, "session");
+        let Events { snapshots, out, .. } = &mut self.clients.events;
+        snapshots.offer(report, now, out, "session");
+        let snapshot = snapshots.join(client);
         log::info!("control", "watching", client = client, revision = snapshot.revision);
         snapshot
     }
 
     pub(super) fn app_snapshots(&mut self, client: u64, now: Instant) -> Snapshot<AppState> {
         let state = self.app_state();
-        let Events { app, out, .. } = &mut self.events;
-        let snapshot = app.join(client, state, now, out, "app");
+        let Events { app, out, .. } = &mut self.clients.events;
+        app.offer(state, now, out, "app");
+        let snapshot = app.join(client);
         log::info!("control", "following the app", client = client, revision = snapshot.revision);
         snapshot
     }
 
     pub(super) fn publish_app(&mut self, now: Instant) {
-        if self.events.app.ready(now) {
+        if self.clients.events.app.ready(now) {
             let state = self.app_state();
-            let Events { app, out, .. } = &mut self.events;
+            let Events { app, out, .. } = &mut self.clients.events;
             app.offer(state, now, out, "app");
         }
     }
 
     pub(super) fn flow_runs_snapshots(&mut self, client: u64, now: Instant) -> Snapshot<FlowRuns> {
         let state = self.flow_runs_state();
-        let Events { runs, out, .. } = &mut self.events;
-        let snapshot = runs.join(client, state, now, out, "flow-runs");
+        let Events { runs, out, .. } = &mut self.clients.events;
+        runs.offer(state, now, out, "flow-runs");
+        let snapshot = runs.join(client);
         log::info!("control", "following flow runs", client = client, revision = snapshot.revision);
         snapshot
     }
 
     pub(super) fn publish_flow_runs(&mut self, now: Instant) {
-        if self.events.runs.ready(now) {
+        if self.clients.events.runs.ready(now) {
             let state = self.flow_runs_state();
-            let Events { runs, out, .. } = &mut self.events;
+            let Events { runs, out, .. } = &mut self.clients.events;
             runs.offer(state, now, out, "flow-runs");
         }
     }
 
     pub(super) fn publish_snapshot(&mut self, now: Instant) {
-        let watching = !self.events.snapshots.watchers.is_empty();
-        if !watching && self.views.is_empty() {
+        let watching = !self.clients.events.snapshots.watchers.is_empty();
+        if !watching && self.clients.views.is_empty() {
             return;
         }
-        if self.events.snapshots.read != self.agents.watched {
-            self.events.snapshots.read = self.agents.watched;
+        if self.clients.events.snapshots.read != self.agents.watched() {
+            self.clients.events.snapshots.read = self.agents.watched();
             let refreshed = Some(self.refreshed());
-            if self.events.snapshots.refreshed != refreshed {
-                self.events.snapshots.refreshed = refreshed;
-                self.events.snapshots.changed = true;
+            if self.clients.events.snapshots.refreshed != refreshed {
+                self.clients.events.snapshots.refreshed = refreshed;
+                self.clients.events.snapshots.changed = true;
             }
         }
-        let own = self.views.changed();
-        let snapshots = &mut self.events.snapshots;
+        let own = self.clients.views.changed();
+        let snapshots = &mut self.clients.events.snapshots;
         let paced = snapshots.waits(now);
         if !snapshots.changed && !own {
             return;
@@ -361,19 +383,25 @@ impl App {
         }
         let report = self.report(None);
         if paced {
-            self.events.snapshots.due = self.events.snapshots.changed;
+            self.clients.events.snapshots.due = self.clients.events.snapshots.changed;
             self.publish_views(&report);
             return;
         }
         if watching {
-            let Events { snapshots, out, .. } = &mut self.events;
+            let Events { snapshots, out, .. } = &mut self.clients.events;
             snapshots.offer(report.clone(), now, out, "session");
         } else {
-            let snapshots = &mut self.events.snapshots;
+            let snapshots = &mut self.clients.events.snapshots;
             snapshots.built = Some(now);
             snapshots.due = false;
             snapshots.changed = false;
         }
         self.publish_views(&report);
+    }
+}
+
+fn unwatch_pane(subscribers: &mut [Subscriber], pane: u64) {
+    for panes in subscribers.iter_mut().filter_map(|subscriber| subscriber.panes.as_mut()) {
+        panes.retain(|watched| *watched != pane);
     }
 }

@@ -40,7 +40,8 @@ impl App {
 
     pub(super) fn help_label(&self, item: HelpItem) -> String {
         let core = &TOURS[0];
-        let started = !self.tour.saved.progress(core.id).done.is_empty() && !self.tour.saved.finished(core.id);
+        let started = !self.messages.tour.saved().progress(core.id).done.is_empty()
+            && !self.messages.tour.saved().finished(core.id);
         match item {
             HelpItem::Tour if started => "continue the tour".into(),
             HelpItem::Tour => "tour".into(),
@@ -51,9 +52,17 @@ impl App {
         }
     }
 
+    pub(super) fn help_menu_label(&self, action: MenuAction) -> Option<String> {
+        match action {
+            MenuAction::Help(item) => Some(self.help_label(item)),
+            MenuAction::Tour(index) => Some(self.tour_label(index)),
+            _ => None,
+        }
+    }
+
     pub(super) fn tour_label(&self, index: u8) -> String {
         let Some(tour) = TOURS.get(usize::from(index)) else { return String::new() };
-        let progress = self.tour.saved.progress(tour.id);
+        let progress = self.messages.tour.saved().progress(tour.id);
         if progress.finished {
             format!("{} ✓", tour.title)
         } else if progress.done.is_empty() {
@@ -70,69 +79,78 @@ impl App {
                 let actions = (0..TOURS.len()).filter_map(|i| u8::try_from(i).ok()).map(MenuAction::Tour).collect();
                 self.overlay = Some(Overlay::Menu { at, actions });
             }
-            HelpItem::Docs => self.copy_link(tour::DOCS),
+            HelpItem::Docs => self.copy_address(tour::DOCS),
             HelpItem::Keys => self.overlay = Some(Overlay::Keys(None)),
-            HelpItem::Bug => self.copy_link(BUG_URL),
+            HelpItem::Bug => self.copy_address(BUG_URL),
         }
     }
 
-    fn copy_link(&mut self, url: &str) {
+    fn copy_address(&mut self, url: &str) {
         self.copy(url);
-        self.toast = Some(Toast::new(format!("copied {url}"), ui::ToastIcon::Check));
+        self.messages.toast = Some(Toast::new(format!("copied {url}"), ui::ToastIcon::Check));
     }
 
     pub(super) fn tour_target(&self, areas: &ui::Areas, target: Target) -> (Rect, bool) {
-        let icon = |item: ActivityItem| {
-            ui::activity_items(areas.activity, self.activity_shown())
-                .into_iter()
-                .find_map(|(i, r)| (i == item).then_some(r))
-                .unwrap_or_default()
-        };
-        let icons = !areas.activity.is_empty();
-        let button = |r: Rect| (r, true);
-        let region = |r: Rect| (r, false);
-        let found = match target {
-            Target::None => region(Rect::default()),
-            Target::NewProject if !areas.tree => {
-                button(ui::new_project_button(areas.list, areas.pitch, &self.sidebar_rows()))
-            }
-            Target::NewProject | Target::Projects => region(areas.list),
-            Target::Tabs if !areas.tab_bar.is_empty() => region(areas.tab_bar),
-            Target::Workspaces | Target::Tabs if areas.tree => region(areas.list),
-            Target::Workspaces | Target::Tabs => region(areas.workspaces_list),
-            Target::Pane if areas.pane.x > 0 && !areas.compact() => {
-                region(Rect { x: areas.pane.x - 1, width: 1, ..areas.pane })
-            }
-            Target::Pane => region(areas.pane),
-            Target::Agents => region(areas.agents_list),
-            Target::Issues if icons => button(icon(ActivityItem::Issues)),
-            Target::Issues => button(label_cells(areas.issues, "Issues")),
-            Target::Changes if icons => button(icon(ActivityItem::Changes)),
-            Target::Changes if areas.compact() => button(areas.changes_button),
-            Target::Changes => {
-                button(self.changes_label().map(|l| ui::changes_button(areas.issues, &l)).unwrap_or_default())
-            }
-            Target::Files if icons => button(icon(ActivityItem::Files)),
-            Target::Files => button(areas.files_button),
-            Target::Todo if icons => button(icon(ActivityItem::Todo)),
-            Target::Todo => button(areas.todo_button),
-            Target::Search if areas.compact() => button(areas.search_button),
-            Target::Search => region(areas.search),
-            Target::Settings if icons => button(icon(ActivityItem::Settings)),
-            Target::Settings => button(label_cells(areas.settings, "Settings")),
-            Target::Usage if icons => button(icon(ActivityItem::Usage)),
-            Target::Usage => button(label_cells(areas.usage, "Usage")),
-            Target::Remote if icons => button(icon(ActivityItem::Remote)),
-            Target::Remote => {
-                button(self.remote_button().map(|on| ui::remote_button(areas.usage, on)).unwrap_or_default())
-            }
-            Target::Help if icons => button(icon(ActivityItem::Help)),
-            Target::Help => button(ui::help_button(areas.quit)),
+        let found = match self.icon_target(areas, target) {
+            Some(r) => (r, true),
+            None => Self::region_target(areas, target)
+                .map_or_else(|| (self.button_target(areas, target), true), |r| (r, false)),
         };
         if found.0.is_empty() && areas.compact() && target != Target::None {
             let width = ui::COMPACT_BUTTON_WIDTH.min(areas.bar.width);
-            return button(Rect { width, ..areas.bar });
+            return (Rect { width, ..areas.bar }, true);
         }
         found
+    }
+
+    fn icon_target(&self, areas: &ui::Areas, target: Target) -> Option<Rect> {
+        let item = match target {
+            Target::Issues => ActivityItem::Issues,
+            Target::Changes => ActivityItem::Changes,
+            Target::Files => ActivityItem::Files,
+            Target::Todo => ActivityItem::Todo,
+            Target::Settings => ActivityItem::Settings,
+            Target::Usage => ActivityItem::Usage,
+            Target::Remote => ActivityItem::Remote,
+            Target::Help => ActivityItem::Help,
+            _ => return None,
+        };
+        let items = ui::activity_items(areas.activity, self.activity_shown());
+        (!areas.activity.is_empty())
+            .then(|| items.into_iter().find_map(|(i, r)| (i == item).then_some(r)).unwrap_or_default())
+    }
+
+    fn region_target(areas: &ui::Areas, target: Target) -> Option<Rect> {
+        Some(match target {
+            Target::None => Rect::default(),
+            Target::NewProject if !areas.tree => return None,
+            Target::NewProject | Target::Projects => areas.list,
+            Target::Tabs if !areas.tab_bar.is_empty() => areas.tab_bar,
+            Target::Workspaces | Target::Tabs if areas.tree => areas.list,
+            Target::Workspaces | Target::Tabs => areas.workspaces_list,
+            Target::Pane if areas.pane.x > 0 && !areas.compact() => {
+                Rect { x: areas.pane.x - 1, width: 1, ..areas.pane }
+            }
+            Target::Pane => areas.pane,
+            Target::Agents => areas.agents_list,
+            Target::Search if !areas.compact() => areas.search,
+            _ => return None,
+        })
+    }
+
+    fn button_target(&self, areas: &ui::Areas, target: Target) -> Rect {
+        match target {
+            Target::NewProject => ui::new_project_button(areas.list, areas.pitch, &self.sidebar_rows()),
+            Target::Issues => label_cells(areas.issues, "Issues"),
+            Target::Changes if areas.compact() => areas.changes_button,
+            Target::Changes => self.changes_label().map(|l| ui::changes_button(areas.issues, &l)).unwrap_or_default(),
+            Target::Files => areas.files_button,
+            Target::Todo => areas.todo_button,
+            Target::Search => areas.search_button,
+            Target::Settings => label_cells(areas.settings, "Settings"),
+            Target::Usage => label_cells(areas.usage, "Usage"),
+            Target::Remote => self.remote_button().map(|on| ui::remote_button(areas.usage, on)).unwrap_or_default(),
+            _ => ui::help_button(areas.quit),
+        }
     }
 }

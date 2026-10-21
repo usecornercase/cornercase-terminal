@@ -31,9 +31,9 @@ enum Order {
 }
 
 pub(super) struct Remote {
-    pub(super) web: Web,
-    pub(super) phase: Phase,
-    pub(super) tailscale: Option<PathBuf>,
+    web: Web,
+    phase: Phase,
+    tailscale: Option<PathBuf>,
     on: bool,
     browsers: usize,
     token: Option<String>,
@@ -41,6 +41,25 @@ pub(super) struct Remote {
 }
 
 impl Remote {
+    pub(super) fn paired(&self) -> usize {
+        self.web.paired()
+    }
+
+    #[cfg(test)]
+    pub(super) fn phase(&self) -> &Phase {
+        &self.phase
+    }
+
+    #[cfg(test)]
+    pub(super) fn listening(&self) -> Option<u16> {
+        self.web.listening()
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_tailscale(&mut self, program: PathBuf) {
+        self.tailscale = Some(program);
+    }
+
     pub(super) fn new(web: Web) -> Self {
         Self { web, phase: Phase::Off, tailscale: None, on: false, browsers: 0, token: None, orders: None }
     }
@@ -171,7 +190,7 @@ impl App {
                 if matches!(self.overlay, Some(Overlay::Remote)) {
                     self.overlay = None;
                 }
-                self.toast = Some(Toast::new(CONNECTED, ui::ToastIcon::Check));
+                self.messages.toast = Some(Toast::new(CONNECTED, ui::ToastIcon::Check));
                 self.settings_changed();
             }
             web::Event::Browsers(n) => self.remote.browsers = n,

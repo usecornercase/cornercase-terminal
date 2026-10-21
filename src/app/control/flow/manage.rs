@@ -5,6 +5,7 @@ use crate::app::App;
 use crate::app::control::{Handled, conflict, json, malformed};
 use crate::control::contract::{Code, Refusal};
 use crate::control::{self, FlowRemoved, FlowSaved};
+use crate::flows::Flow;
 use crate::flows::dialog::project_risks;
 use crate::flows::share::{self, To};
 use crate::flows::store::{self, Listing, Origin, Saved};
@@ -22,52 +23,33 @@ impl App {
             return Err(malformed(format!("the flow is {}", share::too_large())));
         }
         let listing = self.flow_listing(project.as_deref());
-        let previous = match &save.path {
-            Some(path) => Some(listed_file(&listing, path)?),
-            None => None,
-        };
-        let dir = match (to, &project) {
-            (To::Project, Some(project)) => store::project_dir(project),
-            _ => paths::flows(&self.config_path),
-        };
-        let target = match &previous {
-            Some(path) if path.parent() == Some(dir.as_path()) => path.clone(),
-            _ => dir.join(format!("{}.{}", store::file_name(&flow.name), store::EXTENSION)),
-        };
+        let previous = save.path.as_deref().map(|path| listed_file(&listing, path)).transpose()?;
+        let dir = self.save_dir(to, project.as_deref());
+        let target = save_target(&dir, &flow, previous.as_deref());
         let origin = if to == To::Yours { Origin::User(target) } else { Origin::Project(target) };
-        let others: Vec<Saved> =
-            listing.flows.iter().filter(|saved| saved.origin.path() != previous.as_deref()).cloned().collect();
-        let mut problems = flow.problems();
-        let own = problems.len();
-        problems.extend(store::conflict(
-            &others,
-            &listing.builtins,
-            &Saved { flow: flow.clone(), origin: origin.clone() },
-        ));
+        let (problems, own) = save_problems(&flow, &listing, &origin, previous.as_deref());
         let check = (to == To::Project).then(|| project_risks(&flow)).flatten();
         let mut saved =
             FlowSaved { name: flow.name.clone(), origin: origin_name(&origin).into(), check, ..FlowSaved::default() };
         if save.check {
-            saved.problems = problems.iter().map(|problem| share::visible(problem)).collect();
+            saved.problems = visible_all(&problems);
             return Ok(Some(json(&saved)));
         }
         if own > 0 {
-            let refused = problems[..own].iter().map(|problem| share::visible(problem)).collect::<Vec<_>>();
-            return Err(malformed(format!("the flow has problems: {}", refused.join("; "))));
+            return Err(malformed(format!("the flow has problems: {}", visible_all(&problems[..own]).join("; "))));
         }
         let path = self.save_flow_file(&dir, &flow, previous.as_deref())?;
-        let after = self.flow_listing(project.as_deref());
-        saved.problems = after
-            .flows
-            .iter()
-            .find(|saved| saved.origin.path() == Some(path.as_path()))
-            .and_then(|saved| after.conflict(saved))
-            .iter()
-            .map(|problem| share::visible(problem))
-            .collect();
+        saved.problems = problems_after(&self.flow_listing(project.as_deref()), &path);
         saved.saved = true;
         saved.path = Some(path);
         Ok(Some(json(&saved)))
+    }
+
+    fn save_dir(&self, to: To, project: Option<&Path>) -> PathBuf {
+        match (to, project) {
+            (To::Project, Some(project)) => store::project_dir(project),
+            _ => paths::flows(self.config_file.path()),
+        }
     }
 
     pub(in crate::app) fn flow_delete_request(&mut self, caller: Option<u64>, delete: &control::FlowDelete) -> Handled {
@@ -110,6 +92,30 @@ impl App {
         removed.changed = true;
         Ok(Some(json(&removed)))
     }
+}
+
+fn save_target(dir: &Path, flow: &Flow, previous: Option<&Path>) -> PathBuf {
+    match previous {
+        Some(path) if path.parent() == Some(dir) => path.to_path_buf(),
+        _ => dir.join(format!("{}.{}", store::file_name(&flow.name), store::EXTENSION)),
+    }
+}
+
+fn save_problems(flow: &Flow, listing: &Listing, origin: &Origin, previous: Option<&Path>) -> (Vec<String>, usize) {
+    let others: Vec<Saved> = listing.flows.iter().filter(|saved| saved.origin.path() != previous).cloned().collect();
+    let mut problems = flow.problems();
+    let own = problems.len();
+    problems.extend(store::conflict(&others, &listing.builtins, &Saved { flow: flow.clone(), origin: origin.clone() }));
+    (problems, own)
+}
+
+fn visible_all(problems: &[String]) -> Vec<String> {
+    problems.iter().map(|problem| share::visible(problem)).collect()
+}
+
+fn problems_after(after: &Listing, path: &Path) -> Vec<String> {
+    let found = after.flows.iter().find(|saved| saved.origin.path() == Some(path));
+    found.and_then(|saved| after.conflict(saved)).iter().map(|problem| share::visible(problem)).collect()
 }
 
 fn place(text: &str) -> Result<To, Refusal> {
@@ -169,45 +175,50 @@ fn named_file(listing: &Listing, delete: &control::FlowDelete) -> Result<(String
         "" => None,
         other => Some(place(other)?),
     };
-    let found: Vec<&Saved> = listing
-        .named(name)
-        .filter(|saved| {
-            matches!(
-                (&saved.origin, wanted),
-                (Origin::User(_), None | Some(To::Yours)) | (Origin::Project(_), None | Some(To::Project))
-            )
-        })
-        .collect();
+    let found: Vec<&Saved> = listing.named(name).filter(|saved| in_place(saved, wanted)).collect();
     let shown = share::visible(name);
-    let Some(first) = found.first() else {
-        if listing.deleted(name).is_some() {
-            return Err(not_found(format!(
-                "the built-in flow {shown} is already deleted; `cornercase flow restore {shown}` brings it back"
-            )));
-        }
-        if listing.named(name).any(|saved| saved.origin == Origin::BuiltIn) {
-            return Err(conflict(format!("{shown} is a built-in flow: `cornercase flow hide {shown}` deletes it")));
-        }
-        let names: Vec<String> = listing.flows.iter().map(|saved| share::visible(&saved.flow.name)).collect();
-        return Err(not_found(format!(
-            "there is no flow of yours or the project's named `{shown}`; the flows are {} (`cornercase flow list`)",
-            names.join(", ")
-        )));
-    };
+    let Some(first) = found.first() else { return Err(no_flow_named(listing, name, &shown)) };
     if found.len() > 1 {
-        let places: Vec<String> = found
-            .iter()
-            .filter_map(|saved| saved.origin.path().map(|path| format!("{}: {}", saved.origin.whose(), path.display())))
-            .collect();
-        return Err(conflict(format!(
-            "{} flows are named `{shown}` ({}): pass --in yours or --in project, or --path FILE",
-            found.len(),
-            places.join("; ")
-        )));
+        return Err(several_named(&found, &shown));
     }
     refuse_edit(listing, first)?;
     let path = first.origin.path().map(PathBuf::from).unwrap_or_default();
     Ok((first.flow.name.clone(), Some(origin_name(&first.origin).into()), path))
+}
+
+fn in_place(saved: &Saved, wanted: Option<To>) -> bool {
+    matches!(
+        (&saved.origin, wanted),
+        (Origin::User(_), None | Some(To::Yours)) | (Origin::Project(_), None | Some(To::Project))
+    )
+}
+
+fn no_flow_named(listing: &Listing, name: &str, shown: &str) -> Refusal {
+    if listing.deleted(name).is_some() {
+        return not_found(format!(
+            "the built-in flow {shown} is already deleted; `cornercase flow restore {shown}` brings it back"
+        ));
+    }
+    if listing.named(name).any(|saved| saved.origin == Origin::BuiltIn) {
+        return conflict(format!("{shown} is a built-in flow: `cornercase flow hide {shown}` deletes it"));
+    }
+    let names: Vec<String> = listing.flows.iter().map(|saved| share::visible(&saved.flow.name)).collect();
+    not_found(format!(
+        "there is no flow of yours or the project's named `{shown}`; the flows are {} (`cornercase flow list`)",
+        names.join(", ")
+    ))
+}
+
+fn several_named(found: &[&Saved], shown: &str) -> Refusal {
+    let places: Vec<String> = found
+        .iter()
+        .filter_map(|saved| saved.origin.path().map(|path| format!("{}: {}", saved.origin.whose(), path.display())))
+        .collect();
+    conflict(format!(
+        "{} flows are named `{shown}` ({}): pass --in yours or --in project, or --path FILE",
+        found.len(),
+        places.join("; ")
+    ))
 }
 
 fn builtin_name(listing: &Listing, name: &str) -> Result<String, Refusal> {

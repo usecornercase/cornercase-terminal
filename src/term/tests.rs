@@ -23,7 +23,7 @@ fn spawn_sh() -> (Term, Receiver<Event>) {
 
 fn contents(term: &mut Term, rx: &Receiver<Event>) -> String {
     while let Ok(ev) = rx.try_recv() {
-        if let Event::Output(_, bytes) = ev {
+        if let Event::Output(_, _, bytes) = ev {
             term.feed(&bytes);
         }
     }
@@ -161,7 +161,7 @@ mod output {
 
         term.write(b"echo x\r");
 
-        assert_matches!(rx.recv_timeout(RECV_TIMEOUT), Ok(Event::Output(1, _)));
+        assert_matches!(rx.recv_timeout(RECV_TIMEOUT), Ok(Event::Output(1, 0, _)));
     }
 }
 
@@ -387,7 +387,8 @@ mod kill {
 
         term.kill();
 
-        let exited = std::iter::from_fn(|| rx.recv_timeout(RECV_TIMEOUT).ok()).any(|ev| matches!(ev, Event::Exited(1)));
+        let exited =
+            std::iter::from_fn(|| rx.recv_timeout(RECV_TIMEOUT).ok()).any(|ev| matches!(ev, Event::Exited(1, 0)));
         assert!(exited, "no Exited(1) event received");
     }
 }

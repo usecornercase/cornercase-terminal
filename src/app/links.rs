@@ -11,6 +11,13 @@ use crate::files::link::{self, Target};
 use crate::project::Tab;
 use crate::term::emulator::Snapshot;
 use crate::term::mouse::MouseMode;
+use crate::ui;
+
+#[derive(Clone, Copy)]
+pub(super) struct Resolving<'a> {
+    pub(super) root: &'a Path,
+    pub(super) home: Option<&'a Path>,
+}
 
 impl App {
     fn link_at(&mut self, at: Position) -> Option<Target> {
@@ -28,9 +35,9 @@ impl App {
         };
         match ev.kind {
             MouseEventKind::Down(MouseButton::Left) => {
-                self.drag = None;
+                self.screen.drag = None;
                 let Some(target) = self.link_at(at) else { return false };
-                self.drag = Some(Drag::Link(LinkPress { term: id, at, target, held: reads.then_some(ev) }));
+                self.screen.drag = Some(Drag::Link(LinkPress { term: id, at, target, held: reads.then_some(ev) }));
                 reads
             }
             MouseEventKind::Drag(MouseButton::Left) => {
@@ -39,7 +46,7 @@ impl App {
                 if press.at == at {
                     return true;
                 }
-                self.drag = None;
+                self.screen.drag = None;
                 if let Some(held) = press.held {
                     self.forward_mouse(held, press.at);
                 }
@@ -47,7 +54,7 @@ impl App {
             }
             MouseEventKind::Up(MouseButton::Left) => {
                 let press = self.held_link().filter(|p| p.term == id).cloned();
-                self.drag = None;
+                self.screen.drag = None;
                 let Some(press) = press else { return false };
                 if press.at == at {
                     self.open_link(&press.target);
@@ -63,18 +70,7 @@ impl App {
     }
 
     fn held_link(&self) -> Option<&LinkPress> {
-        match &self.drag {
-            Some(Drag::Link(press)) => press.held.is_some().then_some(press),
-            Some(
-                Drag::Border(_)
-                | Drag::Divider { .. }
-                | Drag::Row(_)
-                | Drag::Pane(_)
-                | Drag::Selection { .. }
-                | Drag::Lines { .. },
-            )
-            | None => None,
-        }
+        self.screen.drag.as_ref().and_then(Drag::link).filter(|press| press.held.is_some())
     }
 
     pub(super) fn open_link(&mut self, target: &Target) {
@@ -82,19 +78,21 @@ impl App {
             return;
         };
         self.show_side(Some(Side::Files));
-        self.nav = None;
+        self.screen.nav = None;
         match target.lines {
-            Some(lines) => self.files.open_at(workspace, &target.path, lines, None),
-            None => self.files.open_file(workspace, &target.path),
+            Some(lines) => self.panels.files.open_at(workspace, &target.path, lines, None),
+            None => self.panels.files.open_file(workspace, &target.path),
         }
     }
 
     pub(super) fn link_hover(&self) -> Option<Position> {
-        self.hover.filter(|_| {
+        self.screen.hover.filter(|_| {
             self.overlay.is_none()
                 && !self.file_full_screen()
-                && match &self.drag {
-                    Some(Drag::Row(_) | Drag::Pane(_) | Drag::Selection { .. } | Drag::Divider { .. }) => false,
+                && match &self.screen.drag {
+                    Some(
+                        Drag::Row(_) | Drag::Pane(_) | Drag::Selection { .. } | Drag::Divider { .. } | Drag::Footer(_),
+                    ) => false,
                     Some(Drag::Border(_) | Drag::Link(_) | Drag::Lines { .. }) | None => true,
                 }
         })
@@ -103,19 +101,18 @@ impl App {
     pub(super) fn hovered_link(
         tab: &Tab,
         screens: &[Snapshot],
-        pane_area: Rect,
+        (pane_area, footer): (Rect, bool),
         hover: Position,
-        root: &Path,
-        home: Option<&Path>,
+        resolving: Resolving<'_>,
     ) -> Option<(u16, Range<u16>)> {
         let term = tab.pane()?;
-        let pane = tab.rect(pane_area, term.id)?;
+        let (pane, _) = ui::split_footer(tab.rect(pane_area, term.id)?, footer);
         if !pane.contains(hover) {
             return None;
         }
         let (row, col) = (hover.y - pane.y, hover.x - pane.x);
-        let (found, _) =
-            link::under(screens.get(tab.active)?.rows.get(usize::from(row))?, col, term.cwd().as_deref(), root, home)?;
+        let line = screens.get(tab.active)?.rows.get(usize::from(row))?;
+        let (found, _) = link::under(line, col, term.cwd().as_deref(), resolving.root, resolving.home)?;
         Some((row, found.start..found.end))
     }
 }

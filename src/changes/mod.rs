@@ -1,7 +1,12 @@
+pub(crate) mod act;
 pub(crate) mod diff;
+pub(crate) mod discard;
 pub(crate) mod every;
 pub(crate) mod filter;
 pub(crate) mod git;
+mod porcelain;
+pub(crate) mod selection;
+pub(crate) mod stage;
 mod summary;
 
 use std::collections::{HashMap, HashSet};
@@ -74,7 +79,14 @@ pub(crate) struct GapLine {
     pub(crate) old: u32,
     pub(crate) new: u32,
     pub(crate) text: String,
+    pub(crate) raw: Option<Box<str>>,
     pub(crate) syntax: Option<Segments>,
+}
+
+impl GapLine {
+    pub(crate) fn source(&self) -> &str {
+        self.raw.as_deref().unwrap_or(&self.text)
+    }
 }
 
 #[derive(Debug)]
@@ -112,17 +124,17 @@ pub(crate) enum Body {
 
 #[derive(Debug, Default)]
 pub(crate) struct Panel {
-    pub(crate) watched: bool,
-    pub(crate) mode: Mode,
-    pub(crate) scope: Scope,
-    pub(crate) scroll: usize,
-    pub(crate) workspace: Option<u64>,
-    pub(crate) filter: Option<filter::Filter>,
+    watched: bool,
+    mode: Mode,
+    scope: Scope,
+    scroll: usize,
+    workspace: Option<u64>,
+    filter: Option<filter::Filter>,
     models: HashMap<(u64, Mode), Model>,
     followed: HashSet<(u64, Mode)>,
     summaries: HashMap<u64, Model>,
     every_folded: HashMap<FileKey, bool>,
-    pub(crate) headers: HashSet<u64>,
+    headers: HashSet<u64>,
     next: usize,
     summary_requested: HashMap<u64, Instant>,
     folded: HashMap<FileKey, bool>,
@@ -130,7 +142,9 @@ pub(crate) struct Panel {
     gaps: HashMap<(FileKey, u64, usize), Arc<Vec<GapLine>>>,
     loading: Option<(u64, u64, Instant)>,
     generation: u64,
+    superseded: HashMap<u64, u64>,
     requested: HashMap<(u64, Mode), Instant>,
+    selection: Option<selection::Selection>,
 }
 
 pub(crate) struct Checkout {
@@ -144,6 +158,101 @@ fn key(workspace: u64, file: &File) -> FileKey {
 }
 
 impl Panel {
+    pub(crate) fn mode(&self) -> Mode {
+        self.mode
+    }
+
+    pub(crate) fn scope(&self) -> Scope {
+        self.scope
+    }
+
+    pub(crate) fn scroll(&self) -> usize {
+        self.scroll
+    }
+
+    pub(crate) fn filter(&self) -> Option<&filter::Filter> {
+        self.filter.as_ref()
+    }
+
+    pub(crate) fn set_watched(&mut self, watched: bool) {
+        self.watched = watched;
+    }
+
+    pub(crate) fn show_workspace(&mut self, workspace: u64) {
+        if self.workspace != Some(workspace) {
+            self.workspace = Some(workspace);
+            self.scroll = 0;
+        }
+    }
+
+    pub(crate) fn scroll_by(&mut self, delta: isize, max: usize) {
+        self.scroll = self.scroll.min(max).saturating_add_signed(delta).min(max);
+    }
+
+    pub(crate) fn selection(&self) -> Option<&selection::Selection> {
+        self.selection.as_ref()
+    }
+
+    pub(crate) fn select(&mut self, selection: selection::Selection) {
+        self.selection = Some(selection);
+    }
+
+    pub(crate) fn select_to(&mut self, end: selection::Spot) {
+        if let Some(selection) = &mut self.selection {
+            selection.end = end;
+        }
+    }
+
+    pub(crate) fn clear_selection(&mut self) {
+        self.selection = None;
+    }
+
+    fn drop_selection(&mut self, workspace: u64, path: &str) {
+        self.selection.take_if(|s| s.workspace == workspace && s.path == path);
+    }
+
+    pub(crate) fn scroll_to_top(&mut self) {
+        self.scroll = 0;
+    }
+
+    pub(crate) fn focus_filter(&mut self) {
+        self.filter.get_or_insert_default().focused = true;
+    }
+
+    pub(crate) fn clear_filter(&mut self) {
+        self.filter = None;
+    }
+
+    pub(crate) fn push_filter(&mut self, c: char) {
+        if let Some(filter) = &mut self.filter {
+            filter.push(c);
+        }
+    }
+
+    pub(crate) fn pop_filter(&mut self) {
+        if let Some(filter) = &mut self.filter {
+            filter.pop();
+        }
+    }
+
+    pub(crate) fn unfocus(&mut self) {
+        if let Some(filter) = &mut self.filter {
+            filter.focused = false;
+        }
+    }
+
+    pub(crate) fn unfold_headers(&mut self) {
+        self.headers.clear();
+    }
+
+    pub(crate) fn forget_header(&mut self, id: u64) {
+        self.headers.remove(&id);
+    }
+
+    pub(crate) fn header_folded(&self, id: u64) -> bool {
+        self.headers.contains(&id)
+    }
+
     pub(crate) fn model(&self, workspace: u64, base: Option<&str>) -> Option<&Model> {
         self.model_in(workspace, self.mode, base)
     }
@@ -224,47 +333,16 @@ impl Panel {
         if self.loading.is_some_and(|(w, g, _)| (w, g) == (workspace, generation)) {
             self.loading = None;
         }
+        if self.superseded.get(&workspace).is_some_and(|floor| generation <= *floor) {
+            return;
+        }
         let summary = request.expanded.is_some();
         let key = (workspace, request.mode);
-        if !summary && request.mode != self.mode && !self.followed.contains(&key) {
+        if !self.expects(key, request, summary) {
             return;
         }
-        let known = if summary {
-            self.summary_requested.contains_key(&workspace) || self.summaries.contains_key(&workspace)
-        } else {
-            self.requested.contains_key(&key) || self.models.contains_key(&key)
-        };
-        if !known {
-            return;
-        }
-        let now = Instant::now();
         let current = if summary { self.summaries.get_mut(&workspace) } else { self.models.get_mut(&key) };
-        let model = match result {
-            Ok(git::Loaded { diff: None, base, digest }) => {
-                if let Some(model) = current.filter(|m| m.mode == request.mode && m.base == request.base) {
-                    model.at = now;
-                    model.label = base;
-                    model.digest = Some(digest);
-                }
-                return;
-            }
-            Ok(loaded) => Model {
-                mode: request.mode,
-                base: request.base.clone(),
-                label: loaded.base,
-                result: Ok(Arc::new(loaded.diff.unwrap_or_default())),
-                digest: Some(loaded.digest),
-                at: now,
-            },
-            Err(e) => Model {
-                mode: request.mode,
-                base: request.base.clone(),
-                label: request.base.clone(),
-                result: Err(e.to_string()),
-                digest: None,
-                at: now,
-            },
-        };
+        let Some(model) = model_from(result, request, current, Instant::now()) else { return };
         if summary {
             self.summaries.insert(workspace, model);
         } else {
@@ -272,6 +350,18 @@ impl Panel {
             let (mode, followed) = (self.mode, &self.followed);
             self.models
                 .retain(|&(w, m), _| w != workspace || m == request.mode || m == mode || followed.contains(&(w, m)));
+        }
+    }
+
+    fn expects(&self, key: (u64, Mode), request: &git::Request, summary: bool) -> bool {
+        let workspace = key.0;
+        if !summary && request.mode != self.mode && !self.followed.contains(&key) {
+            return false;
+        }
+        if summary {
+            self.summary_requested.contains_key(&workspace) || self.summaries.contains_key(&workspace)
+        } else {
+            self.requested.contains_key(&key) || self.models.contains_key(&key)
         }
     }
 
@@ -355,6 +445,8 @@ impl Panel {
         self.viewed.retain(|k, _| k.workspace != workspace);
         self.gaps.retain(|(k, _, _), _| k.workspace != workspace);
         self.headers.remove(&workspace);
+        self.superseded.remove(&workspace);
+        self.selection.take_if(|s| s.workspace == workspace);
         if self.workspace == Some(workspace) {
             self.workspace = None;
         }
@@ -398,7 +490,23 @@ impl Panel {
         }
         self.folded.remove(&key);
         self.every_folded.remove(&key);
+        self.drop_selection(workspace, path);
         self.invalidate_summary(workspace);
+    }
+
+    pub(crate) fn discarded(&mut self, workspace: u64, path: &str) {
+        self.set_viewed(workspace, path, None);
+        self.gaps.retain(|(k, _, _), _| k.workspace != workspace || k.path != path);
+        self.rescan(workspace);
+    }
+
+    pub(crate) fn rescan(&mut self, workspace: u64) {
+        self.invalidate_summary(workspace);
+        self.requested.retain(|(w, _), _| *w != workspace);
+        self.superseded.insert(workspace, self.generation);
+        if self.loading.is_some_and(|(w, _, _)| w == workspace) {
+            self.loading = None;
+        }
     }
 
     fn auto_folded(&self, workspace: u64, diff: &Diff, file: &File) -> bool {
@@ -421,13 +529,12 @@ impl Panel {
     pub(crate) fn toggle_fold(&mut self, workspace: u64, diff: &Diff, file: &File) {
         let folded = self.folded(workspace, diff, file);
         self.folds_mut().insert(key(workspace, file), !folded);
+        self.drop_selection(workspace, &file.path);
         self.invalidate_summary(workspace);
     }
 
     pub(crate) fn close(&mut self) {
-        if let Some(filter) = &mut self.filter {
-            filter.focused = false;
-        }
+        self.unfocus();
     }
 
     #[cfg(test)]
@@ -448,6 +555,7 @@ impl Panel {
 
     pub(crate) fn set_fold(&mut self, workspace: u64, file: &File, folded: bool) {
         self.folds_mut().insert(key(workspace, file), folded);
+        self.drop_selection(workspace, &file.path);
         self.invalidate_summary(workspace);
     }
 
@@ -458,6 +566,40 @@ impl Panel {
     pub(crate) fn set_gap(&mut self, workspace: u64, file: &File, hunk: usize, lines: Vec<GapLine>) {
         self.gaps.retain(|(k, digest, _), _| k.workspace != workspace || k.path != file.path || *digest == file.digest);
         self.gaps.insert((key(workspace, file), file.digest, hunk), Arc::new(lines));
+    }
+}
+
+fn model_from(
+    result: Result<git::Loaded>,
+    request: &git::Request,
+    current: Option<&mut Model>,
+    now: Instant,
+) -> Option<Model> {
+    match result {
+        Ok(git::Loaded { diff: None, base, digest }) => {
+            if let Some(model) = current.filter(|m| m.mode == request.mode && m.base == request.base) {
+                model.at = now;
+                model.label = base;
+                model.digest = Some(digest);
+            }
+            None
+        }
+        Ok(loaded) => Some(Model {
+            mode: request.mode,
+            base: request.base.clone(),
+            label: loaded.base,
+            result: Ok(Arc::new(loaded.diff.unwrap_or_default())),
+            digest: Some(loaded.digest),
+            at: now,
+        }),
+        Err(e) => Some(Model {
+            mode: request.mode,
+            base: request.base.clone(),
+            label: request.base.clone(),
+            result: Err(e.to_string()),
+            digest: None,
+            at: now,
+        }),
     }
 }
 
@@ -474,7 +616,7 @@ pub(crate) fn gap_lines(file: &File, hunk: usize, new_side: &[String]) -> Vec<Ga
     let range = before.new_end()..after.new_start;
     let texts: Vec<(u32, &str)> =
         range.filter_map(|n| new_side.get(usize::try_from(n).ok()?.checked_sub(1)?).map(|t| (n, t.as_str()))).collect();
-    let code = texts.iter().map(|(_, t)| *t).collect::<Vec<_>>().join("\n");
+    let code = texts.iter().map(|(_, t)| diff::expand(t)).collect::<Vec<_>>().join("\n");
     let highlighted = crate::highlight::highlight(&code, &diff::language(&file.path));
     texts
         .iter()
@@ -482,7 +624,8 @@ pub(crate) fn gap_lines(file: &File, hunk: usize, new_side: &[String]) -> Vec<Ga
         .map(|(k, (n, text))| GapLine {
             old: u32::try_from(i64::from(*n) + offset).unwrap_or(0),
             new: *n,
-            text: (*text).to_string(),
+            text: diff::expand(text),
+            raw: diff::own(text),
             syntax: highlighted.as_ref().map(|h| h.get(k).cloned().unwrap_or_default()),
         })
         .collect()

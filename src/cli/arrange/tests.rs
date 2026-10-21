@@ -40,6 +40,10 @@ mod parsing {
     #[case::a_deleted_group(&["group", "delete", "3", "--close-projects"])]
     #[case::unlocking(&["close", "--workspace", "1", "--remove-worktree", "--unlock", "--force"])]
     #[case::checking(&["close", "--worktree", "fix/login", "--remove-worktree", "--check", "--json"])]
+    #[case::an_agent(&["close", "--agent", "--pane", "7"])]
+    #[case::an_agent_checked(&["close", "--agent", "--pane", "7", "--check", "--json", "--delete-branch"])]
+    #[case::an_agent_with_its_branch(&["close", "--agent", "--pane", "7", "--delete-branch", "--force", "--unlock"])]
+    #[case::an_agent_as_json(&["close", "--agent", "--pane", "7", "--json"])]
     fn the_arranging_commands_parse(#[case] args: &[&str]) {
         parse(args).expect("parse");
     }
@@ -81,6 +85,12 @@ mod parsing {
     #[case::unlocking_without_removing(&["close", "--workspace", "1", "--unlock"])]
     #[case::checking_while_forcing(&["close", "--workspace", "1", "--remove-worktree", "--check", "--force"])]
     #[case::json_without_checking(&["close", "--workspace", "1", "--remove-worktree", "--json"])]
+    #[case::an_agent_without_its_pane(&["close", "--agent"])]
+    #[case::an_agent_by_its_tab(&["close", "--agent", "--tab", "1"])]
+    #[case::an_agent_by_its_workspace(&["close", "--agent", "--workspace", "1"])]
+    #[case::an_agent_and_its_worktree(&["close", "--agent", "--pane", "1", "--remove-worktree"])]
+    #[case::a_branch_without_an_agent(&["close", "--workspace", "1", "--remove-worktree", "--delete-branch"])]
+    #[case::an_agent_checked_and_forced(&["close", "--agent", "--pane", "1", "--check", "--force"])]
     fn wrong_usage_exits_with_2(#[case] args: &[&str]) {
         assert_eq!(parse(args).expect_err("wrong usage").exit_code(), 2);
     }
@@ -150,6 +160,81 @@ mod removal_text {
         assert_eq!(
             removal_lines(&removal)[2],
             "locked: pid 9; the worktree of coder A in /w/a; process 9 is gone (--unlock)"
+        );
+    }
+}
+
+mod agent_text {
+    use super::*;
+    use crate::control::arrange::{AgentClosing, BranchFate, PaneRef};
+
+    fn pane(pane: u64, agent: Option<&str>, workspace: u64) -> PaneRef {
+        PaneRef { pane, agent: agent.map(str::to_string), project: 1, workspace, tab: pane }
+    }
+
+    #[test]
+    fn closing_tabs_says_nothing_is_removed() {
+        let closing = AgentClosing {
+            pane: 7,
+            agent: Some("claude".into()),
+            workspace: 2,
+            tabs: vec![4, 6],
+            stops: vec![pane(7, Some("claude"), 2), pane(8, None, 2)],
+            keeps: vec![pane(12, Some("codex"), 5)],
+            ..AgentClosing::default()
+        };
+
+        assert_eq!(
+            closing_lines(&closing),
+            [
+                "pane 7  claude  workspace 2",
+                "closes: tabs 4, 6; nothing is removed from disk",
+                "stops: pane 7 (claude), pane 8",
+                "keeps running: pane 12 (codex) in workspace 5",
+            ]
+        );
+    }
+
+    fn fate(branch: &str, lost: bool, deletes: bool) -> BranchFate {
+        BranchFate { path: PathBuf::from("/w/fix-login"), branch: Some(branch.into()), lost, deletes, deleted: false }
+    }
+
+    #[test]
+    fn removing_names_the_run_the_worktree_and_each_branch() {
+        let closing = AgentClosing {
+            pane: 7,
+            workspace: 7,
+            removes: Some(Removal {
+                workspace: 7,
+                path: PathBuf::from("/w/fix-login"),
+                branch: Some("fix/login".into()),
+                ..Removal::default()
+            }),
+            branches: vec![
+                fate("fix/login", false, false),
+                fate("a", true, false),
+                fate("b", false, true),
+                fate("c", true, true),
+            ],
+            stops: vec![pane(7, None, 7)],
+            run: Some(3),
+            ..AgentClosing::default()
+        };
+
+        assert_eq!(
+            closing_lines(&closing),
+            [
+                "pane 7  -  workspace 7",
+                "closes: workspace 7 and its worktree, removed from disk",
+                "stops: pane 7",
+                "flow run 3 ends",
+                "changes: none",
+                "locked: no",
+                "branch fix/login: kept (--delete-branch deletes it)",
+                "branch a: kept; its commits are in no remote branch",
+                "branch b: would be deleted",
+                "branch c: would be deleted, and its commits are in no remote branch, so they would be lost (--force)",
+            ]
         );
     }
 }

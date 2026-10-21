@@ -131,7 +131,7 @@ fn every_installed_agent_gets_a_section() {
 #[test]
 fn an_agent_that_is_not_installed_has_no_section() {
     let (mut app, _rx, _dir) = with_agents(&[(agents::Known::Codex.name(), "exec sleep 30")]);
-    app.usage_timeout = Duration::from_millis(200);
+    app.usages.set_timeout(Duration::from_millis(200));
     click(&mut app, areas().usage.as_position());
     app.switch_usage(usage::Page::Limits);
     assert_eq!(titles(&app), ["Codex"]);
@@ -151,7 +151,7 @@ fn without_any_agent_installed_each_one_says_why() {
 #[test]
 fn a_claude_that_hangs_shows_usage_unavailable() {
     let (mut app, rx, _dir) = with_claude("exec sleep 30");
-    app.usage_timeout = Duration::from_millis(200);
+    app.usages.set_timeout(Duration::from_millis(200));
     click(&mut app, areas().usage.as_position());
     app.switch_usage(usage::Page::Limits);
     pump_until(&mut app, &rx, "the probe times out", |a| !errors(a).is_empty());
@@ -161,7 +161,7 @@ fn a_claude_that_hangs_shows_usage_unavailable() {
 #[test]
 fn reopening_while_loading_starts_no_second_probe() {
     let (mut app, rx, dir) = with_claude("echo run >> \"$(dirname \"$0\")/runs\"\nexec sleep 30");
-    app.usage_timeout = Duration::from_secs(3);
+    app.usages.set_timeout(Duration::from_secs(3));
     let runs = dir.path().join("runs");
     click(&mut app, areas().usage.as_position());
     app.switch_usage(usage::Page::Limits);

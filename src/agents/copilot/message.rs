@@ -26,6 +26,39 @@ fn reply(event: &Value) -> Option<&str> {
     data["content"].as_str().filter(|content| main && !content.trim().is_empty())
 }
 
+fn flush_other_call(chunks: &mut Option<Chunks>, call: Option<&str>, each: Each) -> bool {
+    if chunks.as_ref().is_some_and(|open| call != Some(open.call.as_str()))
+        && let Some(spoken) = chunks.take().and_then(Chunks::said)
+        && !each(spoken)
+    {
+        return false;
+    }
+    true
+}
+
+fn spoken_of(event: &Value, call: Option<&str>, chunks: &mut Option<Chunks>) -> Option<Spoken> {
+    let data = &event["data"];
+    let written = event["timestamp"].as_str().map(str::to_string);
+    match event["type"].as_str() {
+        Some("assistant.message") => {
+            let text = reply(event)?;
+            if data["chunkCount"].as_u64().is_some_and(|count| count > 1)
+                && let Some(call) = call
+            {
+                let open = chunks.get_or_insert_with(|| Chunks { call: call.into(), written, parts: Vec::new() });
+                open.parts.push((data["chunkIndex"].as_u64().unwrap_or(0), text.to_string()));
+                return None;
+            }
+            message::joined([text.to_string()]).map(|text| Spoken { role: Role::Reply, said: Said { text, written } })
+        }
+        Some("user.message") if is_prompt(data) => data["content"]
+            .as_str()
+            .and_then(|text| message::joined([text.to_string()]))
+            .map(|text| Spoken { role: Role::Prompt, said: Said { text, written } }),
+        _ => None,
+    }
+}
+
 pub(in crate::agents) fn said_all(dir: &Path, each: Each) -> Result<()> {
     let file = dir.join("events.jsonl");
     let Some(lines) = message::lines(&file)? else { return Ok(()) };
@@ -33,39 +66,11 @@ pub(in crate::agents) fn said_all(dir: &Path, each: Each) -> Result<()> {
     for line in lines {
         let line = line.map_err(|e| message::unreadable(&file, &e))?;
         let Ok(event) = serde_json::from_slice::<Value>(&line) else { continue };
-        let data = &event["data"];
-        let kind = event["type"].as_str();
-        let call = data["apiCallId"].as_str().filter(|_| kind == Some("assistant.message"));
-        if chunks.as_ref().is_some_and(|open| call != Some(open.call.as_str()))
-            && let Some(spoken) = chunks.take().and_then(Chunks::said)
-            && !each(spoken)
-        {
+        let call = event["data"]["apiCallId"].as_str().filter(|_| event["type"].as_str() == Some("assistant.message"));
+        if !flush_other_call(&mut chunks, call, each) {
             return Ok(());
         }
-        let spoken = match kind {
-            Some("assistant.message") => {
-                let Some(text) = reply(&event) else { continue };
-                let written = event["timestamp"].as_str().map(str::to_string);
-                if data["chunkCount"].as_u64().is_some_and(|count| count > 1)
-                    && let Some(call) = call
-                {
-                    let open = chunks.get_or_insert_with(|| Chunks { call: call.into(), written, parts: Vec::new() });
-                    open.parts.push((data["chunkIndex"].as_u64().unwrap_or(0), text.to_string()));
-                    continue;
-                }
-                message::joined([text.to_string()])
-                    .map(|text| Spoken { role: Role::Reply, said: Said { text, written } })
-            }
-            Some("user.message") if is_prompt(data) => {
-                let written = event["timestamp"].as_str().map(str::to_string);
-                data["content"]
-                    .as_str()
-                    .and_then(|text| message::joined([text.to_string()]))
-                    .map(|text| Spoken { role: Role::Prompt, said: Said { text, written } })
-            }
-            _ => None,
-        };
-        if let Some(spoken) = spoken
+        if let Some(spoken) = spoken_of(&event, call, &mut chunks)
             && !each(spoken)
         {
             return Ok(());

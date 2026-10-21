@@ -115,106 +115,145 @@ fn not_confirmed(pane: u64) -> String {
     )
 }
 
+fn touches(pending: &Pending, pane: u64) -> bool {
+    match &pending.stage {
+        Stage::Held(_) | Stage::Launch { .. } | Stage::Confirm(_) => pending.done.ids.pane == Some(pane),
+        Stage::Watch(watch) => watch.pane == pane,
+        Stage::Several { parts, .. } => parts.iter().any(|part| part.done.ended.is_none() && touches(part, pane)),
+        _ => false,
+    }
+}
+
 impl App {
     pub(in crate::app) fn check_requests(&mut self, now: Instant) {
         self.settle_drafts(now);
         self.release_held(now);
-        let launched = std::mem::take(&mut self.requests.launched);
+        let launched = std::mem::take(&mut self.clients.requests.launched);
         let mut kept = Vec::new();
-        for mut pending in std::mem::take(&mut self.requests.pending) {
-            match self.advance(&mut pending, &launched, now) {
-                None => kept.push(pending),
-                Some(reply) => {
-                    if reply.is_ok() && matches!(pending.stage, Stage::Restart { .. }) {
-                        self.outbox.restart = true;
-                    }
-                    self.answer(pending.client, reply);
-                    if matches!(pending.stage, Stage::Worktree(_)) {
-                        kept.push(Pending { client: None, timeout: None, ..pending });
-                    }
-                }
-            }
+        for pending in std::mem::take(&mut self.clients.requests.pending) {
+            kept.extend(self.settle(pending, &launched, now));
         }
-        kept.append(&mut self.requests.pending);
-        self.requests.pending = kept;
+        kept.append(&mut self.clients.requests.pending);
+        self.clients.requests.pending = kept;
         self.show_pending_restart(now);
+    }
+
+    fn settle(&mut self, mut pending: Pending, launched: &[(u64, bool)], now: Instant) -> Option<Pending> {
+        let Some(reply) = self.advance(&mut pending, launched, now) else { return Some(pending) };
+        if reply.is_ok() && matches!(pending.stage, Stage::Restart { .. }) {
+            self.outbox.restart();
+        }
+        self.answer(pending.client, reply);
+        matches!(pending.stage, Stage::Worktree(_)).then(|| Pending { client: None, timeout: None, ..pending })
+    }
+
+    pub(in crate::app) fn fail_pane_requests(&mut self, pane: u64, message: &str) {
+        let (failed, kept) =
+            std::mem::take(&mut self.clients.requests.pending).into_iter().partition(|p| touches(p, pane));
+        self.clients.requests.pending = kept;
+        self.clients.requests.queued.remove(&pane);
+        for pending in failed {
+            self.answer(pending.client, Err(message.to_string()));
+        }
     }
 
     fn advance(&self, pending: &mut Pending, launched: &[(u64, bool)], now: Instant) -> Option<Reply> {
         let pane = pending.done.ids.pane.unwrap_or_default();
-        if let Stage::Launch { confirm, wait } = &mut pending.stage
-            && let Some(&(_, started)) = launched.iter().find(|(key, _)| *key == pending.key)
-        {
-            if !started {
-                return Some(Err(self.not_started(pane)));
-            }
-            let (confirm, wait) = (confirm.take(), wait.take());
-            let next = match confirm {
-                Some(since) => Some(Stage::Confirm(Confirm { pane, since, by: now + self.confirm_within, wait })),
-                None => wait.map(|until| Stage::Watch(self.watch(pane, until, now))),
-            };
-            match next {
-                Some(next) if pending.client.is_some() => pending.stage = next,
-                _ => return Some(Ok(json(&pending.done))),
-            }
+        if let Some(reply) = self.launch_reply(pending, launched, now) {
+            return Some(reply);
         }
-        if let Stage::Usage(waiting) = &pending.stage
-            && let Some(plans) = self.usage_read(waiting, now)
-        {
-            return Some(Ok(json(&plans)));
+        if let Some(reply) = self.usage_or_setup_reply(pending, now) {
+            return Some(reply);
         }
-        if let Stage::Setup(workspace) = pending.stage
-            && !self.workspace_setting_up(workspace)
-        {
-            return Some(self.setup_failure(pane).map_or_else(|| Ok(json(&pending.done)), Err));
+        if let Some(reply) = self.confirm_reply(pending, now) {
+            return Some(reply);
         }
-        if let Stage::Confirm(confirm) = &mut pending.stage {
-            match self.confirmation(confirm, now) {
-                None => {}
-                Some(Err(message)) => return Some(Err(message)),
-                Some(Ok(())) => {
-                    let Some(until) = confirm.wait.take() else { return Some(Ok(json(&pending.done))) };
-                    pending.stage = Stage::Watch(self.watch(pane, until, now));
-                }
-            }
+        if let Some(reply) = self.watch_reply(pending, now) {
+            return Some(reply);
         }
-        if let Stage::Watch(watch) = &mut pending.stage {
-            match self.verdict(watch, now) {
-                Verdict::Pending => {}
-                Verdict::Ended(ended, line) => {
-                    pending.done.ended = Some(ended.to_string());
-                    pending.done.line = line;
-                    return Some(Ok(json(&pending.done)));
-                }
-                Verdict::Failed(message) => return Some(Err(message)),
-            }
+        if let Some(reply) = self.several_reply(pending, launched, now) {
+            return Some(reply);
         }
-        if let Stage::Several { all, parts } = &mut pending.stage {
-            for part in parts.iter_mut().filter(|part| part.done.ended.is_none()) {
-                if self.projects.pane_by(part.done.ids.pane.unwrap_or_default()).is_none() {
-                    part.done.ended = Some("closed".into());
-                } else if let Some(Err(message)) = self.advance(part, launched, now) {
-                    return Some(Err(message));
-                }
-            }
-            let mut ended = parts.iter().filter(|part| part.done.ended.is_some()).map(|part| part.done.clone());
-            let panes: Vec<Done> = if *all {
-                if parts.iter().all(|part| part.done.ended.is_some()) { ended.collect() } else { Vec::new() }
-            } else {
-                ended.next().into_iter().collect()
-            };
-            if !panes.is_empty() {
-                return Some(Ok(json(&Done { panes, ..Done::default() })));
-            }
-        }
-        if let Stage::Restart { caller } = pending.stage
-            && self.agents.watched == Some(now)
-            && self.holding(caller, now).is_empty()
-        {
-            return Some(Ok(json(&self.report(caller))));
+        if let Some(reply) = self.restart_reply(pending, now) {
+            return Some(reply);
         }
         let (at, seconds) = pending.timeout.filter(|_| pending.client.is_some())?;
         (now >= at).then(|| Err(format!("timed out after {seconds}s: {}", self.waiting_on(&pending.stage, pane))))
+    }
+
+    fn launch_reply(&self, pending: &mut Pending, launched: &[(u64, bool)], now: Instant) -> Option<Reply> {
+        let pane = pending.done.ids.pane.unwrap_or_default();
+        let Stage::Launch { confirm, wait } = &mut pending.stage else { return None };
+        let &(_, started) = launched.iter().find(|(key, _)| *key == pending.key)?;
+        if !started {
+            return Some(Err(self.not_started(pane)));
+        }
+        let (confirm, wait) = (confirm.take(), wait.take());
+        let next = match confirm {
+            Some(since) => Some(Stage::Confirm(Confirm { pane, since, by: now + self.clients.confirm_within, wait })),
+            None => wait.map(|until| Stage::Watch(self.watch(pane, until, now))),
+        };
+        match next {
+            Some(next) if pending.client.is_some() => {
+                pending.stage = next;
+                None
+            }
+            _ => Some(Ok(json(&pending.done))),
+        }
+    }
+
+    fn usage_or_setup_reply(&self, pending: &Pending, now: Instant) -> Option<Reply> {
+        let pane = pending.done.ids.pane.unwrap_or_default();
+        match &pending.stage {
+            Stage::Usage(waiting) => self.usage_read(waiting, now).map(|plans| Ok(json(&plans))),
+            Stage::Setup(workspace) if !self.workspace_setting_up(*workspace) => {
+                Some(self.setup_failure(pane).map_or_else(|| Ok(json(&pending.done)), Err))
+            }
+            _ => None,
+        }
+    }
+
+    fn confirm_reply(&self, pending: &mut Pending, now: Instant) -> Option<Reply> {
+        let pane = pending.done.ids.pane.unwrap_or_default();
+        let Stage::Confirm(confirm) = &mut pending.stage else { return None };
+        if let Err(message) = self.confirmation(confirm, now)? {
+            return Some(Err(message));
+        }
+        let Some(until) = confirm.wait.take() else { return Some(Ok(json(&pending.done))) };
+        pending.stage = Stage::Watch(self.watch(pane, until, now));
+        None
+    }
+
+    fn watch_reply(&self, pending: &mut Pending, now: Instant) -> Option<Reply> {
+        let Stage::Watch(watch) = &mut pending.stage else { return None };
+        match self.verdict(watch, now) {
+            Verdict::Pending => None,
+            Verdict::Ended(ended, line) => {
+                pending.done.ended = Some(ended.to_string());
+                pending.done.line = line;
+                Some(Ok(json(&pending.done)))
+            }
+            Verdict::Failed(message) => Some(Err(message)),
+        }
+    }
+
+    fn several_reply(&self, pending: &mut Pending, launched: &[(u64, bool)], now: Instant) -> Option<Reply> {
+        let Stage::Several { all, parts } = &mut pending.stage else { return None };
+        for part in parts.iter_mut().filter(|part| part.done.ended.is_none()) {
+            if self.projects.pane_by(part.done.ids.pane.unwrap_or_default()).is_none() {
+                part.done.ended = Some("closed".into());
+            } else if let Some(Err(message)) = self.advance(part, launched, now) {
+                return Some(Err(message));
+            }
+        }
+        let panes = several_done(*all, parts);
+        (!panes.is_empty()).then(|| Ok(json(&Done { panes, ..Done::default() })))
+    }
+
+    fn restart_reply(&self, pending: &Pending, now: Instant) -> Option<Reply> {
+        let Stage::Restart { caller } = pending.stage else { return None };
+        (self.agents.watched() == Some(now) && self.holding(caller, now).is_empty())
+            .then(|| Ok(json(&self.report(caller))))
     }
 
     fn not_started(&self, pane: u64) -> String {
@@ -235,6 +274,7 @@ impl App {
             Stage::Worktree(_) | Stage::Run(..) => return "git is still creating the worktree".into(),
             Stage::Removing { .. } => return "git is still removing the worktree".into(),
             Stage::Check => return "git is still checking the worktree".into(),
+            Stage::CloseAgent(_) => return "git is still checking or removing the agent's worktree".into(),
             Stage::Issue(asking) => return format!("{} is still looking the issue up", asking.source().name()),
             Stage::Usage(_) => return "the agents have not said their usage yet".into(),
             Stage::Held(_) => return held::waiting(pane, self.blocked(pane, Instant::now())),
@@ -288,7 +328,7 @@ impl App {
             return Some(Ok(()));
         }
         if holds_prompts(term.agent.agent().and_then(agents::Known::of), term.agent.status()) {
-            confirm.by = confirm.by.max(now + self.confirm_within);
+            confirm.by = confirm.by.max(now + self.clients.confirm_within);
         }
         (now >= confirm.by).then(|| Err(not_confirmed(pane)))
     }
@@ -296,55 +336,34 @@ impl App {
     fn verdict(&self, watch: &mut Watch, now: Instant) -> Verdict {
         let pane = watch.pane;
         let Some(term) = self.projects.pane_by(pane) else { return Verdict::Failed(format!("pane {pane} closed")) };
-        let quiet = now.saturating_duration_since(term.output_at);
         if !term.shell_in_foreground() {
             watch.left = Some(now);
         }
-        let look = watch.checked.is_none() || watch.next_look(term).is_some_and(|due| now >= due);
-        match &watch.until {
-            Condition::Shell
-                if term.shell_in_foreground()
-                    && term.input_at.is_none_or(|at| term.output_at > at)
-                    && quiet >= watch.settles(term) =>
-            {
-                return Verdict::Ended("shell", None);
-            }
-            Condition::Quiet(enough) if quiet >= *enough => return Verdict::Ended("quiet", None),
-            Condition::Text(re) if look => {
-                watch.checked = Some(now);
-                let screen = term.emulator.screen_text().unwrap_or_default();
-                if let Some(line) = screen.lines().find(|line| re.is_match(line)) {
-                    return Verdict::Ended("text", Some(line.to_string()));
-                }
-                return Verdict::Pending;
-            }
-            Condition::Shell | Condition::Quiet(_) | Condition::Text(_) => return Verdict::Pending,
-            Condition::Stops | Condition::Idle | Condition::Working | Condition::Waiting | Condition::TurnOver => {}
+        if let Some(verdict) = screen_verdict(watch, term, now) {
+            return verdict;
         }
         if term.agent.status().is_none() {
-            if self.watched_agent(term).is_ok() {
-                return Verdict::Pending;
-            }
-            return Verdict::Failed(format!("the agent in pane {pane} exited"));
+            return self.exited_verdict(term, pane);
         }
         if let Some(since) = watch.since {
             if term.agent.reacted(since) {
                 watch.since = None;
-            } else if now >= since + STARTS_WITHIN {
-                return Verdict::Failed(format!(
-                    "the agent in pane {pane} did not start working within {}s of the Enter: it may have finished \
-                     at once, or not got the text; `cornercase read --pane {pane}` shows where it is",
-                    STARTS_WITHIN.as_secs()
-                ));
             } else {
-                return Verdict::Pending;
+                return started_verdict(pane, since, now);
             }
         }
         watch.until.ended(&term.agent).map_or(Verdict::Pending, |ended| Verdict::Ended(ended, None))
     }
 
+    fn exited_verdict(&self, term: &Term, pane: u64) -> Verdict {
+        if self.watched_agent(term).is_ok() {
+            return Verdict::Pending;
+        }
+        Verdict::Failed(format!("the agent in pane {pane} exited"))
+    }
+
     pub(in crate::app) fn next_request(&self, now: Instant) -> Option<Duration> {
-        let due = self.requests.pending.iter().flat_map(|pending| {
+        let due = self.clients.requests.pending.iter().flat_map(|pending| {
             let deadline = pending.timeout.filter(|_| pending.client.is_some()).map(|(at, _)| at);
             let watches: Vec<&Watch> = match &pending.stage {
                 Stage::Watch(watch) => vec![watch],
@@ -411,10 +430,10 @@ impl App {
         let timeout = deadline(wait.timeout, now)?;
         let until = Condition::of(wait.until)?;
         self.can_wait(asker.caller, pane, &until)?;
-        let key = self.requests.key();
+        let key = self.clients.requests.key();
         let watch = self.watch(pane, until, now);
         let pending = Pending { client: Some(client), key, timeout, done: pane_ids(pane), stage: Stage::Watch(watch) };
-        self.requests.pending.push(pending);
+        self.clients.requests.pending.push(pending);
         Ok(None)
     }
 
@@ -446,12 +465,62 @@ impl App {
             let stage = Stage::Watch(self.watch(id, until, now));
             parts.push(Pending { client: None, key: 0, timeout: None, done, stage });
         }
-        let key = self.requests.key();
+        let key = self.clients.requests.key();
         let stage = Stage::Several { all: wait.all, parts };
-        self.requests.pending.push(Pending { client: Some(client), key, timeout, done: Done::default(), stage });
+        self.clients.requests.pending.push(Pending {
+            client: Some(client),
+            key,
+            timeout,
+            done: Done::default(),
+            stage,
+        });
         Ok(None)
     }
 }
 
 #[cfg(test)]
 mod tests;
+
+fn several_done(all: bool, parts: &[Pending]) -> Vec<Done> {
+    let mut ended = parts.iter().filter(|part| part.done.ended.is_some()).map(|part| part.done.clone());
+    if !all {
+        return ended.next().into_iter().collect();
+    }
+    if parts.iter().all(|part| part.done.ended.is_some()) { ended.collect() } else { Vec::new() }
+}
+
+fn screen_verdict(watch: &mut Watch, term: &Term, now: Instant) -> Option<Verdict> {
+    let quiet = now.saturating_duration_since(term.output_at);
+    let look = watch.checked.is_none() || watch.next_look(term).is_some_and(|due| now >= due);
+    Some(match &watch.until {
+        Condition::Shell
+            if term.shell_in_foreground()
+                && term.input_at.is_none_or(|at| term.output_at > at)
+                && quiet >= watch.settles(term) =>
+        {
+            Verdict::Ended("shell", None)
+        }
+        Condition::Quiet(enough) if quiet >= *enough => Verdict::Ended("quiet", None),
+        Condition::Text(re) if look => {
+            let screen = term.emulator.screen_text().unwrap_or_default();
+            let found = screen.lines().find(|line| re.is_match(line)).map(str::to_string);
+            watch.checked = Some(now);
+            found.map_or(Verdict::Pending, |line| Verdict::Ended("text", Some(line)))
+        }
+        Condition::Shell | Condition::Quiet(_) | Condition::Text(_) => Verdict::Pending,
+        Condition::Stops | Condition::Idle | Condition::Working | Condition::Waiting | Condition::TurnOver => {
+            return None;
+        }
+    })
+}
+
+fn started_verdict(pane: u64, since: Instant, now: Instant) -> Verdict {
+    if now < since + STARTS_WITHIN {
+        return Verdict::Pending;
+    }
+    Verdict::Failed(format!(
+        "the agent in pane {pane} did not start working within {}s of the Enter: it may have finished \
+         at once, or not got the text; `cornercase read --pane {pane}` shows where it is",
+        STARTS_WITHIN.as_secs()
+    ))
+}

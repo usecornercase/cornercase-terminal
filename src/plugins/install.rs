@@ -153,27 +153,7 @@ fn fetch_from(origin: &Origin, places: &Places) -> Result<Fetched, String> {
             checkout.as_os_str(),
         ],
     )?;
-    let pinned = origin.reference.as_ref().filter(|r| is_commit(r)).map(|r| r.to_ascii_lowercase());
-    let candidates: Vec<String> = match &origin.reference {
-        Some(_) if let Some(pinned) = &pinned => vec![pinned.clone()],
-        Some(r) => vec![format!("refs/remotes/origin/{r}"), format!("refs/tags/{r}"), r.clone()],
-        None => vec!["HEAD".into()],
-    };
-    let commit = candidates
-        .iter()
-        .find_map(|candidate| {
-            let target = format!("{candidate}^{{commit}}");
-            let args = ["rev-parse", "--verify", "--quiet", "--end-of-options", target.as_str()];
-            git(origin, Some(&checkout), args).ok()
-        })
-        .map(|out| String::from_utf8_lossy(&out).trim().to_string())
-        .ok_or_else(|| match &origin.reference {
-            Some(r) => format!("{} has no branch, tag or commit `{r}`", origin.repo),
-            None => format!("{} has no commits", origin.repo),
-        })?;
-    if pinned.as_ref().is_some_and(|pinned| *pinned != commit) {
-        return Err(format!("{} gave {commit} for the commit {}; nothing was installed", origin.repo, origin.spec()));
-    }
+    let commit = resolve_commit(origin, &checkout)?;
     git(origin, Some(&checkout), ["checkout", "--quiet", "--detach", commit.as_str()])?;
     let head = git(origin, Some(&checkout), ["rev-parse", "--verify", "HEAD^{commit}"])?;
     if String::from_utf8_lossy(&head).trim() != commit {
@@ -191,6 +171,31 @@ fn fetch_from(origin: &Origin, places: &Places) -> Result<Fetched, String> {
     conflict(&registry, &manifest.id, origin)?;
     let replacing = registry.entry(&manifest.id).ok().map(|entry| entry.enabled);
     Ok(Fetched { origin: origin.clone(), commit, manifest, replacing, staging })
+}
+
+fn resolve_commit(origin: &Origin, checkout: &Path) -> Result<String, String> {
+    let pinned = origin.reference.as_ref().filter(|r| is_commit(r)).map(|r| r.to_ascii_lowercase());
+    let candidates: Vec<String> = match &origin.reference {
+        Some(_) if let Some(pinned) = &pinned => vec![pinned.clone()],
+        Some(r) => vec![format!("refs/remotes/origin/{r}"), format!("refs/tags/{r}"), r.clone()],
+        None => vec!["HEAD".into()],
+    };
+    let commit = candidates
+        .iter()
+        .find_map(|candidate| {
+            let target = format!("{candidate}^{{commit}}");
+            let args = ["rev-parse", "--verify", "--quiet", "--end-of-options", target.as_str()];
+            git(origin, Some(checkout), args).ok()
+        })
+        .map(|out| String::from_utf8_lossy(&out).trim().to_string())
+        .ok_or_else(|| match &origin.reference {
+            Some(r) => format!("{} has no branch, tag or commit `{r}`", origin.repo),
+            None => format!("{} has no commits", origin.repo),
+        })?;
+    if pinned.as_ref().is_some_and(|pinned| *pinned != commit) {
+        return Err(format!("{} gave {commit} for the commit {}; nothing was installed", origin.repo, origin.spec()));
+    }
+    Ok(commit)
 }
 
 fn inside(checkout: &Path, subdir: &str) -> std::io::Result<PathBuf> {
@@ -293,14 +298,7 @@ pub(crate) fn check_update(places: &Places, id: &str) -> Result<Update, String> 
 pub(crate) fn install(fetched: Fetched, places: &Places) -> Result<Installed, String> {
     let root = fetched.root();
     let id = fetched.manifest.id.clone();
-    if let Some(download) = fetched.manifest.download_here() {
-        let bytes = http::download(&SERVICE, &download.url).map_err(|e| e.to_string())?;
-        archive::verify(&bytes, &download.sha256)?;
-        let count = archive::unpack(&bytes, &root)?;
-        places.note(&id, "download unpacked", &[("files", &count)]);
-    } else {
-        build(&fetched, places)?;
-    }
+    obtain(&fetched, places, &root)?;
     if Manifest::read(&root)? != fetched.manifest {
         return Err(format!("installing changed {}; nothing was installed", manifest::FILE));
     }
@@ -315,35 +313,58 @@ pub(crate) fn install(fetched: Fetched, places: &Places) -> Result<Installed, St
         let _ = fs::remove_dir_all(&dest);
         fs::rename(&root, &dest).map_err(|e| format!("cannot move it into {}: {e}", dest.display()))?;
     }
-    let source = Source::Git {
-        repo: fetched.origin.repo.clone(),
-        url: fetched.origin.url.clone(),
-        reference: fetched.origin.reference.clone(),
-        subdir: fetched.origin.subdir.clone(),
-        commit: fetched.commit.clone(),
-        path: dest.clone(),
-    };
     let enabled = previous.as_ref().is_some_and(|entry| entry.enabled);
-    let entry = Entry { id: id.clone(), source, enabled };
-    match registry.entries.iter_mut().find(|e| e.id == id) {
-        Some(found) => *found = entry,
-        None => registry.entries.push(entry),
-    }
-    registry.save().map_err(|e| format!("cannot save {}: {e}", places.registry.display()))?;
+    register(&mut registry, &fetched, &dest, enabled, places)?;
     let kept = previous.as_ref().map(|entry| entry.source.root().to_path_buf());
-    if let Ok(folders) = fs::read_dir(&folder) {
-        for old in folders.flatten().map(|e| e.path()) {
-            if old != dest && Some(&old) != kept.as_ref() {
-                let _ = fs::remove_dir_all(old);
-            }
-        }
-    }
+    prune_old(&folder, &dest, kept.as_ref());
     let previous = previous.and_then(|entry| match entry.source {
         Source::Git { commit, .. } => Some(commit),
         Source::Link { .. } => None,
     });
     places.note(&id, "installed", &[("commit", &fetched.commit)]);
     Ok(Installed { manifest: fetched.manifest.clone(), enabled, previous })
+}
+
+fn obtain(fetched: &Fetched, places: &Places, root: &Path) -> Result<(), String> {
+    let Some(download) = fetched.manifest.download_here() else { return build(fetched, places) };
+    let bytes = http::download(&SERVICE, &download.url).map_err(|e| e.to_string())?;
+    archive::verify(&bytes, &download.sha256)?;
+    let count = archive::unpack(&bytes, root)?;
+    places.note(&fetched.manifest.id, "download unpacked", &[("files", &count)]);
+    Ok(())
+}
+
+fn register(
+    registry: &mut Registry,
+    fetched: &Fetched,
+    dest: &Path,
+    enabled: bool,
+    places: &Places,
+) -> Result<(), String> {
+    let id = &fetched.manifest.id;
+    let source = Source::Git {
+        repo: fetched.origin.repo.clone(),
+        url: fetched.origin.url.clone(),
+        reference: fetched.origin.reference.clone(),
+        subdir: fetched.origin.subdir.clone(),
+        commit: fetched.commit.clone(),
+        path: dest.to_path_buf(),
+    };
+    let entry = Entry { id: id.clone(), source, enabled };
+    match registry.entries.iter_mut().find(|e| e.id == *id) {
+        Some(found) => *found = entry,
+        None => registry.entries.push(entry),
+    }
+    registry.save().map_err(|e| format!("cannot save {}: {e}", places.registry.display()))
+}
+
+fn prune_old(folder: &Path, dest: &Path, kept: Option<&PathBuf>) {
+    let Ok(folders) = fs::read_dir(folder) else { return };
+    for old in folders.flatten().map(|e| e.path()) {
+        if old != dest && Some(&old) != kept {
+            let _ = fs::remove_dir_all(old);
+        }
+    }
 }
 
 fn build(fetched: &Fetched, places: &Places) -> Result<(), String> {
@@ -408,8 +429,11 @@ fn remove_within(places: &Places, id: &str, within: Duration) -> Result<Removed,
     if !installed {
         return Ok(Removed::Unlinked);
     }
-    let folder = places.installs.join(id);
-    match fs::remove_dir_all(&folder) {
+    delete_folder(&places.installs.join(id))
+}
+
+fn delete_folder(folder: &Path) -> Result<Removed, String> {
+    match fs::remove_dir_all(folder) {
         Ok(()) => Ok(Removed::Deleted),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Removed::Deleted),
         Err(e) => Err(format!("removed from the list, but cannot delete {}: {e}", folder.display())),

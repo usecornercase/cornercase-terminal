@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButto
 use ratatui::style::Color;
 use ratatui::text::Line;
 
-use super::view::detail_lines;
+use super::view::{Shown, detail_lines};
 use super::*;
 use crate::issues::{Comment, issue};
 
@@ -35,6 +35,7 @@ fn browser() -> Browser {
         agents: agents(Some("claude")),
         accounts: None,
         picker: None,
+        naming: None,
         places: vec![shop()],
         here: 0,
         place: None,
@@ -69,6 +70,8 @@ fn agents(default: Option<&str>) -> Agents {
         ]),
         prompt: "{url}".into(),
         submit: false,
+        branch: String::new(),
+        user: String::new(),
     }
 }
 
@@ -254,7 +257,7 @@ mod detail {
     fn enter_in_the_issue_starts_it() {
         let mut b = with_lists();
         press(&mut b, KeyCode::Enter);
-        assert!(matches!(press(&mut b, KeyCode::Enter), Action::Start(i, _, _) if i.key == "sc-2"));
+        assert!(matches!(press(&mut b, KeyCode::Enter), Action::Name(i, _, _) if i.key == "sc-2"));
     }
 
     #[test]
@@ -292,10 +295,11 @@ mod detail {
             comments: vec![Comment { author: "bo".into(), created_at: String::new(), body: "Same".into() }],
         };
         let issue = issue(Source::Github, 7, "Login fails");
-        let text: Vec<String> = detail_lines(&issue, Some(&detail), 30, 0, false, Vec::new())
-            .iter()
-            .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect())
-            .collect();
+        let text: Vec<String> =
+            detail_lines(Shown { issue: &issue, detail: Some(&detail), width: 30, now: 0, raw: false }, Vec::new())
+                .iter()
+                .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect())
+                .collect();
         assert_eq!(
             text,
             [
@@ -358,7 +362,7 @@ pub(crate) mod buttons {
         if b.picker.is_some() {
             press(&mut b, KeyCode::Esc);
         }
-        assert!(matches!(press(&mut b, KeyCode::Enter), Action::Start(..)));
+        assert!(matches!(press(&mut b, KeyCode::Enter), Action::Name(..)));
     }
 
     #[test]
@@ -427,14 +431,14 @@ mod agent {
     #[test]
     fn start_uses_the_default_agent() {
         let mut b = reading(Some("claude"));
-        assert!(matches!(press(&mut b, KeyCode::Enter), Action::Start(_, kind, _) if kind == "claude"));
+        assert!(matches!(press(&mut b, KeyCode::Enter), Action::Name(_, kind, _) if kind == "claude"));
     }
 
     #[test]
     fn the_agent_running_in_the_tab_is_used_when_the_default_is_auto() {
         let mut b = reading(None);
         b.agents.running = Some("codex".into());
-        assert!(matches!(press(&mut b, KeyCode::Enter), Action::Start(_, kind, _) if kind == "codex"));
+        assert!(matches!(press(&mut b, KeyCode::Enter), Action::Name(_, kind, _) if kind == "codex"));
     }
 
     #[test]
@@ -450,7 +454,7 @@ mod agent {
         press(&mut b, KeyCode::Enter);
         type_text(&mut b, "cod");
         press(&mut b, KeyCode::Enter);
-        assert!(matches!(press(&mut b, KeyCode::Enter), Action::Start(_, kind, _) if kind == "codex"));
+        assert!(matches!(press(&mut b, KeyCode::Enter), Action::Name(_, kind, _) if kind == "codex"));
     }
 
     #[test]
@@ -489,6 +493,7 @@ mod agent {
 
 mod account;
 mod list_flow;
+mod naming;
 mod place;
 
 pub(crate) mod people {
@@ -587,7 +592,7 @@ fn nothing_reacts_while_starting() {
 fn the_start_button_starts_the_selected_issue() {
     let mut b = with_lists();
     let pos = button(&b, "start");
-    assert!(matches!(click(&mut b, pos), Action::Start(i, _, _) if i.key == "sc-2"));
+    assert!(matches!(click(&mut b, pos), Action::Name(i, _, _) if i.key == "sc-2"));
 }
 
 mod queue_tab {

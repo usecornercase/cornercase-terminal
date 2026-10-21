@@ -74,6 +74,14 @@ pub(crate) enum Step {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct Choices {
+    pub(crate) places: Vec<Choice>,
+    pub(crate) place: Option<usize>,
+    pub(crate) kinds: Vec<String>,
+    pub(crate) agent: usize,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct Form {
     pub(crate) id: Option<u64>,
     pub(crate) label: Option<String>,
@@ -97,14 +105,8 @@ pub(crate) struct Form {
 }
 
 impl Form {
-    pub(crate) fn new(
-        places: Vec<Choice>,
-        place: Option<usize>,
-        kinds: Vec<String>,
-        agent: usize,
-        zone: String,
-        today: &str,
-    ) -> Self {
+    pub(crate) fn new(choices: Choices, zone: String, today: &str) -> Self {
+        let Choices { places, place, kinds, agent } = choices;
         Self {
             id: None,
             label: None,

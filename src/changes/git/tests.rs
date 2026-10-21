@@ -220,6 +220,71 @@ fn an_untracked_symlink_shows_its_target_not_its_contents() {
 fn reads_the_new_side_of_a_file() {
     let repo = git_repo(&[("a.txt", "one\n")]);
     write(repo.path(), "a.txt", "one\n\ttwo\n");
-    assert_eq!(new_side(repo.path(), Mode::Uncommitted, "a.txt"), Some(vec!["one".into(), "    two".into()]));
+    assert_eq!(new_side(repo.path(), Mode::Uncommitted, "a.txt"), Some(vec!["one".into(), "\ttwo".into()]));
     assert_eq!(new_side(repo.path(), Mode::Commits, "a.txt"), Some(vec!["one".into()]));
+}
+
+mod staged {
+    use super::*;
+    use crate::changes::diff::Staged;
+
+    fn marks(dir: &Path, mode: Mode) -> Vec<(String, Option<Staged>)> {
+        let diff = load(&request(dir, mode)).expect("load").diff.expect("diff");
+        diff.files.iter().map(|f| (f.path.clone(), f.staged)).collect()
+    }
+
+    #[test]
+    fn is_read_from_the_index_in_uncommitted() {
+        let repo = git_repo(&[("a.txt", "one\n"), ("b.txt", "one\n"), ("c.txt", "one\n")]);
+        let dir = repo.path();
+        write(dir, "a.txt", "two\n");
+        write(dir, "b.txt", "two\n");
+        write(dir, "c.txt", "two\n");
+        write(dir, "new.txt", "new\n");
+        git(dir, &["add", "b.txt", "c.txt"]);
+        write(dir, "c.txt", "three\n");
+        let want = [
+            ("a.txt", Some(Staged::No)),
+            ("b.txt", Some(Staged::Yes)),
+            ("c.txt", Some(Staged::Partly)),
+            ("new.txt", Some(Staged::No)),
+        ];
+        let want: Vec<_> = want.into_iter().map(|(p, s)| (p.to_string(), s)).collect();
+        assert_eq!(marks(dir, Mode::Uncommitted), want);
+    }
+
+    #[test]
+    fn is_not_read_in_commits_and_all() {
+        let repo = feature_branch();
+        for mode in [Mode::Commits, Mode::All] {
+            assert!(marks(repo.path(), mode).iter().all(|(_, staged)| staged.is_none()), "{mode:?}");
+        }
+    }
+
+    #[test]
+    fn changes_the_digest_and_the_reused_file_carries_it() {
+        let repo = git_repo(&[("a.txt", "one\n")]);
+        let dir = repo.path();
+        write(dir, "a.txt", "two\n");
+        let first = load(&request(dir, Mode::Uncommitted)).expect("load");
+        git(dir, &["add", "a.txt"]);
+        let previous = first.diff.expect("diff").files;
+        let again =
+            load(&Request { last: Some(first.digest), previous: previous.clone(), ..request(dir, Mode::Uncommitted) })
+                .expect("load");
+        assert_ne!(again.digest, first.digest);
+        let again = again.diff.expect("a new diff");
+        assert_eq!(again.files[0].staged, Some(Staged::Yes));
+        assert_eq!(again.files[0].hunks, previous[0].hunks);
+        assert_eq!(again.files[0].viewed_digest, previous[0].viewed_digest);
+    }
+
+    #[test]
+    fn is_read_with_the_index_locked() {
+        let repo = git_repo(&[("a.txt", "one\n")]);
+        let dir = repo.path();
+        write(dir, "a.txt", "two\n");
+        write(dir, ".git/index.lock", "");
+        assert_eq!(marks(dir, Mode::Uncommitted), [("a.txt".to_string(), Some(Staged::No))]);
+    }
 }

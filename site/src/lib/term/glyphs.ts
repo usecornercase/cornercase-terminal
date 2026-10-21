@@ -55,7 +55,7 @@ const BLOCKS: Record<string, Box[]> = {
 
 const ROUND = new Set(['╭', '╮', '╯', '╰']);
 
-const SYMBOLS = new Set(['❯', '⌕', '✓', '●', '■', '≡', '→', '←', '▢', '❐']);
+const SYMBOLS = new Set(['❯', '⌕', '↺', '✓', '●', '■', '≡', '→', '←', '▢', '❐']);
 
 const BRAILLE_DOTS: [number, number, number][] = [
   [0x01, 0, 0], [0x02, 0, 1], [0x04, 0, 2], [0x08, 1, 0],
@@ -150,6 +150,22 @@ function symbol(ch: string, x: number, y: number, cw: number, h: number, lw: num
     return [
       { k: 'path', d: `M${f(cx + r)} ${f(cy)}A${f(r)} ${f(r)} 0 1 1 ${f(cx - r)} ${f(cy)}A${f(r)} ${f(r)} 0 1 1 ${f(cx + r)} ${f(cy)}`, lw: stroke * 0.8 },
       { k: 'path', d: `M${f(cx + r * 0.7)} ${f(cy + r * 0.7)}L${px(0.9)} ${py(0.66)}`, lw: stroke },
+    ];
+  }
+  if (ch === '↺') {
+    const r = cw * 0.3;
+    const cx = x + cw / 2;
+    const cy = y + h / 2;
+    const at = (deg: number) => [cx + r * Math.cos((deg * Math.PI) / 180), cy + r * Math.sin((deg * Math.PI) / 180)];
+    const [sx, sy] = at(-120);
+    const [ex, ey] = at(-60);
+    const wing = (deg: number) => {
+      const a = ((30 + deg) * Math.PI) / 180;
+      return `M${f(ex)} ${f(ey)}L${f(ex + cw * 0.22 * Math.cos(a))} ${f(ey + cw * 0.22 * Math.sin(a))}`;
+    };
+    return [
+      { k: 'path', d: `M${f(sx)} ${f(sy)}A${f(r)} ${f(r)} 0 1 0 ${f(ex)} ${f(ey)}`, lw: stroke * 0.8 },
+      { k: 'path', d: `${wing(-40)}${wing(40)}`, lw: stroke * 0.8 },
     ];
   }
   const box = (x0: number, y0: number, x1: number, y1: number) => `M${px(x0)} ${py(y0)}L${px(x1)} ${py(y0)}L${px(x1)} ${py(y1)}L${px(x0)} ${py(y1)}Z`;

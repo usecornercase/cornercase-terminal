@@ -150,8 +150,9 @@ impl Bot {
         let auth = format!("Bot {}", self.token);
         let agent = format!("DiscordBot (https://usecornercase.dev, {})", version::CURRENT);
         let headers = [("Authorization", auth.as_str()), ("User-Agent", agent.as_str())];
-        let answer = http::call_within(&SERVICE, method, &url, &headers, body, within)
-            .map_err(|e| Failure::Unreachable(self.scrub(&e.to_string())))?;
+        let call = http::Call { method, url: &url, headers: &headers, body };
+        let answer =
+            http::call_within(&SERVICE, call, within).map_err(|e| Failure::Unreachable(self.scrub(&e.to_string())))?;
         if answer.ok() {
             return Ok(answer.json);
         }
@@ -339,16 +340,7 @@ fn message(content: &str, components: &[Value]) -> Value {
 fn request(order: &Order, app: &str) -> Vec<Call> {
     match order {
         Order::Send { chat, text, keyboard, reply_to, ask, .. } => {
-            let path = format!("/channels/{chat}/messages");
-            let mut pages = pages(keyboard).into_iter();
-            let content = if ask.is_some() { asking(text) } else { text.clone() };
-            let mut first = message(&content, &pages.next().unwrap_or_default());
-            if let Some(id) = reply_to {
-                first["message_reference"] = json!({ "message_id": id.to_string(), "fail_if_not_exists": false });
-            }
-            let mut calls = vec![Call::new(Method::Post, path.clone(), Some(first))];
-            calls.extend(pages.map(|page| Call::new(Method::Post, path.clone(), Some(message(MORE, &page)))));
-            calls
+            sending(*chat, text, keyboard, *reply_to, ask.is_some())
         }
         Order::Edit { chat, message: id, text, keyboard } => {
             let body = message(text, pages(keyboard).first().map_or(&[], Vec::as_slice));
@@ -367,18 +359,33 @@ fn request(order: &Order, app: &str) -> Vec<Call> {
             let path = format!("/channels/{chat}/messages/{id}/reactions/{}/@me", http::path_segment(emoji));
             vec![Call::new(Method::Put, path, None)]
         }
-        Order::Commands => {
-            let commands: Vec<Value> = COMMANDS
-                .iter()
-                .map(|(name, about)| {
-                    json!({ "name": name, "description": about, "type": SLASH,
-                        "integration_types": [USER_INSTALL], "contexts": [BOT_DM] })
-                })
-                .collect();
-            vec![Call::new(Method::Put, format!("/applications/{app}/commands"), Some(Value::Array(commands)))]
-        }
+        Order::Commands => vec![Call::new(Method::Put, format!("/applications/{app}/commands"), Some(command_list()))],
         Order::Answer { .. } => Vec::new(),
     }
+}
+
+fn sending(chat: i64, text: &str, keyboard: &Keyboard, reply_to: Option<i64>, ask: bool) -> Vec<Call> {
+    let path = format!("/channels/{chat}/messages");
+    let mut pages = pages(keyboard).into_iter();
+    let content = if ask { asking(text) } else { text.to_string() };
+    let mut first = message(&content, &pages.next().unwrap_or_default());
+    if let Some(id) = reply_to {
+        first["message_reference"] = json!({ "message_id": id.to_string(), "fail_if_not_exists": false });
+    }
+    let mut calls = vec![Call::new(Method::Post, path.clone(), Some(first))];
+    calls.extend(pages.map(|page| Call::new(Method::Post, path.clone(), Some(message(MORE, &page)))));
+    calls
+}
+
+fn command_list() -> Value {
+    let commands: Vec<Value> = COMMANDS
+        .iter()
+        .map(|(name, about)| {
+            json!({ "name": name, "description": about, "type": SLASH,
+                "integration_types": [USER_INSTALL], "contexts": [BOT_DM] })
+        })
+        .collect();
+    Value::Array(commands)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -397,51 +404,57 @@ fn invoked(kind: &str, d: &Value) -> Option<Invoked> {
 
 pub(crate) fn update(kind: &str, d: &Value) -> Option<Update> {
     match kind {
-        "MESSAGE_CREATE" => {
-            let author = &d["author"];
-            let ordinary = matches!(d["type"].as_u64(), None | Some(0 | 19));
-            if d.get("guild_id").is_some_and(|g| !g.is_null()) || author["bot"].as_bool() == Some(true) || !ordinary {
-                return None;
-            }
-            Some(Update::Message(Message {
-                id: snowflake(&d["id"])?,
-                chat: snowflake(&d["channel_id"])?,
-                user: snowflake(&author["id"])?,
-                private: true,
-                date: d["timestamp"].as_str().and_then(time::parse_time).unwrap_or_default(),
-                name: author["username"].as_str().unwrap_or_default().to_string(),
-                text: d["content"].as_str().unwrap_or_default().to_string(),
-                reply_to: snowflake(&d["message_reference"]["message_id"]),
-            }))
-        }
-        "INTERACTION_CREATE" if d["type"].as_u64() == Some(2) => {
-            let user = &d["user"];
-            let user = if user.is_object() { user } else { &d["member"]["user"] };
-            let id = snowflake(&d["id"])?;
-            Some(Update::Message(Message {
-                id,
-                chat: snowflake(&d["channel_id"]).or_else(|| snowflake(&d["channel"]["id"]))?,
-                user: snowflake(&user["id"])?,
-                private: true,
-                date: ((id >> 22) + DISCORD_EPOCH_MS) / 1000,
-                name: user["username"].as_str().unwrap_or_default().to_string(),
-                text: format!("/{}", d["data"]["name"].as_str().filter(|name| !name.is_empty())?),
-                reply_to: None,
-            }))
-        }
-        "INTERACTION_CREATE" if d["type"].as_u64() == Some(3) => {
-            let user = snowflake(&d["user"]["id"]).or_else(|| snowflake(&d["member"]["user"]["id"]))?;
-            let chat = snowflake(&d["channel_id"]).or_else(|| snowflake(&d["channel"]["id"]))?;
-            Some(Update::Press(Press {
-                id: format!("{}:{}", d["id"].as_str()?, d["token"].as_str()?),
-                chat,
-                user,
-                message: snowflake(&d["message"]["id"])?,
-                data: d["data"]["custom_id"].as_str().unwrap_or_default().to_string(),
-            }))
-        }
+        "MESSAGE_CREATE" => written(d),
+        "INTERACTION_CREATE" if d["type"].as_u64() == Some(2) => slash_command(d),
+        "INTERACTION_CREATE" if d["type"].as_u64() == Some(3) => pressed(d),
         _ => None,
     }
+}
+
+fn written(d: &Value) -> Option<Update> {
+    let author = &d["author"];
+    let ordinary = matches!(d["type"].as_u64(), None | Some(0 | 19));
+    if d.get("guild_id").is_some_and(|g| !g.is_null()) || author["bot"].as_bool() == Some(true) || !ordinary {
+        return None;
+    }
+    Some(Update::Message(Message {
+        id: snowflake(&d["id"])?,
+        chat: snowflake(&d["channel_id"])?,
+        user: snowflake(&author["id"])?,
+        private: true,
+        date: d["timestamp"].as_str().and_then(time::parse_time).unwrap_or_default(),
+        name: author["username"].as_str().unwrap_or_default().to_string(),
+        text: d["content"].as_str().unwrap_or_default().to_string(),
+        reply_to: snowflake(&d["message_reference"]["message_id"]),
+    }))
+}
+
+fn slash_command(d: &Value) -> Option<Update> {
+    let user = &d["user"];
+    let user = if user.is_object() { user } else { &d["member"]["user"] };
+    let id = snowflake(&d["id"])?;
+    Some(Update::Message(Message {
+        id,
+        chat: snowflake(&d["channel_id"]).or_else(|| snowflake(&d["channel"]["id"]))?,
+        user: snowflake(&user["id"])?,
+        private: true,
+        date: ((id >> 22) + DISCORD_EPOCH_MS) / 1000,
+        name: user["username"].as_str().unwrap_or_default().to_string(),
+        text: format!("/{}", d["data"]["name"].as_str().filter(|name| !name.is_empty())?),
+        reply_to: None,
+    }))
+}
+
+fn pressed(d: &Value) -> Option<Update> {
+    let user = snowflake(&d["user"]["id"]).or_else(|| snowflake(&d["member"]["user"]["id"]))?;
+    let chat = snowflake(&d["channel_id"]).or_else(|| snowflake(&d["channel"]["id"]))?;
+    Some(Update::Press(Press {
+        id: format!("{}:{}", d["id"].as_str()?, d["token"].as_str()?),
+        chat,
+        user,
+        message: snowflake(&d["message"]["id"])?,
+        data: d["data"]["custom_id"].as_str().unwrap_or_default().to_string(),
+    }))
 }
 
 #[cfg(test)]

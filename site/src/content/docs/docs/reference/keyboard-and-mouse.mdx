@@ -6,7 +6,7 @@ description: Every mouse gesture cornercase understands, the optional prefix key
 import { Aside } from '@astrojs/starlight/components';
 import Screen from '../../../../components/Screen.astro';
 
-cornercase is driven with the mouse. Out of the box it has **no keyboard shortcuts** of its own: outside of its dialogs, the changes panel's filter field, the files panel's search bar and the TODO panel's text field (and `Esc` while you drag a row, a border or a divider, or while the changes, files, TODO or Flow panel is open), every key you press goes to the program in the active pane. That's a deliberate choice, so that nothing you type is ever taken away from your shell, your editor or your agent: `Ctrl+B`, `Ctrl+A`, `Alt` and `Option` combinations all reach them untouched.
+cornercase is driven with the mouse. Out of the box it has **no keyboard shortcuts** of its own: outside of its dialogs, the changes panel's filter field, the files panel's search bar and find field and the TODO panel's text field (and `Esc` while you drag a row, a border or a divider, or while the changes, files, TODO or Flow panel is open), every key you press goes to the program in the active pane. That's a deliberate choice, so that nothing you type is ever taken away from your shell, your editor or your agent: `Ctrl+B`, `Ctrl+A`, `Alt` and `Option` combinations all reach them untouched.
 
 If your hands would rather stay on the keyboard, or your terminal can't send clicks, you can turn on a **prefix key** that opens a menu of [keyboard shortcuts](#keyboard-shortcuts). It takes that one key, and only once you choose it.
 
@@ -25,7 +25,7 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Drag | A project, group, workspace or tab | Moves it within its list; a project also into or out of a group. `Esc` cancels. See [Reorder](../../guides/projects-workspaces-tabs/#reorder). |
 | Hover, then click `×` | Any project, workspace or tab row | Closes it. A project, and a workspace with its own worktree, ask first. In the [compact layout](../../guides/small-terminals/) the `×` always shows, and a tab or workspace asks first too. |
 | Hover, then click `×` | A group header | Asks, then deletes the group: **keep projects** leaves them open, ungrouped; **close projects** closes them too. |
-| Right-click, or hover and click `⋯` | A project, workspace or tab | Opens its menu, to **rename** it; a project's menu can also **move to group** and, for a repository, **project settings** (the [setup and teardown](../../guides/worktrees/#set-up-each-new-worktree) of its worktrees), a worktree workspace with a setup shows **run setup**, a workspace with a pull request shows **pull request #n**, its [checks](../../guides/worktrees/#pull-requests-and-their-checks), and a workspace running a flow shows **show flow**, its [Flow panel](../../guides/flows/#the-flow-panel). A project and a workspace also end with **open in…** (or **copy path** where the window can open nothing), see [Open in another app](../../guides/projects-workspaces-tabs/#open-in-another-app). In the compact layout the `⋯` always shows. |
+| Right-click, or hover and click `⋯` | A project, workspace or tab | Opens its menu, to **rename** it; a project's menu can also **move to group** and, for a repository, **project settings** (the [setup and teardown](../../guides/worktrees/#set-up-each-new-worktree) of its worktrees) and **worktrees** (the [cleanup dialog](../../guides/worktrees/#clean-up-worktrees) for that project), a worktree workspace with a setup shows **run setup**, a workspace with a pull request shows **pull request #n**, its [checks](../../guides/worktrees/#pull-requests-and-their-checks), and a workspace running a flow shows **show flow**, its [Flow panel](../../guides/flows/#the-flow-panel). A project and a workspace also end with **open in…** (or **copy path** where the window can open nothing), see [Open in another app](../../guides/projects-workspaces-tabs/#open-in-another-app). In the compact layout the `⋯` always shows. |
 | Right-click, or hover and click `⋯` | A group header | Opens its menu: **add project**, **rename group**, **icon and colour**, **delete group** (which asks first). |
 | Click | `▸` / `▾` beside a workspace, or in the [tree](../../guides/projects-workspaces-tabs/#the-tree) | Collapses or expands a workspace (or, in the tree, a project). A click on the rest of its row opens it and expands it. |
 | Wheel | The projects, workspaces or tree list | Scrolls the list. |
@@ -39,6 +39,7 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Wheel | That bar | Scrolls the tabs. |
 | Click | An agent in the [agents section](../../guides/projects-workspaces-tabs/#the-agents-section) | Shows that agent's project, workspace and tab, and focuses its pane. |
 | Click | `▸` / `▾` beside an agent in the agents section | Collapses or expands the agents it started. A click on the rest of its row shows the agent. |
+| Click | `×` on an agent's row in the agents section | Asks to close the agent, its tab or its whole worktree workspace, and what it started there. |
 | Wheel | The agents section | Scrolls it. |
 | Drag | The line above the agents section | Makes it taller or shorter. |
 | Double-click | That line | Gives it a third of the room again. |
@@ -81,12 +82,17 @@ Programs that use the mouse get clicks, releases, drags, movement and the wheel,
 | Click | `vs main ▾` | Opens the list of branches to compare with. |
 | Click | A file row | Expands or collapses the file. |
 | Hover, then click `✓` | A file row | Marks the file as viewed, or not. |
+| Hover, then click `+` | A file row, in Uncommitted and Every project | Stages the file, as `git add` does; on a staged file (`●`) it unstages it. |
+| Hover, then click `↺` | A file row, in Uncommitted and Every project | Asks, then puts the file back as it is in the last commit, or deletes it when git doesn't track it. |
 | Click | `↕ n unchanged lines` | Shows the code between two hunks. |
 | Hover, then click | `open`, `ask agent`, `copy` on a hunk | Opens it in your editor, types its reference into the workspace's agent, copies it as a patch. |
+| Click, or press and drag | The lines of a diff | Selects a line, or several, of one file. Held on the first or last row shown, or past it, the panel scrolls with the selection. |
+| Click | `ask agent`, `copy` at the bottom, with lines selected | Types the file's path and the lines into the workspace's agent, copies their code. |
+| Click | An empty spot in the diff | Clears the selection. |
 | Click | `expand all` / `collapse all`, `×` | Expands or collapses every file, closes the panel. |
 | Click | `⌕` | Opens the field to [filter the files](../../guides/changes/#filter-the-files), or gives it the keys back. |
 | Click | `×` in the filter field | Closes it and shows every file again. |
-| Wheel | The panel | Scrolls the diff. |
+| Wheel | The panel | Scrolls the diff, also while you select lines. |
 | Drag, double-click | The panel's left border | Resizes it, gives it back its automatic width. |
 
 See [Changes panel](../../guides/changes/).
@@ -105,6 +111,9 @@ See [Changes panel](../../guides/changes/).
 | Click | `×` in the search bar | Clears the search. |
 | Click | A result | Opens the file, at the line of a text match. |
 | Right-click | A file or folder in the tree | Opens the **open in…** menu for it: your file manager, editors and, for a file, the default app. |
+| Click | `⌕` | Opens the field to [find text in the open file](../../guides/files/#find-in-the-file), or gives it the keys back. |
+| Click | `↑`, `↓` in the find field | Go to the previous or the next match. |
+| Click | `×` in the find field | Closes the find field. |
 | Click | `▢`, then `❐` | Shows the open file full screen, then puts it back in the panel. |
 | Click | `×` | Closes the panel. |
 | Wheel | The panel | Scrolls the tree, the results or the file. |
@@ -190,11 +199,11 @@ Press the prefix and a menu opens at the bottom of the screen with what each nex
 | `o` | Away on chat apps: turns the away mode of [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) on or off, on every one that is set up, as **Remote** does for each. With none paired, it opens the settings to set one up. |
 | `q` | Quits the window. Everything keeps running, as with **Quit**. |
 
-`Esc`, or a key the menu doesn't list, closes it without doing anything, and that key doesn't reach your program. Press the prefix twice to send the prefix itself to the program in the pane. The prefix works while the pane, the files search, the changes filter or a TODO field has the keys, but not inside a dialog, which has its own keys below.
+`Esc`, or a key the menu doesn't list, closes it without doing anything, and that key doesn't reach your program. Press the prefix twice to send the prefix itself to the program in the pane. The prefix works while the pane, the files search or find field, the changes filter or a TODO field has the keys, but not inside a dialog, which has its own keys below.
 
 ## Keys inside cornercase's dialogs
 
-While a dialog, the search, the settings, the issue browser, the changes panel's filter field, the files panel's search bar or a TODO field is open, the keys below drive it instead of your program.
+While a dialog, the search, the settings, the issue browser, the changes panel's filter field, the files panel's search bar or find field or a TODO field is open, the keys below drive it instead of your program.
 
 | Where | Keys |
 | --- | --- |
@@ -211,7 +220,8 @@ While a dialog, the search, the settings, the issue browser, the changes panel's
 | Changes panel filter | Type a piece of a path or a pattern: `*.test.js` keeps only those files, `!*.snap` leaves them out. `Enter` keeps the filter and gives the keys back to your program, `Esc` clears it, or closes the panel when the field is empty. A click in a pane gives the keys back too. |
 | Files panel search | Type to search. `↑` `↓` pick a result. `Enter` opens it. `Esc` clears the search and gives the keys back to your program, or closes the panel when the bar is empty. A click in a pane gives them back too and keeps the search. |
 | TODO field | Type, paste. `←` `→` move the cursor, `↑` `↓` move across the lines of a long item, `Home` `End` go to its start and end, `Backspace` `Delete` delete. `Enter` saves (a new item keeps the field open for the next one), `Esc` cancels, or closes the panel when the field is empty. A click outside the field saves it and gives the keys back. |
-| Changes, files, TODO or Flow panel | `Esc` closes it, as its `×` does, unless one of its fields above has text; a file shown full screen goes back to its panel first. That `Esc` does not reach your program; the next one does. |
+| Files panel find field | Type to find in the open file. `↓` or `Enter` go to the next match, `↑` to the previous one, wrapping. `Esc` clears it, or closes it when it is empty. A click in a pane gives the keys back and keeps it. |
+| Changes, files, TODO or Flow panel | `Esc` closes it, as its `×` does, unless one of its fields above has text; the files find field closes, and a file shown full screen goes back to its panel, first. That `Esc` does not reach your program; the next one does. |
 | Settings › Flows | `↑` `↓` select a flow (its diagram is drawn beside the list; the wheel over the diagram scrolls it), `Tab` `→` / `Shift+Tab` `←` switch settings tabs (in the page that **`edit`** opens from a start dialog, which has no tabs, `Tab` moves between flows), `Enter` opens it (on **deleted built-ins** it expands them, on one of them it restores it), `Delete` deletes it after asking (a built-in flow is hidden). On a flow: `↑` `↓` select a row, `Enter` or `Space` change it or open a stage, `Tab` `→` / `Shift+Tab` `←` switch tabs, `Shift+↑` `Shift+↓` move a stage, `Delete` removes it. `Esc` goes back to the list, then closes; with unsaved changes it asks first. A paste on the list opens the import page ([share a flow](../../guides/flows/#share-a-flow)). |
 | The import page, in Settings › Flows | Type or paste a flow's text. `Enter` starts a new line, the arrows, `Home` and `End` move. **`import`** opens it in the editor to check and save, `Esc` goes back. |
 | A prompt or the notes, in Settings › Flows | Type, paste. `Enter` starts a new line, the arrows, `Home` and `End` move, `Backspace` `Delete` delete. **`save`** keeps the text, `Esc` drops it. |

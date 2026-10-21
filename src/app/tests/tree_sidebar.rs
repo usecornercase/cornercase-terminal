@@ -22,7 +22,7 @@ fn list() -> Rect {
 }
 
 fn row(app: &App, row: TreeRow) -> Rect {
-    ui::tree_row(list(), &app.tree_shape(), app.scroll.projects, row)
+    ui::tree_row(list(), &app.tree_shape(), app.scroll.of(List::Projects), row)
 }
 
 fn click_at(app: &mut App, pos: Position) {
@@ -36,7 +36,7 @@ fn click_name(app: &mut App, r: TreeRow) {
 }
 
 fn click_arrow(app: &mut App, r: TreeRow) {
-    let arrow = ui::tree_arrow(list(), &app.tree_shape(), app.scroll.projects, r);
+    let arrow = ui::tree_arrow(list(), &app.tree_shape(), app.scroll.of(List::Projects), r);
     click_at(app, arrow.as_position());
 }
 
@@ -136,7 +136,7 @@ fn a_tab_of_another_project_can_be_renamed_from_its_menu() {
 #[test]
 fn a_tab_dragged_in_another_project_moves_there() {
     let (mut app, _rx, _dirs) = tree(2);
-    app.add_tab(0, 0, AREA).expect("add a tab");
+    app.add_tab(workspace_at(&app, 0, 0), AREA).expect("add a tab");
     app.active = 1;
     drawn(&mut app);
     let tabs = |app: &App| -> Vec<u64> { app.projects[0].workspaces[0].tabs.iter().map(|t| t.id).collect() };

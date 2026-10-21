@@ -162,7 +162,8 @@ mod start {
         assert_eq!(answers(&mut app), [], "git makes the worktree first");
         let made = made_pane(answered(&mut app, &rx, "the agent starts in the worktree"));
 
-        let (p, w, _) = app.projects.tab_of_pane(made).expect("the agent's tab");
+        let (p, w) =
+            app.projects.tab_of_pane(made).map(|at| (at.project(), at.workspace().index())).expect("the agent's tab");
         assert!(app.projects[p].workspaces[w].worktree, "the agent runs in the new worktree");
         assert_eq!(parent(&app, made), Some(caller));
     }

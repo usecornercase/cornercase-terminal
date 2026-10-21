@@ -14,7 +14,7 @@ impl App {
             return Err("search needs some text to look for".into());
         }
         let sources = self.build_sources(false);
-        let key = self.requests.key();
+        let key = self.clients.requests.key();
         let job = Job::new(Level::Debug, "control", "search");
         self.spawn_job(
             job,
@@ -27,12 +27,18 @@ impl App {
             },
         );
         let done = Done::default();
-        self.requests.pending.push(Pending { client: Some(client), key, timeout: None, done, stage: Stage::Reading });
+        self.clients.requests.pending.push(Pending {
+            client: Some(client),
+            key,
+            timeout: None,
+            done,
+            stage: Stage::Reading,
+        });
         Ok(None)
     }
 
     pub(in crate::app) fn sessions_replied(&mut self, request: u64, found: error::Result<Found>) {
-        let Some(pending) = self.requests.take(request) else { return };
+        let Some(pending) = self.clients.requests.take(request) else { return };
         let reply = match found {
             Ok(found) => Ok(json(&matches(&found))),
             Err(e) => Err(format!("cannot search: {e}")),

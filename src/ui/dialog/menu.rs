@@ -25,15 +25,20 @@ pub(crate) fn menu_hit(menu: Rect, items: usize, pos: Position) -> Option<usize>
     (0..items).find(|&i| menu_item(menu, i).contains(pos))
 }
 
-pub(in crate::ui) fn draw_menu(f: &mut Frame, view: &View, at: Position, items: &[String]) {
+pub(in crate::ui) fn draw_menu(f: &mut Frame, view: &View, at: Position, items: &[String], disabled: &[bool]) {
     let menu = menu_area(f.area(), at, items);
     f.render_widget(Clear, menu);
     f.render_widget(overlay_block(view.muted, ""), menu);
     for (i, item) in items.iter().enumerate() {
         let r = menu_item(menu, i);
-        let lit = hovered(view, r);
+        let off = disabled.get(i).copied().unwrap_or(false);
+        let lit = !off && hovered(view, r);
         let bg = if lit { Style::default().bg(view.surface()) } else { Style::default() };
-        let text = if lit { bg.add_modifier(Modifier::BOLD) } else { bg };
+        let text = match (lit, off) {
+            (true, _) => bg.add_modifier(Modifier::BOLD),
+            (false, true) => bg.fg(view.muted).add_modifier(Modifier::DIM),
+            (false, false) => bg,
+        };
         let line = Line::from(vec![rail(lit, bg), Span::styled(format!("{item} "), text)]);
         f.render_widget(Paragraph::new(line).style(bg), r);
     }

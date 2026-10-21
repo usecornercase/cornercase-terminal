@@ -59,22 +59,15 @@ impl Status {
     pub(super) fn advance(&mut self, byte: u8) -> bool {
         let Some(command) = self.stream.advance(byte) else { return false };
         match command {
-            stream::Command::Reset => self.records.clear(),
+            stream::Command::Reset => {
+                self.records.clear();
+                false
+            }
             stream::Command::Osc(bytes) => {
                 let Ok(text) = std::str::from_utf8(bytes) else { return false };
-                if text.split(';').next() == Some("133") && text.split(';').nth(1) == Some("A") {
-                    self.records.retain(|record| matches!(record.state, State::Done | State::Error));
-                } else if let Some(body) = text.strip_prefix("7501;") {
-                    if body == "?" {
-                        return true;
-                    }
-                    if let Some(report) = Report::parse(body) {
-                        apply(&mut self.records, self.process, &report);
-                    }
-                }
+                osc(&mut self.records, self.process, text)
             }
         }
-        false
     }
 
     pub(super) fn process(&mut self, pid: Option<i32>) {
@@ -105,6 +98,20 @@ impl Status {
     pub(super) fn acknowledge(&mut self, pid: i32) {
         self.records.retain(|record| record.process != Some(pid) || record.state != State::Done);
     }
+}
+
+fn osc(records: &mut Vec<Record>, process: Option<i32>, text: &str) -> bool {
+    if text.split(';').next() == Some("133") && text.split(';').nth(1) == Some("A") {
+        records.retain(|record| matches!(record.state, State::Done | State::Error));
+    } else if let Some(body) = text.strip_prefix("7501;") {
+        if body == "?" {
+            return true;
+        }
+        if let Some(report) = Report::parse(body) {
+            apply(records, process, &report);
+        }
+    }
+    false
 }
 
 struct Report<'a> {

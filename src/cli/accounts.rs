@@ -2,10 +2,13 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::io::{self, IsTerminal as _};
 
-use super::args::accounts::{AccountAction, AccountRenameArgs, ProfileAction, ProfileArg};
+use super::args::accounts::{
+    AccountAction, AccountAddArgs, AccountListArgs, AccountRemoveArgs, AccountRenameArgs, AccountRestartArgs,
+    AccountUseArgs, ProfileAction, ProfileArg,
+};
 use super::{print_json, print_out};
 use crate::client::{self, answer, ask, confirm};
-use crate::control::{self, AccountsInfo, Command};
+use crate::control::{self, AccountsInfo, Command, RestartInfo};
 use crate::error::{Error, Result};
 
 pub(super) fn profile_arg(arg: ProfileArg) -> Result<(Option<String>, BTreeMap<String, String>)> {
@@ -30,78 +33,134 @@ pub(super) fn account_choices(given: Vec<(String, String)>) -> Result<BTreeMap<S
 
 pub(super) fn account(action: AccountAction) -> Result<()> {
     match action {
-        AccountAction::List(list) => {
-            if list.check {
-                client::use_account_login()?;
-            }
-            let value = ask("account-list", Command::AccountList(control::AccountList { check: list.check }))?;
-            if list.print.json {
-                return print_json(&value);
-            }
-            print_out(&accounts_text(&answer(value)?))
-        }
-        AccountAction::Add(add) => {
-            let request = control::AccountAdd {
-                provider: add.provider.clone(),
-                name: add.name.clone(),
-                login: add.login,
-                workspace: add.workspace,
-                focus: add.focus,
-            };
-            let value = ask("account-add", Command::AccountAdd(request))?;
-            if add.print.json {
-                return print_json(&value);
-            }
-            let info: AccountsInfo = answer(value)?;
-            let mut text = format!("added the {} account {}", add.provider, add.name);
-            if let Some(path) = path_of(&info, &add.provider, &add.name) {
-                let _ = write!(text, " in {path}");
-            }
-            if let Some(pane) = info.login.and_then(|ids| ids.pane) {
-                let _ = write!(text, "\nits login runs in pane {pane}");
-            }
-            print_out(&(text + "\n"))
-        }
-        AccountAction::Remove(remove) => {
-            let info: AccountsInfo =
-                answer(ask("account-list", Command::AccountList(control::AccountList::default()))?)?;
-            let Some(path) = path_of(&info, &remove.provider, &remove.name) else {
-                return Err(Error::Control(format!(
-                    "there is no {} account `{}`; `cornercase account list` lists them",
-                    remove.provider, remove.name
-                )));
-            };
-            if !remove.yes {
-                if !io::stdin().is_terminal() {
-                    return Err(Error::Control("no terminal to ask in; pass --yes to remove it".into()));
-                }
-                let question = format!(
-                    "Remove the {} account {} and delete {path}, with its login? Profiles that use it go back to \
-                     the system's login. [y/N] ",
-                    remove.provider, remove.name
-                );
-                if !confirm(&question) {
-                    return Ok(());
-                }
-            }
-            let request = control::AccountRemove { provider: remove.provider.clone(), name: remove.name.clone() };
-            ask("account-remove", Command::AccountRemove(request))?;
-            print_out(&format!("removed the {} account {}\n", remove.provider, remove.name))
-        }
-        AccountAction::Rename(rename) => {
-            let (account, label) = rename_target(&rename)?;
-            client::use_account_switch()?;
-            let json = rename.print.json;
-            let request = control::AccountRename { provider: rename.provider, account, label };
-            switched(ask("account-rename", Command::AccountRename(request))?, json)
-        }
-        AccountAction::Use(chosen) => {
-            client::use_account_switch()?;
-            let request =
-                control::AccountUse { provider: chosen.provider, account: chosen.account.unwrap_or_default() };
-            switched(ask("account-use", Command::AccountUse(request))?, chosen.print.json)
-        }
+        AccountAction::List(list) => account_list(&list),
+        AccountAction::Add(add) => account_add(&add),
+        AccountAction::Remove(remove) => account_remove(&remove),
+        AccountAction::Rename(rename) => account_rename(rename),
+        AccountAction::Use(chosen) => account_use(chosen),
+        AccountAction::Restart(restart) => account_restart(restart),
     }
+}
+
+fn account_use(chosen: AccountUseArgs) -> Result<()> {
+    client::use_account_switch()?;
+    let account = chosen.account.unwrap_or_default();
+    let request = control::AccountUse { provider: chosen.provider, account };
+    switched(ask("account-use", Command::AccountUse(request))?, chosen.print.json)
+}
+
+fn account_restart(AccountRestartArgs { provider, account, system, panes, print }: AccountRestartArgs) -> Result<()> {
+    client::use_account_restart()?;
+    let account = if system { Some(String::new()) } else { account };
+    let value = restart(provider, account, panes)?;
+    if print.json {
+        return print_json(&value);
+    }
+    print_out(&restart_text(&answer(value)?))
+}
+
+fn account_list(list: &AccountListArgs) -> Result<()> {
+    if list.check {
+        client::use_account_login()?;
+    }
+    let value = ask("account-list", Command::AccountList(control::AccountList { check: list.check }))?;
+    if list.print.json {
+        return print_json(&value);
+    }
+    print_out(&accounts_text(&answer(value)?))
+}
+
+fn account_add(add: &AccountAddArgs) -> Result<()> {
+    let request = control::AccountAdd {
+        provider: add.provider.clone(),
+        name: add.name.clone(),
+        login: add.login,
+        workspace: add.workspace,
+        focus: add.focus,
+    };
+    let value = ask("account-add", Command::AccountAdd(request))?;
+    if add.print.json {
+        return print_json(&value);
+    }
+    let info: AccountsInfo = answer(value)?;
+    let mut text = format!("added the {} account {}", add.provider, add.name);
+    if let Some(path) = path_of(&info, &add.provider, &add.name) {
+        let _ = write!(text, " in {path}");
+    }
+    if let Some(pane) = info.login.and_then(|ids| ids.pane) {
+        let _ = write!(text, "\nits login runs in pane {pane}");
+    }
+    print_out(&(text + "\n"))
+}
+
+fn account_remove(remove: &AccountRemoveArgs) -> Result<()> {
+    let info: AccountsInfo = answer(ask("account-list", Command::AccountList(control::AccountList::default()))?)?;
+    let Some(path) = path_of(&info, &remove.provider, &remove.name) else {
+        return Err(Error::Control(format!(
+            "there is no {} account `{}`; `cornercase account list` lists them",
+            remove.provider, remove.name
+        )));
+    };
+    if !remove.yes && !confirmed_removal(remove, &path)? {
+        return Ok(());
+    }
+    let request = control::AccountRemove { provider: remove.provider.clone(), name: remove.name.clone() };
+    ask("account-remove", Command::AccountRemove(request))?;
+    print_out(&format!("removed the {} account {}\n", remove.provider, remove.name))
+}
+
+fn confirmed_removal(remove: &AccountRemoveArgs, path: &str) -> Result<bool> {
+    if !io::stdin().is_terminal() {
+        return Err(Error::Control("no terminal to ask in; pass --yes to remove it".into()));
+    }
+    let question = format!(
+        "Remove the {} account {} and delete {path}, with its login? Profiles that use it go back to the system's \
+         login. [y/N] ",
+        remove.provider, remove.name
+    );
+    Ok(confirm(&question))
+}
+
+fn account_rename(rename: AccountRenameArgs) -> Result<()> {
+    let (account, label) = rename_target(&rename)?;
+    client::use_account_switch()?;
+    let json = rename.print.json;
+    let request = control::AccountRename { provider: rename.provider, account, label };
+    switched(ask("account-rename", Command::AccountRename(request))?, json)
+}
+
+fn restart(provider: String, account: Option<String>, panes: Vec<u64>) -> Result<serde_json::Value> {
+    ask("account-restart", Command::AccountRestart(control::AccountRestart { provider, account, panes }))
+}
+
+pub(crate) fn restart_text(info: &RestartInfo) -> String {
+    let on = if info.account.is_empty() {
+        format!("its own {} login", info.provider)
+    } else {
+        format!("the {} account {}", info.provider, info.account)
+    };
+    let listed = |panes: &[u64]| panes.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
+    let panes = |panes: &[u64]| if panes.len() == 1 { "pane" } else { "panes" };
+    let mut text = String::new();
+    if !info.restarted.is_empty() {
+        let _ = writeln!(text, "restarted {} {} on {on}", panes(&info.restarted), listed(&info.restarted));
+    }
+    if !info.waiting.is_empty() {
+        let (verb, whose) = if info.waiting.len() == 1 { ("restarts", "its") } else { ("restart", "their") };
+        let _ = writeln!(
+            text,
+            "{} {} {verb} on {on} once {whose} turn is over",
+            panes(&info.waiting),
+            listed(&info.waiting)
+        );
+    }
+    for skipped in &info.skipped {
+        let _ = writeln!(text, "skipped pane {}: {}", skipped.pane, skipped.why);
+    }
+    if text.is_empty() {
+        let _ = writeln!(text, "every open {} agent already runs on {on}", info.provider);
+    }
+    text
 }
 
 fn switched(value: serde_json::Value, json: bool) -> Result<()> {

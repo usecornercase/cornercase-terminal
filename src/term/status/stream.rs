@@ -32,32 +32,13 @@ impl Stream {
         }
         match self.state {
             State::Ground if byte == 0x1b => self.state = State::Escape,
-            State::Escape => match byte {
-                b']' => {
-                    self.bytes.clear();
-                    self.overflow = false;
-                    self.state = State::Osc;
-                }
-                b'[' | 0x20..=0x2f => self.state = State::Csi,
-                b'P' | b'_' | b'^' | b'X' => self.state = State::String,
-                b'c' => {
-                    self.state = State::Ground;
-                    return Some(Command::Reset);
-                }
-                0x30..=0x7e => self.state = State::Ground,
-                _ => {}
-            },
+            State::Escape => return self.escape(byte),
             State::Csi => match byte {
                 0x1b => self.state = State::Escape,
                 0x40..=0x7e => self.state = State::Ground,
                 _ => {}
             },
-            State::Osc => match byte {
-                0x07 => return self.finish(3),
-                0x1b => self.state = State::OscEscape,
-                _ if self.bytes.len() < MAX_SEQUENCE => self.bytes.push(byte),
-                _ => self.overflow = true,
-            },
+            State::Osc => return self.osc(byte),
             State::OscEscape if byte == b'\\' => return self.finish(4),
             State::OscEscape => {
                 self.state = State::Escape;
@@ -68,6 +49,35 @@ impl Stream {
                 self.state = if byte == b'\\' { State::Ground } else { State::String };
             }
             _ => {}
+        }
+        None
+    }
+
+    fn escape(&mut self, byte: u8) -> Option<Command<'_>> {
+        match byte {
+            b']' => {
+                self.bytes.clear();
+                self.overflow = false;
+                self.state = State::Osc;
+            }
+            b'[' | 0x20..=0x2f => self.state = State::Csi,
+            b'P' | b'_' | b'^' | b'X' => self.state = State::String,
+            b'c' => {
+                self.state = State::Ground;
+                return Some(Command::Reset);
+            }
+            0x30..=0x7e => self.state = State::Ground,
+            _ => {}
+        }
+        None
+    }
+
+    fn osc(&mut self, byte: u8) -> Option<Command<'_>> {
+        match byte {
+            0x07 => return self.finish(3),
+            0x1b => self.state = State::OscEscape,
+            _ if self.bytes.len() < MAX_SEQUENCE => self.bytes.push(byte),
+            _ => self.overflow = true,
         }
         None
     }

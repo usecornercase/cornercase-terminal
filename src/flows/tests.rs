@@ -29,21 +29,23 @@ mod builtins {
             .collect()
     }
 
+    fn assert_built_ins_valid(installed: &[Known], default: Option<Known>) {
+        let flows = builtin::flows(installed, default).into_iter().chain([builtin::starter(installed, default)]);
+        for flow in flows {
+            let possible = installed.iter().any(|kind| !kind.status_by_folder()) || installed.len() >= flow.agents();
+            let problems = flow.problems();
+            let others: Vec<&String> = problems.iter().filter(|p| !p.contains("cannot tell two")).collect();
+            let what = format!("{} with {installed:?} and {default:?}: {problems:?}", flow.name);
+            assert!(others.is_empty(), "{what}");
+            assert!(!possible || problems.is_empty(), "{what}");
+        }
+    }
+
     #[test]
     fn every_built_in_flow_is_valid_whenever_the_installed_agents_allow_it() {
         for installed in every_set() {
             for default in std::iter::once(None).chain(Known::ALL.map(Some)) {
-                let flows =
-                    builtin::flows(&installed, default).into_iter().chain([builtin::starter(&installed, default)]);
-                for flow in flows {
-                    let possible =
-                        installed.iter().any(|kind| !kind.status_by_folder()) || installed.len() >= flow.agents();
-                    let problems = flow.problems();
-                    let others: Vec<&String> = problems.iter().filter(|p| !p.contains("cannot tell two")).collect();
-                    let what = format!("{} with {installed:?} and {default:?}: {problems:?}", flow.name);
-                    assert!(others.is_empty(), "{what}");
-                    assert!(!possible || problems.is_empty(), "{what}");
-                }
+                assert_built_ins_valid(&installed, default);
             }
         }
     }

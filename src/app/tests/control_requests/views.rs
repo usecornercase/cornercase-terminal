@@ -74,7 +74,7 @@ fn window_pane(app: &App) -> (u16, u16) {
 }
 
 fn snapshots(app: &mut App, client: u64) -> Vec<Value> {
-    app.events.snapshots.every = Duration::ZERO;
+    app.clients.events.snapshots.set_every(Duration::ZERO);
     app.trace();
     app.take_events()
         .into_iter()
@@ -170,6 +170,22 @@ fn a_views_size_has_no_window_chrome_and_other_tabs_keep_the_window_size() {
     assert_eq!(size_of(&app, ids[1]), (100, 30));
     assert_eq!(size_of(&app, ids[2]), window_pane(&app));
     assert_eq!(size_of(&app, ids[0]), window_pane(&app));
+}
+
+#[test]
+fn a_tab_sized_by_a_view_has_no_account_row_while_the_window_s_tabs_do() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let root = TempDir::new();
+    app.set_accounts_dir(root.path());
+    crate::accounts::add(root.path(), crate::agents::Known::Claude, "work", None).expect("add the account");
+    app.relist_accounts();
+    let ids = tabs(&mut app, 2);
+
+    open(&mut app, A, Some((80, 20)), Some(ids[1]));
+    app.resize(AREA);
+
+    let (cols, rows) = window_pane(&app);
+    assert_eq!((size_of(&app, ids[1]), size_of(&app, ids[0])), ((80, 20), (cols, rows - 1)));
 }
 
 #[test]
@@ -448,7 +464,7 @@ fn the_window_draws_a_tab_sized_by_a_view_within_its_own_pane(#[case] cols: u16,
     open(&mut app, A, Some((cols, rows)), Some(tab));
     app.resize(AREA);
     let text: String = (0..cols * 2).map(|i| char::from(b'a' + (i % 26) as u8)).collect();
-    app.handle_event(AppEvent::Output(pane, format!("\x1b[H{text}").into_bytes()), AREA).expect("output");
+    app.handle_event(AppEvent::Output(pane, 0, format!("\x1b[H{text}").into_bytes()), AREA).expect("output");
 
     let (buffer, _) = render_frame(&mut app, AREA, &Sight::default());
 
@@ -487,7 +503,7 @@ fn a_view_change_reaches_the_view_at_once_but_a_watcher_keeps_its_pacing() {
     let tab = app.projects[0].workspaces[0].tabs[0].id;
     let view = open(&mut app, A, Some((60, 12)), Some(tab));
     ok(call(&mut app, 77, None, Command::Watch(wire::Watch::default()), false));
-    app.events.snapshots.every = Duration::from_secs(60);
+    app.clients.events.snapshots.set_every(Duration::from_secs(60));
     app.trace();
     app.take_events();
 

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
@@ -75,44 +76,50 @@ impl Report {
 
     pub fn panes(&self) -> Vec<PaneRow> {
         let projects = self.loose().chain(self.groups.iter().flat_map(|group| self.grouped(group.id)));
-        let mut rows = Vec::new();
-        for project in projects {
-            for workspace in &project.workspaces {
-                for tab in &workspace.tabs {
-                    rows.extend(tab.panes.iter().map(|pane| PaneRow {
-                        pane: pane.id,
-                        tab: tab.id,
-                        workspace: workspace.id,
-                        project: project.id,
-                        program: pane.program.clone(),
-                        agent: pane.agent.clone(),
-                        status: pane.status.clone(),
-                        background_shell: pane.background_shell,
-                        dialog: pane.dialog,
-                        at_prompt: pane.at_prompt,
-                        model: pane.model.clone(),
-                        context: pane.context,
-                        caller: pane.caller,
-                        shown: self.shown.pane == Some(pane.id),
-                        active: pane.active,
-                        tab_name: tab.name.clone(),
-                        workspace_name: workspace.name.clone(),
-                        branch: workspace.branch.clone(),
-                        worktree: workspace.worktree,
-                        project_name: project.name.clone(),
-                        path: pane.path.clone(),
-                        survey: pane.survey,
-                        resuming: pane.resuming,
-                        parent: pane.parent,
-                        subagents: pane.subagents,
-                        role: pane.role.clone(),
-                        held_sends: pane.held_sends,
-                        draft: pane.draft,
-                    }));
-                }
-            }
+        let tabs = projects.flat_map(|project| {
+            project
+                .workspaces
+                .iter()
+                .flat_map(move |workspace| workspace.tabs.iter().map(move |tab| (project, workspace, tab)))
+        });
+        let rows = tabs.flat_map(|(project, workspace, tab)| {
+            tab.panes.iter().map(move |pane| self.pane_row(project, workspace, tab, pane))
+        });
+        rows.collect()
+    }
+
+    fn pane_row(&self, project: &ProjectInfo, workspace: &WorkspaceInfo, tab: &TabInfo, pane: &PaneInfo) -> PaneRow {
+        PaneRow {
+            pane: pane.id,
+            tab: tab.id,
+            workspace: workspace.id,
+            project: project.id,
+            program: pane.program.clone(),
+            agent: pane.agent.clone(),
+            status: pane.status.clone(),
+            background_shell: pane.background_shell,
+            dialog: pane.dialog,
+            at_prompt: pane.at_prompt,
+            model: pane.model.clone(),
+            context: pane.context,
+            caller: pane.caller,
+            shown: self.shown.pane == Some(pane.id),
+            active: pane.active,
+            tab_name: tab.name.clone(),
+            workspace_name: workspace.name.clone(),
+            branch: workspace.branch.clone(),
+            worktree: workspace.worktree,
+            project_name: project.name.clone(),
+            path: pane.path.clone(),
+            survey: pane.survey,
+            resuming: pane.resuming,
+            parent: pane.parent,
+            subagents: pane.subagents,
+            role: pane.role.clone(),
+            held_sends: pane.held_sends,
+            draft: pane.draft,
+            account_restart: pane.account_restart.clone(),
         }
-        rows
     }
 }
 
@@ -154,10 +161,11 @@ pub struct PaneRow {
     pub(crate) role: Option<String>,
     pub(crate) held_sends: u32,
     pub(crate) draft: bool,
+    pub(crate) account_restart: Option<String>,
 }
 
 impl PaneRow {
-    pub const COLUMNS: [&str; 28] = [
+    pub const COLUMNS: [&str; 29] = [
         "pane",
         "tab",
         "workspace",
@@ -186,6 +194,7 @@ impl PaneRow {
         "role",
         "held_sends",
         "draft",
+        "account_restart",
     ];
 }
 
@@ -311,4 +320,8 @@ pub struct PaneInfo {
     pub(crate) collapsed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) account: Option<String>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) accounts: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) account_restart: Option<String>,
 }

@@ -206,19 +206,29 @@ Examples:
   cornercase wait --any --pane 12 --pane 15 --tab 9 --timeout 1800";
 pub(super) const CLOSE_HELP: &str =
     "Its shells stop, as with its ×, but nothing asks first, not even for a project. A worktree's
-workspace stays listed while its worktree exists, and its branch is never deleted.
+workspace stays listed while its worktree exists, and its branch is kept (only --delete-branch,
+with --agent, deletes one).
 --remove-worktree runs the project's teardown first; a teardown that fails is a warning on
 stderr, and the worktree is removed anyway. --check only says what removing it would lose, as the
 window's dialog does (changes that are not committed, a lock and whether its process still runs, the
 worktrees of a flow's roles that go with it, the teardown), and stops nothing. --unlock does what
 the dialog's unlock and remove does; changes still need --force.
+--agent closes the agent in --pane as its close agent in the window does, without asking: its tab
+and the tabs of the agents it started in the same workspace, or, when it works in a git worktree of
+its own (a flow run's too), that workspace and its worktree, with the run's role worktrees. Agents
+it started elsewhere keep running, and a project's own folder is never removed. Git is checked
+first, and changes (--force) or a lock (--unlock) refuse it before anything stops. --delete-branch
+also deletes the branch of each worktree removed, but a branch whose commits are in no remote branch
+needs --force. With --check it only says what would stop, keep running and be lost.
 
 Examples:
   cornercase close --tab 9
   cornercase close --workspace 5 --remove-worktree
   cornercase close --worktree fix/login --remove-worktree
   cornercase close --worktree fix/login --remove-worktree --check
-  cornercase close --worktree fix/login --remove-worktree --unlock";
+  cornercase close --worktree fix/login --remove-worktree --unlock
+  cornercase close --agent --pane 12 --check
+  cornercase close --agent --pane 12 --delete-branch";
 pub(super) const RENAME_HELP: &str = "Examples:
   cornercase rename 'review #42'
   cornercase rename --workspace 5 ''";
@@ -651,7 +661,10 @@ pub(super) const CHANGES_HELP: &str =
 every project with --every, and with --follow keeps printing them as JSON lines each time they change. `file` prints one \
 file's diff, `gap` the unchanged lines before one of its hunks, `base` the branches the Commits and All modes can compare \
 with (naming one sets it, --default goes back to following the default branch), and `viewed` marks a file as viewed or clears \
-the mark. The modes are uncommitted (the default), \
+the mark. `discard` throws a file's uncommitted changes away (a file git does not track is deleted), asks first on a terminal \
+and needs --yes in a script; it cannot be undone. `stage` puts a file's changes in git's index, as `git add` does, and \
+`unstage` takes them out of it; both act on the version `changes file` shows, so a file that changed since is left alone. \
+The modes are uncommitted (the default), \
 commits and all. The base and the viewed marks are shared with the window's changes panel; the mode of a stream is its own.
 
 Examples:
@@ -661,7 +674,10 @@ Examples:
   cornercase changes file src/main.rs --json
   cornercase changes gap src/main.rs --hunk 1
   cornercase changes base origin/main
-  cornercase changes viewed src/main.rs";
+  cornercase changes viewed src/main.rs
+  cornercase changes stage src/main.rs
+  cornercase changes unstage src/main.rs
+  cornercase changes discard src/main.rs --yes";
 
 mod flow;
 
@@ -779,8 +795,11 @@ Examples:
 pub(super) const ACCOUNT_HELP: &str =
     "An account is a folder of its own under cornercase's state folder in which an agent keeps its
 login: CLAUDE_CONFIG_DIR for Claude Code, CODEX_HOME for Codex, GEMINI_CLI_HOME for Gemini CLI.
-Each agent has an account in use for its new tabs: `account use`, or its button in the window,
-changes it, and tabs already open keep theirs. `account rename` gives an account (or the agent's
+Each agent has a default account, which new workspaces, scripts run outside a pane and the queue
+start with: `account use`, or Settings › Accounts in the window, changes it. A new tab or a split
+takes the accounts of the pane it comes from, and panes already open keep theirs until
+`account restart`, or the account button under the pane, restarts them on another, each once its
+turn is over, in the same conversation. `account rename` gives an account (or the agent's
 own login, with --system) the name the window shows; commands always name an account by its
 folder. `start`, `new-tab`, `flow run` and `queue` take --account AGENT=ACCOUNT to start once
 with another. A new account links the settings it shares from the agent's own folder (settings,
@@ -792,17 +811,18 @@ login.
 Examples:
   cornercase account add claude work --login
   cornercase account use claude work
+  cornercase account restart claude --pane 4
   cornercase account rename claude work Work
   cornercase account list
   cornercase start claude --account claude=home --prompt \"fix the tests\"
   cornercase account remove claude work";
 
 pub(super) const PROFILE_HELP: &str =
-    "A profile, for scripts, names which account each agent uses. While a profile is active, new tabs
-and agents use its accounts; tabs already open keep the ones they started with. Choosing an
-account with `account use`, or in the window, leaves the active profile; `profile use --system`
-goes back to each agent's own login. `start`, `new-tab` and `flow run` take --profile to use
-another one once, without changing what is in use.
+    "A profile, for scripts, names which account each agent uses. While a profile is active, it is the
+default: new workspaces and agents use its accounts; panes already open keep the ones they started
+with. Choosing an account with `account use`, or in Settings › Accounts, leaves the active profile;
+`profile use --system` goes back to each agent's own login. `start`, `new-tab` and `flow run` take
+--profile to use another one once, without changing the default.
 
 Examples:
   cornercase profile new Work claude=work codex=work

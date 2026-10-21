@@ -214,7 +214,7 @@ After **schedule** (see [Schedule for later](#schedule-for-later)), **start a fl
 - **GitHub** and **GitLab** issues belong to the project you opened the browser from.
 - **Shortcut**, **Linear**, **Jira**, **Plane** and **Asana** issues aren't tied to a repository, so when more than one place is open, cornercase asks **where…**: every project that is a git repository is offered as *a new worktree*, and the workspaces of other projects as *a new tab*. The place you are in is marked *where you are*.
 
-In a repository, the issue gets its own worktree on a branch named after it:
+In a repository, the issue gets its own worktree on a branch named after it. By default each tracker has its own name:
 
 | Source | Example issue | Branch |
 | --- | --- | --- |
@@ -231,7 +231,31 @@ GitLab branches start with the issue's number and a dash, GitLab's own conventio
 
 The title part is lowercased, accents become plain letters, everything else becomes dashes, and it is cut at a word boundary to at most 40 characters. The workspace is named after the issue's key and title, like `#482 Returns page crashes on empty addr…`.
 
-If a workspace on that branch is already open, cornercase takes you there instead of creating another one, and only starts the agent if the workspace has no tab open. Outside a repository, the agent starts in a new tab of the chosen workspace, and the tab is named after the issue.
+Before the worktree is made, cornercase shows both names, filled in, so you can follow your team's convention for this one issue:
+
+<Screen
+  name="issue-names"
+  alt="Start #482 Returns page crashes on empty address in a new worktree: the branch issue-482-returns-page-crashes-on-empty-address and the workspace #482 Returns page crashes on empty addr…, both editable, with start and back"
+  crop={[2, 4, 106, 9]}
+/>
+
+Edit either, `Tab` moves between them, and `Enter` or **start** goes on; `Enter` straight away keeps the names as they are, `Esc` or **back** goes back to the issue. A name git would refuse (a space, `..`, a `:`…) is pointed out before anything is made. An empty workspace name keeps the issue's.
+
+If the branch already exists, the worktree checks it out; if a workspace on that branch is already open, cornercase takes you there instead of creating another one, and only starts the agent if the workspace has no tab open. Outside a repository, the agent starts in a new tab of the chosen workspace, the tab is named after the issue, and nothing is asked.
+
+#### Your team's branch names
+
+To set the convention once, write a template in **settings → Worktrees → issue branches** ([`issue_branch`](../../reference/configuration/#issue_branch)), such as `feat/{key}-{slug}`. It is what the field starts with, and what [scheduled](#schedule-for-later) issues, [flows](../flows/) started from an issue and the [commands for scripts](../scripts-and-agents/#issues) use:
+
+| Placeholder | Meaning | #482 on GitHub | ENG-123 on Linear |
+| --- | --- | --- | --- |
+| `{key}` | The issue's key, without `#` | `482` | `ENG-123` |
+| `{number}` | Its number: the digits after the key's last dash | `482` | `123` |
+| `{slug}` | Its title, as above | `returns-page-crashes-…` | `returns-page-crashes` |
+| `{source}` | The tracker | `github` | `linear` |
+| `{user}` | Your git `user.name`, slugged | `ana-garcia` | `ana-garcia` |
+
+The template needs `{key}` or `{number}`, so each issue gets a branch of its own. What it makes is cleaned into a name git takes: spaces and other characters become dashes, and an empty part (a `{user}` git does not know) is dropped. Empty keeps each tracker's own name. `{user}` comes from the repository's git config, else `~/.gitconfig` or `~/.config/git/config`. GitLab closes an issue by itself only from a merge request whose branch starts with the issue's number and a dash, so the setting warns when a template does not start with `{number}-` (or `{key}-`, which is the same on GitLab).
 
 ### Which agent
 
@@ -248,7 +272,7 @@ cornercase picks the agent in this order:
   crop={[2, 4, 106, 21]}
 />
 
-When you pick an agent that isn't your default, a **make default** button appears so you can keep that choice. Once you have [accounts](../accounts/) of the chosen agent, **start** (or `Enter`) first asks which account it starts with, with the one in use selected, so `Enter` again keeps it; **account…** on the issue's page chooses it ahead. Neither changes the account in use; **start a flow** passes it on. An account removed before you click **start** stops the start and says so. How each agent starts (its permission mode and extra arguments) is set in **settings → Agents**; see [Agents](../../reference/agents/).
+When you pick an agent that isn't your default, a **make default** button appears so you can keep that choice. Once you have [accounts](../accounts/) of the chosen agent, **start** (or `Enter`) first asks which account it starts with, with the default selected, so `Enter` again keeps it; **account…** on the issue's page chooses it ahead. Neither changes the default account; **start a flow** passes it on. An account removed before you click **start** stops the start and says so. How each agent starts (its permission mode and extra arguments) is set in **settings → Agents**; see [Agents](../../reference/agents/).
 
 ### The launch
 

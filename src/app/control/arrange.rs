@@ -59,17 +59,10 @@ impl App {
                 self.projects.project_index(id).ok_or_else(|| none("project", id))?;
                 Target::Project(id)
             }
-            Some(Item::Workspace(id)) => {
-                let (p, _) = self.usable_workspace(id)?;
-                Target::Workspace(self.projects[p].id, id)
-            }
-            Some(Item::Tab(id)) => self.tab_target(self.projects.tab_index(id)).ok_or_else(|| none("tab", id))?,
-            Some(Item::Pane(id)) => self.tab_target(self.projects.tab_of_pane(id)).ok_or_else(|| none("pane", id))?,
-            None => {
-                let here = self.here(asker);
-                let found = here.project.zip(here.workspace).zip(here.tab).map(|((p, w), t)| (p, w, t));
-                self.tab_target(found).ok_or("no tab is open here; pass --tab")?
-            }
+            Some(Item::Workspace(id)) => self.workspace_target(self.usable_workspace(id)?),
+            Some(Item::Tab(id)) => self.tab_target(self.projects.tab_index(id).ok_or_else(|| none("tab", id))?),
+            Some(Item::Pane(id)) => self.tab_target(self.projects.tab_of_pane(id).ok_or_else(|| none("pane", id))?),
+            None => self.tab_target(self.here(asker).tab.ok_or("no tab is open here; pass --tab")?),
         };
         let name = name_of(Some(rename.name));
         if matches!(target, Target::Group(_)) && name.is_none() {
@@ -79,102 +72,103 @@ impl App {
         Ok(Some(json(&Done::default())))
     }
 
-    pub(in crate::app) fn tab_target(&self, found: Option<(usize, usize, usize)>) -> Option<Target> {
-        let (p, w, t) = found?;
-        let project = &self.projects[p];
-        let workspace = &project.workspaces[w];
-        Some(Target::Tab(project.id, workspace.id, workspace.tabs[t].id))
-    }
-
     pub(super) fn notify_request(&mut self, text: &str) -> Handled {
         let message = notify::clean(text).trim().to_string();
         if message.is_empty() {
             return Err("the notification needs a text".into());
         }
-        self.outbox.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
-        self.toast = Some(Toast::new(message, ui::ToastIcon::Check));
+        self.outbox.notify(Notification::new(&message, &self.config.desktop_notifications));
+        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Check));
         Ok(Some(json(&Done::default())))
     }
 
     pub(super) fn todo_request(&mut self, todo: control::Todo) -> Handled {
-        let done = match todo {
-            control::Todo::Add(text) => {
-                Done { todo: Some(self.todos.add(&text).ok_or("the todo needs a text")?), ..Done::default() }
-            }
-            control::Todo::List => return Ok(Some(json(&TodoList { todos: self.todo_items(), undo: None }))),
-            control::Todo::Done(id) => {
-                self.todos.item(id).ok_or_else(|| none("todo", id))?;
-                self.todos.toggle(id);
-                Done::default()
-            }
-            control::Todo::Undone(id) => {
-                if self.todos.item(id).ok_or_else(|| none("todo", id))?.done {
-                    self.todos.toggle(id);
-                }
-                Done::default()
-            }
-            control::Todo::Edit { id, text } => {
-                self.todos.item(id).ok_or_else(|| none("todo", id))?;
-                if !self.todos.edit(id, &text) {
-                    return Err("the todo needs a text".into());
-                }
-                if self.todo.field.as_ref().is_some_and(|field| field.item == Some(id)) {
-                    self.todo.field = None;
-                }
-                Done::default()
-            }
-            control::Todo::Move { id, before } => {
-                self.todos.item(id).ok_or_else(|| none("todo", id))?;
-                if let Some(before) = before {
-                    self.todos.item(before).ok_or_else(|| none("todo", before))?;
-                    if before == id {
-                        return Err(malformed(format!("todo {id} cannot move before itself")));
-                    }
-                }
-                self.todos.move_to(id, before);
-                Done::default()
-            }
+        match todo {
+            control::Todo::Add(text) => self.todo_added(&text),
+            control::Todo::List => Ok(Some(json(&TodoList { todos: self.todo_items(), undo: None }))),
+            control::Todo::Done(id) => self.todo_toggled(id, false),
+            control::Todo::Undone(id) => self.todo_toggled(id, true),
+            control::Todo::Edit { id, text } => self.todo_edited(id, &text),
+            control::Todo::Move { id, before } => self.todo_moved(id, before),
             control::Todo::Rm(id) => {
-                let removed = self.todos.remove(id).ok_or_else(|| none("todo", id))?;
-                return Ok(Some(json(&self.removed_by_request(removed))));
+                let removed = self.panels.todos.remove(id).ok_or_else(|| none("todo", id))?;
+                Ok(Some(json(&self.removed_by_request(removed))))
             }
             control::Todo::ClearDone => {
-                let list = match self.todos.clear_done() {
-                    Some(removed) => self.removed_by_request(removed),
-                    None => TodoList::default(),
-                };
-                return Ok(Some(json(&list)));
+                let list = self
+                    .panels
+                    .todos
+                    .clear_done()
+                    .map_or_else(TodoList::default, |removed| self.removed_by_request(removed));
+                Ok(Some(json(&list)))
             }
-            control::Todo::Restore(undo) => {
-                let removed = self.todo.undos.take(undo).ok_or_else(|| {
-                    Refusal::new(
-                        Code::NotFound,
-                        format!(
-                            "there is no removal {undo} to undo: it was undone already, or is older than the last {}",
-                            crate::todo::UNDOS
-                        ),
-                    )
-                })?;
-                let todos = removed.items().map(todo_item).collect();
-                self.todos.restore(removed);
-                return Ok(Some(json(&TodoList { todos, undo: None })));
+            control::Todo::Restore(undo) => self.todo_restored(undo),
+        }
+    }
+
+    fn todo_added(&mut self, text: &str) -> Handled {
+        let id = self.panels.todos.add(text).ok_or("the todo needs a text")?;
+        Ok(Some(json(&Done { todo: Some(id), ..Done::default() })))
+    }
+
+    fn todo_toggled(&mut self, id: u64, only_if_done: bool) -> Handled {
+        let done = self.panels.todos.item(id).ok_or_else(|| none("todo", id))?.done;
+        if !only_if_done || done {
+            self.panels.todos.toggle(id);
+        }
+        Ok(Some(json(&Done::default())))
+    }
+
+    fn todo_edited(&mut self, id: u64, text: &str) -> Handled {
+        self.panels.todos.item(id).ok_or_else(|| none("todo", id))?;
+        if !self.panels.todos.edit(id, text) {
+            return Err("the todo needs a text".into());
+        }
+        if self.panels.todo.field().is_some_and(|field| field.item == Some(id)) {
+            self.panels.todo.cancel();
+        }
+        Ok(Some(json(&Done::default())))
+    }
+
+    fn todo_moved(&mut self, id: u64, before: Option<u64>) -> Handled {
+        self.panels.todos.item(id).ok_or_else(|| none("todo", id))?;
+        if let Some(before) = before {
+            self.panels.todos.item(before).ok_or_else(|| none("todo", before))?;
+            if before == id {
+                return Err(malformed(format!("todo {id} cannot move before itself")));
             }
-        };
-        Ok(Some(json(&done)))
+        }
+        self.panels.todos.move_to(id, before);
+        Ok(Some(json(&Done::default())))
+    }
+
+    fn todo_restored(&mut self, undo: u64) -> Handled {
+        let removed = self.panels.todo.take_removed(undo).ok_or_else(|| {
+            Refusal::new(
+                Code::NotFound,
+                format!(
+                    "there is no removal {undo} to undo: it was undone already, or is older than the last {}",
+                    crate::todo::UNDOS
+                ),
+            )
+        })?;
+        let todos = removed.items().map(todo_item).collect();
+        self.panels.todos.restore(removed);
+        Ok(Some(json(&TodoList { todos, undo: None })))
     }
 
     pub(in crate::app) fn todo_items(&self) -> Vec<TodoItem> {
-        self.todos.items().iter().map(todo_item).collect()
+        self.panels.todos.items().iter().map(todo_item).collect()
     }
 
     fn removed_by_request(&mut self, removed: crate::todo::Removed) -> TodoList {
         let todos = removed.items().map(todo_item).collect();
-        if let Some(field) = &self.todo.field
+        if let Some(field) = self.panels.todo.field()
             && field.item.is_some_and(|open| removed.items().any(|item| item.id == open))
         {
-            self.todo.field = None;
+            self.panels.todo.cancel();
         }
-        let undo = self.todo.undos.keep(removed);
+        let undo = self.panels.todo.keep_removed(removed);
         TodoList { todos, undo: Some(undo) }
     }
 
@@ -185,11 +179,11 @@ impl App {
         todo: &control::TodoSend,
         now: Instant,
     ) -> Handled {
-        let item = self.todos.item(todo.id).ok_or_else(|| none("todo", todo.id))?;
+        let item = self.panels.todos.item(todo.id).ok_or_else(|| none("todo", todo.id))?;
         if item.done {
             return Err(format!("todo {} is already done, so it is not sent; uncheck it first", todo.id).into());
         }
-        if self.requests.todo_sends.values().any(|sending| sending.todo == todo.id) {
+        if self.clients.requests.todo_sends.values().any(|sending| sending.todo == todo.id) {
             return Err(format!("todo {} is already being sent; wait for its answer", todo.id).into());
         }
         let pane = self.target(asker, todo.pane, todo.tab)?;
@@ -207,14 +201,14 @@ impl App {
             force: todo.force,
             ..control::SendText::default()
         };
-        self.requests.todo_sends.insert(client, super::Sending { todo: todo.id, text, confirmed });
+        self.clients.requests.todo_sends.insert(client, super::Sending { todo: todo.id, text, confirmed });
         self.send_request(client, asker, send, now)
     }
 
     pub(in crate::app) fn send_todo(&mut self, client: u64, todo: u64, pane: u64, now: Instant) {
         let command = Command::TodoSend(control::TodoSend { id: todo, pane: Some(pane), ..Default::default() });
         let request = Request { caller: None, server: None, contract: None, boot: None, view: None, command };
-        self.run_request(client, Ok(request), 0, None, now);
+        self.run_request(client, Ok(request), None, now);
     }
 }
 
@@ -277,38 +271,39 @@ impl App {
     }
 
     fn move_workspace_request(&mut self, id: u64, before: Option<u64>) -> Result<(), Refusal> {
-        let (p, w) = self.usable_workspace(id)?;
+        let at = self.usable_workspace(id)?;
+        let p = at.project();
         let to = match before {
             Some(before) => {
-                let (other, v) = self.projects.workspace_index(before).ok_or_else(|| none("workspace", before))?;
-                if other != p {
+                let other = self.projects.workspace_index(before).ok_or_else(|| none("workspace", before))?;
+                if other.project() != p {
                     return Err(conflict(format!(
                         "workspace {before} is in another project: a workspace moves only among its project's"
                     )));
                 }
-                v
+                other.index()
             }
             None => self.projects[p].workspaces.len(),
         };
-        self.move_workspace(p, w, to);
+        self.move_workspace(p, at.index(), to);
         Ok(())
     }
 
     fn move_tab_request(&mut self, id: u64, before: Option<u64>) -> Result<(), Refusal> {
-        let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
+        let at = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
         let to = match before {
             Some(before) => {
-                let (op, ow, u) = self.projects.tab_index(before).ok_or_else(|| none("tab", before))?;
-                if (op, ow) != (p, w) {
+                let other = self.projects.tab_index(before).ok_or_else(|| none("tab", before))?;
+                if other.workspace() != at.workspace() {
                     return Err(conflict(format!(
                         "tab {before} is in another workspace: a tab moves only among its workspace's"
                     )));
                 }
-                u
+                other.index()
             }
-            None => self.projects[p].workspaces[w].tabs.len(),
+            None => self.projects.workspace(at.workspace()).tabs.len(),
         };
-        self.move_tab(p, w, t, to);
+        self.move_tab(at, to);
         Ok(())
     }
 
@@ -322,10 +317,7 @@ impl App {
                 self.projects.project_index(id).ok_or_else(|| none("project", id))?;
                 Target::Project(id)
             }
-            Item::Workspace(id) => {
-                let (p, _) = self.usable_workspace(id)?;
-                Target::Workspace(self.projects[p].id, id)
-            }
+            Item::Workspace(id) => self.workspace_target(self.usable_workspace(id)?),
             Item::Pane(id) => {
                 let term = self.projects.pane_by(id).ok_or_else(|| none("pane", id))?;
                 if term.agent.status().is_none() {
@@ -400,15 +392,14 @@ impl App {
         if pane == target {
             return Err(malformed("a pane cannot move onto itself"));
         }
-        let (p, w, t) = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
-        let (op, ow, ot) = self.projects.tab_of_pane(target).ok_or_else(|| none("pane", target))?;
-        if (p, w, t) != (op, ow, ot) {
+        let at = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
+        if self.projects.tab_of_pane(target).ok_or_else(|| none("pane", target))? != at {
             return Err(conflict(format!("pane {target} is in another tab: a pane moves within its tab")));
         }
         let window = sized(area)?;
-        let tab_id = self.projects[p].workspaces[w].tabs[t].id;
+        let tab_id = self.projects.tab(at).id;
         let room = self.tab_area(tab_id, window);
-        let tab = &mut self.projects[p].workspaces[w].tabs[t];
+        let tab = self.projects.tab_mut(at);
         let layout = tab.rearranged(room, pane, target, place.into()).ok_or_else(|| {
             conflict(format!(
                 "tab {tab_id} has no room for every pane after that move ({}×{})",

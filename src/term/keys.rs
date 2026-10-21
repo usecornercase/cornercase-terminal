@@ -162,39 +162,50 @@ fn ghostty_key(code: KeyCode) -> Option<key::Key> {
     })
 }
 
+const LETTERS: [key::Key; 26] = [
+    key::Key::A,
+    key::Key::B,
+    key::Key::C,
+    key::Key::D,
+    key::Key::E,
+    key::Key::F,
+    key::Key::G,
+    key::Key::H,
+    key::Key::I,
+    key::Key::J,
+    key::Key::K,
+    key::Key::L,
+    key::Key::M,
+    key::Key::N,
+    key::Key::O,
+    key::Key::P,
+    key::Key::Q,
+    key::Key::R,
+    key::Key::S,
+    key::Key::T,
+    key::Key::U,
+    key::Key::V,
+    key::Key::W,
+    key::Key::X,
+    key::Key::Y,
+    key::Key::Z,
+];
+
+const DIGITS: [key::Key; 10] = [
+    key::Key::Digit0,
+    key::Key::Digit1,
+    key::Key::Digit2,
+    key::Key::Digit3,
+    key::Key::Digit4,
+    key::Key::Digit5,
+    key::Key::Digit6,
+    key::Key::Digit7,
+    key::Key::Digit8,
+    key::Key::Digit9,
+];
+
 fn char_key(c: char) -> Option<key::Key> {
     use key::Key as G;
-
-    const LETTERS: [key::Key; 26] = [
-        G::A,
-        G::B,
-        G::C,
-        G::D,
-        G::E,
-        G::F,
-        G::G,
-        G::H,
-        G::I,
-        G::J,
-        G::K,
-        G::L,
-        G::M,
-        G::N,
-        G::O,
-        G::P,
-        G::Q,
-        G::R,
-        G::S,
-        G::T,
-        G::U,
-        G::V,
-        G::W,
-        G::X,
-        G::Y,
-        G::Z,
-    ];
-    const DIGITS: [key::Key; 10] =
-        [G::Digit0, G::Digit1, G::Digit2, G::Digit3, G::Digit4, G::Digit5, G::Digit6, G::Digit7, G::Digit8, G::Digit9];
 
     Some(match c {
         'a'..='z' => LETTERS[usize::from(c as u8 - b'a')],
@@ -243,26 +254,44 @@ fn unshifted(c: char) -> char {
     }
 }
 
+struct Legacy {
+    param: u8,
+    app_cursor: bool,
+}
+
+impl Legacy {
+    fn modified(&self) -> bool {
+        self.param > 1
+    }
+
+    fn cursor_key(&self, c: char) -> Vec<u8> {
+        let param = self.param;
+        if self.modified() {
+            format!("\x1b[1;{param}{c}").into_bytes()
+        } else if self.app_cursor {
+            format!("\x1bO{c}").into_bytes()
+        } else {
+            format!("\x1b[{c}").into_bytes()
+        }
+    }
+
+    fn tilde_key(&self, n: u8) -> Vec<u8> {
+        let param = self.param;
+        if self.modified() { format!("\x1b[{n};{param}~").into_bytes() } else { format!("\x1b[{n}~").into_bytes() }
+    }
+
+    fn function_key(&self, n: u8) -> Vec<u8> {
+        let (param, c) = (self.param, char::from(b'P' + n - 1));
+        if self.modified() { format!("\x1b[1;{param}{c}").into_bytes() } else { format!("\x1bO{c}").into_bytes() }
+    }
+}
+
 fn legacy(key: KeyEvent, app_cursor: bool) -> Vec<u8> {
     let mods = key.modifiers;
     let ctrl = mods.contains(KeyModifiers::CONTROL);
     let alt = mods.contains(KeyModifiers::ALT);
     let shift = mods.contains(KeyModifiers::SHIFT);
-    let modifier_param = 1 + u8::from(shift) + u8::from(alt) * 2 + u8::from(ctrl) * 4;
-    let modified = modifier_param > 1;
-
-    let cursor_key = |c: char| -> Vec<u8> {
-        if modified {
-            format!("\x1b[1;{modifier_param}{c}").into_bytes()
-        } else if app_cursor {
-            format!("\x1bO{c}").into_bytes()
-        } else {
-            format!("\x1b[{c}").into_bytes()
-        }
-    };
-    let tilde_key = |n: u8| -> Vec<u8> {
-        if modified { format!("\x1b[{n};{modifier_param}~").into_bytes() } else { format!("\x1b[{n}~").into_bytes() }
-    };
+    let keys = Legacy { param: 1 + u8::from(shift) + u8::from(alt) * 2 + u8::from(ctrl) * 4, app_cursor };
 
     let mut out = match key.code {
         KeyCode::Char(c) if ctrl => ctrl_char(c),
@@ -272,23 +301,20 @@ fn legacy(key: KeyEvent, app_cursor: bool) -> Vec<u8> {
         KeyCode::BackTab => b"\x1b[Z".to_vec(),
         KeyCode::Backspace => vec![0x7f],
         KeyCode::Esc => vec![0x1b],
-        KeyCode::Up => cursor_key('A'),
-        KeyCode::Down => cursor_key('B'),
-        KeyCode::Right => cursor_key('C'),
-        KeyCode::Left => cursor_key('D'),
-        KeyCode::Home => cursor_key('H'),
-        KeyCode::End => cursor_key('F'),
-        KeyCode::Insert => tilde_key(2),
-        KeyCode::Delete => tilde_key(3),
-        KeyCode::PageUp => tilde_key(5),
-        KeyCode::PageDown => tilde_key(6),
-        KeyCode::F(n @ 1..=4) => {
-            let c = char::from(b'P' + n - 1);
-            if modified { format!("\x1b[1;{modifier_param}{c}").into_bytes() } else { format!("\x1bO{c}").into_bytes() }
-        }
-        KeyCode::F(5) => tilde_key(15),
-        KeyCode::F(n @ 6..=10) => tilde_key(n + 11),
-        KeyCode::F(n @ 11..=12) => tilde_key(n + 12),
+        KeyCode::Up => keys.cursor_key('A'),
+        KeyCode::Down => keys.cursor_key('B'),
+        KeyCode::Right => keys.cursor_key('C'),
+        KeyCode::Left => keys.cursor_key('D'),
+        KeyCode::Home => keys.cursor_key('H'),
+        KeyCode::End => keys.cursor_key('F'),
+        KeyCode::Insert => keys.tilde_key(2),
+        KeyCode::Delete => keys.tilde_key(3),
+        KeyCode::PageUp => keys.tilde_key(5),
+        KeyCode::PageDown => keys.tilde_key(6),
+        KeyCode::F(n @ 1..=4) => keys.function_key(n),
+        KeyCode::F(5) => keys.tilde_key(15),
+        KeyCode::F(n @ 6..=10) => keys.tilde_key(n + 11),
+        KeyCode::F(n @ 11..=12) => keys.tilde_key(n + 12),
         _ => vec![],
     };
 

@@ -132,42 +132,46 @@ impl<E: From<(Via, Event)>> Listener<E> {
     fn listen(&mut self, stop: &AtomicBool) {
         while !stop.load(Ordering::Relaxed) {
             let end = panics::job(|| Ok(self.connect_and_run(stop))).unwrap_or_else(|e| End::Failed(e.to_string()));
-            match end {
-                End::Stopped => return,
-                End::Rejected => {
-                    log::warning!("discord", "token refused", link = self.id);
-                    let _ = self.tell(Event::Rejected(self.id));
-                    return;
-                }
-                End::Fatal(why) => {
-                    log::warning!("discord", "gateway refused", link = self.id, error = why);
-                    let _ = self.tell(Event::Problem(self.id, Some(why)));
-                    return;
-                }
-                End::Resume => {}
-                End::Anew => {
-                    self.session = None;
-                    self.seq = None;
-                    nap(stop, ANEW);
-                }
-                End::Failed(why) => {
-                    self.failed += 1;
-                    if self.failed.is_power_of_two() {
-                        log::warning!(
-                            "discord",
-                            "cannot read messages",
-                            link = self.id,
-                            failed = self.failed,
-                            error = why
-                        );
-                    }
-                    if !self.tell(Event::Problem(self.id, Some(why))) {
-                        return;
-                    }
-                    nap(stop, backoff(self.failed));
-                }
+            if !self.settle(end, stop) {
+                return;
             }
         }
+    }
+
+    fn settle(&mut self, end: End, stop: &AtomicBool) -> bool {
+        match end {
+            End::Stopped => return false,
+            End::Rejected => {
+                log::warning!("discord", "token refused", link = self.id);
+                let _ = self.tell(Event::Rejected(self.id));
+                return false;
+            }
+            End::Fatal(why) => {
+                log::warning!("discord", "gateway refused", link = self.id, error = why);
+                let _ = self.tell(Event::Problem(self.id, Some(why)));
+                return false;
+            }
+            End::Resume => {}
+            End::Anew => {
+                self.session = None;
+                self.seq = None;
+                nap(stop, ANEW);
+            }
+            End::Failed(why) => return self.fail(why, stop),
+        }
+        true
+    }
+
+    fn fail(&mut self, why: String, stop: &AtomicBool) -> bool {
+        self.failed += 1;
+        if self.failed.is_power_of_two() {
+            log::warning!("discord", "cannot read messages", link = self.id, failed = self.failed, error = why);
+        }
+        if !self.tell(Event::Problem(self.id, Some(why))) {
+            return false;
+        }
+        nap(stop, backoff(self.failed));
+        true
     }
 
     fn connect_and_run(&mut self, stop: &AtomicBool) -> End {
@@ -203,30 +207,38 @@ impl<E: From<(Via, Event)>> Listener<E> {
             if stop.load(Ordering::Relaxed) {
                 return End::Stopped;
             }
-            if let Some(every) = beat.every
-                && Instant::now() >= beat.at
-            {
-                if !beat.acked {
-                    return End::Failed("the Discord gateway stopped answering".into());
-                }
-                if let Err(why) = send(socket, &json!({ "op": 1, "d": self.seq })) {
-                    return End::Failed(why);
-                }
-                beat.acked = false;
-                beat.at = Instant::now() + every;
+            if let Some(end) = self.heartbeat(socket, &mut beat) {
+                return end;
             }
-            match socket.read() {
-                Ok(Message::Text(text)) => {
-                    let payload: Value = serde_json::from_str(text.as_str()).unwrap_or(Value::Null);
-                    if let Some(end) = self.payload(socket, url, &payload, &mut beat) {
-                        return end;
-                    }
-                }
-                Ok(Message::Close(frame)) => return closed(frame.map(|frame| u16::from(frame.code))),
-                Ok(_) => {}
-                Err(e) if waiting(&e) => {}
-                Err(e) => return End::Failed(format!("the Discord gateway failed: {e}")),
+            if let Some(end) = self.read(socket, url, &mut beat) {
+                return end;
             }
+        }
+    }
+
+    fn heartbeat(&self, socket: &mut Socket, beat: &mut Beat) -> Option<End> {
+        let every = beat.every.filter(|_| Instant::now() >= beat.at)?;
+        if !beat.acked {
+            return Some(End::Failed("the Discord gateway stopped answering".into()));
+        }
+        if let Err(why) = send(socket, &json!({ "op": 1, "d": self.seq })) {
+            return Some(End::Failed(why));
+        }
+        beat.acked = false;
+        beat.at = Instant::now() + every;
+        None
+    }
+
+    fn read(&mut self, socket: &mut Socket, url: &str, beat: &mut Beat) -> Option<End> {
+        match socket.read() {
+            Ok(Message::Text(text)) => {
+                let payload: Value = serde_json::from_str(text.as_str()).unwrap_or(Value::Null);
+                self.payload(socket, url, &payload, beat)
+            }
+            Ok(Message::Close(frame)) => Some(closed(frame.map(|frame| u16::from(frame.code)))),
+            Ok(_) => None,
+            Err(e) if waiting(&e) => None,
+            Err(e) => Some(End::Failed(format!("the Discord gateway failed: {e}"))),
         }
     }
 

@@ -5,8 +5,8 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
 use super::flows::{
-    MAX_WARNINGS, beside, draw_buttons, draw_hint, draw_preview, draw_text, draw_warnings, flows_area, flows_wide,
-    text_inside,
+    MAX_WARNINGS, Previewed, beside, draw_buttons, draw_hint, draw_preview, draw_text, draw_warnings, flows_area,
+    flows_wide, text_inside,
 };
 use super::issues::issue_buttons_in;
 use super::{INPUT_PROMPT, Note, draw_input, form_inner, pick_background};
@@ -31,26 +31,32 @@ pub(crate) struct Shape {
     pub(crate) diagram: bool,
     pub(crate) lines: usize,
     pub(crate) accounts: usize,
+    pub(crate) workspace: bool,
 }
 
 impl Shape {
     pub(crate) fn new(items: usize, warnings: usize, preview: bool, diagram: bool) -> Self {
-        Self { warnings, preview, diagram, lines: 1 + 2 * items, accounts: 0 }
+        Self { warnings, preview, diagram, lines: 1 + 2 * items, accounts: 0, workspace: false }
     }
 
     pub(crate) fn with_accounts(self, accounts: usize) -> Self {
         Self { accounts, ..self }
     }
+
+    pub(crate) fn with_workspace(self, workspace: bool) -> Self {
+        Self { workspace, ..self }
+    }
 }
 
-fn start_rows(area: Rect, shape: Shape) -> [Rect; 9] {
+fn start_rows(area: Rect, shape: Shape) -> [Rect; 10] {
     let shown = u16::try_from(shape.warnings.min(MAX_WARNINGS)).unwrap_or(0);
-    let [heading, _, body, _, branch, accounts, warnings, note, buttons] = Layout::vertical([
+    let [heading, _, body, _, branch, workspace, accounts, warnings, note, buttons] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Fill(1),
         Constraint::Length(1),
         Constraint::Length(1),
+        Constraint::Length(u16::from(shape.workspace)),
         Constraint::Length(u16::try_from(shape.accounts).unwrap_or(u16::MAX)),
         Constraint::Length(shown),
         Constraint::Length(1),
@@ -64,7 +70,7 @@ fn start_rows(area: Rect, shape: Shape) -> [Rect; 9] {
     let on_top = shape.preview && shape.diagram && !flows_wide(area);
     let lines = u16::try_from(shape.lines).unwrap_or(u16::MAX).min(most.height);
     let [top, _, label, prompt] = if on_top { split(Constraint::Fill(2)) } else { split(Constraint::Length(lines)) };
-    [heading, top, label, prompt, branch, accounts, warnings, note, buttons]
+    [heading, top, label, prompt, branch, workspace, accounts, warnings, note, buttons]
 }
 
 fn columns(area: Rect, shape: Shape) -> (Rect, Option<Rect>) {
@@ -104,12 +110,16 @@ pub(crate) fn start_branch(area: Rect, shape: Shape) -> Rect {
     start_rows(area, shape)[4]
 }
 
+pub(crate) fn start_workspace(area: Rect, shape: Shape) -> Rect {
+    start_rows(area, shape)[5]
+}
+
 pub(crate) fn start_buttons(area: Rect, shape: Shape, labels: &[&str]) -> Vec<Rect> {
-    issue_buttons_in(start_rows(area, shape)[8], labels)
+    issue_buttons_in(start_rows(area, shape)[9], labels)
 }
 
 fn account_row(area: Rect, shape: Shape, n: usize) -> Rect {
-    let rows = start_rows(area, shape)[5];
+    let rows = start_rows(area, shape)[6];
     let y = rows.y.saturating_add(u16::try_from(n).unwrap_or(u16::MAX));
     Rect { y, height: 1, ..rows }.intersection(rows)
 }
@@ -139,6 +149,7 @@ pub(crate) struct StartFlow {
     pub(crate) preview_scroll: u16,
     pub(crate) prompt: Editor,
     pub(crate) branch: String,
+    pub(crate) workspace: Option<String>,
     pub(crate) focus: Focus,
     pub(crate) warnings: Vec<String>,
     pub(crate) note: Option<Note>,
@@ -154,6 +165,7 @@ impl StartFlow {
     pub(crate) fn shape(&self) -> Shape {
         Shape::new(self.items.len(), self.warnings.len(), self.preview.is_some(), self.diagram)
             .with_accounts(self.accounts.len())
+            .with_workspace(self.workspace.is_some())
     }
 
     fn list_hidden(&self, area: Rect) -> bool {
@@ -174,6 +186,7 @@ pub(crate) enum StartHit {
     Row(usize),
     Prompt { line: usize, col: usize },
     Branch,
+    Workspace,
     Account(usize),
     Choose(usize),
     Close,
@@ -199,6 +212,9 @@ pub(crate) fn start_hit(area: Rect, view: &StartFlow, pos: Position) -> Option<S
     }
     if start_branch(area, shape).contains(pos) {
         return Some(StartHit::Branch);
+    }
+    if shape.workspace && start_workspace(area, shape).contains(pos) {
+        return Some(StartHit::Workspace);
     }
     if view.list_hidden(area) {
         return None;
@@ -259,38 +275,24 @@ fn draw_items(f: &mut Frame, view: &View, list: Rect, start: &StartFlow) {
     }
 }
 
-pub(in crate::ui) fn draw_start_flow(f: &mut Frame, view: &View, start: &StartFlow) {
-    let area = f.area();
-    let r = flows_area(area);
-    f.render_widget(Clear, r);
-    f.render_widget(overlay_block(view.muted, &start.title), r);
+fn draw_start_prompt(f: &mut Frame, view: &View, start: &StartFlow, area: Rect) -> Option<Position> {
     let shape = start.shape();
-    let [heading, _, _, _, branch, _, warning_rows, note, _] = start_rows(area, shape);
     let (label, prompt) = (prompt_label(area, shape), prompt_area(area, shape));
     let dim = Style::default().fg(view.muted);
-    let heading_text = truncate_right(&start.heading, usize::from(heading.width));
-    f.render_widget(Paragraph::new(Span::styled(heading_text, dim.add_modifier(Modifier::BOLD))), heading);
-    if let Some(preview) = start.preview_area(area) {
-        draw_preview(f, view, preview, start.preview.as_ref(), start.preview_scroll, None);
-    }
-    if !start.list_hidden(area) {
-        draw_items(f, view, start.list(area), start);
-    }
-    let lit = |focus: Focus| if start.focus == focus { Style::default().fg(Color::Cyan) } else { dim };
-    f.render_widget(Paragraph::new(Span::styled("prompt", lit(Focus::Prompt))), label);
-    let mut cursor = draw_text(f, view, prompt, &start.prompt).filter(|_| start.focus == Focus::Prompt);
+    let lit = if start.focus == Focus::Prompt { Style::default().fg(Color::Cyan) } else { dim };
+    f.render_widget(Paragraph::new(Span::styled("prompt", lit)), label);
+    let cursor = draw_text(f, view, prompt, &start.prompt).filter(|_| start.focus == Focus::Prompt);
     if start.prompt.is_empty() {
         let at = text_inside(prompt);
         let placeholder = truncate_right(PLACEHOLDER, usize::from(at.width));
         f.render_widget(Paragraph::new(Span::styled(placeholder, dim.bg(view.surface()))), Rect { height: 1, ..at });
     }
-    let typed = draw_input(f, view.muted, branch, "branch:", &start.branch);
-    if start.focus == Focus::Branch {
-        cursor = typed;
-    }
-    draw_warnings(f, &start.warnings, warning_rows);
-    draw_hint(f, view, start.note.as_ref(), &start.hint, note);
-    draw_buttons(f, view, &start_buttons(area, shape, &start.buttons), &start.buttons, START);
+    cursor
+}
+
+fn draw_start_accounts(f: &mut Frame, view: &View, start: &StartFlow, area: Rect) -> bool {
+    let shape = start.shape();
+    let dim = Style::default().fg(view.muted);
     for (n, field) in start.accounts.iter().enumerate() {
         let focused = start.focused_account == Some(n);
         let name = format!("{:<ACCOUNT_LABEL$}", format!("{} account:", field.kind));
@@ -298,10 +300,52 @@ pub(in crate::ui) fn draw_start_flow(f: &mut Frame, view: &View, start: &StartFl
         let label =
             Line::from(vec![Span::styled(INPUT_PROMPT, Style::default().fg(Color::Cyan)), Span::styled(name, lit)]);
         f.render_widget(Paragraph::new(label), account_row(area, shape, n));
-        combo::draw_field(f, view, start_account(area, shape, n), &field.combo, "", focused);
-        if focused {
-            cursor = None;
+        let at = start_account(area, shape, n);
+        combo::draw_field(f, view, at, combo::Field { combo: &field.combo, placeholder: "", focused });
+    }
+    start.focused_account.is_some_and(|n| n < start.accounts.len())
+}
+
+fn draw_start_names(f: &mut Frame, view: &View, start: &StartFlow, [branch, workspace]: [Rect; 2]) -> Option<Position> {
+    let label = if start.workspace.is_some() { "branch:   " } else { "branch:" };
+    let mut cursor = draw_input(f, view.muted, branch, label, &start.branch).filter(|_| start.focus == Focus::Branch);
+    if let Some(name) = &start.workspace {
+        let typed = draw_input(f, view.muted, workspace, "workspace:", name);
+        if start.focus == Focus::Workspace {
+            cursor = typed;
         }
+    }
+    cursor
+}
+
+pub(in crate::ui) fn draw_start_flow(f: &mut Frame, view: &View, start: &StartFlow) {
+    let area = f.area();
+    let r = flows_area(area);
+    f.render_widget(Clear, r);
+    f.render_widget(overlay_block(view.muted, &start.title), r);
+    let shape = start.shape();
+    let [heading, _, _, _, branch, workspace, _, warning_rows, note, _] = start_rows(area, shape);
+    let dim = Style::default().fg(view.muted);
+    let heading_text = truncate_right(&start.heading, usize::from(heading.width));
+    f.render_widget(Paragraph::new(Span::styled(heading_text, dim.add_modifier(Modifier::BOLD))), heading);
+    if let Some(preview) = start.preview_area(area) {
+        draw_preview(
+            f,
+            view,
+            preview,
+            Previewed { flow: start.preview.as_ref(), scroll: start.preview_scroll, focus: None },
+        );
+    }
+    if !start.list_hidden(area) {
+        draw_items(f, view, start.list(area), start);
+    }
+    let mut cursor = draw_start_prompt(f, view, start, area);
+    cursor = draw_start_names(f, view, start, [branch, workspace]).or(cursor);
+    draw_warnings(f, &start.warnings, warning_rows);
+    draw_hint(f, view, start.note.as_ref(), &start.hint, note);
+    draw_buttons(f, view, &start_buttons(area, shape, &start.buttons), &start.buttons, START);
+    if draw_start_accounts(f, view, start, area) {
+        cursor = None;
     }
     for (n, field) in start.accounts.iter().enumerate() {
         if let Some(list) = start_account_list(area, shape, n, &field.combo) {

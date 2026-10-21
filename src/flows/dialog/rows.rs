@@ -1,6 +1,7 @@
 use super::edit::{Choice, DEFAULT_MODEL, Editing, Row, Tab};
 use super::{Agents, RowText};
 use crate::agents::{self, Known};
+use crate::flows::Role;
 use crate::text::one_line;
 
 const TEXT_MARK: &str = "✎";
@@ -11,17 +12,7 @@ impl Editing {
     }
 
     fn row_text(&self, row: Row, agents: &Agents) -> RowText {
-        let text = |label: &str, value: String, note: &str| RowText {
-            section: if self.tab == Tab::Flow && !matches!(row, Row::Name | Row::Description | Row::Place) {
-                "Plan"
-            } else {
-                ""
-            },
-            label: label.to_string(),
-            value,
-            note: note.to_string(),
-            ..RowText::default()
-        };
+        let text = |label: &str, value: String, note: &str| self.plain_text(row, label, value, note);
         let flow = &self.flow;
         let back = |i: usize| flow.stages.get(i).and_then(|stage| stage.back.as_ref());
         match row {
@@ -31,14 +22,7 @@ impl Editing {
                 let file = self.path.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned());
                 text("saved in", self.place.label().into(), &file.unwrap_or_else(|| "not saved yet".into()))
             }
-            Row::Stage(i) => {
-                let stage = &flow.stages[i];
-                let roles = if stage.roles.is_empty() { "no roles yet".to_string() } else { stage.roles.join(" + ") };
-                let note =
-                    back(i).map(|b| format!("{} → {} · at most {}", b.when, b.to, b.at_most)).unwrap_or_default();
-                let arrow = if self.open == Some(i) { "▾" } else { "▸" };
-                RowText { removable: true, movable: true, ..text(&format!("{arrow} {}", i + 1), roles, &note) }
-            }
+            Row::Stage(i) => RowText { removable: true, movable: true, ..self.stage_text(i, text) },
             Row::Roles(i) => text("    roles", flow.stages[i].roles.join(", "), "several work side by side"),
             Row::Back(i) => match back(i) {
                 Some(b) => text("    goes back", format!("to stage {}", b.to), "when there are problems"),
@@ -65,24 +49,32 @@ impl Editing {
         }
     }
 
-    fn role_row(&self, row: Row, agents: &Agents) -> RowText {
-        let Some(role) = self.role() else { return RowText::default() };
-        let text = |label: &str, value: String, note: String| RowText {
+    fn plain_text(&self, row: Row, label: &str, value: String, note: &str) -> RowText {
+        let planned = self.tab == Tab::Flow && !matches!(row, Row::Name | Row::Description | Row::Place);
+        RowText {
+            section: if planned { "Plan" } else { "" },
             label: label.to_string(),
             value,
-            note,
+            note: note.to_string(),
             ..RowText::default()
-        };
+        }
+    }
+
+    fn stage_text(&self, i: usize, text: impl Fn(&str, String, &str) -> RowText) -> RowText {
+        let stage = &self.flow.stages[i];
+        let roles = if stage.roles.is_empty() { "no roles yet".to_string() } else { stage.roles.join(" + ") };
+        let back = stage.back.as_ref();
+        let note = back.map(|b| format!("{} → {} · at most {}", b.when, b.to, b.at_most)).unwrap_or_default();
+        let arrow = if self.open == Some(i) { "▾" } else { "▸" };
+        text(&format!("{arrow} {}", i + 1), roles, &note)
+    }
+
+    fn role_row(&self, row: Row, agents: &Agents) -> RowText {
+        let Some(role) = self.role() else { return RowText::default() };
+        let text = role_text;
         match row {
             Row::RoleName => text("name", role.name.clone(), String::new()),
-            Row::Agent => {
-                let note = match Known::of(&role.agent) {
-                    Some(kind) if agents.installed.contains(&kind) => kind.title().to_string(),
-                    Some(_) => "not installed".to_string(),
-                    None => "not an agent a flow can start".to_string(),
-                };
-                RowText { red: Known::of(&role.agent).is_none(), ..text("agent", role.agent.clone(), note) }
-            }
+            Row::Agent => agent_text(role, agents),
             Row::Model => text("model", role.model.clone().unwrap_or_else(|| DEFAULT_MODEL.into()), String::new()),
             Row::Effort => match self.effort_levels() {
                 Some(_) => {
@@ -157,6 +149,19 @@ impl Editing {
         let levels = levels.map(|level| Choice { value: (*level).into(), label: (*level).into(), note: String::new() });
         std::iter::once(default).chain(levels).collect()
     }
+}
+
+fn role_text(label: &str, value: String, note: String) -> RowText {
+    RowText { label: label.to_string(), value, note, ..RowText::default() }
+}
+
+fn agent_text(role: &Role, agents: &Agents) -> RowText {
+    let note = match Known::of(&role.agent) {
+        Some(kind) if agents.installed.contains(&kind) => kind.title().to_string(),
+        Some(_) => "not installed".to_string(),
+        None => "not an agent a flow can start".to_string(),
+    };
+    RowText { red: Known::of(&role.agent).is_none(), ..role_text("agent", role.agent.clone(), note) }
 }
 
 fn or_none(value: String) -> String {

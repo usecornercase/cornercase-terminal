@@ -6,6 +6,7 @@ use ratatui::layout::Rect;
 use super::App;
 use super::event::AppEvent;
 use super::toast::Toast;
+use super::worktree_setup::SetupRun;
 use super::worktrees::WorktreeEvent;
 use crate::accounts::Accounts;
 use crate::agents;
@@ -21,11 +22,68 @@ use crate::host::notify::{self, Notification};
 use crate::log::{self, Job, Level};
 use crate::paths;
 use crate::project::search::Goto;
-use crate::project::{Hierarchy, Phase, Tab};
+use crate::project::{Hierarchy, Phase, Project, Tab, Workspace, WorkspaceAt};
 use crate::state::RunState;
 use crate::term::Term;
 use crate::time;
 use crate::ui;
+
+pub(super) struct Runs {
+    list: Vec<Run>,
+    dir: PathBuf,
+    pending_dirs: Vec<(u64, Vec<PathBuf>)>,
+}
+
+impl Runs {
+    pub(super) fn new(config_path: &Path) -> Self {
+        Self { list: Vec::new(), dir: config_path.with_file_name("runs"), pending_dirs: Vec::new() }
+    }
+
+    pub(super) fn all(&self) -> &[Run] {
+        &self.list
+    }
+
+    pub(super) fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    pub(super) fn seat(&self, pane: u64) -> Option<(&Run, &str)> {
+        self.list.iter().find_map(|run| Some((run, run.role_of(pane)?)))
+    }
+
+    pub(super) fn of_workspace(&self, workspace: u64) -> Option<&Run> {
+        self.list.iter().find(|run| run.workspace == workspace)
+    }
+
+    pub(super) fn has(&self, id: u64) -> bool {
+        self.list.iter().any(|run| run.id == id)
+    }
+
+    pub(super) fn run_mut(&mut self, id: u64) -> Option<&mut Run> {
+        self.list.iter_mut().find(|run| run.id == id)
+    }
+
+    pub(super) fn end_in(&mut self, workspace: u64) -> usize {
+        let ended = self.list.iter().filter(|run| run.workspace == workspace).count();
+        self.list.retain(|run| run.workspace != workspace);
+        ended
+    }
+
+    #[cfg(test)]
+    pub(super) fn push(&mut self, run: Run) {
+        self.list.push(run);
+    }
+
+    #[cfg(test)]
+    pub(super) fn clear(&mut self) {
+        self.list.clear();
+    }
+
+    #[cfg(test)]
+    pub(super) fn first_mut(&mut self) -> &mut Run {
+        self.list.first_mut().expect("a run")
+    }
+}
 
 pub(super) struct Starting {
     pub(super) flow: Flow,
@@ -36,6 +94,27 @@ pub(super) struct Starting {
     pub(super) trees: Vec<(RoleWorktree, bool)>,
     pub(super) parent: Option<u64>,
     pub(super) accounts: Accounts,
+    pub(super) name: Option<String>,
+}
+
+impl Starting {
+    pub(super) fn new(flow: Flow, task: String, branch: String, accounts: Accounts) -> Self {
+        Self { flow, task, branch, focus: true, note: None, trees: Vec::new(), parent: None, accounts, name: None }
+    }
+}
+
+pub(super) struct RunTrees {
+    pub(super) run: Option<PathBuf>,
+    pub(super) branch: String,
+    pub(super) roles: Vec<(String, String)>,
+}
+
+struct RunPanes<'a> {
+    roles: &'a [Role],
+    trees: &'a [(RoleWorktree, bool)],
+    setup: bool,
+    dir: &'a Path,
+    accounts: &'a Accounts,
 }
 
 #[derive(Debug)]
@@ -81,6 +160,31 @@ fn make_trees(
     }
 }
 
+fn folder_removed(result: &crate::error::Result<(usize, u64)>, job: &mut Job) -> Option<AppEvent> {
+    if let Ok((files, bytes)) = result {
+        job.note("files", files);
+        job.note("bytes", bytes);
+    }
+    None
+}
+
+fn forget_moved_end(projects: &mut [Project], run: &mut Run) {
+    let id = run.workspace;
+    let branch = projects.workspace_by(id).and_then(|w| git::checked_out(&w.path));
+    let Some(ended) = run.moved_to(branch.as_deref()) else { return };
+    let pane = run.pane_of(flows::ORCHESTRATOR);
+    if let Some(term) = pane.and_then(|pane| projects.pane_by_mut(pane)) {
+        term.agent.mark(false);
+    }
+    log::info!(
+        "flow",
+        "end forgotten on another branch",
+        workspace = id,
+        ended = ended,
+        branch = branch.unwrap_or_default()
+    );
+}
+
 fn discard(repo: &Path, paths: &[PathBuf]) {
     for path in paths.iter().rev().filter(|path| path.exists()) {
         if let Err(e) = worktree::remove(repo, path, true, false) {
@@ -91,21 +195,21 @@ fn discard(repo: &Path, paths: &[PathBuf]) {
 
 impl App {
     pub(crate) fn set_runs_dir(&mut self, dir: &Path) {
-        self.runs_dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
+        self.runs.dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
     }
 
     pub(super) fn defer_run_dirs(&mut self, workspace: u64, dirs: Vec<PathBuf>) {
         if !dirs.is_empty() {
-            self.pending_run_dirs.push((workspace, dirs));
+            self.runs.pending_dirs.push((workspace, dirs));
         }
     }
 
     pub(super) fn flush_run_dirs(&mut self) {
         let projects = &self.projects;
-        let (gone, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.pending_run_dirs)
+        let (gone, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.runs.pending_dirs)
             .into_iter()
             .partition(|(id, _)| projects.workspace_index(*id).is_none());
-        self.pending_run_dirs = kept;
+        self.runs.pending_dirs = kept;
         for (_, dirs) in gone {
             self.remove_run_dirs(dirs);
         }
@@ -114,17 +218,7 @@ impl App {
     pub(super) fn remove_run_dirs(&self, dirs: Vec<PathBuf>) {
         for dir in dirs {
             let job = Job::new(Level::Info, "flow", "remove folder").with("path", dir.display());
-            self.spawn_job(
-                job,
-                move || Ok(folder::remove(&dir)?),
-                |result, job| {
-                    if let Ok((files, bytes)) = result {
-                        job.note("files", files);
-                        job.note("bytes", bytes);
-                    }
-                    None
-                },
-            );
+            self.spawn_job(job, move || Ok(folder::remove(&dir)?), |result, job| folder_removed(&result, job));
         }
     }
 
@@ -133,34 +227,20 @@ impl App {
         store::list(
             builtin::for_config(&self.config),
             &self.config.hidden_flows,
-            &paths::flows(&self.config_path),
+            &paths::flows(self.config_file.path()),
             project.as_deref(),
         )
     }
 
-    pub(crate) fn start_run(
-        &mut self,
-        project: u64,
-        flow: Flow,
-        task: String,
-        branch: String,
-        accounts: Accounts,
-        area: Rect,
-    ) -> Result<(), String> {
-        let branch = if branch.trim() == flows::branch(&task) { String::new() } else { branch };
-        let starting =
-            Starting { flow, task, branch, focus: true, note: None, trees: Vec::new(), parent: None, accounts };
+    pub(super) fn start_run(&mut self, project: u64, mut starting: Starting, area: Rect) -> Result<(), String> {
+        if starting.name.is_none() && starting.branch.trim() == flows::branch(&starting.task) {
+            starting.branch = String::new();
+        }
         self.run_flow(None, project, starting, area).map(drop).map_err(String::from)
     }
 
-    pub(super) fn spawn_run_worktrees(
-        &self,
-        p: usize,
-        run: Option<PathBuf>,
-        branch: String,
-        roles: Vec<(String, String)>,
-        request: u64,
-    ) {
+    pub(super) fn spawn_run_worktrees(&self, p: usize, trees: RunTrees, request: u64) {
+        let RunTrees { run, branch, roles } = trees;
         let project = &self.projects[p];
         let (id, repo) = (project.id, project.path.clone());
         let dir = self.config.worktrees_dir(self.home.as_deref());
@@ -229,36 +309,36 @@ impl App {
         Ok(())
     }
 
-    fn spawn_run_panes(
-        &mut self,
-        area: Rect,
-        (p, w): (usize, usize),
-        roles: &[Role],
-        trees: &[(RoleWorktree, bool)],
-        setup: bool,
-        (dir, accounts): (&Path, &Accounts),
-    ) -> Result<Vec<Term>, String> {
-        let (id, path) = (self.projects[p].workspaces[w].id, self.projects[p].workspaces[w].path.clone());
+    fn spawn_run_panes(&mut self, area: Rect, at: WorkspaceAt, panes: &RunPanes) -> Result<Vec<Term>, String> {
+        let RunPanes { roles, trees, setup, dir, accounts } = *panes;
+        let (p, workspace) = (at.project(), self.projects.workspace(at));
+        let (id, path) = (workspace.id, workspace.path.clone());
         let mut terms = Vec::with_capacity(roles.len());
         let script = self.setup_script(p);
         let own = |role: &Role| trees.iter().find(|(tree, _)| tree.role == role.name);
         let run_dir = Some(dir);
         for (i, role) in roles.iter().enumerate() {
             let tree = own(role);
-            let given = (run_dir, accounts.clone());
+            let given = accounts.clone();
             let term = match (&script, tree) {
-                (Some(script), _) if i == 0 && setup => self.spawn_setup(area, (p, id), path.clone(), script, given),
-                (Some(script), Some((tree, true))) => self.spawn_setup(area, (p, id), tree.path.clone(), script, given),
+                (Some(script), _) if i == 0 && setup => {
+                    let at = SetupRun { project: p, workspace: id, path: path.clone(), script, run: run_dir };
+                    self.spawn_setup(area, at, given)
+                }
+                (Some(script), Some((tree, true))) => {
+                    let at = SetupRun { project: p, workspace: id, path: tree.path.clone(), script, run: run_dir };
+                    self.spawn_setup(area, at, given)
+                }
                 _ => {
                     let cwd = tree.map_or_else(|| path.clone(), |(tree, _)| tree.path.clone());
-                    self.spawn_in(area, cwd, run_dir, given.1)
+                    self.spawn_in(area, cwd, run_dir, given)
                 }
             };
             match term {
                 Ok(term) => terms.push(term),
                 Err(e) => {
                     let _ = std::fs::remove_dir(dir);
-                    self.projects[p].workspaces[w].run_dirs.retain(|kept| kept != dir);
+                    self.projects.workspace_mut(at).run_dirs.retain(|kept| kept != dir);
                     return Err(e.to_string());
                 }
             }
@@ -266,15 +346,8 @@ impl App {
         Ok(terms)
     }
 
-    pub(super) fn open_run(
-        &mut self,
-        p: usize,
-        w: usize,
-        starting: Starting,
-        area: Rect,
-        setup: bool,
-    ) -> Result<RunInfo, String> {
-        let (project, workspace) = (&self.projects[p], &self.projects[p].workspaces[w]);
+    fn open_check(&self, at: WorkspaceAt) -> Result<u64, String> {
+        let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at));
         let id = workspace.id;
         if project.closing {
             return Err(format!("project {} is closing", project.id));
@@ -284,83 +357,43 @@ impl App {
             Phase::Removing(_) => return Err(format!("workspace {id} is being removed")),
             Phase::Closing => return Err(format!("workspace {id} is closing")),
         }
-        if self.runs.iter().any(|run| run.workspace == id) {
+        if self.runs.list.iter().any(|run| run.workspace == id) {
             return Err(format!("workspace {id} already runs a flow, and a workspace runs one at a time"));
         }
-        let Starting { flow, task, branch, focus, note, trees, parent, accounts } = starting;
+        Ok(id)
+    }
+
+    pub(super) fn open_run(
+        &mut self,
+        place: WorkspaceAt,
+        starting: Starting,
+        area: Rect,
+        setup: bool,
+    ) -> Result<RunInfo, String> {
+        let id = self.open_check(place)?;
+        let Starting { flow, task, branch, focus, note, trees, parent, accounts, name } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
         run.id = self.take_id();
-        let mut info = RunInfo {
-            run: run.id,
-            project: self.projects[p].id,
-            workspace: id,
-            branch,
-            members: Vec::new(),
-            note,
-            run_dir: None,
-        };
-        let path = self.projects[p].workspaces[w].path.clone();
-        let dir = folder::make(&self.runs_dir, &path, time::now() * 1000)
+        let project = self.projects[place.project()].id;
+        let mut info =
+            RunInfo { run: run.id, project, workspace: id, branch, members: Vec::new(), note, run_dir: None };
+        let path = self.projects.workspace(place).path.clone();
+        let dir = folder::make(&self.runs.dir, &path, time::now() * 1000)
             .map_err(|e| format!("could not make the run's folder: {e}"))?;
-        self.projects[p].workspaces[w].run_dirs.push(dir.clone());
-        let terms = self.spawn_run_panes(area, (p, w), &roles, &trees, setup, (&dir, &accounts))?;
+        self.projects.workspace_mut(place).run_dirs.push(dir.clone());
+        let panes = RunPanes { roles: &roles, trees: &trees, setup, dir: &dir, accounts: &accounts };
+        let terms = self.spawn_run_panes(area, place, &panes)?;
+        self.name_flow_workspace(place, name);
         let seats: Vec<RoleWorktree> = trees.iter().map(|(tree, _)| tree.clone()).collect();
         log::info!("flow", "run folder made", workspace = id, path = dir.display());
         run.dir = Some(dir.clone());
-        info.run_dir = Some(dir.clone());
-        for (role, term) in roles.iter().zip(terms) {
-            let pane = term.id;
-            let tab = Tab::new(self.take_id(), Some(role.name.clone()), term);
-            run.members.push(Member { role: role.name.clone(), pane });
-            let tree = seats.iter().find(|tree| tree.role == role.name);
-            info.members.push(MemberInfo {
-                role: role.name.clone(),
-                agent: role.agent.clone(),
-                tab: tab.id,
-                pane,
-                worktree: tree.map(|tree| tree.path.clone()),
-                branch: tree.map(|tree| tree.branch.clone()),
-            });
-            self.projects[p].workspaces[w].tabs.push(tab);
-        }
-        for tree in &seats {
-            let remembered = &mut self.projects[p].workspaces[w].role_worktrees;
-            if !remembered.iter().any(|known| known.path == tree.path) {
-                remembered.push(tree.clone());
-            }
-            self.worktree_workspace(p, tree.path.clone());
-        }
-        let own = run.members[0].pane;
-        self.adopt(own, parent);
-        for member in &run.members[1..] {
-            self.adopt(member.pane, Some(own));
-        }
-        let now = Instant::now();
-        let mut team = Vec::new();
-        for (role, member) in roles.iter().zip(&run.members).skip(1) {
-            let branch = seats.iter().find(|tree| tree.role == role.name).map(|tree| tree.branch.as_str());
-            let spec = self.flow_spec(role, brief::member(role, branch, Some(&dir)), Some(&dir));
-            self.agents.launches.push(Launch::new(member.pane, spec, now));
-            team.push(member.pane);
-        }
-        let spec = self.flow_spec(
-            &roles[0],
-            brief::brief(&run.flow, &run.task, &info.branch, &run.members, &seats, Some(&dir)),
-            Some(&dir),
-        );
-        let mut launch = Launch::new(run.members[0].pane, spec, now);
-        launch.after = team;
-        self.agents.launches.push(launch);
-        log::info!(
-            "flow",
-            "run started",
-            workspace = id,
-            flow = run.flow.name,
-            agents = roles.len(),
-            worktrees = seats.len()
-        );
-        self.runs.push(run);
+        info.run_dir = Some(dir);
+        (run.members, info.members) = self.seat_members(place, &roles, terms, &seats);
+        self.remember_role_trees(place, &seats);
+        self.adopt_members(&run, parent);
+        self.launch_run(&run, &roles, &seats, &info.branch);
+        self.runs.list.push(run);
         if focus && let Some(first) = info.members.first() {
             self.goto(Goto::Place { project: info.project, workspace: Some(id), tab: Some(first.tab) });
             self.show_flow();
@@ -368,24 +401,99 @@ impl App {
         Ok(info)
     }
 
+    fn name_flow_workspace(&mut self, at: WorkspaceAt, name: Option<String>) {
+        let workspace = self.projects.workspace_mut(at);
+        if workspace.name.is_none() {
+            workspace.name = name;
+        }
+    }
+
+    fn seat_members(
+        &mut self,
+        at: WorkspaceAt,
+        roles: &[Role],
+        terms: Vec<Term>,
+        seats: &[RoleWorktree],
+    ) -> (Vec<Member>, Vec<MemberInfo>) {
+        let (mut members, mut infos) = (Vec::new(), Vec::new());
+        for (role, term) in roles.iter().zip(terms) {
+            let pane = term.id;
+            let tab = Tab::new(self.take_id(), Some(role.name.clone()), term);
+            members.push(Member { role: role.name.clone(), pane });
+            let tree = seats.iter().find(|tree| tree.role == role.name);
+            infos.push(MemberInfo {
+                role: role.name.clone(),
+                agent: role.agent.clone(),
+                tab: tab.id,
+                pane,
+                worktree: tree.map(|tree| tree.path.clone()),
+                branch: tree.map(|tree| tree.branch.clone()),
+            });
+            self.projects.push_tab(at, tab);
+        }
+        (members, infos)
+    }
+
+    fn remember_role_trees(&mut self, at: WorkspaceAt, seats: &[RoleWorktree]) {
+        for tree in seats {
+            let remembered = &mut self.projects.workspace_mut(at).role_worktrees;
+            if !remembered.iter().any(|known| known.path == tree.path) {
+                remembered.push(tree.clone());
+            }
+            self.worktree_workspace(at.project(), tree.path.clone());
+        }
+    }
+
+    fn adopt_members(&mut self, run: &Run, parent: Option<u64>) {
+        let own = run.members[0].pane;
+        self.adopt(own, parent);
+        for member in &run.members[1..] {
+            self.adopt(member.pane, Some(own));
+        }
+    }
+
+    fn launch_run(&mut self, run: &Run, roles: &[Role], seats: &[RoleWorktree], branch: &str) {
+        let dir = run.dir.as_deref();
+        let now = Instant::now();
+        let mut team = Vec::new();
+        for (role, member) in roles.iter().zip(&run.members).skip(1) {
+            let branch = seats.iter().find(|tree| tree.role == role.name).map(|tree| tree.branch.as_str());
+            let spec = self.flow_spec(role, brief::member(role, branch, dir), dir);
+            self.agents.launches.add(Launch::new(member.pane, spec, now));
+            team.push(member.pane);
+        }
+        let members = brief::Team { members: &run.members, trees: seats };
+        let spec = self.flow_spec(&roles[0], brief::brief(&run.flow, &run.task, branch, members, dir), dir);
+        let mut launch = Launch::new(run.members[0].pane, spec, now);
+        launch.after = team;
+        self.agents.launches.add(launch);
+        log::info!(
+            "flow",
+            "run started",
+            workspace = run.workspace,
+            flow = run.flow.name,
+            agents = roles.len(),
+            worktrees = seats.len()
+        );
+    }
+
     pub(super) fn member_waits(&mut self, pane: u64) {
-        let Some((run, role)) = self.runs.iter().find_map(|run| Some((run, run.role_of(pane)?))) else { return };
+        let Some((run, role)) = self.runs.seat(pane) else { return };
         let (workspace, role) = (run.workspace, role.to_string());
-        let Some((p, w)) = self.projects.workspace_index(workspace) else { return };
-        let project = &self.projects[p];
-        let place = format!("{} › {}", self.project_label(project), project.workspaces[w].label());
+        let Some(at) = self.projects.workspace_index(workspace) else { return };
+        let place = self.place_name(at);
         let message = notify::clean(&format!(
             "{role} waits for you in {place}: accept or refuse Claude Code's bypass permissions mode in its tab"
         ));
         log::info!("flow", "a member waits for you", workspace = workspace, role = role);
-        self.outbox.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
-        self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(activity::Status::Waiting)));
+        self.outbox.notify(Notification::new(&message, &self.config.desktop_notifications));
+        self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Agent(activity::Status::Waiting)));
     }
 
     pub(super) fn run_failed(&mut self, message: &str) {
         log::warning!("flow", "the run did not start", error = message);
         if !self.start_flow_settled(Some(message)) {
-            self.toast = Some(Toast::new(format!("the flow did not start: {message}"), ui::ToastIcon::Bug));
+            self.messages.toast = Some(Toast::new(format!("the flow did not start: {message}"), ui::ToastIcon::Bug));
         }
     }
 
@@ -395,22 +503,19 @@ impl App {
     }
 
     pub(super) fn run_panes(&self, orchestrators: bool) -> Vec<u64> {
-        let members = self.runs.iter().flat_map(|run| &run.members);
+        let members = self.runs.list.iter().flat_map(|run| &run.members);
         members.filter(|m| (m.role == flows::ORCHESTRATOR) == orchestrators).map(|m| m.pane).collect()
     }
 
     pub(super) fn latch_run_ends(&mut self) {
         let projects = &self.projects;
-        for run in &mut self.runs {
+        for run in &mut self.runs.list {
             let marked = run
                 .pane_of(flows::ORCHESTRATOR)
                 .and_then(|pane| projects.pane_by(pane))
                 .is_some_and(|term| term.agent.pending());
             let id = run.workspace;
-            let branch = || {
-                let (p, w) = projects.workspace_index(id)?;
-                git::checked_out(&projects[p].workspaces[w].path)
-            };
+            let branch = || git::checked_out(&projects.workspace_by(id)?.path);
             if run.latch(marked, branch) {
                 log::info!("flow", "end marked", workspace = id, branch = run.ended.as_deref().unwrap_or_default());
             }
@@ -418,31 +523,15 @@ impl App {
     }
 
     pub(super) fn forget_moved_run_ends(&mut self) {
-        for run in self.runs.iter_mut().filter(|run| run.ended.is_some()) {
-            let id = run.workspace;
-            let projects = &mut self.projects;
-            let branch =
-                projects.workspace_index(id).and_then(|(p, w)| git::checked_out(&projects[p].workspaces[w].path));
-            if let Some(ended) = run.moved_to(branch.as_deref()) {
-                let pane = run.pane_of(flows::ORCHESTRATOR);
-                if let Some(term) = pane.and_then(|pane| projects.pane_by_mut(pane)) {
-                    term.agent.mark(false);
-                }
-                log::info!(
-                    "flow",
-                    "end forgotten on another branch",
-                    workspace = id,
-                    ended = ended,
-                    branch = branch.unwrap_or_default()
-                );
-            }
+        for run in self.runs.list.iter_mut().filter(|run| run.ended.is_some()) {
+            forget_moved_end(&mut self.projects, run);
         }
     }
 
     pub(super) fn forget_runs(&mut self) {
         let projects = &self.projects;
-        let open = |id: u64| projects.workspace_index(id).is_some_and(|(p, w)| projects[p].workspaces[w].open());
-        self.runs.retain(|run| {
+        let open = |id: u64| projects.workspace_by(id).is_some_and(Workspace::open);
+        self.runs.list.retain(|run| {
             let kept = open(run.workspace) && run.members.iter().any(|m| projects.pane_by(m.pane).is_some());
             if !kept {
                 log::info!("flow", "run ended", workspace = run.workspace, flow = run.flow.name);
@@ -496,7 +585,7 @@ impl App {
         if let Some(term) = tabs.iter().flat_map(|(_, tab)| &tab.panes).find(|term| Some(term.id) == own) {
             self.brief_again(&run, term);
         }
-        self.runs.push(run);
+        self.runs.list.push(run);
     }
 
     fn brief_again(&mut self, run: &Run, term: &Term) {
@@ -507,7 +596,6 @@ impl App {
             return;
         };
         let Some(line) = self.resume_line(Some(&run.flow.orchestrator), agent, run.dir.as_deref()) else { return };
-        self.agents.launches.retain(|launch| launch.term != term.id);
         let spec = launch::Spec {
             command: line,
             prompt: Some(brief::restored(&run.members, run.dir.as_deref())),
@@ -517,6 +605,6 @@ impl App {
         let mut launch = Launch::new(term.id, spec, Instant::now());
         launch.after = run.members.iter().map(|m| m.pane).filter(|pane| *pane != term.id).collect();
         launch.resume = term.resuming;
-        self.agents.launches.push(launch);
+        self.agents.launches.replace(launch);
     }
 }

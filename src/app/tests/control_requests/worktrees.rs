@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::worktrees::RemoveOptions;
 use crate::config::ProjectSettings;
 use crate::control::arrange::Removal;
 use crate::test_util::git;
@@ -17,7 +18,7 @@ fn locked_workspace(app: &mut App, rx: &Receiver<AppEvent>, repo: &Path) -> (u64
 
 fn removing_workspace(app: &mut App, rx: &Receiver<AppEvent>) -> u64 {
     let (id, _) = made(app, rx);
-    app.start_removal(app.projects[0].id, id, false, false, None);
+    app.start_removal(app.projects[0].id, id, RemoveOptions::default(), None);
     id
 }
 
@@ -48,7 +49,7 @@ fn a_worktree_opens_with_a_tab_and_leaves_the_window_as_it_is() {
 fn made(app: &mut App, rx: &Receiver<AppEvent>) -> (u64, PathBuf) {
     ask(app, None, worktree("feat/x"));
     let id = done(answered(app, rx, "git makes the worktree")).ids.workspace.expect("the workspace");
-    let (p, w) = app.projects.workspace_index(id).expect("it");
+    let (p, w) = app.projects.workspace_index(id).map(|at| (at.project(), at.index())).expect("it");
     (id, app.projects[p].workspaces[w].path.clone())
 }
 
@@ -95,7 +96,7 @@ fn a_removal_that_starts_while_git_status_runs_is_not_started_twice() {
     let (id, _) = made(&mut app, &rx);
     ask(&mut app, None, remove(id));
 
-    app.start_removal(app.projects[0].id, id, false, false, None);
+    app.start_removal(app.projects[0].id, id, RemoveOptions::default(), None);
 
     let message = error(answered(&mut app, &rx, "git status answers"));
     assert!(message.contains("is being removed"), "{message}");
@@ -109,7 +110,7 @@ fn a_worktree_with_changes_is_refused_before_anything_stops() {
     ask(&mut app, None, remove(id));
     let message = error(answered(&mut app, &rx, "git status answers"));
 
-    let (p, w) = app.projects.workspace_index(id).expect("it stays");
+    let (p, w) = app.projects.workspace_index(id).map(|at| (at.project(), at.index())).expect("it stays");
     let workspace = &app.projects[p].workspaces[w];
     assert!(message.contains("--force"), "{message}");
     assert_eq!((workspace.removing(), workspace.tabs.len(), path.exists()), (false, 1, true));
@@ -124,7 +125,7 @@ fn lock(repo: &Path, path: &Path) {
 }
 
 fn untouched(app: &App, id: u64, path: &Path) -> bool {
-    let (p, w) = app.projects.workspace_index(id).expect("it stays");
+    let (p, w) = app.projects.workspace_index(id).map(|at| (at.project(), at.index())).expect("it stays");
     let workspace = &app.projects[p].workspaces[w];
     workspace.open() && !workspace.tabs.is_empty() && path.exists()
 }

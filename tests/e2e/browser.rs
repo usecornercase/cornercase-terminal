@@ -19,6 +19,16 @@ fn pairing_token(screen: &str) -> String {
     format!("{first}{rest}").chars().take(32).collect()
 }
 
+fn connect_socket(port: u16, cookie: &str) -> tungstenite::WebSocket<std::net::TcpStream> {
+    let mut request = tungstenite::client::IntoClientRequest::into_client_request(format!("ws://127.0.0.1:{port}/ws"))
+        .expect("a websocket request");
+    request.headers_mut().insert("Cookie", cookie.parse().expect("cookie header"));
+    request.headers_mut().insert("Origin", format!("http://127.0.0.1:{port}").parse().expect("origin header"));
+    let stream = std::net::TcpStream::connect(("127.0.0.1", port)).expect("connect");
+    stream.set_read_timeout(Some(TIMEOUT)).expect("read timeout");
+    tungstenite::client::client(request, stream).expect("websocket handshake").0
+}
+
 #[test]
 fn a_paired_browser_types_into_the_shell_over_a_websocket() {
     let session = Session::new();
@@ -47,13 +57,7 @@ fn a_paired_browser_types_into_the_shell_over_a_websocket() {
         .expect("a cookie for the paired browser")
         .to_string();
 
-    let mut request = tungstenite::client::IntoClientRequest::into_client_request(format!("ws://127.0.0.1:{port}/ws"))
-        .expect("a websocket request");
-    request.headers_mut().insert("Cookie", cookie.parse().expect("cookie header"));
-    request.headers_mut().insert("Origin", format!("http://127.0.0.1:{port}").parse().expect("origin header"));
-    let stream = std::net::TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    stream.set_read_timeout(Some(TIMEOUT)).expect("read timeout");
-    let (mut ws, _) = tungstenite::client::client(request, stream).expect("websocket handshake");
+    let mut ws = connect_socket(port, &cookie);
     ws.send(tungstenite::Message::text(r#"{"type":"hello","cols":100,"rows":24}"#)).expect("hello");
     ws.send(tungstenite::Message::binary(b"echo web-\"\"works\r".to_vec())).expect("keys");
     let mut seen = Vec::new();

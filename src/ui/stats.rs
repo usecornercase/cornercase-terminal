@@ -39,7 +39,15 @@ pub(super) fn lines(colours: (Color, Color, bool), stats: &stats::View, width: u
     }
     lines.push(Line::default());
     let weeks = (width / 2).min(WEEKS);
-    let levels = stats.levels(weeks);
+    lines.extend(heatmap(width, &stats.levels(weeks), &colour));
+    lines.extend(legend(&format!("{weeks} weeks · {}", stats.counting()), width, dim, &colour));
+    lines.push(Line::default());
+    lines
+}
+
+fn heatmap(width: usize, levels: &[u8], colour: &impl Fn(u8) -> Color) -> Vec<Line<'static>> {
+    let weeks = levels.len() / 7;
+    let mut lines = Vec::new();
     for row in 0..7 {
         let mut spans = vec![Span::raw(" ".repeat(width.saturating_sub(weeks * 2)))];
         for week in (0..weeks).rev() {
@@ -47,24 +55,21 @@ pub(super) fn lines(colours: (Color, Color, bool), stats: &stats::View, width: u
         }
         lines.push(Line::from(spans));
     }
-    let left = format!("{weeks} weeks · {}", stats.counting());
-    let legend = vec![
-        Span::styled("less · ", dim),
-        Span::styled("■ ", Style::default().fg(colour(1))),
-        Span::styled("■ ", Style::default().fg(colour(2))),
-        Span::styled("■ ", Style::default().fg(colour(3))),
-        Span::styled("■ ", Style::default().fg(colour(4))),
-        Span::styled("more", dim),
-    ];
-    let mut spans = vec![Span::styled(left.clone(), dim)];
+    lines
+}
+
+fn legend(left: &str, width: usize, dim: Style, colour: &impl Fn(u8) -> Color) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    let mut spans = vec![Span::styled(left.to_string(), dim)];
     if left.chars().count() + 19 > width {
         lines.push(Line::from(spans));
         spans = Vec::new();
     } else {
         spans.push(Span::raw(" ".repeat(width.saturating_sub(left.chars().count() + 19))));
     }
-    spans.extend(legend);
+    spans.push(Span::styled("less · ", dim));
+    spans.extend((1..=4).map(|level| Span::styled("■ ", Style::default().fg(colour(level)))));
+    spans.push(Span::styled("more", dim));
     lines.push(Line::from(spans));
-    lines.push(Line::default());
     lines
 }

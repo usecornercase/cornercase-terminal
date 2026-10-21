@@ -1,7 +1,7 @@
 use ratatui::layout::{Position, Rect};
 
 use super::changes;
-use super::layout::{Border, STACKED_KEEP, split_agents, stack_room};
+use super::layout::{Border, STACKED_KEEP, Screen, split_agents, stack_room};
 use crate::state::Widths;
 
 pub const SIDEBAR_WIDTH: u16 = 32;
@@ -97,15 +97,15 @@ impl Widths {
     }
 
     #[must_use]
-    pub(crate) fn stacked_dragged(self, border: Border, pos: Position, area: Rect, agents: bool, icons: bool) -> Self {
+    pub(crate) fn stacked_dragged(self, border: Border, pos: Position, area: Rect, screen: Screen) -> Self {
         match border {
             Border::Projects => {
                 let max = columns_room(area.width).max(MIN_COLUMN_WIDTH);
                 Self { projects: pos.x.saturating_add(1).clamp(MIN_COLUMN_WIDTH, max), ..self }
             }
             Border::Stack => {
-                let mut room = stack_room(area, icons);
-                if agents {
+                let mut room = stack_room(area, screen.icons);
+                if screen.agents {
                     let [rest, ..] = split_agents(Rect { height: room.height + 1, ..room }, self, STACKED_KEEP);
                     room.height = rest.height.saturating_sub(1);
                 }

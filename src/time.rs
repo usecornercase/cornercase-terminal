@@ -59,6 +59,23 @@ pub(crate) fn age(secs: i64) -> String {
     }
 }
 
+pub(crate) fn ago(elapsed: Duration) -> String {
+    let minutes = elapsed.as_secs() / 60;
+    let hours = minutes / 60;
+    let days = hours / 24;
+    if minutes < 1 {
+        String::from("just now")
+    } else if hours < 1 {
+        format!("{minutes} min ago")
+    } else if days < 1 {
+        format!("{hours}h ago")
+    } else if days == 1 {
+        String::from("1 day ago")
+    } else {
+        format!("{days} days ago")
+    }
+}
+
 pub(crate) fn parse_time(text: &str) -> Option<i64> {
     let field = |from: usize, to: usize| text.get(from..to)?.parse::<i64>().ok();
     let (year, month, day) = (field(0, 4)?, field(5, 7)?, field(8, 10)?);
