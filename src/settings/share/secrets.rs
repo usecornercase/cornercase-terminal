@@ -39,19 +39,25 @@ pub(crate) fn warnings(shared: &Shared) -> Vec<String> {
 fn texts(shared: &Shared) -> Vec<(String, String)> {
     let mut texts = Vec::new();
     for (key, value) in &shared.settings {
-        match value {
-            Value::Object(map) => {
-                for (name, inner) in map {
-                    texts.extend(text_of(inner).map(|text| (format!("{key} of {name}"), text)));
-                }
-            }
-            other => texts.extend(text_of(other).map(|text| (key.clone(), text))),
-        }
+        nested(key, &mut Vec::new(), value, &mut texts);
     }
     for repository in &shared.repositories {
         texts.extend(repository_texts(repository));
     }
     texts
+}
+
+fn nested<'a>(key: &str, names: &mut Vec<&'a str>, value: &'a Value, texts: &mut Vec<(String, String)>) {
+    let Value::Object(map) = value else {
+        let place = if names.is_empty() { key.to_string() } else { format!("{key} of {}", names.join(".")) };
+        texts.extend(text_of(value).map(|text| (place, text)));
+        return;
+    };
+    for (name, inner) in map {
+        names.push(name);
+        nested(key, names, inner, texts);
+        names.pop();
+    }
 }
 
 fn repository_texts(repository: &Repository) -> Vec<(String, String)> {

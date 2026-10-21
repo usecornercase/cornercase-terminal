@@ -278,7 +278,7 @@ mod the_copy_toast {
     fn says_what_was_copied_and_left_out() {
         assert_eq!(
             copied(&exported(&[])),
-            "setup copied: 12 settings, 1 repositories · left out: tokens, personal settings"
+            "setup copied: 12 settings, 1 repository · left out: tokens, personal settings"
         );
     }
 
@@ -286,7 +286,7 @@ mod the_copy_toast {
     fn names_the_first_warning() {
         assert_eq!(
             copied(&exported(&["setup of a sets NPM_TOKEN: check no secret goes with it", "second"])),
-            "setup copied: 12 settings, 1 repositories · left out: tokens, personal settings · check: setup of a sets \
+            "setup copied: 12 settings, 1 repository · left out: tokens, personal settings · check: setup of a sets \
              NPM_TOKEN: check no secret goes with it"
         );
     }

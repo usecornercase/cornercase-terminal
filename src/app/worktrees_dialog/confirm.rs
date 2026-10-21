@@ -8,16 +8,13 @@ use crate::app::App;
 use crate::app::worktrees::lock_note;
 use crate::flows::run::RoleWorktree;
 use crate::project::Hierarchy;
+use crate::text::plural;
 use crate::ui;
 use crate::worktrees::{Dialog, Kind, Live, Row, Scan, Step};
 
 const INDENT: &str = "  ";
 
 const UNCHECKED: &str = "not checked, so it may have changes";
-
-pub(super) fn plural(n: usize, one: &str, many: &str) -> String {
-    if n == 1 { format!("1 {one}") } else { format!("{n} {many}") }
-}
 
 pub(in crate::app) fn wrap(lines: Vec<Line<'static>>, width: u16) -> Vec<Line<'static>> {
     let width = usize::from(width).max(1);

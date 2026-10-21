@@ -71,6 +71,12 @@ fn agent_commands_are_scanned_by_agent() {
 }
 
 #[test]
+fn agent_modes_are_scanned_by_agent_and_mode() {
+    let shared = with_setting("agent_modes", json!({"claude": {"fast": ["--api-key", "x"], "plan": ["--plan"]}}));
+    assert_eq!(warnings(&shared), vec!["agent_modes of claude.fast passes --api-key: check no secret goes with it"]);
+}
+
+#[test]
 fn a_plain_string_setting_is_named_by_its_key() {
     let shared = with_setting("prompt", json!("Authorization: Bearer abcdefghijklmnopqrstuvwxyz"));
     assert_eq!(warnings(&shared), vec!["prompt holds a Bearer token: check no secret goes with it"]);

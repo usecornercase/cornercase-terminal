@@ -52,6 +52,18 @@ fn a_preview_without_changes_imports_nothing() {
 }
 
 #[test]
+fn the_export_line_counts_in_the_singular_and_the_plural() {
+    let exported = |settings, repositories| SetupExported { settings, repositories, ..SetupExported::default() };
+    assert_eq!(
+        (wrote(&exported(1, 1), Path::new("a.toml")), wrote(&exported(12, 0), Path::new("a.toml"))),
+        (
+            "exported 1 setting and 1 repository to a.toml\n".to_string(),
+            "exported 12 settings and 0 repositories to a.toml\n".to_string()
+        )
+    );
+}
+
+#[test]
 fn a_folder_is_refused_as_the_file_to_write() {
     let dir = crate::test_util::TempDir::new();
     let refused = written(dir.path(), "x").expect_err("a folder");

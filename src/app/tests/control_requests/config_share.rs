@@ -239,7 +239,7 @@ mod importing {
         let described = imported(&mut s, text, Some(&["interface"]));
 
         assert_eq!((s.app.config.sidebar.as_str(), s.app.config.prompt.as_str()), ("tree", "{url}"));
-        assert_eq!(described.notices[0], "imported 1 settings and 0 repositories");
+        assert_eq!(described.notices[0], "imported 1 setting and 0 repositories");
     }
 
     #[test]

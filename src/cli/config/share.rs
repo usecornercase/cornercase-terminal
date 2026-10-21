@@ -35,13 +35,13 @@ pub(super) fn export(to: Option<&Path>, json: bool) -> Result<()> {
     match (json, to) {
         (true, _) => print_json(&value),
         (false, None) => print_out(&exported.text),
-        (false, Some(file)) => print_out(&format!(
-            "exported {} settings and {} repositories to {}\n",
-            exported.settings,
-            exported.repositories,
-            file.display()
-        )),
+        (false, Some(file)) => print_out(&wrote(&exported, file)),
     }
+}
+
+fn wrote(exported: &SetupExported, file: &Path) -> String {
+    let (settings, repositories) = share::counts(exported.settings, exported.repositories);
+    format!("exported {settings} and {repositories} to {}\n", file.display())
 }
 
 fn written(file: &Path, text: &str) -> Result<()> {

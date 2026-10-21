@@ -110,7 +110,7 @@ fn preview_then_import_applies_the_ticked_sections() {
     click_section(&mut s.app, "agents");
     press(&mut s.app, IMPORT);
     assert_eq!((s.app.config.sidebar.as_str(), s.app.config.prompt.as_str()), ("tree", "{url}"));
-    assert_eq!(toast(&s.app), Some("imported 1 settings and 0 repositories"));
+    assert_eq!(toast(&s.app), Some("imported 1 setting and 0 repositories"));
     assert_eq!(s.app.overlay.as_ref().map(Overlay::name), Some("settings"));
 }
 

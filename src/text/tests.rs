@@ -34,3 +34,11 @@ fn escape_hidden_shows_invisible_characters(#[case] text: &str, #[case] shown: &
 fn wrap_cells_keeps_every_character_within_the_width(#[case] text: &str, #[case] max: usize, #[case] rows: &[&str]) {
     assert_eq!(wrap_cells(text, max), rows);
 }
+
+#[test]
+fn plural_names_one_in_the_singular() {
+    assert_eq!(
+        (plural(1, "repository", "repositories"), plural(0, "repository", "repositories"), plural(2, "a", "b")),
+        ("1 repository".to_string(), "0 repositories".to_string(), "2 b".to_string())
+    );
+}

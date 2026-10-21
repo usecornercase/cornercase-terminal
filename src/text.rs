@@ -83,6 +83,10 @@ pub(crate) fn truncate_left(s: &str, max: usize) -> String {
     format!("…{}", tail.trim_start_matches('…'))
 }
 
+pub(crate) fn plural(n: usize, one: &str, many: &str) -> String {
+    if n == 1 { format!("1 {one}") } else { format!("{n} {many}") }
+}
+
 pub(crate) fn one_line(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }

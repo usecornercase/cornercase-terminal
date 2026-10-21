@@ -4,6 +4,7 @@ use serde_json::Value;
 use toml::{Table, Value as Toml};
 
 use crate::config::Config;
+use crate::text;
 
 pub(crate) const VERSION: u64 = 1;
 pub(crate) const MAX_BYTES: usize = 256 * 1024;
@@ -128,6 +129,10 @@ pub(crate) struct Shared {
     pub(crate) repositories: Vec<Repository>,
     pub(crate) connect: Vec<String>,
     pub(crate) unknown: Vec<String>,
+}
+
+pub(crate) fn counts(settings: usize, repositories: usize) -> (String, String) {
+    (text::plural(settings, "setting", "settings"), text::plural(repositories, "repository", "repositories"))
 }
 
 pub(crate) fn too_large() -> String {

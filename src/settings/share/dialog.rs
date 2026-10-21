@@ -273,10 +273,8 @@ impl Dialog {
 }
 
 pub(crate) fn copied(exported: &SetupExported) -> String {
-    let copied = format!(
-        "setup copied: {} settings, {} repositories · left out: tokens, personal settings",
-        exported.settings, exported.repositories
-    );
+    let (settings, repositories) = super::counts(exported.settings, exported.repositories);
+    let copied = format!("setup copied: {settings}, {repositories} · left out: tokens, personal settings");
     match exported.warnings.first() {
         Some(warning) => format!("{copied} · check: {warning}"),
         None => copied,

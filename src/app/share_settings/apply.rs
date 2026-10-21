@@ -11,7 +11,7 @@ use crate::control::contract::Refusal;
 use crate::log;
 use crate::settings::Page;
 use crate::settings::share::preview::{self, OpenRepository};
-use crate::settings::share::{Repository, Section, Shared, settings_of};
+use crate::settings::share::{self, Repository, Section, Shared, settings_of};
 use crate::text;
 
 const ROWLESS: [&str; 7] =
@@ -46,7 +46,8 @@ impl App {
             settings = settings,
             repositories = repositories
         );
-        let first = format!("imported {settings} settings and {repositories} repositories");
+        let (settings, repositories) = share::counts(settings, repositories);
+        let first = format!("imported {settings} and {repositories}");
         Ok([vec![first], imported.notices].concat())
     }
 
