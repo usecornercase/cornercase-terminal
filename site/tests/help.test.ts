@@ -46,3 +46,12 @@ for (const columns of [140, 70]) test(`Help sits beside Quit and opens its menu 
   assert.ok(app.textAt('guided tour needs a real cornercase'));
   app.destroy();
 });
+
+test('with a prefix key, Help lists the keys menu and opens it', () => {
+  const app = demo(140);
+  app.config.prefix = 'ctrl+]';
+  openHelp(app, 140);
+  press(app, 'keys menu');
+  assert.equal(app.overlay?.kind, 'keys');
+  app.destroy();
+});

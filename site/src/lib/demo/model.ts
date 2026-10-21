@@ -184,7 +184,7 @@ export type MenuAction =
   | { kind: 'worktrees'; project: number }
   | { kind: 'help'; item: HelpItem };
 
-export type HelpItem = 'tour' | 'catalogue' | 'docs' | 'bug';
+export type HelpItem = 'tour' | 'catalogue' | 'docs' | 'keys' | 'bug';
 
 export interface PickItem {
   value: string;

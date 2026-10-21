@@ -125,7 +125,13 @@ const OPEN_IN_NEEDS = 'this needs cornercase on your computer: the demo opens no
 const TOUR_NEEDS = 'the guided tour needs a real cornercase: cornercase tour starts it';
 export const DOCS_URL = 'https://usecornercase.dev/docs/';
 export const BUG_URL = 'https://github.com/usecornercase/cornercase-terminal/issues/new';
-const HELP_LABELS: Record<HelpItem, string> = { tour: 'tour', catalogue: 'catalogue…', docs: 'docs', bug: 'report a bug' };
+const HELP_LABELS: Record<HelpItem, string> = {
+  tour: 'tour',
+  catalogue: 'catalogue…',
+  docs: 'docs',
+  keys: 'keys menu',
+  bug: 'report a bug',
+};
 const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
 const WORKTREES_NEED = 'this needs cornercase on your computer: the demo has no worktrees on disk to list';
 const SETUP_NEEDS = 'this needs cornercase on your computer: the demo runs no setup scripts';
@@ -1316,13 +1322,14 @@ export class App {
 
   openHelp(at: Pos): void {
     this.nav = null;
-    const items: HelpItem[] = ['tour', 'catalogue', 'docs', 'bug'];
+    const items: HelpItem[] = ['tour', 'catalogue', 'docs', ...(this.config.prefix ? ['keys' as const] : []), 'bug'];
     this.overlay = { kind: 'menu', at, actions: items.map((item) => ({ kind: 'help', item })) };
     this.dirty();
   }
 
   private helpAction(item: HelpItem): void {
-    if (item === 'docs' || item === 'bug') {
+    if (item === 'keys') this.overlay = { kind: 'keys', group: null };
+    else if (item === 'docs' || item === 'bug') {
       const url = item === 'docs' ? DOCS_URL : BUG_URL;
       this.emit('copy', url);
       this.notify(`copied ${url}`);
