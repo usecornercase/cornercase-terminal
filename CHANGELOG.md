@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.184
+
+- **File type icons.** The files tree, the changes panel's file rows and the files search results show an icon for each file's type, and folders an open or closed folder, in the colour of the type (the name keeps its git colour). They show in Ghostty, kitty and WezTerm (also inside tmux) and in the browser window, which already have the font that draws them, and in any window where the icon bar is on. Settings → UI → **icons**: `auto` (the default) decides for each window, `on` draws them in every window (other terminals need a Nerd Font), `off` never.
+- The compact bar's and the panels' search and full-screen buttons now follow that setting instead of the icon bar's; with `auto`, turning the icon bar on still turns them on everywhere.
+- Scripts: `cornercase config set icons auto|on|off`.
+
 ## 0.12.183
 
 - **Stacked pull requests.** When a workspace's pull request is part of a stack on GitHub, its row shows its layer after the number, `#483• 2/3`, counted from the bottom, in red when a pull request below failed its checks and in orange when one has merge conflicts, since either keeps this one from merging. Click it (or the number) to see the whole stack, top first, with each layer's checks and the workspace that holds it (click a layer to go there), what keeps the merge waiting, and, when a layer below was merged and your branch is behind, that it needs a pull before you push again. It costs one more `gh` call per stack; a pull request outside a stack is checked every 5 minutes, and GitHub Enterprise Server, which has no stacks yet, only once.
