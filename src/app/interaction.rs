@@ -9,6 +9,7 @@ use super::menus::Target;
 use crate::changes::selection::Spot;
 use crate::files;
 use crate::state;
+use crate::text::stretch::Stretch;
 use crate::ui::{self};
 
 pub(super) const DOUBLE_CLICK: Duration = Duration::from_millis(400);
@@ -79,8 +80,8 @@ impl Clicks {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Anchor {
-    File(u32),
-    Diff(Spot),
+    File { line: u32, text: Option<Stretch<u32>> },
+    Diff { spot: Spot, text: Option<Stretch<Spot>> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -231,14 +232,14 @@ impl App {
         match ev.kind {
             MouseEventKind::Drag(MouseButton::Left) => {
                 self.mark_moved();
-                self.select_lines((workspace, anchor), ev.row, panel_area);
+                self.select_lines((workspace, anchor), Position::new(ev.column, ev.row), panel_area);
                 self.auto_scroll_lines(Instant::now());
             }
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
                 if let Some(delta) = wheel(ev.kind) {
                     self.scroll_lines((workspace, anchor), panel_area, delta);
                 }
-                self.select_lines((workspace, anchor), ev.row, panel_area);
+                self.select_lines((workspace, anchor), Position::new(ev.column, ev.row), panel_area);
             }
             _ => self.screen.drag = None,
         }
@@ -250,7 +251,7 @@ impl App {
         }
     }
 
-    pub(super) fn lines_edge(&self) -> Option<(Rect, u16, isize)> {
+    pub(super) fn lines_edge(&self) -> Option<(Rect, Position, isize)> {
         let Some(Drag::Lines { workspace, path, anchor, area, moved: true, .. }) = &self.screen.drag else {
             return None;
         };
@@ -260,11 +261,11 @@ impl App {
         }
         let panel_area = self.layout(*area).shown(self.screen.nav).changes;
         let delta = self.lines_delta(*anchor, panel_area, pos.y)?;
-        Some((panel_area, pos.y, delta))
+        Some((panel_area, pos, delta))
     }
 
     pub(super) fn auto_scroll_lines(&mut self, now: Instant) {
-        let Some((panel_area, row, delta)) = self.lines_edge() else { return };
+        let Some((panel_area, pos, delta)) = self.lines_edge() else { return };
         let Some(Drag::Lines { workspace, anchor, scrolled, .. }) = &mut self.screen.drag else { return };
         if scrolled.is_some_and(|at| now.duration_since(at) < LINES_SCROLL_EVERY) {
             return;
@@ -272,34 +273,36 @@ impl App {
         *scrolled = Some(now);
         let at = (*workspace, *anchor);
         self.scroll_lines(at, panel_area, delta);
-        self.select_lines(at, row, panel_area);
+        self.select_lines(at, pos, panel_area);
     }
 
     fn shows_lines(&self, workspace: u64, path: &str, anchor: Anchor) -> bool {
         match anchor {
-            Anchor::File(_) => self.shows_file(workspace, path),
-            Anchor::Diff(spot) => self.shows_diff_lines(workspace, path, spot),
+            Anchor::File { .. } => self.shows_file(workspace, path),
+            Anchor::Diff { spot, .. } => self.shows_diff_lines(workspace, path, spot),
         }
     }
 
     fn lines_delta(&self, anchor: Anchor, panel_area: Rect, y: u16) -> Option<isize> {
         match anchor {
-            Anchor::File(_) => ui::files::edge(panel_area, &self.files_view()?, y),
-            Anchor::Diff(_) => ui::changes::edge(panel_area, &self.panel_view()?, y),
+            Anchor::File { .. } => ui::files::edge(panel_area, &self.files_view()?, y),
+            Anchor::Diff { .. } => ui::changes::edge(panel_area, &self.panel_view()?, y),
         }
     }
 
     fn scroll_lines(&mut self, (workspace, anchor): (u64, Anchor), panel_area: Rect, delta: isize) {
         match anchor {
-            Anchor::File(_) => self.scroll_viewer(workspace, panel_area, delta),
-            Anchor::Diff(_) => self.scroll_diff(panel_area, delta),
+            Anchor::File { .. } => self.scroll_viewer(workspace, panel_area, delta),
+            Anchor::Diff { .. } => self.scroll_diff(panel_area, delta),
         }
     }
 
-    fn select_lines(&mut self, (workspace, anchor): (u64, Anchor), row: u16, panel_area: Rect) {
+    fn select_lines(&mut self, (workspace, anchor): (u64, Anchor), pos: Position, panel_area: Rect) {
         match anchor {
-            Anchor::File(line) => self.select_file_lines(workspace, line, row, panel_area),
-            Anchor::Diff(_) => self.select_diff_lines(row, panel_area),
+            Anchor::File { line, text: None } => self.select_file_lines(workspace, line, pos.y, panel_area),
+            Anchor::File { text: Some(text), .. } => self.select_file_text(workspace, text, pos, panel_area),
+            Anchor::Diff { text: None, .. } => self.select_diff_lines(pos.y, panel_area),
+            Anchor::Diff { text: Some(text), .. } => self.select_diff_text(text, pos, panel_area),
         }
     }
 }

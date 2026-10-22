@@ -153,3 +153,46 @@ fn an_svg_stays_text() {
 
     assert_eq!(read(&path, None).expect("read").lines().len(), 1);
 }
+
+mod lines_of_the_source {
+    use super::*;
+    use crate::text::stretch::{Point, Stretch};
+
+    fn content(source: &str) -> Content {
+        let dir = TempDir::new();
+        let path = dir.path().join("a.txt");
+        fs::write(&path, source).expect("write");
+        read(&path, None).expect("read")
+    }
+
+    #[test]
+    fn each_line_is_the_files_own_text_without_its_break() {
+        let content = content("all:\r\n\tcargo build\r\n\ntest:\n\tcargo test");
+        let lines: Vec<_> = (1..=5).map(|n| content.source_line(n)).collect();
+        assert_eq!(lines, [Some("all:"), Some("\tcargo build"), Some(""), Some("test:"), Some("\tcargo test")]);
+        assert_eq!((content.source_line(0), content.source_line(6)), (None, None));
+    }
+
+    #[test]
+    fn an_empty_file_has_no_lines() {
+        assert_eq!(content("").source_line(1), None);
+    }
+
+    #[test]
+    fn a_stretch_is_cut_from_the_source_with_tabs_kept() {
+        let content = content("fn main() {\n\trun();\n}\n");
+        let stretch = Stretch { from: Point { line: 1, offset: 3 }, to: Point { line: 2, offset: 2 } };
+        assert_eq!(content.cut(stretch).as_deref(), Some("main() {\n\tr"));
+        assert_eq!(content.cut(Stretch::within(2, 1..4)).as_deref(), Some("run"));
+    }
+
+    #[test]
+    fn a_stretch_past_the_end_is_clamped_to_the_text() {
+        let content = content("one\ntwo\n");
+        let past = Stretch { from: Point { line: 2, offset: 1 }, to: Point { line: 9, offset: 3 } };
+        let clamped = content.clamped(past).expect("clamped");
+        assert_eq!((clamped.to.line, clamped.to.offset), (2, 3));
+        assert_eq!(content.cut(clamped).as_deref(), Some("wo"));
+        assert_eq!(content.clamped(Stretch::within(5, 0..1)), None);
+    }
+}

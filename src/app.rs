@@ -284,6 +284,7 @@ impl App {
         self.panels.todo.cancel();
         self.panels.files.unfocus();
         self.panels.files.set_full_screen(false);
+        self.panels.files.drop_stretches();
         self.panels.changes.unfocus();
         self.panels.changes.clear_selection();
     }

@@ -898,3 +898,4 @@ mod staging {
 }
 
 mod selection;
+mod text;

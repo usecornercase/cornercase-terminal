@@ -8,7 +8,6 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::{Position, Rect};
 
 use super::input::wheel;
-use super::interaction::{Anchor, Drag};
 use super::layout::Side;
 use super::{App, AppEvent};
 use crate::changes::{Checkout, Tints};
@@ -23,6 +22,7 @@ use crate::ui;
 use crate::ui::files::{self as panel, Action, Bar, FileView, Found, Hit, Screen, SearchView, TreeRow, TreeView};
 
 mod find;
+mod selection;
 
 fn text_rows(text: &search::Text) -> Vec<Found> {
     let mut rows = Vec::new();
@@ -229,6 +229,7 @@ impl App {
             unfolded: viewer.unfolded.clone(),
             scroll: viewer.scroll,
             selection: viewer.selection,
+            stretch: viewer.stretched(),
             find: viewer.finding().cloned().map(|mut find| {
                 find.focused &= self.overlay.is_none();
                 find
@@ -314,7 +315,7 @@ impl App {
     pub(super) fn files_view(&self) -> Option<panel::View> {
         let (workspace, root) = self.files_target()?;
         let screen = match self.panels.files.viewer(workspace) {
-            Some(viewer) => Screen::File(self.file_view(workspace, viewer)),
+            Some(viewer) => Screen::File(Box::new(self.file_view(workspace, viewer))),
             None => match self.found_view(workspace) {
                 Some(search) => Screen::Search(search),
                 None => Screen::Tree(self.folder_view(workspace)),
@@ -358,6 +359,7 @@ impl App {
             Some(Hit::FullScreen) => self.panels.files.set_full_screen(!self.panels.files.full_screen()),
             Some(Hit::Row(i)) => self.click_file_row(workspace, &view, i),
             Some(Hit::Line(n)) => self.press_file_line(workspace, n, area),
+            Some(Hit::Text(n)) => self.press_file_text(workspace, n, &view, (pos, panel_area, area)),
             Some(Hit::Fold(key)) => self.toggle_unfolded(workspace, key),
             Some(Hit::Action(action)) => {
                 return self.file_action(&Checkout { workspace, dir: root, base: None }, action, pos, area);
@@ -397,15 +399,6 @@ impl App {
             self.panels.files.toggle(workspace, &row.path);
         } else {
             self.panels.files.open_file(workspace, &row.path);
-        }
-    }
-
-    fn press_file_line(&mut self, workspace: u64, n: u32, area: Rect) {
-        if let Some(viewer) = self.panels.files.viewer_mut(workspace) {
-            viewer.selection = Some((n, n));
-            let path = viewer.path.clone();
-            self.screen.drag =
-                Some(Drag::Lines { workspace, path, anchor: Anchor::File(n), area, moved: false, scrolled: None });
         }
     }
 
@@ -523,28 +516,6 @@ impl App {
         }
     }
 
-    pub(super) fn shows_file(&self, workspace: u64, path: &str) -> bool {
-        self.files_shown()
-            && self.files_target().is_some_and(|(id, _)| id == workspace)
-            && self.panels.files.viewer(workspace).is_some_and(|viewer| viewer.path == path)
-    }
-
-    pub(super) fn scroll_viewer(&mut self, workspace: u64, panel_area: Rect, delta: isize) {
-        let Some(view) = self.files_view() else { return };
-        let max = panel::max_scroll(panel_area, &view);
-        if let Some(viewer) = self.panels.files.viewer_mut(workspace) {
-            viewer.scroll = viewer.scroll.min(max).saturating_add_signed(delta).min(max);
-        }
-    }
-
-    pub(super) fn select_file_lines(&mut self, workspace: u64, anchor: u32, row: u16, panel_area: Rect) {
-        let Some(view) = self.files_view() else { return };
-        let Some(line) = panel::line_near(panel_area, &view, row) else { return };
-        if let Some(viewer) = self.panels.files.viewer_mut(workspace) {
-            viewer.selection = Some((anchor, line));
-        }
-    }
-
     fn file_action(&mut self, target: &Checkout, action: Action, pos: Position, area: Rect) -> Result<()> {
         let workspace = target.workspace;
         let Some(viewer) = self.panels.files.viewer(workspace) else { return Ok(()) };
@@ -566,7 +537,9 @@ impl App {
                 self.ask_agent(workspace, &reference);
             }
             Action::Copy => {
-                let text = viewer.content.as_ref().and_then(|content| content.text(selected)).unwrap_or(path);
+                let content = viewer.content.as_ref();
+                let cut = viewer.stretched().and_then(|stretch| content?.cut(stretch));
+                let text = cut.or_else(|| content.and_then(|c| c.text(selected))).unwrap_or(path);
                 self.copy(&text);
             }
         }

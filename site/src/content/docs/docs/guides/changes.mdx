@@ -151,14 +151,14 @@ The editor gets the line as `+11`, which `vi`, `vim`, `nvim`, `nano`, `emacs` an
 
 ## Select lines
 
-Click a line of a diff to select it, or press and drag over several: added, removed and unchanged lines, also the ones **`↕ unchanged lines`** shows. A selection stays in one file; dragging past its first or last line, or over another file, keeps the nearest line of that file. Hold the pointer on the first or last row shown, or past it, and the panel scrolls while the selection follows; the wheel scrolls it too while you keep the button pressed.
+Click a line of a diff to select it, or press on its line numbers and drag over several: added, removed and unchanged lines, also the ones **`↕ unchanged lines`** shows. To select part of a line, press on its code and drag: the characters from where you pressed to the pointer are selected, across lines, and shown reversed as in your panes. A selection stays in one file; dragging past its first or last line, or over another file, keeps the nearest line of that file. Hold the pointer on the first or last row shown, or past it, and the panel scrolls while the selection follows; the wheel scrolls it too while you keep the button pressed.
 
-The bottom of the panel then says which lines, such as `lines 9-12`, and its buttons act on them:
+The bottom of the panel then says which lines the selection covers, such as `lines 9-12`, and its buttons act on them:
 
 | Button | Does |
 | --- | --- |
-| **ask agent** | Types a reference such as `src/returns/address.rs:9-12 ` into the agent running in the file's workspace and switches to its tab. The numbers are those of the file as it is now; when only removed lines are selected, it types the hunk's reference, as the hunk's **ask agent** does. Without an agent, it copies the reference. |
-| **copy** | Copies the selected lines' code to your clipboard, as it is in the file (tabs included), without the `+`/`-` bar and the line numbers. Removed and added lines are copied in the order shown; unchanged lines between hunks only when they are shown. |
+| **ask agent** | Types a reference to the lines covered, such as `src/returns/address.rs:9-12 ` into the agent running in the file's workspace and switches to its tab. The numbers are those of the file as it is now; when only removed lines are selected, it types the hunk's reference, as the hunk's **ask agent** does. Without an agent, it copies the reference. |
+| **copy** | Copies the selected characters or lines to your clipboard, as it is in the file (tabs included), without the `+`/`-` bar and the line numbers. Removed and added lines are copied in the order shown; unchanged lines between hunks only when they are shown. |
 
 Click an empty spot of the diff (a hunk's top line outside its buttons, or the space between files) to clear the selection and get **collapse all** and the viewed count back. Collapsing the file or marking it viewed clears it too; the filter, another tab or workspace, or closing the panel only hide it until its lines show again, unless the file changed meanwhile.
 

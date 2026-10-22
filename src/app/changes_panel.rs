@@ -389,6 +389,7 @@ impl App {
     ) -> bool {
         match hit {
             Some(PanelHit::Line(i, spot)) => self.press_diff_line(view, (i, spot), at.1),
+            Some(PanelHit::Text(i, spot)) => self.press_diff_text(view, (i, spot), (at.0, panel_area, at.1)),
             Some(PanelHit::Lines(action)) => self.selected_lines_action(view, action),
             None if panel::parts(panel_area, view).body.contains(at.0) => self.panels.changes.clear_selection(),
             _ => return false,
@@ -424,7 +425,7 @@ impl App {
             Some(PanelHit::Stage(_)) => self.stage_clicked(chosen),
             Some(PanelHit::Discard(_)) => self.ask_discard(chosen),
             Some(PanelHit::Gap(_, h)) => self.read_gap(view.mode, chosen, h),
-            Some(PanelHit::Action(..) | PanelHit::Line(..) | PanelHit::Lines(_)) | None => {}
+            Some(PanelHit::Action(..) | PanelHit::Line(..) | PanelHit::Text(..) | PanelHit::Lines(_)) | None => {}
         }
     }
 

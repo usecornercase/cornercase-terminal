@@ -7,12 +7,12 @@ import type { Cursor } from '../term/canvas';
 import { BOLD, Grid, type Rect, contains, rect } from '../term/grid';
 import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
-import { BASES, type ChangesMode, type ChangesSelection, type FileDiff, type HunkAction, type LinesAction, changesLineEdge, changesLineNear, hasChanges, hunkLines, linesReference, linesText, selectedLines, shownChanges, workspaceDiff } from './changes';
+import { BASES, type ChangesMode, type ChangesSelection, type FileDiff, type HunkAction, type LinesAction, type Spot, changesLineEdge, changesLineNear, changesStretchNear, compareSpots, hasChanges, hunkLines, linesReference, linesText, selectedLines, shownChanges, workspaceDiff } from './changes';
 import { TodoPanel, todoWidth } from './todo';
 import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
 import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
 import { type FindState, findAll, firstFrom, nearest, start as hitStart } from './find';
-import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, fileLines, fileMax, foundRows, lineEdge, lineNear, linkAt, ordered, resolveLink, reveal, selectable, selectedText, topLine, typing, viewFile, wanted, workspaceFiles } from './files';
+import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, compare, coveredLines, fileLines, fileMax, foundRows, lineEdge, lineNear, linkAt, resolveLink, reveal, selectable, selectedText, stretchNear, topLine, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
   GROUP_STYLES,
@@ -99,6 +99,7 @@ import {
 import { AGENT_KINDS, Agent, Editor, type Host, type Key, type Place, Shell } from './programs';
 import { type KeysAction, type KeysGroup, type KeysStep, isPrefix, keysItems, keysLookup, prefixClash, prefixOf } from './keys';
 import { type Node, type PanePlace, beside, fits, hasRoom, moved, placeArea, placeAt, ratioAt, remove, setRatio, split, visible } from './split';
+import { type Stretch, dragged as extended } from './stretch';
 import { type Line, folderSlug, seg, slug, truncateRight } from './text';
 import { type Drag, type Frame, Painter, type Region } from './ui';
 
@@ -446,6 +447,7 @@ export class App {
   changesScroll = 0;
   changesSelection: ChangesSelection | null = null;
   private changesSelecting = false;
+  private changesAnchor: Stretch<Spot> | null = null;
   private changesScrolled = -Infinity;
   changesFilter: { query: string; focused: boolean } | null = null;
   todo = new TodoPanel([
@@ -1026,11 +1028,23 @@ export class App {
     const edge = lineEdge(this, h.y);
     if (!edge) return;
     this.scrollFiles(edge.delta, edge.max);
-    const line = lineNear(this, h.y);
-    if (line !== null) viewer.selection = [from, line];
+    this.extendFile(h.x, h.y);
     this.files.scrolled = this.now();
     this.dirty();
     this.after(LINES_SCROLL_EVERY, () => this.autoScrollLines());
+  }
+
+  private extendFile(x: number, y: number): void {
+    const viewer = this.filesPlace()?.viewer;
+    const from = this.files.selecting;
+    if (!viewer || from === null) return;
+    const anchor = this.files.anchor;
+    const pointer = anchor && stretchNear(this, x, y);
+    if (anchor && pointer) viewer.stretch = extended(compare, viewer.stretch, anchor, pointer);
+    else if (!anchor) {
+      const line = lineNear(this, y);
+      if (line !== null) viewer.selection = [from, line];
+    }
   }
 
   private autoScrollChangesLines(): void {
@@ -1040,20 +1054,28 @@ export class App {
     const edge = changesLineEdge(this, h.y);
     if (!edge) return;
     this.scrollChanges(edge.delta, edge.max);
-    this.extendChangesSelection(picked.file, h.y);
+    this.extendChangesSelection(picked.file, h.x, h.y);
     this.changesScrolled = this.now();
     this.dirty();
     this.after(LINES_SCROLL_EVERY, () => this.autoScrollChangesLines());
   }
 
-  private extendChangesSelection(file: number, y: number): void {
+  private extendChangesSelection(file: number, x: number, y: number): void {
+    const selection = this.changesSelection;
+    if (!selection) return;
+    if (this.changesAnchor) {
+      const pointer = changesStretchNear(this, file, x, y);
+      if (pointer) selection.stretch = extended(compareSpots, selection.stretch ?? null, this.changesAnchor, pointer);
+      return;
+    }
     const end = changesLineNear(this, file, y);
-    if (end && this.changesSelection) this.changesSelection.end = end;
+    if (end) selection.end = end;
   }
 
-  selectChangesLine(f: FileDiff, h: number, l: number): void {
-    this.changesSelection = { key: this.fileKey(f), before: f.change.before, after: f.change.after, anchor: [h, l], end: [h, l] };
+  selectChangesLine(f: FileDiff, h: number, l: number, text: { x: number; y: number } | null = null): void {
+    this.changesSelection = { key: this.fileKey(f), before: f.change.before, after: f.change.after, anchor: [h, l], end: [h, l], stretch: null };
     this.changesSelecting = true;
+    this.changesAnchor = text && changesStretchNear(this, this.changesDiff().findIndex((x) => this.fileKey(x) === this.fileKey(f) && x.change.before === f.change.before && x.change.after === f.change.after), text.x, text.y);
     this.dirty();
   }
 
@@ -1073,9 +1095,9 @@ export class App {
     const w = f && (f.owner?.workspace ?? this.workspace());
     if (!picked || !f || !w) return;
     if (action === 'copy') {
-      this.emit('copy', linesText(f, picked.from, picked.to));
+      this.emit('copy', linesText(f, picked.from, picked.to, picked.stretch));
       this.notify('copied to clipboard');
-    } else this.askAgent(w, linesReference(f, picked.from, picked.to));
+    } else this.askAgent(w, linesReference(f, picked.from, picked.to, picked.stretch));
     this.dirty();
   }
 
@@ -2131,11 +2153,13 @@ export class App {
     this.dirty();
   }
 
-  selectFileLine(n: number): void {
+  selectFileLine(n: number, text: { x: number; y: number } | null = null): void {
     const viewer = this.filesPlace()?.viewer;
     if (!viewer) return;
     viewer.selection = [n, n];
+    viewer.stretch = null;
     this.files.selecting = n;
+    this.files.anchor = text && stretchNear(this, text.x, text.y);
     this.dirty();
   }
 
@@ -2144,7 +2168,7 @@ export class App {
     const w = this.workspace();
     const viewer = this.filesPlace()?.viewer;
     if (!p || !w || !viewer) return;
-    const sel = viewer.selection && ordered(viewer.selection);
+    const sel = coveredLines(viewer);
     const files = this.filesMap();
     if (action === 'open in…') this.bug(OPEN_IN_NEEDS);
     else if (action === 'open') this.openInEditor(p, w, viewer.path, files.get(viewer.path) ?? '', sel ? sel[0] : 1);
@@ -4454,15 +4478,13 @@ export class App {
     }
     if (this.changesSelecting && buttons & 1) {
       const picked = selectedLines(this, shownChanges(this, this.areas()));
-      if (picked) this.extendChangesSelection(picked.file, y);
+      if (picked) this.extendChangesSelection(picked.file, x, y);
       this.autoScrollChangesLines();
       this.dirty();
       return;
     }
     if (this.files.selecting !== null && buttons & 1) {
-      const line = lineNear(this, y);
-      const viewer = this.filesPlace()?.viewer;
-      if (line !== null && viewer) viewer.selection = [this.files.selecting, line];
+      this.extendFile(x, y);
       this.autoScrollLines();
       this.dirty();
       return;
@@ -4630,7 +4652,7 @@ export class App {
     const picked = shown && selectedLines(this, shown);
     if (shown && picked) {
       this.scrollChanges(dy > 0 ? 3 : -3, shown.max);
-      this.extendChangesSelection(picked.file, y);
+      this.extendChangesSelection(picked.file, x, y);
       this.dirty();
       return true;
     }
@@ -4639,8 +4661,7 @@ export class App {
     const max = fileMax(this);
     if (from !== null && viewer && max !== null) {
       this.scrollFiles(dy > 0 ? 3 : -3, max);
-      const line = lineNear(this, y);
-      if (line !== null) viewer.selection = [from, line];
+      this.extendFile(x, y);
       this.dirty();
       return true;
     }

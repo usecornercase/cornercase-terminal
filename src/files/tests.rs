@@ -17,7 +17,7 @@ fn panel_with_listings() -> Panel {
 fn content(lines: &[&str]) -> Content {
     let source = lines.join("\n").into();
     let lines = lines.iter().map(|l| (*l).to_string()).collect();
-    Content { stamp: Stamp::default(), language: None, body: Body::Text { lines, styles: None, source } }
+    Content { stamp: Stamp::default(), language: None, body: Body::text(lines, None, source) }
 }
 
 fn paths(rows: &[Row]) -> Vec<(&str, u16)> {

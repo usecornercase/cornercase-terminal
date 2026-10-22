@@ -1,19 +1,30 @@
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 
 use super::super::App;
 use super::super::interaction::{Anchor, Drag};
 use super::ready;
 use crate::changes::selection::{self, Selection, Spot};
+use crate::text::stretch::Stretch;
 use crate::ui::changes::{self as panel, LinesAction};
 
 impl App {
     pub(super) fn press_diff_line(&mut self, view: &panel::View, (i, spot): (usize, Spot), area: Rect) {
+        self.press_diff(view, (i, spot, None), area);
+    }
+
+    pub(super) fn press_diff_text(&mut self, view: &panel::View, (i, spot): (usize, Spot), at: (Position, Rect, Rect)) {
+        let (pos, panel_area, area) = at;
+        self.press_diff(view, (i, spot, panel::stretch_near(panel_area, view, i, pos)), area);
+    }
+
+    fn press_diff(&mut self, view: &panel::View, (i, spot, text): (usize, Spot, Option<Stretch<Spot>>), area: Rect) {
         let Some(file) = ready(view).and_then(|d| d.files.get(i)) else { return };
         let Some(&workspace) = view.owners.get(i) else { return };
         let path = file.path.clone();
-        let selection = Selection { workspace, path: path.clone(), digest: file.digest, anchor: spot, end: spot };
+        let selection =
+            Selection { workspace, path: path.clone(), digest: file.digest, anchor: spot, end: spot, stretch: None };
         self.panels.changes.select(selection);
-        let anchor = Anchor::Diff(spot);
+        let anchor = Anchor::Diff { spot, text };
         self.screen.drag = Some(Drag::Lines { workspace, path, anchor, area, moved: false, scrolled: None });
     }
 
@@ -35,6 +46,15 @@ impl App {
         }
     }
 
+    pub(in crate::app) fn select_diff_text(&mut self, anchor: Stretch<Spot>, pos: Position, panel_area: Rect) {
+        let Some(view) = self.panel_view() else { return };
+        let Some(selected) = view.selection else { return };
+        let Some(pointer) = panel::stretch_near(panel_area, &view, selected.file, pos) else { return };
+        let mut stretch = selected.stretch;
+        Stretch::dragged(&mut stretch, anchor, pointer);
+        self.panels.changes.set_stretch(stretch);
+    }
+
     pub(in crate::app) fn scroll_diff(&mut self, panel_area: Rect, delta: isize) {
         let Some(view) = self.panel_view() else { return };
         self.panels.changes.scroll_by(delta, panel::max_scroll(panel_area, &view));
@@ -45,9 +65,16 @@ impl App {
         let Some(file) = ready(view).and_then(|d| d.files.get(selected.file)) else { return };
         let lines = panel::picked(view, &selected);
         match action {
-            LinesAction::Copy => self.copy(&selection::text(&lines)),
+            LinesAction::Copy => self.copy(&match selected.stretch {
+                Some(stretch) => stretch.text(lines.iter().map(|line| line.text)),
+                None => selection::text(&lines),
+            }),
             LinesAction::Ask => {
-                let reference = selection::reference(file, selected.from.hunk, &lines);
+                let reference = selection::reference(
+                    file,
+                    selected.from.hunk,
+                    selection::covered(&lines, selected.stretch.as_ref()),
+                );
                 if let Some(&workspace) = view.owners.get(selected.file) {
                     self.ask_agent(workspace, &reference);
                 }

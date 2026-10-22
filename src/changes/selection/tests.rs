@@ -52,8 +52,50 @@ mod spots {
 
     #[test]
     fn the_range_is_ordered_whichever_end_was_pressed_first() {
-        let selection = Selection { workspace: 1, path: "a.rs".into(), digest: 0, anchor: at(1, 2), end: at(0, 1) };
+        let selection =
+            Selection { workspace: 1, path: "a.rs".into(), digest: 0, anchor: at(1, 2), end: at(0, 1), stretch: None };
         assert_eq!(selection.range(), (at(0, 1), at(1, 2)));
+    }
+}
+
+mod characters {
+    use super::*;
+    use crate::text::stretch::{Point, Stretch};
+
+    fn stretch(from: (Spot, usize), to: (Spot, usize)) -> Stretch<Spot> {
+        Stretch { from: Point { line: from.0, offset: from.1 }, to: Point { line: to.0, offset: to.1 } }
+    }
+
+    #[test]
+    fn the_range_is_the_stretch_s_lines_even_when_the_pointer_went_elsewhere() {
+        let selection = Selection {
+            workspace: 1,
+            path: "a.rs".into(),
+            digest: 0,
+            anchor: at(0, 1),
+            end: at(0, 1),
+            stretch: Some(stretch((at(0, 1), 2), (at(0, 3), 1))),
+        };
+        assert_eq!(selection.range(), (at(0, 1), at(0, 3)));
+    }
+
+    #[test]
+    fn covered_drops_a_last_line_that_holds_nothing() {
+        let file = file();
+        let lines = picked(&file, |_| None, (at(0, 1), at(0, 3)));
+        let empty_end = stretch((at(0, 1), 2), (at(0, 3), 0));
+        assert_eq!(covered(&lines, Some(&empty_end)).len(), 2);
+        let some_end = stretch((at(0, 1), 2), (at(0, 3), 1));
+        assert_eq!(covered(&lines, Some(&some_end)).len(), 3);
+        assert_eq!(covered(&lines, None).len(), 3);
+    }
+
+    #[test]
+    fn covered_keeps_a_single_line() {
+        let file = file();
+        let lines = picked(&file, |_| None, (at(0, 1), at(0, 1)));
+        let stretch = stretch((at(0, 1), 0), (at(0, 1), 0));
+        assert_eq!(covered(&lines, Some(&stretch)).len(), 1);
     }
 }
 

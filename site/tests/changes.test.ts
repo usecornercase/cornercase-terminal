@@ -288,6 +288,38 @@ test('pressing and dragging over diff lines selects them, and copy and ask agent
   app.destroy();
 });
 
+test('pressing and dragging over the code of a diff line selects characters, and copy takes exactly them', () => {
+  const app = demo(140);
+  const copied: string[] = [];
+  app.on((event, detail) => {
+    if (event === 'copy') copied.push(detail ?? '');
+  });
+  const [first] = lineRows(app);
+  assert.ok(first !== undefined);
+  const bar = app.textAt('▎');
+  assert.ok(bar);
+  const code = bar.x + 2;
+  app.pointerDown(code + 1, first, 0);
+  app.pointerUp();
+  assert.deepEqual(app.changesSelection?.stretch ?? null, null);
+  app.pointerDown(code + 1, first, 0);
+  app.pointerMove(code + 4, first, 1);
+  app.pointerUp();
+  app.render();
+  const stretch = app.changesSelection?.stretch;
+  assert.ok(stretch);
+  assert.deepEqual([stretch.from.offset, stretch.to.offset], [1, 5]);
+  app.pointerMove(0, 0, 0);
+  app.render();
+  const copy = app.textAt(' copy ');
+  assert.ok(copy);
+  app.pointerDown(copy.x + 1, copy.y, 0);
+  app.pointerUp();
+  assert.equal(copied.at(-1)?.length, 4);
+  assert.ok(!copied.at(-1)?.includes('\n'));
+  app.destroy();
+});
+
 test('a click on a hunk header outside its buttons clears the selection', () => {
   const app = demo(140);
   const [first] = lineRows(app);

@@ -1199,6 +1199,7 @@ dependencies = [
  "thiserror 2.0.21",
  "toml",
  "tungstenite",
+ "unicode-segmentation",
  "unicode-width",
  "ureq",
  "vt100",

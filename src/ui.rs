@@ -8,6 +8,7 @@ mod activity;
 mod agents_section;
 pub(crate) mod changes;
 mod chrome;
+mod code;
 pub(crate) mod combo;
 mod dialog;
 pub(crate) use dialog::queue as queue_form;

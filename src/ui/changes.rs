@@ -7,8 +7,11 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 
-pub(crate) use self::selection::{LinesAction, Selected, edge, line_near, lines_actions, picked, selected};
-use self::selection::{covers, numbers_style, spot_of};
+pub(crate) use self::selection::{
+    LinesAction, Selected, edge, line_near, lines_actions, picked, selected, stretch_near,
+};
+use self::selection::{code_rect, code_x, covers, line_hit, numbers_style};
+use super::code;
 use super::icons::{self, Glyphs};
 use super::{action_style, dim, draw_close, fit, hovered_at as hovered, put, scroll_edge};
 use crate::changes::Body;
@@ -351,6 +354,7 @@ pub(crate) enum Hit {
     Gap(usize, usize),
     Action(usize, usize, Action),
     Line(usize, Spot),
+    Text(usize, Spot),
     Lines(LinesAction),
 }
 
@@ -388,7 +392,7 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
         Row::File(i) => Some(Hit::File(i)),
         Row::Gap(i, h) => Some(Hit::Gap(i, h)),
         Row::Hunk(i, h) => actions(r).into_iter().find(|(_, a)| a.contains(pos)).map(|(a, _)| Hit::Action(i, h, a)),
-        Row::Line(..) | Row::GapLine(..) => spot_of(row).map(|(i, spot)| Hit::Line(i, spot)),
+        Row::Line(..) | Row::GapLine(..) => line_hit(view, row, r, pos),
         Row::Spacer => None,
     }
 }
@@ -604,6 +608,7 @@ impl Painter<'_> {
                 let (old, new, text) = (Some(line.old), Some(line.new), line.text.as_str());
                 let (syntax, selected) = (line.syntax.as_ref(), covers(view, row));
                 self.code(r, Code { kind: Kind::Context, old, new, text, digits, syntax, emphasis: &[], selected });
+                self.paint_stretch(row, code_rect(r, digits), (text, line.source()));
             }
             Row::Hunk(i, h) => self.hunk(&diff.files[i].hunks[h], r, hovered_hunk == Some((i, h))),
             Row::Line(i, h, l) => {
@@ -613,6 +618,7 @@ impl Painter<'_> {
                 let (syntax, emphasis) = (line.syntax.as_ref(), line.emphasis.as_slice());
                 let selected = covers(view, row);
                 self.code(r, Code { kind, old, new, text, digits, syntax, emphasis, selected });
+                self.paint_stretch(row, code_rect(r, digits), (text, line.source()));
             }
             Row::Spacer => {}
         }
@@ -781,25 +787,23 @@ impl Painter<'_> {
         if let Some(bar) = bar {
             put(self.buf, (x + 1, r.y), "▎", Style::default().fg(bar), r.right());
         }
-        self.code_text(r, &code, x + 3, (tint, word));
+        self.code_text(r, &code, code_x(r, digits), (tint, word));
     }
 
     fn code_text(&mut self, r: Rect, code: &Code, start: u16, (tint, word): (Option<Color>, Option<Color>)) {
         let end = r.right().saturating_sub(1);
-        let room = usize::from(end.saturating_sub(start));
+        let fit = code::fit(code.text, end.saturating_sub(start));
         let plain = [(code.text.to_string(), Style::default())];
         let segments: &[(String, Style)] = code.syntax.map_or(&plain, Vec::as_slice);
-        let total: usize = segments.iter().map(|(t, _)| t.chars().count()).sum();
-        let limit = if total > room { room.saturating_sub(1) } else { room };
         let mut x = start;
         let mut index = 0;
         for (text, style) in segments {
-            for (run, strong) in runs(text, code.emphasis, &mut index, limit) {
+            for (run, strong) in runs(text, code.emphasis, &mut index, fit.shown) {
                 x = put(self.buf, (x, r.y), &run, paint(*style, tint, word, strong), end);
             }
         }
-        if total > room {
-            put(self.buf, (x, r.y), "…", dim(self.view.muted), end + 1);
+        if fit.cut {
+            put(self.buf, (start + fit.width, r.y), "…", dim(self.view.muted), end + 1);
         }
     }
 }

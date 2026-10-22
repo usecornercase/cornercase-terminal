@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 use self::disk::{Body, Content, Entry, Stamp};
 use self::find::Find;
 use crate::changes::diff::{Diff, File as Changed, Hunk, Kind, Status};
+use crate::text::stretch::Stretch;
 
 pub(crate) const LIST_EVERY: Duration = Duration::from_secs(2);
 pub(crate) const CONTEXT: usize = 3;
@@ -87,13 +88,18 @@ pub(crate) struct Viewer {
     pub(crate) scroll: usize,
     pub(crate) content: Option<Arc<Content>>,
     pub(crate) selection: Option<(u32, u32)>,
+    pub(crate) stretch: Option<Stretch<u32>>,
     pub(crate) unfolded: HashSet<u32>,
     pub(crate) find: Option<Find>,
 }
 
 impl Viewer {
     pub(crate) fn selected(&self) -> Option<(u32, u32)> {
-        self.selection.map(|(a, b)| (a.min(b), a.max(b)))
+        self.stretched().as_ref().map(Stretch::lines).or(self.selection).map(|(a, b)| (a.min(b), a.max(b)))
+    }
+
+    pub(crate) fn stretched(&self) -> Option<Stretch<u32>> {
+        self.content.as_deref().and_then(|content| content.clamped(self.stretch?))
     }
 
     pub(crate) fn finding(&self) -> Option<&Find> {
@@ -176,6 +182,14 @@ impl Panel {
 
     pub(crate) fn viewer(&self, workspace: u64) -> Option<&Viewer> {
         self.places.get(&workspace)?.viewer.as_ref()
+    }
+
+    pub(crate) fn drop_stretches(&mut self) {
+        for place in self.places.values_mut() {
+            if let Some(viewer) = &mut place.viewer {
+                viewer.stretch = None;
+            }
+        }
     }
 
     pub(crate) fn viewer_mut(&mut self, workspace: u64) -> Option<&mut Viewer> {

@@ -7,11 +7,11 @@ use ratatui::style::Style;
 use similar::{Algorithm, DiffTag};
 
 use crate::highlight;
+use crate::text::TAB;
 
 pub(crate) const MAX_LINES: usize = 3000;
 pub(crate) const MAX_UNTRACKED_BYTES: u64 = 1 << 20;
 const BINARY_PROBE: usize = 8000;
-const TAB: &str = "    ";
 const LOCKFILES: [&str; 16] = [
     "Cargo.lock",
     "package-lock.json",

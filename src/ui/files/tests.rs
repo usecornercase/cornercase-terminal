@@ -51,23 +51,24 @@ fn opened(selection: Option<(u32, u32)>, unfolded: &[u32]) -> View {
     let content = Content {
         stamp: disk::Stamp::default(),
         language: Some("rust"),
-        body: Body::Text { lines, styles, source: source.into() },
+        body: Body::text(lines, styles, source.into()),
     };
     let gutter = files::gutter(&diff::parse(PATCH)[0], 4);
     View {
         root: "~/projects/shop".into(),
         bar: Bar { query: String::new(), focused: false, mode: Mode::Text },
-        screen: Screen::File(FileView {
+        screen: Screen::File(Box::new(FileView {
             path: "src/main.rs".into(),
             content: Some(Arc::new(content)),
             gutter: Some(gutter),
             unfolded: unfolded.iter().copied().collect(),
             scroll: 0,
             selection,
+            stretch: None,
             find: None,
             image: None,
             full_screen: false,
-        }),
+        })),
         light: false,
         muted: Color::DarkGray,
         tint: None,
@@ -237,6 +238,93 @@ fn hits_rows_lines_and_marks() {
     assert_eq!(hit(AREA, &file, action(AREA, f, Action::Ask).as_position()), Some(Hit::Action(Action::Ask)));
 }
 
+mod stretching {
+    use super::*;
+    use crate::text::stretch::{Point, Stretch};
+
+    fn viewing(stretch: Option<Stretch<u32>>, unfolded: &[u32]) -> View {
+        let mut view = opened(Some((2, 2)), unfolded);
+        let Screen::File(file) = &mut view.screen else { unreachable!() };
+        file.stretch = stretch;
+        view
+    }
+
+    fn at(view: &View, row: u16, column: u16) -> Position {
+        Position::new(code_x(AREA, file_of(view)) + column, body(AREA, view).y + row)
+    }
+
+    fn file_of(view: &View) -> &FileView {
+        let Screen::File(file) = &view.screen else { unreachable!() };
+        file
+    }
+
+    #[test]
+    fn the_numbers_select_lines_the_text_selects_characters_and_a_blocks_mark_folds() {
+        let view = viewing(None, &[]);
+        let y = body(AREA, &view).y + 1;
+        let mark = mark_cell(AREA, file_of(&view));
+        assert_eq!(hit(AREA, &view, Position::new(2, y)), Some(Hit::Line(2)));
+        assert_eq!(hit(AREA, &view, Position::new(mark, y)), Some(Hit::Fold(2)));
+        assert_eq!(hit(AREA, &view, Position::new(mark + 1, y)), Some(Hit::Line(2)));
+        assert_eq!(hit(AREA, &view, at(&view, 1, 0)), Some(Hit::Text(2)));
+        assert_eq!(hit(AREA, &view, at(&view, 1, 30)), Some(Hit::Text(2)));
+    }
+
+    #[test]
+    fn a_cell_stands_for_the_chars_under_it() {
+        let view = viewing(None, &[]);
+        assert_eq!(stretch_near(AREA, &view, at(&view, 1, 4)), Some(Stretch::within(2, 4..5)));
+        assert_eq!(stretch_near(AREA, &view, at(&view, 1, 30)), Some(Stretch::within(2, 10..10)));
+        assert_eq!(stretch_near(AREA, &view, Position::new(2, at(&view, 1, 0).y)), Some(Stretch::within(2, 0..0)));
+    }
+
+    #[test]
+    fn rows_above_and_below_the_body_are_clamped_to_the_first_and_last_shown() {
+        let view = viewing(None, &[]);
+        let (above, below) = (Position::new(at(&view, 0, 3).x, 0), Position::new(at(&view, 0, 3).x, AREA.bottom() + 5));
+        assert_eq!(stretch_near(AREA, &view, above), Some(Stretch::within(1, 3..4)));
+        assert_eq!(stretch_near(AREA, &view, below), Some(Stretch::within(4, 1..1)));
+    }
+
+    #[test]
+    fn a_removed_row_stands_for_the_end_of_the_line_above() {
+        let view = viewing(None, &[2]);
+        assert_eq!(stretch_near(AREA, &view, at(&view, 1, 3)), Some(Stretch::within(1, 11..11)));
+    }
+
+    #[test]
+    fn a_character_selection_reverses_its_cells_only() {
+        let view = viewing(Some(Stretch::within(2, 4..7)), &[]);
+        let buffer = drawn_at(&view);
+        let (y, plain) = (at(&view, 1, 0).y, drawn_at(&viewing(None, &[])));
+        let reversed = |column: u16| buffer[(at(&view, 1, column).x, y)].modifier.contains(Modifier::REVERSED);
+        assert_eq!((reversed(3), reversed(4), reversed(6), reversed(7)), (false, true, true, false));
+        let number = buffer[(2, y)].clone();
+        assert_eq!(number.fg, Color::DarkGray);
+        assert_ne!(buffer[(0, y)].bg, plain[(0, y)].bg, "no surface background");
+        assert_ne!(plain[(2, y)].fg, number.fg, "a line selection lights the number");
+    }
+
+    #[test]
+    fn a_selected_line_break_reverses_to_the_edge() {
+        let view = viewing(Some(Stretch { from: Point { line: 1, offset: 3 }, to: Point { line: 2, offset: 2 } }), &[]);
+        let buffer = drawn_at(&view);
+        let first = body(AREA, &view).y;
+        let reversed = |row: u16, column: u16| {
+            buffer[(at(&view, row, column).x, first + row)].modifier.contains(Modifier::REVERSED)
+        };
+        assert!(!reversed(0, 2) && reversed(0, 3) && reversed(0, 30));
+        assert!(reversed(1, 0) && reversed(1, 1) && !reversed(1, 2));
+    }
+
+    #[test]
+    fn the_header_names_the_lines_the_characters_cover() {
+        let ends_at_a_line_start = Stretch { from: Point { line: 1, offset: 3 }, to: Point { line: 3, offset: 0 } };
+        let head = render(&viewing(Some(ends_at_a_line_start), &[]));
+        assert!(head.lines().nth(1).is_some_and(|row| row.contains("lines 1-2")), "{head}");
+    }
+}
+
 mod open_in {
     use super::*;
 
@@ -284,17 +372,18 @@ mod images {
     fn imaged(body: Body, image: Option<Image>) -> View {
         let content = Content { stamp: disk::Stamp::default(), language: None, body };
         View {
-            screen: Screen::File(FileView {
+            screen: Screen::File(Box::new(FileView {
                 path: "docs/logo.png".into(),
                 content: Some(Arc::new(content)),
                 gutter: None,
                 unfolded: HashSet::new(),
                 scroll: 0,
                 selection: None,
+                stretch: None,
                 find: None,
                 image,
                 full_screen: false,
-            }),
+            })),
             ..tree()
         }
     }
@@ -605,7 +694,7 @@ mod find {
         let content = Content {
             stamp: disk::Stamp::default(),
             language: None,
-            body: Body::Text { lines: vec![source.clone()], styles: None, source: source.as_str().into() },
+            body: Body::text(vec![source.clone()], None, source.as_str().into()),
         };
         let mut view = finding("b", false);
         if let Screen::File(file) = &mut view.screen {
@@ -628,7 +717,7 @@ mod find {
         let content = Content {
             stamp: disk::Stamp::default(),
             language: None,
-            body: Body::Text { lines, styles: None, source: source.as_str().into() },
+            body: Body::text(lines, None, source.as_str().into()),
         };
         let mut view = finding("line", false);
         if let Screen::File(file) = &mut view.screen {

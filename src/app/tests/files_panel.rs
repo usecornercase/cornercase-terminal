@@ -60,7 +60,7 @@ fn row_pos(app: &App, path: &str) -> Position {
 
 fn file(app: &App) -> panel::FileView {
     match view(app).screen {
-        Screen::File(file) => file,
+        Screen::File(file) => *file,
         Screen::Tree(_) | Screen::Search(_) => panic!("a file shows"),
     }
 }
@@ -758,3 +758,4 @@ mod full_screen {
 }
 
 mod find;
+mod text;

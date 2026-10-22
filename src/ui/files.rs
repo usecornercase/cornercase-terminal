@@ -10,6 +10,7 @@ use ratatui::style::{Color, Modifier, Style};
 
 use self::find::{draw_find, find_hit, find_slot};
 use super::changes::{buttons, close};
+use super::code::{self, clip, draw as draw_code, draw_fitted};
 use super::icons::{self, Glyphs, Icon};
 use super::{action_style, dim, draw_close, fit, hovered_at as hovered, put, scroll_edge};
 use crate::changes::diff::Status;
@@ -19,12 +20,15 @@ use crate::files::{CONTEXT, Gutter, Line, Lines, Mark, Mode};
 use crate::graphics::kitty;
 use crate::highlight::markdown;
 use crate::highlight::syntax::Segments;
+use crate::text::stretch::Stretch;
 use crate::text::{truncate_left, truncate_right};
 
 mod find;
+mod selection;
 
 #[cfg(test)]
 pub(crate) use self::find::{find_button, find_close, find_field, find_next, find_previous};
+pub(crate) use self::selection::stretch_near;
 
 pub(crate) const LABEL: &str = "Files";
 const HEADER_ROWS: u16 = 3;
@@ -97,7 +101,7 @@ impl View {
 pub(crate) enum Screen {
     Tree(TreeView),
     Search(SearchView),
-    File(FileView),
+    File(Box<FileView>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -154,6 +158,7 @@ pub(crate) struct FileView {
     pub(crate) unfolded: HashSet<u32>,
     pub(crate) scroll: usize,
     pub(crate) selection: Option<(u32, u32)>,
+    pub(crate) stretch: Option<Stretch<u32>>,
     pub(crate) find: Option<Find>,
     pub(crate) image: Option<Image>,
     pub(crate) full_screen: bool,
@@ -206,7 +211,11 @@ impl FileView {
     }
 
     fn selected(&self, line: u32) -> bool {
-        self.selection.is_some_and(|(a, b)| (a.min(b)..=a.max(b)).contains(&line))
+        self.stretch.is_none() && self.selection.is_some_and(|(a, b)| (a.min(b)..=a.max(b)).contains(&line))
+    }
+
+    fn covered(&self) -> Option<(u32, u32)> {
+        self.stretch.as_ref().map(Stretch::lines).or(self.selection)
     }
 }
 
@@ -227,6 +236,7 @@ pub(crate) enum Hit {
     Action(Action),
     Row(usize),
     Line(u32),
+    Text(u32),
     Fold(u32),
 }
 
@@ -331,6 +341,10 @@ fn mark_cell(area: Rect, file: &FileView) -> u16 {
     area.x + 2 + file.digits()
 }
 
+fn code_x(area: Rect, file: &FileView) -> u16 {
+    mark_cell(area, file) + 2
+}
+
 pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     if close(area).contains(pos) {
         return Some(Hit::Close);
@@ -385,6 +399,7 @@ fn hit_line(area: Rect, view: &View, file: &FileView, pos: Position) -> Option<H
             let block = file.gutter.as_ref().and_then(|g| g.block(n));
             match block {
                 Some(key) if pos.x == mark_cell(area, file) => Some(Hit::Fold(key)),
+                _ if pos.x >= code_x(area, file) => Some(Hit::Text(n)),
                 _ => Some(Hit::Line(n)),
             }
         }
@@ -600,7 +615,7 @@ fn draw_found_row(buf: &mut Buffer, view: &View, r: Rect, row: &Found) {
             let row = Rect::new(r.x + 2 + slot, y, r.width.saturating_sub(2 + slot), 1);
             let (shown, indices) = tail(path, indices, usize::from(row.width.saturating_sub(1)));
             let lit = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
-            draw_code(buf, view, row, &mark(&path_segments(&shown, view), &ranges_of(&indices), lit));
+            draw_code(buf, view.muted, row, &mark(&path_segments(&shown, view), &ranges_of(&indices), lit));
         }
         Found::File { path, count } => {
             let count = count.to_string();
@@ -611,7 +626,7 @@ fn draw_found_row(buf: &mut Buffer, view: &View, r: Rect, row: &Found) {
                 *style = style.add_modifier(Modifier::BOLD);
             }
             let start = r.x + 2 + slot;
-            draw_code(buf, view, Rect::new(start, y, end.saturating_sub(start), 1), &segments);
+            draw_code(buf, view.muted, Rect::new(start, y, end.saturating_sub(start), 1), &segments);
             put(buf, (end + 1, y), &count, dim(view.muted), r.right());
         }
         Found::Line { number, text, ranges, .. } => {
@@ -622,7 +637,7 @@ fn draw_found_row(buf: &mut Buffer, view: &View, r: Rect, row: &Found) {
             let shifted: Vec<Range<usize>> =
                 ranges.iter().map(|m| m.start.saturating_sub(skip)..m.end.saturating_sub(skip)).collect();
             let segments = mark(&[(text, Style::default())], &shifted, LIT);
-            draw_code(buf, view, Rect::new(x, y, r.right().saturating_sub(x), 1), &segments);
+            draw_code(buf, view.muted, Rect::new(x, y, r.right().saturating_sub(x), 1), &segments);
         }
     }
 }
@@ -708,7 +723,7 @@ fn draw_header(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover
     draw_title_buttons(buf, area, view, file, hover);
     let buttons = file.actions(p.info);
     let end = buttons.first().map_or(p.info.right(), |(_, r)| r.x.saturating_sub(1));
-    let (texts, style) = match file.selection {
+    let (texts, style) = match file.covered() {
         Some((a, b)) if a == b => (vec![format!("line {a}"), a.to_string()], Style::default().fg(Color::Cyan)),
         Some((a, b)) => {
             let range = format!("{}-{}", a.min(b), a.max(b));
@@ -848,22 +863,10 @@ fn draw_code_row(buf: &mut Buffer, view: &View, file: &FileView, slot: Slot, n: 
     let plain = [(text.clone(), Style::default())];
     let segments = content.styles().and_then(|s| s.get(index)).map_or(&plain[..], Vec::as_slice);
     let code = Rect::new(mark_x + 2, y, r.right().saturating_sub(mark_x + 2), 1);
-    let segments = lit(file, n, usize::from(code.width), segments);
-    draw_code(buf, view, code, &segments);
-}
-
-fn clip(segments: &[(String, Style)], keep: usize) -> Segments {
-    let mut left = keep;
-    let mut out = Segments::new();
-    for (text, style) in segments {
-        if left == 0 {
-            break;
-        }
-        let piece: String = text.chars().take(left).collect();
-        left -= piece.chars().count();
-        out.push((piece, *style));
-    }
-    out
+    let fit = code::fit(text, code.width.saturating_sub(1));
+    let segments = lit(file, n, fit.shown, segments);
+    draw_fitted(buf, view.muted, code, &segments, fit);
+    selection::paint(buf, file, n, (code, text));
 }
 
 fn lit(file: &FileView, n: u32, keep: usize, segments: &[(String, Style)]) -> Segments {
@@ -885,7 +888,7 @@ fn draw_removed_row(buf: &mut Buffer, view: &View, slot: Slot, text: &str) {
     }
     put(buf, (mark_x, r.y), "-", Style::default().fg(Color::Red), r.right());
     let segments: Segments = vec![(text.to_string(), Style::default().fg(Color::Red))];
-    draw_code(buf, view, Rect::new(mark_x + 2, r.y, r.right().saturating_sub(mark_x + 2), 1), &segments);
+    draw_code(buf, view.muted, Rect::new(mark_x + 2, r.y, r.right().saturating_sub(mark_x + 2), 1), &segments);
 }
 
 fn draw_image(buf: &mut Buffer, body: Rect, view: &View, image: Option<&Image>) {
@@ -917,21 +920,6 @@ fn draw_image(buf: &mut Buffer, body: Rect, view: &View, image: Option<&Image>) 
             }
         }
         Some(Image::Blank) | None => {}
-    }
-}
-
-fn draw_code(buf: &mut Buffer, view: &View, r: Rect, segments: &[(String, Style)]) {
-    let end = r.right().saturating_sub(1);
-    let room = usize::from(end.saturating_sub(r.x));
-    let total: usize = segments.iter().map(|(t, _)| t.chars().count()).sum();
-    let left = if total > room { room.saturating_sub(1) } else { room };
-    let mut x = r.x;
-    for (piece, style) in clip(segments, left) {
-        let style = if style.fg == Some(Color::DarkGray) { style.fg(view.muted) } else { style };
-        x = put(buf, (x, r.y), &piece, style, end);
-    }
-    if total > room {
-        put(buf, (x, r.y), "…", dim(view.muted), end + 1);
     }
 }
 
