@@ -210,6 +210,7 @@ impl Raw {
             base: self.target_branch.unwrap_or_default(),
             checks,
             provider: Provider::Gitlab,
+            stack: None,
         }
     }
 }

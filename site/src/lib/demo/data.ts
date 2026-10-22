@@ -518,6 +518,8 @@ export const PULLS: Pull[] = [
   },
 ];
 
+export const STACK = { number: 484, layers: [485, 483] };
+
 export const AGENTS: [string, string][] = [
   ['claude', 'claude'],
   ['codex', 'codex'],

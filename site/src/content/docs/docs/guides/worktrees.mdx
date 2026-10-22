@@ -106,13 +106,26 @@ A pull request with merge conflicts says so at the top (`open · conflicts with 
 
 With a [prefix key](../../reference/keyboard-and-mouse/#keyboard-shortcuts), `g` `p` opens the dialog for the workspace on screen.
 
+### Stacked pull requests
+
+On GitHub, [stacked pull requests](https://github.com/github/gh-stack) chain pull requests of one repository: the bottom one targets the trunk, each one above the branch of the one below, and they merge from the bottom up. When a workspace's pull request is in a stack, its row shows its layer after the number, `#483• 2/2`, counted from the bottom the way GitHub counts (merged layers stay counted). The layer is grey. It turns red when a pull request below failed its checks and orange when one below has merge conflicts, since either keeps this one from merging whatever its own checks say.
+
+<Screen
+  name="pull-request-stack"
+  alt="The Pull request dialog for #483 Dark mode for the checkout: open, checks running; stack #484 on main, layer 2 of 2; the layers top first, #483 marked and #485 below it with feat/dark-mode and feat/gift-cards beside them; cannot merge until #485 below passes its checks; then its checks and the buttons"
+  crop={[19, 7, 72, 24]}
+/>
+
+Click the layer, or the number, to open the dialog. Between the summary and the checks it lists the whole stack, top first like `gh stack view`, each layer with its position, number, checks, title and the workspace of this project that holds it. The layer you opened is marked `▸`, merged layers are purple and closed ones crossed out, and a click on a layer goes to its workspace. One line says what keeps the merge waiting, only when something does: `cannot merge until #485 below passes its checks`, `has no merge conflicts` or `is approved`. When a layer below was merged and your branch is behind its remote, a note says to pull before you push again.
+
 How it works:
 
 - cornercase runs [`gh`](https://cli.github.com/), GitHub's CLI, in each workspace's folder: `gh pr view` finds the pull request of the branch checked out there, also one an agent opened with `gh pr create`. `gh` must be installed and logged in (`gh auth login`); without it nothing shows, and **settings → Worktrees → pull requests** says why.
 - A project whose `origin` remote (else its first) is on GitLab, gitlab.com or your own instance, uses [`glab`](https://gitlab.com/gitlab-org/cli), GitLab's CLI, instead: `glab mr view` finds the merge request of the branch, in any state, and `glab api` reads the jobs of its latest pipeline. A host counts as GitLab when its name has `gitlab` in it or when `glab auth status` lists it (its SSH host too); everything else, GitHub Enterprise included, stays on `gh`, and `github.com` never runs `glab`. `glab` must be installed and logged in to that host (`glab auth login`); without it nothing shows on the rows, and the settings note says why. If several merge requests come from branches of that name, the newest is shown.
 - Only workspaces on a branch of a repository with a remote are asked, and not the default branch (`origin`'s `HEAD`). A workspace is asked again every 20 seconds while its checks run and every minute otherwise; a merged or closed pull request, and a project where `gh` or `glab` failed, every 5 minutes. Opening the dialog asks at once.
+- The stack is one more `gh api graphql` call per stack, made at the pace of its pull requests and shared by every workspace of the project in it. A pull request in no stack is checked for one every 5 minutes. GitHub Enterprise Server has no stacks yet: it is asked once and then left alone. GitLab has none.
 - GitHub works out whether a pull request can merge in the background, and so does GitLab (`checking`, `unchecked`). Right after a push to the branch or its base it may not know yet, so a new conflict can take up to a minute to show, and until then the row keeps what it showed.
-- Turn it off in **settings → Worktrees → pull requests**; nothing is asked then. Scripts and agents find the same in `cornercase status --json`, under each workspace's `pull_request`, with `conflicts`, `base` and `provider` (`github` or `gitlab`).
+- Turn it off in **settings → Worktrees → pull requests**; nothing is asked then. Scripts and agents find the same in `cornercase status --json`, under each workspace's `pull_request`, with `conflicts`, `base`, `provider` (`github` or `gitlab`) and `stack` (`null` outside a stack).
 
 ## Worktrees you made elsewhere
 

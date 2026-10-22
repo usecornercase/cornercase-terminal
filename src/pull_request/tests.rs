@@ -29,6 +29,7 @@ fn pull(state: State, checks: Vec<Check>) -> PullRequest {
         base: String::new(),
         checks,
         provider: Provider::Github,
+        stack: None,
     }
 }
 

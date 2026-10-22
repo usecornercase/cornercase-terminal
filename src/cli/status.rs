@@ -139,6 +139,9 @@ fn pull_request_part(pull: &PullRequestInfo) -> String {
         said.push(pull.base.as_ref().map_or("conflicts".to_string(), |base| format!("conflicts with {base}")));
     }
     said.extend(pull.checks.as_ref().map(|checks| format!("{} {checks}", provider.checks())));
+    said.extend(
+        pull.stack.as_ref().map(|s| format!("layer {} of {} of stack #{} on {}", s.position, s.size, s.number, s.base)),
+    );
     said.join(", ")
 }
 

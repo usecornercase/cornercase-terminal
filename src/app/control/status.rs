@@ -7,13 +7,14 @@ use crate::agents::activity::Status;
 use crate::agents::awake;
 use crate::app::App;
 use crate::control::{
-    self, AppState, ConfigInfo, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, PullRequestInfo, Report, RunStatus,
-    TabInfo, WorkspaceInfo,
+    self, AppState, ConfigInfo, Done, GroupInfo, KeepAwake, LayerInfo, PaneInfo, ProjectInfo, PullRequestInfo, Report,
+    RunStatus, StackInfo, TabInfo, WorkspaceInfo,
 };
 use crate::git;
 use crate::log::{self, Level};
 use crate::process;
 use crate::project::{Group, Hierarchy, Project, Tab, Workspace};
+use crate::pull_request::stack::Layer;
 use crate::pull_request::{Ci, PullRequest};
 use crate::term::Term;
 use crate::version;
@@ -36,13 +37,40 @@ fn pull_request_info(pull: &PullRequest) -> PullRequestInfo {
         conflicts: pull.conflicts(),
         base: Some(pull.base.clone()).filter(|base| !base.is_empty()),
         provider: pull.provider.id().into(),
+        stack: stack_info(pull),
     }
+}
+
+fn stack_info(pull: &PullRequest) -> Option<StackInfo> {
+    let stack = pull.stack.as_ref()?;
+    let layer = |l: &Layer| LayerInfo {
+        number: l.number,
+        title: l.title.clone(),
+        url: l.url.clone(),
+        state: l.state.name().into(),
+        checks: l.checks.map(|ci| ci.name().into()),
+        conflicts: l.conflicts(),
+        review: l.review.map(|review| review.name().into()),
+    };
+    Some(StackInfo {
+        number: stack.number,
+        base: stack.base.clone(),
+        position: stack.position_of(pull.number)?,
+        size: stack.size,
+        layers: stack.layers.iter().map(layer).collect(),
+    })
 }
 
 fn pull_refreshed(pull: &PullRequest, hash: &mut DefaultHasher) {
     (pull.number, &pull.title, pull.state.name(), pull.ci().map(Ci::name), pull.conflicts(), &pull.base).hash(hash);
     pull.provider.id().hash(hash);
     pull.failed().for_each(|check| check.name.hash(hash));
+    if let Some(stack) = stack_info(pull) {
+        (stack.number, &stack.base, stack.position, stack.size).hash(hash);
+        for layer in &stack.layers {
+            (layer.number, &layer.title, &layer.state, &layer.checks, layer.conflicts, &layer.review).hash(hash);
+        }
+    }
 }
 
 impl App {

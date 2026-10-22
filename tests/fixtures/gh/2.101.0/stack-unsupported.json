@@ -1,0 +1,1 @@
+{"errors":[{"path":["query","resource","... on PullRequest","stack"],"extensions":{"code":"undefinedField","typeName":"PullRequest","fieldName":"stack"},"locations":[{"line":1,"column":64}],"message":"Field 'stack' doesn't exist on type 'PullRequest'"}]}

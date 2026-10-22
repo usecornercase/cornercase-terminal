@@ -15,7 +15,7 @@ use super::rows::{
     row_button, row_close_button, row_menu_button, row_rect,
 };
 use super::sidebar::NEW_BUTTON;
-use super::theme::{pull_tag, severity_color, status_icon};
+use super::theme::{pull_tag, severity_color, stack_tag, status_icon};
 use super::widgets::{button_style, dim, draw_band, draw_button, draw_title, middle, sidebar_hovered};
 use crate::agents::activity::{self, Status};
 use crate::agents::usage::Severity;
@@ -398,12 +398,14 @@ fn among_tabs(rows: &[WorkspaceRow], i: usize) -> bool {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Tag {
     Pull,
+    Stack,
     Reopen,
 }
 
 #[derive(Default)]
 struct Places {
     pull: Option<usize>,
+    stack: Option<usize>,
     reopen: Option<usize>,
 }
 
@@ -411,6 +413,7 @@ impl Places {
     fn of(&self, tag: Tag) -> Option<usize> {
         match tag {
             Tag::Pull => self.pull,
+            Tag::Stack => self.stack,
             Tag::Reopen => self.reopen,
         }
     }
@@ -432,11 +435,16 @@ fn marks(entry: &WorkspaceEntry, badge: Badge, muted: Color, spin: Option<u8>) -
     let reopen_at = usize::from(badge.is_some());
     let pull_at = reopen_at + usize::from(reopen.is_some()) + usize::from(setting.is_some());
     let pull = entry.pull.map(|mark| pull_tag(muted, mark));
-    let places = Places { pull: pull.is_some().then_some(pull_at), reopen: reopen.is_some().then_some(reopen_at) };
+    let stack = entry.pull.and_then(|mark| mark.stack).map(|stack| stack_tag(muted, stack));
+    let places = Places {
+        pull: pull.is_some().then_some(pull_at),
+        stack: stack.is_some().then_some(pull_at + 1),
+        reopen: reopen.is_some().then_some(reopen_at),
+    };
     let behind = Some(entry.behind)
         .filter(|n| *n > 0)
         .map(|n| Span::styled(format!("{BEHIND_ICON}{n}"), Style::default().fg(Color::Yellow)));
-    (badge.into_iter().chain(reopen).chain(setting).chain(pull).chain(behind).collect(), places)
+    (badge.into_iter().chain(reopen).chain(setting).chain(pull).chain(stack).chain(behind).collect(), places)
 }
 
 pub(super) fn tag_badge(
@@ -484,7 +492,11 @@ pub(super) fn draw_workspace_band(f: &mut Frame, view: &View, band: Band, line: 
     let room = band.room();
     let (spans, places) = marks(entry, badge, view.muted, view.spin);
     let mut marks = Tags::fit(spans, room);
-    for (tag, add) in [(Tag::Pull, Modifier::UNDERLINED), (Tag::Reopen, Modifier::BOLD | Modifier::UNDERLINED)] {
+    for (tag, add) in [
+        (Tag::Pull, Modifier::UNDERLINED),
+        (Tag::Stack, Modifier::UNDERLINED),
+        (Tag::Reopen, Modifier::BOLD | Modifier::UNDERLINED),
+    ] {
         if let Some(rect) = tag_badge(band.r, band.pitch, band.lead_width(), (entry, badge), tag)
             && let Some(at) = places.of(tag)
             && sidebar_hovered(view, rect)

@@ -118,7 +118,7 @@ pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, projec
 #[cfg(test)]
 pub(crate) use star::star_buttons;
 pub(crate) use star::{StarButton, star_area, star_hit};
-pub(crate) use theme::{muted, outcome_icon, soft};
+pub(crate) use theme::{block_color, ci_icon, layer_style, muted, outcome_icon, soft};
 #[cfg(test)]
 pub(crate) use toast::toast_area;
 pub(crate) use toast::{Toast, ToastButton, ToastIcon, toast_button};

@@ -28,7 +28,7 @@ The ` share ` button hands your settings to a colleague, or imports theirs: see 
 | **fetch branches every** | How often, in minutes, the remotes are fetched to show the [commits to pull](../../guides/worktrees/#commits-to-pull) as `↓n` on each workspace. `0` turns it off. |
 | **merged PRs in stats** | On (the default): Usage → Stats counts your merged pull requests and merge requests, read with `gh` and `glab`. Off: nothing is asked. The note names the accounts read, or why none were. See [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats). |
 | **worktrees on disk** | Not a setting: `Enter` opens the [Worktrees dialog](../../guides/worktrees/#clean-up-worktrees), which lists the worktrees of your open projects and of the closed ones in the worktrees folder, with when it last changed and what it has, and removes several at once. |
-| **pull requests** | On (the default): each workspace whose branch has a pull request on GitHub, or a merge request on GitLab, shows its number, the state of its checks (its pipeline's jobs on GitLab) and whether it has merge conflicts, read with `gh` or `glab`. Off: nothing is asked. The note says why none show when every project read with one of them fails, because it is missing, logged out or failing. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks). |
+| **pull requests** | On (the default): each workspace whose branch has a pull request on GitHub, or a merge request on GitLab, shows its number, the state of its checks (its pipeline's jobs on GitLab) and whether it has merge conflicts, and on GitHub its layer in a stack, read with `gh` or `glab`. Off: nothing is asked. The note says why none show when every project read with one of them fails, because it is missing, logged out or failing. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks). |
 
 ### Agents
 
@@ -354,7 +354,7 @@ How often, in minutes, each project's remotes are fetched to show the [commits t
 
 #### `pull_requests`
 
-Whether each workspace shows the pull request of its branch and the state of its checks and whether it has merge conflicts, asked of GitHub with [`gh`](#gh) or, for a GitLab merge request and its pipeline, with [`glab`](#glab). On by default. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks).
+Whether each workspace shows the pull request of its branch and the state of its checks and whether it has merge conflicts, and, on GitHub, its layer in a stack, asked of GitHub with [`gh`](#gh) or, for a GitLab merge request and its pipeline, with [`glab`](#glab). On by default. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks).
 
 #### `merged_pull_requests`
 

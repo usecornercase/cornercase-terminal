@@ -104,6 +104,18 @@ mod rows {
     }
 
     #[test]
+    fn a_merge_request_is_in_no_stack() {
+        let repo = found(VIEW, JOBS);
+
+        let pull = repo.app.pull_request(repo.worktree()).expect("a merge request");
+
+        assert_eq!(pull.stack, None);
+        let report = repo.app.report(None);
+        let info = report.projects[0].workspaces[1].pull_request.as_ref().expect("a merge request");
+        assert_eq!(info.stack, None);
+    }
+
+    #[test]
     fn gh_is_never_run_for_a_gitlab_project() {
         let repo = found(VIEW, JOBS);
 
@@ -268,7 +280,7 @@ mod dialog {
         let Some(Overlay::PullRequest { workspace, scroll }) = repo.app.overlay else {
             panic!("the dialog is not open")
         };
-        let Some(ui::Overlay::Update(update)) = repo.app.pull_request_view(workspace, scroll) else {
+        let Some(ui::Overlay::Update(update)) = repo.app.pull_request_view(workspace, scroll, AREA) else {
             panic!("no view")
         };
         assert_eq!(update.title, "Merge request");

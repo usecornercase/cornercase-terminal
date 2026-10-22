@@ -1,0 +1,60 @@
+{
+  "data": {
+    "resource": {
+      "stack": {
+        "number": 484,
+        "size": 3,
+        "baseRefName": "main",
+        "entries": {
+          "nodes": [
+            {
+              "position": 1,
+              "pullRequest": {
+                "number": 482,
+                "title": "Returns page crashes on an empty address",
+                "url": "https://github.com/acme/web-shop/pull/482",
+                "state": "OPEN",
+                "isDraft": false,
+                "mergeable": "MERGEABLE",
+                "reviewDecision": "REVIEW_REQUIRED",
+                "statusCheckRollup": {
+                  "state": "FAILURE"
+                }
+              }
+            },
+            {
+              "position": 2,
+              "pullRequest": {
+                "number": 483,
+                "title": "Dark mode for the checkout",
+                "url": "https://github.com/acme/web-shop/pull/483",
+                "state": "OPEN",
+                "isDraft": false,
+                "mergeable": "UNKNOWN",
+                "reviewDecision": "APPROVED",
+                "statusCheckRollup": {
+                  "state": "SUCCESS"
+                }
+              }
+            },
+            {
+              "position": 3,
+              "pullRequest": {
+                "number": 485,
+                "title": "Pay with a gift card at checkout",
+                "url": "https://github.com/acme/web-shop/pull/485",
+                "state": "OPEN",
+                "isDraft": true,
+                "mergeable": "MERGEABLE",
+                "reviewDecision": null,
+                "statusCheckRollup": {
+                  "state": "PENDING"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

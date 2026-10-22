@@ -5,6 +5,7 @@ use ratatui::text::Span;
 use crate::agents::activity::{self, Status};
 use crate::agents::usage::Severity;
 use crate::host::theme::HostTheme;
+use crate::pull_request::stack::{Block, StackMark};
 use crate::pull_request::{Ci, Mark, Outcome, State};
 
 pub(super) const BRAND_COLOR: Color = Color::Indexed(27);
@@ -111,14 +112,39 @@ pub(super) fn pull_tag(muted: Color, mark: Mark) -> Span<'static> {
         _ if mark.conflicts => (format!("{number}!"), Style::default().fg(WAITING_COLOR)),
         (_, None) => (number, Style::default().fg(muted)),
         (_, Some(ci)) => {
-            let outcome = match ci {
-                Ci::Failing => Outcome::Failed,
-                Ci::Pending => Outcome::Pending,
-                Ci::Passing => Outcome::Passed,
-            };
-            let icon = outcome_icon(muted, outcome);
+            let icon = ci_icon(muted, ci);
             (format!("{number}{}", icon.content), icon.style)
         }
     };
     Span::styled(text, style)
+}
+
+pub(crate) fn ci_icon(muted: Color, ci: Ci) -> Span<'static> {
+    let outcome = match ci {
+        Ci::Failing => Outcome::Failed,
+        Ci::Pending => Outcome::Pending,
+        Ci::Passing => Outcome::Passed,
+    };
+    outcome_icon(muted, outcome)
+}
+
+pub(crate) fn layer_style(muted: Color, state: State) -> Style {
+    match state {
+        State::Merged => Style::default().fg(MERGED_COLOR),
+        State::Closed => Style::default().fg(muted).add_modifier(Modifier::CROSSED_OUT),
+        State::Open | State::Draft => Style::default(),
+    }
+}
+
+pub(crate) fn block_color(muted: Color, block: Block) -> Color {
+    match block {
+        Block::Checks => Color::Red,
+        Block::Conflicts => WAITING_COLOR,
+        Block::Review => muted,
+    }
+}
+
+pub(super) fn stack_tag(muted: Color, stack: StackMark) -> Span<'static> {
+    let colour = stack.blocked.map_or(muted, |block| block_color(muted, block));
+    Span::styled(format!("{}/{}", stack.position, stack.size), Style::default().fg(colour))
 }

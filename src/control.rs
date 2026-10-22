@@ -61,7 +61,7 @@ pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use plugins::{PluginActions, PluginList, PluginRun};
 pub(crate) use search::{Hit, Matches, Search};
 pub(crate) use start_server::StartServer;
-pub(crate) use status::{GroupInfo, KeepAwake, PullRequestInfo, RunStatus};
+pub(crate) use status::{GroupInfo, KeepAwake, LayerInfo, PullRequestInfo, RunStatus, StackInfo};
 pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, WorkspaceInfo};
 pub(crate) use surface::Surface;
 pub(crate) use terminal::{Input, Link, Ratio, Redraw, Resize, Scroll, Selection};

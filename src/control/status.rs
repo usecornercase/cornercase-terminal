@@ -278,6 +278,29 @@ pub(crate) struct PullRequestInfo {
     pub(crate) conflicts: bool,
     pub(crate) base: Option<String>,
     pub(crate) provider: String,
+    pub(crate) stack: Option<StackInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct StackInfo {
+    pub(crate) number: u64,
+    pub(crate) base: String,
+    pub(crate) position: usize,
+    pub(crate) size: usize,
+    pub(crate) layers: Vec<LayerInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct LayerInfo {
+    pub(crate) number: u64,
+    pub(crate) title: String,
+    pub(crate) url: String,
+    pub(crate) state: String,
+    pub(crate) checks: Option<String>,
+    pub(crate) conflicts: bool,
+    pub(crate) review: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

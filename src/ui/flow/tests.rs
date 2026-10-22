@@ -506,7 +506,7 @@ mod end {
     }
 
     fn mark(state: Pull, ci: Option<Ci>, conflicts: bool) -> Mark {
-        Mark { number: 485, state, ci, conflicts }
+        Mark { number: 485, state, ci, conflicts, stack: None }
     }
 
     fn last_rows(t: &Terminal<TestBackend>, n: u16) -> String {

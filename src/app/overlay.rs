@@ -301,7 +301,7 @@ impl App {
             Overlay::Remote => ui::Overlay::Remote(self.remote_view()),
             Overlay::Pairing(via) => ui::Overlay::Remote(self.pairing_view(*via)),
             Overlay::Branches(picker) => Self::branches_view(picker),
-            Overlay::PullRequest { workspace, scroll } => self.pull_request_view(*workspace, *scroll)?,
+            Overlay::PullRequest { workspace, scroll } => self.pull_request_view(*workspace, *scroll, area)?,
             Overlay::FlowMessage { workspace, edge, to, scroll } => {
                 self.flow_message_view(*workspace, (*edge, to.as_deref()), *scroll, area)?
             }

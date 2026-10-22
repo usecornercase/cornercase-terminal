@@ -8,7 +8,9 @@ use super::args::todo::TodoAction;
 use super::args::{KillServerArgs, RestartArgs, StartServerArgs, UpdateArgs};
 use super::status::cell;
 use super::*;
-use crate::control::{GroupInfo, Ids, PaneInfo, PaneRows, ProjectInfo, PullRequestInfo, TabInfo, WorkspaceInfo};
+use crate::control::{
+    GroupInfo, Ids, PaneInfo, PaneRows, ProjectInfo, PullRequestInfo, StackInfo, TabInfo, WorkspaceInfo,
+};
 
 pub(super) fn parse(args: &[&str]) -> std::result::Result<Cli, clap::Error> {
     Cli::try_parse_from(std::iter::once("cornercase").chain(args.iter().copied()))
@@ -612,6 +614,25 @@ mod output {
 
         assert!(named.contains("pull request #482 open, conflicts with main, checks passing  (shown)\n"), "{named}");
         assert!(bare.contains("pull request #482 open, conflicts, checks passing  (shown)\n"), "{bare}");
+    }
+
+    #[test]
+    fn a_pull_request_in_a_stack_names_its_layer() {
+        let mut report = report();
+        report.projects[0].workspaces[0].pull_request = Some(PullRequestInfo {
+            number: 483,
+            state: "open".into(),
+            checks: Some("passing".into()),
+            stack: Some(StackInfo { number: 484, base: "main".into(), position: 2, size: 3, layers: Vec::new() }),
+            ..PullRequestInfo::default()
+        });
+
+        let said = render(&report, Some(Path::new("/home/ana")));
+
+        assert!(
+            said.contains("pull request #483 open, checks passing, layer 2 of 3 of stack #484 on main  (shown)\n"),
+            "{said}"
+        );
     }
 
     #[test]

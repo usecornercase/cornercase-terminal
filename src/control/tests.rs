@@ -941,3 +941,19 @@ fn a_pull_request_from_an_older_server_reads_without_a_provider() {
     assert_eq!((older.number, older.provider.as_str()), (482, ""));
     assert_eq!(newer.provider, "gitlab");
 }
+
+#[test]
+fn a_pull_request_from_an_older_server_reads_without_a_stack() {
+    let older: PullRequestInfo = serde_json::from_str(r#"{"number": 482, "state": "open"}"#).expect("an older one");
+    let newer = r#"{"number": 483, "stack": {"number": 484, "base": "main", "position": 2, "size": 3,
+        "layers": [{"number": 482, "state": "open", "checks": "failing", "conflicts": false, "review": null}]}}"#;
+
+    let newer: PullRequestInfo = serde_json::from_str(newer).expect("a newer one");
+
+    assert_eq!(older.stack, None);
+    let stack = newer.stack.expect("a stack");
+    assert_eq!(
+        (stack.number, stack.position, stack.size, stack.layers[0].checks.as_deref()),
+        (484, 2, 3, Some("failing"))
+    );
+}

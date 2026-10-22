@@ -1,4 +1,6 @@
 use super::*;
+use crate::pull_request::stack::{Block, StackMark};
+use crate::ui::rows::Tags;
 
 fn wlist() -> Rect {
     areas().workspaces_list
@@ -186,7 +188,7 @@ mod pull_request_tag {
     }
 
     fn mark(state: State, ci: Option<Ci>) -> Mark {
-        Mark { number: 482, state, ci, conflicts: false }
+        Mark { number: 482, state, ci, conflicts: false, stack: None }
     }
 
     fn conflicting(state: State, ci: Option<Ci>) -> Mark {
@@ -394,6 +396,82 @@ mod pull_request_tag {
         assert!(!badge_cell(&v).modifier.contains(Modifier::UNDERLINED));
     }
 
+    fn stacked(blocked: Option<Block>) -> Mark {
+        Mark { stack: Some(StackMark { position: 2, size: 3, blocked }), ..mark(State::Open, Some(Ci::Passing)) }
+    }
+
+    fn stack_rect(v: &View) -> Rect {
+        workspace_tag(
+            &workspace_layout(wlist(), areas().pitch, &v.tab_lines(), 0),
+            areas().pitch,
+            &v.tab_lines(),
+            0,
+            (&v.workspaces[0], Tag::Stack),
+        )
+        .expect("a target")
+    }
+
+    #[rstest]
+    #[case::unblocked(None, Color::DarkGray)]
+    #[case::failed_checks(Some(Block::Checks), Color::Red)]
+    #[case::a_conflict(Some(Block::Conflicts), Color::Indexed(208))]
+    #[case::changes_requested(Some(Block::Review), Color::DarkGray)]
+    fn the_layer_follows_the_number_in_the_colour_of_what_blocks(
+        #[case] blocked: Option<Block>,
+        #[case] colour: Color,
+    ) {
+        let v = tagged("login", 0, stacked(blocked));
+
+        assert_eq!(row_text(&v, WorkspaceRow::Workspace(0)).trim_end(), "  ▾ login #482✓ 2/3");
+        let r = stack_rect(&v);
+        assert_eq!(render(&v).backend().buffer()[(r.x, r.y)].fg, colour);
+    }
+
+    #[test]
+    fn the_layer_target_lies_right_of_the_number() {
+        let v = tagged("login", 0, stacked(None));
+        let number = workspace_tag(
+            &workspace_layout(wlist(), areas().pitch, &v.tab_lines(), 0),
+            areas().pitch,
+            &v.tab_lines(),
+            0,
+            (&v.workspaces[0], Tag::Pull),
+        )
+        .expect("a target");
+
+        let layer = stack_rect(&v);
+
+        assert_eq!((layer.width, layer.x > number.right()), (3, true));
+    }
+
+    #[rstest]
+    #[case::room_for_all(20, "#482✓ 2/3 ↓3")]
+    #[case::the_commits_go_first(13, "#482✓ 2/3")]
+    #[case::then_the_layer(10, "#482✓")]
+    #[case::then_the_number(6, "")]
+    fn a_narrow_row_drops_the_commits_then_the_layer_then_the_number(#[case] room: usize, #[case] kept: &str) {
+        let tags = ["#482✓", "2/3", "↓3"].map(|t| Span::raw(t.to_string())).to_vec();
+
+        let fitted = Tags::fit(tags, room);
+
+        let mut line = Vec::new();
+        fitted.push_onto(&mut line, 0, room);
+        let text: String = line.iter().map(|s| s.content.as_ref()).collect();
+        assert_eq!(text.trim(), kept);
+    }
+
+    #[test]
+    fn hovering_the_layer_underlines_it() {
+        let mut v = tagged("login", 0, stacked(Some(Block::Checks)));
+        let r = stack_rect(&v);
+        v.hover = Some(r.as_position());
+
+        let cell = render(&v).backend().buffer()[(r.x, r.y)].clone();
+
+        assert!(cell.modifier.contains(Modifier::UNDERLINED));
+        assert_eq!(cell.fg, Color::Red);
+    }
+
     #[test]
     fn no_underline_while_an_overlay_is_open() {
         let mut v = tagged("login", 0, mark(State::Open, Some(Ci::Failing)));
@@ -454,7 +532,8 @@ mod reopen_tag {
     fn goes_before_the_pull_request_and_the_commits_to_pull() {
         let mut v = closed("login", 1);
         v.workspaces[0].behind = 3;
-        v.workspaces[0].pull = Some(Mark { number: 482, state: State::Open, ci: Some(Ci::Passing), conflicts: false });
+        v.workspaces[0].pull =
+            Some(Mark { number: 482, state: State::Open, ci: Some(Ci::Passing), conflicts: false, stack: None });
 
         assert_eq!(row_text(&v, WorkspaceRow::Workspace(0)).trim_end(), "  ▾ log… ▶ #482✓ ↓3");
     }
@@ -474,7 +553,8 @@ mod reopen_tag {
     #[test]
     fn stays_when_the_row_is_too_narrow_for_the_pull_request_tag() {
         let mut v = closed("login", 1);
-        v.workspaces[0].pull = Some(Mark { number: 482, state: State::Open, ci: Some(Ci::Passing), conflicts: false });
+        v.workspaces[0].pull =
+            Some(Mark { number: 482, state: State::Open, ci: Some(Ci::Passing), conflicts: false, stack: None });
         let tabs = v.tab_lines();
         let list = Rect { width: 14, ..wlist() };
         let layout = workspace_layout(list, areas().pitch, &tabs, 0);

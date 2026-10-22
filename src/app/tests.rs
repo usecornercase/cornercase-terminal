@@ -576,6 +576,7 @@ mod issue_asana;
 mod issue_list;
 mod issue_naming;
 mod path_links;
+mod pull_request_stacks;
 mod pull_requests;
 mod queue;
 mod remote_access;

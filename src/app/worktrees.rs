@@ -9,6 +9,7 @@ use super::event::AppEvent;
 use super::event::Start;
 use super::flow_runs::Made;
 use super::overlay::Overlay;
+use super::pull_requests::Looked;
 use super::toast::Toast;
 use super::worktrees_dialog::Deleted;
 use crate::agents::launch::Launch;
@@ -21,7 +22,6 @@ pub(super) use crate::git::worktree::RemoveOptions;
 use crate::log::{self, Job, Level};
 use crate::project::{Hierarchy, Phase, Workspace, WorkspaceAt};
 use crate::pull_request::glab::Host;
-use crate::pull_request::{Provider, PullRequest};
 use crate::ui::{self};
 use crate::worktrees::{Found, Scan};
 
@@ -53,61 +53,17 @@ pub(super) enum Check {
 
 #[derive(Debug)]
 pub(crate) enum WorktreeEvent {
-    Created {
-        project: u64,
-        result: Result<PathBuf>,
-        start: Option<Start>,
-        request: Option<u64>,
-    },
-    Run {
-        project: u64,
-        result: Result<Made>,
-        request: u64,
-    },
-    Checked {
-        project: u64,
-        workspace: u64,
-        status: worktree::Status,
-        request: Option<u64>,
-    },
-    Removed {
-        project: u64,
-        workspace: u64,
-        result: Result<Option<String>>,
-        request: Option<u64>,
-    },
-    Behind {
-        project: u64,
-        behind: Vec<(u64, u32)>,
-    },
-    PullRequests {
-        project: u64,
-        provider: Provider,
-        found: Vec<(u64, String, Option<PullRequest>)>,
-        error: Option<String>,
-    },
+    Created { project: u64, result: Result<PathBuf>, start: Option<Start>, request: Option<u64> },
+    Run { project: u64, result: Result<Made>, request: u64 },
+    Checked { project: u64, workspace: u64, status: worktree::Status, request: Option<u64> },
+    Removed { project: u64, workspace: u64, result: Result<Option<String>>, request: Option<u64> },
+    Behind { project: u64, behind: Vec<(u64, u32)> },
+    PullRequests { project: u64, looked: Looked },
     GlabHosts(std::result::Result<Vec<Host>, String>),
-    Listed {
-        generation: u64,
-        found: Vec<Found>,
-    },
-    Scanned {
-        generation: u64,
-        ticket: u64,
-        path: PathBuf,
-        scan: Box<Result<Scan>>,
-        confirm: bool,
-    },
-    Outside {
-        generation: u64,
-        ticket: u64,
-        found: Result<Vec<(PathBuf, String, bool)>>,
-    },
-    Cleaned {
-        key: u64,
-        result: Result<Option<String>>,
-        branch: Deleted,
-    },
+    Listed { generation: u64, found: Vec<Found> },
+    Scanned { generation: u64, ticket: u64, path: PathBuf, scan: Box<Result<Scan>>, confirm: bool },
+    Outside { generation: u64, ticket: u64, found: Result<Vec<(PathBuf, String, bool)>> },
+    Cleaned { key: u64, result: Result<Option<String>>, branch: Deleted },
 }
 
 impl WorktreeEvent {
@@ -151,9 +107,7 @@ impl App {
                 self.worktree_removed(project, workspace, result);
             }
             WorktreeEvent::Behind { project, behind } => self.behind_counted(project, &behind),
-            WorktreeEvent::PullRequests { project, provider, found, error } => {
-                self.pull_requests_found(project, provider, found, error);
-            }
+            WorktreeEvent::PullRequests { project, looked } => self.pull_requests_found(project, looked),
             WorktreeEvent::GlabHosts(listed) => self.glab_hosts_found(listed),
             WorktreeEvent::Listed { generation, found } => self.worktrees_listed(generation, found),
             WorktreeEvent::Scanned { generation, ticket, path, scan, confirm } => {

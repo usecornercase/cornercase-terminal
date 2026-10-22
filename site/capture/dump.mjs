@@ -67,6 +67,16 @@ for (const pull of data.PULLS) {
   writeFileSync(join(gh, `pr-${pull.branch.replace(/\//g, '-')}.json`), JSON.stringify(view));
 }
 
+const rollupState = (pull) => (pull.checks.some((c) => c.outcome === 'failed') ? 'FAILURE' : pull.checks.some((c) => c.outcome === 'running') ? 'PENDING' : 'SUCCESS');
+const layer = (number, i) => {
+  const pull = data.PULLS.find((p) => p.number === number);
+  const url = `https://github.com/acme/web-shop/pull/${number}`;
+  const node = { number, title: pull.title, url, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', reviewDecision: null, statusCheckRollup: { state: rollupState(pull) } };
+  return { position: i + 1, pullRequest: node };
+};
+const stack = { number: data.STACK.number, size: data.STACK.layers.length, baseRefName: 'main', entries: { nodes: data.STACK.layers.map(layer) } };
+writeFileSync(join(gh, 'stack.json'), JSON.stringify({ data: { resource: { stack } } }));
+
 const at = (minutes) => new Date(now + minutes * 60e3).toISOString();
 const unix = (minutes) => Math.floor((now + minutes * 60e3) / 1000);
 const limit = (kind, group, percent, severity, minutes, scope = null) => ({ kind, group, percent, severity, resets_at: at(minutes), scope, is_active: false });

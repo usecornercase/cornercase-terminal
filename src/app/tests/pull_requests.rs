@@ -38,7 +38,7 @@ fn gh_answering(dir: &Path, found: &str) -> PathBuf {
     fake_gh(
         dir,
         &format!(
-            "pwd >> \"$0.calls\"\nif [ \"$(git rev-parse --abbrev-ref HEAD)\" = feat/x ]; then {found}\nelse echo \
+            "if [ \"$1\" = api ]; then echo '{{\"data\":{{\"resource\":{{\"stack\":null}}}}}}'; exit 0; fi\npwd >> \"$0.calls\"\nif [ \"$(git rev-parse --abbrev-ref HEAD)\" = feat/x ]; then {found}\nelse echo \
              'no pull requests found for branch' >&2; exit 1; fi"
         ),
     )
@@ -53,16 +53,26 @@ pub(super) fn printing() -> String {
 }
 
 pub(super) fn repo_with(found: &str, configure: impl FnOnce(&mut Config)) -> Repo {
+    repo_on(&["feat/x"], |dir| gh_answering(dir, found), configure)
+}
+
+pub(super) fn repo_on(
+    branches: &[&str],
+    gh: impl FnOnce(&Path) -> PathBuf,
+    configure: impl FnOnce(&mut Config),
+) -> Repo {
     let remote = git_repo(&[("README", "hi")]);
     let (clone_dir, clone) = clone_of(remote.path());
     let tmp = TempDir::new();
-    let checkout = tmp.path().join("feat-x");
-    git(&clone, &["worktree", "add", "--quiet", "-b", "feat/x", &checkout.display().to_string()]);
-    let mut config = Config { gh: gh_answering(tmp.path(), found).display().to_string(), ..Config::default() };
+    for branch in branches {
+        let checkout = tmp.path().join(branch.replace('/', "-"));
+        git(&clone, &["worktree", "add", "--quiet", "-b", branch, &checkout.display().to_string()]);
+    }
+    let mut config = Config { gh: gh(tmp.path()).display().to_string(), ..Config::default() };
     configure(&mut config);
     let (mut app, rx) = app_in(&clone, write_config(tmp.path(), &config));
     app.sync_worktrees();
-    assert_eq!(app.projects[0].workspaces.len(), 2);
+    assert_eq!(app.projects[0].workspaces.len(), 1 + branches.len());
     Repo { app, rx, tmp, _remote: remote, _clone: clone_dir }
 }
 
@@ -86,7 +96,7 @@ pub(super) fn row_text(app: &mut App, row: WorkspaceRow) -> String {
 
 pub(super) fn notes(app: &App) -> Vec<String> {
     let Some(Overlay::PullRequest { workspace, scroll }) = app.overlay else { panic!("the dialog is not open") };
-    let Some(ui::Overlay::Update(update)) = app.pull_request_view(workspace, scroll) else { panic!("no view") };
+    let Some(ui::Overlay::Update(update)) = app.pull_request_view(workspace, scroll, AREA) else { panic!("no view") };
     update.notes.iter().map(ToString::to_string).collect()
 }
 

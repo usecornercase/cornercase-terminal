@@ -22,18 +22,26 @@ pub(crate) fn run_raw(gh: &Path, dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
 }
 
 pub(crate) fn run_raw_env(gh: &Path, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Result<Vec<u8>> {
+    let out = output(gh, dir, args, env)?;
+    if !out.status.success() {
+        return Err(Error::Gh(failure(&out, "gh")));
+    }
+    Ok(out.stdout)
+}
+
+pub(crate) fn run_output(gh: &Path, dir: &Path, args: &[&str]) -> Result<Output> {
+    output(gh, dir, args, &[])
+}
+
+fn output(gh: &Path, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Result<Output> {
     let mut command = Command::new(gh);
     command.current_dir(dir).args(args).envs(ENV);
     if !env.is_empty() {
         command.env_remove("GITHUB_TOKEN").env_remove("GITHUB_ENTERPRISE_TOKEN").envs(env.iter().copied());
     }
-    let out = process::output_within(&mut command, TIMEOUT)
+    process::output_within(&mut command, TIMEOUT)
         .map_err(Error::RunGh)?
-        .ok_or_else(|| Error::RunGh(io::Error::new(io::ErrorKind::TimedOut, "no answer within a minute")))?;
-    if !out.status.success() {
-        return Err(Error::Gh(failure(&out, "gh")));
-    }
-    Ok(out.stdout)
+        .ok_or_else(|| Error::RunGh(io::Error::new(io::ErrorKind::TimedOut, "no answer within a minute")))
 }
 
 pub(crate) fn failure(out: &Output, tool: &str) -> String {

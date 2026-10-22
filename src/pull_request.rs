@@ -6,9 +6,12 @@ use serde::Deserialize;
 use crate::error::{Error, Result};
 use crate::gh;
 
+use stack::{Stack, StackMark};
+
 pub(crate) mod gitlab;
 pub(crate) mod glab;
 pub(crate) mod merged;
+pub(crate) mod stack;
 
 const FIELDS: &str = "number,title,url,state,isDraft,mergeable,baseRefName,statusCheckRollup";
 
@@ -176,6 +179,7 @@ pub(crate) struct PullRequest {
     pub(crate) base: String,
     pub(crate) checks: Vec<Check>,
     pub(crate) provider: Provider,
+    pub(crate) stack: Option<Stack>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -184,6 +188,7 @@ pub(crate) struct Mark {
     pub(crate) state: State,
     pub(crate) ci: Option<Ci>,
     pub(crate) conflicts: bool,
+    pub(crate) stack: Option<StackMark>,
 }
 
 impl PullRequest {
@@ -205,7 +210,8 @@ impl PullRequest {
     }
 
     pub(crate) fn mark(&self) -> Mark {
-        Mark { number: self.number, state: self.state, ci: self.ci(), conflicts: self.conflicts() }
+        let stack = self.stack.as_ref().and_then(|s| s.mark(self.number, !self.state.settled()));
+        Mark { number: self.number, state: self.state, ci: self.ci(), conflicts: self.conflicts(), stack }
     }
 
     pub(crate) fn conflicts(&self) -> bool {
@@ -213,8 +219,14 @@ impl PullRequest {
     }
 
     pub(crate) fn keep_known(&mut self, before: &Self) {
-        if self.conflicting.is_none() && self.number == before.number {
+        if self.number != before.number {
+            return;
+        }
+        if self.conflicting.is_none() {
             self.conflicting = before.conflicting;
+        }
+        if self.stack.is_none() {
+            self.stack.clone_from(&before.stack);
         }
     }
 
@@ -369,6 +381,23 @@ impl RawCheck {
     }
 }
 
+pub(super) fn state_of(state: &str, draft: bool) -> State {
+    match state {
+        "MERGED" => State::Merged,
+        "CLOSED" => State::Closed,
+        _ if draft => State::Draft,
+        _ => State::Open,
+    }
+}
+
+pub(super) fn conflicting_of(mergeable: Option<&str>) -> Option<bool> {
+    match mergeable {
+        Some("CONFLICTING") => Some(true),
+        Some("MERGEABLE") => Some(false),
+        _ => None,
+    }
+}
+
 pub(super) fn order(checks: &mut [Check]) {
     checks.sort_by(|a, b| {
         let key = |c: &Check| (c.outcome, c.workflow.is_empty(), c.workflow.clone(), c.name.clone());
@@ -382,12 +411,7 @@ fn started(at: Option<String>) -> Option<String> {
 
 impl From<Raw> for PullRequest {
     fn from(raw: Raw) -> Self {
-        let state = match raw.state.as_str() {
-            "MERGED" => State::Merged,
-            "CLOSED" => State::Closed,
-            _ if raw.is_draft => State::Draft,
-            _ => State::Open,
-        };
+        let state = state_of(&raw.state, raw.is_draft);
         let mut runs: Vec<(Check, Option<String>)> =
             raw.status_check_rollup.into_iter().filter_map(RawCheck::check).collect();
         let newest_first = |started: &Option<String>| (started.is_none(), started.clone());
@@ -399,11 +423,7 @@ impl From<Raw> for PullRequest {
         runs.dedup_by(|(later, _), (kept, _)| (&later.workflow, &later.name) == (&kept.workflow, &kept.name));
         let mut checks: Vec<Check> = runs.into_iter().map(|(check, _)| check).collect();
         order(&mut checks);
-        let conflicting = match raw.mergeable.as_deref() {
-            Some("CONFLICTING") => Some(true),
-            Some("MERGEABLE") => Some(false),
-            _ => None,
-        };
+        let conflicting = conflicting_of(raw.mergeable.as_deref());
         let base = raw.base_ref_name.unwrap_or_default();
         Self {
             number: raw.number,
@@ -414,6 +434,7 @@ impl From<Raw> for PullRequest {
             base,
             checks,
             provider: Provider::Github,
+            stack: None,
         }
     }
 }
