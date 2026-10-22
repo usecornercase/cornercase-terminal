@@ -12,6 +12,9 @@ pub(in crate::agents) const TITLE: &str = "Cursor CLI";
 pub(in crate::agents) const COMMAND: &str = "cursor-agent";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const MODEL_ALIAS: Option<&str> = None;
+pub(in crate::agents) const COMPACT: Option<crate::agents::Compact> =
+    Some(crate::agents::Compact { command: "/summarize", keeps: false });
+
 pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = None;
 pub(in crate::agents) const ADD_DIR: Option<&str> = Some("--add-dir");
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--force", "--trust"];

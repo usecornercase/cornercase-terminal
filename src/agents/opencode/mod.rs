@@ -11,6 +11,9 @@ pub(in crate::agents) const TITLE: &str = "opencode";
 pub(in crate::agents) const COMMAND: &str = "opencode";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const MODEL_ALIAS: Option<&str> = Some("-m");
+pub(in crate::agents) const COMPACT: Option<crate::agents::Compact> =
+    Some(crate::agents::Compact { command: "/compact", keeps: false });
+
 pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = None;
 pub(in crate::agents) const ADD_DIR: Option<&str> = None;
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--auto"];

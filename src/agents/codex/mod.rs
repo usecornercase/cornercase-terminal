@@ -24,6 +24,9 @@ pub(in crate::agents) const TITLE: &str = "Codex";
 pub(in crate::agents) const COMMAND: &str = "codex";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const MODEL_ALIAS: Option<&str> = Some("-m");
+pub(in crate::agents) const COMPACT: Option<crate::agents::Compact> =
+    Some(crate::agents::Compact { command: "/compact", keeps: false });
+
 pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = Some(crate::agents::Effort {
     levels: &["minimal", "low", "medium", "high", "xhigh"],
     flags: &[],

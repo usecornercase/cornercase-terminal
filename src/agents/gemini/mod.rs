@@ -21,6 +21,9 @@ pub(in crate::agents) const TITLE: &str = "Gemini CLI";
 pub(in crate::agents) const COMMAND: &str = "gemini";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const MODEL_ALIAS: Option<&str> = Some("-m");
+pub(in crate::agents) const COMPACT: Option<crate::agents::Compact> =
+    Some(crate::agents::Compact { command: "/compress", keeps: false });
+
 pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = None;
 pub(in crate::agents) const ADD_DIR: Option<&str> = None;
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--yolo", "--skip-trust"];

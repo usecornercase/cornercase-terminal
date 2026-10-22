@@ -113,6 +113,22 @@ impl Known {
         }
     }
 
+    pub(crate) fn compact(self) -> Option<super::Compact> {
+        match self {
+            Self::Claude => claude::COMPACT,
+            Self::Codex => codex::COMPACT,
+            Self::Gemini => gemini::COMPACT,
+            Self::Opencode => opencode::COMPACT,
+            Self::Grok => grok::COMPACT,
+            Self::Cursor => cursor::COMPACT,
+            Self::Copilot => copilot::COMPACT,
+        }
+    }
+
+    pub(crate) fn compacts(self, text: &str) -> bool {
+        self.compact().is_some_and(|compact| text.split_whitespace().next() == Some(compact.command))
+    }
+
     pub(crate) fn model_alias(self) -> Option<&'static str> {
         match self {
             Self::Claude => claude::MODEL_ALIAS,

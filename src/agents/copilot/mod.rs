@@ -14,6 +14,9 @@ pub(in crate::agents) const UNFOUND: &str = "GitHub Copilot CLI has no conversat
 pub(in crate::agents) const COMMAND: &str = "copilot";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const MODEL_ALIAS: Option<&str> = None;
+pub(in crate::agents) const COMPACT: Option<crate::agents::Compact> =
+    Some(crate::agents::Compact { command: "/compact", keeps: true });
+
 pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = Some(crate::agents::Effort {
     levels: &["none", "minimal", "low", "medium", "high", "xhigh", "max"],
     flags: &["--reasoning-effort"],

@@ -192,6 +192,12 @@ impl AccountHome {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Compact {
+    pub(crate) command: &'static str,
+    pub(crate) keeps: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Effort {
     pub(crate) levels: &'static [&'static str],
     pub(crate) flags: &'static [&'static str],

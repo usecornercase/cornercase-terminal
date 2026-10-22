@@ -12,6 +12,9 @@ pub(in crate::agents) const TITLE: &str = "Grok Build";
 pub(in crate::agents) const COMMAND: &str = "grok";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const MODEL_ALIAS: Option<&str> = Some("-m");
+pub(in crate::agents) const COMPACT: Option<crate::agents::Compact> =
+    Some(crate::agents::Compact { command: "/compact", keeps: false });
+
 pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = Some(crate::agents::Effort {
     levels: &["none", "minimal", "low", "medium", "high", "xhigh", "max"],
     flags: &["--reasoning-effort", "--effort"],

@@ -33,3 +33,31 @@ fn claude_codex_cursor_and_copilot_take_one_more_folder_by_flag() {
         ]
     );
 }
+
+#[test]
+fn each_agent_compacts_with_its_own_command() {
+    let commands: Vec<_> = Known::ALL.iter().map(|kind| kind.compact().map(|c| (c.command, c.keeps))).collect();
+    assert_eq!(
+        commands,
+        [
+            Some(("/compact", true)),
+            Some(("/compact", false)),
+            Some(("/compress", false)),
+            Some(("/compact", false)),
+            Some(("/compact", false)),
+            Some(("/summarize", false)),
+            Some(("/compact", true)),
+        ]
+    );
+}
+
+#[rstest::rstest]
+#[case::with_instructions(Known::Claude, "/compact keep: x", true)]
+#[case::padded(Known::Claude, "  /compact", true)]
+#[case::longer_word(Known::Claude, "/compactx", false)]
+#[case::not_first(Known::Claude, "please /compact", false)]
+#[case::gemini_own(Known::Gemini, "/compress", true)]
+#[case::gemini_not_claudes(Known::Gemini, "/compact", false)]
+fn knows_a_compact_command(#[case] kind: Known, #[case] text: &str, #[case] compacts: bool) {
+    assert_eq!(kind.compacts(text), compacts);
+}
