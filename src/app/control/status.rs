@@ -65,7 +65,9 @@ fn pull_refreshed(pull: &PullRequest, hash: &mut DefaultHasher) {
     (pull.number, &pull.title, pull.state.name(), pull.ci().map(Ci::name), pull.conflicts(), &pull.base).hash(hash);
     pull.provider.id().hash(hash);
     pull.failed().for_each(|check| check.name.hash(hash));
-    if let Some(stack) = stack_info(pull) {
+    let stack = stack_info(pull);
+    stack.is_some().hash(hash);
+    if let Some(stack) = stack {
         (stack.number, &stack.base, stack.position, stack.size).hash(hash);
         for layer in &stack.layers {
             (layer.number, &layer.title, &layer.state, &layer.checks, layer.conflicts, &layer.review).hash(hash);

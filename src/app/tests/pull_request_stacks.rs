@@ -229,6 +229,22 @@ mod pacing {
     }
 
     #[test]
+    fn turning_pull_requests_off_and_on_asks_a_host_without_stacks_again() {
+        let mut repo = stacked_by(UNSUPPORTED);
+        set(&repo, "stack-err", "gh: Field 'stack' doesn't exist on type 'PullRequest'");
+        repo.app.git.pulls = PullRequests::default();
+        repo.ask("gh answers");
+        let asked = graphql_calls(&repo);
+        repo.app.config.pull_requests = false;
+        repo.app.ask_pull_requests(Instant::now());
+        repo.app.config.pull_requests = true;
+
+        ask_in(&mut repo, 1);
+
+        assert_eq!(graphql_calls(&repo), asked + 1);
+    }
+
+    #[test]
     fn a_failing_stack_query_keeps_the_last_stack() {
         let mut repo = stacked();
         let note = repo.app.pull_requests_note();
