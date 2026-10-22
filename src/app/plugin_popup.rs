@@ -19,6 +19,8 @@ use crate::term::{SpawnOptions, Term};
 use crate::ui;
 
 const STOP_WITHIN: Duration = Duration::from_secs(2);
+const KILLED_WITHIN: Duration = Duration::from_millis(500);
+const POLL: Duration = Duration::from_millis(20);
 const ROWS: u16 = 24;
 const COLS: u16 = 80;
 
@@ -70,6 +72,25 @@ impl Stopping {
             hang_up(term, Signal::KILL);
             false
         });
+    }
+
+    pub(super) fn finish(&mut self) {
+        self.settle(Instant::now() + STOP_WITHIN);
+        for (term, _) in &self.0 {
+            hang_up(term, Signal::KILL);
+        }
+        self.settle(Instant::now() + KILLED_WITHIN);
+        self.0.clear();
+    }
+
+    fn settle(&mut self, deadline: Instant) {
+        loop {
+            self.0.retain_mut(|(term, _)| !term.exited());
+            if self.0.is_empty() || Instant::now() >= deadline {
+                return;
+            }
+            std::thread::sleep(POLL);
+        }
     }
 
     fn wake(&self, now: Instant) -> Option<Duration> {

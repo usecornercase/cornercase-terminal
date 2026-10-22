@@ -283,6 +283,15 @@ mod closing {
     }
 
     #[test]
+    fn stopping_the_server_kills_a_program_that_ignores_the_hang_up_with_what_it_started() {
+        let mut p = popped();
+        p.open("stubborn", None);
+        let (pid, kid) = (p.pid(), p.kid());
+        p.app.stop_plugins();
+        wait_until("the stubborn program and its child are gone", || !process::alive(pid) && !process::alive(kid));
+    }
+
+    #[test]
     fn closing_with_no_popup_does_nothing() {
         let mut p = popped();
         assert!(!p.app.close_plugin_popup());
