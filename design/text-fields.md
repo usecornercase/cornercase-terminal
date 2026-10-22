@@ -1,0 +1,22 @@
+# Text fields
+
+`editor.rs`, #454. One component for every field with a cursor.
+
+- **One component, two ways of use.** The multi-line fields (the start dialog's prompt, a flow's prompts and notes, the import page, a project's setup and teardown, the paste field in Settings › Share, the tour's prompt) and the one-line fields (TODO items; the schedule form's prompt, time, date, amount and branch) are the same `Editor`.
+  - A multi-line field uses `key`: `Enter` breaks the line, `Home` and `End` reach the ends of the wrapped line, the cursor is revealed; pastes go through `insert_lines` (`\r\n` and `\r` become `\n`).
+  - A one-line field uses `one_line_key`: the caller keeps `Enter`, `Home` and `End` reach the ends of the text; pastes go through `insert`, which turns line breaks, tabs and control characters into spaces. TODO and queue shared two copies of this mapping before.
+  - Fields without a cursor (changes filter, files search and find, search dialog, comboboxes, the flow editor's one-line rows, the start dialog's branch and workspace) are plain strings and are not built on it.
+- **ratatui-textarea as a model only** (0.9.3, `default-features = false`): lines, cursor, edits and history. Its widget is not used: viewport and screen layout live in cells that its own render updates, while fields live in `App` and every window draws a copy of the view. Its `input` brings emacs `Ctrl` and `Alt` bindings, which AGENTS.md rules out, and `input_without_shortcuts` lacks the arrows and `Home`/`End`, inserts four spaces for `Tab` and has a `Delete` that removes a line break before a zero-width character ending a line, so keys are mapped by us.
+  - Wrapping, scroll, vertical moves, clicks and drawing stay ours: wrap keeps every char and counts display columns, a full last line gets an empty one for the cursor. The snapshots did not change.
+  - `TextArea` is `Send` but not `Sync`; `App` and the views stay on the server's loop.
+  - The `TextArea` is boxed so that enums holding an `Editor` stay small.
+  - Cost, measured on 2026-10-22 in release: an edit rebuilds the screen map, about 0.8 ms per keystroke on a 256 KiB text and nothing on normal fields; a view's clone carries the history (50 edits), about 0.2 ms for 4,096 lines. The default history stays so that undo is ready.
+- **Our moves, applied with `Jump`.** `Forward`, `Back`, `Up` and `Down` read the screen map in screen columns and skip or stop short of zero-width characters at the start or end of a line, so typing there would split a character. `left`, `right` and `place` compute the offset as before and jump to it. `Delete` is `delete_str(1)`, guarded at the end of the text.
+- **The `u16` limit.** `Jump` takes `u16`, so a row or column of 65,536 or more cannot be reached; such a line only comes from a paste (up to 256 KiB). `jump` refuses instead of clamping: `←` `→` fall back to `Back` and `Forward`, which have no limit, and a click, `↑` `↓` or `Home`/`End` of a wrapped line leave the cursor in place.
+- **Word moves** (#454, asked by the user): `Ctrl+←` and `Ctrl+→` are `WordBack` and `WordForward`. A word is a run of the same class (whitespace; ASCII punctuation, where a run is one word; everything else), as in vim's `w` and `b`, and a line break is a stop.
+  - `Ctrl` with an arrow is neither `Alt` (Option composes characters on macOS) nor `Ctrl+letter` (shell bindings). `Shift` is left for a future selection; `Shift` and `Alt` with an arrow still move one character, and `Ctrl+↑` `Ctrl+↓` stay `↑` `↓`.
+  - It cannot clash with the prefix key, which is `Ctrl` or `Alt` with a character, or a function key.
+  - macOS: Mission Control takes `Ctrl+←` `Ctrl+→` by default, so they reach the terminal only after turning those shortcuts off. Option+arrows arrive as `Esc b` and `Esc f` (Ghostty's default) or as `Alt+←` `Alt+→` (kitty, WezTerm); accepting them would bend the rule against `Alt` shortcuts, so it is left open.
+  - These are keys of the TUI's own fields, exempt from reaching the socket.
+- **Equality** compares text, cursor and scroll, not history or styles.
+- **Left out**: offering undo, redo, selection, cut and copy, and word deletion (each needs a key or a button, so each asks the user first); word moves in the fields without a cursor.

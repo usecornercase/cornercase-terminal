@@ -33,7 +33,7 @@ Clock times use the zone shown in the form, supplied by the client that opened i
 
 A reset choice runs the existing plan usage probe on the server when you save. It freezes the returned reset time; it does not keep polling or follow later changes to the window. If the probe fails or reports no future five-hour reset, the form shows the reason and keeps your text.
 
-Press `Enter` or click **`schedule`** to save; `Esc` or **`cancel`** closes the form (with a list open, `Enter` picks and `Esc` closes only the list). Click a text field to edit it, use the arrow keys, `Home`, `End`, `Backspace` and `Delete`, or paste text. `Tab` and `Shift+Tab` move between the fields and lists. A line break in a prompt from a template or `--prompt` shows as `↵`.
+Press `Enter` or click **`schedule`** to save; `Esc` or **`cancel`** closes the form (with a list open, `Enter` picks and `Esc` closes only the list). Click a text field to edit it, use the arrow keys (`Ctrl+←` `Ctrl+→` move by word), `Home`, `End`, `Backspace` and `Delete`, or paste text. `Tab` and `Shift+Tab` move between the fields and lists. A prompt from a template or `--prompt` keeps its line breaks; a pasted text goes in as one line.
 
 **Queued launches always accept the agent's folder trust question**, even with `accept_trust_prompts` off. This lets unattended starts proceed. The form states this before saving. Immediate starts keep your global trust setting. Agent approval modes remain the ones you selected. Queued launches submit their stored prompt automatically, even when automatic submission for immediate issue starts is off.
 

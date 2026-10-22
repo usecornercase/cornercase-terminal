@@ -4,6 +4,7 @@
 src/main.rs       hands argv to cli.rs (uses anyhow)
 src/lib.rs        the `pub mod` lines, in the five groups below: shared leaves, domains, view, app, processes
 
+src/editor.rs     the text field with a cursor that panels and dialogs use: ratatui-textarea's TextArea as the model, our own wrapping, scroll, clicks and keys
 src/error.rs      library error type
 src/gh.rs         running gh, GitHub's CLI
 src/http.rs       HTTP requests and downloads for issue trackers and updates
@@ -49,7 +50,7 @@ src/discord/      Discord: REST, gateway.rs (WebSocket), markdown.rs
 src/term.rs       a shell in a PTY, its Emulator, and the reader thread; term/emulator.rs wraps libghostty-vt and takes plain Snapshots for ui
                   term/status.rs OSC 7501 reports, records and lifetimes; term/status/stream.rs bounded escape parsing
                   term/keys.rs KeyEvent -> bytes; term/mouse.rs MouseEvent -> bytes; term/memory.rs how much memory a pane uses
-src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state), editor.rs (a text field with a cursor, soft wrap, line breaks)
+src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state)
 src/tour.rs       the guided tours: steps, what completes each, the section each opens, progress in tour.json, first-run detection; tour/steps.rs the tours as data
 src/worktrees/    Worktrees dialog: mod.rs (list), dialog.rs (state, keys), discover.rs, scan.rs, remove.rs
 src/update.rs     update check against GitHub releases, download, checksum, binary swap; update/restart.rs what a server restart stops: running programs from a status Report, the confirmation texts

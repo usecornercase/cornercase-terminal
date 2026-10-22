@@ -81,10 +81,36 @@ export function insertText(f: Editable, text: string): void {
   f.cursor += chars.length;
 }
 
+const kind = (c: string): string => (/\s/.test(c) ? 'space' : c !== '_' && /[!-/:-@[-`{-~]/.test(c) ? 'punct' : 'other');
+
+function wordRight(chars: string[], at: number): number {
+  if (at >= chars.length) return chars.length;
+  let prev = kind(chars[at]);
+  for (let i = at + 1; i < chars.length; i++) {
+    const cur = kind(chars[i]);
+    if (cur !== 'space' && cur !== prev) return i;
+    prev = cur;
+  }
+  return chars.length;
+}
+
+function wordLeft(chars: string[], at: number): number {
+  if (at <= 0) return 0;
+  let cur = kind(chars[at - 1]);
+  for (let i = at - 2; i >= 0; i--) {
+    const next = kind(chars[i]);
+    if (cur !== 'space' && next !== cur) return i + 1;
+    cur = next;
+  }
+  return 0;
+}
+
 export function editKey(f: Editable, k: Key, width: number): void {
   const [line, col] = fieldPosition(f, width);
   if (k.key === 'Backspace' && f.cursor > 0) f.chars.splice(--f.cursor, 1);
   else if (k.key === 'Delete') f.chars.splice(f.cursor, 1);
+  else if (k.key === 'ArrowLeft' && k.ctrl) f.cursor = wordLeft(f.chars, f.cursor);
+  else if (k.key === 'ArrowRight' && k.ctrl) f.cursor = wordRight(f.chars, f.cursor);
   else if (k.key === 'ArrowLeft') f.cursor = Math.max(0, f.cursor - 1);
   else if (k.key === 'ArrowRight') f.cursor = Math.min(f.chars.length, f.cursor + 1);
   else if (k.key === 'Home') f.cursor = 0;

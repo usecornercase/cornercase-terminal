@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { App } from '../src/lib/demo/app';
+import type { Key } from '../src/lib/demo/programs';
+import { editKey } from '../src/lib/demo/todo';
 import { world } from '../src/lib/demo/world';
 
 function demo(columns: number): App {
@@ -87,4 +89,15 @@ test('the send button is always shown in compact mode and not on done items', ()
   assert.ok(app.textAt('▸'));
   assert.equal(app.textAt('▸', 1), null);
   app.destroy();
+});
+
+test('ctrl and the arrows move a field by word, as in the app', () => {
+  const f = { chars: [...'fix the login-bug'], cursor: 0 };
+  const walk = (key: string): number[] =>
+    [0, 1, 2, 3, 4].map(() => {
+      editKey(f, { key, ctrl: true } as Key, 40);
+      return f.cursor;
+    });
+  assert.deepEqual(walk('ArrowRight'), [4, 8, 13, 14, 17]);
+  assert.deepEqual(walk('ArrowLeft'), [14, 13, 8, 4, 0]);
 });
