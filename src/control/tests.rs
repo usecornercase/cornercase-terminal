@@ -149,6 +149,9 @@ fn last_commands() -> Vec<Command> {
         Command::AccountRestart(AccountRestart::default()),
         Command::ChangesDiscard(ChangesDiscard::default()),
         Command::ChangesStage(ChangesStage::default()),
+        Command::AgentsClose(AgentsClose::default()),
+        Command::AgentsReopen(AgentsReopen::default()),
+        Command::AgentsForget(AgentsForget::default()),
         Command::Tour(tour::TourRequest::default()),
     ]
 }
@@ -923,4 +926,16 @@ fn a_workspace_says_whether_its_flow_run_reached_its_end() {
 
     assert_eq!(sent["run"], json!({"end": "pull_request", "reached": true}));
     assert!(serde_json::to_value(WorkspaceInfo::default()).expect("json").get("run").is_none());
+}
+
+#[test]
+fn a_pull_request_from_an_older_server_reads_without_a_provider() {
+    let older = r#"{"number": 482, "title": "x", "url": "u", "state": "open"}"#;
+    let newer = r#"{"number": 486, "state": "open", "provider": "gitlab"}"#;
+
+    let older: PullRequestInfo = serde_json::from_str(older).expect("an older pull request");
+    let newer: PullRequestInfo = serde_json::from_str(newer).expect("a newer pull request");
+
+    assert_eq!((older.number, older.provider.as_str()), (482, ""));
+    assert_eq!(newer.provider, "gitlab");
 }

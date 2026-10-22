@@ -102,6 +102,24 @@ pub(crate) struct WorkspaceState {
     pub(crate) role_worktrees: Vec<RoleWorktree>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) run_dirs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) closed: Option<ClosedState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct ClosedState {
+    pub(crate) tabs: Vec<TabState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) run: Option<RunState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ClosedAgent {
+    pub(crate) kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) mode: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) cut: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -141,6 +159,10 @@ impl RunState {
             .iter()
             .filter_map(|m| place(m.pane).map(|(tab, pane)| SeatState { role: m.role.clone(), tab, pane }))
             .collect();
+        Self::seated(run, members)
+    }
+
+    pub(crate) fn seated(run: &Run, members: Vec<SeatState>) -> Self {
         Self {
             flow: run.flow.clone(),
             task: run.task.clone(),
@@ -189,6 +211,8 @@ pub(crate) struct PaneState {
     pub(crate) collapsed: bool,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(crate) accounts: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) closed: Option<ClosedAgent>,
 }
 
 impl WorkspaceState {
@@ -210,6 +234,7 @@ impl WorkspaceState {
             run: None,
             role_worktrees: Vec::new(),
             run_dirs: Vec::new(),
+            closed: None,
         }
     }
 }
@@ -226,13 +251,15 @@ impl PaneState {
             parent: None,
             collapsed: false,
             accounts: BTreeMap::new(),
+            closed: None,
         }
     }
 }
 
-pub(crate) fn named_parents(projects: &[Project]) -> HashSet<u64> {
+pub(crate) fn named_parents<'a>(projects: &[Project], closed: impl Iterator<Item = &'a TabState>) -> HashSet<u64> {
     let ids: HashSet<u64> = projects.terms().map(|term| term.id).collect();
-    projects.terms().filter_map(|term| term.parent).filter(|parent| ids.contains(parent)).collect()
+    let kept = closed.flat_map(|tab| &tab.panes).filter_map(|pane| pane.parent);
+    projects.terms().filter_map(|term| term.parent).chain(kept).filter(|parent| ids.contains(parent)).collect()
 }
 
 impl ProjectState {
@@ -297,6 +324,7 @@ impl WorkspaceState {
             run: run.map(|run| RunState::of(run, workspace)),
             role_worktrees: workspace.role_worktrees.clone(),
             run_dirs: workspace.run_dirs.iter().filter_map(|dir| folder_name(dir)).collect(),
+            closed: None,
         }
     }
 }
@@ -318,6 +346,7 @@ impl TabState {
                     parent: term.parent.filter(|parent| parents.contains(parent)),
                     collapsed: term.collapsed,
                     accounts: term.accounts().chosen(),
+                    closed: None,
                 })
                 .collect(),
             active: tab.active,

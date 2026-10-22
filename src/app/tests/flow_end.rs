@@ -1,12 +1,13 @@
 use std::time::Duration;
 
 use super::flow_panel::{TALL, run_in, spot};
+use super::merge_requests::{gitlab, install_glab};
 use super::pull_requests::{Repo, VIEW, repo_with};
 use super::*;
 use crate::agents::activity::Activity;
 use crate::flows::{End, Flow, ORCHESTRATOR, builtin};
 use crate::pull_request::{Ci, State};
-use crate::test_util::git;
+use crate::test_util::{fixture, git};
 
 fn flow(end: End) -> Flow {
     let mut flow = builtin::flows(&agents::Known::ALL, Some(agents::Known::Claude)).remove(0);
@@ -67,6 +68,29 @@ fn the_end_lights_once_the_pull_request_appears_and_its_tag_follows_the_checks()
     answer(&mut repo, &VIEW.replace("\"OPEN\"", "\"CLOSED\""), 4);
     let closed = end(&repo.app);
     assert_eq!((closed.reached, closed.pull.map(|pull| pull.state)), (false, Some(State::Closed)));
+}
+
+#[test]
+fn a_gitlab_merge_request_lights_the_end_and_its_tag_follows_the_pipeline() {
+    let view = fixture!("glab/1.124.0/mr-view-conflicting.json");
+    let mut repo = gitlab(view, fixture!("glab/1.124.0/pipeline-jobs-failed.json"));
+    run_in(&mut repo.app, (0, 1), flow(End::PullRequest));
+    repo.app.projects[0].active = 1;
+    repo.app.ask_pull_requests(Instant::now());
+    pump_until(&mut repo.app, &repo.rx, "glab hosts", |a| !a.git.pulls.glab.asking());
+    repo.ask("glab answers");
+
+    let found = end(&repo.app);
+    assert!(found.reached);
+    let pull = found.pull.expect("its mark");
+    assert_eq!((pull.number, pull.ci), (486, Some(Ci::Failing)));
+    repo.app.show_flow();
+    spot(&mut repo.app, "#486!");
+    install_glab(&mut repo, fixture!("glab/1.124.0/mr-view.json"), fixture!("glab/1.124.0/pipeline-jobs.json"));
+    repo.app.ask_pull_requests(Instant::now() + Duration::from_mins(10));
+    pump_until(&mut repo.app, &repo.rx, "glab answers", |a| a.git.pulls.asking.is_empty());
+    assert_eq!(end(&repo.app).pull.expect("its mark").ci, Some(Ci::Passing));
+    spot(&mut repo.app, "#482✓");
 }
 
 #[test]

@@ -1,0 +1,533 @@
+[
+  {
+    "id": 81000,
+    "status": "success",
+    "stage": "test",
+    "name": "tests:unit",
+    "ref": "refs/merge-requests/486/merge",
+    "tag": false,
+    "coverage": null,
+    "allow_failure": false,
+    "created_at": "2026-10-14T09:34:20.100Z",
+    "started_at": "2026-10-14T09:34:20.100Z",
+    "finished_at": "2026-10-14T09:34:20.100Z",
+    "erased_at": null,
+    "duration": 60.0,
+    "queued_duration": 0.25,
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana",
+      "public_email": "",
+      "bot": false
+    },
+    "commit": {
+      "id": "ebebebebebebebebebebebebebebebebebebebeb",
+      "short_id": "ebebebeb",
+      "created_at": "2026-10-14T09:34:09.000Z",
+      "parent_ids": [
+        "0101010101010101010101010101010101010101",
+        "0202020202020202020202020202020202020202"
+      ],
+      "title": "Merge branch 'feat/saved-address' into 'main'",
+      "message": "Merge branch into 'main'\n",
+      "author_name": "Ana",
+      "author_email": "ana@example.com",
+      "authored_date": "2026-10-14T09:34:09.000Z",
+      "committer_name": "GitLab",
+      "committer_email": "noreply@example.com",
+      "committed_date": "2026-10-14T09:34:09.000Z",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/acme/web-shop/-/commit/ebebebebebebebebebebebebebebebebebebebeb"
+    },
+    "pipeline": {
+      "id": 70486,
+      "iid": 619,
+      "project_id": 4101,
+      "sha": "ebebebebebebebebebebebebebebebebebebebeb",
+      "ref": "refs/merge-requests/486/merge",
+      "status": "failed",
+      "source": "merge_request_event",
+      "created_at": "2026-10-14T09:34:19.148Z",
+      "updated_at": "2026-10-14T09:43:29.085Z",
+      "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70486"
+    },
+    "web_url": "https://gitlab.com/acme/web-shop/-/jobs/81000",
+    "project": {
+      "ci_job_token_scope_enabled": false
+    },
+    "artifacts_file": {
+      "filename": "artifacts.zip",
+      "size": 186524
+    },
+    "artifacts": [
+      {
+        "file_type": "trace",
+        "size": 4096,
+        "filename": "job.log",
+        "file_format": null
+      }
+    ],
+    "runner": {
+      "id": 7001,
+      "description": "shared-runner-linux-amd64",
+      "ip_address": null,
+      "active": true,
+      "paused": false,
+      "is_shared": true,
+      "runner_type": "instance_type",
+      "name": null,
+      "online": true,
+      "status": "online",
+      "job_execution_status": "active"
+    },
+    "runner_manager": null,
+    "artifacts_expire_at": "2026-10-14T09:34:20.100Z",
+    "archived": false,
+    "tag_list": [
+      "linux-amd64"
+    ]
+  },
+  {
+    "id": 81001,
+    "status": "failed",
+    "stage": "test",
+    "name": "lint",
+    "ref": "refs/merge-requests/486/merge",
+    "tag": false,
+    "coverage": null,
+    "allow_failure": false,
+    "created_at": "2026-10-14T09:35:21.101Z",
+    "started_at": "2026-10-14T09:35:21.101Z",
+    "finished_at": "2026-10-14T09:35:21.101Z",
+    "erased_at": null,
+    "duration": 67.5,
+    "queued_duration": 0.25,
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana",
+      "public_email": "",
+      "bot": false
+    },
+    "commit": {
+      "id": "ebebebebebebebebebebebebebebebebebebebeb",
+      "short_id": "ebebebeb",
+      "created_at": "2026-10-14T09:34:09.000Z",
+      "parent_ids": [
+        "0101010101010101010101010101010101010101",
+        "0202020202020202020202020202020202020202"
+      ],
+      "title": "Merge branch 'feat/saved-address' into 'main'",
+      "message": "Merge branch into 'main'\n",
+      "author_name": "Ana",
+      "author_email": "ana@example.com",
+      "authored_date": "2026-10-14T09:34:09.000Z",
+      "committer_name": "GitLab",
+      "committer_email": "noreply@example.com",
+      "committed_date": "2026-10-14T09:34:09.000Z",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/acme/web-shop/-/commit/ebebebebebebebebebebebebebebebebebebebeb"
+    },
+    "pipeline": {
+      "id": 70486,
+      "iid": 619,
+      "project_id": 4101,
+      "sha": "ebebebebebebebebebebebebebebebebebebebeb",
+      "ref": "refs/merge-requests/486/merge",
+      "status": "failed",
+      "source": "merge_request_event",
+      "created_at": "2026-10-14T09:34:19.148Z",
+      "updated_at": "2026-10-14T09:43:29.085Z",
+      "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70486"
+    },
+    "failure_reason": "script_failure",
+    "web_url": "https://gitlab.com/acme/web-shop/-/jobs/81001",
+    "project": {
+      "ci_job_token_scope_enabled": false
+    },
+    "artifacts": [
+      {
+        "file_type": "trace",
+        "size": 4096,
+        "filename": "job.log",
+        "file_format": null
+      }
+    ],
+    "runner": {
+      "id": 7001,
+      "description": "shared-runner-linux-amd64",
+      "ip_address": null,
+      "active": true,
+      "paused": false,
+      "is_shared": true,
+      "runner_type": "instance_type",
+      "name": null,
+      "online": true,
+      "status": "online",
+      "job_execution_status": "active"
+    },
+    "runner_manager": null,
+    "artifacts_expire_at": "2026-10-14T09:35:21.101Z",
+    "archived": false,
+    "tag_list": [
+      "linux-amd64"
+    ]
+  },
+  {
+    "id": 81002,
+    "status": "success",
+    "stage": "docs",
+    "name": "docs:build",
+    "ref": "refs/merge-requests/486/merge",
+    "tag": false,
+    "coverage": null,
+    "allow_failure": false,
+    "created_at": "2026-10-14T09:36:22.102Z",
+    "started_at": "2026-10-14T09:36:22.102Z",
+    "finished_at": "2026-10-14T09:36:22.102Z",
+    "erased_at": null,
+    "duration": 75.0,
+    "queued_duration": 0.25,
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana",
+      "public_email": "",
+      "bot": false
+    },
+    "commit": {
+      "id": "ebebebebebebebebebebebebebebebebebebebeb",
+      "short_id": "ebebebeb",
+      "created_at": "2026-10-14T09:34:09.000Z",
+      "parent_ids": [
+        "0101010101010101010101010101010101010101",
+        "0202020202020202020202020202020202020202"
+      ],
+      "title": "Merge branch 'feat/saved-address' into 'main'",
+      "message": "Merge branch into 'main'\n",
+      "author_name": "Ana",
+      "author_email": "ana@example.com",
+      "authored_date": "2026-10-14T09:34:09.000Z",
+      "committer_name": "GitLab",
+      "committer_email": "noreply@example.com",
+      "committed_date": "2026-10-14T09:34:09.000Z",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/acme/web-shop/-/commit/ebebebebebebebebebebebebebebebebebebebeb"
+    },
+    "pipeline": {
+      "id": 70486,
+      "iid": 619,
+      "project_id": 4101,
+      "sha": "ebebebebebebebebebebebebebebebebebebebeb",
+      "ref": "refs/merge-requests/486/merge",
+      "status": "failed",
+      "source": "merge_request_event",
+      "created_at": "2026-10-14T09:34:19.148Z",
+      "updated_at": "2026-10-14T09:43:29.085Z",
+      "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70486"
+    },
+    "web_url": "https://gitlab.com/acme/web-shop/-/jobs/81002",
+    "project": {
+      "ci_job_token_scope_enabled": false
+    },
+    "artifacts": [
+      {
+        "file_type": "trace",
+        "size": 4096,
+        "filename": "job.log",
+        "file_format": null
+      }
+    ],
+    "runner": {
+      "id": 7001,
+      "description": "shared-runner-linux-amd64",
+      "ip_address": null,
+      "active": true,
+      "paused": false,
+      "is_shared": true,
+      "runner_type": "instance_type",
+      "name": null,
+      "online": true,
+      "status": "online",
+      "job_execution_status": "active"
+    },
+    "runner_manager": null,
+    "artifacts_expire_at": null,
+    "archived": false,
+    "tag_list": [
+      "linux-amd64"
+    ]
+  },
+  {
+    "id": 81003,
+    "status": "failed",
+    "stage": "checks",
+    "name": "commit-lint",
+    "ref": "refs/merge-requests/486/merge",
+    "tag": false,
+    "coverage": null,
+    "allow_failure": false,
+    "created_at": "2026-10-14T09:37:23.103Z",
+    "started_at": "2026-10-14T09:37:23.103Z",
+    "finished_at": "2026-10-14T09:37:23.103Z",
+    "erased_at": null,
+    "duration": 82.5,
+    "queued_duration": 0.25,
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana",
+      "public_email": "",
+      "bot": false
+    },
+    "commit": {
+      "id": "ebebebebebebebebebebebebebebebebebebebeb",
+      "short_id": "ebebebeb",
+      "created_at": "2026-10-14T09:34:09.000Z",
+      "parent_ids": [
+        "0101010101010101010101010101010101010101",
+        "0202020202020202020202020202020202020202"
+      ],
+      "title": "Merge branch 'feat/saved-address' into 'main'",
+      "message": "Merge branch into 'main'\n",
+      "author_name": "Ana",
+      "author_email": "ana@example.com",
+      "authored_date": "2026-10-14T09:34:09.000Z",
+      "committer_name": "GitLab",
+      "committer_email": "noreply@example.com",
+      "committed_date": "2026-10-14T09:34:09.000Z",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/acme/web-shop/-/commit/ebebebebebebebebebebebebebebebebebebebeb"
+    },
+    "pipeline": {
+      "id": 70486,
+      "iid": 619,
+      "project_id": 4101,
+      "sha": "ebebebebebebebebebebebebebebebebebebebeb",
+      "ref": "refs/merge-requests/486/merge",
+      "status": "failed",
+      "source": "merge_request_event",
+      "created_at": "2026-10-14T09:34:19.148Z",
+      "updated_at": "2026-10-14T09:43:29.085Z",
+      "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70486"
+    },
+    "failure_reason": "script_failure",
+    "web_url": "https://gitlab.com/acme/web-shop/-/jobs/81003",
+    "project": {
+      "ci_job_token_scope_enabled": false
+    },
+    "artifacts": [
+      {
+        "file_type": "trace",
+        "size": 4096,
+        "filename": "job.log",
+        "file_format": null
+      }
+    ],
+    "runner": {
+      "id": 7001,
+      "description": "shared-runner-linux-amd64",
+      "ip_address": null,
+      "active": true,
+      "paused": false,
+      "is_shared": true,
+      "runner_type": "instance_type",
+      "name": null,
+      "online": true,
+      "status": "online",
+      "job_execution_status": "active"
+    },
+    "runner_manager": null,
+    "artifacts_expire_at": null,
+    "archived": false,
+    "tag_list": [
+      "linux-amd64"
+    ]
+  },
+  {
+    "id": 81004,
+    "status": "manual",
+    "stage": "security",
+    "name": "vulnerability-check",
+    "ref": "refs/merge-requests/486/merge",
+    "tag": false,
+    "coverage": null,
+    "allow_failure": true,
+    "created_at": "2026-10-14T09:38:24.104Z",
+    "started_at": null,
+    "finished_at": null,
+    "erased_at": null,
+    "duration": null,
+    "queued_duration": null,
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana",
+      "public_email": "",
+      "bot": false
+    },
+    "commit": {
+      "id": "ebebebebebebebebebebebebebebebebebebebeb",
+      "short_id": "ebebebeb",
+      "created_at": "2026-10-14T09:34:09.000Z",
+      "parent_ids": [
+        "0101010101010101010101010101010101010101",
+        "0202020202020202020202020202020202020202"
+      ],
+      "title": "Merge branch 'feat/saved-address' into 'main'",
+      "message": "Merge branch into 'main'\n",
+      "author_name": "Ana",
+      "author_email": "ana@example.com",
+      "authored_date": "2026-10-14T09:34:09.000Z",
+      "committer_name": "GitLab",
+      "committer_email": "noreply@example.com",
+      "committed_date": "2026-10-14T09:34:09.000Z",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/acme/web-shop/-/commit/ebebebebebebebebebebebebebebebebebebebeb"
+    },
+    "pipeline": {
+      "id": 70486,
+      "iid": 619,
+      "project_id": 4101,
+      "sha": "ebebebebebebebebebebebebebebebebebebebeb",
+      "ref": "refs/merge-requests/486/merge",
+      "status": "failed",
+      "source": "merge_request_event",
+      "created_at": "2026-10-14T09:34:19.148Z",
+      "updated_at": "2026-10-14T09:43:29.085Z",
+      "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70486"
+    },
+    "web_url": "https://gitlab.com/acme/web-shop/-/jobs/81004",
+    "project": {
+      "ci_job_token_scope_enabled": false
+    },
+    "artifacts": [],
+    "runner": null,
+    "runner_manager": null,
+    "artifacts_expire_at": null,
+    "archived": false,
+    "tag_list": [
+      "linux-amd64"
+    ]
+  },
+  {
+    "id": 81005,
+    "status": "success",
+    "stage": "security",
+    "name": "secret-detection",
+    "ref": "refs/merge-requests/486/merge",
+    "tag": false,
+    "coverage": null,
+    "allow_failure": true,
+    "created_at": "2026-10-14T09:39:25.105Z",
+    "started_at": "2026-10-14T09:39:25.105Z",
+    "finished_at": "2026-10-14T09:39:25.105Z",
+    "erased_at": null,
+    "duration": 97.5,
+    "queued_duration": 0.25,
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana",
+      "public_email": "",
+      "bot": false
+    },
+    "commit": {
+      "id": "ebebebebebebebebebebebebebebebebebebebeb",
+      "short_id": "ebebebeb",
+      "created_at": "2026-10-14T09:34:09.000Z",
+      "parent_ids": [
+        "0101010101010101010101010101010101010101",
+        "0202020202020202020202020202020202020202"
+      ],
+      "title": "Merge branch 'feat/saved-address' into 'main'",
+      "message": "Merge branch into 'main'\n",
+      "author_name": "Ana",
+      "author_email": "ana@example.com",
+      "authored_date": "2026-10-14T09:34:09.000Z",
+      "committer_name": "GitLab",
+      "committer_email": "noreply@example.com",
+      "committed_date": "2026-10-14T09:34:09.000Z",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/acme/web-shop/-/commit/ebebebebebebebebebebebebebebebebebebebeb"
+    },
+    "pipeline": {
+      "id": 70486,
+      "iid": 619,
+      "project_id": 4101,
+      "sha": "ebebebebebebebebebebebebebebebebebebebeb",
+      "ref": "refs/merge-requests/486/merge",
+      "status": "failed",
+      "source": "merge_request_event",
+      "created_at": "2026-10-14T09:34:19.148Z",
+      "updated_at": "2026-10-14T09:43:29.085Z",
+      "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70486"
+    },
+    "web_url": "https://gitlab.com/acme/web-shop/-/jobs/81005",
+    "project": {
+      "ci_job_token_scope_enabled": false
+    },
+    "artifacts_file": {
+      "filename": "artifacts.zip",
+      "size": 727
+    },
+    "artifacts": [
+      {
+        "file_type": "trace",
+        "size": 4096,
+        "filename": "job.log",
+        "file_format": null
+      }
+    ],
+    "runner": {
+      "id": 7001,
+      "description": "shared-runner-linux-amd64",
+      "ip_address": null,
+      "active": true,
+      "paused": false,
+      "is_shared": true,
+      "runner_type": "instance_type",
+      "name": null,
+      "online": true,
+      "status": "online",
+      "job_execution_status": "active"
+    },
+    "runner_manager": null,
+    "artifacts_expire_at": "2026-10-14T09:39:25.105Z",
+    "archived": false,
+    "tag_list": [
+      "linux-amd64"
+    ]
+  }
+]

@@ -76,6 +76,14 @@ impl App {
             Action::NewTab => self.new_tab_by_key(area),
             Action::Split(dir) => self.split_by_key(dir, area),
             Action::Issues => self.issues_by_key(area),
+            Action::ReopenAgents => {
+                self.reopen_agents_by_key(area);
+                Ok(())
+            }
+            Action::CloseAgents => {
+                self.close_agents_by_key();
+                Ok(())
+            }
             _ => Ok(()),
         }
     }

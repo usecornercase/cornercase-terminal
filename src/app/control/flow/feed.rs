@@ -1,6 +1,7 @@
 use super::super::{Handled, conflict, json, none};
 use crate::agents::activity::Status;
 use crate::app::App;
+use crate::app::closed_agents::{Kept, KeptRun};
 use crate::app::event::AppEvent;
 use crate::app::events::Streamed;
 use crate::control::contract::Refusal;
@@ -8,10 +9,11 @@ use crate::control::{
     self, FlowBacklog, FlowMessage, FlowRuns, Response, RoleState, RunFile, RunFiles, RunState, StepInfo,
 };
 use crate::error::Result;
-use crate::flows::folder;
 use crate::flows::run::Run;
+use crate::flows::{self, folder};
 use crate::log::{self, Job, Level};
 use crate::project::{Hierarchy, Workspace};
+use crate::state::SeatState;
 use crate::time::Stamp;
 use crate::version;
 
@@ -22,7 +24,9 @@ impl App {
     }
 
     pub(in crate::app) fn flow_runs_state(&self) -> FlowRuns {
-        let runs = self.runs.all().iter().filter_map(|run| self.run_state(run)).collect();
+        let running = self.runs.all().iter().filter_map(|run| self.run_state(run));
+        let closed = self.agents.closed.with_runs().filter_map(|kept| self.closed_run_state(kept));
+        let runs = running.chain(closed).collect();
         FlowRuns { version: version::CURRENT.to_string(), boot: control::server_token().to_string(), runs }
     }
 
@@ -50,6 +54,43 @@ impl App {
             outside: progress.outside.map(Into::into),
             ended,
             messages: run.recorded,
+            state: None,
+        })
+    }
+
+    fn closed_run_state(&self, kept: &Kept) -> Option<RunState> {
+        let KeptRun { run, seats } = kept.run.as_ref()?;
+        let at = self.projects.workspace_index(run.workspace)?;
+        let workspace = self.projects.workspace(at);
+        let pending = |seat: &SeatState| kept.tabs.get(seat.tab)?.panes.get(seat.pane).map(|pane| pane.pending);
+        let ended = seats.iter().find(|seat| seat.role == flows::ORCHESTRATOR).and_then(pending).unwrap_or(false);
+        let roles = std::iter::once(&run.flow.orchestrator).chain(&run.flow.roles).map(|role| {
+            let tree = workspace.role_worktrees.iter().find(|tree| tree.role == role.name);
+            RoleState {
+                role: role.name.clone(),
+                closed: true,
+                worktree: tree.map(|tree| tree.path.clone()),
+                branch: tree.map(|tree| tree.branch.clone()),
+                ..RoleState::default()
+            }
+        });
+        let progress = &run.progress;
+        Some(RunState {
+            run: run.id,
+            project: self.projects[at.project()].id,
+            workspace: run.workspace,
+            flow: (&run.flow).into(),
+            task: run.task.clone(),
+            dir: run.dir.clone(),
+            roles: roles.collect(),
+            stage: progress.active,
+            rounds: (0..run.flow.stages.len()).map(|stage| progress.rounds(stage)).collect(),
+            holder: progress.holder.clone(),
+            last: progress.last.as_ref().map(StepInfo::from),
+            outside: progress.outside.map(Into::into),
+            ended,
+            messages: run.recorded,
+            state: Some("closed".to_string()),
         })
     }
 

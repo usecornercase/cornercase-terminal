@@ -20,7 +20,16 @@ fn check(name: &str, outcome: Outcome) -> Check {
 }
 
 fn pull(state: State, checks: Vec<Check>) -> PullRequest {
-    PullRequest { number: 7, title: "x".into(), url: "u".into(), state, conflicting: None, base: String::new(), checks }
+    PullRequest {
+        number: 7,
+        title: "x".into(),
+        url: "u".into(),
+        state,
+        conflicting: None,
+        base: String::new(),
+        checks,
+        provider: Provider::Github,
+    }
 }
 
 mod find {
@@ -317,5 +326,58 @@ mod conflicts {
         let mark = parsed(CONFLICTING).mark();
 
         assert_eq!((mark.conflicts, mark.ci), (true, Some(Ci::Passing)));
+    }
+}
+
+mod routing {
+    use super::*;
+
+    fn listed(host: &str, ssh_host: &str) -> glab::Host {
+        glab::Host { host: host.into(), ssh_host: ssh_host.into(), ..glab::Host::default() }
+    }
+
+    #[rstest]
+    #[case::github("github.com", Provider::Github)]
+    #[case::github_over_ssh("ssh.github.com", Provider::Github)]
+    #[case::enterprise("ghe.acme.dev", Provider::Github)]
+    #[case::an_ssh_alias_for_github("github.com-work", Provider::Github)]
+    #[case::bitbucket("bitbucket.org", Provider::Github)]
+    #[case::gitlab("gitlab.com", Provider::Gitlab)]
+    #[case::gitlab_over_ssh("altssh.gitlab.com", Provider::Gitlab)]
+    #[case::self_hosted("gitlab.acme.dev", Provider::Gitlab)]
+    #[case::an_ssh_alias_for_gitlab("gitlab-work", Provider::Gitlab)]
+    fn a_host_names_its_provider(#[case] host: &str, #[case] expected: Provider) {
+        assert_eq!(provider_of(host, &[]), expected);
+    }
+
+    #[rstest]
+    #[case::listed("git.acme.dev")]
+    #[case::a_subdomain("ssh.git.acme.dev")]
+    #[case::by_its_ssh_host("git-ssh.acme.dev")]
+    fn a_host_glab_serves_is_gitlab(#[case] host: &str) {
+        let hosts = [listed("git.acme.dev", "git-ssh.acme.dev")];
+
+        assert_eq!(provider_of(host, &hosts), Provider::Gitlab);
+        assert_eq!(provider_of(host, &[]), Provider::Github);
+    }
+
+    #[rstest]
+    #[case("github.com", false)]
+    #[case("GitHub.com", false)]
+    #[case("ssh.github.com", false)]
+    #[case("ghe.acme.dev", true)]
+    #[case("gitlab.com", true)]
+    fn only_a_host_that_is_not_github_com_asks_glab(#[case] host: &str, #[case] asks: bool) {
+        assert_eq!(asks_glab(host), asks);
+    }
+
+    #[test]
+    fn a_provider_says_its_words() {
+        assert_eq!(Provider::of("gitlab"), Provider::Gitlab);
+        assert_eq!(Provider::of(""), Provider::Github);
+        assert_eq!(Provider::of(Provider::Github.id()), Provider::Github);
+        assert_eq!(Provider::Gitlab.reference(486), "!486");
+        assert_eq!(Provider::Github.reference(482), "#482");
+        assert_eq!((Provider::Gitlab.noun(), Provider::Gitlab.checks()), ("merge request", "pipeline"));
     }
 }

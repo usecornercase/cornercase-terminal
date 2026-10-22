@@ -55,6 +55,9 @@ impl Command {
         match self {
             Self::Close(close) => close.fields(fields),
             Self::CloseAgent(close) => close.fields(fields),
+            Self::AgentsClose(close) => close.fields(fields),
+            Self::AgentsReopen(reopen) => reopen.fields(fields),
+            Self::AgentsForget(forget) => forget.fields(fields),
             Self::Rename(rename) => {
                 fields.maybe("item", rename.item).add("name", &rename.name);
             }

@@ -81,6 +81,7 @@ impl App {
             pull: self.pull_mark(w),
             removing: w.removing(),
             setting_up: w.setting_up(),
+            closed: self.agents.closed.count(w.id),
         }
     }
 
@@ -119,6 +120,7 @@ impl App {
             removing: workspace.removing(),
             collapsed: workspace.collapsed,
             setting_up: workspace.setting_up(),
+            closed: self.agents.closed.count(workspace.id),
         }
     }
 
@@ -165,6 +167,7 @@ impl App {
             agents: self.config.agents_section.then(|| self.agents_view()),
             counts: self.config.counts,
             icons: self.config.icon_bar,
+            closed_agents: project.and_then(Project::workspace).map_or(0, |w| self.agents.closed.count(w.id)),
             groups: self.groups.iter().map(|g| g.entry.clone()).collect(),
             projects: self.project_entries(),
             active: self.active,

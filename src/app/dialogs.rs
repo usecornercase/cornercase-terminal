@@ -2,6 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::{Position, Rect};
 
 use super::App;
+use super::closed_agents::forgotten;
 use super::menus::{PaneAction, Target};
 use super::overlay::{CLOSE_SUBMIT, CREATE_SUBMIT, Overlay, RENAME_SUBMIT};
 use crate::error::Result;
@@ -216,6 +217,7 @@ impl App {
             Overlay::CloseProject { project } => self.submit_close_project(project),
             Overlay::CloseWorkspace { project, workspace } => self.submit_close_workspace(project, workspace),
             Overlay::CloseTab { project, workspace, tab } => self.submit_close_tab(project, workspace, tab),
+            Overlay::ForgetAgents { workspace, .. } => self.submit_forget_agents(workspace),
             Overlay::ClosePane { pane } => self.submit_close_pane(pane, area)?,
             Overlay::Update(step) => self.submit_update(step),
             Overlay::Restart => self.submit_restart(),
@@ -291,12 +293,18 @@ impl App {
     pub(super) fn close_project_message(&self, id: u64) -> Option<String> {
         let project = &self.projects[self.projects.project_index(id)?];
         let stopped = stopped_tabs(project.workspaces.iter().map(|w| w.tabs.len()).sum());
-        Some(format!("Close the project {}?{stopped} Folders and worktrees stay on disk.", self.project_label(project)))
+        let closed: usize = project.workspaces.iter().map(|w| self.agents.closed.count(w.id)).sum();
+        let forgotten = forgotten(closed);
+        Some(format!(
+            "Close the project {}?{stopped}{forgotten} Folders and worktrees stay on disk.",
+            self.project_label(project)
+        ))
     }
 
     pub(super) fn close_workspace_message(&self, project: u64, workspace: u64) -> Option<String> {
         let workspace = self.projects.workspace(self.projects.workspace_in(project, workspace)?);
-        Some(format!("Close the workspace {}?{}", workspace.label(), stopped_tabs(workspace.tabs.len())))
+        let closed = self.forgotten_note(workspace.id);
+        Some(format!("Close the workspace {}?{}{closed}", workspace.label(), stopped_tabs(workspace.tabs.len())))
     }
 
     pub(super) fn close_tab_message(&self, project: u64, workspace: u64, tab: u64) -> Option<String> {

@@ -17,7 +17,7 @@ use super::worktrees::WorktreeEvent;
 use crate::git;
 use crate::log::{self, Job, Level};
 use crate::project::{Hierarchy, Workspace};
-use crate::pull_request::{self, Mark, PullRequest};
+use crate::pull_request::{Mark, Provider, PullRequest};
 use crate::ui::{self};
 
 const RUNNING_EVERY: Duration = Duration::from_secs(20);
@@ -30,8 +30,6 @@ const FAILED_EVERY: Duration = Duration::from_secs(300);
 
 const SLOW: Duration = Duration::from_secs(30);
 
-const TITLE: &str = "Pull request";
-
 pub(super) const COPY_LINK: &str = "copy link";
 
 pub(super) const ASK_AGENT: &str = "ask agent";
@@ -41,13 +39,18 @@ pub(super) const DONE: &str = "done";
 const CONFLICT_NOTE: [&str; 2] =
     ["GitHub runs no pull_request workflows until the", "conflict is resolved, so checks may be missing."];
 
-const NOTE: &str = "each workspace's pull request and its checks, from gh";
+const NOTE: &str = "each workspace's pull request and its checks, from gh or glab";
+
+mod glab_hosts;
+
+use glab_hosts::{GlabHosts, Route};
 
 #[derive(Default)]
 pub(super) struct PullRequests {
     pub(super) found: HashMap<u64, Found>,
     pub(super) asking: HashSet<u64>,
     pub(super) answered: HashMap<u64, Answered>,
+    pub(super) glab: GlabHosts,
 }
 
 pub(super) struct Found {
@@ -57,8 +60,9 @@ pub(super) struct Found {
 }
 
 pub(super) struct Answered {
-    at: Instant,
-    error: Option<String>,
+    pub(super) at: Instant,
+    pub(super) error: Option<String>,
+    pub(super) provider: Provider,
 }
 
 impl Found {
@@ -92,11 +96,13 @@ impl App {
     }
 
     pub(super) fn pull_requests_note(&self) -> String {
-        let mut answers = self.git.pulls.answered.values();
-        match answers.next().and_then(|first| first.error.clone()) {
-            Some(error) if answers.all(|a| a.error.is_some()) => error,
-            _ => NOTE.into(),
-        }
+        [Provider::Github, Provider::Gitlab]
+            .into_iter()
+            .find_map(|provider| {
+                let mut answers = self.git.pulls.answered.values().filter(|a| a.provider == provider);
+                answers.next().and_then(|first| first.error.clone()).filter(|_| answers.all(|a| a.error.is_some()))
+            })
+            .unwrap_or_else(|| NOTE.into())
     }
 
     pub(super) fn ask_pull_requests(&mut self, now: Instant) {
@@ -108,17 +114,31 @@ impl App {
         self.git.pulls.found.retain(|id, _| workspaces.contains(id));
         self.git.pulls.answered.retain(|id, _| self.projects.project_index(*id).is_some());
         self.close_gone_pull_request();
-        let gh = self.config.gh(self.home.as_deref());
+        let wanted = self.glab_wanted();
         for p in 0..self.projects.len() {
-            let project = &self.projects[p];
-            if project.closing || self.git.pulls.waiting(project.id, now) {
-                continue;
+            self.ask_project_pull_requests(p, now);
+        }
+        self.ask_glab_hosts(now, wanted);
+    }
+
+    fn ask_project_pull_requests(&mut self, p: usize, now: Instant) {
+        let project = &self.projects[p];
+        if project.closing || self.git.pulls.waiting(project.id, now) {
+            return;
+        }
+        let id = project.id;
+        let due = self.due_pull_requests(p, now);
+        if due.is_empty() {
+            return;
+        }
+        match self.git.pulls.glab.route(self.project_host(p).as_deref()) {
+            Route::Wait => {}
+            Route::Explain(why) => {
+                let workspaces: Vec<u64> = self.projects[p].workspaces.iter().map(|w| w.id).collect();
+                self.git.pulls.found.retain(|id, _| !workspaces.contains(id));
+                self.pull_requests_found(id, Provider::Gitlab, Vec::new(), Some(why));
             }
-            let id = project.id;
-            let due = self.due_pull_requests(p, now);
-            if !due.is_empty() {
-                self.spawn_pull_requests(id, due, gh.clone());
-            }
+            Route::Ask(provider) => self.spawn_pull_requests(id, due, provider),
         }
     }
 
@@ -140,15 +160,22 @@ impl App {
         due
     }
 
-    fn spawn_pull_requests(&mut self, project: u64, due: Vec<(u64, PathBuf, String)>, gh: PathBuf) {
+    fn spawn_pull_requests(&mut self, project: u64, due: Vec<(u64, PathBuf, String)>, provider: Provider) {
         self.git.pulls.asking.insert(project);
-        let job = Job::new(Level::Debug, "pr", "view").with("project", project).with("workspaces", due.len());
+        let tool = match provider {
+            Provider::Github => self.config.gh(self.home.as_deref()),
+            Provider::Gitlab => self.config.glab(self.home.as_deref()),
+        };
+        let job = Job::new(Level::Debug, "pr", "view")
+            .with("project", project)
+            .with("provider", provider.id())
+            .with("workspaces", due.len());
         self.spawn_job(
             job.slow_after(SLOW),
-            move || Ok(read_pull_requests(&gh, due)),
+            move || Ok(read_pull_requests(provider, &tool, due)),
             move |result, _| {
                 let (found, error) = result.unwrap_or_else(|e| (Vec::new(), Some(e.to_string())));
-                Some(AppEvent::Worktree(WorktreeEvent::PullRequests { project, found, error }))
+                Some(AppEvent::Worktree(WorktreeEvent::PullRequests { project, provider, found, error }))
             },
         );
     }
@@ -156,6 +183,7 @@ impl App {
     pub(super) fn pull_requests_found(
         &mut self,
         project: u64,
+        provider: Provider,
         found: Vec<(u64, String, Option<PullRequest>)>,
         error: Option<String>,
     ) {
@@ -165,10 +193,10 @@ impl App {
         }
         let now = Instant::now();
         let known = self.git.pulls.answered.get(&project).and_then(|a| a.error.as_ref());
-        log_pull_error(project, known, error.as_ref());
-        self.git.pulls.answered.insert(project, Answered { at: now, error });
-        for (workspace, branch, pull) in found {
-            self.record_pull_request(workspace, branch, pull, now);
+        log_pull_error(project, provider, known, error.as_ref());
+        self.git.pulls.answered.insert(project, Answered { at: now, error, provider });
+        for found in found {
+            self.record_pull_request(found, (now, provider));
         }
         self.close_gone_pull_request();
         let note = self.pull_requests_note();
@@ -177,7 +205,8 @@ impl App {
         }
     }
 
-    fn record_pull_request(&mut self, workspace: u64, branch: String, mut pull: Option<PullRequest>, now: Instant) {
+    fn record_pull_request(&mut self, found: (u64, String, Option<PullRequest>), (now, provider): (Instant, Provider)) {
+        let (workspace, branch, mut pull) = found;
         let path = self.projects.workspace_by(workspace).map(|w| &w.path);
         if path.and_then(|path| git::checked_out(path)) != Some(branch.clone()) {
             return;
@@ -189,7 +218,7 @@ impl App {
         let shown = before.map(PullRequest::mark);
         let mark = pull.as_ref().map(PullRequest::mark);
         if shown != mark {
-            log_pull_request(workspace, mark);
+            log_pull_request(workspace, mark, provider);
         }
         self.git.pulls.found.insert(workspace, Found { branch, at: Some(now), pull });
     }
@@ -202,25 +231,42 @@ impl App {
         }
     }
 
-    pub(super) fn pull_in_list(&self, list: Rect, pitch: u16, tabs: &ui::TabLines, w: usize) -> Option<(Rect, u64)> {
+    pub(super) fn tag_in_list(
+        &self,
+        list: Rect,
+        pitch: u16,
+        tabs: &ui::TabLines,
+        (w, pos): (usize, Position),
+    ) -> Option<(ui::Tag, u64)> {
         let workspace = self.projects.get(self.active)?.workspaces.get(w)?;
         let entry = self.workspace_entry(workspace);
         let layout = ui::workspace_layout(list, pitch, tabs, self.scroll.of(List::Workspaces));
-        ui::workspace_pull(&layout, pitch, tabs, w, &entry).map(|rect| (rect, workspace.id))
+        [ui::Tag::Pull, ui::Tag::Reopen].into_iter().find_map(|tag| {
+            let rect = ui::workspace_tag(&layout, pitch, tabs, w, (&entry, tag))?;
+            rect.contains(pos).then_some((tag, workspace.id))
+        })
     }
 
-    pub(super) fn pull_in_tree(
+    pub(super) fn tag_in_tree(
         &self,
         list: Rect,
         shape: &ui::TreeShape,
         (p, w): (usize, usize),
         pos: Position,
-    ) -> Option<u64> {
+    ) -> Option<(ui::Tag, u64)> {
         let workspace = self.projects.get(p)?.workspaces.get(w)?;
         let entry = self.workspace_entry(workspace);
-        ui::tree_pull(list, shape, self.scroll.of(List::Projects), (p, w), &entry)
-            .filter(|rect| rect.contains(pos))
-            .map(|_| workspace.id)
+        [ui::Tag::Pull, ui::Tag::Reopen].into_iter().find_map(|tag| {
+            let rect = ui::tree_tag(list, shape, self.scroll.of(List::Projects), (p, w), (&entry, tag))?;
+            rect.contains(pos).then_some((tag, workspace.id))
+        })
+    }
+
+    pub(super) fn press_tag(&mut self, (tag, workspace): (ui::Tag, u64), area: Rect) {
+        match tag {
+            ui::Tag::Pull => self.open_pull_request(workspace),
+            ui::Tag::Reopen => self.reopen_from_window(workspace, area),
+        }
     }
 
     pub(super) fn open_pull_request(&mut self, workspace: u64) {
@@ -243,6 +289,7 @@ impl App {
         }
         let project = self.project().map(|p| p.id).unwrap_or_default();
         let error = self.git.pulls.answered.get(&project).and_then(|a| a.error.clone());
+        let noun = self.pull_noun();
         let (message, icon) = match (git::checked_out(&path), error) {
             _ if !self.config.pull_requests => ("pull requests are off in settings".into(), ui::ToastIcon::Check),
             (None, _) => ("this workspace is not on a branch".into(), ui::ToastIcon::Check),
@@ -250,11 +297,24 @@ impl App {
             (Some(branch), None)
                 if self.git.pulls.found.contains_key(&id) || git::origin_head(&path) == Some(branch.clone()) =>
             {
-                (format!("no pull request for {branch}"), ui::ToastIcon::Check)
+                (format!("no {noun} for {branch}"), ui::ToastIcon::Check)
             }
-            (Some(branch), None) => (format!("looking for a pull request for {branch}…"), ui::ToastIcon::Check),
+            (Some(branch), None) => (format!("looking for a {noun} for {branch}…"), ui::ToastIcon::Check),
         };
         self.messages.toast = Some(Toast::new(message, icon));
+    }
+
+    pub(super) fn pull_request_label(&self, workspace: u64) -> String {
+        self.pull_request(workspace).map(|p| format!("{} {}", p.provider.noun(), p.reference())).unwrap_or_default()
+    }
+
+    fn pull_noun(&self) -> &'static str {
+        let host = self.projects.get(self.active).and_then(|_| self.project_host(self.active));
+        match self.git.pulls.glab.route(host.as_deref()) {
+            Route::Ask(provider) => provider.noun(),
+            Route::Explain(_) => Provider::Gitlab.noun(),
+            Route::Wait => Provider::Github.noun(),
+        }
     }
 
     pub(super) fn pull_request_extra(&self, workspace: u64) -> Option<&'static str> {
@@ -265,7 +325,7 @@ impl App {
         let grey = ui::muted(self.themes.host());
         let muted = Style::default().fg(grey);
         let mut notes = vec![Line::from(Span::styled(pull.summary(), muted))];
-        if pull.conflicts() {
+        if pull.conflicts() && pull.provider == Provider::Github {
             notes.extend(CONFLICT_NOTE.map(|line| Line::from(Span::styled(line, muted))));
         }
         notes.push(Line::default());
@@ -286,8 +346,8 @@ impl App {
         let project = self.projects.workspace_index(workspace).map(|at| self.projects[at.project()].id);
         let error = project.and_then(|id| self.git.pulls.answered.get(&id)).and_then(|a| a.error.clone());
         Some(ui::Overlay::Update(ui::Update {
-            title: TITLE,
-            message: format!("#{} {}", pull.number, pull.title),
+            title: pull.provider.title(),
+            message: format!("{} {}", pull.reference(), pull.title),
             notes,
             scroll,
             note: error.map(ui::Note::Error),
@@ -350,7 +410,7 @@ fn pull_branch(workspace: &Workspace) -> Option<String> {
 
 type Looked = Vec<(u64, String, Option<PullRequest>)>;
 
-fn read_pull_requests(gh: &Path, due: Vec<(u64, PathBuf, String)>) -> (Looked, Option<String>) {
+fn read_pull_requests(provider: Provider, tool: &Path, due: Vec<(u64, PathBuf, String)>) -> (Looked, Option<String>) {
     let mut asked: HashMap<PathBuf, Option<PullRequest>> = HashMap::new();
     let mut found = Vec::new();
     for (id, path, branch) in due {
@@ -358,32 +418,36 @@ fn read_pull_requests(gh: &Path, due: Vec<(u64, PathBuf, String)>) -> (Looked, O
             found.push((id, branch, pull.clone()));
             continue;
         }
-        match pull_request::find(gh, &path) {
+        match provider.find(tool, &path) {
             Ok(pull) => {
                 asked.insert(path, pull.clone());
                 found.push((id, branch, pull));
             }
-            Err(e) => return (found, Some(pull_request::explain(&e))),
+            Err(e) => return (found, Some(provider.explain(&e))),
         }
     }
     (found, None)
 }
 
-fn log_pull_error(project: u64, known: Option<&String>, error: Option<&String>) {
+fn log_pull_error(project: u64, provider: Provider, known: Option<&String>, error: Option<&String>) {
+    let provider = provider.id();
     match error {
         Some(why) if known != Some(why) => {
-            log::warning!("pr", "cannot read pull requests", project = project, error = why);
+            log::warning!("pr", "cannot read pull requests", project = project, provider = provider, error = why);
         }
-        None if known.is_some() => log::info!("pr", "pull requests read again", project = project),
+        None if known.is_some() => {
+            log::info!("pr", "pull requests read again", project = project, provider = provider);
+        }
         _ => {}
     }
 }
 
-fn log_pull_request(workspace: u64, mark: Option<Mark>) {
+fn log_pull_request(workspace: u64, mark: Option<Mark>, provider: Provider) {
     log::info!(
         "pr",
         "pull request",
         workspace = workspace,
+        provider = provider.id(),
         number = mark.map_or(0, |m| m.number),
         state = mark.map_or("none", |m| m.state.name()),
         checks = mark.and_then(|m| m.ci).map_or("none", |ci| ci.name()),

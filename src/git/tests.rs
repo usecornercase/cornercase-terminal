@@ -224,6 +224,39 @@ mod remote_urls {
     }
 }
 
+mod primary_remote {
+    use crate::git::remote;
+    use crate::test_util::git_repo;
+
+    fn named(config: &str) -> Option<String> {
+        let repo = git_repo(&[]);
+        std::fs::write(repo.path().join(".git/config"), config).expect("write config");
+        remote::primary(repo.path()).map(|r| r.name)
+    }
+
+    #[test]
+    fn is_origin_wherever_it_is_listed() {
+        let config =
+            "[remote \"up\"]\n\turl = git@gitlab.com:a/b.git\n[remote \"origin\"]\n\turl = git@github.com:a/b.git\n";
+
+        assert_eq!(named(config).as_deref(), Some("origin"));
+    }
+
+    #[test]
+    fn is_the_first_remote_without_an_origin() {
+        let config =
+            "[remote \"up\"]\n\turl = git@gitlab.com:a/b.git\n[remote \"mirror\"]\n\turl = git@github.com:a/b.git\n";
+
+        assert_eq!(named(config).as_deref(), Some("up"));
+    }
+
+    #[test]
+    fn is_none_without_a_remote_or_with_a_local_path() {
+        assert_eq!(named("[core]\n"), None);
+        assert_eq!(named("[remote \"origin\"]\n\turl = /srv/git/shop\n"), None);
+    }
+}
+
 mod user_name {
     use super::*;
 

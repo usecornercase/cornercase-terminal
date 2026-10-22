@@ -84,6 +84,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                 parent: None,
                 collapsed: false,
                 accounts: std::collections::BTreeMap::new(),
+                closed: None,
             },
             PaneState {
                 cwd: Some(paths[3].clone()),
@@ -95,6 +96,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                 parent: None,
                 collapsed: false,
                 accounts: std::collections::BTreeMap::new(),
+                closed: None,
             },
         ],
         active: 1,
@@ -139,6 +141,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                                         parent: None,
                                         collapsed: false,
                                         accounts: std::collections::BTreeMap::new(),
+                                        closed: None,
                                     }],
                                     active: 0,
                                     layout: None,
@@ -151,6 +154,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                             run: None,
                             role_worktrees: Vec::new(),
                             run_dirs: Vec::new(),
+                            closed: None,
                         },
                     ],
                 )
@@ -259,6 +263,7 @@ fn with_a_locked_pane(dir: &Path, locked: &Locked) -> WorkspaceState {
         parent: None,
         collapsed: false,
         accounts: std::collections::BTreeMap::new(),
+        closed: None,
     });
     ws
 }
@@ -294,7 +299,7 @@ fn a_tab_that_cannot_start_names_the_folder_and_why() {
 
     let Err(e) = app.restore_tab(
         &ws.tabs[0],
-        session::Restoring { dir: dir.path(), area: AREA, run: None },
+        session::Restoring { dir: dir.path(), area: AREA, run: None, reopen: false },
         |_| None,
         &mut session::Parents::default(),
     ) else {

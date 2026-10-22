@@ -7,7 +7,8 @@ use super::event::AppEvent;
 use crate::agents::stats::MergedRow;
 use crate::git::remote::{self, Remote};
 use crate::log::{self, Job, Level};
-use crate::pull_request::merged::{self, Answer, Cache, Provider, Read};
+use crate::pull_request::Provider;
+use crate::pull_request::merged::{self, Answer, Cache, Read};
 
 const EVERY: Duration = Duration::from_mins(15);
 

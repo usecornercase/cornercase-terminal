@@ -1,0 +1,606 @@
+[
+  {
+    "id": 80000,
+    "status": "manual",
+    "stage": "review",
+    "name": "review-deploy",
+    "ref": "refs/merge-requests/482/merge",
+    "tag": false,
+    "coverage": null,
+    "allow_failure": true,
+    "created_at": "2026-10-14T09:34:20.100Z",
+    "started_at": null,
+    "finished_at": null,
+    "erased_at": null,
+    "duration": null,
+    "queued_duration": null,
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana",
+      "public_email": "",
+      "bot": false
+    },
+    "commit": {
+      "id": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+      "short_id": "e7e7e7e7",
+      "created_at": "2026-10-14T09:34:09.000Z",
+      "parent_ids": [
+        "0101010101010101010101010101010101010101",
+        "0202020202020202020202020202020202020202"
+      ],
+      "title": "Merge branch 'feat/gift-cards' into 'main'",
+      "message": "Merge branch into 'main'\n",
+      "author_name": "Ana",
+      "author_email": "ana@example.com",
+      "authored_date": "2026-10-14T09:34:09.000Z",
+      "committer_name": "GitLab",
+      "committer_email": "noreply@example.com",
+      "committed_date": "2026-10-14T09:34:09.000Z",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/acme/web-shop/-/commit/e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+    },
+    "pipeline": {
+      "id": 70482,
+      "iid": 615,
+      "project_id": 4101,
+      "sha": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+      "ref": "refs/merge-requests/482/merge",
+      "status": "success",
+      "source": "merge_request_event",
+      "created_at": "2026-10-14T09:34:19.148Z",
+      "updated_at": "2026-10-14T09:43:29.085Z",
+      "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70482"
+    },
+    "web_url": "https://gitlab.com/acme/web-shop/-/jobs/80000",
+    "project": {
+      "ci_job_token_scope_enabled": false
+    },
+    "artifacts": [],
+    "runner": null,
+    "runner_manager": null,
+    "artifacts_expire_at": null,
+    "archived": false,
+    "tag_list": [
+      "linux-amd64"
+    ]
+  },
+  {
+    "id": 80001,
+    "status": "success",
+    "stage": "test",
+    "name": "tests:unit",
+    "ref": "refs/merge-requests/482/merge",
+    "tag": false,
+    "coverage": null,
+    "allow_failure": false,
+    "created_at": "2026-10-14T09:35:21.101Z",
+    "started_at": "2026-10-14T09:35:21.101Z",
+    "finished_at": "2026-10-14T09:35:21.101Z",
+    "erased_at": null,
+    "duration": 67.5,
+    "queued_duration": 0.25,
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana",
+      "public_email": "",
+      "bot": false
+    },
+    "commit": {
+      "id": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+      "short_id": "e7e7e7e7",
+      "created_at": "2026-10-14T09:34:09.000Z",
+      "parent_ids": [
+        "0101010101010101010101010101010101010101",
+        "0202020202020202020202020202020202020202"
+      ],
+      "title": "Merge branch 'feat/gift-cards' into 'main'",
+      "message": "Merge branch into 'main'\n",
+      "author_name": "Ana",
+      "author_email": "ana@example.com",
+      "authored_date": "2026-10-14T09:34:09.000Z",
+      "committer_name": "GitLab",
+      "committer_email": "noreply@example.com",
+      "committed_date": "2026-10-14T09:34:09.000Z",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/acme/web-shop/-/commit/e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+    },
+    "pipeline": {
+      "id": 70482,
+      "iid": 615,
+      "project_id": 4101,
+      "sha": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+      "ref": "refs/merge-requests/482/merge",
+      "status": "success",
+      "source": "merge_request_event",
+      "created_at": "2026-10-14T09:34:19.148Z",
+      "updated_at": "2026-10-14T09:43:29.085Z",
+      "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70482"
+    },
+    "web_url": "https://gitlab.com/acme/web-shop/-/jobs/80001",
+    "project": {
+      "ci_job_token_scope_enabled": false
+    },
+    "artifacts_file": {
+      "filename": "artifacts.zip",
+      "size": 186946
+    },
+    "artifacts": [
+      {
+        "file_type": "trace",
+        "size": 4096,
+        "filename": "job.log",
+        "file_format": null
+      }
+    ],
+    "runner": {
+      "id": 7001,
+      "description": "shared-runner-linux-amd64",
+      "ip_address": null,
+      "active": true,
+      "paused": false,
+      "is_shared": true,
+      "runner_type": "instance_type",
+      "name": null,
+      "online": true,
+      "status": "online",
+      "job_execution_status": "active"
+    },
+    "runner_manager": null,
+    "artifacts_expire_at": "2026-10-14T09:35:21.101Z",
+    "archived": false,
+    "tag_list": [
+      "linux-amd64"
+    ]
+  },
+  {
+    "id": 80002,
+    "status": "success",
+    "stage": "test",
+    "name": "lint",
+    "ref": "refs/merge-requests/482/merge",
+    "tag": false,
+    "coverage": null,
+    "allow_failure": false,
+    "created_at": "2026-10-14T09:36:22.102Z",
+    "started_at": "2026-10-14T09:36:22.102Z",
+    "finished_at": "2026-10-14T09:36:22.102Z",
+    "erased_at": null,
+    "duration": 75.0,
+    "queued_duration": 0.25,
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana",
+      "public_email": "",
+      "bot": false
+    },
+    "commit": {
+      "id": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+      "short_id": "e7e7e7e7",
+      "created_at": "2026-10-14T09:34:09.000Z",
+      "parent_ids": [
+        "0101010101010101010101010101010101010101",
+        "0202020202020202020202020202020202020202"
+      ],
+      "title": "Merge branch 'feat/gift-cards' into 'main'",
+      "message": "Merge branch into 'main'\n",
+      "author_name": "Ana",
+      "author_email": "ana@example.com",
+      "authored_date": "2026-10-14T09:34:09.000Z",
+      "committer_name": "GitLab",
+      "committer_email": "noreply@example.com",
+      "committed_date": "2026-10-14T09:34:09.000Z",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/acme/web-shop/-/commit/e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+    },
+    "pipeline": {
+      "id": 70482,
+      "iid": 615,
+      "project_id": 4101,
+      "sha": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+      "ref": "refs/merge-requests/482/merge",
+      "status": "success",
+      "source": "merge_request_event",
+      "created_at": "2026-10-14T09:34:19.148Z",
+      "updated_at": "2026-10-14T09:43:29.085Z",
+      "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70482"
+    },
+    "web_url": "https://gitlab.com/acme/web-shop/-/jobs/80002",
+    "project": {
+      "ci_job_token_scope_enabled": false
+    },
+    "artifacts_file": {
+      "filename": "artifacts.zip",
+      "size": 226
+    },
+    "artifacts": [
+      {
+        "file_type": "trace",
+        "size": 4096,
+        "filename": "job.log",
+        "file_format": null
+      }
+    ],
+    "runner": {
+      "id": 7001,
+      "description": "shared-runner-linux-amd64",
+      "ip_address": null,
+      "active": true,
+      "paused": false,
+      "is_shared": true,
+      "runner_type": "instance_type",
+      "name": null,
+      "online": true,
+      "status": "online",
+      "job_execution_status": "active"
+    },
+    "runner_manager": null,
+    "artifacts_expire_at": "2026-10-14T09:36:22.102Z",
+    "archived": false,
+    "tag_list": [
+      "linux-amd64"
+    ]
+  },
+  {
+    "id": 80003,
+    "status": "success",
+    "stage": "docs",
+    "name": "docs:build",
+    "ref": "refs/merge-requests/482/merge",
+    "tag": false,
+    "coverage": null,
+    "allow_failure": false,
+    "created_at": "2026-10-14T09:37:23.103Z",
+    "started_at": "2026-10-14T09:37:23.103Z",
+    "finished_at": "2026-10-14T09:37:23.103Z",
+    "erased_at": null,
+    "duration": 82.5,
+    "queued_duration": 0.25,
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana",
+      "public_email": "",
+      "bot": false
+    },
+    "commit": {
+      "id": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+      "short_id": "e7e7e7e7",
+      "created_at": "2026-10-14T09:34:09.000Z",
+      "parent_ids": [
+        "0101010101010101010101010101010101010101",
+        "0202020202020202020202020202020202020202"
+      ],
+      "title": "Merge branch 'feat/gift-cards' into 'main'",
+      "message": "Merge branch into 'main'\n",
+      "author_name": "Ana",
+      "author_email": "ana@example.com",
+      "authored_date": "2026-10-14T09:34:09.000Z",
+      "committer_name": "GitLab",
+      "committer_email": "noreply@example.com",
+      "committed_date": "2026-10-14T09:34:09.000Z",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/acme/web-shop/-/commit/e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+    },
+    "pipeline": {
+      "id": 70482,
+      "iid": 615,
+      "project_id": 4101,
+      "sha": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+      "ref": "refs/merge-requests/482/merge",
+      "status": "success",
+      "source": "merge_request_event",
+      "created_at": "2026-10-14T09:34:19.148Z",
+      "updated_at": "2026-10-14T09:43:29.085Z",
+      "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70482"
+    },
+    "web_url": "https://gitlab.com/acme/web-shop/-/jobs/80003",
+    "project": {
+      "ci_job_token_scope_enabled": false
+    },
+    "artifacts": [
+      {
+        "file_type": "trace",
+        "size": 4096,
+        "filename": "job.log",
+        "file_format": null
+      }
+    ],
+    "runner": {
+      "id": 7001,
+      "description": "shared-runner-linux-amd64",
+      "ip_address": null,
+      "active": true,
+      "paused": false,
+      "is_shared": true,
+      "runner_type": "instance_type",
+      "name": null,
+      "online": true,
+      "status": "online",
+      "job_execution_status": "active"
+    },
+    "runner_manager": null,
+    "artifacts_expire_at": null,
+    "archived": false,
+    "tag_list": [
+      "linux-amd64"
+    ]
+  },
+  {
+    "id": 80004,
+    "status": "success",
+    "stage": "checks",
+    "name": "commit-lint",
+    "ref": "refs/merge-requests/482/merge",
+    "tag": false,
+    "coverage": null,
+    "allow_failure": false,
+    "created_at": "2026-10-14T09:38:24.104Z",
+    "started_at": "2026-10-14T09:38:24.104Z",
+    "finished_at": "2026-10-14T09:38:24.104Z",
+    "erased_at": null,
+    "duration": 90.0,
+    "queued_duration": 0.25,
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana",
+      "public_email": "",
+      "bot": false
+    },
+    "commit": {
+      "id": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+      "short_id": "e7e7e7e7",
+      "created_at": "2026-10-14T09:34:09.000Z",
+      "parent_ids": [
+        "0101010101010101010101010101010101010101",
+        "0202020202020202020202020202020202020202"
+      ],
+      "title": "Merge branch 'feat/gift-cards' into 'main'",
+      "message": "Merge branch into 'main'\n",
+      "author_name": "Ana",
+      "author_email": "ana@example.com",
+      "authored_date": "2026-10-14T09:34:09.000Z",
+      "committer_name": "GitLab",
+      "committer_email": "noreply@example.com",
+      "committed_date": "2026-10-14T09:34:09.000Z",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/acme/web-shop/-/commit/e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+    },
+    "pipeline": {
+      "id": 70482,
+      "iid": 615,
+      "project_id": 4101,
+      "sha": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+      "ref": "refs/merge-requests/482/merge",
+      "status": "success",
+      "source": "merge_request_event",
+      "created_at": "2026-10-14T09:34:19.148Z",
+      "updated_at": "2026-10-14T09:43:29.085Z",
+      "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70482"
+    },
+    "web_url": "https://gitlab.com/acme/web-shop/-/jobs/80004",
+    "project": {
+      "ci_job_token_scope_enabled": false
+    },
+    "artifacts": [
+      {
+        "file_type": "trace",
+        "size": 4096,
+        "filename": "job.log",
+        "file_format": null
+      }
+    ],
+    "runner": {
+      "id": 7001,
+      "description": "shared-runner-linux-amd64",
+      "ip_address": null,
+      "active": true,
+      "paused": false,
+      "is_shared": true,
+      "runner_type": "instance_type",
+      "name": null,
+      "online": true,
+      "status": "online",
+      "job_execution_status": "active"
+    },
+    "runner_manager": null,
+    "artifacts_expire_at": null,
+    "archived": false,
+    "tag_list": [
+      "linux-amd64"
+    ]
+  },
+  {
+    "id": 80005,
+    "status": "manual",
+    "stage": "security",
+    "name": "vulnerability-check",
+    "ref": "refs/merge-requests/482/merge",
+    "tag": false,
+    "coverage": null,
+    "allow_failure": true,
+    "created_at": "2026-10-14T09:39:25.105Z",
+    "started_at": null,
+    "finished_at": null,
+    "erased_at": null,
+    "duration": null,
+    "queued_duration": null,
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana",
+      "public_email": "",
+      "bot": false
+    },
+    "commit": {
+      "id": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+      "short_id": "e7e7e7e7",
+      "created_at": "2026-10-14T09:34:09.000Z",
+      "parent_ids": [
+        "0101010101010101010101010101010101010101",
+        "0202020202020202020202020202020202020202"
+      ],
+      "title": "Merge branch 'feat/gift-cards' into 'main'",
+      "message": "Merge branch into 'main'\n",
+      "author_name": "Ana",
+      "author_email": "ana@example.com",
+      "authored_date": "2026-10-14T09:34:09.000Z",
+      "committer_name": "GitLab",
+      "committer_email": "noreply@example.com",
+      "committed_date": "2026-10-14T09:34:09.000Z",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/acme/web-shop/-/commit/e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+    },
+    "pipeline": {
+      "id": 70482,
+      "iid": 615,
+      "project_id": 4101,
+      "sha": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+      "ref": "refs/merge-requests/482/merge",
+      "status": "success",
+      "source": "merge_request_event",
+      "created_at": "2026-10-14T09:34:19.148Z",
+      "updated_at": "2026-10-14T09:43:29.085Z",
+      "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70482"
+    },
+    "web_url": "https://gitlab.com/acme/web-shop/-/jobs/80005",
+    "project": {
+      "ci_job_token_scope_enabled": false
+    },
+    "artifacts": [],
+    "runner": null,
+    "runner_manager": null,
+    "artifacts_expire_at": null,
+    "archived": false,
+    "tag_list": [
+      "linux-amd64"
+    ]
+  },
+  {
+    "id": 80006,
+    "status": "success",
+    "stage": "security",
+    "name": "secret-detection",
+    "ref": "refs/merge-requests/482/merge",
+    "tag": false,
+    "coverage": null,
+    "allow_failure": true,
+    "created_at": "2026-10-14T09:40:26.106Z",
+    "started_at": "2026-10-14T09:40:26.106Z",
+    "finished_at": "2026-10-14T09:40:26.106Z",
+    "erased_at": null,
+    "duration": 105.0,
+    "queued_duration": 0.25,
+    "user": {
+      "id": 501,
+      "username": "ana",
+      "name": "Ana",
+      "state": "active",
+      "created_at": null,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/501/avatar.png",
+      "web_url": "https://gitlab.com/ana",
+      "public_email": "",
+      "bot": false
+    },
+    "commit": {
+      "id": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+      "short_id": "e7e7e7e7",
+      "created_at": "2026-10-14T09:34:09.000Z",
+      "parent_ids": [
+        "0101010101010101010101010101010101010101",
+        "0202020202020202020202020202020202020202"
+      ],
+      "title": "Merge branch 'feat/gift-cards' into 'main'",
+      "message": "Merge branch into 'main'\n",
+      "author_name": "Ana",
+      "author_email": "ana@example.com",
+      "authored_date": "2026-10-14T09:34:09.000Z",
+      "committer_name": "GitLab",
+      "committer_email": "noreply@example.com",
+      "committed_date": "2026-10-14T09:34:09.000Z",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/acme/web-shop/-/commit/e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+    },
+    "pipeline": {
+      "id": 70482,
+      "iid": 615,
+      "project_id": 4101,
+      "sha": "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
+      "ref": "refs/merge-requests/482/merge",
+      "status": "success",
+      "source": "merge_request_event",
+      "created_at": "2026-10-14T09:34:19.148Z",
+      "updated_at": "2026-10-14T09:43:29.085Z",
+      "web_url": "https://gitlab.com/acme/web-shop/-/pipelines/70482"
+    },
+    "web_url": "https://gitlab.com/acme/web-shop/-/jobs/80006",
+    "project": {
+      "ci_job_token_scope_enabled": false
+    },
+    "artifacts_file": {
+      "filename": "artifacts.zip",
+      "size": 720
+    },
+    "artifacts": [
+      {
+        "file_type": "trace",
+        "size": 4096,
+        "filename": "job.log",
+        "file_format": null
+      }
+    ],
+    "runner": {
+      "id": 7001,
+      "description": "shared-runner-linux-amd64",
+      "ip_address": null,
+      "active": true,
+      "paused": false,
+      "is_shared": true,
+      "runner_type": "instance_type",
+      "name": null,
+      "online": true,
+      "status": "online",
+      "job_execution_status": "active"
+    },
+    "runner_manager": null,
+    "artifacts_expire_at": "2026-10-14T09:40:26.106Z",
+    "archived": false,
+    "tag_list": [
+      "linux-amd64"
+    ]
+  }
+]

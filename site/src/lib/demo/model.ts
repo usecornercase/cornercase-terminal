@@ -130,6 +130,7 @@ export interface Workspace {
   behind?: number;
   collapsed?: boolean;
   removing?: boolean;
+  closed?: Tab[];
 }
 
 export interface Group {
@@ -173,6 +174,9 @@ export type MenuAction =
   | { kind: 'mark'; panes: number[]; pending: boolean }
   | { kind: 'agentFold'; pane: number; collapsed: boolean }
   | { kind: 'closeAgent'; pane: number }
+  | { kind: 'closeAgents'; workspace: number }
+  | { kind: 'reopenAgents'; workspace: number }
+  | { kind: 'forgetAgents'; workspace: number }
   | { kind: 'pane'; pane: number; action: PaneAction }
   | { kind: 'base'; branch: string }
   | { kind: 'showFlow'; workspace: number }
@@ -244,6 +248,7 @@ export type Overlay =
   | { kind: 'closeProject'; project: number }
   | { kind: 'closeWorkspace'; project: number; workspace: number }
   | { kind: 'closeTab'; project: number; workspace: number; tab: number }
+  | { kind: 'forgetAgents'; workspace: number }
   | { kind: 'picker'; dir: string[]; filter: string; selected: number | null; scroll: number; group?: number }
   | { kind: 'search'; query: string; selected: number; scroll: number; mode: 'names' | 'sessions' }
   | { kind: 'usage' }
@@ -255,6 +260,10 @@ export type Overlay =
   | import('./queue').QueueForm
   | SettingsOverlay
   | IssuesOverlay;
+
+export const REOPEN_ICON = '▶';
+
+export const agentsLabel = (count: number): string => (count === 1 ? '1 agent' : `${count} agents`);
 
 export const isModal = (o: Overlay): boolean => o.kind !== 'menu' && o.kind !== 'search' && o.kind !== 'keys';
 

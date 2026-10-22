@@ -94,6 +94,9 @@ pub(super) enum MenuAction {
     Mark(Marked, bool),
     AgentFold(u64, bool),
     CloseAgent(u64),
+    CloseAgents(u64),
+    ReopenAgents(u64),
+    ForgetAgents(u64),
     PullRequest(u64),
     ShowFlow(u64),
     Browser,
@@ -145,8 +148,14 @@ impl App {
         actions.iter().map(|&a| self.menu_label(a, blocker)).collect()
     }
 
+    fn concern_menu_label(&self, action: MenuAction, blocker: Option<&str>) -> Option<String> {
+        self.account_menu_label(action, blocker)
+            .or_else(|| self.help_menu_label(action))
+            .or_else(|| self.closed_agents_label(action))
+    }
+
     fn menu_label(&self, action: MenuAction, blocker: Option<&str>) -> String {
-        if let Some(label) = self.account_menu_label(action, blocker).or_else(|| self.help_menu_label(action)) {
+        if let Some(label) = self.concern_menu_label(action, blocker) {
             return label;
         }
         match action {
@@ -173,9 +182,7 @@ impl App {
             MenuAction::AgentFold(_, true) => "collapse".into(),
             MenuAction::AgentFold(_, false) => "expand".into(),
             MenuAction::CloseAgent(_) => "close agent".into(),
-            MenuAction::PullRequest(workspace) => {
-                self.pull_request(workspace).map(|p| format!("pull request #{}", p.number)).unwrap_or_default()
-            }
+            MenuAction::PullRequest(workspace) => self.pull_request_label(workspace),
             MenuAction::ShowFlow(_) => "show flow".into(),
             MenuAction::Browser if self.config.remote => "open in your phone's browser".into(),
             MenuAction::Browser => "set up your phone's browser…".into(),
@@ -202,6 +209,10 @@ impl App {
             Target::Workspace(_, workspace) => self.run_of(workspace).map(|_| MenuAction::ShowFlow(workspace)),
             _ => None,
         };
+        let closed = match target {
+            Target::Workspace(_, workspace) => self.closed_agents_menu(workspace),
+            _ => Vec::new(),
+        };
         let spot = match target {
             Target::Group(_) => None,
             Target::Project(project) => Some(Spot::Project(project)),
@@ -220,6 +231,7 @@ impl App {
             .chain(more)
             .chain(account)
             .chain(flow)
+            .chain(closed)
             .chain(setup)
             .chain(open)
             .chain(spot.map(|spot| self.plugin_menu(spot)).unwrap_or_default())
@@ -304,6 +316,9 @@ impl App {
             MenuAction::CopyPath(subject) => self.copy_path(subject),
             MenuAction::PullRequest(workspace) => self.open_pull_request(workspace),
             MenuAction::ShowFlow(workspace) => self.show_flow_of(workspace),
+            MenuAction::CloseAgents(workspace) => self.ask_close_agents(workspace),
+            MenuAction::ReopenAgents(workspace) => self.reopen_from_window(workspace, area),
+            MenuAction::ForgetAgents(workspace) => self.ask_forget_agents(workspace),
             MenuAction::AccountMenu(pane) => self.open_account_submenu(pane, at),
             MenuAction::AccountsOf(item) => self.open_accounts_of(item, at),
             MenuAction::Help(item) => self.help_action(item, at),

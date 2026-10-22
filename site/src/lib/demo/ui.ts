@@ -74,7 +74,7 @@ import {
 } from './layout';
 import { USAGE, STATS, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
-import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, highest, isModal, MAX_AGENT_DEPTH, NARROW_AGENT_DEPTH, projectAttention, projectLabel, shapeTree, tabLabel, tabRunning, tabStatus, workspaceLabel } from './model';
+import { type ConfirmView, type Group, type IssuesOverlay, type Pane, REOPEN_ICON, agentsLabel, type SettingsOverlay, type Status, type Tab, type Target, attention, highest, isModal, MAX_AGENT_DEPTH, NARROW_AGENT_DEPTH, projectAttention, projectLabel, shapeTree, tabLabel, tabRunning, tabStatus, workspaceLabel } from './model';
 import { type Divider, type PanePlace, dividers, grab, hasRoom, visible } from './split';
 import { type Line, type Seg, drawLine, pad as padTo, seg, truncateLeft, truncateRight, width, wrapAll } from './text';
 
@@ -356,7 +356,7 @@ export class Painter {
   private finish(areas: Areas): Frame {
     const app = this.app;
     this.overlay(areas);
-    if (app.toast) this.toast(app.toast.text, app.toast.status, app.toast.undo ? [UNDO, app.toast.undo] : app.toast.go ? [GO, app.toast.go] : undefined, app.toast.bug);
+    if (app.toast) this.toast(app.toast.text, app.toast.status, app.toast.undo ? [app.toast.label ?? UNDO, app.toast.undo] : app.toast.go ? [GO, app.toast.go] : undefined, app.toast.bug);
     return { regions: this.regions, cursor: this.cursor, areas };
   }
 
@@ -378,8 +378,23 @@ export class Painter {
     const app = this.app;
     const tab = app.tab();
     if (tab) this.tab(tab, areas.pane);
-    else if (app.project()) this.centered(areas.pane, [[seg(NO_TAB, { fg: 8, add: BOLD })], [seg('+ Tab', CYAN), seg(NO_TAB_HINT, DARK)]]);
+    else if (app.project()) this.noTab(areas.pane);
     else if (!app.projects.length) this.welcome(areas.pane);
+  }
+
+  private noTab(area: Rect): void {
+    const app = this.app;
+    const closed = app.workspace() ? app.closedCount(app.workspace()?.id ?? -1) : 0;
+    const hint = [seg('+ Tab', CYAN), seg(NO_TAB_HINT, DARK)];
+    if (!closed) return this.centered(area, [[seg(NO_TAB, { fg: 8, add: BOLD })], hint]);
+    const label = ` ${REOPEN_ICON} reopen ${closed === 1 ? 'agent' : 'agents'} `;
+    const count = `${agentsLabel(closed)} closed`;
+    const w = Math.max([...count].length, [...label].length, 5 + [...NO_TAB_HINT].length);
+    if (area.h < 3 || w > area.w) return;
+    const button = rect(area.x + Math.floor((area.w - [...label].length) / 2), area.y + Math.floor((area.h - 3) / 2) + 1, [...label].length, 1);
+    this.centered(area, [[seg(count, { fg: 8, add: BOLD })], [seg(label, this.hovered(button) ? PRESSED : { fg: 6, add: BOLD })], hint]);
+    const id = app.workspace()?.id;
+    if (id !== undefined) this.region({ r: button, click: () => app.reopenAgents(id), cursor: 'pointer' });
   }
 
   private tabBar(bar: Rect): void {
@@ -720,16 +735,22 @@ export class Painter {
     const statuses = ws.tabs.map(tabStatus);
     const status = badge === 'highest' ? highest(statuses) : badge === 'attention' ? attention(statuses) : null;
     const behind = app.config.fetchMinutes && ws.behind ? [seg(`↓${ws.behind}`, { fg: 3 })] : [];
-    const tags = ws.removing ? [seg('removing…', DARK)] : [...(status ? [statusIcon(status, spinAt(app))] : []), ...behind];
+    const closed = app.closedCount(ws.id);
+    const reopen = closed > 0 ? [seg(REOPEN_ICON, { fg: 6 })] : [];
+    const tags = ws.removing ? [seg('removing…', DARK)] : [...(status ? [statusIcon(status, spinAt(app))] : []), ...reopen, ...behind];
     const marks = fitTags(tags, room);
     const name = truncateRight(workspaceLabel(ws), room - marks.reserved);
     const line = [...b.lead, seg(name, style)];
+    const at = status ? 2 : 0;
+    const tag = !ws.removing && reopen.length && marks.segs.length > at ? rect(b.r.x + width(b.lead) + room - marks.width + at, b.r.y, 1, Math.min(b.pitch, b.r.h)) : null;
+    if (tag && this.sidebarHovered(tag)) marks.segs[at] = seg(REOPEN_ICON, { fg: 6, add: BOLD | UNDERLINE });
     pushTags(line, marks, [...name].length, room);
     this.band(b.r, line, b.bg);
     if (ws.removing) return;
     const grab: Target = { kind: 'workspace', project: project.id, workspace: ws.id };
     const menu = (x: number, y: number) => app.openMenu({ x, y }, grab);
     this.region({ r: b.r, click, right: menu, grab, cursor: 'pointer' });
+    if (tag) this.region({ r: tag, click: () => app.reopenAgents(ws.id), cursor: 'pointer' });
     this.rowButtons(b.r, b.pitch, b.bg, () => (b.pitch > 1 ? app.askCloseWorkspace(p, w) : app.closeWorkspace(p, w)), menu);
   }
 

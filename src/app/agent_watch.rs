@@ -4,6 +4,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use super::App;
 use super::account_restart::Restarts;
+use super::closed_agents::ClosedAgents;
 use super::launches::Launches;
 use super::menus::{Marked, MenuAction};
 use super::notifications::Said;
@@ -34,6 +35,7 @@ pub(super) struct AgentRuntime {
     pub(super) awake: Awake,
     pub(super) stats: agents::stats::Stats,
     pub(super) restarts: Restarts,
+    pub(super) closed: ClosedAgents,
 }
 
 impl AgentRuntime {
@@ -45,6 +47,7 @@ impl AgentRuntime {
             awake: Awake::new(awake::tools()),
             stats: agents::stats::Stats::new(SystemTime::now()),
             restarts: Restarts::default(),
+            closed: ClosedAgents::default(),
         }
     }
 
@@ -97,6 +100,7 @@ impl App {
             folds: tree || self.screen.drawn.tab_bar.is_empty(),
             members,
             orchestrators,
+            quiet: self.agents.closed.quiet().clone(),
             jobs: self.following(),
             stats: &mut self.agents.stats,
             samples: Vec::new(),
@@ -260,6 +264,7 @@ struct Round<'a> {
     folds: bool,
     members: Vec<u64>,
     orchestrators: Vec<u64>,
+    quiet: HashSet<u64>,
     jobs: bool,
     stats: &'a mut agents::stats::Stats,
     samples: Vec<agents::stats::Sample>,
@@ -354,7 +359,8 @@ impl Round<'_> {
             && !seen
             && matches!(before, Some("working" | "shell"))
             && state == Some("pending");
-        notice.filter(|_| !routine).or_else(|| ended.then_some(activity::Status::Done))
+        let notice = notice.filter(|_| !routine).or_else(|| ended.then_some(activity::Status::Done));
+        notice.filter(|_| !self.quiet.contains(&pane))
     }
 
     fn add_notice(&mut self, key: NoticeKey, pane: u64) {

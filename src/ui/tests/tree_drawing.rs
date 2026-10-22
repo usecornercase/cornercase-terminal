@@ -38,6 +38,7 @@ fn tree_workspaces() -> Vec<Vec<WorkspaceEntry>> {
         pull: None,
         removing: false,
         setting_up: false,
+        closed: 0,
     };
     vec![
         Vec::new(),

@@ -1,0 +1,38 @@
+{
+  "project": 1,
+  "workspace": 2,
+  "tabs": [
+    5,
+    6
+  ],
+  "agents": [
+    {
+      "pane": 31,
+      "tab": 5,
+      "agent": "claude",
+      "role": "coder",
+      "status": "working",
+      "resumes": true
+    },
+    {
+      "pane": 32,
+      "tab": 6,
+      "agent": "claude",
+      "role": null,
+      "status": "working",
+      "resumes": false
+    }
+  ],
+  "stops": [
+    {
+      "pane": 33,
+      "agent": null,
+      "project": 1,
+      "workspace": 2,
+      "tab": 5
+    }
+  ],
+  "run": 9,
+  "closed": true,
+  "closed_agents": 2
+}

@@ -124,7 +124,7 @@ pub(crate) use toast::{Toast, ToastButton, ToastIcon, toast_button};
 pub(crate) use tour::{FIELD_ROWS as TOUR_FIELD_ROWS, TourButton, TourCard, tour_hit, tour_layout};
 pub(crate) use tree::{
     ProjectShape, TreeHit, TreeRow, TreeShape, TreeView, WorkspaceShape, tree_active_row, tree_hit, tree_layout_rows,
-    tree_pull, tree_row, tree_rows,
+    tree_row, tree_rows, tree_tag,
 };
 #[cfg(test)]
 pub(crate) use tree::{tree_arrow, tree_close};
@@ -134,7 +134,8 @@ pub use widths::SIDEBAR_WIDTH;
 pub(crate) use widths::{MIN_COLUMN_WIDTH, MIN_PANE_WIDTH, MIN_STACK_SECTION, PANE_PADDING, WORKSPACES_WIDTH};
 pub use workspaces::{Details, TabLines, WorkspaceRow, new_workspace_button, workspace_row};
 pub(crate) use workspaces::{
-    ICON_WIDTH, TabEntry, WorkspaceEntry, WorkspaceHit, workspace_hit, workspace_layout, workspace_pull, workspace_rows,
+    ICON_WIDTH, REOPEN_ICON, TabEntry, Tag, WorkspaceEntry, WorkspaceHit, workspace_hit, workspace_layout,
+    workspace_rows, workspace_tag,
 };
 
 use crate::agents::activity::Status;
@@ -160,6 +161,7 @@ use dialog::update::draw_update;
 use dialog::usage::draw_usage;
 use dialog::worktrees::draw_worktrees;
 use dialog::{FORM_WIDTH, draw_submit, form_inner};
+pub(crate) use pane::reopen_button;
 use pane::{draw_no_tab, draw_tab, draw_welcome};
 use rows::{GAP, Zone, draw_more};
 use sidebar::draw_sidebar;
@@ -218,6 +220,7 @@ pub(crate) struct View<'a> {
     pub(crate) agents: Option<AgentsView>,
     pub(crate) counts: bool,
     pub(crate) icons: bool,
+    pub(crate) closed_agents: usize,
     pub(crate) tab_bar: Option<tab_bar::TabBar>,
 }
 
@@ -325,7 +328,7 @@ fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
 fn draw_tab_or_empty(f: &mut Frame, view: &View, areas: &Areas) {
     match &view.tab {
         Some(tab) => draw_tab(f, view, tab, areas.pane),
-        None if view.has_project => draw_no_tab(f, view.muted, areas.pane),
+        None if view.has_project => draw_no_tab(f, view, areas.pane),
         None if view.projects.is_empty() => draw_welcome(f, view.muted, areas.pane),
         None => {}
     }

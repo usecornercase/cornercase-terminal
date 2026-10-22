@@ -18,6 +18,7 @@ use crate::remote::{self, Remote};
 use crate::{log, server};
 
 mod accounts;
+mod agents;
 mod args;
 mod arrange;
 mod changes;
@@ -255,6 +256,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::Theme(args) => theme::run(&args).map(|()| true),
         Control::Config(args) => config::run(args).map(|()| true),
         Control::Changes(args) => changes::run(args).map(|()| true),
+        Control::Agents(args) => agents::run(args).map(|()| true),
         Control::Account(args) => accounts::account(args.action).map(|()| true),
         Control::Profile(args) => accounts::profile(args.action).map(|()| true),
         other => return ControlFlow::Continue(other),

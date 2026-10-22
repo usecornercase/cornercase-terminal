@@ -231,10 +231,11 @@ impl App {
         let resume = resume
             .filter(|_| term.context.conversation_files().is_some())
             .map(|state| AgentState { account: (!to.is_empty()).then(|| to.to_string()), ..state });
-        let line = match resume.as_ref().and_then(|state| agents::resume_line(&self.config, state)) {
-            Some(line) => line,
-            None => self.fresh_line(kind, &term.foreground_args()),
-        };
+        let line = resume.as_ref().and_then(|state| agents::resume_line(&self.config, state)).unwrap_or_else(|| {
+            let name = kind.name();
+            let mode = agents::mode_of(name, &term.foreground_args(), &agents::modes(&self.config, name));
+            agents::fresh_line(&self.config, name, mode.as_deref())
+        });
         let cwd = self.pane_folder(pane, term.context.folder().map(Path::to_path_buf).or_else(|| term.cwd()))?;
         let marks = (term.agent.unseen(), term.agent.pending());
         let (generation, agent) = (term.generation(), term.context.agent());
@@ -244,13 +245,6 @@ impl App {
     pub(super) fn pane_folder(&self, pane: u64, preferred: Option<PathBuf>) -> std::result::Result<PathBuf, String> {
         let fallback = || self.projects.tab_with_pane(pane).map(|(path, _)| path.to_path_buf());
         preferred.filter(|dir| dir.is_dir()).or_else(fallback).ok_or_else(|| "the pane has no folder".to_string())
-    }
-
-    fn fresh_line(&self, kind: Known, args: &[String]) -> String {
-        let name = kind.name();
-        let mode = agents::mode_of(name, args, &agents::modes(&self.config, name));
-        agents::start_line(&self.config, name, mode.as_deref(), None, None)
-            .unwrap_or_else(|_| agents::command_line(&self.config, name))
     }
 
     fn restart_home(&self, kind: Known, to: &str) -> std::result::Result<PathBuf, String> {

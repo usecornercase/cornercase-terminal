@@ -23,7 +23,7 @@ impl Repo {
         self.app.projects[0].workspaces[1].id
     }
 
-    fn calls(&self) -> Vec<String> {
+    pub(super) fn calls(&self) -> Vec<String> {
         let calls = std::fs::read_to_string(self.tmp.path().join("gh.calls")).unwrap_or_default();
         calls.lines().map(str::to_string).collect()
     }
@@ -48,7 +48,7 @@ fn printing_json(json: &str) -> String {
     format!("cat <<'EOF'\n{json}\nEOF")
 }
 
-fn printing() -> String {
+pub(super) fn printing() -> String {
     printing_json(VIEW)
 }
 
@@ -77,14 +77,14 @@ fn found() -> Repo {
     repo
 }
 
-fn row_text(app: &mut App, row: WorkspaceRow) -> String {
+pub(super) fn row_text(app: &mut App, row: WorkspaceRow) -> String {
     let r = row_rect(app, row);
     let terminal = render(app, AREA);
     let buffer = terminal.backend().buffer();
     (r.left()..r.right()).map(|x| buffer[(x, r.y)].symbol().to_string()).collect()
 }
 
-fn notes(app: &App) -> Vec<String> {
+pub(super) fn notes(app: &App) -> Vec<String> {
     let Some(Overlay::PullRequest { workspace, scroll }) = app.overlay else { panic!("the dialog is not open") };
     let Some(ui::Overlay::Update(update)) = app.pull_request_view(workspace, scroll) else { panic!("no view") };
     update.notes.iter().map(ToString::to_string).collect()
@@ -104,13 +104,13 @@ fn badge_pos(app: &mut App, which: char) -> Position {
     find_in(app, r, AREA, which)
 }
 
-fn open_dialog_of(repo: &mut Repo, number: u64) {
+pub(super) fn open_dialog_of(repo: &mut Repo, entry: &str) {
     right_click_row(&mut repo.app, WorkspaceRow::Workspace(1));
-    pick(&mut repo.app, &format!("pull request #{number}"));
+    pick(&mut repo.app, entry);
 }
 
 fn open_dialog(repo: &mut Repo) {
-    open_dialog_of(repo, 482);
+    open_dialog_of(repo, "pull request #482");
 }
 
 fn conflicting() -> Repo {
@@ -234,6 +234,7 @@ mod asking {
         let pull = report.projects[0].workspaces[1].pull_request.as_ref().expect("in the report");
         assert_eq!((pull.number, pull.state.as_str(), pull.checks.as_deref()), (482, "open", Some("failing")));
         assert_eq!(pull.failed, ["tests (ubuntu-24.04)"]);
+        assert_eq!(pull.provider, "github");
         assert_eq!((pull.conflicts, pull.base.as_deref()), (false, Some("main")));
         assert_eq!(report.projects[0].workspaces[0].pull_request, None);
     }
@@ -306,7 +307,7 @@ mod dialog {
     fn a_conflict_is_said_with_why_checks_are_missing() {
         let mut repo = conflicting();
 
-        open_dialog_of(&mut repo, 486);
+        open_dialog_of(&mut repo, "pull request #486");
 
         assert_eq!(
             notes(&repo.app),
@@ -323,7 +324,7 @@ mod dialog {
     #[test]
     fn ask_agent_hands_over_the_conflict() {
         let mut repo = conflicting();
-        open_dialog_of(&mut repo, 486);
+        open_dialog_of(&mut repo, "pull request #486");
 
         click(&mut repo.app, ui::update_extra(AREA, COPY_LINK, DONE, ASK_AGENT).as_position());
 

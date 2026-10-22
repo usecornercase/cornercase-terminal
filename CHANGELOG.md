@@ -2,11 +2,22 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.174
+## 0.12.176
 
 - **A guided tour for your first steps.** The first time you run cornercase, a card at the bottom right shows you around: projects, workspaces, tabs and panes, then your first prompt to an agent (an idea you can edit, and a button that starts the agent with it), the status icons, and the settings worth a look. It points at the part of the window it talks about, and opens it when it is a panel, a dialog or a page of Settings (closing it again when you move on, unless you had it open), and a step that asks you to do something moves on as soon as you do it. Skip any step, or end the tour; it never takes the keys from your shell. If you already use cornercase, it does not pop up: a toast says it is in Help.
 - **Help, beside Quit.** The new ` Help ` button (in the icon bar too, and `h` in the keys menu) opens the tour again, a catalogue of short tours (issues to agents, reviewing changes, files, flows, TODO, the queue, search, your phone, Telegram and Discord, accounts, keys, scripts and plugins), and copies the link to the docs or to report a bug.
 - Settings › UI has **guided tour** (whether it shows by itself on a new install), **start the tour** and **reset tour progress**. `cornercase tour` opens it from a shell; `tour list --json` gives every step as data for other apps, and the app feed (`status --app`) carries where you are.
+
+## 0.12.175
+
+- **GitLab merge requests on workspace rows.** When a workspace's branch has a merge request on GitLab (gitlab.com or your own instance), its row shows it the way it shows a GitHub pull request: the number coloured by its pipeline (`✓` passed, `•` running, `✗` failed), an orange `!` when it has merge conflicts, purple once merged. Click it to see the pipeline's jobs, failed ones first, copy its link, or hand the failed jobs and the conflict to the agent. It is read with `glab`, GitLab's CLI, which must be installed and logged in (`glab auth login`); **Settings → Worktrees → pull requests** says why when it can't be read. A flow whose end is a pull request now also lights up from a merge request, and its brief says to open a merge request with `glab mr create` on GitLab.
+- Scripts: `pull_request` in `status --json`, `watch` and `view` gains `provider` (`github` or `gitlab`); for GitLab, `number` is the merge request's number in its project (`!486`).
+- Stats' merged merge requests now read glab's errors correctly when glab styles them (an old glab is told to update, a missing login is explained).
+
+## 0.12.174
+
+- **Close a workspace's agents and reopen them later.** Right-click a workspace, or use its ` ⋯ `, and pick **close agents**: every tab running an agent closes, your shells stay, and a cyan **`▶`** on the workspace row brings them back, each in its own conversation, with the mode and account it had. It asks first only when it matters: an agent still working, one that can't resume its conversation (opencode starts a new one), or other programs in those tabs. Closed agents stay closed through `kill-server` and a reboot. A flow's team closes with its orchestrator and comes back whole, the orchestrator last with its team's new pane ids. The row's menu also has **reopen agents** and **forget closed agents**, and the keys menu has `w a` and `w o`. Removing or closing the workspace forgets its closed agents, and says so first.
+- Scripts and other apps: `cornercase agents close`, `agents reopen` and `agents forget` (the `agents-close`, `agents-reopen` and `agents-forget` requests); `closed_agents` on each workspace of `status --json`, `watch` and `view`; a closed run in `flow runs` with `state: "closed"`.
 
 ## 0.12.173
 

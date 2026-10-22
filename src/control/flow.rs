@@ -405,6 +405,8 @@ pub(crate) struct RunState {
     pub(crate) outside: Option<RunEdge>,
     pub(crate) ended: bool,
     pub(crate) messages: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) state: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

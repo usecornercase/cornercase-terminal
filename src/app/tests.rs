@@ -166,6 +166,8 @@ fn new_app(config_path: PathBuf) -> (App, Receiver<AppEvent>) {
     app.set_default_homes(&std::env::temp_dir().join("cornercase-test-no-default-homes"));
     if app.config.gh == config::DEFAULT_GH {
         app.config.gh = "/nonexistent/gh".into();
+    }
+    if app.config.glab == config::DEFAULT_GLAB {
         app.config.glab = "/nonexistent/glab".into();
     }
     (app, rx)
@@ -506,6 +508,7 @@ mod accounts_page;
 mod agent_status;
 mod click_outside;
 mod close_agent;
+mod closed_agents;
 mod compact;
 mod context_menu;
 mod dispatch;
@@ -513,6 +516,7 @@ mod groups;
 mod icon_bar;
 mod keys;
 mod lock_text;
+mod merge_requests;
 mod merged_pull_requests;
 mod muted_text;
 mod opening;

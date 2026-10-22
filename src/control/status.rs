@@ -255,6 +255,8 @@ pub struct WorkspaceInfo {
     pub(crate) collapsed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) changes: Option<super::ChangesCount>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) closed_agents: Option<usize>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -275,6 +277,7 @@ pub(crate) struct PullRequestInfo {
     pub(crate) failed: Vec<String>,
     pub(crate) conflicts: bool,
     pub(crate) base: Option<String>,
+    pub(crate) provider: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

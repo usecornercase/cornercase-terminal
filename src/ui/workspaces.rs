@@ -30,6 +30,8 @@ pub(crate) const ICON_WIDTH: usize = 2;
 
 const BEHIND_ICON: &str = "↓";
 
+pub(crate) const REOPEN_ICON: &str = "▶";
+
 const REMOVING_LABEL: &str = "removing…";
 const SETTING_UP_LABEL: &str = "setting up…";
 
@@ -198,6 +200,7 @@ pub(crate) struct WorkspaceEntry {
     pub(crate) pull: Option<Mark>,
     pub(crate) removing: bool,
     pub(crate) setting_up: bool,
+    pub(crate) closed: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -392,9 +395,30 @@ fn among_tabs(rows: &[WorkspaceRow], i: usize) -> bool {
     above.is_some() && above == below
 }
 
-fn marks(entry: &WorkspaceEntry, badge: Badge, muted: Color, spin: Option<u8>) -> (Vec<Span<'static>>, Option<usize>) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Tag {
+    Pull,
+    Reopen,
+}
+
+#[derive(Default)]
+struct Places {
+    pull: Option<usize>,
+    reopen: Option<usize>,
+}
+
+impl Places {
+    fn of(&self, tag: Tag) -> Option<usize> {
+        match tag {
+            Tag::Pull => self.pull,
+            Tag::Reopen => self.reopen,
+        }
+    }
+}
+
+fn marks(entry: &WorkspaceEntry, badge: Badge, muted: Color, spin: Option<u8>) -> (Vec<Span<'static>>, Places) {
     if entry.removing {
-        return (vec![Span::styled(REMOVING_LABEL, Style::default().fg(muted))], None);
+        return (vec![Span::styled(REMOVING_LABEL, Style::default().fg(muted))], Places::default());
     }
     let statuses = entry.tabs.iter().map(|t| t.status);
     let badge = match badge {
@@ -403,35 +427,43 @@ fn marks(entry: &WorkspaceEntry, badge: Badge, muted: Color, spin: Option<u8>) -
         Badge::Highest => activity::highest(statuses),
     }
     .map(|status| status_icon(muted, status, spin));
+    let reopen = (entry.closed > 0).then(|| Span::styled(REOPEN_ICON, Style::default().fg(Color::Cyan)));
     let setting = entry.setting_up.then(|| Span::styled(SETTING_UP_LABEL, Style::default().fg(muted)));
-    let pull_at = usize::from(badge.is_some()) + usize::from(setting.is_some());
+    let reopen_at = usize::from(badge.is_some());
+    let pull_at = reopen_at + usize::from(reopen.is_some()) + usize::from(setting.is_some());
     let pull = entry.pull.map(|mark| pull_tag(muted, mark));
-    let pull_index = pull.is_some().then_some(pull_at);
+    let places = Places { pull: pull.is_some().then_some(pull_at), reopen: reopen.is_some().then_some(reopen_at) };
     let behind = Some(entry.behind)
         .filter(|n| *n > 0)
         .map(|n| Span::styled(format!("{BEHIND_ICON}{n}"), Style::default().fg(Color::Yellow)));
-    (badge.into_iter().chain(setting).chain(pull).chain(behind).collect(), pull_index)
+    (badge.into_iter().chain(reopen).chain(setting).chain(pull).chain(behind).collect(), places)
 }
 
-pub(super) fn pull_badge(row: Rect, pitch: u16, lead: usize, entry: &WorkspaceEntry, badge: Badge) -> Option<Rect> {
+pub(super) fn tag_badge(
+    row: Rect,
+    pitch: u16,
+    lead: usize,
+    (entry, badge): (&WorkspaceEntry, Badge),
+    tag: Tag,
+) -> Option<Rect> {
     let room = room(row, pitch, lead);
-    let (spans, pull) = marks(entry, badge, Color::Reset, None);
-    let (x, width) = Tags::fit(spans, room).place(pull?, lead + room)?;
+    let (spans, places) = marks(entry, badge, Color::Reset, None);
+    let (x, width) = Tags::fit(spans, room).place(places.of(tag)?, lead + room)?;
     let x = u16::try_from(usize::from(row.x) + x).ok()?;
     let rect = Rect::new(x, row.y, u16::try_from(width).ok()?, pitch.min(row.height)).intersection(row);
     (!rect.is_empty()).then_some(rect)
 }
 
-pub(crate) fn workspace_pull(
+pub(crate) fn workspace_tag(
     layout: &Rows,
     pitch: u16,
     tabs: &TabLines,
     w: usize,
-    entry: &WorkspaceEntry,
+    (entry, tag): (&WorkspaceEntry, Tag),
 ) -> Option<Rect> {
     let badge = if tabs.is_folded(w) { Badge::Highest } else { Badge::Attention };
     let row = row_rect(layout, &workspace_rows(tabs), &WorkspaceRow::Workspace(w));
-    pull_badge(row, pitch, 4, entry, badge)
+    tag_badge(row, pitch, 4, (entry, badge), tag)
 }
 
 #[derive(Clone, Copy)]
@@ -450,13 +482,15 @@ pub(super) fn draw_workspace_band(f: &mut Frame, view: &View, band: Band, line: 
     };
     let style = Style::default().fg(colour).add_modifier(Modifier::BOLD);
     let room = band.room();
-    let (spans, pull) = marks(entry, badge, view.muted, view.spin);
+    let (spans, places) = marks(entry, badge, view.muted, view.spin);
     let mut marks = Tags::fit(spans, room);
-    if let Some(rect) = pull_badge(band.r, band.pitch, band.lead_width(), entry, badge)
-        && let Some(tag) = pull
-        && sidebar_hovered(view, rect)
-    {
-        marks.highlight(tag, Modifier::UNDERLINED);
+    for (tag, add) in [(Tag::Pull, Modifier::UNDERLINED), (Tag::Reopen, Modifier::BOLD | Modifier::UNDERLINED)] {
+        if let Some(rect) = tag_badge(band.r, band.pitch, band.lead_width(), (entry, badge), tag)
+            && let Some(at) = places.of(tag)
+            && sidebar_hovered(view, rect)
+        {
+            marks.highlight(at, add);
+        }
     }
     let allocation = room.saturating_sub(marks.reserved());
     let name = clip_cells(&truncate_cells(&entry.name, allocation), allocation);

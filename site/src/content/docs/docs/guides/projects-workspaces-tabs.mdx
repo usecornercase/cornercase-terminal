@@ -109,7 +109,7 @@ A workspace is called after its custom name, otherwise its branch, otherwise `de
 
 Worktrees of the repository that you create outside cornercase, with `git worktree add`, appear as workspaces by themselves, at the end of the list. A worktree you remove outside cornercase goes away once its tabs are closed, also when git forgot it but its folder is still there (after `git worktree prune`, or a removal that failed half way); that folder stays on disk for you to delete.
 
-When a workspace's branch is behind its upstream, its row ends with the number of commits to pull, such as `↓3`. See [Commits to pull](../worktrees/#commits-to-pull). When the branch has a pull request on GitHub, the row shows its number, coloured by its checks, such as `#485✗` when one failed, or `#486!` in orange when it has merge conflicts; click it to see its checks. See [Pull requests and their checks](../worktrees/#pull-requests-and-their-checks).
+When a workspace's branch is behind its upstream, its row ends with the number of commits to pull, such as `↓3`. See [Commits to pull](../worktrees/#commits-to-pull). When the branch has a pull request on GitHub (or a merge request on GitLab), the row shows its number, coloured by its checks, such as `#485✗` when one failed, or `#486!` in orange when it has merge conflicts; click it to see its checks. See [Pull requests and their checks](../worktrees/#pull-requests-and-their-checks).
 
 ## Tabs
 
@@ -358,9 +358,32 @@ Hover a group, project, workspace or tab row: it gets a lighter background, so y
 | A project | It asks first, saying how many tabs it stops. Then everything in it is closed and the project goes away; its folder and its worktrees stay on disk. |
 | A group | It asks first, then the group goes away. With **keep projects** its projects stay open, ungrouped, and nothing in them is ended; with **close projects** they close with it, which stops every shell in them (folders and worktrees stay on disk). |
 
-Rows disappear once their programs have exited, not before. Closing the last tab keeps its workspace (the pane says *no tab open*), closing the last workspace keeps its project, and closing the last project leaves cornercase open and empty: the pane shows the cornercase logo and that `+ New` opens a folder. Closing every project of a group keeps the group.
+Rows disappear once their programs have exited, not before. Closing the last tab keeps its workspace (the pane says *no tab open*, or how many [agents are closed](#close-agents-and-reopen-them-later)), closing the last workspace keeps its project, and closing the last project leaves cornercase open and empty: the pane shows the cornercase logo and that `+ New` opens a folder. Closing every project of a group keeps the group.
 
 When a program ends by itself, for example when you type `exit`, its pane closes; when the last pane of a tab closes, so does the tab.
+
+## Close agents and reopen them later
+
+To stop a workspace's agents without losing their place, right-click the workspace (or use its ` ⋯ `) and pick **close agents**. Every tab that runs a coding agent closes, whole, and your shells stay, with the workspace and its worktree. The row then ends with a cyan **`▶`**, in every layout, and the toast that says `2 agents closed` has a ` reopen ` button for six seconds.
+
+<Screen
+  name="agents-closed"
+  alt="The workspaces of web-shop after closing the agents of feat/dark-mode: its row ends with a cyan ▶, and a toast says 1 agent closed with a reopen button"
+  caption="feat/dark-mode has no agent tab left; its row's ▶ and the toast's reopen bring it back."
+  crop={[0, 12, 110, 28]}
+/>
+
+It asks first only when something would be lost: an agent that is still working or waiting (closing cuts its turn), one that cannot resume its conversation (opencode, a custom agent, or an agent that has not had a turn yet start a new one), or other panes in those tabs (a split shell, for example), which close with them.
+
+<Screen
+  name="close-agents"
+  alt="The Close agents dialog for feat/dark-mode: claude is working, so closing cuts its turn"
+  crop={[18, 7, 74, 22]}
+/>
+
+Click the **`▶`** to bring them back: each agent returns in a new tab after the others, in its own conversation, with the mode and account it had, even when [`resume_agents`](../../reference/configuration/#agents) is off. The workspace's menu also has **reopen agents** and **forget closed agents**, which drops them for good after asking (their conversations stay in each agent's own history), and the [keys menu](../../reference/keyboard-and-mouse/#keyboard-shortcuts) has `w a` and `w o`. A workspace with no tabs shows `2 agents closed` and a ` ▶ reopen agents ` button in its pane.
+
+Closed agents are saved with the session, so they survive `kill-server` and a reboot. Removing or closing the workspace forgets them, and says so first. A flow's team closes with its orchestrator and comes back whole: see [Close the team and reopen it later](../flows/#close-the-team-and-reopen-it-later). From a script: [`cornercase agents`](../scripts-and-agents/#close-and-reopen-a-workspaces-agents).
 
 ## Arrange the columns
 

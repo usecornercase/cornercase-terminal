@@ -4,29 +4,15 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::agents::stats::{self, MergedAccount, MergedRow};
 use crate::git::remote::Remote;
+use crate::pull_request::Provider;
 
 pub(crate) mod github;
 pub(crate) mod gitlab;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) enum Provider {
-    Github,
-    Gitlab,
-}
-
-impl Provider {
-    pub(crate) fn name(self) -> &'static str {
-        match self {
-            Self::Github => "GitHub",
-            Self::Gitlab => "GitLab",
-        }
-    }
-
-    fn index(self) -> usize {
-        match self {
-            Self::Github => 0,
-            Self::Gitlab => 1,
-        }
+fn slot(provider: Provider) -> usize {
+    match provider {
+        Provider::Github => 0,
+        Provider::Gitlab => 1,
     }
 }
 
@@ -120,7 +106,7 @@ impl Cache {
     }
 
     fn apply_read(&mut self, provider: Provider, read: Read) {
-        let slot = provider.index();
+        let slot = slot(provider);
         match read {
             Read::Unavailable(why) => {
                 self.entries.retain(|e| e.source.provider != provider);
@@ -170,7 +156,7 @@ impl Cache {
     pub(crate) fn problems(&self) -> Vec<(Provider, String, String)> {
         let mut found: Vec<(Provider, String, String)> = Vec::new();
         for provider in [Provider::Github, Provider::Gitlab] {
-            if let Some(why) = &self.failed[provider.index()] {
+            if let Some(why) = &self.failed[slot(provider)] {
                 found.push((provider, String::new(), why.clone()));
             }
         }

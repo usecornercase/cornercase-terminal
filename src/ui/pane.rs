@@ -13,6 +13,7 @@ use super::dialog::dialog_button_style;
 use super::sidebar::NEW_BUTTON;
 use super::theme::{BRAND_COLOR, status_icon};
 use super::widgets::sidebar_hovered;
+use super::workspaces::REOPEN_ICON;
 use crate::agents::activity::Status;
 use crate::project::split::{Dir, Divider, Node, Place};
 use crate::term::emulator::Snapshot;
@@ -63,16 +64,55 @@ fn draw_centered(f: &mut Frame, area: Rect, lines: Vec<Line<'static>>) {
     f.render_widget(Paragraph::new(lines).alignment(Alignment::Center), r);
 }
 
-pub(super) fn draw_no_tab(f: &mut Frame, muted: Color, pane: Rect) {
-    let dim = Style::default().fg(muted);
-    draw_centered(
-        f,
-        pane,
-        vec![
-            Line::from(Span::styled(NO_TAB, dim.add_modifier(Modifier::BOLD))),
-            Line::from(vec![Span::styled("+ Tab", Style::default().fg(Color::Cyan)), Span::styled(NO_TAB_HINT, dim)]),
-        ],
-    );
+fn closed_count(closed: usize) -> String {
+    if closed == 1 { "1 agent closed".to_string() } else { format!("{closed} agents closed") }
+}
+
+fn reopen_label(closed: usize) -> String {
+    let what = if closed == 1 { "agent" } else { "agents" };
+    format!(" {REOPEN_ICON} reopen {what} ")
+}
+
+fn no_tab_lines(view: &View, button: Option<Rect>) -> Vec<Line<'static>> {
+    let dim = Style::default().fg(view.muted);
+    let hint =
+        Line::from(vec![Span::styled("+ Tab", Style::default().fg(Color::Cyan)), Span::styled(NO_TAB_HINT, dim)]);
+    if view.closed_agents == 0 {
+        return vec![Line::from(Span::styled(NO_TAB, dim.add_modifier(Modifier::BOLD))), hint];
+    }
+    let lit = button.is_some_and(|r| sidebar_hovered(view, r));
+    let pill = if lit {
+        Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+    };
+    vec![
+        Line::from(Span::styled(closed_count(view.closed_agents), dim.add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(reopen_label(view.closed_agents), pill)),
+        hint,
+    ]
+}
+
+pub(crate) fn reopen_button(pane: Rect, closed: usize) -> Option<Rect> {
+    if closed == 0 {
+        return None;
+    }
+    let width =
+        [closed_count(closed).chars().count(), reopen_label(closed).chars().count(), 5 + NO_TAB_HINT.chars().count()]
+            .into_iter()
+            .max()
+            .unwrap_or(0);
+    if 3 > pane.height || width > usize::from(pane.width) {
+        return None;
+    }
+    let label = u16::try_from(reopen_label(closed).chars().count()).ok()?;
+    let top = pane.y + (pane.height - 3) / 2;
+    Some(Rect::new(pane.x + (pane.width - label) / 2, top + 1, label, 1))
+}
+
+pub(super) fn draw_no_tab(f: &mut Frame, view: &View, pane: Rect) {
+    let button = reopen_button(pane, view.closed_agents);
+    draw_centered(f, pane, no_tab_lines(view, button));
 }
 
 fn welcome_text(muted: Color) -> Vec<Line<'static>> {

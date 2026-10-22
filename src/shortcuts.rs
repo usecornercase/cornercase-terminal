@@ -151,6 +151,8 @@ pub(crate) enum Action {
     StartFlow,
     RenameWorkspace,
     CloseWorkspace,
+    CloseAgents,
+    ReopenAgents,
     Issues,
     Todo,
     Settings,
@@ -249,11 +251,13 @@ const GIT: [Item; 3] = [
     run("p", "pull request and its checks", Action::PullRequest),
 ];
 
-const WORKSPACE: [Item; 5] = [
+const WORKSPACE: [Item; 7] = [
     run("n", "new workspace", Action::NewWorkspace),
     run("s", "start a flow", Action::StartFlow),
     run("r", "rename workspace", Action::RenameWorkspace),
     run("f", "flow of this workspace", Action::Flow),
+    run("a", "close agents", Action::CloseAgents),
+    run("o", "reopen agents", Action::ReopenAgents),
     run("x", "close workspace", Action::CloseWorkspace),
 ];
 

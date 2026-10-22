@@ -47,3 +47,9 @@ pub(crate) fn remotes(output: &str) -> Vec<Remote> {
 pub(crate) fn of(dir: &std::path::Path) -> Vec<Remote> {
     super::remote_urls(dir).iter().filter_map(|(name, url)| remote(name, url)).collect()
 }
+
+pub(crate) fn primary(dir: &std::path::Path) -> Option<Remote> {
+    let mut remotes = of(dir);
+    let at = remotes.iter().position(|r| r.name == "origin").unwrap_or(0);
+    (at < remotes.len()).then(|| remotes.swap_remove(at))
+}

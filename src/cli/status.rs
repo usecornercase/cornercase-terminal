@@ -9,6 +9,7 @@ use crate::agents::activity;
 use crate::client::{answer, ask};
 use crate::control::{self, PaneInfo, PaneRow, PaneRows, ProjectInfo, PullRequestInfo, Report, WorkspaceInfo};
 use crate::error::{Error, Result};
+use crate::pull_request::Provider;
 
 pub(super) fn run_status(status: &StatusArgs) -> Result<()> {
     if status.app {
@@ -124,15 +125,20 @@ fn workspace_parts(workspace: &WorkspaceInfo, home: Option<&Path>) -> Vec<String
         format!("{} {noun} changed", c.files)
     }));
     parts.extend(workspace.pull_request.as_ref().map(pull_request_part));
+    parts.extend(workspace.closed_agents.filter(|count| *count > 0).map(|count| {
+        let noun = if count == 1 { "agent" } else { "agents" };
+        format!("{count} {noun} closed")
+    }));
     parts
 }
 
 fn pull_request_part(pull: &PullRequestInfo) -> String {
-    let mut said = vec![format!("pull request #{} {}", pull.number, pull.state)];
+    let provider = Provider::of(&pull.provider);
+    let mut said = vec![format!("{} {} {}", provider.noun(), provider.reference(pull.number), pull.state)];
     if pull.conflicts {
         said.push(pull.base.as_ref().map_or("conflicts".to_string(), |base| format!("conflicts with {base}")));
     }
-    said.extend(pull.checks.as_ref().map(|checks| format!("checks {checks}")));
+    said.extend(pull.checks.as_ref().map(|checks| format!("{} {checks}", provider.checks())));
     said.join(", ")
 }
 
@@ -191,3 +197,6 @@ fn line(depth: usize, kind: &str, id: u64, parts: &[String], marks: &[&str]) -> 
     }
     text
 }
+
+#[cfg(test)]
+mod tests;

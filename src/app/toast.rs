@@ -22,6 +22,7 @@ pub(super) const NOT_READING: &str = "the program in this pane is not reading wh
 pub(super) enum Undo {
     Todos(todo::Removed),
     Queue(Vec<queue::Entry>),
+    Agents(u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,6 +50,7 @@ impl Toast {
 
     pub(super) fn view(&self) -> ui::Toast<'_> {
         let button = match self.icon {
+            _ if matches!(self.undo, Some(Undo::Agents(_))) => Some(ui::ToastButton::Reopen),
             _ if self.undo.is_some() => Some(ui::ToastButton::Undo),
             _ if self.go.is_some() => Some(ui::ToastButton::Go),
             ui::ToastIcon::Restart => Some(ui::ToastButton::Cancel),
@@ -67,6 +69,7 @@ impl App {
         match self.messages.toast.take() {
             Some(Toast { undo: Some(Undo::Todos(removed)), .. }) => self.panels.todos.restore(removed),
             Some(Toast { undo: Some(Undo::Queue(entries)), .. }) => self.panels.queued.restore(entries),
+            Some(Toast { undo: Some(Undo::Agents(workspace)), .. }) => self.reopen_from_window(workspace, area),
             Some(Toast { go: Some(token), .. }) => self.notification_clicked(&token),
             Some(Toast { icon: ui::ToastIcon::Restart, .. }) => self.cancel_restarts(),
             _ => {}

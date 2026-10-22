@@ -14,7 +14,7 @@ use super::rows::{
 use super::sidebar::{NEW_BUTTON, SidebarRow, draw_group, draw_new_project, draw_project_band, sidebar_rows};
 use super::widgets::{button_style, draw_button, draw_title};
 use super::workspaces::{
-    Badge, Guide, WorkspaceEntry, WorkspaceLine, draw_guide, draw_tab_band, draw_workspace_band, pull_badge,
+    Badge, Guide, Tag, WorkspaceEntry, WorkspaceLine, draw_guide, draw_tab_band, draw_workspace_band, tag_badge,
 };
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -208,16 +208,16 @@ pub(crate) fn tree_hit(list: Rect, shape: &TreeShape, scroll: usize, pos: Positi
     })
 }
 
-pub(crate) fn tree_pull(
+pub(crate) fn tree_tag(
     list: Rect,
     shape: &TreeShape,
     scroll: usize,
     (p, w): (usize, usize),
-    entry: &WorkspaceEntry,
+    (entry, tag): (&WorkspaceEntry, Tag),
 ) -> Option<Rect> {
     let row = TreeRow::Workspace(p, w);
     let lead = usize::from(tree_indent(shape, row)) + 2;
-    pull_badge(tree_row(list, shape, scroll, row), 1, lead, entry, badge_of(shape, row))
+    tag_badge(tree_row(list, shape, scroll, row), 1, lead, (entry, badge_of(shape, row)), tag)
 }
 
 pub(crate) struct TreeView {

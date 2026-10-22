@@ -829,3 +829,22 @@ Examples:
   cornercase profile set Work --provider codex --account personal
   cornercase profile use Work
   cornercase start claude --profile Home --prompt \"fix the tests\"";
+
+pub(super) const AGENTS_HELP: &str =
+    "`close` closes every tab of a workspace (the one you are in, or the one --workspace or --worktree names) that runs \
+a coding agent, whole, and keeps what each agent needs to start again: its conversation, mode and account. Shells and \
+the workspace stay. It refuses when closing would cut an agent's turn, when an agent cannot resume its conversation \
+(opencode, custom agents, an agent with no conversation yet starts a new one) or when other panes share those tabs, \
+unless you pass --force; --check says what would close and closes nothing. A flow's team closes with its orchestrator \
+and the run is kept whole. `reopen` brings the tabs back after the others, each agent in its own conversation (even \
+with resume_agents off), and a flow's orchestrator last with its team's new pane ids. `forget` drops what was closed \
+for good, asks first on a terminal and needs --yes in a script, and ends a kept flow run. Closed agents survive a \
+restart of the server and show as `closed_agents` in `status --json`; removing the workspace forgets them.
+
+Examples:
+  cornercase agents close
+  cornercase agents close --worktree fix/login --check
+  cornercase agents close --workspace 7 --force --json
+  cornercase agents reopen --workspace 7
+  cornercase agents forget --workspace 7 --yes
+";

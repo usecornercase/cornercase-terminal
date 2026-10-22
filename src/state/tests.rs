@@ -53,6 +53,7 @@ mod file {
             parent: None,
             collapsed: false,
             accounts: BTreeMap::new(),
+            closed: None,
         }
     }
 
@@ -76,6 +77,7 @@ mod file {
                 run: None,
                 role_worktrees: Vec::new(),
                 run_dirs: Vec::new(),
+                closed: None,
             }],
             active: 0,
             collapsed: false,
@@ -123,6 +125,7 @@ mod file {
                 run: None,
                 role_worktrees: Vec::new(),
                 run_dirs: Vec::new(),
+                closed: None,
             }],
             active: 0,
             collapsed: true,
@@ -191,6 +194,53 @@ mod file {
             .collect();
         let fixture = crate::test_util::fixture!("session/parents.json");
         round_trip(fixture, &saved);
+    }
+
+    fn closed_state() -> State {
+        let mut saved = state(&["projects/team"]);
+        let agent =
+            AgentState { kind: "claude".into(), conversation: "s1".into(), mode: Some("plan".into()), account: None };
+        let pane = |id: u64, parent: Option<u64>| PaneState {
+            id: Some(id),
+            parent,
+            ..PaneState::at(Some("projects/team".into()))
+        };
+        let coder = PaneState {
+            agent: Some(agent),
+            closed: Some(ClosedAgent { kind: "claude".into(), mode: Some("plan".into()), cut: true }),
+            ..pane(4, Some(3))
+        };
+        let fresh = PaneState {
+            closed: Some(ClosedAgent { kind: "opencode".into(), mode: None, cut: false }),
+            ..pane(5, None)
+        };
+        let tab = |panes| TabState { name: None, panes, active: 0, layout: None };
+        saved.projects[0].workspaces[0].closed = Some(ClosedState {
+            tabs: vec![tab(vec![coder]), tab(vec![fresh, pane(6, Some(5))])],
+            run: Some(RunState {
+                flow: Flow::default(),
+                task: "fix the login".into(),
+                members: vec![SeatState { role: "coder".into(), tab: 0, pane: 0 }],
+                stage: Some(0),
+                rounds: vec![1],
+                dir: Some("2026-10-21-fix".into()),
+                ended: None,
+            }),
+        });
+        saved
+    }
+
+    #[test]
+    fn closed_agents_round_trip_through_their_own_fixture() {
+        let fixture = crate::test_util::fixture!("session/closed.json");
+        round_trip(fixture, &closed_state());
+    }
+
+    #[test]
+    fn a_session_without_closed_agents_writes_no_closed_key() {
+        let text = serde_json::to_string(&state(&["projects/team"])).expect("json");
+
+        assert!(!text.contains("closed"));
     }
 
     #[test]
@@ -489,6 +539,7 @@ mod mapping {
             parent: None,
             collapsed: false,
             accounts: BTreeMap::new(),
+            closed: None,
         };
         TabState { name: None, panes: vec![pane; panes], active, layout: None }
     }

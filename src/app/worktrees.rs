@@ -21,7 +21,8 @@ use crate::git::worktree;
 pub(super) use crate::git::worktree::RemoveOptions;
 use crate::log::{self, Job, Level};
 use crate::project::{Hierarchy, Phase, Workspace, WorkspaceAt};
-use crate::pull_request::PullRequest;
+use crate::pull_request::glab::Host;
+use crate::pull_request::{Provider, PullRequest};
 use crate::ui::{self};
 use crate::worktrees::{Found, Scan};
 
@@ -53,17 +54,65 @@ pub(super) enum Check {
 
 #[derive(Debug)]
 pub(crate) enum WorktreeEvent {
-    Created { project: u64, result: Result<PathBuf>, start: Option<Start>, request: Option<u64> },
-    Run { project: u64, result: Result<Made>, request: u64 },
-    Checked { project: u64, workspace: u64, status: worktree::Status, request: Option<u64> },
-    Removed { project: u64, workspace: u64, result: Result<Option<String>>, request: Option<u64> },
-    Behind { project: u64, behind: Vec<(u64, u32)> },
-    PullRequests { project: u64, found: Vec<(u64, String, Option<PullRequest>)>, error: Option<String> },
-    Listed { generation: u64, found: Vec<Found> },
-    Scanned { generation: u64, ticket: u64, path: PathBuf, scan: Box<Result<Scan>>, confirm: bool },
-    Outside { generation: u64, ticket: u64, found: Result<Vec<(PathBuf, String, bool)>> },
-    Cleaned { key: u64, result: Result<Option<String>>, branch: Deleted },
-    AgentChecked { generation: u64, found: Findings },
+    Created {
+        project: u64,
+        result: Result<PathBuf>,
+        start: Option<Start>,
+        request: Option<u64>,
+    },
+    Run {
+        project: u64,
+        result: Result<Made>,
+        request: u64,
+    },
+    Checked {
+        project: u64,
+        workspace: u64,
+        status: worktree::Status,
+        request: Option<u64>,
+    },
+    Removed {
+        project: u64,
+        workspace: u64,
+        result: Result<Option<String>>,
+        request: Option<u64>,
+    },
+    Behind {
+        project: u64,
+        behind: Vec<(u64, u32)>,
+    },
+    PullRequests {
+        project: u64,
+        provider: Provider,
+        found: Vec<(u64, String, Option<PullRequest>)>,
+        error: Option<String>,
+    },
+    GlabHosts(std::result::Result<Vec<Host>, String>),
+    Listed {
+        generation: u64,
+        found: Vec<Found>,
+    },
+    Scanned {
+        generation: u64,
+        ticket: u64,
+        path: PathBuf,
+        scan: Box<Result<Scan>>,
+        confirm: bool,
+    },
+    Outside {
+        generation: u64,
+        ticket: u64,
+        found: Result<Vec<(PathBuf, String, bool)>>,
+    },
+    Cleaned {
+        key: u64,
+        result: Result<Option<String>>,
+        branch: Deleted,
+    },
+    AgentChecked {
+        generation: u64,
+        found: Findings,
+    },
 }
 
 impl WorktreeEvent {
@@ -75,6 +124,7 @@ impl WorktreeEvent {
             Self::Removed { .. } => "worktree removed",
             Self::Behind { .. } => "behind",
             Self::PullRequests { .. } => "pull requests",
+            Self::GlabHosts(_) => "glab hosts",
             Self::Listed { .. } => "worktrees listed",
             Self::Scanned { .. } => "worktree scanned",
             Self::Outside { .. } => "outside processes",
@@ -107,7 +157,10 @@ impl App {
                 self.worktree_removed(project, workspace, result);
             }
             WorktreeEvent::Behind { project, behind } => self.behind_counted(project, &behind),
-            WorktreeEvent::PullRequests { project, found, error } => self.pull_requests_found(project, found, error),
+            WorktreeEvent::PullRequests { project, provider, found, error } => {
+                self.pull_requests_found(project, provider, found, error);
+            }
+            WorktreeEvent::GlabHosts(listed) => self.glab_hosts_found(listed),
             WorktreeEvent::Listed { generation, found } => self.worktrees_listed(generation, found),
             WorktreeEvent::Scanned { generation, ticket, path, scan, confirm } => {
                 self.worktree_scanned((generation, ticket), &path, *scan, confirm);
@@ -343,9 +396,12 @@ impl App {
         let project = &self.projects[at.project()];
         project.workspaces.iter().filter(|owner| owner.open()).find_map(|owner| {
             let tree = owner.role_worktrees.iter().find(|tree| &tree.path == path)?;
-            self.runs.of_workspace(owner.id).is_some().then(|| {
+            let running = self.runs.of_workspace(owner.id).is_some();
+            let closed = self.agents.closed.has_run(owner.id);
+            let state = if running { "running" } else { "whose agents are closed" };
+            (running || closed).then(|| {
                 format!(
-                    "this worktree belongs to `{}` in the flow running in {} › {}: it is removed with that workspace",
+                    "this worktree belongs to `{}` in the flow {state} in {} › {}: it is removed with that workspace",
                     tree.role,
                     self.project_label(project),
                     owner.label()
@@ -532,7 +588,9 @@ impl App {
         let kept = if roles == 0 { "The branch is kept." } else { "The branches are kept." };
         let with_roles = if roles == 0 { String::new() } else { format!(", with the worktrees of its {roles} roles") };
         let first = if teardown { "Its teardown runs first. " } else { "" };
-        format!("Remove the workspace {label} and delete its worktree folder {path}{with_roles}? {first}{kept}")
+        let id = found.map_or(0, |w| w.id);
+        let closed = self.forgotten_note(id);
+        format!("Remove the workspace {label} and delete its worktree folder {path}{with_roles}? {first}{kept}{closed}")
     }
 }
 

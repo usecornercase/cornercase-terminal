@@ -35,11 +35,13 @@ fn pull_request_info(pull: &PullRequest) -> PullRequestInfo {
         failed: pull.failed().map(|check| check.name.clone()).collect(),
         conflicts: pull.conflicts(),
         base: Some(pull.base.clone()).filter(|base| !base.is_empty()),
+        provider: pull.provider.id().into(),
     }
 }
 
 fn pull_refreshed(pull: &PullRequest, hash: &mut DefaultHasher) {
     (pull.number, &pull.title, pull.state.name(), pull.ci().map(Ci::name), pull.conflicts(), &pull.base).hash(hash);
+    pull.provider.id().hash(hash);
     pull.failed().for_each(|check| check.name.hash(hash));
 }
 
@@ -112,6 +114,7 @@ impl App {
             custom_name: ws.name.clone(),
             collapsed: ws.collapsed,
             changes: self.changes_count(ws.id, seen.counted, seen.sweeping),
+            closed_agents: Some(self.agents.closed.count(ws.id)).filter(|count| *count > 0),
         }
     }
 
@@ -175,6 +178,7 @@ impl App {
             pull_refreshed(pull, hash);
         }
         self.run_status(workspace.id).hash(hash);
+        self.agents.closed.count(workspace.id).hash(hash);
         for tab in &workspace.tabs {
             self.tab_refreshed(tab, live, hash);
         }

@@ -6,6 +6,8 @@ use serde::Deserialize;
 use crate::error::{Error, Result};
 use crate::gh;
 
+pub(crate) mod gitlab;
+pub(crate) mod glab;
 pub(crate) mod merged;
 
 const FIELDS: &str = "number,title,url,state,isDraft,mergeable,baseRefName,statusCheckRollup";
@@ -15,6 +17,87 @@ const NOT_FOUND: &str = "no pull requests found";
 const LOGGED_OUT: &str = "gh auth login";
 
 const NEVER: &str = "0001-01-01";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) enum Provider {
+    Github,
+    Gitlab,
+}
+
+impl Provider {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Github => "GitHub",
+            Self::Gitlab => "GitLab",
+        }
+    }
+
+    pub(crate) fn id(self) -> &'static str {
+        match self {
+            Self::Github => "github",
+            Self::Gitlab => "gitlab",
+        }
+    }
+
+    pub(crate) fn of(id: &str) -> Self {
+        if id == "gitlab" { Self::Gitlab } else { Self::Github }
+    }
+
+    pub(crate) fn noun(self) -> &'static str {
+        match self {
+            Self::Github => "pull request",
+            Self::Gitlab => "merge request",
+        }
+    }
+
+    pub(crate) fn title(self) -> &'static str {
+        match self {
+            Self::Github => "Pull request",
+            Self::Gitlab => "Merge request",
+        }
+    }
+
+    pub(crate) fn checks(self) -> &'static str {
+        match self {
+            Self::Github => "checks",
+            Self::Gitlab => "pipeline",
+        }
+    }
+
+    pub(crate) fn reference(self, number: u64) -> String {
+        match self {
+            Self::Github => format!("#{number}"),
+            Self::Gitlab => format!("!{number}"),
+        }
+    }
+
+    pub(crate) fn find(self, tool: &Path, dir: &Path) -> Result<Option<PullRequest>> {
+        match self {
+            Self::Github => find(tool, dir),
+            Self::Gitlab => gitlab::find(tool, dir),
+        }
+    }
+
+    pub(crate) fn explain(self, error: &Error) -> String {
+        match self {
+            Self::Github => explain(error),
+            Self::Gitlab => gitlab::explain(error),
+        }
+    }
+}
+
+pub(crate) fn asks_glab(host: &str) -> bool {
+    let host = host.to_lowercase();
+    host != "github.com" && !host.ends_with(".github.com")
+}
+
+pub(crate) fn provider_of(host: &str, hosts: &[glab::Host]) -> Provider {
+    if host.to_lowercase().contains("gitlab") || hosts.iter().any(|h| h.serves(host)) {
+        Provider::Gitlab
+    } else {
+        Provider::Github
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum State {
@@ -92,6 +175,7 @@ pub(crate) struct PullRequest {
     pub(crate) conflicting: Option<bool>,
     pub(crate) base: String,
     pub(crate) checks: Vec<Check>,
+    pub(crate) provider: Provider,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -134,6 +218,10 @@ impl PullRequest {
         }
     }
 
+    pub(crate) fn reference(&self) -> String {
+        self.provider.reference(self.number)
+    }
+
     pub(crate) fn base_name(&self) -> &str {
         if self.base.is_empty() { "its base" } else { &self.base }
     }
@@ -153,7 +241,7 @@ impl PullRequest {
             .filter(|(n, _)| *n > 0)
             .map(|(n, name)| format!("{n} {name}"))
             .collect();
-        let checks = if counts.is_empty() { "no checks".to_string() } else { counts.join(", ") };
+        let checks = if counts.is_empty() { format!("no {}", self.provider.checks()) } else { counts.join(", ") };
         if self.conflicts() {
             format!("{} · conflicts with {} · {checks}", self.state.name(), self.base_name())
         } else {
@@ -173,12 +261,12 @@ impl PullRequest {
             parts.push(format!("has merge conflicts with {}", self.base_name()));
         }
         if !checks.is_empty() {
-            parts.push(format!("failed its checks: {}", checks.join(", ")));
+            parts.push(format!("failed its {}: {}", self.provider.checks(), checks.join(", ")));
         }
         if parts.is_empty() {
             return None;
         }
-        Some(format!("pull request #{} {} ", self.number, parts.join(" and ")))
+        Some(format!("{} {} {} ", self.provider.noun(), self.reference(), parts.join(" and ")))
     }
 }
 
@@ -281,6 +369,13 @@ impl RawCheck {
     }
 }
 
+pub(super) fn order(checks: &mut [Check]) {
+    checks.sort_by(|a, b| {
+        let key = |c: &Check| (c.outcome, c.workflow.is_empty(), c.workflow.clone(), c.name.clone());
+        key(a).cmp(&key(b))
+    });
+}
+
 fn started(at: Option<String>) -> Option<String> {
     at.filter(|at| !at.is_empty() && !at.starts_with(NEVER))
 }
@@ -303,17 +398,23 @@ impl From<Raw> for PullRequest {
         });
         runs.dedup_by(|(later, _), (kept, _)| (&later.workflow, &later.name) == (&kept.workflow, &kept.name));
         let mut checks: Vec<Check> = runs.into_iter().map(|(check, _)| check).collect();
-        checks.sort_by(|a, b| {
-            let key = |c: &Check| (c.outcome, c.workflow.is_empty(), c.workflow.clone(), c.name.clone());
-            key(a).cmp(&key(b))
-        });
+        order(&mut checks);
         let conflicting = match raw.mergeable.as_deref() {
             Some("CONFLICTING") => Some(true),
             Some("MERGEABLE") => Some(false),
             _ => None,
         };
         let base = raw.base_ref_name.unwrap_or_default();
-        Self { number: raw.number, title: raw.title, url: raw.url, state, conflicting, base, checks }
+        Self {
+            number: raw.number,
+            title: raw.title,
+            url: raw.url,
+            state,
+            conflicting,
+            base,
+            checks,
+            provider: Provider::Github,
+        }
     }
 }
 

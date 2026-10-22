@@ -14,6 +14,8 @@ const UNDO_LABEL: &str = "undo";
 
 const GO_LABEL: &str = "go";
 
+const REOPEN_LABEL: &str = "reopen";
+
 const TOAST_ICON: &str = " ✓ ";
 
 const BUG_ICON: &str = " ✗ ";
@@ -35,6 +37,7 @@ pub(crate) enum ToastButton {
     Undo,
     Go,
     Cancel,
+    Reopen,
 }
 
 impl ToastButton {
@@ -43,6 +46,7 @@ impl ToastButton {
             Self::Undo => UNDO_LABEL,
             Self::Go => GO_LABEL,
             Self::Cancel => CANCEL_LABEL,
+            Self::Reopen => REOPEN_LABEL,
         }
     }
 }

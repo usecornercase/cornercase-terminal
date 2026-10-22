@@ -28,7 +28,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Worktrees](design/worktrees.md) (`git/worktree.rs`, `app/worktrees.rs`): one worktree per workspace, removal in the background, locks, `↓n`.
 - [Worktree setup](design/worktree-setup.md) (`git/worktree/setup.rs`, `project/settings.rs`, `app/worktree_setup.rs`, `app/project_settings_dialog.rs`, `ui/dialog/project_settings.rs`, #250): a project's setup and teardown scripts.
 - [Worktrees dialog](design/worktrees-dialog.md) (`worktrees/`, `app/worktrees_dialog.rs`, `app/worktrees_dialog/`, `ui/dialog/worktrees.rs`, #256): every worktree on disk with when it last changed and what makes it safe to remove, removing several at once.
-- [Pull requests](design/pull-requests.md) (`pull_request.rs`, `gh.rs`, `app/pull_requests.rs`, `ui/workspaces.rs`, #251): a workspace's pull request and its checks, from `gh`.
+- [Pull requests](design/pull-requests.md) (`pull_request.rs`, `pull_request/gitlab.rs`, `pull_request/glab.rs`, `gh.rs`, `app/pull_requests.rs`, `ui/workspaces.rs`, #251, #402): a workspace's pull request or merge request and its checks, from `gh` or `glab`.
 - [Merged pull requests](design/merged-pull-requests.md) (`pull_request/merged.rs`, `pull_request/merged/`, `git/remote.rs`, `app/merged_pull_requests.rs`, #293): the Stats row of merged pull requests, from `gh` and `glab`.
 - [Changes panel](design/changes-panel.md) (`changes/`, `ui/changes.rs`, `app/changes_panel.rs`): the git diff, its modes, filter, scope, pacing and digests.
 - [TODO panel](design/todo-panel.md) (`todo/`, `ui/todo.rs`, `app/todo_panel.rs`): the TODO list, its requests, sending an item to an agent.
@@ -65,6 +65,6 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Plugins](design/plugins.md) (`plugins/`, `app/plugins.rs`, `cli/plugin.rs`, `client/window.rs`): manifests, trust, actions, hooks, services, installing, the catalogue.
 - [Updates](design/updates.md) (`update.rs`, `cli/update.rs`, `version.rs`, `http.rs`, `app/update_dialog.rs`): checking, installing and restarting, also once agents are idle.
 - [Releases](design/releases.md) (`.github/`, `dist-workspace.toml`): how a push to `main` becomes a release.
-- [Saved session](design/saved-session.md) (`state.rs`, `persist.rs`, `app.rs`, `app/session.rs`): `session.json`, restoring, resuming agents.
+- [Saved session](design/saved-session.md) (`state.rs`, `persist.rs`, `app.rs`, `app/session.rs`, `app/closed_agents.rs`, `app/closed_agents/`, `control/closed_agents.rs`, `cli/agents.rs`, #430): `session.json`, restoring, resuming agents, closing a workspace's agents and reopening them.
 - [Website](design/website.md) (`site/`): the brand, the landing demo, captures, translations.
 - [Test helpers](design/test-helpers.md) (`test_util.rs`, `agents/{claude,codex,gemini,opencode,grok,cursor,copilot}/fake.rs`, `app/tests.rs`): fakes, fixtures, keeping tests away from the user's files.

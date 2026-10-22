@@ -50,6 +50,7 @@ impl App {
             Some(Overlay::ProjectSettings(_)) => self.project_settings_key(key, area),
             Some(Overlay::Worktrees(_)) => self.worktrees_key(key, area),
             Some(Overlay::CloseAgent(_)) => self.close_agent_key(key, area),
+            Some(Overlay::CloseAgents(_)) => self.close_agents_key(key, area),
             Some(Overlay::Usage) => {
                 self.usage_key(key);
             }

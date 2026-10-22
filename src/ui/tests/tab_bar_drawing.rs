@@ -15,6 +15,7 @@ fn with_bar() -> View<'static> {
             pull: None,
             removing: false,
             setting_up: false,
+            closed: 0,
         }],
         active_tab: Some(0),
         tab_bar: Some(tab_bar::TabBar { tabs, active: Some(0), details, scroll: 0 }),
