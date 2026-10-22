@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.179
+
+- **`+ Tab` and `+ New` in the middle of an empty window work.** A workspace without tabs now opens a shell from the **`+ Tab`** in the middle of its pane, which lights up under the pointer like the other buttons; with closed agents it sits below ` ▶ reopen agents `. In a project whose last workspace you closed, it starts the default workspace first. With no project open, the **`+ New`** under the logo opens the same menu as the one under the projects: **open project** or **new group**.
+- The ` ▶ reopen agents ` button of an empty pane takes the click on all of it at every window width (one column was missed on some), and the agents it reopens start at the pane's size.
+
 ## 0.12.178
 
 - **Close agent only closes agents.** The agents section's ` × ` and **close agent** close the agent's tab and the tabs of the agents it started in that workspace, and never remove anything from disk. An agent in a worktree of its own leaves the workspace, its worktree and its branch as they were (the workspace's ` × ` and the Worktrees dialog remove them). Closing a member of a flow run closes its whole team and ends the run; the run's worktrees and folder stay. The confirmation no longer checks git or offers to delete the branch.
