@@ -139,7 +139,9 @@ have been submitted` when it records none: read the pane before sending it again
 Gemini, Grok Build, Cursor CLI or GitHub Copilot CLI holds a prompt until it takes it, so the command returns then.
 Grok Build queues that prompt; pressing Enter again sends it now and cancels the turn. Gemini local
 slash commands, ? help and ! shell input, and the / and ! commands of Grok Build and Cursor CLI, and the / and !
-commands and a lone ? of GitHub Copilot CLI, return after Enter without confirming a prompt record. In other programs it returns once Enter is pressed.
+commands and a lone ? of GitHub Copilot CLI, return after Enter without confirming a prompt record. A compact command
+(`/compact` of Claude Code and Codex) returns once the agent records the compaction, however long that takes
+while the agent works on it; --timeout bounds it. In other programs it returns once Enter is pressed.
 
 With --wait, the command fails if the agent does not start working within 10 seconds of the Enter,
 and otherwise prints how the wait ended; with --until it waits for that state instead, as

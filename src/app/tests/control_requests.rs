@@ -519,6 +519,7 @@ mod arranging;
 mod changes;
 mod close_agent;
 mod closed_agents;
+mod compacting;
 mod config;
 mod config_share;
 mod contract;

@@ -160,7 +160,7 @@ enum Stage {
     Removing { force: bool, unlock: bool },
     Check,
     Held(Box<Held>),
-    Launch { confirm: Option<SystemTime>, wait: Option<Condition> },
+    Launch { confirm: Option<SystemTime>, compacts: bool, wait: Option<Condition> },
     Confirm(Confirm),
     Watch(Watch),
     Several { all: bool, parts: Vec<Pending> },
@@ -173,7 +173,7 @@ enum Stage {
 
 impl Stage {
     fn launch(wait: Option<Condition>) -> Self {
-        Self::Launch { confirm: None, wait }
+        Self::Launch { confirm: None, compacts: false, wait }
     }
 
     fn outlives_its_client(&self) -> bool {

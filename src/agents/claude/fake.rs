@@ -41,6 +41,15 @@ while printf '\033[H\033[2J%s\n────────────\n❯ ' "$sai
     printf '\033[H\033[2J● How is Claude doing this session? (optional)\n  1: Bad    2: Fine   3: Good   0: Dismiss\n\n'
     printf '────────────\n❯ '; IFS= read -r line; [ "$line" = 0 ] && continue ;;
   esac
+  case "$line" in /compact*)
+    state busy
+    while [ ! -e "$d/finish" ]; do sleep 0.02; done
+    rm -f "$d/finish"
+    case "$line" in *nothing*) ;; *)
+      printf '{"type":"system","subtype":"compact_boundary","timestamp":"%s.999Z"}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl" ;;
+    esac
+    state idle; continue ;;
+  esac
   n=$((n + 1))
   printf '{"type":"user","uuid":"p%s","origin":{"kind":"human"},"timestamp":"%s.999Z"}\n' "$n" "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl"
   state busy

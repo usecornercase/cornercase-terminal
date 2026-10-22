@@ -109,6 +109,8 @@ impl App {
     ) -> Result<Option<(Launch, Stage)>, Refusal> {
         let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
         let confirm = (held.enter && self.confirms(term, held.text.as_deref())).then(SystemTime::now);
+        let compacts = confirm.is_some()
+            && self.foreground_agent(term).is_some_and(|agent| held.text.as_deref().is_some_and(|t| agent.compacts(t)));
         if let Some(text) = &held.text
             && let Some(term) = self.projects.pane_by_mut(pane)
             && !term.paste(text)
@@ -118,14 +120,15 @@ impl App {
         if held.enter {
             self.runs.prompted(held.from, pane, now);
         }
-        Ok(held.enter.then(|| (Launch::enter(pane, now), Stage::Launch { confirm, wait: held.wait })))
+        Ok(held.enter.then(|| (Launch::enter(pane, now), Stage::Launch { confirm, compacts, wait: held.wait })))
+    }
+
+    fn foreground_agent(&self, term: &term::Term) -> Option<agents::Known> {
+        agents::detect(&self.config, &term.foreground_args()).as_deref().and_then(agents::Known::of)
     }
 
     pub(super) fn confirms(&self, term: &term::Term, text: Option<&str>) -> bool {
-        let local = agents::detect(&self.config, &term.foreground_args())
-            .as_deref()
-            .and_then(agents::Known::of)
-            .is_some_and(|agent| text.is_some_and(|text| agent.local_command(text)));
+        let local = self.foreground_agent(term).is_some_and(|agent| text.is_some_and(|text| agent.local_command(text)));
         !local && self.watched_agent(term).is_ok() && !self.record_hidden(term)
     }
 
