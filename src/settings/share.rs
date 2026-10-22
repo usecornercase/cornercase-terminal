@@ -50,7 +50,7 @@ const ISSUES: [&str; 10] = [
     "asana_projects",
 ];
 const WORKTREES: [&str; 6] = ["worktrees_dir", "fetch_minutes", "pull_requests", "merged_pull_requests", "gh", "glab"];
-const INTERFACE: [&str; 22] = [
+const INTERFACE: [&str; 23] = [
     "sidebar",
     "tabs",
     "icon_bar",
@@ -73,6 +73,7 @@ const INTERFACE: [&str; 22] = [
     "sound_subagents",
     "check_updates",
     "star_prompt",
+    "tour",
 ];
 const REPOSITORIES: &str = "repositories";
 

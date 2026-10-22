@@ -543,14 +543,10 @@ impl App {
         Some(name)
     }
 
-    pub(super) fn remove_view(
-        &self,
-        (project, workspace): (u64, u64),
-        check: Check,
-        lock: Option<&worktree::Lock>,
-        submit: &'static str,
-    ) -> ui::Overlay {
-        let found = self.projects.workspace_in(project, workspace);
+    pub(super) fn remove_view(&self, overlay: &Overlay) -> Option<ui::Overlay> {
+        let Overlay::RemoveWorkspace { project, workspace, check, lock } = overlay else { return None };
+        let (check, lock, submit) = (*check, lock.as_ref(), overlay.submit_label());
+        let found = self.projects.workspace_in(*project, *workspace);
         let teardown = found.is_some_and(|at| self.teardown_script(at.project()).is_some());
         let (message, note) = match lock {
             Some(lock) => (
@@ -566,14 +562,14 @@ impl App {
                 },
             ),
         };
-        ui::Overlay::Confirm(ui::Confirm {
+        Some(ui::Overlay::Confirm(ui::Confirm {
             title: "Remove workspace",
             message,
             note,
             submit,
             extra: None,
             dangerous: false,
-        })
+        }))
     }
 
     fn found_label(&self, found: Option<WorkspaceAt>) -> String {

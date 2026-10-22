@@ -43,4 +43,4 @@ expression: t.backend()
 " ─│ a click on a section ticks or unticks it · enter imports the ticked ones · esc goes back                                                 │  "
 "  │                                                                                                                           back   import  │  "
 "  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  "
-"  Quit                         │                         │                                                                                      "
+"  Quit                   Help  │                         │                                                                                      "

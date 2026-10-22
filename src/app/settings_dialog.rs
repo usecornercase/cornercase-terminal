@@ -164,16 +164,18 @@ impl App {
         }
     }
 
+    fn save_settings(&mut self, config: &Config) {
+        if let Err(e) = self.write_config(config) {
+            self.settings_message(e);
+        }
+    }
+
     fn settings_act(&mut self, action: settings::Action, area: Rect) {
         match action {
             settings::Action::None => {}
             settings::Action::Close => self.overlay = None,
             settings::Action::Restart => self.open_restart(),
-            settings::Action::Save(config) => {
-                if let Err(e) = self.write_config(&config) {
-                    self.settings_message(e);
-                }
-            }
+            settings::Action::Save(config) => self.save_settings(&config),
             settings::Action::CheckToken(source, token) => self.check_token(source, token),
             settings::Action::ForgetBrowsers => {
                 let forgotten = self.forget_browsers();

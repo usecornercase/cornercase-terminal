@@ -281,9 +281,7 @@ impl App {
             Overlay::StartFlow { start, .. } => start_flow_view(start, area),
             Overlay::ProjectSettings(form) => super::project_settings_dialog::project_settings_overlay(form),
             Overlay::Rename { target, input } => Self::rename_view(*target, input),
-            Overlay::RemoveWorkspace { project, workspace, check, lock } => {
-                self.remove_view((*project, *workspace), *check, lock.as_ref(), overlay.submit_label())
-            }
+            Overlay::RemoveWorkspace { .. } => self.remove_view(overlay)?,
             Overlay::DeleteGroup { group } => self.delete_group_view(*group)?,
             Overlay::CloseProject { project } => self.close_project_view(*project)?,
             Overlay::CloseWorkspace { project, workspace } => self.close_workspace_view(*project, *workspace)?,
