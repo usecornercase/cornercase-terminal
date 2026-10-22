@@ -188,13 +188,12 @@ impl Reader {
             *shown = None;
         }
         let transcript = self.transcript.get_or_insert_with(|| Transcript::new(path));
-        let before = (transcript.reply.clone(), transcript.compaction.hides);
+        let before = transcript.shown_key();
         transcript.update();
         let prompted = transcript.prompted;
         ledger.apply(&transcript.path.to_string_lossy(), since, std::mem::take(&mut transcript.counted));
-        if (transcript.reply.clone(), transcript.compaction.hides) != before {
-            let compaction = transcript.compaction;
-            *shown = transcript.reply.as_ref().map(|reply| reply.shown(&Limits::read(dir, cwd, look), compaction));
+        if transcript.shown_key() != before {
+            *shown = transcript.shown(&Limits::read(dir, cwd, look));
         }
         let parent = transcript.path.with_extension("").join("subagents");
         if let Some(mut found) = self.following.take() {

@@ -705,23 +705,15 @@ mod watch_v1 {
     }
 
     #[test]
-    fn a_pane_leaves_collapsed_out_unless_it_is_true() {
+    fn a_pane_leaves_collapsed_and_compacted_out_unless_they_are_true() {
         let plain = serde_json::to_value(pane(4, false)).expect("a pane");
-        let folded = serde_json::to_value(PaneInfo { collapsed: true, ..pane(4, false) }).expect("a pane");
+        let on = PaneInfo { collapsed: true, compacted: true, ..pane(4, false) };
+        let folded = serde_json::to_value(on).expect("a pane");
 
-        assert!(plain.get("collapsed").is_none(), "{plain}");
-        assert_eq!(folded["collapsed"], true);
-        assert!(!serde_json::from_value::<PaneInfo>(plain).expect("a pane").collapsed);
-    }
-
-    #[test]
-    fn a_pane_leaves_compacted_out_unless_it_is_true() {
-        let plain = serde_json::to_value(pane(4, false)).expect("a pane");
-        let compacted = serde_json::to_value(PaneInfo { compacted: true, ..pane(4, false) }).expect("a pane");
-
-        assert!(plain.get("compacted").is_none(), "{plain}");
-        assert_eq!(compacted["compacted"], true);
-        assert!(!serde_json::from_value::<PaneInfo>(plain).expect("a pane").compacted);
+        assert!(plain.get("collapsed").is_none() && plain.get("compacted").is_none(), "{plain}");
+        assert_eq!((&folded["collapsed"], &folded["compacted"]), (&json!(true), &json!(true)));
+        let read = serde_json::from_value::<PaneInfo>(plain).expect("a pane");
+        assert!(!read.collapsed && !read.compacted);
     }
 
     #[test]

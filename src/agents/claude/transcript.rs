@@ -334,6 +334,14 @@ impl Transcript {
 }
 
 impl Transcript {
+    pub(in crate::agents) fn shown_key(&self) -> (Option<Reply>, bool) {
+        (self.reply.clone(), self.compaction.hides)
+    }
+
+    pub(in crate::agents) fn shown(&self, limits: &Limits) -> Option<Context> {
+        self.reply.as_ref().map(|reply| reply.shown(limits, self.compaction))
+    }
+
     fn note_compaction(&mut self, entry: &Value, read_at: SystemTime) {
         if entry["type"] == "system" && entry["subtype"] == "compact_boundary" && entry["isSidechain"] != true {
             self.compaction.at = self.compaction.at.max(counting::timestamp(entry).or(Some(read_at)));

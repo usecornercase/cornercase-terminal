@@ -110,6 +110,18 @@ impl Session {
         }
     }
 
+    fn note_picked(&mut self, entry: &Value) {
+        if entry["type"] == "info"
+            && let Some(model) = entry["content"].as_str().and_then(|t| t.strip_prefix("Model set to "))
+        {
+            let model = model.strip_suffix(" (persisted)").unwrap_or(model);
+            self.picked = Some((
+                model.into(),
+                entry["timestamp"].as_str().and_then(Stamp::parse).unwrap_or_else(SystemTime::now),
+            ));
+        }
+    }
+
     fn message(&mut self, entry: &Value) {
         if let Some(record) = counted(entry) {
             self.counted.push(record);
@@ -123,15 +135,7 @@ impl Session {
             self.prompted = self.prompted.max(entry["timestamp"].as_str().and_then(Stamp::parse));
             self.used = true;
         }
-        if entry["type"] == "info"
-            && let Some(model) = entry["content"].as_str().and_then(|t| t.strip_prefix("Model set to "))
-        {
-            let model = model.strip_suffix(" (persisted)").unwrap_or(model);
-            self.picked = Some((
-                model.into(),
-                entry["timestamp"].as_str().and_then(Stamp::parse).unwrap_or_else(SystemTime::now),
-            ));
-        }
+        self.note_picked(entry);
         if entry["type"] != "gemini" {
             return;
         }
