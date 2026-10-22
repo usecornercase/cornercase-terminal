@@ -1,0 +1,23 @@
+---
+source: src/ui/tests/dialogs.rs
+assertion_line: 398
+expression: "render(&with(popup(b\"pick one:\\r\\n> main\"))).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ cornercase (1)               │                         │                                          "
+"                               │       ╭─ Pop: pick a … ──×─╮                                       "
+"  + New                        │       │pick one:           │                                       "
+"                               │       │> main              │                                       "
+"                               │       │                    │                                       "
+"                               │       │                    │                                       "
+"                               │       │                    │                                       "
+"                               │       ╰────────────────────╯                                       "
+"                               │                         │                                          "
+"                               │                         │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │                         │                                          "
+"  Quit                   Help  │                         │                                          "

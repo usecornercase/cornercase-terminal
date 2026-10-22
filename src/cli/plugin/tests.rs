@@ -39,6 +39,7 @@ fn the_actions_are_a_tab_separated_table_under_a_header() {
         action: "note".into(),
         title: "take\ta\nnote".into(),
         contexts: vec!["pane".into(), "tab".into()],
+        ..Default::default()
     };
     assert_eq!(
         actions_text(&info(vec![action])),
@@ -55,9 +56,13 @@ fn a_run_says_how_it_ended() {
         error: error.map(str::to_string),
         ..ActionRan::default()
     };
-    assert_eq!(ran_text(&ran(None), Item::Pane(5)), "ran acme.notes note on pane 5: exit status: 0\n");
+    assert_eq!(ran_text(&ran(None), Some(Item::Pane(5))), "ran acme.notes note on pane 5: exit status: 0\n");
     assert_eq!(
-        ran_text(&ran(Some("exit status: 3")), Item::Tab(2)),
+        ran_text(&ran(Some("exit status: 3")), Some(Item::Tab(2))),
         "ran acme.notes note on tab 2: exit status: 3; `cornercase plugin logs acme.notes` says more\n"
+    );
+    assert_eq!(
+        ran_text(&ran(Some("the popup was closed")), None).lines().next(),
+        Some("ran acme.notes note: the popup was closed; `cornercase plugin logs acme.notes` says more")
     );
 }

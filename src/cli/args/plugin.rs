@@ -54,17 +54,20 @@ pub(crate) enum PluginAction {
         #[arg(
             long,
             value_name = "KIND",
-            value_parser = ["project", "workspace", "tab", "pane"],
-            help = "Only the actions offered for a project, workspace, tab or pane"
+            value_parser = ["project", "workspace", "tab", "pane", "button"],
+            help = "Only the actions offered for a project, workspace, tab or pane, or on the plugins' buttons"
         )]
         context: Option<String>,
         #[command(flatten)]
         print: Print,
     },
     #[command(
-        about = "Run a plugin's action on a project, workspace, tab or pane as its menu entry does; asks the server"
+        about = "Run a plugin's action on a project, workspace, tab or pane as its menu entry does, or a button's on \
+                 what the window shows; asks the server"
     )]
     Run(RunArgs),
+    #[command(about = "Close the plugin popup that is open; asks the server")]
+    PopupClose,
     #[command(about = "Turn a plugin on: it runs as you, with access to every terminal")]
     Enable {
         #[arg(value_name = "ID")]
@@ -85,6 +88,7 @@ pub(crate) enum PluginAction {
 }
 
 #[derive(Debug, Args)]
+#[command(mut_group("Which", |group| group.required(false)))]
 pub(crate) struct RunArgs {
     #[arg(value_name = "PLUGIN", help = "The plugin's id")]
     pub(crate) plugin: String,

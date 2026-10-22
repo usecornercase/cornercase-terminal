@@ -25,6 +25,17 @@ pub(crate) struct AppState {
     pub(crate) profile: Option<String>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub(crate) accounts: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) popup: Option<PopupInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct PopupInfo {
+    pub(crate) plugin: String,
+    pub(crate) action: String,
+    pub(crate) cols: u16,
+    pub(crate) rows: u16,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

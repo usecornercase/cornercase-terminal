@@ -38,7 +38,8 @@ pub(crate) use accounts::{
     ProfileList, ProfileNew, ProfileSet, ProfileUse, RestartInfo, SkippedPane,
 };
 pub(crate) use app_state::{
-    AppState, AppWatch, AwayInfo, InstallInfo, NoUpdate, Notes, ReleaseInfo, UpdateCheck, UpdateInfo, UpdateInstall,
+    AppState, AppWatch, AwayInfo, InstallInfo, NoUpdate, Notes, PopupInfo, ReleaseInfo, UpdateCheck, UpdateInfo,
+    UpdateInstall,
 };
 pub(crate) use arrange::{CloseAgent, Fold, GroupDelete, GroupNew, GroupStyle, Move, MovePane, RemovalCheck};
 pub(crate) use changes::{
@@ -58,7 +59,7 @@ pub(crate) use flow::{
     RunEdge, RunFile, RunFiles, RunInfo, RunState, StepInfo,
 };
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
-pub(crate) use plugins::{PluginActions, PluginList, PluginRun};
+pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
 pub(crate) use search::{Hit, Matches, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use status::{GroupInfo, KeepAwake, LayerInfo, PullRequestInfo, RunStatus, StackInfo};
@@ -185,6 +186,7 @@ pub(crate) enum Command {
     PluginList(PluginList),
     PluginActions(PluginActions),
     PluginRun(PluginRun),
+    PluginPopupClose(PluginPopupClose),
     FlowSave(FlowSave),
     FlowDelete(FlowDelete),
     FlowHide(FlowHide),
@@ -377,13 +379,14 @@ impl Command {
             Self::PluginList(_) => 68,
             Self::PluginActions(_) => 69,
             Self::PluginRun(_) => 70,
+            Self::PluginPopupClose(_) => 100,
             Self::ConfigExport(_) => 96,
             Self::ConfigImport(_) => 97,
             _ => return None,
         })
     }
 
-    pub(crate) const NAMES: [&str; 100] = [
+    pub(crate) const NAMES: [&str; 101] = [
         "status",
         "open",
         "new-workspace",
@@ -484,6 +487,7 @@ impl Command {
         "config-import",
         "flow-default",
         "flow-order",
+        "plugin-popup-close",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

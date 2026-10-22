@@ -713,8 +713,10 @@ before you turn it on, not enforced. A running server picks up changes within a 
 `actions` lists what plugins add to the menus, for a kind of row (--context) or all of them, and `run` runs one on \
 a project, workspace, tab or pane as its menu entry does: in the workspace's folder, with the ids of what you \
 name, stopped after 5 minutes, its output in the plugin's log. Both ask the running server; `run` waits for the \
-action and exits with 1 when it fails. An action listed before the plugins changed is refused (pass the --revision \
-`actions --json` printed, or none for the current one).
+action and exits with 1 when it fails. An action on a plugin's button runs with no target, on what the window \
+shows. A popup action waits until its popup closes, and needs a window attached; `popup-close` closes it. An action \
+listed before the plugins changed is refused (pass the --revision `actions --json` printed, or none for the current \
+one).
 
 Examples:
   cornercase plugin install acme/notes
@@ -726,6 +728,8 @@ Examples:
   cornercase plugin list
   cornercase plugin actions --context pane
   cornercase plugin run acme.notes open --pane 5
+  cornercase plugin run acme.notes browse
+  cornercase plugin popup-close
   cornercase plugin logs my-plugin --follow
   cornercase plugin disable my-plugin
   cornercase plugin update

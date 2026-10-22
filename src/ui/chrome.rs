@@ -41,6 +41,8 @@ pub(crate) const TODO_LABEL: &str = "TODO";
 
 const TODO_DOT: &str = "●";
 
+pub(crate) const PLUGINS_MORE: &str = "⋯";
+
 pub(crate) struct ChangesButton {
     pub(crate) label: String,
     pub(crate) files: usize,
@@ -87,6 +89,58 @@ pub(crate) fn help_button(quit: Rect) -> Rect {
 pub(crate) fn quit_button(quit: Rect) -> Rect {
     let help = help_button(quit);
     if help.is_empty() { quit } else { Rect { width: help.x - quit.x, ..quit } }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct PluginRow {
+    pub(crate) buttons: Vec<Rect>,
+    pub(crate) more: Rect,
+}
+
+pub(crate) fn plugin_buttons<'a>(row: Rect, titles: impl IntoIterator<Item = &'a str>) -> PluginRow {
+    let widths: Vec<u16> = titles.into_iter().map(button_width).collect();
+    let start = row.x.saturating_add(1).min(row.right());
+    let room = row.right().saturating_sub(1).saturating_sub(start);
+    let total = widths.iter().fold(0u16, |sum, &w| sum.saturating_add(w));
+    let overflows = total > room && widths.len() > 1;
+    let room = if overflows { room.saturating_sub(button_width(PLUGINS_MORE)) } else { room };
+    let buttons = fitting_buttons(Rect { x: start, width: room, ..row }, &widths);
+    let more = if overflows {
+        let x = buttons.last().map_or(start, |b| b.right());
+        Rect { x, width: button_width(PLUGINS_MORE), ..row }.intersection(row)
+    } else {
+        Rect::default()
+    };
+    PluginRow { buttons, more }
+}
+
+fn fitting_buttons(room: Rect, widths: &[u16]) -> Vec<Rect> {
+    let mut x = room.x;
+    let mut buttons = Vec::new();
+    for (i, &width) in widths.iter().enumerate() {
+        let width = if i == 0 { width.min(room.width) } else { width };
+        if width == 0 || x.saturating_add(width) > room.right() {
+            break;
+        }
+        buttons.push(Rect { x, width, ..room });
+        x += width;
+    }
+    buttons
+}
+
+pub(super) fn draw_plugin_buttons(f: &mut Frame, view: &View, r: Rect) {
+    let row = plugin_buttons(r, view.plugin_buttons.iter().map(|b| b.title.as_str()));
+    for (&button, face) in row.buttons.iter().zip(&view.plugin_buttons) {
+        let label = truncate_right(&face.title, usize::from(button.width.saturating_sub(2)));
+        draw_button(f, button, "", &label, plugin_button_style(view, button));
+    }
+    if !row.more.is_empty() {
+        draw_button(f, row.more, "", PLUGINS_MORE, plugin_button_style(view, row.more));
+    }
+}
+
+fn plugin_button_style(view: &View, r: Rect) -> Style {
+    button_style(view, r, Style::default().fg(view.muted), Color::Cyan)
 }
 
 pub(super) fn draw_column_border(f: &mut Frame, colour: Color, r: Rect) {

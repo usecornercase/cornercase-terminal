@@ -34,8 +34,18 @@ pub(super) struct Plugged {
 }
 
 pub(super) fn plugged(enabled: bool) -> Plugged {
+    plugged_with(enabled, MANIFEST)
+}
+
+fn plugged_with(enabled: bool, manifest: &str) -> Plugged {
+    plugged_among(enabled, manifest, &[])
+}
+
+pub(super) fn plugged_among(enabled: bool, manifest: &str, others: &[String]) -> Plugged {
     let (config, root, project) = (TempDir::new(), TempDir::new(), TempDir::new());
-    std::fs::write(root.path().join(FILE), MANIFEST).expect("manifest");
+    std::fs::write(root.path().join(FILE), manifest).expect("manifest");
+    let cwd = root.path().join("cwd");
+    write_executable(&root.path().join("where"), &format!("#!/bin/sh\npwd > '{}'\n", cwd.display()));
     let out = root.path().join("out");
     let line = "ctx=$CORNERCASE_CONTEXT action=$CORNERCASE_PLUGIN_ACTION pane=$CORNERCASE_PANE tab=$CORNERCASE_TAB \
                 workspace=$CORNERCASE_WORKSPACE project=$CORNERCASE_PROJECT nested=$CORNERCASE";
@@ -50,12 +60,20 @@ pub(super) fn plugged(enabled: bool) -> Plugged {
     let mut registry = Registry::load(&paths::plugins(&config_path));
     registry.link(root.path()).expect("link");
     registry.set_enabled("acme.notes", enabled).expect("switch");
+    let mut dirs = vec![project];
+    for other in others {
+        let dir = TempDir::new();
+        std::fs::write(dir.path().join(FILE), other).expect("manifest");
+        let (linked, _) = registry.link(dir.path()).expect("link");
+        registry.set_enabled(&linked.id, true).expect("switch");
+        dirs.push(dir);
+    }
     registry.save().expect("save");
     let (mut app, rx) = new_app(config_path);
-    app.open_project(project.path().to_path_buf(), AREA).expect("open project");
+    app.open_project(dirs[0].path().to_path_buf(), AREA).expect("open project");
     app.trace();
     app.refresh(Instant::now());
-    Plugged { app, rx, root, _config: config, _dirs: vec![project] }
+    Plugged { app, rx, root, _config: config, _dirs: dirs }
 }
 
 impl Plugged {
@@ -131,6 +149,100 @@ mod menus {
             toast(&p.app),
             Some("Notes: break failed: exit status: 3; `cornercase plugin logs acme.notes` says more")
         );
+    }
+}
+
+mod button {
+    use super::*;
+    use crate::app::plugins::Spot;
+
+    const HEAD: &str = "id = \"acme.notes\"\nname = \"Notes\"\nversion = \"1.0\"\n";
+
+    const NOTE: &str = r#"
+[[actions]]
+id = "note"
+title = "take a note"
+contexts = ["button"]
+command = ["./act"]
+"#;
+
+    const WHERE: &str = r#"
+[[actions]]
+id = "where"
+title = "where am I"
+contexts = ["button"]
+command = ["./where"]
+"#;
+
+    const POPUP: &str = r#"
+[[actions]]
+id = "note"
+title = "take a note"
+contexts = ["button"]
+placement = "popup"
+command = ["./act"]
+"#;
+
+    fn with(actions: &[&str]) -> Plugged {
+        plugged_with(true, &format!("{HEAD}{}", actions.concat()))
+    }
+
+    fn press(p: &mut Plugged, revisions_ago: u32) {
+        let revision = p.app.plugin_revision().wrapping_sub(revisions_ago);
+        let action = MenuAction::PluginButton { plugin: 0, revision };
+        p.app.menu_action(action, Position::new(1, 1), AREA).expect("pressed");
+    }
+
+    fn shown_line(app: &App) -> String {
+        let project = &app.projects[0];
+        let (workspace, tab) = (&project.workspaces[0], &project.workspaces[0].tabs[0]);
+        format!(
+            "ctx=button action=note pane={} tab={} workspace={} project={} nested=1\n",
+            tab.panes[0].id, tab.id, workspace.id, project.id
+        )
+    }
+
+    #[test]
+    fn one_action_runs_at_once_with_the_ids_the_window_shows() {
+        let mut p = with(&[NOTE]);
+        press(&mut p, 0);
+        assert!(p.app.overlay.is_none());
+        wait_until("the action ran", || !p.read("out").is_empty());
+        assert_eq!(p.read("out"), shown_line(&p.app));
+    }
+
+    #[test]
+    fn several_actions_open_a_menu_in_the_order_of_the_manifest() {
+        let mut p = with(&[WHERE, NOTE]);
+        press(&mut p, 0);
+        assert_eq!(menu_labels(&p.app), ["where am I", "take a note"]);
+        pick(&mut p.app, "where am I");
+        wait_until("the action ran", || p.read("cwd").ends_with('\n'));
+        assert_eq!(p.read("cwd").trim_end(), p.app.projects[0].workspaces[0].path.display().to_string());
+    }
+
+    #[test]
+    fn an_old_revision_does_nothing() {
+        let mut p = with(&[WHERE, NOTE]);
+        press(&mut p, 1);
+        assert!(p.app.overlay.is_none());
+    }
+
+    #[test]
+    fn a_popup_action_opens_the_popup_with_the_ids_the_window_shows() {
+        let mut p = with(&[POPUP]);
+        press(&mut p, 0);
+        assert_eq!(p.app.popup().map(|popup| popup.action.id.as_str()), Some("note"));
+        wait_until("the popup ran", || !p.read("out").is_empty());
+        assert_eq!(p.read("out"), shown_line(&p.app));
+    }
+
+    #[test]
+    fn with_no_project_it_runs_in_the_home_folder_with_no_ids() {
+        let config = TempDir::new();
+        let (app, _rx) = new_app(config.path().join("config.json"));
+        let home = std::env::var_os("HOME").map(PathBuf::from).expect("a home");
+        assert_eq!(app.spot_env(Spot::Shown), Some((crate::control::Ids::default(), home)));
     }
 }
 

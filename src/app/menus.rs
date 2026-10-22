@@ -111,6 +111,7 @@ pub(super) enum MenuAction {
     CopyPath(Subject),
     SendTodo { todo: u64, pane: u64 },
     Plugin { spot: Spot, index: u16, revision: u32 },
+    PluginButton { plugin: u16, revision: u32 },
     Account(AccountItem, (u64, u64)),
     AccountNote(AccountItem),
     AccountsOf(AccountItem),
@@ -191,6 +192,7 @@ impl App {
             MenuAction::Away(via) => format!("continue on {}", via.name()),
             MenuAction::SendTodo { pane, .. } => self.todo_agent_label(pane),
             MenuAction::Plugin { index, .. } => self.plugin_label(index),
+            MenuAction::PluginButton { plugin, .. } => self.plugin_button_label(plugin),
             _ => String::new(),
         }
     }
@@ -323,6 +325,7 @@ impl App {
             MenuAction::AccountsOf(item) => self.open_accounts_of(item, at),
             MenuAction::Help(item) => self.help_action(item, at),
             MenuAction::Tour(index) => self.start_tour(usize::from(index), None, true),
+            MenuAction::PluginButton { plugin, revision } => self.press_plugin_button(plugin, revision, at),
             other => return Some(other),
         }
         None

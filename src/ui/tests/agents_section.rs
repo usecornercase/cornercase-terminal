@@ -3,7 +3,7 @@ use super::*;
 const TALL: Rect = Rect { x: 0, y: 0, width: W, height: 30 };
 
 fn with_agents(sidebar: Sidebar) -> Areas {
-    full_layout(TALL, Widths::default(), Screen { changes: false, sidebar, agents: true, icon_bar: false })
+    full_layout(TALL, Widths::default(), Screen { sidebar, agents: true, ..Screen::default() })
 }
 
 fn agent(status: Status, agent: &str, project: &str, workspace: Option<&str>, details: Details) -> AgentEntry {
@@ -105,11 +105,7 @@ fn takes_a_third_of_the_room_by_default() {
 #[case::saved(Some(8), 8)]
 fn keeps_its_height_within_both_lists_minimum(#[case] saved: Option<u16>, #[case] rows: u16) {
     let widths = Widths { agents: saved, ..Widths::default() };
-    let a = full_layout(
-        TALL,
-        widths,
-        Screen { changes: false, sidebar: Sidebar::ProjectsOnTop, agents: true, icon_bar: false },
-    );
+    let a = full_layout(TALL, widths, Screen { sidebar: Sidebar::ProjectsOnTop, agents: true, ..Screen::default() });
     assert_eq!((a.agents.height, a.list.height >= 1, a.workspaces_list.height >= 1), (rows, true, true));
 }
 
@@ -121,11 +117,7 @@ fn the_stack_line_cannot_be_dragged_into_it() {
         TALL,
         Screen { agents: true, ..Screen::default() },
     );
-    let a = full_layout(
-        TALL,
-        widths,
-        Screen { changes: false, sidebar: Sidebar::ProjectsOnTop, agents: true, icon_bar: false },
-    );
+    let a = full_layout(TALL, widths, Screen { sidebar: Sidebar::ProjectsOnTop, agents: true, ..Screen::default() });
     assert_eq!((widths.stack, a.workspaces_list.bottom() <= a.agents_border.y), (Some(8), true));
 }
 
@@ -192,7 +184,7 @@ fn compact_mode_shows_it_as_a_third_menu() {
     let small = full_layout(
         SMALL,
         Widths::default(),
-        Screen { changes: false, sidebar: Sidebar::ProjectsOnTop, agents: true, icon_bar: false },
+        Screen { sidebar: Sidebar::ProjectsOnTop, agents: true, ..Screen::default() },
     );
     let agents = small.shown(Some(Nav::Agents));
     let projects = small.shown(Some(Nav::Projects));
@@ -572,7 +564,7 @@ fn the_close_button_always_shows_dimmed_in_compact_mode() {
     let small = full_layout(
         SMALL,
         Widths::default(),
-        Screen { changes: false, sidebar: Sidebar::ProjectsOnTop, agents: true, icon_bar: false },
+        Screen { sidebar: Sidebar::ProjectsOnTop, agents: true, ..Screen::default() },
     );
     let a = small.shown(Some(Nav::Agents));
     let row = agent_row(a.agents_list, a.pitch, 3, 0, 0);

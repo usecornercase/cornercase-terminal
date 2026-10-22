@@ -229,6 +229,7 @@ impl App {
             tour: self.tour_card(area),
             todo_dot: self.config.todo_dot,
             todo_pending: self.panels.todos.pending() > 0,
+            plugin_buttons: self.plugin_faces(),
             ..ui::View::default()
         }
     }

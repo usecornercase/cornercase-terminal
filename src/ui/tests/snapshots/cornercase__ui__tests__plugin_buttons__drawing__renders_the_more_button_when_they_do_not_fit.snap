@@ -1,0 +1,23 @@
+---
+source: src/ui/tests/plugin_buttons.rs
+assertion_line: 128
+expression: "render_sized(&v, W, H).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ ~ (1)                        │                         │                                          "
+"  shop (1)                     │                         │                                          "
+"                               │                         │                                          "
+"  + New                        │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Deploy  Logs  Preview  ⋯     │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │                         │                                          "
+"  Quit                   Help  │                         │                                          "

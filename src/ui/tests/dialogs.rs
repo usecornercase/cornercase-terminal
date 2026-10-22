@@ -365,3 +365,58 @@ fn renders_an_update_with_its_notes() {
     };
     insta::assert_snapshot!(render(&with(Overlay::Update(update))).backend());
 }
+
+mod popup {
+    use super::*;
+
+    fn popup(text: &[u8]) -> Overlay {
+        let mut emu = Emulator::new(5, 20, 0, &HostTheme::default(), Box::new(|_| {})).expect("emulator");
+        emu.feed(text);
+        let screen = emu.snapshot().expect("snapshot");
+        let wanted = PopupWanted { cols: Some(20), rows: Some(5) };
+        Overlay::Popup(Box::new(Popup { title: "Pop: pick a branch".into(), wanted, screen }))
+    }
+
+    #[rstest]
+    #[case::fits(Rect::new(0, 0, 100, 40), Some(60), Some(10), (10, 60), Rect::new(19, 14, 62, 12))]
+    #[case::does_not_fit(Rect::new(0, 0, 50, 12), Some(60), Some(10), (7, 38), Rect::new(5, 1, 40, 9))]
+    #[case::not_given(Rect::new(0, 0, 100, 40), None, None, (30, 78), Rect::new(10, 4, 80, 32))]
+    #[case::below_the_minimum(Rect::new(0, 0, 20, 6), None, None, (5, 20), Rect::new(0, 0, 20, 6))]
+    fn sizes_the_popup(
+        #[case] area: Rect,
+        #[case] cols: Option<u16>,
+        #[case] rows: Option<u16>,
+        #[case] size: (u16, u16),
+        #[case] drawn: Rect,
+    ) {
+        let wanted = PopupWanted { cols, rows };
+        assert_eq!((popup_size(area, wanted), dialog::popup::popup_area(area, wanted)), (size, drawn));
+    }
+
+    #[test]
+    fn renders_the_program_inside_a_border_with_its_title_and_close() {
+        insta::assert_snapshot!(render(&with(popup(b"pick one:\r\n> main"))).backend());
+    }
+
+    #[test]
+    fn is_drawn_where_its_area_says_over_a_dimmed_window() {
+        let view = with(popup(b"hi"));
+        let corners = corners_of_its_area(&view);
+        let t = render(&view);
+        let inner = popup_inner(AREA, PopupWanted { cols: Some(20), rows: Some(5) });
+        let buffer = t.backend().buffer();
+        let behind = buffer[areas().title.as_position()].modifier.contains(Modifier::DIM);
+        let inside = buffer[inner.as_position()].clone();
+        assert_eq!(corners, (String::from("╭"), String::from("╯")));
+        assert_eq!((behind, inside.symbol(), inside.modifier.contains(Modifier::DIM)), (true, "h", false));
+    }
+
+    #[test]
+    fn its_close_lights_red_under_the_pointer() {
+        let close = popup_close(AREA, PopupWanted { cols: Some(20), rows: Some(5) });
+        let view = View { hover: Some(close.as_position()), ..with(popup(b"")) };
+        let t = render(&view);
+        let x = t.backend().buffer()[(close.x + 1, close.y)].clone();
+        assert_eq!((x.symbol(), x.fg), ("×", Color::Red));
+    }
+}

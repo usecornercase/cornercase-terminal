@@ -42,7 +42,7 @@ pub(crate) use activity::items as activity_items;
 pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as activity_hit};
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold, agent_hit, agent_row, agent_rows};
 pub(crate) use chrome::ChangesButton;
-pub(crate) use chrome::{help_button, quit_button};
+pub(crate) use chrome::{help_button, plugin_buttons, quit_button};
 pub(crate) use dialog::flows::{
     FlowPreview, Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_row_at, flows_text, flows_wide,
     preview_body,
@@ -67,6 +67,7 @@ pub(crate) use dialog::menu::menu_hit;
 pub use dialog::menu::{menu_area, menu_item};
 pub(crate) use dialog::picker::{Entry, Picker, PickerHit, picker_hit, picker_list};
 pub use dialog::picker::{picker_area, picker_buttons, picker_item};
+pub(crate) use dialog::popup::{Popup, Wanted as PopupWanted, popup_close, popup_inner, popup_size};
 #[cfg(test)]
 pub(crate) use dialog::project_settings::project_settings_buttons;
 pub(crate) use dialog::project_settings::{
@@ -143,12 +144,14 @@ pub(crate) use workspaces::{
 
 use crate::agents::activity::Status;
 use crate::config::Sidebar;
+use crate::plugins::manifest::Face;
 use crate::project::group::GroupEntry;
 use crate::state::Widths;
 
 use agents_section::draw_agents;
 use chrome::{
-    USAGE_LABEL, draw_bar, draw_border, draw_borders, draw_column_border, draw_footer, draw_issues_row, draw_search_bar,
+    USAGE_LABEL, draw_bar, draw_border, draw_borders, draw_column_border, draw_footer, draw_issues_row,
+    draw_plugin_buttons, draw_search_bar,
 };
 use dialog::flows::draw_flows;
 use dialog::form::{draw_confirm, draw_form};
@@ -229,6 +232,7 @@ pub(crate) struct View<'a> {
     pub(crate) icons: bool,
     pub(crate) no_tab: NoTab,
     pub(crate) tab_bar: Option<tab_bar::TabBar>,
+    pub(crate) plugin_buttons: Vec<Face>,
 }
 
 impl View<'_> {
@@ -335,6 +339,9 @@ fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
     if [areas.separator, areas.settings, areas.usage, areas.quit].iter().any(|r| !r.is_empty()) {
         draw_footer(f, view, areas);
     }
+    if !areas.plugins.is_empty() {
+        draw_plugin_buttons(f, view, areas.plugins);
+    }
     if !areas.workspaces.is_empty() {
         draw_workspaces(f, view, areas);
     }
@@ -372,7 +379,8 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
     let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some() || view.flow.is_some();
     let full = view.files.as_ref().is_some_and(files::View::full_screen);
     let (agents, icon_bar) = (view.agents.is_some(), view.icon_bar);
-    let screen = Screen { changes: panel, sidebar: view.sidebar, agents, icon_bar };
+    let plugins = !view.plugin_buttons.is_empty();
+    let screen = Screen { changes: panel, sidebar: view.sidebar, agents, icon_bar, plugins };
     let areas = full_layout(f.area(), view.widths, screen)
         .with_tab_bar(view.tab_bar.is_some())
         .with_full_screen(full, f.area())
@@ -438,6 +446,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::StartFlow(start)) => draw_start_flow(f, view, start),
         Some(Overlay::ProjectSettings(settings)) => draw_project_settings(f, view, settings),
         Some(Overlay::Worktrees(worktrees)) => draw_worktrees(f, view, worktrees),
+        Some(Overlay::Popup(popup)) => dialog::popup::draw(f, view, popup),
         Some(Overlay::Search(search)) if search.showing_results() => draw_results(f, view, search, areas.results),
         Some(Overlay::Keys(menu)) => keys::draw(f, view, menu, areas.pane),
         Some(Overlay::Search(_)) | None => {}

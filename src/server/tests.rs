@@ -1,7 +1,6 @@
 use ratatui::layout::Position;
 
 use super::*;
-use crate::config;
 use crate::protocol::Hello;
 use crate::state;
 use crate::test_util::TempDir;
@@ -593,7 +592,7 @@ mod showing_images {
         ui::full_layout(
             Rect::new(0, 0, 100, 20),
             state::Widths::default(),
-            ui::Screen { changes: true, sidebar: config::Sidebar::default(), agents: false, icon_bar: false },
+            ui::Screen { changes: true, ..ui::Screen::default() },
         )
         .settings
         .as_position()
@@ -668,11 +667,7 @@ mod pointing {
         let mut attached = Attached::new();
         let mut window = attached.join_with(Support::default(), Some(pointer::Terminal::Kitty));
         let area = Rect::new(0, 0, COLS, ROWS);
-        let layout = ui::full_layout(
-            area,
-            state::Widths::default(),
-            ui::Screen { changes: false, sidebar: config::Sidebar::default(), agents: false, icon_bar: false },
-        );
+        let layout = ui::full_layout(area, state::Widths::default(), ui::Screen::default());
         let border = layout.border(ui::Border::Projects);
         let server = &mut attached.server;
         server.draw();

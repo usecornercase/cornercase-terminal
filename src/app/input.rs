@@ -29,6 +29,9 @@ impl App {
     }
 
     pub(super) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
+        if self.popup_key(key) {
+            return Ok(());
+        }
         if key.code == KeyCode::Esc && self.stop_dragging() {
             return Ok(());
         }
@@ -106,10 +109,12 @@ impl App {
         areas: &ui::Areas,
         area: Rect,
     ) -> ControlFlow<Result<()>> {
+        let modal = self.popup().is_some();
         if self.continue_drag(ev, areas, area)
-            || self.star_mouse(ev, pos, area)
-            || self.tour_mouse(ev, pos, area)
-            || self.toast_mouse(ev, pos, area)
+            || (!modal
+                && (self.star_mouse(ev, pos, area)
+                    || self.tour_mouse(ev, pos, area)
+                    || self.toast_mouse(ev, pos, area)))
         {
             return ControlFlow::Break(Ok(()));
         }
@@ -197,6 +202,9 @@ impl App {
             Err(e) => return ControlFlow::Break(Err(e)),
             Ok(true) => return ControlFlow::Break(Ok(())),
             Ok(false) => {}
+        }
+        if self.plugin_row_mouse(areas.plugins, pos, left) {
+            return ControlFlow::Break(Ok(()));
         }
         if let Some(item) = self.footer_hit(areas, pos) {
             return ControlFlow::Break(if left { self.activity_click(item, pos, area) } else { Ok(()) });
@@ -354,6 +362,7 @@ impl App {
             flow: self.has_run(),
             update: self.update_label().is_some(),
             remote: self.remote_button().is_some(),
+            plugins: u16::try_from(self.buttoned_plugins().count()).unwrap_or(u16::MAX),
         }
     }
 
@@ -373,6 +382,7 @@ impl App {
             ui::ActivityItem::Files => self.toggle_files(),
             ui::ActivityItem::Todo => self.toggle_todo(),
             ui::ActivityItem::Flow => self.toggle_flow(),
+            ui::ActivityItem::Plugin(plugin) => self.click_plugin_button(plugin, pos),
             ui::ActivityItem::Update => self.open_update(),
             ui::ActivityItem::Remote => self.open_remote_menu(pos),
             ui::ActivityItem::Help => self.open_help(pos),
@@ -405,6 +415,9 @@ impl App {
     }
 
     pub(super) fn handle_paste(&mut self, text: &str, area: Rect) {
+        if self.popup_paste(text) {
+            return;
+        }
         if matches!(self.overlay, Some(Overlay::Keys(_))) {
             self.overlay = None;
         }

@@ -1,11 +1,11 @@
 ---
 title: Plugins
-description: Extend cornercase with a folder and a manifest. A plugin adds entries to the row and pane menus, runs commands on events, keeps a service running in the server and a process next to each window, and talks back through the cornercase commands.
+description: Extend cornercase with a folder and a manifest. A plugin adds entries to the row and pane menus and a button of its own, opens a terminal in a popup, runs commands on events, keeps a service running in the server and a process next to each window, and talks back through the cornercase commands.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-A plugin is a folder with a `cornercase-plugin.toml` that declares commands. cornercase runs those commands at the right moments: when you pick an entry in a menu, when something happens in the server, or for as long as the server or a window runs. The commands talk back to cornercase through the same [commands for scripts and agents](../scripts-and-agents/) you use in a shell (`cornercase status --json`, `events --json`, `send`, `notify`, `todo`…), so a plugin can be written in any language: a shell script, Python, a compiled binary.
+A plugin is a folder with a `cornercase-plugin.toml` that declares commands. cornercase runs those commands at the right moments: when you pick an entry in a menu or click the plugin's button, when something happens in the server, or for as long as the server or a window runs. The commands talk back to cornercase through the same [commands for scripts and agents](../scripts-and-agents/) you use in a shell (`cornercase status --json`, `events --json`, `send`, `notify`, `todo`…), so a plugin can be written in any language: a shell script, Python, a compiled binary.
 
 There is no SDK and no runtime inside cornercase. Whatever the commands can do, a plugin can do.
 
@@ -77,11 +77,24 @@ api = 1                            # optional: the plugin API it was written for
 platforms = ["macos", "linux"]     # optional: where it runs; empty means everywhere
 permissions = ["read", "send"]     # shown before turning it on, not enforced
 
+[button]                           # optional: the plugin's own button
+title = "Notes"                    # its label; the name by default
+icon = "N"                         # its icon bar slot: one cell; the title's first letter by default
+
 [[actions]]                        # an entry in the row and pane menus
 id = "open"
 title = "open notes"
-contexts = ["workspace", "pane"]   # project, workspace, tab, pane
+contexts = ["workspace", "pane"]   # project, workspace, tab, pane, button
 command = ["bin/notes", "open"]
+
+[[actions]]
+id = "browse"
+title = "browse notes"
+contexts = ["button"]              # on the plugin's button
+placement = "popup"                # job (the default) or popup: a terminal in a dialog
+width = 100                        # optional, for a popup: columns, 20 to 500
+height = 30                        # optional, for a popup: rows, 5 to 200
+command = ["bin/notes", "browse"]
 
 [[events]]                         # a command run on each event
 on = "status"                      # opened, closed, status, exited
@@ -117,7 +130,31 @@ Each command's output, and its errors, go to the plugin's log, with a line from 
 
 Each action shows at the bottom of the menus for its `contexts`: the ` ⋯ ` and right-click menus of project, workspace and tab rows, the tab bar, and the right-click menu of a pane. It runs in the folder of the workspace you clicked (the project's folder for a project), and gets the ids of what you clicked in `CORNERCASE_PROJECT`, `CORNERCASE_WORKSPACE`, `CORNERCASE_TAB` and, for a pane, `CORNERCASE_PANE`. With `CORNERCASE_PANE` set, commands like `cornercase send` and `read` act on that pane by default. An action that fails shows its exit status in the window. It is stopped after 5 minutes.
 
+An action with `placement = "popup"` opens in a [popup](#popups) instead, wherever it is offered.
+
 Another app or a script lists the actions with `cornercase plugin actions` and runs one with `cornercase plugin run PLUGIN ACTION --pane ID`, the same way, and gets how it ended; see [Plugins in Scripts and agents](../scripts-and-agents/#plugins).
+
+### A button of its own
+
+Put `button` in an action's `contexts` and the plugin gets a button in the window. With one such action, a click runs it; with several, the click opens a menu of their titles, in the order of the manifest. The optional `[button]` table names the button (`title`, the plugin's `name` by default) and gives it an `icon`, one character one cell wide, for the icon bar (the title's first letter by default).
+
+The buttons sit in a row of their own at the foot of the projects column, above **Settings**, which shows only while a plugin you turned on has one. Buttons that do not fit leave a ` ⋯ ` at the end of the row, which lists the rest. With the **icon bar** on, each button is a slot after Flow, named when you hover it; a short bar leaves them out first. On a small screen, they are in the projects menu.
+
+An action run from its button gets `CORNERCASE_CONTEXT=button` and the ids of what the window shows (the project, workspace, tab and pane on screen, those there are), and runs in the folder of the workspace on screen, or your home folder with no project open.
+
+### Popups
+
+An action with `placement = "popup"` runs in a terminal inside a dialog over the window, instead of in the background: a picker built on fzf, a curses menu, a status page, anything that runs in a terminal. The dialog has the action's title and a `×`, and the rest of the window dims behind it.
+
+- **Size**: `width` columns by `height` rows, when the window has room for them; otherwise, or without them, 80 % of the window each way. It follows the window when it is resized.
+- **Keys**: every key goes to the program, `Esc` and your [prefix key](../../reference/keyboard-and-mouse/#keyboard-shortcuts) included, and so does a paste. The mouse reaches it when the program asks for it. A click outside the popup does nothing.
+- **Closing**: it closes when the program exits, when you click `×`, or with `cornercase plugin popup-close`. `×` stops the program and its children (`SIGHUP`, then `SIGKILL` after 2 seconds). A program that exits with a code other than 0 shows its exit status in the window, like a failed action.
+- It is not stopped after 5 minutes: it stays open until it closes. One popup is open at a time, and it is not part of the session: `kill-server` and a restart close it.
+- The popup runs in the server, so every window attached to it, a phone's browser or a [`cornercase remote`](../remote/) window included, shows it, and you can type in it from any of them.
+
+<Aside type="caution" title="Set min_cornercase">
+A cornercase older than these refuses a manifest with the `button` context, and ignores `placement`, so it would run a popup's program in the background, with no terminal. A plugin that uses either should set `min_cornercase = "0.12.185"` or newer.
+</Aside>
 
 ### Event hooks
 
@@ -156,21 +193,22 @@ A window process runs on the machine that shows the window, for as long as that 
 | `CORNERCASE_PLUGIN_CONFIG` | A folder for its settings, private to you |
 | `CORNERCASE_PLUGIN_STATE` | A folder for its data, private to you; the log lives there too |
 | `CORNERCASE_EVENT` | For hooks: the event, as JSON |
-| `CORNERCASE_PLUGIN_ACTION`, `CORNERCASE_CONTEXT` | For actions: which action, and whether a `project`, `workspace`, `tab` or `pane` was clicked |
-| `CORNERCASE_PROJECT`, `CORNERCASE_WORKSPACE`, `CORNERCASE_TAB`, `CORNERCASE_PANE` | For actions: the ids of what was clicked |
+| `CORNERCASE_PLUGIN_ACTION`, `CORNERCASE_CONTEXT` | For actions: which action, and whether a `project`, `workspace`, `tab` or `pane` was clicked, or the plugin's `button` |
+| `CORNERCASE_PROJECT`, `CORNERCASE_WORKSPACE`, `CORNERCASE_TAB`, `CORNERCASE_PANE` | For actions: the ids of what was clicked, or, from the button, of what the window shows |
 
 Commands also inherit the server's environment (or the window's, for window processes), including `CORNERCASE_SOCKET` when it is set, so `cornercase` reaches the right server. Claude Code's session variables and the issue trackers' token variables (`SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN`, `PLANE_API_KEY`) are removed.
 
 ## An example
 
-A plugin that sends a desktop notification when an agent needs you, and adds **copy pane id** to the pane menu:
+A plugin that sends a desktop notification when an agent needs you, adds **show pane id** to the pane menu, and has a **Nudge** button that lists every pane in a popup:
 
 ```toml
 # ~/code/nudge/cornercase-plugin.toml
 id = "nudge"
 name = "Nudge"
 version = "0.1.0"
-permissions = ["notify"]
+min_cornercase = "0.12.185"        # the first with buttons and popups
+permissions = ["notify", "read"]
 
 [[events]]
 on = "status"
@@ -181,6 +219,15 @@ id = "id"
 title = "show pane id"
 contexts = ["pane"]
 command = ["./show-id"]
+
+[[actions]]
+id = "panes"
+title = "list panes"
+contexts = ["button"]
+placement = "popup"
+height = 20
+width = 100
+command = ["./panes"]
 ```
 
 ```sh
@@ -198,7 +245,15 @@ esac
 ```
 
 ```sh
-chmod +x ~/code/nudge/on-status ~/code/nudge/show-id
+#!/bin/sh
+# ~/code/nudge/panes
+"$CORNERCASE_BIN" status --panes | cut -f1,5-7
+printf 'Enter closes this '
+read -r _
+```
+
+```sh
+chmod +x ~/code/nudge/on-status ~/code/nudge/show-id ~/code/nudge/panes
 cornercase plugin link ~/code/nudge
 cornercase plugin enable nudge
 ```

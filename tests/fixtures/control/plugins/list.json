@@ -38,7 +38,14 @@
           "pid": null,
           "restart_in": null
         }
-      ]
+      ],
+      "button": {
+        "title": "Deploy",
+        "icon": "D",
+        "actions": [
+          "status"
+        ]
+      }
     },
     {
       "id": "acme.broken",

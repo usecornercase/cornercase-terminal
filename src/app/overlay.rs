@@ -93,6 +93,7 @@ pub(super) enum Overlay {
     CloseAgent(Box<CloseAgent>),
     CloseAgents(Box<CloseAgents>),
     ForgetAgents { project: u64, workspace: u64 },
+    Popup(Box<super::plugin_popup::Popup>),
 }
 
 impl Overlay {
@@ -133,6 +134,7 @@ impl Overlay {
             Self::CloseAgent(_) => "close agent",
             Self::CloseAgents(_) => "close agents",
             Self::ForgetAgents { .. } => "forget agents",
+            Self::Popup(_) => "plugin popup",
         }
     }
 
@@ -227,6 +229,7 @@ impl Overlay {
             Self::Settings(s) => s.busy(),
             Self::Update(step) => matches!(step, UpdateStep::Updating),
             Self::StartFlow { start, .. } => start.waiting,
+            Self::Popup(_) => true,
             _ => false,
         }
     }
@@ -260,6 +263,7 @@ impl App {
             Some(Overlay::Worktrees(_)) => self.worktrees_mouse(ev, pos, area),
             Some(Overlay::CloseAgent(_)) => self.close_agent_mouse(ev, pos, area),
             Some(Overlay::CloseAgents(_)) => self.close_agents_mouse(ev, pos, area),
+            Some(Overlay::Popup(_)) => self.popup_mouse(ev, pos, area),
             Some(overlay) if overlay.is_form() => return self.form_mouse(ev, pos, area),
             _ => (),
         }
@@ -302,6 +306,7 @@ impl App {
             Overlay::Pairing(via) => ui::Overlay::Remote(self.pairing_view(*via)),
             Overlay::Branches(picker) => Self::branches_view(picker),
             Overlay::PullRequest { workspace, scroll } => self.pull_request_view(*workspace, *scroll, area)?,
+            Overlay::Popup(popup) => super::plugin_popup::popup_view(popup),
             Overlay::FlowMessage { workspace, edge, to, scroll } => {
                 self.flow_message_view(*workspace, (*edge, to.as_deref()), *scroll, area)?
             }

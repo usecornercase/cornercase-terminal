@@ -347,7 +347,7 @@ fn draw_pane_landing(f: &mut Frame, view: &View, r: Rect, place: Place) {
     f.render_widget(Paragraph::new(Span::styled(label, style)), at);
 }
 
-fn draw_screen(f: &mut Frame, screen: &Snapshot, pane: Rect, show_cursor: bool, dim: bool) {
+pub(super) fn draw_screen(f: &mut Frame, screen: &Snapshot, pane: Rect, show_cursor: bool, dim: bool) {
     let buf = f.buffer_mut();
     for (y, row) in (pane.y..pane.bottom()).zip(&screen.rows) {
         for (x, cell) in (pane.x..pane.right()).zip(row) {

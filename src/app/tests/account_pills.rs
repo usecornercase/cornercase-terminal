@@ -267,8 +267,11 @@ fn the_window_has_no_bar_of_accounts(#[case] area: Rect) {
     let s = setup();
     let (panel, sidebar) = (s.app.panel_shown(), s.app.sidebar());
     let (agents, icons) = (s.app.config.agents_section, s.app.config.icon_bar);
-    let whole =
-        ui::full_layout(area, s.app.screen.widths, ui::Screen { changes: panel, sidebar, agents, icon_bar: icons });
+    let whole = ui::full_layout(
+        area,
+        s.app.screen.widths,
+        ui::Screen { changes: panel, sidebar, agents, icon_bar: icons, ..ui::Screen::default() },
+    );
     assert_eq!(s.app.layout(area), whole);
     assert_eq!(s.app.layout(area).pane.bottom(), area.bottom());
 }
@@ -302,7 +305,11 @@ fn without_accounts_the_window_is_drawn_as_before(
     let (panel, agents) = (app.panel_shown(), app.config.agents_section);
     assert_eq!(
         app.layout(area),
-        ui::full_layout(area, app.screen.widths, ui::Screen { changes: panel, sidebar, agents, icon_bar: icons })
+        ui::full_layout(
+            area,
+            app.screen.widths,
+            ui::Screen { changes: panel, sidebar, agents, icon_bar: icons, ..ui::Screen::default() }
+        )
     );
     let with_switcher = screen(&mut app, area);
     app.config.account_switcher = false;

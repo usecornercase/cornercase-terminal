@@ -21,6 +21,7 @@ pub(crate) enum Item {
     Files,
     Todo,
     Flow,
+    Plugin(u16),
     Update,
     Remote,
     Help,
@@ -38,6 +39,7 @@ pub(crate) struct Shown {
     pub(crate) flow: bool,
     pub(crate) update: bool,
     pub(crate) remote: bool,
+    pub(crate) plugins: u16,
 }
 
 impl Shown {
@@ -49,18 +51,20 @@ impl Shown {
             flow: view.flow_run,
             update: view.update.is_some(),
             remote: view.remote.is_some(),
+            plugins: u16::try_from(view.plugin_buttons.len()).unwrap_or(u16::MAX),
         }
     }
 }
 
 impl Item {
-    fn icon(self) -> &'static str {
+    fn icon<'a>(self, view: &'a View<'_>) -> &'a str {
         match self {
             Self::Issues => icons::ISSUES,
             Self::Changes => icons::NERD.changes,
             Self::Files => icons::NERD.files,
             Self::Todo => icons::NERD.todo,
             Self::Flow => icons::FLOW,
+            Self::Plugin(n) => view.plugin_buttons.get(usize::from(n)).map_or("", |face| face.icon.as_str()),
             Self::Update => icons::UPDATE,
             Self::Remote => icons::REMOTE,
             Self::Help => icons::HELP,
@@ -77,6 +81,9 @@ impl Item {
             Self::Files => files::LABEL.into(),
             Self::Todo => TODO_LABEL.into(),
             Self::Flow => flow::LABEL.into(),
+            Self::Plugin(n) => {
+                view.plugin_buttons.get(usize::from(n)).map(|face| face.title.clone()).unwrap_or_default()
+            }
             Self::Update => view.update.clone().unwrap_or_default(),
             Self::Remote => remote_access::LABEL.into(),
             Self::Help => HELP_LABEL.into(),
@@ -99,7 +106,7 @@ impl Item {
             Self::Settings => {
                 matches!(view.overlay, Some(Overlay::Settings(_) | Overlay::ShareSettings(_) | Overlay::Flows(_)))
             }
-            Self::Update | Self::Quit => false,
+            Self::Plugin(_) | Self::Update | Self::Quit => false,
         }
     }
 
@@ -147,8 +154,9 @@ pub(crate) fn items(bar: Rect, shown: Shown) -> Vec<(Item, Rect)> {
         (Item::Todo, true),
         (Item::Flow, shown.flow),
     ];
+    let plugins = (0..shown.plugins).map(Item::Plugin);
     let mut y = bar.y + 1;
-    for (item, _) in top.into_iter().filter(|(_, on)| *on) {
+    for item in top.into_iter().filter_map(|(item, on)| on.then_some(item)).chain(plugins) {
         if y + PITCH > floor {
             break;
         }
@@ -182,7 +190,7 @@ pub(super) fn draw(f: &mut Frame, view: &View, bar: Rect) {
             _ => view.soft,
         };
         let style = if open || lit { bg.fg(fg).add_modifier(Modifier::BOLD) } else { bg.fg(fg) };
-        put(buf, (r.x + 1, r.y), item.icon(), style, r.right());
+        put(buf, (r.x + 1, r.y), item.icon(view), style, r.right());
         if let Some(badge) = item.badge(view).filter(|_| r.bottom() < bar.bottom()) {
             put(buf, (r.right() - 1, r.bottom()), &badge.content, badge.style, r.right());
         }

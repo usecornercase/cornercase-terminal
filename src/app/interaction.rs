@@ -197,6 +197,7 @@ impl App {
                         ui::Screen {
                             agents: self.config.agents_section,
                             icon_bar: self.config.icon_bar,
+                            plugins: self.has_plugin_buttons(),
                             ..ui::Screen::default()
                         },
                     )
@@ -216,7 +217,13 @@ impl App {
         let rows = ui::full_layout(
             area,
             wanted,
-            ui::Screen { changes: panel, sidebar, agents: true, icon_bar: self.config.icon_bar },
+            ui::Screen {
+                changes: panel,
+                sidebar,
+                agents: true,
+                icon_bar: self.config.icon_bar,
+                plugins: self.has_plugin_buttons(),
+            },
         )
         .agents
         .height;
