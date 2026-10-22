@@ -21,4 +21,4 @@ Code: `flows/`, `app/flow_runs.rs`, `app/flow_panel.rs`, `app/flows_dialog.rs`, 
 - [Through the server](flows/through-the-server.md): #342: the flow as JSON, saving, deleting, hiding, restoring, following runs and messages.
 - [Recording, progress, the diagram and the Flow panel](flows/progress-and-diagram.md): Recording; Where a run stands; The diagram; The Flow panel.
 - [The end](flows/end.md): #372: when the end lights, the latched mark, the pull request tag, scripts.
-- [The Flows and start dialogs](flows/dialogs.md): The Flows dialog; The preview scrolls; The start dialog; Line breaks and display columns.
+- [The Flows and start dialogs](flows/dialogs.md): The Flows dialog; The preview scrolls; The start dialog; The order and the default flow; Line breaks and display columns.

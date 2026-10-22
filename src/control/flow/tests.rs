@@ -239,3 +239,24 @@ fn a_closed_run_says_so_and_a_running_one_has_no_state_key() {
     assert!(running.get("state").is_none());
     assert_eq!(closed["state"], "closed");
 }
+
+#[test]
+fn the_default_and_order_requests_write_every_field() {
+    for (command, args) in
+        [("flow-default", r#"{"name": null, "project": null}"#), ("flow-order", r#"{"names": [], "project": null}"#)]
+    {
+        let text = format!(r#"{{"command": "{command}", "args": {args}}}"#);
+        let raw: Value = serde_json::from_str(&text).expect("json");
+        let parsed: Request = serde_json::from_value(raw.clone()).expect("a request");
+        assert_eq!(unknown_fields(&raw, &parsed), None, "{command}");
+    }
+}
+
+#[test]
+fn they_log_the_flow_and_a_count() {
+    let default = Command::FlowDefault(FlowDefault { name: Some("Quick".into()), project: Some(3) });
+    let order = Command::FlowOrder(FlowOrder { names: vec!["A".into(), "B".into()], project: None });
+    assert_eq!(default.fields(), [("flow", "Quick".to_string()), ("project", "3".to_string())]);
+    assert_eq!(order.fields(), [("count", "2".to_string())]);
+    assert_eq!(Command::FlowDefault(FlowDefault::default()).fields(), []);
+}

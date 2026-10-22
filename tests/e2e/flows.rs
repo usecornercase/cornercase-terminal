@@ -116,3 +116,39 @@ fn the_runs_stream_starts_with_the_current_state() {
     assert_eq!(line["runs"].as_array().map(Vec::len), Some(0), "{first}");
     assert!(line["revision"].as_u64().is_some_and(|revision| revision >= 1), "{first}");
 }
+
+#[test]
+fn a_default_and_an_order_are_set_and_listed() {
+    let app = Harness::start();
+
+    let default = app.session.says(&["flow", "default", "quick"]);
+    let order = app.session.says(&["flow", "order", "Quick", "Arena"]);
+    let list = json(&app.session, &["flow", "list", "--json"]);
+
+    assert_eq!(default, "the start dialog opens on Quick now");
+    assert!(order.starts_with("the flows are in this order now: Quick, Arena"), "{order}");
+    assert_eq!(&names(&list, "flows")[..2], ["Quick", "Arena"]);
+    let flows = list["flows"].as_array().expect("flows");
+    let marked: Vec<&Value> = flows.iter().filter(|f| f["default"] == true).collect();
+    assert_eq!(marked.len(), 1, "{list}");
+    assert_eq!(marked[0]["name"], "Quick");
+    let text = app.session.says(&["flow", "list"]);
+    assert!(text.starts_with("Quick (built in, default)\n"), "{text}");
+}
+
+#[test]
+fn a_default_and_an_order_are_cleared_and_refused() {
+    let app = Harness::start();
+    app.session.says(&["flow", "default", "Quick"]);
+    app.session.says(&["flow", "order", "Quick"]);
+    assert!(app.session.says(&["flow", "default", "Quick"]).contains("was already the default flow"));
+
+    let cleared = app.session.says(&["flow", "default", "--clear"]);
+    let back = app.session.says(&["flow", "order", "--clear"]);
+    let refused = app.session.cli(&["flow", "default", "Nope"]);
+
+    assert!(cleared.starts_with("no default flow"), "{cleared}");
+    assert!(back.starts_with("the flows are in this order now: Arena"), "{back}");
+    assert!(!refused.status.success());
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("there is no flow named `Nope`"), "{refused:?}");
+}

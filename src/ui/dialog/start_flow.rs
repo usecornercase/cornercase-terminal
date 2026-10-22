@@ -256,7 +256,7 @@ fn draw_items(f: &mut Frame, view: &View, list: Rect, start: &StartFlow) {
         let rail = Span::styled(if selected { "▌ " } else { "  " }, bg.fg(Color::Cyan));
         let width = usize::from(row.width);
         let agents = format!(" {} ", item.agents);
-        let tag = item.tag.map(|tag| format!("  {tag}")).unwrap_or_default();
+        let tag = item.tag.as_ref().map(|tag| format!("  {tag}")).unwrap_or_default();
         let room = width.saturating_sub(2 + agents.chars().count() + tag.chars().count());
         let name = truncate_right(&item.name, room);
         let gap = width.saturating_sub(2 + name.chars().count() + tag.chars().count() + agents.chars().count());

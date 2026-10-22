@@ -130,7 +130,18 @@ fn the_list_is_titled_settings_and_ends_with_share_restart_and_done() {
     assert!(d.settings_tabs());
     assert_eq!(
         d.buttons(ROOM),
-        [EDIT, DUPLICATE, EXPORT, DELETE, IMPORT, NEW, crate::settings::SHARE, crate::settings::RESTART, DONE]
+        [
+            EDIT,
+            DUPLICATE,
+            SET_DEFAULT,
+            EXPORT,
+            DELETE,
+            IMPORT,
+            NEW,
+            crate::settings::SHARE,
+            crate::settings::RESTART,
+            DONE
+        ]
     );
     assert_eq!(d.press(crate::settings::RESTART), Action::Restart);
     assert_eq!(d.press(crate::settings::SHARE), Action::Share);

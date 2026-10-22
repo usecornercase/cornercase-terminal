@@ -431,7 +431,7 @@ roles = ["coder"]
         let renamed = store::save(dir.path(), &flow, Some(&path)).expect("rename");
         assert_eq!(renamed, dir.path().join("renamed-flow.toml"));
         assert!(!path.exists());
-        let listing = store::list(Vec::new(), &[], dir.path(), None);
+        let listing = store::list(Vec::new(), store::Chosen::default(), dir.path(), None);
         let names: Vec<_> = listing.flows.iter().map(|saved| saved.flow.name.as_str()).collect();
         assert_eq!(names, ["Full issue", "Renamed flow!"]);
         assert!(listing.flows.iter().all(|saved| matches!(saved.origin, Origin::User(_))));
@@ -440,7 +440,12 @@ roles = ["coder"]
     }
 
     fn hidden_listing(hidden: &[String], user: &std::path::Path, project: &std::path::Path) -> store::Listing {
-        store::list(builtin::flows(&Known::ALL, Some(Known::Claude)), hidden, user, Some(&store::project_dir(project)))
+        store::list(
+            builtin::flows(&Known::ALL, Some(Known::Claude)),
+            store::Chosen { hidden, ..store::Chosen::default() },
+            user,
+            Some(&store::project_dir(project)),
+        )
     }
 
     #[test]
@@ -492,6 +497,146 @@ roles = ["coder"]
         assert!(!store::unhide(&mut names, "Arena"));
     }
 
+    fn chosen<'a>(order: &'a [String], default: &'a str) -> store::Chosen<'a> {
+        store::Chosen { order, default, ..store::Chosen::default() }
+    }
+
+    fn strings(names: &[&str]) -> Vec<String> {
+        names.iter().map(ToString::to_string).collect()
+    }
+
+    fn listed_names(listing: &store::Listing) -> Vec<&str> {
+        listing.flows.iter().map(|saved| saved.flow.name.as_str()).collect()
+    }
+
+    #[test]
+    fn ordered_names_come_first_in_their_order_and_the_rest_by_name() {
+        let (user, project) = (TempDir::new(), TempDir::new());
+        let order = strings(&["Quick", "Cross review"]);
+        let builtins = builtin::flows(&Known::ALL, Some(Known::Claude));
+        let listing = store::list(builtins, chosen(&order, ""), user.path(), Some(&store::project_dir(project.path())));
+        assert_eq!(listed_names(&listing), ["Quick", "Cross review", "Arena", "Bug, test first", "Full issue"]);
+    }
+
+    #[test]
+    fn names_are_matched_trimmed_and_ignoring_case() {
+        let user = TempDir::new();
+        let order = strings(&[" quick ", "FULL ISSUE"]);
+        let listing =
+            store::list(builtin::flows(&Known::ALL, Some(Known::Claude)), chosen(&order, ""), user.path(), None);
+        assert_eq!(&listed_names(&listing)[..2], ["Quick", "Full issue"]);
+    }
+
+    #[test]
+    fn a_stale_name_is_skipped() {
+        let user = TempDir::new();
+        let order = strings(&["Gone", "Quick"]);
+        let listing =
+            store::list(builtin::flows(&Known::ALL, Some(Known::Claude)), chosen(&order, ""), user.path(), None);
+        assert_eq!(listed_names(&listing)[0], "Quick");
+        assert_eq!(listing.flows.len(), 5);
+    }
+
+    #[test]
+    fn yours_and_a_projects_flow_of_one_name_keep_their_rank_at_that_place() {
+        let (user, project) = (TempDir::new(), TempDir::new());
+        let dir = store::project_dir(project.path());
+        store::save(user.path(), &sample(), None).expect("save");
+        store::save(&dir, &sample(), None).expect("save");
+        let order = strings(&["Full issue"]);
+        let builtins = builtin::flows(&Known::ALL, Some(Known::Claude));
+        let listing = store::list(builtins, chosen(&order, ""), user.path(), Some(&dir));
+        let first: Vec<(&str, &str)> =
+            listing.flows.iter().take(2).map(|saved| (saved.flow.name.as_str(), saved.origin.label())).collect();
+        assert_eq!(first, [("Full issue", "yours"), ("Full issue", "this project")]);
+    }
+
+    #[test]
+    fn unreadable_files_and_deleted_built_ins_stay_apart_whatever_the_order() {
+        let (user, project) = (TempDir::new(), TempDir::new());
+        std::fs::write(user.path().join("broken.toml"), "name = ").expect("write");
+        let order = strings(&["Arena", "Quick"]);
+        let hidden = strings(&["Arena"]);
+        let chosen = store::Chosen { hidden: &hidden, order: &order, default: "" };
+        let builtins = builtin::flows(&Known::ALL, Some(Known::Claude));
+        let listing = store::list(builtins, chosen, user.path(), Some(&store::project_dir(project.path())));
+        assert_eq!(listed_names(&listing)[0], "Quick");
+        assert_eq!(listing.hidden.iter().map(|flow| flow.name.as_str()).collect::<Vec<_>>(), ["Arena"]);
+        assert_eq!(listing.broken.len(), 1);
+    }
+
+    #[test]
+    fn the_default_is_the_listed_flows_own_name_and_none_when_hidden_or_missing() {
+        let user = TempDir::new();
+        let list = |chosen: store::Chosen| {
+            store::list(builtin::flows(&Known::ALL, Some(Known::Claude)), chosen, user.path(), None)
+        };
+        assert_eq!(list(chosen(&[], " quick ")).default.as_deref(), Some("Quick"));
+        assert_eq!(list(chosen(&[], "Nope")).default, None);
+        assert_eq!(list(chosen(&[], "  ")).default, None);
+        let hidden = strings(&["Quick"]);
+        let listing = list(store::Chosen { hidden: &hidden, default: "Quick", ..store::Chosen::default() });
+        assert_eq!(listing.default, None);
+        assert!(listing.default_flow().is_none());
+    }
+
+    #[test]
+    fn the_default_is_the_first_flow_of_its_name_and_is_tagged_first() {
+        let (user, project) = (TempDir::new(), TempDir::new());
+        let dir = store::project_dir(project.path());
+        store::save(user.path(), &sample(), None).expect("save");
+        store::save(&dir, &sample(), None).expect("save");
+        let builtins = builtin::flows(&Known::ALL, Some(Known::Claude));
+        let listing = store::list(builtins, chosen(&[], "Full issue"), user.path(), Some(&dir));
+        let marked: Vec<&str> =
+            listing.flows.iter().filter(|s| listing.is_default(s)).map(|s| s.origin.label()).collect();
+        assert_eq!(marked, ["yours"]);
+        let yours = listing.default_flow().expect("the default");
+        let tags = store::tags(&listing.flows, &listing.builtins, listing.default.as_deref(), yours);
+        assert_eq!(tags, ["default", "edited"]);
+    }
+
+    #[test]
+    fn a_write_keeps_another_projects_flow_after_the_name_it_followed() {
+        let stored = strings(&["Quick", "Alpha", "Arena", "Beta"]);
+        let wanted = strings(&["Arena", "Quick"]);
+        let listed = strings(&["Quick", "Arena", "Full issue"]);
+        let next = store::reorder(&stored, &wanted, &listed, |_| true);
+        assert_eq!(next, ["Arena", "Beta", "Quick", "Alpha"]);
+    }
+
+    #[test]
+    fn a_name_no_flow_has_is_removed_on_the_next_write() {
+        let stored = strings(&["Gone", "Quick", "Other"]);
+        let next = store::reorder(&stored, &strings(&["Quick"]), &strings(&["Quick"]), |name| name == "Other");
+        assert_eq!(next, ["Quick", "Other"]);
+    }
+
+    #[test]
+    fn flows_left_out_of_the_wanted_order_go_back_to_name_order() {
+        let stored = strings(&["Quick", "Arena", "Alpha"]);
+        let listed = strings(&["Quick", "Arena"]);
+        let next = store::reorder(&stored, &strings(&["Arena"]), &listed, |_| true);
+        assert_eq!(next, ["Arena", "Alpha"]);
+    }
+
+    #[test]
+    fn an_empty_order_keeps_only_other_scopes_names() {
+        let stored = strings(&["Quick", "Alpha", "Beta"]);
+        let next = store::reorder(&stored, &[], &strings(&["Quick"]), |_| true);
+        assert_eq!(next, ["Alpha", "Beta"]);
+        assert_eq!(store::reorder(&[], &[], &[], |_| true), Vec::<String>::new());
+    }
+
+    #[test]
+    fn rename_replaces_the_name_in_place_and_deduplicates() {
+        let mut order = strings(&["Quick", "Mine", "Other"]);
+        store::rename(&mut order, " mine ", "Mine renamed");
+        assert_eq!(order, ["Quick", "Mine renamed", "Other"]);
+        store::rename(&mut order, "Other", "quick");
+        assert_eq!(order, ["Quick", "Mine renamed"]);
+    }
+
     #[test]
     fn yours_replaces_a_built_in_of_its_name_and_a_projects_comes_after_both() {
         let (user, project) = (TempDir::new(), TempDir::new());
@@ -502,7 +647,7 @@ roles = ["coder"]
         store::save(&dir, &quick, None).expect("save");
         std::fs::write(dir.join("broken.toml"), "name = ").expect("write");
         let builtins = builtin::flows(&Known::ALL, Some(Known::Claude));
-        let listing = store::list(builtins, &[], user.path(), Some(&dir));
+        let listing = store::list(builtins, store::Chosen::default(), user.path(), Some(&dir));
         let listed: Vec<(&str, &str)> =
             listing.flows.iter().map(|saved| (saved.flow.name.as_str(), saved.origin.label())).collect();
         assert_eq!(

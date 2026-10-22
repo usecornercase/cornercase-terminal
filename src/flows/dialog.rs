@@ -9,6 +9,7 @@ pub(crate) const DONE: &str = "done";
 pub(crate) const EDIT: &str = "edit";
 pub(crate) const DUPLICATE: &str = "duplicate";
 pub(crate) const DELETE: &str = "delete";
+pub(crate) const SET_DEFAULT: &str = "set default";
 pub(crate) const EXPORT: &str = "export";
 pub(crate) const IMPORT: &str = "import";
 pub(crate) const NEW: &str = "new";
@@ -24,8 +25,10 @@ pub(crate) const RESTORE: &str = "restore default";
 pub(crate) const RESTORE_BUILT_IN: &str = "restore";
 const IMPORT_HINT: &str = "enter starts a new line · import opens the flow to check it · esc goes back";
 const BUILT_IN_HINT: &str = "a built-in flow: edit saves your version in your folder, in its place; delete hides it";
-const SETTINGS_HINT: &str = "enter or a click on the selected flow edits it · tab or ←→ switches tabs";
-const LIST_HINT: &str = "enter or a click on the selected flow edits it · tab moves between flows";
+const SETTINGS_HINT: &str =
+    "enter or a click on the selected flow edits it · drag a flow to move it · tab or ←→ switches tabs";
+const LIST_HINT: &str =
+    "enter or a click on the selected flow edits it · drag a flow to move it · tab moves between flows";
 const DELETED_HINT: &str = "a deleted built-in flow: restore brings it back to every list";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +54,8 @@ pub(crate) enum Action {
     Duplicate(Box<Flow>),
     Export(Box<Flow>),
     Delete(PathBuf),
+    Default(String),
+    Order(Vec<String>),
     Hide { name: String, file: Option<PathBuf> },
     Unhide(String),
     Restore { file: PathBuf, name: String },
@@ -163,6 +168,8 @@ pub(crate) struct Dialog {
     pub(crate) last: Option<Origin>,
     pub(crate) project: Option<u64>,
     pub(crate) builtins: Vec<String>,
+    pub(crate) default: Option<String>,
+    pub(crate) drag: Option<Dragging>,
     pub(crate) importing: Option<Importing>,
     pub(crate) preview: u16,
     pub(crate) diagram: bool,
@@ -177,6 +184,8 @@ impl Dialog {
             show_hidden: false,
             broken: listing.broken,
             builtins: listing.builtins,
+            default: listing.default,
+            drag: None,
             cursor: 0,
             edit: None,
             confirm: None,
@@ -197,7 +206,10 @@ impl Dialog {
         self.show_hidden &= !self.hidden.is_empty();
         self.broken = listing.broken;
         self.builtins = listing.builtins;
-        self.cursor = self.cursor.min(self.entries().saturating_sub(1));
+        self.default = listing.default;
+        self.drag = None;
+        let held = before.as_ref().and_then(|(origin, name)| self.find(origin, name));
+        self.cursor = held.unwrap_or_else(|| self.cursor.min(self.entries().saturating_sub(1)));
         if before != self.selected().map(|saved| (saved.origin.clone(), saved.flow.name.clone())) {
             self.preview = 0;
         }
@@ -358,6 +370,16 @@ impl Dialog {
         Action::Duplicate(Box::new(flow))
     }
 
+    fn set_default(&mut self) -> Action {
+        let Some(saved) = self.selected() else { return Action::None };
+        let name = saved.flow.name.trim().to_string();
+        if store::is_default(&self.flows, self.default.as_deref(), saved) {
+            self.notice = Some(format!("{name} is already the default: the start dialog opens on it"));
+            return Action::None;
+        }
+        Action::Default(name)
+    }
+
     pub(crate) fn export(&self) -> Action {
         match self.selected() {
             Some(saved) => Action::Export(Box::new(saved.flow.clone())),
@@ -507,7 +529,8 @@ impl Dialog {
     }
 
     pub(crate) fn list_rows(&self) -> Vec<RowText> {
-        let flows = self.flows.iter().map(|saved| flow_row(&self.flows, &self.builtins, saved));
+        let default = self.default.as_deref();
+        let flows = self.flows.iter().map(|saved| flow_row(&self.flows, &self.builtins, default, saved));
         let broken = self.broken.iter().map(|(path, reason)| RowText {
             label: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
             value: reason.clone(),
@@ -547,16 +570,7 @@ impl Dialog {
         if let Some(edit) = &self.edit {
             return edit.buttons(room);
         }
-        let mut buttons = Vec::new();
-        match self.entry(self.cursor) {
-            Some(Entry::Flow(saved)) if store::edits_builtin(&self.builtins, saved) => {
-                buttons.extend([EDIT, DUPLICATE, EXPORT, RESTORE, DELETE]);
-            }
-            Some(Entry::Flow(_)) => buttons.extend([EDIT, DUPLICATE, EXPORT, DELETE]),
-            Some(Entry::Broken(_)) => buttons.push(DELETE),
-            Some(Entry::Hidden(_)) => buttons.push(RESTORE_BUILT_IN),
-            Some(Entry::Deleted) | None => {}
-        }
+        let mut buttons = self.entry_buttons();
         if !room.wide {
             buttons.push(if self.diagram { LIST } else { DIAGRAM });
         }
@@ -565,12 +579,28 @@ impl Dialog {
             buttons.extend([crate::settings::SHARE, crate::settings::RESTART]);
         }
         buttons.push(DONE);
-        for dropped in [crate::settings::SHARE, IMPORT, EXPORT, DUPLICATE] {
+        for dropped in [crate::settings::SHARE, IMPORT, EXPORT, SET_DEFAULT, DUPLICATE] {
             if !room.wide && room.width > 0 && row_width(&buttons) > room.width {
                 buttons.retain(|label| *label != dropped);
             }
         }
         buttons
+    }
+
+    fn entry_buttons(&self) -> Vec<&'static str> {
+        match self.entry(self.cursor) {
+            Some(Entry::Flow(saved)) => {
+                let mut buttons = vec![EDIT, DUPLICATE, SET_DEFAULT, EXPORT];
+                if store::edits_builtin(&self.builtins, saved) {
+                    buttons.push(RESTORE);
+                }
+                buttons.push(DELETE);
+                buttons
+            }
+            Some(Entry::Broken(_)) => vec![DELETE],
+            Some(Entry::Hidden(_)) => vec![RESTORE_BUILT_IN],
+            Some(Entry::Deleted) | None => Vec::new(),
+        }
     }
 
     pub(crate) fn submit(&self) -> &'static str {
@@ -583,6 +613,9 @@ impl Dialog {
     pub(crate) fn hint(&self) -> String {
         if let Some(notice) = &self.notice {
             return notice.clone();
+        }
+        if let Some(hint) = self.drag_hint() {
+            return hint;
         }
         if let Some(importing) = &self.importing {
             return importing
@@ -633,6 +666,7 @@ impl Dialog {
             EDIT => self.open(self.cursor),
             DIAGRAM | LIST => self.diagram = !self.diagram,
             DUPLICATE => return self.duplicate(),
+            SET_DEFAULT => return self.set_default(),
             DELETE => self.ask_delete(),
             RESTORE => self.ask_restore(),
             RESTORE_BUILT_IN => return self.unhide(),
@@ -682,16 +716,21 @@ enum Entry<'a> {
     Hidden(&'a Flow),
 }
 
-pub(crate) fn flow_row(flows: &[Saved], builtins: &[String], saved: &Saved) -> RowText {
+pub(crate) fn flow_row(flows: &[Saved], builtins: &[String], default: Option<&str>, saved: &Saved) -> RowText {
     let problems: Vec<String> =
         store::conflict(flows, builtins, saved).into_iter().chain(saved.flow.problems()).collect();
+    let tags = store::tags(flows, builtins, default, saved);
+    let tag = if tags.is_empty() { String::new() } else { format!("{} · ", tags.join(" · ")) };
     let (value, note) = match problems.as_slice() {
-        [] => {
-            let tag = store::tag(builtins, saved).map(|tag| format!("{tag} · ")).unwrap_or_default();
-            (agents_count(&saved.flow), format!("{tag}{}", plan_summary(&saved.flow)))
-        }
-        [only] => (only.clone(), String::new()),
-        [first, rest @ ..] => (format!("{first} (+{} more)", rest.len()), String::new()),
+        [] => (agents_count(&saved.flow), format!("{tag}{}", plan_summary(&saved.flow))),
+        [only] => (
+            only.clone(),
+            tags.first().filter(|first| **first == "default").map(ToString::to_string).unwrap_or_default(),
+        ),
+        [first, rest @ ..] => (
+            format!("{first} (+{} more)", rest.len()),
+            tags.first().filter(|first| **first == "default").map(ToString::to_string).unwrap_or_default(),
+        ),
     };
     RowText { label: saved.flow.name.clone(), value, note, red: !problems.is_empty(), ..RowText::default() }
 }
@@ -720,12 +759,14 @@ pub(crate) fn plan_summary(flow: &Flow) -> String {
 mod edit;
 mod import;
 mod input;
+mod order;
 mod rows;
 
 pub(crate) use edit::Editing;
 #[cfg(test)]
 pub(crate) use edit::{Row, Tab};
 pub(crate) use import::Importing;
+pub(crate) use order::Dragging;
 
 #[cfg(test)]
 mod tests;

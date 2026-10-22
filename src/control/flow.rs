@@ -53,6 +53,7 @@ pub(crate) struct FlowInfo {
     pub(crate) check: Option<String>,
     pub(crate) flow: FlowSpec,
     pub(crate) edited: bool,
+    pub(crate) default: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -290,6 +291,34 @@ pub(crate) struct FlowRestore {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+pub(crate) struct FlowDefault {
+    pub(crate) name: Option<String>,
+    pub(crate) project: Option<u64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowOrder {
+    pub(crate) names: Vec<String>,
+    pub(crate) project: Option<u64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowDefaultSet {
+    pub(crate) name: Option<String>,
+    pub(crate) changed: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowOrdered {
+    pub(crate) names: Vec<String>,
+    pub(crate) changed: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct FlowSaved {
     pub(crate) name: String,
     pub(crate) origin: String,
@@ -326,6 +355,18 @@ impl FlowDelete {
 impl FlowHide {
     pub(super) fn fields(&self, fields: &mut Fields) {
         fields.add("flow", &self.name);
+    }
+}
+
+impl FlowDefault {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.maybe("flow", self.name.as_ref()).maybe("project", self.project);
+    }
+}
+
+impl FlowOrder {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.add("count", self.names.len()).maybe("project", self.project);
     }
 }
 

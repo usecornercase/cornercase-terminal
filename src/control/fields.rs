@@ -154,6 +154,8 @@ impl Command {
             Self::FlowDelete(delete) => delete.fields(fields),
             Self::FlowHide(hide) => hide.fields(fields),
             Self::FlowRestore(restore) => restore.fields(fields),
+            Self::FlowDefault(default) => default.fields(fields),
+            Self::FlowOrder(order) => order.fields(fields),
             Self::FlowMessages(messages) => messages.fields(fields),
             Self::FlowFiles(files) => files.fields(fields),
             _ => return false,

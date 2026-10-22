@@ -6,8 +6,8 @@ use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 use super::issues::issue_buttons_in;
 use super::settings::{
-    Columns, SettingsEdit, SettingsHit, SettingsPick, SettingsRow, Table, draw_pick, draw_rows, hit_in_rows, pick_hit,
-    pick_list_in,
+    Columns, SettingsEdit, SettingsHit, SettingsPick, SettingsRow, Table, draw_pick, draw_rows, hit_in_rows, line_rect,
+    pick_hit, pick_list_in,
 };
 use super::{Note, draw_input, draw_secondary, draw_submit, draw_tabs, form_inner, tabs_in};
 use crate::flows::Flow;
@@ -118,6 +118,7 @@ pub(crate) struct Flows {
     pub(crate) preview_scroll: u16,
     pub(crate) focus: Option<usize>,
     pub(crate) diagram: bool,
+    pub(crate) landing: Option<usize>,
 }
 
 impl Flows {
@@ -170,6 +171,29 @@ pub(crate) fn flows_hit(area: Rect, view: &Flows, pos: Position) -> Option<Flows
     hit_in_rows(body, &view.rows, view.cursor, pos).map(FlowsHit::Row)
 }
 
+pub(crate) fn flows_row_at(area: Rect, view: &Flows, pos: Position) -> Option<usize> {
+    if view.form_hidden(area) {
+        return None;
+    }
+    let body = view.body(area);
+    if pos.x < body.x || pos.x >= body.right() {
+        return None;
+    }
+    let sections: Vec<&str> = view.rows.iter().map(|row| row.section).collect();
+    let shown: Vec<(usize, Rect)> = (0..view.rows.len())
+        .map(|i| (i, line_rect(body, &sections, view.cursor, i)))
+        .filter(|(_, rect)| rect.height > 0)
+        .collect();
+    let (first, first_rect) = *shown.first()?;
+    if pos.y < first_rect.y {
+        return Some(first);
+    }
+    if shown.last().is_some_and(|(_, rect)| pos.y >= rect.bottom()) {
+        return Some(view.rows.len());
+    }
+    shown.iter().find(|(_, rect)| pos.y < rect.bottom()).map(|(i, _)| *i)
+}
+
 pub(in crate::ui) fn draw_flows(f: &mut Frame, view: &View, flows: &Flows) {
     let area = f.area();
     let r = flows_area(area);
@@ -186,7 +210,7 @@ pub(in crate::ui) fn draw_flows(f: &mut Frame, view: &View, flows: &Flows) {
         cursor = draw_pick(f, view, body, pick);
     } else if !flows.form_hidden(area) {
         let columns = Columns { label: flows.label, fill: true };
-        draw_rows(f, view, body, Table { rows: &flows.rows, cursor: flows.cursor, columns });
+        draw_rows(f, view, body, Table { rows: &flows.rows, cursor: flows.cursor, columns, landing: flows.landing });
     }
     draw_warnings(f, &flows.warnings, warnings);
     if let Some(edit) = &flows.edit {

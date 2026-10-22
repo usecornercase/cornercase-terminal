@@ -13,7 +13,7 @@ pub(crate) const HEADER: &str =
 pub(crate) const NEVER_SHARED: [&str; 4] =
     ["tokens, bots, paired chats and browsers", "jira_email", "accounts and profiles", "remote access and keep awake"];
 #[cfg(test)]
-pub(crate) const LEFT_OUT: [&str; 10] = [
+pub(crate) const LEFT_OUT: [&str; 12] = [
     "jira_email",
     "remote",
     "remote_port",
@@ -24,6 +24,8 @@ pub(crate) const LEFT_OUT: [&str; 10] = [
     "account_names",
     "active_accounts",
     "hidden_flows",
+    "default_flow",
+    "flow_order",
 ];
 
 const AGENTS: [&str; 9] = [

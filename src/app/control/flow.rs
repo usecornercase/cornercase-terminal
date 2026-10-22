@@ -361,6 +361,7 @@ fn flow_info(flow: &Flow, origin: &Origin) -> FlowInfo {
         check: risks(flow, origin),
         flow: FlowSpec::from(flow),
         edited: false,
+        default: false,
     }
 }
 

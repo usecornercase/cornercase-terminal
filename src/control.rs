@@ -52,10 +52,10 @@ pub(crate) use events::{Event, Events, Go, Kind, What};
 #[cfg(test)]
 pub(crate) use flow::{BackSpec, RoleSpec, StageSpec};
 pub(crate) use flow::{
-    BrokenFlow, Exported, FlowBacklog, FlowDelete, FlowExport, FlowFiles, FlowHide, FlowImport, FlowInfo, FlowList,
-    FlowMessage, FlowMessages, FlowRemoved, FlowRestore, FlowRun, FlowRuns, FlowRunsWatch, FlowSave, FlowSaved,
-    FlowSpec, Flows, Imported, MemberInfo, RoleInfo, RoleState, RunEdge, RunFile, RunFiles, RunInfo, RunState,
-    StepInfo,
+    BrokenFlow, Exported, FlowBacklog, FlowDefault, FlowDefaultSet, FlowDelete, FlowExport, FlowFiles, FlowHide,
+    FlowImport, FlowInfo, FlowList, FlowMessage, FlowMessages, FlowOrder, FlowOrdered, FlowRemoved, FlowRestore,
+    FlowRun, FlowRuns, FlowRunsWatch, FlowSave, FlowSaved, FlowSpec, Flows, Imported, MemberInfo, RoleInfo, RoleState,
+    RunEdge, RunFile, RunFiles, RunInfo, RunState, StepInfo,
 };
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use plugins::{PluginActions, PluginList, PluginRun};
@@ -189,6 +189,8 @@ pub(crate) enum Command {
     FlowDelete(FlowDelete),
     FlowHide(FlowHide),
     FlowRestore(FlowRestore),
+    FlowDefault(FlowDefault),
+    FlowOrder(FlowOrder),
     FlowRuns(FlowRunsWatch),
     FlowMessages(FlowMessages),
     FlowFiles(FlowFiles),
@@ -335,6 +337,8 @@ impl Command {
             Self::FlowDelete(_) => 72,
             Self::FlowHide(_) => 73,
             Self::FlowRestore(_) => 74,
+            Self::FlowDefault(_) => 98,
+            Self::FlowOrder(_) => 99,
             Self::FlowMessages(_) => 76,
             Self::FlowFiles(_) => 77,
             _ => return None,
@@ -379,7 +383,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 98] = [
+    pub(crate) const NAMES: [&str; 100] = [
         "status",
         "open",
         "new-workspace",
@@ -478,6 +482,8 @@ impl Command {
         "tour",
         "config-export",
         "config-import",
+        "flow-default",
+        "flow-order",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

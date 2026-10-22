@@ -29,10 +29,11 @@ mod the_buttons {
     }
 
     #[rstest]
-    #[case::roomy(80, &["edit", "duplicate", "export", "delete", "diagram", "import", "new", "done"])]
-    #[case::tight(59, &["edit", "duplicate", "export", "delete", "diagram", "new", "done"])]
-    #[case::tighter(50, &["edit", "duplicate", "delete", "diagram", "new", "done"])]
-    fn narrow_rooms_drop_import_then_export(#[case] width: usize, #[case] expected: &[&str]) {
+    #[case::roomy(90, &["edit", "duplicate", "set default", "export", "delete", "diagram", "import", "new", "done"])]
+    #[case::tight(73, &["edit", "duplicate", "set default", "export", "delete", "diagram", "new", "done"])]
+    #[case::tighter(64, &["edit", "duplicate", "set default", "delete", "diagram", "new", "done"])]
+    #[case::tightest(50, &["edit", "duplicate", "delete", "diagram", "new", "done"])]
+    fn narrow_rooms_drop_import_then_export_then_set_default(#[case] width: usize, #[case] expected: &[&str]) {
         let mut d = dialog();
         d.select(4);
         let room = Room { width, wide: false, ..ROOM };

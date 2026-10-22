@@ -28,11 +28,22 @@ fn setup(repo: bool) -> Setup {
 }
 
 fn opened(repo: bool) -> Setup {
-    let mut s = setup(repo);
+    open_dialog(setup(repo))
+}
+
+fn open_dialog(mut s: Setup) -> Setup {
     let new = new_workspace_pos(&s.app);
     click(&mut s.app, new);
     pick(&mut s.app, START_FLOW);
     s
+}
+
+fn chosen(default: &str, order: &[&str], hidden: &[&str]) -> Setup {
+    let mut s = setup(true);
+    s.app.config.default_flow = default.into();
+    s.app.config.flow_order = order.iter().map(ToString::to_string).collect();
+    s.app.config.hidden_flows = hidden.iter().map(ToString::to_string).collect();
+    open_dialog(s)
 }
 
 fn start(app: &App) -> &Start {
@@ -216,6 +227,36 @@ mod the_dialog {
         flows_button(&mut s.app, dialog::DONE);
         let expected = ("Full issue copy".to_string(), "Add dark mode".to_string());
         assert_eq!((selected(&s.app), start(&s.app).prompt.text()), expected);
+    }
+}
+
+mod default_flow {
+    use super::*;
+
+    #[test]
+    fn the_dialog_opens_on_the_default_flow_and_an_issue_starts_it() {
+        let mut s = chosen("quick", &[], &[]);
+        assert_eq!((selected(&s.app), start(&s.app).focus), ("Quick".into(), Focus::Prompt));
+        s.app.overlay = None;
+        s.app.config.default_flow = "Quick".into();
+        from_issue(&mut s);
+        assert_eq!(selected(&s.app), "Quick");
+        assert!(start(&s.app).issue.is_some());
+    }
+
+    #[test]
+    fn a_hidden_or_missing_default_falls_back_to_full_issue() {
+        assert_eq!(selected(&chosen("Arena", &[], &["Arena"]).app), "Full issue");
+        assert_eq!(selected(&chosen("No such flow", &[], &[]).app), "Full issue");
+    }
+
+    #[test]
+    fn the_list_follows_the_users_order_and_tags_the_default() {
+        let s = chosen("Quick", &["Quick", "Bug, test first"], &[]);
+        let items = start(&s.app).items();
+        let listed: Vec<&str> = items.iter().take(3).map(|item| item.name.as_str()).collect();
+        assert_eq!(listed, ["Quick", "Bug, test first", "Arena"]);
+        assert_eq!(items[0].tag.as_deref(), Some("default"));
     }
 }
 
@@ -545,6 +586,12 @@ mod pages {
     fn narrow() {
         let mut s = written(NARROW);
         insta::assert_snapshot!(format!("{}", render(&mut s.app, NARROW).backend()));
+    }
+
+    #[test]
+    fn in_the_users_order() {
+        let mut s = chosen("Quick", &["Quick", "Bug, test first"], &[]);
+        insta::assert_snapshot!(format!("{}", render(&mut s.app, WIDE).backend()));
     }
 
     #[test]

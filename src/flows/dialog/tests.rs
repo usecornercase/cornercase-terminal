@@ -9,6 +9,7 @@ use crate::flows::store::{Listing, Origin, Saved};
 use crate::flows::{Back, End, Stage};
 
 mod built_ins;
+mod order;
 
 pub(super) const ROOM: Room = Room { pick: 10, width: 40, height: 5, wide: true };
 
@@ -26,7 +27,7 @@ pub(super) fn dialog() -> Dialog {
     let broken = vec![(PathBuf::from("/flows/bad.toml"), "expected `=`".to_string())];
     let builtins = flows.iter().take(4).map(|saved| saved.flow.name.clone()).collect();
     Dialog::new(
-        Listing { flows, hidden: Vec::new(), broken, builtins },
+        Listing { flows, broken, builtins, ..Listing::default() },
         Agents::new(vec![Known::Claude, Known::Codex], Some(Known::Claude), true),
     )
 }
@@ -115,8 +116,8 @@ mod the_list {
     }
 
     #[rstest]
-    #[case::built_in(0, vec![EDIT, DUPLICATE, EXPORT, DELETE, IMPORT, NEW, DONE])]
-    #[case::yours(4, vec![EDIT, DUPLICATE, EXPORT, DELETE, IMPORT, NEW, DONE])]
+    #[case::built_in(0, vec![EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, IMPORT, NEW, DONE])]
+    #[case::yours(4, vec![EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, IMPORT, NEW, DONE])]
     #[case::unreadable(5, vec![DELETE, IMPORT, NEW, DONE])]
     fn the_buttons_follow_the_selected_flow(#[case] selected: usize, #[case] expected: Vec<&str>) {
         let mut d = dialog();
@@ -139,7 +140,7 @@ mod the_list {
         let mut d = dialog();
         d.flows[mine()].flow.name = "Full issue".into();
         d.select(mine());
-        assert_eq!(d.buttons(ROOM), [EDIT, DUPLICATE, EXPORT, RESTORE, DELETE, IMPORT, NEW, DONE]);
+        assert_eq!(d.buttons(ROOM), [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, RESTORE, DELETE, IMPORT, NEW, DONE]);
         d.press(RESTORE);
         assert_eq!(d.confirm, Some(Confirm::Restore(mine())));
         assert_eq!(d.confirm_text().map(|(title, ..)| title), Some("Restore default"));
@@ -260,20 +261,23 @@ mod list_preview {
         d.flows[mine()].flow.name = "Full issue".into();
         d.select(mine());
         let room = Room { width: 62, ..ROOM };
-        assert_eq!(d.buttons(room), [EDIT, DUPLICATE, EXPORT, RESTORE, DELETE, IMPORT, NEW, DONE]);
+        assert_eq!(d.buttons(room), [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, RESTORE, DELETE, IMPORT, NEW, DONE]);
     }
 
     #[test]
     fn a_narrow_list_swaps_between_the_flows_and_the_diagram() {
         let narrow = Room { wide: false, width: 0, ..ROOM };
         let mut d = dialog();
-        assert_eq!(d.buttons(narrow), [EDIT, DUPLICATE, EXPORT, DELETE, DIAGRAM, IMPORT, NEW, DONE]);
+        assert_eq!(d.buttons(narrow), [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, DIAGRAM, IMPORT, NEW, DONE]);
         d.press(DIAGRAM);
         assert!(d.diagram());
-        assert_eq!(d.buttons(narrow), [EDIT, DUPLICATE, EXPORT, DELETE, LIST, IMPORT, NEW, DONE]);
+        assert_eq!(d.buttons(narrow), [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, LIST, IMPORT, NEW, DONE]);
         d.press(LIST);
         assert!(!d.diagram());
-        assert_eq!(d.buttons(Room { width: 0, ..ROOM }), [EDIT, DUPLICATE, EXPORT, DELETE, IMPORT, NEW, DONE]);
+        assert_eq!(
+            d.buttons(Room { width: 0, ..ROOM }),
+            [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, IMPORT, NEW, DONE]
+        );
     }
 }
 

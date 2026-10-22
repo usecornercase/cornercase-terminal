@@ -158,8 +158,12 @@ fn last_commands() -> Vec<Command> {
     ]
 }
 
+fn newest_commands() -> Vec<Command> {
+    vec![Command::FlowDefault(FlowDefault::default()), Command::FlowOrder(FlowOrder::default())]
+}
+
 pub(crate) fn every_command() -> Vec<Command> {
-    [first_commands(), middle_commands(), last_commands()].concat()
+    [first_commands(), middle_commands(), last_commands(), newest_commands()].concat()
 }
 
 #[test]

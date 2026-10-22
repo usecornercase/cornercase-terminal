@@ -47,6 +47,42 @@ fn the_list_ends_with_the_deleted_built_ins_when_there_are_some() {
     assert_eq!(listing(&Flows::default()), "");
 }
 
+#[test]
+fn the_default_flow_is_tagged_in_the_list() {
+    let quick = FlowInfo { name: "Quick".into(), origin: "built-in".into(), default: true, ..FlowInfo::default() };
+    let mine = FlowInfo {
+        name: "Mine".into(),
+        origin: "user".into(),
+        path: Some("/c/flows/mine.toml".into()),
+        default: true,
+        ..FlowInfo::default()
+    };
+    let text = listing(&Flows { flows: vec![quick, mine], ..Flows::default() });
+    assert!(text.starts_with("Quick (built in, default)\n"), "{text}");
+    assert!(text.contains("Mine (yours, default, /c/flows/mine.toml)\n"), "{text}");
+}
+
+#[test]
+fn setting_the_default_says_what_changed() {
+    let set = |name: Option<&str>, changed| FlowDefaultSet { name: name.map(Into::into), changed };
+    assert_eq!(default_line(&set(Some("Quick"), true)), "the start dialog opens on Quick now\n");
+    assert_eq!(default_line(&set(Some("Quick"), false)), "Quick was already the default flow\n");
+    assert_eq!(
+        default_line(&set(None, true)),
+        "no default flow: the start dialog opens on the first built-in flow that can start\n"
+    );
+    assert_eq!(default_line(&set(None, false)), "there was no default flow\n");
+}
+
+#[test]
+fn ordering_says_the_order_the_flows_are_in() {
+    let names = vec!["Quick".to_string(), "Full issue".to_string()];
+    let changed = FlowOrdered { names: names.clone(), changed: true };
+    assert_eq!(ordered_line(&changed), "the flows are in this order now: Quick, Full issue\n");
+    let same = FlowOrdered { names, changed: false };
+    assert_eq!(ordered_line(&same), "the flows were already in this order: Quick, Full issue\n");
+}
+
 mod runs {
     use super::*;
     use crate::control::{BackSpec, FlowSpec, RoleSpec, RoleState, RunFile, StageSpec, StepInfo};

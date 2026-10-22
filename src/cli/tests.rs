@@ -204,6 +204,10 @@ mod parsing {
     #[case::an_import_without_a_file(&["flow", "import"])]
     #[case::an_import_to_nowhere(&["flow", "import", "f.toml", "--to", "other"])]
     #[case::an_export_without_a_name(&["flow", "export"])]
+    #[case::a_default_without_a_name(&["flow", "default"])]
+    #[case::a_default_and_clear(&["flow", "default", "Quick", "--clear"])]
+    #[case::an_order_without_names(&["flow", "order"])]
+    #[case::an_order_and_clear(&["flow", "order", "Quick", "--clear"])]
     #[case::a_flow_with_two_tasks(&["flow", "run", "Quick", "--prompt", "x", "--prompt-file", "y"])]
     #[case::a_plugin_run_without_a_target(&["plugin", "run", "a", "b"])]
     #[case::a_plugin_run_on_two_targets(&["plugin", "run", "a", "b", "--pane", "1", "--tab", "2"])]
@@ -302,6 +306,25 @@ mod parsing {
             ("Full issue", Some("Fix it"), Some("fix"))
         );
         assert!(run.create.focus && run.create.print.json);
+    }
+
+    #[test]
+    fn a_default_and_an_order_are_chosen_by_name_or_cleared() {
+        let flow = |words: &[&str]| {
+            let cli = parse(words).expect("parse");
+            let Some(Command::Control(Control::Flow(flow))) = cli.command else { panic!("not flow") };
+            flow.action
+        };
+        let args::FlowAction::Default(default) = flow(&["flow", "default", "Quick"]) else { panic!("not default") };
+        assert_eq!((default.name.as_deref(), default.clear), (Some("Quick"), false));
+        let args::FlowAction::Default(default) = flow(&["flow", "default", "--clear", "--json"]) else {
+            panic!("not default")
+        };
+        assert_eq!((default.name, default.clear, default.print.json), (None, true, true));
+        let args::FlowAction::Order(order) = flow(&["flow", "order", "A", "B", "--project", "2"]) else {
+            panic!("not order")
+        };
+        assert_eq!((order.names, order.clear, order.project), (vec!["A".to_string(), "B".to_string()], false, Some(2)));
     }
 
     #[test]
