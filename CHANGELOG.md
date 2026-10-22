@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.185
+
+- **Select part of a line in the files viewer and the changes panel.** Press on the text and drag to select characters, from where you pressed to the pointer and across lines, as in a pane; **copy** then copies exactly them, as they are in the file: a tab stays a tab, and a line cut at the panel's edge gives its hidden end too. A click on the text still selects its line, and a press or drag on the line numbers still selects whole lines; **ask agent** types the lines the selection covers, such as `src/main.rs:12-14`. In the changes panel a selection stays in one file, over its added, removed and unchanged lines.
+
 ## 0.12.184
 
 - **File type icons.** The files tree, the changes panel's file rows and the files search results show an icon for each file's type, and folders an open or closed folder, in the colour of the type (the name keeps its git colour). They show in Ghostty, kitty and WezTerm (also inside tmux) and in the browser window, which already have the font that draws them, and in any window where the icon bar is on. Settings → UI → **icons**: `auto` (the default) decides for each window, `on` draws them in every window (other terminals need a Nerd Font), `off` never.
