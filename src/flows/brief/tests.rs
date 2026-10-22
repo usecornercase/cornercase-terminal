@@ -31,8 +31,8 @@ fn the_brief_holds_the_task_the_team_the_plan_and_the_end() {
             "flow \"Full issue\"",
             "on branch fix-login",
             "## Task\n\nFix the login form\n\n## Team",
-            "- coder (pane 14): claude, edits files\n",
-            "- reviewer (pane 15): codex · gpt-5.5 · high, must not edit files\n",
+            "- coder (pane 14): claude, edits files, compacts with `/compact` and what it must keep\n",
+            "- reviewer (pane 15): codex · gpt-5.5 · high, must not edit files, compacts with `/compact` alone\n",
             "- you, the orchestrator (pane 12): claude\n",
             "1. coder.\n",
             "2. reviewer and security, in parallel. If either reports findings, send them to coder and go back to \
@@ -50,10 +50,53 @@ fn the_brief_holds_the_task_the_team_the_plan_and_the_end() {
             "These rules hold after the plan too",
         ],
     );
-    assert_eq!(text.matches("--timeout 540`").count(), 2, "one time limit for every wait: {text}");
+    assert_eq!(text.matches("--timeout 540`").count(), 3, "one time limit for every wait and the compact: {text}");
     assert!(!text.contains("--timeout 300"), "{text}");
     assert!(text.contains("Never wait in the background"), "{text}");
     assert!(!text.contains("--pane 12 --until"), "{text}");
+}
+
+#[test]
+fn the_brief_tells_how_to_watch_and_compact_the_team() {
+    let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
+    let text = brief(&flow, "x", "fix", Team { members: &members(), trees: &[] }, None);
+
+    assert_holds(
+        &text,
+        &[
+            "`cornercase status --panes | cut -f 1,7,12,13,26,32`",
+            "Above about 70 %",
+            "`cornercase send --pane N --enter '/compact …' --timeout 540`",
+            "compacted is true until its next reply",
+            "You cannot compact yourself: when your own context passes about 80 %, tell the user with \
+             `cornercase notify`",
+        ],
+    );
+    assert!(text.find("| cut -f").expect("rule") < text.find("- Never edit").expect("next rule"), "{text}");
+}
+
+#[test]
+fn a_role_whose_agent_has_no_compact_command_gets_none() {
+    let mut flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
+    flow.roles[0].agent = "aider".into();
+    let text = brief(&flow, "x", "fix", Team { members: &members(), trees: &[] }, None);
+
+    let line = text.lines().find(|line| line.starts_with("- coder")).expect("the coder's line");
+    assert!(!line.contains("compacts"), "{line}");
+}
+
+#[rstest::rstest]
+#[case::gemini("gemini", "compacts with `/compress` alone")]
+#[case::grok("grok", "compacts with `/compact` alone")]
+#[case::cursor("cursor", "compacts with `/summarize` alone")]
+#[case::copilot("copilot", "compacts with `/compact` and what it must keep")]
+fn each_agent_is_told_its_own_compact_command(#[case] agent: &str, #[case] said: &str) {
+    let mut flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
+    flow.roles[0].agent = agent.into();
+    let text = brief(&flow, "x", "fix", Team { members: &members(), trees: &[] }, None);
+
+    let line = text.lines().find(|line| line.starts_with("- coder")).expect("the coder's line");
+    assert!(line.contains(said), "{line}");
 }
 
 #[test]
@@ -135,11 +178,16 @@ fn the_team_line_of_a_role_with_its_own_worktree_names_its_folder_and_branch() {
 
     assert!(
         text.contains(
-            "- coder A (pane 13): claude, edits files, in its own worktree /wt/coder-A on branch fix--coder-a\n"
+            "- coder A (pane 13): claude, edits files, in its own worktree /wt/coder-A on branch fix--coder-a, compacts with `/compact` and what it must keep\n"
         ),
         "{text}"
     );
-    assert!(text.contains("- judge (pane 16): claude, must not edit files\n"), "{text}");
+    assert!(
+        text.contains(
+            "- judge (pane 16): claude, must not edit files, compacts with `/compact` and what it must keep\n"
+        ),
+        "{text}"
+    );
 }
 
 #[test]
@@ -206,7 +254,7 @@ fn the_brief_names_the_run_folder_and_says_where_it_writes() {
     assert!(text.contains("Never edit the worktree's files, commit"), "{text}");
     assert!(text.contains("The run's folder is the only place you write."), "{text}");
     assert!(text.find("## Files").expect("files") < text.find("## How to drive").expect("rules"));
-    assert_eq!(text.matches("--timeout 540`").count(), 2, "{text}");
+    assert_eq!(text.matches("--timeout 540`").count(), 3, "{text}");
 }
 
 #[test]

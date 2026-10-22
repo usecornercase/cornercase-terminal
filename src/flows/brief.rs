@@ -95,7 +95,14 @@ fn team_line(role: &Role, pane: Option<u64>, trees: &[RoleWorktree]) -> String {
     let place = trees.iter().find(|tree| tree.role == role.name).map_or_else(String::new, |tree| {
         format!(", in its own worktree {} on branch {}", tree.path.display(), tree.branch)
     });
-    format!("- {} ({at}): {}, {edits}{place}\n", role.name, role.summary())
+    let compact = crate::agents::Known::of(&role.agent).and_then(crate::agents::Known::compact).map_or_else(
+        String::new,
+        |compact| {
+            let keeps = if compact.keeps { "and what it must keep" } else { "alone" };
+            format!(", compacts with `{}` {keeps}", compact.command)
+        },
+    );
+    format!("- {} ({at}): {}, {edits}{place}{compact}\n", role.name, role.summary())
 }
 
 fn ids(members: &[Member]) -> String {
@@ -246,13 +253,28 @@ fn files(dir: &Path) -> String {
     )
 }
 
-fn rules(flow: &Flow, members: &[Member], own: Option<u64>, dir: Option<&Path>) -> String {
-    let others: Vec<String> = flow
+const CONTEXT_RULE: &str = "- Check your team's context before you send a role a large piece of work: \
+    `cornercase status --panes | cut -f 1,7,12,13,26,32` prints each pane's id, status, context (the share of its \
+    agent's context window used, in percent), caller (true for you), role and compacted. Above about 70 %, first \
+    send the role its compact command from the team list (with what it must keep when it takes that: the branches, \
+    the checks to run, what is left), as `cornercase send --pane N --enter '/compact …' --timeout 540` in the \
+    foreground with your shell tool's longest time limit, since it can take minutes, then wait for its turn to end \
+    as after any send and send the work. Right after a compaction its context is empty and compacted is true until \
+    its next reply: that is not \"not available\". You cannot compact yourself: when your own context passes about \
+    80 %, tell the user with `cornercase notify`.\n";
+
+fn pane_flags(flow: &Flow, members: &[Member]) -> String {
+    let flags: Vec<String> = flow
         .roles
         .iter()
         .filter_map(|role| members.iter().find(|m| m.role == role.name))
         .map(|m| format!("--pane {}", m.pane))
         .collect();
+    flags.join(" ")
+}
+
+fn rules(flow: &Flow, members: &[Member], own: Option<u64>, dir: Option<&Path>) -> String {
+    let others = pane_flags(flow, members);
     let mark = own.map_or_else(|| "cornercase mark".to_string(), |id| format!("cornercase mark --pane {id}"));
     format!(
         "\n## How to drive the agents\n\n\
@@ -273,6 +295,7 @@ fn rules(flow: &Flow, members: &[Member], own: Option<u64>, dir: Option<&Path>) 
          `cornercase read --pane N --lines 300` and take the answer from there.\n\
          - If `send` fails with `not confirmed`, run `cornercase read --pane N` before sending again: the agent may \
          have it.\n\
+         {context}\
          - Never edit {edit}, commit or run the project's checks yourself: the roles do that.{only}\n\
          - Never answer another agent's permission prompt or question (status `waiting` in \
          `cornercase status --panes`); tell the user with `cornercase notify` instead.\n\
@@ -282,7 +305,8 @@ fn rules(flow: &Flow, members: &[Member], own: Option<u64>, dir: Option<&Path>) 
          and end your turn with a short summary.\n\
          - These rules hold after the plan too: when the user asks for more work, send it to the agent that does \
          it, wait in the foreground until it answers, then report.\n",
-        panes = others.join(" "),
+        context = CONTEXT_RULE,
+        panes = others,
         edit = if dir.is_some() { "the worktree's files" } else { "files" },
         only = if dir.is_some() { " The run's folder is the only place you write." } else { "" }
     )
