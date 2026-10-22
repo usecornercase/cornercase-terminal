@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.182
+
+- **Pick the flow the start dialog opens on.** In Settings › Flows, **`set default`** makes the selected flow your default: it is tagged `default`, and the start dialog (an issue's **`start a flow`**, or **start a flow…**) opens with it selected, so going fast starts the flow you chose and not Full issue. A default that was deleted, hidden or has problems never blocks a start: the dialog falls back to Full issue, or to the first flow that can start, as before. Renaming the default flow keeps it the default.
+- **Put your flows in your order.** Drag a flow up or down in Settings › Flows (`Esc` cancels), and a click on the selected flow still opens it. The start dialog and `cornercase flow list` follow your order; flows you have not placed, such as a new built-in flow or an import, come after, by name.
+- Scripts: `cornercase flow default NAME` (or `--clear`) and `cornercase flow order NAME…` (or `--clear`), the `flow-default` and `flow-order` requests. `flow list` follows your order and marks the default flow with `default: true`. Neither setting goes into the setup you share with a colleague.
+
 ## 0.12.181
 
 - Scripts and plugins: each pane in `status --json`, `watch` and `view` now has `pid`, the process id of its shell, and `memory`, the memory its shell and the programs under it use, in bytes, while **Settings → UI → memory** is on. `status --panes` gains the two as its last columns.
