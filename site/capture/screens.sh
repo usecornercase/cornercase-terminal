@@ -202,7 +202,7 @@ screen_close_agent() {
   cc_wait '×'
   cc_click '×'
   cc_wait 'Close agent'
-  cc_wait 'nothing is deleted from disk'
+  cc_wait 'keep running'
   cc_shot close-agent
 }
 
