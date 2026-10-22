@@ -72,11 +72,11 @@ Your [agent accounts](../../guides/accounts/). One section per agent that takes 
 
 <Screen
   name="settings-flows"
-  alt="The Flows tab: the built-in flows Arena, Bug, test first, Cross review, Full issue and Quick, each with its number of agents and its plan, and the selected one's diagram beside the list; the buttons edit, duplicate, export, delete, import, new, share, restart and done"
+  alt="The Flows tab: the built-in flows Arena, Bug, test first, Cross review, Full issue and Quick (tagged default), each with its number of agents and its plan, and the selected one's diagram beside the list; the buttons edit, duplicate, set default, export, delete, import, new, share, restart and done"
   crop={[2, 1, 136, 35]}
 />
 
-[Flows](../../guides/flows/#edit-flows), teams of agents that work through a plan: one list with the selected flow's diagram beside it, and **`edit`**, **`duplicate`**, **`export`**, **`delete`**, **`import`** and **`new`**. `Tab` and `←` `→` switch tabs here, `↑` `↓` move between flows. Deleting a built-in flow hides it (see [`hidden_flows`](#hidden_flows)); **deleted built-ins**, at the end of the list, brings it back.
+[Flows](../../guides/flows/#edit-flows), teams of agents that work through a plan: one list in [your order](#flow_order) with the selected flow's diagram beside it, and **`edit`**, **`duplicate`**, **`set default`** (the flow the start dialog opens on, see [`default_flow`](#default_flow)), **`export`**, **`delete`**, **`import`** and **`new`**. Drag a flow to move it (`Esc` cancels). `Tab` and `←` `→` switch tabs here, `↑` `↓` move between flows. Deleting a built-in flow hides it (see [`hidden_flows`](#hidden_flows)); **deleted built-ins**, at the end of the list, brings it back.
 
 ### Issues
 
@@ -249,6 +249,8 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "resume_agents": true,
   "keep_awake": false,
   "hidden_flows": [],
+  "default_flow": "",
+  "flow_order": [],
   "trust_prompt_pattern": "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed",
   "gh": "gh",
   "glab": "glab",
@@ -310,6 +312,8 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`resume_agents`](#resume_agents) | boolean | `true` |
 | [`keep_awake`](#keep_awake) | boolean | `false` |
 | [`hidden_flows`](#hidden_flows) | array of strings | `[]` |
+| [`default_flow`](#default_flow) | string | `""` |
+| [`flow_order`](#flow_order) | array of strings | `[]` |
 | [`trust_prompt_pattern`](#trust_prompt_pattern) | string | see below |
 | [`gh`](#gh) | string | `"gh"` |
 | [`glab`](#glab) | string | `"glab"` |
@@ -443,6 +447,14 @@ Whether the computer stays awake while an agent is working. Off by default. See 
 #### `hidden_flows`
 
 The names of the built-in [flows](../../guides/flows/) you deleted in Settings → Flows, compared ignoring case and surrounding spaces. They leave Settings, the start dialog and `cornercase flow list`, and `cornercase flow run` refuses them; a deleted name stays reserved, so a project's flow named like one does not run. A name that matches no built-in flow is ignored, and the list is kept across updates. Remove a name here, or use **deleted built-ins** in Settings → Flows, to bring the flow back.
+
+#### `default_flow`
+
+The name of the [flow](../../guides/flows/#choose-a-default-and-an-order) the start dialog opens with selected, compared ignoring case and surrounding spaces; empty for none. **`set default`** in Settings → Flows writes it, and `cornercase flow default NAME` does too. When the flow is missing, hidden or has problems, the dialog opens on Full issue, or on the first flow that can start. Deleting or hiding the flow clears it, and renaming it in the editor moves it to the new name. It is not part of the settings you [share](#share-your-setup), since it names a flow the colleague may not have.
+
+#### `flow_order`
+
+The names of the flows in the order you dragged them into in Settings → Flows, first to last, compared ignoring case and surrounding spaces; `cornercase flow order NAME…` writes it too. Settings, the start dialog and `cornercase flow list` follow it. Flows that are not in the list, such as a new built-in flow, an import or a project's flow, go after the others, by name. A name that matches no flow is skipped, and removed the next time the order is written; a project's flow keeps its place while another project is open. It is not part of the settings you [share](#share-your-setup).
 
 #### `trust_prompt_pattern`
 

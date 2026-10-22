@@ -44,6 +44,11 @@
   "hidden_flows": [
     "Arena"
   ],
+  "default_flow": "Quick",
+  "flow_order": [
+    "Quick",
+    "Arena"
+  ],
   "trust_prompt_pattern": "Allow this folder",
   "gh": "fake-gh",
   "glab": "fake-glab",

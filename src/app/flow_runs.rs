@@ -284,7 +284,11 @@ impl App {
         let project = project.map(store::project_dir);
         store::list(
             builtin::for_config(&self.config),
-            &self.config.hidden_flows,
+            store::Chosen {
+                hidden: &self.config.hidden_flows,
+                order: &self.config.flow_order,
+                default: &self.config.default_flow,
+            },
             &paths::flows(self.config_file.path()),
             project.as_deref(),
         )

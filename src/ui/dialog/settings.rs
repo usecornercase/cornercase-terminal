@@ -69,6 +69,7 @@ pub(crate) enum SettingsLine {
     Blank,
     Header(usize),
     Row(usize),
+    Landing,
 }
 
 pub(crate) fn settings_lines(sections: &[&str]) -> Vec<SettingsLine> {
@@ -270,7 +271,7 @@ pub(in crate::ui) fn draw_settings(f: &mut Frame, view: &View, settings: &Settin
         cursor = draw_pick(f, view, body, pick);
     } else {
         let columns = Columns { label: LABEL_WIDTH, fill: false };
-        draw_rows(f, view, body, Table { rows: &settings.rows, cursor: settings.cursor, columns });
+        draw_rows(f, view, body, Table { rows: &settings.rows, cursor: settings.cursor, columns, landing: None });
     }
 
     if let Some(edit) = &settings.edit {
@@ -327,14 +328,20 @@ pub(in crate::ui) struct Table<'a> {
     pub(in crate::ui) rows: &'a [SettingsRow],
     pub(in crate::ui) cursor: usize,
     pub(in crate::ui) columns: Columns,
+    pub(in crate::ui) landing: Option<usize>,
 }
 
 pub(in crate::ui) fn draw_rows(f: &mut Frame, view: &View, body: Rect, table: Table) {
-    let Table { rows, cursor, columns } = table;
+    let Table { rows, cursor, columns, landing } = table;
     let dim = Style::default().fg(view.muted);
     let sections: Vec<&str> = rows.iter().map(|r| r.section).collect();
     let scroll = settings_scroll(&sections, cursor, usize::from(body.height));
-    for (n, line) in settings_lines(&sections).iter().skip(scroll).take(usize::from(body.height)).enumerate() {
+    let mut lines = settings_lines(&sections);
+    if let Some(landing) = landing {
+        let at = lines.iter().position(|l| *l == SettingsLine::Row(landing)).unwrap_or(lines.len());
+        lines.insert(at, SettingsLine::Landing);
+    }
+    for (n, line) in lines.iter().skip(scroll).take(usize::from(body.height)).enumerate() {
         let y = body.y + u16::try_from(n).unwrap_or(0);
         let rect = Rect::new(body.x, y, body.width, 1);
         match line {
@@ -344,6 +351,11 @@ pub(in crate::ui) fn draw_rows(f: &mut Frame, view: &View, body: Rect, table: Ta
             }
             SettingsLine::Row(i) => {
                 draw_settings_row(f, view, &rows[*i], Placed { r: rect, selected: *i == cursor }, &columns);
+            }
+            SettingsLine::Landing => {
+                let line = "─".repeat(usize::from(rect.width.saturating_sub(2)));
+                let at = Rect { x: rect.x + 1, width: rect.width.saturating_sub(1), ..rect };
+                f.render_widget(Paragraph::new(Span::styled(line, Style::default().fg(Color::Cyan))), at);
             }
         }
     }

@@ -63,6 +63,14 @@ pub(crate) struct Listing {
     pub(crate) hidden: Vec<Flow>,
     pub(crate) broken: Vec<(PathBuf, String)>,
     pub(crate) builtins: Vec<String>,
+    pub(crate) default: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Chosen<'a> {
+    pub(crate) hidden: &'a [String],
+    pub(crate) order: &'a [String],
+    pub(crate) default: &'a str,
 }
 
 pub(crate) fn same_name(a: &str, b: &str) -> bool {
@@ -81,6 +89,85 @@ impl Listing {
     pub(crate) fn deleted(&self, name: &str) -> Option<&Flow> {
         self.hidden.iter().find(|flow| same_name(&flow.name, name))
     }
+
+    pub(crate) fn default_flow(&self) -> Option<&Saved> {
+        default_of(&self.flows, self.default.as_deref())
+    }
+
+    pub(crate) fn is_default(&self, saved: &Saved) -> bool {
+        is_default(&self.flows, self.default.as_deref(), saved)
+    }
+}
+
+pub(crate) fn default_of<'a>(flows: &'a [Saved], default: Option<&str>) -> Option<&'a Saved> {
+    let name = default?;
+    flows.iter().find(|saved| same_name(&saved.flow.name, name))
+}
+
+pub(crate) fn is_default(flows: &[Saved], default: Option<&str>, saved: &Saved) -> bool {
+    default_of(flows, default)
+        .is_some_and(|first| first.origin == saved.origin && same_name(&first.flow.name, &saved.flow.name))
+}
+
+pub(crate) fn tags(flows: &[Saved], builtins: &[String], default: Option<&str>, saved: &Saved) -> Vec<&'static str> {
+    let mut tags = Vec::new();
+    if is_default(flows, default, saved) {
+        tags.push("default");
+    }
+    tags.extend(tag(builtins, saved));
+    tags
+}
+
+pub(crate) fn tag_text(tags: &[&str]) -> Option<String> {
+    (!tags.is_empty()).then(|| tags.join(" · "))
+}
+
+fn place(order: &[String], name: &str) -> usize {
+    order.iter().position(|ordered| same_name(ordered, name)).unwrap_or(order.len())
+}
+
+pub(crate) fn dedup_names(names: Vec<String>) -> Vec<String> {
+    let mut kept: Vec<String> = Vec::new();
+    for name in names {
+        if !kept.iter().any(|other| same_name(other, &name)) {
+            kept.push(name);
+        }
+    }
+    kept
+}
+
+pub(crate) fn reorder(
+    stored: &[String],
+    wanted: &[String],
+    listed: &[String],
+    known: impl Fn(&str) -> bool,
+) -> Vec<String> {
+    let mut front: Vec<String> = Vec::new();
+    let mut after: Vec<Vec<String>> = vec![Vec::new(); wanted.len()];
+    let mut anchor: Option<usize> = None;
+    for name in stored {
+        if let Some(i) = wanted.iter().position(|w| same_name(w, name)) {
+            anchor = Some(i);
+        } else if !listed.iter().any(|l| same_name(l, name)) && known(name) {
+            match anchor {
+                Some(i) => after[i].push(name.clone()),
+                None => front.push(name.clone()),
+            }
+        }
+    }
+    let mut next = front;
+    for (name, kept) in wanted.iter().zip(after) {
+        next.push(name.trim().to_string());
+        next.extend(kept);
+    }
+    dedup_names(next)
+}
+
+pub(crate) fn rename(order: &mut Vec<String>, old: &str, new: &str) {
+    for name in order.iter_mut().filter(|name| same_name(name, old)) {
+        new.trim().clone_into(name);
+    }
+    *order = dedup_names(std::mem::take(order));
 }
 
 pub(crate) fn conflict(flows: &[Saved], builtins: &[String], saved: &Saved) -> Option<String> {
@@ -122,17 +209,28 @@ pub(crate) fn project_dir(project: &Path) -> PathBuf {
     project.join(".cornercase").join("flows")
 }
 
-pub(crate) fn list(builtins: Vec<Flow>, hidden: &[String], user: &Path, project: Option<&Path>) -> Listing {
+pub(crate) fn list(builtins: Vec<Flow>, chosen: Chosen, user: &Path, project: Option<&Path>) -> Listing {
     let mut listing = Listing {
         builtins: builtins.iter().map(|flow| flow.name.clone()).collect(),
         flows: builtins.into_iter().map(|flow| Saved { flow, origin: Origin::BuiltIn }).collect(),
-        hidden: Vec::new(),
-        broken: Vec::new(),
+        ..Listing::default()
     };
     read_dir(user, Origin::User, &mut listing);
     if let Some(project) = project {
         read_dir(project, Origin::Project, &mut listing);
     }
+    drop_shadowed(&mut listing);
+    hide_flows(&mut listing, chosen.hidden);
+    let order = chosen.order;
+    listing.flows.sort_by_key(|saved| {
+        (place(order, &saved.flow.name), saved.flow.name.trim().to_lowercase(), saved.origin.rank())
+    });
+    listing.default = default_of(&listing.flows, Some(chosen.default.trim()).filter(|name| !name.is_empty()))
+        .map(|saved| saved.flow.name.clone());
+    listing
+}
+
+fn drop_shadowed(listing: &mut Listing) {
     let yours: Vec<String> = listing
         .flows
         .iter()
@@ -142,14 +240,15 @@ pub(crate) fn list(builtins: Vec<Flow>, hidden: &[String], user: &Path, project:
     listing
         .flows
         .retain(|saved| saved.origin != Origin::BuiltIn || !yours.iter().any(|n| same_name(n, &saved.flow.name)));
+}
+
+fn hide_flows(listing: &mut Listing, hidden: &[String]) {
     let (gone, kept): (Vec<Saved>, Vec<Saved>) = std::mem::take(&mut listing.flows)
         .into_iter()
         .partition(|saved| saved.origin == Origin::BuiltIn && hidden.iter().any(|n| same_name(n, &saved.flow.name)));
     listing.flows = kept;
     listing.hidden = gone.into_iter().map(|saved| saved.flow).collect();
     listing.hidden.sort_by_key(|flow| flow.name.trim().to_lowercase());
-    listing.flows.sort_by_key(|saved| (saved.flow.name.trim().to_lowercase(), saved.origin.rank()));
-    listing
 }
 
 fn read_dir(dir: &Path, origin: fn(PathBuf) -> Origin, listing: &mut Listing) {

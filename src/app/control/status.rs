@@ -263,6 +263,8 @@ impl App {
             account: term.account().map(str::to_string),
             accounts: term.accounts().chosen(),
             account_restart: self.restart_waiting(term.id).map(|_| "waiting".to_string()),
+            pid: term.shell_pid(),
+            memory: term.memory.bytes().filter(|_| self.config.memory),
         }
     }
 

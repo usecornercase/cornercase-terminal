@@ -51,7 +51,7 @@ pub(crate) enum Hit {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Item {
     pub(crate) name: String,
-    pub(crate) tag: Option<&'static str>,
+    pub(crate) tag: Option<String>,
     pub(crate) agents: String,
     pub(crate) line: String,
     pub(crate) red: bool,
@@ -76,6 +76,7 @@ pub(crate) struct Start {
     pub(crate) issue: Option<String>,
     pub(crate) flows: Vec<Saved>,
     builtins: Vec<String>,
+    default: Option<String>,
     pub(crate) cursor: usize,
     pub(crate) preview: u16,
     pub(crate) prompt: Editor,
@@ -98,6 +99,7 @@ impl Start {
             issue: None,
             flows: listing.flows,
             builtins: listing.builtins,
+            default: listing.default,
             cursor: 0,
             preview: 0,
             prompt: Editor::default(),
@@ -110,16 +112,26 @@ impl Start {
             notice: None,
             waiting: false,
         };
-        let startable = |saved: &&Saved| start.problems(saved).is_empty();
-        let first_builtin = start.builtins.first().map(|name| name.to_lowercase());
+        start.cursor = start.first_choice();
+        start
+    }
+
+    fn first_choice(&self) -> usize {
+        let startable = |saved: &&Saved| self.problems(saved).is_empty();
+        let default = self.default.as_deref();
+        let chosen = store::default_of(&self.flows, default)
+            .and_then(|first| self.flows.iter().position(|s| std::ptr::eq(s, first)))
+            .filter(|i| startable(&&self.flows[*i]));
+        if let Some(i) = chosen {
+            return i;
+        }
+        let first_builtin = self.builtins.first().map(|name| name.to_lowercase());
         let named = |saved: &Saved| first_builtin.as_deref() == Some(saved.flow.name.trim().to_lowercase().as_str());
-        start.cursor = start
-            .flows
+        self.flows
             .iter()
             .position(|saved| named(saved) && startable(&saved))
-            .or_else(|| start.flows.iter().position(|saved| startable(&saved)))
-            .unwrap_or(0);
-        start
+            .or_else(|| self.flows.iter().position(|saved| startable(&saved)))
+            .unwrap_or(0)
     }
 
     pub(crate) fn for_issue(mut self, issue: String, prompt: &str, branch: String) -> Self {
@@ -167,6 +179,7 @@ impl Start {
         let selected = self.selected().map(|saved| saved.origin.clone());
         self.flows = listing.flows;
         self.builtins = listing.builtins;
+        self.default = listing.default;
         let find = |origin: &Origin| self.flows.iter().position(|saved| saved.origin == *origin && origin.editable());
         let cursor = select
             .and_then(find)
@@ -189,7 +202,7 @@ impl Start {
             let line = problems.first().cloned().unwrap_or_else(|| saved.flow.description.trim().to_string());
             Item {
                 name: saved.flow.name.trim().to_string(),
-                tag: store::tag(&self.builtins, saved),
+                tag: store::tag_text(&store::tags(&self.flows, &self.builtins, self.default.as_deref(), saved)),
                 agents: agents_count(&saved.flow),
                 line,
                 red: !problems.is_empty(),

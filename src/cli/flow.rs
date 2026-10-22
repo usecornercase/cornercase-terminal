@@ -3,13 +3,14 @@ use std::io::IsTerminal as _;
 use std::path::Path;
 
 use super::args::{
-    self, FlowAction, FlowDeleteArgs, FlowFilesArgs, FlowImportArgs, FlowMessagesArgs, FlowRunsArgs, ImportTo,
+    self, FlowAction, FlowDefaultArgs, FlowDeleteArgs, FlowFilesArgs, FlowImportArgs, FlowMessagesArgs, FlowOrderArgs,
+    FlowRunsArgs, ImportTo,
 };
 use super::{print_json, print_out, quietly, read_limited, read_prompt, stream_json, workspace};
 use crate::client::{self, answer, ask, confirm};
 use crate::control::{
-    self, Exported, FlowBacklog, FlowInfo, FlowMessage, FlowRemoved, FlowRuns, Flows, Imported, RoleInfo, RunEdge,
-    RunFiles, RunInfo, RunState,
+    self, Exported, FlowBacklog, FlowDefaultSet, FlowInfo, FlowMessage, FlowOrdered, FlowRemoved, FlowRuns, Flows,
+    Imported, RoleInfo, RunEdge, RunFiles, RunInfo, RunState,
 };
 use crate::error::{Error, Result};
 use crate::flows::Worktree;
@@ -28,12 +29,14 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
         FlowAction::Delete(delete) => delete_flow(delete),
         FlowAction::Hide(hide) => {
             let request = control::FlowHide { name: hide.name };
-            removed("flow hide", control::Command::FlowHide(request), hide.print.json, hidden_line)
+            answered("flow hide", control::Command::FlowHide(request), hide.print.json, hidden_line)
         }
         FlowAction::Restore(restore) => {
             let request = control::FlowRestore { name: restore.name };
-            removed("flow restore", control::Command::FlowRestore(request), restore.print.json, restored_line)
+            answered("flow restore", control::Command::FlowRestore(request), restore.print.json, restored_line)
         }
+        FlowAction::Default(default) => set_default(default),
+        FlowAction::Order(order) => set_order(order),
     }
 }
 
@@ -94,20 +97,47 @@ fn delete_flow(args: FlowDeleteArgs) -> Result<()> {
         project: args.project,
         path: args.path.map(std::path::absolute).transpose()?,
     };
-    removed("flow delete", control::Command::FlowDelete(request), args.print.json, deleted_line)
+    answered("flow delete", control::Command::FlowDelete(request), args.print.json, deleted_line)
 }
 
-fn removed(
+fn answered<T: serde::de::DeserializeOwned>(
     name: &'static str,
     command: control::Command,
     json: bool,
-    line: impl Fn(&FlowRemoved) -> String,
+    line: impl Fn(&T) -> String,
 ) -> Result<()> {
     let value = ask(name, command)?;
     if json {
         return print_json(&value);
     }
     print_out(&line(&answer(value)?))
+}
+
+fn set_default(args: FlowDefaultArgs) -> Result<()> {
+    let name = args.name.filter(|_| !args.clear);
+    let request = control::FlowDefault { name, project: args.project };
+    answered("flow default", control::Command::FlowDefault(request), args.print.json, default_line)
+}
+
+fn set_order(args: FlowOrderArgs) -> Result<()> {
+    let names = if args.clear { Vec::new() } else { args.names };
+    let request = control::FlowOrder { names, project: args.project };
+    answered("flow order", control::Command::FlowOrder(request), args.print.json, ordered_line)
+}
+
+pub(super) fn default_line(set: &FlowDefaultSet) -> String {
+    match (&set.name, set.changed) {
+        (Some(name), true) => format!("the start dialog opens on {} now\n", share::visible(name)),
+        (Some(name), false) => format!("{} was already the default flow\n", share::visible(name)),
+        (None, true) => "no default flow: the start dialog opens on the first built-in flow that can start\n".into(),
+        (None, false) => "there was no default flow\n".into(),
+    }
+}
+
+pub(super) fn ordered_line(ordered: &FlowOrdered) -> String {
+    let names: Vec<String> = ordered.names.iter().map(|name| share::visible(name)).collect();
+    let what = if ordered.changed { "are in this order now" } else { "were already in this order" };
+    format!("the flows {what}: {}\n", names.join(", "))
 }
 
 pub(super) fn deleted_line(removed: &FlowRemoved) -> String {
@@ -277,9 +307,10 @@ fn heading(flow: &FlowInfo) -> String {
         "user" => "yours",
         _ => "this project",
     };
+    let default = if flow.default { ", default" } else { "" };
     match &flow.path {
-        Some(path) => format!("{} ({origin}, {})", flow.name, path.display()),
-        None => format!("{} ({origin})", flow.name),
+        Some(path) => format!("{} ({origin}{default}, {})", flow.name, path.display()),
+        None => format!("{} ({origin}{default})", flow.name),
     }
 }
 

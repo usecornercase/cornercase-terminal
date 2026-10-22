@@ -6,8 +6,8 @@ use super::changes::Where;
 use super::{Create, Print, branch};
 use super::{accounts, issue};
 use crate::cli::help::{
-    FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP, FLOW_HIDE_HELP, FLOW_IMPORT_HELP, FLOW_MESSAGES_HELP,
-    FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP,
+    FLOW_DEFAULT_HELP, FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP, FLOW_HIDE_HELP, FLOW_IMPORT_HELP,
+    FLOW_MESSAGES_HELP, FLOW_ORDER_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP,
 };
 
 #[derive(Debug, Args)]
@@ -62,6 +62,51 @@ pub(crate) enum FlowAction {
         after_help = FLOW_RESTORE_HELP
     )]
     Restore(FlowNameArgs),
+    #[command(
+        about = "Choose the flow the start dialog opens on, as set default does in Settings › Flows",
+        after_help = FLOW_DEFAULT_HELP
+    )]
+    Default(FlowDefaultArgs),
+    #[command(
+        about = "Put the flows in your order, as dragging them in Settings › Flows does",
+        after_help = FLOW_ORDER_HELP
+    )]
+    Order(FlowOrderArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowDefaultArgs {
+    #[arg(
+        value_name = "NAME",
+        required_unless_present = "clear",
+        conflicts_with = "clear",
+        help = "The flow, as `cornercase flow list` names it"
+    )]
+    pub(crate) name: Option<String>,
+    #[arg(long, help = "Choose no default: the start dialog opens on the first built-in flow that can start")]
+    pub(crate) clear: bool,
+    #[arg(long, value_name = "ID", help = "The project whose flows to look in [default: the one this runs in]")]
+    pub(crate) project: Option<u64>,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowOrderArgs {
+    #[arg(
+        value_name = "NAME",
+        num_args = 1..,
+        required_unless_present = "clear",
+        conflicts_with = "clear",
+        help = "The flows, first to last, as `cornercase flow list` names them"
+    )]
+    pub(crate) names: Vec<String>,
+    #[arg(long, help = "Go back to name order")]
+    pub(crate) clear: bool,
+    #[arg(long, value_name = "ID", help = "The project whose flows to look in [default: the one this runs in]")]
+    pub(crate) project: Option<u64>,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]

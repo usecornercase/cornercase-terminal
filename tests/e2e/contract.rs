@@ -36,7 +36,7 @@ fn assert_header(contract: &Value, session: &Session) {
     assert_eq!(contract["boot"].as_str(), Some(boot(session).as_str()));
 }
 
-const OPERATIONS: [&str; 36] = [
+const OPERATIONS: [&str; 38] = [
     "contract",
     "start-server",
     "surface",
@@ -70,6 +70,8 @@ const OPERATIONS: [&str; 36] = [
     "flow-delete",
     "flow-hide",
     "flow-restore",
+    "flow-default",
+    "flow-order",
     "flow-runs",
     "flow-messages",
     "flow-files",

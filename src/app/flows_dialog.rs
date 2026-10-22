@@ -104,6 +104,11 @@ impl App {
             }
             return;
         }
+        if dialog.drag.is_some() {
+            let action = flows_drag(dialog, ev, pos, area);
+            self.flows_act(action);
+            return;
+        }
         if let Some(delta) = wheel(ev.kind) {
             wheel_flows(dialog, area, pos, delta, room);
             return;
@@ -112,7 +117,11 @@ impl App {
             return;
         }
         let ui::Overlay::Flows(view) = flows_view(dialog, area) else { return };
-        let Some(hit) = list_hit(&view, ui::flows_hit(area, &view, pos)) else { return };
+        let hit = ui::flows_hit(area, &view, pos);
+        if grab_row(dialog, hit, area) {
+            return;
+        }
+        let Some(hit) = list_hit(&view, hit) else { return };
         let action = dialog.hit(hit, room);
         follow_preview(dialog, area);
         self.flows_act(action);
@@ -125,8 +134,17 @@ impl App {
             Action::Save { flow, place, previous } => self.flows_save(&flow, place, previous.as_deref()),
             Action::Duplicate(flow) => self.flows_duplicate(&flow),
             Action::Delete(path) => {
-                if let (Err(e), Some(dialog)) = (self.delete_flow_file(&path), self.flows_dialog()) {
+                let project = self.flows_project();
+                if let (Err(e), Some(dialog)) = (self.delete_flow_file(&path, project.as_deref()), self.flows_dialog())
+                {
                     dialog.notice = Some(e);
+                }
+            }
+            Action::Default(name) => self.flows_default(&name),
+            Action::Order(names) => {
+                let project = self.flows_project();
+                if let Err(e) = self.order_flows(&names, project.as_deref()) {
+                    self.flows_notice(e);
                 }
             }
             Action::Hide { name, file } => self.flows_hide(&name, file.as_deref()),
@@ -173,6 +191,14 @@ impl App {
         });
     }
 
+    fn flows_default(&mut self, name: &str) {
+        let notice = match self.set_default_flow(Some(name)) {
+            Ok(_) => format!("{name} is the default: the start dialog opens on it"),
+            Err(e) => e,
+        };
+        self.flows_notice(notice);
+    }
+
     fn flows_hide(&mut self, name: &str, file: Option<&Path>) {
         match self.hide_builtin(name, file) {
             Ok(()) => {
@@ -212,26 +238,110 @@ impl App {
         flow: &Flow,
         previous: Option<&Path>,
     ) -> Result<PathBuf, String> {
+        let old = previous.and_then(|path| store::read(path).ok()).map(|flow| flow.name);
+        let was_default = previous.is_some_and(|path| self.is_default_file(path));
         let saved = save(dir, flow, previous);
         if let Ok(path) = &saved {
             log::info!("flows", "flow saved", file = file_name(path));
+            if let Some(old) = old.filter(|old| !store::same_name(old, &flow.name)) {
+                self.flow_renamed(&old, &flow.name, was_default);
+            }
         }
         self.refresh_flows();
         saved
     }
 
-    pub(in crate::app) fn delete_flow_file(&mut self, path: &Path) -> Result<(), String> {
+    fn is_default_file(&self, path: &Path) -> bool {
+        let projects = self.projects.iter().map(|project| Some(project.path.clone()));
+        std::iter::once(None).chain(projects).any(|project| {
+            let listing = self.flow_listing(project.as_deref());
+            listing.default_flow().is_some_and(|saved| saved.origin.path() == Some(path))
+        })
+    }
+
+    fn flow_renamed(&mut self, old: &str, new: &str, was_default: bool) {
+        let moved = self.change_config(|config| {
+            if was_default && store::same_name(&config.default_flow, old) {
+                new.trim().clone_into(&mut config.default_flow);
+            }
+            store::rename(&mut config.flow_order, old, new);
+        });
+        if let Err(e) = moved {
+            log::warning!("flows", "the default flow and the order did not follow a rename", why = e);
+        }
+    }
+
+    pub(in crate::app) fn delete_flow_file(&mut self, path: &Path, project: Option<&Path>) -> Result<(), String> {
+        let was_default =
+            self.flow_listing(project).default_flow().is_some_and(|saved| saved.origin.path() == Some(path));
         let deleted = store::delete(path);
         if deleted.is_ok() {
             log::info!("flows", "flow deleted", file = file_name(path));
+            if was_default {
+                self.clear_default_flow();
+            }
         }
         self.refresh_flows();
         deleted.map_err(|e| format!("could not delete the flow: {e}"))
     }
 
+    fn clear_default_flow(&mut self) {
+        if let Err(e) = self.change_config(|config| config.default_flow.clear()) {
+            log::warning!("flows", "the default flow could not be cleared", why = e);
+        }
+    }
+
+    pub(in crate::app) fn set_default_flow(&mut self, name: Option<&str>) -> Result<bool, String> {
+        let name = name.map(str::trim).unwrap_or_default();
+        if self.config.default_flow.trim() == name {
+            return Ok(false);
+        }
+        self.change_config(|config| name.clone_into(&mut config.default_flow))?;
+        if name.is_empty() {
+            log::info!("flows", "default flow cleared");
+        } else {
+            log::info!("flows", "default flow set", name = name);
+        }
+        self.refresh_flows();
+        Ok(true)
+    }
+
+    pub(in crate::app) fn order_flows(&mut self, wanted: &[String], project: Option<&Path>) -> Result<bool, String> {
+        let listed: Vec<String> = self.flow_listing(project).flows.into_iter().map(|saved| saved.flow.name).collect();
+        let known = self.known_flow_names();
+        let next = store::reorder(&self.config.flow_order, wanted, &listed, |name| {
+            known.iter().any(|other| store::same_name(other, name))
+        });
+        let changed = next != self.config.flow_order;
+        if changed {
+            let count = next.len();
+            self.change_config(|config| config.flow_order = next)?;
+            log::info!("flows", "flows ordered", count = count);
+        }
+        self.refresh_flows();
+        Ok(changed)
+    }
+
+    fn known_flow_names(&self) -> Vec<String> {
+        let all = self.flow_listing(None);
+        let mut names = all.builtins;
+        names.extend(all.flows.into_iter().map(|saved| saved.flow.name));
+        for project in &self.projects {
+            let listing = self.flow_listing(Some(&project.path));
+            names.extend(
+                listing
+                    .flows
+                    .into_iter()
+                    .filter(|saved| matches!(saved.origin, Origin::Project(_)))
+                    .map(|saved| saved.flow.name),
+            );
+        }
+        names
+    }
+
     fn save_then_delete(&mut self, next: &crate::config::Config, file: Option<&Path>) -> Result<(), String> {
         let previous = self.config.clone();
-        let changed = next.hidden_flows != previous.hidden_flows;
+        let changed = *next != previous;
         if changed {
             self.write_config(next)?;
         }
@@ -252,6 +362,9 @@ impl App {
     pub(in crate::app) fn hide_builtin(&mut self, name: &str, file: Option<&Path>) -> Result<(), String> {
         let mut next = self.config.clone();
         store::hide(&mut next.hidden_flows, name);
+        if store::same_name(&next.default_flow, name) {
+            next.default_flow.clear();
+        }
         let saved = self.save_then_delete(&next, file);
         self.refresh_flows();
         if saved.is_ok() {
@@ -421,6 +534,36 @@ fn confirm_click(dialog: &mut Dialog, area: Rect, pos: Position) -> Option<Actio
     }
 }
 
+fn grab_row(dialog: &mut Dialog, hit: Option<FlowsHit>, area: Rect) -> bool {
+    let Some(FlowsHit::Row(SettingsHit::Row(i))) = hit else { return false };
+    if !dialog.grabbable(i) {
+        return false;
+    }
+    dialog.grab(i);
+    follow_preview(dialog, area);
+    true
+}
+
+fn flows_drag(dialog: &mut Dialog, ev: MouseEvent, pos: Position, area: Rect) -> Action {
+    match ev.kind {
+        MouseEventKind::Drag(MouseButton::Left) => {
+            if let ui::Overlay::Flows(view) = flows_view(dialog, area) {
+                dialog.drag_over(ui::flows_row_at(area, &view, pos));
+            }
+        }
+        MouseEventKind::Up(MouseButton::Left) => {
+            let action = dialog.release();
+            follow_preview(dialog, area);
+            return action;
+        }
+        MouseEventKind::Down(_) | MouseEventKind::Up(_) | MouseEventKind::Drag(_) => {
+            dialog.cancel_drag();
+        }
+        _ => {}
+    }
+    Action::None
+}
+
 fn wheel_flows(dialog: &mut Dialog, area: Rect, pos: Position, delta: isize, room: Room) {
     let body = preview_body(dialog, area).filter(|body| body.contains(pos));
     let most = body.and_then(|body| match dialog.preview() {
@@ -531,5 +674,6 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
         preview_scroll: dialog.preview_scroll(),
         focus: edit.and_then(Editing::preview_stage),
         diagram: dialog.diagram(),
+        landing: dialog.drag.filter(|drag| drag.moved).and_then(|drag| drag.landing),
     }))
 }

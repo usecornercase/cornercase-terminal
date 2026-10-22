@@ -4,7 +4,7 @@ use super::{NO_PROJECT, origin_name};
 use crate::app::App;
 use crate::app::control::{Handled, conflict, json, malformed};
 use crate::control::contract::{Code, Refusal};
-use crate::control::{self, FlowRemoved, FlowSaved};
+use crate::control::{self, FlowDefaultSet, FlowOrdered, FlowRemoved, FlowSaved};
 use crate::flows::Flow;
 use crate::flows::dialog::project_risks;
 use crate::flows::share::{self, To};
@@ -59,9 +59,26 @@ impl App {
             Some(path) => deletable(&listing, path)?,
             None => named_file(&listing, delete)?,
         };
-        self.delete_flow_file(&path)?;
+        self.delete_flow_file(&path, project.as_deref())?;
         let removed = FlowRemoved { name, origin, deleted: Some(path), hidden: false, changed: true };
         Ok(Some(json(&removed)))
+    }
+
+    pub(in crate::app) fn flow_default_request(&mut self, caller: Option<u64>, req: &control::FlowDefault) -> Handled {
+        let project = self.flows_scope(caller, req.project)?;
+        let listing = self.flow_listing(project.as_deref());
+        let name = req.name.as_deref().map(|name| default_target(&listing, name)).transpose()?;
+        let changed = self.set_default_flow(name.as_deref())?;
+        Ok(Some(json(&FlowDefaultSet { name, changed })))
+    }
+
+    pub(in crate::app) fn flow_order_request(&mut self, caller: Option<u64>, req: &control::FlowOrder) -> Handled {
+        let project = self.flows_scope(caller, req.project)?;
+        let wanted = ordered_names(&self.flow_listing(project.as_deref()), &req.names)?;
+        let changed = self.order_flows(&wanted, project.as_deref())?;
+        let after = self.flow_listing(project.as_deref());
+        let names = store::dedup_names(after.flows.into_iter().map(|saved| saved.flow.name).collect());
+        Ok(Some(json(&FlowOrdered { names, changed })))
     }
 
     pub(in crate::app) fn flow_hide_request(&mut self, hide: &control::FlowHide) -> Handled {
@@ -231,6 +248,58 @@ fn builtin_name(listing: &Listing, name: &str) -> Result<String, Refusal> {
     })
 }
 
+fn flow_names(listing: &Listing) -> String {
+    let names: Vec<&str> = listing.flows.iter().map(|saved| saved.flow.name.trim()).collect();
+    names.join(", ")
+}
+
+fn default_target(listing: &Listing, name: &str) -> Result<String, Refusal> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(malformed("name a flow, or clear the default"));
+    }
+    if let Some(flow) = listing.deleted(name) {
+        return Err(not_found(format!(
+            "the built-in flow `{}` was deleted: bring it back in Settings › Flows, under deleted built-ins",
+            flow.name.trim()
+        )));
+    }
+    match listing.named(name).next() {
+        Some(saved) => Ok(saved.flow.name.trim().to_string()),
+        None => Err(not_found(format!(
+            "there is no flow named `{}`; the flows are {} (`cornercase flow list`)",
+            share::visible(name),
+            flow_names(listing)
+        ))),
+    }
+}
+
+fn ordered_names(listing: &Listing, names: &[String]) -> Result<Vec<String>, Refusal> {
+    let mut wanted: Vec<String> = Vec::new();
+    let mut unknown: Vec<String> = Vec::new();
+    for name in names.iter().map(|name| name.trim()) {
+        if name.is_empty() {
+            return Err(malformed("a flow name is blank"));
+        }
+        if wanted.iter().chain(&unknown).any(|seen| store::same_name(seen, name)) {
+            return Err(malformed(format!("`{}` is named twice", share::visible(name))));
+        }
+        match listing.named(name).next() {
+            Some(saved) => wanted.push(saved.flow.name.trim().to_string()),
+            None => unknown.push(name.to_string()),
+        }
+    }
+    if unknown.is_empty() {
+        return Ok(wanted);
+    }
+    let unknown: Vec<String> = unknown.iter().map(|name| format!("`{}`", share::visible(name))).collect();
+    Err(not_found(format!(
+        "there is no flow named {}; the flows are {} (`cornercase flow list`)",
+        unknown.join(", "),
+        flow_names(listing)
+    )))
+}
+
 fn edited(listing: &Listing, name: &str) -> Option<PathBuf> {
     listing
         .flows
@@ -247,6 +316,7 @@ pub(super) fn info_listing(listing: &Listing) -> (Vec<control::FlowInfo>, Vec<co
             let mut info = super::flow_info(&saved.flow, &saved.origin);
             info.problems.extend(listing.conflict(saved));
             info.edited = store::edits_builtin(&listing.builtins, saved);
+            info.default = listing.is_default(saved);
             info
         })
         .collect();

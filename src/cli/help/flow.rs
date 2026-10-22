@@ -14,6 +14,8 @@ Examples:
   cornercase flow runs
   cornercase flow messages --worktree fix-login --follow
   cornercase flow hide Quick
+  cornercase flow default Quick
+  cornercase flow order Quick 'Full issue'
   cornercase flow delete 'Quick mine'";
 pub(in crate::cli) const FLOW_RUN_HELP: &str =
     "It makes the worktree (or uses a worktree already on that branch, if it runs no flow), opens a
@@ -91,6 +93,27 @@ is the one that runs again. A flow that is shown and not edited has nothing to r
 
 Examples:
   cornercase flow restore Quick";
+pub(in crate::cli) const FLOW_DEFAULT_HELP: &str =
+    "The start dialog (an issue's start a flow, or start a flow… in + New) opens with the default flow selected.
+When the default is missing, hidden or has problems, it falls back to the first built-in flow that can
+start, so a default never blocks a start. Deleting or hiding the default flow clears it; renaming it in
+Settings › Flows moves it to the new name. It is the same as set default in Settings › Flows, and choosing
+the flow that already is the default changes nothing. --clear chooses no default. `flow run NAME` still
+needs the name: the default only picks what the start dialog selects.
+
+Examples:
+  cornercase flow default Quick
+  cornercase flow default --clear";
+pub(in crate::cli) const FLOW_ORDER_HELP: &str =
+    "It puts the flows in the order you name them, for Settings › Flows, the start dialog and `flow list`, the
+same as dragging them in Settings › Flows. The flows you leave out go after the ones you name, by name, as a new
+built-in flow or an imported one does. A name that no flow has is refused, and so is one named twice. Names
+kept from other projects' flows keep their place. --clear gives name order back. Naming the order the flows
+already are in changes nothing.
+
+Examples:
+  cornercase flow order Quick 'Full issue'
+  cornercase flow order --clear";
 pub(in crate::cli) const FLOW_RUNS_HELP: &str =
     "It prints one block per running flow: its workspace, the stage the work is in and the rounds of its loops,
 the role that holds the work, the last step along the plan and the last one outside it, each role's pane and

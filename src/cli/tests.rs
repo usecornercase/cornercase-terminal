@@ -206,6 +206,10 @@ mod parsing {
     #[case::an_import_without_a_file(&["flow", "import"])]
     #[case::an_import_to_nowhere(&["flow", "import", "f.toml", "--to", "other"])]
     #[case::an_export_without_a_name(&["flow", "export"])]
+    #[case::a_default_without_a_name(&["flow", "default"])]
+    #[case::a_default_and_clear(&["flow", "default", "Quick", "--clear"])]
+    #[case::an_order_without_names(&["flow", "order"])]
+    #[case::an_order_and_clear(&["flow", "order", "Quick", "--clear"])]
     #[case::a_flow_with_two_tasks(&["flow", "run", "Quick", "--prompt", "x", "--prompt-file", "y"])]
     #[case::a_plugin_run_without_a_target(&["plugin", "run", "a", "b"])]
     #[case::a_plugin_run_on_two_targets(&["plugin", "run", "a", "b", "--pane", "1", "--tab", "2"])]
@@ -304,6 +308,25 @@ mod parsing {
             ("Full issue", Some("Fix it"), Some("fix"))
         );
         assert!(run.create.focus && run.create.print.json);
+    }
+
+    #[test]
+    fn a_default_and_an_order_are_chosen_by_name_or_cleared() {
+        let flow = |words: &[&str]| {
+            let cli = parse(words).expect("parse");
+            let Some(Command::Control(Control::Flow(flow))) = cli.command else { panic!("not flow") };
+            flow.action
+        };
+        let args::FlowAction::Default(default) = flow(&["flow", "default", "Quick"]) else { panic!("not default") };
+        assert_eq!((default.name.as_deref(), default.clear), (Some("Quick"), false));
+        let args::FlowAction::Default(default) = flow(&["flow", "default", "--clear", "--json"]) else {
+            panic!("not default")
+        };
+        assert_eq!((default.name, default.clear, default.print.json), (None, true, true));
+        let args::FlowAction::Order(order) = flow(&["flow", "order", "A", "B", "--project", "2"]) else {
+            panic!("not order")
+        };
+        assert_eq!((order.names, order.clear, order.project), (vec!["A".to_string(), "B".to_string()], false, Some(2)));
     }
 
     #[test]
@@ -720,6 +743,8 @@ mod output {
         report.projects[0].workspaces[0].tabs[0].panes[1].held_sends = 1;
         report.projects[0].workspaces[0].tabs[0].panes[1].draft = true;
         report.projects[0].workspaces[0].tabs[0].panes[1].account_restart = Some("waiting".into());
+        report.projects[0].workspaces[0].tabs[0].panes[1].pid = Some(321);
+        report.projects[0].workspaces[0].tabs[0].panes[1].memory = Some(4096);
 
         let text = pane_table(&report.panes()).expect("a table");
 
@@ -727,11 +752,11 @@ mod output {
             text,
             "pane\ttab\tworkspace\tproject\tprogram\tagent\tstatus\tbackground_shell\tdialog\tat_prompt\tmodel\t\
                  context\tcaller\tshown\tactive\ttab_name\tworkspace_name\tbranch\tworktree\tproject_name\tpath\t\
-                 survey\tresuming\tparent\tsubagents\trole\theld_sends\tdraft\taccount_restart\n\
+                 survey\tresuming\tparent\tsubagents\trole\theld_sends\tdraft\taccount_restart\tpid\tmemory\n\
                  4\t3\t2\t1\tzsh\t-\t-\tfalse\tfalse\ttrue\t-\t-\tfalse\ttrue\ttrue\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\tfalse\t-\t0\t-\t0\tfalse\t-\n\
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\tfalse\t-\t0\t-\t0\tfalse\t-\t-\t-\n\
                  5\t3\t2\t1\tclaude\tclaude\tworking\tfalse\tfalse\t-\tOpus 5.5\t23\ttrue\tfalse\tfalse\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\ttrue\t4\t2\tcoder\t1\ttrue\twaiting\n"
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\ttrue\t4\t2\tcoder\t1\ttrue\twaiting\t321\t4096\n"
         );
     }
 

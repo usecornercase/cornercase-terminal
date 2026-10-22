@@ -91,6 +91,8 @@ mod file {
             resume_agents: false,
             keep_awake: true,
             hidden_flows: vec!["Arena".into()],
+            default_flow: "Quick".into(),
+            flow_order: vec!["Quick".into(), "Arena".into()],
             trust_prompt_pattern: "Allow this folder".into(),
             gh: "fake-gh".into(),
             glab: "fake-glab".into(),

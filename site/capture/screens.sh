@@ -1063,7 +1063,9 @@ screen_flow_agents() {
 }
 
 flows_open() {
-  cc_config '{}'
+  local config=${1-}
+  [ -n "$config" ] || config='{}'
+  cc_config "$config"
   cc_session "$CC_CAPTURE/sessions/$CC_SESSION.json"
   cc_start 140 38
   cc_wait 'web-shop'
@@ -1073,7 +1075,7 @@ flows_open() {
 }
 
 screen_settings_flows() {
-  flows_open
+  flows_open '{"default_flow":"Quick"}'
   cc_hover '╭─ Settings'
   cc_shot settings-flows
 }

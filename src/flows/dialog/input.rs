@@ -5,6 +5,9 @@ use super::{Action, Dialog, Entry, Hit, Room};
 
 impl Dialog {
     pub(crate) fn key(&mut self, key: KeyEvent, room: Room) -> Action {
+        if self.cancel_drag() && key.code == KeyCode::Esc {
+            return Action::None;
+        }
         if self.confirm.is_some() {
             return self.confirm_key(key);
         }
@@ -144,6 +147,9 @@ impl Dialog {
     }
 
     pub(crate) fn wheel(&mut self, delta: isize, room: Room) {
+        if self.drag.is_some() {
+            return;
+        }
         if let Some(importing) = &mut self.importing {
             importing.editor.scroll_by(delta, room.width, room.height);
             return;

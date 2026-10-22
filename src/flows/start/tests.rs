@@ -17,7 +17,13 @@ fn listing() -> Listing {
     mine.name = "Mine".into();
     flows.push(Saved { flow: mine, origin: Origin::User(PathBuf::from("/flows/mine.toml")) });
     let builtins = flows.iter().take(4).map(|saved| saved.flow.name.clone()).collect();
-    Listing { flows, hidden: Vec::new(), broken: vec![(PathBuf::from("/flows/bad.toml"), "broken".into())], builtins }
+    Listing { flows, broken: vec![(PathBuf::from("/flows/bad.toml"), "broken".into())], builtins, ..Listing::default() }
+}
+
+fn with_default(name: &str) -> Listing {
+    let mut listing = listing();
+    listing.default = Some(name.into());
+    listing
 }
 
 fn start() -> Start {
@@ -74,12 +80,12 @@ mod opening {
         let items = Start::new(7, "web-shop".into(), true, listing).items();
         let full = &items[0];
         assert_eq!(
-            (full.name.as_str(), full.agents.as_str(), full.tag, full.red),
+            (full.name.as_str(), full.agents.as_str(), full.tag.as_deref(), full.red),
             ("Full issue", "5 agents", None, false)
         );
         assert!(full.line.starts_with("A coder, a reviewer and a security reviewer"), "{}", full.line);
         assert_eq!((items[1].line.as_str(), items[1].red), ("`coder` is in no stage", true));
-        assert_eq!(items[4].tag, Some("edited"));
+        assert_eq!(items[4].tag.as_deref(), Some("edited"));
     }
 
     #[test]
@@ -108,6 +114,43 @@ mod opening {
         assert_ne!(listing.flows[0].flow.name, "Full issue");
         let s = Start::new(7, "web-shop".into(), true, listing);
         assert_eq!(s.selected().map(|saved| saved.flow.name.as_str()), Some("Full issue"));
+    }
+
+    #[test]
+    fn the_default_flow_is_selected_when_it_can_start() {
+        let s = Start::new(7, "web-shop".into(), true, with_default("Quick"));
+        assert_eq!(s.selected().map(|saved| saved.flow.name.as_str()), Some("Quick"));
+        assert_eq!(s.focus, Focus::Prompt);
+    }
+
+    #[test]
+    fn a_default_with_problems_falls_back_to_the_first_built_in() {
+        let mut listing = with_default("Quick");
+        listing.flows[2].flow.stages.clear();
+        let s = Start::new(7, "web-shop".into(), true, listing);
+        assert_eq!(s.selected().map(|saved| saved.flow.name.as_str()), Some("Full issue"));
+    }
+
+    #[test]
+    fn without_a_default_listed_the_first_built_in_is_selected() {
+        let s = Start::new(7, "web-shop".into(), true, listing());
+        assert_eq!(s.selected().map(|saved| saved.flow.name.as_str()), Some("Full issue"));
+    }
+
+    #[test]
+    fn the_list_keeps_the_listings_order() {
+        let mut listing = listing();
+        listing.flows.reverse();
+        let names: Vec<String> =
+            Start::new(7, "web-shop".into(), true, listing).items().into_iter().map(|i| i.name).collect();
+        assert_eq!(names, ["Mine", "Bug, test first", "Quick", "Cross review", "Full issue"]);
+    }
+
+    #[test]
+    fn the_default_flow_is_tagged_default() {
+        let items = Start::new(7, "web-shop".into(), true, with_default("Mine")).items();
+        assert_eq!(items[4].tag.as_deref(), Some("default"));
+        assert_eq!(items[0].tag, None);
     }
 
     #[test]
@@ -507,6 +550,17 @@ mod from_an_issue {
     fn started(action: Action) -> (String, Option<String>) {
         let Action::Start { branch, workspace, .. } = action else { panic!("not started: {action:?}") };
         (branch, workspace)
+    }
+
+    #[test]
+    fn start_starts_the_default_flow() {
+        let mut s = Start::new(7, "web-shop".into(), true, with_default("Quick")).for_issue(
+            "#482 Returns".into(),
+            "https://x/482",
+            "issue-482-returns".into(),
+        );
+        let Action::Start { flow, .. } = s.press(START) else { panic!("not started") };
+        assert_eq!(flow.name, "Quick");
     }
 
     #[test]

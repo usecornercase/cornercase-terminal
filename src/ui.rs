@@ -43,7 +43,8 @@ pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold,
 pub(crate) use chrome::ChangesButton;
 pub(crate) use chrome::{help_button, quit_button};
 pub(crate) use dialog::flows::{
-    FlowPreview, Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_text, flows_wide, preview_body,
+    FlowPreview, Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_row_at, flows_text, flows_wide,
+    preview_body,
 };
 #[cfg(test)]
 pub(crate) use dialog::flows::{flows_body, flows_buttons, flows_tabs};

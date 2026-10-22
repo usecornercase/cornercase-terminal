@@ -830,3 +830,5 @@ mod ordering {
         assert!(dialog(&s.app).notice.clone().unwrap_or_default().starts_with("could not delete"));
     }
 }
+
+mod order;
