@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.185
+
+- **Flows: the orchestrator keeps an eye on its team's context.** Its brief now has it check each role's context before sending it a large piece of work, and compact a role that has used more than about 70 % of its window first, with that agent's compact command and what the role must keep. Each role's command is in the team list. When its own context passes about 80 %, it tells you, since it can't compact itself.
+- `cornercase send --enter '/compact …'` to Claude Code or Codex no longer fails with `not confirmed` while the compaction runs: it returns once the agent records the compaction.
+- After an agent compacts its conversation, the line under its tab reads `compacted` where the percentage goes (`Opus 5.5 · compacted` for Claude Code), until its next reply. opencode no longer shows the summary's old figure after `/compact`.
+- Scripts: each pane in `status --json`, `watch` and `view` has `compacted: true` while its context is empty because its conversation was just compacted; `status --panes` gains `compacted` as its last column, and the text form reads `Opus 5.5 · compacted`.
+
 ## 0.12.184
 
 - **File type icons.** The files tree, the changes panel's file rows and the files search results show an icon for each file's type, and folders an open or closed folder, in the colour of the type (the name keeps its git colour). They show in Ghostty, kitty and WezTerm (also inside tmux) and in the browser window, which already have the font that draws them, and in any window where the icon bar is on. Settings → UI → **icons**: `auto` (the default) decides for each window, `on` draws them in every window (other terminals need a Nerd Font), `off` never.
