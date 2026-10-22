@@ -54,7 +54,7 @@ pub(super) struct PullRequests {
     pub(super) answered: HashMap<u64, Answered>,
     pub(super) glab: GlabHosts,
     unstacked: HashSet<String>,
-    stack_errors: HashMap<u64, String>,
+    pub(super) stack_errors: HashMap<u64, String>,
 }
 
 pub(super) struct Found {

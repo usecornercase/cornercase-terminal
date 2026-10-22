@@ -116,7 +116,7 @@ On GitHub, [stacked pull requests](https://github.com/github/gh-stack) chain pul
   crop={[19, 7, 72, 24]}
 />
 
-Click the layer, or the number, to open the dialog. Between the summary and the checks it lists the whole stack, top first like `gh stack view`, each layer with its position, number, checks, title and the workspace of this project that holds it. The layer you opened is marked `▸`, merged layers are purple and closed ones crossed out, and a click on a layer goes to its workspace. One line says what keeps the merge waiting, only when something does: `cannot merge until #485 below passes its checks`, `has no merge conflicts` or `is approved`. When a layer below was merged and your branch is behind its remote, a note says to pull before you push again.
+Click the layer, or the number, to open the dialog. Between the summary and the checks it lists the whole stack, top first like `gh stack view`, each layer with its position, number, checks, title and the workspace of this project that holds it. The layer you opened is marked `▸`, merged layers are purple and closed ones crossed out, and a click on a layer goes to its workspace. One line says what keeps the merge waiting, only when something does: `cannot merge until #485 below passes its checks`, `cannot merge until #485 below has no merge conflicts` or `cannot merge until #485 below is approved`. When a layer below was merged and your branch is behind its remote, a note says to pull before you push again.
 
 How it works:
 

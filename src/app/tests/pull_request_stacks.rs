@@ -258,6 +258,21 @@ mod pacing {
     }
 
     #[test]
+    fn a_round_that_read_no_stack_does_not_clear_the_stack_error() {
+        let mut repo = stacked();
+        set(&repo, "stack-err", "HTTP 502: Bad Gateway");
+        std::fs::remove_file(repo.tmp.path().join("gh.stack")).expect("no body");
+        ask_in(&mut repo, 2);
+        let project = repo.app.projects[0].id;
+        assert!(repo.app.git.pulls.stack_errors.contains_key(&project));
+
+        repo.app.ask_pull_requests(Instant::now() + Duration::from_secs(150));
+        pump_until(&mut repo.app, &repo.rx, "an answer", |a| a.git.pulls.asking.is_empty());
+
+        assert!(repo.app.git.pulls.stack_errors.contains_key(&project));
+    }
+
+    #[test]
     fn a_merged_one_keeps_its_last_answer() {
         let mut repo = stacked();
         set(&repo, "pr-feat-x", &VIEW.replace("\"OPEN\"", "\"MERGED\""));

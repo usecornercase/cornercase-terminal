@@ -70,7 +70,8 @@ fn pull_refreshed(pull: &PullRequest, hash: &mut DefaultHasher) {
     if let Some(stack) = stack {
         (stack.number, &stack.base, stack.position, stack.size).hash(hash);
         for layer in &stack.layers {
-            (layer.number, &layer.title, &layer.state, &layer.checks, layer.conflicts, &layer.review).hash(hash);
+            (layer.number, &layer.title, &layer.url, &layer.state, &layer.checks, layer.conflicts, &layer.review)
+                .hash(hash);
         }
     }
 }

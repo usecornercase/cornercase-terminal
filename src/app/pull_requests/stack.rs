@@ -99,6 +99,9 @@ impl App {
                 crate::log::info!("pr", "no stacks on this host", host = host);
             }
         }
+        if stacks.read.is_empty() && stacks.error.is_none() {
+            return;
+        }
         let known = self.git.pulls.stack_errors.get(&project).cloned();
         log_change(
             project,
