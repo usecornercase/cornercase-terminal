@@ -104,6 +104,11 @@ impl App {
         };
         let Some(pane) = run.pane_of(role) else { return state };
         state.pane = Some(pane);
+        state.awaited = run
+            .sent
+            .iter()
+            .find(|sent| sent.pane == pane)
+            .map(|sent| if sent.finished { "finished" } else { "working" }.to_string());
         match self.projects.pane_by(pane) {
             Some(term) => {
                 state.status = term.agent.status().map(|status| status.name().to_string());

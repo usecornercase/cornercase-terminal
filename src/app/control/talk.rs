@@ -3,7 +3,7 @@ use std::time::{Instant, SystemTime};
 use crossterm::event::KeyCode;
 
 use super::held::Held;
-use super::wait::Condition;
+use super::wait::{Condition, turn_ended};
 use super::{Asker, Handled, Pending, Stage, Waits, deadline, json, none, pane_ids};
 use crate::agents;
 use crate::agents::activity::{self, Status};
@@ -37,7 +37,7 @@ fn unfound(pane: u64, agent: agents::Known) -> String {
 }
 
 fn turn_over(agent: &activity::Pane) -> Option<bool> {
-    agent.status().map(|_| Condition::TurnOver.ended(agent).is_some())
+    agent.status().map(|_| turn_ended(agent).is_some())
 }
 
 impl App {
@@ -114,6 +114,9 @@ impl App {
             && !term.paste(text)
         {
             return Err(not_reading(pane).into());
+        }
+        if held.enter {
+            self.runs.prompted(held.from, pane, now);
         }
         Ok(held.enter.then(|| (Launch::enter(pane, now), Stage::Launch { confirm, wait: held.wait })))
     }

@@ -32,11 +32,26 @@ pub(super) struct Runs {
     list: Vec<Run>,
     dir: PathBuf,
     pending_dirs: Vec<(u64, Vec<PathBuf>)>,
+    wakes: Vec<Wake>,
+    woken: u64,
+}
+
+pub(super) struct Wake {
+    pub(super) client: u64,
+    pub(super) run: u64,
+    pub(super) workspace: u64,
+    pub(super) roles: Vec<(String, u64)>,
 }
 
 impl Runs {
     pub(super) fn new(config_path: &Path) -> Self {
-        Self { list: Vec::new(), dir: config_path.with_file_name("runs"), pending_dirs: Vec::new() }
+        Self {
+            list: Vec::new(),
+            dir: config_path.with_file_name("runs"),
+            pending_dirs: Vec::new(),
+            wakes: Vec::new(),
+            woken: 0,
+        }
     }
 
     pub(super) fn all(&self) -> &[Run] {
@@ -65,7 +80,37 @@ impl Runs {
 
     pub(super) fn take_of(&mut self, workspace: u64) -> Option<Run> {
         let i = self.list.iter().position(|run| run.workspace == workspace)?;
-        Some(self.list.remove(i))
+        let mut run = self.list.remove(i);
+        run.sent.clear();
+        Some(run)
+    }
+
+    pub(super) fn prompted(&mut self, from: Option<u64>, to: u64, at: Instant) {
+        for run in &mut self.list {
+            if from.is_some() && run.pane_of(flows::ORCHESTRATOR) == from {
+                run.sent_to(to, at);
+            } else {
+                run.forget_sent(to);
+            }
+        }
+    }
+
+    pub(super) fn next_wake(&mut self) -> u64 {
+        self.woken += 1;
+        self.woken
+    }
+
+    pub(super) fn start_wake(&mut self, wake: Wake) {
+        self.wakes.push(wake);
+    }
+
+    pub(super) fn waking(&self, run: u64) -> bool {
+        self.wakes.iter().any(|wake| wake.run == run)
+    }
+
+    pub(super) fn woke(&mut self, client: u64) -> Option<Wake> {
+        let i = self.wakes.iter().position(|wake| wake.client == client)?;
+        Some(self.wakes.remove(i))
     }
 
     pub(super) fn put(&mut self, run: Run) {

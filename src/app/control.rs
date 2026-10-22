@@ -109,6 +109,7 @@ pub(super) struct Requests {
     pending: Vec<Pending>,
     open: Vec<u64>,
     asked: HashMap<u64, (Instant, &'static str)>,
+    callers: HashMap<u64, u64>,
     structured: HashSet<u64>,
     answers: Vec<(u64, String)>,
     launched: Vec<(u64, bool)>,
@@ -368,6 +369,7 @@ impl App {
     pub(crate) fn forget(&mut self, client: u64) {
         self.clients.requests.open.retain(|open| *open != client);
         self.clients.requests.structured.remove(&client);
+        self.clients.requests.callers.remove(&client);
         self.orphan_todo_send(client);
         if let Some((at, command)) = self.clients.requests.asked.remove(&client) {
             log::info!(
@@ -435,12 +437,14 @@ impl App {
         };
         self.flow_answered(client, &reply);
         self.clients.requests.open.retain(|open| *open != client);
+        self.clients.requests.callers.remove(&client);
         if let Some((at, command)) = self.clients.requests.asked.remove(&client) {
             log_answered(client, at, command, &reply);
         }
         if self.queue_answered(client, &reply)
             || self.todo_answered(client, &reply)
             || self.tour_answered(client, &reply)
+            || self.wake_answered(client, &reply)
         {
             return;
         }
@@ -477,6 +481,9 @@ impl App {
             return Err(stale_boot(boot));
         }
         let caller = request.caller.filter(|_| request.server.as_deref() == Some(control::server_token()));
+        if let Some(caller) = caller {
+            self.clients.requests.callers.insert(client, caller);
+        }
         let asker = Asker { caller, view: request.view };
         self.check_view(&request)?;
         self.settle_views();

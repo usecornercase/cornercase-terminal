@@ -43,7 +43,7 @@ impl Condition {
         matches!(self, Self::Stops | Self::Idle | Self::Working | Self::Waiting | Self::TurnOver)
     }
 
-    fn ends_on_idle(&self) -> bool {
+    pub(super) fn ends_on_idle(&self) -> bool {
         matches!(self, Self::Stops | Self::Idle | Self::TurnOver)
     }
 
@@ -78,6 +78,31 @@ impl Watch {
     fn next_look(&self, term: &Term) -> Option<Instant> {
         let at = self.checked.filter(|checked| term.output_at >= *checked)?;
         at.checked_add(TEXT_EVERY)
+    }
+}
+
+pub(in crate::app) fn turn_ended(agent: &activity::Pane) -> Option<&'static str> {
+    Condition::TurnOver.ended(agent)
+}
+
+fn waits_on(pending: &Pending, pane: u64) -> bool {
+    let ends = |wait: &Option<Condition>| wait.as_ref().is_some_and(Condition::ends_on_idle);
+    match &pending.stage {
+        Stage::Watch(watch) => watch.pane == pane && watch.until.ends_on_idle(),
+        Stage::Several { parts, .. } => parts.iter().any(|part| part.done.ended.is_none() && waits_on(part, pane)),
+        Stage::Held(held) => ends(&held.wait) && pending.done.ids.pane == Some(pane),
+        Stage::Launch { wait, .. } => ends(wait) && pending.done.ids.pane == Some(pane),
+        Stage::Confirm(confirm) => ends(&confirm.wait) && confirm.pane == pane,
+        _ => false,
+    }
+}
+
+impl App {
+    pub(in crate::app) fn waited_on(&self, caller: u64, pane: u64) -> bool {
+        let callers = &self.clients.requests.callers;
+        self.clients.requests.pending.iter().any(|pending| {
+            pending.client.and_then(|client| callers.get(&client)) == Some(&caller) && waits_on(pending, pane)
+        })
     }
 }
 

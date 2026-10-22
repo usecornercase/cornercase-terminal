@@ -402,6 +402,7 @@ impl App {
         self.drive_launches(now);
         self.latch_run_ends();
         self.watch_agents(now);
+        self.follow_sent_work(now);
         self.drive_restarts(now);
         self.keep_awake(now);
         self.offer_star(now, clock);

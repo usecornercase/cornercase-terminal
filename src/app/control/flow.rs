@@ -1,5 +1,6 @@
 mod feed;
 mod manage;
+mod wake;
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};

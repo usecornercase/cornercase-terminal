@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use super::{Closed, Team, brief, member, reopened, restored, where_it_stands};
+use super::{Closed, Team, brief, finished, member, reopened, restored, where_it_stands};
 use crate::agents::Known;
 use crate::flows::run::{Member, RoleWorktree};
 use crate::flows::{Back, End, Flow, ORCHESTRATOR, Role, builtin, role_branch};
@@ -43,11 +43,15 @@ fn the_brief_holds_the_task_the_team_the_plan_and_the_end() {
             "Do not change the public API.\n\nKeep every message",
             "`cornercase wait --all --pane 14 --pane 15 --pane 16 --pane 17 --until turn-over",
             "run `cornercase mark --pane 12`",
-            "--until turn-over --timeout 300` (several agents",
+            "turn-over --timeout 540`. Run one wait at a time, with a `--pane` for each agent you wait for",
+            "never several identical waits",
+            "(600000 ms on Claude Code's Bash",
+            "If the user writes to you while you wait, answer, then wait again.",
+            "These rules hold after the plan too",
         ],
     );
-    assert_eq!(text.matches("--timeout 300`").count(), 2, "one time limit for every wait: {text}");
-    assert!(text.contains("Give your shell tool a time limit longer than `--timeout` when it takes one"), "{text}");
+    assert_eq!(text.matches("--timeout 540`").count(), 2, "one time limit for every wait: {text}");
+    assert!(!text.contains("--timeout 300"), "{text}");
     assert!(text.contains("Never wait in the background"), "{text}");
     assert!(!text.contains("--pane 12 --until"), "{text}");
 }
@@ -202,7 +206,7 @@ fn the_brief_names_the_run_folder_and_says_where_it_writes() {
     assert!(text.contains("Never edit the worktree's files, commit"), "{text}");
     assert!(text.contains("The run's folder is the only place you write."), "{text}");
     assert!(text.find("## Files").expect("files") < text.find("## How to drive").expect("rules"));
-    assert_eq!(text.matches("--timeout 300`").count(), 2, "{text}");
+    assert_eq!(text.matches("--timeout 540`").count(), 2, "{text}");
 }
 
 #[test]
@@ -288,4 +292,23 @@ fn a_restored_brief_names_the_folder() {
     let text = restored(&members(), Some(folder()));
     assert!(text.contains(&format!("Use these from now on. The run's folder is still {DIR}. Any wait")), "{text}");
     assert!(!restored(&members(), None).contains("folder"));
+}
+
+#[test]
+fn a_finished_role_is_named_with_how_to_read_its_answer() {
+    let text = finished(&[("coder".into(), 113)]);
+    assert_eq!(
+        text,
+        "coder (pane 113) finished the work you sent it. Read its answer with `cornercase read --last-message \
+         --pane 113`, then go on."
+    );
+}
+
+#[test]
+fn several_finished_roles_share_one_message() {
+    let two = finished(&[("coder".into(), 14), ("reviewer".into(), 15)]);
+    assert!(two.starts_with("coder (pane 14) and reviewer (pane 15) finished the work you sent them."), "{two}");
+    assert!(two.contains("Read their answers with `cornercase read --last-message --pane 14 --pane 15`"), "{two}");
+    let three = finished(&[("a".into(), 1), ("b".into(), 2), ("c".into(), 3)]);
+    assert!(three.starts_with("a (pane 1), b (pane 2) and c (pane 3) finished"), "{three}");
 }

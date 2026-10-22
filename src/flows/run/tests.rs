@@ -116,3 +116,117 @@ mod moved_to {
         assert_eq!(run.moved_to(Some("other")), None);
     }
 }
+
+mod sent {
+    use std::time::Duration;
+
+    use super::*;
+
+    const CODER: u64 = 14;
+    const REVIEWER: u64 = 15;
+
+    fn team() -> Run {
+        let mut run = run(End::Commits);
+        run.members = vec![
+            Member { role: ORCHESTRATOR.into(), pane: 13 },
+            Member { role: "coder".into(), pane: CODER },
+            Member { role: "reviewer".into(), pane: REVIEWER },
+        ];
+        run
+    }
+
+    fn message(from: &str, to: &str, kind: Kind) -> Message {
+        Message {
+            from: from.into(),
+            to: to.into(),
+            kind,
+            text: None,
+            bytes: 0,
+            at: Instant::now(),
+            time: SystemTime::now(),
+            seq: 0,
+            edge: None,
+        }
+    }
+
+    fn seen(worked: bool, ended: Option<&'static str>) -> Seen {
+        Seen { worked, ended, ..Seen::default() }
+    }
+
+    #[rstest]
+    #[case::not_yet_working(seen(false, Some("idle")), Some(false))]
+    #[case::still_working(seen(true, None), Some(false))]
+    #[case::waiting(seen(true, Some("waiting")), Some(false))]
+    #[case::finished(seen(true, Some("idle")), Some(true))]
+    #[case::left_a_background_shell(seen(true, Some("shell")), Some(true))]
+    #[case::failed(seen(true, Some("failed")), Some(true))]
+    #[case::a_wait_reports_it(Seen { covered: true, ..seen(true, Some("idle")) }, None)]
+    #[case::closed(Seen { gone: true, ..seen(true, Some("idle")) }, None)]
+    fn settling_follows_the_turn(#[case] seen: Seen, #[case] expected: Option<bool>) {
+        let mut run = team();
+        run.sent_to(CODER, Instant::now());
+        run.settle(CODER, seen);
+        assert_eq!(run.sent.first().map(|sent| sent.finished), expected);
+    }
+
+    #[rstest]
+    #[case::after(1, None)]
+    #[case::before(-1, Some(true))]
+    fn the_person_typing_takes_the_turn(#[case] offset: i64, #[case] expected: Option<bool>) {
+        let mut run = team();
+        let base = Instant::now();
+        let at = base + Duration::from_secs(10);
+        run.sent_to(CODER, at);
+        let typed = if offset > 0 { base + Duration::from_secs(11) } else { base + Duration::from_secs(9) };
+        run.settle(CODER, Seen { typed: Some(typed), ..seen(true, Some("idle")) });
+        assert_eq!(run.sent.first().map(|sent| sent.finished), expected);
+    }
+
+    #[test]
+    fn sending_ignores_the_orchestrator_and_strangers_and_replaces_an_earlier_one() {
+        let mut run = team();
+        run.sent_to(13, Instant::now());
+        run.sent_to(99, Instant::now());
+        assert_eq!(run.sent.len(), 0);
+        let first = Instant::now();
+        run.sent_to(CODER, first);
+        run.settle(CODER, seen(true, Some("idle")));
+        run.sent_to(CODER, first + Duration::from_secs(1));
+        assert_eq!(run.sent.len(), 1);
+        assert!(!run.sent[0].finished);
+    }
+
+    #[rstest]
+    #[case::wait(Kind::Wait)]
+    #[case::read(Kind::Read)]
+    #[case::send(Kind::Send)]
+    fn hearing_from_the_orchestrator_clears_a_finished_role_only(#[case] kind: Kind) {
+        let mut run = team();
+        run.sent_to(CODER, Instant::now());
+        run.sent_to(REVIEWER, Instant::now());
+        run.settle(CODER, seen(true, Some("idle")));
+        run.record(message(ORCHESTRATOR, "coder", kind));
+        run.record(message(ORCHESTRATOR, "reviewer", kind));
+        assert_eq!(run.sent.iter().map(|sent| sent.pane).collect::<Vec<_>>(), vec![REVIEWER]);
+    }
+
+    #[test]
+    fn a_message_from_another_member_clears_nothing() {
+        let mut run = team();
+        run.sent_to(CODER, Instant::now());
+        run.settle(CODER, seen(true, Some("idle")));
+        run.record(message("reviewer", "coder", Kind::Send));
+        assert_eq!(run.due(), vec![CODER]);
+    }
+
+    #[test]
+    fn taking_what_is_due_keeps_the_send_order() {
+        let mut run = team();
+        run.sent_to(REVIEWER, Instant::now());
+        run.sent_to(CODER, Instant::now());
+        run.settle(CODER, seen(true, Some("idle")));
+        run.settle(REVIEWER, seen(true, Some("idle")));
+        assert_eq!(run.take_due(), vec![REVIEWER, CODER]);
+        assert_eq!(run.sent.len(), 0);
+    }
+}

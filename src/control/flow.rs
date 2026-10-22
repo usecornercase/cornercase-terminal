@@ -417,6 +417,8 @@ pub(crate) struct RoleState {
     pub(crate) tab: Option<u64>,
     pub(crate) status: Option<String>,
     pub(crate) closed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) awaited: Option<String>,
     pub(crate) worktree: Option<PathBuf>,
     pub(crate) branch: Option<String>,
 }

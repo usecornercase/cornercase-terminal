@@ -103,6 +103,23 @@ mod pane {
     }
 
     #[rstest]
+    #[case::it_worked(Some(Activity::Idle), Some(Activity::Working), true)]
+    #[case::it_only_changed(Some(Activity::Shell), Some(Activity::Idle), false)]
+    #[case::it_stayed_idle(Some(Activity::Idle), Some(Activity::Idle), false)]
+    fn working_since_is_working_not_moving(
+        #[case] first: Option<Activity>,
+        #[case] last: Option<Activity>,
+        #[case] expected: bool,
+    ) {
+        let mut pane = Pane::default();
+        let t0 = Instant::now();
+        pane.update(first, false, t0);
+        let sent = t0 + Duration::from_millis(500);
+        pane.update(last, false, sent + Duration::from_secs(1));
+        assert_eq!(pane.worked_since(sent), expected);
+    }
+
+    #[rstest]
     #[case::nothing_runs(None, None)]
     #[case::working(Some(Activity::Working), Some("working"))]
     #[case::background_shell(Some(Activity::Shell), Some("shell"))]

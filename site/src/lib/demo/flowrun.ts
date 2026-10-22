@@ -121,7 +121,7 @@ function play(app: App, run: Run): void {
       record(app, run, role, text);
     }
     const panes = sends.map(([role]) => `--pane ${pane(role)}`).join(' ');
-    lead()?.tool('Bash', `cornercase wait --all ${panes} --until turn-over --timeout 900`, 'idle');
+    lead()?.tool('Bash', `cornercase wait --all ${panes} --until turn-over --timeout 540`, 'idle');
     when(
       () => sends.every(([role]) => !agentOf(app, run, role)?.working),
       () => {
@@ -156,7 +156,7 @@ function play(app: App, run: Run): void {
   };
   const begin = () => {
     lead()?.begin(`You are the orchestrator of a team of coding agents that cornercase started for the flow "Full issue". Task: ${RUN_TASK}`);
-    lead()?.tool('Bash', `cornercase wait --all ${run.members.slice(1).map((m) => `--pane ${m.pane}`).join(' ')} --until turn-over --timeout 300`, 'all ready');
+    lead()?.tool('Bash', `cornercase wait --all ${run.members.slice(1).map((m) => `--pane ${m.pane}`).join(' ')} --until turn-over --timeout 540`, 'all ready');
     app.after(BETWEEN, () => stage(0));
   };
   when(() => true, begin);

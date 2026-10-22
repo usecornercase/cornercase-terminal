@@ -121,6 +121,17 @@ pub(crate) fn restored(members: &[Member], dir: Option<&Path>) -> String {
     )
 }
 
+pub(crate) fn finished(roles: &[(String, u64)]) -> String {
+    let named: Vec<String> = roles.iter().map(|(role, pane)| format!("{role} (pane {pane})")).collect();
+    let panes: Vec<String> = roles.iter().map(|(_, pane)| format!("--pane {pane}")).collect();
+    let (them, answers) = if roles.len() == 1 { ("it", "its answer") } else { ("them", "their answers") };
+    format!(
+        "{} finished the work you sent {them}. Read {answers} with `cornercase read --last-message {}`, then go on.",
+        names(&named),
+        panes.join(" ")
+    )
+}
+
 pub(crate) struct Closed<'a> {
     pub(crate) cut: &'a [String],
     pub(crate) fresh: &'a [String],
@@ -246,14 +257,17 @@ fn rules(flow: &Flow, members: &[Member], own: Option<u64>, dir: Option<&Path>) 
     format!(
         "\n## How to drive the agents\n\n\
          - Every agent already has its role prompt and waits for you. First wait until they are all ready: \
-         `cornercase wait --all {panes} --until turn-over --timeout 300`.\n\
+         `cornercase wait --all {panes} --until turn-over --timeout 540`.\n\
          - Send work with `cornercase send --pane N --enter 'the full instruction'`: one self-contained message \
          saying what to do and what to answer with. An agent knows only what you send it.\n\
-         - Wait in the foreground with `cornercase wait --pane N --until turn-over --timeout 300` (several agents: \
-         one wait with a `--pane` each and `--any` or `--all`). Give your shell tool a time limit longer than \
-         `--timeout` when it takes one (Claude Code's Bash stops a command after 2 minutes unless told), else use a \
-         `--timeout` under its limit; when the wait times out, run it again. Never wait in the background: that \
-         ends your turn, and cornercase then shows you as finished while your team works.\n\
+         - After each send, wait in the foreground until the agent answers: `cornercase wait --pane N --until \
+         turn-over --timeout 540`. Run one wait at a time, with a `--pane` for each agent you wait for (and `--any` \
+         or `--all`), never several identical waits. Give your shell tool its longest time limit (600000 ms on \
+         Claude Code's Bash, which otherwise stops a command after 2 minutes), else use a `--timeout` under its \
+         limit; when the wait times out, run it again. Never wait in the background: that ends your turn, and \
+         cornercase then shows you as finished while your team works.\n\
+         - If the user writes to you while you wait, answer, then wait again. A wait moved to the background that \
+         ends is not news: check the agent with `cornercase status --panes`, and wait again while it works.\n\
          - Read what agents answered with `cornercase read --last-message --pane N` (a `--pane` each for several), \
          not their screens. If it fails for an agent (its record cannot be found), read its screen with \
          `cornercase read --pane N --lines 300` and take the answer from there.\n\
@@ -265,7 +279,9 @@ fn rules(flow: &Flow, members: &[Member], own: Option<u64>, dir: Option<&Path>) 
          - Stay in this worktree: do not open, close or focus tabs, workspaces or worktrees. Each role's tab is \
          named after it.\n\
          - When the plan is done, do the final action, then run `{mark}` so the user sees the run waits for review, \
-         and end your turn with a short summary.\n",
+         and end your turn with a short summary.\n\
+         - These rules hold after the plan too: when the user asks for more work, send it to the agent that does \
+         it, wait in the foreground until it answers, then report.\n",
         panes = others.join(" "),
         edit = if dir.is_some() { "the worktree's files" } else { "files" },
         only = if dir.is_some() { " The run's folder is the only place you write." } else { "" }

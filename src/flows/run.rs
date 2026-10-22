@@ -5,7 +5,8 @@ use std::time::{Instant, SystemTime};
 use serde::{Deserialize, Serialize};
 
 use super::progress::{Edge, Progress};
-use super::{End, Flow};
+use super::{End, Flow, ORCHESTRATOR};
+use crate::agents::activity::Status;
 use crate::pull_request::{self, PullRequest};
 
 pub(crate) const MAX_MESSAGES: usize = 256;
@@ -44,6 +45,22 @@ pub(crate) struct RoleWorktree {
     pub(crate) branch: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Sent {
+    pub(crate) pane: u64,
+    pub(crate) at: Instant,
+    pub(crate) finished: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Seen {
+    pub(crate) gone: bool,
+    pub(crate) typed: Option<Instant>,
+    pub(crate) worked: bool,
+    pub(crate) ended: Option<&'static str>,
+    pub(crate) covered: bool,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct Run {
     pub(crate) id: u64,
@@ -56,6 +73,7 @@ pub(crate) struct Run {
     pub(crate) dir: Option<PathBuf>,
     pub(crate) recorded: u64,
     pub(crate) ended: Option<String>,
+    pub(crate) sent: Vec<Sent>,
 }
 
 impl Run {
@@ -71,6 +89,7 @@ impl Run {
             dir: None,
             recorded: 0,
             ended: None,
+            sent: Vec::new(),
         }
     }
 
@@ -85,12 +104,63 @@ impl Run {
     pub(crate) fn record(&mut self, mut message: Message) -> &Message {
         self.recorded += 1;
         message.seq = self.recorded;
+        self.heard(&message);
         message.edge = self.progress.step(&self.flow, &message);
         if self.messages.len() == MAX_MESSAGES {
             self.messages.pop_front();
         }
         self.messages.push_back(message);
         self.messages.back().unwrap_or_else(|| unreachable!("a message was just pushed"))
+    }
+
+    fn heard(&mut self, message: &Message) {
+        if message.from != ORCHESTRATOR {
+            return;
+        }
+        if let Some(pane) = self.pane_of(&message.to) {
+            self.sent.retain(|sent| !(sent.pane == pane && sent.finished));
+        }
+    }
+
+    pub(crate) fn sent_to(&mut self, pane: u64, at: Instant) {
+        self.forget_sent(pane);
+        if self.role_of(pane).is_some_and(|role| role != ORCHESTRATOR) {
+            self.sent.push(Sent { pane, at, finished: false });
+        }
+    }
+
+    pub(crate) fn forget_sent(&mut self, pane: u64) {
+        self.sent.retain(|sent| sent.pane != pane);
+    }
+
+    pub(crate) fn settle(&mut self, pane: u64, seen: Seen) {
+        let Some(index) = self.sent.iter().position(|sent| sent.pane == pane && !sent.finished) else {
+            return;
+        };
+        let at = self.sent[index].at;
+        if seen.gone || seen.typed.is_some_and(|typed| typed > at) {
+            self.sent.remove(index);
+            return;
+        }
+        let over = seen.worked && seen.ended.is_some_and(|ended| ended != Status::Waiting.name());
+        if !over {
+            return;
+        }
+        if seen.covered {
+            self.sent.remove(index);
+        } else {
+            self.sent[index].finished = true;
+        }
+    }
+
+    pub(crate) fn due(&self) -> Vec<u64> {
+        self.sent.iter().filter(|sent| sent.finished).map(|sent| sent.pane).collect()
+    }
+
+    pub(crate) fn take_due(&mut self) -> Vec<u64> {
+        let due = self.due();
+        self.sent.retain(|sent| !sent.finished);
+        due
     }
 
     pub(crate) fn pull<'a>(&self, pull: Option<&'a PullRequest>) -> Option<&'a PullRequest> {
