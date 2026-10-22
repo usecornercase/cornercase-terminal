@@ -88,8 +88,9 @@ Programs that use the mouse get clicks, releases, drags, movement and the wheel,
 | Hover, then click `↺` | A file row, in Uncommitted and Every project | Asks, then puts the file back as it is in the last commit, or deletes it when git doesn't track it. |
 | Click | `↕ n unchanged lines` | Shows the code between two hunks. |
 | Hover, then click | `open`, `ask agent`, `copy` on a hunk | Opens it in your editor, types its reference into the workspace's agent, copies it as a patch. |
-| Click, or press and drag | The lines of a diff | Selects a line, or several, of one file. Held on the first or last row shown, or past it, the panel scrolls with the selection. |
-| Click | `ask agent`, `copy` at the bottom, with lines selected | Types the file's path and the lines into the workspace's agent, copies their code. |
+| Click, or press and drag | The line numbers of a diff | Selects a line, or several, of one file. Held on the first or last row shown, or past it, the panel scrolls with the selection. |
+| Press and drag | The code of a diff | Selects the characters from the press to the pointer, across the lines of one file, shown reversed. A click on the code selects its line. Edge scrolling works as with lines. |
+| Click | `ask agent`, `copy` at the bottom, with lines or characters selected | Types the file's path and the lines covered into the workspace's agent, copies the selected code. |
 | Click | An empty spot in the diff | Clears the selection. |
 | Click | `expand all` / `collapse all`, `×` | Expands or collapses every file, closes the panel. |
 | Click | `⌕` | Opens the field to [filter the files](../../guides/changes/#filter-the-files), or gives it the keys back. |
@@ -105,9 +106,10 @@ See [Changes panel](../../guides/changes/).
 | --- | --- | --- |
 | Click | A folder, a file | Opens or closes the folder, reads the file. |
 | Click | `‹` | Goes back to the tree, or to the search results. |
-| Click, or press and drag | The lines of a file | Selects a line, or several. Held on the first or last line shown, or past it, the file scrolls with the selection. |
+| Click, or press and drag | The line numbers of a file | Selects a line, or several. Held on the first or last line shown, or past it, the file scrolls with the selection. |
+| Press and drag | The text of a file | Selects the characters from the press to the pointer, across lines, shown reversed. A click on the text selects its line. Edge scrolling works as with lines. |
 | Click | A change mark (`▎`, `▁`, `▔`) | Shows or hides the lines it replaced or deleted. |
-| Click | `open`, `open in…`, `ask agent`, `copy` | Opens the file in your editor, opens it in an app you pick (an editor at the first selected line, or the default app), types its path and selected lines into the workspace's agent, copies the selected lines, or the whole file when none is selected. |
+| Click | `open`, `open in…`, `ask agent`, `copy` | Opens the file in your editor, opens it in an app you pick (an editor at the first selected line, or the default app), types its path and the selected lines into the workspace's agent, copies the selected characters or lines, or the whole file when none is selected (the path, for an image or a file that cannot be shown as text). |
 | Click | The search bar | Gives it the keys. |
 | Click | `▤` | Searches file names instead of the text, or the text again. |
 | Click | `×` in the search bar | Clears the search. |

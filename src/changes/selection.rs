@@ -1,5 +1,6 @@
 use super::GapLine;
 use super::diff::{File, Kind};
+use crate::text::stretch::Stretch;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum At {
@@ -20,11 +21,15 @@ pub(crate) struct Selection {
     pub(crate) digest: u64,
     pub(crate) anchor: Spot,
     pub(crate) end: Spot,
+    pub(crate) stretch: Option<Stretch<Spot>>,
 }
 
 impl Selection {
     pub(crate) fn range(&self) -> (Spot, Spot) {
-        (self.anchor.min(self.end), self.anchor.max(self.end))
+        match &self.stretch {
+            Some(stretch) => (stretch.from.line, stretch.to.line),
+            None => (self.anchor.min(self.end), self.anchor.max(self.end)),
+        }
     }
 }
 
@@ -54,6 +59,13 @@ pub(crate) fn picked<'a>(
         }
     }
     out
+}
+
+pub(crate) fn covered<'a, 'b>(lines: &'b [Picked<'a>], stretch: Option<&Stretch<Spot>>) -> &'b [Picked<'a>] {
+    match lines.split_last() {
+        Some((_, rest)) if !rest.is_empty() && stretch.is_some_and(Stretch::ends_before) => rest,
+        _ => lines,
+    }
 }
 
 pub(crate) fn text(lines: &[Picked]) -> String {

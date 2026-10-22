@@ -35,7 +35,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Star prompt](design/star-prompt.md) (`star.rs`, `app/star_prompt.rs`, `ui/star.rs`, #276): the card that asks for a GitHub star now and then.
 - [Tour](design/tour.md) (`tour.rs`, `tour/steps.rs`, `app/tour_card.rs`, `app/tour_card/`, `app/help_menu.rs`, `ui/tour.rs`, `control/tour.rs`, `app/control/tour.rs`, `cli/tour.rs`, #400): the guided tour on first run, the catalogue of short tours, the Help button.
 - [Queue](design/queue.md) (`queue/`, `issues/browser.rs`, `ui/dialog/queue.rs`, `app/queue_panel.rs`, `app/queue_dialog.rs`, `app/control/queue/`): scheduled agent starts, their times, places and form.
-- [Files panel](design/files-panel.md) (`files/`, `highlight/syntax.rs`, `ui/files.rs`, `app/files_panel.rs`, `app/links.rs`): tree, viewer, highlighting, search, paths in panes, full screen.
+- [Files panel](design/files-panel.md) (`files/`, `highlight/syntax.rs`, `ui/files.rs`, `ui/code.rs`, `text/stretch.rs`, `app/files_panel.rs`, `app/links.rs`): tree, viewer, highlighting, search, paths in panes, full screen.
 - [Images](design/images.md) (`graphics/`, files panel): pictures in the files panel, by kitty, iTerm2 or sixel.
 - [Issues](design/issues.md) (`issues/`, `issues/browser/`, `http.rs`, `app/issues_dialog.rs`): the issues browser, its seven trackers and the issue requests.
 - [Agents](design/agents.md) (`agents.rs`, `agents/known.rs`, `agents/{claude,codex,gemini,opencode,grok,cursor}/`, `agents/launch.rs`, `app/launches.rs`): the supported agents, adding one, launching, the trust prompt.

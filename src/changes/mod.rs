@@ -21,6 +21,7 @@ use self::diff::{Diff, File, Segments};
 use crate::error::Result;
 use crate::host::theme::HostTheme;
 use crate::list::Cursor;
+use crate::text::stretch::Stretch;
 
 pub(crate) const OPEN_EVERY: Duration = Duration::from_secs(1);
 const CLOSED_EVERY: Duration = Duration::from_secs(3);
@@ -200,6 +201,12 @@ impl Panel {
     pub(crate) fn select_to(&mut self, end: selection::Spot) {
         if let Some(selection) = &mut self.selection {
             selection.end = end;
+        }
+    }
+
+    pub(crate) fn set_stretch(&mut self, stretch: Option<Stretch<selection::Spot>>) {
+        if let Some(selection) = &mut self.selection {
+            selection.stretch = stretch;
         }
     }
 

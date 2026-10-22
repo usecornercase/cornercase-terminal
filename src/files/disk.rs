@@ -12,6 +12,7 @@ use ignore::WalkBuilder;
 use crate::graphics::Picture;
 use crate::graphics::decode;
 use crate::highlight::syntax::{self, Segments};
+use crate::text::stretch::{Point, Stretch};
 
 pub(crate) const MAX_ENTRIES: usize = 10_000;
 pub(crate) const MAX_BYTES: u64 = 8 << 20;
@@ -59,12 +60,20 @@ const GONE: Stamp = Stamp { modified: None, len: 0, found: false };
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Body {
-    Text { lines: Vec<String>, styles: Option<Vec<Segments>>, source: Arc<str> },
+    Text { lines: Vec<String>, styles: Option<Vec<Segments>>, source: Arc<str>, starts: Vec<usize> },
     Image(Arc<Picture>),
     Unreadable { format: &'static str, bytes: u64, reason: String },
     Binary,
     TooLarge(u64),
     Missing,
+}
+
+#[cfg(test)]
+impl Body {
+    pub(crate) fn text(lines: Vec<String>, styles: Option<Vec<Segments>>, source: Arc<str>) -> Self {
+        let starts = syntax::lines(&source).map(|(start, _)| start).collect();
+        Self::Text { lines, styles, source, starts }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -100,6 +109,32 @@ impl Content {
         let take = usize::try_from(last.saturating_sub(first)).map_or(usize::MAX, |n| n.saturating_add(1));
         Some(syntax::lines(source).skip(skip).take(take).map(|(_, line)| line).collect::<Vec<_>>().join("\n"))
     }
+
+    pub(crate) fn source_line(&self, n: u32) -> Option<&str> {
+        let Body::Text { source, starts, .. } = &self.body else { return None };
+        let index = usize::try_from(n).ok()?.checked_sub(1)?;
+        let start = *starts.get(index)?;
+        let rest = source.get(start..)?;
+        let end = rest.find('\n').unwrap_or(rest.len());
+        Some(rest[..end].trim_end_matches('\r'))
+    }
+
+    pub(crate) fn clamped(&self, stretch: Stretch<u32>) -> Option<Stretch<u32>> {
+        let last = u32::try_from(self.lines().len()).ok()?;
+        if stretch.from.line == 0 || stretch.from.line > last {
+            return None;
+        }
+        if stretch.to.line <= last {
+            return Some(stretch);
+        }
+        let end = self.source_line(last)?.chars().count();
+        Some(Stretch { to: Point { line: last, offset: end }, ..stretch })
+    }
+
+    pub(crate) fn cut(&self, stretch: Stretch<u32>) -> Option<String> {
+        let lines = (stretch.from.line..=stretch.to.line).map(|n| self.source_line(n));
+        Some(stretch.text(lines.collect::<Option<Vec<_>>>()?))
+    }
 }
 
 pub(crate) fn read(path: &Path, previous: Option<Stamp>) -> Option<Content> {
@@ -134,10 +169,11 @@ pub(crate) fn read(path: &Path, previous: Option<Stamp>) -> Option<Content> {
         return plain(Body::Binary);
     }
     let source = String::from_utf8_lossy(&bytes);
-    let lines = syntax::lines(&source).map(|(_, line)| syntax::expand(line)).collect();
+    let (starts, lines): (Vec<usize>, Vec<String>) =
+        syntax::lines(&source).map(|(start, line)| (start, syntax::expand(line))).unzip();
     let first = syntax::lines(&source).next().map_or("", |(_, line)| line);
     let language = syntax::language(path, first);
-    content(language, Body::Text { lines, styles: None, source: Arc::from(source) })
+    content(language, Body::Text { lines, styles: None, source: Arc::from(source), starts })
 }
 
 fn head(path: &Path, limit: u64) -> io::Result<Vec<u8>> {
@@ -158,9 +194,9 @@ fn image(format: &'static str, bytes: &[u8]) -> Body {
 }
 
 pub(crate) fn highlighted(content: Content) -> Option<Content> {
-    let Body::Text { lines, source, .. } = content.body else { return None };
+    let Body::Text { lines, source, starts, .. } = content.body else { return None };
     let styles = syntax::highlight(&source, content.language?)?;
-    Some(Content { body: Body::Text { lines, styles: Some(styles), source }, ..content })
+    Some(Content { body: Body::Text { lines, styles: Some(styles), source, starts }, ..content })
 }
 
 #[cfg(test)]

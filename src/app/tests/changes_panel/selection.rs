@@ -3,11 +3,11 @@ use super::*;
 use crate::changes::selection::{At, Spot};
 use crate::ui::changes::{LinesAction, lines_actions};
 
-fn at(line: usize) -> Spot {
+pub(super) fn at(line: usize) -> Spot {
     Spot { hunk: 0, at: At::Line(line) }
 }
 
-fn line(app: &App, file: usize, l: usize) -> Position {
+pub(super) fn line(app: &App, file: usize, l: usize) -> Position {
     row(app, panel::Row::Line(file, 0, l))
 }
 
@@ -21,11 +21,11 @@ fn press_line(app: &mut App, file: usize, l: usize) {
     press(app, pos);
 }
 
-fn selected(app: &App) -> Option<(Spot, Spot)> {
+pub(super) fn selected(app: &App) -> Option<(Spot, Spot)> {
     app.panel_view().and_then(|v| v.selection).map(|s| (s.from, s.to))
 }
 
-fn footer(app: &App, action: LinesAction) -> Position {
+pub(super) fn footer(app: &App, action: LinesAction) -> Position {
     let view = app.panel_view().expect("panel");
     let (_, r) = lines_actions(panel_area(app), &view).into_iter().find(|(a, _)| *a == action).expect("a button");
     Position::new(r.x + 1, r.y)
@@ -38,20 +38,20 @@ fn select(app: &mut App, from: usize, to: usize) {
     mouse(app, MouseEventKind::Up(MouseButton::Left), to);
 }
 
-fn tabbed() -> (TempDir, App, Receiver<AppEvent>) {
+pub(super) fn tabbed() -> (TempDir, App, Receiver<AppEvent>) {
     let repo = git_repo(&[("a.txt", "one\n\ttwo\nthree\n")]);
     std::fs::write(repo.path().join("a.txt"), "one\n\tTWO\nthree\n").expect("edit");
     opened(repo)
 }
 
-fn long() -> (TempDir, App, Receiver<AppEvent>) {
+pub(super) fn long() -> (TempDir, App, Receiver<AppEvent>) {
     let repo = git_repo(&[("a.txt", "one\n")]);
     let text = (1..=200).map(|n| format!("let line_{n} = {n};")).collect::<Vec<_>>().join("\n");
     std::fs::write(repo.path().join("big.txt"), text).expect("new file");
     opened(repo)
 }
 
-fn big_file(app: &App) -> usize {
+pub(super) fn big_file(app: &App) -> usize {
     let changes::Body::Ready(diff) = app.panel_view().expect("panel").body else { panic!("ready") };
     diff.files.iter().position(|f| f.path == "big.txt").expect("big.txt")
 }

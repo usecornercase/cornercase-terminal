@@ -319,6 +319,12 @@ fn press(app: &mut App, pos: Position) {
     mouse_down(app, MouseButton::Left, pos);
 }
 
+fn drag_between(app: &mut App, from: Position, to: Position) {
+    press(app, from);
+    mouse(app, MouseEventKind::Drag(MouseButton::Left), to);
+    mouse(app, MouseEventKind::Up(MouseButton::Left), to);
+}
+
 fn right_click_first_agent(app: &mut App) {
     app.config.agents_section = true;
     let a = app.layout(AREA);

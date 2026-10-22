@@ -5,10 +5,11 @@ use arborium::{GrammarStore, Highlighter};
 use arborium_highlight::{FlatToken, spans_to_flat_tokens};
 use ratatui::style::{Color, Modifier, Style};
 
+use crate::text::TAB;
+
 pub(crate) type Segments = Vec<(String, Style)>;
 
 pub(crate) const MAX_BYTES: usize = 2 << 20;
-const TAB: &str = "    ";
 const PLAIN: Style = Style::new();
 const NAMES: [(&str, &str); 24] = [
     ("Dockerfile", "dockerfile"),

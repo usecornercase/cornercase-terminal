@@ -5,7 +5,10 @@ use std::path::Path;
 use regex::{Regex, RegexBuilder};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+pub(crate) mod stretch;
+
 pub(crate) const CRUMB_SEPARATOR: &str = " › ";
+pub(crate) const TAB: &str = "    ";
 
 pub(crate) fn folder_name(path: &Path, home: Option<&Path>) -> String {
     if home == Some(path) {

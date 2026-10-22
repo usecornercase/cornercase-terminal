@@ -9,6 +9,7 @@ import { SLOT, fileIcon, fileIconAt, folderIcon, iconStyle } from './icons';
 import { highlight, language } from './highlight';
 import { type Areas, FILES_LABEL, bottom, right } from './layout';
 import { type Project, type Workspace, isModal } from './model';
+import { type Stretch, charsAt, endsBefore, on, reverse, textOf, within } from './stretch';
 import { type Line, truncateLeft, truncateRight } from './text';
 import type { Painter } from './ui';
 
@@ -46,6 +47,7 @@ export interface FilesViewer {
   path: string;
   scroll: number;
   selection: Lines | null;
+  stretch: Stretch<number> | null;
   unfolded: Set<number>;
   find: FindState | null;
 }
@@ -65,6 +67,7 @@ export interface FilesPlace {
 export class FilesPanel {
   open = false;
   selecting: number | null = null;
+  anchor: Stretch<number> | null = null;
   scrolled = -Infinity;
   full = false;
   private places = new Map<number, FilesPlace>();
@@ -99,10 +102,17 @@ export const typing = (place: FilesPlace): boolean => (place.viewer ? !!place.vi
 
 export function viewFile(place: FilesPlace, path: string, lines: Lines | null = null, find: FindState | null = null): void {
   place.last = path;
-  place.viewer = { path, scroll: lines ? Math.max(0, lines[0] - 4) : 0, selection: lines, unfolded: new Set(), find };
+  place.viewer = { path, scroll: lines ? Math.max(0, lines[0] - 4) : 0, selection: lines, stretch: null, unfolded: new Set(), find };
 }
 
 export const ordered = ([a, b]: Lines): Lines => [Math.min(a, b), Math.max(a, b)];
+export const compare = (a: number, b: number): number => a - b;
+
+export function coveredLines(viewer: FilesViewer): Lines | null {
+  const s = viewer.stretch;
+  if (s) return [s.from.line, s.to.line - (endsBefore(compare, s) ? 1 : 0)];
+  return viewer.selection && ordered(viewer.selection);
+}
 
 export function workspaceFiles(p: Project | undefined, w: Workspace | undefined, all: FileDiff[]): Map<string, string> {
   const out = new Map<string, string>();
@@ -647,7 +657,7 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
   const wide = place(all);
   const buttons = Math.min(...wide.map((b) => b.r.x)) - inner.x - 2 >= MIN_INFO ? wide : place(all.filter((a) => a !== 'open in…'));
   const text = pic ? [] : textLines(content ?? '');
-  const sel = viewer.selection && ordered(viewer.selection);
+  const sel = coveredLines(viewer);
   const room = Math.max(0, Math.min(...buttons.map((b) => b.r.x)) - 1 - (inner.x + 1));
   const [a, b] = sel ?? [0, 0];
   const options = pic ? described(pic) : !sel ? summary(viewer.path, text.length) : a === b ? [`line ${a}`, String(a)] : [`lines ${a}-${b}`, `${a}-${b}`];
@@ -689,7 +699,7 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
       return;
     }
     const n = row.n;
-    const picked = !!sel && n >= sel[0] && n <= sel[1];
+    const picked = !viewer.stretch && !!sel && n >= sel[0] && n <= sel[1];
     if (picked) p.g.fill(r, { bg: f.surface });
     const number = rect(r.x + 1, r.y, markX - r.x - 1, 1);
     p.span(r.x + 1, r.y, String(n).padStart(digits), picked || p.hovered(number) ? { fg: 6, add: BOLD } : DARK);
@@ -699,7 +709,11 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
     const here = hits.filter((h) => h.line === n);
     const current = now !== null && hits[now].line === n ? ([hits[now].a, hits[now].b] as Lines) : null;
     paint(p, markX + 2, r.y, right(r) - 1, highlight(line, lang), here.map((h): Lines => [h.a, h.b]), LIT, current);
-    p.region({ r, click: () => app.selectFileLine(n), cursor: 'pointer' });
+    if (viewer.stretch) {
+      const lit = on(compare, viewer.stretch, n, [...line].length);
+      if (lit) reverse(p.g, { x: markX + 2, y: r.y, w: right(r) - markX - 2 }, line, lit);
+    }
+    p.region({ r, click: (cx, cy) => app.selectFileLine(n, cx >= markX + 2 ? { x: cx, y: cy } : null), cursor: 'pointer' });
     const key = block(g, n);
     if (key !== null) p.region({ r: rect(markX, r.y, 1, 1), click: () => app.toggleFileBlock(key), cursor: 'pointer' });
   });
@@ -786,9 +800,34 @@ export function lineEdge(app: App, y: number): { delta: number; max: number } | 
   return null;
 }
 
+export function stretchNear(app: App, x: number, y: number): Stretch<number> | null {
+  const shown = shownRows(app);
+  const f = panel(app, app.areas().changes);
+  const content = f?.files.get(f.place.viewer?.path ?? '');
+  if (!shown?.rows.length || content === undefined) return null;
+  const { body, rows, first } = shown;
+  const text = textLines(content);
+  const at = Math.min(first + Math.max(0, Math.min(body.h - 1, y - body.y)), rows.length - 1);
+  const row = rows[at];
+  if (row.kind === 'code') {
+    const codeX = body.x + 2 + Math.max(3, String(text.length).length) + 2;
+    const [a, b] = x < codeX ? [0, 0] : charsAt(text[row.n - 1], right(body) - codeX - 1, x - codeX);
+    return within(row.n, a, b);
+  }
+  for (let i = at; i >= 0; i--) {
+    const above = rows[i];
+    if (above.kind === 'code') return within(above.n, [...text[above.n - 1]].length, [...text[above.n - 1]].length);
+  }
+  const next = rows.find((r) => r.kind === 'code');
+  return next?.kind === 'code' ? within(next.n, 0, 0) : null;
+}
+
 export function selectedText(files: Map<string, string>, viewer: FilesViewer): string {
   const content = files.get(viewer.path);
   if (content === undefined || picture(content)) return viewer.path;
+  const lines = textLines(content);
+  const s = viewer.stretch;
+  if (s && s.from.line >= 1 && s.to.line <= lines.length) return textOf(s, lines.slice(s.from.line - 1, s.to.line));
   if (!viewer.selection) return content;
   const [a, b] = ordered(viewer.selection);
   return textLines(content).slice(a - 1, b).join('\n');

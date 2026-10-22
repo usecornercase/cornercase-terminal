@@ -121,6 +121,64 @@ test('a selection held at the bottom scrolls the file, and copy without one take
   app.destroy();
 });
 
+test('dragging over the text selects characters and copy takes exactly them, and the numbers still select lines', () => {
+  const app = demo(140);
+  app.showFile(PATH);
+  app.render();
+  const copied: string[] = [];
+  app.on((event, detail) => {
+    if (event === 'copy') copied.push(detail ?? '');
+  });
+  const viewer = app.files.place(app.workspace()?.id ?? -1).viewer;
+  assert.ok(viewer);
+  const at = app.textAt('use serde::Deserialize');
+  assert.ok(at);
+  app.pointerDown(at.x + 4, at.y, 0);
+  app.pointerUp();
+  assert.deepEqual([viewer.selection, viewer.stretch], [[1, 1], null]);
+  app.fileAction('copy');
+  assert.equal(copied.at(-1), 'use serde::Deserialize;');
+
+  app.pointerDown(at.x + 4, at.y, 0);
+  app.pointerMove(at.x + 8, at.y, 1);
+  app.pointerUp();
+  assert.ok(viewer.stretch);
+  app.fileAction('copy');
+  assert.equal(copied.at(-1), 'serde');
+  app.render();
+  assert.ok(app.textAt('line 1'));
+
+  app.pointerDown(at.x + 4, at.y, 0);
+  app.pointerMove(at.x + 2, at.y + 2, 1);
+  app.pointerUp();
+  app.fileAction('copy');
+  assert.equal(copied.at(-1), 'serde::Deserialize;\n\n#[d');
+
+  app.pointerDown(at.x - 4, at.y, 0);
+  app.pointerMove(at.x - 4, at.y + 2, 1);
+  app.pointerUp();
+  assert.deepEqual([viewer.selection, viewer.stretch], [[1, 3], null]);
+  app.fileAction('copy');
+  assert.equal(copied.at(-1), 'use serde::Deserialize;\n\n#[derive(Debug, Deserialize)]');
+  app.destroy();
+});
+
+test('ending a character selection in the numbers of a line leaves that line out of the lines it covers', () => {
+  const app = demo(140);
+  app.showFile(PATH);
+  app.render();
+  const viewer = app.files.place(app.workspace()?.id ?? -1).viewer;
+  assert.ok(viewer);
+  const at = app.textAt('use serde::Deserialize');
+  assert.ok(at);
+  app.pointerDown(at.x + 4, at.y, 0);
+  app.pointerMove(at.x - 4, at.y + 2, 1);
+  app.pointerUp();
+  app.render();
+  assert.ok(app.textAt('lines 1-2'));
+  app.destroy();
+});
+
 test('the wheel scrolls a selection and moves its end, as the app does', () => {
   const app = new App();
   app.virtual = true;

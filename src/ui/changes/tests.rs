@@ -498,6 +498,7 @@ fn shows_an_error() {
 mod selecting {
     use super::*;
     use crate::changes::selection::{At, Spot};
+    use crate::text::stretch::{Point, Stretch};
 
     fn spot(hunk: usize, line: usize) -> Spot {
         Spot { hunk, at: At::Line(line) }
@@ -505,7 +506,7 @@ mod selecting {
 
     fn selecting(from: Spot, to: Spot) -> View {
         let view = sample();
-        View { selection: Some(Selected { file: 0, from, to }), ..view }
+        View { selection: Some(Selected { file: 0, from, to, stretch: None }), ..view }
     }
 
     fn text_of(terminal: &Terminal<TestBackend>, y: u16) -> String {
@@ -516,7 +517,8 @@ mod selecting {
     fn line_rows_are_pressable_and_the_other_rows_keep_their_hits() {
         let view = sample();
         let line = row_of(&view, Row::Line(0, 0, 2));
-        assert_eq!(hit(AREA, &view, Position::new(20, line.y)), Some(Hit::Line(0, spot(0, 2))));
+        assert_eq!(hit(AREA, &view, Position::new(8, line.y)), Some(Hit::Line(0, spot(0, 2))));
+        assert_eq!(hit(AREA, &view, Position::new(20, line.y)), Some(Hit::Text(0, spot(0, 2))));
         let hunk = row_of(&view, Row::Hunk(0, 0));
         assert_eq!(hit(AREA, &view, Position::new(hunk.x + 2, hunk.y)), None);
         let file = row_of(&view, Row::File(0));
@@ -530,7 +532,9 @@ mod selecting {
             (14..44).map(|n| GapLine { old: n, new: n, text: format!("line {n}"), raw: None, syntax: None }).collect();
         view.gaps.insert((0, 1), Arc::new(lines));
         let r = row_of(&view, Row::GapLine(0, 1, 2));
-        assert_eq!(hit(AREA, &view, Position::new(20, r.y)), Some(Hit::Line(0, Spot { hunk: 1, at: At::Gap(2) })));
+        let gap = Spot { hunk: 1, at: At::Gap(2) };
+        assert_eq!(hit(AREA, &view, Position::new(8, r.y)), Some(Hit::Line(0, gap)));
+        assert_eq!(hit(AREA, &view, Position::new(20, r.y)), Some(Hit::Text(0, gap)));
     }
 
     #[test]
@@ -588,6 +592,51 @@ mod selecting {
         assert_eq!(line_near(AREA, &view, 0, y), Some(expected));
     }
 
+    #[rstest::rstest]
+    #[case::above_the_file_is_the_start_of_its_first_line(Row::Header(0), 0, Stretch::within(spot(0, 0), 0..0))]
+    #[case::a_hunk_header_is_the_end_of_the_line_above(Row::Hunk(0, 1), 3, Stretch::within(spot(0, 5), 1..1))]
+    #[case::the_spacer_is_the_end_of_the_last_line(Row::Spacer, 3, Stretch::within(spot(1, 4), 1..1))]
+    #[case::a_cell_of_the_code(Row::Line(0, 0, 2), 15, Stretch::within(spot(0, 2), 4..5))]
+    #[case::the_gutter_is_the_start_of_the_line(Row::Line(0, 0, 2), 8, Stretch::within(spot(0, 2), 0..0))]
+    #[case::past_the_end_is_the_end_of_the_line(Row::Line(0, 0, 2), 55, Stretch::within(spot(0, 2), 26..26))]
+    fn stretch_near_maps_a_pointer_to_the_chars_of_the_file(
+        #[case] row: Row,
+        #[case] x: u16,
+        #[case] expected: Stretch<Spot>,
+    ) {
+        let view = sample();
+        let y = if row == Row::Header(0) { 0 } else { row_of(&view, row).y };
+        assert_eq!(stretch_near(AREA, &view, 0, Position::new(x, y)), Some(expected));
+    }
+
+    fn stretching(from: (Spot, usize), to: (Spot, usize)) -> View {
+        let stretch = Stretch { from: Point { line: from.0, offset: from.1 }, to: Point { line: to.0, offset: to.1 } };
+        let view = sample();
+        View { selection: Some(Selected { file: 0, from: from.0, to: to.0, stretch: Some(stretch) }), ..view }
+    }
+
+    #[test]
+    fn a_character_selection_reverses_its_cells_and_keeps_the_tint_without_the_line_look() {
+        let view = stretching((spot(0, 3), 4), (spot(0, 3), 7));
+        let terminal = render(&view, None);
+        let buffer = terminal.backend().buffer();
+        let r = row_of(&view, Row::Line(0, 0, 3));
+        let reversed = |x: u16| buffer[(x, r.y)].modifier.contains(Modifier::REVERSED);
+        assert_eq!(
+            (reversed(r.x + 14), reversed(r.x + 15), reversed(r.x + 17), reversed(r.x + 18)),
+            (false, true, true, false)
+        );
+        assert_eq!(buffer[(r.x + 2, r.y)].bg, TINTS.added.expect("tint"));
+        assert_eq!((buffer[(r.x, r.y)].symbol(), buffer[(r.x + 1, r.y)].fg), (" ", Color::DarkGray));
+    }
+
+    #[test]
+    fn the_footer_names_the_lines_the_characters_cover() {
+        let view = stretching((spot(0, 3), 2), (spot(0, 5), 0));
+        let footer = text_of(&render(&view, None), parts(AREA, &view).footer.y);
+        assert!(footer.contains("lines 10-11"), "{footer}");
+    }
+
     #[test]
     fn the_edge_scrolls_only_where_there_is_more_to_show() {
         let short = Rect { height: 8, ..AREA };
@@ -610,6 +659,7 @@ mod selecting {
             digest: file.digest,
             anchor: spot(0, 1),
             end: spot(0, 2),
+            stretch: None,
         };
         assert!(selected(&view, &selection).is_some());
         assert!(selected(&View { folded: vec![true; 3], ..sample() }, &selection).is_none());

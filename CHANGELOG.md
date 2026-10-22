@@ -2,12 +2,16 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.185
+## 0.12.186
 
 - **Flows: the orchestrator keeps an eye on its team's context.** Its brief now has it check each role's context before sending it a large piece of work, and compact a role that has used more than about 70 % of its window first, with that agent's compact command and what the role must keep. Each role's command is in the team list. When its own context passes about 80 %, it tells you, since it can't compact itself.
 - `cornercase send --enter '/compact …'` to Claude Code or Codex no longer fails with `not confirmed` while the compaction runs: it returns once the agent records the compaction.
 - After an agent compacts its conversation, the line under its tab reads `compacted` where the percentage goes (`Opus 5.5 · compacted` for Claude Code), until its next reply. opencode no longer shows the summary's old figure after `/compact`.
 - Scripts: each pane in `status --json`, `watch` and `view` has `compacted: true` while its context is empty because its conversation was just compacted; `status --panes` gains `compacted` as its last column, and the text form reads `Opus 5.5 · compacted`.
+
+## 0.12.185
+
+- **Select part of a line in the files viewer and the changes panel.** Press on the text and drag to select characters, from where you pressed to the pointer and across lines, as in a pane; **copy** then copies exactly them, as they are in the file: a tab stays a tab, and a line cut at the panel's edge gives its hidden end too. A click on the text still selects its line, and a press or drag on the line numbers still selects whole lines; **ask agent** types the lines the selection covers, such as `src/main.rs:12-14`. In the changes panel a selection stays in one file, over its added, removed and unchanged lines.
 
 ## 0.12.184
 
