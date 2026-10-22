@@ -4,7 +4,6 @@ pub(crate) struct Pane {
     pub(crate) parent: Option<u64>,
     pub(crate) workspace: u64,
     pub(crate) tab: u64,
-    pub(crate) agent: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

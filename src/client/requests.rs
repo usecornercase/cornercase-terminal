@@ -36,7 +36,7 @@ pub(crate) fn use_close_unlock() -> Result<()> {
 }
 
 pub(crate) fn use_close_agent_tabs() -> Result<()> {
-    require("close-agent-tabs", "removes an agent's own worktree when it closes the agent")
+    require("close-agent-tabs", "would remove an agent's own worktree when it closes the agent")
 }
 
 pub(crate) fn use_issues() -> Result<()> {

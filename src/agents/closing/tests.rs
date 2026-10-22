@@ -3,7 +3,7 @@ use rstest::rstest;
 use super::*;
 
 fn pane(id: u64, parent: Option<u64>, workspace: u64, tab: u64) -> Pane {
-    Pane { id, parent, workspace, tab, agent: true }
+    Pane { id, parent, workspace, tab }
 }
 
 #[test]
@@ -15,8 +15,7 @@ fn an_agent_alone_closes_its_tab() {
 
 #[test]
 fn children_in_the_workspace_close_with_their_tabs() {
-    let mut shell = pane(3, Some(1), 10, 102);
-    shell.agent = false;
+    let shell = pane(3, Some(1), 10, 102);
     let panes = [pane(1, None, 10, 100), pane(2, Some(1), 10, 101), shell, pane(4, None, 10, 103)];
     let closing = closing(&panes, 1, &[]).expect("known agent");
     assert_eq!(closing.tabs, vec![100, 101, 102]);

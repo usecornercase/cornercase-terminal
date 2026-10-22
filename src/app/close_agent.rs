@@ -69,7 +69,6 @@ impl App {
                 parent: term.parent,
                 workspace,
                 tab: tab.id,
-                agent: term.agent.status().is_some(),
             })
         })
         .collect()
