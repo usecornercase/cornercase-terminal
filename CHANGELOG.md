@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.181
+
+- Scripts and plugins: each pane in `status --json`, `watch` and `view` now has `pid`, the process id of its shell, and `memory`, the memory its shell and the programs under it use, in bytes, while **Settings → UI → memory** is on. `status --panes` gains the two as its last columns.
+
 ## 0.12.180
 
 - **Flows: the orchestrator hears when a role finishes.** When a role finishes work the orchestrator sent it and the orchestrator wasn't waiting for it (it had ended its turn, or you wrote to it while it waited), cornercase tells the orchestrator once its turn is over, with the role's pane and how to read its answer. A follow-up you ask for after the plan no longer sits finished until you ask. It waits while you're typing to the orchestrator, sends one message for roles that finish together, and stays out of turns you start yourself in a role's tab. If the orchestrator's tab is gone or can't take the message, you get the role's notification instead.
