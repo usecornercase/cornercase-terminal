@@ -85,6 +85,9 @@ impl Progress {
             return None;
         }
         let target = flow.stage_of(&message.to)?;
+        if compacts(flow, message) {
+            return None;
+        }
         let moved = self.moved(flow, message, target);
         if self.active != Some(target) {
             self.entry.clone_from(&moved);
@@ -132,6 +135,15 @@ impl Progress {
 
 fn loops_back(flow: &Flow, from: usize, to: usize) -> bool {
     flow.stages.get(from).and_then(|stage| stage.back.as_ref()).is_some_and(|back| back.to == to + 1)
+}
+
+fn compacts(flow: &Flow, message: &Message) -> bool {
+    let Some(text) = message.text.as_deref() else { return false };
+    flow.roles
+        .iter()
+        .find(|role| role.name == message.to)
+        .and_then(|role| crate::agents::Known::of(&role.agent))
+        .is_some_and(|agent| agent.compacts(text))
 }
 
 #[cfg(test)]

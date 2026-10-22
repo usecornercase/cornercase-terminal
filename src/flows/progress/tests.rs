@@ -37,6 +37,14 @@ impl Script {
         self
     }
 
+    fn compact(mut self, to: &str) -> Self {
+        self = self.send(to);
+        if let Some(last) = self.messages.last_mut() {
+            last.text = Some("/compact keep: the branches".into());
+        }
+        self
+    }
+
     fn send(self, to: &str) -> Self {
         self.with(Kind::Send, ORCHESTRATOR, to)
     }
@@ -182,6 +190,37 @@ mod loops {
             s = s.send("reviewer").send("coder");
         }
         assert_eq!(s.progress().rounds(1), 4);
+    }
+}
+
+mod compacting {
+    use super::*;
+
+    #[test]
+    fn a_compact_command_to_another_stage_moves_nothing_and_counts_no_round() {
+        let script = Script::new().send("coder").send("reviewer").compact("coder");
+
+        let p = script.progress();
+
+        assert_eq!((p.active, p.rounds(1), p.outside), (Some(1), 0, None));
+        assert_eq!(script.edges().last(), Some(&None));
+    }
+
+    #[test]
+    fn a_real_send_after_it_still_loops() {
+        let p = Script::new().send("coder").send("reviewer").compact("coder").send("coder").progress();
+
+        assert_eq!((p.active, p.rounds(1), p.last.map(|l| l.edge)), (Some(0), 1, Some(Edge::Loop(1))));
+    }
+
+    #[test]
+    fn a_compact_command_is_the_agents_own() {
+        let mut script = Script::new().send("coder").send("reviewer");
+        script.flow.roles[0].agent = "gemini".into();
+
+        let p = script.compact("coder").progress();
+
+        assert_eq!((p.active, p.rounds(1)), (Some(0), 1));
     }
 }
 
