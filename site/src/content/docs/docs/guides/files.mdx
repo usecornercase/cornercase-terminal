@@ -67,7 +67,7 @@ Click a line to select it, or press on its line number and drag over several. To
 | **open** | Opens the file in a new tab with your `$VISUAL` or `$EDITOR` (or `vi`), at the first selected line. The tab closes when you quit the editor. |
 | **open in…** | A menu of your apps: **file manager** or **Finder**, **VS Code**, **Cursor**, **Zed**, **Sublime Text** when installed, and **default app**. An editor opens the file at the first selected line; **default app** opens it with the app your system picks, such as Preview for an image. It shows only on this computer (a remote window offers **copy path**), and a narrow panel leaves it out; the tree's right-click still has it. |
 | **ask agent** | Types a reference to the lines the selection covers, such as `src/returns/address.rs:11-12 `, into the agent running in this workspace and switches to its tab, so you can write your question after it. With nothing selected it types the file's path. Without an agent in the workspace, it copies the reference to your clipboard instead. |
-| **copy** | Copies the selected characters or lines to your clipboard, or the whole file when nothing is selected, exactly as it is on disk (tabs included, and the end of a line the panel cuts). |
+| **copy** | Copies the selected characters or lines to your clipboard, or the whole file when nothing is selected, exactly as it is on disk (tabs included, and the end of a line the panel cuts). For an image, a binary file, or one that is too large, gone or not read yet, it copies the file's path instead. |
 
 ### Find in the file
 
