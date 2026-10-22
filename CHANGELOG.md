@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.187
+
+- **Move by word in text fields.** `Ctrl+←` and `Ctrl+→` move the cursor to the previous or next word in every text field with a cursor: TODO items, the schedule form, the prompt when starting a flow, a flow's prompts and notes and its import page in Settings › Flows, a project's setup and teardown, the paste field in Settings › Share and the tour's first prompt. A line break counts as a stop. On macOS, where these keys switch desktops by default, turn off **Move left a space** and **Move right a space** in System Settings › Keyboard › Keyboard Shortcuts › Mission Control.
+- Text fields now run on ratatui-textarea; typing, pasting, clicks, wrapping and scrolling work as before.
+
 ## 0.12.186
 
 - **Flows: the orchestrator keeps an eye on its team's context.** Its brief now has it check each role's context before sending it a large piece of work, and compact a role that has used more than about 70 % of its window first, with that agent's compact command and what the role must keep. Each role's command is in the team list. When its own context passes about 80 %, it tells you, since it can't compact itself.
