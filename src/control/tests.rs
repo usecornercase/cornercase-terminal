@@ -380,6 +380,11 @@ fn new_columns_of_a_pane_row_go_after_the_released_ones() {
 }
 
 #[test]
+fn a_pane_row_ends_with_its_pid_and_memory() {
+    assert_eq!(PaneRow::COLUMNS[PaneRow::COLUMNS.len() - 3..], ["account_restart", "pid", "memory"]);
+}
+
+#[test]
 fn turn_over_is_spelt_as_on_the_command_line() {
     let wait = Command::Wait(Wait { until: Until::TurnOver, ..Wait::default() });
 
@@ -714,6 +719,31 @@ mod watch_v1 {
         assert!(plain.get("accounts").is_none(), "{plain}");
         assert_eq!(given["accounts"], serde_json::json!({ "claude": "work" }));
         assert_eq!(serde_json::from_value::<PaneInfo>(given).expect("a pane").accounts, accounts);
+    }
+
+    #[test]
+    fn a_pane_leaves_its_pid_and_memory_out_unless_it_has_them() {
+        let plain = serde_json::to_value(pane(4, false)).expect("a pane");
+        let given =
+            serde_json::to_value(PaneInfo { pid: Some(321), memory: Some(4096), ..pane(4, false) }).expect("a pane");
+
+        assert!(plain.get("pid").is_none() && plain.get("memory").is_none(), "{plain}");
+        assert_eq!((&given["pid"], &given["memory"]), (&json!(321), &json!(4096)));
+        let read = serde_json::from_value::<PaneInfo>(given).expect("a pane");
+        assert_eq!((read.pid, read.memory), (Some(321), Some(4096)));
+    }
+
+    #[test]
+    fn a_pane_row_gives_its_pid_and_memory_or_null() {
+        let mut project = shop_project();
+        project.workspaces[0].tabs[0].panes[0].pid = Some(321);
+        project.workspaces[0].tabs[0].panes[0].memory = Some(4096);
+        let report = Report { projects: vec![project], ..Report::default() };
+
+        let rows = serde_json::to_value(report.panes()).expect("rows");
+
+        assert_eq!((&rows[0]["pid"], &rows[0]["memory"]), (&json!(321), &json!(4096)));
+        assert_eq!((&rows[1]["pid"], &rows[1]["memory"]), (&Value::Null, &Value::Null));
     }
 
     fn agents_tab() -> TabInfo {

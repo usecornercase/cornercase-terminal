@@ -699,6 +699,8 @@ mod output {
         report.projects[0].workspaces[0].tabs[0].panes[1].held_sends = 1;
         report.projects[0].workspaces[0].tabs[0].panes[1].draft = true;
         report.projects[0].workspaces[0].tabs[0].panes[1].account_restart = Some("waiting".into());
+        report.projects[0].workspaces[0].tabs[0].panes[1].pid = Some(321);
+        report.projects[0].workspaces[0].tabs[0].panes[1].memory = Some(4096);
 
         let text = pane_table(&report.panes()).expect("a table");
 
@@ -706,11 +708,11 @@ mod output {
             text,
             "pane\ttab\tworkspace\tproject\tprogram\tagent\tstatus\tbackground_shell\tdialog\tat_prompt\tmodel\t\
                  context\tcaller\tshown\tactive\ttab_name\tworkspace_name\tbranch\tworktree\tproject_name\tpath\t\
-                 survey\tresuming\tparent\tsubagents\trole\theld_sends\tdraft\taccount_restart\n\
+                 survey\tresuming\tparent\tsubagents\trole\theld_sends\tdraft\taccount_restart\tpid\tmemory\n\
                  4\t3\t2\t1\tzsh\t-\t-\tfalse\tfalse\ttrue\t-\t-\tfalse\ttrue\ttrue\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\tfalse\t-\t0\t-\t0\tfalse\t-\n\
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\tfalse\t-\t0\t-\t0\tfalse\t-\t-\t-\n\
                  5\t3\t2\t1\tclaude\tclaude\tworking\tfalse\tfalse\t-\tOpus 5.5\t23\ttrue\tfalse\tfalse\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\ttrue\t4\t2\tcoder\t1\ttrue\twaiting\n"
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\ttrue\t4\t2\tcoder\t1\ttrue\twaiting\t321\t4096\n"
         );
     }
 

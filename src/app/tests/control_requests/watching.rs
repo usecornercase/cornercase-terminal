@@ -444,3 +444,61 @@ fn a_pane_s_account_changing_sends_its_accounts() {
     assert_ne!(app.refreshed(), before);
     assert_eq!(accounts(&changed), chosen);
 }
+
+mod pid_and_memory {
+    use super::*;
+    use crate::term::memory;
+
+    fn first_pane(app: &mut App, key: &str) -> Option<Value> {
+        let status = value(app, None, Command::Status(wire::Status {}));
+        status["projects"][0]["workspaces"][0]["tabs"][0]["panes"][0].get(key).cloned()
+    }
+
+    fn measured(app: &mut App, rx: &Receiver<AppEvent>) {
+        app.config.memory = true;
+        refreshing(app, rx, "the shell is measured", |a| {
+            a.projects[0].workspaces[0].tabs[0].panes[0].memory.bytes().is_some()
+        });
+    }
+
+    #[test]
+    fn a_pane_gives_the_pid_of_its_shell() {
+        let (mut app, rx, _dirs) = app_with(1);
+
+        let pid = first_pane(&mut app, "pid").and_then(|pid| pid.as_i64()).expect("a pid");
+        type_text(&mut app, "echo pid-\"\"$$");
+        send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+        shows(&mut app, &rx, &format!("pid-{pid}"));
+    }
+
+    #[test]
+    fn a_pane_gives_its_memory_only_while_the_setting_is_on() {
+        let (mut app, rx, _dirs) = app_with(1);
+        let before = first_pane(&mut app, "memory");
+        measured(&mut app, &rx);
+
+        let on = first_pane(&mut app, "memory").and_then(|bytes| bytes.as_u64());
+        app.config.memory = false;
+        let off = first_pane(&mut app, "memory");
+
+        assert_eq!(before, None);
+        assert!(on > Some(0), "{on:?}");
+        assert_eq!(off, None);
+    }
+
+    #[test]
+    fn a_new_memory_figure_leaves_the_session_unchanged_for_watchers() {
+        let (mut app, rx, _dirs) = app_with(1);
+        measured(&mut app, &rx);
+        let before = app.refreshed();
+
+        app.projects[0].workspaces[0].tabs[0].panes[0].memory = memory::Pane::default();
+        let cleared = first_pane(&mut app, "memory");
+        let unmeasured = app.refreshed();
+        measured(&mut app, &rx);
+
+        assert_eq!(cleared, None);
+        assert_eq!((unmeasured, app.refreshed()), (before, before));
+    }
+}

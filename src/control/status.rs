@@ -119,6 +119,8 @@ impl Report {
             held_sends: pane.held_sends,
             draft: pane.draft,
             account_restart: pane.account_restart.clone(),
+            pid: pane.pid,
+            memory: pane.memory,
         }
     }
 }
@@ -162,10 +164,12 @@ pub struct PaneRow {
     pub(crate) held_sends: u32,
     pub(crate) draft: bool,
     pub(crate) account_restart: Option<String>,
+    pub(crate) pid: Option<i32>,
+    pub(crate) memory: Option<u64>,
 }
 
 impl PaneRow {
-    pub const COLUMNS: [&str; 29] = [
+    pub const COLUMNS: [&str; 31] = [
         "pane",
         "tab",
         "workspace",
@@ -195,6 +199,8 @@ impl PaneRow {
         "held_sends",
         "draft",
         "account_restart",
+        "pid",
+        "memory",
     ];
 }
 
@@ -327,4 +333,8 @@ pub struct PaneInfo {
     pub(crate) accounts: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) account_restart: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) pid: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) memory: Option<u64>,
 }
