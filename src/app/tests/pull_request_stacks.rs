@@ -1,5 +1,6 @@
 use super::pull_requests::{Repo, VIEW, notes, repo_on, row_text};
 use super::*;
+use crate::app::pull_requests::PullRequests;
 use crate::test_util::{fake_gh, fixture};
 
 const STACK: &str = fixture!("gh/2.101.0/stack.json");
@@ -42,7 +43,7 @@ fn stacked_by(stack: &str) -> Repo {
 }
 
 fn row_of(repo: &Repo, branch: &str) -> usize {
-    let on = |w: &crate::project::Workspace| crate::git::checked_out(&w.path).as_deref() == Some(branch);
+    let on = |w: &Workspace| git::checked_out(&w.path).as_deref() == Some(branch);
     repo.app.projects[0].workspaces.iter().position(on).expect("a workspace on the branch")
 }
 
@@ -214,7 +215,7 @@ mod pacing {
     fn a_host_without_stacks_is_asked_once() {
         let mut repo = stacked_by(UNSUPPORTED);
         set(&repo, "stack-err", "gh: Field 'stack' doesn't exist on type 'PullRequest'");
-        repo.app.git.pulls = Default::default();
+        repo.app.git.pulls = PullRequests::default();
         repo.ask("gh answers");
         let note = repo.app.pull_requests_note();
         let asked = graphql_calls(&repo);
