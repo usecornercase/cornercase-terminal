@@ -473,6 +473,13 @@ mod sections {
     }
 
     #[test]
+    fn another_tour_closes_what_the_first_one_opened() {
+        let mut t = started("todo", 1);
+        t.app.start_tour(0, Some(0), true);
+        assert_eq!(t.app.screen.side, None);
+    }
+
+    #[test]
     fn a_panel_the_user_had_open_stays_open() {
         let mut t = Tour::with(1, false, Some(&Saved::default()));
         t.app.toggle_todo();

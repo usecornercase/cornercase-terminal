@@ -180,6 +180,7 @@ impl App {
 
     pub(super) fn start_tour(&mut self, tour: usize, step: Option<usize>, card: bool) {
         let Some(t) = TOURS.get(tour) else { return };
+        self.hide_section();
         let saved = &mut self.messages.tour.saved;
         let step = step.unwrap_or_else(|| saved.resume_at(t)).min(t.steps.len().saturating_sub(1));
         if saved.finished(t.id) {
