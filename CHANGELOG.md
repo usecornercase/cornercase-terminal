@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.178
+
+- **Close agent only closes agents.** The agents section's ` × ` and **close agent** close the agent's tab and the tabs of the agents it started in that workspace, and never remove anything from disk. An agent in a worktree of its own leaves the workspace, its worktree and its branch as they were (the workspace's ` × ` and the Worktrees dialog remove them). Closing a member of a flow run closes its whole team and ends the run; the run's worktrees and folder stay. The confirmation no longer checks git or offers to delete the branch.
+- Scripts: `cornercase close --agent` does the same, refuses `--force` and `--unlock`, and `--delete-branch` is gone. Its answer keeps its shape (`removes` is always null, `branches` empty). The new contract feature `close-agent-tabs` tells a client that the server's `close-agent` never removes anything, and `close --agent` checks it, so restart the server after updating.
+
 ## 0.12.177
 
 - **Share your setup with a colleague.** In Settings, **share** › **copy my setup** copies your settings as a text to send in a chat: how your agents start, the prompt, issue branches and trackers, worktrees, the UI, and each repository's setup and teardown, matched by its git remote wherever your colleague cloned it. Tokens, bots, paired phones, accounts and personal settings stay out. Your colleague pastes it in Settings, clicks **preview** to see each setting that would change (what will run on its own in red), unticks what they don't want and clicks **import**; a text with a value the settings refuse imports nothing. From a terminal, `cornercase config export` and `cornercase config import FILE` do the same, and scripts have the `config-export` and `config-import` requests.
