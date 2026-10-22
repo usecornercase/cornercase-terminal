@@ -5,7 +5,7 @@ use crate::accounts::login::{Login, State};
 use crate::agents::activity::{Activity, BRAILLE, glyph};
 use crate::agents::context::counting::Ledger;
 use crate::agents::context::discovery::Job;
-use crate::agents::context::{Context, Look, Record};
+use crate::agents::context::{Compaction, Context, Look, Record};
 
 const ACTION_REQUIRED: [&str; 2] = ["[ ! ] Action Required", "[ . ] Action Required"];
 
@@ -129,6 +129,10 @@ impl Reader {
             return rollout.prompted();
         }
         None
+    }
+
+    pub(in crate::agents) fn compaction(&self) -> Compaction {
+        self.rollout.as_ref().map(rollout::Rollout::compaction).unwrap_or_default()
     }
 
     pub(in crate::agents) fn activity(&self, title: &str) -> Activity {

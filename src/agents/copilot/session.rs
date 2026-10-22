@@ -8,7 +8,7 @@ use super::events::{self, Fold};
 use crate::agents::activity::Activity;
 use crate::agents::context::counting::Record;
 use crate::agents::context::jsonl::{self, Tail};
-use crate::agents::context::{Context, discovery, message};
+use crate::agents::context::{Compaction, Context, discovery, message};
 use crate::process;
 
 const BACK_DEFAULT: u64 = 64 * 1024 * 1024;
@@ -36,6 +36,7 @@ pub(in crate::agents) struct Session {
     pub(in crate::agents) prompted: Option<SystemTime>,
     pub(in crate::agents) activity: Option<Activity>,
     pub(in crate::agents) context: Option<Context>,
+    pub(in crate::agents) compaction: Compaction,
     pub(in crate::agents) counted: Vec<Record>,
     pub(in crate::agents) subagents: usize,
     held: bool,
@@ -199,6 +200,7 @@ impl Session {
             id,
             activity: None,
             context: None,
+            compaction: Compaction::default(),
             counted: Vec::new(),
             subagents: 0,
             prompted: None,
@@ -218,6 +220,7 @@ impl Session {
         self.activity = self.current_activity();
         self.subagents = self.fold.subagents(SystemTime::now());
         self.context = self.fold.context();
+        self.compaction = self.fold.compaction();
         self.prompted = self.prompted.max(self.fold.prompted);
         self.resumable = self.fold.resumable;
         self.counted.append(&mut self.fold.counted);

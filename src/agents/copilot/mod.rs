@@ -5,7 +5,7 @@ use std::time::SystemTime;
 use crate::agents::activity::Activity;
 use crate::agents::context::counting::Ledger;
 use crate::agents::context::discovery::Follower;
-use crate::agents::context::{Context, Look, Record};
+use crate::agents::context::{Compaction, Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "copilot";
 pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = None;
@@ -88,6 +88,7 @@ struct Held {
     activity: Option<Activity>,
     resumable: bool,
     subagents: usize,
+    compaction: Compaction,
 }
 
 #[derive(Debug, Default)]
@@ -119,6 +120,7 @@ impl Reader {
                         activity: session.activity,
                         resumable: session.resumable,
                         subagents: session.subagents,
+                        compaction: session.compaction,
                     }
                 });
                 if self.held.is_none() {
@@ -131,6 +133,10 @@ impl Reader {
 
     pub(in crate::agents) fn activity(&self) -> Option<Activity> {
         self.held.as_ref()?.activity
+    }
+
+    pub(in crate::agents) fn compaction(&self) -> Compaction {
+        self.held.as_ref().map(|held| held.compaction).unwrap_or_default()
     }
 
     pub(in crate::agents) fn subagents(&self) -> usize {

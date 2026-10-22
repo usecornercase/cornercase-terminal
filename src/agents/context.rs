@@ -27,6 +27,19 @@ pub(crate) struct Context {
     pub(crate) percent: Option<u16>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct Compaction {
+    pub(crate) at: Option<SystemTime>,
+    pub(crate) hides: bool,
+}
+
+impl Compaction {
+    pub(in crate::agents) fn happened(&mut self, at: SystemTime) {
+        self.at = self.at.max(Some(at));
+        self.hides = true;
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Record {
     Claude(PathBuf),
@@ -149,6 +162,18 @@ impl Reader {
         }
     }
 
+    fn compaction(&self) -> Compaction {
+        match self {
+            Self::Claude(reader) => reader.compaction(),
+            Self::Codex(reader) => reader.compaction(),
+            Self::Gemini(reader) => reader.compaction(),
+            Self::Opencode(reader) => reader.compaction(),
+            Self::Grok(reader) => reader.compaction(),
+            Self::Copilot(reader) => reader.compaction(),
+            Self::Cursor(_) => Compaction::default(),
+        }
+    }
+
     fn record(&self) -> Option<Record> {
         match self {
             Self::Claude(reader) => reader.record(),
@@ -225,6 +250,10 @@ impl Pane {
 
     pub(crate) fn context(&self) -> Option<&Context> {
         self.shown.as_ref()
+    }
+
+    pub(crate) fn compaction(&self) -> Compaction {
+        self.reader.as_ref().map(Reader::compaction).unwrap_or_default()
     }
 
     pub(crate) fn prompted(&self) -> Option<SystemTime> {

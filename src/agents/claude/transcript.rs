@@ -8,7 +8,7 @@ use serde_json::Value;
 use super::MODEL_FLAG;
 use crate::agents::context::counting::{self, Record as CountRecord, Usage as CountUsage};
 use crate::agents::context::jsonl::{Batch, Tail};
-use crate::agents::context::{Context, Look, fresh, percent};
+use crate::agents::context::{Compaction, Context, Look, fresh, percent};
 use crate::process;
 
 const DIR_NAME_MAX: usize = 200;
@@ -223,6 +223,7 @@ pub(in crate::agents) struct Transcript {
     pub(in crate::agents) reply: Option<Reply>,
     pub(in crate::agents) prompted: Option<SystemTime>,
     pub(in crate::agents) interrupted: Option<SystemTime>,
+    pub(in crate::agents) compaction: Compaction,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -235,6 +236,11 @@ impl Reply {
     pub(in crate::agents) fn context(&self, limits: &Limits) -> Context {
         let window = limits.window(&self.model, self.tokens);
         Context { model: model_name(&self.model), percent: Some(percent(self.tokens, window)) }
+    }
+
+    pub(in crate::agents) fn shown(&self, limits: &Limits, compaction: Compaction) -> Context {
+        let context = self.context(limits);
+        if compaction.hides { Context { percent: None, ..context } } else { context }
     }
 }
 
@@ -283,6 +289,7 @@ impl Transcript {
             reply: None,
             prompted: None,
             interrupted: None,
+            compaction: Compaction::default(),
         }
     }
 
@@ -290,6 +297,7 @@ impl Transcript {
         let Ok(batch) = self.tail.read(&self.path) else {
             self.reply = None;
             self.interrupted = None;
+            self.compaction = Compaction::default();
             self.len = 0;
             self.tail = Tail::default();
             return;
@@ -298,17 +306,19 @@ impl Transcript {
             self.reply = None;
             self.prompted = None;
             self.interrupted = None;
+            self.compaction = Compaction::default();
         }
         self.len = std::fs::metadata(&self.path).map_or(0, |m| m.len());
         if let Some(mark) = batch.bytes.rsplit(|b| *b == b'\n').find_map(mark) {
-            self.reply = match mark {
-                Mark::Reply(reply) => Some(reply),
-                Mark::Compacted => None,
-            };
+            self.compaction.hides = matches!(mark, Mark::Compacted);
+            if let Mark::Reply(reply) = mark {
+                self.reply = Some(reply);
+            }
         }
         let read_at = SystemTime::now();
         for line in batch.bytes.split(|b| *b == b'\n') {
             let Some(entry) = claude_entry(line) else { continue };
+            self.note_compaction(&entry, read_at);
             if entry["type"] == "user"
                 && entry["isSidechain"] != true
                 && std::str::from_utf8(line).is_ok_and(|line| line.contains(INTERRUPTED))
@@ -319,6 +329,14 @@ impl Transcript {
             if let Some(record) = counted_claude(&entry, true) {
                 self.counted.push(record);
             }
+        }
+    }
+}
+
+impl Transcript {
+    fn note_compaction(&mut self, entry: &Value, read_at: SystemTime) {
+        if entry["type"] == "system" && entry["subtype"] == "compact_boundary" && entry["isSidechain"] != true {
+            self.compaction.at = self.compaction.at.max(counting::timestamp(entry).or(Some(read_at)));
         }
     }
 }

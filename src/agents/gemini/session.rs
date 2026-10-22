@@ -8,7 +8,7 @@ use crate::agents::context::counting::{self, Record, Usage};
 use crate::agents::context::discovery::{folder, home, named};
 use crate::agents::context::jsonl::{Tail, head};
 use crate::agents::context::message::{self, Backwards, Each, Role, Said, Spoken};
-use crate::agents::context::{Context, percent};
+use crate::agents::context::{Compaction, Context, percent};
 use crate::error::{Error, Result};
 use crate::process;
 use crate::time::Stamp;
@@ -36,6 +36,7 @@ pub(in crate::agents) struct Session {
     pub(crate) prompted: Option<SystemTime>,
     used: bool,
     model: Option<String>,
+    pub(crate) compaction: Compaction,
     pub(crate) counted: Vec<Record>,
 }
 
@@ -52,6 +53,7 @@ impl Session {
             prompted: None,
             used: false,
             model: None,
+            compaction: Compaction::default(),
             counted: Vec::new(),
         }
     }
@@ -68,6 +70,7 @@ impl Session {
             self.prompted = None;
             self.used = false;
             self.model = None;
+            self.compaction = Compaction::default();
             self.footer = None;
             self.picked = None;
             self.id = metadata(&self.path)?;
@@ -100,6 +103,7 @@ impl Session {
         };
         if let Some(messages) = set.get("messages") {
             self.replies.clear();
+            self.compaction.hides = false;
             for message in messages.as_array().into_iter().flatten() {
                 self.message(message);
             }
@@ -111,6 +115,10 @@ impl Session {
             self.counted.push(record);
         }
         let Some(id) = entry["id"].as_str() else { return };
+        if snapshot(entry) {
+            let at = entry["timestamp"].as_str().and_then(Stamp::parse).unwrap_or_else(SystemTime::now);
+            self.compaction.happened(at);
+        }
         if prompt(entry) {
             self.prompted = self.prompted.max(entry["timestamp"].as_str().and_then(Stamp::parse));
             self.used = true;
@@ -136,6 +144,9 @@ impl Session {
         };
         if reply.model.is_some() {
             self.model.clone_from(&reply.model);
+        }
+        if reply.input.is_some() {
+            self.compaction.hides = false;
         }
         if let Some(at) = self.replies.iter().position(|r| r.id == reply.id) {
             self.replies[at] = reply;
@@ -265,6 +276,10 @@ fn text(content: &Value) -> Option<String> {
         ),
         _ => None,
     }
+}
+
+fn snapshot(entry: &Value) -> bool {
+    entry["type"] == "user" && text(&entry["content"]).is_some_and(|t| t.contains("<state_snapshot>"))
 }
 
 fn prompt(entry: &Value) -> bool {

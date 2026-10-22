@@ -231,6 +231,7 @@ impl App {
         (term.id, pid, pid.and_then(process::name), pid.and_then(process::cwd), term.shell_pid()).hash(hash);
         (term.agent.agent(), term.agent.status().map(Status::name), term.agent.background_shell()).hash(hash);
         term.context.context().map(|c| (&c.model, c.percent)).hash(hash);
+        term.context.compaction().hides.hash(hash);
         term.context.subagents().hash(hash);
         (term.dialog(), term.survey(), term.resume.is_some(), resuming, parent).hash(hash);
         term.emulator.title().hash(hash);
@@ -268,6 +269,7 @@ impl App {
             account_restart: self.restart_waiting(term.id).map(|_| "waiting".to_string()),
             pid: term.shell_pid(),
             memory: term.memory.bytes().filter(|_| self.config.memory),
+            compacted: term.context.compaction().hides,
         }
     }
 

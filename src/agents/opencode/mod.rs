@@ -3,7 +3,7 @@ use std::time::SystemTime;
 use crate::agents::activity::Activity;
 use crate::agents::context::counting::Ledger;
 use crate::agents::context::discovery::Job;
-use crate::agents::context::{Context, Look, Record};
+use crate::agents::context::{Compaction, Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "opencode";
 pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = None;
@@ -77,6 +77,10 @@ impl Reader {
 
     pub(in crate::agents) fn activity(&self) -> Option<Activity> {
         self.session.as_ref().map(|session| activity(session.turn))
+    }
+
+    pub(in crate::agents) fn compaction(&self) -> Compaction {
+        self.session.as_ref().map(|session| session.compaction).unwrap_or_default()
     }
 
     pub(in crate::agents) fn record(&self) -> Option<Record> {

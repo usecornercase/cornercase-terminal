@@ -4,7 +4,7 @@ use std::time::SystemTime;
 use crate::agents::activity::Activity;
 use crate::agents::context::counting::Ledger;
 use crate::agents::context::discovery::Job;
-use crate::agents::context::{Context, Look, Record};
+use crate::agents::context::{Compaction, Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "grok";
 pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = None;
@@ -83,6 +83,7 @@ struct Held {
     activity: Activity,
     turn_open: bool,
     resumable: bool,
+    compaction: Compaction,
 }
 
 #[derive(Debug, Default)]
@@ -137,6 +138,7 @@ impl Reader {
             activity: session.activity,
             turn_open: session.turn_open,
             resumable: session.resumable,
+            compaction: session.compaction,
         });
         self.session = Some(Box::new(session));
         prompted
@@ -145,6 +147,10 @@ impl Reader {
     pub(in crate::agents) fn activity(&self, title: &str) -> Option<Activity> {
         let held = self.held.as_ref()?;
         if held.turn_open && title.contains("Action Required") { Some(Activity::Waiting) } else { Some(held.activity) }
+    }
+
+    pub(in crate::agents) fn compaction(&self) -> Compaction {
+        self.held.as_ref().map(|held| held.compaction).unwrap_or_default()
     }
 
     pub(in crate::agents) fn record(&self) -> Option<Record> {

@@ -4,7 +4,7 @@ use std::time::SystemTime;
 use serde_json::Value;
 
 use crate::agents::context::counting::{self, Record, Usage};
-use crate::agents::context::{Context, fresh, percent};
+use crate::agents::context::{Compaction, Context, fresh, percent};
 use crate::agents::stats::Tokens;
 
 const OPEN: usize = 64;
@@ -24,6 +24,7 @@ pub(in crate::agents) struct Fold {
     concrete: Option<String>,
     usage: Option<Reply>,
     boundary: Option<SystemTime>,
+    compacted: Option<SystemTime>,
     permissions: HashSet<String>,
     asks: HashSet<String>,
     shells: HashSet<String>,
@@ -104,6 +105,7 @@ impl Fold {
             }
             "session.compaction_complete" if data["success"].as_bool() != Some(false) => {
                 self.boundary = at.or(self.boundary);
+                self.compacted = at.or(self.compacted);
             }
             "session.compaction_complete" => {}
             _ => return false,
@@ -243,6 +245,14 @@ impl Fold {
 
     pub(in crate::agents) fn shell_only(&self) -> bool {
         !self.open && !self.shells.is_empty()
+    }
+
+    pub(in crate::agents) fn compaction(&self) -> Compaction {
+        let replied = self.usage.as_ref().is_some_and(|reply| self.boundary.is_none_or(|boundary| reply.at > boundary));
+        Compaction {
+            at: self.compacted,
+            hides: self.compacted.is_some() && self.compacted == self.boundary && !replied,
+        }
     }
 
     pub(in crate::agents) fn context(&self) -> Option<Context> {

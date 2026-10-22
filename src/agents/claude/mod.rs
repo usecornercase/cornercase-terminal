@@ -9,7 +9,7 @@ use crate::accounts::login::{Login, State};
 use crate::agents::activity::{Activity, BRAILLE, glyph};
 use crate::agents::context::counting::Ledger;
 use crate::agents::context::discovery::Job;
-use crate::agents::context::{Context, Look, Record};
+use crate::agents::context::{Compaction, Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "claude";
 pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = Some(crate::agents::AccountHome {
@@ -188,12 +188,13 @@ impl Reader {
             *shown = None;
         }
         let transcript = self.transcript.get_or_insert_with(|| Transcript::new(path));
-        let before = transcript.reply.clone();
+        let before = (transcript.reply.clone(), transcript.compaction.hides);
         transcript.update();
         let prompted = transcript.prompted;
         ledger.apply(&transcript.path.to_string_lossy(), since, std::mem::take(&mut transcript.counted));
-        if transcript.reply != before {
-            *shown = transcript.reply.as_ref().map(|reply| reply.context(&Limits::read(dir, cwd, look)));
+        if (transcript.reply.clone(), transcript.compaction.hides) != before {
+            let compaction = transcript.compaction;
+            *shown = transcript.reply.as_ref().map(|reply| reply.shown(&Limits::read(dir, cwd, look), compaction));
         }
         let parent = transcript.path.with_extension("").join("subagents");
         if let Some(mut found) = self.following.take() {
@@ -222,6 +223,10 @@ impl Reader {
             self.home = Some((look.pid, look.args.clone(), own));
         }
         self.home.as_ref().and_then(|(_, _, own)| own.clone()).or_else(|| look.claude_dir.map(Path::to_path_buf))
+    }
+
+    pub(in crate::agents) fn compaction(&self) -> Compaction {
+        self.transcript.as_ref().map(|transcript| transcript.compaction).unwrap_or_default()
     }
 
     pub(in crate::agents) fn subagents(&self) -> usize {

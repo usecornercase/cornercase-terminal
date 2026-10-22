@@ -131,6 +131,30 @@ fn a_new_usage_event_restores_the_percentage_after_compaction() {
     assert_eq!(file.append("\n"), Some(shown("gpt-5.4", Some(20))));
 }
 
+#[test]
+fn a_compaction_marks_the_rollout_with_its_time_until_the_next_usage_event() {
+    let mut file = Written::new(CONTEXT);
+    let at = Stamp::parse("2026-10-05T12:02:02.000Z");
+
+    file.append(COMPACTED);
+    let marked = file.rollout.compaction();
+    file.append(CONTEXT.lines().last().expect("token event"));
+    file.append("\n");
+
+    assert_eq!((marked, file.rollout.compaction()), (Compaction { at, hides: true }, Compaction { at, hides: false }));
+}
+
+#[test]
+fn a_compaction_and_its_usage_event_in_one_read_keep_the_time() {
+    let mut file = Written::new(CONTEXT);
+    let usage = CONTEXT.lines().last().expect("token event");
+
+    file.append(&format!("{COMPACTED}{usage}\n"));
+
+    assert_eq!(file.rollout.context(), Some(shown("gpt-5.4", Some(20))));
+    assert_eq!(file.rollout.compaction(), Compaction { at: Stamp::parse("2026-10-05T12:02:02.000Z"), hides: false });
+}
+
 #[rstest]
 #[case::missing_header("")]
 #[case::malformed_header("{broken}\n")]

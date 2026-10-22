@@ -74,6 +74,18 @@ fn compression_replaces_the_history_and_clears_old_usage_without_confirming_a_pr
 }
 
 #[test]
+fn a_compression_is_said_until_a_reply_with_usage_follows() {
+    let (_dir, mut session) = written(&format!("{PROMPT}{REPLY}"));
+    let at = Stamp::parse("2026-10-10T12:47:31.593Z");
+
+    append(&mut session, COMPACTED);
+    let marked = session.compaction;
+    append(&mut session, REPLY);
+
+    assert_eq!((marked, session.compaction), (Compaction { at, hides: true }, Compaction { at, hides: false }));
+}
+
+#[test]
 fn a_compressed_history_is_resumable_when_discovered_without_its_original_prompts() {
     let (_dir, session) = written(COMPACTED);
     assert_eq!(session.id(), Some(FakeGemini::ID));

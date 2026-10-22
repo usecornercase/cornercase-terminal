@@ -36,6 +36,8 @@ refuses too (`survey` in the JSON): `cornercase keys --pane N 0` dismisses it.
 is back, it takes no input and `cornercase send` refuses it (`resuming` in the JSON).
 `(role coder)` marks a flow member and the role it plays (`role` in the JSON).
 `(collapsed)` is an agent whose children are hidden in the agents section (`collapsed` in the JSON).
+`Opus 5.5 · compacted` is an agent whose conversation was just compacted: its context is empty
+until its next reply and comes back then (`compacted` in the JSON, there only while true).
 
 With --panes it prints one line per pane instead, for scripts, in the sidebar's order: a header
 line naming the columns, then one row per pane, its columns separated by tabs. The columns are
@@ -44,7 +46,8 @@ at_prompt, model, context, caller (the pane running the command), shown (the pan
 shows), active (its tab's active pane), tab_name, workspace_name, branch, worktree, project_name,
 path, survey (Claude Code's feedback survey shows), resuming (the agent is coming back in its
 conversation), parent (the pane that started it), subagents (how many it still runs) and role (the
-role it plays in a flow, from its run); new ones only ever go at the end. Values are as in the
+role it plays in a flow, from its run) and compacted (true while the context is empty because the
+conversation was just compacted, the last column); new ones only ever go at the end. Values are as in the
 JSON (true or false, context as a number, full paths), with - where there is none and a space for a tab or line break in a name.
 With --json, it prints {\"panes\": [...]}, one object per pane with the columns as keys and null
 where there is no value.

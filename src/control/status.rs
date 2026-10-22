@@ -121,6 +121,7 @@ impl Report {
             account_restart: pane.account_restart.clone(),
             pid: pane.pid,
             memory: pane.memory,
+            compacted: pane.compacted,
         }
     }
 }
@@ -166,10 +167,11 @@ pub struct PaneRow {
     pub(crate) account_restart: Option<String>,
     pub(crate) pid: Option<i32>,
     pub(crate) memory: Option<u64>,
+    pub(crate) compacted: bool,
 }
 
 impl PaneRow {
-    pub const COLUMNS: [&str; 31] = [
+    pub const COLUMNS: [&str; 32] = [
         "pane",
         "tab",
         "workspace",
@@ -201,6 +203,7 @@ impl PaneRow {
         "account_restart",
         "pid",
         "memory",
+        "compacted",
     ];
 }
 
@@ -360,4 +363,6 @@ pub struct PaneInfo {
     pub(crate) pid: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) memory: Option<u64>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) compacted: bool,
 }

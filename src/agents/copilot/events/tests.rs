@@ -180,6 +180,18 @@ mod context {
     }
 
     #[test]
+    fn a_compaction_is_said_until_a_boundary_or_a_main_reply_follows() {
+        let usage = r#"{"type":"session.usage_record","data":{"usage":{"model":"gpt-4.1","inputTokens":32000,"maxPromptTokens":64000}},"id":"x","timestamp":"2026-10-17T17:23:20.000Z"}"#;
+        let cleared_later = CONTEXT_CLEARED.replace("17:23:08", "17:23:12");
+        let at = Stamp::parse("2026-10-17T17:23:08.000Z");
+
+        assert_eq!(fold(&[TURN, COMPACTION]).compaction(), Compaction { at, hides: true });
+        assert_eq!(fold(&[TURN, COMPACTION, usage]).compaction(), Compaction { at, hides: false });
+        assert_eq!(fold(&[TURN, COMPACTION, &cleared_later]).compaction(), Compaction { at, hides: false });
+        assert_eq!(fold(&[TURN, TRUNCATION]).compaction(), Compaction::default());
+    }
+
+    #[test]
     fn a_model_change_shows_the_new_model_without_a_percentage() {
         assert_eq!(shown(&fold(&[TURN, MODEL_CHANGE])), Some(("claude-sonnet-4.5".into(), None)));
     }

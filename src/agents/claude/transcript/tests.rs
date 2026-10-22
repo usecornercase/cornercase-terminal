@@ -6,7 +6,7 @@ use super::*;
 use crate::agents::Known;
 use crate::agents::context::counting::Ledger;
 use crate::agents::context::tests::pane_look;
-use crate::agents::context::{Look, Pane};
+use crate::agents::context::{Compaction, Look, Pane};
 use crate::test_util::{Sleeper, TempDir};
 use crate::time::Stamp;
 
@@ -21,6 +21,8 @@ fn user(text: &str) -> String {
 }
 
 const COMPACTED: &str = r#"{"type":"system","subtype":"compact_boundary","content":"Conversation compacted","isMeta":false,"level":"info","compactMetadata":{"trigger":"manual","preTokens":180000}}"#;
+
+const COMPACTED_AT: &str = r#"{"type":"system","subtype":"compact_boundary","timestamp":"2026-10-22T11:14:54.518Z","content":"Conversation compacted","isMeta":false,"level":"info","compactMetadata":{"trigger":"manual","preTokens":180000}}"#;
 
 fn reply(model: &str, tokens: u64) -> Reply {
     Reply { model: model.into(), tokens }
@@ -117,9 +119,43 @@ mod transcript {
         file.lines(&[assistant("claude-opus-5-5", 1, 0, 180_000)]);
 
         let compacted = file.lines(&[COMPACTED.to_string(), user("summary")]);
+        let hidden = file.transcript.compaction.hides;
         let answered = file.lines(&[assistant("claude-opus-5-5", 1, 0, 30_000)]);
 
-        assert_eq!((compacted, answered), (None, Some(reply("claude-opus-5-5", 30_001))));
+        assert_eq!(
+            (compacted, hidden, answered, file.transcript.compaction.hides),
+            (Some(reply("claude-opus-5-5", 180_001)), true, Some(reply("claude-opus-5-5", 30_001)), false)
+        );
+    }
+
+    #[test]
+    fn a_compaction_marks_the_transcript_with_its_time_until_the_next_reply() {
+        let mut file = Written::new();
+        file.lines(&[assistant("claude-opus-5-5", 1, 0, 180_000)]);
+        let at = Stamp::parse("2026-10-22T11:14:54.518Z");
+
+        file.lines(&[COMPACTED_AT.to_string()]);
+        let marked = file.transcript.compaction;
+        file.lines(&[assistant("claude-opus-5-5", 1, 0, 30_000)]);
+
+        assert_eq!(
+            (marked, file.transcript.compaction),
+            (Compaction { at, hides: true }, Compaction { at, hides: false })
+        );
+    }
+
+    #[test]
+    fn a_compaction_and_the_next_reply_in_one_read_keep_the_time_and_show_the_reply() {
+        let mut file = Written::new();
+        file.lines(&[assistant("claude-opus-5-5", 1, 0, 180_000)]);
+
+        let found = file.lines(&[COMPACTED_AT.to_string(), assistant("claude-opus-5-5", 1, 0, 30_000)]);
+
+        assert_eq!(found, Some(reply("claude-opus-5-5", 30_001)));
+        assert_eq!(
+            file.transcript.compaction,
+            Compaction { at: Stamp::parse("2026-10-22T11:14:54.518Z"), hides: false }
+        );
     }
 
     #[test]
@@ -162,7 +198,8 @@ mod transcript {
         let lines: Vec<String> =
             std::iter::once(COMPACTED.to_string()).chain(std::iter::repeat_n(user(&"x".repeat(1000)), 1100)).collect();
 
-        assert_eq!(file.lines(&lines), None);
+        assert_eq!(file.lines(&lines), Some(reply("claude-opus-5-5", 180_001)));
+        assert!(file.transcript.compaction.hides);
     }
 
     #[test]
@@ -571,6 +608,17 @@ mod pane {
         pane.update(Some(Known::Claude), &s.look(&["claude", "--model", "sonnet[1m]"], "s1"));
 
         assert_eq!(pane.context().and_then(|c| c.percent), Some(10));
+    }
+
+    #[test]
+    fn a_compaction_keeps_the_model_without_the_share_until_the_next_reply() {
+        let (s, mut pane) = answered();
+        s.transcript(&[assistant("claude-opus-5-5", 2, 15_655, 149_954), COMPACTED_AT.to_string()]);
+
+        pane.update(Some(Known::Claude), &s.look(&["claude"], "s1"));
+
+        assert_eq!(pane.context(), Some(&Context { model: "Opus 5.5".into(), percent: None }));
+        assert_eq!(pane.compaction(), Compaction { at: Stamp::parse("2026-10-22T11:14:54.518Z"), hides: true });
     }
 
     #[test]

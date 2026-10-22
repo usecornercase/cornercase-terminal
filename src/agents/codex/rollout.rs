@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::agents::context::counting::{self, Record, Usage};
 use crate::agents::context::discovery::{self, folder};
 use crate::agents::context::jsonl::{Tail, head};
-use crate::agents::context::{Context, percent};
+use crate::agents::context::{Compaction, Context, percent};
 use crate::process;
 use crate::time::Stamp;
 
@@ -116,6 +116,7 @@ pub(in crate::agents) struct Rollout {
     percent: Option<u16>,
     turn: bool,
     prompted: Option<SystemTime>,
+    compaction: Compaction,
     pub(crate) counted: Vec<Record>,
 }
 
@@ -129,12 +130,17 @@ impl Rollout {
             percent: None,
             turn: false,
             prompted: None,
+            compaction: Compaction::default(),
             counted: Vec::new(),
         }
     }
 
     pub(in crate::agents) fn context(&self) -> Option<Context> {
         Some(Context { model: self.model.clone()?, percent: self.percent })
+    }
+
+    pub(in crate::agents) fn compaction(&self) -> Compaction {
+        self.compaction
     }
 
     pub(in crate::agents) fn turn(&self) -> bool {
@@ -180,6 +186,45 @@ impl Rollout {
         if model != self.model {
             self.model = model;
             self.percent = None;
+            self.compaction.hides = false;
+        }
+    }
+
+    fn compacted(&mut self, entry: &Value) {
+        self.percent = None;
+        self.compaction.happened(entry["timestamp"].as_str().and_then(Stamp::parse).unwrap_or_else(SystemTime::now));
+    }
+
+    fn event(&mut self, entry: &Value) {
+        let payload = &entry["payload"];
+        match payload["type"].as_str() {
+            Some("thread_settings_applied") => {
+                if payload.get("thread_id").is_none_or(|id| id.as_str() == self.id.as_deref()) {
+                    self.set_model(payload["thread_settings"].get("model"));
+                }
+            }
+            Some("token_count") => self.usage(&payload["info"]),
+            Some("context_compacted") => self.compacted(entry),
+            Some("task_started") => self.turn = true,
+            Some("task_complete" | "turn_aborted") => self.turn = false,
+            Some("item_completed") if payload["item"]["type"] == "UserMessage" => {
+                let at = entry["timestamp"].as_str().and_then(Stamp::parse).unwrap_or_else(SystemTime::now);
+                self.prompted = self.prompted.max(Some(at));
+            }
+            _ => {}
+        }
+    }
+
+    fn usage(&mut self, info: &Value) {
+        if info.is_null() {
+            return;
+        }
+        self.percent = info["last_token_usage"]["total_tokens"]
+            .as_u64()
+            .zip(info["model_context_window"].as_u64().filter(|window| *window > 0))
+            .map(|(tokens, window)| percent(tokens, window));
+        if self.percent.is_some() {
+            self.compaction.hides = false;
         }
     }
 
@@ -191,35 +236,10 @@ impl Rollout {
         if let Some(record) = counted(&entry) {
             self.counted.push(record);
         }
-        let payload = &entry["payload"];
         match entry["type"].as_str() {
-            Some("turn_context") => self.set_model(payload.get("model")),
-            Some("compacted") => self.percent = None,
-            Some("event_msg") => match payload["type"].as_str() {
-                Some("thread_settings_applied") => {
-                    if payload.get("thread_id").is_none_or(|id| id.as_str() == self.id.as_deref()) {
-                        self.set_model(payload["thread_settings"].get("model"));
-                    }
-                }
-                Some("token_count") => {
-                    if payload.get("info").is_some_and(Value::is_null) {
-                        return;
-                    }
-                    let info = &payload["info"];
-                    self.percent = info["last_token_usage"]["total_tokens"]
-                        .as_u64()
-                        .zip(info["model_context_window"].as_u64().filter(|window| *window > 0))
-                        .map(|(tokens, window)| percent(tokens, window));
-                }
-                Some("context_compacted") => self.percent = None,
-                Some("task_started") => self.turn = true,
-                Some("task_complete" | "turn_aborted") => self.turn = false,
-                Some("item_completed") if payload["item"]["type"] == "UserMessage" => {
-                    let at = entry["timestamp"].as_str().and_then(Stamp::parse).unwrap_or_else(SystemTime::now);
-                    self.prompted = self.prompted.max(Some(at));
-                }
-                _ => {}
-            },
+            Some("turn_context") => self.set_model(entry["payload"].get("model")),
+            Some("compacted") => self.compacted(&entry),
+            Some("event_msg") => self.event(&entry),
             _ => {}
         }
     }

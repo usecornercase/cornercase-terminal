@@ -7,7 +7,7 @@ use serde_json::json;
 use super::*;
 use crate::agents::activity::Activity;
 use crate::agents::context::counting::{Ledger, Usage, tests::sum};
-use crate::agents::context::{Context, Look, Pane, Role, tests::pane_look};
+use crate::agents::context::{Compaction, Context, Look, Pane, Role, tests::pane_look};
 use crate::agents::stats::Tokens;
 use crate::agents::{DEFAULT_TRUST_PROMPT, Known, TrustPrompt, asks_trust};
 use crate::test_util::{Sleeper, TempDir, fixture, wait_until};
@@ -198,6 +198,10 @@ fn compaction_and_a_model_change_clear_the_percentage() {
     age(&session_dir(home.path(), &cwd).join("signals.json"), 1_791_925_000);
     let (sleeper, found) = seen(home.path(), &cwd);
     assert_eq!(found.context.as_ref().map(|ctx| ctx.percent), Some(None));
+    assert_eq!(
+        found.compaction,
+        Compaction { at: UNIX_EPOCH.checked_add(Duration::from_secs(1_791_926_822)), hides: true }
+    );
     std::fs::write(
         found.path.join("updates.jsonl"),
         r#"{"timestamp":1791927000,"method":"session/update","params":{"update":{"sessionUpdate":"turn_completed","prompt_id":"wide","usage":{"inputTokens":900000,"outputTokens":10,"cachedReadTokens":0,"cacheCreationTokens":0,"modelCalls":3}}}}

@@ -4,7 +4,7 @@ use std::time::SystemTime;
 use crate::agents::activity::{Activity, glyph};
 use crate::agents::context::counting::Ledger;
 use crate::agents::context::discovery::Job;
-use crate::agents::context::{Context, Look, Record};
+use crate::agents::context::{Compaction, Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "gemini";
 pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = Some(crate::agents::AccountHome {
@@ -79,6 +79,7 @@ pub(in crate::agents) struct Reader {
     session: Option<session::Session>,
     reading: Job<Option<session::Session>>,
     record: Option<(PathBuf, Option<String>)>,
+    compaction: Compaction,
 }
 
 impl Reader {
@@ -97,6 +98,7 @@ impl Reader {
             }
             *shown = found.as_ref().and_then(|session| session.context.clone());
             prompted = found.as_ref().and_then(|session| session.prompted);
+            self.compaction = found.as_ref().map(|session| session.compaction).unwrap_or_default();
             self.record = found.as_ref().map(|s| (s.path.clone(), s.id().map(str::to_string)));
             self.session = found;
         }
@@ -111,6 +113,10 @@ impl Reader {
 
     pub(in crate::agents) fn activity(title: &str) -> Option<Activity> {
         from_title(title)
+    }
+
+    pub(in crate::agents) fn compaction(&self) -> Compaction {
+        self.compaction
     }
 
     pub(in crate::agents) fn record(&self) -> Option<Record> {

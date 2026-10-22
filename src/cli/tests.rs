@@ -687,6 +687,21 @@ mod output {
     }
 
     #[test]
+    fn an_agent_whose_context_was_compacted_says_so_where_the_share_goes() {
+        let mut report = report();
+        let pane = &mut report.projects[0].workspaces[0].tabs[0].panes[1];
+        pane.context = None;
+        pane.compacted = true;
+
+        let text = render(&report, Some(Path::new("/home/ana")));
+        assert!(text.contains("pane 5  claude  working  Opus 5.5 · compacted  ~/shop  (you)\n"), "{text}");
+
+        report.projects[0].workspaces[0].tabs[0].panes[1].model = None;
+        let text = render(&report, Some(Path::new("/home/ana")));
+        assert!(text.contains("pane 5  claude  working  compacted  ~/shop  (you)\n"), "{text}");
+    }
+
+    #[test]
     fn an_agent_with_subagents_says_how_many() {
         let mut report = report();
         report.projects[0].workspaces[0].tabs[0].panes[1].subagents = 2;
@@ -745,6 +760,7 @@ mod output {
         report.projects[0].workspaces[0].tabs[0].panes[1].account_restart = Some("waiting".into());
         report.projects[0].workspaces[0].tabs[0].panes[1].pid = Some(321);
         report.projects[0].workspaces[0].tabs[0].panes[1].memory = Some(4096);
+        report.projects[0].workspaces[0].tabs[0].panes[1].compacted = true;
 
         let text = pane_table(&report.panes()).expect("a table");
 
@@ -752,11 +768,11 @@ mod output {
             text,
             "pane\ttab\tworkspace\tproject\tprogram\tagent\tstatus\tbackground_shell\tdialog\tat_prompt\tmodel\t\
                  context\tcaller\tshown\tactive\ttab_name\tworkspace_name\tbranch\tworktree\tproject_name\tpath\t\
-                 survey\tresuming\tparent\tsubagents\trole\theld_sends\tdraft\taccount_restart\tpid\tmemory\n\
+                 survey\tresuming\tparent\tsubagents\trole\theld_sends\tdraft\taccount_restart\tpid\tmemory\tcompacted\n\
                  4\t3\t2\t1\tzsh\t-\t-\tfalse\tfalse\ttrue\t-\t-\tfalse\ttrue\ttrue\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\tfalse\t-\t0\t-\t0\tfalse\t-\t-\t-\n\
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\tfalse\t-\t0\t-\t0\tfalse\t-\t-\t-\tfalse\n\
                  5\t3\t2\t1\tclaude\tclaude\tworking\tfalse\tfalse\t-\tOpus 5.5\t23\ttrue\tfalse\tfalse\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\ttrue\t4\t2\tcoder\t1\ttrue\twaiting\t321\t4096\n"
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\ttrue\t4\t2\tcoder\t1\ttrue\twaiting\t321\t4096\ttrue\n"
         );
     }
 

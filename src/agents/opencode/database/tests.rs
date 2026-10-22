@@ -48,7 +48,7 @@ fn shown(model: &str, percent: Option<u16>) -> Context {
 #[case::a_turn_before_any_reply(&[WORKING], true, Some(shown("DeepSeek V4 Pro", None)))]
 #[case::a_turn_after_a_reply(&[REPLY, WORKING], true, Some(shown("DeepSeek V4 Pro", Some(12))))]
 #[case::an_interrupted_turn(&[REPLY, ABORTED], false, Some(shown("DeepSeek V4 Pro", Some(12))))]
-#[case::a_compaction(&[REPLY, COMPACTION], false, Some(shown("DeepSeek V4 Pro", Some(0))))]
+#[case::a_compaction(&[REPLY, COMPACTION], false, Some(shown("DeepSeek V4 Pro", None)))]
 #[case::a_message_sent_before_its_reply_starts(&[REPLY, FLASH], true, Some(shown("DeepSeek V4 Flash", None)))]
 #[case::nothing_yet(&[], false, None)]
 fn the_versioned_messages_give_the_turn_and_the_line_opencode_shows(
@@ -59,6 +59,20 @@ fn the_versioned_messages_give_the_turn_and_the_line_opencode_shows(
     let session = Models::new().read(messages);
 
     assert_eq!((session.turn, session.context), (turn, context));
+}
+
+#[rstest]
+#[case::a_reply_then_a_compaction(&[REPLY, COMPACTION], Some(1_791_471_868_975), true)]
+#[case::a_reply_after_it(&[COMPACTION, REPLY], Some(1_791_471_868_975), false)]
+#[case::none(&[REPLY], None, false)]
+fn a_summary_reply_is_a_compaction_until_a_real_reply_follows(
+    #[case] messages: &[&str],
+    #[case] at: Option<u64>,
+    #[case] hides: bool,
+) {
+    let at = at.and_then(|ms| UNIX_EPOCH.checked_add(Duration::from_millis(ms)));
+
+    assert_eq!(Models::new().read(messages).compaction, Compaction { at, hides });
 }
 
 #[rstest]

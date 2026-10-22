@@ -11,7 +11,7 @@ use serde_json::Value;
 use crate::agents::context::counting::{Record, Usage};
 use crate::agents::context::discovery::{folder, named};
 use crate::agents::context::message::{self, Each, Role, Said, Spoken};
-use crate::agents::context::{Context, percent};
+use crate::agents::context::{Compaction, Context, percent};
 use crate::error::{self, Error};
 use crate::process;
 use crate::time::Stamp;
@@ -24,6 +24,7 @@ const MESSAGES: i64 = 200;
 pub(in crate::agents) struct Session {
     pub(crate) turn: bool,
     pub(crate) context: Option<Context>,
+    pub(crate) compaction: Compaction,
     pub(crate) prompted: Option<SystemTime>,
     pub(crate) place: Option<Place>,
     pub(crate) counted: Vec<Record>,
@@ -216,6 +217,7 @@ struct Message {
     picked: Option<Picked>,
     time: Option<Times>,
     tokens: Option<Tokens>,
+    summary: Option<Value>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -261,6 +263,10 @@ impl Message {
             (picked.provider.as_deref(), picked.model.as_deref())
         };
         Some((provider?, model.filter(|m| !m.trim().is_empty())?))
+    }
+
+    fn summarizes(&self) -> bool {
+        self.assistant() && self.summary == Some(Value::Bool(true))
     }
 
     fn used(&self) -> Option<u64> {
@@ -332,7 +338,8 @@ fn read(newest_first: &[String], models: &mut Models, file: Option<&Path>) -> Se
     let context = messages.iter().find_map(Message::key).map(|(provider, model)| {
         let found = models.find(file, provider, model);
         let reply = messages.iter().find(|m| m.assistant() && m.used().is_some());
-        let used = reply.filter(|reply| reply.key() == Some((provider, model))).and_then(Message::used);
+        let used =
+            reply.filter(|reply| !reply.summarizes() && reply.key() == Some((provider, model))).and_then(Message::used);
         Context {
             model: found.as_ref().map_or_else(|| model.to_string(), |found| found.name.clone()),
             percent: used.zip(found.and_then(|found| found.window)).map(|(used, window)| percent(used, window)),
@@ -345,7 +352,14 @@ fn read(newest_first: &[String], models: &mut Models, file: Option<&Path>) -> Se
         .max()
         .and_then(|created| UNIX_EPOCH.checked_add(Duration::from_millis(created)));
     let counted = newest_first.iter().rev().filter_map(|data| counted(data)).collect();
-    Session { turn, context, prompted, place: None, counted }
+    Session { turn, context, compaction: compaction(&messages), prompted, place: None, counted }
+}
+
+fn compaction(newest_first: &[Message]) -> Compaction {
+    let created = newest_first.iter().filter(|m| m.summarizes()).find_map(|m| m.time.as_ref()?.created);
+    let at = created.and_then(|created| UNIX_EPOCH.checked_add(Duration::from_millis(created)));
+    let hides = newest_first.iter().find(|m| m.assistant() && m.used().is_some()).is_some_and(Message::summarizes);
+    Compaction { at, hides }
 }
 
 fn counted(data: &str) -> Option<Record> {

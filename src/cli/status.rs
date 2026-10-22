@@ -146,12 +146,9 @@ fn pull_request_part(pull: &PullRequestInfo) -> String {
 }
 
 fn pane_line(pane: &PaneInfo, depth: usize, marks: &Marks, home: Option<&Path>) -> String {
-    let details = match (&pane.model, pane.context) {
-        (Some(model), Some(percent)) => format!("{model} · {percent}%"),
-        (Some(model), None) => model.clone(),
-        (None, Some(percent)) => format!("{percent}%"),
-        (None, None) => String::new(),
-    };
+    let share = pane.context.map(|percent| format!("{percent}%"));
+    let share = share.or_else(|| pane.compacted.then(|| "compacted".to_string()));
+    let details = [pane.model.clone(), share].into_iter().flatten().collect::<Vec<_>>().join(" · ");
     let notes = pane_notes(pane);
     let status = pane.status.clone().unwrap_or_default();
     let parts = [

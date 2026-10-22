@@ -9,7 +9,7 @@ use crate::agents::activity::Activity;
 use crate::agents::context::counting::{self, Usage};
 use crate::agents::context::jsonl::{self, Tail};
 use crate::agents::context::message::{self, Each, Role, Said, Spoken};
-use crate::agents::context::{self, Context};
+use crate::agents::context::{self, Compaction, Context};
 use crate::agents::stats::Tokens;
 use crate::error::Result;
 use crate::process;
@@ -31,6 +31,7 @@ pub(in crate::agents) struct Session {
     pub(in crate::agents) activity: Activity,
     pub(in crate::agents) turn_open: bool,
     pub(in crate::agents) context: Option<Context>,
+    pub(in crate::agents) compaction: Compaction,
     pub(in crate::agents) counted: Vec<counting::Record>,
     pub(in crate::agents) extras: Vec<(String, Vec<counting::Record>)>,
     pub(in crate::agents) prompted: Option<SystemTime>,
@@ -185,6 +186,7 @@ impl Session {
             activity: Activity::Idle,
             turn_open: false,
             context: None,
+            compaction: Compaction::default(),
             counted: Vec::new(),
             extras: Vec::new(),
             prompted: None,
@@ -228,7 +230,9 @@ impl Session {
             self.recover_resumable();
         }
         self.note_model();
-        self.context = self.model.clone().map(|model| Context { model, percent: self.occupancy() });
+        let percent = self.occupancy();
+        self.context = self.model.clone().map(|model| Context { model, percent });
+        self.compaction = self.compaction_state(percent);
         self.activity = self.activity_of();
         self.read_children();
     }
@@ -516,6 +520,16 @@ impl Session {
             .find(|turn| model.is_some_and(|id| turn.model.as_deref() == Some(id)))
             .map(|turn| turn.at);
         recorded.or(self.newest_event)
+    }
+
+    fn compaction_state(&self, percent: Option<u16>) -> Compaction {
+        let Some(cut) = self.compact else { return Compaction::default() };
+        let before = |at: Option<SystemTime>| at.is_none_or(|at| at < cut);
+        let hides = percent.is_none()
+            && before(self.newest.as_ref().map(|reply| reply.at))
+            && before(self.signals_at)
+            && before(self.boundary);
+        Compaction { at: Some(cut), hides }
     }
 
     fn occupancy(&self) -> Option<u16> {
