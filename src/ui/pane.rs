@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 
 use ratatui::Frame;
-use ratatui::layout::{Alignment, Position, Rect};
+use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
@@ -12,7 +12,7 @@ use super::accounts_bar::{Row as AccountRow, draw_row};
 use super::dialog::dialog_button_style;
 use super::sidebar::NEW_BUTTON;
 use super::theme::{BRAND_COLOR, status_icon};
-use super::widgets::sidebar_hovered;
+use super::widgets::{action_style, button_width, sidebar_hovered};
 use super::workspaces::REOPEN_ICON;
 use crate::agents::activity::Status;
 use crate::project::split::{Dir, Divider, Node, Place};
@@ -24,6 +24,8 @@ const MOVE_LABEL: &str = "move here";
 const SWAP_LABEL: &str = "swap";
 
 const NO_TAB: &str = "no tab open";
+
+const TAB_BUTTON: &str = "+ Tab";
 
 const NO_TAB_HINT: &str = " opens a shell here";
 
@@ -54,14 +56,43 @@ pub(crate) enum PaneBand {
     Held { text: String, queued: bool },
 }
 
-fn draw_centered(f: &mut Frame, area: Rect, lines: Vec<Line<'static>>) {
-    let height = u16::try_from(lines.len()).unwrap_or(u16::MAX);
-    let width = lines.iter().map(Line::width).max().unwrap_or(0);
-    if height > area.height || width > usize::from(area.width) {
-        return;
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct NoTab {
+    pub(crate) closed: usize,
+    pub(crate) removing: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct NoTabButtons {
+    pub(crate) reopen: Option<Rect>,
+    pub(crate) new_tab: Option<Rect>,
+}
+
+fn centered_rows(area: Rect, lines: &[Line]) -> Option<Vec<Rect>> {
+    let height = u16::try_from(lines.len()).ok()?;
+    let widths: Vec<u16> = lines.iter().map(|line| u16::try_from(line.width()).unwrap_or(u16::MAX)).collect();
+    if height > area.height || widths.iter().any(|&w| w > area.width) {
+        return None;
     }
-    let r = Rect { y: area.y + (area.height - height) / 2, height, ..area };
-    f.render_widget(Paragraph::new(lines).alignment(Alignment::Center), r);
+    let top = area.y + (area.height - height) / 2;
+    Some(widths.into_iter().zip(top..).map(|(w, y)| Rect::new(area.x + area.width / 2 - w / 2, y, w, 1)).collect())
+}
+
+fn draw_centered(f: &mut Frame, area: Rect, lines: Vec<Line<'static>>) {
+    let Some(rows) = centered_rows(area, &lines) else { return };
+    for (line, row) in lines.into_iter().zip(rows) {
+        f.render_widget(Paragraph::new(line), row);
+    }
+}
+
+fn padded(row: Rect, label: &str, pane: Rect) -> Rect {
+    Rect::new(row.x.saturating_sub(1), row.y, button_width(label), 1).intersection(pane)
+}
+
+fn light(f: &mut Frame, view: &View, button: Option<Rect>) {
+    if let Some(button) = button.filter(|r| sidebar_hovered(view, *r)) {
+        f.buffer_mut().set_style(button, action_style(true));
+    }
 }
 
 fn closed_count(closed: usize) -> String {
@@ -73,46 +104,37 @@ fn reopen_label(closed: usize) -> String {
     format!(" {REOPEN_ICON} reopen {what} ")
 }
 
-fn no_tab_lines(view: &View, button: Option<Rect>) -> Vec<Line<'static>> {
-    let dim = Style::default().fg(view.muted);
-    let hint =
-        Line::from(vec![Span::styled("+ Tab", Style::default().fg(Color::Cyan)), Span::styled(NO_TAB_HINT, dim)]);
-    if view.closed_agents == 0 {
-        return vec![Line::from(Span::styled(NO_TAB, dim.add_modifier(Modifier::BOLD))), hint];
-    }
-    let lit = button.is_some_and(|r| sidebar_hovered(view, r));
-    let pill = if lit {
-        Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+fn no_tab_lines(muted: Color, shown: NoTab) -> Vec<Line<'static>> {
+    let dim = Style::default().fg(muted);
+    let bold = dim.add_modifier(Modifier::BOLD);
+    let mut lines = if shown.closed == 0 {
+        vec![Line::from(Span::styled(NO_TAB, bold))]
     } else {
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+        let pill = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
+        vec![
+            Line::from(Span::styled(closed_count(shown.closed), bold)),
+            Line::from(Span::styled(reopen_label(shown.closed), pill)),
+        ]
     };
-    vec![
-        Line::from(Span::styled(closed_count(view.closed_agents), dim.add_modifier(Modifier::BOLD))),
-        Line::from(Span::styled(reopen_label(view.closed_agents), pill)),
-        hint,
-    ]
+    if !shown.removing {
+        lines.push(Line::from(vec![Span::styled(TAB_BUTTON, action_style(false)), Span::styled(NO_TAB_HINT, dim)]));
+    }
+    lines
 }
 
-pub(crate) fn reopen_button(pane: Rect, closed: usize) -> Option<Rect> {
-    if closed == 0 {
-        return None;
+pub(crate) fn no_tab_buttons(pane: Rect, shown: NoTab) -> NoTabButtons {
+    let Some(rows) = centered_rows(pane, &no_tab_lines(Color::Reset, shown)) else { return NoTabButtons::default() };
+    NoTabButtons {
+        reopen: rows.get(1).copied().filter(|_| shown.closed > 0),
+        new_tab: rows.last().filter(|_| !shown.removing).map(|row| padded(*row, TAB_BUTTON, pane)),
     }
-    let width =
-        [closed_count(closed).chars().count(), reopen_label(closed).chars().count(), 5 + NO_TAB_HINT.chars().count()]
-            .into_iter()
-            .max()
-            .unwrap_or(0);
-    if 3 > pane.height || width > usize::from(pane.width) {
-        return None;
-    }
-    let label = u16::try_from(reopen_label(closed).chars().count()).ok()?;
-    let top = pane.y + (pane.height - 3) / 2;
-    Some(Rect::new(pane.x + (pane.width - label) / 2, top + 1, label, 1))
 }
 
 pub(super) fn draw_no_tab(f: &mut Frame, view: &View, pane: Rect) {
-    let button = reopen_button(pane, view.closed_agents);
-    draw_centered(f, pane, no_tab_lines(view, button));
+    let buttons = no_tab_buttons(pane, view.no_tab);
+    draw_centered(f, pane, no_tab_lines(view.muted, view.no_tab));
+    light(f, view, buttons.reopen);
+    light(f, view, buttons.new_tab);
 }
 
 fn welcome_text(muted: Color) -> Vec<Line<'static>> {
@@ -121,11 +143,11 @@ fn welcome_text(muted: Color) -> Vec<Line<'static>> {
         Line::from(wordmark()),
         Line::from(Span::styled(TAGLINE, dim)),
         Line::default(),
-        Line::from(vec![Span::styled(NEW_BUTTON, Style::default().fg(Color::Cyan)), Span::styled(WELCOME_HINT, dim)]),
+        Line::from(vec![Span::styled(NEW_BUTTON, action_style(false)), Span::styled(WELCOME_HINT, dim)]),
     ]
 }
 
-pub(super) fn draw_welcome(f: &mut Frame, muted: Color, pane: Rect) {
+fn welcome_lines(muted: Color, pane: Rect) -> Vec<Line<'static>> {
     let corner = Style::default().fg(BRAND_COLOR);
     let cursor = Style::default();
     let width = LOGO.iter().map(|(c, k)| c.chars().count() + k.chars().count()).max().unwrap_or(0);
@@ -138,11 +160,17 @@ pub(super) fn draw_welcome(f: &mut Frame, muted: Color, pane: Rect) {
         .collect();
     lines.push(Line::default());
     lines.extend(welcome_text(muted));
-    if usize::from(pane.height) >= lines.len() {
-        draw_centered(f, pane, lines);
-    } else {
-        draw_centered(f, pane, welcome_text(muted));
-    }
+    if usize::from(pane.height) >= lines.len() { lines } else { welcome_text(muted) }
+}
+
+pub(crate) fn welcome_button(pane: Rect) -> Option<Rect> {
+    let rows = centered_rows(pane, &welcome_lines(Color::Reset, pane))?;
+    rows.last().map(|row| padded(*row, NEW_BUTTON, pane))
+}
+
+pub(super) fn draw_welcome(f: &mut Frame, view: &View, pane: Rect) {
+    draw_centered(f, pane, welcome_lines(view.muted, pane));
+    light(f, view, welcome_button(pane));
 }
 
 pub(super) fn wordmark() -> Vec<Span<'static>> {

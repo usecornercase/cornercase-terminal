@@ -254,3 +254,16 @@ fn closing_a_project_asks_first() {
 
     assert!(matches!(app.overlay, Some(Overlay::CloseProject { .. })));
 }
+
+#[test]
+fn plus_tab_in_an_empty_pane_opens_a_shell_without_asking() {
+    let (mut app, rx, _dirs) = app_with(1);
+    app.close_tab(tab_at(&app, 0, 0, 0));
+    pump_until(&mut app, &rx, "the tab goes", |a| a.projects[0].workspaces[0].tabs.is_empty());
+    let button = ui::no_tab_buttons(app.layout(SMALL).pane, app.no_tab()).new_tab.expect("the button fits");
+
+    press(&mut app, button.as_position());
+
+    assert!(app.overlay.is_none());
+    assert_eq!(app.projects[0].workspaces[0].tabs.len(), 1);
+}

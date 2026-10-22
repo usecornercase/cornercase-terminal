@@ -109,3 +109,38 @@ fn shells_of_a_debug_server_name_its_socket_for_cornercase_in_them() {
         tab_term(a, 0, 1).emulator.screen_text().is_ok_and(|text| text.contains("sock=/run/cc-test/own.sock"))
     });
 }
+
+#[test]
+fn plus_tab_in_the_empty_pane_opens_a_shell_in_the_workspace_folder() {
+    let (mut app, _rx, dirs) = exited_last_tab();
+    let button = ui::no_tab_buttons(app_areas(&app).pane, app.no_tab()).new_tab.expect("the button fits");
+
+    click(&mut app, button.as_position());
+
+    assert_eq!(app.projects[0].workspaces[0].tabs.len(), 1);
+    wait_until("tab starts in the folder", || tab_term(&app, 0, 0).cwd() == Some(canonical(&dirs[0])));
+}
+
+#[test]
+fn plus_tab_in_the_pane_of_a_project_without_workspaces_makes_one() {
+    let (mut app, rx, _dirs) = app_with(1);
+    app.close_workspace(workspace_at(&app, 0, 0));
+    pump_until(&mut app, &rx, "the workspace goes", |a| a.projects[0].workspaces.is_empty());
+    let button = ui::no_tab_buttons(app_areas(&app).pane, app.no_tab()).new_tab.expect("the button fits");
+
+    click(&mut app, button.as_position());
+
+    assert_eq!((app.projects[0].workspaces.len(), app.projects[0].workspaces[0].tabs.len()), (1, 1));
+}
+
+#[test]
+fn a_workspace_being_removed_offers_no_plus_tab_in_its_pane() {
+    let (mut app, _rx, _dirs) = exited_last_tab();
+    let button = ui::no_tab_buttons(app_areas(&app).pane, app.no_tab()).new_tab.expect("the button fits");
+    app.projects[0].workspaces[0].start_removing();
+
+    click(&mut app, button.as_position());
+
+    assert!(app.projects[0].workspaces[0].tabs.is_empty());
+    assert_eq!(ui::no_tab_buttons(app_areas(&app).pane, app.no_tab()).new_tab, None);
+}

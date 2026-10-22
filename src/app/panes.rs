@@ -16,16 +16,13 @@ use super::toast::NOT_READING;
 use super::toast::Toast;
 use crate::error::Result;
 use crate::log::{self};
-use crate::project::Hierarchy;
 use crate::project::split::{self, Dir};
+use crate::project::{Hierarchy, Project, Workspace};
 use crate::term::{Term, mouse};
 use crate::ui::{self};
 
 impl App {
     pub(super) fn pane_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
-        if self.reopen_button_mouse(ev, pos, area) {
-            return;
-        }
         if self.pane_footer_mouse(ev, pos, area)
             || self.pane_notice_mouse(ev, pos, area)
             || self.pane_chosen_mouse(ev, pos, area)
@@ -33,6 +30,46 @@ impl App {
             return;
         }
         self.pane_press_mouse(ev, area);
+    }
+
+    pub(super) fn no_tab(&self) -> ui::NoTab {
+        let workspace = self.project().and_then(Project::workspace);
+        ui::NoTab {
+            closed: workspace.map_or(0, |w| self.agents.closed.count(w.id)),
+            removing: workspace.is_some_and(Workspace::removing),
+        }
+    }
+
+    pub(super) fn empty_pane_mouse(
+        &mut self,
+        kind: MouseEventKind,
+        pos: Position,
+        pane: Rect,
+        area: Rect,
+    ) -> Result<()> {
+        if kind != MouseEventKind::Down(MouseButton::Left) {
+            return Ok(());
+        }
+        if self.project().is_some() {
+            return self.press_no_tab(pos, pane, area);
+        }
+        if self.projects.is_empty() && ui::welcome_button(pane).is_some_and(|button| button.contains(pos)) {
+            self.new_project_menu(pos);
+        }
+        Ok(())
+    }
+
+    fn press_no_tab(&mut self, pos: Position, pane: Rect, area: Rect) -> Result<()> {
+        let buttons = ui::no_tab_buttons(pane, self.no_tab());
+        if buttons.reopen.is_some_and(|button| button.contains(pos))
+            && let Some(id) = self.project().and_then(Project::workspace).map(|w| w.id)
+        {
+            self.reopen_from_window(id, area);
+        } else if buttons.new_tab.is_some_and(|button| button.contains(pos)) {
+            let at = self.ensure_workspace(self.active);
+            return self.add_tab(at, area);
+        }
+        Ok(())
     }
 
     pub(super) fn terminals(&self, area: Rect) -> Vec<(u64, Rect)> {

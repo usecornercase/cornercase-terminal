@@ -167,7 +167,7 @@ impl App {
             agents: self.config.agents_section.then(|| self.agents_view()),
             counts: self.config.counts,
             icons: self.config.icon_bar,
-            closed_agents: project.and_then(Project::workspace).map_or(0, |w| self.agents.closed.count(w.id)),
+            no_tab: self.no_tab(),
             groups: self.groups.iter().map(|g| g.entry.clone()).collect(),
             projects: self.project_entries(),
             active: self.active,

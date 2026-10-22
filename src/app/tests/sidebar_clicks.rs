@@ -105,3 +105,13 @@ fn new_project_button_works_with_no_projects() {
 
     assert_eq!((app.projects.len(), app.active, app.projects[0].path.clone()), (1, 0, canonical(&home)));
 }
+
+#[test]
+fn the_new_button_of_an_empty_window_opens_the_new_menu() {
+    let (mut app, _rx) = empty_app();
+    let button = ui::welcome_button(app_areas(&app).pane).expect("the button fits");
+
+    click(&mut app, button.as_position());
+
+    assert_eq!(menu_labels(&app), ["open project", "new group"]);
+}

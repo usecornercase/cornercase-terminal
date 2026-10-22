@@ -358,7 +358,7 @@ Hover a group, project, workspace or tab row: it gets a lighter background, so y
 | A project | It asks first, saying how many tabs it stops. Then everything in it is closed and the project goes away; its folder and its worktrees stay on disk. |
 | A group | It asks first, then the group goes away. With **keep projects** its projects stay open, ungrouped, and nothing in them is ended; with **close projects** they close with it, which stops every shell in them (folders and worktrees stay on disk). |
 
-Rows disappear once their programs have exited, not before. Closing the last tab keeps its workspace (the pane says *no tab open*, or how many [agents are closed](#close-agents-and-reopen-them-later)), closing the last workspace keeps its project, and closing the last project leaves cornercase open and empty: the pane shows the cornercase logo and that `+ New` opens a folder. Closing every project of a group keeps the group.
+Rows disappear once their programs have exited, not before. Closing the last tab keeps its workspace (the pane says *no tab open*, or how many [agents are closed](#close-agents-and-reopen-them-later), with a **`+ Tab`** that opens a shell there; in a project with no workspace left it starts the default one), closing the last workspace keeps its project, and closing the last project leaves cornercase open and empty: the pane shows the cornercase logo with a **`+ New`** that opens the same menu as the one under the projects (**open project**, **new group**). Closing every project of a group keeps the group.
 
 When a program ends by itself, for example when you type `exit`, its pane closes; when the last pane of a tab closes, so does the tab.
 
@@ -381,7 +381,7 @@ It asks first only when something would be lost: an agent that is still working 
   crop={[18, 7, 74, 22]}
 />
 
-Click the **`▶`** to bring them back: each agent returns in a new tab after the others, in its own conversation, with the mode and account it had, even when [`resume_agents`](../../reference/configuration/#agents) is off. The workspace's menu also has **reopen agents** and **forget closed agents**, which drops them for good after asking (their conversations stay in each agent's own history), and the [keys menu](../../reference/keyboard-and-mouse/#keyboard-shortcuts) has `w a` and `w o`. A workspace with no tabs shows `2 agents closed` and a ` ▶ reopen agents ` button in its pane.
+Click the **`▶`** to bring them back: each agent returns in a new tab after the others, in its own conversation, with the mode and account it had, even when [`resume_agents`](../../reference/configuration/#agents) is off. The workspace's menu also has **reopen agents** and **forget closed agents**, which drops them for good after asking (their conversations stay in each agent's own history), and the [keys menu](../../reference/keyboard-and-mouse/#keyboard-shortcuts) has `w a` and `w o`. A workspace with no tabs shows `2 agents closed` and a ` ▶ reopen agents ` button in its pane, above its `+ Tab`.
 
 Closed agents are saved with the session, so they survive `kill-server` and a reboot. Removing or closing the workspace forgets them, and says so first. A flow's team closes with its orchestrator and comes back whole: see [Close the team and reopen it later](../flows/#close-the-team-and-reopen-it-later). From a script: [`cornercase agents`](../scripts-and-agents/#close-and-reopen-a-workspaces-agents).
 

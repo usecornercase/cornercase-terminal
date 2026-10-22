@@ -526,7 +526,7 @@ mod empty_pane_with_closed_agents {
 
     fn with_closed(count: usize) -> View<'static> {
         let mut v = with_workspaces(None);
-        v.closed_agents = count;
+        v.no_tab.closed = count;
         v
     }
 
@@ -553,7 +553,7 @@ mod empty_pane_with_closed_agents {
     #[test]
     fn the_button_is_the_pill_drawn() {
         let v = with_closed(4);
-        let button = reopen_button(areas().pane, 4).expect("it fits");
+        let button = no_tab_buttons(areas().pane, NoTab { closed: 4, removing: false }).reopen.expect("it fits");
 
         let t = render(&v);
 
@@ -565,7 +565,7 @@ mod empty_pane_with_closed_agents {
 
     #[test]
     fn the_button_is_lit_on_hover() {
-        let button = reopen_button(areas().pane, 4).expect("it fits");
+        let button = no_tab_buttons(areas().pane, NoTab { closed: 4, removing: false }).reopen.expect("it fits");
         let v = View { hover: Some(button.as_position()), ..with_closed(4) };
 
         assert_eq!(render(&v).backend().buffer()[(button.x + 1, button.y)].bg, Color::Cyan);
@@ -575,7 +575,61 @@ mod empty_pane_with_closed_agents {
     fn a_pane_too_short_for_it_draws_nothing_and_has_no_button() {
         let short = Rect { height: 2, ..areas().pane };
 
-        assert_eq!(reopen_button(short, 4), None);
-        assert_eq!(reopen_button(areas().pane, 0), None);
+        assert_eq!(no_tab_buttons(short, NoTab { closed: 4, removing: false }), NoTabButtons::default());
+        assert_eq!(no_tab_buttons(areas().pane, NoTab::default()).reopen, None);
+    }
+}
+
+mod empty_pane {
+    use super::*;
+    use crate::ui::tests::row_text as cells;
+
+    fn new_tab() -> Rect {
+        no_tab_buttons(areas().pane, NoTab::default()).new_tab.expect("it fits")
+    }
+
+    #[test]
+    fn plus_tab_is_a_button_one_cell_wider_than_its_label_on_each_side() {
+        assert_eq!(cells(&render(&with_workspaces(None)), new_tab()), " + Tab ");
+    }
+
+    #[test]
+    fn plus_tab_is_lit_on_hover() {
+        let button = new_tab();
+        let idle = render(&with_workspaces(None));
+        let lit = render(&View { hover: Some(button.as_position()), ..with_workspaces(None) });
+
+        let plus = |t: &Terminal<TestBackend>| t.backend().buffer()[(button.x + 1, button.y)].clone();
+        assert_eq!((plus(&idle).fg, plus(&idle).bg), (Color::Cyan, Color::Reset));
+        assert_eq!((plus(&lit).fg, plus(&lit).bg), (Color::Black, Color::Cyan));
+        assert!((button.x..button.right()).all(|x| lit.backend().buffer()[(x, button.y)].bg == Color::Cyan));
+    }
+
+    #[test]
+    fn plus_tab_is_left_out_while_the_workspace_is_being_removed() {
+        let mut v = with_workspaces(None);
+        v.no_tab.removing = true;
+        let pane = areas().pane;
+        let t = render(&v);
+        let text: String = (pane.y..pane.bottom()).map(|y| cells(&t, Rect { y, ..pane })).collect();
+
+        assert!(!text.contains("opens a shell here"), "{text}");
+        assert_eq!(no_tab_buttons(pane, v.no_tab).new_tab, None);
+    }
+
+    #[test]
+    fn with_closed_agents_both_buttons_are_where_they_are_drawn_in_an_even_pane() {
+        let area = Rect { width: W + 1, ..AREA };
+        let pane = layout(area, Widths::default()).pane;
+        assert_eq!(pane.width % 2, 0);
+        let shown = NoTab { closed: 4, removing: false };
+        let buttons = no_tab_buttons(pane, shown);
+        let mut v = with_workspaces(None);
+        v.no_tab = shown;
+
+        let t = render_sized(&v, W + 1, H);
+
+        assert_eq!(cells(&t, buttons.reopen.expect("it fits")), " ▶ reopen agents ");
+        assert_eq!(cells(&t, buttons.new_tab.expect("it fits")), " + Tab ");
     }
 }

@@ -297,12 +297,23 @@ export class Painter {
     this.g.fill(rect(0, 0, this.app.cols, this.app.rows), { add: DIM });
   }
 
-  private centered(area: Rect, lines: Line[]): void {
-    const h = lines.length;
+  private centered(area: Rect, lines: Line[]): Rect[] | null {
     const w = Math.max(0, ...lines.map(width));
-    if (h > area.h || w > area.w) return;
-    const y = area.y + Math.floor((area.h - h) / 2);
-    lines.forEach((line, i) => drawLine(this.g, area.x + Math.floor((area.w - width(line)) / 2), y + i, line, area.w));
+    if (lines.length > area.h || w > area.w) return null;
+    const y = area.y + Math.floor((area.h - lines.length) / 2);
+    return lines.map((line, i) => {
+      const x = area.x + Math.floor(area.w / 2) - Math.floor(width(line) / 2);
+      drawLine(this.g, x, y + i, line, area.w);
+      return rect(x, y + i, width(line), 1);
+    });
+  }
+
+  private padded(row: Rect, label: string, area: Rect): Rect {
+    return intersect(rect(row.x - 1, row.y, [...label].length + 2, 1), area);
+  }
+
+  private light(button: Rect): void {
+    if (this.hovered(button)) this.g.fill(button, PRESSED);
   }
 
   private welcome(area: Rect): void {
@@ -315,7 +326,12 @@ export class Painter {
     const size = Math.max(...LOGO.map(([c, k]) => [...c].length + [...k].length));
     const logo: Line[] = LOGO.map(([c, k]) => [seg(c, { fg: BRAND }), seg(k), seg(' '.repeat(size - [...c].length - [...k].length))]);
     const all = [...logo, [], ...words];
-    this.centered(area, all.length <= area.h ? all : words);
+    const rows = this.centered(area, all.length <= area.h ? all : words);
+    const row = rows?.[rows.length - 1];
+    if (!row) return;
+    const button = this.padded(row, NEW_BUTTON, area);
+    this.light(button);
+    this.region({ r: button, click: (x, y) => this.app.openNewMenu({ x, y }), cursor: 'pointer' });
   }
 
   draw(): Frame {
@@ -385,17 +401,26 @@ export class Painter {
 
   private noTab(area: Rect): void {
     const app = this.app;
-    const closed = app.workspace() ? app.closedCount(app.workspace()?.id ?? -1) : 0;
-    const hint = [seg('+ Tab', CYAN), seg(NO_TAB_HINT, DARK)];
-    if (!closed) return this.centered(area, [[seg(NO_TAB, { fg: 8, add: BOLD })], hint]);
-    const label = ` ${REOPEN_ICON} reopen ${closed === 1 ? 'agent' : 'agents'} `;
-    const count = `${agentsLabel(closed)} closed`;
-    const w = Math.max([...count].length, [...label].length, 5 + [...NO_TAB_HINT].length);
-    if (area.h < 3 || w > area.w) return;
-    const button = rect(area.x + Math.floor((area.w - [...label].length) / 2), area.y + Math.floor((area.h - 3) / 2) + 1, [...label].length, 1);
-    this.centered(area, [[seg(count, { fg: 8, add: BOLD })], [seg(label, this.hovered(button) ? PRESSED : { fg: 6, add: BOLD })], hint]);
-    const id = app.workspace()?.id;
-    if (id !== undefined) this.region({ r: button, click: () => app.reopenAgents(id), cursor: 'pointer' });
+    const ws = app.workspace();
+    const closed = ws ? app.closedCount(ws.id) : 0;
+    const lines: Line[] = [];
+    if (closed) {
+      const label = ` ${REOPEN_ICON} reopen ${closed === 1 ? 'agent' : 'agents'} `;
+      lines.push([seg(`${agentsLabel(closed)} closed`, { fg: 8, add: BOLD })], [seg(label, { fg: 6, add: BOLD })]);
+    } else {
+      lines.push([seg(NO_TAB, { fg: 8, add: BOLD })]);
+    }
+    if (!ws?.removing) lines.push([seg('+ Tab', CYAN), seg(NO_TAB_HINT, DARK)]);
+    const rows = this.centered(area, lines);
+    if (!rows) return;
+    if (closed && ws) {
+      this.light(rows[1]);
+      this.region({ r: rows[1], click: () => app.reopenAgents(ws.id), cursor: 'pointer' });
+    }
+    if (ws?.removing) return;
+    const button = this.padded(rows[rows.length - 1], '+ Tab', area);
+    this.light(button);
+    this.region({ r: button, click: () => app.addTab(app.active, app.project()?.active ?? 0), cursor: 'pointer' });
   }
 
   private tabBar(bar: Rect): void {

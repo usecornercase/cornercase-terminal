@@ -57,3 +57,31 @@ fn places_cursor_where_the_inner_terminal_has_it() {
     let mut t = render(&v);
     assert_eq!(t.get_cursor_position().expect("cursor"), Position::new(areas().pane.x + 2, 2));
 }
+
+fn welcome_pane(height: u16) -> Rect {
+    layout(Rect { height, ..AREA }, Widths::default()).pane
+}
+
+#[rstest]
+#[case::with_the_logo(24)]
+#[case::with_the_words_only(8)]
+fn the_welcome_new_is_a_button_where_it_is_drawn(#[case] height: u16) {
+    let button = welcome_button(welcome_pane(height)).expect("it fits");
+
+    assert_eq!(row_text(&render_sized(&view(&[]), W, height), button), " + New ");
+}
+
+#[test]
+fn the_welcome_new_is_lit_on_hover() {
+    let button = welcome_button(welcome_pane(24)).expect("it fits");
+    let v = View { hover: Some(button.as_position()), ..view(&[]) };
+
+    let t = render_sized(&v, W, 24);
+
+    assert!((button.x..button.right()).all(|x| t.backend().buffer()[(x, button.y)].bg == Color::Cyan));
+}
+
+#[test]
+fn a_pane_too_small_for_the_words_has_no_new_button() {
+    assert_eq!(welcome_button(Rect::new(0, 0, 10, 3)), None);
+}

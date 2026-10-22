@@ -1,5 +1,4 @@
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
-use ratatui::layout::{Position, Rect};
+use ratatui::layout::Rect;
 
 use super::App;
 use super::control::conflict;
@@ -168,19 +167,6 @@ impl App {
             .unwrap_or_default();
         let mode = agents::mode_of(&kind, &term.foreground_args(), &agents::modes(&self.config, &kind));
         ClosedAgent { kind, mode, cut }
-    }
-
-    pub(in crate::app) fn reopen_button_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> bool {
-        let Some(workspace) = self.project().and_then(Project::workspace).filter(|_| self.tab().is_none()) else {
-            return false;
-        };
-        let (id, closed) = (workspace.id, self.agents.closed.count(workspace.id));
-        let pressed = ev.kind == MouseEventKind::Down(MouseButton::Left)
-            && ui::reopen_button(area, closed).is_some_and(|button| button.contains(pos));
-        if pressed {
-            self.reopen_from_window(id, area);
-        }
-        pressed
     }
 
     pub(in crate::app) fn close_agents_by_key(&mut self) {

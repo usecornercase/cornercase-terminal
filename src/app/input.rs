@@ -253,6 +253,9 @@ impl App {
         if areas.tab_bar.contains(pos) {
             return self.tab_bar_mouse(areas, pos, ev.kind, area);
         }
+        if self.tab().is_none() {
+            return self.empty_pane_mouse(ev.kind, pos, areas.pane, area);
+        }
         self.pane_mouse(ev, pos, areas.pane);
         Ok(())
     }

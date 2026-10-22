@@ -127,11 +127,33 @@ fn the_row_shows_a_reopen_tag_that_brings_the_agents_back() {
 fn the_empty_pane_offers_the_agents_back() {
     let (mut app, _rx, _dirs) = emptied();
     let pane = app_areas(&app).pane;
-    let button = ui::reopen_button(pane, 2).expect("the button fits");
+    let button = ui::no_tab_buttons(pane, app.no_tab()).reopen.expect("the button fits");
 
     click(&mut app, button.as_position());
 
     assert_eq!(tab_count(&app), 2);
+}
+
+#[test]
+fn the_empty_pane_still_opens_a_shell_beside_the_closed_agents() {
+    let (mut app, _rx, _dirs) = emptied();
+    let button = ui::no_tab_buttons(app_areas(&app).pane, app.no_tab()).new_tab.expect("the button fits");
+
+    click(&mut app, button.as_position());
+
+    assert_eq!(tab_count(&app), 1);
+    assert_eq!(app.agents.closed.count(workspace_id(&app)), 2);
+}
+
+#[test]
+fn agents_reopened_from_the_empty_pane_start_at_the_pane_size() {
+    let (mut app, _rx, _dirs) = emptied();
+    let button = ui::no_tab_buttons(app_areas(&app).pane, app.no_tab()).reopen.expect("the button fits");
+
+    click(&mut app, button.as_position());
+
+    let size = tab_term(&app, 0, 0).emulator.size().expect("size");
+    assert_eq!(size, app.pane_size(AREA));
 }
 
 #[test]
