@@ -10,6 +10,7 @@ use super::event::AppEvent;
 use super::input::wheel;
 use super::overlay::Overlay;
 use crate::agents::Known;
+use crate::editor::Editor;
 use crate::error::Error;
 use crate::flows::dialog::{Action, Agents, Dialog, Editing, Hit, Place, Preview, Room, RowText};
 use crate::flows::registry::{self, Source};
@@ -19,7 +20,6 @@ use crate::log::{self, Job, Level};
 use crate::paths;
 use crate::project::Hierarchy;
 use crate::settings::Page;
-use crate::todo::editor::Editor;
 use crate::ui::{self, FlowsHit, SettingsHit};
 
 const LIST_LABEL: usize = 26;

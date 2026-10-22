@@ -3,8 +3,8 @@ use crossterm::event::{KeyCode, KeyEvent};
 use super::preview::change_text;
 use super::{MAX_BYTES, NEVER_SHARED, Section, Shared, too_large};
 use crate::control::config::{NoteKind, SectionPreview, SetupChange, SetupExported, SetupNote, SetupPreview};
+use crate::editor::Editor;
 use crate::text;
-use crate::todo::editor::Editor;
 
 pub(crate) const COPY: &str = "copy my setup";
 pub(crate) const PREVIEW: &str = "preview";

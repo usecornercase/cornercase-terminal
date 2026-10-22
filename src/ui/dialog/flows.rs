@@ -10,9 +10,9 @@ use super::settings::{
     pick_hit, pick_list_in,
 };
 use super::{Note, draw_input, draw_secondary, draw_submit, draw_tabs, form_inner, tabs_in};
+use crate::editor::Editor;
 use crate::flows::Flow;
 use crate::text::truncate_right;
-use crate::todo::editor::Editor;
 use crate::ui::View;
 use crate::ui::flow::{Diagram, draw_scrolled};
 use crate::ui::widgets::overlay_block;

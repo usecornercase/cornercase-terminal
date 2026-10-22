@@ -8,7 +8,7 @@ use super::CLIENTS;
 use crate::agents;
 use crate::app::App;
 use crate::control::{self, Command, Request};
-use crate::todo::editor::Editor;
+use crate::editor::Editor;
 use crate::ui;
 
 const IDEAS: [&str; 3] = [

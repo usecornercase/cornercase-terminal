@@ -6,9 +6,9 @@ use super::Flow;
 use super::dialog::{CANCEL, DIAGRAM, EDIT, FORM, agents_count, project_risks, scrolled};
 use super::store::{self, Listing, Origin, Saved};
 use crate::accounts::AgentAccounts;
+use crate::editor::Editor;
 use crate::issues::naming::check_branch;
 use crate::list::COMBO_ROWS;
-use crate::todo::editor::Editor;
 
 pub(crate) const START: &str = "start";
 const ACCOUNT_HINT: &str = "only this run: the default stays · enter opens the list";

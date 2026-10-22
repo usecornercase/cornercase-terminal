@@ -13,6 +13,7 @@ use super::overlay::Overlay;
 use super::pull_requests::DONE;
 use super::{App, Toast};
 use crate::control::{Command, FlowMessage};
+use crate::editor::wrap;
 use crate::error::Result;
 use crate::files::link::Target;
 use crate::flows::folder::{self, Listing};
@@ -23,7 +24,6 @@ use crate::project::search::Goto;
 use crate::project::{Hierarchy, Project};
 use crate::pull_request::PullRequest;
 use crate::time;
-use crate::todo::editor::wrap;
 use crate::ui::{self, flow};
 
 pub(super) const COPY: &str = "copy";

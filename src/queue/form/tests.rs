@@ -1,3 +1,4 @@
+use crossterm::event::KeyModifiers;
 use rstest::rstest;
 
 use super::*;
@@ -102,4 +103,14 @@ fn typing_goes_to_the_focused_field() {
     press(&mut f, KeyCode::Char('9'));
     press(&mut f, KeyCode::Char('0'));
     assert_eq!(f.at(), "in 90h");
+}
+
+#[test]
+fn ctrl_and_the_arrows_move_a_field_by_word() {
+    let mut f = form(When::At);
+    f.focus = Control::Prompt;
+    f.prompt = Editor::new("fix the login");
+    f.key(KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL), 60, 8);
+    press(&mut f, KeyCode::Char('x'));
+    assert_eq!(f.prompt.text(), "fix the xlogin");
 }

@@ -5,8 +5,8 @@ use ratatui::text::Span;
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 use super::{buttons_in, draw_dialog_buttons};
+use crate::editor::Editor;
 use crate::queue::form::{Control, Form, When};
-use crate::todo::editor::Editor;
 use crate::ui::View;
 use crate::ui::combo;
 use crate::ui::widgets::overlay_block;

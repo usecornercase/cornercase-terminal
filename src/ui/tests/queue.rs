@@ -1,8 +1,8 @@
 use super::*;
+use crate::editor::Editor;
 use crate::list::Combo;
 use crate::queue::Place;
 use crate::queue::form::{Choice, Choices, Control, Form, When};
-use crate::todo::editor::Editor;
 
 fn queue_tab() -> View<'static> {
     let row = |when: &str, label: &str, meta: &str, colour| IssueRow {

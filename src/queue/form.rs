@@ -1,9 +1,9 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 
 use super::Place;
 use crate::accounts::AgentAccounts;
+use crate::editor::Editor;
 use crate::list::Combo;
-use crate::todo::editor::Editor;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Control {
@@ -282,7 +282,7 @@ impl Form {
                 if let Some(combo) = self.combo(focus) {
                     combo.key(key, rows);
                 } else if let Some(editor) = self.editor(focus) {
-                    edit(editor, key, width);
+                    editor.one_line_key(key, width);
                 }
             }
         }
@@ -294,23 +294,6 @@ impl Form {
             self.focus = control;
         }
         Step::Chose(control)
-    }
-}
-
-fn edit(editor: &mut Editor, key: KeyEvent, width: usize) {
-    match key.code {
-        KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
-            editor.insert(&c.to_string());
-        }
-        KeyCode::Backspace => editor.backspace(),
-        KeyCode::Delete => editor.delete(),
-        KeyCode::Left => editor.left(),
-        KeyCode::Right => editor.right(),
-        KeyCode::Up => editor.up(width),
-        KeyCode::Down => editor.down(width),
-        KeyCode::Home => editor.home(),
-        KeyCode::End => editor.end(),
-        _ => {}
     }
 }
 

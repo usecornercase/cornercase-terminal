@@ -1,5 +1,5 @@
 use super::*;
-use crate::todo::editor::Editor;
+use crate::editor::Editor;
 use crate::ui::{TourButton, TourCard, help_button, quit_button, tour_hit, tour_layout};
 
 const TALL: u16 = 30;

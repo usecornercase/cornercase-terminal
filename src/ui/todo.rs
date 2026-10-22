@@ -4,7 +4,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 
 use super::{GAP, Rows, Zone, action_style, dim, draw_close, hovered_at as hovered, more_above, put};
-use crate::todo::editor::{Editor, wrap};
+use crate::editor::{Editor, wrap};
 
 pub(crate) const TEXT_X: u16 = 5;
 const BUTTONS: u16 = 7;

@@ -1,9 +1,20 @@
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use rstest::rstest;
 
 use super::*;
 
 fn at(text: &str, cursor: usize) -> Editor {
-    Editor { cursor, ..Editor::new(text) }
+    let mut e = Editor::new(text);
+    assert!(e.jump(cursor), "the cursor fits");
+    e
+}
+
+fn press(e: &mut Editor, code: KeyCode, modifiers: KeyModifiers) -> bool {
+    e.key(KeyEvent::new(code, modifiers), 40, 4)
+}
+
+fn press_in_line(e: &mut Editor, code: KeyCode, modifiers: KeyModifiers) -> bool {
+    e.one_line_key(KeyEvent::new(code, modifiers), 40)
 }
 
 mod wrapping {
@@ -344,5 +355,147 @@ mod wide_characters {
         assert_eq!(e.cursor(), 5);
         e.up(10);
         assert_eq!(e.cursor(), 1);
+    }
+}
+
+mod the_model {
+    use super::*;
+
+    #[test]
+    fn a_text_keeps_its_carriage_returns_and_its_last_line_break() {
+        assert_eq!(Editor::new("a\r\nb\n").text(), "a\r\nb\n");
+    }
+
+    #[test]
+    fn a_new_editor_puts_the_cursor_at_the_end_of_its_last_line() {
+        assert_eq!(Editor::new("ab\ncd").cursor(), 5);
+    }
+
+    #[test]
+    fn delete_at_the_end_of_a_line_joins_the_next_one() {
+        let mut e = at("ab\ncd", 2);
+        e.delete();
+        assert_eq!((e.text().as_str(), e.cursor()), ("abcd", 2));
+    }
+
+    #[test]
+    fn delete_before_an_accent_at_the_end_of_a_line_removes_the_accent() {
+        let mut e = at("e\u{301}\nx", 1);
+        e.delete();
+        assert_eq!(e.text(), "e\nx");
+    }
+
+    #[test]
+    fn left_from_the_start_of_a_line_lands_after_an_accent_ending_the_one_above() {
+        let mut e = at("e\u{301}\nx", 3);
+        e.left();
+        assert_eq!(e.cursor(), 2);
+    }
+
+    #[test]
+    fn editors_with_the_same_text_cursor_and_scroll_are_equal_whatever_their_history() {
+        let mut typed = Editor::default();
+        typed.insert("ab");
+        assert_eq!(typed, Editor::new("ab"));
+    }
+}
+
+mod words {
+    use super::*;
+
+    const TEXT: &str = "fix the login-bug\nnext";
+
+    fn stops(mut e: Editor, code: KeyCode, presses: usize) -> Vec<usize> {
+        (0..presses)
+            .map(|_| {
+                press(&mut e, code, KeyModifiers::CONTROL);
+                e.cursor()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn ctrl_right_stops_at_each_word_start_and_at_the_next_line() {
+        assert_eq!(stops(at(TEXT, 0), KeyCode::Right, 7), [4, 8, 13, 14, 18, 22, 22]);
+    }
+
+    #[test]
+    fn ctrl_left_stops_at_each_word_start_and_at_the_end_of_the_line_above() {
+        assert_eq!(stops(Editor::new(TEXT), KeyCode::Left, 8), [18, 17, 14, 13, 8, 4, 0, 0]);
+    }
+
+    #[rstest]
+    #[case::plain(KeyModifiers::NONE)]
+    #[case::shift(KeyModifiers::SHIFT)]
+    #[case::alt(KeyModifiers::ALT)]
+    fn other_modifiers_move_one_character(#[case] modifiers: KeyModifiers) {
+        let mut e = Editor::new("fix the login");
+        press(&mut e, KeyCode::Left, modifiers);
+        assert_eq!(e.cursor(), 12);
+    }
+
+    #[test]
+    fn a_one_line_field_moves_by_word_too() {
+        let mut e = Editor::new("fix the login");
+        press_in_line(&mut e, KeyCode::Left, KeyModifiers::CONTROL);
+        e.insert("x");
+        assert_eq!(e.text(), "fix the xlogin");
+    }
+}
+
+mod one_line {
+    use super::*;
+
+    #[test]
+    fn enter_is_left_to_the_caller() {
+        let mut e = Editor::new("fix");
+        assert!(!press_in_line(&mut e, KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(e.text(), "fix");
+    }
+
+    #[test]
+    fn home_and_end_go_to_the_ends_of_the_text() {
+        let mut e = at("fix the login bug", 9);
+        press_in_line(&mut e, KeyCode::Home, KeyModifiers::NONE);
+        assert_eq!(e.cursor(), 0);
+        press_in_line(&mut e, KeyCode::End, KeyModifiers::NONE);
+        assert_eq!(e.cursor(), 17);
+    }
+
+    #[test]
+    fn a_paste_turns_line_breaks_tabs_and_control_characters_into_spaces() {
+        let mut e = Editor::new("a");
+        e.insert("\r\nb\tc\u{1b}d");
+        assert_eq!(e.text(), "a  b c d");
+    }
+}
+
+mod past_the_cursor_limit {
+    use super::*;
+
+    const LONG: usize = 70_000;
+
+    #[test]
+    fn left_and_right_still_move_one_character() {
+        let mut e = Editor::new(&"x".repeat(LONG));
+        e.left();
+        e.left();
+        e.right();
+        assert_eq!(e.cursor(), LONG - 1);
+    }
+
+    #[test]
+    fn a_click_there_leaves_the_cursor_where_it_was() {
+        let mut e = Editor::new(&"x".repeat(LONG));
+        e.place(LONG + 1, 0, LONG - 10);
+        assert_eq!(e.cursor(), LONG);
+    }
+
+    #[test]
+    fn delete_there_removes_one_character() {
+        let mut e = Editor::new(&"x".repeat(LONG));
+        e.left();
+        e.delete();
+        assert_eq!((e.text().len(), e.cursor()), (LONG - 1, LONG - 1));
     }
 }

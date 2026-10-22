@@ -26,6 +26,29 @@ fn a_todo_typed_in_the_panel_is_saved_next_to_the_session() {
     app.session.wait_for_file("todos.json", "the item is saved", |saved| saved.contains("buy milk"));
 }
 
+#[test]
+fn ctrl_left_in_a_todo_moves_by_word() {
+    let mut app = Harness::start();
+    app.click(areas().todo_button.as_position());
+    app.wait_for("the todo panel opens", |s| s.contains("+ New TODO"));
+    let panel = ui::layout_with(AREA, state::Widths::default(), true, config::Sidebar::default()).changes;
+    let view = ui::todo::View {
+        items: Vec::new(),
+        scroll: 0,
+        adding: None,
+        light: false,
+        muted: ratatui::style::Color::DarkGray,
+        drag: None,
+        compact: false,
+    };
+    let button = ui::todo::rows(panel, &view).button();
+
+    app.click(button.as_position());
+    app.send(b"fix the login\x1b[1;5Dx\r");
+
+    app.session.wait_for_file("todos.json", "the item is saved", |saved| saved.contains("fix the xlogin"));
+}
+
 fn edited_repo(prefix: &str) -> (PathBuf, String) {
     let repo = std::env::temp_dir().join(format!("{prefix}-{}", std::process::id()));
     std::fs::create_dir_all(&repo).expect("create repo dir");

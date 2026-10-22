@@ -3,9 +3,9 @@ use std::path::PathBuf;
 
 use super::{Agents, CANCEL, DELETE_ROLE, DIAGRAM, DONE, FORM, Place, Room, SAVE};
 use crate::agents::{self, Known};
+use crate::editor::Editor;
 use crate::flows::{Back, End, Flow, MAX_ROLES, ORCHESTRATOR, Role, Stage, Worktree, builtin};
 use crate::list::Search;
-use crate::todo::editor::Editor;
 
 pub(crate) const DEFAULT_MODEL: &str = "default";
 pub(crate) const OTHER_MODEL: &str = "other…";

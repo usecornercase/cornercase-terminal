@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 use serde_json::Value;
 
@@ -9,9 +9,9 @@ use super::menus::MenuAction;
 use super::overlay::Overlay;
 use super::toast::Undo;
 use super::{App, Toast};
+use crate::editor::Editor;
 use crate::project::Hierarchy;
 use crate::todo::Removed;
-use crate::todo::editor::Editor;
 use crate::ui;
 use crate::ui::todo::{self as panel, Hit};
 
@@ -107,18 +107,7 @@ impl App {
             KeyCode::Esc if editor.is_empty() => self.close_panel(),
             KeyCode::Esc => self.panels.todo.cancel(),
             KeyCode::Enter => self.submit_todo(area),
-            KeyCode::Backspace => editor.backspace(),
-            KeyCode::Delete => editor.delete(),
-            KeyCode::Left => editor.left(),
-            KeyCode::Right => editor.right(),
-            KeyCode::Home => editor.home(),
-            KeyCode::End => editor.end(),
-            KeyCode::Up => editor.up(width),
-            KeyCode::Down => editor.down(width),
-            KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
-                editor.insert(c.encode_utf8(&mut [0; 4]));
-            }
-            _ => {}
+            _ => _ = editor.one_line_key(key, width),
         }
     }
 

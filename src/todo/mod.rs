@@ -1,11 +1,9 @@
-pub(crate) mod editor;
-
 use std::collections::VecDeque;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use editor::Editor;
+use crate::editor::Editor;
 
 pub(crate) const VERSION: u32 = 1;
 pub(crate) const UNDOS: usize = 16;

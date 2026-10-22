@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::config::ProjectSettings;
-use crate::todo::editor::Editor;
+use crate::editor::Editor;
 
 pub(crate) const SAVE: &str = "save";
 pub(crate) const CANCEL: &str = "cancel";

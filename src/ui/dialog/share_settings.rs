@@ -8,9 +8,9 @@ use super::flows::{draw_hint, draw_text, text_inside};
 use super::issues::issue_buttons_in;
 use super::settings::settings_area;
 use super::{Note, draw_secondary, draw_submit, draw_waiting, form_inner, pick_background};
+use crate::editor::Editor;
 use crate::settings::share::dialog::{Dialog, Line, Page, Tone};
 use crate::text::truncate_right;
-use crate::todo::editor::Editor;
 use crate::ui::View;
 use crate::ui::widgets::overlay_block;
 

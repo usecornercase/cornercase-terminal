@@ -1,3 +1,4 @@
+pub(crate) mod editor;
 pub mod error;
 pub(crate) mod gh;
 pub(crate) mod http;

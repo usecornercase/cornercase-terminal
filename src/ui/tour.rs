@@ -11,7 +11,7 @@ use super::View;
 use super::dialog::dialog_button_style;
 use super::rows::draw_rail;
 use super::widgets::{button_width, put};
-use crate::todo::editor::{Editor, wrap};
+use crate::editor::{Editor, wrap};
 
 const WIDTH: u16 = 54;
 

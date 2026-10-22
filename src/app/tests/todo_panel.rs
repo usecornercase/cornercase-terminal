@@ -173,6 +173,16 @@ fn arrows_move_the_cursor_in_the_field() {
 }
 
 #[test]
+fn ctrl_and_the_arrows_move_the_cursor_by_word() {
+    let (mut app, _rx, _dirs) = opened();
+    new_todo(&mut app);
+    type_text(&mut app, "fix the login");
+    send_key(&mut app, KeyCode::Left, KeyModifiers::CONTROL);
+    submit_text(&mut app, "x");
+    assert_eq!(texts(&app), ["fix the xlogin"]);
+}
+
+#[test]
 fn checking_an_item_moves_it_to_the_bottom() {
     let (mut app, _rx, _dirs) = opened();
     add(&mut app, &["a", "b"]);

@@ -7,10 +7,10 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::overlay::Overlay;
 use super::toast::Toast;
+use crate::editor::Editor;
 use crate::git;
 use crate::log;
 use crate::project::Hierarchy;
-use crate::todo::editor::Editor;
 use crate::tour::{self, Dialog, Done, Facts, Offer, Saved, Show, Step, TOURS, Tour};
 use crate::ui::{self, TourButton};
 

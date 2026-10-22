@@ -1,9 +1,9 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
 use super::{Action, CANCEL, Dialog, Editing, IMPORT, Room};
+use crate::editor::Editor;
 use crate::flows::registry::{self, Source};
 use crate::flows::share;
-use crate::todo::editor::Editor;
 
 #[derive(Debug)]
 pub(crate) struct Importing {

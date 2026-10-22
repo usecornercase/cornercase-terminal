@@ -9,6 +9,7 @@ use super::toast::Toast;
 use crate::accounts::AgentAccounts;
 use crate::agents;
 use crate::control::QueueAdd;
+use crate::editor::Editor;
 use crate::git;
 use crate::issues::browser::{Place, Screen, Tab};
 use crate::issues::{self, Issue};
@@ -16,7 +17,6 @@ use crate::list::{COMBO_ROWS, Combo};
 use crate::project::{Hierarchy, Project, Workspace};
 use crate::queue;
 use crate::queue::form::{Choice, Choices, Control, Form, Step, When};
-use crate::todo::editor::Editor;
 use crate::ui;
 
 impl App {

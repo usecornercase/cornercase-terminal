@@ -27,6 +27,19 @@ fn enter_adds_a_line_and_save_is_the_button_only() {
 }
 
 #[test]
+fn ctrl_left_crosses_a_line_break() {
+    let mut form = Form::new(1, "shop".into(), &ProjectSettings::default());
+    typed(&mut form, "npm ci");
+    key(&mut form, KeyCode::Enter);
+    typed(&mut form, "cp");
+    for _ in 0..2 {
+        form.key(KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL), ROOM);
+    }
+    typed(&mut form, "x");
+    assert_eq!(form.setup.text(), "npm cix\ncp");
+}
+
+#[test]
 fn tab_moves_between_the_fields_and_esc_closes() {
     let mut form = Form::new(1, "shop".into(), &ProjectSettings::default());
     key(&mut form, KeyCode::Tab);

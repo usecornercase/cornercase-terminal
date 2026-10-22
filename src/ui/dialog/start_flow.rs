@@ -10,11 +10,11 @@ use super::flows::{
 };
 use super::issues::issue_buttons_in;
 use super::{INPUT_PROMPT, Note, draw_input, form_inner, pick_background};
+use crate::editor::Editor;
 use crate::flows::Flow;
 use crate::flows::start::{Focus, Item, START};
 use crate::list::Combo;
 use crate::text::truncate_right;
-use crate::todo::editor::Editor;
 use crate::ui::View;
 use crate::ui::combo;
 use crate::ui::widgets::overlay_block;

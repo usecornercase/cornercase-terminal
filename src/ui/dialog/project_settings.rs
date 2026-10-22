@@ -7,8 +7,8 @@ use ratatui::widgets::{Clear, Paragraph};
 use super::flows::{draw_buttons, draw_hint, draw_text, text_inside};
 use super::issues::issue_buttons_in;
 use super::{Note, form_inner};
+use crate::editor::Editor;
 use crate::project::settings::{Field, SAVE};
-use crate::todo::editor::Editor;
 use crate::ui::View;
 use crate::ui::widgets::overlay_block;
 

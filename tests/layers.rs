@@ -4,8 +4,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const LEAVES: &[&str] =
-    &["error", "gh", "http", "list", "log", "panics", "paths", "persist", "process", "text", "time", "version"];
+const LEAVES: &[&str] = &[
+    "editor", "error", "gh", "http", "list", "log", "panics", "paths", "persist", "process", "text", "time", "version",
+];
 
 const APP_EXCEPTIONS: &[&str] = &[];
 const UI_EXCEPTIONS: &[&str] = &[];
