@@ -318,7 +318,7 @@ impl Transcript {
         let read_at = SystemTime::now();
         for line in batch.bytes.split(|b| *b == b'\n') {
             let Some(entry) = claude_entry(line) else { continue };
-            self.note_compaction(&entry, read_at);
+            self.note_compaction(&entry);
             if entry["type"] == "user"
                 && entry["isSidechain"] != true
                 && std::str::from_utf8(line).is_ok_and(|line| line.contains(INTERRUPTED))
@@ -342,9 +342,13 @@ impl Transcript {
         self.reply.as_ref().map(|reply| reply.shown(limits, self.compaction))
     }
 
-    fn note_compaction(&mut self, entry: &Value, read_at: SystemTime) {
-        if entry["type"] == "system" && entry["subtype"] == "compact_boundary" && entry["isSidechain"] != true {
-            self.compaction.at = self.compaction.at.max(counting::timestamp(entry).or(Some(read_at)));
+    fn note_compaction(&mut self, entry: &Value) {
+        if entry["type"] == "system"
+            && entry["subtype"] == "compact_boundary"
+            && entry["isSidechain"] != true
+            && let Some(at) = counting::timestamp(entry)
+        {
+            self.compaction.at = self.compaction.at.max(Some(at));
         }
     }
 }

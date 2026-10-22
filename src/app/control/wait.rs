@@ -134,6 +134,11 @@ pub(super) fn holds_prompts(agent: Option<agents::Known>, status: Option<Status>
     agent.is_some_and(agents::Known::holds_prompts) && matches!(status, Some(Status::Working | Status::Waiting))
 }
 
+fn recorded(confirm: &Confirm, compacted: Option<SystemTime>, prompted: Option<SystemTime>) -> bool {
+    let since = confirm.since;
+    (confirm.compacts && compacted.is_some_and(|at| at >= since)) || prompted.is_some_and(|at| at >= since)
+}
+
 fn keeps_open(confirm: &Confirm, agent: Option<agents::Known>, status: Option<Status>) -> bool {
     holds_prompts(agent, status) || confirm.compacts && matches!(status, Some(Status::Working | Status::Waiting))
 }
@@ -347,7 +352,11 @@ impl App {
 
     fn unrecorded(&self, confirm: &Confirm) -> String {
         let pane = confirm.pane;
-        if confirm.compacts {
+        let working = self
+            .projects
+            .pane_by(pane)
+            .is_some_and(|term| matches!(term.agent.status(), Some(Status::Working | Status::Waiting)));
+        if confirm.compacts && working {
             return format!(
                 "the agent in pane {pane} has not recorded the compaction yet: it is still compacting its conversation"
             );
@@ -363,8 +372,7 @@ impl App {
     fn confirmation(&self, confirm: &mut Confirm, now: Instant) -> Option<Result<(), String>> {
         let pane = confirm.pane;
         let Some(term) = self.projects.pane_by(pane) else { return Some(Err(format!("pane {pane} closed"))) };
-        let compacted = confirm.compacts && term.context.compaction().at.is_some_and(|at| at >= confirm.since);
-        if compacted || term.context.prompted().is_some_and(|at| at >= confirm.since) {
+        if recorded(confirm, term.context.compaction().at, term.context.prompted()) {
             return Some(Ok(()));
         }
         if keeps_open(confirm, term.agent.agent().and_then(agents::Known::of), term.agent.status()) {

@@ -1,13 +1,15 @@
 use rstest::rstest;
 
-use super::{CANNOT_WATCH, Condition, holds_prompts};
+use std::time::{Duration, Instant, SystemTime};
+
+use super::{CANNOT_WATCH, Condition, Confirm, holds_prompts, recorded};
 use crate::agents::Known;
 use crate::agents::activity::{Activity, Pane, Status};
 
 #[test]
 fn a_failed_agent_has_ended_its_turn_and_an_idle_wait() {
     let mut pane = Pane::default();
-    pane.update(Some(Activity::Failed), false, std::time::Instant::now());
+    pane.update(Some(Activity::Failed), false, Instant::now());
     assert_eq!(Condition::TurnOver.ended(&pane), Some("failed"));
     assert_eq!(Condition::Idle.ended(&pane), Some("failed"));
     assert_eq!(Condition::Waiting.ended(&pane), None);
@@ -44,4 +46,22 @@ fn agents_that_queue_prompts_record_them_late(
     #[case] holds: bool,
 ) {
     assert_eq!(holds_prompts(agent, status), holds);
+}
+
+#[rstest]
+#[case::compaction_after_a_compact_send(true, Some(10), None, true)]
+#[case::compaction_before_the_enter(true, Some(1), None, false)]
+#[case::compaction_after_an_ordinary_send(false, Some(10), None, false)]
+#[case::prompt_after_the_enter(false, None, Some(10), true)]
+#[case::nothing(true, None, None, false)]
+fn a_compaction_confirms_only_a_compact_send_made_before_it(
+    #[case] compacts: bool,
+    #[case] compacted: Option<u64>,
+    #[case] prompted: Option<u64>,
+    #[case] expected: bool,
+) {
+    let at = |secs: u64| SystemTime::UNIX_EPOCH + Duration::from_secs(secs);
+    let confirm = Confirm { pane: 1, since: at(5), compacts, by: Instant::now(), wait: None };
+
+    assert_eq!(recorded(&confirm, compacted.map(at), prompted.map(at)), expected);
 }

@@ -145,6 +145,16 @@ mod transcript {
     }
 
     #[test]
+    fn a_boundary_without_a_time_hides_the_share_but_gives_no_time() {
+        let mut file = Written::new();
+        file.lines(&[assistant("claude-opus-5-5", 1, 0, 180_000)]);
+
+        file.lines(&[COMPACTED.to_string()]);
+
+        assert_eq!(file.transcript.compaction, Compaction { at: None, hides: true });
+    }
+
+    #[test]
     fn a_compaction_and_the_next_reply_in_one_read_keep_the_time_and_show_the_reply() {
         let mut file = Written::new();
         file.lines(&[assistant("claude-opus-5-5", 1, 0, 180_000)]);
