@@ -105,7 +105,12 @@ import { type Drag, type Frame, Painter, type Region } from './ui';
 const NO_PLUGINS = '`cornercase plugin install <owner/repo>` adds one, then enter turns it on here';
 const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neither Tailscale nor a chat app';
 
-const ICON_BAR_NEEDS = 'this needs cornercase in your terminal: the demo has no Nerd Font';
+const ICONS_CHOICES: [string, string][] = [
+  ['auto', "where the window's terminal has them, or with the icon bar"],
+  ['on', 'in every window; other terminals need a Nerd Font'],
+  ['off', 'plain symbols in every window'],
+];
+const ICON_BAR_NEEDS = 'this needs cornercase in your terminal';
 
 const MERGED_NEED = 'this needs cornercase on your computer: the demo has no GitHub or GitLab';
 const SOUND_NEEDS = 'this needs cornercase on your computer: the demo plays no sound';
@@ -3162,6 +3167,7 @@ export class App {
       { id: 'sidebar', section: '', label: 'sidebar', value: this.sidebar(), note: 'how projects, workspaces and tabs are laid out' },
       { id: 'tabs', section: '', label: 'tabs', value: this.tabsOnTop() ? 'top' : 'sidebar', note: "where a workspace's tabs are listed" },
       { id: 'iconBar', section: '', label: 'icon bar', value: '[ ] off', note: 'the buttons under the lists, as icons; needs a Nerd Font' },
+      { id: 'icons', section: '', label: 'icons', value: c.icons, note: 'Nerd Font icons for files and buttons, per window' },
       { id: 'agents', section: '', label: 'agents section', value: c.agentsSection ? '[x] shown' : '[ ] hidden', note: 'every running agent in the sidebar' },
       { id: 'working', section: '', label: 'working icon', value: c.workingIcon, note: 'on the tab of an agent that is working' },
       { id: 'counts', section: '', label: 'counts', value: c.counts ? '[x] shown' : '[ ] hidden', note: 'what a project or collapsed group holds, such as (3)' },
@@ -3254,6 +3260,9 @@ export class App {
       const items = TABS.map(([value, note]) => ({ value, note }));
       const current = this.tabsOnTop() ? 'top' : 'sidebar';
       o.pick = { row: row.id, title: "Where should a workspace's tabs go?", items, selected: Math.max(0, items.findIndex((i) => i.value === current)), filter: '' };
+    } else if (row.id === 'icons') {
+      const items = ICONS_CHOICES.map(([value, note]) => ({ value, note }));
+      o.pick = { row: row.id, title: 'Which windows should draw Nerd Font icons?', items, selected: Math.max(0, items.findIndex((i) => i.value === c.icons)), filter: '' };
     } else if (row.id === 'working') {
       const items = WORKING_ICONS.map(([value, note]) => ({ value, note }));
       o.pick = { row: row.id, title: "What should a working agent's tab show?", items, selected: Math.max(0, items.findIndex((i) => i.value === c.workingIcon)), filter: '' };
@@ -3416,6 +3425,9 @@ export class App {
     } else if (row === 'tabs') {
       c.tabs = item.value;
       o.notice = `tabs: ${item.value}`;
+    } else if (row === 'icons') {
+      c.icons = item.value;
+      o.notice = `icons: ${item.value}`;
     } else if (row === 'working') {
       c.workingIcon = item.value;
       o.notice = `working icon: ${item.value}`;

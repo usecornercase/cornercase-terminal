@@ -81,7 +81,7 @@ impl App {
     pub(super) fn layout(&self, area: Rect) -> ui::Areas {
         let (panel, sidebar) = (self.panel_shown(), self.sidebar());
         let (agents, icons) = (self.config.agents_section, self.config.icon_bar);
-        ui::full_layout(area, self.screen.widths, ui::Screen { changes: panel, sidebar, agents, icons })
+        ui::full_layout(area, self.screen.widths, ui::Screen { changes: panel, sidebar, agents, icon_bar: icons })
             .with_tab_bar(config::Tabs::from_setting(&self.config.tabs) == config::Tabs::Top)
             .with_full_screen(self.file_full_screen(), area)
     }

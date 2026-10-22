@@ -86,7 +86,7 @@ pub(super) fn draw_find(
     let end = find_previous(area).x.saturating_sub(width + u16::from(width > 0));
     put(buf, (end, row.y), &count, dim(view.muted), find_previous(area).x);
     let field = QueryField {
-        glyph: view.glyphs.search,
+        glyph: view.glyphs().search,
         text: find.text(),
         placeholder: PLACEHOLDER,
         focused: find.focused,

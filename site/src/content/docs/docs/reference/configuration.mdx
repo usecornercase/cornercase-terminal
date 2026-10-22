@@ -106,7 +106,7 @@ Your [agent accounts](../../guides/accounts/). One section per agent that takes 
 
 <Screen
   name="settings-ui"
-  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; icon bar off; agents section hidden; working icon moon; counts shown; inactive panes dimmed; model and context shown under an agent's tab; memory hidden; desktop notifications auto; sound on, with the built-in sounds for needing you and finishing, and none for subagents; check for updates every hour; star prompt now and then; and prefix key off"
+  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; icon bar off; icons auto; agents section hidden; working icon moon; counts shown; inactive panes dimmed; model and context shown under an agent's tab; memory hidden; desktop notifications auto; sound on, with the built-in sounds for needing you and finishing, and none for subagents; check for updates every hour; star prompt now and then; and prefix key off"
   crop={[2, 1, 106, 23]}
 />
 
@@ -114,6 +114,7 @@ Your [agent accounts](../../guides/accounts/). One section per agent that takes 
 | --- | --- |
 | **sidebar** | How projects, workspaces and tabs are laid out: *projects_on_top* (the default) and *workspaces_on_top* stack both lists in one column, *side_by_side* gives each its own column, and *tree* shows one list with every project, its workspaces and their tabs. See [Arrange the columns](../../guides/projects-workspaces-tabs/#arrange-the-columns). |
 | **tabs** | Where a workspace's tabs are listed: *sidebar* (the default) under their workspace, or *top* in a bar above the pane with only the active workspace's tabs. See [Tabs above the pane](../../guides/projects-workspaces-tabs/#tabs-above-the-pane). |
+| **icons** | Which windows draw Nerd Font icons: file types in the files tree, the changes panel and the search results, and the panels' buttons. `auto` decides per window, `on` and `off` force every window. See [`icons`](#icons). |
 | **icon bar** | Move the buttons at the bottom of the sidebar into a column of icons on the left edge, named when you hover them. They need a Nerd Font, which Ghostty, kitty and WezTerm include. Off by default. See [The icon bar](../../guides/projects-workspaces-tabs/#the-icon-bar). |
 | **agents section** | List every Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI and GitHub Copilot CLI, in every project, at the bottom of the sidebar; a click jumps to one. Off by default. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section). |
 | **working icon** | What a working agent's tab shows: *moon* (the default), a still yellow `◐`, or *spinner*, `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` turning about ten times a second. Also in the tab bar and the agents section. See [What your agents are doing](../../guides/projects-workspaces-tabs/#what-your-agents-are-doing). |
@@ -257,6 +258,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "sidebar": "projects_on_top",
   "tabs": "sidebar",
   "icon_bar": false,
+  "icons": "auto",
   "agents_section": false,
   "working_icon": "moon",
   "counts": true,
@@ -320,6 +322,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`sidebar`](#sidebar) | string | `"projects_on_top"` |
 | [`tabs`](#tabs) | string | `"sidebar"` |
 | [`icon_bar`](#icon_bar) | boolean | `false` |
+| [`icons`](#icons) | string | `"auto"` |
 | [`agents_section`](#agents_section) | boolean | `false` |
 | [`working_icon`](#working_icon) | string | `"moon"` |
 | [`counts`](#counts) | boolean | `true` |
@@ -482,7 +485,13 @@ Where a workspace's tabs are listed: `"sidebar"` under their workspace, in the w
 
 #### `icon_bar`
 
-Whether the buttons at the bottom of the sidebar become a column of icons on the left edge, from 90 columns up, and the compact layout's top bar and the panels' search buttons use the same icons. The icons come from [Nerd Fonts](https://www.nerdfonts.com/): Ghostty, kitty and WezTerm include them, other terminals need a Nerd Font set as their font. See [The icon bar](../../guides/projects-workspaces-tabs/#the-icon-bar).
+Whether the buttons at the bottom of the sidebar become a column of icons on the left edge, from 90 columns up. The icons come from [Nerd Fonts](https://www.nerdfonts.com/): Ghostty, kitty and WezTerm include them, other terminals need a Nerd Font set as their font. See [The icon bar](../../guides/projects-workspaces-tabs/#the-icon-bar).
+
+#### `icons`
+
+Which windows draw Nerd Font icons: an icon per file type in the files tree, the changes panel and the files search results, and the glyphs of the compact layout's top bar and the panels' search and full-screen buttons. `"auto"` decides for each window, so a Ghostty window and a phone attached at once each get their own choice: it draws them in Ghostty, kitty (0.36 and later, or an unknown version) and WezTerm, also inside tmux (the terminal outside tmux decides), in the browser window, and wherever [`icon_bar`](#icon_bar) is on. `"on"` draws them in every window, so other terminals need a Nerd Font set as their font. `"off"` draws plain symbols everywhere. An unknown value counts as the default, `"auto"`. Zellij and screen cannot name the terminal behind them, so `auto` leaves them plain; use `"on"`. With `CORNERCASE_IMAGES` set, cornercase does not ask tmux about the terminal outside it, so use `"on"` there too.
+
+The browser window ships a subset of Symbols Nerd Font: Nerd Fonts (MIT), Seti UI (MIT), Codicons (CC BY 4.0, © Microsoft) and Material Design Icons (Apache 2.0). Their licences are served at `/symbols-LICENSE.txt` on the browser window's address.
 
 #### `agents_section`
 

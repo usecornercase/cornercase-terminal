@@ -3,6 +3,7 @@ use std::time::Instant;
 use ratatui::layout::Rect;
 
 use super::App;
+use super::images::Sight;
 use super::interaction::{Drag, Grab};
 use super::layout::{List, Side};
 use super::links::Resolving;
@@ -10,12 +11,16 @@ use super::toast::Toast;
 use crate::accounts;
 use crate::agents::context::Context;
 use crate::agents::{Known, activity};
-use crate::config::Config;
+use crate::config::{Config, Icons};
 use crate::project::{Hierarchy, Project, Tab, Workspace};
 use crate::term::Term;
 use crate::ui::{self};
 
 impl App {
+    pub(super) fn icons_in(&self, sight: &Sight) -> bool {
+        Icons::from_setting(&self.config.icons).draws(sight.support.nerd_font, self.config.icon_bar)
+    }
+
     pub(super) fn project_entries(&self) -> Vec<ui::ProjectEntry> {
         self.projects
             .iter()
@@ -166,7 +171,8 @@ impl App {
             tree: self.screen.drawn.tree.then(|| self.tree_view()),
             agents: self.config.agents_section.then(|| self.agents_view()),
             counts: self.config.counts,
-            icons: self.config.icon_bar,
+            icon_bar: self.config.icon_bar,
+            icons: false,
             no_tab: self.no_tab(),
             groups: self.groups.iter().map(|g| g.entry.clone()).collect(),
             projects: self.project_entries(),

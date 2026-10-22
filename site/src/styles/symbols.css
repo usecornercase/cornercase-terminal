@@ -1,0 +1,6 @@
+@font-face {
+  font-family: 'cornercase symbols';
+  src: url('../assets/symbols.woff2') format('woff2');
+  font-display: block;
+  unicode-range: U+E5FA-E6B7, U+EA60-EC1E, U+F0001-F1AF0;
+}

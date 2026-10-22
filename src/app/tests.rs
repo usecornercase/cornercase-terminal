@@ -514,6 +514,7 @@ mod context_menu;
 mod dispatch;
 mod groups;
 mod icon_bar;
+mod icons;
 mod keys;
 mod lock_text;
 mod merge_requests;

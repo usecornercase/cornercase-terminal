@@ -26,6 +26,8 @@ The panel follows the active workspace, and each workspace keeps its own open fo
 
 The tree starts at the workspace's folder, folders first. Click a folder to open or close it, a file to read it, and use the wheel to scroll. Hidden files such as `.env` are listed; files git ignores, such as `target/` or `node_modules/`, are not. New files show up within two seconds, so you see what an agent creates as it goes.
 
+Each folder has an open or closed folder icon and each file an icon for its type, in a colour of your terminal's theme: Rust, TypeScript, JSON, Markdown, images, archives, lock files and about fifty more kinds, with a plain one for the rest. The icons show where your terminal has them, or on every window when you turn on the [`icons`](../../reference/configuration/#icons) setting. A name keeps the colour of its git status.
+
 In a git workspace, a changed file gets its status in its colour: `M` for modified, `A` for added or new. A folder holding changes gets a `●`, yellow, or green when everything in it is new. The marks follow the project scope of the [changes panel](../changes/): what isn't committed yet, or, when you pick **Commits** or **All** there, what the branch changed.
 
 ## Read a file
@@ -217,7 +219,7 @@ The panel says why where the picture would be, and what to do. The messages, wit
 
 ## Search
 
-The bar at the top of the panel searches the whole workspace, skipping what git ignores. Click it and type: what you type goes to the bar instead of your pane, and results show as you type. An empty bar shows the tree again.
+The bar at the top of the panel searches the whole workspace, skipping what git ignores. Click it and type: what you type goes to the bar instead of your pane, and results show as you type. An empty bar shows the tree again. A name result and each file of a text search start with the file's icon, and the matching lines below a file move in with its path.
 
 <Screen
   name="files-search"

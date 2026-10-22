@@ -115,6 +115,47 @@ impl WorkingIcon {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum Icons {
+    #[default]
+    Auto,
+    On,
+    Off,
+}
+
+impl Icons {
+    const ALL: [Self; 3] = [Self::Auto, Self::On, Self::Off];
+
+    pub(crate) fn id(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::On => "on",
+            Self::Off => "off",
+        }
+    }
+
+    pub(crate) fn choices() -> Vec<(&'static str, &'static str)> {
+        let note = |i: Self| match i {
+            Self::Auto => "where the window's terminal has them, or with the icon bar",
+            Self::On => "in every window; other terminals need a Nerd Font",
+            Self::Off => "plain symbols in every window",
+        };
+        Self::ALL.into_iter().map(|i| (i.id(), note(i))).collect()
+    }
+
+    pub(crate) fn from_setting(setting: &str) -> Self {
+        from_setting(&Self::ALL, Self::id, setting)
+    }
+
+    pub(crate) fn draws(self, terminal_has_them: bool, icon_bar: bool) -> bool {
+        match self {
+            Self::On => true,
+            Self::Off => false,
+            Self::Auto => terminal_has_them || icon_bar,
+        }
+    }
+}
+
 pub(crate) const DEFAULT_WORKTREES_DIR: &str = "~/.cornercase/worktrees";
 pub(crate) const DEFAULT_PORT: u16 = 47681;
 pub(crate) const DEFAULT_PROMPT: &str = "{url}";
@@ -186,6 +227,7 @@ pub(crate) struct Config {
     pub(crate) sidebar: String,
     pub(crate) tabs: String,
     pub(crate) icon_bar: bool,
+    pub(crate) icons: String,
     pub(crate) agents_section: bool,
     pub(crate) working_icon: String,
     pub(crate) counts: bool,
@@ -254,6 +296,7 @@ impl Config {
         sidebar: String::new(),
         tabs: String::new(),
         icon_bar: false,
+        icons: String::new(),
         agents_section: false,
         working_icon: String::new(),
         counts: false,
@@ -301,6 +344,7 @@ impl Default for Config {
             glab: DEFAULT_GLAB.into(),
             sidebar: Sidebar::default().id().into(),
             tabs: Tabs::default().id().into(),
+            icons: Icons::default().id().into(),
             working_icon: WorkingIcon::default().id().into(),
             counts: true,
             todo_dot: true,

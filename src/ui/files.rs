@@ -10,7 +10,7 @@ use ratatui::style::{Color, Modifier, Style};
 
 use self::find::{draw_find, find_hit, find_slot};
 use super::changes::{buttons, close};
-use super::icons::Glyphs;
+use super::icons::{self, Glyphs, Icon};
 use super::{action_style, dim, draw_close, fit, hovered_at as hovered, put, scroll_edge};
 use crate::changes::diff::Status;
 use crate::files::disk::{Body, Content};
@@ -73,7 +73,24 @@ pub(crate) struct View {
     pub(crate) light: bool,
     pub(crate) muted: Color,
     pub(crate) tint: Option<Color>,
-    pub(crate) glyphs: &'static Glyphs,
+    pub(crate) icons: bool,
+    pub(crate) soft: Color,
+}
+
+impl View {
+    fn glyphs(&self) -> &'static Glyphs {
+        icons::glyphs(self.icons)
+    }
+
+    fn slot(&self) -> u16 {
+        if self.icons { icons::SLOT } else { 0 }
+    }
+
+    fn put_icon(&self, buf: &mut Buffer, (x, y): (u16, u16), icon: Icon, end: u16) {
+        if self.icons {
+            put(buf, (x, y), icon.glyph, icon.style(self.soft), end);
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -494,7 +511,7 @@ fn draw_bar(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>) 
     } else {
         dim(view.muted)
     };
-    put(buf, (mode.x, mode.y), &format!(" {} ", view.glyphs.names), style, mode.right());
+    put(buf, (mode.x, mode.y), &format!(" {} ", view.glyphs().names), style, mode.right());
     let x = clear(area);
     let style =
         if hovered(hover, x) { Style::default().fg(Color::Red).add_modifier(Modifier::BOLD) } else { dim(view.muted) };
@@ -502,7 +519,7 @@ fn draw_bar(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>) 
         put(buf, (x.x + 1, x.y), "×", style, x.right());
     }
     let field = QueryField {
-        glyph: view.glyphs.search,
+        glyph: view.glyphs().search,
         text: &bar.query,
         placeholder: if names { NAME_PLACEHOLDER } else { TEXT_PLACEHOLDER },
         focused: bar.focused,
@@ -571,34 +588,41 @@ fn draw_found(buf: &mut Buffer, area: Rect, view: &View, search: &SearchView, ho
         } else if row.selectable() && hovered(hover, r) {
             buf.set_style(r, Style::default().bg(super::hover_colour(view.light)));
         }
-        match row {
-            Found::Name { path, indices } => {
-                let row = Rect::new(r.x + 2, y, r.width.saturating_sub(2), 1);
-                let (shown, indices) = tail(path, indices, usize::from(row.width.saturating_sub(1)));
-                let lit = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
-                draw_code(buf, view, row, &mark(&path_segments(&shown, view), &ranges_of(&indices), lit));
+        draw_found_row(buf, view, r, row);
+    }
+}
+
+fn draw_found_row(buf: &mut Buffer, view: &View, r: Rect, row: &Found) {
+    let (y, slot) = (r.y, view.slot());
+    match row {
+        Found::Name { path, indices } => {
+            view.put_icon(buf, (r.x + 2, y), icons::file_at(path), r.right());
+            let row = Rect::new(r.x + 2 + slot, y, r.width.saturating_sub(2 + slot), 1);
+            let (shown, indices) = tail(path, indices, usize::from(row.width.saturating_sub(1)));
+            let lit = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
+            draw_code(buf, view, row, &mark(&path_segments(&shown, view), &ranges_of(&indices), lit));
+        }
+        Found::File { path, count } => {
+            let count = count.to_string();
+            let end = r.right().saturating_sub(u16::try_from(count.len()).unwrap_or(0) + 2);
+            view.put_icon(buf, (r.x + 2, y), icons::file_at(path), end);
+            let mut segments = path_segments(path, view);
+            if let Some((_, style)) = segments.last_mut() {
+                *style = style.add_modifier(Modifier::BOLD);
             }
-            Found::File { path, count } => {
-                let count = count.to_string();
-                let end = r.right().saturating_sub(u16::try_from(count.len()).unwrap_or(0) + 2);
-                let mut segments = path_segments(path, view);
-                if let Some((_, style)) = segments.last_mut() {
-                    *style = style.add_modifier(Modifier::BOLD);
-                }
-                draw_code(buf, view, Rect::new(r.x + 2, y, end.saturating_sub(r.x + 2), 1), &segments);
-                put(buf, (end + 1, y), &count, dim(view.muted), r.right());
-            }
-            Found::Line { number, text, ranges, .. } => {
-                let x = put(buf, (r.x + 2, y), &format!("{number:>5}"), dim(view.muted), r.right()) + 2;
-                let room = usize::from(r.right().saturating_sub(x + 1));
-                let skip =
-                    ranges.first().filter(|first| first.end > room).map_or(0, |first| first.start.saturating_sub(8));
-                let text: String = text.chars().skip(skip).collect();
-                let shifted: Vec<Range<usize>> =
-                    ranges.iter().map(|m| m.start.saturating_sub(skip)..m.end.saturating_sub(skip)).collect();
-                let segments = mark(&[(text, Style::default())], &shifted, LIT);
-                draw_code(buf, view, Rect::new(x, y, r.right().saturating_sub(x), 1), &segments);
-            }
+            let start = r.x + 2 + slot;
+            draw_code(buf, view, Rect::new(start, y, end.saturating_sub(start), 1), &segments);
+            put(buf, (end + 1, y), &count, dim(view.muted), r.right());
+        }
+        Found::Line { number, text, ranges, .. } => {
+            let x = put(buf, (r.x + 2 + slot, y), &format!("{number:>5}"), dim(view.muted), r.right()) + 2;
+            let room = usize::from(r.right().saturating_sub(x + 1));
+            let skip = ranges.first().filter(|first| first.end > room).map_or(0, |first| first.start.saturating_sub(8));
+            let text: String = text.chars().skip(skip).collect();
+            let shifted: Vec<Range<usize>> =
+                ranges.iter().map(|m| m.start.saturating_sub(skip)..m.end.saturating_sub(skip)).collect();
+            let segments = mark(&[(text, Style::default())], &shifted, LIT);
+            draw_code(buf, view, Rect::new(x, y, r.right().saturating_sub(x), 1), &segments);
         }
     }
 }
@@ -653,13 +677,16 @@ fn tree_label(buf: &mut Buffer, view: &View, r: Rect, row: &TreeRow, last: bool)
         put(buf, (x, r.y), if row.open { "▾" } else { "▸" }, dim(view.muted), r.right());
     }
     let end = r.right().saturating_sub(4);
+    let icon = if row.dir { icons::folder(row.open) } else { icons::file(&row.name) };
+    view.put_icon(buf, (x + 2, r.y), icon, end);
+    let name_x = x + 2 + view.slot();
     let colour = row.status.map_or(Color::Reset, status_colour);
     let mut style = Style::default().fg(colour);
     if last {
         style = style.add_modifier(Modifier::BOLD);
     }
-    let name = truncate_right(&row.name, usize::from(end.saturating_sub(x + 2)));
-    put(buf, (x + 2, r.y), &name, style, end);
+    let name = truncate_right(&row.name, usize::from(end.saturating_sub(name_x)));
+    put(buf, (name_x, r.y), &name, style, end);
     if let Some(status) = row.status {
         let mark = if row.dir { "●" } else { status.letter() };
         put(buf, (end + 1, r.y), mark, Style::default().fg(colour), r.right());
@@ -706,9 +733,9 @@ fn draw_title_buttons(buf: &mut Buffer, area: Rect, view: &View, file: &FileView
     let find = find_slot(area, file);
     let style =
         if file.find.is_some() || hovered(hover, find) { Style::default().fg(Color::Cyan) } else { dim(view.muted) };
-    put(buf, (find.x + 1, find.y), view.glyphs.search, style, find.right());
+    put(buf, (find.x + 1, find.y), view.glyphs().search, style, find.right());
     let full = full_screen_button(area);
-    let glyph = if file.full_screen { view.glyphs.restore } else { view.glyphs.full_screen };
+    let glyph = if file.full_screen { view.glyphs().restore } else { view.glyphs().full_screen };
     let style =
         if file.full_screen || hovered(hover, full) { Style::default().fg(Color::Cyan) } else { dim(view.muted) };
     put(buf, (full.x + 1, full.y), glyph, style, full.right());

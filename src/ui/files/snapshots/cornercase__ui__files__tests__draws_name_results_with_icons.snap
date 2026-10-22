@@ -1,0 +1,9 @@
+---
+source: src/ui/files/tests.rs
+expression: render(&with_icons(names()))
+---
+  Files  ~/projects/shop                     ×
+   main                                  ×  
+  2 files
+▌  src/main.rs
+   docs/maintaining.md

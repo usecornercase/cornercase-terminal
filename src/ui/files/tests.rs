@@ -28,7 +28,8 @@ fn tree() -> View {
         light: false,
         muted: Color::DarkGray,
         tint: None,
-        glyphs: &crate::ui::icons::PLAIN,
+        icons: false,
+        soft: Color::Gray,
     }
 }
 
@@ -70,7 +71,8 @@ fn opened(selection: Option<(u32, u32)>, unfolded: &[u32]) -> View {
         light: false,
         muted: Color::DarkGray,
         tint: None,
-        glyphs: &crate::ui::icons::PLAIN,
+        icons: false,
+        soft: Color::Gray,
     }
 }
 
@@ -87,6 +89,28 @@ fn render(view: &View) -> String {
 #[test]
 fn draws_the_tree_with_git_marks() {
     insta::assert_snapshot!(render(&tree()));
+}
+
+fn with_icons(view: View) -> View {
+    View { icons: true, ..view }
+}
+
+#[test]
+fn draws_the_tree_with_icons() {
+    insta::assert_snapshot!(render(&with_icons(tree())));
+}
+
+#[test]
+fn the_icon_has_its_type_colour_and_the_name_its_status_colour() {
+    let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("terminal");
+    terminal.draw(|f| draw(f, AREA, &with_icons(tree()), None)).expect("draw");
+    let buffer = terminal.backend().buffer();
+    let cells = (0..AREA.height).flat_map(|y| (0..AREA.width).map(move |x| (x, y)));
+    let (x, y) = cells.into_iter().find(|&(x, y)| buffer[(x, y)].symbol() == "\u{e68b}").expect("a rust icon");
+    assert_eq!(
+        (buffer[(x, y)].fg, buffer[(x + 2, y)].symbol(), buffer[(x + 2, y)].fg),
+        (Color::Red, "m", Color::Yellow)
+    );
 }
 
 #[test]
@@ -108,7 +132,8 @@ fn searched(mode: Mode, rows: Vec<Found>, selected: Option<usize>) -> View {
         light: false,
         muted: Color::DarkGray,
         tint: None,
-        glyphs: &crate::ui::icons::PLAIN,
+        icons: false,
+        soft: Color::Gray,
     }
 }
 
@@ -143,6 +168,16 @@ fn a_long_path_keeps_its_end_and_its_lit_letters() {
     assert_eq!((shown.as_str(), indices), ("…g_name.snap", vec![]));
     let (shown, indices) = tail("src/ui/files.rs", &[7, 8], 10);
     assert_eq!((shown.as_str(), indices), ("…/files.rs", vec![2, 3]));
+}
+
+#[test]
+fn draws_name_results_with_icons() {
+    insta::assert_snapshot!(render(&with_icons(names())));
+}
+
+#[test]
+fn draws_text_results_with_icons() {
+    insta::assert_snapshot!(render(&with_icons(texts())));
 }
 
 #[test]

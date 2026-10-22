@@ -9,7 +9,7 @@ use ratatui::style::{Color, Modifier, Style};
 
 pub(crate) use self::selection::{LinesAction, Selected, edge, line_near, lines_actions, picked, selected};
 use self::selection::{covers, numbers_style, spot_of};
-use super::icons::Glyphs;
+use super::icons::{self, Glyphs};
 use super::{action_style, dim, draw_close, fit, hovered_at as hovered, put, scroll_edge};
 use crate::changes::Body;
 use crate::changes::diff::{Diff, File, Hunk, Kind, Line, Segments, Staged, Status};
@@ -77,7 +77,7 @@ pub(crate) struct View {
     pub(crate) tints: Tints,
     pub(crate) filter: Option<FilterView>,
     pub(crate) selection: Option<Selected>,
-    pub(crate) glyphs: &'static Glyphs,
+    pub(crate) icons: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -94,6 +94,10 @@ impl FilterView {
 }
 
 impl View {
+    fn glyphs(&self) -> &'static Glyphs {
+        icons::glyphs(self.icons)
+    }
+
     fn filtering(&self) -> Option<&FilterView> {
         self.filter.as_ref().filter(|f| !f.query.trim().is_empty())
     }
@@ -494,7 +498,7 @@ impl Painter<'_> {
         let r = filter_button(area);
         let style =
             if self.lit(r) || view.filter.is_some() { Style::default().fg(Color::Cyan) } else { dim(view.muted) };
-        put(self.buf, (r.x + 1, r.y), view.glyphs.filter, style, r.right());
+        put(self.buf, (r.x + 1, r.y), view.glyphs().filter, style, r.right());
         draw_close(self.buf, close(area), self.hover, view.muted);
     }
 
@@ -514,7 +518,7 @@ impl Painter<'_> {
         put(self.buf, (clear.x + 1, clear.y), "×", style, clear.right());
         let end = clear.x;
         let accent = if filter.focused { Color::Cyan } else { view.muted };
-        let start = put(self.buf, (row.x + 1, row.y), view.glyphs.filter, Style::default().fg(accent), end) + 1;
+        let start = put(self.buf, (row.x + 1, row.y), view.glyphs().filter, Style::default().fg(accent), end) + 1;
         let room = usize::from(end.saturating_sub(start + 1));
         if filter.query.is_empty() {
             put(self.buf, (start, row.y), &cut(FILTER_PLACEHOLDER, room), dim(view.muted), end);
@@ -686,7 +690,19 @@ impl Painter<'_> {
         for (text, style) in &right {
             x = put(self.buf, (x, r.y), text, *style, end) + 1;
         }
-        self.path(file, (r.x + 6 + indent, r.y), path_end, muted);
+        let x = self.type_icon(file, (r.x + 6 + indent, r.y), path_end, muted);
+        self.path(file, (x, r.y), path_end, muted);
+    }
+
+    fn type_icon(&mut self, file: &File, (x, y): (u16, u16), end: u16, muted: bool) -> u16 {
+        let view = self.view;
+        if !view.icons {
+            return x;
+        }
+        let icon = icons::file_at(&file.path);
+        let style = if muted { dim(view.muted) } else { icon.style(view.soft) };
+        put(self.buf, (x, y), icon.glyph, style, end);
+        x + icons::SLOT
     }
 
     fn marks(&mut self, r: Rect, staged: Option<Staged>, viewed: bool) -> u16 {

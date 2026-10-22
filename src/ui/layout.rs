@@ -233,7 +233,7 @@ pub fn layout(area: Rect, widths: Widths) -> Areas {
 }
 
 pub fn layout_with(area: Rect, widths: Widths, changes: bool, sidebar: Sidebar) -> Areas {
-    full_layout(area, widths, Screen { changes, sidebar, agents: false, icons: false })
+    full_layout(area, widths, Screen { changes, sidebar, agents: false, icon_bar: false })
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -241,11 +241,11 @@ pub(crate) struct Screen {
     pub(crate) changes: bool,
     pub(crate) sidebar: Sidebar,
     pub(crate) agents: bool,
-    pub(crate) icons: bool,
+    pub(crate) icon_bar: bool,
 }
 
 pub(crate) fn full_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
-    let Screen { changes, sidebar, agents, icons } = screen;
+    let Screen { changes, sidebar, agents, icon_bar: icons } = screen;
     if area.width < COMPACT_WIDTH {
         return compact_layout(area, changes, agents);
     }

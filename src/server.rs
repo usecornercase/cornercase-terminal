@@ -755,7 +755,8 @@ impl Server {
             client = id,
             images = graphics.images(),
             cell = graphics.cell_size(),
-            missing = graphics.why_not()
+            missing = graphics.why_not(),
+            icons = graphics.nerd_font
         );
         if let Some(client) = self.client_mut(id) {
             client.graphics.update(graphics);

@@ -42,6 +42,7 @@ export default defineConfig({
       customCss: [
         '@fontsource-variable/archivo/wdth.css',
         '@fontsource-variable/jetbrains-mono',
+        './src/styles/symbols.css',
         './src/styles/docs.css',
       ],
       head: [

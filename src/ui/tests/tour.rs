@@ -61,7 +61,7 @@ fn the_help_menu_opens_from_the_footer() {
 
 #[test]
 fn help_sits_in_the_icon_bar_between_usage_and_remote() {
-    let v = View { icons: true, remote: Some(false), ..view(&["~"]) };
+    let v = View { icon_bar: true, icons: true, remote: Some(false), ..view(&["~"]) };
     insta::assert_snapshot!(render_sized(&v, W, TALL).backend());
 }
 

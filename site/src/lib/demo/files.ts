@@ -5,6 +5,7 @@ import type { App } from './app';
 import { type FileDiff, drawPanelBorder, tintsOf } from './changes';
 import { type Picture, type Tree, picture } from './data';
 import { type FindState, findAll, nearest, occurrences, start } from './find';
+import { SLOT, fileIcon, fileIconAt, folderIcon, iconStyle } from './icons';
 import { highlight, language } from './highlight';
 import { type Areas, FILES_LABEL, bottom, right } from './layout';
 import { type Project, type Workspace, isModal } from './model';
@@ -514,8 +515,14 @@ function drawTree(p: Painter, f: Panel): void {
     const status = marks.get(row.path);
     const colour = status === 'M' ? 3 : status === 'A' ? 2 : status === 'D' ? 1 : undefined;
     const end = right(r) - 4;
+    const slot = app.config.icons === 'off' ? 0 : SLOT;
+    if (slot) {
+      const icon = row.dir ? folderIcon(row.open) : fileIcon(row.name);
+      p.span(x + 2, r.y, icon.glyph, iconStyle(icon, DARK), Math.max(0, end - x - 2));
+    }
     const style: Style = { ...(colour === undefined ? {} : { fg: colour }), ...(last ? { add: BOLD } : {}) };
-    p.span(x + 2, r.y, truncateRight(row.name, Math.max(0, end - x - 2)), style, Math.max(0, end - x - 2));
+    const room = Math.max(0, end - x - 2 - slot);
+    p.span(x + 2 + slot, r.y, truncateRight(row.name, room), style, room);
     if (status) p.span(end + 1, r.y, row.dir ? '●' : status, { fg: colour });
     p.region({ r, click: () => (row.dir ? app.toggleFilesFolder(row.path) : app.showFile(row.path)), cursor: 'pointer' });
   });
@@ -534,16 +541,25 @@ function drawFound(p: Painter, f: Panel, rows: Found[]): void {
       p.g.fill(r, { bg: f.surface });
       p.span(r.x, r.y, '▌', { fg: 6 });
     } else if (row.kind !== 'file' && p.hovered(r)) p.g.fill(r, { bg: f.hover });
+    const slot = app.config.icons === 'off' ? 0 : SLOT;
+    const mark = (path: string, end: number) => {
+      if (slot) {
+        const icon = fileIconAt(path);
+        p.span(r.x + 2, r.y, icon.glyph, iconStyle(icon, DARK), Math.max(0, end - r.x - 2));
+      }
+    };
     if (row.kind === 'name') {
-      const [shown, indices] = tail(row.path, row.indices, r.w - 3);
-      paint(p, r.x + 2, r.y, right(r) - 1, pathLine(shown, { fg: DEFAULT }), indices.map((n): Lines => [n, n + 1]), { fg: 6, add: BOLD });
+      mark(row.path, right(r) - 1);
+      const [shown, indices] = tail(row.path, row.indices, r.w - 3 - slot);
+      paint(p, r.x + 2 + slot, r.y, right(r) - 1, pathLine(shown, { fg: DEFAULT }), indices.map((n): Lines => [n, n + 1]), { fg: 6, add: BOLD });
     } else if (row.kind === 'file') {
       const count = String(row.count);
       const end = right(r) - count.length - 2;
-      paint(p, r.x + 2, r.y, end - 1, pathLine(row.path, { fg: DEFAULT, add: BOLD }), [], {});
+      mark(row.path, end - 1);
+      paint(p, r.x + 2 + slot, r.y, end - 1, pathLine(row.path, { fg: DEFAULT, add: BOLD }), [], {});
       p.span(end + 1, r.y, count, DARK);
     } else {
-      const x = p.span(r.x + 2, r.y, String(row.n).padStart(5), DARK) + 2;
+      const x = p.span(r.x + 2 + slot, r.y, String(row.n).padStart(5), DARK) + 2;
       const room = right(r) - x - 1;
       const hit = row.ranges[0];
       const skip = hit && hit[1] > room ? Math.max(0, hit[0] - 8) : 0;

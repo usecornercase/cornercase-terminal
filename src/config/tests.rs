@@ -23,6 +23,7 @@ mod file {
     fn interface_keys() -> Config {
         Config {
             icon_bar: true,
+            icons: "on".into(),
             agents_section: true,
             working_icon: "spinner".into(),
             counts: false,

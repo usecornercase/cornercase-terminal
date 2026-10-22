@@ -31,7 +31,7 @@
   NAMES.forEach(function (name, i) { xtermTheme[name] = colours.palette[i]; });
 
   var term = new window.Terminal({
-    fontFamily: 'Menlo, "SF Mono", ui-monospace, "DejaVu Sans Mono", monospace',
+    fontFamily: 'Menlo, "SF Mono", ui-monospace, "DejaVu Sans Mono", "cornercase symbols", monospace',
     fontSize: 13,
     scrollback: 0,
     theme: xtermTheme
@@ -293,5 +293,8 @@
     touchY = null;
   }, { capture: true });
 
-  connect();
+  var symbols = document.fonts && document.fonts.load
+    ? document.fonts.load('13px "cornercase symbols"', '\ue5ff').catch(function () {})
+    : Promise.resolve();
+  Promise.race([symbols, new Promise(function (resolve) { setTimeout(resolve, 1000); })]).then(connect);
 })();

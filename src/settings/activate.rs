@@ -1,5 +1,5 @@
 use crate::agents;
-use crate::config::{Config, Sidebar, Tabs, WorkingIcon};
+use crate::config::{Config, Icons, Sidebar, Tabs, WorkingIcon};
 use crate::host::notify;
 use crate::issues::Source;
 use crate::list::Search;
@@ -123,6 +123,7 @@ impl Settings {
                 self.save(config, detail.notice(on).into())
             }
             Row::Sidebar => self.pick_from(row, Sidebar::choices()),
+            Row::Icons => self.pick_from(row, Icons::choices()),
             Row::Tabs => self.pick_from(row, Tabs::choices()),
             Row::WorkingIcon => self.pick_from(row, WorkingIcon::choices()),
             Row::Notifications => self.pick_from(row, notify::choices()),
@@ -282,6 +283,7 @@ impl Settings {
             Row::DefaultAgent => Some(self.config.agent.clone()),
             Row::Sidebar => Some(Sidebar::from_setting(&self.config.sidebar).id().to_string()),
             Row::Tabs => Some(Tabs::from_setting(&self.config.tabs).id().to_string()),
+            Row::Icons => Some(Icons::from_setting(&self.config.icons).id().to_string()),
             Row::WorkingIcon => Some(WorkingIcon::from_setting(&self.config.working_icon).id().to_string()),
             Row::Notifications => Some(self.config.desktop_notifications.trim().to_lowercase()),
             Row::Kind(kind) => Some(

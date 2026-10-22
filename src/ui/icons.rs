@@ -1,3 +1,7 @@
+mod kinds;
+
+pub(crate) use kinds::{Icon, SLOT, file, file_at, folder};
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Glyphs {
     pub(crate) menu: &'static str,
@@ -77,3 +81,6 @@ const MANY: &str = "\u{f0cb2}";
 pub(crate) fn count(n: usize) -> &'static str {
     n.checked_sub(1).and_then(|i| COUNTS.get(i)).copied().unwrap_or(MANY)
 }
+
+#[cfg(test)]
+mod tests;

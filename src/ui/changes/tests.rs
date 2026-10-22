@@ -63,7 +63,7 @@ fn sample() -> View {
         tints: TINTS,
         filter: None,
         selection: None,
-        glyphs: &crate::ui::icons::PLAIN,
+        icons: false,
     }
 }
 
@@ -167,6 +167,32 @@ fn a_filter_hides_headers_without_matching_files() {
 #[test]
 fn draws_the_panel() {
     insta::assert_snapshot!(render(&sample(), None).backend());
+}
+
+fn with_icons(view: View) -> View {
+    View { icons: true, ..view }
+}
+
+#[test]
+fn draws_file_rows_with_icons() {
+    insta::assert_snapshot!(render(&with_icons(sample()), None).backend());
+}
+
+#[test]
+fn draws_every_project_rows_with_icons() {
+    insta::assert_snapshot!(render(&with_icons(every()), None).backend());
+}
+
+#[test]
+fn a_viewed_row_mutes_its_icon() {
+    let mut view = with_icons(sample());
+    view.viewed = vec![true, false, false];
+    let terminal = render(&view, None);
+    let buffer = terminal.backend().buffer();
+    let cells = (0..AREA.height).flat_map(|y| (0..AREA.width).map(move |x| (x, y)));
+    let (x, y) = cells.into_iter().find(|&(x, y)| buffer[(x, y)].symbol() == "\u{e68b}").expect("a rust icon");
+    let muted = dim(view.muted).fg;
+    assert_eq!(Some(buffer[(x, y)].fg), muted);
 }
 
 #[test]

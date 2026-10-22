@@ -283,6 +283,44 @@ mod working_icon {
     }
 }
 
+mod icons {
+    use super::*;
+
+    #[test]
+    fn starts_on_auto() {
+        let mut s = settings();
+        s.open_page(Page::Ui);
+        let row = s.row_text(&Row::Icons);
+        assert_eq!((row.label.as_str(), row.value.as_str()), ("icons", "auto"));
+    }
+
+    #[test]
+    fn is_picked_from_a_list() {
+        let mut s = settings();
+        go_to(&mut s, &Row::Icons);
+        press(&mut s, KeyCode::Enter);
+        type_text(&mut s, "off");
+        assert_eq!(saved(press(&mut s, KeyCode::Enter)).icons, "off");
+    }
+
+    #[test]
+    fn the_list_starts_on_the_current_choice() {
+        let mut s = settings();
+        s.config.icons = "on".into();
+        go_to(&mut s, &Row::Icons);
+        press(&mut s, KeyCode::Enter);
+        assert_eq!(s.pick_selected().map(|i| s.pick_choices()[i].value.as_str()), Some("on"));
+    }
+
+    #[test]
+    fn an_unknown_value_shows_as_auto() {
+        let mut s = settings();
+        s.config.icons = "sometimes".into();
+        s.open_page(Page::Ui);
+        assert_eq!(s.row_text(&Row::Icons).value, "auto");
+    }
+}
+
 mod remote {
     use super::*;
 
@@ -437,7 +475,7 @@ mod agent_tabs {
         let mut s = settings();
         s.config.context = false;
         s.open_page(Page::Ui);
-        let texts: Vec<RowText> = s.rows()[8..11].iter().map(|row| s.row_text(row)).collect();
+        let texts: Vec<RowText> = s.rows()[9..12].iter().map(|row| s.row_text(row)).collect();
         let rows: Vec<(&str, &str)> = texts.iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
         assert_eq!(rows, [("model", "[x] shown"), ("context", "[ ] hidden"), ("memory", "[ ] hidden")]);
     }
@@ -448,6 +486,7 @@ pub(crate) fn ui_rows() -> Vec<Row> {
         Row::Sidebar,
         Row::Tabs,
         Row::IconBar,
+        Row::Icons,
         Row::AgentsSection,
         Row::WorkingIcon,
         Row::Counts,

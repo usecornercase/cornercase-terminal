@@ -6,7 +6,7 @@ import { world } from '../src/lib/demo/world';
 
 const key = (k: string) => ({ key: k, metaKey: false, isComposing: false, ctrlKey: false, altKey: false, shiftKey: false });
 
-test('the UI tab lists the icon bar, which needs a real cornercase', () => {
+test('the UI tab lists the icons choice and the icon bar, which needs a real cornercase', () => {
   const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
   app.openSettings();
   inputKey(app, key('ArrowLeft'));
@@ -14,10 +14,10 @@ test('the UI tab lists the icon bar, which needs a real cornercase', () => {
   inputKey(app, key('ArrowLeft'));
   assert.equal(app.overlay?.kind === 'settings' && app.overlay.page, 5);
   const rows = app.settingsRows(5);
-  assert.deepEqual(rows.slice(0, 3).map((row) => row.id), ['sidebar', 'tabs', 'iconBar']);
+  assert.deepEqual(rows.slice(0, 4).map((row) => row.id), ['sidebar', 'tabs', 'iconBar', 'icons']);
   app.settingsClick(2);
   app.render();
-  assert.ok(app.textAt('the demo has no Nerd Font'));
+  assert.ok(app.textAt('this needs cornercase in your terminal'));
   app.destroy();
 });
 

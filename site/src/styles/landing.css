@@ -26,7 +26,7 @@
   --yellow: #9a6a00;
   --orange: #c45a00;
   --font: 'Archivo Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --font-mono: 'JetBrains Mono Variable', 'cornercase symbols', ui-monospace, 'SFMono-Regular', Menlo, monospace;
   --wide: 112%;
   --wrap: 1280px;
   --gutter: clamp(20px, 4vw, 48px);

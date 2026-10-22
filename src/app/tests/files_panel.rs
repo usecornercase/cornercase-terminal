@@ -449,6 +449,7 @@ mod images {
             cell: Some(CellSize { width: 10, height: 20 }),
             tmux: Tmux::None,
             id_hi: 42,
+            nerd_font: false,
         };
         Sight { support, lo: 0xF0, ..Sight::default() }
     }

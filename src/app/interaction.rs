@@ -195,7 +195,7 @@ impl App {
                         main,
                         ui::Screen {
                             agents: self.config.agents_section,
-                            icons: self.config.icon_bar,
+                            icon_bar: self.config.icon_bar,
                             ..ui::Screen::default()
                         },
                     )
@@ -215,7 +215,7 @@ impl App {
         let rows = ui::full_layout(
             area,
             wanted,
-            ui::Screen { changes: panel, sidebar, agents: true, icons: self.config.icon_bar },
+            ui::Screen { changes: panel, sidebar, agents: true, icon_bar: self.config.icon_bar },
         )
         .agents
         .height;

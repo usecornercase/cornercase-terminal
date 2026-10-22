@@ -292,7 +292,7 @@ impl App {
             tints: Tints::of(self.themes.host()),
             filter,
             selection: None,
-            glyphs: ui::glyphs(self.config.icon_bar),
+            icons: false,
         })
     }
 

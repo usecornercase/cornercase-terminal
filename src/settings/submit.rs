@@ -23,6 +23,7 @@ impl Settings {
             Row::DefaultAgent => self.chosen("default agent", value, |c, agent| Config { agent, ..c.clone() }),
             Row::Sidebar => self.chosen("sidebar", value, |c, sidebar| Config { sidebar, ..c.clone() }),
             Row::Tabs => self.chosen("tabs", value, |c, tabs| Config { tabs, ..c.clone() }),
+            Row::Icons => self.chosen("icons", value, |c, icons| Config { icons, ..c.clone() }),
             Row::WorkingIcon => {
                 self.chosen("working icon", value, |c, working_icon| Config { working_icon, ..c.clone() })
             }

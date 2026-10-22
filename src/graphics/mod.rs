@@ -15,6 +15,7 @@ pub(crate) struct Support {
     pub(crate) cell: Option<CellSize>,
     pub(crate) tmux: Tmux,
     pub(crate) id_hi: u8,
+    pub(crate) nerd_font: bool,
 }
 
 pub(crate) const KITTY_LO: [u8; 2] = [0xf0, 0xf1];

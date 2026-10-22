@@ -587,6 +587,7 @@ screen_toast() {
 }
 
 changes_open() {
+  CC_CONFIG='{"icons":"on"}'
   cc_s2_shell
   cc_click 'Changes' 0 -1
   cc_wait 'Uncommitted'
@@ -595,7 +596,7 @@ changes_open() {
 changes_commits() {
   changes_open
   cc_click 'Commits' 0 1 95
-  cc_wait 'A src/returns/tests.rs'
+  cc_wait 'src/returns/tests.rs'
 }
 
 screen_changes() {
@@ -622,7 +623,7 @@ screen_changes_filter() {
   changes_open
   cc_click 'All' 0 1 95
   cc_wait '3 files'
-  cc_click '⌕' 0 1 95
+  cc_click '' 0 1 95
   cc_type '!tests.rs'
   cc_wait '2 of 3 files'
   cc_hover 'Workspaces'
@@ -661,13 +662,19 @@ screen_changes_stage() {
 }
 
 files_open() {
+  CC_CONFIG='{"icons":"on"}'
   cc_s2_shell
   cc_click 'Files' 0 -1
   cc_wait 'text in the files'
   cc_click 'src' 0 1 95
   cc_wait 'returns'
   cc_click 'returns' 0 1 95
-  cc_wait 'address.rs                       M'
+  i=0
+  while ! cc_text | grep -qE 'address\.rs +M'; do
+    i=$((i + 1))
+    [ "$i" -lt 200 ] || { echo "capture: address.rs never got its mark"; cc_text; exit 1; }
+    sleep 0.1
+  done
 }
 
 screen_files() {
@@ -698,8 +705,8 @@ screen_files_full() {
   cc_move 'lines.first()'
   cc_release 'lines.first()'
   cc_wait 'lines 11-12'
-  cc_click '▢' 0 1 95
-  cc_wait '❐'
+  cc_click '' 0 1 95
+  cc_wait ''
   cc_hover 'lines 11-12'
   cc_shot files-full
 }
@@ -708,7 +715,7 @@ screen_files_find() {
   files_open
   cc_click 'address.rs' 0 1 95
   cc_wait 'first_line'
-  cc_click '⌕' 0 1 95
+  cc_click '' 0 1 95
   cc_type line
   cc_wait '1/3'
   cc_keys Down
@@ -728,7 +735,7 @@ screen_files_search() {
 
 screen_files_names() {
   files_open
-  cc_click '▤' 0 1 95
+  cc_click '' 0 1 95
   cc_type retadd
   cc_wait '1 file'
   cc_hover 'Workspaces'

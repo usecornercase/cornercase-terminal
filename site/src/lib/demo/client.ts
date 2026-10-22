@@ -56,6 +56,7 @@ export async function mount(root: HTMLElement, opts: MountOptions): Promise<Moun
     await Promise.all([
       document.fonts.load('400 16px "JetBrains Mono Variable"'),
       document.fonts.load('700 16px "JetBrains Mono Variable"'),
+      document.fonts.load('400 16px "cornercase symbols"', '\ue5ff'),
     ]);
   } catch {}
   const view = new CanvasView(canvas);

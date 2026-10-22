@@ -2,7 +2,7 @@ import { type Grid, imageBox } from './grid';
 import { paint } from './paint';
 import { type Theme, theme as defaultTheme } from './palette';
 
-export const FONT = '"JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace';
+export const FONT = '"JetBrains Mono Variable", "JetBrains Mono", "cornercase symbols", ui-monospace, monospace';
 export const ASPECT = 2.08;
 
 export interface Cursor {

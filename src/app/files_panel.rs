@@ -327,7 +327,8 @@ impl App {
             light: self.themes.light(),
             muted: ui::muted(self.themes.host()),
             tint: Tints::of(self.themes.host()).removed,
-            glyphs: ui::glyphs(self.config.icon_bar),
+            icons: false,
+            soft: ui::soft(self.themes.host()),
         })
     }
 

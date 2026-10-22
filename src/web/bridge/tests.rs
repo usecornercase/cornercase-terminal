@@ -29,6 +29,11 @@ fn the_hello_carries_this_build_and_no_images() {
 }
 
 #[test]
+fn the_hello_says_the_page_has_the_symbols() {
+    assert!(hello(48, 0, &Theme::default()).graphics.nerd_font);
+}
+
+#[test]
 fn page_messages_are_read_by_their_type() {
     let hello: FromPage = serde_json::from_str(r#"{"type":"hello","cols":48,"rows":41}"#).expect("hello");
     let resize: FromPage = serde_json::from_str(r#"{"type":"resize","cols":90,"rows":30}"#).expect("resize");

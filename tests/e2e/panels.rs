@@ -63,6 +63,28 @@ fn opened_repo(prefix: &str) -> (PathBuf, Harness) {
 }
 
 #[test]
+fn each_window_draws_the_icons_its_terminal_has() {
+    let (repo, mut ghostty) = opened_repo("ccicons");
+    let env = [("TERM", "xterm-256color")];
+    let plain = Terminal {
+        bin: std::path::Path::new(bin()),
+        args: &[],
+        size: (ROWS, COLS),
+        env: &env,
+        reply: UNKNOWN_TERMINAL,
+    };
+    let mut other = Harness::run_answering(Arc::clone(&ghostty.session), &plain);
+    other.wait_for("the second window shows the sidebar", |s| s.contains("Projects"));
+    ghostty.wait_for("the button counts the changed file", |s| s.contains("Changes 1"));
+
+    ghostty.click(ui::changes_button(areas().issues, "Changes 1").as_position());
+
+    ghostty.wait_for("the row has its type icon", |s| s.contains("M \u{e64e} notes.txt"));
+    other.wait_for("the row has none", |s| s.contains("M notes.txt") && !s.contains('\u{e64e}'));
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+#[test]
 fn scripts_see_the_changes_of_a_workspace() {
     let (repo, app) = opened_repo("ccsc");
 

@@ -40,6 +40,7 @@ pub(crate) enum Row {
     Sidebar,
     Tabs,
     IconBar,
+    Icons,
     AgentsSection,
     WorkingIcon,
     Counts,
@@ -224,11 +225,12 @@ impl Detail {
     }
 }
 
-const LOOK_ROWS: [Row; 26] = [
+const LOOK_ROWS: [Row; 27] = [
     Row::AddAgent,
     Row::Sidebar,
     Row::Tabs,
     Row::IconBar,
+    Row::Icons,
     Row::AgentsSection,
     Row::WorkingIcon,
     Row::Counts,

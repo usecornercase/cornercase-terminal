@@ -39,6 +39,7 @@ fn log_attached(id: u64, hello: &Hello) {
         background = if hello.theme.background.is_some() { "known" } else { "unknown" },
         truecolor = hello.theme.truecolor,
         images = hello.graphics.images(),
+        icons = hello.graphics.nerd_font,
         cell = hello.graphics.cell_size(),
         tmux = hello.graphics.tmux.id(),
         missing = hello.graphics.why_not(),

@@ -3,6 +3,7 @@ import { DEFAULT, rgb } from '../term/palette';
 import type { App } from './app';
 import { ADDRESS_FIXED_RS, ADDRESS_RS, RETURNS_FIXED_RS, RETURNS_RS, RETURNS_TESTS_RS, THEME_RS, TREES, type Tree } from './data';
 import { highlight, language } from './highlight';
+import { SLOT, fileIconAt, iconStyle } from './icons';
 import { type Areas, bottom, isEmpty, right } from './layout';
 import type { Project, Workspace } from './model';
 import { type Line, truncateLeft, truncateRight } from './text';
@@ -653,9 +654,14 @@ function fileRow(p: Painter, f: FileDiff, r: Rect, surface: number): void {
   let x = end - parts.reduce((n, [t]) => n + [...t].length + 1, 0);
   const pathEnd = x - 1;
   for (const [t, s] of parts) x = p.span(x, r.y, t, s) + 1;
-  const path = truncateLeft(f.change.path, Math.max(0, pathEnd - (r.x + 6 + indent)));
+  const slot = app.config.icons === 'off' ? 0 : SLOT;
+  if (slot) {
+    const icon = fileIconAt(f.change.path);
+    p.span(r.x + 6 + indent, r.y, icon.glyph, muted ? DARK : iconStyle(icon, DARK), Math.max(0, pathEnd - (r.x + 6 + indent)));
+  }
+  const path = truncateLeft(f.change.path, Math.max(0, pathEnd - (r.x + 6 + indent + slot)));
   const cut = path.lastIndexOf('/') + 1;
-  const px = p.span(r.x + 6 + indent, r.y, path.slice(0, cut), DARK);
+  const px = p.span(r.x + 6 + indent + slot, r.y, path.slice(0, cut), DARK);
   p.span(px, r.y, path.slice(cut), muted ? DARK : { fg: DEFAULT, add: BOLD });
   p.region({ r: rect(r.x, r.y, r.w - (discard ? 9 : 3), 1), click: () => app.toggleChangesFile(f), cursor: 'pointer' });
   if (stage) p.region({ r: stage, click: () => app.toggleChangesStaged(f), cursor: 'pointer' });

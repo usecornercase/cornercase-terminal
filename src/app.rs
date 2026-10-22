@@ -668,7 +668,7 @@ impl App {
         let (files, placed) = self.files_seen(sight, area, modal);
         let tab = self.tab_view(area);
         self.messages.toast = self.messages.toast.take().filter(|t| t.at.elapsed() < t.lasts());
-        let view = ui::View { tab, overlay, files, ..self.lists_view(area, now) };
+        let view = ui::View { tab, overlay, files, ..self.lists_view(area, now) }.with_icons(self.icons_in(sight));
         ui::draw(f, &view);
         placed.map(|placed| images::owned(f.buffer_mut(), placed))
     }

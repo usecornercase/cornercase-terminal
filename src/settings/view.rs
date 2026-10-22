@@ -1,5 +1,5 @@
 use crate::agents;
-use crate::config::{Config, Sidebar, Tabs, WorkingIcon};
+use crate::config::{Config, Icons, Sidebar, Tabs, WorkingIcon};
 use crate::issues::{Source, naming};
 use crate::messenger::Via;
 use crate::shortcuts::Prefix;
@@ -10,6 +10,7 @@ const RESUME_NOTE: &str = "Claude, Codex, Gemini, Grok, Cursor, Copilot, in thei
 
 const SOUND_FILE_NOTE: &str = "an absolute or ~/ path on the window's computer; empty: built-in";
 
+const ICONS_NOTE: &str = "Nerd Font icons for files and buttons, per window";
 const ICON_BAR_NOTE: &str = "the buttons under the lists, as icons; needs a Nerd Font";
 
 impl Settings {
@@ -170,7 +171,7 @@ impl Settings {
     fn behaviour_row(&self, row: &Row) -> (String, String, String, bool) {
         let config = &self.config;
         match row {
-            Row::Sidebar | Row::Tabs | Row::IconBar => layout_row(config, row),
+            Row::Sidebar | Row::Tabs | Row::IconBar | Row::Icons => layout_row(config, row),
             Row::Notifications => (
                 "desktop notifications".into(),
                 config.desktop_notifications.clone(),
@@ -311,6 +312,7 @@ impl Settings {
             Row::DefaultAgent => "Which agent takes an issue by default?".to_string(),
             Row::Sidebar => "How should projects, workspaces and tabs be laid out?".to_string(),
             Row::Tabs => "Where should a workspace's tabs go?".to_string(),
+            Row::Icons => "Which windows should draw Nerd Font icons?".to_string(),
             Row::WorkingIcon => "What should a working agent's tab show?".to_string(),
             Row::Notifications => "How should your terminal notify you?".to_string(),
             Row::Kind(kind) => format!("How should {kind} start?"),
@@ -348,6 +350,7 @@ impl Settings {
 fn layout_row(config: &Config, row: &Row) -> (String, String, String, bool) {
     let (label, value, note) = match row {
         Row::Tabs => ("tabs", Tabs::from_setting(&config.tabs).id(), "where a workspace's tabs are listed"),
+        Row::Icons => ("icons", Icons::from_setting(&config.icons).id(), ICONS_NOTE),
         Row::IconBar => {
             let value = if config.icon_bar { "[x] on the left" } else { "[ ] off" };
             ("icon bar", value, ICON_BAR_NOTE)

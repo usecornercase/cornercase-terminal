@@ -319,7 +319,8 @@ mod config_file {
         let mut s = open();
         edit_outside(&s, work_profile);
 
-        click_row(&mut s, &Row::Detail(Detail::Memory));
+        go_to(&mut s, &Row::Detail(Detail::Memory));
+        enter(&mut s);
 
         let saved = config::load(&config_path(&s));
         assert_eq!((saved.profile.as_str(), saved.memory), ("Work", true));
@@ -330,7 +331,8 @@ mod config_file {
         let mut s = open();
         edit_outside(&s, |c| c.counts = false);
 
-        click_row(&mut s, &Row::Detail(Detail::Memory));
+        go_to(&mut s, &Row::Detail(Detail::Memory));
+        enter(&mut s);
 
         let saved = config::load(&config_path(&s));
         assert_eq!((saved.counts, saved.memory), (false, true));

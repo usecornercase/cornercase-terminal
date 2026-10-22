@@ -9,6 +9,7 @@ fn everything() -> Shown {
 
 fn with_bar(hover: Option<Position>) -> View<'static> {
     View {
+        icon_bar: true,
         icons: true,
         has_project: true,
         issues: true,
@@ -38,7 +39,7 @@ mod layout {
     #[case::projects_on_top(Sidebar::ProjectsOnTop)]
     #[case::tree(Sidebar::Tree)]
     fn takes_the_left_edge_and_the_buttons_under_the_lists_go(#[case] sidebar: Sidebar) {
-        let a = full_layout(TALL, Widths::default(), Screen { changes: false, sidebar, agents: false, icons: true });
+        let a = full_layout(TALL, Widths::default(), Screen { changes: false, sidebar, agents: false, icon_bar: true });
         let footer = [a.separator, a.settings, a.usage, a.quit, a.issues, a.todo_button, a.files_button];
         assert_eq!(
             (a.activity, a.sidebar.x, footer.iter().all(|r| r.is_empty())),
@@ -51,12 +52,12 @@ mod layout {
         let without = full_layout(
             TALL,
             Widths::default(),
-            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icons: false },
+            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: false },
         );
         let with = full_layout(
             TALL,
             Widths::default(),
-            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icons: true },
+            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true },
         );
         assert_eq!((without.list.bottom(), with.list.bottom()), (TALL.height - 4, TALL.height));
     }
@@ -71,7 +72,7 @@ mod layout {
         let a = full_layout(
             SMALL,
             Widths::default(),
-            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icons: true },
+            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true },
         );
         assert_eq!((a.activity, a.compact()), (Rect::default(), true));
     }
@@ -204,13 +205,29 @@ mod drawing {
     }
 
     #[test]
-    fn the_compact_bar_draws_the_same_icons() {
-        let v = View { icons: true, has_project: true, ..with_bar(None) };
+    fn the_compact_bar_keeps_plain_symbols_when_icons_are_off() {
+        let v = View { icon_bar: true, icons: false, has_project: true, ..with_bar(None) };
         let t = render_sized(&v, SMALL.width, SMALL.height);
         let a = full_layout(
             SMALL,
             Widths::default(),
-            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icons: true },
+            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true },
+        );
+        let middle = |r: Rect| row_text(&t, Rect { y: r.y + 1, ..r }).trim().to_string();
+        assert_eq!(
+            [middle(a.changes_button), middle(a.files_button), middle(a.search_button)],
+            [icons::PLAIN.changes, icons::PLAIN.files, icons::PLAIN.search]
+        );
+    }
+
+    #[test]
+    fn the_compact_bar_draws_the_same_icons() {
+        let v = View { icon_bar: true, icons: true, has_project: true, ..with_bar(None) };
+        let t = render_sized(&v, SMALL.width, SMALL.height);
+        let a = full_layout(
+            SMALL,
+            Widths::default(),
+            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true },
         );
         let middle = |r: Rect| row_text(&t, Rect { y: r.y + 1, ..r }).trim().to_string();
         assert_eq!(

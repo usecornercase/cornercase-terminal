@@ -48,7 +48,7 @@ fn with_panel() -> View<'static> {
         tints,
         filter: None,
         selection: None,
-        glyphs: &icons::PLAIN,
+        icons: false,
     };
     View {
         has_project: true,

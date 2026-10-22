@@ -572,6 +572,7 @@ mod showing_images {
             cell: Some(CellSize { width: 10, height: 20 }),
             tmux: Tmux::None,
             id_hi: 42,
+            nerd_font: false,
         }
     }
 
@@ -592,7 +593,7 @@ mod showing_images {
         ui::full_layout(
             Rect::new(0, 0, 100, 20),
             state::Widths::default(),
-            ui::Screen { changes: true, sidebar: config::Sidebar::default(), agents: false, icons: false },
+            ui::Screen { changes: true, sidebar: config::Sidebar::default(), agents: false, icon_bar: false },
         )
         .settings
         .as_position()
@@ -670,7 +671,7 @@ mod pointing {
         let layout = ui::full_layout(
             area,
             state::Widths::default(),
-            ui::Screen { changes: false, sidebar: config::Sidebar::default(), agents: false, icons: false },
+            ui::Screen { changes: false, sidebar: config::Sidebar::default(), agents: false, icon_bar: false },
         );
         let border = layout.border(ui::Border::Projects);
         let server = &mut attached.server;

@@ -19,7 +19,7 @@ use crate::host::theme::HostTheme;
 use crate::paths;
 use crate::{host::pointer, process};
 
-pub(crate) const VERSION: u32 = 7;
+pub(crate) const VERSION: u32 = 8;
 pub const NESTED_ENV: &str = "CORNERCASE";
 pub(crate) const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
 pub(crate) const BROWSER: &str = "browser";

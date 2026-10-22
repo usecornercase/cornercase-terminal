@@ -130,7 +130,7 @@ fn a_narrow_terminal_gets_a_menu_bar() {
     let narrow = ui::COMPACT_WIDTH - 10;
     let areas = ui::layout(Rect::new(0, 0, narrow, ROWS), state::Widths::default());
     let mut app = Harness::open(Session::new(), ROWS, narrow);
-    app.wait_for("the bar names the project", |s| s.lines().nth(1).is_some_and(|l| l.contains("≡")));
+    app.wait_for("the bar names the project", |s| s.lines().nth(1).is_some_and(|l| l.contains(" › ")));
 
     app.send(b"stty size\r");
     app.wait_for("the shell gets the whole width", |s| s.contains(&format!("{} {narrow}", ROWS - ui::COMPACT_PITCH)));

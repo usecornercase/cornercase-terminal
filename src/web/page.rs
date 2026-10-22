@@ -5,13 +5,15 @@ pub(super) const NOT_PAIRED: &str = include_str!("assets/not-paired.html");
 pub(super) const EXPIRED: &str = include_str!("assets/expired.html");
 pub(super) const OTHER_USER: &str = include_str!("assets/other-user.html");
 
-const ASSETS: &[(&str, &str, &str)] = &[
-    ("/app.js", "text/javascript; charset=utf-8", include_str!("assets/app.js")),
-    ("/app.css", "text/css; charset=utf-8", include_str!("assets/app.css")),
-    ("/xterm.js", "text/javascript; charset=utf-8", include_str!("assets/xterm.js")),
-    ("/xterm.css", "text/css; charset=utf-8", include_str!("assets/xterm.css")),
-    ("/addon-fit.js", "text/javascript; charset=utf-8", include_str!("assets/addon-fit.js")),
-    ("/xterm-LICENSE.txt", "text/plain; charset=utf-8", include_str!("assets/xterm-LICENSE.txt")),
+const ASSETS: &[(&str, &str, &[u8])] = &[
+    ("/app.js", "text/javascript; charset=utf-8", include_bytes!("assets/app.js")),
+    ("/app.css", "text/css; charset=utf-8", include_bytes!("assets/app.css")),
+    ("/xterm.js", "text/javascript; charset=utf-8", include_bytes!("assets/xterm.js")),
+    ("/xterm.css", "text/css; charset=utf-8", include_bytes!("assets/xterm.css")),
+    ("/addon-fit.js", "text/javascript; charset=utf-8", include_bytes!("assets/addon-fit.js")),
+    ("/xterm-LICENSE.txt", "text/plain; charset=utf-8", include_bytes!("assets/xterm-LICENSE.txt")),
+    ("/symbols.woff2", "font/woff2", include_bytes!("assets/symbols.woff2")),
+    ("/symbols-LICENSE.txt", "text/plain; charset=utf-8", include_bytes!("assets/symbols-LICENSE.txt")),
 ];
 
 pub(super) fn asset(path: &str) -> Option<Response> {

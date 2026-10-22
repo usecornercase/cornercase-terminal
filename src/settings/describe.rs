@@ -1,7 +1,7 @@
 use serde_json::Value;
 
 use crate::agents;
-use crate::config::{Config, Sidebar, Tabs, WorkingIcon};
+use crate::config::{Config, Icons, Sidebar, Tabs, WorkingIcon};
 use crate::control::config::{Choice, Connection, ConnectionKind, Kind, Setting, State};
 use crate::host::notify;
 use crate::messenger::Via;
@@ -69,6 +69,7 @@ fn choice(row: &Row) -> Option<&'static str> {
         Row::DefaultAgent => "agent",
         Row::Sidebar => "sidebar",
         Row::Tabs => "tabs",
+        Row::Icons => "icons",
         Row::WorkingIcon => "working_icon",
         Row::Notifications => "desktop_notifications",
         _ => return None,
@@ -131,6 +132,7 @@ impl Settings {
             Row::DefaultAgent => ("agent", self.agent_items(), config.agent.clone()),
             Row::Sidebar => ("sidebar", items(Sidebar::choices()), Sidebar::from_setting(&config.sidebar).id().into()),
             Row::Tabs => ("tabs", items(Tabs::choices()), Tabs::from_setting(&config.tabs).id().into()),
+            Row::Icons => ("icons", items(Icons::choices()), Icons::from_setting(&config.icons).id().into()),
             Row::WorkingIcon => (
                 "working_icon",
                 items(WorkingIcon::choices()),

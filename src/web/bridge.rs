@@ -96,7 +96,11 @@ fn hello(cols: u16, rows: u16, theme: &Theme) -> Hello {
         notify: Channel::Bell,
         terminal: Some(protocol::BROWSER.into()),
         pointer: None,
-        graphics: Support { missing: Some(Missing::Cannot { name: "this browser".into() }), ..Support::default() },
+        graphics: Support {
+            missing: Some(Missing::Cannot { name: "this browser".into() }),
+            nerd_font: true,
+            ..Support::default()
+        },
         probe: "web".into(),
         zone: if theme.zone.is_empty() { "UTC".into() } else { theme.zone.clone() },
         openers: Vec::new(),

@@ -52,10 +52,11 @@ const ISSUES: [&str; 10] = [
     "asana_projects",
 ];
 const WORKTREES: [&str; 6] = ["worktrees_dir", "fetch_minutes", "pull_requests", "merged_pull_requests", "gh", "glab"];
-const INTERFACE: [&str; 23] = [
+const INTERFACE: [&str; 24] = [
     "sidebar",
     "tabs",
     "icon_bar",
+    "icons",
     "agents_section",
     "working_icon",
     "counts",

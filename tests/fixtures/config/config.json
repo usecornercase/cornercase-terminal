@@ -55,6 +55,7 @@
   "sidebar": "tree",
   "tabs": "top",
   "icon_bar": true,
+  "icons": "on",
   "agents_section": true,
   "working_icon": "spinner",
   "counts": false,

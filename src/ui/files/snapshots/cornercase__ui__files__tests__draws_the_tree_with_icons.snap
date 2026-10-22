@@ -1,0 +1,12 @@
+---
+source: src/ui/files/tests.rs
+expression: render(&with_icons(tree()))
+---
+  Files  ~/projects/shop                     ×
+   text in the files                        
+
+  ▾  src                                    ●
+    ▸  ui                                   ●
+       main.rs                              M
+▌      lib.rs
+     README.md

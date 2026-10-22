@@ -224,6 +224,7 @@ pub(crate) struct View<'a> {
     pub(crate) tree: Option<TreeView>,
     pub(crate) agents: Option<AgentsView>,
     pub(crate) counts: bool,
+    pub(crate) icon_bar: bool,
     pub(crate) icons: bool,
     pub(crate) no_tab: NoTab,
     pub(crate) tab_bar: Option<tab_bar::TabBar>,
@@ -243,6 +244,17 @@ impl View<'_> {
 
     fn glyphs(&self) -> &'static icons::Glyphs {
         glyphs(self.icons)
+    }
+
+    pub(crate) fn with_icons(mut self, icons: bool) -> Self {
+        self.icons = icons;
+        if let Some(files) = &mut self.files {
+            files.icons = icons;
+        }
+        if let Some(changes) = &mut self.changes {
+            changes.icons = icons;
+        }
+        self
     }
 
     fn surface(&self) -> Color {
@@ -358,8 +370,8 @@ fn draw_chrome(f: &mut Frame, view: &View, areas: &Areas) {
 pub(crate) fn draw(f: &mut Frame, view: &View) {
     let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some() || view.flow.is_some();
     let full = view.files.as_ref().is_some_and(files::View::full_screen);
-    let (agents, icons) = (view.agents.is_some(), view.icons);
-    let screen = Screen { changes: panel, sidebar: view.sidebar, agents, icons };
+    let (agents, icon_bar) = (view.agents.is_some(), view.icon_bar);
+    let screen = Screen { changes: panel, sidebar: view.sidebar, agents, icon_bar };
     let areas = full_layout(f.area(), view.widths, screen)
         .with_tab_bar(view.tab_bar.is_some())
         .with_full_screen(full, f.area())

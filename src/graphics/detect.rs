@@ -10,6 +10,7 @@ pub(crate) const PANE_TITLE: &str = "\x1b]2;cornercase\x1b\\";
 const DEFAULT_REGISTERS: u16 = 256;
 const SIXEL: u32 = 4;
 const MIN_KITTY: Version = (0, 28, 0);
+const MIN_KITTY_SYMBOLS: Version = (0, 36, 0);
 const MIN_RIO: Version = (0, 5, 27);
 const MIN_KONSOLE: u32 = 220_400;
 const MIN_ZELLIJ: u32 = 4500;
@@ -187,8 +188,25 @@ pub(crate) fn local_tmux(output: &str, own_tty: Option<&str>) -> Option<Outer> {
     })
 }
 
+pub(crate) fn nerd_font(facts: &Facts, var: impl Fn(&str) -> Option<String>) -> bool {
+    let replies = &facts.replies;
+    match multiplexer(replies.terminal.as_deref(), &var, facts.tmux != Some(Outer::Stale)) {
+        Some(Mux::Tmux) => outer_terminal(facts).is_some_and(|terminal| by_xtversion(terminal).ships_symbols()),
+        Some(_) => false,
+        None => brand(replies.terminal.as_deref(), replies.attributes.as_deref(), &var).ships_symbols(),
+    }
+}
+
+fn outer_terminal(facts: &Facts) -> Option<&str> {
+    match &facts.tmux {
+        Some(Outer::Local { terminal, .. }) => terminal.as_deref(),
+        Some(Outer::Probed(outer)) => outer.terminal.as_deref(),
+        _ => None,
+    }
+}
+
 pub(crate) fn decide(facts: &Facts, var: impl Fn(&str) -> Option<String>) -> Support {
-    let mut support = Support { cell: facts.cell(), ..Support::default() };
+    let mut support = Support { cell: facts.cell(), nerd_font: nerd_font(facts, &var), ..Support::default() };
     match choose(facts, &var) {
         Ok(pick) => {
             if matches!(pick.protocol, Protocol::Sixel { .. }) && support.cell.is_none() {
@@ -283,6 +301,14 @@ impl Brand {
             | Self::Hyper
             | Self::Without(_)
             | Self::Unknown => false,
+        }
+    }
+
+    fn ships_symbols(&self) -> bool {
+        match self {
+            Self::Ghostty | Self::WezTerm => true,
+            Self::Kitty(version) => version.is_none_or(|v| v >= MIN_KITTY_SYMBOLS),
+            _ => false,
         }
     }
 

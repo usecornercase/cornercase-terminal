@@ -3,6 +3,10 @@ use rstest::rstest;
 use super::*;
 use crate::host::theme::ThemeProbe;
 
+fn decide(facts: &Facts, var: impl Fn(&str) -> Option<String>) -> Support {
+    Support { nerd_font: false, ..super::decide(facts, var) }
+}
+
 type Vars = &'static [(&'static str, &'static str)];
 
 struct Bench {
@@ -129,11 +133,11 @@ fn remote_tmux_with(through_tmux: &[u8]) -> Support {
 }
 
 fn shows(protocol: Protocol, cell: Option<CellSize>, tmux: Tmux) -> Support {
-    Support { protocol: Some(protocol), missing: None, cell, tmux, id_hi: 0 }
+    Support { protocol: Some(protocol), missing: None, cell, tmux, id_hi: 0, nerd_font: false }
 }
 
 fn says(missing: Missing, cell: Option<CellSize>) -> Support {
-    Support { protocol: None, missing: Some(missing), cell, tmux: Tmux::None, id_hi: 0 }
+    Support { protocol: None, missing: Some(missing), cell, tmux: Tmux::None, id_hi: 0, nerd_font: false }
 }
 
 mod bench {
@@ -671,5 +675,74 @@ mod messages {
     #[case::none(None)]
     fn sends_nothing_to_forget_without_kitty(#[case] protocol: Option<Protocol>) {
         assert_eq!(Support { protocol, id_hi: 42, ..Support::default() }.forget(), Vec::<u8>::new());
+    }
+}
+
+mod symbols {
+    use super::*;
+
+    fn through_tmux(outer: Option<Outer>, replies: &[u8]) -> bool {
+        let mut facts = facts(TMUX_ENV, replies, WINDOW);
+        facts.tmux = outer;
+        nerd_font(&facts, vars(TMUX_ENV))
+    }
+
+    fn local(terminal: &str) -> Outer {
+        Outer::Local { passthrough: true, terminal: Some(terminal.into()), sixel: false }
+    }
+
+    #[rstest]
+    #[case::ghostty(GHOSTTY, true)]
+    #[case::kitty(KITTY, true)]
+    #[case::wezterm(WEZTERM, true)]
+    #[case::konsole(KONSOLE, false)]
+    #[case::foot(FOOT, false)]
+    #[case::xterm(XTERM, false)]
+    fn each_terminal_ships_them_or_not(#[case] bench: Bench, #[case] expected: bool) {
+        assert_eq!(
+            super::super::decide(&facts(bench.env, bench.replies, bench.window), vars(bench.env)).nerd_font,
+            expected
+        );
+    }
+
+    #[rstest]
+    #[case::an_old_kitty(&[("TERM", "xterm-kitty"), ("KITTY_WINDOW_ID", "1")], b"\x1bP>|kitty(0.35.2)\x1b\\\x1b[?62;52;c", false)]
+    #[case::a_kitty_that_stays_silent(&[("TERM", "xterm-kitty"), ("KITTY_WINDOW_ID", "1")], b"", true)]
+    #[case::iterm2(&[("TERM_PROGRAM", "iTerm.app")], b"", false)]
+    #[case::alacritty(&[("TERM", "alacritty"), ("ALACRITTY_WINDOW_ID", "1")], b"", false)]
+    #[case::vs_code(&[("TERM_PROGRAM", "vscode")], b"\x1bP>|xterm.js(6.1.0-beta.91)\x1b\\\x1b[?62;4;9;22c", false)]
+    #[case::alacritty_with_a_ghostty_variable_left_over(&[("TERM_PROGRAM", "ghostty")], b"\x1b[?62;4c", false)]
+    #[case::zellij(&[], b"\x1bP>|Zellij(4501)\x1b\\\x1b[?62;4;52c", false)]
+    #[case::screen(&[("STY", "1234.pts-0.host")], b"", false)]
+    #[case::ghostty_over_ssh_without_its_terminfo(&[("TERM", "xterm-256color")], b"\x1bP>|ghostty 1.3.1\x1b\\\x1b[?62;22;52c", true)]
+    fn the_terminal_decides(#[case] env: Vars, #[case] replies: &[u8], #[case] expected: bool) {
+        assert_eq!(nerd_font(&facts(env, replies, WINDOW), vars(env)), expected);
+    }
+
+    #[rstest]
+    #[case::a_local_ghostty(Some(local("ghostty 1.3.1")), true)]
+    #[case::a_local_xterm(Some(local("XTerm(407)")), false)]
+    #[case::a_nested_tmux(Some(local("tmux 3.6")), false)]
+    #[case::an_unnamed_outer(Some(Outer::Local { passthrough: true, terminal: None, sixel: false }), false)]
+    #[case::a_probed_kitty(Some(Outer::Probed(heard(KITTY.through_tmux))), true)]
+    #[case::a_silent_probe(Some(Outer::Probed(Replies::default())), false)]
+    #[case::no_answer_yet(None, false)]
+    fn tmux_is_asked_who_is_outside(#[case] outer: Option<Outer>, #[case] expected: bool) {
+        assert_eq!(through_tmux(outer, TMUX_ANSWERS), expected);
+    }
+
+    #[test]
+    fn a_stale_tmux_variable_is_ignored() {
+        let env: Vars = &[("TMUX", "/tmp/tmux-1000/default,1,0"), ("TERM", "xterm-ghostty")];
+        let mut facts = facts(env, GHOSTTY.replies, WINDOW);
+        facts.tmux = Some(Outer::Stale);
+        assert!(nerd_font(&facts, vars(env)));
+    }
+
+    #[test]
+    fn images_off_does_not_turn_icons_off() {
+        let env: Vars = &[("TERM", "xterm-ghostty"), (OVERRIDE_ENV, "off")];
+        let decided = super::super::decide(&facts(env, GHOSTTY.replies, WINDOW), vars(env));
+        assert_eq!((decided.protocol, decided.nerd_font), (None, true));
     }
 }
