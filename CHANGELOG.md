@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.177
+
+- **Share your setup with a colleague.** In Settings, **share** › **copy my setup** copies your settings as a text to send in a chat: how your agents start, the prompt, issue branches and trackers, worktrees, the UI, and each repository's setup and teardown, matched by its git remote wherever your colleague cloned it. Tokens, bots, paired phones, accounts and personal settings stay out. Your colleague pastes it in Settings, clicks **preview** to see each setting that would change (what will run on its own in red), unticks what they don't want and clicks **import**; a text with a value the settings refuse imports nothing. From a terminal, `cornercase config export` and `cornercase config import FILE` do the same, and scripts have the `config-export` and `config-import` requests.
+
 ## 0.12.176
 
 - **A guided tour for your first steps.** The first time you run cornercase, a card at the bottom right shows you around: projects, workspaces, tabs and panes, then your first prompt to an agent (an idea you can edit, and a button that starts the agent with it), the status icons, and the settings worth a look. It points at the part of the window it talks about, and opens it when it is a panel, a dialog or a page of Settings (closing it again when you move on, unless you had it open), and a step that asks you to do something moves on as soon as you do it. Skip any step, or end the tour; it never takes the keys from your shell. If you already use cornercase, it does not pop up: a toast says it is in Help.
