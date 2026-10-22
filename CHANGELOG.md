@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.183
+
+- **Stacked pull requests.** When a workspace's pull request is part of a stack on GitHub, its row shows its layer after the number, `#483• 2/3`, counted from the bottom, in red when a pull request below failed its checks and in orange when one has merge conflicts, since either keeps this one from merging. Click it (or the number) to see the whole stack, top first, with each layer's checks and the workspace that holds it (click a layer to go there), what keeps the merge waiting, and, when a layer below was merged and your branch is behind, that it needs a pull before you push again. It costs one more `gh` call per stack; a pull request outside a stack is checked every 5 minutes, and GitHub Enterprise Server, which has no stacks yet, only once.
+- Scripts: `pull_request` in `status --json`, `watch` and `view` gains `stack` (`null` outside one): its number, base, this layer's `position` and `size`, and every layer from the bottom with its state, checks, conflicts and review. The text form adds `layer 2 of 3 of stack #484 on main`.
+
 ## 0.12.182
 
 - **Pick the flow the start dialog opens on.** In Settings › Flows, **`set default`** makes the selected flow your default: it is tagged `default`, and the start dialog (an issue's **`start a flow`**, or **start a flow…**) opens with it selected, so going fast starts the flow you chose and not Full issue. A default that was deleted, hidden or has problems never blocks a start: the dialog falls back to Full issue, or to the first flow that can start, as before. Renaming the default flow keeps it the default.
