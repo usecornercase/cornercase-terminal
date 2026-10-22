@@ -69,3 +69,17 @@ fn a_folder_is_refused_as_the_file_to_write() {
     let refused = written(dir.path(), "x").expect_err("a folder");
     assert!(refused.to_string().contains("is a folder"), "{refused}");
 }
+
+#[test]
+fn an_export_file_is_readable_only_by_its_owner() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let dir = crate::test_util::TempDir::new();
+    let (new, old) = (dir.path().join("new.toml"), dir.path().join("old.toml"));
+    std::fs::write(&old, "before").expect("an old file");
+    std::fs::set_permissions(&old, Permissions::from_mode(0o644)).expect("open to all");
+    for file in [&new, &old] {
+        written(file, "x").expect("written");
+        let mode = std::fs::metadata(file).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!((mode, std::fs::read_to_string(file).expect("read")), (0o600, "x".to_string()), "{file:?}");
+    }
+}

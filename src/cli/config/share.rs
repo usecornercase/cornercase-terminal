@@ -1,5 +1,7 @@
 use std::fmt::Write as _;
-use std::io::IsTerminal as _;
+use std::fs::{OpenOptions, Permissions};
+use std::io::{IsTerminal as _, Write as _};
+use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 use std::path::Path;
 
 use serde_json::Value;
@@ -48,7 +50,19 @@ fn written(file: &Path, text: &str) -> Result<()> {
     if file.is_dir() {
         return Err(Error::WrongUsage(format!("`{}` is a folder: give the file to write", file.display())));
     }
-    std::fs::write(file, text).map_err(|e| Error::Control(format!("cannot write `{}`: {e}", file.display())))
+    let only_mine = |mut out: std::fs::File| {
+        out.set_permissions(Permissions::from_mode(0o600))?;
+        out.set_len(0)?;
+        out.write_all(text.as_bytes())
+    };
+    OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .open(file)
+        .and_then(only_mine)
+        .map_err(|e| Error::Control(format!("cannot write `{}`: {e}", file.display())))
 }
 
 pub(super) fn import(import: &Import, json: bool) -> Result<()> {

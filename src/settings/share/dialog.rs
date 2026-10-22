@@ -324,7 +324,7 @@ fn change_lines(change: &SetupChange) -> Vec<Line> {
 }
 
 fn wrapped(line: Line, width: usize) -> Vec<Line> {
-    if line.tone != Tone::Red || width == 0 || text::cells(&line.text) <= width {
+    if line.section.is_some() || width == 0 || text::cells(&line.text) <= width {
         return vec![line];
     }
     let body = line.text.trim_start_matches(' ');

@@ -225,10 +225,26 @@ mod the_import_page {
     #[test]
     fn wraps_a_long_red_line_instead_of_cutting_it() {
         let lines = texts(&with_scripts("npm run build:all"), 20);
+        let red: Vec<_> = lines.into_iter().filter(|(_, tone)| *tone == Tone::Red).collect();
         assert_eq!(
-            lines[2..4],
+            red,
             [("          npm run bu".to_string(), Tone::Red), ("          ild:all".to_string(), Tone::Red)]
         );
+    }
+
+    #[test]
+    fn wraps_a_long_plain_value_instead_of_cutting_it() {
+        let lines = texts(&with_scripts("x"), 30);
+        assert_eq!(
+            lines[1..3],
+            [("      ~/code/web-shop setup: n".to_string(), Tone::Plain), ("      othing →".to_string(), Tone::Plain)]
+        );
+    }
+
+    #[test]
+    fn never_wraps_a_section_heading() {
+        let lines = texts(&with_scripts("x"), 10);
+        assert_eq!(lines[0], ("[x] repositories · 2 changes".to_string(), Tone::Section));
     }
 
     #[test]
