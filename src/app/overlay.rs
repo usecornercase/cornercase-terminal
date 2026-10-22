@@ -179,13 +179,13 @@ impl Overlay {
             Self::RemoveWorkspace { .. } | Self::RemoveAccount { .. } => REMOVE_SUBMIT,
             Self::DiscardChanges(_) => DISCARD_SUBMIT,
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
-            Self::CloseAgent(dialog) => dialog.submit_label(),
             Self::CloseAgents(_) => CLOSE_AGENTS_SUBMIT,
             Self::ForgetAgents { .. } => FORGET_SUBMIT,
             Self::CloseProject { .. }
             | Self::CloseWorkspace { .. }
             | Self::CloseTab { .. }
-            | Self::ClosePane { .. } => CLOSE_SUBMIT,
+            | Self::ClosePane { .. }
+            | Self::CloseAgent(_) => CLOSE_SUBMIT,
             Self::Update(UpdateStep::Failed(_)) => RETRY_UPDATE_SUBMIT,
             Self::Update(UpdateStep::Installed) | Self::Restart => RESTART_SUBMIT,
             Self::Update(UpdateStep::Manual(_)) => COPY_COMMAND_SUBMIT,

@@ -92,7 +92,7 @@ impl App {
     fn scroll_close_agents(&mut self, delta: isize, area: Rect) {
         let Some(Overlay::CloseAgents(dialog)) = &self.overlay else { return };
         let lines = self.close_agents_notes(dialog, area).len();
-        let scroll = ui::scroll_in(ui::update_body(area, false), lines, dialog.scroll.saturating_add_signed(delta));
+        let scroll = ui::update_scroll(area, lines, dialog.scroll.saturating_add_signed(delta));
         if let Some(Overlay::CloseAgents(dialog)) = &mut self.overlay {
             dialog.scroll = scroll;
         }
@@ -108,7 +108,7 @@ impl App {
 
     fn close_agents_view(&self, dialog: &CloseAgents, area: Rect) -> ui::Overlay {
         let notes = self.close_agents_notes(dialog, area);
-        let scroll = ui::scroll_in(ui::update_body(area, false), notes.len(), dialog.scroll);
+        let scroll = ui::update_scroll(area, notes.len(), dialog.scroll);
         let place = self.closing_place(dialog.plan.place);
         let message = format!(
             "Close {} in {place}? {} on the workspace reopens {}, each in its own conversation.",
@@ -125,8 +125,6 @@ impl App {
             submit: CLOSE_AGENTS_SUBMIT,
             extra: None,
             cancel: ui::CANCEL_LABEL,
-            toggle: None,
-            waiting: false,
         })
     }
 

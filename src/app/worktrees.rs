@@ -5,7 +5,6 @@ use std::time::{Duration, Instant};
 use ratatui::layout::Rect;
 
 use super::App;
-use super::close_agent::Findings;
 use super::event::AppEvent;
 use super::event::Start;
 use super::flow_runs::Made;
@@ -38,7 +37,7 @@ pub(super) const UNCOMMITTED: &str = "It has changes that are not committed; rem
 
 const UNCOMMITTED_TOO: &str = "It has uncommitted changes, which are deleted.";
 
-pub(super) const MAX_LOCK_REASON: usize = 100;
+const MAX_LOCK_REASON: usize = 100;
 
 pub(super) const SYNC_EVERY: Duration = Duration::from_secs(1);
 
@@ -109,10 +108,6 @@ pub(crate) enum WorktreeEvent {
         result: Result<Option<String>>,
         branch: Deleted,
     },
-    AgentChecked {
-        generation: u64,
-        found: Findings,
-    },
 }
 
 impl WorktreeEvent {
@@ -129,7 +124,6 @@ impl WorktreeEvent {
             Self::Scanned { .. } => "worktree scanned",
             Self::Outside { .. } => "outside processes",
             Self::Cleaned { .. } => "worktree cleaned",
-            Self::AgentChecked { .. } => "agent close checked",
         }
     }
 }
@@ -167,7 +161,6 @@ impl App {
             }
             WorktreeEvent::Outside { generation, ticket, found } => self.outside_found((generation, ticket), found),
             WorktreeEvent::Cleaned { key, result, branch } => self.worktree_cleaned(key, result, branch),
-            WorktreeEvent::AgentChecked { generation, found } => self.agent_checked(generation, found),
         }
         Ok(())
     }
@@ -625,7 +618,7 @@ impl Teardown {
     }
 }
 
-pub(super) fn checked_status(path: &Path, roles: &[(String, PathBuf)]) -> worktree::Status {
+fn checked_status(path: &Path, roles: &[(String, PathBuf)]) -> worktree::Status {
     let mut status = worktree::status(path);
     for (name, role) in roles.iter().filter(|(_, role)| role.is_dir()) {
         let found = worktree::status(role);

@@ -202,3 +202,8 @@ fn an_agent_closing_from_a_newer_server_reads_with_its_extra_keys() {
 
     assert_eq!((read.pane, read.stops.len(), read.removes), (7, 1, None));
 }
+
+#[test]
+fn closing_an_agent_is_a_feature_of_the_contract() {
+    assert!(crate::control::contract::FEATURES.contains(&"close-agent-tabs"));
+}

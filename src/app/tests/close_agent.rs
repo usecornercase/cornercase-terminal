@@ -1,10 +1,10 @@
 use rstest::rstest;
 
-use super::worktrees_dialog::{Setup, alive, commit_in, path_of, settled_text, with};
+use super::worktrees_dialog::{Setup, alive, path_of, with};
 use super::*;
 use crate::agents::Known;
 use crate::agents::activity::Activity;
-use crate::app::close_agent::{CLOSE_AND_REMOVE_SUBMIT, CloseAgent};
+use crate::app::close_agent::CloseAgent;
 use crate::app::worktrees::RemoveOptions;
 use crate::flows::run::{Member, RoleWorktree, Run};
 use crate::flows::{Flow, ORCHESTRATOR};
@@ -55,12 +55,6 @@ fn text(app: &App) -> String {
     format!("{}\n{notes}", view.message)
 }
 
-fn ready(app: &mut App, rx: &Receiver<AppEvent>) {
-    pump_until(app, rx, "the check answers", |a| {
-        matches!(a.overlay, Some(Overlay::CloseAgent(_))) && !shown(a).waiting
-    });
-}
-
 fn confirm(app: &mut App) {
     let [submit, _] = ui::update_buttons(AREA, shown(app).submit, ui::CANCEL_LABEL);
     click(app, Position::new(submit.x + 1, submit.y));
@@ -86,7 +80,6 @@ fn in_worktree() -> (Setup, u64) {
 
 fn asked(s: &mut Setup, pane: u64) {
     s.app.ask_close_agent(pane);
-    ready(&mut s.app, &s.rx);
 }
 
 #[test]
@@ -135,98 +128,9 @@ fn nothing_stops_before_confirming(#[case] way: Leave) {
 }
 
 #[test]
-fn a_risk_found_when_confirming_shows_the_confirmation_again() {
-    let (mut s, pane) = in_worktree();
-    let path = path_of(&s, "wt");
-    asked(&mut s, pane);
-    std::fs::write(path.join("late.txt"), "late").expect("write a change");
-
-    confirm(&mut s.app);
-    ready(&mut s.app, &s.rx);
-
-    let shown_again = text(&s.app).contains(UNCOMMITTED);
-    assert_eq!((shown_again, running(&s.app, pane), alive(&s.app, &path)), (true, true, true));
-}
-
-#[test]
-fn a_commit_made_when_confirming_with_the_box_ticked_shows_the_confirmation_again() {
-    let (mut s, pane) = in_worktree();
-    asked(&mut s, pane);
-    send_key(&mut s.app, KeyCode::Char(' '), KeyModifiers::NONE);
-    let before = text(&s.app).contains("will be lost");
-    commit_in(&path_of(&s, "wt"));
-
-    confirm(&mut s.app);
-    ready(&mut s.app, &s.rx);
-
-    let after = text(&s.app).contains("wt: its commits will be lost");
-    assert_eq!((before, after, running(&s.app, pane), branch_exists(s.repo.path(), "wt")), (false, true, true, true));
-}
-
-#[rstest]
-#[case::with_space(false)]
-#[case::with_a_click(true)]
-fn ticking_the_branch_box_while_checking_deletes_no_branch(#[case] clicked: bool) {
-    let (mut s, pane) = in_worktree();
-    commit_in(&path_of(&s, "wt"));
-    asked(&mut s, pane);
-
-    confirm(&mut s.app);
-    if clicked {
-        let toggle = ui::update_toggle(AREA);
-        click(&mut s.app, Position::new(toggle.x + 2, toggle.y));
-    } else {
-        send_key(&mut s.app, KeyCode::Char(' '), KeyModifiers::NONE);
-    }
-    let ticked = dialog(&s.app).branches;
-
-    settled_text(&mut s, 1);
-    assert_eq!((ticked, branch_exists(s.repo.path(), "wt")), (false, true));
-}
-
-#[test]
-fn a_box_changed_during_the_check_shows_the_confirmation_again() {
-    let (mut s, pane) = in_worktree();
-    commit_in(&path_of(&s, "wt"));
-    asked(&mut s, pane);
-
-    confirm(&mut s.app);
-    if let Some(Overlay::CloseAgent(dialog)) = &mut s.app.overlay {
-        dialog.branches = true;
-    }
-    ready(&mut s.app, &s.rx);
-
-    assert_eq!((running(&s.app, pane), branch_exists(s.repo.path(), "wt")), (true, true));
-}
-
-#[test]
-fn space_does_nothing_when_only_tabs_close() {
-    let (mut app, _rx, _dirs) = app_with(1);
-    let pane = agent(&mut app, 0, 0);
-    app.ask_close_agent(pane);
-
-    send_key(&mut app, KeyCode::Char(' '), KeyModifiers::NONE);
-
-    assert_eq!((dialog(&app).branches, shown(&app).toggle.is_none()), (false, true));
-}
-
-#[test]
-fn a_locked_worktree_is_named_and_unlocked_when_removed() {
-    let (mut s, pane) = in_worktree();
-    let path = path_of(&s, "wt");
-    git(s.repo.path(), &["worktree", "lock", "--reason", "testing", path.to_str().expect("utf-8")]);
-    asked(&mut s, pane);
-    let named = text(&s.app).contains("is locked: testing");
-
-    confirm(&mut s.app);
-
-    let toast = settled_text(&mut s, 1);
-    assert_eq!((named, toast.as_deref(), path.exists()), (true, Some("removed 1 worktree"), false));
-}
-
-#[test]
 fn a_child_elsewhere_keeps_running_when_its_parent_leaves_its_own_worktree() {
     let mut s = with(&["wt"]);
+    tabs(&mut s.app, 1, 1);
     let parent = agent(&mut s.app, 1, 0);
     let kid = child(&mut s.app, (0, 0), parent);
     asked(&mut s, parent);
@@ -234,8 +138,8 @@ fn a_child_elsewhere_keeps_running_when_its_parent_leaves_its_own_worktree() {
 
     confirm(&mut s.app);
 
-    settled_text(&mut s, 1);
-    assert_eq!((named, running(&s.app, kid)), (true, true));
+    closed(&mut s.app, &s.rx, 1, 1);
+    assert_eq!((named, running(&s.app, kid), path_of(&s, "wt").exists()), (true, true, true));
 }
 
 #[test]
@@ -288,82 +192,103 @@ fn a_split_tab_closes_whole_and_names_the_other_pane() {
 }
 
 #[test]
-fn an_agent_in_its_own_worktree_removes_the_workspace() {
+fn an_agent_in_its_own_worktree_closes_only_its_tab() {
     let (mut s, pane) = in_worktree();
     tabs(&mut s.app, 1, 1);
     let path = path_of(&s, "wt");
     asked(&mut s, pane);
-    let submit = shown(&s.app).submit;
+    let view = shown(&s.app);
 
     confirm(&mut s.app);
 
-    let toast = settled_text(&mut s, 1);
-    assert_eq!((submit, toast.as_deref(), path.exists()), (CLOSE_AND_REMOVE_SUBMIT, Some("removed 1 worktree"), false));
-}
-
-#[test]
-fn the_branch_stays_unless_asked() {
-    let (mut s, pane) = in_worktree();
-    commit_in(&path_of(&s, "wt"));
-    asked(&mut s, pane);
-    let message = text(&s.app);
-
-    confirm(&mut s.app);
-
-    settled_text(&mut s, 1);
-    let named = (message.contains("The branch wt is kept."), message.contains("will be lost"));
-    assert_eq!((named, branch_exists(s.repo.path(), "wt")), ((true, false), true));
-}
-
-#[test]
-fn a_branch_goes_when_asked() {
-    let (mut s, pane) = in_worktree();
-    commit_in(&path_of(&s, "wt"));
-    asked(&mut s, pane);
-
-    send_key(&mut s.app, KeyCode::Char(' '), KeyModifiers::NONE);
-    let message = text(&s.app);
-    confirm(&mut s.app);
-
-    let toast = settled_text(&mut s, 1);
-    let red = message.contains("wt: its commits will be lost");
+    closed(&mut s.app, &s.rx, 1, 1);
+    let heading = view.message.contains("Its tab closes; nothing is deleted from disk.");
+    assert_eq!((heading, view.submit, view.note), (true, CLOSE_SUBMIT, None));
     assert_eq!(
-        (red, toast.as_deref(), branch_exists(s.repo.path(), "wt")),
-        (true, Some("removed 1 worktree and 1 branch"), false)
+        (s.app.projects[0].workspaces.len(), path.exists(), branch_exists(s.repo.path(), "wt")),
+        (2, true, true)
     );
 }
 
 #[test]
-fn a_run_member_closes_the_whole_run() {
-    let mut s = with(&["wt", "coder"]);
-    let role = path_of(&s, "coder");
+fn changes_and_a_lock_are_left_alone() {
+    let (mut s, pane) = in_worktree();
+    tabs(&mut s.app, 1, 1);
+    let path = path_of(&s, "wt");
+    std::fs::write(path.join("draft.txt"), "draft").expect("write a change");
+    git(s.repo.path(), &["worktree", "lock", "--reason", "testing", path.to_str().expect("utf-8")]);
+    asked(&mut s, pane);
+    let (message, submit) = (text(&s.app), shown(&s.app).submit);
+
+    confirm(&mut s.app);
+
+    closed(&mut s.app, &s.rx, 1, 1);
+    let quiet = !message.contains(UNCOMMITTED) && !message.contains("locked");
+    let listed = std::process::Command::new("git")
+        .args(["worktree", "list", "--porcelain"])
+        .current_dir(s.repo.path())
+        .output()
+        .expect("git worktree list");
+    let locked = String::from_utf8_lossy(&listed.stdout).contains("locked");
+    assert_eq!((quiet, submit, path.join("draft.txt").exists(), locked), (true, CLOSE_SUBMIT, true, true));
+}
+
+pub(super) fn team(s: &mut Setup) -> (u64, u64, u64) {
+    let role = path_of(s, "coder");
     s.app.projects[0].workspaces[1].role_worktrees.push(RoleWorktree {
         role: "coder".into(),
-        path: role.clone(),
+        path: role,
         branch: "coder".into(),
     });
     tabs(&mut s.app, 1, 1);
     let lead = agent(&mut s.app, 1, 0);
     let coder = child(&mut s.app, (1, 1), lead);
-    child(&mut s.app, (2, 0), coder);
+    let kid = child(&mut s.app, (2, 0), coder);
     let mut run = Run::new(s.app.projects[0].workspaces[1].id, Flow::default(), "x".into());
     run.members = vec![Member { role: ORCHESTRATOR.into(), pane: lead }, Member { role: "coder".into(), pane: coder }];
     s.app.runs.push(run);
+    (lead, coder, kid)
+}
+
+#[test]
+fn a_run_member_closes_its_whole_team_and_nothing_else() {
+    let mut s = with(&["wt", "coder"]);
+    let (_, coder, kid) = team(&mut s);
+    tabs(&mut s.app, 1, 1);
+    let shell = tab_panes(&s.app, 1)[2];
+    let (wt, role) = (path_of(&s, "wt"), path_of(&s, "coder"));
     asked(&mut s, coder);
     let message = text(&s.app);
 
     confirm(&mut s.app);
 
-    let toast = settled_text(&mut s, 2);
-    let named = (
-        message.contains("Ends the flow run") && message.contains("coder (claude)"),
-        message.contains("in the worktree of `coder`, running claude") && !message.contains("keep running"),
-    );
+    closed(&mut s.app, &s.rx, 1, 1);
+    pump_until(&mut s.app, &s.rx, "the team stops", |a| a.projects[0].workspaces[1].terms().count() == 1);
+    s.app.forget_runs();
+    let named = message.contains("Ends the flow run") && message.contains("coder (claude)");
+    assert!(named && message.contains("keep running") && !message.contains("worktree of"), "{message}");
     assert_eq!(
-        (named, toast.as_deref(), role.exists()),
-        ((true, true), Some("removed 2 worktrees"), false),
-        "{message}"
+        (tab_panes(&s.app, 1), running(&s.app, kid), wt.exists(), role.exists()),
+        (vec![shell], true, true, true)
     );
+    assert!(s.app.runs.all().is_empty());
+}
+
+#[test]
+fn an_agent_a_member_started_closes_alone() {
+    let mut s = with(&["wt", "coder"]);
+    let (_, coder, _) = team(&mut s);
+    tabs(&mut s.app, 1, 1);
+    let helper = child(&mut s.app, (1, 2), coder);
+    asked(&mut s, helper);
+    let message = text(&s.app);
+    let plan = dialog(&s.app).plan.clone();
+
+    confirm(&mut s.app);
+
+    closed(&mut s.app, &s.rx, 1, 2);
+    assert_eq!((plan.run, message.contains("Ends the flow run"), plan.closing.tabs.len()), (None, false, 1));
+    assert_eq!(s.app.runs.all().len(), 1);
 }
 
 #[test]
@@ -380,23 +305,6 @@ fn a_child_elsewhere_keeps_running_and_is_named() {
     let root = s.app.agent_tree(false).iter().all(|(_, node)| node.depth == 0);
     let named = message.contains("keep running") && message.contains("claude in ") && message.contains("› wt");
     assert_eq!((named, submit, running(&s.app, kid), root), (true, CLOSE_SUBMIT, true, true), "{message}");
-}
-
-#[test]
-fn changes_in_the_worktree_are_named_and_wait_for_the_check() {
-    let (mut s, pane) = in_worktree();
-    std::fs::write(path_of(&s, "wt").join("draft.txt"), "draft").expect("write a change");
-    s.app.ask_close_agent(pane);
-    let waiting = (shown(&s.app).waiting, shown(&s.app).note);
-
-    send_key(&mut s.app, KeyCode::Enter, KeyModifiers::NONE);
-    let still = matches!(s.app.overlay, Some(Overlay::CloseAgent(_))) && running(&s.app, pane);
-    ready(&mut s.app, &s.rx);
-
-    assert_eq!(
-        (waiting, still, text(&s.app).contains(UNCOMMITTED)),
-        ((true, Some(ui::Note::Busy("checking…"))), true, true)
-    );
 }
 
 #[test]
@@ -431,17 +339,17 @@ fn a_pane_that_closed_meanwhile_closes_the_dialog() {
 }
 
 #[test]
-fn a_workspace_being_removed_starts_no_second_removal() {
+fn a_workspace_being_removed_refuses_the_close() {
     let (mut s, pane) = in_worktree();
     asked(&mut s, pane);
     let (project, workspace) = (s.app.projects[0].id, s.app.projects[0].workspaces[1].id);
     s.app.start_removal(project, workspace, RemoveOptions::default(), None);
 
     confirm(&mut s.app);
-    let after = (s.app.overlay.is_none(), s.app.cleaning(workspace));
+    let after = (s.app.overlay.is_none(), toast(&s.app).is_some_and(|text| text.contains("being removed")));
     s.app.ask_close_agent(pane);
 
-    assert_eq!((after, s.app.overlay.is_none()), ((true, false), true));
+    assert_eq!((after, s.app.overlay.is_none()), ((true, true), true));
 }
 
 #[test]

@@ -117,6 +117,8 @@ A flow's agents close like any workspace's: **close agents** in the workspace's 
 
 The workspace's **`▶`** brings the whole team back: each role in its own conversation, and the orchestrator last, told its team's new pane ids and which roles were cut in the middle of a turn. A role you had closed with its `×` starts again from its role's prompt, in a tab named after it. **forget closed agents** ends the run instead.
 
+The `×` of a member's row in the agents section (**close agent**) is different: it closes the whole team for good and ends the run, removing nothing.
+
 ## The run's folder
 
 Every run gets a folder for its files, so long reports don't pile up in the orchestrator's context and the run leaves a record of what each role produced. It is outside the worktree, so nothing in it is ever committed, and every pane of the team has its path in **`$CORNERCASE_RUN_DIR`**.

@@ -206,20 +206,17 @@ Examples:
   cornercase wait --any --pane 12 --pane 15 --tab 9 --timeout 1800";
 pub(super) const CLOSE_HELP: &str =
     "Its shells stop, as with its ×, but nothing asks first, not even for a project. A worktree's
-workspace stays listed while its worktree exists, and its branch is kept (only --delete-branch,
-with --agent, deletes one).
+workspace stays listed while its worktree exists, and its branch is kept.
 --remove-worktree runs the project's teardown first; a teardown that fails is a warning on
 stderr, and the worktree is removed anyway. --check only says what removing it would lose, as the
 window's dialog does (changes that are not committed, a lock and whether its process still runs, the
 worktrees of a flow's roles that go with it, the teardown), and stops nothing. --unlock does what
 the dialog's unlock and remove does; changes still need --force.
 --agent closes the agent in --pane as its close agent in the window does, without asking: its tab
-and the tabs of the agents it started in the same workspace, or, when it works in a git worktree of
-its own (a flow run's too), that workspace and its worktree, with the run's role worktrees. Agents
-it started elsewhere keep running, and a project's own folder is never removed. Git is checked
-first, and changes (--force) or a lock (--unlock) refuse it before anything stops. --delete-branch
-also deletes the branch of each worktree removed, but a branch whose commits are in no remote branch
-needs --force. With --check it only says what would stop, keep running and be lost.
+and the tabs of the agents it started in the same workspace, at any depth. For a member of a flow
+run, its whole team closes and the run ends. Agents it started elsewhere keep running. Nothing is
+removed from disk, a worktree and its branch stay (close --workspace ID --remove-worktree removes
+a worktree). With --check it only says what would stop and keep running.
 
 Examples:
   cornercase close --tab 9
@@ -228,7 +225,7 @@ Examples:
   cornercase close --worktree fix/login --remove-worktree --check
   cornercase close --worktree fix/login --remove-worktree --unlock
   cornercase close --agent --pane 12 --check
-  cornercase close --agent --pane 12 --delete-branch";
+  cornercase close --agent --pane 12";
 pub(super) const RENAME_HELP: &str = "Examples:
   cornercase rename 'review #42'
   cornercase rename --workspace 5 ''";

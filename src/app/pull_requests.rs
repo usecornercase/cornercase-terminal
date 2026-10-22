@@ -354,8 +354,6 @@ impl App {
             submit: COPY_LINK,
             extra: self.pull_request_extra(workspace),
             cancel: DONE,
-            toggle: None,
-            waiting: false,
         }))
     }
 

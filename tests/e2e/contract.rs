@@ -95,7 +95,7 @@ fn assert_updates_only_in_release_builds(contract: &Value) {
 
 fn assert_features_and_streams(contract: &Value) {
     let features = ["views", "host-events", "theme", "notices", "config", "close-unlock", "issues"];
-    for feature in features.into_iter().chain(["todo-panel", "agent-folds", "changes"]) {
+    for feature in features.into_iter().chain(["todo-panel", "agent-folds", "changes", "close-agent-tabs"]) {
         assert!(has_feature(contract, feature), "{feature}: {contract}");
     }
     let streams = ["events", "app", "changes", "flow-runs", "flow-messages", "view", "surface"];

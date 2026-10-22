@@ -94,17 +94,13 @@ pub(crate) use dialog::start_flow::{
 pub(crate) use dialog::start_flow::{
     start_account, start_account_list, start_branch, start_buttons, start_list, start_workspace,
 };
-pub(crate) use dialog::update::{
-    Update, scroll_in, update_body, update_buttons, update_extra, update_notes, update_scroll, update_toggle,
-};
+pub(crate) use dialog::update::{Update, update_buttons, update_extra, update_notes, update_scroll};
 #[cfg(test)]
 pub(crate) use dialog::usage::usage_area;
 pub(crate) use dialog::usage::{Usage, UsageSection, UsageWindow, usage_done, usage_share, usage_tabs};
 #[cfg(test)]
 pub(crate) use dialog::worktrees::worktrees_area;
-pub(crate) use dialog::worktrees::{
-    BRANCHES_LABEL, ConfirmView, WorktreeRow, Worktrees, WorktreesHit, worktrees_hit, worktrees_room,
-};
+pub(crate) use dialog::worktrees::{ConfirmView, WorktreeRow, Worktrees, WorktreesHit, worktrees_hit, worktrees_room};
 pub(crate) use dialog::{CANCEL_LABEL, Note, Overlay};
 pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
 pub(crate) use icons::glyphs;

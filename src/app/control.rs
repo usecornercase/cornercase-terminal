@@ -102,10 +102,6 @@ impl Clients {
     pub(super) fn set_typing_holds(&mut self, holds: Duration) {
         self.typing_holds = holds;
     }
-
-    pub(super) fn requests_waiting(&self) -> usize {
-        self.requests.pending.len()
-    }
 }
 
 #[derive(Default)]
@@ -172,7 +168,6 @@ enum Stage {
     Restart { caller: Option<u64> },
     Issue(Box<Asking>),
     Usage(Vec<(agents::usage::Key, u64)>),
-    CloseAgent(Box<close::Asking>),
 }
 
 impl Stage {
@@ -181,9 +176,6 @@ impl Stage {
     }
 
     fn outlives_its_client(&self) -> bool {
-        if let Self::CloseAgent(asking) = self {
-            return !asking.checks_only();
-        }
         !matches!(
             self,
             Self::Held(_)
@@ -536,7 +528,7 @@ impl App {
             Command::Close(close) => self.close_request(client, &close),
             Command::Rename(rename) => self.rename_request(asker, rename),
             Command::RemovalCheck(check) => self.removal_check_request(client, &check),
-            Command::CloseAgent(close) => self.close_agent_request(client, close),
+            Command::CloseAgent(close) => self.close_agent_request(&close),
             Command::AgentsClose(close) => self.agents_close_request(asker, &close),
             Command::AgentsReopen(reopen) => self.agents_reopen_request(asker, &reopen, area),
             Command::AgentsForget(forget) => self.agents_forget_request(asker, &forget),

@@ -408,8 +408,6 @@ impl App {
             submit,
             extra: None,
             cancel,
-            toggle: None,
-            waiting: false,
         })
     }
 
@@ -429,8 +427,6 @@ impl App {
             submit: RESTART_SUBMIT,
             extra: None,
             cancel: ui::CANCEL_LABEL,
-            toggle: None,
-            waiting: false,
         })
     }
 }

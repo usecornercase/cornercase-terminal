@@ -29,7 +29,7 @@ use crate::worktrees::{
 mod cleanup;
 mod confirm;
 
-pub(super) use cleanup::{Cleanup, Deleted, Tally};
+pub(super) use cleanup::{Cleanup, Deleted};
 pub(super) use confirm::wrap;
 
 pub(super) type Place = (PathBuf, u64, u64);

@@ -14,28 +14,35 @@ pub(crate) struct Closing {
     pub(crate) elsewhere: Vec<u64>,
 }
 
-pub(crate) fn closing(panes: &[Pane], agent: u64, whole_workspace: bool) -> Option<Closing> {
+pub(crate) fn closing(panes: &[Pane], agent: u64, team: &[u64]) -> Option<Closing> {
     let origin = panes.iter().find(|pane| pane.id == agent)?;
+    let alone = gather(panes, origin.workspace, &[agent]);
+    let reached = panes.iter().any(|pane| team.contains(&pane.id) && alone.tabs.contains(&pane.tab));
+    if !reached {
+        return Some(alone);
+    }
+    let roots: Vec<u64> =
+        panes.iter().filter(|pane| pane.id == agent || team.contains(&pane.id)).map(|pane| pane.id).collect();
+    Some(gather(panes, origin.workspace, &roots))
+}
+
+fn gather(panes: &[Pane], workspace: u64, roots: &[u64]) -> Closing {
     let (mut inside, mut elsewhere) = (Vec::new(), Vec::new());
-    for pane in panes.iter().filter(|pane| pane.id != agent && descends(panes, pane, agent)) {
-        if pane.workspace == origin.workspace {
+    let below = |pane: &&Pane| !roots.contains(&pane.id) && roots.iter().any(|&root| descends(panes, pane, root));
+    for pane in panes.iter().filter(below) {
+        if pane.workspace == workspace {
             inside.push(pane.id);
         } else {
             elsewhere.push(pane.id);
         }
     }
     let mut tabs = Vec::new();
-    for pane in panes {
-        let wanted = if whole_workspace {
-            pane.workspace == origin.workspace
-        } else {
-            pane.id == agent || inside.contains(&pane.id)
-        };
-        if wanted && !tabs.contains(&pane.tab) {
+    for pane in panes.iter().filter(|pane| roots.contains(&pane.id) || inside.contains(&pane.id)) {
+        if !tabs.contains(&pane.tab) {
             tabs.push(pane.tab);
         }
     }
-    Some(Closing { tabs, inside, elsewhere })
+    Closing { tabs, inside, elsewhere }
 }
 
 fn descends(panes: &[Pane], pane: &Pane, ancestor: u64) -> bool {

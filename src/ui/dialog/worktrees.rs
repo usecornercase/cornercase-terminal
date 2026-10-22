@@ -31,7 +31,7 @@ const DONE_LABEL: &str = "done";
 
 const BACK_LABEL: &str = "back";
 
-pub(crate) const BRANCHES_LABEL: &str = "also delete the branch";
+const BRANCHES_LABEL: &str = "also delete the branch";
 
 pub(crate) struct Worktrees {
     pub(crate) title: String,

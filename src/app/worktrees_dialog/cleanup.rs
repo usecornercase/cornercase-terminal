@@ -22,11 +22,11 @@ pub(in crate::app) struct Cleanup {
 }
 
 #[derive(Debug, Default)]
-pub(in crate::app) struct Tally {
-    pub(in crate::app) removed: usize,
-    pub(in crate::app) deleted: Vec<String>,
-    pub(in crate::app) notes: Vec<String>,
-    pub(in crate::app) failed: Vec<String>,
+struct Tally {
+    removed: usize,
+    deleted: Vec<String>,
+    notes: Vec<String>,
+    failed: Vec<String>,
 }
 
 impl Tally {
@@ -44,30 +44,13 @@ pub(in crate::app) struct Pending {
     paths: Vec<PathBuf>,
     branches: Vec<String>,
     removed: bool,
-    asked: Option<(u64, Tally)>,
 }
 
 pub(in crate::app) type Deleted = Vec<(String, Result<()>)>;
 
 impl Pending {
     fn new(name: String, repo: PathBuf, paths: Vec<PathBuf>, branches: Vec<String>) -> Self {
-        Self { name, repo, paths, branches, removed: false, asked: None }
-    }
-}
-
-impl Cleanup {
-    fn ask(&mut self, workspace: u64, key: u64, notes_from: usize) {
-        let notes = self.tally.notes.split_off(notes_from);
-        if let Some(pending) = self.pending.get_mut(&workspace) {
-            pending.asked = Some((key, Tally { notes, ..Tally::default() }));
-        }
-    }
-
-    fn add(&mut self, key: u64, tally: Tally) {
-        match self.pending.get_mut(&key).and_then(|pending| pending.asked.as_mut()) {
-            Some((_, asked)) => asked.add(tally),
-            None => self.tally.add(tally),
-        }
+        Self { name, repo, paths, branches, removed: false }
     }
 }
 
@@ -150,31 +133,6 @@ impl App {
         let mut paths = vec![canonical(&workspace.path)];
         paths.extend(workspace.role_worktrees.iter().map(|tree| canonical(&tree.path)));
         paths
-    }
-
-    pub(in crate::app) fn remove_with_shown_branches(
-        &mut self,
-        at: WorkspaceAt,
-        shown: Vec<(PathBuf, String)>,
-        options: (bool, bool),
-        asked: Option<u64>,
-    ) -> bool {
-        let before = self.git.cleanup.tally.notes.len();
-        let mut names = Vec::new();
-        for (path, branch) in shown {
-            let now = branch_now(&path, &branch);
-            names.extend(self.keep_or_delete(Some(branch), now.as_deref()));
-        }
-        let (workspace, name) = (self.projects.workspace(at).id, self.projects.workspace(at).label());
-        let repo = discover::main_checkout(&canonical(&self.projects[at.project()].path));
-        if !self.remove_workspace_with_branches(at, (name, repo), names, options) {
-            self.git.cleanup.tally.notes.truncate(before);
-            return false;
-        }
-        if let Some(key) = asked {
-            self.git.cleanup.ask(workspace, key, before);
-        }
-        true
     }
 
     pub(in crate::app) fn remove_workspace_with_branches(
@@ -286,11 +244,9 @@ impl App {
     }
 
     fn cleanup_finished(&mut self, key: u64) {
-        let Some(pending) = self.git.cleanup.pending.remove(&key) else { return };
-        if let Some((asked, tally)) = pending.asked {
-            self.agent_closed(asked, tally);
+        if self.git.cleanup.pending.remove(&key).is_some() {
+            self.finish_cleanup();
         }
-        self.finish_cleanup();
     }
 
     fn cleaned(&mut self, key: u64, result: Result<Option<String>>, branch: Deleted) {
@@ -307,7 +263,7 @@ impl App {
                 Err(e) => tally.failed.push(format!("could not delete the branch {branch}: {e}")),
             }
         }
-        self.git.cleanup.add(key, tally);
+        self.git.cleanup.tally.add(tally);
     }
 
     fn tally_removal(&mut self, tally: &mut Tally, name: &str, paths: &[PathBuf], result: Result<Option<String>>) {

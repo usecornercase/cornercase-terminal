@@ -11,8 +11,6 @@ use crate::git::{self, worktree};
 use crate::project::{Hierarchy, WorkspaceAt};
 use crate::term::Term;
 
-pub(super) use agent::Asking;
-
 fn uncommitted(workspace: u64) -> String {
     format!("workspace {workspace} has changes that are not committed; add --force to remove it anyway")
 }
