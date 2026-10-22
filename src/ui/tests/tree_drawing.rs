@@ -26,8 +26,14 @@ fn tree_shape() -> TreeShape {
 }
 
 fn tree_workspaces() -> Vec<Vec<WorkspaceEntry>> {
-    let details =
-        Details { model: Some("Opus 5.5".into()), percent: Some(23), subagents: 0, memory: None, account: None };
+    let details = Details {
+        model: Some("Opus 5.5".into()),
+        percent: Some(23),
+        subagents: 0,
+        memory: None,
+        account: None,
+        compacted: false,
+    };
     let claude = TabEntry { status: Some(Status::Working), details, ..TabEntry::from("claude") };
     let finished = TabEntry { status: Some(Status::Done), ..TabEntry::from("") };
     let workspace = |name: &str, tabs: Vec<TabEntry>, behind: u32| WorkspaceEntry {

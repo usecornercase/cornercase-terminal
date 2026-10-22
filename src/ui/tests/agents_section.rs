@@ -26,7 +26,7 @@ fn agent(status: Status, agent: &str, project: &str, workspace: Option<&str>, de
 }
 
 fn details(model: &str, percent: Option<u16>) -> Details {
-    Details { model: Some(model.into()), percent, subagents: 0, memory: None, account: None }
+    Details { model: Some(model.into()), percent, subagents: 0, memory: None, account: None, compacted: false }
 }
 
 fn entries() -> Vec<AgentEntry> {

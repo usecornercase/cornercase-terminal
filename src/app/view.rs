@@ -39,7 +39,12 @@ impl App {
             .pane()
             .and_then(|t| self.pane_account(t))
             .or_else(|| tab.panes.iter().find_map(|t| self.pane_account(t)));
-        self.details(tab.context(), tab.memory(), tab.subagents(), account)
+        let details = self.details(tab.context(), tab.memory(), tab.subagents(), account);
+        ui::Details { compacted: self.shows_compaction(tab.compacted()), ..details }
+    }
+
+    pub(super) fn shows_compaction(&self, compacted: bool) -> bool {
+        compacted && self.config.context
     }
 
     pub(super) fn account_label(&self, kind: Known, name: Option<&str>) -> Option<String> {
@@ -64,6 +69,7 @@ impl App {
             percent: context.and_then(|c| c.percent).filter(|_| self.config.context),
             subagents,
             memory: memory.filter(|_| self.config.memory),
+            compacted: false,
         }
     }
 

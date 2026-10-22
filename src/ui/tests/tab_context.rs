@@ -1,7 +1,14 @@
 use super::*;
 
 fn opus(percent: u16) -> Details {
-    Details { model: Some("Opus 5.5".into()), percent: Some(percent), subagents: 0, memory: None, account: None }
+    Details {
+        model: Some("Opus 5.5".into()),
+        percent: Some(percent),
+        subagents: 0,
+        memory: None,
+        account: None,
+        compacted: false,
+    }
 }
 
 fn with_details(details: Details) -> View<'static> {
@@ -38,8 +45,14 @@ fn renders_the_model_and_the_context_under_the_tab() {
 }
 
 fn agent(name: &str, model: &str, percent: Option<u16>) -> View<'static> {
-    let mut view =
-        with_details(Details { model: Some(model.into()), percent, subagents: 0, memory: None, account: None });
+    let mut view = with_details(Details {
+        model: Some(model.into()),
+        percent,
+        subagents: 0,
+        memory: None,
+        account: None,
+        compacted: false,
+    });
     let tab = &mut view.workspaces[0].tabs[0];
     tab.name = name.into();
     tab.status = None;
@@ -128,6 +141,8 @@ fn a_narrow_column_cuts_the_model_first(#[case] workspaces: u16, #[case] memory:
 #[case::the_memory(Details { memory: Some(300 * MB), ..Details::default() }, "▌ │   300 MB")]
 #[case::the_model_and_the_memory(Details { memory: Some(GB * 12 / 10), ..codex_model() }, "▌ │   gpt-5.4 · 1.2 GB")]
 #[case::the_context_and_the_memory(Details { model: None, memory: Some(300 * MB), ..opus(17) }, "▌ │   17% · 300 MB")]
+#[case::compacted(Details { compacted: true, ..Details::default() }, "▌ │   compacted")]
+#[case::the_model_cut_for_compacted(Details { compacted: true, percent: None, ..opus(17) }, "▌ │   Opus … · compacted")]
 #[case::one_subagent(Details { subagents: 1, ..Details::default() }, "▌ │   1 subagent")]
 #[case::the_context_and_the_subagents(Details { subagents: 2, ..opus(17) }, "▌ │   17% · 2 subagents")]
 #[case::the_subagents_and_the_memory(Details { subagents: 2, memory: Some(300 * MB), ..Details::default() }, "▌ │ 2 subagents · 300 MB")]
@@ -147,6 +162,19 @@ fn renders_the_memory_in_the_compact_layout() {
     let view = View { nav: Some(Nav::Workspaces), ..with_details(Details { memory: Some(GB * 12 / 10), ..opus(17) }) };
 
     insta::assert_snapshot!(render_sized(&view, SMALL.width, SMALL.height).backend());
+}
+
+#[test]
+fn compacted_keeps_the_whole_model_in_a_wide_column_and_reads_muted() {
+    let details = Details { compacted: true, percent: None, ..opus(17) };
+    let v = View { widths: Widths { workspaces: 32, ..Widths::default() }, ..with_details(details) };
+    let r = row(&v, AREA, WorkspaceRow::Tab(0, 0));
+    let rendered = render(&v);
+    let text = line(&rendered, r, 1);
+
+    assert_eq!(text, "▌ │   Opus 5.5 · compacted");
+    let end = u16::try_from(text.chars().count()).expect("a short line");
+    assert_eq!(rendered.backend().buffer()[(r.x + end - 1, r.y + 1)].fg, Color::DarkGray);
 }
 
 #[rstest]

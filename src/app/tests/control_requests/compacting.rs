@@ -27,6 +27,7 @@ fn a_compact_command_is_confirmed_by_the_compaction_it_records_long_after_the_en
     done(agent.answered("the compaction is recorded"));
     agent.refreshing("the agent is idle", |a| pane(a, id).agent.status() != Some(activity::Status::Working));
     let compacted = in_status(&mut agent.app, id);
+    let shown = agent.app.tab_details(&agent.app.projects[0].workspaces[0].tabs[1]).compacted;
 
     ask(&mut agent.app, None, send_text(id, "go on", true, false));
     done(agent.answered("the prompt is recorded"));
@@ -35,7 +36,7 @@ fn a_compact_command_is_confirmed_by_the_compaction_it_records_long_after_the_en
     let answered = in_status(&mut agent.app, id);
 
     assert!(early.is_empty(), "{early:?}");
-    assert_eq!((compacted.compacted, compacted.context), (true, None));
+    assert_eq!((compacted.compacted, compacted.context, shown), (true, None, true));
     assert_eq!((answered.compacted, answered.context.is_some()), (false, true));
 }
 

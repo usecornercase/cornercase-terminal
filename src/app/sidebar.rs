@@ -129,7 +129,10 @@ impl App {
                 workspace: (project.workspaces.len() > 1).then(|| workspace.label()),
                 role,
                 place,
-                details: self.details(context, None, term.context.subagents(), self.pane_account(term)),
+                details: ui::Details {
+                    compacted: self.shows_compaction(term.context.compaction().hides),
+                    ..self.details(context, None, term.context.subagents(), self.pane_account(term))
+                },
                 active: (focus.tab == Some(tab.id) && tab.active == i)
                     || hidden.iter().any(|term| Some(term.id) == focused),
                 depth: node.depth,

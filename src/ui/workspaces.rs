@@ -233,6 +233,7 @@ pub struct Details {
     pub(crate) percent: Option<u16>,
     pub(crate) subagents: usize,
     pub(crate) memory: Option<u64>,
+    pub(crate) compacted: bool,
 }
 
 impl Details {
@@ -242,7 +243,8 @@ impl Details {
                 || self.account.is_some()
                 || self.percent.is_some()
                 || self.subagents > 0
-                || self.memory.is_some(),
+                || self.memory.is_some()
+                || self.compacted,
         )
     }
 }
@@ -556,13 +558,7 @@ pub(super) fn draw_details(f: &mut Frame, muted: Color, line: DetailLine) {
     let r = Rect { y: middle(row).y + 1, height: 1, ..row }.intersection(row);
     let reserved = if buttons.bottom() > r.y { usize::from(buttons.width) } else { 0 };
     let dim = Style::default().fg(muted);
-    let percent = details.percent.map(|used| {
-        let level = match Severity::of(used) {
-            Severity::Normal => dim,
-            severity => Style::default().fg(severity_color(severity)),
-        };
-        Span::styled(format!("{used}%"), level)
-    });
+    let percent = percent_span(details, dim);
     let subagents = (details.subagents > 0).then(|| Span::styled(activity::subagents_text(details.subagents), dim));
     let memory = details.memory.map(|bytes| Span::styled(memory_size(bytes), dim));
     let lead = agent.map(|agent| Span::styled(agent.to_string(), dim));
@@ -590,6 +586,17 @@ pub(super) fn draw_details(f: &mut Frame, muted: Color, line: DetailLine) {
     let mut line = vec![Span::raw(" ".repeat(indent))];
     line.extend(parts.flat_map(|part| [Span::styled(CONTEXT_SEPARATOR, dim), part]).skip(1));
     f.render_widget(Paragraph::new(Line::from(line)), r);
+}
+
+fn percent_span(details: &Details, dim: Style) -> Option<Span<'static>> {
+    let shown = details.percent.map(|used| {
+        let level = match Severity::of(used) {
+            Severity::Normal => dim,
+            severity => Style::default().fg(severity_color(severity)),
+        };
+        Span::styled(format!("{used}%"), level)
+    });
+    shown.or_else(|| details.compacted.then(|| Span::styled("compacted", dim)))
 }
 
 pub(super) fn memory_size(bytes: u64) -> String {

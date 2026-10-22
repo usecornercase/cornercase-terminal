@@ -98,8 +98,17 @@ impl Tab {
             .max()
     }
 
+    fn shown_pane(&self) -> Option<&Term> {
+        let known = |t: &&Term| t.context.context().is_some() || t.context.compaction().hides;
+        self.pane().filter(known).or_else(|| self.panes.iter().find(known))
+    }
+
     pub(crate) fn context(&self) -> Option<&Context> {
-        self.pane().and_then(|t| t.context.context()).or_else(|| self.panes.iter().find_map(|t| t.context.context()))
+        self.shown_pane().and_then(|t| t.context.context())
+    }
+
+    pub(crate) fn compacted(&self) -> bool {
+        self.shown_pane().is_some_and(|t| t.context.compaction().hides)
     }
 
     pub(crate) fn running(&self) -> bool {

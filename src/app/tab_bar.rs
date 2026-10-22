@@ -35,12 +35,15 @@ impl App {
         ui::tab_bar::TabBar {
             tabs: self.bar_tabs(),
             active: workspace.filter(|w| !w.tabs.is_empty()).map(|w| w.active),
-            details: self.details(
-                pane.and_then(|t| t.context.context()),
-                pane.and_then(|t| t.memory.bytes()),
-                pane.map_or(0, |t| t.context.subagents()),
-                pane.and_then(|t| self.pane_account(t)),
-            ),
+            details: ui::Details {
+                compacted: self.shows_compaction(pane.is_some_and(|t| t.context.compaction().hides)),
+                ..self.details(
+                    pane.and_then(|t| t.context.context()),
+                    pane.and_then(|t| t.memory.bytes()),
+                    pane.map_or(0, |t| t.context.subagents()),
+                    pane.and_then(|t| self.pane_account(t)),
+                )
+            },
             scroll: self.scroll.of(List::TabBar),
         }
     }
