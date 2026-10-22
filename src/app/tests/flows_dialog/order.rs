@@ -139,6 +139,57 @@ mod default {
         assert_eq!(config.flow_order, ["Full issue again"]);
     }
 
+    fn edited_quick_as_default() -> Setup {
+        let mut s = settings_tab(false);
+        let quick = crate::flows::Flow {
+            name: "Quick".into(),
+            ..crate::flows::builtin::starter(&[Known::Claude], Some(Known::Claude))
+        };
+        store::save(&user_dir(&s), &quick, None).expect("save");
+        s.app.refresh_flows();
+        select_flow(&mut s.app, WIDE, "Quick");
+        button(&mut s.app, WIDE, dialog::SET_DEFAULT);
+        s
+    }
+
+    #[test]
+    fn restoring_the_default_built_in_keeps_the_default() {
+        let mut s = edited_quick_as_default();
+        button(&mut s.app, WIDE, dialog::RESTORE);
+        confirm(&mut s, dialog::RESTORE);
+        assert_eq!(files(&user_dir(&s)), Vec::<String>::new());
+        assert_eq!(saved(&s).default_flow, "Quick");
+        assert_eq!(dialog(&s.app).default.as_deref(), Some("Quick"));
+    }
+
+    #[test]
+    fn deleting_your_version_of_the_default_built_in_hides_it_and_clears_the_default() {
+        let mut s = edited_quick_as_default();
+        button(&mut s.app, WIDE, dialog::DELETE);
+        confirm(&mut s, dialog::DELETE);
+        let config = saved(&s);
+        assert_eq!(
+            (config.default_flow.as_str(), config.hidden_flows.as_slice()),
+            ("", ["Quick".to_string()].as_slice())
+        );
+    }
+
+    #[test]
+    fn renaming_the_flow_the_default_did_not_resolve_to_leaves_the_default() {
+        let mut s = setup(true);
+        let twin = crate::flows::Flow {
+            name: "Twin".into(),
+            ..crate::flows::builtin::starter(&[Known::Claude], Some(Known::Claude))
+        };
+        let project = store::project_dir(s.project.as_ref().expect("a project").path());
+        let theirs = store::save(&project, &twin, None).expect("save");
+        store::save(&user_dir(&s), &twin, None).expect("save");
+        s.app.change_config(|config| config.default_flow = "Twin".into()).expect("write");
+        let renamed = crate::flows::Flow { name: "Twin two".into(), ..twin };
+        s.app.save_flow_file(&project, &renamed, Some(&theirs)).expect("rename");
+        assert_eq!(saved(&s).default_flow, "Twin");
+    }
+
     #[test]
     fn deleting_the_default_flow_clears_it() {
         let mut s = copy_of_full_issue_as_default();

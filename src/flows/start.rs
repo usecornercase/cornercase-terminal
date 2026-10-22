@@ -202,7 +202,7 @@ impl Start {
             let line = problems.first().cloned().unwrap_or_else(|| saved.flow.description.trim().to_string());
             Item {
                 name: saved.flow.name.trim().to_string(),
-                tag: tag_text(&store::tags(&self.flows, &self.builtins, self.default.as_deref(), saved)),
+                tag: store::tag_text(&store::tags(&self.flows, &self.builtins, self.default.as_deref(), saved)),
                 agents: agents_count(&saved.flow),
                 line,
                 red: !problems.is_empty(),
@@ -496,7 +496,3 @@ impl Start {
 
 #[cfg(test)]
 mod tests;
-
-pub(crate) fn tag_text(tags: &[&str]) -> Option<String> {
-    (!tags.is_empty()).then(|| tags.join(" · "))
-}

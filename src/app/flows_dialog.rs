@@ -239,20 +239,29 @@ impl App {
         previous: Option<&Path>,
     ) -> Result<PathBuf, String> {
         let old = previous.and_then(|path| store::read(path).ok()).map(|flow| flow.name);
+        let was_default = previous.is_some_and(|path| self.is_default_file(path));
         let saved = save(dir, flow, previous);
         if let Ok(path) = &saved {
             log::info!("flows", "flow saved", file = file_name(path));
             if let Some(old) = old.filter(|old| !store::same_name(old, &flow.name)) {
-                self.flow_renamed(&old, &flow.name);
+                self.flow_renamed(&old, &flow.name, was_default);
             }
         }
         self.refresh_flows();
         saved
     }
 
-    fn flow_renamed(&mut self, old: &str, new: &str) {
+    fn is_default_file(&self, path: &Path) -> bool {
+        let projects = self.projects.iter().map(|project| Some(project.path.clone()));
+        std::iter::once(None).chain(projects).any(|project| {
+            let listing = self.flow_listing(project.as_deref());
+            listing.default_flow().is_some_and(|saved| saved.origin.path() == Some(path))
+        })
+    }
+
+    fn flow_renamed(&mut self, old: &str, new: &str, was_default: bool) {
         let moved = self.change_config(|config| {
-            if store::same_name(&config.default_flow, old) {
+            if was_default && store::same_name(&config.default_flow, old) {
                 new.trim().clone_into(&mut config.default_flow);
             }
             store::rename(&mut config.flow_order, old, new);

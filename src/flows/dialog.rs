@@ -720,7 +720,7 @@ pub(crate) fn flow_row(flows: &[Saved], builtins: &[String], default: Option<&st
     let problems: Vec<String> =
         store::conflict(flows, builtins, saved).into_iter().chain(saved.flow.problems()).collect();
     let tags = store::tags(flows, builtins, default, saved);
-    let tag = if tags.is_empty() { String::new() } else { format!("{} · ", tags.join(" · ")) };
+    let tag = store::tag_text(&tags).map(|text| format!("{text} · ")).unwrap_or_default();
     let (value, note) = match problems.as_slice() {
         [] => (agents_count(&saved.flow), format!("{tag}{}", plan_summary(&saved.flow))),
         [only] => (

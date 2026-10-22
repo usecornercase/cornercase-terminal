@@ -118,6 +118,10 @@ pub(crate) fn tags(flows: &[Saved], builtins: &[String], default: Option<&str>, 
     tags
 }
 
+pub(crate) fn tag_text(tags: &[&str]) -> Option<String> {
+    (!tags.is_empty()).then(|| tags.join(" · "))
+}
+
 fn place(order: &[String], name: &str) -> usize {
     order.iter().position(|ordered| same_name(ordered, name)).unwrap_or(order.len())
 }
