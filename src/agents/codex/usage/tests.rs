@@ -5,6 +5,9 @@ use crate::agents::usage::Severity;
 
 pub(crate) const RECORDED: &str = r#"{"id":2,"result":{"ordinaryUsageAllowed":true,"rateLimits":{"limitId":"codex","limitName":null,"normalModelSlug":null,"primary":{"usedPercent":53,"windowDurationMins":300,"resetsAt":1791218970},"secondary":{"usedPercent":8,"windowDurationMins":10080,"resetsAt":1791805770},"credits":{"hasCredits":false,"unlimited":false,"balance":"0"},"individualLimit":null,"spendControlReached":false,"planType":"plus","rateLimitReachedType":null},"rateLimitsByLimitId":{"codex":{"limitId":"codex","limitName":null,"normalModelSlug":null,"primary":{"usedPercent":53,"windowDurationMins":300,"resetsAt":1791218970},"secondary":{"usedPercent":8,"windowDurationMins":10080,"resetsAt":1791805770},"credits":{"hasCredits":false,"unlimited":false,"balance":"0"},"individualLimit":null,"spendControlReached":false,"planType":"plus","rateLimitReachedType":null}},"rateLimitResetCredits":{"availableCount":2,"credits":null},"accountId":"00000000-0000-0000-0000-000000000000","rateLimitUpsell":null}}"#;
 
+pub(crate) const PARAMS_REFUSED: &str =
+    r#"{"error":{"code":-32600,"message":"Invalid request: invalid type: map, expected unit"},"id":2}"#;
+
 pub(crate) const SIGNED_OUT: &str =
     r#"{"error":{"code":-32600,"message":"codex account authentication required to read rate limits"},"id":2}"#;
 
@@ -18,6 +21,12 @@ fn limit(percent: u8, minutes: Option<i64>) -> Value {
 
 fn labels(result: &Value) -> Vec<(String, u16)> {
     parse(result.clone()).expect("a report").windows.into_iter().map(|w| (w.label, w.percent)).collect()
+}
+
+#[test]
+fn the_rate_limits_are_read_without_params() {
+    let read: Value = serde_json::from_str(requests().lines().last().expect("the read")).expect("one request per line");
+    assert_eq!(read.get("params"), None);
 }
 
 #[test]

@@ -50,6 +50,18 @@ fn the_codex_probe_runs_the_app_server() {
     assert_eq!(error.to_string(), "app-server");
 }
 
+#[test]
+fn a_codex_that_takes_no_params_reads_its_limits() {
+    let script = format!(
+        "read -r a\nread -r b\nread -r c\ncase \"$c\" in *'\"params\":{{\"'*) echo '{}' ;; *) echo '{}' ;; esac\nexec sleep 30",
+        codex_tests::PARAMS_REFUSED,
+        codex_tests::RECORDED,
+    );
+    let (_dir, command) = fake(Known::Codex.name(), &script);
+    let report = probe(Known::Codex, &command, None, TIMEOUT).expect("a report");
+    assert_eq!(report, codex_tests::report(codex_tests::RECORDED));
+}
+
 #[rstest]
 #[case::hangs(Known::Claude, "exec sleep 30", Duration::from_millis(300), "claude did not answer in time")]
 #[case::exits(Known::Claude, "exit 1", TIMEOUT, "claude exited without answering")]
