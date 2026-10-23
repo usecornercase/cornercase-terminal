@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.188
+
+- In the icon bar, **Help** now sits right under **Usage**, above Settings and Quit.
+
 ## 0.12.187
 
 - **Plugins get a button and a popup.** A plugin can now put a button of its own in the window: in a row at the foot of the projects column (shown only when a plugin has one, with ` ⋯ ` for those that don't fit), in the icon bar after Flow, and in the projects menu in compact mode. With one action the button runs it; with several it opens a menu of them. An action can also open a **popup**: a terminal in a dialog over the window running the plugin's program, as large as the plugin asks (or 80 % of the window), that every key goes to, `Esc` included, and that closes when the program ends or with its `×`. Scripts can list the buttons, run a button's action with `cornercase plugin run <plugin> <action>`, see an open popup in `status --app` and close it with `cornercase plugin popup-close`. See the plugins guide for the manifest's `[button]`, `contexts = ["button"]` and `placement = "popup"`.
