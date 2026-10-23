@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.191
+
+- The Limits tab of the Usage dialog and `cornercase usage` no longer fail with `usage unavailable: Invalid request: invalid type: map, expected unit` for Codex CLI 0.153 and older: they show those versions' plan limits too.
+
 ## 0.12.190
 
 - Scripts: with `--view`, commands that first check what the server can do no longer fail saying the server is too old: `surface --patches`, `view-set --hidden` and `--visible`, `start` with `--issue`, `--workspace-name`, `--profile` or `--account`, and `new-tab` with `--profile` or `--account`.
