@@ -153,7 +153,7 @@ An action with `placement = "popup"` runs in a terminal inside a dialog over the
 - The popup runs in the server, so every window attached to it, a phone's browser or a [`cornercase remote`](../remote/) window included, shows it, and you can type in it from any of them.
 
 <Aside type="caution" title="Set min_cornercase">
-A cornercase older than these refuses a manifest with the `button` context, and ignores `placement`, so it would run a popup's program in the background, with no terminal. A plugin that uses either should set `min_cornercase = "0.12.185"` or newer.
+A cornercase older than these refuses a manifest with the `button` context, and ignores `placement`, so it would run a popup's program in the background, with no terminal. A plugin that uses either should set `min_cornercase = "0.12.187"` or newer.
 </Aside>
 
 ### Event hooks
@@ -207,7 +207,7 @@ A plugin that sends a desktop notification when an agent needs you, adds **show 
 id = "nudge"
 name = "Nudge"
 version = "0.1.0"
-min_cornercase = "0.12.185"        # the first with buttons and popups
+min_cornercase = "0.12.187"        # the first with buttons and popups
 permissions = ["notify", "read"]
 
 [[events]]
