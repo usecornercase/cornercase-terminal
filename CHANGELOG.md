@@ -5,6 +5,7 @@ Every pull request that changes the app adds a section here for its new version.
 ## 0.12.189
 
 - **Move by word in text fields.** `Ctrl+←` and `Ctrl+→`, and on a Mac `Option+←` and `Option+→`, move the cursor to the previous or next word in every text field with a cursor: TODO items, the schedule form, the prompt when starting a flow, a flow's prompts and notes and its import page in Settings › Flows, a project's setup and teardown, the paste field in Settings › Share and the tour's first prompt. A line break counts as a stop. `Ctrl+←` and `Ctrl+→` switch desktops on a Mac by default; turn off **Move left a space** and **Move right a space** in System Settings › Keyboard › Keyboard Shortcuts › Mission Control, or use Option.
+- **Select text in text fields.** Drag across a field's text, double-click a word, or hold `Shift` with the arrows, `Home` or `End` (with `Ctrl` or `Option` too, a word at a time). Typing, `Backspace` or `Delete` replace or remove the selection, and a plain arrow, `Home` or `End` drops it. Right-click a field to **copy** or **cut** the selection, or **select all**; paste with your terminal's paste, as before.
 - Text fields now run on ratatui-textarea; typing, pasting, clicks, wrapping and scrolling work as before.
 
 ## 0.12.188

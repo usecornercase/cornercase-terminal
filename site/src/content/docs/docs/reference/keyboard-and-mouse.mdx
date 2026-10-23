@@ -155,7 +155,16 @@ See [Flows](../../guides/flows/#the-flow-panel).
 
 ### Dialogs and lists
 
-Click buttons and rows to use them. In lists (the folder picker, the issue browser, the settings, search results) and in an update's release notes, the wheel scrolls. A right-click menu closes when you click anywhere else, and so do the search and every dialog, as its cancel button would, so whatever you typed in it is dropped. A dialog that is busy (creating a worktree, installing an update, checking a token, starting an issue) stays open until it is done. A plugin's [popup](../../guides/plugins/#popups) is the exception: a click outside it does nothing, and it closes with its `×`.
+Click buttons and rows to use them. In lists (the folder picker, the issue browser, the settings, search results) and in an update's release notes, the wheel scrolls. A right-click menu closes when you click anywhere else (a text field's menu closes without its dialog), and so do the search and every dialog, as its cancel button would, so whatever you typed in it is dropped. A dialog that is busy (creating a worktree, installing an update, checking a token, starting an issue) stays open until it is done. A plugin's [popup](../../guides/plugins/#popups) is the exception: a click outside it does nothing, and it closes with its `×`.
+
+### Text fields
+
+| Gesture | Where | Does |
+| --- | --- | --- |
+| Click | A text field with a cursor | Puts the cursor there and drops any selection. |
+| Press, drag, release | A text field | Selects the text; a long field scrolls past its edge while you drag. Typing, `Backspace` and `Delete` replace or remove it. |
+| Double-click | A text field | Selects the word under the pointer. |
+| Right-click | A text field | Opens a small menu, **copy**, **cut** and **select all**; outside the selection it first moves the cursor there. `Esc` closes it, and a click anywhere else closes only the menu, not the dialog. |
 
 ### The resize pointer
 
@@ -216,7 +225,7 @@ While a dialog, the search, the settings, the issue browser, the changes panel's
 | Any dialog with a text field | Type, `Backspace`, paste. `Enter` confirms, `Esc` cancels. |
 | New workspace | `Tab` toggles **with its own worktree**. |
 | A plugin's popup | Every key, `Esc` and the prefix key included, goes to the program in it. Close it with its `×`. |
-| Right-click menus | `Esc` closes the menu. Other keys still go to the active pane. |
+| Right-click menus | `Esc` closes the menu. Other keys still go to the active pane. A text field's menu closes on any key and `Esc` only closes it; other keys go on to the field. |
 | While dragging a row or a pane | `Esc` cancels the drag. Other keys still go to the active pane. |
 | While dragging a border or a divider | `Esc` ends the drag where it is. Other keys still go to the active pane. |
 | Folder picker | Type to filter. `↑` `↓` select. `→` or `Tab` go into the selected folder, `←` goes up. `Enter` goes into the selected folder, or opens the folder you are in. `~` goes home and `/` to the root when the filter is empty. `Backspace` on an empty filter goes up. |
@@ -240,6 +249,8 @@ While a dialog, the search, the settings, the issue browser, the changes panel's
 | Keys menu | The key next to an entry runs it, or opens its group. `Esc` closes it. The prefix again types it in the pane. |
 
 In every field with a cursor (a TODO item, the schedule form, a prompt or a flow's text, a project's setup and teardown, the paste field in Settings › Share, the tour's prompt), `Ctrl+←` and `Ctrl+→` move by word and stop at line breaks. `Option+←` and `Option+→` do the same, in these fields only: a terminal sends them as `Alt+←` `Alt+→` or as `Esc b` and `Esc f`, and both work (on a Mac, a terminal may need Option set to send Esc or Meta). On macOS `Ctrl+←` and `Ctrl+→` switch desktops unless you turn off **Move left a space** and **Move right a space** in System Settings › Keyboard › Keyboard Shortcuts › Mission Control; Option needs no change.
+
+To select with the keys, hold `Shift` with `←` `→` `↑` `↓`, `Home` or `End`; with `Ctrl+Shift` or `Option+Shift` it goes a word at a time. A plain arrow drops the selection (`←` to its start, `→` to its end), and `Home` or `End` drops it too. Copy and cut come from the right-click menu, and your terminal's paste replaces the selection. `Shift`+click cannot extend a selection, because terminals keep it for their own. Some terminals take `Ctrl+Shift+←` `Ctrl+Shift+→` for their tabs (Ghostty on Linux with several tabs, kitty); `Option+Shift` is the alternative there.
 
 ## Keys in your panes
 
