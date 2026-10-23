@@ -7,7 +7,7 @@ import { type AgentRow, type App, PAGE_NAMES, crop } from './app';
 import { changesLabel, drawChanges, hasChanges } from './changes';
 import { drawFiles } from './files';
 import { drawFlow } from './flow';
-import { drawTodo } from './todo';
+import { type FieldGrip, drawTodo } from './todo';
 import { type KeysGroup, keyWidth, keysArea, keysFrame, keysItem, keysItems } from './keys';
 import {
   type Areas,
@@ -90,6 +90,7 @@ export interface Region {
   hold?: boolean;
   wheel?: (dy: number) => boolean;
   cursor?: string;
+  field?: FieldGrip;
   pane?: { pane: Pane; rect: Rect; tab: Tab; alone: boolean };
 }
 
@@ -373,6 +374,7 @@ export class Painter {
   private finish(areas: Areas): Frame {
     const app = this.app;
     this.overlay(areas);
+    this.fieldMenu();
     if (app.toast) this.toast(app.toast.text, app.toast.status, app.toast.undo ? [app.toast.label ?? UNDO, app.toast.undo] : app.toast.go ? [GO, app.toast.go] : undefined, app.toast.bug);
     return { regions: this.regions, cursor: this.cursor, areas };
   }
@@ -1113,6 +1115,20 @@ export class Painter {
     if (o.kind === 'queue') { this.dialogBackdrop(queueBounds(this.app.cols, this.app.rows, o)); return drawQueueForm(this, o); }
     if (o.kind === 'issues') return this.issues(o);
     if (o.kind === 'search') return this.results(areas);
+  }
+
+  private fieldMenu(): void {
+    const app = this.app;
+    const menu = app.fieldMenu;
+    if (!menu) return;
+    const r = menuArea(app.cols, app.rows, menu.at, menu.items.map((item) => item.label));
+    this.box(r, '');
+    menu.items.forEach((item, i) => {
+      const row = intersect(rect(r.x + 1, r.y + 1 + i, r.w - 2, 1), r);
+      const lit = !item.off && this.hovered(row);
+      const bg: Style = lit ? { bg: this.surface } : {};
+      this.line(row, [rail(lit, bg), seg(`${item.label} `, item.off ? DARK : lit ? { add: BOLD } : {})], bg);
+    });
   }
 
   private menu(): void {

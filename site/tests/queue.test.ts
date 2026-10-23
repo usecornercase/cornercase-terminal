@@ -7,6 +7,7 @@ import { Agent } from '../src/lib/demo/programs';
 import { inputKey } from '../src/lib/demo/client';
 import { type QueueControl, type QueueForm, queueAt, queueControls, queueRect, queueWhen, whenCombo } from '../src/lib/demo/queue';
 import { world } from '../src/lib/demo/world';
+import { menuArea } from '../src/lib/demo/layout';
 import { rect } from '../src/lib/term/grid';
 
 const key = (key: string, shift = false) => ({ key, metaKey: false, isComposing: false, ctrlKey: false, altKey: false, shiftKey: shift });
@@ -423,5 +424,24 @@ test('an entry brought back by undo after its time still starts', () => {
   app.toast?.undo?.();
   app.advance(1);
   assert.equal(app.queued[0].state, 'started');
+  app.destroy();
+});
+
+test('right click on the prompt opens a field menu and keeps the queue form', () => {
+  const app = appAt(140);
+  app.openQueueForm();
+  type(app, 'Fix the login');
+  const r = queueRect(screen(app), form(app), 'prompt');
+  app.render();
+  app.pointerDown(r.x + 2, r.y, 2);
+  app.pointerUp();
+  assert.ok(app.fieldMenu);
+  assert.equal(app.overlay?.kind, 'queue');
+  app.render();
+  const menu = menuArea(app.cols, app.rows, { x: r.x + 2, y: r.y }, ['copy', 'cut', 'select all']);
+  app.pointerDown(menu.x + 2, menu.y + 3, 0);
+  type(app, 'Y');
+  assert.equal(form(app).prompt, 'Y');
+  assert.equal(app.overlay?.kind, 'queue');
   app.destroy();
 });

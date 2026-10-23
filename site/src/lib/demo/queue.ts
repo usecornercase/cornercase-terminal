@@ -3,7 +3,7 @@ import { type Combo, COMBO_ROWS, combo, comboKey, comboList, comboRows, drawComb
 import { EMPTY, bottom, intersect, isEmpty, right } from './layout';
 import type { Key } from './programs';
 import { paintRows, seg, wrapWords } from './text';
-import { editKey, fieldLines, fieldPosition, placeIn } from './todo';
+import { type Editable, type FieldGrip, drawSelection, editKey, fieldLines, fieldPosition, placeIn } from './todo';
 import type { Painter } from './ui';
 
 export interface QueueEntry {
@@ -85,6 +85,7 @@ export interface QueueForm {
   mode: Combo;
   focus: QueueControl;
   cursor: number;
+  anchor?: number | null;
   zone: string;
   error?: string;
 }
@@ -147,6 +148,7 @@ export function closeQueueLists(o: QueueForm): void {
 export function focusQueue(o: QueueForm, control: QueueControl): void {
   closeQueueLists(o);
   o.focus = control;
+  o.anchor = null;
   if (!isList(control)) o.cursor = [...o[control]].length;
 }
 
@@ -167,12 +169,25 @@ export function queueKey(o: QueueForm, k: Key, width: number, rows: number): Que
     focusQueue(o, controls[(at + (k.shift ? controls.length - 1 : 1)) % controls.length]);
   } else if (isList(o.focus)) comboKey(o[o.focus], k, rows);
   else {
-    const field = { chars: [...o[o.focus]], cursor: o.cursor };
-    editKey(field, k, width);
-    o[o.focus] = field.chars.join('');
-    o.cursor = field.cursor;
+    queueEdit(o, o.focus, (field) => editKey(field, k, width));
   }
   return 'none';
+}
+
+function queueEdit(o: QueueForm, control: QueueText, change: (f: Editable, width: number) => void, width = 1): void {
+  const field: Editable = { chars: [...o[control]], cursor: o.cursor, anchor: o.anchor };
+  change(field, width);
+  o[control] = field.chars.join('');
+  o.cursor = field.cursor;
+  o.anchor = field.anchor ?? null;
+}
+
+function queueGrip(screen: Rect, o: QueueForm, control: QueueText): FieldGrip {
+  const t = queueTextRect(screen, o, control);
+  return {
+    edit: (change) => queueEdit(o, control, change, Math.max(1, t.w)),
+    spot: (x, y) => [firstLine([...o[control]], o.cursor, t) + (y - t.y), Math.max(0, x - t.x)],
+  };
 }
 
 export function queueFormArea(cols: number, rows: number): Rect {
@@ -257,9 +272,7 @@ export function clickQueue(screen: Rect, o: QueueForm, control: QueueControl, x:
     if (opening) openCombo(o[control]);
     return;
   }
-  const field = { chars: [...o[control]], cursor: o.cursor };
-  placeIn(field, Math.max(1, t.w), top + Math.max(0, y - t.y), Math.max(0, x - t.x));
-  o.cursor = field.cursor;
+  queueEdit(o, control, (field, width) => placeIn(field, width, top + Math.max(0, y - t.y), Math.max(0, x - t.x)), Math.max(1, t.w));
 }
 
 function drawText(p: Painter, field: Rect, t: Rect, value: string, cursor: number, focused: boolean, placeholder: string): void {
@@ -320,9 +333,12 @@ export function drawQueueForm(p: Painter, o: QueueForm): void {
     else {
       const focused = !open && o.focus === control;
       const cursor = focused ? o.cursor : [...o[control]].length;
-      drawText(p, r, queueTextRect(screen, o, control), o[control], cursor, focused, control === 'branch' ? 'branch name' : '');
+      const t = queueTextRect(screen, o, control);
+      drawText(p, r, t, o[control], cursor, focused, control === 'branch' ? 'branch name' : '');
+      if (focused) drawSelection(p, { chars: [...o[control]], cursor: o.cursor, anchor: o.anchor }, t, firstLine([...o[control]], o.cursor, t), { bg: p.surface });
     }
-    p.region({ r, click: (x, y) => { clickQueue(screen, o, control, x, y); app.dirty(); }, cursor: isList(control) ? 'pointer' : 'text' });
+    const field = isList(control) ? undefined : queueGrip(screen, o, control);
+    p.region({ r, click: (x, y) => { clickQueue(screen, o, control, x, y); app.dirty(); }, cursor: isList(control) ? 'pointer' : 'text', field });
   }
   const values = controls.filter((c) => c === 'clock' || c === 'date' || c === 'amount' || c === 'unit');
   const end = values.length ? Math.max(...values.map((c) => right(queueRect(screen, o, c)))) : inner(screen).x + LABEL;

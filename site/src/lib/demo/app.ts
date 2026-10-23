@@ -8,7 +8,7 @@ import { BOLD, Grid, type Rect, contains, rect } from '../term/grid';
 import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
 import { BASES, type ChangesMode, type ChangesSelection, type FileDiff, type HunkAction, type LinesAction, type Spot, changesLineEdge, changesLineNear, changesStretchNear, compareSpots, hasChanges, hunkLines, linesReference, linesText, selectedLines, shownChanges, workspaceDiff } from './changes';
-import { TodoPanel, todoWidth } from './todo';
+import { type FieldGrip, TodoPanel, cursorAt, dragIn, removeSelection, selectAll, selectWord, selectedText as fieldText, selectionOf, todoWidth } from './todo';
 import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
 import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
 import { type FindState, findAll, firstFrom, nearest, start as hitStart } from './find';
@@ -33,9 +33,11 @@ import {
   bottom,
   dragged,
   draggedStacked,
+  intersect,
   isEmpty,
   layout,
   mainWidth,
+  menuArea,
   sidebarDrop,
   agentLayout,
   sidebarLayout,
@@ -504,6 +506,9 @@ export class App {
   private frame: Frame | null = null;
   private grid = new Grid(this.cols, this.rows);
   private lastClick: { at: number; border: string } | null = null;
+  fieldDrag: FieldGrip | null = null;
+  private fieldClick: { at: number; x: number; y: number } | null = null;
+  fieldMenu: { at: { x: number; y: number }; grip: FieldGrip; items: { label: string; off: boolean }[] } | null = null;
   private followed: Focus = { project: null, workspace: null, tab: null, tree: false };
   private needsDraw = true;
 
@@ -4470,6 +4475,16 @@ export class App {
       this.linkPress = null;
       press.held?.();
     }
+    if (this.fieldDrag) {
+      const grip = this.fieldDrag;
+      if (buttons & 1) grip.edit((f, width) => {
+        const [line, col] = grip.spot(x, y);
+        dragIn(f, width, line, col);
+      });
+      else this.settleField();
+      this.dirty();
+      return;
+    }
     if (this.paneDrag) {
       if (buttons === 2) this.paneDrag.moved ||= !contains(this.paneDrag.rect, x, y);
       else this.paneDrag = null;
@@ -4533,6 +4548,7 @@ export class App {
   pointerDown(x: number, y: number, button: number): void {
     this.hover = { x, y };
     if (this.detached) return this.reattach();
+    if (this.fieldMenu) return this.pickFieldMenu(x, y, button);
     if (this.rowDrag) {
       this.rowDrag = null;
       this.dirty();
@@ -4543,6 +4559,7 @@ export class App {
     if (!this.overlay && !(this.filesShown() && contains(this.areas().changes, x, y))) this.files.unfocus();
     const region = this.hit(x, y, (r) => !!(r.click || r.right || r.drag || r.pane));
     if (!region) return;
+    if (region.field && button !== 1) return this.pressField(region, region.field, x, y, button);
     if (region.drag && button === 0) {
       const now = this.now();
       const id = region.drag.kind === 'border' ? region.drag.border : `div:${region.drag.divider.path.join()}`;
@@ -4598,7 +4615,79 @@ export class App {
     if (button === 0) region.click?.(x, y);
   }
 
+  private pressField(region: Region, grip: FieldGrip, x: number, y: number, button: number): void {
+    let inside = false;
+    grip.edit((f, width) => {
+      const s = selectionOf(f);
+      const [line, col] = grip.spot(x, y);
+      const at = cursorAt(f, width, line, col);
+      inside = !!s && at !== null && at >= s[0] && at < s[1];
+    });
+    if (button === 2) {
+      if (!inside) region.click?.(x, y);
+      return this.openFieldMenu(grip, x, y);
+    }
+    region.click?.(x, y);
+    const now = this.now();
+    const last = this.fieldClick;
+    if (last && last.x === x && last.y === y && now - last.at < DOUBLE_CLICK) {
+      this.fieldClick = null;
+      grip.edit((f) => selectWord(f));
+    } else {
+      this.fieldClick = { at: now, x, y };
+      this.fieldDrag = grip;
+    }
+    this.dirty();
+  }
+
+  private settleField(): void {
+    this.fieldDrag?.edit((f) => {
+      if (f.anchor === f.cursor) f.anchor = null;
+    });
+    this.fieldDrag = null;
+  }
+
+  private openFieldMenu(grip: FieldGrip, x: number, y: number): void {
+    let selected = false;
+    let filled = false;
+    grip.edit((f) => {
+      selected = !!selectionOf(f);
+      filled = f.chars.length > 0;
+    });
+    this.fieldMenu = {
+      at: { x, y },
+      grip,
+      items: [
+        { label: 'copy', off: !selected },
+        { label: 'cut', off: !selected },
+        { label: 'select all', off: !filled },
+      ],
+    };
+    this.dirty();
+  }
+
+  private pickFieldMenu(x: number, y: number, button: number): void {
+    const menu = this.fieldMenu;
+    this.fieldMenu = null;
+    this.dirty();
+    if (!menu || button !== 0) return;
+    const r = menuArea(this.cols, this.rows, menu.at, menu.items.map((i) => i.label));
+    const i = menu.items.findIndex((_, n) => contains(intersect(rect(r.x + 1, r.y + 1 + n, r.w - 2, 1), r), x, y));
+    if (i < 0 || menu.items[i].off) return;
+    let text = '';
+    menu.grip.edit((f) => {
+      text = fieldText(f);
+      if (i === 1) removeSelection(f);
+      if (i === 2) selectAll(f);
+    });
+    if (i < 2) {
+      this.emit('copy', text);
+      this.notify('copied to clipboard');
+    }
+  }
+
   pointerUp(): void {
+    this.settleField();
     this.files.selecting = null;
     this.changesSelecting = false;
     const paneDrag = this.paneDrag;
@@ -4720,6 +4809,11 @@ export class App {
       else if (this.typed(k)) this.outerInput += k.key;
       this.dirty();
       return true;
+    }
+    if (this.fieldMenu) {
+      this.fieldMenu = null;
+      this.dirty();
+      if (k.key === 'Escape') return true;
     }
     if ((this.rowDrag || this.paneDrag) && k.key === 'Escape') {
       this.rowDrag = null;

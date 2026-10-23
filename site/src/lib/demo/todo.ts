@@ -1,4 +1,4 @@
-import { BOLD, type Rect, STRIKE, type Style, contains, rect } from '../term/grid';
+import { BOLD, INVERSE, type Rect, STRIKE, type Style, contains, rect } from '../term/grid';
 import type { App } from './app';
 import { drawPanelBorder } from './changes';
 import { type Areas, GAP, Rows, bottom, intersect, moreAbove, right } from './layout';
@@ -22,6 +22,12 @@ export interface TodoItem {
 export interface Editable {
   chars: string[];
   cursor: number;
+  anchor?: number | null;
+}
+
+export interface FieldGrip {
+  edit(change: (f: Editable, width: number) => void): void;
+  spot(x: number, y: number): [number, number];
 }
 
 interface Field extends Editable {
@@ -67,15 +73,93 @@ export function fieldPosition(f: Editable, width: number): [number, number] {
   return [line, f.cursor - lines[line][0]];
 }
 
-export function placeIn(f: Editable, width: number, line: number, col: number): void {
+export function cursorAt(f: Editable, width: number, line: number, col: number): number | null {
   const lines = fieldLines(f, width);
   const span = lines[line];
-  if (!span) return;
+  if (!span) return null;
   const room = line + 1 === lines.length ? span[1] - span[0] : Math.max(0, span[1] - span[0] - 1);
-  f.cursor = span[0] + Math.min(col, room);
+  return span[0] + Math.min(col, room);
+}
+
+export function placeIn(f: Editable, width: number, line: number, col: number): void {
+  const at = cursorAt(f, width, line, col);
+  if (at === null) return;
+  f.anchor = null;
+  f.cursor = at;
+}
+
+export function selectionOf(f: Editable): Span | null {
+  const a = f.anchor;
+  if (a === null || a === undefined || a === f.cursor) return null;
+  return a < f.cursor ? [a, f.cursor] : [f.cursor, a];
+}
+
+const anchorHere = (f: Editable): void => {
+  if (f.anchor === null || f.anchor === undefined) f.anchor = f.cursor;
+};
+
+export function removeSelection(f: Editable): boolean {
+  const s = selectionOf(f);
+  f.anchor = null;
+  if (!s) return false;
+  f.chars.splice(s[0], s[1] - s[0]);
+  f.cursor = s[0];
+  return true;
+}
+
+export const selectedText = (f: Editable): string => {
+  const s = selectionOf(f);
+  return s ? f.chars.slice(s[0], s[1]).join('') : '';
+};
+
+export function selectAll(f: Editable): void {
+  f.anchor = 0;
+  f.cursor = f.chars.length;
+}
+
+export function dragIn(f: Editable, width: number, line: number, col: number): void {
+  anchorHere(f);
+  const lines = fieldLines(f, width);
+  if (line >= lines.length) f.cursor = f.chars.length;
+  else if (line < 0) f.cursor = 0;
+  else f.cursor = cursorAt(f, width, line, col) ?? f.cursor;
+}
+
+export function selectWord(f: Editable): void {
+  const start = f.chars.lastIndexOf('\n', f.cursor - 1) + 1;
+  const found = f.chars.indexOf('\n', f.cursor);
+  const end = found < 0 ? f.chars.length : found;
+  if (start === end) return;
+  const at = Math.min(f.cursor, end - 1);
+  const class_ = kind(f.chars[at]);
+  let a = at;
+  let b = at + 1;
+  while (a > start && kind(f.chars[a - 1]) === class_) a--;
+  while (b < end && kind(f.chars[b]) === class_) b++;
+  f.anchor = a;
+  f.cursor = b;
+}
+
+export function drawSelection(p: Painter, f: Editable, text: Rect, top: number, bg: Style): void {
+  const s = selectionOf(f);
+  if (!s) return;
+  const lines = fieldLines(f, Math.max(1, text.w));
+  lines.forEach(([a, b], i) => {
+    const row = i - top;
+    if (row < 0 || row >= text.h) return;
+    const next = lines[i + 1]?.[0] ?? b;
+    const [from, to] = [Math.max(s[0], a), Math.min(s[1], b)];
+    const edge = s[1] > b && s[0] < Math.max(next, b);
+    if (from >= to && !edge) return;
+    const x0 = Math.min(right(text), text.x + Math.max(0, from - a));
+    const x1 = edge ? right(text) : Math.min(right(text), text.x + Math.max(0, to - a));
+    const shown = f.chars.slice(from, Math.max(from, to)).map((c) => (c === '\n' ? ' ' : c)).join('');
+    p.span(x0, text.y + row, shown.padEnd(Math.max(0, x1 - x0)), { ...bg, add: INVERSE }, x1 - x0);
+  });
 }
 
 export function insertText(f: Editable, text: string): void {
+  removeSelection(f);
   const chars = [...text.replace(/[\r\n\t]/g, ' ')];
   f.chars.splice(f.cursor, 0, ...chars);
   f.cursor += chars.length;
@@ -105,21 +189,40 @@ function wordLeft(chars: string[], at: number): number {
   return 0;
 }
 
-export function editKey(f: Editable, k: Key, width: number): void {
+const ARROWS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+
+function moveKey(f: Editable, k: Key, width: number): boolean {
+  const ends = k.key === 'Home' || k.key === 'End';
+  const word = k.alt && !k.ctrl && !k.shift && (k.key === 'b' || k.key === 'f');
+  if (!ARROWS.includes(k.key) && !ends && !word) return false;
+  const by = k.ctrl || k.alt;
+  const selected = selectionOf(f);
+  if (k.shift && !word) anchorHere(f);
+  else f.anchor = null;
+  if (selected && !k.shift && !by && (k.key === 'ArrowLeft' || k.key === 'ArrowRight')) {
+    f.cursor = k.key === 'ArrowLeft' ? selected[0] : selected[1];
+    return true;
+  }
   const [line, col] = fieldPosition(f, width);
-  if (k.key === 'Backspace' && f.cursor > 0) f.chars.splice(--f.cursor, 1);
-  else if (k.key === 'Delete') f.chars.splice(f.cursor, 1);
-  else if (k.key === 'ArrowLeft' && (k.ctrl || k.alt)) f.cursor = wordLeft(f.chars, f.cursor);
-  else if (k.key === 'ArrowRight' && (k.ctrl || k.alt)) f.cursor = wordRight(f.chars, f.cursor);
-  else if (k.key === 'b' && k.alt && !k.ctrl && !k.shift) f.cursor = wordLeft(f.chars, f.cursor);
-  else if (k.key === 'f' && k.alt && !k.ctrl && !k.shift) f.cursor = wordRight(f.chars, f.cursor);
-  else if (k.key === 'ArrowLeft') f.cursor = Math.max(0, f.cursor - 1);
-  else if (k.key === 'ArrowRight') f.cursor = Math.min(f.chars.length, f.cursor + 1);
+  const back = k.key === 'ArrowLeft' || k.key === 'b';
+  const forward = k.key === 'ArrowRight' || k.key === 'f';
+  if (back && (by || word)) f.cursor = wordLeft(f.chars, f.cursor);
+  else if (forward && (by || word)) f.cursor = wordRight(f.chars, f.cursor);
+  else if (back) f.cursor = Math.max(0, f.cursor - 1);
+  else if (forward) f.cursor = Math.min(f.chars.length, f.cursor + 1);
   else if (k.key === 'Home') f.cursor = 0;
   else if (k.key === 'End') f.cursor = f.chars.length;
-  else if (k.key === 'ArrowUp' && line > 0) placeIn(f, width, line - 1, col);
-  else if (k.key === 'ArrowDown') placeIn(f, width, line + 1, col);
-  else if (k.key.length === 1 && !k.ctrl && !k.alt) insertText(f, k.key);
+  else f.cursor = cursorAt(f, width, k.key === 'ArrowUp' ? line - 1 : line + 1, col) ?? f.cursor;
+  return true;
+}
+
+export function editKey(f: Editable, k: Key, width: number): void {
+  if (moveKey(f, k, width)) return;
+  if (k.key === 'Backspace') {
+    if (!removeSelection(f) && f.cursor > 0) f.chars.splice(--f.cursor, 1);
+  } else if (k.key === 'Delete') {
+    if (!removeSelection(f)) f.chars.splice(f.cursor, 1);
+  } else if (k.key.length === 1 && !k.ctrl && !k.alt) insertText(f, k.key);
 }
 
 const clean = (text: string): string => text.replace(/\s+/g, ' ').trim();
@@ -323,8 +426,10 @@ function drawField(p: Painter, f: Field, r: Rect, width: number, mark: string, s
   fieldLines(f, width).forEach(([a, b], line) => {
     if (r.y + line < bottom(r)) p.span(x, r.y + line, f.chars.slice(a, b).join(''), { bg: surface }, right(field) - x);
   });
+  drawSelection(p, f, rect(x, r.y, Math.max(0, right(field) - x), r.h), 0, { bg: surface });
   const [line, col] = fieldPosition(f, width);
   const at = { x: x + col, y: r.y + line };
   if (contains(r, at.x, at.y)) p.cursor = { ...at, shape: 'block' };
-  p.region({ r: field, click: (cx, cy) => p.app.placeTodoCursor(cy - r.y, cx - x), cursor: 'text' });
+  const grip: FieldGrip = { edit: (change) => change(f, width), spot: (cx, cy) => [cy - r.y, Math.max(0, cx - x)] };
+  p.region({ r: field, click: (cx, cy) => p.app.placeTodoCursor(cy - r.y, cx - x), cursor: 'text', field: grip });
 }
