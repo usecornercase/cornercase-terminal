@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::{Fields, Ids, Item};
-use crate::plugins::manifest::Process;
+use crate::plugins::manifest::{Action, Process};
 use crate::plugins::run::{Ended, Ran};
 use crate::plugins::supervise::{Seen, restart_in};
 use crate::plugins::{Context, Places, Plugin};
@@ -25,8 +25,13 @@ pub(crate) struct PluginRun {
     pub(crate) plugin: String,
     pub(crate) action: String,
     pub(crate) revision: u32,
-    pub(crate) item: Item,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) item: Option<Item>,
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct PluginPopupClose {}
 
 impl PluginActions {
     pub(super) fn fields(&self, fields: &mut Fields) {
@@ -37,7 +42,7 @@ impl PluginActions {
 impl PluginRun {
     pub(super) fn fields(&self, fields: &mut Fields) {
         fields.add("plugin", &self.plugin).add("action", &self.action);
-        fields.add("revision", self.revision).add("item", self.item);
+        fields.add("revision", self.revision).maybe("item", self.item);
     }
 }
 
@@ -62,6 +67,16 @@ pub(crate) struct PluginInfo {
     pub(crate) log: PathBuf,
     pub(crate) manifest: Option<Value>,
     pub(crate) services: Vec<ServiceInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) button: Option<ButtonInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct ButtonInfo {
+    pub(crate) title: String,
+    pub(crate) icon: String,
+    pub(crate) actions: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -96,6 +111,11 @@ impl PluginInfo {
             Ok(manifest) => (serde_json::to_value(manifest).ok(), None),
             Err(e) => (None, Some(e.clone())),
         };
+        let button = plugin.manifest.as_ref().ok().and_then(|manifest| {
+            let face = manifest.face()?;
+            let actions = manifest.button_actions().map(|action| action.id.clone()).collect();
+            Some(ButtonInfo { title: face.title, icon: face.icon, actions })
+        });
         let state = match (&error, plugin.entry.enabled) {
             (Some(_), _) => "cannot-run",
             (None, true) => "on",
@@ -112,6 +132,7 @@ impl PluginInfo {
             log: places.log(&plugin.entry.id),
             manifest,
             services,
+            button,
         }
     }
 }
@@ -131,6 +152,28 @@ pub(crate) struct ActionInfo {
     pub(crate) action: String,
     pub(crate) title: String,
     pub(crate) contexts: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) placement: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) width: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) height: Option<u16>,
+}
+
+impl ActionInfo {
+    pub(crate) fn of(plugin: &Plugin, action: &Action) -> Self {
+        let placement = serde_json::to_value(action.placement).ok().and_then(|v| v.as_str().map(str::to_string));
+        Self {
+            plugin: plugin.entry.id.clone(),
+            name: plugin.name(),
+            action: action.id.clone(),
+            title: action.title.clone(),
+            contexts: action.contexts.iter().map(|c| c.name().to_string()).collect(),
+            placement,
+            width: action.width,
+            height: action.height,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

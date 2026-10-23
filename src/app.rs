@@ -114,6 +114,7 @@ mod outbox;
 mod overlay;
 mod panes;
 mod picker_dialog;
+mod plugin_popup;
 mod plugins;
 mod project_settings_dialog;
 mod pull_requests;
@@ -277,6 +278,7 @@ impl App {
     }
 
     pub(crate) fn reset_interaction(&mut self) {
+        self.close_plugin_popup();
         self.overlay = None;
         self.screen.nav = None;
         self.screen.hover = None;
@@ -367,6 +369,7 @@ impl App {
             self.clients.events.bell_wake(now),
             self.surface_wake(now),
             self.panels.queued.wake(clock),
+            self.popup_wake(now),
         ]
         .into_iter()
         .flatten()
@@ -392,6 +395,7 @@ impl App {
 
     fn refresh_sources(&mut self, now: Instant, clock: i64) {
         self.reap();
+        self.reap_popup(now);
         self.watch_config(now);
         self.watch_setups(now);
         self.drive_queue(clock, now);
@@ -555,6 +559,8 @@ impl App {
     pub(crate) fn handle_event(&mut self, ev: AppEvent, area: Rect) -> Result<()> {
         match ev {
             AppEvent::Input(event) => self.handle_input(event, area)?,
+            AppEvent::Output(id, generation, bytes) if self.is_popup(id, generation) => self.popup_output(&bytes),
+            AppEvent::Exited(id, generation) if self.is_popup(id, generation) => self.reap_popup(Instant::now()),
             AppEvent::Output(id, generation, bytes) if self.current_shell(id, generation) => self.output(id, &bytes),
             AppEvent::Exited(id, generation) if self.current_shell(id, generation) => self.remove(id),
             AppEvent::Output(..) | AppEvent::Exited(..) => {}
@@ -664,7 +670,8 @@ impl App {
     pub(crate) fn draw(&mut self, f: &mut Frame, sight: &Sight, now: Instant) -> Option<Placed> {
         let area = f.area();
         self.begin_draw(area, now);
-        let overlay = self.overlay.as_ref().and_then(|o| self.overlay_view(o, area));
+        let mut overlay = self.overlay.as_ref().and_then(|o| self.overlay_view(o, area));
+        self.with_popup_screen(&mut overlay);
         let modal = overlay.as_ref().is_some_and(ui::Overlay::is_modal);
         let (files, placed) = self.files_seen(sight, area, modal);
         let tab = self.tab_view(area);

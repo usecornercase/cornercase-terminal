@@ -154,7 +154,7 @@ Prints what the running server supports: its version, the version of the contrac
 
 ### `cornercase plugin`
 
-Installs, adds, lists and turns on and off [plugins](../../guides/plugins/). It reads and writes `plugins.json` directly, so it works with no server running, except `actions` and `run`, which ask the running server; a running server picks up the change within a second.
+Installs, adds, lists and turns on and off [plugins](../../guides/plugins/). It reads and writes `plugins.json` directly, so it works with no server running, except `actions`, `run` and `popup-close`, which ask the running server; a running server picks up the change within a second.
 
 ```sh
 cornercase plugin install acme/notes      # fetch it, show what it runs, ask, install it turned off
@@ -167,6 +167,8 @@ cornercase plugin unlink my-plugin        # forget it; its folder stays
 cornercase plugin list                    # every plugin, on or off, and what it runs (--json for scripts)
 cornercase plugin actions --context pane  # the actions plugins add to the menus (asks the server)
 cornercase plugin run acme.notes note --pane 5 # run one as its menu entry does, wait, print how it ended
+cornercase plugin run acme.notes browse   # a button action: on what the window shows, as its button does
+cornercase plugin popup-close             # close the plugin popup that is open (asks the server)
 cornercase plugin enable my-plugin        # turn it on: says what it asks for, then runs it
 cornercase plugin disable my-plugin       # turn it off: its service and window processes stop
 cornercase plugin logs my-plugin          # what its commands printed; -n, --follow and --path as for logs

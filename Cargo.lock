@@ -1158,7 +1158,7 @@ checksum = "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48"
 
 [[package]]
 name = "cornercase"
-version = "0.12.187"
+version = "0.12.189"
 dependencies = [
  "anyhow",
  "arborium",
@@ -1185,7 +1185,6 @@ dependencies = [
  "pulldown-cmark",
  "qrcode",
  "ratatui",
- "ratatui-textarea",
  "regex",
  "rstest",
  "rusqlite",
@@ -2846,18 +2845,6 @@ checksum = "faf03e0380b7744054d6cb74224fe3adf062a029754933f575ca1e3b4c2ce977"
 dependencies = [
  "ratatui-core",
  "termwiz",
-]
-
-[[package]]
-name = "ratatui-textarea"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78cdce79220909bec1bb8307c29fad7d0df7434280da6ecaf44cb208393bed00"
-dependencies = [
- "ratatui-core",
- "ratatui-widgets",
- "unicode-segmentation",
- "unicode-width",
 ]
 
 [[package]]

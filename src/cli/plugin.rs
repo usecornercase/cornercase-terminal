@@ -10,7 +10,7 @@ use super::print_log;
 use crate::client::{answer, ask, confirm};
 use crate::config;
 use crate::control::plugins::{ActionRan, ActionsInfo};
-use crate::control::{Command, Item, PluginActions, PluginRun};
+use crate::control::{Command, Item, PluginActions, PluginPopupClose, PluginRun};
 use crate::error::{Error, Result};
 use crate::paths;
 use crate::plugins::install::{self, Fetched, Removed, Update};
@@ -20,11 +20,15 @@ use crate::plugins::supervise;
 use crate::plugins::{Places, Plugin, Registry};
 
 pub(super) fn run(action: PluginAction) -> Result<bool> {
-    let action = match action {
-        PluginAction::Actions { context, print } => return actions(context.as_deref(), print.json),
-        PluginAction::Run(args) => return run_action(&args),
-        action => action,
-    };
+    match action {
+        PluginAction::Actions { context, print } => actions(context.as_deref(), print.json),
+        PluginAction::Run(args) => run_action(&args),
+        PluginAction::PopupClose => popup_close(),
+        action => run_here(action),
+    }
+}
+
+fn run_here(action: PluginAction) -> Result<bool> {
     let places = Places::new(&paths::config(), &paths::session());
     let mut registry = Registry::open(&places.registry).map_err(Error::Plugin)?;
     match action {
@@ -34,7 +38,7 @@ pub(super) fn run(action: PluginAction) -> Result<bool> {
         PluginAction::Remove { id } => remove(&places, &id)?,
         PluginAction::Unlink { id } => unlink(&mut registry, &id)?,
         PluginAction::List(print) => list(&registry, &places, print.json)?,
-        PluginAction::Actions { .. } | PluginAction::Run(_) => {}
+        PluginAction::Actions { .. } | PluginAction::Run(_) | PluginAction::PopupClose => {}
         PluginAction::Enable { id } => enable(&mut registry, &id)?,
         PluginAction::Disable { id } => disable(&mut registry, &id)?,
         PluginAction::Logs { id, logs } => {
@@ -139,7 +143,7 @@ fn actions_text(info: &ActionsInfo) -> String {
 }
 
 fn run_action(args: &RunArgs) -> Result<bool> {
-    let item = args.which.item("plugin run")?.ok_or_else(|| Error::WrongUsage("say what to run it on".into()))?;
+    let item = args.which.item("plugin run")?;
     let revision = if let Some(revision) = args.revision {
         revision
     } else {
@@ -157,10 +161,17 @@ fn run_action(args: &RunArgs) -> Result<bool> {
     Ok(ran.error.is_none())
 }
 
-fn ran_text(ran: &ActionRan, item: Item) -> String {
-    let (kind, id) = item.to_string().split_once('-').map(|(k, i)| (k.to_string(), i.to_string())).unwrap_or_default();
+fn popup_close() -> Result<bool> {
+    ask("plugin-popup-close", Command::PluginPopupClose(PluginPopupClose {}))?;
+    Ok(true)
+}
+
+fn ran_text(ran: &ActionRan, item: Option<Item>) -> String {
     let name = |text: &str| crate::text::escape_hidden(text);
-    let head = format!("ran {} {} on {kind} {id}", name(&ran.plugin), name(&ran.action));
+    let mut head = format!("ran {} {}", name(&ran.plugin), name(&ran.action));
+    if let Some((kind, id)) = item.map(|item| item.to_string()).as_deref().and_then(|item| item.split_once('-')) {
+        let _ = write!(head, " on {kind} {id}");
+    }
     match &ran.error {
         None => format!("{head}: exit status: 0\n"),
         Some(error) => format!("{head}: {error}; `cornercase plugin logs {}` says more\n", name(&ran.plugin)),

@@ -16,6 +16,8 @@ const MAX_ID: usize = 64;
 const MAX_BYTES: u64 = 64 * 1024;
 const MAX_ENTRIES: usize = 64;
 const MAX_QUOTED: usize = 80;
+pub(crate) const POPUP_WIDTH: std::ops::RangeInclusive<u16> = 20..=500;
+pub(crate) const POPUP_HEIGHT: std::ops::RangeInclusive<u16> = 5..=200;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub(crate) struct Manifest {
@@ -32,6 +34,8 @@ pub(crate) struct Manifest {
     pub(crate) platforms: Vec<String>,
     #[serde(default)]
     pub(crate) permissions: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) button: Option<Button>,
     #[serde(default)]
     pub(crate) actions: Vec<Action>,
     #[serde(default)]
@@ -56,6 +60,34 @@ pub(crate) struct Action {
     pub(crate) title: String,
     pub(crate) contexts: Vec<Context>,
     pub(crate) command: Vec<String>,
+    #[serde(default)]
+    pub(crate) placement: Placement,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) width: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) height: Option<u16>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Placement {
+    #[default]
+    Job,
+    Popup,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub(crate) struct Button {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) icon: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Face {
+    pub(crate) title: String,
+    pub(crate) icon: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -65,6 +97,7 @@ pub(crate) enum Context {
     Workspace,
     Tab,
     Pane,
+    Button,
 }
 
 impl Context {
@@ -74,6 +107,7 @@ impl Context {
             Self::Workspace => "workspace",
             Self::Tab => "tab",
             Self::Pane => "pane",
+            Self::Button => "button",
         }
     }
 }
@@ -170,6 +204,7 @@ impl Manifest {
         self.check_texts()?;
         self.check_requirements()?;
         self.check_entries()?;
+        self.check_button()?;
         for build in &self.build {
             valid_command("a build step", &build.command)?;
         }
@@ -230,6 +265,34 @@ impl Manifest {
         Ok(())
     }
 
+    fn check_button(&self) -> Result<(), String> {
+        let Some(button) = &self.button else { return Ok(()) };
+        if self.button_actions().next().is_none() {
+            return Err(format!("{FILE}: `[button]` needs an action with the `button` context"));
+        }
+        if button.title.as_ref().is_some_and(|title| title.trim().is_empty()) {
+            return Err(format!("{FILE}: the button's `title` is empty"));
+        }
+        match &button.icon {
+            Some(icon) if icon.chars().count() != 1 || text::cells(icon) != 1 => {
+                Err(format!("{FILE}: the button's `icon` `{icon}` must be one character one cell wide"))
+            }
+            _ => Ok(()),
+        }
+    }
+
+    pub(crate) fn button_actions(&self) -> impl Iterator<Item = &Action> {
+        self.actions.iter().filter(|action| action.contexts.contains(&Context::Button))
+    }
+
+    pub(crate) fn face(&self) -> Option<Face> {
+        self.button_actions().next()?;
+        let button = self.button.clone().unwrap_or_default();
+        let title = button.title.unwrap_or_else(|| self.name.clone());
+        let icon = button.icon.unwrap_or_else(|| initial(&title));
+        Some(Face { title, icon })
+    }
+
     fn texts(&self) -> impl Iterator<Item = (&'static str, &str)> {
         let fields =
             [("id", &self.id), ("name", &self.name), ("version", &self.version), ("description", &self.description)];
@@ -239,6 +302,12 @@ impl Manifest {
             .map(|(field, value)| (field, value.as_str()))
             .chain(self.min_cornercase.iter().map(|value| ("min_cornercase", value.as_str())))
             .chain(lists.into_iter().flat_map(|(field, values)| values.iter().map(move |v| (field, v.as_str()))))
+            .chain(self.button.iter().flat_map(|b| {
+                b.title
+                    .iter()
+                    .map(|v| ("the button's title", v.as_str()))
+                    .chain(b.icon.iter().map(|v| ("the button's icon", v.as_str())))
+            }))
             .chain(self.actions.iter().flat_map(|a| {
                 [("an action id", a.id.as_str()), ("an action title", a.title.as_str())]
                     .into_iter()
@@ -314,6 +383,15 @@ impl Manifest {
     }
 }
 
+fn initial(title: &str) -> String {
+    title
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .flat_map(char::to_uppercase)
+        .find(|&c| text::cells(c.encode_utf8(&mut [0; 4])) == 1)
+        .map_or_else(|| "?".into(), String::from)
+}
+
 fn around_hidden(value: &str) -> String {
     let chars: Vec<char> = value.chars().collect();
     let at = chars.iter().position(|&c| text::hidden(c)).unwrap_or(0);
@@ -331,7 +409,22 @@ fn check_action<'a>(action: &'a Action, seen: &mut HashSet<(&'a str, &'a str)>) 
     if action.title.trim().is_empty() || action.contexts.is_empty() {
         return Err(format!("{FILE}: action `{}` needs a title and at least one context", action.id));
     }
+    valid_size(action)?;
     valid_command(&format!("action `{}`", action.id), &action.command)
+}
+
+fn valid_size(action: &Action) -> Result<(), String> {
+    let sized = action.width.is_some() || action.height.is_some();
+    if sized && action.placement != Placement::Popup {
+        return Err(format!("{FILE}: action `{}` sets a `width` or `height`, which only a popup has", action.id));
+    }
+    for (field, value, range) in [("width", action.width, POPUP_WIDTH), ("height", action.height, POPUP_HEIGHT)] {
+        if let Some(value) = value.filter(|value| !range.contains(value)) {
+            let (min, max) = (range.start(), range.end());
+            return Err(format!("{FILE}: action `{}` has a {field} of {value}, not {min} to {max}", action.id));
+        }
+    }
+    Ok(())
 }
 
 fn check_process<'a>(

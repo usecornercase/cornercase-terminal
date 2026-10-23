@@ -890,8 +890,8 @@ impl Server {
     }
 
     fn shutdown(&mut self) {
-        self.answer();
         self.app.stop_plugins();
+        self.answer();
         if let Err(e) = self.stats_saver.flush(self.app.stats(), SystemTime::now()) {
             log::error!("stats", "failed to save", error = e);
         }

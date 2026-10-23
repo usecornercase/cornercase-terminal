@@ -96,6 +96,10 @@ impl Views {
         self.list.iter_mut().find(|view| view.id == id)
     }
 
+    pub(super) fn window(&self) -> Option<Rect> {
+        self.area
+    }
+
     pub(super) fn is_empty(&self) -> bool {
         self.list.is_empty()
     }
@@ -349,6 +353,10 @@ impl App {
         self.clients.views.windowed = true;
     }
 
+    pub(in crate::app) fn has_window(&self) -> bool {
+        self.clients.views.windowed
+    }
+
     pub(crate) fn window_gone(&mut self) {
         self.clients.views.windowed = false;
         if self.clients.views.window.take().is_some() {
@@ -375,6 +383,7 @@ impl App {
 
     pub(crate) fn resize(&mut self, area: Rect) {
         self.size_tabs(Some(area));
+        self.size_popup(area);
     }
 
     fn size_tabs(&mut self, window: Option<Rect>) {

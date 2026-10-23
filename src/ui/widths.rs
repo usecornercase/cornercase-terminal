@@ -104,7 +104,7 @@ impl Widths {
                 Self { projects: pos.x.saturating_add(1).clamp(MIN_COLUMN_WIDTH, max), ..self }
             }
             Border::Stack => {
-                let mut room = stack_room(area, screen.icon_bar);
+                let mut room = stack_room(area, screen);
                 if screen.agents {
                     let [rest, ..] = split_agents(Rect { height: room.height + 1, ..room }, self, STACKED_KEEP);
                     room.height = rest.height.saturating_sub(1);

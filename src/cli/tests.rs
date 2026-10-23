@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use clap::{CommandFactory, Parser};
 use rstest::rstest;
 
+use super::args::PluginAction;
 use super::args::issue::IssueAction;
 use super::args::todo::TodoAction;
 use super::args::{KillServerArgs, RestartArgs, StartServerArgs, UpdateArgs};
@@ -36,6 +37,20 @@ mod parsing {
         assert!(parse(&["start", "--source", "github"]).is_err());
         assert!(parse(&["start", "--issue", "7", "--source", "bugzilla"]).is_err());
         assert!(parse(&["start", "--issue", "7", "--project", "1", "--workspace", "2"]).is_err());
+    }
+
+    #[test]
+    fn a_plugin_run_may_leave_out_its_target_for_a_button_action() {
+        let run = |args: &[&str]| match parse(args).expect("parse").command {
+            Some(Command::Plugin(plugin)) => plugin.action,
+            _ => panic!("not plugin"),
+        };
+        let PluginAction::Run(alone) = run(&["plugin", "run", "a", "b"]) else { panic!("not run") };
+        assert_eq!((alone.which.pane, alone.which.tab, alone.which.project), (None, None, None));
+        let PluginAction::Run(on) = run(&["plugin", "run", "a", "b", "--pane", "4"]) else { panic!("not run") };
+        assert_eq!(on.which.pane, Some(4));
+        assert!(matches!(run(&["plugin", "popup-close"]), PluginAction::PopupClose));
+        assert!(matches!(run(&["plugin", "actions", "--context", "button"]), PluginAction::Actions { .. }));
     }
 
     #[test]
@@ -211,7 +226,6 @@ mod parsing {
     #[case::an_order_without_names(&["flow", "order"])]
     #[case::an_order_and_clear(&["flow", "order", "Quick", "--clear"])]
     #[case::a_flow_with_two_tasks(&["flow", "run", "Quick", "--prompt", "x", "--prompt-file", "y"])]
-    #[case::a_plugin_run_without_a_target(&["plugin", "run", "a", "b"])]
     #[case::a_plugin_run_on_two_targets(&["plugin", "run", "a", "b", "--pane", "1", "--tab", "2"])]
     #[case::a_plugin_action_context_that_is_a_group(&["plugin", "actions", "--context", "group"])]
     #[case::a_negative_revision(&["plugin", "run", "a", "b", "--pane", "1", "--revision", "-1"])]

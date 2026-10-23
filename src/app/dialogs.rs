@@ -96,7 +96,7 @@ impl App {
 
     pub(super) fn closed_from_outside(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> bool {
         let outside = ev.kind == MouseEventKind::Down(MouseButton::Left) && self.outside_dialog(pos, area);
-        if outside {
+        if outside && self.popup().is_none() {
             self.cancel_form();
         }
         outside

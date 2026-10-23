@@ -670,6 +670,7 @@ impl App {
             Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),
             Command::PluginActions(actions) => Ok(Some(self.plugin_actions_request(&actions))),
             Command::PluginRun(run) => self.plugin_run_request(client, &run),
+            Command::PluginPopupClose(_) => self.plugin_popup_close_request(),
             other => return ControlFlow::Continue(other),
         })
     }
@@ -771,7 +772,7 @@ impl App {
         self.ids(at.project(), Some(at.workspace()), Some(at))
     }
 
-    fn shown_ids(&self, p: usize) -> Ids {
+    pub(in crate::app) fn shown_ids(&self, p: usize) -> Ids {
         let workspace = self.projects.active_workspace(p);
         self.ids(p, workspace, workspace.and_then(|at| self.projects.active_tab(at)))
     }

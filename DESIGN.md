@@ -63,7 +63,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Panics](design/panics.md) (`panics.rs`, `server.rs`): containing panics so that the shells survive.
 - [Log](design/log.md) (`log.rs`, `paths.rs`, `time.rs`, `app/trace.rs`): `server.log`, its format, levels and what it never holds.
 - [Commands for scripts and agents](design/commands-for-scripts-and-agents.md) (`cli.rs`, `cli/`, `control.rs`, `app/control.rs`, `app/control/`, `app/events.rs`): the commands and socket requests, streams, the contract.
-- [Plugins](design/plugins.md) (`plugins/`, `app/plugins.rs`, `cli/plugin.rs`, `client/window.rs`): manifests, trust, actions, hooks, services, installing, the catalogue.
+- [Plugins](design/plugins.md) (`plugins/`, `app/plugins.rs`, `app/plugin_popup.rs`, `ui/dialog/popup.rs`, `cli/plugin.rs`, `client/window.rs`): manifests, trust, actions, buttons, popups, hooks, services, installing, the catalogue.
 - [Updates](design/updates.md) (`update.rs`, `cli/update.rs`, `version.rs`, `http.rs`, `app/update_dialog.rs`): checking, installing and restarting, also once agents are idle.
 - [Releases](design/releases.md) (`.github/`, `dist-workspace.toml`): how a push to `main` becomes a release.
 - [Saved session](design/saved-session.md) (`state.rs`, `persist.rs`, `app.rs`, `app/session.rs`, `app/closed_agents.rs`, `app/closed_agents/`, `control/closed_agents.rs`, `cli/agents.rs`, #430): `session.json`, restoring, resuming agents, closing a workspace's agents and reopening them.

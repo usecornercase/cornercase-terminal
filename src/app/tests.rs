@@ -529,6 +529,8 @@ mod muted_text;
 mod opening;
 mod pane_footer;
 mod picker;
+mod plugin_buttons;
+mod plugin_popup;
 mod plugins;
 mod project_settings;
 mod projects;

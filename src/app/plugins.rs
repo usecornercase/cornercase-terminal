@@ -3,15 +3,18 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use ratatui::layout::{Position, Rect};
+
 use super::App;
 use super::event::AppEvent;
 use super::menus::MenuAction;
 use super::overlay::Overlay;
+use super::plugin_popup::Opening;
 use crate::control;
 use crate::control::plugins::{ActionInfo, ActionRan, ActionsInfo, Invoked, PluginInfo, PluginsInfo, ServiceInfo};
 use crate::error::Error;
 use crate::log::{self, Job, Level};
-use crate::plugins::manifest::Action;
+use crate::plugins::manifest::{Action, Face, Manifest, Placement};
 use crate::plugins::registry::missing;
 use crate::plugins::{Context, Kind, Places, Plugin, Registry, Supervisor, Watch, run};
 use crate::project::Hierarchy;
@@ -35,6 +38,7 @@ pub(super) enum Spot {
     Workspace(u64, u64),
     Tab(u64, u64, u64),
     Pane(u64),
+    Shown,
 }
 
 impl Spot {
@@ -44,9 +48,12 @@ impl Spot {
             Self::Workspace(..) => Context::Workspace,
             Self::Tab(..) => Context::Tab,
             Self::Pane(_) => Context::Pane,
+            Self::Shown => Context::Button,
         }
     }
 }
+
+type At = (control::Ids, PathBuf, Context);
 
 #[derive(Debug)]
 pub(crate) enum PluginEvent {
@@ -70,6 +77,7 @@ pub(super) struct Plugins {
     checked: Option<Instant>,
     services: Option<Supervisor>,
     hooks: Arc<AtomicUsize>,
+    pub(super) popups: super::plugin_popup::Stopping,
 }
 
 impl Plugins {
@@ -82,6 +90,7 @@ impl Plugins {
             checked: None,
             services: None,
             hooks: Arc::default(),
+            popups: super::plugin_popup::Stopping::default(),
         }
     }
 
@@ -135,6 +144,8 @@ impl App {
     }
 
     pub(crate) fn stop_plugins(&mut self) {
+        self.close_plugin_popup();
+        self.plugins.popups.finish();
         self.plugins.services = None;
     }
 
@@ -162,14 +173,76 @@ impl App {
     }
 
     pub(super) fn plugin_menu(&self, spot: Spot) -> Vec<MenuAction> {
+        self.plugin_entries(spot, |_| true)
+    }
+
+    fn plugin_entries(&self, spot: Spot, keep: impl Fn(&Plugin) -> bool) -> Vec<MenuAction> {
         let revision = self.plugins.revision;
         self.plugins
             .actions()
             .enumerate()
-            .filter(|(_, (_, action))| action.contexts.contains(&spot.context()))
+            .filter(|(_, (plugin, action))| action.contexts.contains(&spot.context()) && keep(plugin))
             .filter_map(|(i, _)| u16::try_from(i).ok())
             .map(|index| MenuAction::Plugin { spot, index, revision })
             .collect()
+    }
+
+    pub(super) fn buttoned_plugins(&self) -> impl Iterator<Item = &Plugin> {
+        self.plugins.loaded.iter().filter(|plugin| plugin.runs().is_some_and(|m| m.face().is_some()))
+    }
+
+    pub(super) fn plugin_faces(&self) -> Vec<Face> {
+        self.buttoned_plugins().filter_map(|plugin| plugin.runs()?.face()).collect()
+    }
+
+    pub(super) fn has_plugin_buttons(&self) -> bool {
+        self.buttoned_plugins().next().is_some()
+    }
+
+    pub(super) fn plugin_row_mouse(&mut self, row: Rect, pos: Position, left: bool) -> bool {
+        if !row.contains(pos) {
+            return false;
+        }
+        if left {
+            self.screen.nav = None;
+            self.click_plugin_row(row, pos);
+        }
+        true
+    }
+
+    fn click_plugin_row(&mut self, row: Rect, pos: Position) {
+        let faces = self.plugin_faces();
+        let placed = ui::plugin_buttons(row, faces.iter().map(|face| face.title.as_str()));
+        let revision = self.plugins.revision;
+        if let Some(plugin) = placed.buttons.iter().position(|b| b.contains(pos)) {
+            self.click_plugin_button(u16::try_from(plugin).unwrap_or(u16::MAX), pos);
+        } else if placed.more.contains(pos) {
+            let hidden = (placed.buttons.len()..faces.len()).filter_map(|plugin| u16::try_from(plugin).ok());
+            let actions = hidden.map(|plugin| MenuAction::PluginButton { plugin, revision }).collect();
+            self.overlay = Some(Overlay::Menu { at: pos, actions });
+        }
+    }
+
+    pub(super) fn click_plugin_button(&mut self, plugin: u16, at: Position) {
+        self.press_plugin_button(plugin, self.plugins.revision, at);
+    }
+
+    pub(super) fn plugin_button_label(&self, plugin: u16) -> String {
+        let face = self.buttoned_plugins().nth(usize::from(plugin)).and_then(Plugin::runs).and_then(Manifest::face);
+        face.map(|face| face.title).unwrap_or_default()
+    }
+
+    pub(super) fn press_plugin_button(&mut self, plugin: u16, revision: u32, at: Position) {
+        if revision != self.plugins.revision {
+            return;
+        }
+        let Some(id) = self.buttoned_plugins().nth(usize::from(plugin)).map(|p| p.entry.id.clone()) else { return };
+        let actions = self.plugin_entries(Spot::Shown, |p| p.entry.id == id);
+        match actions[..] {
+            [] => {}
+            [MenuAction::Plugin { spot, index, revision }] => self.run_plugin_action(spot, index, revision),
+            _ => self.overlay = Some(Overlay::Menu { at, actions }),
+        }
     }
 
     pub(super) fn plugin_label(&self, index: u16) -> String {
@@ -178,6 +251,7 @@ impl App {
 
     pub(super) fn spot_env(&self, spot: Spot) -> Option<(control::Ids, PathBuf)> {
         let (at, tab, pane) = match spot {
+            Spot::Shown => return Some(self.shown_env()),
             Spot::Project(project) => {
                 let p = self.projects.project_index(project)?;
                 return Some((
@@ -205,7 +279,16 @@ impl App {
         Some((ids, workspace.path.clone()))
     }
 
-    pub(super) fn run_plugin_action(&self, spot: Spot, index: u16, revision: u32) {
+    fn shown_env(&self) -> (control::Ids, PathBuf) {
+        let Some(project) = self.project() else {
+            let home = std::env::var_os("HOME").map_or_else(|| PathBuf::from("/"), PathBuf::from);
+            return (control::Ids::default(), home);
+        };
+        let cwd = project.workspace().map_or(&project.path, |workspace| &workspace.path);
+        (self.shown_ids(self.active), cwd.clone())
+    }
+
+    pub(super) fn run_plugin_action(&mut self, spot: Spot, index: u16, revision: u32) {
         if revision != self.plugins.revision {
             return;
         }
@@ -214,9 +297,41 @@ impl App {
         self.start_plugin_action(spot, plugin, action, None);
     }
 
-    pub(super) fn start_plugin_action(&self, spot: Spot, plugin: Plugin, action: Action, request: Option<u64>) -> bool {
+    pub(super) fn start_plugin_action(
+        &mut self,
+        spot: Spot,
+        plugin: Plugin,
+        action: Action,
+        request: Option<u64>,
+    ) -> bool {
         let Some((ids, cwd)) = self.spot_env(spot) else { return false };
         let context = spot.context();
+        if action.placement == Placement::Popup {
+            self.open_popup_action(plugin, action, (ids, cwd, context), request);
+        } else {
+            self.run_action_job(plugin, action, (ids, cwd, context), request);
+        }
+        true
+    }
+
+    fn open_popup_action(&mut self, plugin: Plugin, action: Action, at: At, request: Option<u64>) {
+        let (ids, cwd, context) = at;
+        let env = action_env(&ids, &action, context);
+        let places = self.plugins.places.clone();
+        let (name, title) = (plugin.name(), action.title.clone());
+        let on = (ids, context);
+        let Err(reason) = self.open_plugin_popup(Opening { plugin, action, places, cwd, env, on, request }) else {
+            return;
+        };
+        let event = match request {
+            Some(request) => PluginEvent::Ran { request, ran: Box::new(Err(reason)) },
+            None => PluginEvent::Failed { plugin: name, title, reason },
+        };
+        let _ = self.tx.send(AppEvent::Plugin(event));
+    }
+
+    fn run_action_job(&self, plugin: Plugin, action: Action, at: At, request: Option<u64>) {
+        let (ids, cwd, context) = at;
         let env = action_env(&ids, &action, context);
         let places = self.plugins.places.clone();
         let job =
@@ -254,7 +369,6 @@ impl App {
                 Some(AppEvent::Plugin(PluginEvent::Failed { plugin: name, title, reason }))
             },
         );
-        true
     }
 
     pub(super) fn plugin_answered(&mut self, event: PluginEvent) {
@@ -340,13 +454,7 @@ impl App {
             .plugins
             .actions()
             .filter(|(_, action)| context.is_none_or(|c| action.contexts.contains(&c)))
-            .map(|(plugin, action)| ActionInfo {
-                plugin: plugin.entry.id.clone(),
-                name: plugin.name(),
-                action: action.id.clone(),
-                title: action.title.clone(),
-                contexts: action.contexts.iter().map(|c| c.name().to_string()).collect(),
-            })
+            .map(|(plugin, action)| ActionInfo::of(plugin, action))
             .collect();
         ActionsInfo { revision: self.plugins.revision, actions }
     }

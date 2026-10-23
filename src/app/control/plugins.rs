@@ -8,6 +8,8 @@ use crate::app::plugins::Spot;
 use crate::control::contract::{Code, Refusal};
 use crate::control::plugins::ActionRan;
 use crate::control::{Done, Item, PluginActions, PluginRun};
+use crate::plugins::manifest::{Action, Placement};
+use crate::plugins::{Context, Plugin};
 use crate::project::Hierarchy;
 
 fn not_found(message: String) -> Refusal {
@@ -36,7 +38,47 @@ impl App {
             )));
         }
         let (plugin, action) = self.plugin_action(&request.plugin, &request.action).map_err(not_found)?;
-        let spot = self.plugin_spot(request.item)?;
+        let spot = self.plugin_run_spot(request.item, &plugin, &action)?;
+        if action.placement == Placement::Popup {
+            self.popup_allowed()?;
+        }
+        let key = self.clients.requests.key();
+        if !self.start_plugin_action(spot, plugin, action, Some(key)) {
+            let what = request.item.map_or_else(|| "what the window shows".to_string(), |item| item.to_string());
+            return Err(not_found(format!("{what} is gone")));
+        }
+        let pending =
+            Pending { client: Some(client), key, timeout: None, done: Done::default(), stage: Stage::Reading };
+        self.clients.requests.pending.push(pending);
+        Ok(None)
+    }
+
+    fn popup_allowed(&self) -> Result<(), Refusal> {
+        if !self.has_window() {
+            return Err("no window is attached".into());
+        }
+        self.popup_blocked().map_or(Ok(()), |blocked| Err(conflict(blocked)))
+    }
+
+    pub(super) fn plugin_popup_close_request(&mut self) -> Handled {
+        if !self.close_plugin_popup() {
+            return Err(not_found("no plugin popup is open".into()));
+        }
+        Ok(Some(json(&Done::default())))
+    }
+
+    fn plugin_run_spot(&self, item: Option<Item>, plugin: &Plugin, action: &Action) -> Result<Spot, Refusal> {
+        let spot = match item {
+            Some(item) => self.plugin_spot(item)?,
+            None if action.contexts.contains(&Context::Button) => return Ok(Spot::Shown),
+            None => {
+                return Err(malformed(format!(
+                    "say what to run `{}` of `{}` on: a project, workspace, tab or pane; only a button action runs \
+                     without one",
+                    action.id, plugin.entry.id
+                )));
+            }
+        };
         if !action.contexts.contains(&spot.context()) {
             let contexts: Vec<&str> = action.contexts.iter().map(|c| c.name()).collect();
             return Err(malformed(format!(
@@ -47,14 +89,7 @@ impl App {
                 spot.context().name()
             )));
         }
-        let key = self.clients.requests.key();
-        if !self.start_plugin_action(spot, plugin, action, Some(key)) {
-            return Err(not_found(format!("{} is gone", request.item)));
-        }
-        let pending =
-            Pending { client: Some(client), key, timeout: None, done: Done::default(), stage: Stage::Reading };
-        self.clients.requests.pending.push(pending);
-        Ok(None)
+        Ok(spot)
     }
 
     pub(in crate::app) fn plugin_ran(&mut self, request: u64, ran: Result<ActionRan, String>) {
@@ -93,7 +128,7 @@ impl App {
                 let at = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
                 self.projects.workspace(at.workspace()).id
             }
-            Spot::Project(_) => return Ok(spot),
+            Spot::Project(_) | Spot::Shown => return Ok(spot),
         };
         if self.projects[self.usable_workspace(workspace)?.project()].closing {
             return Err(format!("workspace {workspace} is closing").into());

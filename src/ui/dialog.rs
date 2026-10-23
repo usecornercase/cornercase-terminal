@@ -4,6 +4,7 @@ pub(super) mod group_style;
 pub(super) mod issues;
 pub(super) mod menu;
 pub(super) mod picker;
+pub(super) mod popup;
 pub(super) mod project_settings;
 pub(crate) mod queue;
 pub(super) mod search;
@@ -142,6 +143,7 @@ pub(crate) enum Overlay {
     Search(Search),
     Keys(keys::Keys),
     Worktrees(Box<Worktrees>),
+    Popup(Box<popup::Popup>),
 }
 
 impl Overlay {
@@ -161,6 +163,7 @@ impl Overlay {
             Self::Flows(_) | Self::StartFlow(_) => Some(flows_area(area)),
             Self::ProjectSettings(_) => Some(project_settings::project_settings_area(area)),
             Self::Worktrees(w) => Some(worktrees_area(area, w.compact)),
+            Self::Popup(p) => Some(popup::popup_area(area, p.wanted)),
             Self::Menu { .. } | Self::Search(_) | Self::Keys(_) => None,
         }
     }

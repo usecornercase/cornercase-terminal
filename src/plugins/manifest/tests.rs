@@ -119,6 +119,85 @@ mod parsing {
     }
 }
 
+mod buttons {
+    use super::*;
+
+    const BUTTON: &str = "[button]\ntitle = \"Deploy\"\nicon = \"D\"\n";
+    const TAB_ACTION: &str = "[[actions]]\nid = \"open\"\ntitle = \"o\"\ncontexts = [\"tab\"]\ncommand = [\"x\"]\n";
+
+    fn action(extra: &str) -> String {
+        format!("[[actions]]\nid = \"status\"\ntitle = \"Deploy status\"\ncommand = [\"bin/status\"]\n{extra}")
+    }
+
+    fn popup(size: &str) -> String {
+        with(&action(&format!("contexts = [\"button\"]\nplacement = \"popup\"\n{size}")))
+    }
+
+    #[test]
+    fn a_button_with_a_sized_popup_is_read() {
+        let text = with(&format!(
+            "{BUTTON}{}",
+            action("contexts = [\"button\", \"workspace\"]\nplacement = \"popup\"\nwidth = 100\nheight = 30")
+        ));
+        let manifest = Manifest::parse(&text).expect("parse");
+        let status = &manifest.actions[0];
+        assert_eq!(
+            (status.contexts.clone(), status.placement, status.width, status.height, manifest.face()),
+            (
+                vec![Context::Button, Context::Workspace],
+                Placement::Popup,
+                Some(100),
+                Some(30),
+                Some(Face { title: "Deploy".into(), icon: "D".into() })
+            )
+        );
+    }
+
+    #[test]
+    fn an_action_runs_as_a_job_unless_it_says_otherwise() {
+        let manifest = Manifest::parse(FULL).expect("parse");
+        assert_eq!((manifest.actions[0].placement, manifest.face()), (Placement::Job, None));
+    }
+
+    #[test]
+    fn a_button_without_its_table_takes_the_name_and_its_initial() {
+        let manifest = Manifest::parse(&with(&action("contexts = [\"button\"]"))).expect("parse");
+        assert_eq!(manifest.face(), Some(Face { title: "Notes".into(), icon: "N".into() }));
+    }
+
+    #[test]
+    fn the_button_lists_only_its_actions_in_order() {
+        let second = action("contexts = [\"button\"]").replace("\"status\"", "\"logs\"");
+        let text = with(&format!("{}\n{TAB_ACTION}{second}", action("contexts = [\"button\"]")));
+        let manifest = Manifest::parse(&text).expect("parse");
+        let ids: Vec<&str> = manifest.button_actions().map(|a| a.id.as_str()).collect();
+        assert_eq!(ids, ["status", "logs"]);
+    }
+
+    #[rstest::rstest]
+    #[case::an_unknown_placement(&with(&action("contexts = [\"button\"]\nplacement = \"window\"")), "unknown variant `window`")]
+    #[case::a_width_on_a_job(&with(&action("contexts = [\"tab\"]\nwidth = 80")), "only a popup has")]
+    #[case::a_height_on_a_job(&with(&action("contexts = [\"tab\"]\nplacement = \"job\"\nheight = 20")), "only a popup has")]
+    #[case::a_popup_too_narrow(&popup("width = 19"), "width of 19, not 20 to 500")]
+    #[case::a_popup_too_wide(&popup("width = 501"), "width of 501, not 20 to 500")]
+    #[case::a_popup_too_short(&popup("height = 4"), "height of 4, not 5 to 200")]
+    #[case::a_popup_too_tall(&popup("height = 201"), "height of 201, not 5 to 200")]
+    #[case::a_negative_width(&popup("width = -1"), "expected u16")]
+    #[case::an_icon_of_two_characters(&with(&format!("[button]\nicon = \"De\"\n{}", action("contexts = [\"button\"]"))), "must be one character one cell wide")]
+    #[case::a_wide_icon(&with(&format!("[button]\nicon = \"界\"\n{}", action("contexts = [\"button\"]"))), "must be one character one cell wide")]
+    #[case::an_empty_icon(&with(&format!("[button]\nicon = \"\"\n{}", action("contexts = [\"button\"]"))), "must be one character one cell wide")]
+    #[case::a_hidden_icon(&with(&format!("[button]\nicon = \"\\u200B\"\n{}", action("contexts = [\"button\"]"))), "the button's icon `\\u{200b}` has an invisible")]
+    #[case::a_hidden_title(&with(&format!("[button]\ntitle = \"a\\u202eb\"\n{}", action("contexts = [\"button\"]"))), "the button's title")]
+    #[case::an_empty_title(&with(&format!("[button]\ntitle = \" \"\n{}", action("contexts = [\"button\"]"))), "the button's `title` is empty")]
+    #[case::a_button_without_button_actions(&with(&format!("{BUTTON}{}", action("contexts = [\"tab\"]"))), "needs an action with the `button` context")]
+    #[case::a_button_without_actions(&with(BUTTON), "needs an action with the `button` context")]
+    #[case::no_context_on_a_button_action(&with(&format!("{BUTTON}{}", action("contexts = []"))), "at least one context")]
+    fn it_refuses(#[case] text: &str, #[case] reason: &str) {
+        let error = Manifest::parse(text).expect_err("refused");
+        assert!(error.contains(reason), "{error}");
+    }
+}
+
 mod loading {
     use super::*;
 

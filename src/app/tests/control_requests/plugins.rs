@@ -248,3 +248,121 @@ mod refusing {
         assert!(refused.message.contains("is off"), "{}", refused.message);
     }
 }
+
+mod buttons_and_popups {
+    use super::super::super::plugins::plugged_among;
+    use super::*;
+
+    const ACTIONS: &str = r#"
+[[actions]]
+id = "here"
+title = "act here"
+contexts = ["button"]
+command = ["./act"]
+
+[[actions]]
+id = "pop"
+title = "pop up"
+contexts = ["button", "pane"]
+placement = "popup"
+width = 40
+height = 8
+command = ["./pop"]
+"#;
+
+    fn popped(pop: &str) -> Plugged {
+        let mut p = plugged_among(true, MANIFEST, &[]);
+        write_executable(&p.root.path().join("pop"), &format!("#!/bin/sh\n{pop}\n"));
+        std::fs::write(p.root.path().join(FILE), format!("{MANIFEST}{ACTIONS}")).expect("manifest");
+        p.app.reload_plugins();
+        p
+    }
+
+    fn bare(p: &mut Plugged, action: &str) -> Value {
+        let revision = revision(&mut p.app);
+        json!({"plugin": "acme.notes", "action": action, "revision": revision})
+    }
+
+    fn outcome(text: &str) -> ActionRan {
+        serde_json::from_value(reply_of(text).expect("an outcome")).expect("an outcome")
+    }
+
+    #[test]
+    fn the_list_and_the_actions_say_the_button_and_the_placement() {
+        let mut p = popped("exit 0");
+        let button = list(&mut p.app).plugins[0].button.clone().expect("a button");
+        assert_eq!((button.title.as_str(), button.actions), ("Notes", vec!["here".to_string(), "pop".to_string()]));
+        let info = actions(&mut p.app, &json!({"context": "button"}));
+        assert_eq!(names(&info), ["here", "pop"]);
+        let sizes: Vec<_> = info.actions.iter().map(|a| (a.placement.as_deref(), a.width, a.height)).collect();
+        assert_eq!(sizes, [(Some("job"), None, None), (Some("popup"), Some(40), Some(8))]);
+    }
+
+    #[test]
+    fn a_button_action_runs_without_an_item_on_what_the_window_shows() {
+        let mut p = popped("exit 0");
+        let (project, workspace, ..) = ids(&p);
+        let args = bare(&mut p, "here");
+        let ran: ActionRan =
+            serde_json::from_value(asked(&mut p.app, &p.rx, "plugin-run", &args).expect("ran")).expect("an outcome");
+        assert_eq!((ran.context.as_str(), ran.ended.as_str(), ran.code), ("button", "exited", Some(0)));
+        assert_eq!((ran.ids.project, ran.ids.workspace), (Some(project), Some(workspace)));
+        assert!(p.read("out").starts_with("ctx=button action=here"), "{}", p.read("out"));
+    }
+
+    #[test]
+    fn any_other_action_without_an_item_is_malformed() {
+        let mut p = popped("exit 0");
+        let args = bare(&mut p, "note");
+        let refused = asked(&mut p.app, &p.rx, "plugin-run", &args).expect_err("refused");
+        assert_eq!(refused.code, "malformed");
+        assert!(refused.message.contains("only a button action"), "{}", refused.message);
+        assert_eq!(p.read("out"), "");
+    }
+
+    #[test]
+    fn a_popup_is_refused_with_no_window_attached() {
+        let mut p = popped("exit 0");
+        let args = bare(&mut p, "pop");
+        let refused = asked(&mut p.app, &p.rx, "plugin-run", &args).expect_err("refused");
+        assert_eq!((refused.code.as_str(), refused.message.as_str()), ("failed", "no window is attached"));
+        assert!(p.app.popup().is_none());
+    }
+
+    #[test]
+    fn a_popup_answers_when_its_program_exits() {
+        let mut p = popped("exit 5");
+        p.app.window_attached();
+        let args = bare(&mut p, "pop");
+        let ran: ActionRan =
+            serde_json::from_value(asked(&mut p.app, &p.rx, "plugin-run", &args).expect("ran")).expect("an outcome");
+        assert_eq!((ran.context.as_str(), ran.ended.as_str(), ran.code), ("button", "exited", Some(5)));
+        assert_eq!(ran.error.as_deref(), Some("exit status: 5"));
+        assert!(toast(&p.app).is_none());
+    }
+
+    #[test]
+    fn the_app_feed_shows_the_popup_until_popup_close_closes_it() {
+        let mut p = popped("exec sleep 30");
+        p.app.window_attached();
+        let (.., pane) = ids(&p);
+        let revision = revision(&mut p.app);
+        let args = json!({"plugin": "acme.notes", "action": "pop", "revision": revision, "item": {"pane": pane}});
+        let text = json!({"contract": 1, "command": "plugin-run", "args": args}).to_string();
+        p.app.request(CLIENT, &text, Some(AREA), Instant::now());
+        assert_eq!(p.app.take_answers().len(), 0);
+        let shown = p.app.app_state().popup.expect("the popup in the feed");
+        assert_eq!((shown.plugin.as_str(), shown.action.as_str()), ("acme.notes", "pop"));
+        assert!(shown.cols > 0 && shown.rows > 0);
+        let close = json!({"contract": 1, "command": "plugin-popup-close", "args": {}}).to_string();
+        p.app.request(CLIENT, &close, Some(AREA), Instant::now());
+        let answers = p.app.take_answers();
+        assert_eq!(answers.len(), 2, "{answers:?}");
+        let ran = outcome(&answers[0].1);
+        assert_eq!((ran.context.as_str(), ran.ended.as_str(), ran.code), ("pane", "closed", None));
+        assert_eq!(ran.ids.pane, Some(pane));
+        assert!(reply_of(&answers[1].1).is_ok());
+        assert_eq!(p.app.app_state().popup, None);
+        assert_eq!(refused(&mut p.app, "plugin-popup-close", &json!({})).code, "not-found");
+    }
+}

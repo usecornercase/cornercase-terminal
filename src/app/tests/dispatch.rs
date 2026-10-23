@@ -150,6 +150,7 @@ fn every_menu_action() -> Vec<MenuAction> {
         MenuAction::ForgetAgents(1),
         MenuAction::Help(HelpItem::Docs),
         MenuAction::Tour(0),
+        MenuAction::PluginButton { plugin: 0, revision: 0 },
     ]
 }
 
@@ -191,6 +192,7 @@ fn menu_index(action: &MenuAction) -> usize {
         MenuAction::ForgetAgents(_) => 33,
         MenuAction::Help(_) => 34,
         MenuAction::Tour(_) => 35,
+        MenuAction::PluginButton { .. } => 36,
     }
 }
 

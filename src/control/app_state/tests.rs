@@ -78,6 +78,7 @@ fn snapshot() -> Snapshot<AppState> {
             },
             profile: None,
             accounts: BTreeMap::new(),
+            popup: None,
         },
     }
 }
@@ -113,4 +114,17 @@ fn every_key_is_there_when_there_is_nothing() {
         (&update["release"], &update["none"], &update["checked"], &update["error"]),
         (&Value::Null, &Value::Null, &Value::Null, &Value::Null)
     );
+}
+
+#[test]
+fn an_open_popup_names_its_plugin_action_and_size() {
+    let popup = PopupInfo { plugin: "acme.notes".into(), action: "status".into(), cols: 100, rows: 30 };
+    let value = serde_json::to_value(AppState { popup: Some(popup.clone()), ..AppState::default() }).expect("json");
+
+    assert_eq!(
+        value["popup"],
+        serde_json::json!({"plugin": "acme.notes", "action": "status", "cols": 100, "rows": 30})
+    );
+    let read: AppState = serde_json::from_value(value).expect("an app state");
+    assert_eq!(read.popup, Some(popup));
 }

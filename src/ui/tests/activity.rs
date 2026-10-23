@@ -4,7 +4,7 @@ use crate::ui::activity::{Item, Shown, WIDTH, items};
 const TALL: Rect = Rect { x: 0, y: 0, width: W, height: 24 };
 
 fn everything() -> Shown {
-    Shown { issues: true, changes: true, files: true, flow: false, update: true, remote: true }
+    Shown { issues: true, changes: true, files: true, flow: false, update: true, remote: true, plugins: 0 }
 }
 
 fn with_bar(hover: Option<Position>) -> View<'static> {
@@ -39,7 +39,11 @@ mod layout {
     #[case::projects_on_top(Sidebar::ProjectsOnTop)]
     #[case::tree(Sidebar::Tree)]
     fn takes_the_left_edge_and_the_buttons_under_the_lists_go(#[case] sidebar: Sidebar) {
-        let a = full_layout(TALL, Widths::default(), Screen { changes: false, sidebar, agents: false, icon_bar: true });
+        let a = full_layout(
+            TALL,
+            Widths::default(),
+            Screen { changes: false, sidebar, agents: false, icon_bar: true, plugins: false },
+        );
         let footer = [a.separator, a.settings, a.usage, a.quit, a.issues, a.todo_button, a.files_button];
         assert_eq!(
             (a.activity, a.sidebar.x, footer.iter().all(|r| r.is_empty())),
@@ -52,12 +56,12 @@ mod layout {
         let without = full_layout(
             TALL,
             Widths::default(),
-            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: false },
+            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: false, plugins: false },
         );
         let with = full_layout(
             TALL,
             Widths::default(),
-            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true },
+            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true, plugins: false },
         );
         assert_eq!((without.list.bottom(), with.list.bottom()), (TALL.height - 4, TALL.height));
     }
@@ -72,7 +76,7 @@ mod layout {
         let a = full_layout(
             SMALL,
             Widths::default(),
-            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true },
+            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true, plugins: false },
         );
         assert_eq!((a.activity, a.compact()), (Rect::default(), true));
     }
@@ -89,8 +93,8 @@ mod places {
             [
                 (Item::Quit, 22),
                 (Item::Settings, 20),
-                (Item::Usage, 18),
-                (Item::Help, 16),
+                (Item::Help, 18),
+                (Item::Usage, 16),
                 (Item::Remote, 14),
                 (Item::Update, 12),
                 (Item::Issues, 1),
@@ -114,7 +118,7 @@ mod places {
         let shown = Shown::default();
         assert_eq!(
             places(Rect::new(0, 0, WIDTH, 9), shown),
-            [(Item::Quit, 7), (Item::Settings, 5), (Item::Usage, 3), (Item::Help, 1)]
+            [(Item::Quit, 7), (Item::Settings, 5), (Item::Help, 3), (Item::Usage, 1)]
         );
     }
 
@@ -196,8 +200,8 @@ mod drawing {
                 icons::NERD.todo,
                 icons::UPDATE,
                 icons::REMOTE,
-                icons::HELP,
                 icons::USAGE,
+                icons::HELP,
                 icons::SETTINGS,
                 icons::QUIT
             ]
@@ -211,7 +215,7 @@ mod drawing {
         let a = full_layout(
             SMALL,
             Widths::default(),
-            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true },
+            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true, plugins: false },
         );
         let middle = |r: Rect| row_text(&t, Rect { y: r.y + 1, ..r }).trim().to_string();
         assert_eq!(
@@ -227,7 +231,7 @@ mod drawing {
         let a = full_layout(
             SMALL,
             Widths::default(),
-            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true },
+            Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true, plugins: false },
         );
         let middle = |r: Rect| row_text(&t, Rect { y: r.y + 1, ..r }).trim().to_string();
         assert_eq!(

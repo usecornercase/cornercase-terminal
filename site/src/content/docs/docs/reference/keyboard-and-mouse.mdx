@@ -54,6 +54,7 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Click | `Files` (or `▤` in the compact bar) | Opens or closes the [files panel](../../guides/files/). |
 | Click | `TODO` (or `☐` in the compact bar) | Opens or closes the [TODO panel](../../guides/todo/). |
 | Click | `↑ 0.2.0` or `↻ restart` at the end of the `Settings` row | Opens the [update](../../installation/#update) dialog. Only there when a new version is out. |
+| Click | A plugin's button: in its row above `Settings`, its slot in the icon bar, or the projects menu in compact mode | Runs the [plugin's](../../guides/plugins/#a-button-of-its-own) action, or opens a menu of them; ` ⋯ ` at the end of the row lists the buttons that did not fit. |
 | Click | The search bar | Starts a [search](../../guides/search/). |
 | Click | `❯` at the right end of the open search bar | Switches the search between names and what was said [in sessions](../../guides/search/#in-sessions). |
 
@@ -154,7 +155,7 @@ See [Flows](../../guides/flows/#the-flow-panel).
 
 ### Dialogs and lists
 
-Click buttons and rows to use them. In lists (the folder picker, the issue browser, the settings, search results) and in an update's release notes, the wheel scrolls. A right-click menu closes when you click anywhere else, and so do the search and every dialog, as its cancel button would, so whatever you typed in it is dropped. A dialog that is busy (creating a worktree, installing an update, checking a token, starting an issue) stays open until it is done.
+Click buttons and rows to use them. In lists (the folder picker, the issue browser, the settings, search results) and in an update's release notes, the wheel scrolls. A right-click menu closes when you click anywhere else, and so do the search and every dialog, as its cancel button would, so whatever you typed in it is dropped. A dialog that is busy (creating a worktree, installing an update, checking a token, starting an issue) stays open until it is done. A plugin's [popup](../../guides/plugins/#popups) is the exception: a click outside it does nothing, and it closes with its `×`.
 
 ### The resize pointer
 
@@ -214,6 +215,7 @@ While a dialog, the search, the settings, the issue browser, the changes panel's
 | --- | --- |
 | Any dialog with a text field | Type, `Backspace`, paste. `Enter` confirms, `Esc` cancels. |
 | New workspace | `Tab` toggles **with its own worktree**. |
+| A plugin's popup | Every key, `Esc` and the prefix key included, goes to the program in it. Close it with its `×`. |
 | Right-click menus | `Esc` closes the menu. Other keys still go to the active pane. |
 | While dragging a row or a pane | `Esc` cancels the drag. Other keys still go to the active pane. |
 | While dragging a border or a divider | `Esc` ends the drag where it is. Other keys still go to the active pane. |

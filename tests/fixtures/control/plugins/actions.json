@@ -9,7 +9,20 @@
       "contexts": [
         "pane",
         "tab"
-      ]
+      ],
+      "placement": "job"
+    },
+    {
+      "plugin": "acme.notes",
+      "name": "Notes",
+      "action": "status",
+      "title": "Deploy status",
+      "contexts": [
+        "button"
+      ],
+      "placement": "popup",
+      "width": 100,
+      "height": 30
     }
   ]
 }

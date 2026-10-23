@@ -136,6 +136,7 @@ mod muted;
 mod overlay;
 mod pane_footer;
 mod picker;
+mod plugin_buttons;
 mod queue;
 mod reorder;
 mod resuming;
