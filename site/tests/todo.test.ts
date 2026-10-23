@@ -91,13 +91,19 @@ test('the send button is always shown in compact mode and not on done items', ()
   app.destroy();
 });
 
-test('ctrl and the arrows move a field by word, as in the app', () => {
-  const f = { chars: [...'fix the login-bug'], cursor: 0 };
-  const walk = (key: string): number[] =>
-    [0, 1, 2, 3, 4].map(() => {
-      editKey(f, { key, ctrl: true } as Key, 40);
-      return f.cursor;
-    });
-  assert.deepEqual(walk('ArrowRight'), [4, 8, 13, 14, 17]);
-  assert.deepEqual(walk('ArrowLeft'), [14, 13, 8, 4, 0]);
-});
+for (const [name, back, forward] of [
+  ['ctrl and the arrows', { key: 'ArrowLeft', ctrl: true }, { key: 'ArrowRight', ctrl: true }],
+  ['option and the arrows', { key: 'ArrowLeft', alt: true }, { key: 'ArrowRight', alt: true }],
+  ['option b and f', { key: 'b', alt: true }, { key: 'f', alt: true }],
+] as const) {
+  test(`${name} move a field by word, as in the app`, () => {
+    const f = { chars: [...'fix the login-bug'], cursor: 0 };
+    const walk = (key: Key): number[] =>
+      [0, 1, 2, 3, 4].map(() => {
+        editKey(f, key, 40);
+        return f.cursor;
+      });
+    assert.deepEqual(walk(forward), [4, 8, 13, 14, 17]);
+    assert.deepEqual(walk(back), [14, 13, 8, 4, 0]);
+  });
+}

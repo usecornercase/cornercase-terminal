@@ -427,11 +427,39 @@ mod words {
     #[rstest]
     #[case::plain(KeyModifiers::NONE)]
     #[case::shift(KeyModifiers::SHIFT)]
-    #[case::alt(KeyModifiers::ALT)]
     fn other_modifiers_move_one_character(#[case] modifiers: KeyModifiers) {
         let mut e = Editor::new("fix the login");
         press(&mut e, KeyCode::Left, modifiers);
         assert_eq!(e.cursor(), 12);
+    }
+
+    #[rstest]
+    #[case::alt_arrow(KeyCode::Left, KeyModifiers::ALT, KeyCode::Right, KeyModifiers::ALT)]
+    #[case::esc_b_and_esc_f(KeyCode::Char('b'), KeyModifiers::ALT, KeyCode::Char('f'), KeyModifiers::ALT)]
+    fn option_moves_by_word_as_ctrl_does(
+        #[case] back: KeyCode,
+        #[case] back_mods: KeyModifiers,
+        #[case] forward: KeyCode,
+        #[case] forward_mods: KeyModifiers,
+    ) {
+        let mut e = Editor::new("fix the login");
+        press(&mut e, back, back_mods);
+        assert_eq!(e.cursor(), 8);
+        press(&mut e, back, back_mods);
+        assert_eq!(e.cursor(), 4);
+        press(&mut e, forward, forward_mods);
+        assert_eq!(e.cursor(), 8);
+    }
+
+    #[rstest]
+    #[case::alt_shift_b(KeyModifiers::ALT | KeyModifiers::SHIFT)]
+    #[case::ctrl_alt_b(KeyModifiers::ALT | KeyModifiers::CONTROL)]
+    #[case::ctrl_b(KeyModifiers::CONTROL)]
+    fn other_b_combinations_insert_nothing(#[case] modifiers: KeyModifiers) {
+        let mut e = Editor::new("fix");
+        press(&mut e, KeyCode::Char('b'), modifiers);
+        assert_eq!(e.text(), "fix");
+        assert_eq!(e.cursor(), 3);
     }
 
     #[test]

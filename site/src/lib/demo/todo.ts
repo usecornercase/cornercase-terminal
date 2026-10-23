@@ -109,8 +109,10 @@ export function editKey(f: Editable, k: Key, width: number): void {
   const [line, col] = fieldPosition(f, width);
   if (k.key === 'Backspace' && f.cursor > 0) f.chars.splice(--f.cursor, 1);
   else if (k.key === 'Delete') f.chars.splice(f.cursor, 1);
-  else if (k.key === 'ArrowLeft' && k.ctrl) f.cursor = wordLeft(f.chars, f.cursor);
-  else if (k.key === 'ArrowRight' && k.ctrl) f.cursor = wordRight(f.chars, f.cursor);
+  else if (k.key === 'ArrowLeft' && (k.ctrl || k.alt)) f.cursor = wordLeft(f.chars, f.cursor);
+  else if (k.key === 'ArrowRight' && (k.ctrl || k.alt)) f.cursor = wordRight(f.chars, f.cursor);
+  else if (k.key === 'b' && k.alt && !k.ctrl && !k.shift) f.cursor = wordLeft(f.chars, f.cursor);
+  else if (k.key === 'f' && k.alt && !k.ctrl && !k.shift) f.cursor = wordRight(f.chars, f.cursor);
   else if (k.key === 'ArrowLeft') f.cursor = Math.max(0, f.cursor - 1);
   else if (k.key === 'ArrowRight') f.cursor = Math.min(f.chars.length, f.cursor + 1);
   else if (k.key === 'Home') f.cursor = 0;

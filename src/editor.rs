@@ -172,7 +172,7 @@ impl Editor {
     }
 
     fn edit(&mut self, key: KeyEvent, width: usize) -> bool {
-        let word = key.modifiers.contains(KeyModifiers::CONTROL);
+        let word = key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
         match key.code {
             KeyCode::Backspace => self.backspace(),
             KeyCode::Delete => self.delete(),
@@ -182,6 +182,8 @@ impl Editor {
             KeyCode::Right => self.right(),
             KeyCode::Up => self.up(width),
             KeyCode::Down => self.down(width),
+            KeyCode::Char('b') if key.modifiers == KeyModifiers::ALT => self.word_left(),
+            KeyCode::Char('f') if key.modifiers == KeyModifiers::ALT => self.word_right(),
             KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
                 self.insert(c.encode_utf8(&mut [0; 4]));
             }
