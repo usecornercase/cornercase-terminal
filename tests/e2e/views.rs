@@ -11,13 +11,18 @@ fn size_of(app: &Harness, pane: &str, when: &str) -> String {
     seen.rsplit('-').next().unwrap_or_default().to_string()
 }
 
+fn new_tab(app: &Harness) -> (String, String) {
+    let pane = app.session.says(&["new-tab"]);
+    let rows: PaneRows = serde_json::from_str(&app.session.says(&["status", "--panes", "--json"])).expect("rows");
+    let tab = rows.panes.iter().find(|row| row.pane.to_string() == pane).expect("the new pane").tab.to_string();
+    (pane, tab)
+}
+
 #[test]
 fn a_view_sizes_its_tab_and_moves_without_the_window_and_gives_both_back_when_it_ends() {
     let app = Harness::start();
-    let pane = app.session.says(&["new-tab"]);
+    let (pane, tab) = new_tab(&app);
     let window = app.session.report().shown;
-    let rows: PaneRows = serde_json::from_str(&app.session.says(&["status", "--panes", "--json"])).expect("rows");
-    let tab = rows.panes.iter().find(|row| row.pane.to_string() == pane).expect("the new pane").tab.to_string();
     let before = size_of(&app, &pane, "before");
 
     let mut opened = app.session.spawn(&["view", "--cols", "100", "--rows", "30", "--tab", &tab]);
@@ -45,6 +50,34 @@ fn a_view_sizes_its_tab_and_moves_without_the_window_and_gives_both_back_when_it
     assert_ne!(moved, "");
     assert_ne!(before, "30x100");
     assert_eq!(after, before);
+    assert_eq!(finish_within(streaming, TIMEOUT).status.code(), Some(0));
+}
+
+#[test]
+fn commands_with_a_view_pass_the_feature_checks_they_need() {
+    let app = Harness::start();
+    let (pane, tab) = new_tab(&app);
+    let mut opened = app.session.spawn(&["view", "--cols", "80", "--rows", "24", "--tab", &tab]);
+    let mut followed = Followed::of(&mut opened);
+    followed.until("the view's first line", |line| line["revision"] == 1);
+    let id = followed.seen[0]["view"]["id"].as_u64().expect("an id").to_string();
+
+    let hidden = app.session.says(&["view-set", "--view", &id, "--hidden"]);
+    let visible = app.session.says(&["view-set", "--view", &id, "--visible"]);
+    let mut streaming = app.session.spawn(&["surface", "--view", &id, "--patches"]);
+    let mut frames = Followed::of(&mut streaming);
+    frames.until("the view's first frame", |frame| frame["revision"] == 1);
+    app.session.says(&["send", "--pane", &pane, "--enter", "echo patch-\"\"ok"]);
+    frames.until("a patch", |frame| frame.get("base").is_some());
+    let profiled = app.session.says(&["new-tab", "--view", &id, "--profile", ""]);
+    let _ = opened.kill();
+    let _ = opened.wait();
+
+    assert!(hidden.ends_with("  hidden"), "{hidden}");
+    assert!(!visible.contains("hidden"), "{visible}");
+    assert_eq!(frames.seen[0]["view"].as_u64(), id.parse().ok());
+    assert!(frames.seen[0].get("base").is_none(), "the first frame is complete");
+    assert_ne!(profiled, "");
     assert_eq!(finish_within(streaming, TIMEOUT).status.code(), Some(0));
 }
 
