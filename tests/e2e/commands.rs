@@ -100,6 +100,13 @@ fn search_finds_what_a_pane_printed_with_its_ids() {
     assert_eq!(none, "pane\twho\tsource\tplace\tline\ttext");
 }
 
+pub(super) fn new_tab(app: &Harness) -> (String, String) {
+    let pane = app.session.says(&["new-tab"]);
+    let rows: PaneRows = serde_json::from_str(&app.session.says(&["status", "--panes", "--json"])).expect("pane rows");
+    let tab = rows.panes.iter().find(|row| row.pane.to_string() == pane).expect("the new pane").tab.to_string();
+    (pane, tab)
+}
+
 pub(super) struct Followed {
     lines: std::sync::mpsc::Receiver<String>,
     pub(super) seen: Vec<serde_json::Value>,
@@ -714,10 +721,8 @@ fn spelled_in_green(frame: &serde_json::Value, word: &str) -> bool {
 #[test]
 fn a_tab_the_window_does_not_show_streams_its_cells_until_it_closes() {
     let app = Harness::start();
-    let pane = app.session.says(&["new-tab"]);
+    let (pane, tab) = new_tab(&app);
     let shown = app.session.report().shown;
-    let rows: PaneRows = serde_json::from_str(&app.session.says(&["status", "--panes", "--json"])).expect("pane rows");
-    let tab = rows.panes.iter().find(|row| row.pane.to_string() == pane).expect("the new pane").tab.to_string();
     let args = ["surface", "--tab", &tab, "--cols", "80", "--rows", "24"];
     let mut streaming = app.session.spawn(&args);
     let mut followed = Followed::of(&mut streaming);
@@ -778,9 +783,7 @@ fn a_hidden_tab_takes_input_selection_and_scrolling_while_the_window_shows_a_dia
 #[test]
 fn a_surface_resizes_in_place_and_a_divider_moves() {
     let app = Harness::start();
-    let pane = app.session.says(&["new-tab"]);
-    let rows: PaneRows = serde_json::from_str(&app.session.says(&["status", "--panes", "--json"])).expect("pane rows");
-    let tab = rows.panes.iter().find(|row| row.pane.to_string() == pane).expect("the new pane").tab.to_string();
+    let (pane, tab) = new_tab(&app);
     let mut streaming = app.session.spawn(&["surface", "--tab", &tab, "--cols", "80", "--rows", "24"]);
     let mut followed = Followed::of(&mut streaming);
     followed.until("the first frame", |frame| frame["revision"] == 1);
@@ -805,9 +808,7 @@ fn a_surface_resizes_in_place_and_a_divider_moves() {
 #[test]
 fn a_surface_with_patches_sends_what_changed_and_redraw_a_complete_line() {
     let app = Harness::start();
-    let pane = app.session.says(&["new-tab"]);
-    let rows: PaneRows = serde_json::from_str(&app.session.says(&["status", "--panes", "--json"])).expect("pane rows");
-    let tab = rows.panes.iter().find(|row| row.pane.to_string() == pane).expect("the new pane").tab.to_string();
+    let (pane, tab) = new_tab(&app);
     let mut streaming = app.session.spawn(&["surface", "--tab", &tab, "--cols", "80", "--rows", "24", "--patches"]);
     let mut followed = Followed::of(&mut streaming);
     followed.until("the first frame", |frame| frame["revision"] == 1);

@@ -1,6 +1,5 @@
-use super::commands::Followed;
+use super::commands::{Followed, new_tab};
 use super::*;
-use cornercase::control::PaneRows;
 
 fn size_of(app: &Harness, pane: &str, when: &str) -> String {
     let marker = format!("size-{when}");
@@ -9,13 +8,6 @@ fn size_of(app: &Harness, pane: &str, when: &str) -> String {
     let seen =
         app.session.says(&["wait", "--pane", pane, "--text", &format!("^{marker}-[0-9]+x[0-9]+$"), "--timeout", "10"]);
     seen.rsplit('-').next().unwrap_or_default().to_string()
-}
-
-fn new_tab(app: &Harness) -> (String, String) {
-    let pane = app.session.says(&["new-tab"]);
-    let rows: PaneRows = serde_json::from_str(&app.session.says(&["status", "--panes", "--json"])).expect("rows");
-    let tab = rows.panes.iter().find(|row| row.pane.to_string() == pane).expect("the new pane").tab.to_string();
-    (pane, tab)
 }
 
 #[test]
