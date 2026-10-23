@@ -445,3 +445,22 @@ test('right click on the prompt opens a field menu and keeps the queue form', ()
   assert.equal(app.overlay?.kind, 'queue');
   app.destroy();
 });
+
+test('right click on another text control focuses it instead of using the prompt selection', () => {
+  const app = appAt(140);
+  app.openQueueForm();
+  type(app, 'abcd');
+  const o = form(app);
+  o.amount = 'abcd';
+  pick(o.when, 'in');
+  app.render();
+  const prompt = queueRect(screen(app), o, 'prompt');
+  app.pointerDown(prompt.x + 1, prompt.y, 0);
+  o.anchor = 0;
+  o.cursor = 4;
+  const amount = queueRect(screen(app), form(app), 'amount');
+  app.render();
+  app.pointerDown(amount.x + 1, amount.y, 2);
+  assert.equal(form(app).focus, 'amount');
+  app.destroy();
+});

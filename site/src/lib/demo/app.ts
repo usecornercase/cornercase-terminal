@@ -4617,7 +4617,7 @@ export class App {
 
   private pressField(region: Region, grip: FieldGrip, x: number, y: number, button: number): void {
     let inside = false;
-    grip.edit((f, width) => {
+    if (grip.focused?.() !== false) grip.edit((f, width) => {
       const s = selectionOf(f);
       const [line, col] = grip.spot(x, y);
       const at = cursorAt(f, width, line, col);

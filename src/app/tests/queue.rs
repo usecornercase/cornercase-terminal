@@ -1,6 +1,6 @@
 use super::*;
 use crate::issues::browser::Tab as IssueTab;
-use crate::queue::form::When;
+use crate::queue::form::{Control, When};
 use crate::queue::{self, Place, State as QueueState, Task};
 use crate::time;
 
@@ -276,6 +276,23 @@ mod forms {
         }
         assert_eq!(app.panels.queued.queue().pending(), Source::ALL.len());
         assert!(app.panels.queued.queue().entries.iter().all(|entry| entry.task.submit));
+    }
+
+    #[test]
+    fn right_click_on_another_field_focuses_it_even_with_a_selection_elsewhere() {
+        let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
+        app.panels.queued.schedule(None, task(&app, time::now() + 3600, None)).expect("add");
+        queue_tab(&mut app);
+        click(&mut app, queue_row(0));
+        let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("edit form") };
+        form.when = When::In.combo();
+        form.prompt = crate::editor::Editor::new("abcd");
+        form.amount = crate::editor::Editor::new("abcd");
+        form.focus_on(Control::Prompt);
+        form.prompt.select_all();
+        let text = ui::queue_form::text(AREA, form, Control::Amount);
+        right_click(&mut app, Position::new(text.x + 1, text.y));
+        assert_eq!(app.focused_field(), Some(crate::app::text_fields::TextField::Queue(Control::Amount)));
     }
 
     #[test]

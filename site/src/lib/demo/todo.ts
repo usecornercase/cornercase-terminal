@@ -28,6 +28,7 @@ export interface Editable {
 export interface FieldGrip {
   edit(change: (f: Editable, width: number) => void): void;
   spot(x: number, y: number): [number, number];
+  focused?(): boolean;
 }
 
 interface Field extends Editable {

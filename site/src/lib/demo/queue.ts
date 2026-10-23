@@ -186,6 +186,7 @@ function queueGrip(screen: Rect, o: QueueForm, control: QueueText): FieldGrip {
   const t = queueTextRect(screen, o, control);
   return {
     edit: (change) => queueEdit(o, control, change, Math.max(1, t.w)),
+    focused: () => o.focus === control,
     spot: (x, y) => [firstLine([...o[control]], o.cursor, t) + (y - t.y), Math.max(0, x - t.x)],
   };
 }
