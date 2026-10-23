@@ -133,6 +133,7 @@ mod start_flow_dialog;
 mod surfaces;
 mod tab_bar;
 mod tabs;
+mod text_fields;
 mod theme;
 mod toast;
 mod todo_panel;
@@ -308,6 +309,7 @@ impl App {
                 | Drag::Selection { .. }
                 | Drag::Link(_)
                 | Drag::Lines { .. }
+                | Drag::Text(_)
                 | Drag::Footer(_),
             ) => {
                 return pointer::Shape::Default;

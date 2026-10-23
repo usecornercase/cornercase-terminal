@@ -7,6 +7,7 @@ use serde_json::Value;
 use super::CLIENTS;
 use crate::agents;
 use crate::app::App;
+use crate::app::text_fields::FieldArea;
 use crate::control::{self, Command, Request};
 use crate::editor::Editor;
 use crate::ui;
@@ -77,6 +78,14 @@ impl App {
             });
         }
         true
+    }
+
+    pub(in crate::app) fn tour_text(&mut self, area: Rect) -> Option<(FieldArea, &mut Editor)> {
+        let card = self.tour_card(area)?;
+        let text = ui::tour_layout(area, &card).field;
+        let editor = self.messages.tour.active.as_mut()?.field.as_mut()?;
+        let width = usize::from(text.width.saturating_sub(1)).max(1);
+        Some((FieldArea { text, width, top: editor.scroll(), scrolls: true }, editor))
     }
 
     pub(in crate::app) fn tour_typing(&self) -> bool {

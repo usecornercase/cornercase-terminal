@@ -91,7 +91,12 @@ impl App {
                 && !self.file_full_screen()
                 && match &self.screen.drag {
                     Some(
-                        Drag::Row(_) | Drag::Pane(_) | Drag::Selection { .. } | Drag::Divider { .. } | Drag::Footer(_),
+                        Drag::Row(_)
+                        | Drag::Pane(_)
+                        | Drag::Selection { .. }
+                        | Drag::Divider { .. }
+                        | Drag::Footer(_)
+                        | Drag::Text(_),
                     ) => false,
                     Some(Drag::Border(_) | Drag::Link(_) | Drag::Lines { .. }) | None => true,
                 }

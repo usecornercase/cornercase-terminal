@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 use std::time::Instant;
 
-use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
@@ -24,12 +24,12 @@ impl App {
                 self.screen.drag = None;
                 true
             }
-            Some(Drag::Selection { .. } | Drag::Link(_) | Drag::Lines { .. }) | None => false,
+            Some(Drag::Selection { .. } | Drag::Link(_) | Drag::Lines { .. } | Drag::Text(_)) | None => false,
         }
     }
 
     pub(super) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
-        if self.popup_key(key) {
+        if self.popup_key(key) || self.close_field_menu_on_key(key.code == KeyCode::Esc) {
             return Ok(());
         }
         if key.code == KeyCode::Esc && self.stop_dragging() {
@@ -88,9 +88,22 @@ impl App {
         let areas = self.layout(area).shown(self.screen.nav);
         let pos = Position::new(ev.column, ev.row);
         self.screen.hover = Some(pos);
-        match self.route_mouse(ev, pos, &areas, area) {
+        let field = if ev.kind == MouseEventKind::Down(MouseButton::Left) { self.field_at(pos, area) } else { None };
+        let routed = self.route_mouse(ev, pos, &areas, area);
+        if let Some(field) = field {
+            self.field_pressed(field, pos, area);
+        }
+        match routed {
             ControlFlow::Break(done) => done,
             ControlFlow::Continue(()) => Ok(()),
+        }
+    }
+
+    pub(super) fn click_at(&mut self, pos: Position, area: Rect) {
+        let areas = self.layout(area).shown(self.screen.nav);
+        for kind in [MouseEventKind::Down(MouseButton::Left), MouseEventKind::Up(MouseButton::Left)] {
+            let ev = MouseEvent { kind, column: pos.x, row: pos.y, modifiers: KeyModifiers::NONE };
+            _ = self.route_mouse(ev, pos, &areas, area);
         }
     }
 
@@ -111,8 +124,10 @@ impl App {
     ) -> ControlFlow<Result<()>> {
         let modal = self.popup().is_some();
         if self.continue_drag(ev, areas, area)
+            || self.field_menu_mouse(ev, pos, area)
             || (!modal
                 && (self.star_mouse(ev, pos, area)
+                    || self.field_right_press(ev, pos, area)
                     || self.tour_mouse(ev, pos, area)
                     || self.toast_mouse(ev, pos, area)))
         {
@@ -315,6 +330,7 @@ impl App {
             }
             Some(Drag::Footer(pane)) => self.drag_footer(pane, ev, areas.pane),
             Some(Drag::Row(drag)) => self.drag_row(drag, ev, areas, area),
+            Some(Drag::Text(field)) => self.drag_field(field, ev, area),
             Some(Drag::Link(_)) | None => return false,
         }
         true
@@ -415,6 +431,7 @@ impl App {
     }
 
     pub(super) fn handle_paste(&mut self, text: &str, area: Rect) {
+        self.screen.field_menu = None;
         if self.popup_paste(text) {
             return;
         }

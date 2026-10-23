@@ -295,6 +295,14 @@ mod first_prompt {
     }
 
     #[test]
+    fn right_click_on_the_tour_field_opens_the_menu() {
+        let mut t = prompt_step();
+        let field = ui::tour_layout(AREA, &t.card()).field;
+        right_click(&mut t.app, field.as_position());
+        assert!(t.app.screen.field_menu.is_some() && t.app.tour_typing());
+    }
+
+    #[test]
     fn another_idea_replaces_the_text() {
         let mut t = prompt_step();
         let before = t.card().field.expect("a field").text();

@@ -343,11 +343,13 @@ impl App {
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
             return true;
         }
-        self.messages.tour.swallowed = true;
         if layout.field.contains(pos) {
             self.focus_tour_field(layout.field, pos);
-        } else if let Some(button) = ui::tour_hit(area, &card, pos) {
-            self.tour_button(button, area);
+        } else {
+            self.messages.tour.swallowed = true;
+            if let Some(button) = ui::tour_hit(area, &card, pos) {
+                self.tour_button(button, area);
+            }
         }
         true
     }

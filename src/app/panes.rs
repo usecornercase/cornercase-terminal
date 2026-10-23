@@ -336,7 +336,8 @@ impl App {
                 | Drag::Selection { .. }
                 | Drag::Link(_)
                 | Drag::Lines { .. }
-                | Drag::Footer(_),
+                | Drag::Footer(_)
+                | Drag::Text(_),
             )
             | None => return None,
         };

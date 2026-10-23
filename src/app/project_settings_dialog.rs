@@ -4,7 +4,9 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::input::wheel;
 use super::overlay::Overlay;
+use super::text_fields::FieldArea;
 use crate::config::ProjectSettings;
+use crate::editor::Editor;
 use crate::project::Hierarchy;
 use crate::project::settings::{Action, Field, Form, Hit, Room};
 use crate::ui::{self, ProjectSettingsHit};
@@ -23,6 +25,16 @@ impl App {
             Some(Overlay::ProjectSettings(form)) => Some(form),
             _ => None,
         }
+    }
+
+    pub(super) fn project_text(&mut self, area: Rect, field: Field) -> Option<(FieldArea, &mut Editor)> {
+        let text = ui::project_settings_field(area, field);
+        let form = self.settings_form()?;
+        let editor = match field {
+            Field::Setup => &mut form.setup,
+            Field::Teardown => &mut form.teardown,
+        };
+        Some((FieldArea { text, width: usize::from(text.width), top: editor.scroll(), scrolls: true }, editor))
     }
 
     pub(super) fn project_settings_key(&mut self, key: KeyEvent, area: Rect) {

@@ -11,6 +11,7 @@ use super::layout::Side;
 use super::notifications::Notices;
 use super::queue_panel::QueueRuntime;
 use super::star_prompt::StarPrompt;
+use super::text_fields::FieldMenu;
 use super::toast::Toast;
 use super::tour_card::TourRuntime;
 use super::worktrees::Upstream;
@@ -26,6 +27,7 @@ pub(super) struct Screen {
     pub(super) widths: state::Widths,
     pub(super) drag: Option<Drag>,
     pub(super) clicks: Clicks,
+    pub(super) field_menu: Option<FieldMenu>,
 }
 
 #[derive(Default)]

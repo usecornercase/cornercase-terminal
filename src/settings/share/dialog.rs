@@ -82,6 +82,20 @@ impl Line {
 }
 
 impl Dialog {
+    pub(crate) fn paste_editor(&self) -> Option<&Editor> {
+        match &self.page {
+            Page::Paste { editor, .. } => Some(editor),
+            Page::Preview { .. } => None,
+        }
+    }
+
+    pub(crate) fn paste_editor_mut(&mut self) -> Option<&mut Editor> {
+        match &mut self.page {
+            Page::Paste { editor, .. } => Some(editor),
+            Page::Preview { .. } => None,
+        }
+    }
+
     pub(crate) fn new(text: &str) -> Self {
         let mut editor = Editor::new(text);
         editor.home();

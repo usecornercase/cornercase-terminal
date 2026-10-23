@@ -307,3 +307,124 @@ fn the_panel_and_the_list_come_back_after_a_restart() {
     back.restore(&state, AREA);
     assert_eq!((state.todo, back.screen.side == Some(Side::Todo), texts(&back)), (true, true, vec!["a".into()]));
 }
+
+mod selecting {
+    use super::*;
+
+    fn at(app: &App, col: u16) -> Position {
+        let area = panel_area(app);
+        let row = panel::field_row(area, &view(app)).expect("a field");
+        let text = panel::field_box(row);
+        Position::new(text.x + col, text.y)
+    }
+
+    fn select(app: &mut App, from: u16, to: u16) {
+        let (from, to) = (at(app, from), at(app, to));
+        press(app, from);
+        mouse(app, MouseEventKind::Drag(MouseButton::Left), to);
+        mouse(app, MouseEventKind::Up(MouseButton::Left), to);
+    }
+
+    fn typed_field() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+        let (mut app, rx, dirs) = opened();
+        new_todo(&mut app);
+        type_text(&mut app, "fix the login");
+        (app, rx, dirs)
+    }
+
+    fn pick_item(app: &mut App, at: Position, i: usize) {
+        let menu = ui::menu_area(AREA, at, &["copy", "cut", "select all"]);
+        click(app, ui::menu_item(menu, i).as_position());
+    }
+
+    #[test]
+    fn dragging_over_the_field_selects_and_typing_replaces_it() {
+        let (mut app, _rx, _dirs) = typed_field();
+        select(&mut app, 4, 7);
+        submit_text(&mut app, "X");
+        assert_eq!(texts(&app), ["fix X login"]);
+    }
+
+    #[test]
+    fn a_double_click_selects_a_word() {
+        let (mut app, _rx, _dirs) = typed_field();
+        let pos = at(&app, 5);
+        click(&mut app, pos);
+        click(&mut app, pos);
+        submit_text(&mut app, "X");
+        assert_eq!(texts(&app), ["fix X login"]);
+    }
+
+    #[test]
+    fn a_slow_second_click_selects_nothing() {
+        let (mut app, _rx, _dirs) = typed_field();
+        let pos = at(&app, 5);
+        click(&mut app, pos);
+        app.screen.clicks.age(DOUBLE_CLICK);
+        click(&mut app, pos);
+        submit_text(&mut app, "X");
+        assert_eq!(texts(&app), ["fix tXhe login"]);
+    }
+
+    #[test]
+    fn shift_and_the_arrows_select_in_the_field() {
+        let (mut app, _rx, _dirs) = typed_field();
+        for _ in 0..5 {
+            send_key(&mut app, KeyCode::Left, KeyModifiers::SHIFT);
+        }
+        submit_text(&mut app, "X");
+        assert_eq!(texts(&app), ["fix the X"]);
+    }
+
+    #[test]
+    fn right_click_copy_puts_the_selection_on_the_clipboard() {
+        let (mut app, _rx, _dirs) = typed_field();
+        select(&mut app, 4, 7);
+        let pos = at(&app, 5);
+        right_click(&mut app, pos);
+        assert!(app.screen.field_menu.is_some());
+        pick_item(&mut app, pos, 0);
+        assert_eq!(app.take_host_writes().last(), Some(&clipboard::osc52("the")));
+        assert!(app.screen.field_menu.is_none());
+    }
+
+    #[test]
+    fn cut_removes_the_selection_and_copies_it() {
+        let (mut app, _rx, _dirs) = typed_field();
+        select(&mut app, 4, 7);
+        let pos = at(&app, 5);
+        right_click(&mut app, pos);
+        pick_item(&mut app, pos, 1);
+        assert_eq!(app.take_host_writes().last(), Some(&clipboard::osc52("the")));
+        send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+        assert_eq!(texts(&app), ["fix  login"]);
+    }
+
+    #[test]
+    fn select_all_in_the_menu_selects_the_whole_field() {
+        let (mut app, _rx, _dirs) = typed_field();
+        let pos = at(&app, 5);
+        right_click(&mut app, pos);
+        pick_item(&mut app, pos, 2);
+        submit_text(&mut app, "X");
+        assert_eq!(texts(&app), ["X"]);
+    }
+
+    #[test]
+    fn a_click_outside_the_field_menu_closes_it_and_keeps_the_field() {
+        let (mut app, _rx, _dirs) = typed_field();
+        let pos = at(&app, 5);
+        right_click(&mut app, pos);
+        click(&mut app, Position::new(0, 0));
+        assert!(app.screen.field_menu.is_none() && app.panels.todo.field().is_some());
+    }
+
+    #[test]
+    fn esc_closes_the_field_menu_only() {
+        let (mut app, _rx, _dirs) = typed_field();
+        let pos = at(&app, 5);
+        right_click(&mut app, pos);
+        send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+        assert!(app.screen.field_menu.is_none() && app.panels.todo.field().is_some() && app.panel_shown());
+    }
+}

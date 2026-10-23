@@ -2,8 +2,7 @@ use super::*;
 use cornercase::config;
 use cornercase::state;
 
-#[test]
-fn a_todo_typed_in_the_panel_is_saved_next_to_the_session() {
+fn new_todo_field() -> Harness {
     let mut app = Harness::start();
     app.click(areas().todo_button.as_position());
     app.wait_for("the todo panel opens", |s| s.contains("+ New TODO"));
@@ -20,6 +19,12 @@ fn a_todo_typed_in_the_panel_is_saved_next_to_the_session() {
     let button = ui::todo::rows(panel, &view).button();
 
     app.click(button.as_position());
+    app
+}
+
+#[test]
+fn a_todo_typed_in_the_panel_is_saved_next_to_the_session() {
+    let mut app = new_todo_field();
     app.send(b"buy milk\r");
 
     app.wait_for("the item shows", |s| s.contains("○  buy milk"));
@@ -28,22 +33,7 @@ fn a_todo_typed_in_the_panel_is_saved_next_to_the_session() {
 
 #[test]
 fn ctrl_left_in_a_todo_moves_by_word() {
-    let mut app = Harness::start();
-    app.click(areas().todo_button.as_position());
-    app.wait_for("the todo panel opens", |s| s.contains("+ New TODO"));
-    let panel = ui::layout_with(AREA, state::Widths::default(), true, config::Sidebar::default()).changes;
-    let view = ui::todo::View {
-        items: Vec::new(),
-        scroll: 0,
-        adding: None,
-        light: false,
-        muted: ratatui::style::Color::DarkGray,
-        drag: None,
-        compact: false,
-    };
-    let button = ui::todo::rows(panel, &view).button();
-
-    app.click(button.as_position());
+    let mut app = new_todo_field();
     app.send(b"fix the login\x1b[1;5Dx\r");
 
     app.session.wait_for_file("todos.json", "the item is saved", |saved| saved.contains("fix the xlogin"));
@@ -51,25 +41,18 @@ fn ctrl_left_in_a_todo_moves_by_word() {
 
 #[test]
 fn esc_b_in_a_todo_moves_by_word() {
-    let mut app = Harness::start();
-    app.click(areas().todo_button.as_position());
-    app.wait_for("the todo panel opens", |s| s.contains("+ New TODO"));
-    let panel = ui::layout_with(AREA, state::Widths::default(), true, config::Sidebar::default()).changes;
-    let view = ui::todo::View {
-        items: Vec::new(),
-        scroll: 0,
-        adding: None,
-        light: false,
-        muted: ratatui::style::Color::DarkGray,
-        drag: None,
-        compact: false,
-    };
-    let button = ui::todo::rows(panel, &view).button();
-
-    app.click(button.as_position());
+    let mut app = new_todo_field();
     app.send(b"fix the login\x1bbx\r");
 
     app.session.wait_for_file("todos.json", "the item is saved", |saved| saved.contains("fix the xlogin"));
+}
+
+#[test]
+fn shift_left_in_a_todo_selects_and_typing_replaces() {
+    let mut app = new_todo_field();
+    app.send(b"fix the login\x1b[1;2D\x1b[1;2D\x1b[1;2D\x1b[1;2D\x1b[1;2DX\r");
+
+    app.session.wait_for_file("todos.json", "the item is saved", |saved| saved.contains("fix the X"));
 }
 
 fn edited_repo(prefix: &str) -> (PathBuf, String) {

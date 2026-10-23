@@ -9,6 +9,7 @@ use super::dialogs::confirm_view;
 use super::event::AppEvent;
 use super::input::wheel;
 use super::overlay::Overlay;
+use super::text_fields::FieldArea;
 use crate::agents::Known;
 use crate::editor::Editor;
 use crate::error::Error;
@@ -67,6 +68,13 @@ impl App {
             Some(Overlay::Flows { dialog, .. }) => Some(dialog.as_mut()),
             _ => None,
         }
+    }
+
+    pub(super) fn flows_text_field(&mut self, area: Rect) -> Option<(FieldArea, &mut Editor)> {
+        let dialog = self.flows_dialog()?;
+        let text = ui::flows_text(area, dialog.warnings().len(), dialog.preview().is_some());
+        let editor = dialog.text_mut()?;
+        Some((FieldArea { text, width: usize::from(text.width), top: editor.scroll(), scrolls: true }, editor))
     }
 
     pub(super) fn flows_key(&mut self, key: KeyEvent, area: Rect) {

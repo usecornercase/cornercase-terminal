@@ -211,6 +211,7 @@ pub(crate) struct View<'a> {
     pub(crate) toast: Option<Toast<'a>>,
     pub(crate) star: bool,
     pub(crate) tour: Option<TourCard>,
+    pub(crate) field_menu: Option<FieldMenu>,
     pub(crate) nav: Option<Nav>,
     pub(crate) update: Option<String>,
     pub(crate) remote: Option<bool>,
@@ -233,6 +234,13 @@ pub(crate) struct View<'a> {
     pub(crate) no_tab: NoTab,
     pub(crate) tab_bar: Option<tab_bar::TabBar>,
     pub(crate) plugin_buttons: Vec<Face>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FieldMenu {
+    pub(crate) at: Position,
+    pub(crate) items: Vec<String>,
+    pub(crate) disabled: Vec<bool>,
 }
 
 impl View<'_> {
@@ -407,6 +415,9 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
     }
     if let Some(card) = &view.tour {
         draw_tour(f, view, card);
+    }
+    if let Some(menu) = &view.field_menu {
+        draw_menu(f, view, menu.at, &menu.items, &menu.disabled);
     }
     if let Some(toast) = view.toast {
         draw_toast(f, view, toast);

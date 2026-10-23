@@ -6,6 +6,7 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::input::wheel;
 use super::menus::Target;
+use super::text_fields::TextField;
 use crate::changes::selection::Spot;
 use crate::files;
 use crate::state;
@@ -56,6 +57,7 @@ pub(super) struct LinkPress {
 pub(super) struct Clicks {
     border: Option<(ui::Border, Instant)>,
     divider: Option<(u64, Vec<bool>, Instant)>,
+    field: Option<(TextField, Position, Instant)>,
 }
 
 impl Clicks {
@@ -68,6 +70,13 @@ impl Clicks {
         double
     }
 
+    pub(super) fn field_pressed(&mut self, field: TextField, pos: Position, now: Instant) -> bool {
+        let double =
+            self.field.is_some_and(|(f, p, at)| f == field && p == pos && now.duration_since(at) < DOUBLE_CLICK);
+        self.field = (!double).then_some((field, pos, now));
+        double
+    }
+
     pub(super) fn forget_divider(&mut self) {
         self.divider = None;
     }
@@ -75,6 +84,7 @@ impl Clicks {
     #[cfg(test)]
     pub(super) fn age(&mut self, by: Duration) {
         self.border = self.border.map(|(b, at)| (b, at.checked_sub(by).expect("an earlier instant")));
+        self.field = self.field.map(|(f, p, at)| (f, p, at.checked_sub(by).expect("an earlier instant")));
     }
 }
 
@@ -94,6 +104,7 @@ pub(super) enum Drag {
     Link(LinkPress),
     Lines { workspace: u64, path: String, anchor: Anchor, area: Rect, moved: bool, scrolled: Option<Instant> },
     Footer(u64),
+    Text(TextField),
 }
 
 impl Drag {
@@ -106,6 +117,7 @@ impl Drag {
             | Self::Selection { .. }
             | Self::Link(_)
             | Self::Lines { .. }
+            | Self::Text(_)
             | Self::Footer(_) => None,
         }
     }
@@ -119,6 +131,7 @@ impl Drag {
             | Self::Selection { .. }
             | Self::Link(_)
             | Self::Lines { .. }
+            | Self::Text(_)
             | Self::Footer(_) => None,
         }
     }
@@ -132,6 +145,7 @@ impl Drag {
             | Self::Pane(_)
             | Self::Selection { .. }
             | Self::Lines { .. }
+            | Self::Text(_)
             | Self::Footer(_) => None,
         }
     }
@@ -145,6 +159,7 @@ impl Drag {
             | Self::Selection { .. }
             | Self::Link(_)
             | Self::Lines { .. }
+            | Self::Text(_)
             | Self::Footer(_) => true,
         }
     }
@@ -161,6 +176,7 @@ impl App {
                 | Drag::Selection { .. }
                 | Drag::Link(_)
                 | Drag::Lines { .. }
+                | Drag::Text(_)
                 | Drag::Footer(_),
             )
             | None => None,

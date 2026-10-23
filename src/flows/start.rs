@@ -328,7 +328,11 @@ impl Start {
         }
     }
 
-    fn typed(&mut self) {
+    pub(crate) fn typing_prompt(&self) -> bool {
+        self.focus == Focus::Prompt && !self.waiting && !self.accounts_open()
+    }
+
+    pub(crate) fn typed(&mut self) {
         if !self.named {
             self.branch = super::branch(&self.prompt.text());
         }

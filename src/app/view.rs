@@ -227,6 +227,7 @@ impl App {
             flow: (self.screen.side == Some(Side::Flow)).then(|| self.flow_view(now, self.spin(now))).flatten(),
             flow_run: self.has_run(),
             tour: self.tour_card(area),
+            field_menu: self.field_menu_view(),
             todo_dot: self.config.todo_dot,
             todo_pending: self.panels.todos.pending() > 0,
             plugin_buttons: self.plugin_faces(),

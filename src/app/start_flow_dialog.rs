@@ -6,8 +6,10 @@ use super::flow_runs::Starting;
 use super::flows_dialog::plan;
 use super::input::wheel;
 use super::overlay::Overlay;
+use super::text_fields::FieldArea;
 use crate::accounts::AgentAccounts;
 use crate::agents::Known;
+use crate::editor::Editor;
 use crate::flows::start::{Action, Focus, Hit, Room, Start};
 use crate::git;
 use crate::list::COMBO_ROWS;
@@ -45,6 +47,19 @@ impl App {
         match &mut self.overlay {
             Some(Overlay::StartFlow { start, .. }) => Some(start.as_mut()),
             _ => None,
+        }
+    }
+
+    pub(super) fn start_text(&mut self, area: Rect) -> Option<(FieldArea, &mut Editor)> {
+        let start = self.start_flow()?;
+        let text = ui::start_prompt(area, shape(start));
+        let top = start.prompt.scroll();
+        Some((FieldArea { text, width: usize::from(text.width), top, scrolls: true }, &mut start.prompt))
+    }
+
+    pub(super) fn prompt_edited(&mut self) {
+        if let Some(start) = self.start_flow() {
+            start.typed();
         }
     }
 

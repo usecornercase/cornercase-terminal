@@ -4,7 +4,9 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::input::wheel;
 use super::overlay::Overlay;
+use super::text_fields::FieldArea;
 use super::toast::Toast;
+use crate::editor::Editor;
 use crate::settings::share::dialog::{Action, Dialog, Page, Room, copied, copy_notes};
 use crate::settings::share::{self, Section, Shared};
 use crate::ui;
@@ -24,6 +26,12 @@ impl App {
             Some(Overlay::ShareSettings(dialog)) => Some(dialog),
             _ => None,
         }
+    }
+
+    pub(super) fn share_text(&mut self, area: Rect) -> Option<(FieldArea, &mut Editor)> {
+        let text = ui::share_settings_text(area);
+        let editor = self.share_dialog()?.paste_editor_mut()?;
+        Some((FieldArea { text, width: usize::from(text.width), top: editor.scroll(), scrolls: true }, editor))
     }
 
     pub(super) fn share_settings_key(&mut self, key: KeyEvent, area: Rect) {

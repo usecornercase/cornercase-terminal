@@ -2,8 +2,29 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::edit::{Editing, Row};
 use super::{Action, Dialog, Entry, Hit, Room};
+use crate::editor::Editor;
 
 impl Dialog {
+    pub(crate) fn text(&self) -> Option<&Editor> {
+        if self.confirm.is_some() || self.drag.is_some() {
+            return None;
+        }
+        match &self.importing {
+            Some(importing) => Some(&importing.editor),
+            None => self.edit.as_ref()?.text.as_ref().map(|text| &text.editor),
+        }
+    }
+
+    pub(crate) fn text_mut(&mut self) -> Option<&mut Editor> {
+        if self.confirm.is_some() || self.drag.is_some() {
+            return None;
+        }
+        match &mut self.importing {
+            Some(importing) => Some(&mut importing.editor),
+            None => self.edit.as_mut()?.text.as_mut().map(|text| &mut text.editor),
+        }
+    }
+
     pub(crate) fn key(&mut self, key: KeyEvent, room: Room) -> Action {
         if self.cancel_drag() && key.code == KeyCode::Esc {
             return Action::None;

@@ -7,6 +7,7 @@ use super::interaction::{Drag, Grab, RowDrag};
 use super::layout::Side;
 use super::menus::MenuAction;
 use super::overlay::Overlay;
+use super::text_fields::FieldArea;
 use super::toast::Undo;
 use super::{App, Toast};
 use crate::editor::Editor;
@@ -22,6 +23,14 @@ const CLIENTS: u64 = 1 << 61;
 impl App {
     fn todo_area(&self, area: Rect) -> Rect {
         self.layout(area).shown(self.screen.nav).changes
+    }
+
+    pub(super) fn todo_text(&mut self, area: Rect) -> Option<(FieldArea, &mut Editor)> {
+        let panel_area = self.todo_area(area);
+        let row = panel::field_row(panel_area, &self.todo_view(panel_area))?;
+        let text =
+            FieldArea { text: panel::field_box(row), width: panel::text_width(panel_area), top: 0, scrolls: false };
+        self.panels.todo.editor_mut().map(|editor| (text, editor))
     }
 
     pub(super) fn todo_view(&self, panel_area: Rect) -> panel::View {
