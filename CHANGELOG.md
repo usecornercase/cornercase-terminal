@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.190
+
+- Scripts: with `--view`, commands that first check what the server can do no longer fail saying the server is too old: `surface --patches`, `view-set --hidden` and `--visible`, `start` with `--issue`, `--workspace-name`, `--profile` or `--account`, and `new-tab` with `--profile` or `--account`.
+
 ## 0.12.189
 
 - **Move by word in text fields.** `Ctrl+←` and `Ctrl+→`, and on a Mac `Option+←` and `Option+→`, move the cursor to the previous or next word in every text field with a cursor: TODO items, the schedule form, the prompt when starting a flow, a flow's prompts and notes and its import page in Settings › Flows, a project's setup and teardown, the paste field in Settings › Share and the tour's first prompt. A line break counts as a stop. `Ctrl+←` and `Ctrl+→` switch desktops on a Mac by default; turn off **Move left a space** and **Move right a space** in System Settings › Keyboard › Keyboard Shortcuts › Mission Control, or use Option.
