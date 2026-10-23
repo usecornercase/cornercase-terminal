@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::text_fields::TextField;
 use crate::issues::browser::Tab as IssueTab;
 use crate::queue::form::{Control, When};
 use crate::queue::{self, Place, State as QueueState, Task};
@@ -292,7 +293,7 @@ mod forms {
         form.prompt.select_all();
         let text = ui::queue_form::text(AREA, form, Control::Amount);
         right_click(&mut app, Position::new(text.x + 1, text.y));
-        assert_eq!(app.focused_field(), Some(crate::app::text_fields::TextField::Queue(Control::Amount)));
+        assert_eq!(app.focused_field(), Some(TextField::Queue(Control::Amount)));
     }
 
     #[test]
