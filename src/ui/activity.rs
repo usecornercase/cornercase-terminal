@@ -24,8 +24,8 @@ pub(crate) enum Item {
     Plugin(u16),
     Update,
     Remote,
-    Help,
     Usage,
+    Help,
     Settings,
     Quit,
 }
@@ -135,8 +135,8 @@ pub(crate) fn items(bar: Rect, shown: Shown) -> Vec<(Item, Rect)> {
     let bottom = [
         (Item::Quit, true),
         (Item::Settings, true),
-        (Item::Usage, true),
         (Item::Help, true),
+        (Item::Usage, true),
         (Item::Remote, shown.remote),
         (Item::Update, shown.update),
     ];

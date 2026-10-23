@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/plugin_buttons.rs
-assertion_line: 186
 expression: "render_sized(&with_bar(None), W, 24).backend()"
 ---
 "   │   search projects, workspaces, tabs                    │                                      "
@@ -19,9 +18,9 @@ expression: "render_sized(&with_bar(None), W, 24).backend()"
 "   │                               │                         │                                      "
 "   │                               │                         │                                      "
 "   │                               │                         │                                      "
-"  │                               │                         │                                      "
-"   │                               │                         │                                      "
 "  │                               │                         │                                      "
+"   │                               │                         │                                      "
+"  │                               │                         │                                      "
 "   │                               │                         │                                      "
 "  │                               │                         │                                      "
 "   │                               │                         │                                      "

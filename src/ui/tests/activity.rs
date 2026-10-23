@@ -93,8 +93,8 @@ mod places {
             [
                 (Item::Quit, 22),
                 (Item::Settings, 20),
-                (Item::Usage, 18),
-                (Item::Help, 16),
+                (Item::Help, 18),
+                (Item::Usage, 16),
                 (Item::Remote, 14),
                 (Item::Update, 12),
                 (Item::Issues, 1),
@@ -118,7 +118,7 @@ mod places {
         let shown = Shown::default();
         assert_eq!(
             places(Rect::new(0, 0, WIDTH, 9), shown),
-            [(Item::Quit, 7), (Item::Settings, 5), (Item::Usage, 3), (Item::Help, 1)]
+            [(Item::Quit, 7), (Item::Settings, 5), (Item::Help, 3), (Item::Usage, 1)]
         );
     }
 
@@ -200,8 +200,8 @@ mod drawing {
                 icons::NERD.todo,
                 icons::UPDATE,
                 icons::REMOTE,
-                icons::HELP,
                 icons::USAGE,
+                icons::HELP,
                 icons::SETTINGS,
                 icons::QUIT
             ]

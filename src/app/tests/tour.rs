@@ -425,7 +425,7 @@ mod help {
     }
 
     #[test]
-    fn the_icon_bar_has_it_above_usage() {
+    fn the_icon_bar_has_it_under_usage() {
         let (mut app, _rx) = app();
         app.config.icon_bar = true;
         render(&mut app, AREA);
@@ -433,7 +433,7 @@ mod help {
         let items = ui::activity_items(bar, app.activity_shown());
         let (_, help) = items.iter().find(|(i, _)| *i == ui::ActivityItem::Help).expect("help");
         let (_, usage) = items.iter().find(|(i, _)| *i == ui::ActivityItem::Usage).expect("usage");
-        assert!(help.y < usage.y);
+        assert!(help.y > usage.y);
         click(&mut app, help.as_position());
         assert_eq!(menu(&app).first().map(String::as_str), Some("tour"));
     }
