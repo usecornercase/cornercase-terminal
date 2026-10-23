@@ -281,7 +281,7 @@ fn draw_start_prompt(f: &mut Frame, view: &View, start: &StartFlow, area: Rect) 
     let dim = Style::default().fg(view.muted);
     let lit = if start.focus == Focus::Prompt { Style::default().fg(Color::Cyan) } else { dim };
     f.render_widget(Paragraph::new(Span::styled("prompt", lit)), label);
-    let cursor = draw_text(f, view, prompt, &start.prompt).filter(|_| start.focus == Focus::Prompt);
+    let cursor = draw_text(f, view, prompt, &start.prompt, start.focus == Focus::Prompt);
     if start.prompt.is_empty() {
         let at = text_inside(prompt);
         let placeholder = truncate_right(PLACEHOLDER, usize::from(at.width));

@@ -15,7 +15,7 @@ use crate::flows::Flow;
 use crate::text::truncate_right;
 use crate::ui::View;
 use crate::ui::flow::{Diagram, draw_scrolled};
-use crate::ui::widgets::overlay_block;
+use crate::ui::widgets::{overlay_block, paint_selection};
 
 const FLOWS_WIDTH: u16 = 140;
 const FLOWS_HEIGHT: u16 = 40;
@@ -205,7 +205,7 @@ pub(in crate::ui) fn draw_flows(f: &mut Frame, view: &View, flows: &Flows) {
     draw_flows_heading(f, view, flows, area, tabs);
     draw_flows_preview(f, view, flows, area);
     if let Some(editor) = &flows.text {
-        cursor = draw_text(f, view, body, editor);
+        cursor = draw_text(f, view, body, editor, true);
     } else if let Some(pick) = flows.pick.as_ref().filter(|_| !flows.form_hidden(area)) {
         cursor = draw_pick(f, view, body, pick);
     } else if !flows.form_hidden(area) {
@@ -317,7 +317,13 @@ fn draw_preview_note(f: &mut Frame, view: &View, r: Rect, note: &str) {
     f.render_widget(text, preview_body(r));
 }
 
-pub(in crate::ui) fn draw_text(f: &mut Frame, view: &View, body: Rect, editor: &Editor) -> Option<Position> {
+pub(in crate::ui) fn draw_text(
+    f: &mut Frame,
+    view: &View,
+    body: Rect,
+    editor: &Editor,
+    focused: bool,
+) -> Option<Position> {
     let bg = Style::default().bg(view.surface());
     f.buffer_mut().set_style(body, bg);
     let text = text_inside(body);
@@ -329,6 +335,10 @@ pub(in crate::ui) fn draw_text(f: &mut Frame, view: &View, body: Rect, editor: &
         let y = text.y.saturating_add(u16::try_from(n).unwrap_or(u16::MAX));
         f.render_widget(Paragraph::new(Span::styled(line, bg)), Rect { y, height: 1, ..text });
     }
+    if !focused {
+        return None;
+    }
+    paint_selection(f.buffer_mut(), text, editor.scroll(), &editor.highlight(width));
     let (line, col) = editor.position(width);
     let row = line.checked_sub(editor.scroll()).and_then(|row| u16::try_from(row).ok())?;
     let at = Position::new(text.x.saturating_add(u16::try_from(col).ok()?), text.y.saturating_add(row));

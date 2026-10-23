@@ -10,7 +10,7 @@ use ratatui::widgets::{Block, BorderType, Clear, Paragraph};
 use super::View;
 use super::dialog::dialog_button_style;
 use super::rows::draw_rail;
-use super::widgets::{button_width, put};
+use super::widgets::{button_width, paint_selection, put};
 use crate::editor::{Editor, wrap};
 
 const WIDTH: u16 = 54;
@@ -192,6 +192,7 @@ fn draw_field(buf: &mut Buffer, view: &View, editor: &Editor, r: Rect, focused: 
     if !focused {
         return None;
     }
+    paint_selection(buf, r, scroll, &editor.highlight(width));
     let (line, col) = editor.position(width);
     let row = line.checked_sub(scroll).filter(|&l| l < usize::from(r.height))?;
     Some(Position::new(r.x + u16::try_from(col).ok()?, r.y + u16::try_from(row).ok()?))

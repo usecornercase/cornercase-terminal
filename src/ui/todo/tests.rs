@@ -219,3 +219,20 @@ mod drawing {
         insta::assert_snapshot!(render(&v, None).backend());
     }
 }
+
+mod selection {
+    use super::*;
+
+    #[test]
+    fn selected_cells_are_reversed() {
+        let mut v = list();
+        let mut editor = Editor::new("write docs");
+        editor.select_all();
+        v.items[1].editing = Some(editor);
+        let t = render(&v, None);
+        let r = row(&v, 1);
+        let at = |dx| t.backend().buffer()[(r.x + TEXT_X + dx, r.y)].modifier;
+        assert!(at(0).contains(Modifier::REVERSED) && at(9).contains(Modifier::REVERSED));
+        assert!(!at(10).contains(Modifier::REVERSED));
+    }
+}

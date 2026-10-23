@@ -9,7 +9,7 @@ use crate::editor::Editor;
 use crate::queue::form::{Control, Form, When};
 use crate::ui::View;
 use crate::ui::combo;
-use crate::ui::widgets::overlay_block;
+use crate::ui::widgets::{overlay_block, paint_selection};
 
 const LABEL: u16 = 9;
 const HEIGHT: u16 = 23;
@@ -163,6 +163,9 @@ fn draw_editor(f: &mut Frame, view: &View, editor: &Editor, at: EditorField) {
             editor.lines(width).into_iter().skip(start).map(|range| chars[range].iter().collect::<String>()).collect();
         let text = bg.fg(if view.light { Color::Black } else { Color::White }).add_modifier(Modifier::BOLD);
         f.render_widget(Paragraph::new(lines.join("\n")).style(text), r);
+    }
+    if focused {
+        paint_selection(f.buffer_mut(), r, start, &editor.highlight(width));
     }
     if focused && !r.is_empty() {
         f.set_cursor_position(Position::new(

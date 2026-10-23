@@ -10,10 +10,18 @@ pub struct Editor {
     scroll: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Highlight {
+    pub(crate) line: usize,
+    pub(crate) cells: Range<usize>,
+    pub(crate) to_edge: bool,
+}
+
 impl PartialEq for Editor {
     fn eq(&self, other: &Self) -> bool {
         self.area.lines() == other.area.lines()
             && self.area.cursor() == other.area.cursor()
+            && self.selection() == other.selection()
             && self.scroll == other.scroll
     }
 }
@@ -65,7 +73,7 @@ impl Editor {
     }
 
     pub(crate) fn delete(&mut self) {
-        if !self.at_end() {
+        if self.selection().is_some() || !self.at_end() {
             self.area.delete_str(1);
         }
     }
@@ -103,38 +111,90 @@ impl Editor {
 
     pub(crate) fn line_home(&mut self, width: usize) {
         let (line, _) = self.position(width);
-        self.place(width, line, 0);
+        self.go_to(width, line, 0);
     }
 
     pub(crate) fn line_end(&mut self, width: usize) {
         let (line, _) = self.position(width);
-        self.place(width, line, usize::MAX);
+        self.go_to(width, line, usize::MAX);
     }
 
     pub(crate) fn up(&mut self, width: usize) {
         let (line, col) = self.position(width);
         if line > 0 {
-            self.place(width, line - 1, col);
+            self.go_to(width, line - 1, col);
         }
     }
 
     pub(crate) fn down(&mut self, width: usize) {
         let (line, col) = self.position(width);
-        self.place(width, line + 1, col);
+        self.go_to(width, line + 1, col);
     }
 
     pub(crate) fn place(&mut self, width: usize, line: usize, col: usize) {
+        self.unselect();
+        self.go_to(width, line, col);
+    }
+
+    pub(crate) fn drag_to(&mut self, width: usize, line: usize, col: usize) {
+        self.anchor();
+        let last = self.lines(width).len().saturating_sub(1);
+        let col = if line > last { usize::MAX } else { col };
+        self.go_to(width, line.min(last), col);
+    }
+
+    pub(crate) fn settle(&mut self) {
+        if self.selection().is_none() {
+            self.unselect();
+        }
+    }
+
+    pub(crate) fn unselect(&mut self) {
+        self.area.cancel_selection();
+    }
+
+    pub(crate) fn selection(&self) -> Option<Range<usize>> {
+        let ((from_row, from_col), (to_row, to_col)) = self.area.selection_range()?;
+        let range = self.offset_of(from_row, from_col)..self.offset_of(to_row, to_col);
+        (!range.is_empty()).then_some(range)
+    }
+
+    pub(crate) fn selected_text(&self) -> Option<String> {
+        let range = self.selection()?;
+        Some(self.chars()[range].iter().collect())
+    }
+
+    pub(crate) fn cut(&mut self) -> Option<String> {
+        let text = self.selected_text()?;
+        self.area.cut();
+        Some(text)
+    }
+
+    pub(crate) fn select_word(&mut self) {
+        if let Some(range) = word_at(&self.chars(), self.offset()) {
+            self.select(range);
+        }
+    }
+
+    pub(crate) fn select_all(&mut self) {
+        self.unselect();
+        self.home();
+        self.area.start_selection();
+        self.end();
+    }
+
+    pub(crate) fn highlight(&self, width: usize) -> Vec<Highlight> {
+        let Some(selected) = self.selection() else { return Vec::new() };
         let chars = self.chars();
         let lines = lines_of(&chars, width);
-        let Some(range) = lines.get(line) else { return };
-        let ends = lines.get(line + 1).is_none_or(|next| next.start > range.end);
-        let limit = if ends { range.end } else { range.end.saturating_sub(1).max(range.start) };
-        let (mut at, mut used) = (range.start, 0);
-        while at < limit && used + cells(chars[at]) <= col {
-            used += cells(chars[at]);
-            at += 1;
-        }
-        self.jump(at);
+        let next = |i: usize| lines.get(i + 1).map_or(lines[i].end, |next: &Range<usize>| next.start);
+        let mark = |(i, line): (usize, &Range<usize>)| {
+            let (start, end) = (selected.start.max(line.start), selected.end.min(line.end));
+            let to_edge = selected.end > line.end && selected.start < next(i).max(line.end);
+            let cells = || span(&chars[line.start..start])..span(&chars[line.start..end.max(start)]);
+            (start < end || to_edge).then(|| Highlight { line: i, cells: cells(), to_edge })
+        };
+        lines.iter().enumerate().filter_map(mark).collect()
     }
 
     pub(crate) fn lines(&self, width: usize) -> Vec<Range<usize>> {
@@ -151,45 +211,94 @@ impl Editor {
     }
 
     pub(crate) fn key(&mut self, key: KeyEvent, width: usize, height: usize) -> bool {
-        match key.code {
-            KeyCode::Enter => self.newline(),
-            KeyCode::Home => self.line_home(width),
-            KeyCode::End => self.line_end(width),
-            _ if self.edit(key, width) => {}
-            _ => return false,
+        if key.code == KeyCode::Enter {
+            self.newline();
+        } else if !self.edit(key, width, false) {
+            return false;
         }
         self.reveal(width, height);
         true
     }
 
     pub(crate) fn one_line_key(&mut self, key: KeyEvent, width: usize) -> bool {
-        match key.code {
-            KeyCode::Home => self.home(),
-            KeyCode::End => self.end(),
-            _ => return self.edit(key, width),
-        }
-        true
+        self.edit(key, width, true)
     }
 
-    fn edit(&mut self, key: KeyEvent, width: usize) -> bool {
-        let word = key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+    fn edit(&mut self, key: KeyEvent, width: usize, one_line: bool) -> bool {
+        let alone = key.modifiers == KeyModifiers::ALT;
         match key.code {
+            KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down => self.arrow(key, width),
+            KeyCode::Home | KeyCode::End => self.ends(key, width, one_line),
             KeyCode::Backspace => self.backspace(),
             KeyCode::Delete => self.delete(),
-            KeyCode::Left if word => self.word_left(),
-            KeyCode::Right if word => self.word_right(),
-            KeyCode::Left => self.left(),
-            KeyCode::Right => self.right(),
-            KeyCode::Up => self.up(width),
-            KeyCode::Down => self.down(width),
-            KeyCode::Char('b') if key.modifiers == KeyModifiers::ALT => self.word_left(),
-            KeyCode::Char('f') if key.modifiers == KeyModifiers::ALT => self.word_right(),
+            KeyCode::Char('b') if alone => self.unselected(Self::word_left),
+            KeyCode::Char('f') if alone => self.unselected(Self::word_right),
             KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
                 self.insert(c.encode_utf8(&mut [0; 4]));
             }
             _ => return false,
         }
         true
+    }
+
+    fn arrow(&mut self, key: KeyEvent, width: usize) {
+        let word = key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+        if key.modifiers.contains(KeyModifiers::SHIFT) {
+            self.anchor();
+        } else if self.collapse(key.code, word) {
+            return;
+        }
+        match (key.code, word) {
+            (KeyCode::Left, true) => self.word_left(),
+            (KeyCode::Right, true) => self.word_right(),
+            (KeyCode::Left, false) => self.left(),
+            (KeyCode::Right, false) => self.right(),
+            (KeyCode::Up, _) => self.up(width),
+            _ => self.down(width),
+        }
+    }
+
+    fn collapse(&mut self, code: KeyCode, word: bool) -> bool {
+        let selected = self.selection().filter(|_| !word);
+        self.unselect();
+        match (selected, code) {
+            (Some(range), KeyCode::Left) => self.jump(range.start),
+            (Some(range), KeyCode::Right) => self.jump(range.end),
+            _ => false,
+        }
+    }
+
+    fn ends(&mut self, key: KeyEvent, width: usize, one_line: bool) {
+        if key.modifiers.contains(KeyModifiers::SHIFT) {
+            self.anchor();
+        } else {
+            self.unselect();
+        }
+        match (key.code == KeyCode::Home, one_line) {
+            (true, true) => self.home(),
+            (false, true) => self.end(),
+            (true, false) => self.line_home(width),
+            (false, false) => self.line_end(width),
+        }
+    }
+
+    fn unselected(&mut self, step: fn(&mut Self)) {
+        self.unselect();
+        step(self);
+    }
+
+    fn anchor(&mut self) {
+        if !self.area.is_selecting() {
+            self.area.start_selection();
+        }
+    }
+
+    fn select(&mut self, range: Range<usize>) {
+        self.unselect();
+        if self.jump(range.start) {
+            self.area.start_selection();
+            self.jump(range.end);
+        }
     }
 
     pub(crate) fn reveal(&mut self, width: usize, height: usize) {
@@ -212,12 +321,41 @@ impl Editor {
         self.scroll = self.scroll.min(self.lines(width).len().saturating_sub(height.max(1)));
     }
 
+    pub(crate) fn selected_at(&self, width: usize, line: usize, col: usize) -> bool {
+        let (Some(range), Some(at)) = (self.selection(), self.locate(width, line, col)) else { return false };
+        range.contains(&at)
+    }
+
+    fn go_to(&mut self, width: usize, line: usize, col: usize) {
+        if let Some(at) = self.locate(width, line, col) {
+            self.jump(at);
+        }
+    }
+
+    fn locate(&self, width: usize, line: usize, col: usize) -> Option<usize> {
+        let chars = self.chars();
+        let lines = lines_of(&chars, width);
+        let range = lines.get(line)?;
+        let ends = lines.get(line + 1).is_none_or(|next| next.start > range.end);
+        let limit = if ends { range.end } else { range.end.saturating_sub(1).max(range.start) };
+        let (mut at, mut used) = (range.start, 0);
+        while at < limit && used + cells(chars[at]) <= col {
+            used += cells(chars[at]);
+            at += 1;
+        }
+        Some(at)
+    }
+
     fn chars(&self) -> Vec<char> {
         self.text().chars().collect()
     }
 
     fn offset(&self) -> usize {
         let DataCursor(row, col) = self.area.cursor();
+        self.offset_of(row, col)
+    }
+
+    fn offset_of(&self, row: usize, col: usize) -> usize {
         self.area.lines()[..row].iter().map(|line| line.chars().count() + 1).sum::<usize>() + col
     }
 
@@ -249,6 +387,25 @@ impl Editor {
 
 pub(crate) fn wrap(text: &str, width: usize) -> Vec<Range<usize>> {
     wrap_chars(&text.chars().collect::<Vec<_>>(), width)
+}
+
+fn word_at(chars: &[char], at: usize) -> Option<Range<usize>> {
+    let on = |i: usize| chars.get(i).is_some_and(|c| *c != '\n');
+    let at = if on(at) { at } else { at.checked_sub(1).filter(|i| on(*i))? };
+    let same = |i: &usize| chars[*i] != '\n' && class(chars[*i]) == class(chars[at]);
+    let start = (0..at).rev().take_while(same).last().unwrap_or(at);
+    let end = (at..chars.len()).take_while(same).last().map_or(at, |i| i + 1);
+    Some(start..end)
+}
+
+fn class(c: char) -> u8 {
+    if c.is_whitespace() {
+        0
+    } else if c != '_' && c.is_ascii_punctuation() {
+        1
+    } else {
+        2
+    }
 }
 
 fn lines_of(chars: &[char], width: usize) -> Vec<Range<usize>> {

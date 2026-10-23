@@ -527,3 +527,252 @@ mod past_the_cursor_limit {
         assert_eq!((e.text().len(), e.cursor()), (LONG - 1, LONG - 1));
     }
 }
+
+mod selecting {
+    use super::*;
+
+    fn shift(e: &mut Editor, code: KeyCode, presses: usize) {
+        for _ in 0..presses {
+            press(e, code, KeyModifiers::SHIFT);
+        }
+    }
+
+    #[test]
+    fn shift_home_and_end_extend_the_selection() {
+        let mut e = at("fix the login", 4);
+        press_in_line(&mut e, KeyCode::End, KeyModifiers::SHIFT);
+        assert_eq!(e.selection(), Some(4..13));
+        press_in_line(&mut e, KeyCode::Home, KeyModifiers::SHIFT);
+        assert_eq!(e.selection(), Some(0..4));
+        press(&mut e, KeyCode::End, KeyModifiers::SHIFT);
+        assert_eq!(e.selection(), Some(4..13));
+    }
+
+    #[test]
+    fn shift_and_the_arrows_select_and_typing_replaces_the_selection() {
+        let mut e = at("fix the login", 0);
+        shift(&mut e, KeyCode::Right, 3);
+        assert_eq!(e.selection(), Some(0..3));
+        press(&mut e, KeyCode::Char('F'), KeyModifiers::SHIFT);
+        assert_eq!((e.text().as_str(), e.selection()), ("F the login", None));
+    }
+
+    #[rstest]
+    #[case::ctrl(KeyModifiers::CONTROL | KeyModifiers::SHIFT)]
+    #[case::alt(KeyModifiers::ALT | KeyModifiers::SHIFT)]
+    fn a_modifier_with_shift_selects_by_word(#[case] modifiers: KeyModifiers) {
+        let mut e = Editor::new("fix the login");
+        press(&mut e, KeyCode::Left, modifiers);
+        press(&mut e, KeyCode::Left, modifiers);
+        assert_eq!(e.selected_text().as_deref(), Some("the login"));
+    }
+
+    #[test]
+    fn shift_up_selects_to_the_line_above() {
+        let mut e = Editor::new("fix the login bug");
+        e.key(KeyEvent::new(KeyCode::Up, KeyModifiers::SHIFT), 10, 4);
+        assert_eq!(e.selection(), Some(7..17));
+    }
+
+    #[test]
+    fn backspace_and_delete_remove_the_selection_even_at_the_end() {
+        let mut e = at("fix the login", 8);
+        shift(&mut e, KeyCode::Right, 5);
+        press(&mut e, KeyCode::Delete, KeyModifiers::NONE);
+        assert_eq!(e.text(), "fix the ");
+        shift(&mut e, KeyCode::Left, 4);
+        press(&mut e, KeyCode::Backspace, KeyModifiers::NONE);
+        assert_eq!(e.text(), "fix ");
+    }
+
+    #[rstest]
+    #[case::left(KeyCode::Left, 4)]
+    #[case::right(KeyCode::Right, 7)]
+    fn a_plain_arrow_goes_to_that_end_of_the_selection(#[case] code: KeyCode, #[case] cursor: usize) {
+        let mut e = at("fix the login", 4);
+        shift(&mut e, KeyCode::Right, 3);
+        press(&mut e, code, KeyModifiers::NONE);
+        assert_eq!((e.selection(), e.cursor()), (None, cursor));
+    }
+
+    #[rstest]
+    #[case::up(KeyCode::Up)]
+    #[case::down(KeyCode::Down)]
+    #[case::home(KeyCode::Home)]
+    #[case::end(KeyCode::End)]
+    #[case::word(KeyCode::Char('b'))]
+    fn other_moves_clear_the_selection(#[case] code: KeyCode) {
+        let mut e = at("fix the login", 4);
+        shift(&mut e, KeyCode::Right, 3);
+        let modifiers = if code == KeyCode::Char('b') { KeyModifiers::ALT } else { KeyModifiers::NONE };
+        press(&mut e, code, modifiers);
+        assert_eq!(e.selection(), None);
+    }
+
+    #[test]
+    fn enter_and_a_paste_replace_the_selection() {
+        let mut e = Editor::new("fix the login");
+        shift(&mut e, KeyCode::Left, 6);
+        press(&mut e, KeyCode::Enter, KeyModifiers::NONE);
+        assert_eq!(e.text(), "fix the\n");
+        shift(&mut e, KeyCode::Left, 4);
+        e.insert_lines("a\nb");
+        assert_eq!(e.text(), "fix a\nb");
+    }
+
+    #[test]
+    fn a_one_line_field_keeps_enter_for_its_caller() {
+        let mut e = Editor::new("fix");
+        shift(&mut e, KeyCode::Left, 1);
+        assert!(!e.one_line_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), 40));
+        assert_eq!(e.selected_text().as_deref(), Some("x"));
+    }
+}
+
+mod mouse {
+    use super::*;
+
+    #[test]
+    fn a_drag_selects_from_the_press_to_the_pointer() {
+        let mut e = Editor::new("fix the login bug");
+        e.place(10, 0, 4);
+        e.drag_to(10, 1, 5);
+        assert_eq!(e.selected_text().as_deref(), Some("the login"));
+    }
+
+    #[test]
+    fn dragging_back_to_the_press_selects_nothing() {
+        let mut e = Editor::new("fix the login");
+        e.place(40, 0, 4);
+        e.drag_to(40, 0, 8);
+        e.drag_to(40, 0, 4);
+        e.settle();
+        press(&mut e, KeyCode::Right, KeyModifiers::NONE);
+        assert_eq!((e.selection(), e.cursor()), (None, 5));
+    }
+
+    #[test]
+    fn dragging_below_the_text_selects_to_its_end() {
+        let mut e = Editor::new("fix the login");
+        e.place(40, 0, 4);
+        e.drag_to(40, 7, 0);
+        assert_eq!(e.selected_text().as_deref(), Some("the login"));
+    }
+
+    #[test]
+    fn a_click_clears_the_selection() {
+        let mut e = Editor::new("fix the login");
+        e.select_all();
+        e.place(40, 0, 2);
+        assert_eq!((e.selection(), e.cursor()), (None, 2));
+    }
+
+    #[rstest]
+    #[case::a_word(10, "login")]
+    #[case::punctuation(14, "-")]
+    #[case::spaces(3, "  ")]
+    #[case::past_the_end_of_a_line(18, "bug")]
+    fn a_double_click_selects_the_word_under_it(#[case] cursor: usize, #[case] word: &str) {
+        let mut e = at("fix  the login-bug\nnext", cursor);
+        e.select_word();
+        assert_eq!(e.selected_text().as_deref(), Some(word));
+    }
+
+    #[rstest]
+    #[case::inside(0, 6, true)]
+    #[case::at_its_end(0, 8, false)]
+    #[case::before_it(0, 2, false)]
+    fn a_right_click_knows_whether_it_is_inside_the_selection(
+        #[case] line: usize,
+        #[case] col: usize,
+        #[case] inside: bool,
+    ) {
+        let mut e = Editor::new("fix the login");
+        e.select(4..8);
+        assert_eq!(e.selected_at(40, line, col), inside);
+    }
+
+    #[test]
+    fn a_double_click_on_an_empty_line_selects_nothing() {
+        let mut e = at("a\n\nb", 2);
+        e.select_word();
+        assert_eq!(e.selection(), None);
+    }
+}
+
+mod clipboard {
+    use super::*;
+
+    #[test]
+    fn the_selected_text_keeps_its_line_breaks() {
+        let mut e = at("ab\ncd", 1);
+        press(&mut e, KeyCode::Right, KeyModifiers::SHIFT);
+        press(&mut e, KeyCode::Right, KeyModifiers::SHIFT);
+        press(&mut e, KeyCode::Right, KeyModifiers::SHIFT);
+        assert_eq!(e.selected_text().as_deref(), Some("b\nc"));
+    }
+
+    #[test]
+    fn cut_returns_the_text_and_removes_it() {
+        let mut e = Editor::new("fix the login");
+        e.select_all();
+        assert_eq!((e.cut().as_deref(), e.text().as_str()), (Some("fix the login"), ""));
+        assert_eq!(e.cut(), None);
+    }
+
+    #[test]
+    fn select_all_then_typing_replaces_everything() {
+        let mut e = at("ab\ncd", 1);
+        e.select_all();
+        e.insert("x");
+        assert_eq!(e.text(), "x");
+    }
+}
+
+mod drawing {
+    use super::*;
+
+    fn mark(line: usize, cells: Range<usize>, to_edge: bool) -> Highlight {
+        Highlight { line, cells, to_edge }
+    }
+
+    #[test]
+    fn a_selected_line_break_reaches_the_edge() {
+        let mut e = at("ab\ncd", 1);
+        e.select(1..4);
+        assert_eq!(e.highlight(10), [mark(0, 1..2, true), mark(1, 0..1, false)]);
+    }
+
+    #[test]
+    fn a_selection_across_a_wrap_reaches_the_edge_of_the_upper_line() {
+        let mut e = Editor::new("fix the login bug");
+        e.select(4..10);
+        assert_eq!(e.highlight(10), [mark(0, 4..8, true), mark(1, 0..2, false)]);
+    }
+
+    #[test]
+    fn a_selection_starting_at_a_wrap_leaves_the_upper_line_alone() {
+        let mut e = Editor::new("fix the login bug");
+        e.select(8..13);
+        assert_eq!(e.highlight(10), [mark(1, 0..5, false)]);
+    }
+
+    #[test]
+    fn wide_characters_take_two_cells() {
+        let mut e = Editor::new("a你好b");
+        e.select(1..3);
+        assert_eq!(e.highlight(10), [mark(0, 1..5, false)]);
+    }
+
+    #[test]
+    fn nothing_selected_draws_nothing() {
+        assert_eq!(Editor::new("fix").highlight(10), []);
+    }
+
+    #[test]
+    fn the_selection_counts_in_equality() {
+        let mut e = Editor::new("fix");
+        e.select(0..1);
+        assert_ne!(e, Editor::new("fix"));
+    }
+}

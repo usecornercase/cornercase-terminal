@@ -108,7 +108,7 @@ pub(in crate::ui) fn draw_share_settings(f: &mut Frame, view: &View, share: &Sha
     let dim = Style::default().fg(view.muted);
     f.render_widget(Paragraph::new(Span::styled(share.intro, dim)).wrap(Wrap { trim: true }), intro);
     let cursor = match &share.body {
-        ShareBody::Text(editor) => draw_text(f, view, body, editor),
+        ShareBody::Text(editor) => draw_text(f, view, body, editor, true),
         ShareBody::Lines { lines, scroll } => {
             draw_lines(f, view, body, lines, *scroll);
             None

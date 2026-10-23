@@ -263,6 +263,8 @@ impl Painter<'_> {
             let part: String = text[range].iter().collect();
             put(self.buf, (x, y), &part, Style::default().bg(super::surface_colour(view.light)), field.right());
         }
+        let text_box = Rect { x, width: field.right().saturating_sub(x), ..r };
+        super::widgets::paint_selection(self.buf, text_box, 0, &editor.highlight(width));
         let (line, col) = editor.position(width);
         let at = Position::new(x.saturating_add(height(col)), r.y.saturating_add(height(line)));
         r.contains(at).then_some(at)

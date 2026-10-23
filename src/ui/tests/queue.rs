@@ -162,3 +162,24 @@ fn a_click_on_the_account_field_hits_it_and_its_open_list_chooses() {
     let home = Position::new(list.x + 2, list.y + 2);
     assert!(matches!(queue_form::hit(screen, &f, home), Some(queue_form::Hit::Choose(1))));
 }
+
+fn reversed(t: &Terminal<TestBackend>) -> usize {
+    t.backend().buffer().content().iter().filter(|c| c.modifier.contains(Modifier::REVERSED)).count()
+}
+
+#[test]
+fn a_selection_in_the_focused_prompt_is_reversed() {
+    let mut f = form("fix the login", None);
+    f.focus = Control::Prompt;
+    let before = reversed(&shown(f.clone(), 100, 24));
+    f.prompt.select_all();
+    assert_eq!(reversed(&shown(f, 100, 24)), before + 13);
+}
+
+#[test]
+fn an_unfocused_field_draws_no_selection() {
+    let mut f = form("fix the login", None);
+    let before = reversed(&shown(f.clone(), 100, 24));
+    f.prompt.select_all();
+    assert_eq!(reversed(&shown(f, 100, 24)), before);
+}

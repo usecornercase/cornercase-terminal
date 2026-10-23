@@ -5,6 +5,8 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Paragraph};
 
+use crate::editor::Highlight;
+
 use super::View;
 
 pub(super) fn button_width(label: &str) -> u16 {
@@ -14,6 +16,20 @@ pub(super) fn button_width(label: &str) -> u16 {
 pub(crate) fn update_button(settings: Rect, label: &str) -> Rect {
     let width = button_width(label).min(settings.width);
     Rect { x: settings.right() - width, width, ..settings }
+}
+
+pub(super) fn paint_selection(buf: &mut Buffer, text: Rect, top: usize, marks: &[Highlight]) {
+    for mark in marks {
+        let Some(row) = mark.line.checked_sub(top).and_then(|row| u16::try_from(row).ok()).filter(|&r| r < text.height)
+        else {
+            continue;
+        };
+        let cell = |cells: usize| text.x.saturating_add(u16::try_from(cells).unwrap_or(u16::MAX)).min(text.right());
+        let end = if mark.to_edge { text.right() } else { cell(mark.cells.end) };
+        let start = cell(mark.cells.start);
+        let area = Rect { x: start, y: text.y + row, width: end.saturating_sub(start), height: 1 };
+        buf.set_style(area, Style::default().add_modifier(Modifier::REVERSED));
+    }
 }
 
 pub(super) fn hovered(view: &View, r: Rect) -> bool {
