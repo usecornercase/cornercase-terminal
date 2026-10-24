@@ -598,6 +598,9 @@ mod tokens {
         assert_eq!(shown(&s.app), Vec::<String>::new());
         let error = browser(&s.app).lists[&Source::Shortcut].error.clone().unwrap_or_default();
         assert!(error.contains("saved") && !error.contains("from before"), "{error}");
+        send_key(&mut s.app, KeyCode::Esc, KeyModifiers::NONE);
+        open_list(&mut s);
+        assert_eq!(shown(&s.app), Vec::<String>::new());
     }
 
     #[test]

@@ -331,6 +331,9 @@ impl App {
             Ok(_) => drop(self.issues.failures.remove(&key)),
             Err(error) => drop(self.issues.failures.insert(key, error.to_string())),
         }
+        if matches!(result, Err(Error::TokenRejected(_))) {
+            self.issues.cache.forget(source);
+        }
     }
 
     pub(super) fn cache_key(&self, source: Source, project: u64, query: &Query) -> CacheKey {
