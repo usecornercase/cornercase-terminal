@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.195
+
+- **A tidier footer: the tools, then More.** Under the lists, **Issues**, **Changes**, **Files** and **TODO** now sit in two columns, and Settings, Usage, Remote, the update and Quit moved into one button, **More ▴**, at the bottom next to **Help**. Click it for **settings**, **usage**, **remote…** (once browser access or a chat bot is set up), **update to x.y.z** when there is one, and **quit**. More turns cyan when an update is waiting and shows a green dot while a browser is attached or you're away on a chat app.
+- **Worktrees has a button of its own.** The dialog that lists every worktree on disk, with when it last changed and what makes it safe to remove, now opens from **Worktrees** at the bottom of the sidebar (above More when the lists are side by side), instead of from Settings › Worktrees › worktrees on disk. A project's menu still opens it for that project alone.
+- In the icon bar, Worktrees gets a slot after TODO, and Settings, Usage, Remote, the update and Quit are now behind a gear at the bottom that opens the same menu, with Help just above it.
+- TODO's dot now follows its label: ` TODO ● `.
+
 ## 0.12.194
 
 - **The name field has a cursor.** In **New workspace**, **New group** and **Rename**, the arrows, `Home` and `End` now move the cursor, `Ctrl+←` `Ctrl+→` or `Option+←` `Option+→` move by word, and a click puts the cursor where you click, so you can fix a letter in the middle without deleting the rest. `Shift` and the mouse select, and a right-click copies or cuts, as in the other text fields.
