@@ -331,6 +331,19 @@ mod api {
     }
 
     #[test]
+    fn pairing_names_a_missing_access_as_discord_does() {
+        let server = FakeHttp::start(vec![
+            ("GET /oauth2/applications/@me", 200, r#"{"id":"123456789","owner":{"id":"9","username":"ada"}}"#),
+            ("POST /users/@me/channels", 200, r#"{"id":"1200"}"#),
+            ("POST /channels/1200/messages", 403, r#"{"message":"Missing Access","code":50001}"#),
+        ]);
+
+        let (_, paired) = bot(&server).pair("hello");
+
+        assert_eq!(paired, Err(Failure::Refused("Missing Access (code 50001)".into())));
+    }
+
+    #[test]
     fn a_long_keyboard_reports_the_first_message_and_resumes_after_a_limit() {
         let server = FakeHttp::start(vec![
             ("POST /channels/42/messages", 200, r#"{"id":"100"}"#),

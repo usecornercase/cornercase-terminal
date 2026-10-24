@@ -155,6 +155,10 @@ fn with_tags(forum: &Forum, channel: &Value) -> Result<Forum, Failure> {
 }
 
 impl Bot {
+    fn forum_call(&self, method: Method, path: &str, body: Option<&Value>) -> Result<Value, Failure> {
+        self.scoped(true).call(method, path, body)
+    }
+
     pub(crate) fn set_up(&self, chosen: Option<i64>, saved: Option<&Forum>) -> Result<Progress, Failure> {
         let checklist = self.checklist()?;
         let picked = checklist.pick(chosen).filter(|_| checklist.content);
@@ -171,12 +175,12 @@ impl Bot {
     }
 
     fn servers_of(&self, owner: i64) -> Result<Vec<Server>, Failure> {
-        let guilds = self.call(Method::Get, "/users/@me/guilds", None)?;
+        let guilds = self.forum_call(Method::Get, "/users/@me/guilds", None)?;
         listed(&guilds)
             .iter()
             .filter_map(|guild| snowflake(&guild["id"]).map(|id| (id, guild["name"].as_str().unwrap_or_default())))
             .map(|(id, name)| {
-                let guild = self.call(Method::Get, &format!("/guilds/{id}"), None)?;
+                let guild = self.forum_call(Method::Get, &format!("/guilds/{id}"), None)?;
                 let theirs = snowflake(&guild["owner_id"]) == Some(owner);
                 Ok(theirs.then(|| Server { id, name: name.to_string() }))
             })
@@ -196,7 +200,7 @@ impl Bot {
     }
 
     fn found(&self, server: &Server) -> Result<Option<Forum>, Failure> {
-        let channels = self.call(Method::Get, &format!("/guilds/{}/channels", server.id), None)?;
+        let channels = self.forum_call(Method::Get, &format!("/guilds/{}/channels", server.id), None)?;
         let found = listed(&channels)
             .iter()
             .find(|channel| channel["type"].as_u64() == Some(FORUM) && channel["name"].as_str() == Some(NAME));
@@ -208,7 +212,7 @@ impl Bot {
         let bot = self.application()?;
         let path = format!("/guilds/{}/channels", server.id);
         let channel = self
-            .call(Method::Post, &path, Some(&creating(server.id, &bot)))
+            .forum_call(Method::Post, &path, Some(&creating(server.id, &bot)))
             .map_err(|f| missing(f, MANAGE_CHANNELS_NAME))?;
         let id = snowflake(&channel["id"]).ok_or_else(|| Failure::Refused("the forum has no id".into()))?;
         with_tags(&Forum { guild: server.id, guild_name: server.name.clone(), channel: id, tags: UNREAD }, &channel)
@@ -216,7 +220,7 @@ impl Bot {
 
     pub(crate) fn ensure_tags(&self, forum: &Forum) -> Result<Forum, Failure> {
         let path = format!("/channels/{}", forum.channel);
-        let channel = self.call(Method::Get, &path, None)?;
+        let channel = self.forum_call(Method::Get, &path, None)?;
         if tags_of(&channel).is_some() {
             return with_tags(forum, &channel);
         }
@@ -224,7 +228,8 @@ impl Bot {
         let wanting: Vec<&str> = TAGS.into_iter().filter(|name| tag(&tags, name).is_none()).collect();
         tags.extend(wanting.into_iter().map(|name| json!({ "name": name })));
         let body = json!({ "available_tags": tags });
-        let patched = self.call(Method::Patch, &path, Some(&body)).map_err(|f| missing(f, MANAGE_CHANNELS_NAME))?;
+        let patched =
+            self.forum_call(Method::Patch, &path, Some(&body)).map_err(|f| missing(f, MANAGE_CHANNELS_NAME))?;
         with_tags(forum, &patched)
     }
 }

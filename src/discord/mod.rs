@@ -50,6 +50,8 @@ pub(crate) const PUBLIC: &str = "public app: Install Link to None, then Public B
 pub(crate) struct Bot {
     base: String,
     token: String,
+    dm: Option<i64>,
+    forum: bool,
 }
 
 impl fmt::Debug for Bot {
@@ -143,7 +145,31 @@ fn snowflake(value: &Value) -> Option<i64> {
 
 impl Bot {
     pub(crate) fn new(base: &str, token: &str) -> Self {
-        Self { base: base.trim_end_matches('/').to_string(), token: token.trim().to_string() }
+        let (base, token) = (base.trim_end_matches('/').to_string(), token.trim().to_string());
+        Self { base, token, dm: None, forum: false }
+    }
+
+    pub(crate) fn posting(self, dm: Option<i64>) -> Self {
+        Self { dm, ..self }
+    }
+
+    fn scoped(&self, forum: bool) -> Self {
+        Self { forum, ..self.clone() }
+    }
+
+    fn on_forum(&self, order: &Order) -> bool {
+        match order {
+            Order::Post { .. }
+            | Order::Retag { .. }
+            | Order::Close { .. }
+            | Order::Reopen { .. }
+            | Order::Remove { .. } => true,
+            Order::Send { chat, .. }
+            | Order::Edit { chat, .. }
+            | Order::Buttons { chat, .. }
+            | Order::React { chat, .. } => self.dm.is_some_and(|dm| dm != *chat),
+            Order::Answer { .. } | Order::Commands => false,
+        }
     }
 
     fn scrub(&self, text: &str) -> String {
@@ -176,8 +202,8 @@ impl Bot {
             (429, _) => Failure::Wait(retry_after(&answer.json)),
             (_, Some(CANNOT_MESSAGE)) => Failure::Closed,
             (_, Some(MISSING_PERMISSION)) => Failure::Missing(forum::SOME_PERMISSION),
-            (_, Some(MISSING_ACCESS | UNKNOWN_GUILD)) => Failure::Removed,
-            (_, Some(UNKNOWN_CHANNEL)) => Failure::Lost,
+            (_, Some(MISSING_ACCESS | UNKNOWN_GUILD)) if self.forum => Failure::Removed,
+            (_, Some(UNKNOWN_CHANNEL)) if self.forum => Failure::Lost,
             (_, Some(THREAD_ARCHIVED)) => Failure::Archived,
             (status, code) => {
                 let said = answer.json["message"].as_str().map_or_else(|| format!("status {status}"), String::from);
@@ -296,8 +322,9 @@ impl Transport for Bot {
     fn perform(&self, order: &Order, attempt: &Sent) -> Result<Option<i64>, Failure> {
         let follows_up = matches!(order, Order::Answer { text, .. } if !text.is_empty());
         let app = if follows_up || matches!(order, Order::Commands) { self.application()? } else { String::new() };
+        let bot = self.scoped(self.on_forum(order));
         while let Some(call) = request(order, &app, attempt.thread.get()).into_iter().nth(attempt.calls.get()) {
-            let answer = self.call(call.method, &call.path, call.body.as_ref()).map_err(|f| forum::needs(f, order))?;
+            let answer = bot.call(call.method, &call.path, call.body.as_ref()).map_err(|f| forum::needs(f, order))?;
             record(order, &answer, attempt);
             attempt.calls.set(attempt.calls.get() + 1);
         }

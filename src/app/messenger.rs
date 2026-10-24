@@ -291,7 +291,8 @@ impl App {
         messenger.refuse_content(false);
         let id = messenger.links;
         let forum = messenger.saved.forum.as_ref().filter(|_| self.config.discord_forum && messenger.forum_ready());
-        let account = Account { api: &messenger.api, token: &token, forum: forum.map(|forum| forum.guild) };
+        let dm = forum.and(messenger.chat()).map(|chat| chat.id);
+        let account = Account { api: &messenger.api, token: &token, forum: forum.map(|forum| forum.guild), dm };
         let link = via.start_link(id, account, &self.tx, unix_now() - RECENT);
         link.send(Order::Commands);
         log::info!(via.target(), "listening", link = id, paired = messenger.paired());

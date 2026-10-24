@@ -158,8 +158,9 @@ impl App {
         let messenger = self.messenger(via);
         if agent.status == Some(Status::Waiting) {
             let why = format!("{} is waiting for an answer: use the buttons below.", agent.kind);
+            let to = self.heard_in(via, message).or_else(|| messenger.chat().map(|chat| chat.id));
             self.reply(via, message, &why);
-            self.notice_waiting(via, pane);
+            self.notice_waiting(via, pane, to);
         } else if survey {
             let keyboard = vec![vec![messenger.tap("dismiss the survey", &Tap::Key(pane, "0".into()))]];
             let text = "Claude Code's feedback survey is open above its input box: dismiss it, then send again.";

@@ -34,6 +34,7 @@ pub(crate) struct Account<'a> {
     pub(crate) api: &'a str,
     pub(crate) token: &'a str,
     pub(crate) forum: Option<i64>,
+    pub(crate) dm: Option<i64>,
 }
 
 impl Via {
@@ -130,12 +131,12 @@ impl Via {
         tx: &std::sync::mpsc::Sender<E>,
         since: i64,
     ) -> link::Link {
-        let Account { api, token, forum } = account;
+        let Account { api, token, forum, dm } = account;
         match self {
             Self::Telegram => {
                 telegram::link::start(id, &telegram::Bot::new(api, token), tx, telegram::link::POLL, since)
             }
-            Self::Discord => discord::gateway::start(id, &discord::Bot::new(api, token), tx, since, forum),
+            Self::Discord => discord::gateway::start(id, &discord::Bot::new(api, token).posting(dm), tx, since, forum),
         }
     }
 

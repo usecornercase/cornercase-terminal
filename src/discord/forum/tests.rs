@@ -262,20 +262,49 @@ mod posts {
         assert_eq!(Bot::archived(&Order::Reopen { thread: 700 }, &failure), None);
     }
 
+    fn sending(chat: i64) -> Order {
+        Order::Send { chat, text: "hi".into(), keyboard: Vec::new(), reply_to: None, ask: None, tag: Some(1) }
+    }
+
+    fn refusing(path: &'static str, code: i64) -> FakeHttp {
+        let answer = format!(r#"{{"message":"no","code":{code}}}"#);
+        FakeHttp::start(vec![(path, 404, answer)])
+    }
+
     #[test]
     fn a_thread_deleted_by_hand_is_gone() {
-        let server = FakeHttp::start(vec![(
-            "POST /channels/700/messages",
-            404,
-            r#"{"message":"Unknown Channel","code":10003}"#,
-        )]);
-        let order =
-            Order::Send { chat: 700, text: "hi".into(), keyboard: Vec::new(), reply_to: None, ask: None, tag: Some(1) };
+        let server = refusing("POST /channels/700/messages", 10003);
+        let order = sending(700);
 
-        let failure = bot(&server).perform(&order, &Sent::default()).expect_err("a failure");
+        let failure = bot(&server).posting(Some(42)).perform(&order, &Sent::default()).expect_err("a failure");
 
         assert_eq!(Bot::gone(&order, &failure), Some(700));
         assert_eq!(Bot::gone(&order, &Failure::Missing("Send Messages")), None);
+    }
+
+    #[rstest::rstest]
+    #[case::an_unknown_channel(10003)]
+    #[case::no_access(50001)]
+    #[case::an_unknown_server(10004)]
+    fn a_refusal_in_the_dm_is_not_the_forums(#[case] code: i64, #[values(None, Some(42))] dm: Option<i64>) {
+        let server = refusing("POST /channels/42/messages", code);
+        let order = sending(42);
+
+        let failure = bot(&server).posting(dm).perform(&order, &Sent::default()).expect_err("a failure");
+
+        assert_eq!(failure, Failure::Refused(format!("no (code {code})")));
+        assert_eq!(Bot::gone(&order, &failure), None);
+    }
+
+    #[rstest::rstest]
+    #[case::an_unknown_channel(10003, Failure::Lost)]
+    #[case::no_access(50001, Failure::Removed)]
+    fn a_refusal_of_a_forum_order_is_the_forums(#[case] code: i64, #[case] failure: Failure) {
+        let server = refusing("PATCH /channels/700", code);
+
+        let got = bot(&server).perform(&Order::Retag { thread: 700, tag_id: 11 }, &Sent::default());
+
+        assert_eq!(got, Err(failure));
     }
 
     #[rstest::rstest]

@@ -1,6 +1,6 @@
 use rstest::rstest;
 
-use super::posts::{Posting, THREAD, first_post, sends};
+use super::posts::{Posting, THREAD, first_post, needs_you, sends};
 use super::*;
 use crate::control::Close;
 use crate::messenger::Tap;
@@ -160,6 +160,51 @@ mod routing {
 
         let said = "No agent is running in this workspace. /new in the direct message starts one.";
         assert_eq!(sends(&got), [(THREAD, said)], "{got:?}");
+    }
+}
+
+mod waiting {
+    use super::*;
+
+    fn waiting_thread() -> (Thread, u64) {
+        let (mut thread, pane) = Thread::new();
+        thread.posting.report(pane, "blocked");
+        thread.posting.sent();
+        (thread, pane)
+    }
+
+    fn said_to(orders: &[Order]) -> (Vec<i64>, Vec<i64>) {
+        let chats = |pick: fn(&Order) -> bool| -> Vec<i64> {
+            orders
+                .iter()
+                .filter_map(|order| match order {
+                    Order::Send { chat, .. } if pick(order) => Some(*chat),
+                    _ => None,
+                })
+                .collect()
+        };
+        let why = |order: &Order| matches!(order, Order::Send { text, .. } if text.contains("use the buttons below"));
+        (chats(why), chats(needs_you))
+    }
+
+    #[test]
+    fn a_message_in_the_dm_gets_the_buttons_in_the_dm() {
+        let (mut thread, _) = waiting_thread();
+
+        thread.message("hello", None, (CHAT, USER, None));
+        let got = thread.posting.sent();
+
+        assert_eq!(said_to(&got), (vec![CHAT], vec![CHAT]), "{got:?}");
+    }
+
+    #[test]
+    fn a_message_in_the_post_gets_the_buttons_in_the_post() {
+        let (mut thread, _) = waiting_thread();
+
+        thread.says("hello");
+        let got = thread.posting.sent();
+
+        assert_eq!(said_to(&got), (vec![THREAD], vec![THREAD]), "{got:?}");
     }
 }
 
