@@ -33,6 +33,7 @@ pub(crate) enum Via {
 pub(crate) struct Account<'a> {
     pub(crate) api: &'a str,
     pub(crate) token: &'a str,
+    pub(crate) forum: Option<i64>,
 }
 
 impl Via {
@@ -129,12 +130,12 @@ impl Via {
         tx: &std::sync::mpsc::Sender<E>,
         since: i64,
     ) -> link::Link {
-        let Account { api, token } = account;
+        let Account { api, token, forum } = account;
         match self {
             Self::Telegram => {
                 telegram::link::start(id, &telegram::Bot::new(api, token), tx, telegram::link::POLL, since)
             }
-            Self::Discord => discord::gateway::start(id, &discord::Bot::new(api, token), tx, since),
+            Self::Discord => discord::gateway::start(id, &discord::Bot::new(api, token), tx, since, forum),
         }
     }
 
@@ -274,12 +275,17 @@ pub(crate) enum Order {
     Answer { id: String, text: String },
     React { chat: i64, message: i64, emoji: String },
     Commands,
+    Post { forum: i64, title: String, tag_id: i64, text: String, keyboard: Keyboard, tag: Option<u64> },
+    Retag { thread: i64, tag_id: i64 },
+    Close { thread: i64, lock: bool },
+    Reopen { thread: i64 },
+    Remove { thread: i64 },
 }
 
 impl Order {
     pub(crate) fn tag(&self) -> Option<u64> {
         match self {
-            Self::Send { tag, .. } => *tag,
+            Self::Send { tag, .. } | Self::Post { tag, .. } => *tag,
             _ => None,
         }
     }
@@ -291,6 +297,7 @@ pub(crate) struct Message {
     pub(crate) chat: i64,
     pub(crate) user: i64,
     pub(crate) private: bool,
+    pub(crate) guild: Option<i64>,
     pub(crate) date: i64,
     pub(crate) name: String,
     pub(crate) text: String,
@@ -335,12 +342,29 @@ pub(crate) struct Saved {
     version: u32,
     pub(crate) bot: String,
     pub(crate) chat: Option<Chat>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) forum: Option<Forum>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Forum {
+    pub(crate) guild: i64,
+    pub(crate) guild_name: String,
+    pub(crate) channel: i64,
+    pub(crate) tags: Tags,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Tags {
+    pub(crate) working: i64,
+    pub(crate) waiting: i64,
+    pub(crate) done: i64,
 }
 
 impl Saved {
     #[cfg(test)]
     pub(crate) fn new(bot: String, chat: Option<Chat>) -> Self {
-        Self { version: VERSION, bot, chat }
+        Self { version: VERSION, bot, chat, forum: None }
     }
 
     pub(crate) fn load(path: &Path) -> Self {

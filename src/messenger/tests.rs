@@ -142,4 +142,36 @@ mod saved {
         std::fs::write(&path, "{").expect("write");
         assert_eq!(Saved::load(&path), Saved::default());
     }
+
+    #[test]
+    fn a_file_from_before_the_forum_reads_without_one() {
+        let dir = TempDir::new();
+        let path = dir.path().join("discord.json");
+        std::fs::write(&path, r#"{"version":1,"bot":"cornercase","chat":null}"#).expect("write");
+
+        assert_eq!(Saved::load(&path), Saved::new("cornercase".into(), None));
+    }
+
+    #[test]
+    fn the_forum_comes_back_with_its_tags() {
+        let dir = TempDir::new();
+        let path = dir.path().join("discord.json");
+        let tags = Tags { working: 11, waiting: 12, done: 13 };
+        let forum = Forum { guild: 7, guild_name: "home".into(), channel: 8, tags };
+        let saved = Saved { forum: Some(forum), ..Saved::new("cornercase".into(), None) };
+
+        saved.save(&path).expect("save");
+
+        assert_eq!(Saved::load(&path), saved);
+    }
+
+    #[test]
+    fn no_forum_writes_no_forum_key() {
+        let dir = TempDir::new();
+        let path = dir.path().join("discord.json");
+
+        Saved::new("cornercase".into(), None).save(&path).expect("save");
+
+        assert!(!std::fs::read_to_string(&path).expect("read").contains("forum"));
+    }
 }

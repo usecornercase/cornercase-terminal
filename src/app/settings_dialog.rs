@@ -24,26 +24,34 @@ impl App {
                 log::info!("app", "settings changed", keys = changes.keys().join(","));
             }
         }
+        self.forget_changed_issues(&config);
+        let forum = config.discord_forum != self.config.discord_forum;
+        self.config = config;
+        if let Some(Overlay::Settings(s)) = &mut self.overlay {
+            s.take_config(self.config.clone());
+        }
+        if forum {
+            self.forum_switched();
+        }
+        self.settings_changed();
+    }
+
+    fn forget_changed_issues(&mut self, config: &Config) {
         let jira = |c: &Config| (c.jira_site.clone(), c.jira_email.clone(), c.jira_jql.clone());
-        if jira(&config) != jira(&self.config) {
+        if jira(config) != jira(&self.config) {
             self.forget_issues(Source::Jira);
         }
         let plane = |c: &Config| (c.plane_url.clone(), c.plane_workspace.clone(), c.plane_filter.clone());
-        if plane(&config) != plane(&self.config) {
+        if plane(config) != plane(&self.config) {
             self.forget_issues(Source::Plane);
         }
         let asana = |c: &Config| (c.asana_workspace.clone(), c.asana_projects.clone());
-        if asana(&config) != asana(&self.config) {
+        if asana(config) != asana(&self.config) {
             self.forget_issues(Source::Asana);
         }
         if config.gitlab_url != self.config.gitlab_url {
             self.forget_issues(Source::Gitlab);
         }
-        self.config = config;
-        if let Some(Overlay::Settings(s)) = &mut self.overlay {
-            s.take_config(self.config.clone());
-        }
-        self.settings_changed();
     }
 
     pub(super) fn open_settings(&mut self) {
@@ -170,6 +178,22 @@ impl App {
         }
     }
 
+    fn pair_from_settings(&mut self, via: Via) {
+        if let Some(why) = self.pair(via) {
+            self.settings_message(why.into());
+        }
+    }
+
+    fn forum_from_settings(&mut self, via: Via, config: Option<&Config>) {
+        if let Some(config) = config
+            && let Err(e) = self.write_config(config)
+        {
+            self.settings_message(e);
+            return;
+        }
+        self.open_forum(via);
+    }
+
     fn settings_act(&mut self, action: settings::Action, area: Rect) {
         match action {
             settings::Action::None => {}
@@ -186,11 +210,8 @@ impl App {
                 let removed = self.remove_messenger(via);
                 self.settings_message(removed.unwrap_or_else(|e| e));
             }
-            settings::Action::Pair(via) => {
-                if let Some(why) = self.pair(via) {
-                    self.settings_message(why.into());
-                }
-            }
+            settings::Action::Pair(via) => self.pair_from_settings(via),
+            settings::Action::Forum(via, config) => self.forum_from_settings(via, config.as_deref()),
             settings::Action::ForgetChat(via) => {
                 let forgotten = self.forget_chat(via);
                 self.settings_message(forgotten);

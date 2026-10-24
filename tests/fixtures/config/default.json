@@ -64,5 +64,7 @@
   "tour": true,
   "remote": false,
   "remote_port": 47681,
+  "discord_forum": false,
+  "discord_forum_close": "archive",
   "projects": {}
 }

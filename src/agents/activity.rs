@@ -2,7 +2,7 @@ use std::ops::RangeInclusive;
 use std::time::{Duration, Instant};
 
 pub(in crate::agents) const BRAILLE: RangeInclusive<char> = '\u{2800}'..='\u{28ff}';
-const NOTIFY_AFTER: Duration = Duration::from_secs(1);
+pub(crate) const NOTIFY_AFTER: Duration = Duration::from_secs(1);
 pub(crate) const SHELL: &str = "shell";
 pub(crate) const MOON: &str = "◐";
 pub(crate) const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];

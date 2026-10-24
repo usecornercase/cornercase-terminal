@@ -78,6 +78,8 @@
   "tour": false,
   "remote": true,
   "remote_port": 47682,
+  "discord_forum": true,
+  "discord_forum_close": "delete",
   "projects": {
     "~/code/web-shop": {
       "setup": "npm ci\ncp ../.env .env",

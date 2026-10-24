@@ -3,13 +3,13 @@ use serde_json::json;
 use super::*;
 use crate::test_util::FakeHttp;
 
-const TOKEN: &str = "MTIzNDU2Nzg5.Gx.SECRET-token";
+pub(super) const TOKEN: &str = "MTIzNDU2Nzg5.Gx.SECRET-token";
 
-fn bot(server: &FakeHttp) -> Bot {
+pub(super) fn bot(server: &FakeHttp) -> Bot {
     Bot::new(&server.url(), TOKEN)
 }
 
-fn body(request: &str) -> Value {
+pub(super) fn body(request: &str) -> Value {
     let (_, body) = request.split_once("\r\n\r\n").expect("a body");
     serde_json::from_str(body).expect("a JSON body")
 }
@@ -31,13 +31,14 @@ mod updates {
             "timestamp": "2026-10-15T10:00:00.000000+00:00", "author": {"id": "9", "username": "ada"},
             "message_reference": {"message_id": "1300000000000000000"}});
 
-        let update = update("MESSAGE_CREATE", &d);
+        let update = update("MESSAGE_CREATE", &d, None);
 
         let message = Message {
             id: 1_300_000_000_000_000_001,
             chat: 1200,
             user: 9,
             private: true,
+            guild: None,
             date: time::parse_time("2026-10-15T10:00:00Z").expect("a time"),
             name: "ada".into(),
             text: "/status".into(),
@@ -51,7 +52,37 @@ mod updates {
     #[case::from_a_bot(json!({"id": "1", "channel_id": "2", "author": {"id": "9", "bot": true}}))]
     #[case::a_system_message(json!({"id": "1", "channel_id": "2", "type": 7, "author": {"id": "9"}}))]
     fn other_messages_are_left_out(#[case] d: Value) {
-        assert_eq!(update("MESSAGE_CREATE", &d), None);
+        assert_eq!(update("MESSAGE_CREATE", &d, None), None);
+    }
+
+    fn in_a_guild(guild: &str) -> Value {
+        json!({"id": "1", "channel_id": "2", "guild_id": guild, "content": "go on",
+            "timestamp": "2026-10-15T10:00:00+00:00", "author": {"id": "9", "username": "ada"}})
+    }
+
+    #[rstest::rstest]
+    #[case::in_direct_messages_only(None)]
+    #[case::in_another_server(Some(4))]
+    fn a_message_in_a_server_that_is_not_the_forum_s_is_left_out(#[case] forum: Option<i64>) {
+        assert_eq!(update("MESSAGE_CREATE", &in_a_guild("3"), forum), None);
+    }
+
+    #[test]
+    fn a_message_in_the_forum_s_server_is_read_with_its_guild() {
+        let Some(Update::Message(message)) = update("MESSAGE_CREATE", &in_a_guild("3"), Some(3)) else {
+            panic!("a message")
+        };
+
+        assert_eq!((message.guild, message.private, message.chat, message.text.as_str()), (Some(3), false, 2, "go on"));
+    }
+
+    #[test]
+    fn a_direct_message_has_no_guild_in_forum_mode_too() {
+        let d = json!({"id": "1", "channel_id": "2", "author": {"id": "9"}});
+
+        let Some(Update::Message(message)) = update("MESSAGE_CREATE", &d, Some(3)) else { panic!("a message") };
+
+        assert_eq!((message.guild, message.private), (None, true));
     }
 
     #[test]
@@ -60,18 +91,21 @@ mod updates {
             "user": {"id": "9"}, "message": {"id": "55"}, "data": {"custom_id": "ab12:s:5"}});
 
         let press = Press { id: "77:tok".into(), chat: 1200, user: 9, message: 55, data: "ab12:s:5".into() };
-        assert_eq!(update("INTERACTION_CREATE", &d), Some(Update::Press(press)));
+        assert_eq!(update("INTERACTION_CREATE", &d, None), Some(Update::Press(press)));
     }
 
     #[test]
     fn a_member_presses_through_its_member_user_and_other_interactions_are_ignored() {
         let d = json!({"id": "77", "token": "tok", "type": 3, "channel": {"id": "1200"},
             "member": {"user": {"id": "9"}}, "message": {"id": "55"}, "data": {"custom_id": "x"}});
-        let Some(Update::Press(press)) = update("INTERACTION_CREATE", &d) else { panic!("a press") };
+        let Some(Update::Press(press)) = update("INTERACTION_CREATE", &d, None) else { panic!("a press") };
         assert_eq!((press.user, press.chat), (9, 1200));
 
-        assert_eq!(update("INTERACTION_CREATE", &json!({"id": "1", "token": "t", "type": 4, "channel_id": "2"})), None);
-        assert_eq!(update("TYPING_START", &json!({})), None);
+        assert_eq!(
+            update("INTERACTION_CREATE", &json!({"id": "1", "token": "t", "type": 4, "channel_id": "2"}), None),
+            None
+        );
+        assert_eq!(update("TYPING_START", &json!({}), None), None);
     }
 
     #[test]
@@ -84,12 +118,13 @@ mod updates {
             chat: 1200,
             user: 9,
             private: true,
+            guild: None,
             date: (1_300_000_000_000_000_001_i64 >> 22) / 1000 + 1_420_070_400,
             name: "ada".into(),
             text: "/new".into(),
             reply_to: None,
         };
-        assert_eq!(update("INTERACTION_CREATE", &d), Some(Update::Message(message)));
+        assert_eq!(update("INTERACTION_CREATE", &d, None), Some(Update::Message(message)));
         let expected = Invoked { id: "1300000000000000001:tok".into(), app: Some("123456789".into()) };
         assert_eq!(invoked("INTERACTION_CREATE", &d), Some(expected));
         assert_eq!(invoked("MESSAGE_CREATE", &d), None);
@@ -115,7 +150,7 @@ mod buttons {
     fn more_than_five_rows_go_to_the_messages_after() {
         let keyboard: Keyboard = (0..12).map(|i| vec![key("k", &format!("d{i}"))]).collect();
 
-        let calls = request(&send(keyboard), "");
+        let calls = request(&send(keyboard), "", None);
 
         let rows: Vec<usize> = calls
             .iter()
@@ -147,7 +182,7 @@ mod orders {
             tag: None,
         };
 
-        let calls = request(&order, "");
+        let calls = request(&order, "", None);
 
         let body = calls[0].body.clone().expect("a body");
         assert_eq!((calls[0].method, calls[0].path.as_str()), (Method::Post, "/channels/42/messages"));
@@ -167,7 +202,7 @@ mod orders {
             tag: None,
         };
 
-        let calls = request(&order, "");
+        let calls = request(&order, "", None);
 
         let content = calls[0].body.as_ref().and_then(|b| b["content"].as_str()).unwrap_or_default().to_string();
         assert_eq!(markdown::length(&content), markdown::MAX);
@@ -176,8 +211,8 @@ mod orders {
 
     #[test]
     fn edits_and_buttons_patch_the_message() {
-        let edit = request(&Order::Edit { chat: 1, message: 2, text: "t".into(), keyboard: Vec::new() }, "");
-        let buttons = request(&Order::Buttons { chat: 1, message: 2, keyboard: Vec::new() }, "");
+        let edit = request(&Order::Edit { chat: 1, message: 2, text: "t".into(), keyboard: Vec::new() }, "", None);
+        let buttons = request(&Order::Buttons { chat: 1, message: 2, keyboard: Vec::new() }, "", None);
 
         assert_eq!((edit[0].method, edit[0].path.as_str()), (Method::Patch, "/channels/1/messages/2"));
         assert_eq!(buttons[0].body, Some(json!({"components": []})));
@@ -185,16 +220,16 @@ mod orders {
 
     #[test]
     fn an_answer_with_text_is_an_ephemeral_follow_up_and_without_it_nothing() {
-        let calls = request(&Order::Answer { id: "77:tok".into(), text: "stale".into() }, "123");
+        let calls = request(&Order::Answer { id: "77:tok".into(), text: "stale".into() }, "123", None);
 
         assert_eq!(calls[0].path, "/webhooks/123/tok");
         assert_eq!(calls[0].body.as_ref().map(|b| b["flags"].clone()), Some(json!(64)));
-        assert_eq!(request(&Order::Answer { id: "77:tok".into(), text: String::new() }, "123"), Vec::new());
+        assert_eq!(request(&Order::Answer { id: "77:tok".into(), text: String::new() }, "123", None), Vec::new());
     }
 
     #[test]
     fn a_reaction_puts_the_encoded_emoji() {
-        let calls = request(&Order::React { chat: 1, message: 2, emoji: "👍".into() }, "");
+        let calls = request(&Order::React { chat: 1, message: 2, emoji: "👍".into() }, "", None);
 
         assert_eq!(
             (calls[0].method, calls[0].path.as_str()),

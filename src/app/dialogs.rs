@@ -215,6 +215,7 @@ impl App {
             | Overlay::Usage
             | Overlay::Remote
             | Overlay::Pairing(_)
+            | Overlay::Forum(_)
             | Overlay::Worktrees(_) => None,
             Overlay::RemoveWorkspace { project, workspace, check, lock } => {
                 self.confirm_removal(project, workspace, check, lock.is_some())

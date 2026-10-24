@@ -525,6 +525,7 @@ fn workspace_with(tab: TabState, dir: &Path) -> WorkspaceState {
         role_worktrees: Vec::new(),
         run_dirs: Vec::new(),
         closed: None,
+        discord_post: None,
     }
 }
 

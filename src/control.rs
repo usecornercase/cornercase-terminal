@@ -38,8 +38,8 @@ pub(crate) use accounts::{
     ProfileList, ProfileNew, ProfileSet, ProfileUse, RestartInfo, SkippedPane,
 };
 pub(crate) use app_state::{
-    AppState, AppWatch, AwayInfo, InstallInfo, NoUpdate, Notes, PopupInfo, ReleaseInfo, UpdateCheck, UpdateInfo,
-    UpdateInstall,
+    AppState, AppWatch, AwayInfo, ForumInfo, InstallInfo, NoUpdate, Notes, PopupInfo, ReleaseInfo, UpdateCheck,
+    UpdateInfo, UpdateInstall,
 };
 pub(crate) use arrange::{CloseAgent, Fold, GroupDelete, GroupNew, GroupStyle, Move, MovePane, RemovalCheck};
 pub(crate) use changes::{
@@ -62,7 +62,7 @@ pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
 pub(crate) use search::{Hit, Matches, Search};
 pub(crate) use start_server::StartServer;
-pub(crate) use status::{GroupInfo, KeepAwake, LayerInfo, PullRequestInfo, RunStatus, StackInfo};
+pub(crate) use status::{GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RunStatus, StackInfo};
 pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, WorkspaceInfo};
 pub(crate) use surface::Surface;
 pub(crate) use terminal::{Input, Link, Ratio, Redraw, Resize, Scroll, Selection};

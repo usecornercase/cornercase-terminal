@@ -44,6 +44,18 @@ pub(crate) struct AwayInfo {
     pub(crate) platform: String,
     pub(crate) ready: bool,
     pub(crate) away: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) forum: Option<ForumInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct ForumInfo {
+    pub(crate) on: bool,
+    pub(crate) ready: bool,
+    pub(crate) guild: Option<String>,
+    pub(crate) channel: Option<String>,
+    pub(crate) pending: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

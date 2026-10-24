@@ -1,0 +1,23 @@
+---
+source: src/ui/tests/forum.rs
+assertion_line: 61
+expression: render(&with(ready())).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ cornercase (1)               │                         │                                          "
+"                  ╭─ Discord forum ──────────────────────────────────────────────╮                  "
+"  + New           │ ✓ Guild Install is on                                        │                  "
+"                  │ ✓ Message Content Intent is on                               │                  "
+"                  │ ✓ the app is in home                                         │                  "
+"                  │ ✓ a private forum channel, #cornercase, is made for you      │                  "
+"                  │                                                              │                  "
+"                  │                                             turn off   done  │                  "
+"                  ╰──────────────────────────────────────────────────────────────╯                  "
+"                               │                         │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │                         │                                          "
+"  Quit                   Help  │                         │                                          "

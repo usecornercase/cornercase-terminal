@@ -1,5 +1,5 @@
 use crate::agents;
-use crate::config::{Config, Icons, Sidebar, Tabs, WorkingIcon};
+use crate::config::{Config, ForumClose, Icons, Sidebar, Tabs, WorkingIcon};
 use crate::issues::{Source, naming};
 use crate::messenger::Via;
 use crate::shortcuts::Prefix;
@@ -9,6 +9,8 @@ use super::{NO_PLUGINS, Page, Row, RowText, Settings, Status};
 const RESUME_NOTE: &str = "Claude, Codex, Gemini, Grok, Cursor, Copilot, in their tabs";
 
 const SOUND_FILE_NOTE: &str = "an absolute or ~/ path on the window's computer; empty: built-in";
+
+const FORUM_NOTE: &str = "a post per workspace in a forum channel of your server";
 
 const ICONS_NOTE: &str = "Nerd Font icons for files and buttons, per window";
 const ICON_BAR_NOTE: &str = "the buttons under the lists, as icons; needs a Nerd Font";
@@ -202,8 +204,25 @@ impl Settings {
                 ("paired browsers".into(), self.browsers.to_string(), "enter forgets them all".into(), true)
             }
             Row::Bot(via) | Row::Chat(via) => self.messenger_row(row, *via),
+            Row::Forum(via) => self.forum_row(*via),
+            Row::ForumClose(_) => (
+                "closed workspaces".into(),
+                ForumClose::from_setting(&self.config.discord_forum_close).id().into(),
+                "what happens to the post of a workspace you close".into(),
+                false,
+            ),
             _ => (String::new(), String::new(), String::new(), false),
         }
+    }
+
+    fn forum_row(&self, via: Via) -> (String, String, String, bool) {
+        let messenger = self.messenger(via);
+        let (value, note) = match (self.config.discord_forum, messenger.forum.as_str()) {
+            (false, _) => ("[ ] off", FORUM_NOTE),
+            (true, "") => ("[x] on", "enter sets it up"),
+            (true, note) => ("[x] on", note),
+        };
+        ("forum mode".into(), value.into(), note.into(), false)
     }
 
     fn asana_workspace_row(&self) -> (String, String, String, bool) {
@@ -315,6 +334,7 @@ impl Settings {
             Row::Icons => "Which windows should draw Nerd Font icons?".to_string(),
             Row::WorkingIcon => "What should a working agent's tab show?".to_string(),
             Row::Notifications => "How should your terminal notify you?".to_string(),
+            Row::ForumClose(_) => "What happens to a workspace's post when you close it?".to_string(),
             Row::Kind(kind) => format!("How should {kind} start?"),
             _ => "Which agent do you want to set up?".to_string(),
         }

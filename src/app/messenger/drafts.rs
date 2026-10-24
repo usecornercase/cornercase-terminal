@@ -191,7 +191,7 @@ impl App {
                     self.show_step(via, edit, text, Vec::new());
                 }
                 let text = format!("What should {} do in {}?", m.bold(&m.escape(&agent)), m.escape(&place));
-                self.ask(via, text, &format!("prompt for {agent}"), Route::Prompt(id));
+                self.ask(via, text, &format!("prompt for {agent}"), (Route::Prompt(id), None));
             }
         }
     }
@@ -214,7 +214,7 @@ impl App {
                 let name = m.escape(&project.map(|p| self.project_label(&self.projects[p])).unwrap_or_default());
                 let name = m.bold(&name);
                 self.show_step(via, Some(message), format!("A new worktree in {name}"), Vec::new());
-                self.ask(via, format!("Name of the new branch in {name}:"), "branch", Route::Branch(id));
+                self.ask(via, format!("Name of the new branch in {name}:"), "branch", (Route::Branch(id), None));
                 return;
             }
         }

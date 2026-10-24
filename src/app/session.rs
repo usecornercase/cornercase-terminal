@@ -79,6 +79,7 @@ impl App {
         if let Some(closed) = &saved.closed {
             self.restore_closed(id, closed, parents);
         }
+        self.restore_post(id, saved.discord_post);
         let tabs = tabs.into_iter().map(|(_, tab)| tab).collect();
         let mut workspace = saved.restore(id, path, tabs, self.runs.dir());
         if let Some(dir) = run_dir.filter(|dir| !workspace.run_dirs.contains(dir)) {

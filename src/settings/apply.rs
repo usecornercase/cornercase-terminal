@@ -76,6 +76,10 @@ impl Settings {
         match (&target, setting.kind) {
             (Target::Tabs, _) => self.apply_tabs(value)?,
             (_, Kind::Key) => self.apply_prefix(&typed)?,
+            (Target::Row(row @ Row::Forum(_)), _) => {
+                self.go_to(row);
+                self.flip_forum();
+            }
             (Target::Row(row), kind) => {
                 self.go_to(row);
                 self.activate();
@@ -85,21 +89,23 @@ impl Settings {
                     _ => self.submit_text(typed)?,
                 }
             }
-            (Target::Mode(kind) | Target::Extra(kind), _) => {
-                if !self.listed_kinds().contains(kind) {
-                    self.added.push(kind.clone());
-                }
-                self.go_to(&Row::Kind(kind.clone()));
-                if matches!(target, Target::Mode(_)) {
-                    self.activate();
-                    self.pick_value(&typed)?;
-                } else {
-                    self.edit_extra(kind);
-                    self.submit_text(typed)?;
-                }
-            }
+            (Target::Mode(kind) | Target::Extra(kind), _) => self.apply_agent(kind, &target, typed)?,
         }
         Ok(self.notice.take())
+    }
+
+    fn apply_agent(&mut self, kind: &str, target: &Target, typed: String) -> Result<(), Refused> {
+        if !self.listed_kinds().iter().any(|listed| listed == kind) {
+            self.added.push(kind.to_string());
+        }
+        self.go_to(&Row::Kind(kind.to_string()));
+        if matches!(target, Target::Mode(_)) {
+            self.activate();
+            self.pick_value(&typed)
+        } else {
+            self.edit_extra(kind);
+            self.submit_text(typed)
+        }
     }
 
     fn pick_value(&mut self, value: &str) -> Result<(), Refused> {

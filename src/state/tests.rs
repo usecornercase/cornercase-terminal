@@ -78,6 +78,7 @@ mod file {
                 role_worktrees: Vec::new(),
                 run_dirs: Vec::new(),
                 closed: None,
+                discord_post: None,
             }],
             active: 0,
             collapsed: false,
@@ -126,6 +127,7 @@ mod file {
                 role_worktrees: Vec::new(),
                 run_dirs: Vec::new(),
                 closed: None,
+                discord_post: None,
             }],
             active: 0,
             collapsed: true,
@@ -241,6 +243,21 @@ mod file {
         let text = serde_json::to_string(&state(&["projects/team"])).expect("json");
 
         assert!(!text.contains("closed"));
+    }
+
+    #[test]
+    fn a_workspaces_discord_post_round_trips_through_its_own_fixture() {
+        let mut saved = state(&["projects/team"]);
+        saved.projects[0].workspaces[0].discord_post = Some(DiscordPost { channel: 800, thread: 900, archived: false });
+        let fixture = crate::test_util::fixture!("session/discord_post.json");
+        round_trip(fixture, &saved);
+    }
+
+    #[test]
+    fn a_workspace_without_a_discord_post_writes_no_key() {
+        let text = serde_json::to_string(&state(&["projects/team"])).expect("json");
+
+        assert!(!text.contains("discord_post"));
     }
 
     #[test]

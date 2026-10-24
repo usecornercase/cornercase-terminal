@@ -115,6 +115,7 @@ impl App {
             self.agents.stats.prune(clock);
         }
         self.send_notices(notices);
+        self.retag_posts(now);
     }
 
     fn send_notices(&mut self, notices: Vec<(NoticeKey, Vec<u64>)>) {

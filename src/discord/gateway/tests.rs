@@ -117,6 +117,8 @@ impl Drop for FakeGateway {
     }
 }
 
+const FORUM_GUILD: i64 = 3;
+
 fn started(
     gateway: &FakeGateway,
     routes: Vec<(&'static str, u16, String)>,
@@ -129,11 +131,20 @@ fn started_since(
     routes: Vec<(&'static str, u16, String)>,
     since: i64,
 ) -> (FakeHttp, Link, Receiver<(Via, Event)>) {
+    started_with(gateway, routes, since, None)
+}
+
+fn started_with(
+    gateway: &FakeGateway,
+    routes: Vec<(&'static str, u16, String)>,
+    since: i64,
+    forum: Option<i64>,
+) -> (FakeHttp, Link, Receiver<(Via, Event)>) {
     let mut all = vec![("GET /gateway/bot", 200, json!({ "url": gateway.url }).to_string())];
     all.extend(routes);
     let http = FakeHttp::start(all);
     let (tx, rx) = mpsc::channel();
-    let link = start(3, &Bot::new(&http.url(), TOKEN), &tx, since);
+    let link = start(3, &Bot::new(&http.url(), TOKEN), &tx, since, forum);
     (http, link, rx)
 }
 
@@ -395,4 +406,56 @@ fn a_refused_intent_is_a_problem_that_is_not_retried() {
 
     let problem = next(&rx, "the problem", |e| matches!(e, Event::Problem(_, Some(_))));
     assert!(matches!(problem, Event::Problem(3, Some(why)) if why.contains("4014")));
+}
+
+mod forum_mode {
+    use super::*;
+
+    fn intents(identify: &Value) -> Option<u64> {
+        identify["d"]["intents"].as_u64()
+    }
+
+    #[test]
+    fn the_bot_identifies_for_the_forum_s_messages_too() {
+        let gateway = FakeGateway::start(QUIET);
+        let (_http, _link, _rx) = started_with(&gateway, Vec::new(), 0, Some(FORUM_GUILD));
+
+        let (_, identify) = gateway.heard(2);
+
+        assert_eq!(intents(&identify), Some(1 << 12 | 1 << 9 | 1 << 15));
+    }
+
+    #[test]
+    fn a_refused_content_intent_falls_back_to_the_direct_message() {
+        let gateway = FakeGateway::start(QUIET);
+        let (_http, _link, rx) = started_with(&gateway, Vec::new(), 0, Some(FORUM_GUILD));
+        gateway.heard(2);
+
+        gateway.close(4014);
+
+        assert!(matches!(next(&rx, "the fall back", |e| matches!(e, Event::DirectOnly(_))), Event::DirectOnly(3)));
+        let (connection, identify) = gateway.heard(2);
+        assert_eq!((connection, intents(&identify)), (1, Some(4096)));
+        gateway.ready();
+        direct_message(2, &gateway);
+        assert_eq!(said(&rx), (1200, 9, "hi".into()));
+    }
+
+    #[test]
+    fn a_message_in_the_forum_s_server_comes_in_with_its_guild() {
+        let gateway = FakeGateway::start(QUIET);
+        let (_http, _link, rx) = started_with(&gateway, Vec::new(), 0, Some(FORUM_GUILD));
+        gateway.heard(2);
+        gateway.ready();
+
+        let message = |id: &str, guild: &str| {
+            json!({ "id": id, "channel_id": "1300", "guild_id": guild, "content": "go on",
+                "timestamp": "2026-10-15T10:00:00+00:00", "author": { "id": "9", "username": "ada" } })
+        };
+        gateway.dispatch(2, "MESSAGE_CREATE", &message("56", "4"));
+        gateway.dispatch(3, "MESSAGE_CREATE", &message("57", "3"));
+
+        let updates = updates(&rx);
+        assert!(matches!(updates.as_slice(), [Update::Message(Said { id: 57, guild: Some(3), .. })]), "{updates:?}");
+    }
 }

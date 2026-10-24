@@ -1,8 +1,9 @@
 use crate::agents;
-use crate::config::{Config, Icons, Sidebar, Tabs, WorkingIcon};
+use crate::config::{Config, ForumClose, Icons, Sidebar, Tabs, WorkingIcon};
 use crate::host::notify;
 use crate::issues::Source;
 use crate::list::Search;
+use crate::messenger::Via;
 
 use super::{Action, EXTRA_ARGS, Edit, NO_PLUGINS, Page, Pick, PickItem, Row, Settings, Status};
 
@@ -194,7 +195,29 @@ impl Settings {
             Row::Browsers => Action::ForgetBrowsers,
             Row::Bot(_) => self.start_edit(row, String::new()),
             Row::Chat(via) => Action::Pair(via),
+            Row::Forum(via) => self.forum(via),
+            Row::ForumClose(_) => self.pick_from(row, ForumClose::choices()),
             _ => Action::None,
+        }
+    }
+
+    pub(super) fn flip_forum(&mut self) -> Action {
+        self.flip(
+            |c| &mut c.discord_forum,
+            ["forum mode is on: agents write in a post per workspace", "forum mode is off: agents message the DM"],
+        )
+    }
+
+    fn forum(&mut self, via: Via) -> Action {
+        if self.config.discord_forum && self.messenger(via).forum_ready {
+            return self.flip_forum();
+        }
+        if self.config.discord_forum {
+            return Action::Forum(via, None);
+        }
+        match self.flip_forum() {
+            Action::Save(config) => Action::Forum(via, Some(config)),
+            other => other,
         }
     }
 
@@ -286,6 +309,7 @@ impl Settings {
             Row::Icons => Some(Icons::from_setting(&self.config.icons).id().to_string()),
             Row::WorkingIcon => Some(WorkingIcon::from_setting(&self.config.working_icon).id().to_string()),
             Row::Notifications => Some(self.config.desktop_notifications.trim().to_lowercase()),
+            Row::ForumClose(_) => Some(ForumClose::from_setting(&self.config.discord_forum_close).id().to_string()),
             Row::Kind(kind) => Some(
                 agents::mode_of(kind, &agents::args(&self.config, kind), &agents::modes(&self.config, kind))
                     .unwrap_or_else(|| "default".into()),

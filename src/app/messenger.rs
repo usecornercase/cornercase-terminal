@@ -8,6 +8,8 @@ use serde_json::Value;
 
 use super::{App, AppEvent, Overlay, Toast};
 use crate::control::{AwayInfo, Command, Done, Request};
+use crate::discord::Failure;
+use crate::discord::forum::Progress;
 use crate::error::Error;
 use crate::issues::{Secret, secrets};
 use crate::log::{self, Job, Level};
@@ -19,6 +21,8 @@ use crate::web::auth::{Pairing, random_hex};
 
 mod chat;
 mod drafts;
+mod every;
+mod forum;
 mod notices;
 mod pairing;
 
@@ -35,6 +39,7 @@ pub(crate) enum MessengerEvent {
     Checked { via: Via, token: Secret, result: Result<Identity, String>, request: Option<u64> },
     Paired { via: Via, token: Secret, advice: Advice, result: Result<Owned, String> },
     Advised { via: Via, link: u64, advice: Option<&'static str> },
+    Forum { via: Via, token: Secret, read: Result<Progress, Failure> },
 }
 
 impl MessengerEvent {
@@ -44,6 +49,7 @@ impl MessengerEvent {
             Self::Checked { via, .. } => via.checked(),
             Self::Paired { via, .. } => via.pairing(),
             Self::Advised { via, .. } => via.advised(),
+            Self::Forum { .. } => "discord forum",
         }
     }
 }
@@ -67,6 +73,7 @@ struct Delivery {
     keyboard: Keyboard,
     route: Option<Route>,
     reply_to: Option<i64>,
+    to: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,7 +102,7 @@ impl By {
 
 enum Asked {
     Send { message: i64 },
-    Keys { press: String, chat_message: i64, key: String, agent: String },
+    Keys { press: String, chat: i64, chat_message: i64, key: String, agent: String },
     Finished { pane: u64, header: String },
     Start { message: i64, place: String, agent: String },
 }
@@ -113,7 +120,8 @@ pub(super) struct Messenger {
     pub(super) away: bool,
     run: String,
     pairing: Option<Pairing>,
-    owner: pairing::Owner,
+    owner: every::Every,
+    forum: forum::Forum,
     advice: Option<&'static str>,
     tags: HashMap<u64, Route>,
     next_tag: u64,
@@ -156,7 +164,8 @@ impl Messenger {
             away: false,
             run: run_id(),
             pairing: None,
-            owner: pairing::Owner::default(),
+            owner: every::Every::default(),
+            forum: forum::Forum::default(),
             advice: None,
             tags: HashMap::new(),
             next_tag: 0,
@@ -263,6 +272,7 @@ impl App {
             messenger.pairing = None;
             messenger.owner.closed();
         }
+        self.close_forum_setup(via);
         let messenger = self.messenger(via);
         let wanted = messenger.token.is_some() && messenger.phase != Phase::Rejected;
         match (messenger.link.is_some(), wanted) {
@@ -278,8 +288,11 @@ impl App {
             return;
         };
         messenger.links += 1;
+        messenger.refuse_content(false);
         let id = messenger.links;
-        let link = via.start_link(id, Account { api: &messenger.api, token: &token }, &self.tx, unix_now() - RECENT);
+        let forum = messenger.saved.forum.as_ref().filter(|_| self.config.discord_forum && messenger.forum_ready());
+        let account = Account { api: &messenger.api, token: &token, forum: forum.map(|forum| forum.guild) };
+        let link = via.start_link(id, account, &self.tx, unix_now() - RECENT);
         link.send(Order::Commands);
         log::info!(via.target(), "listening", link = id, paired = messenger.paired());
         messenger.link = Some(link);
@@ -309,6 +322,7 @@ impl App {
         messenger.link = None;
         messenger.phase = Phase::Off;
         self.sync_messenger(via);
+        self.posts_relinked(via);
     }
 
     fn post(&self, via: Via, order: Order) {
@@ -318,38 +332,43 @@ impl App {
     }
 
     fn say(&mut self, via: Via, text: String, delivery: Delivery) {
-        let Delivery { keyboard, route, reply_to } = delivery;
+        let Delivery { keyboard, route, reply_to, to } = delivery;
+        let to = to.or_else(|| reply_to.and_then(|message| self.heard_in(via, message)));
         let messenger = self.messenger_mut(via);
         if route.is_some() {
             messenger.open_ask = None;
         }
         let Some(chat) = messenger.chat().map(|c| c.id) else { return };
         let tag = route.map(|route| messenger.tag(route));
-        self.post(via, Order::Send { chat, text, keyboard, reply_to, ask: None, tag });
+        let order = Order::Send { chat: to.unwrap_or(chat), text, keyboard, reply_to, ask: None, tag };
+        let order = if to.is_some() { Some(self.answered_in(via, order)) } else { self.routed(via, route, order) };
+        if let Some(order) = order {
+            self.post(via, order);
+        }
     }
 
     fn say_long(&mut self, via: Via, header: &str, parts: Vec<String>, delivery: Delivery) {
-        let Delivery { keyboard, route, .. } = delivery;
+        let Delivery { keyboard, route, to, .. } = delivery;
         let count = parts.len();
         if count == 0 {
-            self.say(via, header.to_string(), Delivery { keyboard, route, reply_to: None });
+            self.say(via, header.to_string(), Delivery { keyboard, route, reply_to: None, to });
             return;
         }
         let markup = via.markup();
         for (i, part) in parts.into_iter().enumerate() {
             let joined = i == 0 && markup.fits(header, &part);
             if i == 0 && !joined {
-                self.say(via, header.to_string(), Delivery { route, ..Delivery::default() });
+                self.say(via, header.to_string(), Delivery { route, to, ..Delivery::default() });
             }
             let text = if joined { format!("{header}\n\n{part}") } else { part };
             let keys = if i + 1 == count { keyboard.clone() } else { Vec::new() };
-            self.say(via, text, Delivery { keyboard: keys, route, reply_to: None });
+            self.say(via, text, Delivery { keyboard: keys, route, reply_to: None, to });
         }
     }
 
-    fn ask(&mut self, via: Via, text: String, placeholder: &str, route: Route) {
+    fn ask(&mut self, via: Via, text: String, placeholder: &str, (route, to): (Route, Option<i64>)) {
         let messenger = self.messenger_mut(via);
-        let Some(chat) = messenger.chat().map(|c| c.id) else { return };
+        let Some(chat) = messenger.chat().map(|c| to.unwrap_or(c.id)) else { return };
         let tag = messenger.tag(route);
         if !via.forces_reply() {
             messenger.open_ask = Some((route, Instant::now()));
@@ -388,12 +407,10 @@ impl App {
                 Ok(_) => self.post_reaction(via, message),
                 Err(why) => self.reply(via, message, &why),
             },
-            Asked::Keys { press, chat_message, key, agent } => match reply {
+            Asked::Keys { press, chat, chat_message, key, agent } => match reply {
                 Ok(_) => {
                     self.answer_press(via, &press, &format!("sent {key} to {agent}"));
-                    if key.chars().all(|c| c.is_ascii_digit())
-                        && let Some(chat) = self.messenger(via).chat().map(|c| c.id)
-                    {
+                    if key.chars().all(|c| c.is_ascii_digit()) {
                         self.post(via, Order::Buttons { chat, message: chat_message, keyboard: Vec::new() });
                     }
                 }
@@ -408,7 +425,7 @@ impl App {
     }
 
     fn post_reaction(&self, via: Via, message: i64) {
-        if let Some(chat) = self.messenger(via).chat().map(|c| c.id) {
+        if let Some(chat) = self.heard_in(via, message).or(self.messenger(via).chat().map(|c| c.id)) {
             self.post(via, Order::React { chat, message, emoji: "👍".into() });
         }
     }
@@ -423,7 +440,13 @@ impl App {
             m.escape(place)
         );
         let route = done.ids.pane.map(Route::Pane);
-        self.say(via, text, Delivery { route, reply_to: Some(message), ..Delivery::default() });
+        let (Some(workspace), Some(route)) = (self.post_workspace(via, route), route) else {
+            self.say(via, text, Delivery { route, reply_to: Some(message), ..Delivery::default() });
+            return;
+        };
+        self.say(via, text, Delivery { route: Some(route), ..Delivery::default() });
+        let line = format!("Started {} in {}:", m.bold(&m.escape(agent)), m.escape(place));
+        self.pointed(via, workspace, forum::Pointer { line, message, route });
     }
 
     pub(super) fn messenger_event(&mut self, event: MessengerEvent, area: Rect) {
@@ -433,32 +456,52 @@ impl App {
                 self.messenger_checked(via, &token, result, request);
             }
             MessengerEvent::Paired { via, token, advice, result } => self.owner_answered(via, &token, advice, result),
-            MessengerEvent::Link(via, link::Event::Updates(id, updates)) if current(self, via, id) => {
-                for update in updates {
-                    self.chat_update(via, update, area);
-                }
-            }
-            MessengerEvent::Link(via, link::Event::Sent { link, tag, message }) if current(self, via, link) => {
-                let messenger = self.messenger_mut(via);
-                if let Some(route) = messenger.tags.get(&tag).copied() {
-                    messenger.remember(message, route);
-                }
-            }
-            MessengerEvent::Link(via, link::Event::Problem(id, problem)) if current(self, via, id) => {
-                self.messenger_mut(via).phase = problem.map_or(Phase::Listening, Phase::Problem);
-                self.refresh_messenger_note(via);
-            }
-            MessengerEvent::Link(via, link::Event::Rejected(id)) if current(self, via, id) => {
-                let messenger = self.messenger_mut(via);
-                messenger.link = None;
-                messenger.phase = Phase::Rejected;
-                self.refresh_messenger_note(via);
-            }
+            MessengerEvent::Forum { via, token, read } => self.forum_read(via, &token, read),
+            MessengerEvent::Link(via, event) if current(self, via, event.link()) => self.link_event(via, event, area),
             MessengerEvent::Advised { via, link, advice } if current(self, via, link) => {
                 self.messenger_mut(via).advice = advice;
                 self.refresh_messenger_note(via);
             }
             MessengerEvent::Link(..) | MessengerEvent::Advised { .. } => {}
+        }
+    }
+
+    fn link_event(&mut self, via: Via, event: link::Event, area: Rect) {
+        match event {
+            link::Event::Updates(_, updates) => {
+                for update in updates {
+                    self.chat_update(via, update, area);
+                }
+            }
+            link::Event::Sent { tag, message, .. } => self.delivered(via, tag, message),
+            link::Event::Posted { tag, thread, message, .. } => {
+                self.delivered(via, tag, message);
+                self.post_made(via, tag, thread);
+            }
+            link::Event::Failed { tag, .. } => self.post_failed(via, tag),
+            link::Event::Gone { thread, order, .. } => self.post_gone(via, thread, order),
+            link::Event::Archived { thread, .. } => self.post_archived(via, thread),
+            link::Event::Problem(_, problem) => {
+                self.messenger_mut(via).phase = problem.map_or(Phase::Listening, Phase::Problem);
+                self.refresh_messenger_note(via);
+            }
+            link::Event::DirectOnly(_) => {
+                self.messenger_mut(via).refuse_content(true);
+                self.refresh_messenger_note(via);
+            }
+            link::Event::Rejected(_) => {
+                let messenger = self.messenger_mut(via);
+                messenger.link = None;
+                messenger.phase = Phase::Rejected;
+                self.refresh_messenger_note(via);
+            }
+        }
+    }
+
+    fn delivered(&mut self, via: Via, tag: u64, message: i64) {
+        let messenger = self.messenger_mut(via);
+        if let Some(route) = messenger.tags.get(&tag).copied() {
+            messenger.remember(message, route);
         }
     }
 
@@ -498,6 +541,7 @@ impl App {
             let messenger = self.messenger_mut(via);
             if messenger.saved.bot != *name {
                 messenger.saved.chat = None;
+                messenger.forget_forum();
             }
             messenger.saved.bot.clone_from(name);
             messenger.save();
@@ -591,6 +635,14 @@ impl App {
         ui::RemoteAccess { title: via.name(), url, code, lines }
     }
 
+    pub(super) fn messenger_view(&self, overlay: &Overlay) -> Option<ui::Overlay> {
+        match overlay {
+            Overlay::Pairing(via) => Some(ui::Overlay::Remote(self.pairing_view(*via))),
+            Overlay::Forum(via) => Some(ui::Overlay::Forum(self.forum_view(*via))),
+            _ => None,
+        }
+    }
+
     pub(super) fn pairing_mouse(&mut self, via: Via, ev: MouseEvent, pos: Position, area: Rect) {
         let done = ui::remote_done(area, &self.pairing_view(via));
         if ev.kind == MouseEventKind::Down(MouseButton::Left) && done.contains(pos) {
@@ -614,6 +666,8 @@ impl App {
             note: messenger.note(),
             checking: false,
             refused: messenger.phase == Phase::Rejected,
+            forum: messenger.forum_note(),
+            forum_ready: messenger.forum_ready() && !messenger.content_refused(),
         }
     }
 
@@ -715,7 +769,12 @@ impl App {
             .into_iter()
             .map(|via| {
                 let messenger = self.messenger(via);
-                AwayInfo { platform: via.target().to_string(), ready: messenger.ready(), away: messenger.away }
+                AwayInfo {
+                    platform: via.target().to_string(),
+                    ready: messenger.ready(),
+                    away: messenger.away,
+                    forum: self.forum_info(via),
+                }
             })
             .collect()
     }
@@ -766,6 +825,11 @@ pub(super) fn set_up(app: &mut App, via: Via, token: &str, bot: &str, chat: Opti
     let messenger = app.messenger_mut(via);
     messenger.token = Some(token.into());
     messenger.saved = Saved::new(bot.into(), chat);
+}
+
+#[cfg(test)]
+pub(super) fn set_forum(app: &mut App, via: Via, forum: Option<crate::messenger::Forum>) {
+    app.messenger_mut(via).saved.forum = forum;
 }
 
 #[cfg(test)]

@@ -7,31 +7,13 @@ use crate::log::{self, Job, Level};
 use crate::messenger::{Advice, Chat, Owned, Via};
 use crate::ui;
 
-const PAIR_EVERY: Duration = Duration::from_secs(3);
-
-#[derive(Debug, Default)]
-pub(super) struct Owner {
-    asked: Option<Instant>,
-    until: Option<Instant>,
-    busy: bool,
-    pub(super) failed: Option<String>,
-}
-
-impl Owner {
-    pub(super) fn closed(&mut self) {
-        self.asked = None;
-        self.until = None;
-        self.failed = None;
-    }
-}
-
 impl App {
     fn owner_due(&self, via: Via) -> bool {
         let messenger = self.messenger(via);
         via.pairs_by_owner()
             && matches!(self.overlay, Some(Overlay::Pairing(shown)) if shown == via)
             && messenger.token.is_some()
-            && !messenger.owner.busy
+            && messenger.owner.idle()
     }
 
     pub(in crate::app) fn next_pairing(&self, now: Instant) -> Option<Duration> {
@@ -39,9 +21,7 @@ impl App {
     }
 
     fn pairing_wait(&self, via: Via, now: Instant) -> Duration {
-        let owner = &self.messenger(via).owner;
-        let every = owner.asked.map_or(Duration::ZERO, |at| PAIR_EVERY.saturating_sub(now.duration_since(at)));
-        every.max(owner.until.map_or(Duration::ZERO, |until| until.saturating_duration_since(now)))
+        self.messenger(via).owner.wait(now)
     }
 
     pub(in crate::app) fn pair_by_owner(&mut self, now: Instant) {
@@ -55,8 +35,7 @@ impl App {
     fn ask_owner(&mut self, via: Via, now: Instant) {
         let messenger = self.messenger_mut(via);
         let Some(token) = messenger.token.clone() else { return };
-        messenger.owner.asked = Some(now);
-        messenger.owner.busy = true;
+        messenger.owner.start(now);
         let api = messenger.api.clone();
         let job = Job::new(Level::Debug, via.target(), "pair");
         let secret = Secret(token.clone());
@@ -72,7 +51,7 @@ impl App {
 
     pub(super) fn owner_answered(&mut self, via: Via, token: &Secret, advice: Advice, result: Result<Owned, String>) {
         let messenger = self.messenger_mut(via);
-        messenger.owner.busy = false;
+        messenger.owner.landed();
         if messenger.token.as_deref() != Some(token.0.as_str()) {
             return;
         }
@@ -88,16 +67,8 @@ impl App {
                 messenger.owner.closed();
                 self.connect(via, chat);
             }
-            Ok(Owned::Later(wait)) => {
-                messenger.owner.failed = None;
-                messenger.owner.until = (!wait.is_zero()).then(|| Instant::now() + wait);
-            }
-            Err(why) => {
-                if messenger.owner.failed.as_ref() != Some(&why) {
-                    log::warning!(via.target(), "cannot pair", error = why);
-                }
-                messenger.owner.failed = Some(why);
-            }
+            Ok(Owned::Later(wait)) => messenger.owner.later(wait),
+            Err(why) => messenger.owner.fail(via.target(), "cannot pair", why),
         }
     }
 

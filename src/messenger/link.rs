@@ -17,8 +17,29 @@ const TRIES: usize = 3;
 pub(crate) enum Event {
     Updates(u64, Vec<Update>),
     Sent { link: u64, tag: u64, message: i64 },
+    Posted { link: u64, tag: u64, thread: i64, message: i64 },
+    Failed { link: u64, tag: u64 },
+    Archived { link: u64, thread: i64 },
+    Gone { link: u64, thread: i64, order: Order },
     Problem(u64, Option<String>),
+    DirectOnly(u64),
     Rejected(u64),
+}
+
+impl Event {
+    pub(crate) fn link(&self) -> u64 {
+        match self {
+            Self::Updates(link, _)
+            | Self::Problem(link, _)
+            | Self::Rejected(link)
+            | Self::DirectOnly(link)
+            | Self::Sent { link, .. }
+            | Self::Posted { link, .. }
+            | Self::Failed { link, .. }
+            | Self::Archived { link, .. }
+            | Self::Gone { link, .. } => *link,
+        }
+    }
 }
 
 pub(crate) enum Next<F> {
@@ -39,6 +60,18 @@ pub(crate) trait Transport: Send + 'static {
 
     fn more(_attempt: &Self::Attempt) -> Vec<i64> {
         Vec::new()
+    }
+
+    fn posted(_attempt: &Self::Attempt) -> Option<i64> {
+        None
+    }
+
+    fn gone(_order: &Order, _failure: &Self::Failure) -> Option<i64> {
+        None
+    }
+
+    fn archived(_order: &Order, _failure: &Self::Failure) -> Option<i64> {
+        None
     }
 }
 
@@ -100,10 +133,18 @@ pub(crate) fn backoff(failed: u32) -> Duration {
     Duration::from_secs(1u64.checked_shl(failed.saturating_sub(1)).unwrap_or(MOST_WAIT).min(MOST_WAIT))
 }
 
-fn perform<T: Transport>(transport: &T, order: &Order, stop: &AtomicBool) -> Result<Vec<i64>, T::Failure> {
+struct Done {
+    thread: Option<i64>,
+    messages: Vec<i64>,
+}
+
+fn perform<T: Transport>(transport: &T, order: &Order, stop: &AtomicBool) -> Result<Done, T::Failure> {
     let mut attempt = T::Attempt::default();
     let sent = |done: Result<Option<i64>, T::Failure>, attempt: &T::Attempt| {
-        done.map(|first| first.map_or_else(Vec::new, |first| [first].into_iter().chain(T::more(attempt)).collect()))
+        done.map(|first| Done {
+            thread: T::posted(attempt),
+            messages: first.map_or_else(Vec::new, |first| [first].into_iter().chain(T::more(attempt)).collect()),
+        })
     };
     for _ in 0..TRIES {
         match transport.perform(order, &attempt) {
@@ -127,11 +168,31 @@ struct Delivery<'a, E> {
 }
 
 impl<E: From<(Via, Event)>> Delivery<'_, E> {
-    fn sent(&self, tag: u64, messages: Vec<i64>) -> bool {
-        messages.into_iter().all(|message| {
-            let event = Event::Sent { link: self.id, tag, message };
-            self.tx.send((self.via, event).into()).is_ok()
+    fn sent(&self, tag: u64, done: Done) -> bool {
+        done.messages.into_iter().enumerate().all(|(i, message)| {
+            let event = match done.thread {
+                Some(thread) if i == 0 => Event::Posted { link: self.id, tag, thread, message },
+                _ => Event::Sent { link: self.id, tag, message },
+            };
+            self.tell(event)
         })
+    }
+
+    fn failed<T: Transport>(&self, order: &Order, failure: &T::Failure) -> bool {
+        if let Some(thread) = T::archived(order, failure) {
+            log::debug!(self.via.target(), "the post is archived", method = T::method(order), thread = thread);
+            return self.tell(Event::Archived { link: self.id, thread });
+        }
+        if let Some(thread) = T::gone(order, failure) {
+            log::info!(self.via.target(), "the channel is gone", method = T::method(order), thread = thread);
+            return self.tell(Event::Gone { link: self.id, thread, order: order.clone() });
+        }
+        log::warning!(self.via.target(), "not delivered", method = T::method(order), error = failure);
+        order.tag().is_none_or(|tag| self.tell(Event::Failed { link: self.id, tag }))
+    }
+
+    fn tell(&self, event: Event) -> bool {
+        self.tx.send((self.via, event).into()).is_ok()
     }
 }
 
@@ -143,14 +204,19 @@ fn deliver<E: From<(Via, Event)>, T: Transport>(delivery: &Delivery<E>, transpor
         let done = panics::job(|| Ok(perform(transport, &order, delivery.stop)))
             .unwrap_or_else(|e| Err(T::Failure::from(e.to_string())));
         match done {
-            Ok(messages) => {
-                if order.tag().is_some_and(|tag| !delivery.sent(tag, messages)) {
+            Ok(done) => {
+                if order.tag().is_some_and(|tag| !delivery.sent(tag, done)) {
                     return;
                 }
             }
             Err(failure) => {
-                log::warning!(delivery.via.target(), "not delivered", method = T::method(&order), error = failure);
+                if !delivery.failed::<T>(&order, &failure) {
+                    return;
+                }
             }
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

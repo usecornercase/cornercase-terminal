@@ -155,6 +155,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                             role_worktrees: Vec::new(),
                             run_dirs: Vec::new(),
                             closed: None,
+                            discord_post: None,
                         },
                     ],
                 )

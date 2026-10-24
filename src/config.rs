@@ -156,6 +156,35 @@ impl Icons {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum ForumClose {
+    #[default]
+    Archive,
+    Delete,
+}
+
+impl ForumClose {
+    const ALL: [Self; 2] = [Self::Archive, Self::Delete];
+
+    pub(crate) fn id(self) -> &'static str {
+        match self {
+            Self::Archive => "archive",
+            Self::Delete => "delete",
+        }
+    }
+
+    pub(crate) fn choices() -> Vec<(&'static str, &'static str)> {
+        vec![
+            (Self::Archive.id(), "the post is archived and locked, kept to read"),
+            (Self::Delete.id(), "the post and its messages are deleted"),
+        ]
+    }
+
+    pub(crate) fn from_setting(setting: &str) -> Self {
+        from_setting(&Self::ALL, Self::id, setting)
+    }
+}
+
 pub(crate) const DEFAULT_WORKTREES_DIR: &str = "~/.cornercase/worktrees";
 pub(crate) const DEFAULT_PORT: u16 = 47681;
 pub(crate) const DEFAULT_PROMPT: &str = "{url}";
@@ -250,6 +279,8 @@ pub(crate) struct Config {
     pub(crate) tour: bool,
     pub(crate) remote: bool,
     pub(crate) remote_port: u16,
+    pub(crate) discord_forum: bool,
+    pub(crate) discord_forum_close: String,
     pub(crate) projects: BTreeMap<String, ProjectSettings>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub(crate) profiles: BTreeMap<String, BTreeMap<String, String>>,
@@ -319,6 +350,8 @@ impl Config {
         tour: false,
         remote: false,
         remote_port: 0,
+        discord_forum: false,
+        discord_forum_close: String::new(),
         projects: BTreeMap::new(),
         profiles: BTreeMap::new(),
         profile: String::new(),
@@ -360,6 +393,7 @@ impl Default for Config {
             star_prompt: true,
             tour: true,
             remote_port: DEFAULT_PORT,
+            discord_forum_close: ForumClose::default().id().into(),
             ..Self::BLANK
         }
     }

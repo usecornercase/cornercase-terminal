@@ -128,6 +128,7 @@ mod combobox;
 mod compact;
 mod dialogs;
 mod draw;
+mod forum;
 mod groups;
 mod hover;
 mod issues;

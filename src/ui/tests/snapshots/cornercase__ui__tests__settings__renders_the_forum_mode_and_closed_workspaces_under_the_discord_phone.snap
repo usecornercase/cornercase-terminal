@@ -1,0 +1,23 @@
+---
+source: src/ui/tests/settings.rs
+assertion_line: 88
+expression: render(&with(remote)).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"  ╭─ Settings ───────────────────────────────────────────────────────────────────────────────────╮  "
+" P│  Worktrees   Agents   Remote                                                                 │  "
+"  │                                                                                              │  "
+"▌ │ Browser                                                                                      │  "
+"  │   remote access             [ ] off                                                          │  "
+"  │                                                                                              │  "
+"  │ Discord                                                                                      │  "
+"  │   bot                       @cornercase_bot                                                  │  "
+"  │   phone                     @ada  agents message it while you are away · enter pairs another │  "
+"  │ ▌ forum mode                [x] on  add the app to your server                               │  "
+"  │   closed workspaces         archive  what happens to the post of a workspace you close       │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+" ─│ enter changes the selected setting                                                           │  "
+"  │                                                                      share   restart   done  │  "
+"  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  "
+"  Quit                   Help  │                         │                                          "

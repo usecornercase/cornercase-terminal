@@ -104,6 +104,16 @@ pub(crate) struct WorkspaceState {
     pub(crate) run_dirs: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) closed: Option<ClosedState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) discord_post: Option<DiscordPost>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct DiscordPost {
+    pub(crate) channel: i64,
+    pub(crate) thread: i64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) archived: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -235,6 +245,7 @@ impl WorkspaceState {
             role_worktrees: Vec::new(),
             run_dirs: Vec::new(),
             closed: None,
+            discord_post: None,
         }
     }
 }
@@ -325,6 +336,7 @@ impl WorkspaceState {
             role_worktrees: workspace.role_worktrees.clone(),
             run_dirs: workspace.run_dirs.iter().filter_map(|dir| folder_name(dir)).collect(),
             closed: None,
+            discord_post: None,
         }
     }
 }

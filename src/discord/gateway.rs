@@ -20,7 +20,8 @@ use crate::panics;
 
 type Socket = WebSocket<MaybeTlsStream<TcpStream>>;
 
-const INTENTS: u64 = 1 << 12;
+const DIRECT_MESSAGES: u64 = 1 << 12;
+const FORUM_INTENTS: u64 = DIRECT_MESSAGES | 1 << 9 | 1 << 15;
 const VIA: Via = Via::Discord;
 const READ: Duration = Duration::from_millis(100);
 const HANDSHAKE: Duration = Duration::from_secs(20);
@@ -29,11 +30,21 @@ const QUERY: &str = "v=10&encoding=json";
 const ANEW: Duration = Duration::from_secs(2);
 const AUTHENTICATION_FAILED: u16 = 4004;
 const FATAL: RangeInclusive<u16> = 4010..=4014;
+const DISALLOWED_INTENTS: u16 = 4014;
+pub(crate) const DIRECT_ONLY: &str =
+    "the bot cannot read the forum: turn on Message Content Intent in the Developer Portal, on the Bot page";
 const FORGET: [u16; 2] = [4007, 4009];
 const KEEP_SESSION: u16 = 4000;
 
-pub(crate) fn start<E: From<(Via, Event)> + Send + 'static>(id: u64, bot: &Bot, tx: &Sender<E>, since: i64) -> Link {
-    let mut listener = Listener { id, bot: bot.clone(), tx: tx.clone(), since, session: None, seq: None, failed: 0 };
+pub(crate) fn start<E: From<(Via, Event)> + Send + 'static>(
+    id: u64,
+    bot: &Bot,
+    tx: &Sender<E>,
+    since: i64,
+    forum: Option<i64>,
+) -> Link {
+    let mut listener =
+        Listener { id, bot: bot.clone(), tx: tx.clone(), since, forum, session: None, seq: None, failed: 0 };
     Link::start(id, VIA, tx, bot.clone(), move |stop| listener.listen(stop))
 }
 
@@ -46,6 +57,7 @@ enum End {
     Stopped,
     Rejected,
     Fatal(String),
+    DirectOnly,
     Resume,
     Anew,
     Failed(String),
@@ -62,6 +74,7 @@ struct Listener<E> {
     bot: Bot,
     tx: Sender<E>,
     since: i64,
+    forum: Option<i64>,
     session: Option<Session>,
     seq: Option<i64>,
     failed: u32,
@@ -112,9 +125,10 @@ fn jitter(every: Duration) -> Duration {
     every.mul_f64(f64::from(nanos % 1000) / 1000.0)
 }
 
-fn closed(code: Option<u16>) -> End {
+fn closed(code: Option<u16>, forum: bool) -> End {
     match code {
         Some(AUTHENTICATION_FAILED) => End::Rejected,
+        Some(DISALLOWED_INTENTS) if forum => End::DirectOnly,
         Some(code) if FATAL.contains(&code) => {
             End::Fatal(format!("the Discord gateway refused this bot (code {code}): check the app's settings"))
         }
@@ -151,6 +165,7 @@ impl<E: From<(Via, Event)>> Listener<E> {
                 let _ = self.tell(Event::Problem(self.id, Some(why)));
                 return false;
             }
+            End::DirectOnly => return self.direct_only(stop),
             End::Resume => {}
             End::Anew => {
                 self.session = None;
@@ -159,6 +174,18 @@ impl<E: From<(Via, Event)>> Listener<E> {
             }
             End::Failed(why) => return self.fail(why, stop),
         }
+        true
+    }
+
+    fn direct_only(&mut self, stop: &AtomicBool) -> bool {
+        log::warning!("discord", "forum intents refused", link = self.id);
+        self.forum = None;
+        self.session = None;
+        self.seq = None;
+        if !self.tell(Event::DirectOnly(self.id)) {
+            return false;
+        }
+        nap(stop, ANEW);
         true
     }
 
@@ -235,7 +262,7 @@ impl<E: From<(Via, Event)>> Listener<E> {
                 let payload: Value = serde_json::from_str(text.as_str()).unwrap_or(Value::Null);
                 self.payload(socket, url, &payload, beat)
             }
-            Ok(Message::Close(frame)) => Some(closed(frame.map(|frame| u16::from(frame.code)))),
+            Ok(Message::Close(frame)) => Some(closed(frame.map(|frame| u16::from(frame.code)), self.forum.is_some())),
             Ok(_) => None,
             Err(e) if waiting(&e) => None,
             Err(e) => Some(End::Failed(format!("the Discord gateway failed: {e}"))),
@@ -274,7 +301,7 @@ impl<E: From<(Via, Event)>> Listener<E> {
             }}),
             _ => json!({ "op": 2, "d": {
                 "token": self.bot.token,
-                "intents": INTENTS,
+                "intents": if self.forum.is_some() { FORUM_INTENTS } else { DIRECT_MESSAGES },
                 "properties": { "os": std::env::consts::OS, "browser": "cornercase", "device": "cornercase" },
             }}),
         }
@@ -295,7 +322,7 @@ impl<E: From<(Via, Event)>> Listener<E> {
             }
             _ => {}
         }
-        let update = super::update(kind, d)?;
+        let update = super::update(kind, d, self.forum)?;
         if let Update::Press(press) = &update
             && let Err(failure) = self.bot.ack(&press.id)
         {

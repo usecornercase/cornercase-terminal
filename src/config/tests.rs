@@ -46,13 +46,13 @@ mod file {
             tour: false,
             remote: true,
             remote_port: 47682,
+            discord_forum: true,
+            discord_forum_close: "delete".into(),
             projects: [(
                 "~/code/web-shop".into(),
                 ProjectSettings { setup: "npm ci\ncp ../.env .env".into(), teardown: "docker compose down".into() },
             )]
             .into(),
-            profiles: BTreeMap::new(),
-            profile: String::new(),
             account_names: [(
                 "claude".into(),
                 [(String::new(), "work".into()), ("home".into(), "Personal".into())].into(),
@@ -186,6 +186,25 @@ mod file {
         std::fs::write(&path, r#"{"worktrees_dir": "/srv/w"}"#).expect("write");
 
         assert_eq!(load(&path), Config { worktrees_dir: "/srv/w".into(), ..Config::default() });
+    }
+
+    #[test]
+    fn a_config_from_before_the_discord_forum_keeps_it_off_and_archives_closed_threads() {
+        let tmp = TempDir::new();
+        let path = tmp.path().join("config.json");
+        std::fs::write(&path, r#"{"remote": true, "remote_port": 47682}"#).expect("write");
+
+        let c = load(&path);
+        assert_eq!((c.remote, c.discord_forum), (true, false));
+        assert_eq!(ForumClose::from_setting(&c.discord_forum_close), ForumClose::Archive);
+    }
+
+    #[rstest]
+    #[case::archive("archive", ForumClose::Archive)]
+    #[case::delete(" Delete ", ForumClose::Delete)]
+    #[case::unknown("burn", ForumClose::Archive)]
+    fn a_closed_workspace_thread_is_archived_unless_told_to_delete(#[case] setting: &str, #[case] close: ForumClose) {
+        assert_eq!(ForumClose::from_setting(setting), close);
     }
 
     #[test]

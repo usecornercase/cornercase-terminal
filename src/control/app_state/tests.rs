@@ -57,8 +57,8 @@ fn snapshot() -> Snapshot<AppState> {
             ],
             queue: vec![queued()],
             away: vec![
-                AwayInfo { platform: "telegram".into(), ready: true, away: true },
-                AwayInfo { platform: "discord".into(), ready: false, away: false },
+                AwayInfo { platform: "telegram".into(), ready: true, away: true, forum: None },
+                AwayInfo { platform: "discord".into(), ready: false, away: false, forum: None },
             ],
             update: update_info(),
             keep_awake: Some(KeepAwake { held: true, by: Some("caffeinate".into()), unavailable: None }),

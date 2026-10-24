@@ -36,6 +36,7 @@ mod updates {
             chat: 42,
             user: 9,
             private: true,
+            guild: None,
             date: 1_760_000_000,
             name: "@ada".into(),
             text: "/status".into(),
@@ -107,6 +108,30 @@ mod orders {
         let (method, body) = request(&Order::Buttons { chat: 1, message: 2, keyboard: Vec::new() }, true);
 
         assert_eq!((method, &body["reply_markup"]), ("editMessageReplyMarkup", &json!({"inline_keyboard": []})));
+    }
+}
+
+mod forum_orders {
+    use super::*;
+
+    #[rstest::rstest]
+    #[case::post(Order::Post {
+        forum: 1,
+        title: "web › main".into(),
+        tag_id: 2,
+        text: "hi".into(),
+        keyboard: Vec::new(),
+        tag: Some(3),
+    })]
+    #[case::retag(Order::Retag { thread: 4, tag_id: 2 })]
+    #[case::close(Order::Close { thread: 4, lock: true })]
+    #[case::reopen(Order::Reopen { thread: 4 })]
+    #[case::remove(Order::Remove { thread: 4 })]
+    fn telegram_ignores_them_without_calling(#[case] order: Order) {
+        let server = FakeHttp::start(Vec::<(&str, u16, &str)>::new());
+
+        assert_eq!(bot(&server).perform(&order, &Plain::default()), Ok(None));
+        assert_eq!(server.requests(), Vec::<String>::new());
     }
 }
 

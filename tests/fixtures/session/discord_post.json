@@ -1,0 +1,31 @@
+{
+  "version": 5,
+  "projects": [
+    {
+      "path": "projects/team",
+      "workspaces": [
+        {
+          "path": "projects/team",
+          "worktree": false,
+          "tabs": [
+            {
+              "panes": [
+                {
+                  "cwd": "projects/team"
+                }
+              ],
+              "active": 0
+            }
+          ],
+          "active": 0,
+          "discord_post": {
+            "channel": 800,
+            "thread": 900
+          }
+        }
+      ],
+      "active": 0
+    }
+  ],
+  "active": 0
+}

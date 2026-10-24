@@ -67,7 +67,11 @@ impl App {
         let at = self.reopenable(workspace)?;
         let kept = self.agents.closed.take(workspace).ok_or_else(|| conflict("no closed agents"))?;
         match self.spawn_reopened(at, &kept, area) {
-            Ok(spawned) => Ok(self.open_reopened(at, &kept, spawned)),
+            Ok(spawned) => {
+                let reopened = self.open_reopened(at, &kept, spawned);
+                self.unarchive_post(workspace);
+                Ok(reopened)
+            }
             Err(e) => {
                 log::warning!("agents", "could not reopen agents", workspace = workspace, error = e);
                 self.agents.closed.put_back(kept);

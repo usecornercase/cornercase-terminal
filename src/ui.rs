@@ -15,6 +15,7 @@ pub(crate) use dialog::queue as queue_form;
 mod drop;
 pub(crate) mod files;
 pub(crate) mod flow;
+mod forum;
 mod icons;
 pub(crate) mod keys;
 mod layout;
@@ -106,6 +107,7 @@ pub(crate) use dialog::worktrees::worktrees_area;
 pub(crate) use dialog::worktrees::{ConfirmView, WorktreeRow, Worktrees, WorktreesHit, worktrees_hit, worktrees_room};
 pub(crate) use dialog::{CANCEL_LABEL, Note, Overlay};
 pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
+pub(crate) use forum::{ForumHit, ForumSetup, hit as forum_hit};
 pub(crate) use icons::glyphs;
 pub(crate) use layout::COMPACT_BUTTON_WIDTH;
 pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, layout, layout_with};
@@ -449,6 +451,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::Update(update)) => draw_update(f, view, update),
         Some(Overlay::Usage(usage)) => draw_usage(f, view, usage),
         Some(Overlay::Remote(remote)) => remote_access::draw(f, view, remote),
+        Some(Overlay::Forum(setup)) => forum::draw(f, view, setup),
         Some(Overlay::Picker(picker)) => draw_picker(f, view, picker),
         Some(Overlay::Issues(issues)) => draw_issues(f, view, issues),
         Some(Overlay::Settings(settings)) => draw_settings(f, view, settings),

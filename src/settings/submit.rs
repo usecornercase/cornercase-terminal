@@ -31,6 +31,10 @@ impl Settings {
                 desktop_notifications,
                 ..c.clone()
             }),
+            Row::ForumClose(_) => self.chosen("closed workspaces", value, |c, discord_forum_close| Config {
+                discord_forum_close,
+                ..c.clone()
+            }),
             Row::Kind(kind) => self.chosen_mode(&kind, &value),
             Row::AddAgent => {
                 self.added.push(value.clone());

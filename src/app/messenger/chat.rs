@@ -24,7 +24,7 @@ pub(super) fn welcome(via: Via) -> String {
     format!("{connected}: this chat now gets this computer's agents.\n\n{HELP}")
 }
 
-fn command(text: &str) -> Option<(&str, &str)> {
+pub(super) fn command(text: &str) -> Option<(&str, &str)> {
     let rest = text.trim().strip_prefix('/')?;
     let (word, args) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
     let word = word.split_once('@').map_or(word, |(word, _)| word);
@@ -43,8 +43,14 @@ impl App {
         self.messenger(via).chat().is_some_and(|paired| paired.id == chat && paired.user == user)
     }
 
+    fn pressed_by_owner(&self, via: Via, press: &Press) -> bool {
+        let owner = self.messenger(via).chat().is_some_and(|paired| paired.user == press.user);
+        self.paired_with(via, press.chat, press.user) || owner && self.knows(via, press.chat)
+    }
+
     fn chat_message(&mut self, via: Via, message: &Message, area: Rect) {
-        if !self.paired_with(via, message.chat, message.user) {
+        let in_post = self.posted_by_owner(via, message);
+        if !in_post && !self.paired_with(via, message.chat, message.user) {
             if !self.try_pairing(via, message) {
                 log::info!(via.target(), "message from another chat ignored", chat = message.chat);
             }
@@ -52,31 +58,45 @@ impl App {
         }
         let kind = command(&message.text).map_or(if message.reply_to.is_some() { "reply" } else { "text" }, |(c, _)| c);
         log::info!(via.target(), "message", kind = kind, bytes = message.text.len());
+        if in_post {
+            self.heard(via, message);
+        }
         if message.text.trim().is_empty() {
             self.reply(via, message.id, ONLY_TEXT);
-            return;
+        } else if in_post {
+            self.post_message(via, message, area);
+        } else {
+            self.direct_message(via, message, area);
         }
+    }
+
+    fn direct_message(&mut self, via: Via, message: &Message, area: Rect) {
         if let Some((word, _)) = command(&message.text) {
             self.messenger_mut(via).open_ask = None;
             self.chat_command(via, word, message, area);
             return;
         }
-        let replied = message.reply_to.and_then(|id| self.messenger(via).route(id));
-        let messenger = self.messenger_mut(via);
-        let route = match replied {
-            Some(route) => {
-                if messenger.open_ask.is_some_and(|(open, _)| open == route) {
-                    messenger.open_ask = None;
-                }
-                Some(route)
-            }
-            None => messenger.take_open_ask(Instant::now()),
-        };
+        let route = self.replied_route(via, message).or_else(|| self.messenger_mut(via).take_open_ask(Instant::now()));
         match route {
-            Some(Route::Pane(pane)) => self.deliver(via, pane, message.text.clone(), message.id),
-            Some(Route::Branch(draft)) => self.draft_branch(via, draft, message.text.trim(), message.id),
-            Some(Route::Prompt(draft)) => self.draft_prompt(via, draft, message, area),
-            None => self.unrouted(via, message),
+            Some(route) => self.text_for(via, route, message, area),
+            None => self.unrouted(via, message, self.agent_panes(), NO_AGENT),
+        }
+    }
+
+    pub(super) fn replied_route(&mut self, via: Via, message: &Message) -> Option<Route> {
+        let route = message.reply_to.and_then(|id| self.messenger(via).route(id))?;
+        let messenger = self.messenger_mut(via);
+        if messenger.open_ask.is_some_and(|(open, _)| open == route) {
+            messenger.open_ask = None;
+        }
+        Some(route)
+    }
+
+    pub(super) fn text_for(&mut self, via: Via, route: Route, message: &Message, area: Rect) {
+        match route {
+            Route::Pane(pane) => self.deliver(via, pane, message.text.clone(), message.id),
+            Route::Branch(draft) => self.draft_branch(via, draft, message.text.trim(), message.id),
+            Route::Prompt(draft) => self.draft_prompt(via, draft, message, area),
         }
     }
 
@@ -103,10 +123,9 @@ impl App {
         }
     }
 
-    fn unrouted(&mut self, via: Via, message: &Message) {
-        let panes = self.agent_panes();
+    pub(super) fn unrouted(&mut self, via: Via, message: &Message, panes: Vec<u64>, none: &str) {
         match panes.as_slice() {
-            [] => self.reply(via, message.id, NO_AGENT),
+            [] => self.reply(via, message.id, none),
             [pane] => self.deliver(via, *pane, message.text.clone(), message.id),
             _ => {
                 let messenger = self.messenger_mut(via);
@@ -144,7 +163,8 @@ impl App {
         } else if survey {
             let keyboard = vec![vec![messenger.tap("dismiss the survey", &Tap::Key(pane, "0".into()))]];
             let text = "Claude Code's feedback survey is open above its input box: dismiss it, then send again.";
-            self.say(via, text.into(), Delivery { keyboard, route: Some(Route::Pane(pane)), reply_to: Some(message) });
+            let delivery = Delivery { keyboard, route: Some(Route::Pane(pane)), reply_to: Some(message), to: None };
+            self.say(via, text.into(), delivery);
         } else if dialog {
             let keyboard = vec![vec![
                 messenger.tap("screen", &Tap::Screen(pane)),
@@ -155,7 +175,11 @@ impl App {
                  then send again.",
                 via.markup().escape(&agent.kind)
             );
-            self.say(via, text, Delivery { keyboard, route: Some(Route::Pane(pane)), reply_to: Some(message) });
+            self.say(
+                via,
+                text,
+                Delivery { keyboard, route: Some(Route::Pane(pane)), reply_to: Some(message), to: None },
+            );
         } else {
             let send = SendText { pane: Some(pane), text: Some(text), enter: true, ..SendText::default() };
             self.chat_request(via, Command::Send(send), Asked::Send { message }, None);
@@ -163,7 +187,7 @@ impl App {
     }
 
     fn chat_press(&mut self, via: Via, press: &Press, area: Rect) {
-        if !self.paired_with(via, press.chat, press.user) {
+        if !self.pressed_by_owner(via, press) {
             log::info!(via.target(), "button from another chat ignored", chat = press.chat);
             return;
         }
@@ -182,15 +206,15 @@ impl App {
             Tap::Key(pane, key) => self.tap_key(via, pane, key, press),
             Tap::Screen(pane) => {
                 self.answer_press(via, &press.id, "");
-                self.send_screen(via, pane);
+                self.send_screen(via, pane, Some(press.chat));
             }
             Tap::Write(pane) => {
                 self.answer_press(via, &press.id, "");
-                self.tap_write(via, pane);
+                self.tap_write(via, pane, press.chat);
             }
             Tap::Deliver(pane, held) => {
                 self.answer_press(via, &press.id, "");
-                self.tap_deliver(via, pane, held, press.message);
+                self.tap_deliver(via, pane, held, (press.chat, press.message));
             }
             Tap::New => {
                 self.answer_press(via, &press.id, "");
@@ -208,29 +232,27 @@ impl App {
             self.answer_press(via, &press.id, GONE);
             return;
         };
-        let asked =
-            Asked::Keys { press: press.id.clone(), chat_message: press.message, key: key.clone(), agent: agent.kind };
+        let (press, chat, chat_message) = (press.id.clone(), press.chat, press.message);
+        let asked = Asked::Keys { press, chat, chat_message, key: key.clone(), agent: agent.kind };
         let keys = Keys { pane: Some(pane), tab: None, keys: vec![key] };
         self.chat_request(via, Command::Keys(keys), asked, None);
     }
 
-    fn tap_write(&mut self, via: Via, pane: u64) {
+    fn tap_write(&mut self, via: Via, pane: u64, chat: i64) {
         let Some(agent) = self.agent_at(pane) else {
-            self.say(via, GONE.into(), Delivery::default());
+            self.say(via, GONE.into(), Delivery { to: Some(chat), ..Delivery::default() });
             return;
         };
         let m = via.markup();
         let text = format!("Write to {} in {}:", m.bold(&m.escape(&agent.kind)), m.escape(&agent.place));
-        self.ask(via, text, &format!("message for {}", agent.kind), Route::Pane(pane));
+        self.ask(via, text, &format!("message for {}", agent.kind), (Route::Pane(pane), Some(chat)));
     }
 
-    fn tap_deliver(&mut self, via: Via, pane: u64, held: u32, edited_message: i64) {
+    fn tap_deliver(&mut self, via: Via, pane: u64, held: u32, (chat, edited_message): (i64, i64)) {
         let messenger = self.messenger_mut(via);
         let found = messenger.held.iter().position(|(id, ..)| *id == held);
         let Some((_, text, message)) = found.and_then(|i| messenger.held.remove(i)) else { return };
-        if let Some(agent) = self.agent_at(pane)
-            && let Some(chat) = self.messenger(via).chat().map(|c| c.id)
-        {
+        if let Some(agent) = self.agent_at(pane) {
             let m = via.markup();
             let edited = format!("For {} in {}.", m.bold(&m.escape(&agent.kind)), m.escape(&agent.place));
             self.post(via, Order::Edit { chat, message: edited_message, text: edited, keyboard: Vec::new() });

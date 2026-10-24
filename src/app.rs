@@ -364,6 +364,7 @@ impl App {
             self.flow_frame(now),
             self.next_request(now),
             self.next_pairing(now),
+            self.next_forum_setup(now),
             self.clients.events.snapshots.wake(now, !self.clients.views.is_empty()),
             self.clients.events.app.wake(now, false),
             self.clients.events.runs.wake(now, false),
@@ -418,6 +419,7 @@ impl App {
         self.sync_remote();
         self.sync_messengers();
         self.pair_by_owner(now);
+        self.set_up_forums(now);
         self.watch_plugins(now);
         self.check_requests(now);
         self.ring_bells(now);
@@ -442,6 +444,7 @@ impl App {
         self.sync_worktrees();
         self.forget_runs();
         self.forget_gone_closed();
+        self.clean_gone_posts();
         self.forget_moved_run_ends();
         self.forget_files();
         self.count_behind(now);
@@ -462,6 +465,7 @@ impl App {
             .map(|(p, group)| ProjectState::of(p, group, self.runs.all(), &parents))
             .collect();
         self.save_closed(&mut projects);
+        self.save_posts(&mut projects);
         let groups = self.groups.iter().map(|g| g.entry.clone()).collect();
         let changes = (self.screen.side == Some(Side::Changes)
             || self.panels.changes.mode() != changes::Mode::default()

@@ -69,6 +69,26 @@ fn renders_the_sections_and_rows() {
 }
 
 #[test]
+fn renders_the_forum_mode_and_closed_workspaces_under_the_discord_phone() {
+    let remote = Settings {
+        tabs: vec!["Worktrees", "Agents", "Remote"],
+        tab: 2,
+        rows: vec![
+            row("Browser", "remote access", "[ ] off", ""),
+            row("Discord", "bot", "@cornercase_bot", ""),
+            SettingsRow {
+                removable: true,
+                ..row("Discord", "phone", "@ada", "agents message it while you are away · enter pairs another")
+            },
+            row("Discord", "forum mode", "[x] on", "add the app to your server"),
+            row("Discord", "closed workspaces", "archive", "what happens to the post of a workspace you close"),
+        ],
+        ..settings(3)
+    };
+    insta::assert_snapshot!(render(&with(remote)).backend());
+}
+
+#[test]
 fn renders_a_pick() {
     let pick = SettingsPick {
         title: "How should claude start?".into(),

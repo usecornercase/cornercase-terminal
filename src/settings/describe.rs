@@ -1,7 +1,7 @@
 use serde_json::Value;
 
 use crate::agents;
-use crate::config::{Config, Icons, Sidebar, Tabs, WorkingIcon};
+use crate::config::{Config, ForumClose, Icons, Sidebar, Tabs, WorkingIcon};
 use crate::control::config::{Choice, Connection, ConnectionKind, Kind, Setting, State};
 use crate::host::notify;
 use crate::messenger::Via;
@@ -41,6 +41,7 @@ fn switch(row: &Row) -> Option<&'static str> {
         Row::StarPrompt => "star_prompt",
         Row::Tour => "tour",
         Row::Remote => "remote",
+        Row::Forum(_) => "discord_forum",
         _ => return None,
     })
 }
@@ -141,6 +142,11 @@ impl Settings {
             Row::Notifications => {
                 ("desktop_notifications", items(notify::choices()), config.desktop_notifications.trim().to_lowercase())
             }
+            Row::ForumClose(_) => (
+                "discord_forum_close",
+                items(ForumClose::choices()),
+                ForumClose::from_setting(&config.discord_forum_close).id().into(),
+            ),
             Row::Fetch => {
                 let mut setting = self.base(row, "fetch_minutes", Kind::Number);
                 setting.field = Some(Self::field_label(row));

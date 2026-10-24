@@ -80,6 +80,8 @@ pub(crate) enum Row {
     AddAgent,
     Bot(Via),
     Chat(Via),
+    Forum(Via),
+    ForumClose(Via),
     Plugin(String),
     NoPlugins,
     ServerTokens,
@@ -97,7 +99,7 @@ impl Row {
     pub(crate) fn section(&self) -> &'static str {
         match self {
             Self::Remote | Self::Browsers => "Browser",
-            Self::Bot(via) | Self::Chat(via) => via.name(),
+            Self::Bot(via) | Self::Chat(via) | Self::Forum(via) | Self::ForumClose(via) => via.name(),
             Self::Plugin(_) | Self::NoPlugins => "Installed",
             Self::Account(kind, _) | Self::AddAccount(kind) | Self::System(kind) | Self::RenameAccount(kind, _) => {
                 kind.title()
@@ -140,7 +142,9 @@ impl Row {
             | Self::AsanaWorkspace
             | Self::AsanaProjects
             | Self::Tab(_) => Page::Issues,
-            Self::Remote | Self::Browsers | Self::Bot(_) | Self::Chat(_) => Page::Remote,
+            Self::Remote | Self::Browsers | Self::Bot(_) | Self::Chat(_) | Self::Forum(_) | Self::ForumClose(_) => {
+                Page::Remote
+            }
             Self::Plugin(_) | Self::NoPlugins => Page::Plugins,
             Self::ServerTokens
             | Self::Account(..)
@@ -322,6 +326,7 @@ pub(crate) enum Action {
     CheckBot(Via, Secret),
     RemoveBot(Via),
     Pair(Via),
+    Forum(Via, Option<Box<Config>>),
     ForgetChat(Via),
     Plugin(String, bool),
     Accounts(Order),
@@ -338,6 +343,8 @@ pub(crate) struct Messenger {
     pub(crate) note: String,
     pub(crate) checking: bool,
     pub(crate) refused: bool,
+    pub(crate) forum: String,
+    pub(crate) forum_ready: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -518,8 +525,16 @@ impl Settings {
             if self.messenger(via).bot.is_some() {
                 rows.push(Row::Chat(via));
             }
+            rows.extend(self.forum_rows(via));
         }
         rows
+    }
+
+    fn forum_rows(&self, via: Via) -> Vec<Row> {
+        if via != Via::Discord || self.messenger(via).chat.is_none() {
+            return Vec::new();
+        }
+        if self.config.discord_forum { vec![Row::Forum(via), Row::ForumClose(via)] } else { vec![Row::Forum(via)] }
     }
 
     pub(crate) fn open_page(&mut self, page: Page) {

@@ -90,6 +90,7 @@ pub(super) mod a_bug {
             role_worktrees: Vec::new(),
             run_dirs: Vec::new(),
             closed: None,
+            discord_post: None,
         };
         let project =
             ProjectState { path, name: None, group: None, workspaces: vec![workspace], active: 0, collapsed: false };

@@ -115,6 +115,16 @@ impl Transport for Bot {
     type Attempt = Plain;
 
     fn perform(&self, order: &Order, attempt: &Plain) -> Result<Option<i64>, Failure> {
+        if matches!(
+            order,
+            Order::Post { .. }
+                | Order::Retag { .. }
+                | Order::Close { .. }
+                | Order::Reopen { .. }
+                | Order::Remove { .. }
+        ) {
+            return Ok(None);
+        }
         self.send_order(order, !attempt.0)
     }
 
@@ -161,6 +171,11 @@ fn method(order: &Order) -> &'static str {
         Order::Answer { .. } => "answerCallbackQuery",
         Order::React { .. } => "setMessageReaction",
         Order::Commands => "setMyCommands",
+        Order::Post { .. }
+        | Order::Retag { .. }
+        | Order::Close { .. }
+        | Order::Reopen { .. }
+        | Order::Remove { .. } => "unsupported",
     }
 }
 
@@ -196,6 +211,13 @@ fn request(order: &Order, rich: bool) -> (&'static str, Value) {
                 COMMANDS.iter().map(|(command, about)| json!({ "command": command, "description": about })).collect();
             json!({ "commands": commands })
         }
+        Order::Post { .. }
+        | Order::Retag { .. }
+        | Order::Close { .. }
+        | Order::Reopen { .. }
+        | Order::Remove { .. } => {
+            json!({})
+        }
     };
     (method(order), body)
 }
@@ -215,6 +237,7 @@ fn update(value: &Value) -> Option<Update> {
             chat: m["chat"]["id"].as_i64()?,
             user: from["id"].as_i64()?,
             private: m["chat"]["type"].as_str() == Some("private"),
+            guild: None,
             date: m["date"].as_i64().unwrap_or_default(),
             name,
             text: m["text"].as_str().unwrap_or_default().to_string(),

@@ -266,6 +266,15 @@ pub struct WorkspaceInfo {
     pub(crate) changes: Option<super::ChangesCount>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) closed_agents: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) post: Option<PostInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct PostInfo {
+    pub(crate) url: String,
+    pub(crate) archived: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -73,46 +73,61 @@ pub(crate) fn code(url: &str) -> Vec<Line<'static>> {
         .collect()
 }
 
-fn body(remote: &RemoteAccess, width: u16, room: u16, muted: Color) -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
-    let text = |lines: &mut Vec<Line<'static>>, s: &str, style: Style| {
-        lines.extend(markdown::wrap_text(s, style, usize::from(width)));
-    };
-    let plain = Style::default();
+pub(super) fn text(lines: &mut Vec<Line<'static>>, s: &str, style: Style, width: u16) {
+    lines.extend(markdown::wrap_text(s, style, usize::from(width)));
+}
+
+pub(super) struct Linked<'a> {
+    pub(super) url: &'a str,
+    pub(super) code: &'a [Line<'static>],
+    pub(super) notes: &'a [String],
+}
+
+pub(super) fn with_code(linked: &Linked<'_>, width: u16, room: usize, muted: Color) -> Vec<Line<'static>> {
+    let Linked { url, code, notes } = *linked;
     let dim = Style::default().fg(muted);
-    if let Some(url) = &remote.url {
-        let code = &remote.code;
-        let side = code.first().map_or(0, |l| l.spans.len());
-        let rows = |s: &str| markdown::wrap_text(s, plain, usize::from(width)).len();
-        let words = remote.lines.iter().map(|line| rows(line)).sum::<usize>() + rows(url) + 2;
-        if side <= usize::from(width) && code.len() + words <= usize::from(room) {
-            lines.extend(code.iter().cloned().map(Line::centered));
-        } else {
-            text(&mut lines, TOO_SMALL, dim);
-        }
-        lines.push(Line::default());
-        text(&mut lines, url, plain);
-        for line in &remote.lines {
-            text(&mut lines, line, dim);
-        }
+    let mut lines = Vec::new();
+    let side = code.first().map_or(0, |l| l.spans.len());
+    let rows = |s: &str| markdown::wrap_text(s, Style::default(), usize::from(width)).len();
+    let words = notes.iter().map(|line| rows(line)).sum::<usize>() + rows(url) + 2;
+    if side <= usize::from(width) && code.len() + words <= room {
+        lines.extend(code.iter().cloned().map(Line::centered));
     } else {
-        for line in &remote.lines {
-            text(&mut lines, line, plain);
-        }
+        text(&mut lines, TOO_SMALL, dim, width);
+    }
+    lines.push(Line::default());
+    text(&mut lines, url, Style::default(), width);
+    for line in notes {
+        text(&mut lines, line, dim, width);
     }
     lines
 }
 
-pub(crate) fn area(screen: Rect, remote: &RemoteAccess) -> Rect {
+fn body(remote: &RemoteAccess, width: u16, room: u16, muted: Color) -> Vec<Line<'static>> {
+    if let Some(url) = &remote.url {
+        let linked = Linked { url, code: &remote.code, notes: &remote.lines };
+        return with_code(&linked, width, usize::from(room), muted);
+    }
+    let mut lines = Vec::new();
+    for line in &remote.lines {
+        text(&mut lines, line, Style::default(), width);
+    }
+    lines
+}
+
+pub(super) fn sized(screen: Rect, body: impl Fn(u16, u16) -> usize) -> Rect {
     let width = screen.width.saturating_sub(4).min(FORM_WIDTH);
     let inner = form_inner(Rect::new(0, 0, width, 3)).width;
-    let room = screen.height.saturating_sub(4);
-    let lines = u16::try_from(body(remote, inner, room, Color::Reset).len()).unwrap_or(u16::MAX);
+    let lines = u16::try_from(body(inner, screen.height.saturating_sub(4))).unwrap_or(u16::MAX);
     let height = lines.saturating_add(4).min(screen.height);
     Rect::new(screen.x + (screen.width - width) / 2, screen.y + (screen.height - height) / 2, width, height)
 }
 
-fn rows(r: Rect) -> [Rect; 3] {
+pub(crate) fn area(screen: Rect, remote: &RemoteAccess) -> Rect {
+    sized(screen, |inner, room| body(remote, inner, room, Color::Reset).len())
+}
+
+pub(super) fn rows(r: Rect) -> [Rect; 3] {
     Layout::vertical([Constraint::Min(0), Constraint::Length(1), Constraint::Length(1)]).areas(form_inner(r))
 }
 

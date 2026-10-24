@@ -13,6 +13,7 @@ use crate::messenger::{Advice, COMMANDS, Chat, Key, Keyboard, Message, Order, Pr
 use crate::time;
 use crate::version;
 
+pub(crate) mod forum;
 pub(crate) mod gateway;
 pub(crate) mod markdown;
 
@@ -21,6 +22,11 @@ pub(crate) const API_ENV: &str = "CORNERCASE_DISCORD_API";
 pub(crate) const TOKEN_KEY: &str = "discord_bot_token";
 pub(crate) const DATA_BYTES: usize = 100;
 const CANNOT_MESSAGE: i64 = 50007;
+const MISSING_PERMISSION: i64 = 50013;
+const MISSING_ACCESS: i64 = 50001;
+const UNKNOWN_CHANNEL: i64 = 10003;
+const UNKNOWN_GUILD: i64 = 10004;
+const THREAD_ARCHIVED: i64 = 50083;
 const CALL_TIMEOUT: Duration = Duration::from_secs(20);
 const ACK_TIMEOUT: Duration = Duration::from_secs(3);
 const ACK_WAIT: u64 = 1;
@@ -57,6 +63,10 @@ pub(crate) enum Failure {
     Rejected,
     Closed,
     Wait(u64),
+    Missing(&'static str),
+    Removed,
+    Lost,
+    Archived,
     Refused(String),
     Unreachable(String),
 }
@@ -67,6 +77,10 @@ impl fmt::Display for Failure {
             Self::Rejected => write!(f, "Discord refused the bot token: paste it again from the Developer Portal"),
             Self::Closed => write!(f, "Discord cannot message you yet: add the app to your account first"),
             Self::Wait(seconds) => write!(f, "Discord asks to wait {seconds} s"),
+            Self::Missing(permission) => write!(f, "missing permission: {permission}"),
+            Self::Removed => write!(f, "the app is not in the server: add it again"),
+            Self::Lost => write!(f, "the channel is gone from Discord"),
+            Self::Archived => write!(f, "the post is archived"),
             Self::Refused(why) => write!(f, "Discord said: {why}"),
             Self::Unreachable(why) => write!(f, "{why}"),
         }
@@ -83,6 +97,7 @@ impl From<String> for Failure {
 pub(crate) struct Sent {
     calls: Cell<usize>,
     ids: RefCell<Vec<i64>>,
+    thread: Cell<Option<i64>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -160,6 +175,10 @@ impl Bot {
             (401, _) => Failure::Rejected,
             (429, _) => Failure::Wait(retry_after(&answer.json)),
             (_, Some(CANNOT_MESSAGE)) => Failure::Closed,
+            (_, Some(MISSING_PERMISSION)) => Failure::Missing(forum::SOME_PERMISSION),
+            (_, Some(MISSING_ACCESS | UNKNOWN_GUILD)) => Failure::Removed,
+            (_, Some(UNKNOWN_CHANNEL)) => Failure::Lost,
+            (_, Some(THREAD_ARCHIVED)) => Failure::Archived,
             (status, code) => {
                 let said = answer.json["message"].as_str().map_or_else(|| format!("status {status}"), String::from);
                 let said = code.map_or(said.clone(), |code| format!("{said} (code {code})"));
@@ -277,13 +296,9 @@ impl Transport for Bot {
     fn perform(&self, order: &Order, attempt: &Sent) -> Result<Option<i64>, Failure> {
         let follows_up = matches!(order, Order::Answer { text, .. } if !text.is_empty());
         let app = if follows_up || matches!(order, Order::Commands) { self.application()? } else { String::new() };
-        for call in request(order, &app).iter().skip(attempt.calls.get()) {
-            let answer = self.call(call.method, &call.path, call.body.as_ref())?;
-            if matches!(order, Order::Send { .. })
-                && let Some(id) = snowflake(&answer["id"])
-            {
-                attempt.ids.borrow_mut().push(id);
-            }
+        while let Some(call) = request(order, &app, attempt.thread.get()).into_iter().nth(attempt.calls.get()) {
+            let answer = self.call(call.method, &call.path, call.body.as_ref()).map_err(|f| forum::needs(f, order))?;
+            record(order, &answer, attempt);
             attempt.calls.set(attempt.calls.get() + 1);
         }
         Ok(attempt.ids.borrow().first().copied())
@@ -291,6 +306,34 @@ impl Transport for Bot {
 
     fn more(attempt: &Sent) -> Vec<i64> {
         attempt.ids.borrow().iter().skip(1).copied().collect()
+    }
+
+    fn posted(attempt: &Sent) -> Option<i64> {
+        attempt.thread.get()
+    }
+
+    fn gone(order: &Order, failure: &Failure) -> Option<i64> {
+        if *failure != Failure::Lost {
+            return None;
+        }
+        match order {
+            Order::Send { chat, .. }
+            | Order::Edit { chat, .. }
+            | Order::Buttons { chat, .. }
+            | Order::React { chat, .. } => Some(*chat),
+            Order::Retag { thread, .. }
+            | Order::Close { thread, .. }
+            | Order::Reopen { thread }
+            | Order::Remove { thread } => Some(*thread),
+            Order::Answer { .. } | Order::Commands | Order::Post { .. } => None,
+        }
+    }
+
+    fn archived(order: &Order, failure: &Failure) -> Option<i64> {
+        match (order, failure) {
+            (Order::Retag { thread, .. } | Order::Close { thread, .. }, Failure::Archived) => Some(*thread),
+            _ => None,
+        }
     }
 
     fn next(failure: Failure, _: &mut Sent) -> Next<Failure> {
@@ -308,7 +351,24 @@ impl Transport for Bot {
             Order::Answer { .. } => "answer",
             Order::React { .. } => "react",
             Order::Commands => "commands",
+            Order::Post { .. } => "post",
+            Order::Retag { .. } => "retag",
+            Order::Close { .. } => "close",
+            Order::Reopen { .. } => "reopen",
+            Order::Remove { .. } => "remove",
         }
+    }
+}
+
+fn record(order: &Order, answer: &Value, attempt: &Sent) {
+    let Some(id) = snowflake(&answer["id"]) else { return };
+    match order {
+        Order::Post { .. } if attempt.thread.get().is_none() => {
+            attempt.thread.set(Some(id));
+            attempt.ids.borrow_mut().push(snowflake(&answer["message"]["id"]).unwrap_or(id));
+        }
+        Order::Send { .. } | Order::Post { .. } => attempt.ids.borrow_mut().push(id),
+        _ => {}
     }
 }
 
@@ -337,7 +397,7 @@ fn message(content: &str, components: &[Value]) -> Value {
     json!({ "content": content, "components": components, "allowed_mentions": { "parse": [] } })
 }
 
-fn request(order: &Order, app: &str) -> Vec<Call> {
+fn request(order: &Order, app: &str, thread: Option<i64>) -> Vec<Call> {
     match order {
         Order::Send { chat, text, keyboard, reply_to, ask, .. } => {
             sending(*chat, text, keyboard, *reply_to, ask.is_some())
@@ -360,6 +420,13 @@ fn request(order: &Order, app: &str) -> Vec<Call> {
             vec![Call::new(Method::Put, path, None)]
         }
         Order::Commands => vec![Call::new(Method::Put, format!("/applications/{app}/commands"), Some(command_list()))],
+        Order::Post { forum, title, tag_id, text, keyboard, .. } => {
+            forum::posting(&forum::Post { forum: *forum, title, tag_id: *tag_id, text, keyboard }, thread)
+        }
+        Order::Retag { thread, tag_id } => vec![forum::retagging(*thread, *tag_id)],
+        Order::Close { thread, lock } => vec![forum::archiving(*thread, true, *lock)],
+        Order::Reopen { thread } => vec![forum::archiving(*thread, false, false)],
+        Order::Remove { thread } => vec![forum::removing(*thread)],
         Order::Answer { .. } => Vec::new(),
     }
 }
@@ -402,26 +469,29 @@ fn invoked(kind: &str, d: &Value) -> Option<Invoked> {
     Some(Invoked { id, app: d["application_id"].as_str().map(String::from) })
 }
 
-pub(crate) fn update(kind: &str, d: &Value) -> Option<Update> {
+pub(crate) fn update(kind: &str, d: &Value, forum: Option<i64>) -> Option<Update> {
     match kind {
-        "MESSAGE_CREATE" => written(d),
+        "MESSAGE_CREATE" => written(d, forum),
         "INTERACTION_CREATE" if d["type"].as_u64() == Some(2) => slash_command(d),
         "INTERACTION_CREATE" if d["type"].as_u64() == Some(3) => pressed(d),
         _ => None,
     }
 }
 
-fn written(d: &Value) -> Option<Update> {
+fn written(d: &Value, forum: Option<i64>) -> Option<Update> {
     let author = &d["author"];
     let ordinary = matches!(d["type"].as_u64(), None | Some(0 | 19));
-    if d.get("guild_id").is_some_and(|g| !g.is_null()) || author["bot"].as_bool() == Some(true) || !ordinary {
+    let in_guild = d.get("guild_id").is_some_and(|g| !g.is_null());
+    let guild = snowflake(&d["guild_id"]).filter(|guild| Some(*guild) == forum);
+    if (in_guild && guild.is_none()) || author["bot"].as_bool() == Some(true) || !ordinary {
         return None;
     }
     Some(Update::Message(Message {
         id: snowflake(&d["id"])?,
         chat: snowflake(&d["channel_id"])?,
         user: snowflake(&author["id"])?,
-        private: true,
+        private: !in_guild,
+        guild,
         date: d["timestamp"].as_str().and_then(time::parse_time).unwrap_or_default(),
         name: author["username"].as_str().unwrap_or_default().to_string(),
         text: d["content"].as_str().unwrap_or_default().to_string(),
@@ -438,6 +508,7 @@ fn slash_command(d: &Value) -> Option<Update> {
         chat: snowflake(&d["channel_id"]).or_else(|| snowflake(&d["channel"]["id"]))?,
         user: snowflake(&user["id"])?,
         private: true,
+        guild: None,
         date: ((id >> 22) + DISCORD_EPOCH_MS) / 1000,
         name: user["username"].as_str().unwrap_or_default().to_string(),
         text: format!("/{}", d["data"]["name"].as_str().filter(|name| !name.is_empty())?),

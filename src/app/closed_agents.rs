@@ -144,6 +144,7 @@ impl App {
         self.agents.closed.keep(plan.place.1, tabs, run.map(|run| KeptRun { run, seats }));
         self.agents.closed.mark_closing(panes);
         self.close_tabs(&plan.tabs);
+        self.archive_post(plan.place.1);
     }
 
     fn closed_tab(&self, tab: &Tab, plan: &Plan, run: Option<&Run>, live: &std::collections::HashSet<u64>) -> TabState {

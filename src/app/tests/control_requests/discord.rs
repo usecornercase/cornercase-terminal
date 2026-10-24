@@ -270,7 +270,7 @@ mod chat {
         let d = serde_json::json!({ "id": "1300000000000000001", "token": "tok", "type": 2, "channel_id": CHAT.to_string(),
             "user": { "id": USER.to_string(), "username": "ada" }, "data": { "name": "new", "type": 1 } });
 
-        let command = crate::discord::update("INTERACTION_CREATE", &d).expect("a command");
+        let command = crate::discord::update("INTERACTION_CREATE", &d, None).expect("a command");
         update(&mut agent.app, Via::Discord, command);
 
         phone.says_in_html(&mut agent, "the prompt question", "What should **claude** do");

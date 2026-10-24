@@ -470,6 +470,7 @@ impl Phone {
             chat,
             user,
             private: true,
+            guild: None,
             date: 0,
             name: "@ada".into(),
             text: text.into(),
@@ -527,6 +528,7 @@ mod copilot;
 mod creating;
 mod cursor;
 mod discord;
+mod discord_forum;
 mod driving;
 mod events;
 mod flow_sharing;

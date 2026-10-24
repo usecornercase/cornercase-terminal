@@ -46,6 +46,7 @@ mod pairing {
             chat: -5,
             user: USER,
             private: false,
+            guild: None,
             date: 0,
             name: String::new(),
             text: format!("/start {token}"),
