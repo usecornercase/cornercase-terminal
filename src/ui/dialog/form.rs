@@ -8,9 +8,10 @@ use super::{
     CANCEL_LABEL, FORM_WIDTH, INPUT_PROMPT, Note, buttons_in, draw_danger, draw_dialog_buttons, draw_note,
     draw_secondary, draw_submit, form_inner, left_of,
 };
+use crate::editor::Editor;
 use crate::text::truncate_left;
 use crate::ui::View;
-use crate::ui::widgets::{hovered, overlay_block};
+use crate::ui::widgets::{hovered, overlay_block, paint_selection};
 
 const FORM_HEIGHT: u16 = 10;
 
@@ -32,6 +33,12 @@ pub(in crate::ui) fn form_rows(form: Rect) -> [Rect; 6] {
     ])
     .areas(form_inner(form));
     [label, input, hint, toggle, note, buttons]
+}
+
+pub(crate) fn form_text(area: Rect) -> Rect {
+    let input = form_rows(form_area(area))[1];
+    let prompt = u16::try_from(INPUT_PROMPT.chars().count()).unwrap_or(u16::MAX).min(input.width);
+    Rect { x: input.x + prompt, width: input.width - prompt, ..input }
 }
 
 pub(crate) fn form_toggle(form: Rect) -> Rect {
@@ -79,7 +86,7 @@ pub(crate) struct Toggle {
 pub(crate) struct Form {
     pub(crate) title: &'static str,
     pub(crate) label: &'static str,
-    pub(crate) value: String,
+    pub(crate) value: Editor,
     pub(crate) hint: String,
     pub(crate) toggle: Option<Toggle>,
     pub(crate) note: Option<Note>,
@@ -108,25 +115,28 @@ pub(in crate::ui) fn draw_form(f: &mut Frame, view: &View, form: &Form) {
         let style = if hovered(view, toggle) { Style::default().fg(Color::Cyan) } else { Style::default() };
         f.render_widget(Paragraph::new(Span::styled(format!("{mark}{}", t.label), style)), toggle);
     }
-    let max = usize::from(input.width).saturating_sub(INPUT_PROMPT.chars().count() + 1);
-    let value = truncate_left(&form.value, max);
-    let cursor_x = input.x + u16::try_from(INPUT_PROMPT.chars().count() + value.chars().count()).unwrap_or(0);
-    f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(INPUT_PROMPT, Style::default().fg(Color::Cyan)),
-            Span::styled(value, Style::default().add_modifier(Modifier::BOLD)),
-        ])),
-        input,
-    );
+    f.render_widget(Paragraph::new(Span::styled(INPUT_PROMPT, Style::default().fg(Color::Cyan))), input);
+    draw_value(f, &form.value, form_text(f.area()), !matches!(form.note, Some(Note::Busy(_))));
     f.render_widget(Paragraph::new(Span::styled(truncate_left(&form.hint, usize::from(hint.width)), dim)), hint);
 
     draw_note(f, view.muted, form.note.as_ref(), note);
 
     draw_dialog_buttons(f, view, form_buttons(r, form.submit), form.submit, CANCEL_LABEL);
+}
 
-    if !matches!(form.note, Some(Note::Busy(_))) && cursor_x < input.right() {
-        f.set_cursor_position(Position::new(cursor_x, input.y));
+fn draw_value(f: &mut Frame, editor: &Editor, text: Rect, focused: bool) {
+    let width = usize::from(text.width.max(1));
+    let (top, col) = editor.position(width);
+    let chars: Vec<char> = editor.text().chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
+    let shown: String =
+        editor.lines(width).get(top).map(|range| chars[range.clone()].iter().collect()).unwrap_or_default();
+    f.render_widget(Paragraph::new(Line::styled(shown, Style::default().add_modifier(Modifier::BOLD))), text);
+    if !focused || text.is_empty() {
+        return;
     }
+    paint_selection(f.buffer_mut(), text, top, &editor.highlight(width));
+    let col = u16::try_from(col).unwrap_or(u16::MAX).min(text.width - 1);
+    f.set_cursor_position(Position::new(text.x + col, text.y));
 }
 
 pub(in crate::ui) fn draw_confirm(f: &mut Frame, view: &View, confirm: &Confirm) {

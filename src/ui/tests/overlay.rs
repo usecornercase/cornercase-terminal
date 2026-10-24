@@ -1,10 +1,11 @@
 use super::*;
+use crate::editor::Editor;
 
 fn form(note: Option<Note>) -> Form {
     Form {
         title: "New worktree",
         label: "branch",
-        value: "feat/login".into(),
+        value: Editor::new("feat/login"),
         hint: "in ~/.cornercase/worktrees/cornercase/feat-login".into(),
         toggle: None,
         note,

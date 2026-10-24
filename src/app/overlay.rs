@@ -16,6 +16,7 @@ use super::update_dialog::UpdateStep;
 use super::worktrees::Check;
 use crate::agents::Known;
 use crate::changes::{self, BranchPicker};
+use crate::editor::Editor;
 use crate::error::Result;
 use crate::flows::dialog::Dialog;
 use crate::flows::progress::Edge;
@@ -59,14 +60,14 @@ const COPY_COMMAND_SUBMIT: &str = "copy command";
 #[derive(Debug)]
 pub(super) enum Overlay {
     Menu { at: Position, actions: Vec<MenuAction> },
-    NewGroup { input: String },
+    NewGroup { input: Editor },
     GroupStyle { group: u64 },
     DeleteGroup { group: u64 },
     CloseProject { project: u64 },
     CloseWorkspace { project: u64, workspace: u64 },
     CloseTab { project: u64, workspace: u64, tab: u64 },
     ClosePane { pane: u64 },
-    NewWorkspace { project: u64, input: String, worktree: Option<bool>, error: Option<String>, creating: bool },
+    NewWorkspace { project: u64, input: Editor, worktree: Option<bool>, error: Option<String>, creating: bool },
     Settings(Box<Settings>),
     ShareSettings(Box<crate::settings::share::dialog::Dialog>),
     RemoveAccount { kind: Known, name: String },
@@ -74,7 +75,7 @@ pub(super) enum Overlay {
     Flows { dialog: Box<Dialog>, back: Option<Box<Overlay>> },
     StartFlow { start: Box<Start>, back: Option<Box<Overlay>> },
     ProjectSettings(Box<crate::project::settings::Form>),
-    Rename { target: Target, input: String },
+    Rename { target: Target, input: Editor },
     RemoveWorkspace { project: u64, workspace: u64, check: Check, lock: Option<worktree::Lock> },
     Picker { picker: Picker, group: Option<u64> },
     Issues(Box<Browser>),
@@ -208,15 +209,23 @@ impl Overlay {
         }
     }
 
-    pub(super) fn input(&mut self) -> Option<&mut String> {
+    pub(super) fn input(&mut self) -> Option<&mut Editor> {
         match self {
-            Self::NewWorkspace { input, error, creating: false, .. } => {
-                *error = None;
-                Some(input)
-            }
-            Self::Rename { input, .. } | Self::NewGroup { input } => Some(input),
+            Self::NewWorkspace { input, creating: false, .. }
+            | Self::Rename { input, .. }
+            | Self::NewGroup { input } => Some(input),
             _ => None,
         }
+    }
+
+    pub(super) fn clear_error(&mut self) {
+        if let Self::NewWorkspace { error, .. } = self {
+            *error = None;
+        }
+    }
+
+    pub(super) fn takes_input(&self) -> bool {
+        matches!(self, Self::NewWorkspace { creating: false, .. } | Self::Rename { .. } | Self::NewGroup { .. })
     }
 
     pub(super) fn lists_running(&self) -> bool {

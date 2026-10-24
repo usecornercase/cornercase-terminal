@@ -7,6 +7,7 @@ use super::help_menu::HelpItem;
 use super::opening::Subject;
 use super::overlay::Overlay;
 use super::plugins::Spot;
+use crate::editor::Editor;
 use crate::error::Result;
 use crate::host::open::Opener;
 use crate::log::{self};
@@ -254,7 +255,8 @@ impl App {
     pub(in crate::app) fn group_action(&mut self, action: MenuAction, at: Position) -> Option<MenuAction> {
         match action {
             MenuAction::Rename(target) => {
-                self.overlay = self.current_name(target).map(|input| Overlay::Rename { target, input });
+                self.overlay =
+                    self.current_name(target).map(|name| Overlay::Rename { target, input: Editor::new(&name) });
             }
             MenuAction::MoveToGroup(project) => self.move_to_group_menu(project, at),
             MenuAction::SetGroup(project, group) => {
@@ -269,7 +271,7 @@ impl App {
             MenuAction::OpenProject => self.pick_project(None),
             MenuAction::NewGroup => {
                 self.screen.nav = None;
-                self.overlay = Some(Overlay::NewGroup { input: String::new() });
+                self.overlay = Some(Overlay::NewGroup { input: Editor::default() });
             }
             MenuAction::NewWorkspace(project) => {
                 if let Some(p) = self.projects.project_index(project) {

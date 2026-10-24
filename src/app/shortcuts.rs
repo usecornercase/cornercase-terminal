@@ -6,6 +6,7 @@ use super::layout::Side;
 use super::menus::{Marked, MenuAction, Target};
 use super::{App, Overlay, Toast};
 use crate::agents::activity::Status;
+use crate::editor::Editor;
 use crate::error::Result;
 use crate::files::Mode;
 use crate::log;
@@ -210,7 +211,7 @@ impl App {
     fn ask_rename(&mut self, target: Option<Target>) {
         if let Some((target, input)) = target.and_then(|t| Some((t, self.current_name(t)?))) {
             self.screen.nav = None;
-            self.overlay = Some(Overlay::Rename { target, input });
+            self.overlay = Some(Overlay::Rename { target, input: Editor::new(&input) });
         }
     }
 

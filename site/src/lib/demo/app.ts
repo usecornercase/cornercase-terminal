@@ -8,7 +8,7 @@ import { BOLD, Grid, type Rect, contains, rect } from '../term/grid';
 import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
 import { BASES, type ChangesMode, type ChangesSelection, type FileDiff, type HunkAction, type LinesAction, type Spot, changesLineEdge, changesLineNear, changesStretchNear, compareSpots, hasChanges, hunkLines, linesReference, linesText, selectedLines, shownChanges, workspaceDiff } from './changes';
-import { type FieldGrip, TodoPanel, cursorAt, dragIn, removeSelection, selectAll, selectWord, selectedText as fieldText, selectionOf, todoWidth } from './todo';
+import { type Editable, type FieldGrip, TodoPanel, cursorAt, dragIn, editKey, insertText, removeSelection, selectAll, selectWord, selectedText as fieldText, selectionOf, todoWidth } from './todo';
 import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
 import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
 import { type FindState, findAll, firstFrom, nearest, start as hitStart } from './find';
@@ -4772,7 +4772,7 @@ export class App {
           o.cursor += typed.length;
         }
       }
-      else if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') o.input += text.replace(/\s+/g, ' ');
+      else if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') nameEdit(o, (f) => insertText(f, text.replace(/\s+/g, ' ')));
       else if (o.kind === 'search') o.query += text;
       else if (o.kind === 'picker') o.filter += text;
       else if (o.kind === 'settings' && o.edit) o.edit.input += o.edit.token ? text.replace(/\s/g, '') : text;
@@ -4883,8 +4883,7 @@ export class App {
       else if (k.key === 'Enter') this.submitForm();
       else if (o.kind === 'newWorkspace' && o.creating) return true;
       else if (o.kind === 'newWorkspace' && k.key === 'Tab') this.toggleWorktree();
-      else if (k.key === 'Backspace') o.input = o.input.slice(0, -1);
-      else if (ch) o.input += ch;
+      else nameEdit(o, (f) => editKey(f, k, Number.MAX_SAFE_INTEGER));
       if (o.kind === 'newWorkspace') o.error = undefined;
       this.dirty();
       return true;
@@ -5113,4 +5112,15 @@ export function crop(text: string, hit: [number, number], width: number): [strin
   if (to < chars.length) shown += '…';
   const end = Math.min(hit[1], to - (to < chars.length ? 1 : 0));
   return [shown, [Math.max(hit[0], from + lead) - from, Math.max(end - from, Math.max(hit[0], from + lead) - from)]];
+}
+
+type NameOverlay = Extract<Overlay, { kind: 'newWorkspace' | 'rename' | 'newGroup' }>;
+
+function nameEdit(o: NameOverlay, change: (f: Editable) => void): void {
+  const chars = [...o.input];
+  const field: Editable = { chars, cursor: o.cursor ?? chars.length, anchor: o.anchor };
+  change(field);
+  o.input = field.chars.join('');
+  o.cursor = field.cursor;
+  o.anchor = field.anchor ?? null;
 }

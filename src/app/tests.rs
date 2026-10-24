@@ -47,6 +47,7 @@ use crate::agents::AgentState;
 use crate::agents::context::{self};
 use crate::changes::Checkout;
 use crate::config;
+use crate::editor::Editor;
 use crate::git;
 use crate::host::clipboard;
 use crate::host::notify::{self};
@@ -408,9 +409,9 @@ fn click_new_workspace(app: &mut App) {
     pick(app, "new workspace");
 }
 
-fn form_value(app: &App) -> Option<&str> {
+fn form_value(app: &App) -> Option<String> {
     match &app.overlay {
-        Some(Overlay::NewWorkspace { input, .. } | Overlay::Rename { input, .. }) => Some(input),
+        Some(Overlay::NewWorkspace { input, .. } | Overlay::Rename { input, .. }) => Some(input.text()),
         _ => None,
     }
 }

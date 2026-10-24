@@ -480,11 +480,7 @@ impl App {
             Some(Overlay::StartFlow { .. }) => self.start_flow_paste(text, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_paste(text, area),
             Some(Overlay::Worktrees(_)) => self.worktrees_paste(text),
-            Some(overlay) => {
-                if let Some(input) = overlay.input() {
-                    input.extend(clean());
-                }
-            }
+            Some(_) => self.name_paste(text, area),
             None => {}
         }
     }

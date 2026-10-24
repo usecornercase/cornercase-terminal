@@ -118,7 +118,7 @@ fn the_new_workspace_dialog_names_the_setup_when_a_worktree_is_chosen() {
     let id = s.app.projects[0].id;
     s.app.overlay = Some(Overlay::NewWorkspace {
         project: id,
-        input: "feat".into(),
+        input: Editor::new("feat"),
         worktree: Some(true),
         error: None,
         creating: false,

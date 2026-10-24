@@ -50,7 +50,7 @@ pub(crate) use dialog::flows::{
 };
 #[cfg(test)]
 pub(crate) use dialog::flows::{flows_body, flows_buttons, flows_tabs};
-pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_hit};
+pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_hit, form_text};
 pub use dialog::form::{form_area, form_buttons};
 #[cfg(test)]
 pub(crate) use dialog::form::{form_extra_button, form_toggle};

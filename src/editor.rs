@@ -226,9 +226,13 @@ impl Editor {
 
     fn edit(&mut self, key: KeyEvent, width: usize, one_line: bool) -> bool {
         let alone = key.modifiers == KeyModifiers::ALT;
+        let control = key.modifiers == KeyModifiers::CONTROL;
+        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
         match key.code {
             KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down => self.arrow(key, width),
-            KeyCode::Home | KeyCode::End => self.ends(key, width, one_line),
+            KeyCode::Home | KeyCode::End => self.ends(key.code == KeyCode::Home, shift, width, one_line),
+            KeyCode::Char('a') if control => self.ends(true, false, width, one_line),
+            KeyCode::Char('e') if control => self.ends(false, false, width, one_line),
             KeyCode::Backspace => self.backspace(),
             KeyCode::Delete => self.delete(),
             KeyCode::Char('b') if alone => self.unselected(Self::word_left),
@@ -268,13 +272,13 @@ impl Editor {
         }
     }
 
-    fn ends(&mut self, key: KeyEvent, width: usize, one_line: bool) {
-        if key.modifiers.contains(KeyModifiers::SHIFT) {
+    fn ends(&mut self, home: bool, shift: bool, width: usize, one_line: bool) {
+        if shift {
             self.anchor();
         } else {
             self.unselect();
         }
-        match (key.code == KeyCode::Home, one_line) {
+        match (home, one_line) {
             (true, true) => self.home(),
             (false, true) => self.end(),
             (true, false) => self.line_home(width),

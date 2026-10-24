@@ -239,10 +239,10 @@ export interface ConfirmView {
 
 export type Overlay =
   | { kind: 'menu'; at: Pos; actions: MenuAction[] }
-  | { kind: 'newGroup'; input: string }
+  | { kind: 'newGroup'; input: string; cursor?: number; anchor?: number | null }
   | { kind: 'groupStyle'; group: number }
-  | { kind: 'newWorkspace'; project: number; input: string; worktree: boolean | null; error?: string; creating?: boolean }
-  | { kind: 'rename'; target: Target; input: string }
+  | { kind: 'newWorkspace'; project: number; input: string; cursor?: number; anchor?: number | null; worktree: boolean | null; error?: string; creating?: boolean }
+  | { kind: 'rename'; target: Target; input: string; cursor?: number; anchor?: number | null }
   | { kind: 'remove'; project: number; workspace: number }
   | { kind: 'deleteGroup'; group: number }
   | { kind: 'closeProject'; project: number }

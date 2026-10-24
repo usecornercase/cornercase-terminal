@@ -7,7 +7,7 @@ fn outside() -> Position {
 #[test]
 fn a_click_outside_a_form_closes_it() {
     let (mut app, _rx, _dirs) = app_with(1);
-    app.overlay = Some(Overlay::NewGroup { input: "work".into() });
+    app.overlay = Some(Overlay::NewGroup { input: Editor::new("work") });
 
     click(&mut app, outside());
 
@@ -17,7 +17,7 @@ fn a_click_outside_a_form_closes_it() {
 #[test]
 fn a_click_inside_a_form_keeps_it() {
     let (mut app, _rx, _dirs) = app_with(1);
-    app.overlay = Some(Overlay::NewGroup { input: "work".into() });
+    app.overlay = Some(Overlay::NewGroup { input: Editor::new("work") });
     let form = ui::form_area(AREA);
 
     click(&mut app, Position::new(form.x + 1, form.y + 1));
@@ -39,8 +39,13 @@ fn a_click_outside_the_settings_closes_them() {
 fn a_busy_dialog_stays_open() {
     let (mut app, _rx, _dirs) = app_with(1);
     let project = app.projects[0].id;
-    app.overlay =
-        Some(Overlay::NewWorkspace { project, input: "login".into(), worktree: None, error: None, creating: true });
+    app.overlay = Some(Overlay::NewWorkspace {
+        project,
+        input: Editor::new("login"),
+        worktree: None,
+        error: None,
+        creating: true,
+    });
 
     click(&mut app, outside());
 

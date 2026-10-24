@@ -193,7 +193,8 @@ function wordLeft(chars: string[], at: number): number {
 const ARROWS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
 
 function moveKey(f: Editable, k: Key, width: number): boolean {
-  const ends = k.key === 'Home' || k.key === 'End';
+  const toEnd = k.ctrl && !k.alt && !k.shift && (k.key === 'a' || k.key === 'e');
+  const ends = k.key === 'Home' || k.key === 'End' || toEnd;
   const word = k.alt && !k.ctrl && !k.shift && (k.key === 'b' || k.key === 'f');
   if (!ARROWS.includes(k.key) && !ends && !word) return false;
   const by = k.ctrl || k.alt;
@@ -211,8 +212,8 @@ function moveKey(f: Editable, k: Key, width: number): boolean {
   else if (forward && (by || word)) f.cursor = wordRight(f.chars, f.cursor);
   else if (back) f.cursor = Math.max(0, f.cursor - 1);
   else if (forward) f.cursor = Math.min(f.chars.length, f.cursor + 1);
-  else if (k.key === 'Home') f.cursor = 0;
-  else if (k.key === 'End') f.cursor = f.chars.length;
+  else if (k.key === 'Home' || k.key === 'a') f.cursor = 0;
+  else if (k.key === 'End' || k.key === 'e') f.cursor = f.chars.length;
   else f.cursor = cursorAt(f, width, k.key === 'ArrowUp' ? line - 1 : line + 1, col) ?? f.cursor;
   return true;
 }

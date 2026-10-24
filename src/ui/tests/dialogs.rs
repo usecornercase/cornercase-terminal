@@ -1,11 +1,12 @@
 use super::*;
+use crate::editor::Editor;
 use crate::pull_request::Outcome;
 
 fn new_workspace_form(on: bool) -> Form {
     Form {
         title: "New workspace",
         label: "name",
-        value: "feat/login".into(),
+        value: Editor::new("feat/login"),
         hint: "in ~/.cornercase/worktrees/cornercase/feat-login".into(),
         toggle: Some(Toggle { label: "with its own worktree", on }),
         note: None,

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { App } from '../src/lib/demo/app';
 import { workspaceLabel } from '../src/lib/demo/model';
+import type { Key } from '../src/lib/demo/programs';
 import { world } from '../src/lib/demo/world';
 
 function demo(): App {
@@ -83,5 +84,23 @@ test('a tab menu has no open in…', () => {
   app.openMenu({ x: 2, y: 2 }, { kind: 'tab', project: p.id, workspace: w.id, tab: w.tabs[0].id });
   if (app.overlay?.kind !== 'menu') return assert.fail('no menu');
   assert.ok(!app.overlay.actions.some((a) => a.kind === 'openIn'));
+  app.destroy();
+});
+
+test('the new workspace name moves its cursor with the arrows, Ctrl+A and Ctrl+E', () => {
+  const app = demo();
+  app.openNewWorkspace(0);
+  for (const ch of 'fix login') app.key({ key: ch } as Key);
+  app.key({ key: 'ArrowLeft', alt: true } as Key);
+  for (const ch of 'the ') app.key({ key: ch } as Key);
+  app.key({ key: 'a', ctrl: true } as Key);
+  app.key({ key: '-' } as Key);
+  app.key({ key: 'e', ctrl: true } as Key);
+  app.key({ key: '!' } as Key);
+  const o = app.overlay;
+  assert.ok(o?.kind === 'newWorkspace');
+  assert.equal(o.input, '-fix the login!');
+  app.paste('x');
+  assert.equal(o.input, '-fix the login!x');
   app.destroy();
 });

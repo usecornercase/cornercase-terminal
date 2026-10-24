@@ -3,6 +3,7 @@ use rstest::rstest;
 use super::*;
 use crate::app::menus::Target;
 use crate::app::overlay::Overlay;
+use crate::editor::Editor;
 use crate::project::group::{GROUP_COLOURS, GROUP_ICONS, GROUP_STYLES};
 
 fn new_group(app: &mut App, name: &str) -> u64 {
@@ -121,7 +122,7 @@ fn deleting_a_group_closes_the_windows_dialog_for_it() {
     assert!(app.overlay.is_none());
 
     let third = new_group(&mut app, "third");
-    app.overlay = Some(Overlay::Rename { target: Target::Group(third), input: "x".into() });
+    app.overlay = Some(Overlay::Rename { target: Target::Group(third), input: Editor::new("x") });
     ok(&mut app, "group-delete", &json!({"group": third}));
     assert!(app.overlay.is_none());
 }

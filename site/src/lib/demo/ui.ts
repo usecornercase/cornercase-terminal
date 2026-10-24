@@ -1188,14 +1188,18 @@ export class Painter {
     this.region({ r, click: onClick, cursor: 'pointer' });
   }
 
-  private input(row: Rect, label: string, value: string, focused = true): void {
+  private input(row: Rect, label: string, value: string, focused = true, cursor?: number): void {
     const lbl = label ? `${label} ` : '';
     const max = Math.max(0, row.w - INPUT_PROMPT.length - [...lbl].length - 1);
-    const v = truncateLeft(value, max);
+    const chars = [...value];
+    const at = Math.min(cursor ?? chars.length, chars.length);
+    const start = at === chars.length ? 0 : Math.max(0, at - max + 1);
+    const v = at === chars.length ? truncateLeft(value, max) : chars.slice(start, start + max).join('');
     let x = this.span(row.x, row.y, INPUT_PROMPT, CYAN);
     x = this.span(x, row.y, lbl, DARK);
-    x = this.span(x, row.y, v, { add: BOLD });
-    if (focused && x < right(row)) this.cursor = { x, y: row.y, shape: 'block' };
+    const end = this.span(x, row.y, v, { add: BOLD });
+    const caret = at === chars.length ? end : x + at - start;
+    if (focused && caret < right(row)) this.cursor = { x: caret, y: row.y, shape: 'block' };
   }
 
   private form(): void {
@@ -1208,7 +1212,7 @@ export class Painter {
     this.box(r, title);
     const c = rect(r.x + 2, r.y + 1, r.w - 4, r.h - 2);
     this.span(c.x, c.y, 'name', DARK);
-    this.input(rect(c.x, c.y + 1, c.w, 1), '', o.input);
+    this.input(rect(c.x, c.y + 1, c.w, 1), '', o.input, true, o.cursor);
     if (o.kind === 'newWorkspace') {
       this.span(c.x, c.y + 2, truncateLeft(app.newWorkspaceHint(o), c.w), DARK);
       if (o.worktree !== null) {
