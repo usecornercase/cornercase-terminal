@@ -7,7 +7,7 @@ import { type AgentRow, type App, PAGE_NAMES, crop } from './app';
 import { changesLabel, drawChanges, hasChanges } from './changes';
 import { drawFiles } from './files';
 import { drawFlow } from './flow';
-import { type FieldGrip, drawTodo } from './todo';
+import { type FieldGrip, drawTodo, fieldLines, fieldPosition } from './todo';
 import { type KeysGroup, keyWidth, keysArea, keysFrame, keysItem, keysItems } from './keys';
 import {
   type Areas,
@@ -29,6 +29,7 @@ import {
   helpButton,
   closeButton,
   formArea,
+  INPUT_PROMPT,
   inner,
   intersect,
   isEmpty,
@@ -41,6 +42,7 @@ import {
   EMPTY,
   MIN_MENU_ROW_WIDTH,
   moreAbove,
+  nameWidth,
   pickerArea,
   right,
   rightAligned,
@@ -186,7 +188,6 @@ function updated(ms: number): string {
   if (minutes < 60) return `updated ${minutes}m ago`;
   return `updated ${Math.floor(minutes / 60)}h ago`;
 }
-const INPUT_PROMPT = '› ';
 
 const middle = (r: Rect): Rect => rect(r.x, r.y + Math.floor(Math.max(0, r.h - 1) / 2), r.w, Math.min(r.h, 1));
 const marker = (shown: boolean): Seg => seg(shown ? '▌ ' : '  ', CYAN);
@@ -1188,18 +1189,25 @@ export class Painter {
     this.region({ r, click: onClick, cursor: 'pointer' });
   }
 
-  private input(row: Rect, label: string, value: string, focused = true, cursor?: number): void {
+  private input(row: Rect, label: string, value: string, focused = true): void {
     const lbl = label ? `${label} ` : '';
     const max = Math.max(0, row.w - INPUT_PROMPT.length - [...lbl].length - 1);
-    const chars = [...value];
-    const at = Math.min(cursor ?? chars.length, chars.length);
-    const start = at === chars.length ? 0 : Math.max(0, at - max + 1);
-    const v = at === chars.length ? truncateLeft(value, max) : chars.slice(start, start + max).join('');
+    const v = truncateLeft(value, max);
     let x = this.span(row.x, row.y, INPUT_PROMPT, CYAN);
     x = this.span(x, row.y, lbl, DARK);
-    const end = this.span(x, row.y, v, { add: BOLD });
-    const caret = at === chars.length ? end : x + at - start;
-    if (focused && caret < right(row)) this.cursor = { x: caret, y: row.y, shape: 'block' };
+    x = this.span(x, row.y, v, { add: BOLD });
+    if (focused && x < right(row)) this.cursor = { x, y: row.y, shape: 'block' };
+  }
+
+  private nameInput(row: Rect, value: string, cursor: number | undefined): void {
+    const chars = [...value];
+    const field = { chars, cursor: Math.min(cursor ?? chars.length, chars.length) };
+    const w = nameWidth(this.app.cols, this.app.rows);
+    const [line, col] = fieldPosition(field, w);
+    const [from, to] = fieldLines(field, w)[line];
+    const x = this.span(row.x, row.y, INPUT_PROMPT, CYAN);
+    this.span(x, row.y, chars.slice(from, to).join(''), { add: BOLD }, w);
+    this.cursor = { x: x + Math.min(col, w - 1), y: row.y, shape: 'block' };
   }
 
   private form(): void {
@@ -1212,7 +1220,7 @@ export class Painter {
     this.box(r, title);
     const c = rect(r.x + 2, r.y + 1, r.w - 4, r.h - 2);
     this.span(c.x, c.y, 'name', DARK);
-    this.input(rect(c.x, c.y + 1, c.w, 1), '', o.input, true, o.cursor);
+    this.nameInput(rect(c.x, c.y + 1, c.w, 1), o.input, o.cursor);
     if (o.kind === 'newWorkspace') {
       this.span(c.x, c.y + 2, truncateLeft(app.newWorkspaceHint(o), c.w), DARK);
       if (o.worktree !== null) {

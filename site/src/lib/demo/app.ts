@@ -38,6 +38,7 @@ import {
   layout,
   mainWidth,
   menuArea,
+  nameWidth,
   sidebarDrop,
   agentLayout,
   sidebarLayout,
@@ -4883,7 +4884,7 @@ export class App {
       else if (k.key === 'Enter') this.submitForm();
       else if (o.kind === 'newWorkspace' && o.creating) return true;
       else if (o.kind === 'newWorkspace' && k.key === 'Tab') this.toggleWorktree();
-      else nameEdit(o, (f) => editKey(f, k, Number.MAX_SAFE_INTEGER));
+      else nameEdit(o, (f) => editKey(f, k, nameWidth(this.cols, this.rows)));
       if (o.kind === 'newWorkspace') o.error = undefined;
       this.dirty();
       return true;

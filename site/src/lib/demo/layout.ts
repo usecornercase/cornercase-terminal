@@ -850,6 +850,8 @@ export function centered(cols: number, rows: number, w: number, h: number): Rect
 }
 
 export const formArea = (cols: number, rows: number) => centered(cols, rows, Math.min(Math.max(0, cols - 4), FORM_WIDTH), Math.min(FORM_HEIGHT, rows));
+export const INPUT_PROMPT = '› ';
+export const nameWidth = (cols: number, rows: number) => Math.max(1, formArea(cols, rows).w - 4 - INPUT_PROMPT.length);
 export const pickerArea = (cols: number, rows: number) =>
   centered(cols, rows, Math.min(Math.max(0, cols - 4), PICKER_WIDTH), Math.min(Math.max(0, rows - 2), PICKER_HEIGHT));
 export const updateNotes = (cols: number, rows: number): Rect => {
