@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.192
+
+- **A Discord forum for your workspaces.** Turn on **forum mode** in Settings › Remote, with the Discord rows, and each workspace gets its own post in a private forum channel of a Discord server you own, titled `project › workspace`, so parallel work no longer shares one direct message. A dialog walks you through the setup and ticks each step as Discord confirms it: Guild Install and the Message Content intent in the Developer Portal, the app added to a server you own (a QR code and a link with the permissions already in it), and the forum channel, which cornercase makes for you. The direct message works as before, and commands stay there. Without the Message Content intent the direct message still works; only replies in posts wait for it.
+- Each post carries a tag, `working`, `needs you` or `done`, that follows its agents, so the forum list shows at a glance which task needs you. Notices and buttons go to the workspace's post; write in a post and it reaches that workspace's agent (or asks which one, if there are several). `/new` makes the post of the new workspace, and the direct message links to it.
+- **Posts tidy themselves away.** Closing a workspace archives and locks its post, or deletes it if you set **closed workspaces** to `delete`. Closing a workspace's agents archives its post, and reopening them brings it back. Deleting a post by hand is fine: the next notice opens a new one.
+- Scripts: `status --app` gains `forum` in Discord's row (`on`, `ready`, `guild`, `channel`, `pending`), and each workspace in `status --json` and `watch` gains `post` (`url`, `archived`) while it has one. New `config.json` keys: `discord_forum` and `discord_forum_close`. Turned on with `cornercase config`, the forum is set up without the window once the app is in one server; with several servers, picking one stays in the window, and `pending` says what is left meanwhile.
+
 ## 0.12.191
 
 - The Limits tab of the Usage dialog and `cornercase usage` no longer fail with `usage unavailable: Invalid request: invalid type: map, expected unit` for Codex CLI 0.153 and older: they show those versions' plan limits too.
