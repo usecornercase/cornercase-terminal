@@ -22,9 +22,9 @@ Code: `cli.rs`, `cli/`, `control.rs`, `app/control.rs`, `app/control/`, `app/eve
 - [Gemini, Cursor and Copilot sends, and `todo send`](commands-for-scripts-and-agents/agent-sends.md): Gemini sends; Cursor sends; Copilot sends; Gemini's input box and last message; `todo send ID`.
 - [Waiting on several panes](commands-for-scripts-and-agents/waiting-on-several-panes.md): #129: `--any` and `--all`, one line per pane, `wait-several`.
 - [Reading a pane and its last message](commands-for-scripts-and-agents/reading.md): `read` and `--text`; The last message; Searching; Reading several last messages; What the last message is; No input box in `read --json`.
-- [`status`: the tree, roles and the flat list](commands-for-scripts-and-agents/status.md): the tree; A run member's role; A flat list of panes.
+- [`status`: the tree, roles and the flat list](commands-for-scripts-and-agents/status.md): the tree; A run member's role; A workspace's Discord post; A flat list of panes.
 - [Following events](commands-for-scripts-and-agents/events.md): Following events; Where events come from; Programs ending; The stream; Slow readers never block the server; What programs ask of the host terminal.
-- [Watching the session and the rest of the app](commands-for-scripts-and-agents/watching.md): Watching the session (`watch`, `status --follow`); Following the rest of the app (`app`).
+- [Watching the session and the rest of the app](commands-for-scripts-and-agents/watching.md): Watching the session (`watch`, `status --follow`); Following the rest of the app (`app`), Discord's forum.
 - [Streaming a tab's terminals](commands-for-scripts-and-agents/surfaces.md): #286: frames, cells and styles, What else a cell carries, sizes, pacing, Patches.
 - [Views of your own, and what a view sees](commands-for-scripts-and-agents/views.md): Views of your own; What a view shows counts as seen, and agent notices for other programs.
 - [Driving a tab's terminals](commands-for-scripts-and-agents/driving-terminals.md): #287: `input`, `scroll`, `selection`, `ratio`, `resize`; The path under a cell (`link`).

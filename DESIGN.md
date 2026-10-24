@@ -59,7 +59,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Remote windows](design/remote-windows.md) (`remote.rs`, `client.rs`, `client/window.rs`, `ui/remote.rs`): `cornercase remote` over ssh, the proxy, reconnecting.
 - [Browser access](design/browser-access.md) (`web/`, `web/tailscale.rs`, `app/remote_access.rs`, `ui/remote_access.rs`): the window in a phone's browser, pairing, Tailscale.
 - [Telegram](design/telegram.md) (`telegram/`, `messenger/`, `app/messenger.rs`, `app/messenger/`): away mode, the Telegram bot and what chat apps share.
-- [Discord](design/discord.md) (`discord/`, `app/messenger/pairing.rs`, #265): the Discord bot, pairing, the Gateway, slash commands.
+- [Discord](design/discord.md) (`discord/`, `app/messenger/pairing.rs`, `app/messenger/every.rs`, `app/messenger/forum.rs`, `app/messenger/forum/`, `ui/forum.rs`, #265, #437): the Discord bot, pairing, the Gateway, slash commands, forum mode.
 - [Panics](design/panics.md) (`panics.rs`, `server.rs`): containing panics so that the shells survive.
 - [Log](design/log.md) (`log.rs`, `paths.rs`, `time.rs`, `app/trace.rs`): `server.log`, its format, levels and what it never holds.
 - [Commands for scripts and agents](design/commands-for-scripts-and-agents.md) (`cli.rs`, `cli/`, `control.rs`, `app/control.rs`, `app/control/`, `app/events.rs`): the commands and socket requests, streams, the contract.

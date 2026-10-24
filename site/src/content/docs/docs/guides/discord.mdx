@@ -14,7 +14,7 @@ It does what the [Telegram bot](../telegram/) does, and the two can be set up an
 - **A Discord account**, with the Discord app on your phone.
 - **An app of your own**, made in the [Discord Developer Portal](https://discord.com/developers/applications):
   1. **New Application**, give it a name (`cornercase` will do) and create it.
-  2. In **Installation**, under **Installation Contexts**, keep **User Install** on. **Guild Install** can stay as it is: cornercase never joins a server.
+  2. In **Installation**, under **Installation Contexts**, keep **User Install** on. **Guild Install** can stay as it is: the direct message needs no server. [Forum mode](#forum-mode) asks you to turn it on later.
   3. Still in **Installation**, set **Install Link** to **None** and save. cornercase makes its own link when you pair, and Discord does not let a bot be private while it has an install link.
   4. In **Bot**, turn **Public Bot** off and save, so the app is private: nobody but you can add it. cornercase would ignore anyone else anyway, but each of their messages would add a line to `server.log`.
   5. In **General Information**, leave **Interactions Endpoint URL** empty. With an address there, Discord sends button presses and commands to it instead of to cornercase, and they all fail.
@@ -29,7 +29,7 @@ The app is yours alone: cornercase talks to Discord as its bot, and only to you,
 3. Scan the code with your phone's camera. It opens Discord on **Add to my apps**: authorize it.
 4. Within a few seconds the dialog closes, `Discord connected` shows, and the bot says hello in a direct message.
 
-There is no code to type: the link adds the app to your own Discord account, and cornercase then messages the app's owner, which is you. Once paired, the bot listens only to that direct message.
+There is no code to type: the link adds the app to your own Discord account, and cornercase then messages the app's owner, which is you. Once paired, the bot listens only to that direct message, and, with [forum mode](#forum-mode), to your messages in its forum's posts.
 
 If the app is still public or **User Install** is off, the **bot** row and the dialog say what to change (`public app: Install Link to None, then Public Bot off`, `turn on User Install in the Developer Portal`). Change it in the Developer Portal and the warning goes on the next check, a few seconds later while the dialog is open; there is no need to paste the token again. It never stops you from pairing.
 
@@ -49,6 +49,32 @@ The bot then sends the list of your agents, and **`Remote`** shows a green **`�
 The messages are the same as on Telegram (see [What you get](../telegram/#what-you-get)): `! claude needs you · web-shop › dark-mode` with the last lines of its screen and a button per option, plus **esc** and **screen**; `✓ claude finished` with the last thing it wrote, in Discord's Markdown. A message longer than Discord's 2,000 characters comes in several, at most four. A keyboard with more buttons than one message holds continues in the next ones, marked `…`.
 
 **Reply** to one of the bot's messages (long-press or swipe it, then **Reply**) and what you write goes to that agent, with `Enter`. A 👍 on your message says the agent took it; otherwise the bot answers why not. When the bot asks you to write something (the prompt for `/new`, a branch's name, a message after **write**), its message ends with *reply to this message*, but a plain message works too: the next one you send that is not a command answers it, for ten minutes, unless the bot has written about an agent since. Otherwise a message that replies to nothing goes to your only agent, or, with several, the bot asks which one.
+
+## Forum mode
+
+With several agents at work, everything lands in the one direct message. **Forum mode** gives each workspace its own post in a forum channel of a server of yours, with a tag that says how its agents are doing, so you follow each line of work on its own and a message in a post goes to that workspace's agent. The direct message stays: commands, the welcome and whatever belongs to no workspace go there. Off by default; with it off, nothing changes.
+
+Discord does not let an app make a server, so you make one (a private one, just for you, will do) and add the app to it. To turn it on, select **forum mode** under **phone**, in **Settings › Remote › Discord**, and press `Enter`. A **Discord forum** dialog opens with four steps, which tick themselves as cornercase sees each one done, every few seconds while the dialog is open:
+
+1. **Guild Install**: in the Developer Portal, **Installation**, turn on **Guild Install** and save.
+2. **Message Content Intent**: in **Bot**, turn on **Message Content Intent** and save. In a server, Discord sends a message's text only to bots with this switch, so without it the bot could not read your replies in the posts. A private app gets it without review.
+3. **The app is in your server**: the dialog shows a QR code and a link that add the app to a server, with the permissions the forum needs. Open it and pick your server. No server yet? In Discord, **+ › Create My Own › For me and my friends**. Only servers you own count; with several, click the one you want.
+4. **The forum channel**: cornercase makes a private forum channel, `#cornercase`, that only you and the bot see, with the tags `working`, `needs you` and `done`.
+
+Then the dialog closes and `Discord forum ready in <server> › #cornercase` shows. **done** closes the dialog with the mode on, and the **forum mode** row's note names the step still left; **turn off** turns the mode off. If something is missing, the dialog says what: a permission the bot lacks shows the link again to grant it. Once the forum is ready, `Enter` on **forum mode** turns it off.
+
+The steps are also checked with the dialog closed, every 30 seconds while the mode is on, a phone is paired and the forum is not ready yet. So a script can turn the mode on with [`cornercase config`](../scripts-and-agents/#settings), follow the step left in `cornercase status --app`, and the forum is made by itself once the steps are done, as long as the app is in only one of your servers; with several, pick the server in the dialog. Pasting the token of another bot forgets the forum, so its steps start again.
+
+What changes:
+
+- **A post per workspace**, titled `<project> › <workspace>`, made by the first message about one of its agents. Notices and screens of that workspace's agents go there; each message names its agent, as in the direct message.
+- **A tag per post**: `needs you` while one of its agents waits for you or failed, `working` while one works, `done` otherwise. Tags change whether or not you are away; messages still come only while you are away.
+- **Write in the post** and it goes to that workspace's agent: to the agent of the message you reply to, to the agent whose **write** you pressed, to the only one, or, with several, the bot asks which with a button for each. With none, the bot says `/new` in the direct message starts one.
+- **Commands stay in the direct message**: a `/…` typed in a post answers `Commands work in the direct message with the bot.` `/status` and `/new` there cover every workspace; once `/new` starts an agent, its `Started … in …` goes to that workspace's post, and the direct message gets a link to the post.
+- **Closing a workspace** sets its post to `done` and archives and locks it, or deletes it: the **closed workspaces** row, shown under **forum mode** while it is on, picks `archive` (the default) or `delete`. **close agents** in a workspace's menu archives its post without locking it, and reopening them unarchives it, so the next message goes to the same post. A workspace closed while forum mode is off has its post cleaned up when you turn the mode back on, unless the cornercase server restarted in between.
+- **Deleting a post yourself** is fine: the message that finds it gone makes a new post for its workspace and goes there, so nothing is lost; if the new post cannot be made either, the message goes to the direct message.
+
+If **Message Content Intent** is turned off later, the bot keeps working in the direct message and keeps making and tagging posts, but cannot read them: the **forum mode** row says so until you turn the switch on again. Turning the mode off keeps the posts and the forum; turned on again, the same posts are used.
 
 ## Commands
 
@@ -70,10 +96,11 @@ A button from before the server restarted is refused, since the ids it carries m
 
 ## Privacy and security
 
-- Only the direct message with the app's owner is heard; messages from anyone else, and from servers, are ignored.
-- The token lives in `secrets.json`, and the bot's name and the paired chat in `discord.json`, both next to `config.json` and readable only by you (see [Files](../../reference/files-and-environment/)).
+- Only the app's owner is heard: in the direct message and, with forum mode, in the posts the bot made in its forum. Messages from anyone else, from other channels and from other servers are ignored.
+- cornercase joins a server only for forum mode, and only the one you add the app to. Its forum channel is private: hidden from the server's other members.
+- The token lives in `secrets.json`, and the bot's name, the paired chat and the forum's server and channel in `discord.json`, both next to `config.json` and readable only by you (see [Files](../../reference/files-and-environment/)).
 - `server.log` says when a message or a tap came in and what kind it was, never its text, nor the token.
-- **What agents write goes through Discord.** Direct messages with bots are not end-to-end encrypted, so Discord's servers store them: questions, answers, the screens you ask for, file paths and code. Don't use it for work you can't send there.
+- **What agents write goes through Discord.** Direct messages with bots and forum posts are not end-to-end encrypted, so Discord's servers store them: questions, answers, the screens you ask for, file paths and code. Don't use it for work you can't send there.
 
 <Aside type="caution">
 Whoever can write as you in Discord can type into your agents, as if at your keyboard. Keep your Discord account locked (two-factor authentication), and keep the bot's token secret: reset it in the Developer Portal if it leaks.
@@ -85,3 +112,5 @@ Whoever can write as you in Discord can type into your agents, as if at your key
 - Away is not saved: after a server restart it is off until you turn it on again.
 - Give each computer its own app: two computers on one app would both read your replies.
 - Pictures from the agents are not sent: one direct message holds every agent, and replies say which one.
+- Forum mode does not make workspaces: a new post you write yourself in the forum is ignored. Start agents with `/new` in the direct message.
+- A post keeps its first title: renaming the workspace does not rename it.

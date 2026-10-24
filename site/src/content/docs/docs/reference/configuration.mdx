@@ -155,6 +155,8 @@ Using cornercase away from the computer: in your phone's browser, or through Tel
 | **paired browsers** | How many browsers are paired, shown once there is one. `Enter` forgets them all and disconnects them. |
 | **bot** | Under **Telegram**, the [Telegram](../../guides/telegram/) bot that messages you while you are away: paste the token @BotFather gave you. Under **Discord**, the [Discord](../../guides/discord/) app's bot token, from the Developer Portal. The note says whether cornercase reaches it. `Backspace` removes it. |
 | **phone** | The chat paired with the bot, shown once a bot is set. `Enter` shows a code to scan with your phone (for Discord, the link that adds the app to your account); `Backspace` forgets the chat. |
+| **forum mode** | Under **Discord**, once the phone is paired: a post per workspace in a forum channel of your server (see [Forum mode](../../guides/discord/#forum-mode)). `Enter` turns it on and opens the dialog that sets it up; while it is not ready, `Enter` opens the dialog again, and once it is, turns it off. The note names the server and channel, the step still left or what failed. |
+| **closed workspaces** | Shown while **forum mode** is on: `archive` or `delete` the post of a workspace you close. |
 
 ### Plugins
 
@@ -281,6 +283,8 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "tour": true,
   "remote": false,
   "remote_port": 47681,
+  "discord_forum": false,
+  "discord_forum_close": "archive",
   "projects": {}
 }
 ```
@@ -345,6 +349,8 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`tour`](#tour) | boolean | `true` |
 | [`remote`](#remote) | boolean | `false` |
 | [`remote_port`](#remote_port) | number | `47681` |
+| [`discord_forum`](#discord_forum) | boolean | `false` |
+| [`discord_forum_close`](#discord_forum_close) | string | `"archive"` |
 | [`projects`](#projects) | object | `{}` |
 | [`profiles`](#profiles) | object | `{}` |
 | [`profile`](#profile) | string | `""` |
@@ -582,6 +588,14 @@ Whether this cornercase can be opened in a browser over Tailscale, from a phone 
 #### `remote_port`
 
 The port cornercase listens on for browsers, on your computer only (`127.0.0.1`); `tailscale serve` passes Tailscale's port 8443 to it. Change it when something else uses 47681.
+
+#### `discord_forum`
+
+[Forum mode](../../guides/discord/#forum-mode): each workspace gets a post in a forum channel of your Discord server, with a status tag, and what you write in it goes to that workspace's agent. Off by default. Turned on in the settings modal, it opens the dialog that sets the forum up; turned on here or with `cornercase config`, nothing opens, and the **forum mode** row says `enter sets it up` until Discord is read; the setup then goes on in the background (see the [guide](../../guides/discord/#forum-mode)). The settings modal shows it, and `cornercase config` sets it, only while a Discord phone is paired. It is not part of the settings you [share](#share-your-setup), since it belongs to your own bot and server.
+
+#### `discord_forum_close`
+
+What happens to a workspace's post when you close the workspace, in forum mode: `"archive"` tags it `done`, then archives and locks it; `"delete"` deletes it. An unknown value counts as the default, `"archive"`. Closing a workspace's agents only archives its post, whatever this says. `cornercase config` sets it while forum mode is on, as the row shows. It is not part of the settings you [share](#share-your-setup).
 
 #### `projects`
 
