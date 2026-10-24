@@ -4,11 +4,13 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Clear, Paragraph};
 
-use super::chrome::{HELP_LABEL, ISSUES_LABEL, TODO_LABEL, USAGE_LABEL, draw_column_border};
+use super::chrome::{HELP_LABEL, ISSUES_LABEL, TODO_LABEL, WORKTREES_LABEL, draw_column_border};
 use super::widgets::{put, sidebar_hovered};
-use super::{Overlay, View, files, flow, icons, remote_access};
+use super::{Overlay, View, files, flow, icons};
 
 pub(crate) const WIDTH: u16 = 4;
+
+const MORE: &str = "More";
 
 const SLOT: u16 = 3;
 
@@ -20,14 +22,11 @@ pub(crate) enum Item {
     Changes,
     Files,
     Todo,
+    Worktrees,
     Flow,
     Plugin(u16),
-    Update,
-    Remote,
-    Usage,
     Help,
-    Settings,
-    Quit,
+    More,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -37,8 +36,6 @@ pub(crate) struct Shown {
     pub(crate) changes: bool,
     pub(crate) files: bool,
     pub(crate) flow: bool,
-    pub(crate) update: bool,
-    pub(crate) remote: bool,
     pub(crate) plugins: u16,
 }
 
@@ -49,8 +46,6 @@ impl Shown {
             changes: view.changes_button.is_some(),
             files: view.has_project,
             flow: view.flow_run,
-            update: view.update.is_some(),
-            remote: view.remote.is_some(),
             plugins: u16::try_from(view.plugin_buttons.len()).unwrap_or(u16::MAX),
         }
     }
@@ -63,14 +58,11 @@ impl Item {
             Self::Changes => icons::NERD.changes,
             Self::Files => icons::NERD.files,
             Self::Todo => icons::NERD.todo,
+            Self::Worktrees => icons::WORKTREES,
             Self::Flow => icons::FLOW,
             Self::Plugin(n) => view.plugin_buttons.get(usize::from(n)).map_or("", |face| face.icon.as_str()),
-            Self::Update => icons::UPDATE,
-            Self::Remote => icons::REMOTE,
             Self::Help => icons::HELP,
-            Self::Usage => icons::USAGE,
-            Self::Settings => icons::SETTINGS,
-            Self::Quit => icons::QUIT,
+            Self::More => icons::MORE,
         }
     }
 
@@ -80,16 +72,13 @@ impl Item {
             Self::Changes => view.changes_button.as_ref().map_or_else(String::new, |b| b.label.clone()),
             Self::Files => files::LABEL.into(),
             Self::Todo => TODO_LABEL.into(),
+            Self::Worktrees => WORKTREES_LABEL.into(),
             Self::Flow => flow::LABEL.into(),
             Self::Plugin(n) => {
                 view.plugin_buttons.get(usize::from(n)).map(|face| face.title.clone()).unwrap_or_default()
             }
-            Self::Update => view.update.clone().unwrap_or_default(),
-            Self::Remote => remote_access::LABEL.into(),
             Self::Help => HELP_LABEL.into(),
-            Self::Usage => USAGE_LABEL.into(),
-            Self::Settings => "Settings".into(),
-            Self::Quit => "Quit".into(),
+            Self::More => MORE.into(),
         }
     }
 
@@ -99,14 +88,20 @@ impl Item {
             Self::Changes => view.changes_button.as_ref().is_some_and(|b| b.open),
             Self::Files => view.files.is_some(),
             Self::Todo => view.todo.is_some(),
+            Self::Worktrees => matches!(view.overlay, Some(Overlay::Worktrees(_))),
             Self::Flow => view.flow.is_some(),
-            Self::Remote => matches!(view.overlay, Some(Overlay::Remote(_))),
-            Self::Usage => matches!(view.overlay, Some(Overlay::Usage(_))),
             Self::Help => view.tour.is_some(),
-            Self::Settings => {
-                matches!(view.overlay, Some(Overlay::Settings(_) | Overlay::ShareSettings(_) | Overlay::Flows(_)))
-            }
-            Self::Plugin(_) | Self::Update | Self::Quit => false,
+            Self::More => matches!(
+                view.overlay,
+                Some(
+                    Overlay::Settings(_)
+                        | Overlay::ShareSettings(_)
+                        | Overlay::Flows(_)
+                        | Overlay::Usage(_)
+                        | Overlay::Remote(_)
+                )
+            ),
+            Self::Plugin(_) => false,
         }
     }
 
@@ -119,7 +114,7 @@ impl Item {
                 .filter(|b| b.files > 0)
                 .map(|b| Span::styled(icons::count(b.files), Style::default().fg(Color::Cyan))),
             Self::Todo => (view.todo_dot && view.todo_pending).then(|| Span::styled(icons::DOT, muted)),
-            Self::Remote => {
+            Self::More => {
                 view.remote.filter(|&on| on).map(|_| Span::styled(icons::DOT, Style::default().fg(Color::Green)))
             }
             _ => None,
@@ -132,17 +127,9 @@ pub(crate) fn items(bar: Rect, shown: Shown) -> Vec<(Item, Rect)> {
         return Vec::new();
     }
     let slot = |y| Rect { x: bar.x, y, width: SLOT, height: 1 };
-    let bottom = [
-        (Item::Quit, true),
-        (Item::Settings, true),
-        (Item::Help, true),
-        (Item::Usage, true),
-        (Item::Remote, shown.remote),
-        (Item::Update, shown.update),
-    ];
     let mut placed = Vec::new();
     let mut floor = bar.bottom();
-    for (item, _) in bottom.into_iter().filter(|(_, on)| *on) {
+    for item in [Item::More, Item::Help] {
         let Some(y) = floor.checked_sub(PITCH).filter(|&y| y > bar.y) else { break };
         floor = y;
         placed.push((item, slot(y)));
@@ -152,6 +139,7 @@ pub(crate) fn items(bar: Rect, shown: Shown) -> Vec<(Item, Rect)> {
         (Item::Changes, shown.changes),
         (Item::Files, shown.files),
         (Item::Todo, true),
+        (Item::Worktrees, true),
         (Item::Flow, shown.flow),
     ];
     let plugins = (0..shown.plugins).map(Item::Plugin);
@@ -183,8 +171,7 @@ pub(super) fn draw(f: &mut Frame, view: &View, bar: Rect) {
             put(buf, (r.x, r.y), "▌", bg.fg(Color::Cyan), r.right());
         }
         let fg = match item {
-            Item::Quit if lit => Color::Red,
-            Item::Update => Color::Cyan,
+            Item::More if view.update.is_some() => Color::Cyan,
             _ if open => Color::Cyan,
             _ if lit => Color::Reset,
             _ => view.soft,

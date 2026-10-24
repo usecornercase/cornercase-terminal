@@ -254,7 +254,7 @@ cornercase also plays a sound at those moments, one for an agent that needs you 
 
 ### Usage and stats
 
-The dialog opens on **Stats** and remembers your last tab until the server restarts. Switch to **Limits** to read your plan limits. Claude Code and Codex plans have a five-hour session limit and a weekly limit. To see how close you are without opening `/usage` or `/status` in one of your agents, click **`Usage`** at the bottom of the projects column. Gemini CLI has no section: API keys have no plan limits, and its Google-login quota has no usable CLI probe; use Gemini's `/stats` or `/usage`. opencode has no section: it uses whichever providers you set up, its own Zen and Go subscriptions among them, and cornercase doesn't ask any of them for your usage.
+The dialog opens on **Stats** and remembers your last tab until the server restarts. Switch to **Limits** to read your plan limits. Claude Code and Codex plans have a five-hour session limit and a weekly limit. To see how close you are without opening `/usage` or `/status` in one of your agents, click **`More ▴`** at the bottom of the sidebar, then **usage**. Gemini CLI has no section: API keys have no plan limits, and its Google-login quota has no usable CLI probe; use Gemini's `/stats` or `/usage`. opencode has no section: it uses whichever providers you set up, its own Zen and Go subscriptions among them, and cornercase doesn't ask any of them for your usage.
 
 <Screen
   name="usage"
@@ -405,7 +405,7 @@ Column widths, the line between stacked lists, the height of the [agents section
 
 <Screen
   name="sidebar-stacked"
-  alt="One column with the projects on top, the work group with web-shop active and orders-api, the personal group with blog and dotfiles, and the workspaces of web-shop below a line: main with nvim and bash, feat/dark-mode with claude, feat/gift-cards with codex, then Issues, Changes, Files, TODO, Settings, Usage and Quit at the bottom"
+  alt="One column with the projects on top, the work group with web-shop active and orders-api, the personal group with blog and dotfiles, and the workspaces of web-shop below a line: main with nvim and bash, feat/dark-mode with claude, feat/gift-cards with codex, then Issues, Changes, Files, TODO and Worktrees, and More and Help at the bottom"
   caption="Projects on top: both lists in one column, and the panes get the room of the second one."
   crop={[0, 0, 60, 38]}
 />
@@ -489,12 +489,12 @@ It works in every layout: below the projects in *side_by_side*, below both lists
 
 ### The icon bar
 
-Turn on **settings → UI → icon bar** to move the buttons at the bottom of the sidebar (**`Issues`**, **`Changes`**, **`Files`**, **`TODO`**, **`Settings`**, **`Usage`**, **`Help`**, **`Quit`**, and **`Remote`**, the update and the [accounts](../accounts/) when they show, plus **Flow** while the workspace runs a [flow](../flows/)) into a narrow column of icons on the left edge, like an editor's activity bar. The lists then reach the bottom of the window. Off by default.
+Turn on **settings → UI → icon bar** to move the buttons at the bottom of the sidebar (**`Issues`**, **`Changes`**, **`Files`**, **`TODO`**, **`Worktrees`**, **`Help`** and **`More ▴`**, and the [accounts](../accounts/) when they show, plus **Flow** while the workspace runs a [flow](../flows/)) into a narrow column of icons on the left edge, like an editor's activity bar. The lists then reach the bottom of the window. Off by default.
 
-- The panels and **`Issues`** are at the top; **`Usage`**, **`Help`**, **`Settings`** and **`Quit`** at the bottom, in that order, with **`Remote`** and an available update above them. A button that doesn't apply, such as **`Changes`** outside a git repository or **Flow** in a workspace that runs no flow, is left out and the others close up.
+- The panels and **`Issues`** are at the top; **`Help`** and a gear at the bottom. The gear opens the same menu as **`More ▴`**: settings, usage, remote, quit and an available update, which turns the gear cyan. A button that doesn't apply, such as **`Changes`** outside a git repository or **Flow** in a workspace that runs no flow, is left out and the others close up.
 - **Hover an icon** to see its name beside it, such as *Changes 3*.
 - The panel that is open is marked with the cyan bar `▌` and a cyan icon. Click its icon again to close it.
-- The number of changed files sits at the corner of the **`Changes`** icon, in a circle (`9+` from ten on); **`TODO`** gets a grey dot while items are left to do, and **`Remote`** a green one while a browser is attached or you are away on Telegram or Discord.
+- The number of changed files sits at the corner of the **`Changes`** icon, in a circle (`9+` from ten on); **`TODO`** gets a grey dot while items are left to do, and the gear a green one while a browser is attached or you are away on Telegram or Discord.
 - The [compact layout](../small-terminals/)'s top bar and the search buttons of the [changes](../changes/) and [files](../files/) panels follow the [`icons`](../../reference/configuration/#icons) setting, which turns them on in every window when the icon bar is on.
 
 The icons come from [Nerd Fonts](https://www.nerdfonts.com/). Ghostty, kitty and WezTerm include them, so they show without installing anything; in another terminal, install a Nerd Font and pick it as your terminal's font, or the icons show as empty boxes. The size of an icon is your terminal's choice: a program can only say which character goes in a cell. The **icons** setting decides which windows draw them: with `auto`, the default, each window does when its terminal ships them (and the icon bar counts as saying yours does).

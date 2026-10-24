@@ -25,13 +25,13 @@ function press(app: App, label: string): void {
   app.render();
 }
 
-for (const columns of [140, 70]) test(`Help sits beside Quit and opens its menu at ${columns} columns`, () => {
+for (const columns of [140, 70]) test(`Help sits beside More and opens its menu at ${columns} columns`, () => {
   const app = demo(columns);
   const help = app.textAt(' Help ');
-  const quit = app.textAt(' Quit ');
-  assert.ok(help && quit);
-  assert.equal(help.y, quit.y);
-  assert.ok(help.x > quit.x);
+  const more = app.textAt(' More ▴ ');
+  assert.ok(help && more);
+  assert.equal(help.y, more.y);
+  assert.ok(help.x > more.x);
   press(app, ' Help ');
   for (const item of ['tour', 'catalogue…', 'docs', 'report a bug']) assert.ok(app.textAt(item), item);
   const copied: string[] = [];

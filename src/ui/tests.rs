@@ -20,6 +20,7 @@ use super::layout::{COMPACT_BUTTON_WIDTH, HEADER_HEIGHT};
 use super::pane::TAGLINE;
 use super::rows::{Band, CLOSE_BUTTON_WIDTH, COMPACT_CLOSE_WIDTH, MENU_BUTTON_WIDTH, MIN_MENU_ROW_WIDTH};
 use super::theme::{DARK_HOVER, DARK_LINE, DARK_SURFACE, LIGHT_HOVER, LIGHT_SURFACE, WAITING_COLOR};
+use super::widgets::middle;
 use super::workspaces::{GB, MB, draw_tab_band, memory_size};
 use super::*;
 use crate::agents::usage::Severity;

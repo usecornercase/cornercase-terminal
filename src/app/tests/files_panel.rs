@@ -548,8 +548,7 @@ mod images {
         let (mut app, rx) = shown(&dir);
         let kitty = sight(Some(Protocol::Kitty));
         ready(&mut app, &rx, &kitty);
-        let settings = app.layout(AREA).settings.as_position();
-        click(&mut app, settings);
+        from_more(&mut app, "settings");
 
         let (buffer, placed) = render_frame(&mut app, AREA, &kitty);
         let placed = placed.expect("placed");

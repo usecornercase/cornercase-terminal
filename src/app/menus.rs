@@ -4,6 +4,7 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::account_menu::AccountItem;
 use super::help_menu::HelpItem;
+use super::more_menu::MoreItem;
 use super::opening::Subject;
 use super::overlay::Overlay;
 use super::plugins::Spot;
@@ -120,6 +121,7 @@ pub(super) enum MenuAction {
     ManageAccounts,
     Help(HelpItem),
     Tour(u8),
+    More(MoreItem),
 }
 
 impl App {
@@ -153,6 +155,7 @@ impl App {
     fn concern_menu_label(&self, action: MenuAction, blocker: Option<&str>) -> Option<String> {
         self.account_menu_label(action, blocker)
             .or_else(|| self.help_menu_label(action))
+            .or_else(|| self.more_menu_label(action))
             .or_else(|| self.closed_agents_label(action))
     }
 
@@ -326,6 +329,7 @@ impl App {
             MenuAction::AccountMenu(pane) => self.open_account_submenu(pane, at),
             MenuAction::AccountsOf(item) => self.open_accounts_of(item, at),
             MenuAction::Help(item) => self.help_action(item, at),
+            MenuAction::More(item) => self.more_action(item, at),
             MenuAction::Tour(index) => self.start_tour(usize::from(index), None, true),
             MenuAction::PluginButton { plugin, revision } => self.press_plugin_button(plugin, revision, at),
             other => return Some(other),

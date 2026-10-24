@@ -264,9 +264,9 @@ export interface Areas {
   title: Rect;
   list: Rect;
   separator: Rect;
-  settings: Rect;
-  usage: Rect;
-  quit: Rect;
+  worktrees: Rect;
+  moreSeparator: Rect;
+  more: Rect;
   workspaces: Rect;
   workspacesTitle: Rect;
   workspacesList: Rect;
@@ -290,14 +290,14 @@ export interface Areas {
   tabBar: Rect;
 }
 
-function column(r: Rect, lead: number): [Rect, Rect, Rect, Rect, Rect, Rect] {
+function column(r: Rect, lead: number): [Rect, Rect, Rect, Rect, Rect] {
   const title = rect(r.x, r.y, r.w, Math.min(lead, r.h));
   const listY = r.y + lead + GAP;
-  const listH = Math.max(1, r.h - lead - GAP - 4);
+  const listH = Math.max(1, r.h - lead - GAP - 3);
   const list = rect(r.x, listY, r.w, listH);
   const separator = rect(r.x, bottom(list), r.w, 1);
-  const [a, b, c] = [1, 2, 3].map((dy) => rect(r.x, bottom(list) + dy, r.w, 1));
-  return [title, list, separator, a, b, c];
+  const [a, b] = [1, 2].map((dy) => rect(r.x, bottom(list) + dy, r.w, 1));
+  return [title, list, separator, a, b];
 }
 
 export function layout(cols: number, rows: number, widths: Widths, nav: Nav, changes = false, sidebar: Sidebar = 'side_by_side', agents = false, tabs = false): Areas {
@@ -310,7 +310,7 @@ export function layout(cols: number, rows: number, widths: Widths, nav: Nav, cha
   const areas = cols < COMPACT_WIDTH ? compact(cols, rows, changes, agents) : changes ? withChanges(cols, rows, widths, main) : main(cols);
   if (!areas.compact) return tabs ? withTabBar(areas) : areas;
   const projects =
-    nav === 'projects' ? areas : { ...areas, sidebar: EMPTY, title: EMPTY, list: EMPTY, separator: EMPTY, settings: EMPTY, usage: EMPTY, quit: EMPTY, agentsButton: EMPTY };
+    nav === 'projects' ? areas : { ...areas, sidebar: EMPTY, title: EMPTY, list: EMPTY, separator: EMPTY, worktrees: EMPTY, moreSeparator: EMPTY, more: EMPTY, agentsButton: EMPTY };
   const workspaces =
     nav === 'workspaces'
       ? projects
@@ -342,7 +342,7 @@ function wide(cols: number, rows: number, widths: Widths, agents: boolean): Area
   const pane = rect(columnsWidth + PANE_PADDING, 0, Math.max(1, cols - columnsWidth - PANE_PADDING), rows);
   const header = rect(0, 0, columnsWidth - 1, Math.min(HEADER_HEIGHT, rows));
   const sidebar = rect(0, HEADER_HEIGHT, projects, Math.max(0, rows - HEADER_HEIGHT));
-  const [projectsTitle, projectsList, separator, settings, usage, quit] = column(rect(0, HEADER_HEIGHT, projects - 1, sidebar.h), 1);
+  const [projectsTitle, projectsList, separator, worktrees, more] = column(rect(0, HEADER_HEIGHT, projects - 1, sidebar.h), 1);
   const lists = rect(projectsTitle.x, projectsTitle.y, projectsTitle.w, Math.max(0, bottom(projectsList) - projectsTitle.y));
   const [rest, agentsAreas] = agentsSection(lists, widths, MIN_STACK_SECTION, agents);
   const [title, list] = agents ? section(rest) : [projectsTitle, projectsList];
@@ -360,9 +360,9 @@ function wide(cols: number, rows: number, widths: Widths, agents: boolean): Area
     title,
     list,
     separator,
-    settings,
-    usage,
-    quit,
+    worktrees,
+    moreSeparator: EMPTY,
+    more,
     workspaces: wsColumn,
     workspacesTitle,
     workspacesList,
@@ -385,14 +385,19 @@ function wide(cols: number, rows: number, widths: Widths, agents: boolean): Area
 
 export const TODO_LABEL = 'TODO';
 export const TODO_DOT = '●';
-const todoButton = (row: Rect): Rect => intersect(rect(right(row) - TODO_LABEL.length - 3, row.y, TODO_LABEL.length + 2, 1), row);
+export function changesButton(row: Rect, label: string): Rect {
+  const w = buttonWidth(label);
+  const column = row.x + 1 + Math.floor(row.w / 2);
+  const x = Math.max(row.x, Math.min(column, Math.max(0, right(row) - w - 1)));
+  return intersect(rect(x, row.y, w, 1), row);
+}
+const todoButton = (row: Rect): Rect => changesButton(row, TODO_LABEL);
 export const FILES_LABEL = 'Files';
 const filesButton = (row: Rect): Rect => intersect(rect(row.x + 1, row.y, FILES_LABEL.length + 2, 1), row);
 
 export function todoWithDot(areas: Areas, dot: boolean): Rect {
   const r = areas.todoButton;
-  const x = r.x - 2;
-  return dot && !areas.compact && x > right(areas.filesButton) ? rect(x, r.y, r.w + 2, r.h) : r;
+  return dot && !areas.compact && right(r) + 2 <= right(areas.issues) ? rect(r.x, r.y, r.w + 2, r.h) : r;
 }
 
 export const stackedWidth = (w: Widths, total: number): number =>
@@ -436,9 +441,9 @@ function oneColumn(cols: number, rows: number, widths: Widths, keep: number, age
     title: EMPTY,
     list: EMPTY,
     separator: rect(0, footer, inner, 1),
-    settings: rect(0, footer + 3, inner, 1),
-    usage: rect(0, footer + 4, inner, 1),
-    quit: rect(0, footer + 5, inner, 1),
+    worktrees: rect(0, footer + 3, inner, 1),
+    moreSeparator: rect(0, footer + 4, inner, 1),
+    more: rect(0, footer + 5, inner, 1),
     workspaces: EMPTY,
     workspacesTitle: EMPTY,
     workspacesList: EMPTY,
@@ -500,7 +505,7 @@ function compact(cols: number, rows: number, changes: boolean, agents: boolean):
   const list = rect(0, listY, cols, Math.max(1, bottom(menu) - listY - 1 - pitch));
   const separator = rect(0, bottom(list), cols, 1);
   const footer = rect(0, bottom(list) + 1, cols, pitch);
-  const [first, second] = [Math.round(cols / 3), Math.round((2 * cols) / 3)];
+  const projectsList = rect(0, listY, cols, Math.max(1, bottom(menu) - listY - 1 - 2 * pitch));
   const agentsY = menu.y + pitch + GAP;
   const agentsWidth = Math.min(buttonWidth(AGENTS_LABEL) + 2, title.w);
   const shown = (r: Rect): Rect => (agents ? r : EMPTY);
@@ -514,11 +519,11 @@ function compact(cols: number, rows: number, changes: boolean, agents: boolean):
     back: intersect(rect(0, title.y, '‹ Projects'.length + 2 + 2, pitch), title),
     sidebar: below,
     title,
-    list,
-    separator,
-    settings: rect(0, footer.y, first, pitch),
-    usage: rect(first, footer.y, second - first, pitch),
-    quit: rect(second, footer.y, cols - second, pitch),
+    list: projectsList,
+    separator: rect(0, bottom(projectsList), cols, 1),
+    worktrees: rect(0, bottom(projectsList) + 1, cols, pitch),
+    moreSeparator: EMPTY,
+    more: footer,
     workspaces: below,
     workspacesTitle: title,
     workspacesList: list,
@@ -1052,8 +1057,16 @@ export class Strip {
   }
 }
 
-export function helpButton(quit: Rect): Rect {
+export const MORE_LABEL = 'More ▴';
+export const WORKTREES_LABEL = 'Worktrees';
+
+export function helpButton(more: Rect): Rect {
   const w = buttonWidth('Help');
-  if (quit.w < buttonWidth('Quit') + w + 2) return EMPTY;
-  return { ...quit, x: quit.x + quit.w - w - 1, w };
+  if (more.w < buttonWidth(MORE_LABEL) + w + 2) return EMPTY;
+  return { ...more, x: more.x + more.w - w - 1, w };
+}
+
+export function moreButton(more: Rect): Rect {
+  const help = helpButton(more);
+  return isEmpty(help) ? more : { ...more, w: help.x - more.x };
 }

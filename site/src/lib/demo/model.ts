@@ -186,9 +186,12 @@ export type MenuAction =
   | { kind: 'openIn' }
   | { kind: 'sendTodo'; todo: number; pane: number }
   | { kind: 'worktrees'; project: number }
-  | { kind: 'help'; item: HelpItem };
+  | { kind: 'help'; item: HelpItem }
+  | { kind: 'more'; item: MoreItem };
 
 export type HelpItem = 'tour' | 'catalogue' | 'docs' | 'keys' | 'bug';
+
+export type MoreItem = 'settings' | 'usage' | 'quit';
 
 export interface PickItem {
   value: string;

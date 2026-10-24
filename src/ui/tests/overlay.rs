@@ -115,9 +115,9 @@ fn buttons_behind_the_menu_are_not_highlighted() {
 
 #[test]
 fn sidebar_buttons_are_not_highlighted_behind_a_form() {
-    let quit = areas().quit.as_position();
-    let v = View { hover: Some(quit), ..with(Overlay::Form(form(None))) };
-    assert_eq!(render(&v).backend().buffer()[quit].bg, Color::Reset);
+    let more = areas().more.as_position();
+    let v = View { hover: Some(more), ..with(Overlay::Form(form(None))) };
+    assert_eq!(render(&v).backend().buffer()[more].bg, Color::Reset);
 }
 
 #[test]

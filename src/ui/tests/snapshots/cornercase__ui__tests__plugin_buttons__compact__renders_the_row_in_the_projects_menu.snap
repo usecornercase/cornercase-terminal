@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/plugin_buttons.rs
-assertion_line: 202
 expression: "render_sized(&v, SMALL.width, SMALL.height).backend()"
 ---
 "                                                                                "
@@ -23,13 +22,13 @@ expression: "render_sized(&v, SMALL.width, SMALL.height).backend()"
 "                                                                                "
 "                                                                                "
 "                                                                                "
-"                                                                                "
-"                                                                                "
-"                                                                                "
 " ────────────────────────────────────────────────────────────────────────────── "
 "                                                                                "
 "  Deploy  Logs                                                                  "
 "                                                                                "
 "                                                                                "
-"  Settings                   Usage                     Quit               Help  "
+"  Worktrees                                                                     "
+"                                                                                "
+"                                                                                "
+"  More ▴                                                                  Help  "
 "                                                                                "

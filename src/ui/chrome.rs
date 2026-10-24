@@ -10,11 +10,9 @@ use super::files;
 use super::icons::Glyphs;
 use super::layout::{Areas, Border, COMPACT_BUTTON_WIDTH, changes_button};
 use super::pane::wordmark;
-use super::remote_access;
 use super::theme::status_icon;
 use super::widgets::{
     button_style, button_width, centered, draw_band, draw_button, draw_separator, middle, sidebar_hovered,
-    update_button,
 };
 use crate::text::{CRUMB_SEPARATOR, truncate_left, truncate_right};
 
@@ -35,11 +33,15 @@ pub(super) const USAGE_LABEL: &str = "Usage";
 
 pub(super) const HELP_LABEL: &str = "Help";
 
-const QUIT_LABEL: &str = "Quit";
+pub const MORE_LABEL: &str = "More ▴";
+
+pub(crate) const WORKTREES_LABEL: &str = "Worktrees";
 
 pub(crate) const TODO_LABEL: &str = "TODO";
 
 const TODO_DOT: &str = "●";
+
+const REMOTE_DOT: &str = "●";
 
 pub(crate) const PLUGINS_MORE: &str = "⋯";
 
@@ -51,44 +53,30 @@ pub(crate) struct ChangesButton {
 
 pub(super) fn draw_footer(f: &mut Frame, view: &View, areas: &Areas) {
     draw_separator(f, view.line(), areas.separator);
-    let mut settings = areas.settings;
-    if let Some(label) = &view.update {
-        let r = update_button(areas.settings, label);
-        let idle = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
-        draw_button(f, r, "", label, button_style(view, r, idle, Color::Cyan));
-        settings.width -= r.width;
-    }
-    draw_settings_button(f, view, settings);
-    let mut usage = areas.usage;
-    if let Some(connected) = view.remote {
-        let r = remote_access::button(areas.usage, connected);
-        remote_access::draw_button(f, view, r, connected);
-        if !r.is_empty() {
-            usage.width = r.x - usage.x;
-        }
-    }
-    draw_usage_button(f, view, usage);
-    let help = help_button(areas.quit);
-    let mut quit = areas.quit;
+    draw_separator(f, view.line(), areas.more_separator);
+    let help = help_button(areas.more);
     if !help.is_empty() {
         let style = button_style(view, help, Style::default().fg(view.muted), Color::Cyan);
         draw_button(f, help, "", HELP_LABEL, style);
-        quit.width = help.x - quit.x;
     }
-    draw_quit_button(f, view, quit);
+    draw_more_button(f, view, more_button(areas.more));
+    if !areas.worktrees.is_empty() {
+        let style = button_style(view, areas.worktrees, Style::default().fg(view.muted), Color::Cyan);
+        draw_button(f, areas.worktrees, " ", WORKTREES_LABEL, style);
+    }
 }
 
-pub(crate) fn help_button(quit: Rect) -> Rect {
+pub(crate) fn help_button(more: Rect) -> Rect {
     let width = button_width(HELP_LABEL);
-    if quit.width < button_width(QUIT_LABEL) + width + 2 {
+    if more.width < button_width(MORE_LABEL) + width + 2 {
         return Rect::default();
     }
-    Rect { x: quit.right() - width - 1, width, ..quit }
+    Rect { x: more.right() - width - 1, width, ..more }
 }
 
-pub(crate) fn quit_button(quit: Rect) -> Rect {
-    let help = help_button(quit);
-    if help.is_empty() { quit } else { Rect { width: help.x - quit.x, ..quit } }
+pub(crate) fn more_button(more: Rect) -> Rect {
+    let help = help_button(more);
+    if help.is_empty() { more } else { Rect { width: help.x - more.x, ..more } }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -346,17 +334,21 @@ fn menu_label(glyphs: &Glyphs, view: &View, width: u16, (style, lit): (Style, bo
     ])
 }
 
-fn draw_settings_button(f: &mut Frame, view: &View, r: Rect) {
-    let style = button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
-    draw_button(f, r, " ", "Settings", style);
-}
-
-fn draw_usage_button(f: &mut Frame, view: &View, r: Rect) {
-    let style = button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
-    draw_button(f, r, " ", USAGE_LABEL, style);
-}
-
-fn draw_quit_button(f: &mut Frame, view: &View, r: Rect) {
-    let style = button_style(view, r, Style::default().fg(view.muted), Color::Red);
-    draw_button(f, r, " ", QUIT_LABEL, style);
+fn draw_more_button(f: &mut Frame, view: &View, r: Rect) {
+    let idle = match view.update {
+        Some(_) => Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        None => Style::default().fg(view.muted),
+    };
+    let style = button_style(view, r, idle, Color::Cyan);
+    if r.height > 1
+        && let Some(bg) = style.bg
+    {
+        f.render_widget(Block::new().style(Style::default().bg(bg)), r);
+    }
+    let mut spans = vec![Span::raw(" "), Span::styled(format!(" {MORE_LABEL}"), style)];
+    if view.remote == Some(true) {
+        spans.push(Span::styled(format!(" {REMOTE_DOT}"), style.fg(Color::Green)));
+    }
+    spans.push(Span::styled(" ", style));
+    f.render_widget(Paragraph::new(Line::from(spans)), middle(r));
 }

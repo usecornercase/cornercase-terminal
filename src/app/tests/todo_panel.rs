@@ -251,7 +251,7 @@ fn todo_button(app: &mut App) -> String {
     let r = app.layout(AREA).todo_button;
     let t = render(app, AREA);
     app.screen.side = side;
-    (r.x - 2..r.right()).map(|x| t.backend().buffer()[(x, r.y)].symbol().to_string()).collect()
+    (r.x..r.right() + 2).map(|x| t.backend().buffer()[(x, r.y)].symbol().to_string()).collect()
 }
 
 #[test]
@@ -265,7 +265,7 @@ fn the_button_shows_a_dot_while_items_are_pending() {
     tap(&mut app, |a| panel::check(item_row(a, 0)));
     tap(&mut app, |a| panel::clear_done(panel_area(a), &view(a)));
     seen.push(todo_button(&mut app));
-    assert_eq!(seen, ["   TODO ", " TODO ● ", "   TODO ", " TODO ● ", "   TODO "]);
+    assert_eq!(seen, [" TODO   ", " TODO ● ", " TODO   ", " TODO ● ", " TODO   "]);
 }
 
 #[test]
@@ -273,7 +273,7 @@ fn switched_off_the_button_shows_no_dot() {
     let (mut app, _rx, _dirs) = opened();
     add(&mut app, &["a"]);
     app.config.todo_dot = false;
-    assert_eq!(todo_button(&mut app), "   TODO ");
+    assert_eq!(todo_button(&mut app), " TODO   ");
 }
 
 #[test]

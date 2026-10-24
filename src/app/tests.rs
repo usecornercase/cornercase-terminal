@@ -454,14 +454,28 @@ fn menu_disabled(app: &App) -> Vec<bool> {
 }
 
 fn menu_item_at(app: &App, i: usize) -> Position {
+    menu_item_in(app, i, AREA)
+}
+
+fn menu_item_in(app: &App, i: usize, area: Rect) -> Position {
     let Some(Overlay::Menu { at, .. }) = &app.overlay else { panic!("the menu is not open") };
-    ui::menu_item(ui::menu_area(AREA, *at, &menu_labels(app)), i).as_position()
+    ui::menu_item(ui::menu_area(area, *at, &menu_labels(app)), i).as_position()
 }
 
 fn pick(app: &mut App, label: &str) {
+    pick_in(app, label, AREA);
+}
+
+fn pick_in(app: &mut App, label: &str, area: Rect) {
     let i = menu_labels(app).iter().position(|l| l == label).expect("the menu has the item");
-    let pos = menu_item_at(app, i);
-    click(app, pos);
+    let pos = menu_item_in(app, i, area);
+    click_in(app, pos, area);
+}
+
+fn from_more(app: &mut App, entry: &str) {
+    let more = app_areas(app).more;
+    click(app, more.as_position());
+    pick(app, entry);
 }
 
 fn click_pill(app: &mut App, pane: u64, pill: usize) {

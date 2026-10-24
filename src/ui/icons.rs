@@ -50,17 +50,11 @@ pub(crate) const ISSUES: &str = "\u{eb0c}";
 
 pub(crate) const FLOW: &str = "\u{ebb9}";
 
-pub(crate) const UPDATE: &str = "\u{eac2}";
-
-pub(crate) const REMOTE: &str = "\u{eb3a}";
-
-pub(crate) const USAGE: &str = "\u{eb03}";
+pub(crate) const WORKTREES: &str = "\u{ea63}";
 
 pub(crate) const HELP: &str = "\u{eb32}";
 
-pub(crate) const SETTINGS: &str = "\u{eb51}";
-
-pub(crate) const QUIT: &str = "\u{ea6e}";
+pub(crate) const MORE: &str = "\u{eb51}";
 
 pub(crate) const DOT: &str = "\u{f09df}";
 

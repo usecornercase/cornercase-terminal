@@ -51,7 +51,6 @@ mod describing {
                     | Row::AddAgent
                     | Row::Plugin(_)
                     | Row::NoPlugins
-                    | Row::Worktrees
                     | Row::TourStart
                     | Row::TourReset
             ) || row.page() == Page::Accounts;

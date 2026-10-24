@@ -249,7 +249,7 @@ screen_compact_menu_workspaces() {
 }
 
 screen_compact_menu_projects() {
-  cc_s1_at 64 35
+  cc_s1_at 64 38
   cc_click '≡'
   cc_click '‹ Projects'
   cc_wait 'dotfiles (1)'
@@ -796,7 +796,7 @@ screen_todo_add() {
 
 settings_open() {
   cc_s1
-  cc_click 'Settings'
+  cc_more settings
   cc_wait 'Worktrees'
 }
 
@@ -871,7 +871,7 @@ share_open() {
   cc_session "$CC_CAPTURE/sessions/$CC_SESSION.json"
   cc_start 140 38
   cc_wait 'web-shop'
-  cc_click 'Settings'
+  cc_more settings
   cc_wait 'Worktrees'
   cc_click ' share ' 1
   cc_wait 'copy my setup'
@@ -925,7 +925,7 @@ TOML
 
 screen_usage() {
   cc_s1
-  cc_click 'Usage'
+  cc_more usage
   cc_click 'Limits'
   cc_wait 'resets in' 15
   cc_wait 'max plan'
@@ -947,7 +947,7 @@ screen_usage_accounts() {
   accounts_knobs
   cc_s1_at 110 48
   accounts_add
-  cc_click 'Usage'
+  cc_more usage
   cc_click 'Limits'
   cc_wait '● Claude Code · work' 15
   cc_wait 'pro plan' 15
@@ -959,7 +959,7 @@ screen_settings_accounts() {
   accounts_knobs
   cc_s1
   accounts_add
-  cc_click 'Settings'
+  cc_more settings
   cc_wait 'Worktrees'
   cc_click 'Accounts'
   cc_wait 'signed in as ana@acme.dev' 15
@@ -1025,7 +1025,7 @@ JS
   touch "$CC_DATA/gh/merged"
   git -C "$CC_HOME/code/web-shop" remote set-url origin git@github.com:acme/web-shop.git
   cc_s1
-  cc_click 'Usage'
+  cc_more usage
   cc_wait 'in parallel'
   cc_wait 'merged PRs'
   cc_shot usage-stats
@@ -1060,10 +1060,10 @@ screen_flow_agents() {
   cc flow run 'Full issue' --prompt 'Fix https://github.com/acme/web-shop/issues/482: the returns page crashes on an empty address.' --worktree issue-482-returns-page-crashes-on-empty-address --focus >/dev/null
   cc_wait 'Sending issue #482 to coder' 60
   cc_wait 'tester' 30
-  cc_find '─────' 2 -2
+  cc_find '─────' 2 -3
   tmux -L "$CC_TMUX" send-keys -t 0 -l "$(printf '\033[<0;%s;%sM\033[<32;%s;%sM\033[<0;%s;%sm' "$col" "$row" "$col" "$((row - 6))" "$col" "$((row - 6))")"
   sleep 0.3
-  cc_wheel 'feat/dark-mode' down 1
+  cc_wheel 'web-shop › feat/dark' down 1
   cc_hover 'Workspaces'
   cc_wait '└ ○ tester' 30
   cc_shot flow-agents
@@ -1076,7 +1076,7 @@ flows_open() {
   cc_session "$CC_CAPTURE/sessions/$CC_SESSION.json"
   cc_start 140 38
   cc_wait 'web-shop'
-  cc_click 'Settings'
+  cc_more settings
   cc_click 'Flows   Issues'
   cc_wait 'a built-in flow: edit saves'
 }
@@ -1092,7 +1092,7 @@ screen_flows_deleted() {
   cc_session "$CC_CAPTURE/sessions/$CC_SESSION.json"
   cc_start 140 38
   cc_wait 'web-shop'
-  cc_click 'Settings'
+  cc_more settings
   cc_click 'Flows   Issues'
   cc_wait 'deleted built-ins'
   cc_click 'deleted built-ins'

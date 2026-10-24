@@ -49,23 +49,19 @@ fn the_remote_dialog_is_drawn_where_its_area_says() {
     assert_eq!(corners, (String::from("╭"), String::from("╯")));
 }
 
-#[test]
-fn the_remote_button_lights_green_while_a_browser_is_attached() {
-    let view = View { remote: Some(true), ..view(&["cornercase"]) };
-    let t = render(&view);
-    let r = remote_button(layout(AREA, Widths::default()).usage, true);
-    let dot = t.backend().buffer()[(r.right() - 2, r.y)].clone();
-    assert_eq!((dot.symbol(), dot.fg), ("●", Color::Green));
-}
-
-#[test]
-fn hovering_the_remote_button_leaves_usage_unlit() {
-    let usage = layout(AREA, Widths::default()).usage;
-    let remote = remote_button(usage, false);
-    let view = View { remote: Some(false), hover: Some(remote.as_position()), ..view(&["cornercase"]) };
-    let t = render(&view);
-    let cells = (t.backend().buffer()[(remote.x, remote.y)].bg, t.backend().buffer()[(usage.x, usage.y)].bg);
-    assert_eq!(cells, (Color::Cyan, Color::Reset));
+#[rstest]
+#[case::attached(Some(true), Some(("●", Color::Green)))]
+#[case::set_up(Some(false), None)]
+#[case::off(None, None)]
+fn more_shows_a_green_dot_while_a_browser_is_attached(
+    #[case] remote: Option<bool>,
+    #[case] dot: Option<(&str, Color)>,
+) {
+    let t = render(&View { remote, ..view(&["cornercase"]) });
+    let more = layout(AREA, Widths::default()).more;
+    let label = more.x + 2 + u16::try_from(MORE_LABEL.chars().count()).expect("short");
+    let cell = t.backend().buffer()[(label + 1, more.y)].clone();
+    assert_eq!((cell.symbol() != " ").then(|| (cell.symbol(), cell.fg)), dot);
 }
 
 #[test]

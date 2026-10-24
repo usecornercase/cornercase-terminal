@@ -24,7 +24,7 @@ function shown(app: App, needle: string): boolean {
 }
 
 for (const [columns, dot, plain] of [
-  [140, ' TODO ● ', '   TODO '],
+  [140, ' TODO ● ', ' TODO   '],
   [80, '☐ ●', '☐  '],
 ] as const) {
   test(`the TODO button shows a dot while items are pending at ${columns} columns`, () => {

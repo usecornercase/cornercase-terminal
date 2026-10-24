@@ -759,7 +759,7 @@ fn typed(app: &Harness, pane: &str, line: &str) {
 fn a_hidden_tab_takes_input_selection_and_scrolling_while_the_window_shows_a_dialog() {
     let mut app = Harness::start();
     let pane = app.session.says(&["new-tab"]);
-    app.click(app.position_of(" Settings "));
+    app.pick_in_more("settings");
     app.wait_for("the dialog opens", |s| s.contains(" restart "));
     let shown = app.session.report().shown;
 

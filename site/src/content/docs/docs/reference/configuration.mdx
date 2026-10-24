@@ -6,7 +6,7 @@ description: Every setting in the settings modal and every key of config.json, w
 import { Aside } from '@astrojs/starlight/components';
 import Screen from '../../../../components/Screen.astro';
 
-cornercase is configured from the **Settings** modal, opened with the `Settings` button at the bottom of the projects column. Every change is saved at once to `config.json`, so there is nothing to apply or restart. You can also edit the file by hand, and the server applies it within a second; this page lists every key. A script or another app reads and changes the same settings with [`cornercase config`](../../guides/scripts-and-agents/#settings).
+cornercase is configured from the **Settings** modal, opened from **`More ▴` › settings** at the bottom of the sidebar. Every change is saved at once to `config.json`, so there is nothing to apply or restart. You can also edit the file by hand, and the server applies it within a second; this page lists every key. A script or another app reads and changes the same settings with [`cornercase config`](../../guides/scripts-and-agents/#settings).
 
 ## The settings modal
 
@@ -18,7 +18,7 @@ The ` share ` button hands your settings to a colleague, or imports theirs: see 
 
 <Screen
   name="settings-worktrees"
-  alt="The Worktrees tab: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; fetch branches every 5 min, commits to pull show as ↓n; pull requests shown, each workspace's pull request and its checks, from gh or glab; worktrees on disk"
+  alt="The Worktrees tab: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; fetch branches every 5 min, commits to pull show as ↓n; pull requests shown, each workspace's pull request and its checks, from gh or glab"
   crop={[2, 1, 106, 8]}
 />
 
@@ -27,7 +27,6 @@ The ` share ` button hands your settings to a colleague, or imports theirs: see 
 | **worktrees folder** | Where new [worktrees](../../guides/worktrees/) are checked out: `<folder>/<repository>/<branch>`. Must be an absolute path or start with `~/`. |
 | **fetch branches every** | How often, in minutes, the remotes are fetched to show the [commits to pull](../../guides/worktrees/#commits-to-pull) as `↓n` on each workspace. `0` turns it off. |
 | **merged PRs in stats** | On (the default): Usage → Stats counts your merged pull requests and merge requests, read with `gh` and `glab`. Off: nothing is asked. The note names the accounts read, or why none were. See [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats). |
-| **worktrees on disk** | Not a setting: `Enter` opens the [Worktrees dialog](../../guides/worktrees/#clean-up-worktrees), which lists the worktrees of your open projects and of the closed ones in the worktrees folder, with when it last changed and what it has, and removes several at once. |
 | **pull requests** | On (the default): each workspace whose branch has a pull request on GitHub, or a merge request on GitLab, shows its number, the state of its checks (its pipeline's jobs on GitLab) and whether it has merge conflicts, and on GitHub its layer in a stack, read with `gh` or `glab`. Off: nothing is asked. The note says why none show when every project read with one of them fails, because it is missing, logged out or failing. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks). |
 
 ### Agents
@@ -141,7 +140,7 @@ Your [agent accounts](../../guides/accounts/). One section per agent that takes 
 
 ### Remote
 
-Using cornercase away from the computer: in your phone's browser, or through Telegram or Discord. Once one of them is set up, a **`Remote`** button shows at the right of the `Usage` row, at the bottom of the sidebar; it opens a menu with each, and shows a green `●` while a browser is attached or you are away on a chat app.
+Using cornercase away from the computer: in your phone's browser, or through Telegram or Discord. Once one of them is set up, **`More ▴`**, at the bottom of the sidebar, gets a **remote…** entry that opens a menu with each, and shows a green `●` while a browser is attached or you are away on a chat app.
 
 <Screen
   name="settings-remote"
@@ -151,7 +150,7 @@ Using cornercase away from the computer: in your phone's browser, or through Tel
 
 | Row | What it sets |
 | --- | --- |
-| **remote access** | Open this cornercase in your phone's browser over Tailscale: on, **Remote › open in your phone's browser** shows a QR code to scan. The note says when it is ready, at which address, or what is missing. Off by default. See [From your phone](../../guides/phone/). |
+| **remote access** | Open this cornercase in your phone's browser over Tailscale: on, **`More ▴` › remote… › open in your phone's browser** shows a QR code to scan. The note says when it is ready, at which address, or what is missing. Off by default. See [From your phone](../../guides/phone/). |
 | **paired browsers** | How many browsers are paired, shown once there is one. `Enter` forgets them all and disconnects them. |
 | **bot** | Under **Telegram**, the [Telegram](../../guides/telegram/) bot that messages you while you are away: paste the token @BotFather gave you. Under **Discord**, the [Discord](../../guides/discord/) app's bot token, from the Developer Portal. The note says whether cornercase reaches it. `Backspace` removes it. |
 | **phone** | The chat paired with the bot, shown once a bot is set. `Enter` shows a code to scan with your phone (for Discord, the link that adds the app to your account); `Backspace` forgets the chat. |
@@ -583,7 +582,7 @@ Whether the guided tour shows by itself on a new install: the first time cornerc
 
 #### `remote`
 
-Whether this cornercase can be opened in a browser over Tailscale, from a phone that scans the code the `Remote` button shows. Off by default. See [From your phone](../../guides/phone/).
+Whether this cornercase can be opened in a browser over Tailscale, from a phone that scans the code **`More ▴` › remote… › open in your phone's browser** shows. Off by default. See [From your phone](../../guides/phone/).
 
 #### `remote_port`
 

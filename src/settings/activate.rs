@@ -44,7 +44,6 @@ impl Settings {
                 |c| &mut c.merged_pull_requests,
                 ["Stats counts your merged pull requests", "Stats no longer counts merged pull requests"],
             ),
-            Row::Worktrees => Action::Worktrees,
             _ => Action::None,
         }
     }

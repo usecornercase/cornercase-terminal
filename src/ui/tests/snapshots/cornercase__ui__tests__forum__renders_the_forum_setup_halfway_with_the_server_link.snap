@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/forum.rs
-assertion_line: 56
 expression: "render_sized(&with(halfway()), W, 50).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -49,7 +48,7 @@ expression: "render_sized(&with(halfway()), W, 50).backend()"
 "                  │                                             turn off   done  │                  "
 "                  ╰──────────────────────────────────────────────────────────────╯                  "
 "                               │                         │                                          "
+"                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
-"  Settings                     │                         │                                          "
-"  Usage                        │                         │                                          "
-"  Quit                   Help  │                         │                                          "
+"  Worktrees                    │                         │                                          "
+"  More ▴                 Help  │                         │                                          "

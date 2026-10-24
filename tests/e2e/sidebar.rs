@@ -139,7 +139,7 @@ fn a_narrow_terminal_gets_a_menu_bar() {
     app.wait_for("the menu lists the workspaces", |s| s.contains("‹ Projects") && s.contains(ui::NEW_BUTTON));
     app.click(areas.back.as_position());
     app.wait_for("back lists the projects", |s| {
-        s.contains(ui::NEW_BUTTON) && !s.contains("‹ Projects") && s.contains("Quit")
+        s.contains(ui::NEW_BUTTON) && !s.contains("‹ Projects") && s.contains(ui::MORE_LABEL)
     });
 }
 

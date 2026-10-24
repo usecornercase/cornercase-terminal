@@ -86,9 +86,9 @@ fn closing_the_active_one_activates_the_previous() {
 }
 
 #[test]
-fn quit_button_asks_to_detach_once() {
+fn quit_in_the_more_menu_asks_to_detach_once() {
     let (mut app, _rx, _dirs) = app_with(2);
-    click(&mut app, areas().quit.as_position());
+    from_more(&mut app, "quit");
     assert_eq!((app.take_detach(), app.take_detach(), app.projects.len()), (true, false, 2));
 }
 

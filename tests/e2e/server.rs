@@ -33,7 +33,7 @@ fn quit_button_detaches_and_programs_keep_running() {
     app.send(b"echo cat-\"\"starts; cat -v\r");
     app.wait_for("cat runs", |s| s.contains("cat-starts"));
 
-    app.click(areas().quit.as_position());
+    app.quit();
     app.wait_exit("client exits");
     let mut again = app.attach(ROWS, COLS);
     again.send(b"\x02\r");
@@ -101,7 +101,7 @@ fn quitting_one_client_leaves_the_others_attached() {
     let mut first = Harness::start();
     let mut second = first.attach(ROWS, COLS);
 
-    second.click(areas().quit.as_position());
+    second.quit();
     second.wait_exit("second client exits");
     first.send(b"echo still-\"\"here\r");
 

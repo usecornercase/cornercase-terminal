@@ -108,6 +108,7 @@ mod links;
 mod menus;
 mod merged_pull_requests;
 mod messenger;
+mod more_menu;
 mod notifications;
 mod opening;
 mod outbox;

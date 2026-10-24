@@ -46,15 +46,16 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Drag | The line above the agents section | Makes it taller or shorter. |
 | Double-click | That line | Gives it a third of the room again. |
 | Click | `Agents ›` in the [compact](../../guides/small-terminals/#the-menu) projects menu | Shows the agents. |
-| Click | `Settings`, `Usage`, `Quit`, `Issues` | Opens the settings, shows your [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats), detaches, opens the issue browser. |
+| Click | `Issues` | Opens the issue browser. |
+| Click | `Worktrees` (its slot in the icon bar, or the projects menu in compact mode) | Opens the [Worktrees dialog](../../guides/worktrees/#clean-up-worktrees) for every project: each worktree on disk, when it last changed and what makes it safe to remove, and removing several at once. |
+| Click | `More ▴` (the gear in the icon bar) | Opens a menu: **update to x.y.z** when a new version is out (see [Update](../../installation/#update)), **settings**, **usage** (your [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats)), **remote…** once remote access or a chat bot is set up, and **quit**, which detaches. It turns cyan while an update waits and shows a green `●` while a browser is attached or you are away. |
 | Click | `Help` | Opens a menu: the [guided tour](../../first-steps/#the-guided-tour-and-help), the catalogue of short tours, the docs, the keys menu (with a prefix key) and the link to report a bug. |
 | Click | The tour's card | Its buttons move the tour: **back**, **skip**, **next**, **docs** (copies the tour's page), **end tour**. Keys still go to the pane. |
-| Click | `Remote` | Opens a menu to open cornercase [in your phone's browser](../../guides/phone/) or to have agents message you [on Telegram](../../guides/telegram/) or [on Discord](../../guides/discord/), or to stop. It shows once one of them is set up, with a green `●` while a browser is attached or you are away. |
+| Click | **remote…** in the `More ▴` menu | Opens a menu to open cornercase [in your phone's browser](../../guides/phone/) or to have agents message you [on Telegram](../../guides/telegram/) or [on Discord](../../guides/discord/), or to stop. |
 | Click | `Changes` (or `±` in the compact bar) | Opens or closes the [changes panel](../../guides/changes/). Only in git workspaces. |
 | Click | `Files` (or `▤` in the compact bar) | Opens or closes the [files panel](../../guides/files/). |
 | Click | `TODO` (or `☐` in the compact bar) | Opens or closes the [TODO panel](../../guides/todo/). |
-| Click | `↑ 0.2.0` or `↻ restart` at the end of the `Settings` row | Opens the [update](../../installation/#update) dialog. Only there when a new version is out. |
-| Click | A plugin's button: in its row above `Settings`, its slot in the icon bar, or the projects menu in compact mode | Runs the [plugin's](../../guides/plugins/#a-button-of-its-own) action, or opens a menu of them; ` ⋯ ` at the end of the row lists the buttons that did not fit. |
+| Click | A plugin's button: in its row above `More ▴`, its slot in the icon bar, or the projects menu in compact mode | Runs the [plugin's](../../guides/plugins/#a-button-of-its-own) action, or opens a menu of them; ` ⋯ ` at the end of the row lists the buttons that did not fit. |
 | Click | The search bar | Starts a [search](../../guides/search/). |
 | Click | `❯` at the right end of the open search bar | Switches the search between names and what was said [in sessions](../../guides/search/#in-sessions). |
 
@@ -211,8 +212,8 @@ Press the prefix and a menu opens at the bottom of the screen with what each nex
 | `w` `f` | Opens or closes the [Flow panel](../../guides/flows/#the-flow-panel) of the workspace's run, or says it runs no flow. |
 | `i`, `t`, `,`, `u` | Opens the issues, the [TODO list](../../guides/todo/) (on a new item), the settings, Usage and stats. |
 | `h` | Opens the **`Help`** menu. |
-| `o` | Away on chat apps: turns the away mode of [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) on or off, on every one that is set up, as **Remote** does for each. With none paired, it opens the settings to set one up. |
-| `q` | Quits the window. Everything keeps running, as with **Quit**. |
+| `o` | Away on chat apps: turns the away mode of [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) on or off, on every one that is set up, as **More ▴ › remote…** does for each. With none paired, it opens the settings to set one up. |
+| `q` | Quits the window. Everything keeps running, as with **More ▴ › quit**. |
 
 `Esc`, or a key the menu doesn't list, closes it without doing anything, and that key doesn't reach your program. Press the prefix twice to send the prefix itself to the program in the pane. The prefix works while the pane, the files search or find field, the changes filter or a TODO field has the keys, but not inside a dialog, which has its own keys below.
 

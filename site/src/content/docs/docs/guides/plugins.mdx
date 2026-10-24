@@ -138,7 +138,7 @@ Another app or a script lists the actions with `cornercase plugin actions` and r
 
 Put `button` in an action's `contexts` and the plugin gets a button in the window. With one such action, a click runs it; with several, the click opens a menu of their titles, in the order of the manifest. The optional `[button]` table names the button (`title`, the plugin's `name` by default) and gives it an `icon`, one character one cell wide, for the icon bar (the title's first letter by default).
 
-The buttons sit in a row of their own at the foot of the projects column, above **Settings**, which shows only while a plugin you turned on has one. Buttons that do not fit leave a ` ⋯ ` at the end of the row, which lists the rest. With the **icon bar** on, each button is a slot after Flow, named when you hover it; a short bar leaves them out first. On a small screen, they are in the projects menu.
+The buttons sit in a row of their own above **`More ▴`**: under the projects column's line when the lists are side by side, and under `Files` and `TODO` in one column, where the row shows only while a plugin you turned on has one. Buttons that do not fit leave a ` ⋯ ` at the end of the row, which lists the rest. With the **icon bar** on, each button is a slot after Flow, named when you hover it; a short bar leaves them out first. On a small screen, they are in the projects menu.
 
 An action run from its button gets `CORNERCASE_CONTEXT=button` and the ids of what the window shows (the project, workspace, tab and pane on screen, those there are), and runs in the folder of the workspace on screen, or your home folder with no project open.
 

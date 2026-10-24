@@ -32,7 +32,7 @@ On the left are your projects and the workspaces of the active one, in one colum
 | Area | What it holds |
 | --- | --- |
 | Top left | The **search bar**: click it to jump to any project, workspace or tab. |
-| **Projects** | Every project you opened, with its number of workspaces, optionally in [groups](../guides/projects-workspaces-tabs/#groups). `+ New` at the end of the list; `Settings`, [`Usage`](../guides/projects-workspaces-tabs/#usage-and-stats) and `Quit` at the bottom, with `Help` next to `Quit` and an [update](../installation/#update) button next to `Settings` when a new version is out. |
+| **Projects** | Every project you opened, with its number of workspaces, optionally in [groups](../guides/projects-workspaces-tabs/#groups). `+ New` at the end of the list; [`Worktrees`](../guides/worktrees/#clean-up-worktrees) and `More ▴` at the bottom, with `Help` beside it: its menu holds **settings**, [**usage**](../guides/projects-workspaces-tabs/#usage-and-stats) and **quit**, and the [update](../installation/#update) when a new version is out. |
 | **Workspaces** | The workspaces of the active project, each with its tabs. `+ Tab` adds a tab to a workspace, `+ New` starts a new one (**new workspace**) or a [flow](../guides/flows/) (**start a flow…**), `Issues` opens the issue browser, `Files` the [files panel](../guides/files/), `TODO` your [TODO list](../guides/todo/). |
 | The pane | The active tab: one shell, or several in splits. |
 
@@ -118,7 +118,7 @@ To rename something, click the `⋯` at the end of its row, or right-click the r
 
 ## Leave and come back
 
-Click **`Quit`** at the bottom of the projects column, or simply close the terminal window. cornercase detaches, but your shells, editors and agents keep running in the background server.
+Click **`More ▴`** at the bottom of the sidebar, then **quit**, or simply close the terminal window. cornercase detaches, but your shells, editors and agents keep running in the background server.
 
 Run `cornercase` again, from any terminal, and you are back where you left off. You can even attach from two terminals at once: they show the same session.
 
@@ -137,7 +137,7 @@ After `kill-server` or a reboot, the next `cornercase` brings back your projects
   caption="The first step of the tour. A project is already open, so it only explains."
 />
 
-**`Help`**, at the right of the `Quit` row, opens a menu:
+**`Help`**, at the right of the `More ▴` row, opens a menu:
 
 - **tour** shows the guided tour again, where you left it (**continue the tour**), or from the start once you finished it. Its steps follow this page, then show you your first prompt to an agent, the status icons and the settings that matter most.
 - **catalogue…** lists short tours of the rest of cornercase: issues to agents, reviewing changes, files and paths, flows, TODO, the queue, search, your phone, Telegram and Discord, accounts, keys, scripts and plugins. A tour you finished gets a `✓`, one you started shows how far you got.
@@ -154,5 +154,5 @@ The tour shows by itself only once, on a new install. **settings → UI → guid
 
 - Look around with the short tours in **`Help` → catalogue…**.
 - Let an agent work on an issue: [Issues and agents](../guides/issues-and-agents/), or a whole team of them: [Flows](../guides/flows/).
-- Tune cornercase in **Settings**: [Settings and config.json](../reference/configuration/).
+- Tune cornercase in **`More ▴` › settings**: [Settings and config.json](../reference/configuration/).
 - Every click and key, in one place: [Keyboard and mouse](../reference/keyboard-and-mouse/).

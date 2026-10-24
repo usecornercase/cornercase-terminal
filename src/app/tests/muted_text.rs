@@ -9,6 +9,6 @@ fn a_terminal_that_keeps_its_palette_to_itself_gets_a_grey_that_shows() {
     app.set_theme(HostTheme { background: Some(RgbColor { r: 0x1d, g: 0x20, b: 0x22 }), ..HostTheme::default() });
     let t = render(&mut app, AREA);
 
-    let settings = areas().settings;
-    assert_eq!(t.backend().buffer()[(settings.x + 2, settings.y)].fg, Color::Indexed(243));
+    let more = areas().more;
+    assert_eq!(t.backend().buffer()[(more.x + 2, more.y)].fg, Color::Indexed(243));
 }

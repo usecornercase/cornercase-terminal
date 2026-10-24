@@ -16,7 +16,7 @@ fn settings() -> Setup {
     let (dir, config) = (TempDir::new(), TempDir::new());
     let (mut app, _rx) = app_in(dir.path(), config.path().join("config.json"));
     app.issues.clear_env_tokens();
-    click(&mut app, areas().settings.as_position());
+    from_more(&mut app, "settings");
     Setup { app, _config: config, _dir: dir }
 }
 

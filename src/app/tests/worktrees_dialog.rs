@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use ratatui::style::Style;
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
@@ -152,11 +152,11 @@ fn the_project_menu_opens_its_worktrees() {
 }
 
 #[test]
-fn settings_opens_every_projects_worktrees() {
+fn the_worktrees_button_opens_every_projects_worktrees() {
     let mut s = with(&["a"]);
-    s.app.open_settings_on(&crate::settings::Row::Worktrees);
+    let button = app_areas(&s.app).worktrees;
 
-    send_key(&mut s.app, KeyCode::Enter, KeyModifiers::NONE);
+    click(&mut s.app, button.as_position());
     ready(&mut s, 1);
 
     assert_eq!((view(&s.app).title, dialog(&s.app).project.is_none()), ("Worktrees".to_string(), true));
@@ -336,7 +336,7 @@ fn a_removal_that_fails_is_named_in_the_toast() {
 
 #[test]
 fn every_wrapped_line_of_the_confirmation_can_be_scrolled_to() {
-    let red = Style::default().fg(ratatui::style::Color::Red);
+    let red = Style::default().fg(Color::Red);
     let lines = vec![
         Line::from("web-shop › feat/gift-cards"),
         Line::from("  2 commits not pushed, locked: claude session 日本語 (pid 4 start 9)"),

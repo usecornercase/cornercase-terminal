@@ -105,7 +105,7 @@ If you already have a checkout of Ghostty, point `GHOSTTY_SOURCE_DIR` at it befo
 
 cornercase updates itself. When the server starts, and then every hour, it asks GitHub for the latest release. That is a single request to GitHub's API (plus the changelog once a new version is out); nothing about you or your projects is sent.
 
-When a newer version is out, a toast says *a new cornercase is out* and a button with the new version, such as ` ↑ 0.2.0 `, appears at the right end of the ` Settings ` row in the sidebar (in a [small terminal](../guides/small-terminals/), in the same row of the menu's footer). Click it:
+When a newer version is out, a toast says *a new cornercase is out* and **`More ▴`** at the bottom of the sidebar turns cyan, and its menu starts with the new version, such as **update to 0.2.0** (in a [small terminal](../guides/small-terminals/), it is in the projects menu's footer). Click it:
 
 <Steps>
 
@@ -117,7 +117,7 @@ When a newer version is out, a toast says *a new cornercase is out* and a button
 
 </Steps>
 
-Not ready to restart? Click **later**: the old version keeps running, and the sidebar button becomes ` ↻ restart ` for later. The next natural restart of the server, after `cornercase kill-server` or a reboot, also starts the new version, and running `cornercase` from another terminal against the old server asks whether to restart it (see [Command line](../reference/command-line/#a-server-from-another-build)).
+Not ready to restart? Click **later**: the old version keeps running, and the entry in **`More ▴`** becomes **restart to update** for later. The next natural restart of the server, after `cornercase kill-server` or a reboot, also starts the new version, and running `cornercase` from another terminal against the old server asks whether to restart it (see [Command line](../reference/command-line/#a-server-from-another-build)).
 
 ### From the command line
 

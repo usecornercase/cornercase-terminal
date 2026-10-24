@@ -365,6 +365,17 @@ impl Harness {
             .expect("the text is on screen")
     }
 
+    fn pick_in_more(&mut self, entry: &str) {
+        self.click(areas().more.as_position());
+        self.wait_for("the more menu opens", |s| s.contains(entry) && s.contains("quit"));
+        let at = self.position_of(entry);
+        self.click(at);
+    }
+
+    fn quit(&mut self) {
+        self.pick_in_more("quit");
+    }
+
     fn restart_server(&mut self) {
         self.send(b"echo before-\"\"restart\r");
         self.wait_for("the old shell answers", |text| text.contains("before-restart"));

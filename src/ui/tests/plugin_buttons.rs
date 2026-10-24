@@ -33,10 +33,10 @@ mod the_row {
     #[case::projects_on_top(Sidebar::ProjectsOnTop)]
     #[case::workspaces_on_top(Sidebar::WorkspacesOnTop)]
     #[case::tree(Sidebar::Tree)]
-    fn sits_between_the_separator_and_settings(#[case] sidebar: Sidebar) {
+    fn sits_between_the_separator_and_more(#[case] sidebar: Sidebar) {
         let a = full_layout(TALL, Widths::default(), screen_for(sidebar, true, false));
-        assert_eq!((a.plugins.height, a.plugins.y + 1, a.settings.y), (1, a.settings.y, a.plugins.bottom()));
-        assert!(a.separator.y < a.plugins.y, "{a:?}");
+        assert_eq!(a.plugins.height, 1);
+        assert!(a.separator.y < a.plugins.y && a.plugins.bottom() <= a.more.y, "{a:?}");
     }
 
     #[rstest]
@@ -63,7 +63,7 @@ mod the_row {
     #[test]
     fn sits_above_the_footer_in_the_compact_projects_menu() {
         let a = full_layout(SMALL, Widths::default(), screen_for(Sidebar::SideBySide, true, false));
-        assert_eq!((a.plugins.height, a.plugins.bottom()), (COMPACT_PITCH, a.settings.y));
+        assert_eq!((a.plugins.height, a.plugins.bottom()), (COMPACT_PITCH, a.worktrees.y));
     }
 
     #[test]
@@ -178,13 +178,16 @@ mod icon_bar {
     fn puts_a_slot_for_each_plugin_after_flow() {
         let shown = Shown { flow: true, plugins: 2, ..Shown::default() };
         let top: Vec<(Item, u16)> = places(24, shown).into_iter().filter(|(_, y)| *y < 12).collect();
-        assert_eq!(top, [(Item::Todo, 1), (Item::Flow, 3), (Item::Plugin(0), 5), (Item::Plugin(1), 7)]);
+        assert_eq!(
+            top,
+            [(Item::Todo, 1), (Item::Worktrees, 3), (Item::Flow, 5), (Item::Plugin(0), 7), (Item::Plugin(1), 9)]
+        );
     }
 
     #[test]
     fn drops_the_plugins_first_when_the_bar_is_short() {
         let shown = Shown { plugins: 2, ..Shown::default() };
-        let top: Vec<(Item, u16)> = places(12, shown).into_iter().filter(|(_, y)| *y < 4).collect();
+        let top: Vec<(Item, u16)> = places(8, shown).into_iter().filter(|(_, y)| *y < 4).collect();
         assert_eq!(top, [(Item::Todo, 1)]);
     }
 
@@ -195,8 +198,8 @@ mod icon_bar {
 
     #[test]
     fn names_a_hovered_plugin_with_its_title() {
-        let t = render_sized(&with_bar(Some(Position::new(1, 5))), W, 24);
-        assert!(row_text(&t, Rect::new(WIDTH, 5, 10, 1)).starts_with(" Deploy "));
+        let t = render_sized(&with_bar(Some(Position::new(1, 7))), W, 24);
+        assert!(row_text(&t, Rect::new(WIDTH, 7, 10, 1)).starts_with(" Deploy "));
     }
 }
 

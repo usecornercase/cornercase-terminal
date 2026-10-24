@@ -26,7 +26,11 @@ import {
   DONE,
   bottom,
   buttonWidth,
+  MORE_LABEL,
+  WORKTREES_LABEL,
+  changesButton,
   helpButton,
+  moreButton,
   closeButton,
   formArea,
   INPUT_PROMPT,
@@ -359,7 +363,7 @@ export class Painter {
     if (areas.tree) this.tree(areas);
     else if (!isEmpty(areas.sidebar)) this.sidebar(areas);
     if (app.config.agentsSection) this.agents(areas);
-    if ([areas.separator, areas.settings, areas.usage, areas.quit].some((r) => !isEmpty(r))) this.footer(areas);
+    if ([areas.separator, areas.worktrees, areas.moreSeparator, areas.more].some((r) => !isEmpty(r))) this.footer(areas);
     if (!isEmpty(areas.workspaces)) this.workspaces(areas);
     if (app.project() && [areas.workspacesSeparator, areas.issues].some((r) => !isEmpty(r))) this.issuesRow(areas);
     if (app.changesShown() && !isEmpty(areas.changes)) drawChanges(this, areas);
@@ -989,19 +993,21 @@ export class Painter {
 
   private footer(areas: Areas): void {
     const app = this.app;
-    this.line(areas.separator, [seg(` ${'─'.repeat(Math.max(0, areas.separator.w - 2))}${areas.compact ? ' ' : ''}`, { fg: this.lineColour })]);
-    this.button(areas.settings, ' ', 'Settings', this.buttonStyle(areas.settings, DARK, 6));
-    this.region({ r: areas.settings, click: () => app.openSettings(), cursor: 'pointer' });
-    this.button(areas.usage, ' ', 'Usage', this.buttonStyle(areas.usage, DARK, 6));
-    this.region({ r: areas.usage, click: () => app.openUsage(), cursor: 'pointer' });
-    const help = helpButton(areas.quit);
-    const quit = isEmpty(help) ? areas.quit : { ...areas.quit, w: help.x - areas.quit.x };
+    for (const r of [areas.separator, areas.moreSeparator]) {
+      if (!isEmpty(r)) this.line(r, [seg(` ${'─'.repeat(Math.max(0, r.w - 2))}${areas.compact ? ' ' : ''}`, { fg: this.lineColour })]);
+    }
+    const help = helpButton(areas.more);
     if (!isEmpty(help)) {
       this.button(help, '', 'Help', this.buttonStyle(help, DARK, 6));
       this.region({ r: help, click: (x, y) => app.openHelp({ x, y }), cursor: 'pointer' });
     }
-    this.button(quit, ' ', 'Quit', this.buttonStyle(quit, DARK, 1));
-    this.region({ r: quit, click: () => app.quit(), cursor: 'pointer' });
+    const more = moreButton(areas.more);
+    this.button(more, ' ', MORE_LABEL, this.buttonStyle(more, DARK, 6));
+    this.region({ r: more, click: (x, y) => app.openMore({ x, y }), cursor: 'pointer' });
+    if (!isEmpty(areas.worktrees)) {
+      this.button(areas.worktrees, ' ', WORKTREES_LABEL, this.buttonStyle(areas.worktrees, DARK, 6));
+      this.region({ r: areas.worktrees, click: () => app.openWorktrees(), cursor: 'pointer' });
+    }
   }
 
   private workspaces(areas: Areas): void {
@@ -1060,15 +1066,15 @@ export class Painter {
   private issuesRow(areas: Areas): void {
     const app = this.app;
     this.line(areas.workspacesSeparator, [seg(` ${'─'.repeat(Math.max(0, areas.workspacesSeparator.w - 2))}`, { fg: this.lineColour })]);
-    this.button(areas.issues, ' ', 'Issues', this.buttonStyle(areas.issues, DARK, 6));
-    this.region({ r: areas.issues, click: () => app.openIssues(), cursor: 'pointer' });
-    if (!areas.compact && hasChanges(app.workspace())) {
-      const label = changesLabel(app.activeChangesDiff());
-      const w = label.length + 2;
-      const r = intersect(rect(right(areas.issues) - w - 1, areas.issues.y, w, 1), areas.issues);
+    const label = !areas.compact && hasChanges(app.workspace()) ? changesLabel(app.activeChangesDiff()) : null;
+    const changes = label === null ? null : changesButton(areas.issues, label);
+    const issues = changes ? { ...areas.issues, w: changes.x - areas.issues.x } : areas.issues;
+    this.button(issues, ' ', 'Issues', this.buttonStyle(issues, DARK, 6));
+    this.region({ r: issues, click: () => app.openIssues(), cursor: 'pointer' });
+    if (label !== null && changes) {
       const idle: Style = app.changesOpen ? { fg: 6, add: BOLD } : DARK;
-      this.button(r, '', label, this.buttonStyle(r, idle, 6));
-      this.region({ r, click: () => app.toggleChanges(), cursor: 'pointer' });
+      this.button(changes, '', label, this.buttonStyle(changes, idle, 6));
+      this.region({ r: changes, click: () => app.toggleChanges(), cursor: 'pointer' });
     }
     if (!areas.compact) {
       const r = todoWithDot(areas, app.config.todoDot && app.todo.pending() > 0);

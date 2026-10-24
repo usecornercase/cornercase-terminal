@@ -30,12 +30,13 @@ fn the_line_sits_between_the_lists() {
 }
 
 #[test]
-fn one_footer_holds_issues_todo_settings_usage_and_quit() {
+fn one_footer_holds_the_tools_then_more_under_its_own_line() {
     let a = stacked(Sidebar::WorkspacesOnTop);
     assert_eq!(
-        (a.separator.y, a.issues.y, a.todo_button.y, a.settings.y, a.usage.y, a.quit.y, a.workspaces_separator),
-        (24, 25, 26, 27, 28, 29, Rect::default())
+        (a.separator.y, a.issues.y, a.todo_button.y, a.worktrees.y, a.more_separator.y, a.more.y),
+        (24, 25, 26, 27, 28, 29)
     );
+    assert_eq!(a.workspaces_separator, Rect::default());
 }
 
 #[test]
@@ -142,10 +143,7 @@ fn a_short_terminal_still_shows_the_footer(#[case] sidebar: Sidebar, #[case] hei
     let a = layout_with(Rect { height, ..TALL }, Widths::default(), false, sidebar);
     let t = render_sized(&with_lists(sidebar), W, height);
     let text = |r: Rect| row_text(&t, r).trim().to_string();
-    assert_eq!(
-        [text(a.issues), text(a.settings), text(a.usage), text(quit_button(a.quit)), text(help_button(a.quit))],
-        ["Issues", "Settings", "Usage", "Quit", "Help"]
-    );
+    assert_eq!([text(a.issues), text(more_button(a.more)), text(help_button(a.more))], ["Issues", "More ▴", "Help"]);
 }
 
 #[test]

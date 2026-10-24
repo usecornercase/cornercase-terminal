@@ -32,7 +32,7 @@ fn focus_reporting_is_on_while_attached_and_off_once_it_leaves() {
     let mut app = Harness::start();
     app.wait_for_raw("focus reporting is turned on", |raw| raw.contains("\x1b[?1004h"));
 
-    app.click(areas().quit.as_position());
+    app.quit();
     app.wait_exit("client exits");
 
     app.wait_for_raw("focus reporting is turned off after it was on", |raw| {

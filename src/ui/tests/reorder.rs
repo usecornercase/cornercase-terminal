@@ -182,7 +182,7 @@ fn a_line_out_of_sight_is_not_drawn() {
 fn a_line_on_the_more_label_replaces_it() {
     let names: Vec<String> = (0..20).map(|i| format!("p{i}")).collect();
     let names: Vec<&str> = names.iter().map(String::as_str).collect();
-    let landing = Landing { at: 8, spot: spot(Some(0), Some(8)) };
+    let landing = Landing { at: 9, spot: spot(Some(0), Some(9)) };
     let t = render(&dragging(view(&names), Drag::Sidebar(SidebarRow::Project(0), Some(landing))));
     let below = project_rows(list(), 1, &plain(20), 0).more_below();
     assert_eq!(row_text(&t, below).trim_end(), format!("    {}", "─".repeat(usize::from(list().width) - 5)));

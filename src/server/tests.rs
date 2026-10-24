@@ -330,7 +330,7 @@ pub(super) mod a_bug {
             server.step(step)
         };
         Attached::new().serve(run, |client| {
-            client.shows("Quit");
+            client.shows("More");
             let before = client.clears;
             client.send(BUGGY);
             client.until("the screen is cleared", |client| client.clears > before);
@@ -589,13 +589,13 @@ mod showing_images {
         client.shows("400×200");
     }
 
-    fn settings() -> Position {
+    fn more() -> Position {
         ui::full_layout(
             Rect::new(0, 0, 100, 20),
             state::Widths::default(),
             ui::Screen { changes: true, ..ui::Screen::default() },
         )
-        .settings
+        .more
         .as_position()
     }
 
@@ -621,8 +621,9 @@ mod showing_images {
             open_the_image(client);
             client.until("the image is sent", |c| c.count(ITERM) == 1);
 
-            let at = settings();
+            let at = more();
             client.click(at.x, at.y);
+            client.click_on("settings");
             client.shows("Worktrees");
             assert_eq!(client.count(ITERM), 1, "nothing while the dialog is open");
             client.key(KeyCode::Esc);

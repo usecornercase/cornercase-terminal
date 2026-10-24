@@ -42,9 +42,9 @@ fn a_paired_browser_types_into_the_shell_over_a_websocket() {
     std::fs::write(session.dir.join("config.json"), config).expect("config");
     let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default());
     let mut ui = Harness::open_with(Arc::clone(&session), ROWS, COLS, &[("PATH", &path)]);
-    ui.wait_for("the remote button shows", |s| s.contains("Remote"));
+    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
 
-    ui.click(ui.position_of("Remote"));
+    ui.pick_in_more("remote…");
     ui.wait_for("the remote menu opens", |s| s.contains("open in your phone's browser"));
     ui.click(ui.position_of("open in your phone's browser"));
     ui.wait_for("the pairing address shows", |s| s.contains("pair?t="));
@@ -68,5 +68,5 @@ fn a_paired_browser_types_into_the_shell_over_a_websocket() {
             seen.extend_from_slice(&bytes);
         }
     }
-    ui.wait_for("the window shows the browser is attached", |s| s.contains("Remote ●"));
+    ui.wait_for("the window shows the browser is attached", |s| s.contains(&format!("{} ●", ui::MORE_LABEL)));
 }

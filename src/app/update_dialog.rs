@@ -100,6 +100,8 @@ const RESTART_MESSAGE: &str = "Restart cornercase now? Its server starts again a
 
 pub(super) const RESTART_LABEL: &str = "↻ restart";
 
+const RESTART_ENTRY: &str = "restart to update";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum UpdateStep {
     Ask,
@@ -203,6 +205,13 @@ impl App {
             return Some(RESTART_LABEL.into());
         }
         self.update.updates.available.as_ref().map(|release| format!("↑ {}", release.version))
+    }
+
+    pub(super) fn update_entry(&self) -> Option<String> {
+        if self.update.updates.installed {
+            return Some(RESTART_ENTRY.into());
+        }
+        self.update.updates.available.as_ref().map(|release| format!("update to {}", release.version))
     }
 
     pub(super) fn open_update(&mut self) {
