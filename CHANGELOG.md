@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.194
+
+- **The name field has a cursor.** In **New workspace**, **New group** and **Rename**, the arrows, `Home` and `End` now move the cursor, `Ctrl+←` `Ctrl+→` or `Option+←` `Option+→` move by word, and a click puts the cursor where you click, so you can fix a letter in the middle without deleting the rest. `Shift` and the mouse select, and a right-click copies or cuts, as in the other text fields.
+- **`Cmd+←` and `Cmd+→` reach the start and end of a text field** in Ghostty on a Mac. It sends them as `Ctrl+A` and `Ctrl+E`, which every text field with a cursor now takes, like `Home` and `End`. Outside the fields, `Ctrl+A` and `Ctrl+E` still go to the program in the pane.
+
 ## 0.12.193
 
 - **A rejected tracker token says which one it was.** When GitLab, Shortcut, Linear, Jira, Plane or Asana rejects a token, the message now says whether it was the token saved in Settings (paste a new one there or with `cornercase config secret`) or one from a variable such as `LINEAR_API_KEY` in the server's environment, which wins over a saved one until you unset it and restart the server. This shows in the Issues dialog and in `cornercase issue sources`, `issue list`, `issue read`, `issue people` and `start --issue`.
