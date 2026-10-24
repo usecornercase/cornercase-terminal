@@ -63,11 +63,13 @@ impl App {
         match event {
             IssueEvent::Listed { project, source, epoch, query, result } => {
                 if epoch == self.epoch(source) {
+                    let result = self.rejected_from(source, result);
                     self.issues_loaded(project, source, &query, result);
                 }
             }
             IssueEvent::Read { source, epoch, key, result } => {
                 let current = epoch == self.epoch(source);
+                let result = self.rejected_from(source, result);
                 if let Some(Overlay::Issues(b)) = &mut self.overlay
                     && current
                 {
@@ -88,6 +90,7 @@ impl App {
             IssueEvent::Replied { ticket, answer } => self.issue_replied(&ticket, *answer, area),
             IssueEvent::People { project, source, epoch, result } => {
                 if epoch == self.epoch(source) {
+                    let result = self.rejected_from(source, result);
                     self.people_loaded(project, source, result);
                 }
             }
@@ -373,6 +376,9 @@ impl App {
         if let (Ok(Listed { account: Some(account), .. }), Some(connection)) = (&result, b.connections.get_mut(&source))
         {
             connection.account = Some(account.clone());
+        }
+        if matches!(result, Err(Error::TokenRejected(_))) && *query == b.query(source) {
+            b.lists.entry(source).or_default().issues.clear();
         }
         b.loaded(source, query, result.map(|listed| listed.issues).map_err(|e| e.to_string()));
     }
@@ -877,7 +883,10 @@ fn list_view(browser: &Browser, now: i64) -> (ui::IssuesBody, Option<ui::Note>, 
     let error = listings.iter().find_map(|(s, l)| {
         l.error.as_ref().map(|e| if browser.current() == Tab::All { format!("{}: {e}", s.name()) } else { e.clone() })
     });
-    let empty = list_empty(browser, loading || error.is_some());
+    let empty = match &error {
+        Some(e) if !loading => e.clone(),
+        _ => list_empty(browser, loading || error.is_some()),
+    };
     let note = match error {
         Some(e) => Some(ui::Note::Error(e)),
         None if loading && shown.is_empty() => Some(ui::Note::Busy("loading…")),

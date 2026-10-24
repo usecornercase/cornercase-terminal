@@ -111,7 +111,7 @@ fn failure(error: &Value, what: &str) -> Error {
     let message = text(error, "/message");
     let lower = message.to_lowercase();
     if code == "AUTHENTICATION_ERROR" || lower.contains("authenticat") {
-        return Error::Api(REJECTED.into());
+        return Error::TokenRejected(REJECTED.into());
     }
     if code == "RATELIMITED" {
         return Error::Api("Linear rate limit reached, try again in a few minutes".into());

@@ -191,6 +191,19 @@ impl App {
         source.secret_key().and_then(|key| secrets::read(&self.issues.secrets_path, key)).map(|token| (token, false))
     }
 
+    pub(super) fn token_from_env(&self, source: Source) -> bool {
+        self.issues.env_tokens.contains_key(&source)
+    }
+
+    pub(super) fn shadowed(&self, source: Source) -> bool {
+        self.token_from_env(source)
+            && source.secret_key().and_then(|key| secrets::read(&self.issues.secrets_path, key)).is_some()
+    }
+
+    pub(super) fn rejected_from<T>(&self, source: Source, result: Result<T>) -> Result<T> {
+        result.map_err(|error| source.rejected_from(error, self.token_from_env(source)))
+    }
+
     pub(super) fn jira(&self, token: String) -> Option<jira::Api> {
         let config = &self.config;
         if config.jira_site.is_empty() || config.jira_email.is_empty() {
@@ -317,6 +330,9 @@ impl App {
         match result {
             Ok(_) => drop(self.issues.failures.remove(&key)),
             Err(error) => drop(self.issues.failures.insert(key, error.to_string())),
+        }
+        if matches!(result, Err(Error::TokenRejected(_))) {
+            self.issues.cache.forget(source);
         }
     }
 

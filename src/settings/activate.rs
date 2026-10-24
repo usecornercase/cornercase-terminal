@@ -108,8 +108,7 @@ impl Settings {
 
     fn activate_token(&mut self, row: Row, source: Source) -> Action {
         if self.status(source) == Some(&Status::Env) {
-            let env = source.token_env().unwrap_or_default();
-            self.notice = Some(format!("{env} is set: change or unset it there"));
+            self.notice = Some(source.env_wins());
             return Action::None;
         }
         self.start_edit(row, String::new())

@@ -199,8 +199,7 @@ impl Settings {
         if let Row::Token(source) = &row
             && self.status(*source) == Some(&Status::Env)
         {
-            let env = source.token_env().unwrap_or_default();
-            return Err(Refused::Blocked(format!("{env} is set: change or unset it there")));
+            return Err(Refused::Blocked(source.env_wins()));
         }
         Ok(self.removal_of_row(&row))
     }

@@ -21,6 +21,9 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, Result};
 use crate::time::{age, parse_time};
 
+const ENV_FIX: &str =
+    "fix or unset it where you start cornercase, then restart the server with `cornercase kill-server`";
+
 pub(crate) const LIMIT: usize = 100;
 const SLUG_MAX: usize = 40;
 const NAME_MAX: usize = 40;
@@ -89,6 +92,30 @@ impl Source {
             Self::Plane => Some(plane::TOKEN_ENV),
             Self::Asana => Some(asana::TOKEN_ENV),
         }
+    }
+
+    pub(crate) fn env_wins(self) -> String {
+        format!(
+            "{} is set in the server's environment and takes precedence over a saved {}: {ENV_FIX}",
+            self.token_env().unwrap_or_default(),
+            self.token_name()
+        )
+    }
+
+    pub(crate) fn rejected_from(self, error: Error, from_env: bool) -> Error {
+        let Error::TokenRejected(message) = error else { return error };
+        let (name, id) = (self.token_name(), self.id());
+        let origin = match self.token_env().filter(|_| from_env) {
+            Some(env) => format!(
+                "It came from {env}, which the server read when it started and which takes precedence over a saved \
+                 {name}: {ENV_FIX}"
+            ),
+            None => format!(
+                "It is the {name} saved in Settings › Issues: paste a new one there or with `cornercase config secret \
+                 {id}`"
+            ),
+        };
+        Error::TokenRejected(format!("{message}. {origin}"))
     }
 
     pub(crate) fn secret_key(self) -> Option<&'static str> {

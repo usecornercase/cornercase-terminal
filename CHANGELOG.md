@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.193
+
+- **A rejected tracker token says which one it was.** When GitLab, Shortcut, Linear, Jira, Plane or Asana rejects a token, the message now says whether it was the token saved in Settings (paste a new one there or with `cornercase config secret`) or one from a variable such as `LINEAR_API_KEY` in the server's environment, which wins over a saved one until you unset it and restart the server. This shows in the Issues dialog and in `cornercase issue sources`, `issue list`, `issue read`, `issue people` and `start --issue`.
+- Trying to save or remove a token while its variable is set now says the server read it when it started and to restart the server once it is unset. `cornercase issue sources` prints `saved` for a saved token, and `from LINEAR_API_KEY, over the saved one` when a variable hides a saved token (`shadowed` in `--json`).
+- The Issues dialog no longer shows an old list as if it were current: a list that fails to refresh says *showing the list from before*, and a rejected token clears the list and shows the whole message in its place.
+
 ## 0.12.192
 
 - **A Discord forum for your workspaces.** Turn on **forum mode** in Settings › Remote, with the Discord rows, and each workspace gets its own post in a private forum channel of a Discord server you own, titled `project › workspace`, so parallel work no longer shares one direct message. A dialog walks you through the setup and ticks each step as Discord confirms it: Guild Install and the Message Content intent in the Developer Portal, the app added to a server you own (a QR code and a link with the permissions already in it), and the forum channel, which cornercase makes for you. The direct message works as before, and commands stay there. Without the Message Content intent the direct message still works; only replies in posts wait for it.
