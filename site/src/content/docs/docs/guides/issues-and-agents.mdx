@@ -130,7 +130,7 @@ Without further settings the Asana tab lists the open tasks assigned to you. To 
 Saved tokens go to `secrets.json` next to your `config.json`, readable only by you (mode `0600`). They are never written to logs, to the issue cache or to the screen. The **disconnect** button in a tracker's tab removes its saved token.
 
 <Aside type="caution" title="Environment variables win">
-When `GITLAB_TOKEN`, `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN`, `PLANE_API_KEY` or `ASANA_ACCESS_TOKEN` is set, it takes precedence over a saved token, and cornercase won't let you change it from the app. The server reads these variables when it starts, so after changing them, restart it with `cornercase kill-server`.
+When `GITLAB_TOKEN`, `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN`, `PLANE_API_KEY` or `ASANA_ACCESS_TOKEN` is set, it takes precedence over a saved token, and cornercase won't let you change it from the app. The server reads these variables when it starts, so after changing them, restart it with `cornercase kill-server`. When a tracker rejects a token, the message says which one it used: the saved one, or the variable by name.
 </Aside>
 
 ## Browse and filter

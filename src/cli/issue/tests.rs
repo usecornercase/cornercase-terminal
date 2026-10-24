@@ -1,5 +1,5 @@
 use super::*;
-use crate::control::issues::{CommentInfo, IssueInfo, ListedInfo, PlaceInfo, SourceInfo};
+use crate::control::issues::{CommentInfo, IssueInfo, ListedInfo, PlaceInfo};
 
 fn source(id: &str, state: SourceState) -> SourceInfo {
     SourceInfo { source: id.into(), name: id.into(), tab: true, state, ..SourceInfo::default() }
@@ -18,7 +18,13 @@ fn the_sources_read_as_one_line_each_then_the_places() {
         project: 1,
         sources: vec![
             SourceInfo { from: Some("gh".into()), ..source("github", SourceState::Connected) },
-            SourceInfo { account: Some("@ana".into()), ..source("linear", SourceState::Connected) },
+            SourceInfo {
+                account: Some("@ana".into()),
+                from: Some("env".into()),
+                env: Some("LINEAR_API_KEY".into()),
+                shadowed: true,
+                ..source("linear", SourceState::Connected)
+            },
             SourceInfo { missing: vec!["site".into(), "token".into()], ..source("jira", SourceState::Missing) },
             SourceInfo { reason: Some("rejected".into()), tab: false, ..source("shortcut", SourceState::Failing) },
         ],
@@ -31,7 +37,7 @@ fn the_sources_read_as_one_line_each_then_the_places() {
     let text = sources_text(&sources);
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines[0].trim_end(), "github    connected  through gh");
-    assert_eq!(lines[1].trim_end(), "linear    connected  @ana");
+    assert_eq!(lines[1].trim_end(), "linear    connected  @ana, from LINEAR_API_KEY, over the saved one");
     assert_eq!(lines[2].trim_end(), "jira      missing    missing site, token");
     assert_eq!(lines[3].trim_end(), "shortcut  failing    rejected  (not a tab)");
     assert_eq!(lines[5], "places for Shortcut, Linear, Jira, Plane and Asana issues:");

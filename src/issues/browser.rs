@@ -380,7 +380,8 @@ impl Browser {
                 listing.issues = issues;
                 listing.error = None;
             }
-            Err(e) => listing.error = Some(e),
+            Err(e) if listing.issues.is_empty() => listing.error = Some(e),
+            Err(e) => listing.error = Some(format!("showing the list from before: {e}")),
         }
     }
 

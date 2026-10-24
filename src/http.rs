@@ -190,7 +190,7 @@ fn finish(service: &Service, result: std::result::Result<Response<ureq::Body>, u
     let mut response = reached(service, result, TIMEOUT)?;
     let status = response.status().as_u16();
     if status == 401 || status == 403 {
-        return Err(Error::Api(service.rejected.into()));
+        return Err(Error::TokenRejected(service.rejected.into()));
     }
     if status == 429 {
         return Err(Error::Api(format!("{} rate limit reached, try again in a minute", service.name)));

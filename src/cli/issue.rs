@@ -4,7 +4,7 @@ use super::args::issue::{IssueAction, ListArgs, PeopleArgs, ReadArgs, SourcesArg
 use super::status::tsv;
 use super::{print_json, print_out};
 use crate::client::{answer, ask};
-use crate::control::issues::{Lists, PeopleInfo, ReadIssue, SourceState, Sources, Who};
+use crate::control::issues::{Lists, PeopleInfo, ReadIssue, SourceInfo, SourceState, Sources, Who};
 use crate::control::{Command, IssueList, IssuePeople, IssueRead, IssueSources};
 use crate::error::Result;
 use crate::issues::Source;
@@ -37,6 +37,16 @@ fn sources(args: &SourcesArgs) -> Result<()> {
     print_out(&sources_text(&answer(value)?))
 }
 
+fn token_from(source: &SourceInfo) -> String {
+    match (source.from.as_deref(), source.env.as_deref()) {
+        (Some("env"), Some(env)) if source.shadowed => format!("from {env}, over the saved one"),
+        (Some("env"), Some(env)) => format!("from {env}"),
+        (Some("saved"), _) => "saved".into(),
+        (Some("gh"), _) => "through gh".into(),
+        _ => String::new(),
+    }
+}
+
 pub(crate) fn sources_text(sources: &Sources) -> String {
     let mut text = String::new();
     let width = sources.sources.iter().map(|s| s.source.len()).max().unwrap_or(0);
@@ -50,18 +60,11 @@ pub(crate) fn sources_text(sources: &Sources) -> String {
         let detail = match source.state {
             SourceState::Missing => format!("missing {}", source.missing.join(", ")),
             SourceState::Failing => source.reason.clone().unwrap_or_default(),
-            _ => {
-                let from = match (source.from.as_deref(), source.env.as_deref()) {
-                    (Some("env"), Some(env)) => format!("from {env}"),
-                    (Some("gh"), _) => "through gh".into(),
-                    _ => String::new(),
-                };
-                [source.account.clone().unwrap_or_default(), from]
-                    .into_iter()
-                    .filter(|part| !part.is_empty())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            }
+            _ => [source.account.clone().unwrap_or_default(), token_from(source)]
+                .into_iter()
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join(", "),
         };
         let hidden = if source.tab { "" } else { "  (not a tab)" };
         let _ = writeln!(text, "{:width$}  {state:9}  {detail}{hidden}", source.source);

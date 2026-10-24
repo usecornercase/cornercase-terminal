@@ -109,6 +109,64 @@ fn a_token_from_the_environment_says_so() {
 }
 
 #[test]
+fn a_saved_token_under_one_from_the_environment_is_shown_as_shadowed() {
+    let mut s = setup(true, "");
+    s.app.issues.set_env_token(Source::Linear, "x");
+    assert!(!info(&sources(&mut s), "linear").shadowed);
+    secrets::write(&secrets_file(&s), "linear_api_key", "saved").expect("save token");
+    let got = sources(&mut s);
+    assert_eq!((info(&got, "linear").from.as_deref(), info(&got, "linear").shadowed), (Some("env"), true));
+}
+
+mod a_rejected_token {
+    use super::*;
+
+    fn rejecting(s: &mut Setup) -> crate::test_util::FakeHttp {
+        let routes = vec![
+            ("GET /api/v3/member", 401, "{}"),
+            ("GET /api/v3/members", 401, "{}"),
+            ("GET /api/v3/search/stories", 401, "{}"),
+            ("GET /api/v3/stories/482", 401, "{}"),
+        ];
+        shortcut(s, routes)
+    }
+
+    fn messages(s: &mut Setup) -> Vec<String> {
+        let lists: Lists = good(s, "issue-list", &json!({"source": "shortcut"}));
+        let people = bad(s, "issue-people", &json!({"source": "shortcut"}));
+        let read = bad(s, "issue-read", &json!({"issue": "sc-482", "source": "shortcut"}));
+        let reason = info(&sources(s), "shortcut").reason.clone();
+        vec![
+            lists.sources[0].error.clone().unwrap_or_default(),
+            people.message,
+            read.message,
+            reason.unwrap_or_default(),
+        ]
+    }
+
+    #[test]
+    fn says_it_is_the_saved_one_and_how_to_replace_it() {
+        let mut s = setup(true, "");
+        let _server = rejecting(&mut s);
+        secrets::write(&secrets_file(&s), "shortcut_token", "t0k").expect("save token");
+        for message in messages(&mut s) {
+            assert!(message.starts_with("Shortcut rejected the token"), "{message}");
+            assert!(message.contains("saved") && message.contains("config secret shortcut"), "{message}");
+        }
+    }
+
+    #[test]
+    fn names_the_variable_it_came_from() {
+        let mut s = setup(true, "");
+        let _server = rejecting(&mut s);
+        s.app.issues.set_env_token(Source::Shortcut, "t0k");
+        for message in messages(&mut s) {
+            assert!(message.contains("SHORTCUT_API_TOKEN") && message.contains("restart"), "{message}");
+        }
+    }
+}
+
+#[test]
 fn a_failing_list_marks_the_source_until_one_works_or_it_is_forgotten() {
     let mut s = setup(true, "");
     let broken = with_token(&mut s, Vec::new());

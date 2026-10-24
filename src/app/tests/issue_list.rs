@@ -197,6 +197,20 @@ mod github {
     }
 
     #[test]
+    fn a_failing_reload_says_the_list_is_from_before() {
+        let mut s = listing();
+        open_loaded(&mut s, Source::Github);
+        send_key(&mut s.app, KeyCode::Esc, KeyModifiers::NONE);
+        crate::test_util::write_executable(&s.config.path().join("gh"), "#!/bin/sh\necho boom >&2\nexit 1\n");
+
+        open_loaded(&mut s, Source::Github);
+
+        assert_eq!(shown(&s.app), ["#7", "#3"]);
+        let error = browser(&s.app).lists[&Source::Github].error.clone().unwrap_or_default();
+        assert!(error.contains("from before") && error.contains("boom"), "{error}");
+    }
+
+    #[test]
     fn esc_closes_the_list() {
         let mut s = listing();
         open_loaded(&mut s, Source::Github);
@@ -569,6 +583,21 @@ mod tokens {
         open_loaded(&mut s, Source::Shortcut);
 
         assert_eq!(shown(&s.app), ["sc-482"]);
+    }
+
+    #[test]
+    fn a_rejected_token_drops_the_list_from_before_and_says_where_it_came_from() {
+        let mut s = setup(false, "echo '[]'");
+        let _server = shortcut_with_token(&mut s);
+        assert_eq!(shown(&s.app), ["sc-482"]);
+        send_key(&mut s.app, KeyCode::Esc, KeyModifiers::NONE);
+        let _rejecting = shortcut(&mut s, vec![("GET /api/v3/member", 401, "{}")]);
+
+        open_loaded(&mut s, Source::Shortcut);
+
+        assert_eq!(shown(&s.app), Vec::<String>::new());
+        let error = browser(&s.app).lists[&Source::Shortcut].error.clone().unwrap_or_default();
+        assert!(error.contains("saved") && !error.contains("from before"), "{error}");
     }
 
     #[test]

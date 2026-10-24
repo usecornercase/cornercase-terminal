@@ -71,6 +71,8 @@ pub enum Error {
     #[error("{0}")]
     Api(String),
     #[error("{0}")]
+    TokenRejected(String),
+    #[error("{0}")]
     Usage(String),
     #[error("{0}")]
     Plugin(String),

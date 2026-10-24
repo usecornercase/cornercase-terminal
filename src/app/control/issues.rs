@@ -151,6 +151,7 @@ impl App {
             account: self.issues.account(source).map(Account::describe),
             from: from.map(String::from),
             env: source.token_env().filter(|_| from_env).map(String::from),
+            shadowed: self.shadowed(source),
             fields: source.people_fields().map(String::from),
             people: [Who::from(&people[0]), Who::from(&people[1])],
         }
@@ -342,6 +343,7 @@ impl App {
                 entries.push(Entry { source, issues: Vec::new(), cached: false, error });
                 continue;
             }
+            let result = self.rejected_from(source, result);
             self.note_list(source, project, &result);
             entries.push(self.listed_entry(source, self.cache_key(source, project, query), result));
         }
@@ -390,7 +392,13 @@ impl App {
                     comments,
                 }))
             }
-            Err(error) => Err(failed(error.to_string())),
+            Err(error) => {
+                let error = match ticket.epochs.first() {
+                    Some((source, _)) => source.rejected_from(error, self.token_from_env(*source)),
+                    None => error,
+                };
+                Err(failed(error.to_string()))
+            }
         };
         self.refuse_or_answer(pending.client, reply);
     }
@@ -403,6 +411,7 @@ impl App {
             }
             return;
         }
+        let result = self.rejected_from(source, result);
         let reply = match &result {
             Ok(people) => Ok(json(&people_answer(source, false, people))),
             Err(error) => Err(failed(error.to_string())),
@@ -416,9 +425,10 @@ impl App {
     fn spawn_find(&mut self, key: u64, project: u64, api: Client, locator: Locator) {
         let job =
             Job::new(Level::Info, "issues", "find").with("source", locator.source.name()).with("project", project);
+        let (source, from_env) = (locator.source, self.token_from_env(locator.source));
         self.spawn_job(
             job,
-            move || locate::find(&api, &locator),
+            move || locate::find(&api, &locator).map_err(|error| source.rejected_from(error, from_env)),
             move |result, _| Some(Ticket { key, project, epochs: Vec::new() }.replied(IssueReply::Found(result))),
         );
     }

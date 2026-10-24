@@ -145,6 +145,9 @@ fn a_token_from_the_environment_cannot_be_replaced_or_removed() {
     let removed = refused(&mut s, &json!({"action": "remove", "entry": "linear"}));
 
     assert_eq!((replaced.code.as_str(), removed.code.as_str()), ("conflict", "conflict"));
+    for message in [&replaced.message, &removed.message] {
+        assert!(message.contains("LINEAR_API_KEY") && message.contains("restart"), "{message}");
+    }
 }
 
 #[test]

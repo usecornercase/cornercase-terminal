@@ -165,7 +165,8 @@ pub(in crate::ui) fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
             draw_issue_tabs(f, view, issues, r);
             let cursor = draw_input(f, view.muted, input, "", filter);
             if items.is_empty() {
-                f.render_widget(Paragraph::new(Span::styled(format!(" {empty}"), dim)), list);
+                let text = Paragraph::new(Span::styled(empty.as_str(), dim)).wrap(Wrap { trim: false });
+                f.render_widget(text, list.inner(Margin::new(1, 0)));
             }
             draw_issue_rows(f, view, list, RowsShown { items, selected: *selected, scroll: *scroll });
             cursor

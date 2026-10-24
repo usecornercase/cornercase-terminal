@@ -140,6 +140,8 @@ pub(crate) struct SourceInfo {
     pub(crate) from: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) env: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) shadowed: bool,
     pub(crate) fields: [String; 2],
     pub(crate) people: [Who; 2],
 }
