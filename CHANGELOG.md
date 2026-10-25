@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.197
+
+- Internal change with nothing new to see: the code that works out which tab started a process, used by the Worktrees dialog to name processes running in a worktree, is now shared so upcoming views can use it too.
+
 ## 0.12.196
 
 - A pane that floods output now slows its program instead of building an unbounded backlog in memory. Keys, clicks and script requests keep being handled, and interrupting the program no longer leaves the server busy parsing old output for minutes.
