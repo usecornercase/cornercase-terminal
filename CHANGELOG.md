@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.205
+
+- **`cornercase flow save` saves a flow from JSON.** It takes a flow as `cornercase flow list --json` gives it (each entry's `flow`), from a file or from standard input with `-`, checks it as Settings › Flows does and saves it into your flows, or the project's with `--to project`. `--check` lists its problems without saving, `--path` names the file of the flow you are editing so a new name renames it and `--to` moves it, and `--json` prints what was saved. Apps with an editor of their own can now create and edit flows from the command line instead of writing the TOML file themselves.
+
 ## 0.12.204
 
 - **See and stop a workspace's dev servers.** A workspace's menu (` ⋯ ` or right-click) has **ports**: every port its programs listen on, with the address, the program, its pid and the tab it runs in (or the agent that started it), refreshed every two seconds. Each row can **copy** the address, **open** it in your browser, **go** to its tab and **stop** it; tick several to stop them together, or stop them all. Stopping always asks first, warns when it's an agent's or a program no tab started, sends `SIGTERM`, then `SIGKILL` after three seconds, and only to the program holding the port, never the shell or agent that started it.
