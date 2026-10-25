@@ -28,6 +28,7 @@ mod flow;
 mod help;
 mod issue;
 mod plugin;
+mod ports;
 mod queue;
 mod read;
 mod search;
@@ -249,6 +250,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
     ControlFlow::Break(match command {
         Control::Issue(args) => return ControlFlow::Break(issue::run(args.action)),
         Control::Usage(args) => return ControlFlow::Break(usage::run(&args)),
+        Control::Ports(args) => ports::run(&args).map(|()| true),
         Control::Tour(args) => tour::run(&args).map(|()| true),
         Control::Queue(queue) => queue::run(queue.action).map(|()| true),
         Control::Away(away) => run_away(&away).map(|()| true),
@@ -442,7 +444,7 @@ fn event_line(value: &Value) -> String {
     }
 }
 
-fn workspace(command: &'static str, id: Option<u64>, branch: Option<&str>) -> Result<Option<u64>> {
+pub(super) fn workspace(command: &'static str, id: Option<u64>, branch: Option<&str>) -> Result<Option<u64>> {
     let Some(branch) = branch else { return Ok(id) };
     let report: Report = answer(ask(command, control::Command::Status(control::Status {}))?)?;
     report.workspace_on(branch).map(Some).map_err(Error::WrongUsage)

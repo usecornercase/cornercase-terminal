@@ -18,6 +18,7 @@ mod fields;
 mod flow;
 pub(crate) mod issues;
 pub(crate) mod plugins;
+pub(crate) mod ports;
 mod search;
 pub(crate) mod start_server;
 mod status;
@@ -60,6 +61,7 @@ pub(crate) use flow::{
 };
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
+pub(crate) use ports::{Listing, Ports};
 pub(crate) use search::{Hit, Matches, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use status::{GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RunStatus, StackInfo};
@@ -214,6 +216,7 @@ pub(crate) enum Command {
     Tour(tour::TourRequest),
     ConfigExport(ConfigExport),
     ConfigImport(ConfigImport),
+    Ports(Ports),
 }
 
 impl Command {
@@ -375,6 +378,7 @@ impl Command {
             Self::StartServer(_) => 30,
             Self::Away(_) => 20,
             Self::Usage(_) => 67,
+            Self::Ports(_) => 101,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
             Self::PluginActions(_) => 69,
@@ -386,7 +390,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 101] = [
+    pub(crate) const NAMES: [&str; 102] = [
         "status",
         "open",
         "new-workspace",
@@ -488,6 +492,7 @@ impl Command {
         "flow-default",
         "flow-order",
         "plugin-popup-close",
+        "ports",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

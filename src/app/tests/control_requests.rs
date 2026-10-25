@@ -544,6 +544,7 @@ mod ordering;
 mod pane_moves;
 mod parents;
 mod plugins;
+mod ports;
 mod searching;
 mod setup;
 mod start_server;

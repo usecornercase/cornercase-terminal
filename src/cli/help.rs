@@ -788,6 +788,23 @@ Examples:
   cornercase tour list --json
   cornercase tour reset";
 
+pub(super) const PORTS_HELP: &str =
+    "Lists the TCP ports in LISTEN state held by the programs of a workspace: the processes its panes
+started (and their children), and, in a workspace with a worktree of its own, any of your processes
+working in that worktree. Each line gives the URL to open (http://localhost:PORT when it listens on
+every address or on 127.0.0.1), the addresses, the program and its pid, and how it belongs to the
+workspace: pane N, agent claude in pane N (the agent itself or a program it started), or cwd. A
+plain workspace (no worktree of its own) shares its folder with the others, so only its panes count.
+--all lists every port your processes listen on, those of no workspace too. Ports published by
+Docker are held by Docker, not by the workspace that started the containers, so they show only
+with --all. With --json it prints {\"ports\": [...]}: port, addresses, url, pid, program, args,
+project, workspace, pane, via (pane, agent or cwd) and agent, null when they do not apply.
+
+Examples:
+  cornercase ports
+  cornercase ports --worktree feat/login --json
+  cornercase ports --all";
+
 pub(super) const USAGE_HELP: &str =
     "Asks Claude Code and Codex for your plan limits as the Limits tab of the Usage dialog does, and
 prints each limit with how much of it is used and when it resets, then extra usage or credits. It

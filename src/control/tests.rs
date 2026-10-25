@@ -167,6 +167,7 @@ fn newest_commands() -> Vec<Command> {
         Command::FlowDefault(FlowDefault::default()),
         Command::FlowOrder(FlowOrder::default()),
         Command::PluginPopupClose(PluginPopupClose::default()),
+        Command::Ports(Ports::default()),
     ]
 }
 

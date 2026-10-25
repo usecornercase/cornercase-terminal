@@ -812,6 +812,30 @@ With `--json` it prints `{"agents": [...]}`, one entry per agent with every key 
 
 It is the request `{"command": "usage", "args": {"cached": false}}`. An older server answers that it has no `usage` command.
 
+### Ports
+
+```sh
+cornercase ports
+cornercase ports --worktree feat/login --json
+cornercase ports --all
+```
+
+`ports` lists the TCP ports a workspace's programs listen on, so an agent that just started a dev server can find its URL, and you can tell which `localhost:5173` belongs to which worktree:
+
+```text
+http://localhost:5173  127.0.0.1  node vite  pid 48211  workspace 4, pane 12
+http://localhost:6006  0.0.0.0 ::  node storybook dev  pid 48390  workspace 4, agent claude in pane 9
+http://localhost:3000  127.0.0.1  node next dev  pid 51007  workspace 4, cwd
+```
+
+A program belongs to a workspace when one of its panes started it (the shell, or anything started from it), or, in a workspace with a [worktree](../worktrees/) of its own, when it works inside that worktree. A plain workspace shares its folder with the others, so only its panes count. `agent claude in pane 9` means the agent in that pane, or a program it started, listens there; `cwd` means a program started elsewhere (another terminal, say) works in the worktree. Every TCP listener is listed, HTTP or not, with the URL to open: `http://localhost:PORT` when it listens on every address or on `127.0.0.1`, `http://[::1]:PORT` when only on `::1`, else the address it listens on.
+
+From a pane it lists that pane's workspace, elsewhere the one shown; `--workspace ID` or `--worktree BRANCH` picks another, and `--all` lists every port your programs listen on, with the workspace each belongs to, or none. Nothing listening prints `nothing is listening on a port`. cornercase's own ports (such as [browser access](../phone/)) are left out.
+
+With `--json` it prints `{"ports": [...]}`, each with every key present (`null` when it does not apply): `port`, `addresses`, `url`, `pid`, `program`, `args` (the program's command line), `project`, `workspace`, `pane`, `via` (`pane`, `agent` or `cwd`; `null` for no workspace) and `agent` (the agent's name when `via` is `agent`). It is the request `{"command": "ports", "args": {"workspace": 4, "all": false}}`, answered once the server has looked; an older server answers that it has no `ports` command.
+
+Ports published by Docker (`docker run -p`, `docker compose up`) are held by Docker's own process, not by the `docker` command in your tab, so they belong to no workspace: on macOS they show only with `--all`, and on Linux, where Docker's proxy runs as root, not at all. A program of another user, or one in a container or another network namespace, is not seen either.
+
 ### Stats
 
 ```sh

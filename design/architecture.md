@@ -52,6 +52,7 @@ src/term.rs       a shell in a PTY and its Emulator; term/reader.rs forwards out
                   term/keys.rs KeyEvent -> bytes; term/mouse.rs MouseEvent -> bytes; term/memory.rs how much memory a pane uses
 src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state)
 src/tour.rs       the guided tours: steps, what completes each, the section each opens, progress in tour.json, first-run detection; tour/steps.rs the tours as data
+src/ports/        the TCP ports programs listen on: mod.rs (merging, URLs, which workspace a program belongs to), listen.rs (libproc on macOS, /proc/net/tcp on Linux)
 src/worktrees/    Worktrees dialog: mod.rs (list), dialog.rs (state, keys), discover.rs, scan.rs, remove.rs
 src/update.rs     update check against GitHub releases, download, checksum, binary swap; update/restart.rs what a server restart stops: running programs from a status Report, the confirmation texts
 
