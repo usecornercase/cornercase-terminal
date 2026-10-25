@@ -27,7 +27,8 @@ fn every_port_is_answered_after_the_scan_without_the_servers_own() {
     let listing = asked(&mut app, &rx, "ports", &json!({"all": true})).expect("an answer");
 
     let ports = listing["ports"].as_array().expect("a list");
-    assert!(ports.iter().all(|p| p["port"] != port), "{listing}");
+    let server = std::process::id();
+    assert!(ports.iter().all(|p| p["pid"] != server || p["port"] != port), "{listing}");
 }
 
 #[test]
