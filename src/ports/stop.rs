@@ -84,7 +84,8 @@ pub(crate) fn stop(targets: Vec<Target>) -> Vec<Stopped> {
 fn kill(targets: Vec<Target>, done: &mut Vec<Stopped>) -> Vec<Target> {
     let mut killed = Vec::new();
     for target in targets {
-        if target.started.is_some() && process::start_stamp(target.pid) != target.started {
+        let restarted = target.started.is_some() && process::start_stamp(target.pid) != target.started;
+        if restarted || !target.holds() {
             done.push((target, Ok(Outcome::Stopped)));
             continue;
         }

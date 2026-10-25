@@ -100,3 +100,13 @@ fn a_pid_whose_start_changed_before_sigkill_is_not_killed() {
     assert_eq!(done, [(target, Ok(Outcome::Stopped))]);
     assert!(listening.running());
 }
+
+#[test]
+fn a_program_that_released_its_port_before_sigkill_is_not_killed() {
+    let mut listening = Listening::new("ignore");
+    let target = Target { port: listening.port.wrapping_add(1), ..listening.target() };
+    let mut done = Vec::new();
+    assert_eq!(kill(vec![target.clone()], &mut done), []);
+    assert_eq!(done, [(target, Ok(Outcome::Stopped))]);
+    assert!(listening.running());
+}
