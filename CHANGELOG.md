@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.199
 
-- **`cornercase ports` lists the ports a workspace listens on.** Each TCP port held by a program its tabs started, or, in a workspace with a worktree of its own, by any of your programs working in that worktree, with the URL to open (`http://localhost:5173`), the program, its pid and the tab it runs in. A port opened by an agent, or by something it started, says which agent. From a tab it lists that tab's workspace; `--worktree BRANCH` picks another and `--all` lists every port your programs listen on. `--json` gives the same for scripts and agents, so an agent that just started a dev server can find its address. Ports published by Docker belong to Docker, not to a workspace.
+- **`cornercase ports` lists the ports a workspace listens on.** Each TCP port held by a program its tabs started, or, in a workspace with a worktree of its own, by any of your programs working in that worktree, with the URL to open (`http://localhost:5173`), the program and its pid, and the pane that started it when a tab did. A port opened by an agent, or by something it started, says which agent. From a tab it lists that tab's workspace; `--worktree BRANCH` picks another and `--all` lists every port your programs listen on. `--json` gives the same for scripts and agents, so an agent that just started a dev server can find its address. Ports published by Docker belong to Docker, not to a workspace.
 
 ## 0.12.198
 
