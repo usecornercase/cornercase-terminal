@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.199
+
+- **`cornercase ports` lists the ports a workspace listens on.** Each TCP port held by a program its tabs started, or, in a workspace with a worktree of its own, by any of your programs working in that worktree, with the URL to open (`http://localhost:5173`), the program, its pid and the tab it runs in. A port opened by an agent, or by something it started, says which agent. From a tab it lists that tab's workspace; `--worktree BRANCH` picks another and `--all` lists every port your programs listen on. `--json` gives the same for scripts and agents, so an agent that just started a dev server can find its address. Ports published by Docker belong to Docker, not to a workspace.
+
 ## 0.12.198
 
 - Leaving the Files search idle no longer scans the whole workspace every ten seconds. Its file list refreshes when you change the query, return to the search bar, or the tree sees files added, removed or renamed. New scans cancel the previous one and use at most eight threads, keeping large workspaces quieter.
