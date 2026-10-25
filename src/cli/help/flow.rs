@@ -11,6 +11,7 @@ Examples:
   cornercase flow run 'Full issue' --prompt-file task.md --worktree fix-login
   cornercase flow export Quick > quick.toml
   cornercase flow import quick.toml
+  cornercase flow save draft.json --check
   cornercase flow runs
   cornercase flow messages --worktree fix-login --follow
   cornercase flow hide Quick
@@ -148,3 +149,24 @@ last folder the workspace's runs made, for as long as the workspace lives.
 Examples:
   cornercase flow files
   cornercase flow files --worktree fix-login --json";
+
+pub(in crate::cli) const FLOW_SAVE_HELP: &str =
+    "It saves a flow written as JSON: the `flow` of an entry of `flow list --json` (`jq '.flows[0].flow'`), read from a
+file or from standard input with -, checked as Settings › Flows does. It is for apps with an editor of their own;
+people edit flows in Settings › Flows or in their files. Keys left out take their defaults, and a key a flow does
+not have is refused with its place, so a typo never drops a setting.
+
+A flow with problems of its own (a role in no stage, a loop that goes forward, an unknown agent...) is refused. One
+whose name another flow runs under instead is saved, and the clash is printed, as the list shows it in red. --check
+prints the problems, and what a project's flow runs unattended, and saves nothing.
+
+Without --path it saves a new flow, into yours or, with --to project, the project's: saving it again needs the
+--path it printed, or it makes a second flow of that name. --path names the file of the flow being edited, as
+`flow list --json` gives it: the flow stays in its place unless --to moves it, and a new name renames the file.
+Saving a built-in flow's name into yours makes your version of it, as edit does in Settings › Flows.
+
+Examples:
+  cornercase flow list --json | jq '.flows[0].flow' > draft.json
+  cornercase flow save draft.json --check
+  cornercase flow save draft.json --path ~/.config/cornercase/flows/quick-mine.toml
+  cornercase flow save - --to project --json < draft.json";

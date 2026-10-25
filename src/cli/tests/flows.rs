@@ -1,4 +1,4 @@
-use super::args::ImportTo;
+use super::args::{Command, Control, FlowAction, ImportTo};
 use super::flow::{confirmation, fetched, folder_note, imported_line, listing, started};
 use crate::control::{BrokenFlow, FlowInfo, Flows, Imported, MemberInfo, RoleInfo, RunInfo};
 use crate::flows::Worktree;
@@ -100,4 +100,36 @@ fn a_run_names_its_folder_on_stderr_when_it_has_one() {
     let run = RunInfo { run_dir: Some("/s/runs/2026-10-17-api".into()), ..RunInfo::default() };
     assert_eq!(folder_note(&run).as_deref(), Some("the run keeps its files in /s/runs/2026-10-17-api"));
     assert_eq!(folder_note(&RunInfo::default()), None);
+}
+
+#[test]
+fn a_flow_is_saved_from_a_file_or_standard_input_with_the_requests_options() {
+    let parse = |args: &[&str]| {
+        let Some(Command::Control(Control::Flow(flow))) = super::parse(args).expect("parse").command else {
+            panic!("not flow")
+        };
+        let FlowAction::Save(save) = flow.action else { panic!("not save") };
+        save
+    };
+
+    let save = parse(&[
+        "flow",
+        "save",
+        "d.json",
+        "--to",
+        "project",
+        "--project",
+        "2",
+        "--path",
+        "/c/x.toml",
+        "--check",
+        "--json",
+    ]);
+    assert_eq!(
+        (save.source.to_str(), save.to, save.project, save.path.as_deref(), save.check, save.print.json),
+        (Some("d.json"), Some(ImportTo::Project), Some(2), Some(std::path::Path::new("/c/x.toml")), true, true)
+    );
+
+    let save = parse(&["flow", "save", "-"]);
+    assert_eq!((save.source.to_str(), save.to, save.check), (Some("-"), None, false));
 }

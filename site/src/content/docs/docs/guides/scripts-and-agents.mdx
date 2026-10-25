@@ -61,7 +61,7 @@ group 9  personal  collapsed
 | `split` | Splits a pane right, or down, optionally typing a command. Prints the new pane's id. |
 | `start [AGENT]` | Starts a coding agent in a new tab and gives it a prompt, or with `--issue` the issue's. Prints the pane's id. |
 | `issue sources`, `issue list`, `issue read KEY`, `issue people SOURCE` | Read the [issue trackers](#issues) through the server: which are connected, their lists with the Issues dialog's filters, an issue with its comments, and whom the filters can name. |
-| `flow list`, `flow run NAME`, `flow export NAME`, `flow import SOURCE`, `flow delete NAME`, `flow hide NAME`, `flow restore NAME`, `flow default NAME`, `flow order NAME…` | Lists the [flows](../flows/), starts one (a team of agents in a worktree, run by an orchestrator agent), prints one as text to share, adds one someone shared, deletes one of yours or the project's, deletes a built-in flow and brings it back, or chooses the flow the start dialog opens on and the order of the list. |
+| `flow list`, `flow run NAME`, `flow export NAME`, `flow import SOURCE`, `flow save FILE`, `flow delete NAME`, `flow hide NAME`, `flow restore NAME`, `flow default NAME`, `flow order NAME…` | Lists the [flows](../flows/), starts one (a team of agents in a worktree, run by an orchestrator agent), prints one as text to share, adds one someone shared, saves one given as JSON, deletes one of yours or the project's, deletes a built-in flow and brings it back, or chooses the flow the start dialog opens on and the order of the list. |
 | `flow runs`, `flow messages`, `flow files` | Where each running flow stands, what its roles sent each other, and the files of its folder: see [Follow a flow run](#follow-a-flow-run). |
 | `send [TEXT]` | Pastes text into a pane, and presses Enter with `--enter`. |
 | `keys KEY…` | Presses keys in a pane. |
@@ -494,6 +494,7 @@ cornercase flow run 'Full issue' --issue ENG-42 --project 3
 
 ```sh
 cornercase flow list --json
+cornercase flow save draft.json --check
 cornercase flow delete 'Quick mine'
 cornercase flow hide Quick
 cornercase flow restore Quick
@@ -512,6 +513,8 @@ An app with an editor of its own works on the flow as JSON. `flow list --json` g
 ```
 
 With `check` it answers `problems` (what the editor shows in red: the flow's own and a name conflict) and the `check` text (what a project's flow runs unattended: its `env` and `args`), and writes nothing; without it, it saves, answers the `path` and is refused as `malformed` while the flow has problems of its own. A request is `not-found` for a project that is not open and a `path` that is no flow file, and `malformed` for another place. The last write wins over an editor open on the same flow, as with a file edited by hand.
+
+`flow save FILE` sends that request from the command line, with the flow read as JSON from a file or, with `-`, from standard input (at most 1 MiB): `cornercase flow list --json | jq '.flows[0].flow' > draft.json` gives one to edit. `--to yours` or `--to project` is the `place` (by default the place of the `--path` file, else yours, so an edit never moves a flow unless you ask), and `--project ID`, `--path FILE` and `--check` are the request's. Keys left out take their defaults, so a form can send only what it has, and a key a flow does not have is refused with its place (`roles.0.promt`). It prints where the flow went and what still stops it from running; with `--check` it prints the problems and saves nothing, and exits with 0 either way. `--json` prints the request's answer. Without `--path` it makes a new flow, so save again with the `--path` it printed: the same draft saved twice makes a second flow of that name, listed with the clash.
 
 ### Issues
 
@@ -975,7 +978,7 @@ The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `
 | `flow runs` | `version`, `boot`, `runs` (with `--follow`, each line also has `revision`), see [Follow a flow run](#follow-a-flow-run). |
 | `flow messages` | One object per line: `run`, `workspace`, `seq`, `time`, `from`, `to`, `kind`, `text`, `bytes`, `edge`. |
 | `flow files` | `workspace`, `run`, `dir`, `files` (`name`, `path`, `bytes`, `modified`) and `more`. |
-| `flow-save` (a request) | `name`, `origin`, `path`, `saved`, `problems`, `check`. |
+| `flow save` (the `flow-save` request) | `name`, `origin`, `path`, `saved`, `problems`, `check`. |
 | `usage` | `agents`: `agent`, `title`, `loading`, `read_at`, `age`, `plan`, `limited`, `limits` (`label`, `kind`, `scope`, `percent`, `severity`, `resets_at`), `extra`, `notice`, `error`. See [Plan usage](#plan-usage). |
 | `plugin-list` (a socket request) | `revision`, `problem` and `plugins`: `id`, `enabled`, `state`, `error`, `label`, `note`, `source`, `log`, `manifest`, `services` (`id`, `state`, `pid`, `restart_in`) and `button` (`title`, `icon`, `actions`). See [Plugins](#plugins). |
 | `plugin actions` | `revision` and `actions`: `plugin`, `name`, `action`, `title`, `contexts`, `placement`, `width`, `height`. |

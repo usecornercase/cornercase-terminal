@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{Command, Request, Response};
+use super::{Command, Response};
 
 pub(crate) const CONTRACT: u32 = 1;
 pub(crate) const EVENTS_VERSION: u32 = 1;
@@ -155,7 +155,7 @@ pub(crate) fn describe(boot: &str, unavailable: &[(&str, &str)]) -> Descriptor {
     }
 }
 
-pub(crate) fn unknown_fields(raw: &Value, parsed: &Request) -> Option<String> {
+pub(crate) fn unknown_fields(raw: &Value, parsed: &impl Serialize) -> Option<String> {
     serde_json::to_value(parsed).ok().and_then(|known| stray(raw, &known))
 }
 

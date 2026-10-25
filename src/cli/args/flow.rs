@@ -7,7 +7,7 @@ use super::{Create, Print, branch};
 use super::{accounts, issue};
 use crate::cli::help::{
     FLOW_DEFAULT_HELP, FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP, FLOW_HIDE_HELP, FLOW_IMPORT_HELP,
-    FLOW_MESSAGES_HELP, FLOW_ORDER_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP,
+    FLOW_MESSAGES_HELP, FLOW_ORDER_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP, FLOW_SAVE_HELP,
 };
 
 #[derive(Debug, Args)]
@@ -35,6 +35,11 @@ pub(crate) enum FlowAction {
         after_help = FLOW_IMPORT_HELP
     )]
     Import(FlowImportArgs),
+    #[command(
+        about = "Save a flow given as JSON, as `flow list --json` gives it, checked as Settings › Flows does",
+        after_help = FLOW_SAVE_HELP
+    )]
+    Save(FlowSaveArgs),
     #[command(
         about = "Print where each running flow stands: its stage, its loops, each role's pane and status",
         after_help = FLOW_RUNS_HELP
@@ -139,6 +144,33 @@ pub(crate) struct FlowFilesArgs {
 pub(crate) struct FlowNameArgs {
     #[arg(value_name = "NAME", help = "The built-in flow, as `cornercase flow list` names it")]
     pub(crate) name: String,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowSaveArgs {
+    #[arg(
+        value_name = "FILE",
+        help = "The flow as JSON, the `flow` of an entry of `flow list --json`, or - for standard input"
+    )]
+    pub(crate) source: PathBuf,
+    #[arg(long, value_enum, help = "Where the flow goes [default: where the --path file is, else yours]")]
+    pub(crate) to: Option<ImportTo>,
+    #[arg(
+        long,
+        value_name = "ID",
+        help = "The project, for --to project and the flows its name may clash with [default: the one this runs in, else the shown one]"
+    )]
+    pub(crate) project: Option<u64>,
+    #[arg(
+        long,
+        value_name = "FILE",
+        help = "The file of the flow being edited, as `flow list --json` gives it: a new name renames it, --to moves it"
+    )]
+    pub(crate) path: Option<PathBuf>,
+    #[arg(long, help = "List the flow's problems and save nothing")]
+    pub(crate) check: bool,
     #[command(flatten)]
     pub(crate) print: Print,
 }

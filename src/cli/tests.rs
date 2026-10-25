@@ -220,6 +220,8 @@ mod parsing {
     #[case::a_flow_without_a_task(&["flow", "run", "Quick"])]
     #[case::an_import_without_a_file(&["flow", "import"])]
     #[case::an_import_to_nowhere(&["flow", "import", "f.toml", "--to", "other"])]
+    #[case::a_save_without_a_file(&["flow", "save"])]
+    #[case::a_save_to_nowhere(&["flow", "save", "d.json", "--to", "cloud"])]
     #[case::an_export_without_a_name(&["flow", "export"])]
     #[case::a_default_without_a_name(&["flow", "default"])]
     #[case::a_default_and_clear(&["flow", "default", "Quick", "--clear"])]

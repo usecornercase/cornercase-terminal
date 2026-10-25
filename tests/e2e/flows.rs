@@ -21,6 +21,8 @@ prompt = "Write it."
 roles = ["coder"]
 "#;
 
+const DRAFT: &str = r#"{"name": "Mine", "orchestrator": {"agent": "claude", "prompt": "Run it."}, "roles": [{"name": "coder", "agent": "claude", "edits": true, "prompt": "Write it."}], "stages": [{"roles": ["coder"]}]}"#;
+
 fn json(session: &Session, args: &[&str]) -> Value {
     serde_json::from_str(&session.says(args)).expect("a JSON answer")
 }
@@ -151,4 +153,72 @@ fn a_default_and_an_order_are_cleared_and_refused() {
     assert!(back.starts_with("the flows are in this order now: Arena"), "{back}");
     assert!(!refused.status.success());
     assert!(String::from_utf8_lossy(&refused.stderr).contains("there is no flow named `Nope`"), "{refused:?}");
+}
+
+fn saving(session: &Session, args: &[&str], draft: &str) -> std::process::Output {
+    let mut all = vec!["flow", "save", "-"];
+    all.extend_from_slice(args);
+    session.fed(&all, draft)
+}
+
+fn answered(out: &std::process::Output) -> Value {
+    assert!(out.status.success(), "{out:?}");
+    serde_json::from_slice(&out.stdout).expect("a JSON answer")
+}
+
+fn listed<'a>(list: &'a Value, name: &str) -> &'a Value {
+    list["flows"].as_array().expect("flows").iter().find(|f| f["name"] == name).expect("a listed flow")
+}
+
+#[test]
+fn a_listed_flow_is_saved_back_from_its_json_and_renamed_by_its_file() {
+    let app = Harness::start();
+    let first = answered(&saving(&app.session, &["--json"], DRAFT));
+    assert_eq!((first["saved"].as_bool(), first["origin"].as_str()), (Some(true), Some("user")), "{first}");
+    let old = first["path"].as_str().expect("a path").to_string();
+
+    let list = json(&app.session, &["flow", "list", "--json"]);
+    let mut draft = listed(&list, "Mine")["flow"].clone();
+    draft["name"] = "Ours".into();
+    draft["roles"][0]["prompt"] = "Write it well.".into();
+    let draft = draft.to_string();
+    let check = answered(&saving(&app.session, &["--check", "--json"], &draft));
+    assert_eq!(
+        (check["saved"].as_bool(), check["problems"].as_array().map(Vec::len)),
+        (Some(false), Some(0)),
+        "{check}"
+    );
+    assert!(check["path"].is_null(), "{check}");
+    let done = answered(&saving(&app.session, &["--path", &old, "--json"], &draft));
+
+    assert_eq!(done["origin"], "user", "{done}");
+    assert!(!std::path::Path::new(&old).exists());
+    let list = json(&app.session, &["flow", "list", "--json"]);
+    assert_eq!(listed(&list, "Ours")["flow"]["roles"][0]["prompt"], "Write it well.");
+    assert!(!names(&list, "flows").contains(&"Mine".to_string()), "{list}");
+}
+
+#[test]
+fn a_draft_with_problems_or_a_stray_key_is_refused_and_a_good_one_is_saved_from_a_file() {
+    let app = Harness::start();
+    let mut empty: Value = serde_json::from_str(DRAFT).expect("a draft");
+    empty["stages"] = Value::Array(Vec::new());
+    let empty = empty.to_string();
+
+    let check = saving(&app.session, &["--check"], &empty);
+    let refused = saving(&app.session, &[], &empty);
+    let mut typo: Value = serde_json::from_str(DRAFT).expect("a draft");
+    typo["roles"][0]["promt"] = "x".into();
+    let stray = saving(&app.session, &[], &typo.to_string());
+
+    assert!(check.status.success(), "{check:?}");
+    assert!(String::from_utf8_lossy(&check.stdout).contains("cannot run: the flow has no stages"), "{check:?}");
+    assert!(!refused.status.success());
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("the flow has problems"), "{refused:?}");
+    assert!(!stray.status.success());
+    assert!(String::from_utf8_lossy(&stray.stderr).contains("roles.0.promt"), "{stray:?}");
+    let file = app.session.dir.join("draft.json");
+    std::fs::write(&file, DRAFT).expect("a draft file");
+    let said = app.session.says(&["flow", "save", &file.display().to_string()]);
+    assert!(said.starts_with("saved Mine into yours: "), "{said}");
 }

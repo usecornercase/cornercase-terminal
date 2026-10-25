@@ -273,10 +273,11 @@ cornercase flow list
 cornercase flow run 'Full issue' --prompt-file issue.md --worktree fix-login
 cornercase flow export Quick > quick.toml
 cornercase flow import quick.toml
+cornercase flow save draft.json --check
 cornercase flow hide Quick
 ```
 
-`flow export` and `flow import` [share a flow](#share-a-flow). `flow delete`, `flow hide` and `flow restore` [manage them](../scripts-and-agents/#manage-flows), `flow runs`, `flow messages` and `flow files` [follow a run](../scripts-and-agents/#follow-a-flow-run), and a program with an editor of its own reads each flow whole in `flow list --json` and saves one with the `flow-save` request. `flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
+`flow export` and `flow import` [share a flow](#share-a-flow). `flow save`, `flow delete`, `flow hide` and `flow restore` [manage them](../scripts-and-agents/#manage-flows), `flow runs`, `flow messages` and `flow files` [follow a run](../scripts-and-agents/#follow-a-flow-run), and a program with an editor of its own reads each flow whole in `flow list --json` and saves one with `flow save` (the `flow-save` request). `flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
 
 `cornercase status --json` gives each workspace that runs a flow a `run` with its `end` and whether it was `reached`.
 
