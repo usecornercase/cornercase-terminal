@@ -119,6 +119,125 @@ mod viewer {
     }
 }
 
+mod indexing {
+    use super::*;
+
+    const ROOT: &str = "/repo";
+
+    fn request(panel: &mut Panel, now: Instant) -> (u64, Index) {
+        panel.index_request(1, Path::new(ROOT), now).expect("an index request")
+    }
+
+    fn ready(panel: &mut Panel, now: Instant) {
+        panel.query_mut(1).focused = true;
+        let (generation, _) = request(panel, now);
+        panel.indexed(1, generation, vec!["a.rs".into()]);
+    }
+
+    #[rstest::rstest]
+    #[case::empty("")]
+    #[case::text("needle")]
+    fn an_idle_search_never_reindexes_on_a_timer(#[case] query: &str) {
+        let (mut panel, now) = (Panel::default(), Instant::now());
+        panel.query_mut(1).text = query.into();
+        ready(&mut panel, now);
+        assert!(panel.index_request(1, Path::new(ROOT), now + Duration::from_secs(3600)).is_none());
+    }
+
+    #[test]
+    fn changing_the_query_refreshes_the_index() {
+        let (mut panel, now) = (Panel::default(), Instant::now());
+        ready(&mut panel, now);
+        panel.query_mut(1).text = "new".into();
+        request(&mut panel, now);
+    }
+
+    #[test]
+    fn taking_focus_again_refreshes_the_index() {
+        let (mut panel, now) = (Panel::default(), Instant::now());
+        ready(&mut panel, now);
+        panel.unfocus();
+        panel.query_mut(1).focused = true;
+        request(&mut panel, now);
+    }
+
+    #[test]
+    fn changed_listings_refresh_the_index_but_unchanged_ones_do_not() {
+        let (mut panel, now) = (panel_with_listings(), Instant::now());
+        ready(&mut panel, now);
+        let listing = vec![("src".into(), Some(entries(&[("ui", true), ("main.rs", false)])))];
+        panel.listed(1, 0, listing);
+        assert!(panel.index_request(1, Path::new(ROOT), now).is_none());
+        panel.listed(1, 0, vec![("src".into(), Some(entries(&[("new.rs", false)])))]);
+        request(&mut panel, now);
+    }
+
+    #[test]
+    fn a_new_query_cancels_the_walk_and_drops_its_late_answer() {
+        let (mut panel, now) = (Panel::default(), Instant::now());
+        panel.query_mut(1).focused = true;
+        let (old, first) = request(&mut panel, now);
+        panel.query_mut(1).text = "new".into();
+        let (latest, _) = request(&mut panel, now);
+        assert!(first.cancel.load(Ordering::Relaxed));
+        panel.indexed(1, latest, vec!["new.rs".into()]);
+        panel.indexed(1, old, vec!["old.rs".into()]);
+        assert_eq!(panel.index.get(&1).map(|paths| paths.as_slice()), Some(["new.rs".into()].as_slice()));
+    }
+
+    #[test]
+    fn a_timeout_cancels_the_old_walk_before_retrying() {
+        let (mut panel, now) = (Panel::default(), Instant::now());
+        panel.query_mut(1).focused = true;
+        let (_, first) = request(&mut panel, now);
+        assert!(panel.index_request(1, Path::new(ROOT), now + GIVE_UP_AFTER / 2).is_none());
+        request(&mut panel, now + GIVE_UP_AFTER);
+        assert!(first.cancel.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn switching_workspaces_cancels_the_previous_walk() {
+        let (mut panel, now) = (Panel::default(), Instant::now());
+        panel.query_mut(1).focused = true;
+        let (_, first) = request(&mut panel, now);
+        panel.query_mut(2).text = "new".into();
+        let (generation, _) = panel.index_request(2, Path::new("/other"), now).expect("the other workspace");
+        panel.indexed(2, generation, vec!["other.rs".into()]);
+        request(&mut panel, now);
+        assert!(first.cancel.load(Ordering::Relaxed));
+    }
+
+    #[rstest::rstest]
+    #[case::closing(false)]
+    #[case::forgetting(true)]
+    fn stopping_the_panel_cancels_the_walk(#[case] forget: bool) {
+        let (mut panel, now) = (Panel::default(), Instant::now());
+        panel.query_mut(1).focused = true;
+        let (generation, index) = request(&mut panel, now);
+        if forget {
+            panel.forget(&HashSet::new());
+        } else {
+            panel.close();
+        }
+        panel.indexed(1, generation, vec!["late.rs".into()]);
+        assert!(index.cancel.load(Ordering::Relaxed) && !panel.index.contains_key(&1));
+    }
+
+    #[test]
+    fn an_unchanged_file_list_keeps_the_cached_search_answer() {
+        let (mut panel, now) = (Panel::default(), Instant::now());
+        panel.query_mut(1).text = "needle".into();
+        ready(&mut panel, now);
+        let (generation, search, _) = panel.grep_request(1, now).expect("a search");
+        panel.grepped(1, generation, search, search::Text::default());
+        panel.unfocus();
+        panel.query_mut(1).focused = true;
+        let (generation, _) = request(&mut panel, now);
+        panel.indexed(1, generation, vec!["a.rs".into()]);
+        assert!(panel.grep_request(1, now).is_none());
+    }
+}
+
 mod searching {
     use super::*;
 

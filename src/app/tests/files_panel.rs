@@ -347,6 +347,24 @@ fn a_name_search_finds_the_file_and_enter_opens_it() {
     assert_eq!(file(&app).path, "src/main.rs");
 }
 
+#[rstest::rstest]
+#[case::listed_root("other-main.rs", false)]
+#[case::closed_folder_on_refocus("src/other-main.rs", true)]
+fn the_search_picks_up_new_files(#[case] path: &str, #[case] refocus: bool) {
+    let repo = repo();
+    let (mut app, rx) = opened(&repo);
+    search(&mut app, &rx, files::Mode::Name, "main");
+    std::fs::write(repo.path().join(path), "fn main() {}\n").expect("a new file");
+    if refocus {
+        click(&mut app, areas().pane.as_position());
+        let field = panel::field(panel_area(&app)).as_position();
+        click(&mut app, field);
+    }
+    settle(&mut app, &rx, "the new file is found", |v| results(v).len() == 2);
+    let found = results(&view(&app));
+    assert!(found.iter().any(|row| matches!(row, panel::Found::Name { path: found, .. } if found == path)));
+}
+
 #[test]
 fn a_text_search_opens_the_file_at_the_line() {
     let repo = repo();

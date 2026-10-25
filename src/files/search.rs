@@ -21,13 +21,24 @@ pub(crate) const MAX_MATCHES: usize = 1000;
 const MAX_LINE: usize = 400;
 const MAX_THREADS: usize = 8;
 
-pub(crate) fn index(root: &Path) -> Vec<String> {
+fn threads() -> usize {
+    std::thread::available_parallelism().map_or(4, NonZero::get).min(MAX_THREADS)
+}
+
+pub(crate) fn index(root: &Path, cancel: &AtomicBool) -> Vec<String> {
     let (tx, rx) = mpsc::channel();
     let count = AtomicUsize::new(0);
-    let walk = WalkBuilder::new(root).hidden(false).filter_entry(|e| e.file_name() != ".git").build_parallel();
+    let walk = WalkBuilder::new(root)
+        .hidden(false)
+        .filter_entry(|e| e.file_name() != ".git")
+        .threads(threads())
+        .build_parallel();
     walk.run(|| {
         let (tx, count) = (tx.clone(), &count);
         Box::new(move |entry| {
+            if cancel.load(Ordering::Relaxed) {
+                return WalkState::Quit;
+            }
             let Ok(entry) = entry else { return WalkState::Continue };
             if !entry.path().is_file() {
                 return WalkState::Continue;
@@ -119,8 +130,7 @@ fn line(matcher: &RegexMatcher, number: u64, raw: &str) -> Line {
 }
 
 pub(crate) fn text(root: &Path, paths: &[String], query: &str, cancel: &AtomicBool) -> Text {
-    let threads = std::thread::available_parallelism().map_or(4, NonZero::get).min(MAX_THREADS);
-    text_on(root, paths, query, cancel, threads)
+    text_on(root, paths, query, cancel, threads())
 }
 
 struct Scan<'a> {

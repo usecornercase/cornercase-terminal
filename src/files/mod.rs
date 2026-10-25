@@ -17,7 +17,6 @@ use crate::text::stretch::Stretch;
 pub(crate) const LIST_EVERY: Duration = Duration::from_secs(2);
 pub(crate) const CONTEXT: usize = 3;
 pub(crate) const CHECK_EVERY: Duration = Duration::from_secs(1);
-pub(crate) const INDEX_EVERY: Duration = Duration::from_secs(10);
 const GIVE_UP_AFTER: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -118,6 +117,25 @@ struct Place {
     last: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct IndexUse {
+    query: String,
+    focused: bool,
+}
+
+#[derive(Debug)]
+struct Indexing {
+    workspace: u64,
+    generation: u64,
+    cancel: Arc<AtomicBool>,
+    started: Instant,
+}
+
+pub(crate) struct Index {
+    pub(crate) root: PathBuf,
+    pub(crate) cancel: Arc<AtomicBool>,
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct Panel {
     places: HashMap<u64, Place>,
@@ -128,8 +146,9 @@ pub(crate) struct Panel {
     reading: Option<(u64, Instant)>,
     checked: Option<Instant>,
     index: HashMap<u64, Arc<Vec<String>>>,
-    indexing: Option<(u64, Instant)>,
-    indexed: HashMap<u64, Instant>,
+    indexing: Option<Indexing>,
+    indexed: HashMap<u64, IndexUse>,
+    dirty: HashSet<u64>,
     names: HashMap<u64, Answer<Vec<search::Name>>>,
     naming: Option<(u64, Instant)>,
     texts: HashMap<u64, Answer<search::Text>>,
@@ -267,6 +286,7 @@ impl Panel {
     }
 
     pub(crate) fn close(&mut self) {
+        self.cancel_index();
         self.full_screen = false;
         self.unfocus();
         for viewer in self.places.values_mut().filter_map(|p| p.viewer.as_mut()) {
@@ -275,6 +295,9 @@ impl Panel {
     }
 
     pub(crate) fn unfocus(&mut self) {
+        for usage in self.indexed.values_mut() {
+            usage.focused = false;
+        }
         for place in self.places.values_mut() {
             place.query.focused = false;
             place.query.enter = false;
@@ -307,25 +330,57 @@ impl Panel {
         self.texts.get(&workspace).map(|a| (a.query.as_str(), a.found.as_ref()))
     }
 
-    pub(crate) fn index_request(&mut self, workspace: u64, root: &Path, now: Instant) -> Option<(u64, PathBuf)> {
-        let wanted = self.query(workspace).is_some_and(|q| q.focused || q.wanted().is_some());
-        if !wanted || self.indexing.is_some_and(|(_, at)| now.duration_since(at) < GIVE_UP_AFTER) {
+    fn index_changed(&mut self, workspace: u64) -> bool {
+        let query = self.query(workspace).cloned().unwrap_or_default();
+        let current = IndexUse { query: query.text.trim().into(), focused: query.focused };
+        let changed = self
+            .indexed
+            .get(&workspace)
+            .is_none_or(|old| old.query != current.query || (!old.focused && current.focused));
+        self.indexed.insert(workspace, current);
+        if changed {
+            self.dirty.insert(workspace);
+        }
+        query.focused || query.wanted().is_some()
+    }
+
+    fn cancel_index(&mut self) {
+        if let Some(running) = self.indexing.take() {
+            running.cancel.store(true, Ordering::Relaxed);
+            self.dirty.insert(running.workspace);
+        }
+    }
+
+    pub(crate) fn index_request(&mut self, workspace: u64, root: &Path, now: Instant) -> Option<(u64, Index)> {
+        let wanted = self.index_changed(workspace);
+        if self.indexing.as_ref().is_some_and(|job| job.workspace != workspace || !wanted) {
+            self.cancel_index();
+        }
+        if !wanted {
             return None;
         }
-        let fresh = self.indexed.get(&workspace).is_some_and(|at| now.duration_since(*at) < INDEX_EVERY);
-        if self.index.contains_key(&workspace) && fresh {
+        if let Some(job) = &self.indexing {
+            if !self.dirty.contains(&workspace) && now.duration_since(job.started) < GIVE_UP_AFTER {
+                return None;
+            }
+            self.cancel_index();
+        }
+        if self.index.contains_key(&workspace) && !self.dirty.remove(&workspace) {
             return None;
         }
+        self.dirty.remove(&workspace);
         self.generation += 1;
-        self.indexing = Some((self.generation, now));
-        self.indexed.insert(workspace, now);
-        Some((self.generation, root.to_path_buf()))
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.indexing =
+            Some(Indexing { workspace, generation: self.generation, cancel: Arc::clone(&cancel), started: now });
+        Some((self.generation, Index { root: root.to_path_buf(), cancel }))
     }
 
     pub(crate) fn indexed(&mut self, workspace: u64, generation: u64, paths: Vec<String>) {
-        if self.indexing.is_some_and(|(g, _)| g == generation) {
-            self.indexing = None;
+        if self.indexing.as_ref().is_none_or(|job| job.workspace != workspace || job.generation != generation) {
+            return;
         }
+        self.indexing = None;
         if self.index.get(&workspace).is_none_or(|known| **known != paths) {
             self.index.insert(workspace, Arc::new(paths));
         }
@@ -440,6 +495,13 @@ impl Panel {
         }
         for (folder, entries) in folders {
             let key = (workspace, folder);
+            if self
+                .listings
+                .get(&key)
+                .is_some_and(|known| entries.as_ref().map_or(!known.is_empty(), |entries| entries != known.as_ref()))
+            {
+                self.dirty.insert(workspace);
+            }
             match entries {
                 Some(entries) if self.listings.get(&key).is_some_and(|known| **known == entries) => {}
                 Some(entries) => _ = self.listings.insert(key, Arc::new(entries)),
@@ -494,6 +556,10 @@ impl Panel {
     }
 
     pub(crate) fn forget(&mut self, alive: &HashSet<u64>) {
+        if self.indexing.as_ref().is_some_and(|job| !alive.contains(&job.workspace)) {
+            self.cancel_index();
+        }
+        self.dirty.retain(|id| alive.contains(id));
         self.places.retain(|id, _| alive.contains(id));
         self.listings.retain(|(id, _), _| alive.contains(id));
         self.listed.retain(|id, _| alive.contains(id));

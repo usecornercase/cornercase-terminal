@@ -168,11 +168,11 @@ impl App {
     }
 
     fn refresh_search(&mut self, workspace: u64, root: &Path, now: Instant) {
-        if let Some((generation, root)) = self.panels.files.index_request(workspace, root, now) {
+        if let Some((generation, index)) = self.panels.files.index_request(workspace, root, now) {
             let job = Job::new(Level::Debug, "files", "index").with("workspace", workspace);
             self.spawn_job(
                 job,
-                move || Ok(search::index(&root)),
+                move || Ok(search::index(&index.root, &index.cancel)),
                 move |paths, job| {
                     let paths = paths.unwrap_or_default();
                     job.note("files", paths.len());
