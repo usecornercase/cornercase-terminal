@@ -2,9 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.202
+## 0.12.203
 
 - **A large diff no longer keeps the server busy after you close Changes.** Files, the changes panel and Markdown code blocks now share one highlighter. While Changes is closed, the button's count is read without colouring every hunk, and a refresh does not start another copy of itself while the previous one is still working. A git command or a highlight that runs too long is stopped, and that text stays plain until it changes.
+
+## 0.12.202
+
+- `cornercase changes gap --help` now says that `--hunk N` counts from 0, as the hunks of `changes file` do: `--hunk 1` is the unchanged lines between the first and the second hunk, and the first hunk has no gap. Asking for a hunk with no gap says so too.
 
 ## 0.12.201
 

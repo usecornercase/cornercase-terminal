@@ -18,6 +18,7 @@ use crate::error::Result;
 use crate::git;
 use crate::log::{Job, Level};
 use crate::project::{Hierarchy, Workspace};
+use crate::text;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BaseChange {
@@ -363,7 +364,10 @@ fn gap_reply(at: Replied<'_>, hunk: usize, hunks: usize, lines: Option<Vec<chang
     if hunk < 1 || hunk >= hunks {
         return Err(Refusal::new(
             Code::NotFound,
-            format!("{path} has no gap before hunk {hunk}: it has {hunks} hunks"),
+            format!(
+                "{path} has no gap before hunk {hunk}: it has {}, counted from 0, and the first has none",
+                text::plural(hunks, "hunk", "hunks")
+            ),
         ));
     }
     lines.map(|lines| json(&Gap::of(workspace, path, hunk, &lines))).ok_or_else(|| {

@@ -324,7 +324,7 @@ fn a_missing_file_and_a_gap_out_of_range_are_not_found() {
     assert_eq!(none.code, "not-found");
     let gap = call_later(&mut app, &rx, "changes-gap", &json!({"path": "a.txt", "hunk": 1})).expect_err("refused");
     assert_eq!(gap.code, "not-found");
-    assert!(gap.message.contains("has 1 hunks"), "{}", gap.message);
+    assert!(gap.message.contains("has 1 hunk, counted from 0, and the first has none"), "{}", gap.message);
 }
 
 #[test]

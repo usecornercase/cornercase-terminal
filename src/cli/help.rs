@@ -670,9 +670,9 @@ Examples:
 pub(super) const CHANGES_HELP: &str =
     "`list` prints the changed files of a workspace (the one you are in, or the one --workspace or --worktree names), or of \
 every project with --every, and with --follow keeps printing them as JSON lines each time they change. `file` prints one \
-file's diff, `gap` the unchanged lines before one of its hunks, `base` the branches the Commits and All modes can compare \
-with (naming one sets it, --default goes back to following the default branch), and `viewed` marks a file as viewed or clears \
-the mark. `discard` throws a file's uncommitted changes away (a file git does not track is deleted), asks first on a terminal \
+file's diff, `gap` the unchanged lines between one of its hunks and the one before (hunks count from 0, so the first has \
+no gap), `base` the branches the Commits and All modes can compare with (naming one sets it, --default goes back to \
+following the default branch), and `viewed` marks a file as viewed or clears the mark. `discard` throws a file's uncommitted changes away (a file git does not track is deleted), asks first on a terminal \
 and needs --yes in a script; it cannot be undone. `stage` puts a file's changes in git's index, as `git add` does, and \
 `unstage` takes them out of it; both act on the version `changes file` shows, so a file that changed since is left alone. \
 The modes are uncommitted (the default), \

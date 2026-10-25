@@ -72,7 +72,7 @@ pub(crate) enum ChangesAction {
         #[command(flatten)]
         print: Print,
     },
-    #[command(about = "Print the unchanged lines before a hunk of a file")]
+    #[command(about = "Print the unchanged lines between a hunk of a file and the one before")]
     Gap {
         #[arg(value_name = "PATH", help = "The file, relative to the workspace")]
         path: String,
@@ -80,7 +80,7 @@ pub(crate) enum ChangesAction {
             long,
             value_name = "N",
             required = true,
-            help = "The hunk, counted from 1: its gap is the lines before it"
+            help = "The hunk, counted from 0 as in `changes file`: its gap is the lines between it and the one before"
         )]
         hunk: usize,
         #[command(flatten)]
