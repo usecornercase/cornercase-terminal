@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.196
+
+- A pane that floods output now slows its program instead of building an unbounded backlog in memory. Keys, clicks and script requests keep being handled, and interrupting the program no longer leaves the server busy parsing old output for minutes.
+
 ## 0.12.195
 
 - **A tidier footer: the tools, then More.** Under the lists, **Issues**, **Changes**, **Files** and **TODO** now sit in two columns, and Settings, Usage, Remote, the update and Quit moved into one button, **More ▴**, at the bottom next to **Help**. Click it for **settings**, **usage**, **remote…** (once browser access or a chat bot is set up), **update to x.y.z** when there is one, and **quit**. More turns cyan when an update is waiting and shows a green dot while a browser is attached or you're away on a chat app.
