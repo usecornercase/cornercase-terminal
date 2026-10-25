@@ -177,8 +177,7 @@ pub(in crate::ui) fn draw_ports(f: &mut Frame, view: &View, ports: &Ports) {
     match &ports.confirm {
         Some(confirm) => {
             let scroll = u16::try_from(confirm.scroll).unwrap_or(u16::MAX);
-            let body =
-                Paragraph::new(confirm.lines.clone()).wrap(ratatui::widgets::Wrap { trim: false }).scroll((scroll, 0));
+            let body = Paragraph::new(confirm.lines.clone()).scroll((scroll, 0));
             f.render_widget(body, list);
         }
         None => draw_list(f, view, ports, list),

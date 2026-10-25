@@ -116,3 +116,19 @@ fn a_program_that_no_longer_holds_its_port_is_left_running_after_the_confirmatio
     assert!(toast.contains("no longer listens on port 1"), "{toast}");
     assert!(process::alive(sleeper.pid()));
 }
+
+#[test]
+fn a_confirmation_longer_than_the_dialog_says_to_scroll_until_its_end() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let generation = opened(&mut app);
+    listed(&mut app, generation, (0..30).map(|i| port(10 + i, 3000 + u16::try_from(i).expect("small"))).collect());
+    dialog(&mut app).click(Hit::Stop);
+    let area = Rect::new(0, 0, 60, 20);
+    let note = |app: &mut App| {
+        let Some(Overlay::Ports(dialog)) = &app.overlay else { panic!("the ports dialog is not open") };
+        app.ports_view(dialog, area).note
+    };
+    assert_eq!(note(&mut app), Some(ui::Note::Info("↓ scroll for more".into())));
+    dialog(&mut app).scroll_by(100, 15, 200);
+    assert_eq!(note(&mut app), None);
+}

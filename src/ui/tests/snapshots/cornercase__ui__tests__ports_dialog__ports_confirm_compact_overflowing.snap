@@ -1,0 +1,16 @@
+---
+source: src/ui/tests/ports_dialog.rs
+expression: "snapshot(p, (60, 12))"
+---
+"╭─ Ports › feat/checkout ──────────────────────────────────╮"
+"│ Stop these 4 programs?                                   │"
+"│ • node next dev · pid 48211 · :3000 ·                    │"
+"│ pane 12 · dev                                            │"
+"│   ⚠ it is the agent claude, or a                         │"
+"│ program it started                                       │"
+"│ • node vite · pid 48211 · :5173 ·                        │"
+"│ pane 12 · dev                                            │"
+"│   ⚠ it is the agent claude, or a                         │"
+"│ ↓ scroll for more                                        │"
+"│                                             back   stop  │"
+"╰──────────────────────────────────────────────────────────╯"

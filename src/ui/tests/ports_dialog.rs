@@ -138,3 +138,19 @@ fn stop_is_off_without_ports_and_back_answers_in_the_confirmation() {
     let back = Position::new(area.right() - 13, area.bottom() - 2);
     assert_eq!(ports_hit(screen(BIG), &confirming, back), Some(PortsHit::Back));
 }
+
+#[test]
+fn ports_confirm_compact_overflowing() {
+    let warn = Style::default().fg(Color::Yellow);
+    let mut lines = vec![Line::from("Stop these 4 programs?")];
+    for (command, port) in [("node next dev", 3000), ("node vite", 5173), ("node server.js", 9229)] {
+        lines.push(Line::from(format!("• {command} · pid 48211 · :{port} ·")));
+        lines.push(Line::from("pane 12 · dev"));
+        lines.push(Line::from(Span::styled("  ⚠ it is the agent claude, or a", warn)));
+        lines.push(Line::from(Span::styled("program it started", warn)));
+    }
+    let confirm = ConfirmBody { lines, scroll: 0 };
+    let note = Some(Note::Info("↓ scroll for more".into()));
+    let p = Ports { compact: true, confirm: Some(confirm), note, ..ports() };
+    insta::assert_snapshot!(snapshot(p, (60, 12)));
+}

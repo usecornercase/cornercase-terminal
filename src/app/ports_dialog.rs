@@ -10,6 +10,7 @@ use super::event::AppEvent;
 use super::input::{ListPointer, list_pointer, wheel_span};
 use super::overlay::Overlay;
 use super::toast::Toast;
+use super::worktrees_dialog::wrap;
 use crate::control::contract::Refusal;
 use crate::control::{Item, PortStopped};
 use crate::error::Result;
@@ -189,10 +190,15 @@ impl App {
                 go: row.port.place.pane.is_some(),
             })
             .collect();
+        let compact = area.width < ui::COMPACT_WIDTH;
+        let (_, body) = ui::ports_room(area, compact);
         let confirm = match &dialog.step {
-            Step::Confirm(ports) => Some(ui::ConfirmBody { lines: self.stop_lines(ports), scroll: dialog.body }),
+            Step::Confirm(ports) => {
+                Some(ui::ConfirmBody { lines: wrap(self.stop_lines(ports), body.width), scroll: dialog.body })
+            }
             Step::List => None,
         };
+        let note = self.ports_note(dialog, confirm.as_ref(), body);
         Box::new(ui::Ports {
             title: label.map_or_else(|| "Ports".to_string(), |label| format!("Ports › {label}")),
             empty: dialog.loaded && dialog.rows.is_empty(),
@@ -200,19 +206,23 @@ impl App {
             selected: dialog.cursor.selected,
             scroll: dialog.cursor.scroll,
             ticked: dialog.ticked(),
-            note: self.ports_note(dialog),
+            note,
             confirm,
             can_open: self.can_browse(),
-            compact: area.width < ui::COMPACT_WIDTH,
+            compact,
         })
     }
 
-    fn ports_note(&self, dialog: &Dialog) -> Option<ui::Note> {
+    fn ports_note(&self, dialog: &Dialog, confirm: Option<&ui::ConfirmBody>, body: Rect) -> Option<ui::Note> {
         if self.panels.ports.stopping > 0 {
             return Some(ui::Note::Busy("stopping…"));
         }
         if let Some(error) = &dialog.failed {
             return Some(ui::Note::Error(format!("could not list the ports: {error}")));
+        }
+        if let Some(confirm) = confirm {
+            return (confirm.scroll + usize::from(body.height) < confirm.lines.len())
+                .then(|| ui::Note::Info("↓ scroll for more".into()));
         }
         (!dialog.loaded).then_some(ui::Note::Busy("looking for ports…"))
     }
