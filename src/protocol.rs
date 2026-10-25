@@ -13,13 +13,13 @@ use serde::{Deserialize, Serialize};
 use crate::error::Error;
 use crate::graphics::Support;
 use crate::host::notify::Channel;
-use crate::host::open::{Failed, Open, Opener};
+use crate::host::open::{Browse, Failed, Open, Opener};
 use crate::host::sound::Cue;
 use crate::host::theme::HostTheme;
 use crate::paths;
 use crate::{host::pointer, process};
 
-pub(crate) const VERSION: u32 = 8;
+pub(crate) const VERSION: u32 = 9;
 pub const NESTED_ENV: &str = "CORNERCASE";
 pub(crate) const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
 pub(crate) const BROWSER: &str = "browser";
@@ -63,6 +63,7 @@ pub(crate) enum ServerMessage {
     Response(String),
     Sound(Cue),
     Open(Open),
+    Browse(Browse),
 }
 
 pub(crate) fn send<T: Serialize>(w: &mut impl Write, msg: &T) -> io::Result<()> {

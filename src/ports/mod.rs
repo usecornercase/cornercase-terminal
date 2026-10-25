@@ -1,11 +1,14 @@
 use std::collections::BTreeMap;
 use std::net::IpAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use crate::process;
+use crate::host::open::Browse;
 use crate::process::owners::{Owner, Trees, folder, owner, trees};
+use crate::{process, text};
 
+pub(crate) mod dialog;
 pub(crate) mod listen;
+pub(crate) mod stop;
 
 use listen::Listener;
 
@@ -56,13 +59,25 @@ pub(crate) struct Port {
     pub(crate) pid: i32,
     pub(crate) program: Option<String>,
     pub(crate) args: Vec<String>,
+    pub(crate) started: Option<u64>,
     pub(crate) place: Place,
 }
 
 impl Port {
-    pub(crate) fn url(&self) -> String {
-        format!("http://{}:{}", host(&self.addresses), self.number)
+    pub(crate) fn browse(&self) -> Browse {
+        Browse { ip: host(&self.addresses), port: self.number }
     }
+
+    pub(crate) fn url(&self) -> String {
+        self.browse().url()
+    }
+}
+
+pub(crate) fn command_line(program: Option<&str>, args: &[String], width: usize) -> String {
+    let first = args.first().and_then(|arg| Path::new(arg).file_name()?.to_str());
+    let name = program.or(first).unwrap_or("?");
+    let line = std::iter::once(name).chain(args.iter().skip(1).map(String::as_str)).collect::<Vec<_>>().join(" ");
+    text::truncate_right(&line, width)
 }
 
 pub(crate) fn scan(places: &Places, only: Option<u64>) -> Vec<Port> {
@@ -76,6 +91,7 @@ pub(crate) fn scan(places: &Places, only: Option<u64>) -> Vec<Port> {
             pid,
             program: process::name(pid),
             args: process::args(pid),
+            started: process::start_stamp(pid),
             place: attribution.place(pid),
         })
         .filter(|port| only.is_none() || port.place.workspace == only)
@@ -96,17 +112,13 @@ pub(crate) fn merge(listeners: Vec<Listener>) -> BTreeMap<(i32, u16), Vec<IpAddr
     merged
 }
 
-pub(crate) fn host(addresses: &[IpAddr]) -> String {
+pub(crate) fn host(addresses: &[IpAddr]) -> Option<IpAddr> {
     let local = |a: &IpAddr| a.is_unspecified() || (a.is_ipv4() && a.is_loopback());
     if addresses.iter().any(local) {
-        return "localhost".into();
+        return None;
     }
     let chosen = addresses.iter().find(|a| a.is_ipv4()).or_else(|| addresses.iter().find(|a| !a.is_loopback()));
-    match chosen.or_else(|| addresses.first()) {
-        Some(IpAddr::V4(v4)) => v4.to_string(),
-        Some(IpAddr::V6(v6)) => format!("[{v6}]"),
-        None => "localhost".into(),
-    }
+    chosen.or_else(|| addresses.first()).copied()
 }
 
 pub(crate) struct Attribution<'a> {

@@ -70,6 +70,7 @@ pub use dialog::menu::{menu_area, menu_item};
 pub(crate) use dialog::picker::{Entry, Picker, PickerHit, picker_hit, picker_list};
 pub use dialog::picker::{picker_area, picker_buttons, picker_item};
 pub(crate) use dialog::popup::{Popup, Wanted as PopupWanted, popup_close, popup_inner, popup_size};
+pub(crate) use dialog::ports::{ConfirmBody, PortRow, Ports, PortsHit, ports_hit, ports_room};
 #[cfg(test)]
 pub(crate) use dialog::project_settings::project_settings_buttons;
 pub(crate) use dialog::project_settings::{
@@ -161,6 +162,7 @@ use dialog::group_style::draw_group_style;
 use dialog::issues::draw_issues;
 use dialog::menu::draw_menu;
 use dialog::picker::draw_picker;
+use dialog::ports::draw_ports;
 use dialog::project_settings::draw_project_settings;
 use dialog::search::draw_results;
 use dialog::settings::draw_settings;
@@ -460,6 +462,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::StartFlow(start)) => draw_start_flow(f, view, start),
         Some(Overlay::ProjectSettings(settings)) => draw_project_settings(f, view, settings),
         Some(Overlay::Worktrees(worktrees)) => draw_worktrees(f, view, worktrees),
+        Some(Overlay::Ports(ports)) => draw_ports(f, view, ports),
         Some(Overlay::Popup(popup)) => dialog::popup::draw(f, view, popup),
         Some(Overlay::Search(search)) if search.showing_results() => draw_results(f, view, search, areas.results),
         Some(Overlay::Keys(menu)) => keys::draw(f, view, menu, areas.pane),

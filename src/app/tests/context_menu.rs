@@ -11,7 +11,7 @@ fn a_project_offers_rename_project() {
 fn a_workspace_offers_rename_workspace() {
     let (mut app, _rx, _dirs) = app_with(1);
     right_click_row(&mut app, WorkspaceRow::Workspace(0));
-    assert_eq!(menu_labels(&app), ["rename workspace", "copy path"]);
+    assert_eq!(menu_labels(&app), ["rename workspace", "copy path", "ports"]);
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn the_menu_button_of_a_project_opens_its_menu() {
 }
 
 #[rstest::rstest]
-#[case::a_workspace(WorkspaceRow::Workspace(0), vec!["rename workspace", "copy path"])]
+#[case::a_workspace(WorkspaceRow::Workspace(0), vec!["rename workspace", "copy path", "ports"])]
 #[case::a_tab(WorkspaceRow::Tab(0, 0), vec!["rename tab"])]
 fn the_menu_button_of_a_row_opens_its_menu(#[case] row: WorkspaceRow, #[case] labels: Vec<&str>) {
     let (mut app, _rx, _dirs) = app_with(1);

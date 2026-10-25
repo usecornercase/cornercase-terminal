@@ -34,3 +34,26 @@ fn a_server_started_in_a_tab_is_listed_with_its_pane_and_url() {
         "{text}"
     );
 }
+
+#[test]
+fn ports_stop_ends_the_server_of_a_tab_and_frees_its_port() {
+    let app = Harness::start();
+    let pane = app.session.says(&["new-tab", "--name", "server", "--", LISTEN]);
+    let id: u64 = pane.parse().expect("a pane id");
+    let mut port = None;
+    wait_until("the server listens", || {
+        port = ports(&app.session, &[]).iter().find(|p| p["pane"] == id).and_then(|p| p["port"].as_u64());
+        port.is_some()
+    });
+    let port = port.expect("a port").to_string();
+
+    let stopped: Value = serde_json::from_str(&app.session.says(&["ports", "stop", &port, "--json"])).expect("json");
+
+    assert_eq!((stopped["port"].to_string(), stopped["outcome"].as_str()), (port.clone(), Some("stopped")));
+    assert!(
+        ports(&app.session, &["--all"]).iter().all(|p| p["port"].as_u64().map(|n| n.to_string()) != Some(port.clone()))
+    );
+    let again = app.session.cli(&["ports", "stop", &port]);
+    assert_eq!(again.status.code(), Some(1), "{again:?}");
+    assert!(String::from_utf8_lossy(&again.stderr).contains(&format!("nothing listens on port {port}")), "{again:?}");
+}

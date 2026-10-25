@@ -256,6 +256,18 @@ pub(super) mod a_bug {
         }
 
         pub(super) fn click_on(&mut self, text: &str) {
+            let (column, row) = self.find(text);
+            self.click(column, row);
+        }
+
+        pub(super) fn right_click_on(&mut self, text: &str) {
+            let (column, row) = self.find(text);
+            for kind in [MouseEventKind::Down(MouseButton::Right), MouseEventKind::Up(MouseButton::Right)] {
+                self.input(Event::Mouse(MouseEvent { kind, column, row, modifiers: KeyModifiers::NONE }));
+            }
+        }
+
+        fn find(&mut self, text: &str) -> (u16, u16) {
             self.shows(text);
             let rows = self.screen.screen().rows(0, COLS).collect::<Vec<_>>();
             let (row, column) = rows
@@ -265,7 +277,7 @@ pub(super) mod a_bug {
                 .find_map(|(y, line)| Some((y, line.find(text)?)))
                 .expect("the text is on screen");
             let column = u16::try_from(rows[row][..column].chars().count()).expect("on screen");
-            self.click(column + 1, u16::try_from(row).expect("on screen"));
+            (column + 1, u16::try_from(row).expect("on screen"))
         }
 
         pub(super) fn type_line(&self, line: &str) {

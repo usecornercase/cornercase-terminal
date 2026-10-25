@@ -107,6 +107,7 @@ pub(super) enum MenuAction {
     StartFlow(u64),
     ProjectSettings(u64),
     Worktrees(u64),
+    Ports(u64),
     RunSetup(u64),
     OpenIn(Subject),
     OpenWith(Subject, Opener),
@@ -177,6 +178,7 @@ impl App {
             MenuAction::StartFlow(_) => "start a flow…".into(),
             MenuAction::ProjectSettings(_) => "project settings".into(),
             MenuAction::Worktrees(_) => "worktrees".into(),
+            MenuAction::Ports(_) => "ports".into(),
             MenuAction::RunSetup(_) => "run setup".into(),
             MenuAction::OpenIn(_) => "open in…".into(),
             MenuAction::OpenWith(_, opener) => opener.name().into(),
@@ -230,8 +232,8 @@ impl App {
             _ => None,
         };
         let open = match target {
-            Target::Workspace(_, workspace) => Some(self.open_entry(Subject::Workspace(workspace))),
-            _ => None,
+            Target::Workspace(_, workspace) => self.workspace_tools(workspace).to_vec(),
+            _ => Vec::new(),
         };
         std::iter::once(MenuAction::Rename(target))
             .chain(more)
@@ -242,6 +244,10 @@ impl App {
             .chain(open)
             .chain(spot.map(|spot| self.plugin_menu(spot)).unwrap_or_default())
             .collect()
+    }
+
+    fn workspace_tools(&self, workspace: u64) -> [MenuAction; 2] {
+        [self.open_entry(Subject::Workspace(workspace)), MenuAction::Ports(workspace)]
     }
 
     pub(super) fn menu_action(&mut self, action: MenuAction, at: Position, area: Rect) -> Result<()> {
@@ -317,6 +323,7 @@ impl App {
             MenuAction::StartFlow(project) => self.open_start_flow(self.start_flow_in(project)),
             MenuAction::ProjectSettings(project) => self.open_project_settings(project),
             MenuAction::Worktrees(project) => self.open_worktrees(Some(project)),
+            MenuAction::Ports(workspace) => self.open_ports(workspace),
             MenuAction::RunSetup(workspace) => self.run_setup(workspace, area),
             MenuAction::OpenIn(subject) => self.open_in_menu(subject, at),
             MenuAction::OpenWith(subject, opener) => self.open_with(subject, opener),

@@ -834,6 +834,15 @@ From a pane it lists that pane's workspace, elsewhere the one shown; `--workspac
 
 With `--json` it prints `{"ports": [...]}`, each with every key present (`null` when it does not apply): `port`, `addresses`, `url`, `pid`, `program`, `args` (the program's command line), `project`, `workspace`, `pane`, `via` (`pane`, `agent` or `cwd`; `null` for no workspace) and `agent` (the agent's name when `via` is `agent`). It is the request `{"command": "ports", "args": {"workspace": 4, "all": false}}`, answered once the server has looked; an older server answers that it has no `ports` command.
 
+The text shows each program with its arguments cut to 40 characters; `--json` keeps `args` whole. The [Ports dialog](../projects-workspaces-tabs/#ports-a-workspace-listens-on) in a workspace's menu shows the same list.
+
+```sh
+cornercase ports stop 5173
+cornercase ports stop 3000 --pid 48211 --json
+```
+
+`ports stop PORT` stops the program of a workspace that listens on that port, as the dialog's **stop** does: it checks that the program still holds the port, sends it `SIGTERM`, waits up to three seconds for the port to be released, then sends `SIGKILL`. Only that process gets the signals, never the shell or agent that started it. It prints `stopped node (pid 48211) on port 5173`, `killed …` when it ignored `SIGTERM`, or that it is still running, and exits 1 in that last case. It refuses a port no program listens on, and one held by a program of no workspace (the ones only `--all` lists), so it never stops a program outside your workspaces. When several programs listen on the port, `--pid` says which. With `--json` it prints `{"port", "pid", "program", "outcome"}`, `outcome` being `stopped`, `killed` or `still-running`; it is the request `{"command": "stop-port", "args": {"port": 5173, "pid": null}}`.
+
 Ports published by Docker (`docker run -p`, `docker compose up`) are held by Docker's own process, not by the `docker` command in your tab, so they belong to no workspace: on macOS they show only with `--all`, and on Linux, where Docker's proxy runs as root, not at all. A program of another user, or one in a container or another network namespace, is not seen either.
 
 ### Stats

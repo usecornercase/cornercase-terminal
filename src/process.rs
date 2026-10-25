@@ -11,7 +11,9 @@ use std::time::{Duration, Instant};
 use rustix::io::Errno;
 use rustix::process::{Pid, Signal, kill_process_group, test_kill_process};
 
-pub(crate) use imp::{all, args, children, cwd, env, footprint, name, open_files, parent, peer_uid, started};
+pub(crate) use imp::{
+    all, args, children, cwd, env, footprint, name, open_files, parent, peer_uid, start_stamp, started,
+};
 
 pub(crate) mod owners;
 
@@ -209,6 +211,10 @@ mod imp {
         rest.split_whitespace().nth(19)?.parse().ok()
     }
 
+    pub(crate) fn start_stamp(pid: i32) -> Option<u64> {
+        started(pid)
+    }
+
     pub(crate) fn parent(pid: i32) -> Option<i32> {
         let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
         let rest = stat.rsplit_once(')')?.1;
@@ -324,6 +330,11 @@ mod imp {
         let info: libc::proc_bsdinfo = pid_info(pid, libc::PROC_PIDTBSDINFO)?;
         i32::try_from(info.pbi_ppid).ok()
     }
+
+    pub(crate) fn start_stamp(pid: i32) -> Option<u64> {
+        let info: libc::proc_bsdinfo = pid_info(pid, libc::PROC_PIDTBSDINFO)?;
+        Some(info.pbi_start_tvsec.saturating_mul(1_000_000).saturating_add(info.pbi_start_tvusec))
+    }
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
@@ -371,6 +382,10 @@ mod imp {
     }
 
     pub(crate) fn parent(_pid: i32) -> Option<i32> {
+        None
+    }
+
+    pub(crate) fn start_stamp(_pid: i32) -> Option<u64> {
         None
     }
 }

@@ -334,7 +334,7 @@ Type the new name and press `Enter`. Leave the name empty to go back to the auto
 
 ## Open in another app
 
-The menu of a project or a workspace row (` ⋯ ` or right-click, in every layout) ends with **open in…**. It opens a second menu with what your computer has: **Finder** on macOS or your **file manager** on Linux, then **VS Code**, **Cursor**, **Zed** and **Sublime Text**, each only when it is installed:
+The menu of a project or a workspace row (` ⋯ ` or right-click, in every layout) has **open in…** (the last entry of a project's menu, followed by **ports** in a workspace's). It opens a second menu with what your computer has: **Finder** on macOS or your **file manager** on Linux, then **VS Code**, **Cursor**, **Zed** and **Sublime Text**, each only when it is installed:
 
 <Screen
   name="open-in"
@@ -346,6 +346,21 @@ The menu of a project or a workspace row (` ⋯ ` or right-click, in every layou
 - The [pane menu](../panes-and-splits/) has the same entry for the folder the program in that pane is in, following your `cd`; the [files panel](../files/#pick-lines-and-act-on-them) opens the file you are reading, and a right-click on a file or folder in its tree opens the same menu.
 - A command on your `PATH` is enough for an editor (`code`, `cursor`, `zed`, `subl`; on Linux Zed's command is often `zeditor`). On macOS an app in `/Applications` or `~/Applications` works without its command.
 - It opens on the computer your window is on. In a window from [`cornercase remote`](../remote/), your [phone's browser](../phone/) or an `ssh` session, the folders are on the other computer, so the menus show **copy path** instead, which copies the folder's path to your clipboard. If an app can't start, the toast says `could not open in VS Code: exit status 1`; see [troubleshooting](../../help/troubleshooting/#open-in-shows-copy-path-or-misses-an-app).
+
+## Ports a workspace listens on
+
+**ports** in a workspace's menu (` ⋯ ` or right-click) lists the TCP ports its programs listen on: the dev servers, Storybooks and debuggers its tabs started, whether you or an agent started them. Each row has the address to open (`http://localhost:5173`), the program, its pid and where it runs: `pane 12 · dev`, `agent claude · pane 9 · claude` when the agent or something it started listens there, or `in the worktree, no tab` for a program started elsewhere (another terminal, say) that works in the workspace's own worktree. A workspace without a worktree of its own counts only what its tabs started, since it shares its folder with others. The list refreshes every two seconds while it is open; with nothing listening it says `Nothing in this workspace is listening on a port.`
+
+Hover a row, or pick it with the arrows, for its buttons:
+
+- **copy** copies the address.
+- **open** opens it in your browser. It shows only in a window on the computer the server runs on: in a window from [`cornercase remote`](../remote/), your [phone's browser](../phone/) or an `ssh` session, `localhost` is the other computer, so **copy** is what you get, and the toast says so.
+- **go** shows the tab the program runs in (when a tab started it).
+- **stop** stops that program, after a confirmation that names it, its port and its tab, and warns when it is an agent (or something an agent started) or a program no tab started.
+
+Tick rows (click their circle, or `Space`) and **stop 2** stops those; with nothing ticked the button reads **stop all** and stops every port of the workspace, again after a confirmation. Stopping sends `SIGTERM` to the program holding the port, waits up to three seconds for it to let the port go, then sends `SIGKILL`. Only that program gets the signal, not the shell or agent that started it, and a program that no longer holds its port by then is left alone. A toast says what happened. Scripts and agents get the same list and stop with [`cornercase ports`](../scripts-and-agents/#ports).
+
+Ports published by Docker (`docker run -p`, `docker compose up`) are held by Docker, not by the tab that ran the command, so they don't show in a workspace's list.
 
 ## Close
 

@@ -670,6 +670,10 @@ impl App {
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),
             Command::Usage(usage) => Ok(self.usage_request(client, &usage, now)),
             Command::Ports(ports) => self.ports_request(client, asker, &ports),
+            Command::StopPort(stop) => {
+                self.stop_port_request(client, &stop);
+                Ok(None)
+            }
             Command::Tour(tour) => self.tour_request(&tour),
             Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),
             Command::PluginActions(actions) => Ok(Some(self.plugin_actions_request(&actions))),

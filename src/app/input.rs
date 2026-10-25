@@ -52,7 +52,7 @@ impl App {
             Some(Overlay::Flows { .. }) => self.flows_key(key, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_key(key, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_key(key, area),
-            Some(Overlay::Worktrees(_)) => self.worktrees_key(key, area),
+            Some(Overlay::Worktrees(_) | Overlay::Ports(_)) => self.listing_key(key, area),
             Some(Overlay::CloseAgent(_)) => self.close_agent_key(key, area),
             Some(Overlay::CloseAgents(_)) => self.close_agents_key(key, area),
             Some(Overlay::Usage) => {
@@ -503,4 +503,21 @@ pub(super) fn wheel(kind: MouseEventKind) -> Option<isize> {
         MouseEventKind::ScrollDown => Some(WHEEL_ROWS),
         _ => None,
     }
+}
+
+pub(super) enum ListPointer {
+    Wheel(isize),
+    Press,
+}
+
+pub(super) fn list_pointer(kind: MouseEventKind) -> Option<ListPointer> {
+    match (wheel(kind), kind) {
+        (Some(delta), _) => Some(ListPointer::Wheel(delta)),
+        (None, MouseEventKind::Down(MouseButton::Left)) => Some(ListPointer::Press),
+        _ => None,
+    }
+}
+
+pub(super) fn wheel_span((rows, body): (usize, Rect), confirm_lines: Option<usize>) -> (usize, usize) {
+    confirm_lines.map_or((rows, 0), |lines| (usize::from(body.height), lines))
 }

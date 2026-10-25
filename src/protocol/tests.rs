@@ -253,6 +253,13 @@ mod compatibility {
     }
 
     #[test]
+    fn a_browse_comes_after_every_older_server_variant_and_round_trips() {
+        let browse = Browse { ip: Some("::1".parse().expect("an address")), port: 5173 };
+        assert_eq!(postcard::to_stdvec(&ServerMessage::Browse(browse)).expect("encode")[0], 8);
+        assert!(matches!(round_trip(&ServerMessage::Browse(browse)), ServerMessage::Browse(b) if b == browse));
+    }
+
+    #[test]
     fn opens_and_failures_round_trip() {
         assert!(matches!(round_trip(&ServerMessage::Open(order())), ServerMessage::Open(o) if o == order()));
         assert!(

@@ -202,6 +202,7 @@ impl Command {
             }
             Self::Usage(usage) => usage.fields(fields),
             Self::Ports(ports) => ports.fields(fields),
+            Self::StopPort(stop) => stop.fields(fields),
             Self::Tour(tour) => tour.fields(fields),
             Self::PluginActions(actions) => actions.fields(fields),
             Self::PluginRun(run) => run.fields(fields),

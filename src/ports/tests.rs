@@ -51,7 +51,8 @@ mod urls {
         #[case] wanted: &str,
     ) {
         let addresses: Vec<IpAddr> = addresses.iter().map(|a| ip(a)).collect();
-        assert_eq!(host(&addresses), wanted);
+        let url = crate::host::open::Browse { ip: host(&addresses), port: 80 }.url();
+        assert_eq!(url, format!("http://{wanted}:80"));
     }
 }
 

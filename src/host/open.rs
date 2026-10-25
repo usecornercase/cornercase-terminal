@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::fmt::Write;
+use std::net::IpAddr;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -79,6 +80,22 @@ pub(crate) struct Open {
     pub(crate) opener: Opener,
     pub(crate) path: String,
     pub(crate) line: Option<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Browse {
+    pub(crate) ip: Option<IpAddr>,
+    pub(crate) port: u16,
+}
+
+impl Browse {
+    pub(crate) fn url(&self) -> String {
+        match self.ip {
+            None => format!("http://localhost:{}", self.port),
+            Some(IpAddr::V4(ip)) => format!("http://{ip}:{}", self.port),
+            Some(IpAddr::V6(ip)) => format!("http://[{ip}]:{}", self.port),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -207,6 +224,19 @@ impl Openers {
         }
         steps.push(step(launcher, &[parent]));
         steps
+    }
+
+    pub(crate) fn can_browse(&self) -> bool {
+        self.found.iter().any(|(opener, _)| *opener == Opener::Default)
+    }
+
+    pub(crate) fn browse(&self, browse: Browse, failed: impl FnOnce(Failed) + Send + 'static) {
+        let Some(launcher) = self.launcher.clone().filter(|_| self.can_browse()) else { return };
+        thread::spawn(move || {
+            if let Err(reason) = run(&[step(&launcher, &[browse.url().into()])]) {
+                failed(Failed { opener: Opener::Default, reason });
+            }
+        });
     }
 
     pub(crate) fn open(&self, open: &Open, failed: impl FnOnce(Failed) + Send + 'static) {

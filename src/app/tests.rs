@@ -547,6 +547,7 @@ mod picker;
 mod plugin_buttons;
 mod plugin_popup;
 mod plugins;
+mod ports_dialog;
 mod project_settings;
 mod projects;
 mod remove_worktree;

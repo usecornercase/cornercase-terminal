@@ -139,6 +139,7 @@ mod overlay;
 mod pane_footer;
 mod picker;
 mod plugin_buttons;
+mod ports_dialog;
 mod queue;
 mod reorder;
 mod resuming;

@@ -662,6 +662,12 @@ impl Server {
                 client.send(ServerMessage::Open(open));
             }
         }
+        for (id, browse) in app.take_browses() {
+            if let Some(client) = clients.iter().find(|c| c.id == id && c.screen.is_some() && !c.browser) {
+                log::info!("server", "browse sent", client = id, port = browse.port);
+                client.send(ServerMessage::Browse(browse));
+            }
+        }
     }
 
     fn due(&self, now: Instant) -> bool {

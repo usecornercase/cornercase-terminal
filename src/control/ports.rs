@@ -56,3 +56,26 @@ impl PortInfo {
         }
     }
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct StopPort {
+    pub(crate) port: u16,
+    pub(crate) pid: Option<i32>,
+}
+
+impl StopPort {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.add("port", self.port);
+        fields.maybe("pid", self.pid);
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct PortStopped {
+    pub(crate) port: u16,
+    pub(crate) pid: i32,
+    pub(crate) program: Option<String>,
+    pub(crate) outcome: String,
+}

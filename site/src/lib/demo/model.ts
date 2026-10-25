@@ -186,6 +186,7 @@ export type MenuAction =
   | { kind: 'openIn' }
   | { kind: 'sendTodo'; todo: number; pane: number }
   | { kind: 'worktrees'; project: number }
+  | { kind: 'ports'; workspace: number }
   | { kind: 'help'; item: HelpItem }
   | { kind: 'more'; item: MoreItem };
 

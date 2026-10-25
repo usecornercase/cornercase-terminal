@@ -135,6 +135,7 @@ fn every_menu_action() -> Vec<MenuAction> {
         MenuAction::Tour(0),
         MenuAction::PluginButton { plugin: 0, revision: 0 },
         MenuAction::More(MoreItem::Settings),
+        MenuAction::Ports(1),
     ]);
     actions
 }
@@ -184,6 +185,12 @@ fn menu_index(action: &MenuAction) -> usize {
         MenuAction::StartFlow(_) => 16,
         MenuAction::ProjectSettings(_) => 17,
         MenuAction::RunSetup(_) => 18,
+        other => later_menu_index(other),
+    }
+}
+
+fn later_menu_index(action: &MenuAction) -> usize {
+    match action {
         MenuAction::OpenIn(_) => 19,
         MenuAction::OpenWith(..) => 20,
         MenuAction::CopyPath(_) => 21,
@@ -203,6 +210,8 @@ fn menu_index(action: &MenuAction) -> usize {
         MenuAction::Tour(_) => 35,
         MenuAction::PluginButton { .. } => 36,
         MenuAction::More(_) => 37,
+        MenuAction::Ports(_) => 38,
+        other => panic!("{other:?} is counted by menu_index"),
     }
 }
 

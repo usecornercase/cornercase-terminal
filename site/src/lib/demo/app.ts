@@ -147,6 +147,7 @@ const HELP_LABELS: Record<HelpItem, string> = {
 const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'quit'];
 const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
 const WORKTREES_NEED = 'this needs cornercase on your computer: the demo has no worktrees on disk to list';
+const PORTS_NEED = 'this needs cornercase on your computer: the demo runs no servers';
 const SETUP_NEEDS = 'this needs cornercase on your computer: the demo runs no setup scripts';
 const SHARE_NEEDS = 'this needs cornercase on your computer: the demo has no settings to copy or import';
 
@@ -2468,6 +2469,7 @@ export class App {
     if (target.kind === 'workspace' && this.runOf(target.workspace)) actions.push({ kind: 'showFlow', workspace: target.workspace });
     if (target.kind === 'workspace') actions.push(...this.closedAgentsMenu(target.workspace));
     if (target.kind === 'project' || target.kind === 'workspace') actions.push({ kind: 'openIn' });
+    if (target.kind === 'workspace') actions.push({ kind: 'ports', workspace: target.workspace });
     this.overlay = { kind: 'menu', at, actions };
     this.dirty();
   }
@@ -2513,6 +2515,7 @@ export class App {
     if (a.kind === 'help') return HELP_LABELS[a.item];
     if (a.kind === 'more') return a.item;
     if (a.kind === 'worktrees') return 'worktrees';
+    if (a.kind === 'ports') return 'ports';
     return a.action;
   }
 
@@ -2586,6 +2589,7 @@ export class App {
     else if (a.kind === 'help') this.helpAction(a.item);
     else if (a.kind === 'more') this.moreAction(a.item);
     else if (a.kind === 'worktrees') this.bug(WORKTREES_NEED);
+    else if (a.kind === 'ports') this.bug(PORTS_NEED);
     else this.paneAction(a.pane, a.action);
     this.dirty();
   }

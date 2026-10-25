@@ -8,7 +8,7 @@ use super::form::Toggle;
 use super::settings::settings_area;
 use super::{
     Note, draw_input, draw_note, draw_secondary, draw_submit, draw_tick, draw_waiting, first_visible_by, form_inner,
-    list_item_by, pick_background, right_aligned,
+    item_at, list_item_by, pick_background, right_aligned,
 };
 use crate::text::{truncate_left, truncate_right};
 use crate::ui::View;
@@ -172,13 +172,8 @@ pub(crate) fn worktrees_hit(screen: Rect, view: &Worktrees, pos: Position) -> Op
     if filter.contains(pos) {
         return Some(WorktreesHit::Filter);
     }
-    if !list.contains(pos) {
-        return None;
-    }
-    let step = pitch(view.compact);
-    let i = first_visible_by(list, view.rows.len(), view.scroll, step) + usize::from((pos.y - list.y) / step);
+    let (i, rect) = item_at(list, (view.rows.len(), view.scroll), pitch(view.compact), pos)?;
     let row = view.rows.get(i)?;
-    let rect = list_item_by(list, view.rows.len(), view.scroll, i, step);
     if row.changes && changes_rect(rect, view.compact).contains(pos) {
         return Some(WorktreesHit::Changes(i));
     }

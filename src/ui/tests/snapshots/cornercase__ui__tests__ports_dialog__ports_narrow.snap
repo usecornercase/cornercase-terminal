@@ -1,0 +1,18 @@
+---
+source: src/ui/tests/ports_dialog.rs
+expression: "snapshot(ports(), (90, 14))"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                "
+"  ╭─ Ports › feat/checkout ────────────────────────────────────────────────────────────╮  "
+" P│ ▌○ http://localhost:3000  node next dev          pid 48211   copy  open  go  stop  │  "
+"  │  ✓ http://localhost:5173  node vite              pid 48390    agent claude · pane  │  "
+"▌ │  ○ http://localhost:6006  node storybook dev -…  pid 51007    in the worktree, no  │  "
+"  │  ○ http://[::1]:9229      node --inspect serve…  pid 51200    pane 14 · api        │  "
+"  │                                                                                    │  "
+"  │                                                                                    │  "
+"  │                                                                                    │  "
+"  │                                                                                    │  "
+"  │                                                                                    │  "
+" ─│                                                                     stop 1   done  │  "
+"  ╰────────────────────────────────────────────────────────────────────────────────────╯  "
+"  More ▴                 Help  │                         │                                "

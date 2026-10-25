@@ -5,6 +5,7 @@ pub(super) mod issues;
 pub(super) mod menu;
 pub(super) mod picker;
 pub(super) mod popup;
+pub(super) mod ports;
 pub(super) mod project_settings;
 pub(crate) mod queue;
 pub(super) mod search;
@@ -27,6 +28,7 @@ use super::dialog::flows::{Flows, flows_area};
 use super::dialog::form::{Confirm, Form, form_area};
 use super::dialog::issues::{Issues, issues_area};
 use super::dialog::picker::{Picker, picker_area};
+use super::dialog::ports::{Ports, ports_area};
 use super::dialog::search::Search;
 use super::dialog::settings::{Settings, settings_area};
 use super::dialog::start_flow::StartFlow;
@@ -83,6 +85,14 @@ pub(super) fn list_item_by(list: Rect, items: usize, scroll: usize, i: usize, pi
     };
     let y = list.y.saturating_add(u16::try_from(row).unwrap_or(u16::MAX).saturating_mul(pitch));
     Rect::new(list.x, y, list.width, pitch).intersection(list)
+}
+
+pub(super) fn item_at(list: Rect, (items, scroll): (usize, usize), pitch: u16, pos: Position) -> Option<(usize, Rect)> {
+    if !list.contains(pos) {
+        return None;
+    }
+    let i = first_visible_by(list, items, scroll, pitch) + usize::from((pos.y - list.y) / pitch.max(1));
+    (i < items).then(|| (i, list_item_by(list, items, scroll, i, pitch)))
 }
 
 fn row_of(row: Rect, x: u16, width: u16) -> Rect {
@@ -144,6 +154,7 @@ pub(crate) enum Overlay {
     Search(Search),
     Keys(keys::Keys),
     Worktrees(Box<Worktrees>),
+    Ports(Box<Ports>),
     Popup(Box<popup::Popup>),
 }
 
@@ -165,6 +176,7 @@ impl Overlay {
             Self::Flows(_) | Self::StartFlow(_) => Some(flows_area(area)),
             Self::ProjectSettings(_) => Some(project_settings::project_settings_area(area)),
             Self::Worktrees(w) => Some(worktrees_area(area, w.compact)),
+            Self::Ports(p) => Some(ports_area(area, p.compact)),
             Self::Popup(p) => Some(popup::popup_area(area, p.wanted)),
             Self::Menu { .. } | Self::Search(_) | Self::Keys(_) => None,
         }
