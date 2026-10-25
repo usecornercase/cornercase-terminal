@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.202
+
+- `cornercase changes gap --help` now says that `--hunk N` counts from 0, as the hunks of `changes file` do: `--hunk 1` is the unchanged lines between the first and the second hunk, and the first hunk has no gap. Asking for a hunk with no gap says so too.
+
 ## 0.12.201
 
 - **`cornercase config import --preview` shows a shared setup without applying it.** It prints what would change, section by section, and exits 0, without asking and without writing `config.json`. `--json` prints the same preview a program can draw, so a settings window can show the changes and the notes, then import the chosen sections with `--only` and `--yes`. A file that is not a setup, or one that does not fit this machine, still exits with 1 and changes nothing.
