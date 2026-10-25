@@ -57,7 +57,7 @@ fn queue_removals_print_undo_numbers_and_restore_the_saved_entry() {
     let removed: Value = serde_json::from_str(&app.session.says(&["queue", "remove", &id, "--json"])).expect("removal");
     assert_eq!(removed["entries"], before["entries"]);
     let undo = removed["undo"].as_u64().expect("undo number");
-    assert!(app.session.says(&["queue", "restore", &undo.to_string()]).is_empty());
+    assert_eq!(app.session.says(&["queue", "restore", &undo.to_string()]), "");
 
     let next = app.session.says(&["queue", "remove", &id]);
     assert_eq!(next, (undo + 1).to_string());
@@ -70,7 +70,7 @@ fn queue_removals_print_undo_numbers_and_restore_the_saved_entry() {
 #[test]
 fn clearing_an_empty_started_history_prints_no_undo() {
     let app = Harness::start();
-    assert!(app.session.says(&["queue", "clear-started"]).is_empty());
+    assert_eq!(app.session.says(&["queue", "clear-started"]), "");
     let empty: Value = serde_json::from_str(&app.session.says(&["queue", "clear-started", "--json"])).expect("empty");
     assert_eq!(empty, serde_json::json!({"entries": []}));
     let refused = app.session.command().args(["queue", "restore", "999"]).output().expect("restore refused");
