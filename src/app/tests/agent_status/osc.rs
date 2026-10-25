@@ -96,7 +96,9 @@ fn the_result_survives_the_agents_exit_and_does_not_override_the_next_agent(
     report(&mut w, state, 1);
     let Fake::Claude(claude, _) = &w.agents[0] else { panic!("Claude fake") };
     claude.signal("quit");
-    watch_until(&mut w.app, &w.rx, "the agent exits", |a| tab_term(a, 0, 0).shell_in_foreground());
+    watch_until(&mut w.app, &w.rx, "the agent exits with its result kept", |a| {
+        tab_term(a, 0, 0).shell_in_foreground() && status(a, 0, 0) == Some(expected)
+    });
     assert_eq!(status(&w.app, 0, 0), Some(expected));
     click_row(&mut w.app, WorkspaceRow::Tab(0, 0));
     tick(&mut w.app);
