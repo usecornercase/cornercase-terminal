@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.204
+
+- **See and stop a workspace's dev servers.** A workspace's menu (` ⋯ ` or right-click) has **ports**: every port its programs listen on, with the address, the program, its pid and the tab it runs in (or the agent that started it), refreshed every two seconds. Each row can **copy** the address, **open** it in your browser, **go** to its tab and **stop** it; tick several to stop them together, or stop them all. Stopping always asks first, warns when it's an agent's or a program no tab started, sends `SIGTERM`, then `SIGKILL` after three seconds, and only to the program holding the port, never the shell or agent that started it.
+- **open** works in a window on the server's own computer. In a remote window, your phone's browser or over `ssh`, the address is copied instead, since `localhost` there is the other machine.
+- **`cornercase ports stop PORT`** stops a workspace's program on that port the same way, for scripts and agents, and says whether it stopped, had to be killed or is still running.
+- `cornercase ports` now shows each program with its arguments cut to 40 characters, so a long command line no longer floods the list; `--json` still has them whole.
+
 ## 0.12.203
 
 - **A large diff no longer keeps the server busy after you close Changes.** Files, the changes panel and Markdown code blocks now share one highlighter. While Changes is closed, the button's count is read without colouring every hunk, and a refresh does not start another copy of itself while the previous one is still working. A git command or a highlight that runs too long is stopped, and that text stays plain until it changes.
