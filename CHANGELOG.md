@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.198
+
+- Leaving the Files search idle no longer scans the whole workspace every ten seconds. Its file list refreshes when you change the query, return to the search bar, or the tree sees files added, removed or renamed. New scans cancel the previous one and use at most eight threads, keeping large workspaces quieter.
+
 ## 0.12.197
 
 - Internal change with nothing new to see: the code that works out which tab started a process, used by the Worktrees dialog to name processes running in a worktree, is now shared so upcoming views can use it too.
