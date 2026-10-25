@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
 use std::time::{Duration, Instant};
 
 use ratatui::layout::Rect;
@@ -83,11 +84,13 @@ impl QueueRuntime {
             return None;
         }
         self.next_undo += 1;
+        let undo = BuildHasherDefault::<DefaultHasher>::default().hash_one((control::server_token(), self.next_undo))
+            & ((1 << 53) - 1);
         if self.removals.len() == queue::UNDOS {
             self.removals.pop_front();
         }
-        self.removals.push_back((self.next_undo, entries));
-        Some(self.next_undo)
+        self.removals.push_back((undo, entries));
+        Some(undo)
     }
 
     pub(super) fn take_removed(&mut self, undo: u64) -> Option<Vec<queue::Entry>> {

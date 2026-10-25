@@ -60,7 +60,7 @@ fn queue_removals_print_undo_numbers_and_restore_the_saved_entry() {
     assert_eq!(app.session.says(&["queue", "restore", &undo.to_string()]), "");
 
     let next = app.session.says(&["queue", "remove", &id]);
-    assert_eq!(next, (undo + 1).to_string());
+    assert_ne!(next, undo.to_string());
     app.session.says(&["queue", "restore", &next]);
     app.restart_server();
     let restored: Value = serde_json::from_str(&app.session.says(&["queue", "list", "--json"])).expect("restored");
@@ -76,4 +76,23 @@ fn clearing_an_empty_started_history_prints_no_undo() {
     let refused = app.session.command().args(["queue", "restore", "999"]).output().expect("restore refused");
     assert!(!refused.status.success());
     assert!(String::from_utf8_lossy(&refused.stderr).contains("no queue removal 999"));
+}
+
+#[test]
+fn an_expired_undo_number_cannot_restore_a_removal_from_the_next_server() {
+    let mut app = Harness::start();
+    let args = ["queue", "add", "--at", "in 2h", "--agent", "claude", "--prompt", "review login"];
+    let id = app.session.says(&args);
+    let expired = app.session.says(&["queue", "remove", &id]);
+    app.restart_server();
+    let next = app.session.says(&args);
+    let current = app.session.says(&["queue", "remove", &next]);
+    assert_ne!(current, expired);
+    let refused = app.session.command().args(["queue", "restore", &expired]).output().expect("old undo refused");
+    assert!(!refused.status.success());
+    let empty: Value = serde_json::from_str(&app.session.says(&["queue", "list", "--json"])).expect("still removed");
+    assert_eq!(empty, serde_json::json!({"entries": []}));
+    app.session.says(&["queue", "restore", &current]);
+    let restored: Value = serde_json::from_str(&app.session.says(&["queue", "list", "--json"])).expect("restored");
+    assert_eq!(restored["entries"][0]["id"].as_u64().expect("new entry").to_string(), next);
 }
