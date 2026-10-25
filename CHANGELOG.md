@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.200
+
+- **Undo queue removals from the command line.** `cornercase queue remove ID` now prints an undo number, and `queue clear-started` removes every started entry at once with the same undo. `queue restore NUMBER` puts that removal back with its captured prompt, agent, mode, destination, accounts and state. The last 16 command removals stay available until the server stops, independently of the window's undo notice. Both removal commands support `--json` with the removed entries and undo number; clearing nothing prints no number. External UIs can discover these actions through the `queue-undo` contract feature.
+
 ## 0.12.199
 
 - **`cornercase ports` lists the ports a workspace listens on.** Each TCP port held by a program its tabs started, or, in a workspace with a worktree of its own, by any of your programs working in that worktree, with the URL to open (`http://localhost:5173`), the program and its pid, and the pane that started it when a tab did. A port opened by an agent, or by something it started, says which agent. From a tab it lists that tab's workspace; `--worktree BRANCH` picks another and `--all` lists every port your programs listen on. `--json` gives the same for scripts and agents, so an agent that just started a dev server can find its address. Ports published by Docker belong to Docker, not to a workspace.
