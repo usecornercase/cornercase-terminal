@@ -90,11 +90,9 @@ fn several_programs_are_stopped_together() {
     assert!(outcomes.contains(&(second.port, Ok(Outcome::Killed))), "{outcomes:?}");
 }
 
-#[test]
-fn a_pid_whose_start_changed_before_sigkill_is_not_killed() {
+fn left_alone_by_sigkill(change: impl FnOnce(Target) -> Target) {
     let mut listening = Listening::new("ignore");
-    let target = listening.target();
-    let target = Target { started: target.started.map(|stamp| stamp + 1), ..target };
+    let target = change(listening.target());
     let mut done = Vec::new();
     assert_eq!(kill(vec![target.clone()], &mut done), []);
     assert_eq!(done, [(target, Ok(Outcome::Stopped))]);
@@ -102,11 +100,11 @@ fn a_pid_whose_start_changed_before_sigkill_is_not_killed() {
 }
 
 #[test]
+fn a_pid_whose_start_changed_before_sigkill_is_not_killed() {
+    left_alone_by_sigkill(|target| Target { started: target.started.map(|stamp| stamp + 1), ..target });
+}
+
+#[test]
 fn a_program_that_released_its_port_before_sigkill_is_not_killed() {
-    let mut listening = Listening::new("ignore");
-    let target = Target { port: listening.port.wrapping_add(1), ..listening.target() };
-    let mut done = Vec::new();
-    assert_eq!(kill(vec![target.clone()], &mut done), []);
-    assert_eq!(done, [(target, Ok(Outcome::Stopped))]);
-    assert!(listening.running());
+    left_alone_by_sigkill(|target| Target { port: target.port.wrapping_add(1), ..target });
 }
