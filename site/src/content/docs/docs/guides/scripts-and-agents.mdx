@@ -409,7 +409,7 @@ pane	who	source	place	line	text
 - `--json` prints `{"matches": [...], "capped": false}`, each match with `pane`, `tab`, `workspace`, `project` (the ids), `place`, `who`, `source`, `line` (`null` when there is none), `text` and `written` (when an agent's message was written, in UTC, or `null`).
 - The text you search for is never written to `server.log`.
 - `focus --pane ID --reveal TEXT` goes to the pane, scrolls it to the text and selects it, as `Enter` on a result in the window does. `TEXT` is what you searched for. `--line` takes a `screen` match's `line`; leave it out for an agent's message, which takes the newest place the pane shows the text. `--json` prints `revealed`, which is `false` when the pane no longer holds the text: the pane is still shown, a warning goes to stderr and the exit status is 0. A program that reads the mouse takes the pane back to the bottom. With `--view ID` the view shows it, not the window.
-- Over the socket: `{"command": "focus", "args": {"item": {"pane": 9}, "reveal": {"query": "migration failed", "line": 118}}}` answers `{"revealed": true}`. Check the `focus-reveal` feature first: an older server ignores `reveal` and only shows the pane.
+- Over the socket: `{"command": "focus", "args": {"item": {"pane": 9}, "reveal": {"query": "migration failed", "line": 118}}}` answers `{"ok": {"revealed": true}}`. Check the `focus-reveal` feature first: an older server ignores `reveal` and only shows the pane.
 
 ### Create
 

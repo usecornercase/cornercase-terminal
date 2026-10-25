@@ -112,6 +112,20 @@ fn a_reveal_of_text_the_pane_no_longer_holds_only_shows_it() {
     assert_eq!(emulator.selection_text().expect("selection"), None);
 }
 
+#[test]
+fn a_reveal_that_misses_clears_the_selection_an_earlier_one_left() {
+    let (mut app, rx) = app();
+    let id = tab_that_printed_a_marker(&mut app, &rx);
+    let hit = json!({"item": {"pane": id}, "reveal": {"query": "needle-found"}});
+    assert_eq!(ok(&mut app, "focus", &hit), json!({"revealed": true}));
+
+    let miss = json!({"item": {"pane": id}, "reveal": {"query": "no-such-text-anywhere"}});
+
+    assert_eq!(ok(&mut app, "focus", &miss), json!({"revealed": false}));
+    let emulator = &mut app.term_mut().expect("the pane").emulator;
+    assert_eq!(emulator.selection_text().expect("selection"), None);
+}
+
 #[rstest::rstest]
 #[case::a_tab(json!({"item": {"tab": 1}, "reveal": {"query": "x"}}))]
 #[case::blank_text(json!({"item": {"pane": 1}, "reveal": {"query": "  "}}))]

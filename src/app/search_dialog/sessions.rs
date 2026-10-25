@@ -130,7 +130,11 @@ impl App {
 
     pub(in crate::app) fn reveal_in(&mut self, pane: u64, needle: &Needle, near: Option<usize>) -> bool {
         let Some(term) = self.projects.pane_by_mut(pane) else { return false };
-        term.emulator.reveal(needle, near).unwrap_or(false)
+        let revealed = term.emulator.reveal(needle, near).unwrap_or(false);
+        if !revealed {
+            let _ = term.emulator.clear_selection();
+        }
+        revealed
     }
 }
 
