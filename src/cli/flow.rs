@@ -1,6 +1,6 @@
 use std::fmt::Write as _;
 use std::io::IsTerminal as _;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use super::args::{
     self, FlowAction, FlowDefaultArgs, FlowDeleteArgs, FlowFilesArgs, FlowImportArgs, FlowMessagesArgs, FlowOrderArgs,
@@ -95,7 +95,7 @@ const MAX_DRAFT: usize = 4 * share::MAX_BYTES;
 
 fn save_flow(args: FlowSaveArgs) -> Result<()> {
     let flow = draft(&args.source)?;
-    let path = args.path.map(std::path::absolute).transpose()?;
+    let path = args.path.map(|path| listed_path(&path)).transpose()?;
     let to = match (args.to, &path) {
         (None, Some(path)) => place_of(path, args.project)?,
         (to, _) => to,
@@ -134,6 +134,20 @@ fn listed_place(flows: &Flows, path: &Path) -> Option<ImportTo> {
     Some(if listed.origin == "project" { ImportTo::Project } else { ImportTo::Yours })
 }
 
+fn listed_path(path: &Path) -> Result<PathBuf> {
+    let mut clean = PathBuf::new();
+    for part in std::path::absolute(path)?.components() {
+        match part {
+            Component::ParentDir => {
+                clean.pop();
+            }
+            Component::CurDir => {}
+            other => clean.push(other),
+        }
+    }
+    Ok(clean)
+}
+
 fn into_place(origin: &str) -> &'static str {
     if origin == "project" { "this project" } else { "yours" }
 }
@@ -160,7 +174,7 @@ fn delete_flow(args: FlowDeleteArgs) -> Result<()> {
         name: args.name.unwrap_or_default(),
         place: args.place.map(|place| place.name().to_string()).unwrap_or_default(),
         project: args.project,
-        path: args.path.map(std::path::absolute).transpose()?,
+        path: args.path.map(|path| listed_path(&path)).transpose()?,
     };
     answered("flow delete", control::Command::FlowDelete(request), args.print.json, deleted_line)
 }
