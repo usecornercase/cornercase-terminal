@@ -363,7 +363,9 @@ fn gap_reply(at: Replied<'_>, hunk: usize, hunks: usize, lines: Option<Vec<chang
     if hunk < 1 || hunk >= hunks {
         return Err(Refusal::new(
             Code::NotFound,
-            format!("{path} has no gap before hunk {hunk}: it has {hunks} hunks"),
+            format!(
+                "{path} has no gap before hunk {hunk}: it has {hunks} hunks, counted from 0, and the first has none"
+            ),
         ));
     }
     lines.map(|lines| json(&Gap::of(workspace, path, hunk, &lines))).ok_or_else(|| {
