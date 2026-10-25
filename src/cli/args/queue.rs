@@ -20,10 +20,21 @@ pub(crate) enum QueueAction {
     },
     #[command(about = "List scheduled, started, failed and missed entries")]
     List(Print),
-    #[command(about = "Cancel or remove an entry")]
-    Remove { id: u64 },
+    #[command(about = "Remove an entry and print the number that restore takes to put it back")]
+    Remove {
+        id: u64,
+        #[command(flatten)]
+        print: Print,
+    },
     #[command(about = "Start a pending, missed or failed entry now")]
     Run { id: u64 },
+    #[command(about = "Remove every started entry and print the number that restore takes to put them back")]
+    ClearStarted(Print),
+    #[command(about = "Put back what remove or clear-started removed")]
+    Restore {
+        #[arg(value_name = "UNDO", help = "The number remove or clear-started printed")]
+        undo: u64,
+    },
 }
 
 #[derive(Debug, Args)]

@@ -545,6 +545,7 @@ mod pane_moves;
 mod parents;
 mod plugins;
 mod ports;
+mod queue;
 mod searching;
 mod setup;
 mod start_server;

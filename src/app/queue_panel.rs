@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
 use ratatui::layout::Rect;
@@ -27,6 +27,8 @@ pub(super) struct QueueRuntime {
     area: Option<Rect>,
     path: Option<std::path::PathBuf>,
     back: Option<Box<Browser>>,
+    removals: VecDeque<(u64, Vec<queue::Entry>)>,
+    next_undo: u64,
 }
 
 impl QueueRuntime {
@@ -70,6 +72,27 @@ impl QueueRuntime {
 
     pub(super) fn restore(&mut self, entries: Vec<queue::Entry>) {
         self.queue.restore(entries);
+    }
+
+    pub(super) fn clear_started(&mut self) -> Vec<queue::Entry> {
+        self.queue.clear_started()
+    }
+
+    pub(super) fn keep_removed(&mut self, entries: Vec<queue::Entry>) -> Option<u64> {
+        if entries.is_empty() {
+            return None;
+        }
+        self.next_undo += 1;
+        if self.removals.len() == queue::UNDOS {
+            self.removals.pop_front();
+        }
+        self.removals.push_back((self.next_undo, entries));
+        Some(self.next_undo)
+    }
+
+    pub(super) fn take_removed(&mut self, undo: u64) -> Option<Vec<queue::Entry>> {
+        let index = self.removals.iter().position(|(id, _)| *id == undo)?;
+        self.removals.remove(index).map(|(_, entries)| entries)
     }
 
     pub(super) fn start(&mut self, id: u64) -> u64 {
@@ -289,7 +312,7 @@ impl App {
     }
 
     pub(super) fn clear_queued(&mut self) {
-        let cleared = self.panels.queued.queue.clear_started();
+        let cleared = self.panels.queued.clear_started();
         self.queue_removed(format!("cleared {} started", cleared.len()), cleared);
         self.sync_queued();
     }

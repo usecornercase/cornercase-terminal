@@ -10,7 +10,7 @@ use crate::agents;
 use crate::agents::usage;
 use crate::app::App;
 use crate::app::queue_panel::QueueEvent;
-use crate::control::contract::Refusal;
+use crate::control::contract::{Code, Refusal};
 use crate::control::{self, QueueAdd};
 use crate::error::Error;
 use crate::issues;
@@ -29,12 +29,40 @@ impl App {
             control::Queue::Run(id) => self.run_queue_request(id, area, now),
             control::Queue::Add(add) => self.add_queue_request(Some(client), asker.caller, None, &add),
             control::Queue::Edit { id, add } => self.add_queue_request(Some(client), asker.caller, Some(id), &add),
+            control::Queue::ClearStarted => {
+                let entries = self.panels.queued.clear_started();
+                Ok(Some(self.queue_removal(entries)))
+            }
+            control::Queue::Restore(undo) => self.restore_queue_request(undo),
         }
     }
 
     fn remove_queue_request(&mut self, id: u64) -> Handled {
-        self.panels.queued.remove(id)?;
-        Ok(Some(json!({})))
+        let entry = self.panels.queued.remove(id)?;
+        Ok(Some(self.queue_removal(vec![entry])))
+    }
+
+    fn queue_removal(&mut self, entries: Vec<queue::Entry>) -> serde_json::Value {
+        let mut value = json!({ "entries": entries });
+        if let Some(undo) = self.panels.queued.keep_removed(entries) {
+            value["undo"] = json!(undo);
+        }
+        value
+    }
+
+    fn restore_queue_request(&mut self, undo: u64) -> Handled {
+        let entries = self.panels.queued.take_removed(undo).ok_or_else(|| {
+            Refusal::new(
+                Code::NotFound,
+                format!(
+                    "there is no queue removal {undo} to undo: it was undone already, or is older than the last {}",
+                    queue::UNDOS
+                ),
+            )
+        })?;
+        let value = json!({ "entries": entries });
+        self.panels.queued.restore(entries);
+        Ok(Some(value))
     }
 
     fn run_queue_request(&mut self, id: u64, area: Option<Rect>, now: Instant) -> Handled {
