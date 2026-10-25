@@ -24,7 +24,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Dialogs](design/dialogs.md) (`ui/dialog.rs`, `ui/dialog/`, `ui/combo.rs`, `list.rs`, `app/overlay.rs`, `app/dialogs.rs`): borders, dimming, buttons, a click outside, comboboxes.
 - [Hierarchy](design/hierarchy.md) (`project.rs`, `project/group.rs`, `project/hierarchy.rs`, `app/hierarchy.rs`, `app/tabs.rs`, `app/menus.rs`, `app/sidebar/drag.rs`): groups, projects, workspaces, tabs and panes; ids, labels, closing, reordering.
 - [Splits](design/splits.md) (`project/split.rs`, `app/panes.rs`): the split tree, minimum sizes, hidden panes, moving panes.
-- [Search](design/search.md) (`project/search.rs`, `project/search/said.rs`, `list.rs`, `app/search_dialog.rs`, `app/search_dialog/sessions.rs`, `app/control/search.rs`, `cli/search.rs`, #272): one search over names, or over what agents and shells said.
+- [Search](design/search.md) (`project/search.rs`, `project/search/said.rs`, `list.rs`, `app/search_dialog.rs`, `app/search_dialog/sessions.rs`, `app/control/search.rs`, `cli/search.rs`, #272, #467): one search over names, or over what agents and shells said.
 - [Folder picker](design/folder-picker.md) (`project/picker.rs`, `list.rs`, `app/picker_dialog.rs`): where it starts and how it is walked.
 - [Worktrees](design/worktrees.md) (`git/worktree.rs`, `app/worktrees.rs`): one worktree per workspace, removal in the background, locks, `↓n`.
 - [Worktree setup](design/worktree-setup.md) (`git/worktree/setup.rs`, `project/settings.rs`, `app/worktree_setup.rs`, `app/project_settings_dialog.rs`, `ui/dialog/project_settings.rs`, #250): a project's setup and teardown scripts.

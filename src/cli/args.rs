@@ -633,6 +633,22 @@ pub(crate) struct FocusArgs {
     pub(crate) which: Which,
     #[command(flatten)]
     pub(crate) view: ViewArg,
+    #[arg(
+        long,
+        value_name = "TEXT",
+        conflicts_with_all = ["tab", "workspace", "worktree", "project"],
+        help = "Also scroll the pane to this text and select it, as Enter on a result of the search does: the text `cornercase search` looked for"
+    )]
+    pub(crate) reveal: Option<String>,
+    #[arg(
+        long,
+        value_name = "LINE",
+        requires = "reveal",
+        help = "The match's line as `cornercase search` printed it (screen matches); without it, the newest place the pane shows the text"
+    )]
+    pub(crate) line: Option<usize>,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]

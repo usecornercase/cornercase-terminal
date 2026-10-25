@@ -100,6 +100,27 @@ fn search_finds_what_a_pane_printed_with_its_ids() {
     assert_eq!(none, "pane\twho\tsource\tplace\tline\ttext");
 }
 
+#[test]
+fn focus_reveals_a_search_match_and_selects_it() {
+    let mut app = Harness::start();
+    let pane = app.session.says(&["new-tab", "--name", "build", "--", "echo needle-\"\"found; seq 1 60"]);
+    app.session.says(&["wait", "--pane", &pane, "--until", "shell", "--timeout", "10"]);
+    let found: serde_json::Value =
+        serde_json::from_str(&app.session.says(&["search", "needle-found", "--json"])).expect("json");
+    let line = found["matches"][0]["line"].to_string();
+
+    let args = ["focus", "--pane", &pane, "--reveal", "needle-found", "--line", &line, "--json"];
+    let revealed: serde_json::Value = serde_json::from_str(&app.session.says(&args)).expect("json");
+    let selected = app.session.says(&["selection", "--pane", &pane]);
+    app.wait_for("the window shows the match", |s| s.contains("needle-found"));
+    let lost = app.session.cli(&["focus", "--pane", &pane, "--reveal", "no-such-text-anywhere"]);
+
+    assert_eq!(revealed["revealed"], true);
+    assert_eq!(selected, "needle-found");
+    assert_eq!(lost.status.code(), Some(0));
+    assert!(String::from_utf8_lossy(&lost.stderr).contains("warning:"), "{lost:?}");
+}
+
 pub(super) fn new_tab(app: &Harness) -> (String, String) {
     let pane = app.session.says(&["new-tab"]);
     let rows: PaneRows = serde_json::from_str(&app.session.says(&["status", "--panes", "--json"])).expect("pane rows");

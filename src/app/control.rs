@@ -527,7 +527,7 @@ impl App {
             Command::WaitSeveral(wait) => self.wait_several_request(client, asker, wait, now),
             Command::Mark(mark) => self.mark_request(asker, &mark),
             Command::Notify(notify) => self.notify_request(&notify.text),
-            Command::Focus(focus) => self.focus_request(asker, focus.item),
+            Command::Focus(focus) => self.focus_request(asker, &focus),
             other => return ControlFlow::Continue(other),
         })
     }
@@ -855,10 +855,12 @@ impl App {
         Ok(())
     }
 
-    fn focus_request(&mut self, asker: Asker, item: Item) -> Handled {
-        let projection = self.show_to(asker.view, item)?;
+    fn focus_request(&mut self, asker: Asker, focus: &control::Focus) -> Handled {
+        let reveal = focus.reveal.as_ref().map(|reveal| search::revealing(focus.item, reveal)).transpose()?;
+        let projection = self.show_to(asker.view, focus.item)?;
+        let revealed = reveal.map(|(pane, needle, near)| self.reveal_in(pane, &needle, near));
         let ids = asker.view.map(|view| self.view_ids(view)).unwrap_or_default();
-        Ok(Some(json(&Done { ids, projection, ..Done::default() })))
+        Ok(Some(json(&Done { ids, revealed, projection, ..Done::default() })))
     }
 
     pub(in crate::app) fn usable_workspace(&self, id: u64) -> Result<WorkspaceAt, Refusal> {

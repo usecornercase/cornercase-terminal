@@ -1,11 +1,13 @@
 use std::sync::atomic::AtomicBool;
 
-use super::{App, Done, Handled, Pending, Stage, json};
+use super::{App, Done, Handled, Pending, Stage, json, malformed};
 use crate::app::{AppEvent, SearchEvent};
-use crate::control::{Hit, Matches};
+use crate::control::contract::Refusal;
+use crate::control::{Hit, Item, Matches, Reveal};
 use crate::error;
 use crate::log::{Job, Level};
 use crate::project::search::said::{self, Found};
+use crate::text::Needle;
 
 impl App {
     pub(super) fn search_request(&mut self, client: u64, query: &str) -> Handled {
@@ -61,4 +63,13 @@ fn matches(found: &Found) -> Matches {
         written: m.written.clone(),
     });
     Matches { matches: hits.collect(), capped: found.capped }
+}
+
+pub(super) fn revealing(item: Item, reveal: &Reveal) -> Result<(u64, Needle, Option<usize>), Refusal> {
+    let Item::Pane(pane) = item else {
+        return Err(malformed("`reveal` needs the pane the match is in: give a pane as the item"));
+    };
+    let needle =
+        Needle::new(&reveal.query).ok_or_else(|| malformed("`reveal` needs the text that was searched for"))?;
+    Ok((pane, needle, reveal.line))
 }

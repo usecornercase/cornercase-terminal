@@ -13,7 +13,7 @@ pub(crate) const APP_VERSION: u32 = 1;
 pub(crate) const CHANGES_VERSION: u32 = 1;
 pub(crate) const FLOW_RUNS_VERSION: u32 = 1;
 pub(crate) const FLOW_MESSAGES_VERSION: u32 = 1;
-pub(crate) const FEATURES: [&str; 23] = [
+pub(crate) const FEATURES: [&str; 24] = [
     "boot",
     "structured-errors",
     "strict-fields",
@@ -37,6 +37,7 @@ pub(crate) const FEATURES: [&str; 23] = [
     "tour",
     "close-agent-tabs",
     "queue-undo",
+    "focus-reveal",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

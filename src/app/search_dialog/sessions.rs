@@ -123,10 +123,14 @@ impl App {
             return;
         }
         self.jump_to_pane(pane);
-        let Some(needle) = Needle::new(query) else { return };
-        if let Some(term) = self.projects.pane_by_mut(pane) {
-            let _ = term.emulator.reveal(&needle, found.line);
+        if let Some(needle) = Needle::new(query) {
+            self.reveal_in(pane, &needle, found.line);
         }
+    }
+
+    pub(in crate::app) fn reveal_in(&mut self, pane: u64, needle: &Needle, near: Option<usize>) -> bool {
+        let Some(term) = self.projects.pane_by_mut(pane) else { return false };
+        term.emulator.reveal(needle, near).unwrap_or(false)
     }
 }
 

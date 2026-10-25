@@ -102,7 +102,7 @@ fn focus_shows_what_it_names() {
     let (mut app, _rx, _dirs) = app_with(2);
     let id = term(&app, 0).id;
 
-    done(now(&mut app, None, Command::Focus(wire::Focus { item: Item::Pane(id) })));
+    done(now(&mut app, None, Command::Focus(wire::Focus { item: Item::Pane(id), reveal: None })));
 
     assert_eq!((app.active, app.term().map(|t| t.id)), (0, Some(id)));
 }

@@ -59,7 +59,7 @@ fn first_commands() -> Vec<Command> {
         Command::Wait(Wait::default()),
         Command::Close(Close { item: Item::Tab(1), remove_worktree: false, force: false, unlock: false }),
         Command::Rename(Rename::default()),
-        Command::Focus(Focus { item: Item::Pane(1) }),
+        Command::Focus(Focus { item: Item::Pane(1), reveal: None }),
         Command::Notify(Notify::default()),
         Command::Todo(Todo::List),
         Command::WaitSeveral(Wait::default()),
@@ -231,6 +231,7 @@ fn the_fields_to_log_leave_out_what_is_typed() {
         Command::WaitSeveral(Wait { until: Until::Text(secret.into()), panes: vec![3, 4], ..Wait::default() }),
         Command::Notify(Notify { text: secret.into() }),
         Command::Search(Search { query: secret.into() }),
+        Command::Focus(Focus { item: Item::Pane(1), reveal: Some(Reveal { query: secret.into(), line: Some(3) }) }),
         Command::Todo(Todo::Add(secret.into())),
         Command::Todo(Todo::Edit { id: 3, text: secret.into() }),
         Command::FlowRun(FlowRun { name: "Quick".into(), prompt: secret.into(), ..FlowRun::default() }),
@@ -268,6 +269,38 @@ fn a_search_travels_as_its_query_and_logs_only_its_size() {
     assert_eq!(sent, r#"{"caller":null,"server":null,"command":"search","args":{"query":"checkout"}}"#);
     assert_eq!(serde_json::from_str::<Request>(&sent).expect("a request"), request);
     assert_eq!(request.command.fields(), [("bytes", "8".to_string())]);
+}
+
+#[test]
+fn a_focus_from_an_older_command_reveals_nothing() {
+    let request: Request =
+        serde_json::from_str(r#"{"command":"focus","args":{"item":{"pane":4}}}"#).expect("a request");
+
+    assert_eq!(request.command, Command::Focus(Focus { item: Item::Pane(4), reveal: None }));
+}
+
+#[test]
+fn a_reveal_travels_as_its_query_and_line_and_logs_only_its_size() {
+    let reveal = Reveal { query: "checkout".into(), line: Some(12) };
+    let request = Request {
+        caller: None,
+        server: None,
+        contract: None,
+        boot: None,
+        view: None,
+        command: Command::Focus(Focus { item: Item::Pane(4), reveal: Some(reveal) }),
+    };
+    let sent = serde_json::to_string(&request).expect("json");
+
+    assert_eq!(
+        sent,
+        r#"{"caller":null,"server":null,"command":"focus","args":{"item":{"pane":4},"reveal":{"query":"checkout","line":12}}}"#
+    );
+    assert_eq!(serde_json::from_str::<Request>(&sent).expect("a request"), request);
+    assert_eq!(
+        request.command.fields(),
+        [("item", "pane-4".to_string()), ("reveal_bytes", "8".to_string()), ("line", "12".to_string())]
+    );
 }
 
 #[test]

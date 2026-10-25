@@ -62,6 +62,10 @@ fn commands_with_a_view_pass_the_feature_checks_they_need() {
     app.session.says(&["send", "--pane", &pane, "--enter", "echo patch-\"\"ok"]);
     frames.until("a patch", |frame| frame.get("base").is_some());
     let profiled = app.session.says(&["new-tab", "--view", &id, "--profile", ""]);
+    let revealed: serde_json::Value = serde_json::from_str(
+        &app.session.says(&["focus", "--view", &id, "--pane", &pane, "--reveal", "patch-ok", "--json"]),
+    )
+    .expect("json");
     let _ = opened.kill();
     let _ = opened.wait();
 
@@ -70,6 +74,8 @@ fn commands_with_a_view_pass_the_feature_checks_they_need() {
     assert_eq!(frames.seen[0]["view"].as_u64(), id.parse().ok());
     assert!(frames.seen[0].get("base").is_none(), "the first frame is complete");
     assert_ne!(profiled, "");
+    assert_eq!(revealed["revealed"], true);
+    assert!(revealed.get("projection").is_some(), "{revealed}");
     assert_eq!(finish_within(streaming, TIMEOUT).status.code(), Some(0));
 }
 

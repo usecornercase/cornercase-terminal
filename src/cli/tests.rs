@@ -971,6 +971,7 @@ mod output {
 }
 
 mod flows;
+mod focus;
 
 mod away {
     use super::*;

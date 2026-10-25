@@ -45,6 +45,8 @@ impl Command {
             }
             Self::Focus(focus) => {
                 fields.add("item", focus.item);
+                fields.maybe("reveal_bytes", focus.reveal.as_ref().map(|reveal| reveal.query.len()));
+                fields.maybe("line", focus.reveal.as_ref().and_then(|reveal| reveal.line));
             }
             _ => return false,
         }

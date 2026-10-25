@@ -35,6 +35,10 @@ pub(crate) fn use_close_unlock() -> Result<()> {
     require("close-unlock", "cannot unlock a worktree to remove it")
 }
 
+pub(crate) fn use_focus_reveal() -> Result<()> {
+    require("focus-reveal", "cannot reveal a search match in its pane")
+}
+
 pub(crate) fn use_close_agent_tabs() -> Result<()> {
     require("close-agent-tabs", "would remove an agent's own worktree when it closes the agent")
 }

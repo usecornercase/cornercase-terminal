@@ -108,6 +108,16 @@ mod features {
         assert!(error.to_string().contains("cannot name the workspace an issue starts in"), "{error}");
         assert_eq!(asked.len(), 1, "{asked:?}");
     }
+
+    #[test]
+    fn a_server_that_cannot_reveal_is_refused_before_the_focus_is_sent() {
+        let (checked, asked) = asking(&["views"], "focus-reveal", "cannot reveal a search match in its pane");
+
+        let error = checked.expect_err("refused");
+        assert!(error.to_string().contains("cannot reveal a search match in its pane"), "{error}");
+        assert_eq!(asked.len(), 1, "{asked:?}");
+        assert!(asked[0].contains("\"contract\""), "{}", asked[0]);
+    }
 }
 
 mod the_view {

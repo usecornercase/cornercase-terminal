@@ -62,7 +62,7 @@ pub(crate) use flow::{
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
-pub(crate) use search::{Hit, Matches, Search};
+pub(crate) use search::{Hit, Matches, Reveal, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use status::{GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RunStatus, StackInfo};
 pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, WorkspaceInfo};
@@ -687,6 +687,8 @@ pub(crate) struct Rename {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Focus {
     pub(crate) item: Item,
+    #[serde(default)]
+    pub(crate) reveal: Option<Reveal>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -754,6 +756,8 @@ pub(crate) struct Done {
     pub(crate) unconfirmed: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) checked: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) revealed: Option<bool>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) panes: Vec<Done>,
     #[serde(skip_serializing_if = "Option::is_none")]

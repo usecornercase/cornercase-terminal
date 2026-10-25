@@ -351,7 +351,18 @@ fn run_close(close: &args::CloseArgs) -> Result<bool> {
 
 fn run_focus(focus: &args::FocusArgs) -> Result<()> {
     let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
-    ask("focus", control::Command::Focus(control::Focus { item })).map(drop)
+    let reveal = focus.reveal.clone().map(|query| control::Reveal { query, line: focus.line });
+    if reveal.is_some() {
+        client::use_focus_reveal()?;
+    }
+    let value = ask("focus", control::Command::Focus(control::Focus { item, reveal }))?;
+    if focus.print.json {
+        return print_json(&value);
+    }
+    if let Some(warning) = search::unrevealed(&value, item) {
+        eprintln!("warning: {warning}");
+    }
+    Ok(())
 }
 
 fn run_go(go: args::GoArgs) -> Result<()> {

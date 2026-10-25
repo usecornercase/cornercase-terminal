@@ -236,12 +236,22 @@ pub(super) const RENAME_HELP: &str = "Examples:
   cornercase rename --workspace 5 ''";
 pub(super) const FOCUS_HELP: &str =
     "Shows it in the window, or with --view ID in that view only (`cornercase view`), which then
-follows it: the window and other views stay where they are. With --view it prints the view's new
-tab and its `projection`, the number a view's lines and surface frames carry, which goes up each time
-what the view shows changes.
+follows it: the window and other views stay where they are.
+
+--reveal TEXT (a pane only) also scrolls the pane to the text and selects it, as Enter on a result of
+`cornercase search` does: TEXT is what the search looked for, and --line is the match's line from
+`search --json` for a screen match. Leave --line out for an agent's prompt or reply, which takes the
+newest place the pane shows the text. The scroll and the selection are the pane's, so the window and
+every view show them. When the pane no longer holds the text it is still shown, a warning goes to
+stderr and the exit status is 0.
+
+--json prints the answer: `revealed` with --reveal, and with --view the view's new tab and its
+`projection`, the number a view's lines and surface frames carry, which goes up each time what the
+view shows changes.
 
 Examples:
   cornercase focus --pane 12
+  cornercase focus --pane 12 --reveal 'migration failed' --line 340
   cornercase focus --view 41 --tab 7";
 pub(super) const GO_HELP: &str =
     "Does what a click on an agent's desktop notification does, or the go button of its toast: shows
@@ -283,7 +293,7 @@ also has its tab, workspace and project ids and, for an agent's message, when it
 Examples:
   cornercase search 'migration failed'
   pane=$(cornercase search --json checkout | jq -r '.matches[0].pane')
-  cornercase focus --pane \"$pane\"";
+  cornercase focus --pane \"$pane\" --reveal checkout";
 pub(super) const MARK_HELP: &str =
     "A pane marked as pending review shows a blue ● on its tab, and on its workspace, project and
 group rows, until it is marked as reviewed or its agent starts working again on a new prompt or an
