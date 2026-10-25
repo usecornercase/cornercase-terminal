@@ -106,5 +106,5 @@ fn a_cancelled_search_finds_nothing_more() {
 #[test]
 fn a_cancelled_walk_indexes_nothing() {
     let repo = git_repo(&[("src/a.rs", ""), ("src/b.rs", "")]);
-    assert!(index(repo.path(), &AtomicBool::new(true)).is_empty());
+    assert_eq!(index(repo.path(), &AtomicBool::new(true)), Vec::<String>::new());
 }
