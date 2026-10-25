@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.207
+
+- **Show a search match from a script.** `cornercase focus --pane ID --reveal TEXT` goes to the pane, scrolls it to the text and selects it, as `Enter` on a result of the search in sessions does. Pass `--line N` from `cornercase search --json` for a match on the pane's screen; leave it out for an agent's prompt or reply. `--json` prints `revealed`, which is `false` when the pane no longer holds the text (the pane is still shown and nothing stays selected). Other UIs find the `reveal` field of the `focus` request through the `focus-reveal` contract feature.
+- `cornercase focus --json` prints its answer, so `focus --view --json` now gives the view's new tab and its `projection`, as the help already said.
+
 ## 0.12.206
 
 - **Preview a plugin without installing it.** `cornercase plugin install SOURCE --preview` fetches the plugin and prints what installing it would do (where it comes from, its commit, what it asks for, how it is built or downloaded, and every command it runs), then exits without asking or installing anything, even with no terminal. `plugin update --preview` does the same for updates, or says a plugin is up to date. With `--json` (and an ID for `update`) the preview is data, so another app can show it in its own dialog.
