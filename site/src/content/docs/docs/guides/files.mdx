@@ -50,7 +50,7 @@ The header shows the file's path, its number of lines and its language; **`‹`*
   crop={[0, 0, 140, 20]}
 />
 
-- Code is coloured with your terminal's palette by tree-sitter grammars, for about 60 languages. A language without a grammar of its own borrows a close relative's, so its comments and strings still read right. Files over 2 MB show without colours.
+- Code is coloured with your terminal's palette by tree-sitter grammars, for about 60 languages. The changes panel and Markdown code blocks use the same grammars. A language without a grammar of its own borrows a close relative's, so its comments and strings still read right. Files over 2 MB show without colours.
 - Beside the line numbers, git's marks show what changed: a green `▎` on added lines, a blue `▎` on changed ones, and a red `▁` under the line after which lines were deleted (`▔` when they were at the top). A new file is green all the way down.
 - Click the mark of a changed or deleted block to see the lines that were there before, in red, and again to hide them.
 - The viewer follows the file on disk: when an agent edits it, you see the new version within a second, marks included.

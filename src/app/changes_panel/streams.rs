@@ -182,7 +182,9 @@ impl App {
     fn project_content(&self, content: &mut Content, workspace: Option<u64>, mode: Mode) {
         let Some(at) = workspace.and_then(|id| self.projects.workspace_index(id)) else { return };
         let ws = self.projects.workspace(at);
-        match self.panels.changes.model_in(ws.id, mode, ws.base.as_deref()).map(|m| &m.result) {
+        let model = self.panels.changes.model_in(ws.id, mode, ws.base.as_deref());
+        let summary = self.panels.changes.summary(ws.id).filter(|model| model.mode == mode);
+        match model.or(summary).map(|m| &m.result) {
             None => {}
             Some(Err(e)) => {
                 content.state = State::Failed;
@@ -285,8 +287,11 @@ impl App {
         let w = self.projects.workspace_by(workspace)?;
         if target == Some(workspace) {
             let every = self.every_shown();
-            let model = if every {
-                self.panels.changes.summary(workspace)
+            let model = if every || !self.changes_shown() {
+                self.panels
+                    .changes
+                    .summary(workspace)
+                    .or_else(|| self.panels.changes.model(workspace, w.base.as_deref()))
             } else {
                 self.panels.changes.model(workspace, w.base.as_deref())
             };

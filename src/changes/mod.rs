@@ -10,7 +10,7 @@ pub(crate) mod stage;
 mod summary;
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -26,7 +26,7 @@ use crate::text::stretch::Stretch;
 pub(crate) const OPEN_EVERY: Duration = Duration::from_secs(1);
 const CLOSED_EVERY: Duration = Duration::from_secs(3);
 const LIVE_FOR: Duration = Duration::from_secs(5);
-const GIVE_UP_AFTER: Duration = Duration::from_secs(30);
+pub(crate) const GIVE_UP_AFTER: Duration = Duration::from_secs(30);
 const AUTO_FOLD_LINES: usize = 500;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -142,6 +142,7 @@ pub(crate) struct Panel {
     viewed: HashMap<FileKey, u64>,
     gaps: HashMap<(FileKey, u64, usize), Arc<Vec<GapLine>>>,
     loading: Option<(u64, u64, Instant)>,
+    counts_for: Option<(u64, Mode, Option<String>, Vec<String>)>,
     generation: u64,
     superseded: HashMap<u64, u64>,
     requested: HashMap<(u64, Mode), Instant>,
@@ -302,6 +303,31 @@ impl Panel {
         Some((self.generation, request))
     }
 
+    pub(crate) fn request_counts(
+        &mut self,
+        target: &Checkout,
+        preview: &[String],
+        now: Instant,
+    ) -> Option<(u64, git::Request)> {
+        let every = if self.watched { OPEN_EVERY } else { CLOSED_EVERY };
+        if self.busy(now) {
+            return None;
+        }
+        let key = (target.workspace, self.mode, target.base.clone(), preview.to_vec());
+        let same = self.counts_for.as_ref() == Some(&key);
+        let current = same.then(|| self.summary(target.workspace)).flatten();
+        let recent = self.summary_requested.get(&target.workspace).is_some_and(|at| now.duration_since(*at) < every);
+        if current.is_some() && recent {
+            return None;
+        }
+        let request = counts_request(target, self.mode, preview, current);
+        self.counts_for = Some(key);
+        self.generation += 1;
+        self.loading = Some((target.workspace, self.generation, now));
+        self.summary_requested.insert(target.workspace, now);
+        Some((self.generation, request))
+    }
+
     pub(crate) fn request_followed(
         &mut self,
         wanted: &[(Checkout, Mode)],
@@ -339,6 +365,9 @@ impl Panel {
     ) {
         if self.loading.is_some_and(|(w, g, _)| (w, g) == (workspace, generation)) {
             self.loading = None;
+        }
+        if matches!(&result, Err(crate::error::Error::Git(message)) if message == "timed out") {
+            return;
         }
         if self.superseded.get(&workspace).is_some_and(|floor| generation <= *floor) {
             return;
@@ -438,8 +467,8 @@ impl Panel {
         self.summary_requested.remove(&workspace);
     }
 
-    fn busy(&self, now: Instant) -> bool {
-        self.loading.is_some_and(|(_, _, at)| now.duration_since(at) < GIVE_UP_AFTER)
+    fn busy(&self, _now: Instant) -> bool {
+        self.loading.is_some()
     }
 
     pub(crate) fn forget(&mut self, workspace: u64) {
@@ -453,6 +482,9 @@ impl Panel {
         self.gaps.retain(|(k, _, _), _| k.workspace != workspace);
         self.headers.remove(&workspace);
         self.superseded.remove(&workspace);
+        if self.counts_for.as_ref().is_some_and(|key| key.0 == workspace) {
+            self.counts_for = None;
+        }
         self.selection.take_if(|s| s.workspace == workspace);
         if self.workspace == Some(workspace) {
             self.workspace = None;
@@ -610,7 +642,18 @@ fn model_from(
     }
 }
 
-pub(crate) fn gap(dir: &std::path::Path, mode: Mode, file: &File, hunk: usize) -> Option<Vec<GapLine>> {
+fn counts_request(target: &Checkout, mode: Mode, preview: &[String], current: Option<&Model>) -> git::Request {
+    git::Request {
+        dir: target.dir.clone(),
+        mode,
+        base: target.base.clone(),
+        last: current.and_then(|model| model.digest),
+        previous: current.and_then(Model::diff).map(|diff| diff.files.clone()).unwrap_or_default(),
+        expanded: Some(preview.to_vec()),
+    }
+}
+
+pub(crate) fn gap(dir: &Path, mode: Mode, file: &File, hunk: usize) -> Option<Vec<GapLine>> {
     git::new_side(dir, mode, &file.path).map(|side| gap_lines(file, hunk, &side))
 }
 
@@ -624,7 +667,8 @@ pub(crate) fn gap_lines(file: &File, hunk: usize, new_side: &[String]) -> Vec<Ga
     let texts: Vec<(u32, &str)> =
         range.filter_map(|n| new_side.get(usize::try_from(n).ok()?.checked_sub(1)?).map(|t| (n, t.as_str()))).collect();
     let code = texts.iter().map(|(_, t)| diff::expand(t)).collect::<Vec<_>>().join("\n");
-    let highlighted = crate::highlight::highlight(&code, &diff::language(&file.path));
+    let highlighted = crate::highlight::syntax::language(Path::new(&file.path), "")
+        .and_then(|language| crate::highlight::syntax::paint_block(&code, language));
     texts
         .iter()
         .enumerate()

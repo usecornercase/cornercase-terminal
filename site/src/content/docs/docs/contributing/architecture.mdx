@@ -135,8 +135,9 @@ Each holds a model and its own I/O jobs, and never uses `app` or `ui`.
 | `git/worktree.rs` | `git worktree add` and `remove`, checkout paths, `.worktreeinclude`; `git/worktree/setup.rs` the setup wrapper and the teardown. |
 | `git/upstream.rs` | `git fetch` and the commits each workspace can pull (`↓n`). |
 | `graphics/` | Images in the files panel: which protocol each window's terminal understands (`detect.rs`), decoding an image and fitting it to the panel (`decode.rs`, `encode.rs`), the bytes for kitty graphics, iTerm2 inline images and sixel (`kitty.rs`, `iterm.rs`, `sixel.rs`), and wrapping them for tmux (`tmux.rs`). |
-| `highlight.rs` | Syntax highlighting of Markdown code blocks with palette colours. |
-| `highlight/syntax.rs` | The files panel's highlighting: tree-sitter grammars through arborium, the language of a file, palette colours. |
+| `highlight.rs` | Syntax highlighting for files, changes and Markdown, one tree-sitter engine. |
+| `highlight/syntax.rs` | Which grammar a file or a fenced block gets, tree-sitter through arborium, palette colours and the block cache. |
+| `highlight/limit.rs` | The highlight worker and the budget that kills a paint that runs too long. |
 | `highlight/markdown.rs` | Markdown to wrapped lines. |
 | `host/` | The outer terminal: asking for its colours and its name (`host/theme.rs`), desktop notifications, which escape sequence each terminal understands and reading a click on one (`host/notify.rs`), the resize pointer (`host/pointer.rs`) and OSC 52 (`host/clipboard.rs`). |
 | `issues/` | The issue model and clients for GitHub (`gh`), GitLab (REST, for the project of the repository's remote), Shortcut (REST), Linear (GraphQL), Jira Cloud (REST, with an Atlassian Document Format to Markdown converter) and Plane and Asana (REST, sharing an HTML to Markdown converter in `issues/html.rs`), the browser state, the on-disk cache, and the trackers' tokens in `secrets.json` (`issues/secrets.rs`). `browser.rs` and `browser/` (buttons, connect form, people filter, picker, keys and mouse, detail text) take sizes and hits; `app/issues_dialog.rs` builds and hit-tests its UI view. |

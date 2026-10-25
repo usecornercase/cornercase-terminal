@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::io::{self, Read};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
@@ -31,7 +32,6 @@ pub(crate) fn output_within(command: &mut Command, timeout: Duration) -> io::Res
     let deadline = Instant::now() + timeout;
     let mut child =
         command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).process_group(0).spawn()?;
-    let group = i32::try_from(child.id()).ok().and_then(Pid::from_raw);
     let (stdout, stderr) = (drain(child.stdout.take()), drain(child.stderr.take()));
     let left = || deadline.saturating_duration_since(Instant::now());
     let output = wait_until(&mut child, deadline)?.and_then(|status| {
@@ -40,13 +40,29 @@ pub(crate) fn output_within(command: &mut Command, timeout: Duration) -> io::Res
         Some(Output { status, stdout, stderr })
     });
     if output.is_none() {
-        if let Some(group) = group {
-            let _ = kill_process_group(group, Signal::KILL);
-        }
-        let _ = child.kill();
-        let _ = child.wait();
+        kill_group(&mut child);
     }
     Ok(output)
+}
+
+pub(crate) fn kill_group(child: &mut Child) {
+    if let Some(group) = i32::try_from(child.id()).ok().and_then(Pid::from_raw) {
+        let _ = kill_process_group(group, Signal::KILL);
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+thread_local! {
+    static DEADLINE: Cell<Option<Instant>> = const { Cell::new(None) };
+}
+
+pub(crate) fn set_deadline(at: Option<Instant>) {
+    DEADLINE.with(|slot| slot.set(at));
+}
+
+pub(crate) fn time_left(default: Duration) -> Duration {
+    DEADLINE.with(|slot| slot.get().map_or(default, |at| at.saturating_duration_since(Instant::now())))
 }
 
 fn drain(pipe: Option<impl Read + Send + 'static>) -> Receiver<Vec<u8>> {

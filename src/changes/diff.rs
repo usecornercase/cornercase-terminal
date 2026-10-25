@@ -6,7 +6,7 @@ use std::sync::Arc;
 use ratatui::style::Style;
 use similar::{Algorithm, DiffTag};
 
-use crate::highlight;
+use crate::highlight::syntax;
 use crate::text::TAB;
 
 pub(crate) const MAX_LINES: usize = 3000;
@@ -440,16 +440,10 @@ pub(crate) fn finish(file: &mut File) {
     if !file.fold.shows_lines() {
         return;
     }
-    let language = language(&file.path);
     for hunk in &mut file.hunks {
         emphasize(&mut hunk.lines);
-        highlight_hunk(hunk, &language);
+        highlight_hunk(hunk, &file.path);
     }
-}
-
-pub(crate) fn language(path: &str) -> String {
-    let path = Path::new(path);
-    path.extension().or_else(|| path.file_name()).map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default()
 }
 
 fn emphasize(lines: &mut [Line]) {
@@ -544,20 +538,25 @@ fn push_range(ranges: &mut Vec<Range<usize>>, range: Range<usize>) {
     }
 }
 
-fn highlight_hunk(hunk: &mut Hunk, language: &str) {
+fn highlight_hunk(hunk: &mut Hunk, path: &str) {
+    let Some(language) = syntax::language(Path::new(path), "") else { return };
     for skip in [Kind::Added, Kind::Removed] {
-        let side: Vec<usize> = (0..hunk.lines.len()).filter(|&i| hunk.lines[i].kind != skip).collect();
-        if side.is_empty() {
+        paint_side(hunk, language, skip);
+    }
+}
+
+fn paint_side(hunk: &mut Hunk, language: &str, skip: Kind) {
+    let side: Vec<usize> = (0..hunk.lines.len()).filter(|&i| hunk.lines[i].kind != skip).collect();
+    if side.is_empty() {
+        return;
+    }
+    let code = side.iter().map(|&i| hunk.lines[i].text.as_str()).collect::<Vec<_>>().join("\n");
+    let Some(highlighted) = syntax::paint_block(&code, language) else { return };
+    for (k, &i) in side.iter().enumerate() {
+        if skip == Kind::Added && hunk.lines[i].kind == Kind::Context {
             continue;
         }
-        let code = side.iter().map(|&i| hunk.lines[i].text.as_str()).collect::<Vec<_>>().join("\n");
-        let Some(highlighted) = highlight::highlight(&code, language) else { return };
-        for (k, &i) in side.iter().enumerate() {
-            if skip == Kind::Added && hunk.lines[i].kind == Kind::Context {
-                continue;
-            }
-            hunk.lines[i].syntax = Some(highlighted.get(k).cloned().unwrap_or_default());
-        }
+        hunk.lines[i].syntax = Some(highlighted.get(k).cloned().unwrap_or_default());
     }
 }
 

@@ -124,7 +124,10 @@ fn a_rename_has_its_old_path_and_its_patch_pairs_it() {
     wait_until("the window's changes load", || {
         drain(&mut app, &rx);
         app.refresh(Instant::now());
-        app.changes_target().is_some_and(|t| app.panels.changes.model(t.workspace, t.base.as_deref()).is_some())
+        app.changes_target().is_some_and(|t| {
+            app.panels.changes.model(t.workspace, t.base.as_deref()).is_some()
+                || app.panels.changes.summary(t.workspace).is_some()
+        })
     });
     let first = ok(&mut app, "changes", &json!({}));
     assert_eq!((&first["state"], &first["workspaces"][0]["files"][0]["old_path"]), (&json!("ready"), &json!("a.txt")));
@@ -217,10 +220,13 @@ fn the_windows_mark_shows_in_a_stream() {
     wait_until("the changes load", || {
         drain(&mut app, &rx);
         app.refresh(Instant::now());
-        app.changes_target().is_some_and(|t| app.panels.changes.model(t.workspace, t.base.as_deref()).is_some())
+        app.changes_target().is_some_and(|t| {
+            app.panels.changes.model(t.workspace, t.base.as_deref()).is_some()
+                || app.panels.changes.summary(t.workspace).is_some()
+        })
     });
     let workspace = workspace_id(&app);
-    let file = app.changes_target().and_then(|t| app.changed_diff(&t)).expect("diff").files[0].clone();
+    let file = app.changes_target().and_then(|t| app.marks_diff(&t)).expect("diff").files[0].clone();
     app.panels.changes.toggle_viewed(workspace, &file);
 
     let first = ok(&mut app, "changes", &json!({}));

@@ -55,3 +55,7 @@ pub(crate) mod web;
 
 #[cfg(test)]
 mod test_util;
+
+pub fn highlight_worker() -> i32 {
+    highlight::worker_main()
+}

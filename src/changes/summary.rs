@@ -3,6 +3,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
 use std::sync::Arc;
 
+use super::Mode;
 use super::diff::{self, Diff, File, Fold, Status};
 use super::git::{self, Loaded, Request};
 use super::porcelain::{Porcelain, path_prefix};
@@ -47,6 +48,9 @@ type Statuses = HashMap<String, Status>;
 type Previous<'a> = HashMap<&'a str, &'a Arc<File>>;
 
 pub(super) fn load(request: &Request, expanded: &[String]) -> Result<Loaded> {
+    if request.mode != Mode::Uncommitted {
+        return compared(request, expanded);
+    }
     let dir = request.dir.as_path();
     let from = git::head(dir)?;
     let status = git::status(dir)?;
@@ -142,6 +146,137 @@ fn opened(file: File, untracked: &[git::Untracked], patches: &mut HashMap<String
         }
         None => file,
     }
+}
+
+struct Fetched {
+    numstat: Vec<u8>,
+    names: Vec<u8>,
+    untracked: Vec<git::Untracked>,
+}
+
+struct ParsedNames {
+    statuses: Statuses,
+    renames: HashMap<String, String>,
+}
+
+fn compared(request: &Request, expanded: &[String]) -> Result<Loaded> {
+    let dir = request.dir.as_path();
+    let (base, from) = git::comparison(request, dir)?;
+    let to = (request.mode == Mode::Commits).then_some("HEAD");
+    let fetched = fetch_range(dir, &from, to, request.mode)?;
+    let parsed = names(&fetched.names);
+    let previous = previous_of(request);
+    let paths = patch_paths(expanded, &fetched.untracked, &parsed.renames, &previous);
+    let patch = ranged_patch(dir, &from, to, &paths)?;
+    let digest = digest_of(
+        dir,
+        &parsed.statuses,
+        (&request.mode, &from, &fetched.numstat, &fetched.names, &fetched.untracked, expanded, &patch),
+    );
+    if request.last == Some(digest) {
+        return Ok(Loaded { base, digest, diff: None });
+    }
+    let files = ranged_files(&from, &fetched, &parsed, (&patch, expanded, &previous));
+    Ok(Loaded { base, digest, diff: Some(Diff { files }) })
+}
+
+fn fetch_range(dir: &Path, from: &str, to: Option<&str>, mode: Mode) -> Result<Fetched> {
+    Ok(Fetched {
+        numstat: stat(dir, from, to, "--numstat")?,
+        names: stat(dir, from, to, "--name-status")?,
+        untracked: if mode == Mode::All { git::untracked(dir)? } else { Vec::new() },
+    })
+}
+
+fn stat(dir: &Path, from: &str, to: Option<&str>, flag: &str) -> Result<Vec<u8>> {
+    let mut args = vec!["diff", flag, "-z", "--find-renames", "--relative", "--no-ext-diff", "--no-textconv", from];
+    if let Some(to) = to {
+        args.push(to);
+    }
+    args.extend(["--", "."]);
+    git::run(dir, &args)
+}
+
+fn ranged_patch(dir: &Path, from: &str, to: Option<&str>, paths: &[&str]) -> Result<Vec<u8>> {
+    if paths.is_empty() { Ok(Vec::new()) } else { git::patch_between(dir, from, to, paths) }
+}
+
+fn names(raw: &[u8]) -> ParsedNames {
+    let mut parts = raw.split(|byte| *byte == 0).filter(|part| !part.is_empty());
+    let mut parsed = ParsedNames { statuses: HashMap::new(), renames: HashMap::new() };
+    while let Some(code) = parts.next() {
+        push_name(&mut parsed, &mut parts, &String::from_utf8_lossy(code));
+    }
+    parsed
+}
+
+fn push_name<'a>(parsed: &mut ParsedNames, parts: &mut impl Iterator<Item = &'a [u8]>, code: &str) {
+    let Some(path) = parts.next() else { return };
+    let path = String::from_utf8_lossy(path).into_owned();
+    if letter(code) != Status::Renamed {
+        parsed.statuses.insert(path, letter(code));
+        return;
+    }
+    let Some(new) = parts.next() else { return };
+    let new = String::from_utf8_lossy(new).into_owned();
+    parsed.renames.insert(new.clone(), path);
+    parsed.statuses.insert(new, Status::Renamed);
+}
+
+fn letter(code: &str) -> Status {
+    match code.as_bytes().first() {
+        Some(b'A') => Status::Added,
+        Some(b'D') => Status::Deleted,
+        Some(b'R' | b'C') => Status::Renamed,
+        _ => Status::Modified,
+    }
+}
+
+fn previous_of(request: &Request) -> Previous<'_> {
+    request.previous.iter().map(|file| (file.path.as_str(), file)).collect()
+}
+
+fn ranged_files(
+    from: &str,
+    fetched: &Fetched,
+    parsed: &ParsedNames,
+    rest: (&[u8], &[String], &Previous<'_>),
+) -> Vec<Arc<File>> {
+    let (patch, expanded, previous) = rest;
+    let mut files = counted(&fetched.numstat, &parsed.statuses);
+    files.extend(
+        fetched.untracked.iter().map(|file| diff::untracked_file(&file.path, file.size, file.bytes.as_deref(), false)),
+    );
+    for file in &mut files {
+        file.digest = file_digest(from, file);
+        file.staged = None;
+    }
+    let mut patches = parsed_patches(patch);
+    let mut files: Vec<_> =
+        files.into_iter().map(|file| materialize(file, expanded, &fetched.untracked, &mut patches, previous)).collect();
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    files
+}
+
+fn parsed_patches(patch: &[u8]) -> HashMap<String, File> {
+    diff::parse(&String::from_utf8_lossy(patch)).into_iter().map(|file| (file.path.clone(), file)).collect()
+}
+
+fn materialize(
+    file: File,
+    expanded: &[String],
+    untracked: &[git::Untracked],
+    patches: &mut HashMap<String, File>,
+    previous: &Previous<'_>,
+) -> Arc<File> {
+    let file = if expanded.contains(&file.path) { opened(file, untracked, patches) } else { file };
+    git::reuse(file, previous)
+}
+
+fn file_digest(from: &str, file: &File) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    (from, &file.path, &file.old_path, file.status, file.added, file.removed).hash(&mut hasher);
+    hasher.finish()
 }
 
 #[cfg(test)]

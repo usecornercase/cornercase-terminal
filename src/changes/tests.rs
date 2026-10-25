@@ -156,7 +156,7 @@ mod refresh {
     #[rstest::rstest]
     #[case::project(Scope::Project)]
     #[case::every_project(Scope::Every)]
-    fn a_hung_job_gives_up_its_slot_after_thirty_seconds_and_its_late_answer_is_accepted(#[case] scope: Scope) {
+    fn a_job_stays_the_only_one_across_repeated_timeouts(#[case] scope: Scope) {
         let mut panel = Panel { scope, ..Panel::default() };
         let now = Instant::now();
         let ask = |panel: &mut Panel, workspace, at| {
@@ -167,15 +167,37 @@ mod refresh {
             }
         };
         let (generation, request) = ask(&mut panel, 1, now).expect("first");
-        let before = (now + GIVE_UP_AFTER).checked_sub(Duration::from_millis(1)).expect("before the timeout");
-        assert!(ask(&mut panel, 2, before).is_none());
-        let (second, next) = ask(&mut panel, 2, now + GIVE_UP_AFTER).expect("replacement");
+        for step in 1..=3 {
+            assert!(ask(&mut panel, 2, now + GIVE_UP_AFTER * step).is_none(), "step {step}");
+        }
         panel.loaded(1, generation, &request, Ok(loaded(Some(Diff::default()), 1)));
         let model = if scope == Scope::Every { panel.summary(1) } else { panel.model(1, None) };
         assert!(model.is_some());
-        assert!(ask(&mut panel, 3, now + GIVE_UP_AFTER).is_none());
-        panel.loaded(2, second, &next, Ok(loaded(Some(Diff::default()), 2)));
-        assert!(ask(&mut panel, 3, now + GIVE_UP_AFTER).is_some());
+        assert!(ask(&mut panel, 2, now + GIVE_UP_AFTER * 4).is_some());
+    }
+
+    #[test]
+    fn a_timed_out_job_keeps_the_diff_already_shown_and_frees_the_slot() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        let (generation, request) = panel.request(&target(1), now).expect("first");
+        panel.loaded(1, generation, &request, Ok(loaded(Some(diff(vec![file("a", 1, 1)])), 7)));
+        let (generation, request) = panel.request(&target(1), now + CLOSED_EVERY).expect("again");
+        panel.loaded(1, generation, &request, Err(crate::error::Error::Git("timed out".into())));
+        assert_eq!(panel.model(1, None).and_then(Model::diff).map(|d| d.files.len()), Some(1));
+        assert!(panel.request(&target(1), now + CLOSED_EVERY * 2).is_some());
+    }
+
+    #[test]
+    fn a_closed_panel_asks_for_counts_and_one_open_file() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        let preview = vec!["src/main.rs".to_string()];
+        let (_, request) = panel.request_counts(&target(1), &preview, now).expect("counts");
+        assert_eq!(request.expanded.as_deref(), Some(preview.as_slice()));
+        assert!(panel.request_counts(&target(1), &preview, now + GIVE_UP_AFTER * 3).is_none());
+        panel.loaded(1, 1, &request, Ok(loaded(Some(Diff::default()), 1)));
+        assert!(panel.request_counts(&target(1), &preview, now + CLOSED_EVERY).is_some());
     }
 
     #[test]

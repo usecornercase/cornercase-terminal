@@ -219,7 +219,7 @@ impl App {
         let gutter = self
             .changes_target()
             .filter(|t| t.workspace == workspace)
-            .and_then(|t| self.changed_diff(&t))
+            .and_then(|t| self.marks_diff(&t))
             .and_then(|diff| diff.files.iter().find(|f| f.path == viewer.path).cloned())
             .map(|file| files::gutter(&file, lines));
         FileView {
@@ -249,7 +249,7 @@ impl App {
         let statuses = self
             .changes_target()
             .filter(|t| t.workspace == workspace)
-            .and_then(|t| self.changed_diff(&t))
+            .and_then(|t| self.marks_diff(&t))
             .map(|diff| files::statuses(&diff))
             .unwrap_or_default();
         let rows = self

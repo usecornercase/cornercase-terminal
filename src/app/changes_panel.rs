@@ -159,7 +159,39 @@ impl App {
     fn project_request(&mut self, now: Instant) -> Option<(u64, u64, changes::git::Request)> {
         let target = self.changes_target()?;
         self.panels.changes.show_workspace(target.workspace);
-        self.panels.changes.request(&target, now).map(|(generation, request)| (target.workspace, generation, request))
+        let request = if self.detailed_changes(&target) {
+            self.panels.changes.request(&target, now)
+        } else {
+            let preview = self.preview_paths(target.workspace);
+            self.panels.changes.request_counts(&target, &preview, now)
+        };
+        request.map(|(generation, request)| (target.workspace, generation, request))
+    }
+
+    fn detailed_changes(&self, target: &Checkout) -> bool {
+        self.changes_shown()
+            || self.clients.change_streams.followed().contains(&(target.workspace, self.panels.changes.mode()))
+    }
+
+    fn preview_paths(&self, workspace: u64) -> Vec<String> {
+        let Some(path) = self.panels.files.viewer(workspace).map(|viewer| viewer.path.clone()) else {
+            return Vec::new();
+        };
+        if path.is_empty() || path.starts_with('/') || path.split('/').any(|part| part == "..") {
+            return Vec::new();
+        }
+        vec![path]
+    }
+
+    pub(super) fn marks_diff(&self, target: &Checkout) -> Option<Arc<changes::diff::Diff>> {
+        if self.changes_shown() {
+            return self.changed_diff(target);
+        }
+        self.panels
+            .changes
+            .summary(target.workspace)
+            .and_then(|model| model.diff().cloned())
+            .or_else(|| self.changed_diff(target))
     }
 
     fn feed_request(&mut self, now: Instant) -> Option<(u64, u64, changes::git::Request)> {
@@ -204,8 +236,11 @@ impl App {
 
     pub(super) fn changes_files(&self) -> Option<usize> {
         let target = self.changes_target()?;
-        let model = if self.every_shown() {
-            self.panels.changes.summary(target.workspace)
+        let model = if self.every_shown() || !self.changes_shown() {
+            self.panels
+                .changes
+                .summary(target.workspace)
+                .or_else(|| self.panels.changes.model(target.workspace, target.base.as_deref()))
         } else {
             self.panels.changes.model(target.workspace, target.base.as_deref())
         };

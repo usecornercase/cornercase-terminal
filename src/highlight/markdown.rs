@@ -2,7 +2,7 @@ use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
-use crate::highlight;
+use crate::highlight::syntax;
 
 const MIN_WIDTH: usize = 10;
 const MIN_CELL: usize = 3;
@@ -36,7 +36,7 @@ pub(crate) fn warm(source: &str) {
             }
             Event::End(TagEnd::CodeBlock) => {
                 if let Some((info, body)) = code.take() {
-                    highlight::highlight(body.trim_end_matches('\n'), &info);
+                    syntax::paint_fence(body.trim_end_matches('\n'), &info);
                 }
             }
             _ => {}
@@ -371,7 +371,7 @@ impl Renderer {
         let code = code.trim_end_matches('\n');
         let prefix = self.prefix(false);
         let room = self.width.saturating_sub(spans_width(&prefix) + 2);
-        let highlighted = highlight::highlight(code, &language);
+        let highlighted = syntax::paint_fence(code, &language);
         let plain: Vec<Vec<Segment>> = match &highlighted {
             Some(_) => Vec::new(),
             None => code.split('\n').map(|line| vec![(line.replace('\t', "    "), CODE)]).collect(),
