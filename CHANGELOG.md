@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.202
+
+- **A large diff no longer keeps the server busy after you close Changes.** Files, the changes panel and Markdown code blocks now share one highlighter. While Changes is closed, the button's count is read without colouring every hunk, and a refresh does not start another copy of itself while the previous one is still working. A git command or a highlight that runs too long is stopped, and that text stays plain until it changes.
+
 ## 0.12.201
 
 - **`cornercase config import --preview` shows a shared setup without applying it.** It prints what would change, section by section, and exits 0, without asking and without writing `config.json`. `--json` prints the same preview a program can draw, so a settings window can show the changes and the notes, then import the chosen sections with `--only` and `--yes`. A file that is not a setup, or one that does not fit this machine, still exits with 1 and changes nothing.
