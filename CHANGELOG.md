@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.206
+
+- **Preview a plugin without installing it.** `cornercase plugin install SOURCE --preview` fetches the plugin and prints what installing it would do (where it comes from, its commit, what it asks for, how it is built or downloaded, and every command it runs), then exits without asking or installing anything, even with no terminal. `plugin update --preview` does the same for updates, or says a plugin is up to date. With `--json` (and an ID for `update`) the preview is data, so another app can show it in its own dialog.
+- **Install exactly the commit you reviewed.** `--commit SHA` installs, or updates to, the commit the preview showed, and refuses if the plugin has changed since, so nothing you have not seen gets installed. Unlike `SOURCE@SHA`, which pins the plugin to that commit, later updates keep following its branch or tag.
+
 ## 0.12.205
 
 - **`cornercase flow save` saves a flow from JSON.** It takes a flow as `cornercase flow list --json` gives it (each entry's `flow`), from a file or from standard input with `-`, checks it as Settings › Flows does and saves it into your flows, or the project's with `--to project`. `--check` lists its problems without saving, `--path` names the file of the flow you are editing so a new name renames it and `--to` moves it, and `--json` prints what was saved. Apps with an editor of their own can now create and edit flows from the command line instead of writing the TOML file themselves.
