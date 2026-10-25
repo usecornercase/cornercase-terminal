@@ -17,7 +17,7 @@ use crate::web::{self};
 pub(crate) enum AppEvent {
     Input(Event),
     Queue(Box<QueueEvent>),
-    Output(u64, u32, Vec<u8>),
+    Output(u64, u32, term::reader::Output),
     Exited(u64, u32),
     Worktree(WorktreeEvent),
     Issues(IssueEvent),

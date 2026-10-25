@@ -47,7 +47,7 @@ src/state.rs      the saved session as JSON, its Widths schema, migrations and t
 src/messenger/    chat bots: Via, orders, buttons, link.rs, markup.rs
 src/telegram/     Telegram: Bot API, updates, html.rs, link.rs (polling)
 src/discord/      Discord: REST, gateway.rs (WebSocket), markdown.rs, forum.rs (forum mode: the server install link, the setup's reads, the forum channel and its tags, posts)
-src/term.rs       a shell in a PTY, its Emulator, and the reader thread; term/emulator.rs wraps libghostty-vt and takes plain Snapshots for ui
+src/term.rs       a shell in a PTY and its Emulator; term/reader.rs forwards output with permits held through parsing; term/emulator.rs wraps libghostty-vt and takes plain Snapshots for ui
                   term/status.rs OSC 7501 reports, records and lifetimes; term/status/stream.rs bounded escape parsing
                   term/keys.rs KeyEvent -> bytes; term/mouse.rs MouseEvent -> bytes; term/memory.rs how much memory a pane uses
 src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state)
@@ -77,6 +77,6 @@ src/web/          browser access: mod.rs (listener, routes, pairing), bridge.rs 
 skills/cornercase/SKILL.md  the agent skill, embedded for `cornercase skill`
 ```
 
-**Server loop:** the accept thread, one reader thread per client, the signal thread and a forwarder for PTY output all send `ServerEvent`s over one `mpsc` channel. The loop waits for an event or a 500 ms tick, drains the queue, then draws once per client when something on screen may have changed (`Server::due`). Each client has a writer thread so a slow one never blocks the loop. **Client:** the main thread writes each `Frame` to stdout; an input thread sends every crossterm event.
+**Server loop:** the accept thread, one reader thread per client, the signal thread and a forwarder for PTY output all send `ServerEvent`s over one `mpsc` channel. The loop waits for an event or a 500 ms tick, drains a batch within a frame interval, then draws once per client when something on screen may have changed (`Server::due`). Each client has a writer thread so a slow one never blocks the loop. **Client:** the main thread writes each `Frame` to stdout; an input thread sends every crossterm event.
 
 `ui::draw` takes a `View`, not `App`, so rendering is testable with `TestBackend`. Geometry functions (`ui::layout`, `entry_row`, `workspace_row`, `form_buttons`, `picker_item`, …) serve both drawing and hit testing, so tests take positions from them.

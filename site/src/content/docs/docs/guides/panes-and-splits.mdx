@@ -74,6 +74,10 @@ When the program in a pane asks for the mouse (htop, lazygit, nvim with `mouse=a
 
 When the program doesn't ask for the mouse, dragging selects text instead; see below.
 
+## Heavy output
+
+When a program prints faster than cornercase can display it, the pane slows the program until it catches up. Pending output stays bounded per pane, so a flood does not build an ever-growing backlog in memory. Keys, clicks and script requests keep being handled, including `Ctrl+C` to interrupt the program.
+
 ## Scroll back
 
 Over a shell, or any program that doesn't use the mouse, the wheel scrolls back through what the pane printed: each pane keeps its last 10 MB of output, as Ghostty does, which is about 14,000 lines in an 80-column pane and fewer in a wider one. It scrolls the pane under the pointer, even one that isn't active, without moving the focus. While you are up in the history, ` ↓ n more ` at the bottom right of the pane says how many lines are below; new output doesn't move what you are reading, the number just grows. Click ` ↓ n more `, or type or paste in the pane, to get back to the bottom. Commands sent by scripts and agents (`cornercase send`, `cornercase keys`) leave the view where it is.

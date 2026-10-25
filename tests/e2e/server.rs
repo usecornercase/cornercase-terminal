@@ -5,6 +5,22 @@ fn columns() -> u16 {
 }
 
 #[test]
+fn a_flooding_pane_can_be_interrupted_and_requests_keep_answering() {
+    let mut app = Harness::start();
+    app.send(b"yes 'flood flood flood flood'\r");
+    app.wait_for("the pane floods", |s| s.matches("flood flood flood flood").count() > 10);
+
+    let keys = app.session.spawn(&["keys", "ctrl+c"]);
+    let interrupted = finish_within(keys, Duration::from_secs(5));
+    assert!(interrupted.status.success(), "interrupting the flood failed: {interrupted:?}");
+    let status = finish_within(app.session.spawn(&["status", "--json"]), Duration::from_secs(5));
+    assert!(status.status.success(), "status after the flood failed: {status:?}");
+    app.send(b"echo recovered-\"\"after-flood\r");
+
+    app.wait_for("the shell answers after the flood", |s| s.contains("recovered-after-flood"));
+}
+
+#[test]
 fn the_server_log_tells_what_happened_but_never_what_was_typed() {
     let session = Session::new();
     let mut app = Harness::open_with(Arc::clone(&session), ROWS, COLS, &[("CORNERCASE_LOG", "debug")]);

@@ -464,7 +464,7 @@ fn the_window_draws_a_tab_sized_by_a_view_within_its_own_pane(#[case] cols: u16,
     open(&mut app, A, Some((cols, rows)), Some(tab));
     app.resize(AREA);
     let text: String = (0..cols * 2).map(|i| char::from(b'a' + (i % 26) as u8)).collect();
-    app.handle_event(AppEvent::Output(pane, 0, format!("\x1b[H{text}").into_bytes()), AREA).expect("output");
+    app.handle_event(AppEvent::Output(pane, 0, format!("\x1b[H{text}").into_bytes().into()), AREA).expect("output");
 
     let (buffer, _) = render_frame(&mut app, AREA, &Sight::default());
 

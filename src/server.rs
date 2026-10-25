@@ -455,9 +455,13 @@ impl Server {
         rx: &Receiver<ServerEvent>,
         run: &impl Fn(&mut Self, Step) -> ControlFlow<()>,
     ) -> ControlFlow<()> {
+        let started = Instant::now();
         for ev in first.into_iter().chain(std::iter::from_fn(|| rx.try_recv().ok())) {
             if self.contain(Step::Event(ev), run) == Some(ControlFlow::Break(())) {
                 return ControlFlow::Break(());
+            }
+            if started.elapsed() >= FRAME {
+                break;
             }
         }
         ControlFlow::Continue(())

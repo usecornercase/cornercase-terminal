@@ -242,7 +242,7 @@ mod respawning_a_pane {
         let cwd = setup.project.path().to_path_buf();
         assert!(setup.app.respawn_in(pane, cwd, Accounts::default()).expect("respawn"));
 
-        setup.app.handle_event(AppEvent::Output(pane, 0, b"stale-output".to_vec()), AREA).expect("output");
+        setup.app.handle_event(AppEvent::Output(pane, 0, b"stale-output".to_vec().into()), AREA).expect("output");
         setup.app.handle_event(AppEvent::Exited(pane, 0), AREA).expect("exited");
 
         let term = setup.app.projects.pane_by(pane).expect("the pane is still open");

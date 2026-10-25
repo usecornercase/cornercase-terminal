@@ -6,6 +6,8 @@ use crate::state;
 use crate::test_util::TempDir;
 use crate::version;
 
+mod output;
+
 mod lock {
     use super::*;
 
@@ -725,7 +727,7 @@ mod sounding {
         attached.server.app.queue_sound(Cue { kind: Kind::NeedsYou, path: String::new() });
         attached.server.flush();
         let copy = b"\x1b]52;c;aGVsbG8=\x07".to_vec();
-        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, copy)));
+        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, copy.into())));
         attached.server.flush();
 
         let copied = clipboard::osc52("hello");
@@ -777,7 +779,7 @@ mod drawing {
         let mut attached = Attached::new();
         let now = drawn_just_now(&mut attached);
 
-        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(u64::MAX, 0, b"hidden".to_vec())));
+        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(u64::MAX, 0, b"hidden".to_vec().into())));
 
         assert!(!attached.server.due(now));
     }
@@ -789,7 +791,7 @@ mod drawing {
         let now = drawn_just_now(&mut attached);
         attached.server.printed_at = Some(now);
 
-        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, b"shown".to_vec())));
+        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, b"shown".to_vec().into())));
 
         let server = &attached.server;
         assert_eq!((server.due(now), server.due(now + FRAME), server.next_frame(now)), (false, true, Some(FRAME)));
@@ -815,7 +817,7 @@ mod drawing {
         let _ = attached.server.handle(ServerEvent::Message(1, ClientMessage::Event(key)));
         attached.server.draw();
 
-        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, b"a".to_vec())));
+        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, b"a".to_vec().into())));
 
         assert!(attached.server.due(Instant::now()));
     }
@@ -837,7 +839,7 @@ mod drawing {
         drawn_just_now(&mut attached);
         let copy = b"\x1b]52;c;aGVsbG8=\x07".to_vec();
 
-        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, copy)));
+        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, copy.into())));
         attached.server.flush();
 
         assert!(!attached.server.app.shows(pane));
