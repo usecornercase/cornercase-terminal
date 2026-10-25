@@ -213,16 +213,18 @@ fn read_exact(stdout: &mut ChildStdout, buf: &mut [u8], deadline: Instant) -> Re
 }
 
 fn wait_in(stdout: &ChildStdout, deadline: Instant) -> Result<(), Fail> {
-    let left = deadline.saturating_duration_since(Instant::now());
-    if left.is_zero() {
-        return Err(Fail::Timeout);
-    }
-    let timeout = Timespec::try_from(left).map_err(|_| Fail::Broken)?;
-    let mut fds = [PollFd::new(stdout, PollFlags::IN)];
-    match poll(&mut fds, Some(&timeout)) {
-        Ok(_) => ready(&fds[0]),
-        Err(err) if err.kind() == io::ErrorKind::Interrupted => Ok(()),
-        Err(_) => Err(Fail::Broken),
+    loop {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(Fail::Timeout);
+        }
+        let timeout = Timespec::try_from(left).map_err(|_| Fail::Broken)?;
+        let mut fds = [PollFd::new(stdout, PollFlags::IN)];
+        match poll(&mut fds, Some(&timeout)) {
+            Ok(_) => return ready(&fds[0]),
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => {}
+            Err(_) => return Err(Fail::Broken),
+        }
     }
 }
 
