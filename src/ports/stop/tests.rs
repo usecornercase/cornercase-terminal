@@ -1,7 +1,7 @@
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 
-use super::{Outcome, Target, stop};
+use super::{Outcome, Target, kill, stop};
 
 const LISTEN: &str = "import signal, socket, sys, time
 if sys.argv[1] == 'ignore':
@@ -88,4 +88,15 @@ fn several_programs_are_stopped_together() {
     let outcomes: Vec<_> = stop(vec![first.target(), second.target()]).into_iter().map(|(t, o)| (t.port, o)).collect();
     assert!(outcomes.contains(&(first.port, Ok(Outcome::Stopped))), "{outcomes:?}");
     assert!(outcomes.contains(&(second.port, Ok(Outcome::Killed))), "{outcomes:?}");
+}
+
+#[test]
+fn a_pid_whose_start_changed_before_sigkill_is_not_killed() {
+    let mut listening = Listening::new("ignore");
+    let target = listening.target();
+    let target = Target { started: target.started.map(|stamp| stamp + 1), ..target };
+    let mut done = Vec::new();
+    assert_eq!(kill(vec![target.clone()], &mut done), []);
+    assert_eq!(done, [(target, Ok(Outcome::Stopped))]);
+    assert!(listening.running());
 }

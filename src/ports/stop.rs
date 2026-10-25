@@ -75,16 +75,25 @@ pub(crate) fn stop(targets: Vec<Target>) -> Vec<Stopped> {
         }
     }
     let left = wait(signalled, GRACE, Outcome::Stopped, &mut done);
+    let killed = kill(left, &mut done);
+    let left = wait(killed, KILL_WAIT, Outcome::Killed, &mut done);
+    done.extend(left.into_iter().map(|target| (target, Ok(Outcome::StillRunning))));
+    done
+}
+
+fn kill(targets: Vec<Target>, done: &mut Vec<Stopped>) -> Vec<Target> {
     let mut killed = Vec::new();
-    for target in left {
+    for target in targets {
+        if target.started.is_some() && process::start_stamp(target.pid) != target.started {
+            done.push((target, Ok(Outcome::Stopped)));
+            continue;
+        }
         match Pid::from_raw(target.pid).ok_or_else(String::new).and_then(|pid| signal(pid, Signal::KILL)) {
             Ok(()) => killed.push(target),
             Err(reason) => done.push((target, Err(reason))),
         }
     }
-    let left = wait(killed, KILL_WAIT, Outcome::Killed, &mut done);
-    done.extend(left.into_iter().map(|target| (target, Ok(Outcome::StillRunning))));
-    done
+    killed
 }
 
 pub(crate) fn summary(stopped: &[Stopped]) -> String {
