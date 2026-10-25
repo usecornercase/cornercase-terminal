@@ -485,7 +485,9 @@ forgets a token, a bot, a paired chat or the paired browsers.
 
 `export` writes the settings a colleague can use, as TOML, and says on standard error what it left
 out: tokens, accounts, personal keys. `import` shows what a shared file would change and asks first;
-reading standard input or without a terminal it needs --yes. --only limits it to some sections.
+reading standard input or without a terminal it needs --yes. --preview prints that preview and exits
+without asking or importing: the same text on standard output, or, with --json, the preview a program
+draws. --only limits either one to some sections. --preview and --yes cannot be combined.
 
 The server notices edits to config.json within a second and applies them. What cornercase changes
 meanwhile only rewrites the keys it touches, and it does not write over a file it cannot read.
@@ -500,7 +502,8 @@ Examples:
   cornercase config remove linear
   cornercase config project ~/code/web-shop --setup 'npm ci'
   cornercase config export --to team.toml
-  cornercase config import team.toml --only agents,worktrees";
+  cornercase config import team.toml --only agents,worktrees
+  cornercase config import team.toml --preview --json";
 
 pub(super) const ISSUE_HELP: &str =
     "These read the trackers through the server's own connections, the ones the Issues dialog uses:

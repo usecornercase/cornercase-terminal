@@ -368,6 +368,19 @@ mod parsing {
     }
 
     #[test]
+    fn a_setup_can_be_previewed_without_importing_it() {
+        let cli = parse(&["config", "import", "team.toml", "--only", "agents,interface", "--preview", "--json"])
+            .expect("parse");
+        let Some(Command::Control(Control::Config(config))) = cli.command else { panic!("not config") };
+        let Some(args::config::ConfigAction::Import { source, only, yes, preview }) = config.action else {
+            panic!("not import")
+        };
+        assert_eq!((source, only), ("team.toml".to_string(), vec!["agents".to_string(), "interface".into()]));
+        assert!(preview && config.json && !yes);
+        assert!(parse(&["config", "import", "team.toml", "--preview", "--yes"]).is_err());
+    }
+
+    #[test]
     fn status_follows_with_or_without_json_but_never_with_panes() {
         for args in [&["status", "--follow"][..], &["status", "--follow", "--json"]] {
             let Some(Command::Control(Control::Status(status))) = parse(args).expect("parse").command else {

@@ -54,7 +54,9 @@ pub(crate) enum ConfigAction {
             help = "Only these sections: agents, issues, worktrees, interface, repositories"
         )]
         only: Vec<String>,
-        #[arg(long, help = "Import without asking")]
+        #[arg(long, help = "Import without asking", conflicts_with = "preview")]
         yes: bool,
+        #[arg(long, help = "Show what would change and exit, without asking or importing")]
+        preview: bool,
     },
 }

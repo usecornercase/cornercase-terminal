@@ -85,7 +85,7 @@ group 9  personal  collapsed
 | `notify TEXT` | Shows a message in the window, with a desktop notification. |
 | `todo` | Adds, lists, edits, checks off and back, reorders and removes items of the [TODO list](../todo/) (with undo), and sends one to an agent as `send --enter` would. |
 | `config` | Reads every setting, connection and project's commands, and changes them with the Settings dialog's own checks: [settings for a program that draws its own preferences](#settings). |
-| `config export`, `config import FILE` | Writes the settings to hand to a colleague, without tokens or personal ones, and imports such a file after showing what it changes: [share your setup](#share-your-setup). |
+| `config export`, `config import FILE` | Writes the settings to hand to a colleague, without tokens or personal ones, and imports such a file after showing what it changes. `--preview` prints that preview and exits 0 without importing: [share your setup](#share-your-setup). |
 | `away` | Has agents message you [on Telegram](../telegram/) or [Discord](../discord/); `--off` stops it. |
 | `usage` | Prints your Claude Code and Codex [plan limits](#plan-usage) as the Usage dialog's Limits tab shows them; `--cached` prints the last answer without asking the agents again. |
 | `plugin actions`, `plugin run PLUGIN ACTION`, `plugin popup-close` | List the actions your [plugins](../plugins/) add to the menus and buttons, run one on a project, workspace, tab or pane as its menu entry does (or on what the window shows, as its button does), waiting for it to end, and close a plugin's popup. See [Plugins](#plugins). |
@@ -896,11 +896,14 @@ cornercase config export --to team.toml
 cornercase config import team.toml
 cornercase config import team.toml --only agents,worktrees
 cornercase config import - --yes < team.toml
+cornercase config import team.toml --preview --json
 ```
 
 `config export` prints the settings you can hand to a colleague, as the TOML text that ` copy my setup ` copies in the [settings](../../reference/configuration/#share-your-setup), or writes it to the file `--to` names, readable only by you. Standard error says what it left out (tokens, bots, paired chats and browsers, accounts and profiles, `jira_email`, remote access and keep awake, and each project that has no git remote) and, after a `!`, every place where a setup, an argument or a prompt looks like it holds a secret.
 
 `config import` shows on standard error what the file would change, section by section, with the same notes as **Settings › Import**, then asks `Import these settings? [y/N]`. Reading standard input (`-`), or with no terminal to ask on, it imports only with `--yes`. `--only` takes some of the sections: `agents`, `issues`, `worktrees`, `interface` and `repositories`. Either the ticked sections are all saved, or nothing is: a file from a newer cornercase's format, a value the settings refuse or two repositories matching one project leave `config.json` as it was, and the command exits with `1` and the reason. A setting this cornercase does not know is skipped and named, not refused.
+
+`config import --preview` prints that same preview and exits 0, without asking and without saving anything. On standard output it is the text an import shows before the question; with `--json` it is the preview a program can draw, each section's changes and notes. It works when reading standard input and when there is no terminal, so it needs no `--yes`. A file that is not a setup, a newer format, a value the settings refuse, two repositories matching one project, or a project that stopped being a repository still exits with 1 and the reason, and nothing is saved. `--preview` and `--yes` cannot be used together. Show the preview, then import the sections you want with `config import FILE --only agents,interface --yes`.
 
 Over the socket, `config-export` answers `text`, the counts of `settings` and `repositories`, `left_out` and `warnings`. `config-import` takes the `text`, `sections` (every one when left out) and `apply`:
 

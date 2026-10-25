@@ -210,7 +210,7 @@ To import one, paste it on Share (or anywhere on a settings tab) and click **` p
 
 Click a section to untick it, then **` import `**: the ticked sections are saved at once, and the rest stay as they are, as do the settings the text does not mention. The notes say what to check first: in red, the commands that will run on their own (a repository's setup and teardown, `agent_commands`, `gh` and `glab`, an agent mode that skips permission prompts, trust prompts answered for you) and what looks like a secret; then a path or a program this computer lacks, a tracker to connect, a repository with no open project (open it and import again), and a setting this cornercase does not know yet (update it to get that one; the rest still imports). If anything in the text cannot be used, such as a value the settings would refuse, nothing at all is imported and the page says why.
 
-From a terminal, `cornercase config export` and `cornercase config import` do the same: see [Share your setup](../../guides/scripts-and-agents/#share-your-setup) in Scripts and agents.
+From a terminal, `cornercase config export` and `cornercase config import` do the same, and `config import --preview` prints what would change without applying it: see [Share your setup](../../guides/scripts-and-agents/#share-your-setup) in Scripts and agents.
 
 ## config.json
 

@@ -37,8 +37,8 @@ pub(super) fn run(args: ConfigArgs) -> Result<()> {
         }
         Some(ConfigAction::Remove { key }) => request(Configure::Remove(key))?,
         Some(ConfigAction::Export { to }) => return share::export(to.as_deref(), args.json),
-        Some(ConfigAction::Import { source, only, yes }) => {
-            return share::import(&share::Import { source, only, yes }, args.json);
+        Some(ConfigAction::Import { source, only, yes, preview }) => {
+            return share::import(&share::Import { source, only, yes, preview }, args.json);
         }
     };
     if args.json {

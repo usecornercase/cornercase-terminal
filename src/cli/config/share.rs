@@ -20,6 +20,7 @@ pub(super) struct Import {
     pub(super) source: String,
     pub(super) only: Vec<String>,
     pub(super) yes: bool,
+    pub(super) preview: bool,
 }
 
 pub(super) fn export(to: Option<&Path>, json: bool) -> Result<()> {
@@ -70,6 +71,9 @@ pub(super) fn import(import: &Import, json: bool) -> Result<()> {
     let sections = (!import.only.is_empty()).then(|| import.only.clone());
     let mut request = ConfigImport { text, sections, apply: false };
     let value = ask("config import", Command::ConfigImport(request.clone()))?;
+    if import.preview {
+        return show_preview(&value, json);
+    }
     let preview: SetupPreview = answer(value.clone())?;
     eprint!("{}", preview_text(&preview));
     if !changes_anything(&preview) {
@@ -89,6 +93,13 @@ pub(super) fn import(import: &Import, json: bool) -> Result<()> {
         return print_json(&value);
     }
     print_out(&render(&answer::<Described>(value)?, true))
+}
+
+fn show_preview(value: &Value, json: bool) -> Result<()> {
+    if json {
+        return print_json(value);
+    }
+    print_out(&preview_text(&answer(value.clone())?))
 }
 
 fn confirmed(source: &str) -> Result<bool> {
