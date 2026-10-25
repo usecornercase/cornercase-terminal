@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.200
+
+- **`cornercase config import --preview` shows a shared setup without applying it.** It prints what would change, section by section, and exits 0, without asking and without writing `config.json`. `--json` prints the same preview a program can draw, so a settings window can show the changes and the notes, then import the chosen sections with `--only` and `--yes`. A file that is not a setup, or one that does not fit this machine, still exits with 1 and changes nothing.
+
 ## 0.12.199
 
 - **`cornercase ports` lists the ports a workspace listens on.** Each TCP port held by a program its tabs started, or, in a workspace with a worktree of its own, by any of your programs working in that worktree, with the URL to open (`http://localhost:5173`), the program and its pid, and the pane that started it when a tab did. A port opened by an agent, or by something it started, says which agent. From a tab it lists that tab's workspace; `--worktree BRANCH` picks another and `--all` lists every port your programs listen on. `--json` gives the same for scripts and agents, so an agent that just started a dev server can find its address. Ports published by Docker belong to Docker, not to a workspace.
