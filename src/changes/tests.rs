@@ -189,6 +189,17 @@ mod refresh {
     }
 
     #[test]
+    fn a_first_timeout_is_kept_so_the_next_try_waits() {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        let (generation, request) = panel.request(&target(1), now).expect("first");
+        panel.loaded(1, generation, &request, Err(crate::error::Error::Git("timed out".into())));
+        assert!(panel.model(1, None).is_some_and(|model| model.result.is_err()));
+        assert!(panel.request(&target(1), now + Duration::from_millis(500)).is_none());
+        assert!(panel.request(&target(1), now + CLOSED_EVERY).is_some());
+    }
+
+    #[test]
     fn a_closed_panel_asks_for_counts_and_one_open_file() {
         let mut panel = Panel::default();
         let now = Instant::now();

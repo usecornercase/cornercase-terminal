@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{self, Read, Write};
 use std::os::unix::process::CommandExt;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -43,14 +44,32 @@ fn session() -> &'static Mutex<Session> {
 }
 
 fn spawn_worker() -> io::Result<Child> {
-    let exe = std::env::current_exe()?;
-    Command::new(exe)
+    Command::new(worker_exe()?)
         .env("CORNERCASE_HIGHLIGHT_WORKER", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .process_group(0)
         .spawn()
+}
+
+fn worker_exe() -> io::Result<PathBuf> {
+    static EXE: OnceLock<PathBuf> = OnceLock::new();
+    if let Some(path) = EXE.get() {
+        return Ok(path.clone());
+    }
+    let path = usable_exe(&std::env::current_exe()?);
+    let _ = EXE.set(path.clone());
+    Ok(path)
+}
+
+fn usable_exe(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| stripped(path))
+}
+
+fn stripped(path: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    text.strip_suffix(" (deleted)").map_or_else(|| path.to_path_buf(), PathBuf::from)
 }
 
 impl Session {
@@ -63,13 +82,14 @@ impl Session {
     ) -> Option<Vec<Segments>> {
         let key = hash_of(language, source);
         if self.failed.contains(&key) || budget.is_zero() {
-            self.failed.insert(key);
             return None;
         }
         match self.exchange(language, source, budget, spawn) {
             Ok(lines) => lines,
             Err(Fail::Timeout) => {
-                self.failed.insert(key);
+                if budget >= PAINT_BUDGET {
+                    self.failed.insert(key);
+                }
                 self.stop();
                 None
             }

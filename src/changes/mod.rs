@@ -366,7 +366,7 @@ impl Panel {
         if self.loading.is_some_and(|(w, g, _)| (w, g) == (workspace, generation)) {
             self.loading = None;
         }
-        if matches!(&result, Err(crate::error::Error::Git(message)) if message == "timed out") {
+        if self.keeps_timeout(workspace, request, &result) {
             return;
         }
         if self.superseded.get(&workspace).is_some_and(|floor| generation <= *floor) {
@@ -386,6 +386,19 @@ impl Panel {
             let (mode, followed) = (self.mode, &self.followed);
             self.models
                 .retain(|&(w, m), _| w != workspace || m == request.mode || m == mode || followed.contains(&(w, m)));
+        }
+    }
+
+    fn keeps_timeout(&self, workspace: u64, request: &git::Request, result: &Result<git::Loaded>) -> bool {
+        let timed_out = matches!(result, Err(crate::error::Error::Git(message)) if message == "timed out");
+        timed_out && self.has_result(workspace, request)
+    }
+
+    fn has_result(&self, workspace: u64, request: &git::Request) -> bool {
+        if request.expanded.is_some() {
+            self.summaries.contains_key(&workspace)
+        } else {
+            self.model_in(workspace, request.mode, request.base.as_deref()).is_some()
         }
     }
 
