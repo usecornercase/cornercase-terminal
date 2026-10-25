@@ -32,7 +32,7 @@ mod window;
 pub(crate) use requests::{answer, ask, ask_starting, follow, follow_all, report_now, running_now};
 pub(crate) use requests::{
     answered, request, use_account_login, use_account_restart, use_account_switch, use_accounts, use_agent_folds,
-    use_close_agent_tabs, use_close_unlock, use_host_events, use_issue_names, use_issues, use_notices,
+    use_close_agent_tabs, use_close_unlock, use_host_events, use_issue_names, use_issues, use_notices, use_queue_undo,
     use_surface_patches, use_todo_panel, use_view,
 };
 pub(crate) use server_process::{Found, find, find_or_start, wait_for_exit};

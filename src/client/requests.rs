@@ -51,6 +51,10 @@ pub(crate) fn use_todo_panel() -> Result<()> {
     require("todo-panel", "cannot edit, uncheck, reorder or restore TODO items")
 }
 
+pub(crate) fn use_queue_undo() -> Result<()> {
+    require("queue-undo", "cannot undo queue removals or clear started entries")
+}
+
 pub(crate) fn use_agent_folds() -> Result<()> {
     require("agent-folds", "cannot collapse or expand an agent's children")
 }

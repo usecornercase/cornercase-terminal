@@ -2,9 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.200
+## 0.12.201
 
 - **`cornercase config import --preview` shows a shared setup without applying it.** It prints what would change, section by section, and exits 0, without asking and without writing `config.json`. `--json` prints the same preview a program can draw, so a settings window can show the changes and the notes, then import the chosen sections with `--only` and `--yes`. A file that is not a setup, or one that does not fit this machine, still exits with 1 and changes nothing.
+
+## 0.12.200
+
+- **Undo queue removals from the command line.** `cornercase queue remove ID` now prints an undo number, and `queue clear-started` removes every started entry at once with the same undo. `queue restore NUMBER` puts that removal back with its captured prompt, agent, mode, destination, accounts and state. The last 16 command removals stay available until the server stops, independently of the window's undo notice. Both removal commands support `--json` with the removed entries and undo number; clearing nothing prints no number. External UIs can discover these actions through the `queue-undo` contract feature.
 
 ## 0.12.199
 

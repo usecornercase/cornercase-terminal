@@ -806,6 +806,8 @@ pub(crate) enum Queue {
     List,
     Remove(u64),
     Run(u64),
+    ClearStarted,
+    Restore(u64),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
