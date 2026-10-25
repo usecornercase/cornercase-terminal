@@ -160,6 +160,8 @@ Installs, adds, lists and turns on and off [plugins](../../guides/plugins/). It 
 cornercase plugin install acme/notes      # fetch it, show what it runs, ask, install it turned off
 cornercase plugin install acme/notes@v1.2 # the same, at a tag, branch or commit
 cornercase plugin install acme/tools/notes # a plugin in the notes folder of acme/tools
+cornercase plugin install acme/notes --preview --json # what it would run, as JSON; installs nothing
+cornercase plugin install acme/notes --commit "$commit" --yes # install exactly the commit the preview showed
 cornercase plugin update                  # fetch installed plugins again; ask before installing a change
 cornercase plugin remove notes            # turn it off, wait for it to stop, delete its copy
 cornercase plugin link ~/code/my-plugin   # add the plugin in that folder, turned off
@@ -174,7 +176,7 @@ cornercase plugin disable my-plugin       # turn it off: its service and window 
 cornercase plugin logs my-plugin          # what its commands printed; -n, --follow and --path as for logs
 ```
 
-`install` takes `owner/repo` (GitHub), an `https://` git address or a git folder. A plugin in a folder of the repository is `owner/repo/folder` on GitHub, and `address//folder` for any other address or a folder on your machine. With no terminal to ask in, `install` and `update` need `--yes`. A plugin whose manifest cannot be read, or whose command leads out of its folder, is listed with the reason, and cannot be turned on. An unknown id exits with status 1.
+`install` takes `owner/repo` (GitHub), an `https://` git address or a git folder. A plugin in a folder of the repository is `owner/repo/folder` on GitHub, and `address//folder` for any other address or a folder on your machine. With no terminal to ask in, `install` and `update` need `--yes`, or `--preview`, which prints what they would run and exits without installing; `--json` prints it as one JSON object (for `update`, with an ID), and `--commit` then installs, or updates to, exactly the commit it printed, and fails once the plugin gives another. A plugin whose manifest cannot be read, or whose command leads out of its folder, is listed with the reason, and cannot be turned on. An unknown id exits with status 1.
 
 ### `cornercase --version`
 

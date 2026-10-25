@@ -111,6 +111,18 @@ fn plugin_repository(base: &Path) -> (PathBuf, PathBuf, String) {
     (work, folder, repo)
 }
 
+fn release(work: &Path, folder: &Path, repo: &str, version: &str) {
+    write_plugin(folder, version);
+    git(work, &["commit", "--quiet", "-am", version]);
+    git(work, &["push", "--quiet", repo, "HEAD:main"]);
+}
+
+fn previewed(session: &Session, args: &[&str]) -> serde_json::Value {
+    let out = session.cli(args);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    serde_json::from_slice(&out.stdout).expect("one JSON object on standard output")
+}
+
 fn assert_install_asks_first(session: &Session, plugin: &str) {
     let asked = session.cli(&["plugin", "install", plugin]);
     let (out, err) = (String::from_utf8_lossy(&asked.stdout), String::from_utf8_lossy(&asked.stderr));
@@ -139,9 +151,7 @@ fn a_plugin_installs_from_a_repository_after_its_preview_updates_and_goes() {
     assert_install_asks_first(&app.session, &plugin);
     assert_installed_and_current(&app.session, &plugin, &repo);
 
-    write_plugin(&folder, "0.2.0");
-    git(&work, &["commit", "--quiet", "-am", "two"]);
-    git(&work, &["push", "--quiet", &repo, "HEAD:main"]);
+    release(&work, &folder, &repo, "0.2.0");
     let updated = app.session.says(&["plugin", "update", "--yes"]);
     assert!(updated.contains("E2E 0.2.0 (acme.e2e)") && updated.contains("updated acme.e2e to 0.2.0"), "{updated}");
 
@@ -150,6 +160,83 @@ fn a_plugin_installs_from_a_repository_after_its_preview_updates_and_goes() {
     let removed = app.session.says(&["plugin", "remove", "acme.e2e"]);
     assert!(removed.starts_with("removed acme.e2e"), "{removed}");
     assert!(!app.session.dir.join("plugins/installed/acme.e2e").exists());
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+fn assert_previewed_without_installing(session: &Session, plugin: &str) -> String {
+    let text = session.says(&["plugin", "install", plugin, "--preview"]);
+    assert!(text.contains("service serve: ./run service") && text.contains("nothing was installed"), "{text}");
+    let shown = previewed(session, &["plugin", "install", plugin, "--preview", "--json"]);
+    assert_eq!(
+        (&shown["id"], &shown["version"], &shown["subdir"]),
+        (&"acme.e2e".into(), &"0.1.0".into(), &"plugins/e2e".into())
+    );
+    assert!(
+        shown["runs"].as_array().is_some_and(|runs| runs.contains(&serde_json::json!({
+            "entry": "service", "id": "serve", "command": ["./run", "service"]
+        }))),
+        "{shown}"
+    );
+    assert!(shown["replacing"].is_null());
+    assert!(session.says(&["plugin", "list"]).starts_with("no plugins"));
+    let staging = std::fs::read_dir(session.dir.join("plugins/installed/.staging")).map_or(0, Iterator::count);
+    assert_eq!(staging, 0);
+    shown["commit"].as_str().expect("a commit").to_string()
+}
+
+#[test]
+fn a_program_previews_an_install_then_installs_only_the_commit_it_showed() {
+    let session = Session::new();
+    let base = temp_dir_named(&format!("ccpreview-{}", std::process::id()));
+    let (work, folder, repo) = plugin_repository(&base);
+    let plugin = format!("{repo}//plugins/e2e");
+    let first = assert_previewed_without_installing(&session, &plugin);
+
+    release(&work, &folder, &repo, "0.2.0");
+    let refused = session.cli(&["plugin", "install", &plugin, "--commit", &first, "--yes"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("nothing was installed"), "{refused:?}");
+    assert!(session.says(&["plugin", "list"]).starts_with("no plugins"));
+
+    let second = previewed(&session, &["plugin", "install", &plugin, "--preview", "--json"])["commit"].clone();
+    let second = second.as_str().expect("a commit");
+    let installed = session.says(&["plugin", "install", &plugin, "--commit", second, "--yes"]);
+    assert!(installed.contains("installed E2E 0.2.0 (acme.e2e), turned off"), "{installed}");
+    let listed = previewed(&session, &["plugin", "list", "--json"]);
+    let source = &listed["plugins"][0]["source"];
+    assert!(source["commit"] == second && source.get("ref").is_none(), "{source}");
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[test]
+fn a_program_previews_an_update_then_updates_only_to_the_commit_it_showed() {
+    let session = Session::new();
+    let base = temp_dir_named(&format!("ccupdprev-{}", std::process::id()));
+    let (work, folder, repo) = plugin_repository(&base);
+    session.says(&["plugin", "install", &format!("{repo}//plugins/e2e"), "--yes"]);
+
+    let current = previewed(&session, &["plugin", "update", "acme.e2e", "--preview", "--json"]);
+    assert_eq!(current["up_to_date"], true);
+    let installed = current["commit"].clone();
+
+    release(&work, &folder, &repo, "0.2.0");
+    let shown = previewed(&session, &["plugin", "update", "acme.e2e", "--preview", "--json"]);
+    assert_eq!((&shown["up_to_date"], &shown["version"]), (&false.into(), &"0.2.0".into()));
+    assert_eq!(shown["replacing"], serde_json::json!({ "commit": installed, "enabled": false }));
+    assert!(session.says(&["plugin", "list"]).starts_with("acme.e2e  0.1.0  off"));
+    let second = shown["commit"].as_str().expect("a commit").to_string();
+
+    release(&work, &folder, &repo, "0.3.0");
+    let refused = session.cli(&["plugin", "update", "acme.e2e", "--commit", &second, "--yes"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(session.says(&["plugin", "list"]).starts_with("acme.e2e  0.1.0  off"));
+
+    let third = previewed(&session, &["plugin", "update", "acme.e2e", "--preview", "--json"])["commit"].clone();
+    let third = third.as_str().expect("a commit");
+    let updated = session.says(&["plugin", "update", "acme.e2e", "--commit", third, "--yes"]);
+    assert!(updated.contains("updated acme.e2e to 0.3.0, still off"), "{updated}");
+    let usage = session.cli(&["plugin", "update", "--preview", "--json"]);
+    assert_eq!(usage.status.code(), Some(2), "{usage:?}");
     let _ = std::fs::remove_dir_all(&base);
 }
 

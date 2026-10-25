@@ -19,6 +19,38 @@ const MAX_QUOTED: usize = 80;
 pub(crate) const POPUP_WIDTH: std::ops::RangeInclusive<u16> = 20..=500;
 pub(crate) const POPUP_HEIGHT: std::ops::RangeInclusive<u16> = 5..=200;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "entry", rename_all = "lowercase")]
+pub(crate) enum Declared<'a> {
+    Service { id: &'a str, command: &'a [String] },
+    Window { id: &'a str, command: &'a [String] },
+    Action { id: &'a str, title: &'a str, contexts: &'a [Context], command: &'a [String] },
+    Hook { on: On, command: &'a [String] },
+}
+
+impl<'a> Declared<'a> {
+    fn label(self) -> String {
+        match self {
+            Self::Service { id, .. } => format!("service {id}"),
+            Self::Window { id, .. } => format!("window process {id}"),
+            Self::Action { id, contexts, .. } => {
+                let contexts: Vec<&str> = contexts.iter().map(|c| c.name()).collect();
+                format!("action {id} ({})", contexts.join(", "))
+            }
+            Self::Hook { on, .. } => format!("on {}", on.name()),
+        }
+    }
+
+    fn command(self) -> &'a [String] {
+        match self {
+            Self::Service { command, .. }
+            | Self::Window { command, .. }
+            | Self::Action { command, .. }
+            | Self::Hook { command, .. } => command,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub(crate) struct Manifest {
     pub(crate) id: String,
@@ -328,22 +360,21 @@ impl Manifest {
             }))
     }
 
+    pub(crate) fn declared(&self) -> Vec<Declared<'_>> {
+        let services = self.service.iter().map(|p| Declared::Service { id: &p.id, command: &p.command });
+        let windows = self.window.iter().map(|p| Declared::Window { id: &p.id, command: &p.command });
+        let actions = self.actions.iter().map(|action| Declared::Action {
+            id: &action.id,
+            title: &action.title,
+            contexts: &action.contexts,
+            command: &action.command,
+        });
+        let hooks = self.events.iter().map(|hook| Declared::Hook { on: hook.on, command: &hook.command });
+        services.chain(windows).chain(actions).chain(hooks).collect()
+    }
+
     pub(crate) fn commands(&self) -> Vec<(String, &[String])> {
-        let mut commands: Vec<(String, &[String])> = Vec::new();
-        for process in &self.service {
-            commands.push((format!("service {}", process.id), &process.command));
-        }
-        for process in &self.window {
-            commands.push((format!("window process {}", process.id), &process.command));
-        }
-        for action in &self.actions {
-            let contexts: Vec<&str> = action.contexts.iter().map(|c| c.name()).collect();
-            commands.push((format!("action {} ({})", action.id, contexts.join(", ")), &action.command));
-        }
-        for hook in &self.events {
-            commands.push((format!("on {}", hook.on.name()), &hook.command));
-        }
-        commands
+        self.declared().into_iter().map(|entry| (entry.label(), entry.command())).collect()
     }
 
     fn programs(&self, root: &Path) -> Result<(), String> {

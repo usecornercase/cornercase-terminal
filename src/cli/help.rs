@@ -711,6 +711,12 @@ several plugins, each in its own folder (owner/repo/folder on GitHub, address//f
 from, what it asks for and every command it runs before anything runs, and it is installed turned off. Link a \
 folder of yours instead while you write one.
 
+`--preview` fetches a plugin, or an update of one, and prints that same preview, then exits without asking or \
+installing, also with no terminal; with `--json` (and an ID for `update`) it is one JSON object, for a program that \
+shows it and asks itself. `--commit` then installs, or updates to, exactly the commit the preview printed: it fails \
+and installs nothing once the source gives another commit, and unlike SOURCE@COMMIT, which pins the plugin there, \
+later updates still follow its branch or tag.
+
 A plugin runs as you and can do anything you can, including typing into every terminal. What it asks for is shown \
 before you turn it on, not enforced. A running server picks up changes within a second.
 
@@ -725,6 +731,8 @@ one).
 Examples:
   cornercase plugin install acme/notes
   cornercase plugin install acme/notes@v1.2.0
+  cornercase plugin install acme/notes --preview --json
+  cornercase plugin update acme.notes --preview
   cornercase plugin install acme/tools/plugins/notes
   cornercase plugin install https://git.example.com/acme/tools.git//plugins/notes
   cornercase plugin link ~/code/my-plugin

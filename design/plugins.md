@@ -11,6 +11,6 @@ Code: `plugins/`, `app/plugins.rs`, `app/plugin_popup.rs`, `ui/dialog/popup.rs`,
 - [The manifest, commands and the registry](plugins/manifest.md): The manifest; Commands are argv, never a shell; The registry.
 - [Turning plugins on, permissions, environment and folders](plugins/permissions-and-environment.md): Nothing runs until the user turns it on; Permissions are shown, not enforced; What a command inherits; Folders and the log.
 - [Actions, hooks, services and running files](plugins/running.md): Actions in the menus; A button of its own; Popups; Event hooks; Services and window processes; Running files; The server loop never waits on a plugin; Settings › Plugins; The commands.
-- [Installing](plugins/installing.md): sources, fetching, the preview, installing, updating, removing, `[download]`, git, the review.
+- [Installing](plugins/installing.md): sources, fetching, the preview, the preview for programs (`--preview`, `--json`, `--commit`), installing, updating, removing, `[download]`, git, the review.
 - [Finding plugins](plugins/finding-plugins.md): the crawl, the blocklist, the index, trending and new, the page and its CSP.
 - [Through the server](plugins/through-the-server.md): #343: `plugin-list`, `plugin-actions`, `plugin-run`; #435: buttons, popups, `plugin-popup-close`.

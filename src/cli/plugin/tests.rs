@@ -66,3 +66,60 @@ fn a_run_says_how_it_ended() {
         Some("ran acme.notes note: the popup was closed; `cornercase plugin logs acme.notes` says more")
     );
 }
+
+mod previewing {
+    use super::*;
+    use crate::cli::args::{Command as Cli, PluginAction};
+    use crate::cli::tests::parse;
+
+    const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+
+    fn parses(args: &[&str]) -> bool {
+        let mut line = vec!["plugin"];
+        line.extend(args);
+        parse(&line).is_ok()
+    }
+
+    fn install(args: &[&str]) -> InstallArgs {
+        let mut line = vec!["plugin", "install", "acme/notes"];
+        line.extend(args);
+        match parse(&line).expect("parse").command {
+            Some(Cli::Plugin(plugin)) => match plugin.action {
+                PluginAction::Install(args) => args,
+                _ => panic!("not install"),
+            },
+            _ => panic!("not plugin"),
+        }
+    }
+
+    #[test]
+    fn an_install_or_update_previews_without_asking_and_takes_the_commit_it_showed() {
+        let args = install(&["--preview", "--json"]);
+        assert!(args.preview && args.json && !args.yes && args.commit.is_none());
+        let args = install(&["--commit", &SHA.to_ascii_uppercase(), "--yes"]);
+        assert_eq!(args.commit.as_deref(), Some(SHA));
+        for bad in [
+            vec!["install", "a/b", "--preview", "--yes"],
+            vec!["install", "a/b", "--json"],
+            vec!["install", "a/b", "--commit", "0123abc"],
+            vec!["install", "a/b", "--commit", SHA, "--preview"],
+            vec!["update", "--preview", "--json"],
+            vec!["update", "--commit", SHA],
+        ] {
+            assert!(!parses(&bad), "{bad:?}");
+        }
+        assert!(parses(&["update", "--preview"]) && parses(&["update", "acme.notes", "--preview", "--json"]));
+    }
+
+    #[test]
+    fn another_commit_than_the_one_named_is_refused() {
+        let (a, b) = (SHA, "fedcba9876543210fedcba9876543210fedcba98");
+        assert!(same_commit(a, None, "acme/notes", "nothing was installed").is_ok());
+        assert!(same_commit(a, Some(&a.to_ascii_uppercase()), "acme/notes", "nothing was installed").is_ok());
+        let error = same_commit(a, Some(b), "acme/notes", "nothing was installed").expect_err("refused").to_string();
+        assert!(
+            error.contains(&a[..12]) && error.contains(&b[..12]) && error.contains("nothing was installed"),
+            "{error}"
+        );
+    }
+}

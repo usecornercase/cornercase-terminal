@@ -2,10 +2,11 @@ use std::fmt::Write as _;
 use std::io::{self, IsTerminal as _, Write as _};
 use std::path::Path;
 
+use serde::Serialize;
 use serde_json::json;
 
 use super::args::PluginAction;
-use super::args::plugin::RunArgs;
+use super::args::plugin::{InstallArgs, RunArgs, UpdatePluginArgs};
 use super::print_log;
 use crate::client::{answer, ask, confirm};
 use crate::config;
@@ -14,7 +15,7 @@ use crate::control::{Command, Item, PluginActions, PluginPopupClose, PluginRun};
 use crate::error::{Error, Result};
 use crate::paths;
 use crate::plugins::install::{self, Fetched, Removed, Update};
-use crate::plugins::registry::{Source, missing, short};
+use crate::plugins::registry::{missing, short};
 use crate::plugins::source::Origin;
 use crate::plugins::supervise;
 use crate::plugins::{Places, Plugin, Registry};
@@ -33,8 +34,8 @@ fn run_here(action: PluginAction) -> Result<bool> {
     let mut registry = Registry::open(&places.registry).map_err(Error::Plugin)?;
     match action {
         PluginAction::Link { folder } => link(&mut registry, &folder)?,
-        PluginAction::Install { source, yes } => install_from(&places, &source, yes)?,
-        PluginAction::Update { id, yes } => update(&places, &registry, id, yes)?,
+        PluginAction::Install(args) => install_from(&places, &args)?,
+        PluginAction::Update(args) => update(&places, &registry, &args)?,
         PluginAction::Remove { id } => remove(&places, &id)?,
         PluginAction::Unlink { id } => unlink(&mut registry, &id)?,
         PluginAction::List(print) => list(&registry, &places, print.json)?,
@@ -178,11 +179,16 @@ fn ran_text(ran: &ActionRan, item: Option<Item>) -> String {
     }
 }
 
-fn install_from(places: &Places, spec: &str, yes: bool) -> Result<()> {
-    let origin = Origin::parse(&folder_spec(spec)).map_err(Error::Plugin)?;
-    println!("fetching {}…", crate::text::escape_hidden(&origin.spec()));
+fn install_from(places: &Places, args: &InstallArgs) -> Result<()> {
+    let origin = Origin::parse(&folder_spec(&args.source)).map_err(Error::Plugin)?;
+    progress(args.json, &format!("fetching {}…", crate::text::escape_hidden(&origin.spec())));
     let fetched = install::fetch(&origin, places).map_err(Error::Plugin)?;
-    if !confirmed(&fetched, yes, "Install it?")? {
+    if args.preview {
+        return previewed(&fetched, args.json, "nothing was installed");
+    }
+    let place = crate::text::escape_hidden(&origin.place());
+    same_commit(&fetched.commit, args.commit.as_deref(), &place, "nothing was installed")?;
+    if !confirmed(&fetched, args.yes, "Install it?")? {
         println!("nothing was installed");
         return Ok(());
     }
@@ -195,6 +201,34 @@ fn install_from(places: &Places, spec: &str, yes: bool) -> Result<()> {
         println!("turn it on with `cornercase plugin enable {}`", m.id);
     }
     Ok(())
+}
+
+fn progress(json: bool, line: &str) {
+    if json {
+        eprintln!("{line}");
+    } else {
+        println!("{line}");
+    }
+}
+
+fn previewed(fetched: &Fetched, json: bool, kept: &str) -> Result<()> {
+    if json {
+        return super::print_out(&shown_json(&fetched.details()));
+    }
+    show(fetched);
+    println!("{kept}; add --commit {} to install exactly this commit", fetched.commit);
+    Ok(())
+}
+
+fn same_commit(found: &str, wanted: Option<&str>, what: &str, kept: &str) -> Result<()> {
+    match wanted {
+        Some(wanted) if !found.eq_ignore_ascii_case(wanted) => Err(Error::Plugin(format!(
+            "{what} gives commit {} now, not {}, the one --commit names; {kept}; preview it again",
+            short(found),
+            short(wanted)
+        ))),
+        _ => Ok(()),
+    }
 }
 
 fn folder_spec(spec: &str) -> String {
@@ -215,43 +249,75 @@ fn folder_spec(spec: &str) -> String {
     format!("{}{subdir}{at}", Path::new(&path).display())
 }
 
-fn update(places: &Places, registry: &Registry, id: Option<String>, yes: bool) -> Result<()> {
-    let ids: Vec<String> = match id {
-        Some(id) => vec![id],
+fn update(places: &Places, registry: &Registry, args: &UpdatePluginArgs) -> Result<()> {
+    let ids: Vec<String> = match &args.id {
+        Some(id) => vec![id.clone()],
         None => registry.entries.iter().filter(|e| e.source.installed()).map(|e| e.id.clone()).collect(),
     };
     if ids.is_empty() {
         println!("no installed plugins to update");
     }
-    for id in ids {
-        println!("fetching {id}…");
-        match install::check_update(places, &id).map_err(Error::Plugin)? {
-            Update::UpToDate(commit) => println!("{id} is up to date at {}", short(&commit)),
-            Update::Changed(fetched) => {
-                let old = registry.entry(&id).ok().and_then(|entry| match &entry.source {
-                    Source::Git { commit, .. } => Some(short(commit).to_string()),
-                    Source::Link { .. } => None,
-                });
-                println!("{id} changed: {} → {}", old.unwrap_or_default(), short(&fetched.commit));
-                if !confirmed(&fetched, yes, "Update it?")? {
-                    println!("{id} stays as it was");
-                    continue;
-                }
-                let installed = install::install(*fetched, places).map_err(Error::Plugin)?;
-                let on = if installed.enabled { "on" } else { "off" };
-                println!("updated {id} to {}, still {on}", installed.manifest.version);
-            }
-        }
+    for id in &ids {
+        update_one(places, id, args)?;
     }
     Ok(())
 }
 
-fn confirmed(fetched: &Fetched, yes: bool, question: &str) -> Result<bool> {
+fn update_one(places: &Places, id: &str, args: &UpdatePluginArgs) -> Result<()> {
+    progress(args.json, &format!("fetching {id}…"));
+    match install::check_update(places, id).map_err(Error::Plugin)? {
+        Update::UpToDate(commit) => {
+            same_commit(&commit, args.commit.as_deref(), id, "nothing was changed")?;
+            if args.json {
+                return super::print_out(&shown_json(&json!({ "id": id, "commit": commit, "up_to_date": true })));
+            }
+            println!("{id} is up to date at {}", short(&commit));
+            Ok(())
+        }
+        Update::Changed(fetched) => changed(places, id, *fetched, args),
+    }
+}
+
+#[derive(Serialize)]
+struct UpdatePreview<'a> {
+    #[serde(flatten)]
+    details: install::Details<'a>,
+    up_to_date: bool,
+}
+
+fn changed(places: &Places, id: &str, fetched: Fetched, args: &UpdatePluginArgs) -> Result<()> {
+    if args.json {
+        return super::print_out(&shown_json(&UpdatePreview { details: fetched.details(), up_to_date: false }));
+    }
+    let kept = format!("{id} stays as it was");
+    if !args.preview {
+        same_commit(&fetched.commit, args.commit.as_deref(), id, &kept)?;
+    }
+    let old = fetched.replacing.as_ref().map_or("", |replaced| short(&replaced.commit));
+    println!("{id} changed: {old} → {}", short(&fetched.commit));
+    if args.preview {
+        return previewed(&fetched, false, &kept);
+    }
+    if !confirmed(&fetched, args.yes, "Update it?")? {
+        println!("{kept}");
+        return Ok(());
+    }
+    let installed = install::install(fetched, places).map_err(Error::Plugin)?;
+    let on = if installed.enabled { "on" } else { "off" };
+    println!("updated {id} to {}, still {on}", installed.manifest.version);
+    Ok(())
+}
+
+fn show(fetched: &Fetched) {
     println!();
     for line in fetched.preview() {
         println!("  {line}");
     }
     println!();
+}
+
+fn confirmed(fetched: &Fetched, yes: bool, question: &str) -> Result<bool> {
+    show(fetched);
     if yes {
         return Ok(true);
     }
@@ -304,7 +370,11 @@ fn list_json(plugins: &[Plugin], places: &Places) -> String {
             })
         })
         .collect();
-    let json = serde_json::to_string_pretty(&json!({ "plugins": rows })).unwrap_or_default();
+    shown_json(&json!({ "plugins": rows }))
+}
+
+fn shown_json(value: &impl Serialize) -> String {
+    let json = serde_json::to_string_pretty(value).unwrap_or_default();
     let mut text = json.chars().fold(String::with_capacity(json.len()), |mut out, c| {
         if c != '\n' && crate::text::hidden(c) {
             c.encode_utf16(&mut [0; 2]).iter().for_each(|unit| {

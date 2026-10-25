@@ -5,8 +5,10 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
+use serde::Serialize;
+
 use super::archive;
-use super::manifest::{self, Manifest};
+use super::manifest::{self, Declared, Download, Manifest};
 use super::registry::{Entry, Plugin, Registry, Source, short};
 use super::run::{self, Places, private_dir};
 use super::source::Origin;
@@ -39,8 +41,14 @@ pub(crate) struct Fetched {
     pub(crate) origin: Origin,
     pub(crate) commit: String,
     pub(crate) manifest: Manifest,
-    pub(crate) replacing: Option<bool>,
+    pub(crate) replacing: Option<Replacing>,
     staging: Staging,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct Replacing {
+    pub(crate) commit: String,
+    pub(crate) enabled: bool,
 }
 
 #[derive(Debug)]
@@ -107,16 +115,76 @@ impl Fetched {
             lines.push("Once on, it runs:".into());
             lines.extend(commands.iter().map(|(what, command)| format!("  {what}: {}", shown(command))));
         }
-        lines.push(match self.replacing {
+        lines.push(match &self.replacing {
             None => "It is installed turned off.".into(),
-            Some(false) => "It replaces the version you have, which is off, and stays off.".into(),
-            Some(true) => "It replaces the version you have, which is on: its new commands run right away.".into(),
+            Some(Replacing { enabled: false, .. }) => {
+                "It replaces the version you have, which is off, and stays off.".into()
+            }
+            Some(Replacing { enabled: true, .. }) => {
+                "It replaces the version you have, which is on: its new commands run right away.".into()
+            }
         });
         lines.push(
             "Once on, it runs as you and can do anything you can, in every terminal: read its code or trust its author."
                 .into(),
         );
         lines.iter().map(|line| text::escape_hidden(line)).collect()
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct Details<'a> {
+    id: &'a str,
+    name: &'a str,
+    version: &'a str,
+    description: &'a str,
+    repo: &'a str,
+    url: &'a str,
+    #[serde(rename = "ref")]
+    reference: Option<&'a str>,
+    subdir: Option<&'a str>,
+    commit: &'a str,
+    permissions: &'a [String],
+    download: Option<&'a Download>,
+    build: Vec<&'a [String]>,
+    runs: Vec<Declared<'a>>,
+    replacing: Option<&'a Replacing>,
+    lines: Vec<String>,
+}
+
+impl Fetched {
+    pub(crate) fn details(&self) -> Details<'_> {
+        let m = &self.manifest;
+        let download = m.download_here();
+        let build = match download {
+            Some(_) => Vec::new(),
+            None => m.build.iter().map(|step| step.command.as_slice()).collect(),
+        };
+        Details {
+            id: &m.id,
+            name: &m.name,
+            version: &m.version,
+            description: m.description.trim(),
+            repo: &self.origin.repo,
+            url: &self.origin.url,
+            reference: self.origin.reference.as_deref(),
+            subdir: self.origin.subdir.as_deref(),
+            commit: &self.commit,
+            permissions: &m.permissions,
+            download,
+            build,
+            runs: m.declared(),
+            replacing: self.replacing.as_ref(),
+            lines: self.preview(),
+        }
+    }
+}
+
+fn replacing(registry: &Registry, id: &str) -> Option<Replacing> {
+    let entry = registry.entry(id).ok()?;
+    match &entry.source {
+        Source::Git { commit, .. } => Some(Replacing { commit: commit.clone(), enabled: entry.enabled }),
+        Source::Link { .. } => None,
     }
 }
 
@@ -169,7 +237,7 @@ fn fetch_from(origin: &Origin, places: &Places) -> Result<Fetched, String> {
     let manifest = Manifest::read(&root)?;
     let registry = Registry::load(&places.registry);
     conflict(&registry, &manifest.id, origin)?;
-    let replacing = registry.entry(&manifest.id).ok().map(|entry| entry.enabled);
+    let replacing = replacing(&registry, &manifest.id);
     Ok(Fetched { origin: origin.clone(), commit, manifest, replacing, staging })
 }
 
@@ -210,7 +278,7 @@ fn inside(checkout: &Path, subdir: &str) -> std::io::Result<PathBuf> {
     Ok(path)
 }
 
-fn is_commit(reference: &str) -> bool {
+pub(crate) fn is_commit(reference: &str) -> bool {
     reference.len() == 40 && reference.bytes().all(|b| b.is_ascii_hexdigit())
 }
 

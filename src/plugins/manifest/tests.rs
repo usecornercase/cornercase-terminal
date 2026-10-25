@@ -54,6 +54,23 @@ mod parsing {
     }
 
     #[test]
+    fn the_commands_and_their_fields_keep_the_preview_order() {
+        let manifest = Manifest::parse(FULL).expect("parse");
+        let labels: Vec<String> = manifest.commands().into_iter().map(|(label, _)| label).collect();
+        assert_eq!(labels, ["service sync", "window process panel", "action open (workspace, pane)", "on status"]);
+        assert_eq!(
+            serde_json::to_value(manifest.declared()).expect("json"),
+            serde_json::json!([
+                {"entry": "service", "id": "sync", "command": ["bin/notes", "sync"]},
+                {"entry": "window", "id": "panel", "command": ["bin/notes", "panel"]},
+                {"entry": "action", "id": "open", "title": "open notes", "contexts": ["workspace", "pane"],
+                 "command": ["bin/notes", "open"]},
+                {"entry": "hook", "on": "status", "command": ["bin/notes", "status"]},
+            ])
+        );
+    }
+
+    #[test]
     fn it_says_what_it_runs_and_asks_for() {
         let manifest = Manifest::parse(FULL).expect("parse");
         assert_eq!(
