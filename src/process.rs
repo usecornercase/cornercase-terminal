@@ -12,6 +12,8 @@ use rustix::process::{Pid, Signal, kill_process_group, test_kill_process};
 
 pub(crate) use imp::{all, args, children, cwd, env, footprint, name, open_files, parent, peer_uid, started};
 
+pub(crate) mod owners;
+
 const MAX_DESCENDANTS: usize = 256;
 
 const POLL: Duration = Duration::from_millis(20);

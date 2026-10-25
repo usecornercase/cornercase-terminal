@@ -13,7 +13,7 @@ src/log.rs        server.log: levels, the line format, the writer thread and its
 src/panics.rs     containing panics: `catch_unwind` wrappers for the server loop and background jobs, the hook that logs them
 src/paths.rs      socket and lock paths, and every file cornercase keeps
 src/persist.rs    safe JSON writes, backups and the Saver that writes once the state settles
-src/process.rs    a pid's cwd, name, arguments, environment, descendants and memory footprint: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid; stopping and reaping a child
+src/process.rs    a pid's cwd, name, arguments, environment, descendants and memory footprint: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid; stopping and reaping a child; process/owners.rs which pane's shell started a pid (its process tree, walking up its ancestors) and the deepest folder holding a cwd
 src/text.rs       truncation, displayed paths, folder names, breadcrumbs, one-line text and hex; text/stretch.rs the selection of characters across lines (`Stretch`) and the tab rule between a shown line and the file's own
 src/time.rs       timestamps, calendar dates and ages
 src/version.rs    the binary version, version comparison and build id

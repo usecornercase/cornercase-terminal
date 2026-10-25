@@ -359,7 +359,7 @@ impl App {
         self.spawn_job(
             job,
             move || {
-                let panes = pane_trees(&shells);
+                let panes = process::owners::trees(&shells);
                 let server = i32::try_from(std::process::id()).unwrap_or_default();
                 let found = scan::outside(&paths, &panes, server);
                 Ok(found.into_iter().map(|(at, name, tab)| (paths[at].clone(), name, tab)).collect::<Vec<_>>())
@@ -679,15 +679,4 @@ impl App {
 
 pub(super) fn canonical(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
-}
-
-fn pane_trees(shells: &[(i32, Vec<usize>)]) -> scan::Panes {
-    let mut panes = scan::Panes::new();
-    for (pid, owns) in shells {
-        panes.insert(*pid, owns.clone());
-        for child in process::descendants(*pid) {
-            panes.entry(child).or_insert_with(|| owns.clone());
-        }
-    }
-    panes
 }
