@@ -1,7 +1,7 @@
 use std::fmt::Write as _;
 
 use super::args::usage::UsageArgs;
-use super::{print_json, print_out};
+use super::{partial_unless, print_json, print_out};
 use crate::agents::usage::{until, updated};
 use crate::client::{answer, ask};
 use crate::control::usage::PlanInfo;
@@ -17,7 +17,7 @@ pub(super) fn run(args: &UsageArgs) -> Result<bool> {
     } else {
         print_out(&text(&plans, time::now()))?;
     }
-    Ok(plans.agents.iter().all(|plan| plan.error.is_none()))
+    partial_unless(plans.agents.iter().all(|plan| plan.error.is_none()))
 }
 
 pub(crate) fn text(plans: &Plans, clock: i64) -> String {

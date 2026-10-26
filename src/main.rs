@@ -11,6 +11,7 @@ fn main() -> Result<ExitCode> {
     }
     match cli::run(Cli::parse()) {
         Ok(done) => Ok(if done { ExitCode::SUCCESS } else { ExitCode::FAILURE }),
+        Err(Error::Partial) => Ok(ExitCode::from(3)),
         Err(Error::WrongUsage(message)) => {
             eprintln!("error: {message}");
             Ok(ExitCode::from(2))

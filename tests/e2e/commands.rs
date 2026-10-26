@@ -315,7 +315,7 @@ fn mixed_read<'a>(shell: &'a str, first: &'a str, empty: &'a str, second: &'a st
 
 fn assert_failures_in_json(session: &Session, mixed: &[&str], messages: &[serde_json::Value]) {
     let failed = session.cli(&[mixed, &["--json"]].concat());
-    assert_eq!(failed.status.code(), Some(1), "{failed:?}");
+    assert_eq!(failed.status.code(), Some(3), "{failed:?}");
     assert!(failed.stderr.is_empty(), "{failed:?}");
     let json: serde_json::Value = serde_json::from_slice(&failed.stdout).expect("json");
     let entries = json["panes"].as_array().expect("panes");
@@ -333,7 +333,7 @@ fn assert_failures_in_json(session: &Session, mixed: &[&str], messages: &[serde_
 fn assert_failures_in_text(session: &Session, mixed: &[&str]) {
     let (shell, first, empty, second) = (mixed[3], mixed[5], mixed[7], mixed[9]);
     let failed = session.cli(mixed);
-    assert_eq!(failed.status.code(), Some(1), "{failed:?}");
+    assert_eq!(failed.status.code(), Some(3), "{failed:?}");
     let text = String::from_utf8(failed.stdout).expect("text");
     let positions: Vec<usize> = [
         format!("pane {shell}\nerror:"),
@@ -560,13 +560,18 @@ fn skill_prints_the_instructions_for_agents() {
     assert!(String::from_utf8_lossy(&out.stdout).starts_with("---\nname: cornercase\n"), "{out:?}");
 }
 
-#[test]
-fn a_command_without_a_server_says_so_and_starts_none() {
+#[rstest]
+#[case::status(&["status"])]
+#[case::several_last_messages(&["read", "--last-message", "--pane", "1", "--pane", "2"])]
+#[case::usage(&["usage"])]
+#[case::issue_list(&["issue", "list"])]
+fn a_command_without_a_server_says_so_and_starts_none(#[case] args: &[&str]) {
     let session = Session::new();
 
-    let out = session.cli(&["status"]);
+    let out = session.cli(args);
 
     assert!(refused(&out, 1, "no cornercase server is running"), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
     assert_eq!(session.servers(), 0);
 }
 

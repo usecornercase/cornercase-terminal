@@ -94,6 +94,8 @@ pub enum Error {
     Control(String),
     #[error("{0}")]
     WrongUsage(String),
+    #[error("the answer is printed, but part of it failed")]
+    Partial,
     #[error(
         "the running cornercase server is too old for `cornercase {0}`. Restart it: run `cornercase kill-server` \
          (it closes all its terminals) and start cornercase again"

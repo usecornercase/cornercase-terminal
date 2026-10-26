@@ -98,7 +98,7 @@ fn list(args: &ListArgs) -> Result<bool> {
     } else {
         print_out(&tsv(&LIST_COLUMNS, &lists.issues)?)?;
     }
-    Ok(failures(&lists))
+    super::partial_unless(failures(&lists))
 }
 
 pub(crate) fn failures(lists: &Lists) -> bool {

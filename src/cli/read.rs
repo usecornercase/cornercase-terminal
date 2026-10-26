@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
 use super::args::ReadArgs;
-use super::{print_json, print_out, say};
+use super::{partial_unless, print_json, print_out, say};
 use crate::client::ask;
 use crate::control::{self, LastMessage};
 use crate::error::{Error, Result};
@@ -9,14 +9,14 @@ use crate::error::{Error, Result};
 pub(super) fn run(read: &ReadArgs) -> Result<bool> {
     let targets = targets(read)?;
     if targets.len() > 1 {
-        let panes: Vec<Value> = targets.iter().map(message).collect();
+        let panes = targets.iter().map(message).collect::<Result<Vec<Value>>>()?;
         let done = panes.iter().all(|pane| pane.get("error").is_none());
         if read.print.json {
             print_json(&json!({ "panes": panes }))?;
         } else {
             print_out(&blocks(&panes))?;
         }
-        return Ok(done);
+        return partial_unless(done);
     }
     let LastMessage { pane, tab } = targets.into_iter().next().unwrap_or_default();
     let value = if read.last_message {
@@ -47,19 +47,22 @@ fn targets(read: &ReadArgs) -> Result<Vec<LastMessage>> {
     Ok(targets)
 }
 
-fn message(target: &LastMessage) -> Value {
-    match ask("read --last-message", control::Command::LastMessage(target.clone())) {
-        Ok(value) => value,
-        Err(error) => {
-            let mut value = json!({ "error": error.to_string() });
-            if let Some(pane) = target.pane {
-                value["pane"] = pane.into();
-            } else if let Some(tab) = target.tab {
-                value["tab"] = tab.into();
-            }
-            value
-        }
+fn message(target: &LastMessage) -> Result<Value> {
+    kept(target, ask("read --last-message", control::Command::LastMessage(target.clone())))
+}
+
+fn kept(target: &LastMessage, asked: Result<Value>) -> Result<Value> {
+    let error = match asked {
+        Err(Error::Control(error)) => error,
+        asked => return asked,
+    };
+    let mut value = json!({ "error": error });
+    if let Some(pane) = target.pane {
+        value["pane"] = pane.into();
+    } else if let Some(tab) = target.tab {
+        value["tab"] = tab.into();
     }
+    Ok(value)
 }
 
 fn blocks(panes: &[Value]) -> String {

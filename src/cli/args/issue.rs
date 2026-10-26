@@ -1,6 +1,7 @@
 use clap::{Args, Subcommand};
 
 use super::Print;
+use crate::cli::help::ISSUE_LIST_HELP;
 
 pub(crate) const SOURCES: [&str; 7] = ["github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"];
 
@@ -17,7 +18,7 @@ pub(crate) struct IssueArgs {
 pub(crate) enum IssueAction {
     #[command(about = "Say which trackers are connected for a project, what is missing and where work can start")]
     Sources(SourcesArgs),
-    #[command(about = "List issues with the Issues dialog's filters, one line each")]
+    #[command(about = "List issues with the Issues dialog's filters, one line each", after_help = ISSUE_LIST_HELP)]
     List(ListArgs),
     #[command(about = "Print an issue's details, its description and its comments")]
     Read(ReadArgs),
