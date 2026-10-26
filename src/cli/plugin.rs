@@ -117,7 +117,7 @@ fn disable(registry: &mut Registry, id: &str) -> Result<()> {
 fn status(json: bool) -> Result<bool> {
     let value = ask("plugin-list", Command::PluginList(PluginList {}))?;
     if json {
-        super::print_json(&value)?;
+        super::print_out(&shown_json(&value))?;
     } else {
         super::print_out(&status_text(&answer(value)?))?;
     }

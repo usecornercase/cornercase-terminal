@@ -88,6 +88,20 @@ fn the_status_says_when_there_are_no_plugins_and_when_the_registry_cannot_be_rea
 }
 
 #[test]
+fn the_status_json_escapes_invisible_characters_and_keeps_their_values() {
+    let plugin = PluginInfo {
+        id: "notes\u{202e}".into(),
+        source: serde_json::json!("/plugins/evil\u{202e}lmth.sh"),
+        ..PluginInfo::default()
+    };
+    let json = shown_json(&listed(vec![plugin]));
+    assert!(!json.chars().any(|c| c != '\n' && crate::text::hidden(c)), "{json}");
+    let read: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+    assert_eq!(read["plugins"][0]["id"], "notes\u{202e}");
+    assert_eq!(read["plugins"][0]["source"], "/plugins/evil\u{202e}lmth.sh");
+}
+
+#[test]
 fn the_status_escapes_invisible_characters() {
     let plugin = PluginInfo {
         id: "notes\u{202e}".into(),

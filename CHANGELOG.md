@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.209
 
-- **See what each plugin's service is doing from the command line.** `cornercase plugin status` prints the plugins as Settings › Plugins shows them: on, off or cannot run, the note, and whether each service is running, waiting to start again or still starting. `--json` prints that for another app, including why `plugins.json` cannot be read. `plugin list` still reads the files and works with no server.
+- **See what each plugin's service is doing from the command line.** `cornercase plugin status` prints the plugins as Settings › Plugins shows them: on, off or cannot run, the note, and whether each service is running, waiting to start again or still starting. `--json` prints that for another app, with hidden characters escaped as in `plugin list --json`, including why `plugins.json` cannot be read. `plugin list` still reads the files and works with no server.
 
 ## 0.12.208
 
