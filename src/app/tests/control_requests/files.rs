@@ -455,6 +455,24 @@ mod searching {
         app.handle_event(event, AREA).expect("handled");
         assert_eq!(app.take_answers(), Vec::<(u64, String)>::new());
     }
+
+    #[test]
+    fn a_newer_search_of_the_same_connection_cancels_the_earlier_one() {
+        let mut streams = crate::app::files_panel::Streams::default();
+
+        let first = streams.search(CLIENT, 1);
+        let other = streams.search(CLIENT + 1, 2);
+        let second = streams.search(CLIENT, 3);
+
+        assert_eq!(
+            (streams.cancelled(1), streams.cancelled(2), streams.cancelled(3)),
+            (Some(true), Some(false), Some(false))
+        );
+        assert!(first.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(
+            !other.load(std::sync::atomic::Ordering::Relaxed) && !second.load(std::sync::atomic::Ordering::Relaxed)
+        );
+    }
 }
 
 mod the_server_s_home {

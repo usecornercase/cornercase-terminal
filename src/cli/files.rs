@@ -112,7 +112,7 @@ fn read(path: String, at: &Where, follow: bool, json: bool) -> Result<()> {
 }
 
 pub(super) fn read_text(read: &Read) -> Result<String> {
-    let path = &read.path;
+    let path = &plain(&read.path);
     let bytes = read.bytes.unwrap_or_default();
     Ok(match (read.kind, &read.text, &read.image) {
         (ReadKind::Text, Some(text), _) => text.clone(),
@@ -149,11 +149,11 @@ fn search(query: String, names: bool, at: &Where, json: bool) -> Result<()> {
 pub(super) fn search_text(found: &Found) -> String {
     let mut out = String::new();
     for name in &found.names {
-        let _ = writeln!(out, "{}", name.path);
+        let _ = writeln!(out, "{}", plain(&name.path));
     }
     for file in &found.files {
         for line in &file.lines {
-            let _ = writeln!(out, "{}:{}:{}", file.path, line.number, line.text);
+            let _ = writeln!(out, "{}:{}:{}", plain(&file.path), line.number, plain(&line.text));
         }
     }
     if out.is_empty() { "nothing found\n".into() } else { out }

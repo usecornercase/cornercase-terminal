@@ -116,6 +116,13 @@ mod a_read {
         assert_eq!(read_text(&read).expect("text"), "a.bin: PNG image, 1280×720, 2048 bytes; --json gives its data\n");
     }
 
+    #[test]
+    fn of_what_cannot_be_shown_names_the_path_without_control_characters() {
+        let read = Read { path: "a\x1b[2Jb".into(), kind: ReadKind::Binary, bytes: Some(1), ..Read::default() };
+
+        assert_eq!(read_text(&read).expect("text"), "a [2Jb: binary, 1 bytes\n");
+    }
+
     #[rstest]
     #[case::binary(ReadKind::Binary, "a.bin: binary, 2048 bytes\n")]
     #[case::too_large(ReadKind::TooLarge, "a.bin: too large to read, 2048 bytes\n")]
@@ -161,6 +168,16 @@ mod a_search {
         };
 
         assert_eq!(search_text(&found), "src/a.rs:3:let parse = 1;\nsrc/a.rs:9:parse()\n");
+    }
+
+    #[test]
+    fn never_sends_control_characters_to_the_terminal() {
+        let names = Found { names: vec![NameInfo { path: "a\x1b[31mb".into(), indices: vec![] }], ..Found::default() };
+        let line = FoundLine { number: 1, text: "x\x1b]0;t\x07y".into(), ranges: vec![] };
+        let text = Found { files: vec![FoundFile { path: "p\x1bq".into(), lines: vec![line] }], ..Found::default() };
+
+        assert_eq!(search_text(&names), "a [31mb\n");
+        assert_eq!(search_text(&text), "p q:1:x ]0;t y\n");
     }
 
     #[test]

@@ -76,6 +76,9 @@ impl Streams {
     }
 
     pub(in crate::app) fn search(&mut self, client: u64, key: u64) -> Arc<AtomicBool> {
+        for (_, _, earlier) in self.searches.iter().filter(|(searching, ..)| *searching == client) {
+            earlier.store(true, Ordering::Relaxed);
+        }
         let cancel = Arc::new(AtomicBool::new(false));
         self.searches.push((client, key, Arc::clone(&cancel)));
         cancel
@@ -88,6 +91,12 @@ impl Streams {
     #[cfg(test)]
     pub(in crate::app) fn set_every(&mut self, every: Duration) {
         self.every = Some(every);
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn cancelled(&self, key: u64) -> Option<bool> {
+        let found = self.searches.iter().find(|(_, searching, _)| *searching == key);
+        found.map(|(_, _, cancel)| cancel.load(Ordering::Relaxed))
     }
 
     #[cfg(test)]
