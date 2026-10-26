@@ -621,7 +621,7 @@ pub(super) const WAIT_PANE: &str = "The pane; repeat it, or add --tab, to wait o
     the shown one]";
 pub(super) const WAIT_TAB: &str = "A tab: its agent's pane, else its active one; repeat it to wait on several";
 pub(super) const HERE_WORKSPACE: &str = "The workspace [default: the one this runs in, else the shown one]";
-pub(super) const SEEN_DIGEST: &str = "Act only on the version with this digest, from `changes list --json` or `changes file --json`: a file that changed since is left alone [default: the version there now]";
+pub(super) const SEEN_DIGEST: &str = "Act only on the version with this digest, from `changes list --json` or `changes file --json` (the Uncommitted one for stage, unstage and discard): a file that changed since is left alone [default: the version there now]";
 pub(super) const BY_BRANCH: &str =
     "The workspace on this branch, looked up in the project this runs in, else the shown one";
 
