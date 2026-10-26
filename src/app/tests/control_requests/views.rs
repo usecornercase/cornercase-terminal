@@ -43,7 +43,7 @@ fn set(app: &mut App, view: u64, client: u64, set: SetView) -> Value {
 }
 
 fn focus(app: &mut App, view: u64, client: u64, tab: u64) -> Value {
-    call(app, client, Some(view), Command::Focus(wire::Focus { item: Item::Tab(tab) }), false)
+    call(app, client, Some(view), Command::Focus(wire::Focus { item: Item::Tab(tab), reveal: None }), false)
 }
 
 fn info(app: &mut App, view: u64) -> ViewInfo {
@@ -289,7 +289,8 @@ fn legacy_focus_moves_the_window_and_not_the_view() {
     let ids = tabs(&mut app, 2);
     let view = open(&mut app, A, Some((70, 15)), Some(ids[0]));
 
-    let answer = ok(call(&mut app, 71, None, Command::Focus(wire::Focus { item: Item::Tab(ids[1]) }), false));
+    let answer =
+        ok(call(&mut app, 71, None, Command::Focus(wire::Focus { item: Item::Tab(ids[1]), reveal: None }), false));
 
     assert_eq!(answer, serde_json::json!({}));
     assert_eq!(report(&mut app).shown.tab, Some(ids[1]));
@@ -464,7 +465,7 @@ fn the_window_draws_a_tab_sized_by_a_view_within_its_own_pane(#[case] cols: u16,
     open(&mut app, A, Some((cols, rows)), Some(tab));
     app.resize(AREA);
     let text: String = (0..cols * 2).map(|i| char::from(b'a' + (i % 26) as u8)).collect();
-    app.handle_event(AppEvent::Output(pane, 0, format!("\x1b[H{text}").into_bytes()), AREA).expect("output");
+    app.handle_event(AppEvent::Output(pane, 0, format!("\x1b[H{text}").into_bytes().into()), AREA).expect("output");
 
     let (buffer, _) = render_frame(&mut app, AREA, &Sight::default());
 

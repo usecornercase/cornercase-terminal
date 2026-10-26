@@ -1,15 +1,13 @@
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use crate::error::{Error, Result};
 use crate::git::worktree::{check, git, lock};
 use crate::process;
+use crate::process::owners::{Owner, Trees, folder, owner};
 
 use super::Scan;
 use super::discover::{branch_at, gitdir_of};
-
-const MAX_ANCESTORS: usize = 64;
 
 pub(crate) fn scan(path: &Path, base: Option<&str>) -> Result<Scan> {
     if gitdir_of(path).is_none() {
@@ -116,7 +114,7 @@ fn is_ancestor(path: &Path, base: &str) -> bool {
     git(path, ["merge-base", "--is-ancestor", "HEAD", base]).is_ok_and(|out| out.status.success())
 }
 
-pub(crate) type Panes = HashMap<i32, Vec<usize>>;
+pub(crate) type Panes = Trees<Vec<usize>>;
 
 pub(crate) fn outside(paths: &[PathBuf], panes: &Panes, server: i32) -> Vec<(usize, String, bool)> {
     let mut found = Vec::new();
@@ -125,13 +123,8 @@ pub(crate) fn outside(paths: &[PathBuf], panes: &Panes, server: i32) -> Vec<(usi
             continue;
         }
         let Some(cwd) = process::cwd(pid) else { continue };
-        let owner = paths
-            .iter()
-            .enumerate()
-            .filter(|(_, path)| cwd.starts_with(path))
-            .max_by_key(|(_, path)| path.components().count());
-        let Some((index, _)) = owner else { continue };
-        let tab = match owner_of(pid, panes, server) {
+        let Some(index) = folder(&cwd, paths) else { continue };
+        let tab = match owner(pid, panes, server) {
             Owner::Pane(rows) if rows.contains(&index) => continue,
             Owner::Pane(_) => true,
             Owner::Server => continue,
@@ -142,31 +135,4 @@ pub(crate) fn outside(paths: &[PathBuf], panes: &Panes, server: i32) -> Vec<(usi
         }
     }
     found
-}
-
-enum Owner<'a> {
-    Pane(&'a [usize]),
-    Server,
-    None,
-}
-
-fn owner_of(pid: i32, panes: &Panes, server: i32) -> Owner<'_> {
-    let mut at = pid;
-    for _ in 0..MAX_ANCESTORS {
-        if let Some(rows) = panes.get(&at) {
-            return Owner::Pane(rows);
-        }
-        let Some(up) = process::parent(at) else { return Owner::None };
-        if up == server && process::name(at).as_deref() == Some("git") {
-            return Owner::Server;
-        }
-        if up == server {
-            return panes.get(&up).map_or(Owner::None, |rows| Owner::Pane(rows));
-        }
-        if up <= 1 || up == at {
-            return Owner::None;
-        }
-        at = up;
-    }
-    Owner::None
 }

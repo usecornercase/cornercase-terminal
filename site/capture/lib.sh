@@ -133,6 +133,12 @@ cc_click() {
   cc_at "$col" "$row" 0
 }
 
+cc_more() {
+  cc_click 'More ▴'
+  cc_wait "$1"
+  cc_click "$1" 0 -1
+}
+
 cc_rclick() {
   cc_find "$1" "${2:-0}" "${3:-1}" "${4:-0}"
   cc_at "$col" "$row" 2

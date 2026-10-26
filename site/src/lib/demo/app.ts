@@ -8,7 +8,7 @@ import { BOLD, Grid, type Rect, contains, rect } from '../term/grid';
 import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
 import { BASES, type ChangesMode, type ChangesSelection, type FileDiff, type HunkAction, type LinesAction, type Spot, changesLineEdge, changesLineNear, changesStretchNear, compareSpots, hasChanges, hunkLines, linesReference, linesText, selectedLines, shownChanges, workspaceDiff } from './changes';
-import { type FieldGrip, TodoPanel, cursorAt, dragIn, removeSelection, selectAll, selectWord, selectedText as fieldText, selectionOf, todoWidth } from './todo';
+import { type Editable, type FieldGrip, TodoPanel, cursorAt, dragIn, editKey, insertText, removeSelection, selectAll, selectWord, selectedText as fieldText, selectionOf, todoWidth } from './todo';
 import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
 import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
 import { type FindState, findAll, firstFrom, nearest, start as hitStart } from './find';
@@ -38,6 +38,7 @@ import {
   layout,
   mainWidth,
   menuArea,
+  nameWidth,
   sidebarDrop,
   agentLayout,
   sidebarLayout,
@@ -64,6 +65,7 @@ import {
   type IssuesOverlay,
   type HelpItem,
   type MenuAction,
+  type MoreItem,
   type Overlay,
   type Pane,
   type PaneAction,
@@ -142,8 +144,10 @@ const HELP_LABELS: Record<HelpItem, string> = {
   keys: 'keys menu',
   bug: 'report a bug',
 };
+const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'quit'];
 const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
 const WORKTREES_NEED = 'this needs cornercase on your computer: the demo has no worktrees on disk to list';
+const PORTS_NEED = 'this needs cornercase on your computer: the demo runs no servers';
 const SETUP_NEEDS = 'this needs cornercase on your computer: the demo runs no setup scripts';
 const SHARE_NEEDS = 'this needs cornercase on your computer: the demo has no settings to copy or import';
 
@@ -1447,6 +1451,24 @@ export class App {
     } else this.bug(TOUR_NEEDS);
   }
 
+  openWorktrees(): void {
+    this.nav = null;
+    this.bug(WORKTREES_NEED);
+    this.dirty();
+  }
+
+  openMore(at: Pos): void {
+    this.nav = null;
+    this.overlay = { kind: 'menu', at, actions: MORE_ITEMS.map((item) => ({ kind: 'more', item })) };
+    this.dirty();
+  }
+
+  private moreAction(item: MoreItem): void {
+    if (item === 'settings') this.openSettings();
+    else if (item === 'usage') this.openUsage();
+    else this.quit();
+  }
+
   openNewMenu(at: Pos): void {
     this.overlay = { kind: 'menu', at, actions: [{ kind: 'openProject' }, { kind: 'newGroup' }] };
     this.dirty();
@@ -2447,6 +2469,7 @@ export class App {
     if (target.kind === 'workspace' && this.runOf(target.workspace)) actions.push({ kind: 'showFlow', workspace: target.workspace });
     if (target.kind === 'workspace') actions.push(...this.closedAgentsMenu(target.workspace));
     if (target.kind === 'project' || target.kind === 'workspace') actions.push({ kind: 'openIn' });
+    if (target.kind === 'workspace') actions.push({ kind: 'ports', workspace: target.workspace });
     this.overlay = { kind: 'menu', at, actions };
     this.dirty();
   }
@@ -2490,7 +2513,9 @@ export class App {
     if (a.kind === 'projectSettings') return 'project settings';
     if (a.kind === 'openIn') return 'open in…';
     if (a.kind === 'help') return HELP_LABELS[a.item];
+    if (a.kind === 'more') return a.item;
     if (a.kind === 'worktrees') return 'worktrees';
+    if (a.kind === 'ports') return 'ports';
     return a.action;
   }
 
@@ -2562,7 +2587,9 @@ export class App {
     else if (a.kind === 'projectSettings') this.bug(SETUP_NEEDS);
     else if (a.kind === 'openIn') this.bug(OPEN_IN_NEEDS);
     else if (a.kind === 'help') this.helpAction(a.item);
+    else if (a.kind === 'more') this.moreAction(a.item);
     else if (a.kind === 'worktrees') this.bug(WORKTREES_NEED);
+    else if (a.kind === 'ports') this.bug(PORTS_NEED);
     else this.paneAction(a.pane, a.action);
     this.dirty();
   }
@@ -3119,7 +3146,6 @@ export class App {
         { id: 'fetch', section: '', label: 'fetch branches every', value: c.fetchMinutes ? `${c.fetchMinutes} min` : 'off', note: 'commits to pull show as ↓n' },
         { id: 'pulls', section: '', label: 'pull requests', value: '[ ] hidden', note: "each workspace's pull request and its checks, from gh or glab" },
         { id: 'merged', section: '', label: 'merged PRs in stats', value: '[ ] hidden', note: 'your merged pull requests, from gh and glab' },
-        { id: 'worktrees', section: '', label: 'worktrees on disk', value: '', note: 'enter lists every worktree and removes several at once' },
       ];
     }
     if (page === PAGE.agents) {
@@ -3330,8 +3356,6 @@ export class App {
       o.notice = BRANCHES_NEED;
     } else if (row.id === 'merged') {
       o.notice = MERGED_NEED;
-    } else if (row.id === 'worktrees') {
-      o.notice = WORKTREES_NEED;
     } else if (row.id.startsWith('flow:')) {
       o.notice = FLOWS_NEED;
     } else if (row.id === 'plugins') {
@@ -4772,7 +4796,7 @@ export class App {
           o.cursor += typed.length;
         }
       }
-      else if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') o.input += text.replace(/\s+/g, ' ');
+      else if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') nameEdit(o, (f) => insertText(f, text.replace(/\s+/g, ' ')));
       else if (o.kind === 'search') o.query += text;
       else if (o.kind === 'picker') o.filter += text;
       else if (o.kind === 'settings' && o.edit) o.edit.input += o.edit.token ? text.replace(/\s/g, '') : text;
@@ -4883,8 +4907,7 @@ export class App {
       else if (k.key === 'Enter') this.submitForm();
       else if (o.kind === 'newWorkspace' && o.creating) return true;
       else if (o.kind === 'newWorkspace' && k.key === 'Tab') this.toggleWorktree();
-      else if (k.key === 'Backspace') o.input = o.input.slice(0, -1);
-      else if (ch) o.input += ch;
+      else nameEdit(o, (f) => editKey(f, k, nameWidth(this.cols, this.rows)));
       if (o.kind === 'newWorkspace') o.error = undefined;
       this.dirty();
       return true;
@@ -5113,4 +5136,15 @@ export function crop(text: string, hit: [number, number], width: number): [strin
   if (to < chars.length) shown += '…';
   const end = Math.min(hit[1], to - (to < chars.length ? 1 : 0));
   return [shown, [Math.max(hit[0], from + lead) - from, Math.max(end - from, Math.max(hit[0], from + lead) - from)]];
+}
+
+type NameOverlay = Extract<Overlay, { kind: 'newWorkspace' | 'rename' | 'newGroup' }>;
+
+function nameEdit(o: NameOverlay, change: (f: Editable) => void): void {
+  const chars = [...o.input];
+  const field: Editable = { chars, cursor: o.cursor ?? chars.length, anchor: o.anchor };
+  change(field);
+  o.input = field.chars.join('');
+  o.cursor = field.cursor;
+  o.anchor = field.anchor ?? null;
 }

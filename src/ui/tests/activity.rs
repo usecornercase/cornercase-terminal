@@ -4,7 +4,7 @@ use crate::ui::activity::{Item, Shown, WIDTH, items};
 const TALL: Rect = Rect { x: 0, y: 0, width: W, height: 24 };
 
 fn everything() -> Shown {
-    Shown { issues: true, changes: true, files: true, flow: false, update: true, remote: true, plugins: 0 }
+    Shown { issues: true, changes: true, files: true, flow: false, plugins: 0 }
 }
 
 fn with_bar(hover: Option<Position>) -> View<'static> {
@@ -44,7 +44,7 @@ mod layout {
             Widths::default(),
             Screen { changes: false, sidebar, agents: false, icon_bar: true, plugins: false },
         );
-        let footer = [a.separator, a.settings, a.usage, a.quit, a.issues, a.todo_button, a.files_button];
+        let footer = [a.separator, a.more_separator, a.more, a.issues, a.todo_button, a.files_button];
         assert_eq!(
             (a.activity, a.sidebar.x, footer.iter().all(|r| r.is_empty())),
             (Rect::new(0, 0, WIDTH, TALL.height), WIDTH, true)
@@ -63,7 +63,7 @@ mod layout {
             Widths::default(),
             Screen { changes: false, sidebar: Sidebar::SideBySide, agents: false, icon_bar: true, plugins: false },
         );
-        assert_eq!((without.list.bottom(), with.list.bottom()), (TALL.height - 4, TALL.height));
+        assert_eq!((without.list.bottom(), with.list.bottom()), (TALL.height - 3, TALL.height));
     }
 
     #[test]
@@ -86,21 +86,18 @@ mod places {
     use super::*;
 
     #[test]
-    fn panels_go_at_the_top_and_the_rest_at_the_bottom() {
+    fn panels_go_at_the_top_and_help_and_more_at_the_bottom() {
         let bar = Rect::new(0, 0, WIDTH, 24);
         assert_eq!(
             places(bar, everything()),
             [
-                (Item::Quit, 22),
-                (Item::Settings, 20),
-                (Item::Help, 18),
-                (Item::Usage, 16),
-                (Item::Remote, 14),
-                (Item::Update, 12),
+                (Item::More, 22),
+                (Item::Help, 20),
                 (Item::Issues, 1),
                 (Item::Changes, 3),
                 (Item::Files, 5),
                 (Item::Todo, 7),
+                (Item::Worktrees, 9),
             ]
         );
     }
@@ -110,16 +107,17 @@ mod places {
         let shown = Shown { changes: false, ..everything() };
         let top: Vec<(Item, u16)> =
             places(Rect::new(0, 0, WIDTH, 24), shown).into_iter().filter(|(_, y)| *y < 10).collect();
-        assert_eq!(top, [(Item::Issues, 1), (Item::Files, 3), (Item::Todo, 5)]);
+        assert_eq!(top, [(Item::Issues, 1), (Item::Files, 3), (Item::Todo, 5), (Item::Worktrees, 7)]);
     }
 
     #[test]
     fn a_short_bar_drops_panels_before_the_bottom_buttons() {
-        let shown = Shown::default();
-        assert_eq!(
-            places(Rect::new(0, 0, WIDTH, 9), shown),
-            [(Item::Quit, 7), (Item::Settings, 5), (Item::Help, 3), (Item::Usage, 1)]
-        );
+        assert_eq!(places(Rect::new(0, 0, WIDTH, 5), everything()), [(Item::More, 3), (Item::Help, 1)]);
+    }
+
+    #[test]
+    fn a_bar_under_five_rows_keeps_more_alone() {
+        assert_eq!(places(Rect::new(0, 0, WIDTH, 4), everything()), [(Item::More, 2)]);
     }
 
     #[test]
@@ -128,7 +126,7 @@ mod places {
         let hits: Vec<Option<Item>> = [(1, 3), (2, 22), (3, 22), (1, 4)]
             .map(|(x, y)| activity_hit(bar, everything(), Position::new(x, y)))
             .into();
-        assert_eq!(hits, [Some(Item::Changes), Some(Item::Quit), None, None]);
+        assert_eq!(hits, [Some(Item::Changes), Some(Item::More), None, None]);
     }
 }
 
@@ -162,13 +160,13 @@ mod drawing {
         let t = render_sized(&with_bar(None), W, 24);
         let buffer = t.backend().buffer();
         let corner = |y: u16| buffer[(2, y + 1)].symbol().to_string();
-        assert_eq!([corner(3), corner(7), corner(14)], [icons::count(3), icons::DOT, icons::DOT]);
+        assert_eq!([corner(3), corner(7), corner(22)], [icons::count(3), icons::DOT, icons::DOT]);
     }
 
     #[test]
     fn hovering_a_button_names_it_beside_the_bar() {
-        let t = render_sized(&with_bar(Some(Position::new(1, 20))), W, 24);
-        assert!(row_text(&t, Rect::new(WIDTH, 20, 12, 1)).starts_with(" Settings "));
+        let t = render_sized(&with_bar(Some(Position::new(1, 22))), W, 24);
+        assert!(row_text(&t, Rect::new(WIDTH, 22, 12, 1)).starts_with(" More "));
     }
 
     #[test]
@@ -182,9 +180,9 @@ mod drawing {
             sessions: false,
             searching: false,
         };
-        let v = View { overlay: Some(Overlay::Search(search)), ..with_bar(Some(Position::new(1, 20))) };
+        let v = View { overlay: Some(Overlay::Search(search)), ..with_bar(Some(Position::new(1, 22))) };
         let t = render_sized(&v, W, 24);
-        assert!(!row_text(&t, Rect::new(WIDTH, 20, 12, 1)).contains("Settings"));
+        assert!(!row_text(&t, Rect::new(WIDTH, 22, 12, 1)).contains("More"));
     }
 
     #[test]
@@ -198,12 +196,9 @@ mod drawing {
                 icons::NERD.changes,
                 icons::NERD.files,
                 icons::NERD.todo,
-                icons::UPDATE,
-                icons::REMOTE,
-                icons::USAGE,
+                icons::WORKTREES,
                 icons::HELP,
-                icons::SETTINGS,
-                icons::QUIT
+                icons::MORE
             ]
         );
     }
@@ -251,7 +246,7 @@ mod colours {
 
     use super::*;
 
-    const SETTINGS: Position = Position::new(1, 20);
+    const HELP: Position = Position::new(1, 20);
 
     const fn rgb(r: u8, g: u8, b: u8) -> RgbColor {
         RgbColor { r, g, b }
@@ -276,11 +271,11 @@ mod colours {
         #[case] rest: Color,
     ) {
         let still = themed(background, white, None);
-        let lit = themed(background, white, Some(SETTINGS));
-        let (icon, name) = (&lit.backend().buffer()[SETTINGS], &lit.backend().buffer()[(WIDTH + 1, SETTINGS.y)]);
+        let lit = themed(background, white, Some(HELP));
+        let (icon, name) = (&lit.backend().buffer()[HELP], &lit.backend().buffer()[(WIDTH + 1, HELP.y)]);
         let bold = |cell: &ratatui::buffer::Cell| cell.modifier.contains(Modifier::BOLD);
         assert_eq!(
-            (still.backend().buffer()[SETTINGS].fg, icon.fg, bold(icon), name.fg, bold(name)),
+            (still.backend().buffer()[HELP].fg, icon.fg, bold(icon), name.fg, bold(name)),
             (rest, Color::Reset, true, Color::Reset, true)
         );
     }

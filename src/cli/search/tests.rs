@@ -46,3 +46,14 @@ fn the_columns_are_the_keys_of_a_hit_in_order() {
 
     assert!(Hit::COLUMNS.iter().all(|column| value.get(*column).is_some()));
 }
+
+#[rstest::rstest]
+#[case::revealed(serde_json::json!({"revealed": true}), None)]
+#[case::not_asked(serde_json::json!({}), None)]
+#[case::lost(
+    serde_json::json!({"revealed": false}),
+    Some("pane 12 is shown, but its history no longer holds that text, so nothing is selected")
+)]
+fn only_a_lost_match_is_warned_about(#[case] answer: Value, #[case] warning: Option<&str>) {
+    assert_eq!(unrevealed(&answer, control::Item::Pane(12)).as_deref(), warning);
+}

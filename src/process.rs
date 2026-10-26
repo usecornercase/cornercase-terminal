@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::io::{self, Read};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
@@ -10,7 +11,11 @@ use std::time::{Duration, Instant};
 use rustix::io::Errno;
 use rustix::process::{Pid, Signal, kill_process_group, test_kill_process};
 
-pub(crate) use imp::{all, args, children, cwd, env, footprint, name, open_files, parent, peer_uid, started};
+pub(crate) use imp::{
+    all, args, children, cwd, env, footprint, name, open_files, parent, peer_uid, start_stamp, started,
+};
+
+pub(crate) mod owners;
 
 const MAX_DESCENDANTS: usize = 256;
 
@@ -29,7 +34,6 @@ pub(crate) fn output_within(command: &mut Command, timeout: Duration) -> io::Res
     let deadline = Instant::now() + timeout;
     let mut child =
         command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).process_group(0).spawn()?;
-    let group = i32::try_from(child.id()).ok().and_then(Pid::from_raw);
     let (stdout, stderr) = (drain(child.stdout.take()), drain(child.stderr.take()));
     let left = || deadline.saturating_duration_since(Instant::now());
     let output = wait_until(&mut child, deadline)?.and_then(|status| {
@@ -38,13 +42,29 @@ pub(crate) fn output_within(command: &mut Command, timeout: Duration) -> io::Res
         Some(Output { status, stdout, stderr })
     });
     if output.is_none() {
-        if let Some(group) = group {
-            let _ = kill_process_group(group, Signal::KILL);
-        }
-        let _ = child.kill();
-        let _ = child.wait();
+        kill_group(&mut child);
     }
     Ok(output)
+}
+
+pub(crate) fn kill_group(child: &mut Child) {
+    if let Some(group) = i32::try_from(child.id()).ok().and_then(Pid::from_raw) {
+        let _ = kill_process_group(group, Signal::KILL);
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+thread_local! {
+    static DEADLINE: Cell<Option<Instant>> = const { Cell::new(None) };
+}
+
+pub(crate) fn set_deadline(at: Option<Instant>) {
+    DEADLINE.with(|slot| slot.set(at));
+}
+
+pub(crate) fn time_left(default: Duration) -> Duration {
+    DEADLINE.with(|slot| slot.get().map_or(default, |at| at.saturating_duration_since(Instant::now())))
 }
 
 fn drain(pipe: Option<impl Read + Send + 'static>) -> Receiver<Vec<u8>> {
@@ -191,6 +211,10 @@ mod imp {
         rest.split_whitespace().nth(19)?.parse().ok()
     }
 
+    pub(crate) fn start_stamp(pid: i32) -> Option<u64> {
+        started(pid)
+    }
+
     pub(crate) fn parent(pid: i32) -> Option<i32> {
         let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
         let rest = stat.rsplit_once(')')?.1;
@@ -306,6 +330,11 @@ mod imp {
         let info: libc::proc_bsdinfo = pid_info(pid, libc::PROC_PIDTBSDINFO)?;
         i32::try_from(info.pbi_ppid).ok()
     }
+
+    pub(crate) fn start_stamp(pid: i32) -> Option<u64> {
+        let info: libc::proc_bsdinfo = pid_info(pid, libc::PROC_PIDTBSDINFO)?;
+        Some(info.pbi_start_tvsec.saturating_mul(1_000_000).saturating_add(info.pbi_start_tvusec))
+    }
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
@@ -353,6 +382,10 @@ mod imp {
     }
 
     pub(crate) fn parent(_pid: i32) -> Option<i32> {
+        None
+    }
+
+    pub(crate) fn start_stamp(_pid: i32) -> Option<u64> {
         None
     }
 }

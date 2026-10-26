@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use flate2::Compression;
 use flate2::write::GzEncoder;
+use serde_json::json;
 use sha2::{Digest, Sha256};
 
 use super::*;
@@ -105,6 +106,23 @@ mod installing {
         let gone = Origin { reference: Some("nope\u{202e}".into()), ..origin };
         let error = fetch(&gone, &places(&home)).map(|_| ()).expect_err("no such ref");
         assert!(!error.contains('\u{202e}'), "{error}");
+    }
+
+    #[test]
+    fn the_details_are_the_preview_as_fields() {
+        let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
+        let fetched = fetch(&remote.origin(None), &places(&home)).expect("fetch");
+        let details = serde_json::to_value(fetched.details()).expect("json");
+        assert_eq!(
+            (&details["id"], &details["commit"], &details["url"], &details["permissions"]),
+            (&json!("acme.notes"), &json!(remote.head()), &json!(remote.url()), &json!(["read"]))
+        );
+        assert_eq!(
+            (&details["ref"], &details["subdir"], &details["build"], &details["download"], &details["replacing"]),
+            (&json!(null), &json!(null), &json!([]), &json!(null), &json!(null))
+        );
+        assert_eq!(details["runs"], json!([{"entry": "service", "id": "sync", "command": ["bin/run", "sync"]}]));
+        assert_eq!(details["lines"], json!(fetched.preview()));
     }
 
     #[test]
@@ -230,6 +248,7 @@ mod building {
         let fetched = fetch(&remote.origin(None), &places).expect("fetch");
         assert!(!fetched.checkout().join("bin/run").exists(), "nothing ran before the confirmation");
         assert!(fetched.preview().join("\n").contains("Installing it runs, in its folder:\n  ./make"));
+        assert_eq!(serde_json::to_value(fetched.details()).expect("json")["build"], json!([["./make"]]));
         install(fetched, &places).expect("install");
         assert!(root(&places).join("bin/run").exists());
     }
@@ -294,6 +313,9 @@ mod downloading {
         let places = places(&home);
         let fetched = fetch(&remote.origin(None), &places).expect("fetch");
         assert!(fetched.preview().join("\n").contains("/tool.tar.gz and checks its sha256"));
+        let details = serde_json::to_value(fetched.details()).expect("json");
+        assert!(details["download"]["url"].as_str().is_some_and(|url| url.ends_with("/tool.tar.gz")), "{details}");
+        assert_eq!(details["build"], json!([]));
         install(fetched, &places).expect("install");
         let mode = fs::metadata(root(&places).join("bin/tool")).expect("unpacked").permissions().mode() & 0o777;
         assert_eq!(mode, 0o755);
@@ -329,11 +351,13 @@ mod updating {
         let places = places(&home);
         installed(&remote, &places);
         let first = root(&places);
+        let installed_commit = remote.head();
         let mut registry = Registry::open(&places.registry).expect("open");
         registry.set_enabled("acme.notes", true).expect("on");
         registry.save().expect("save");
         remote.commit(&[("cornercase-plugin.toml", &manifest("2.0", ""))]);
         let Ok(Update::Changed(fetched)) = check_update(&places, "acme.notes") else { panic!("an update") };
+        assert_eq!(fetched.replacing, Some(Replacing { commit: installed_commit, enabled: true }));
         let preview = fetched.preview();
         assert!(preview[0].contains("Notes 2.0"));
         assert!(preview.join("\n").contains("which is on: its new commands run right away"), "{preview:?}");

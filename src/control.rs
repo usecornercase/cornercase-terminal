@@ -18,6 +18,7 @@ mod fields;
 mod flow;
 pub(crate) mod issues;
 pub(crate) mod plugins;
+pub(crate) mod ports;
 mod search;
 pub(crate) mod start_server;
 mod status;
@@ -60,7 +61,8 @@ pub(crate) use flow::{
 };
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
-pub(crate) use search::{Hit, Matches, Search};
+pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
+pub(crate) use search::{Hit, Matches, Reveal, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use status::{GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RunStatus, StackInfo};
 pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, WorkspaceInfo};
@@ -214,6 +216,8 @@ pub(crate) enum Command {
     Tour(tour::TourRequest),
     ConfigExport(ConfigExport),
     ConfigImport(ConfigImport),
+    Ports(Ports),
+    StopPort(StopPort),
 }
 
 impl Command {
@@ -375,6 +379,8 @@ impl Command {
             Self::StartServer(_) => 30,
             Self::Away(_) => 20,
             Self::Usage(_) => 67,
+            Self::Ports(_) => 101,
+            Self::StopPort(_) => 102,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
             Self::PluginActions(_) => 69,
@@ -386,7 +392,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 101] = [
+    pub(crate) const NAMES: [&str; 103] = [
         "status",
         "open",
         "new-workspace",
@@ -488,6 +494,8 @@ impl Command {
         "flow-default",
         "flow-order",
         "plugin-popup-close",
+        "ports",
+        "stop-port",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
@@ -679,6 +687,8 @@ pub(crate) struct Rename {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Focus {
     pub(crate) item: Item,
+    #[serde(default)]
+    pub(crate) reveal: Option<Reveal>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -746,6 +756,8 @@ pub(crate) struct Done {
     pub(crate) unconfirmed: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) checked: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) revealed: Option<bool>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) panes: Vec<Done>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -801,6 +813,8 @@ pub(crate) enum Queue {
     List,
     Remove(u64),
     Run(u64),
+    ClearStarted,
+    Restore(u64),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

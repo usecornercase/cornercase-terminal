@@ -5,12 +5,11 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
-use super::{FORM_WIDTH, View, draw_submit, form_inner, overlay_block, update_button};
+use super::widgets::update_button;
+use super::{FORM_WIDTH, View, draw_submit, form_inner, overlay_block};
 use crate::highlight::markdown;
 
 pub(crate) const TITLE: &str = "Remote";
-pub(crate) const LABEL: &str = "Remote";
-const LIT: &str = " ●";
 const QUIET: usize = 4;
 const DARK: Color = Color::Indexed(16);
 const LIGHT: Color = Color::Indexed(231);
@@ -21,29 +20,6 @@ pub(crate) struct RemoteAccess {
     pub(crate) url: Option<String>,
     pub(crate) code: Vec<Line<'static>>,
     pub(crate) lines: Vec<String>,
-}
-
-pub(crate) fn button(usage: Rect, connected: bool) -> Rect {
-    let label = if connected { format!("{LABEL}{LIT}") } else { LABEL.into() };
-    let width = u16::try_from(label.chars().count()).unwrap_or(u16::MAX).saturating_add(2);
-    let room = usage.width.saturating_sub(super::button_width(super::USAGE_LABEL) + 2);
-    if width > room {
-        return Rect::default();
-    }
-    Rect { x: usage.right() - width - 1, width, ..usage }
-}
-
-pub(crate) fn draw_button(f: &mut Frame, view: &View, r: Rect, connected: bool) {
-    if r.is_empty() {
-        return;
-    }
-    let style = super::button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
-    let mut spans = vec![Span::styled(format!(" {LABEL}"), style)];
-    if connected {
-        spans.push(Span::styled(LIT, style.fg(Color::Green)));
-    }
-    spans.push(Span::styled(" ", style));
-    f.render_widget(Paragraph::new(Line::from(spans)), super::middle(r));
 }
 
 fn modules(url: &str) -> Option<(usize, Vec<bool>)> {

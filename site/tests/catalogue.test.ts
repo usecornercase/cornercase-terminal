@@ -20,6 +20,8 @@ contexts = ["pane"]
 command = ["./notes"]
 `;
 const withId = (id: string) => MANIFEST.replace('acme.notes', id);
+const BUTTON = MANIFEST.replace('contexts = ["pane"]', 'contexts = ["button"]');
+const sized = (fields: string) => MANIFEST.replace('command = ["./notes"]', `command = ["./notes"]\n${fields}`);
 
 const repo = (name: string, stars = 0, created = '2026-01-01T00:00:00Z'): Repo => ({
   repo: name, branch: 'main', stars, created, pushed: '2026-10-01T00:00:00Z', fork: false, archived: false, language: 'Rust', description: 'A repo',
@@ -310,11 +312,44 @@ test('manifests the app would refuse are invalid', () => {
     `${MANIFEST}\n[download.macos-arm]\nurl = "https://example.com/a b.tar.gz"\nsha256 = "${'a'.repeat(64)}"\n`,
     `${MANIFEST}\n[download.macos-arm]\nurl = "https://example.com/a.tar.gz"\nsha256 = "abc"\n`,
     `${MANIFEST}\n${'[[events]]\non = "opened"\ncommand = ["x"]\n'.repeat(64)}`,
+    MANIFEST.replace('contexts = ["pane"]', 'contexts = ["Button"]'),
+    ...['"modal"', '1'].map((placement) => sized(`placement = ${placement}`)),
+    ...['', 'placement = "job"\n'].flatMap((placement) => [sized(`${placement}width = 80`), sized(`${placement}height = 10`)]),
+    ...['width = 19', 'width = 501', 'height = 4', 'height = 201', 'width = 80.5', 'width = "80"'].map((size) => sized(`placement = "popup"\n${size}`)),
+    `${MANIFEST}\n[button]\ntitle = "Top"\n`,
+    `button = "x"\n${BUTTON}`,
+    `button = 1979-05-27\n${BUTTON}`,
+    `download = 1979-05-27\n${MANIFEST}`,
+    ...['title = "  "', 'title = 1', 'icon = "ab"', 'icon = ""', 'icon = 1', 'icon = "\u0301"', 'icon = "界"', 'icon = "🚀"'].map((field) => `${BUTTON}\n[button]\n${field}\n`),
   ];
   assert.deepEqual(scan(bad.map((text) => ({ path: '', text }))), { plugins: [], invalid: bad.length });
   const good = `${MANIFEST}\napi = 0\n[[events]]\non = "opened"\ncommand = ["x"]\n[[service]]\nid = "s"\ncommand = ["./s"]\n[[build]]\ncommand = ["make"]\n[download.macos-arm]\nurl = "https://example.com/a.tar.gz"\nsha256 = "${'a'.repeat(64)}"\n`;
   assert.equal(scan([{ path: '', text: good.replace(`api = 0\n`, '') }]).plugins.length, 1);
   for (const api of [0, 1]) assert.equal(scan([{ path: '', text: `api = ${api}\n${MANIFEST}` }]).plugins.length, 1, `api = ${api}`);
+});
+
+test('actions on the plugin\'s button and popups are plugins', () => {
+  const good = [
+    BUTTON,
+    sized('placement = "popup"').replace('contexts = ["pane"]', 'contexts = ["button", "project", "workspace", "tab", "pane"]'),
+    ...['title = "Top"\nicon = "T"', 'title = "Top"', 'icon = "T"', 'icon = "▶"', 'icon = "⚙"', 'icon = "✔"', 'icon = "♥"', 'icon = "\u0903"', ''].map((fields) => `${BUTTON}\n[button]\n${fields}\n`),
+    ...['width = 20', 'width = 500', 'height = 5', 'height = 200'].map((size) => sized(`placement = "popup"\n${size}`)),
+  ];
+  for (const text of good) assert.equal(pluginFrom('', text).id, 'acme.notes', text);
+});
+
+test('a bad context names every context there is', () => {
+  assert.throws(() => pluginFrom('', MANIFEST.replace('contexts = ["pane"]', 'contexts = ["window"]')), /project, workspace, tab, pane and button/);
+});
+
+test('every example manifest in the plugins guide is a plugin', () => {
+  const guide = readFileSync('src/content/docs/docs/guides/plugins.mdx', 'utf8');
+  const examples = [...guide.matchAll(/```toml\n([\s\S]*?)```/g)].map((block) => block[1]).filter((block) => block.includes('[[actions]]'));
+  assert.ok(examples.length >= 2, 'the guide lost an example manifest');
+  for (const example of examples) {
+    const text = example.replace(/sha256 = "[^"]*"/g, `sha256 = "${'a'.repeat(64)}"`);
+    assert.doesNotThrow(() => pluginFrom('', text), example);
+  }
 });
 
 test('unblocking an id brings its unchanged plugin back', async () => {

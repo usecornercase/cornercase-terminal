@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 pub(crate) const VERSION: u32 = 1;
 pub(crate) const GRACE: i64 = 600;
+pub(crate) const UNDOS: usize = 16;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Place {

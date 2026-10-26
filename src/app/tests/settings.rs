@@ -21,7 +21,7 @@ fn open() -> Setup {
     let (dir, config) = (TempDir::new(), TempDir::new());
     let (mut app, rx) = app_in(dir.path(), config.path().join("config.json"));
     app.issues.clear_env_tokens();
-    click(&mut app, areas().settings.as_position());
+    from_more(&mut app, "settings");
     Setup { app, rx, config, _dir: dir }
 }
 
@@ -138,7 +138,7 @@ fn they_open_again_on_the_last_tab() {
     send_key(&mut s.app, KeyCode::Tab, KeyModifiers::NONE);
     send_key(&mut s.app, KeyCode::Esc, KeyModifiers::NONE);
 
-    click(&mut s.app, areas().settings.as_position());
+    from_more(&mut s.app, "settings");
 
     assert_eq!(form(&s.app).page, Page::Agents);
 }
@@ -195,7 +195,7 @@ fn a_saved_token_shows_as_connected() {
     let (mut app, _rx) = app_in(dir.path(), config.path().join("config.json"));
     app.issues.clear_env_tokens();
 
-    click(&mut app, areas().settings.as_position());
+    from_more(&mut app, "settings");
 
     assert_eq!(form(&app).tokens[1].1, Status::Saved(None));
 }
@@ -205,7 +205,7 @@ fn the_remove_button_forgets_a_saved_token() {
     let mut s = open();
     secrets::write(&secrets_file(&s), "shortcut_token", "t0k").expect("save");
     send_key(&mut s.app, KeyCode::Esc, KeyModifiers::NONE);
-    click(&mut s.app, areas().settings.as_position());
+    from_more(&mut s.app, "settings");
     show(&mut s.app, Page::Issues);
     let row = ui::settings_row(AREA, &sections(&s.app), 0, 0);
 

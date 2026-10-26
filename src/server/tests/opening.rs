@@ -64,3 +64,24 @@ fn a_failed_open_becomes_a_toast() {
         opener.shows("could not open in VS Code: exit status 1");
     });
 }
+
+#[test]
+fn only_a_window_that_can_open_is_told_to_open_a_port_in_the_browser() {
+    let mut attached = Attached::new();
+    let mut opener = attached.join_hello(Hello { openers: vec![Opener::Default], ..hello(HostTheme::default()) });
+    attached.serve(Server::step, move |plain| {
+        let listen =
+            "python3 -c 'import socket,time; s=socket.socket(); s.bind((\"127.0.0.1\",0)); s.listen(); time.sleep(60)'";
+        opener.type_line(listen);
+        opener.right_click_on("default");
+        opener.click_on("ports");
+        opener.shows("http://localhost:");
+        opener.click_on(" open ");
+        let got = opener.received(|m| matches!(m, ServerMessage::Browse(_)));
+        assert!(got.iter().any(|m| matches!(m, ServerMessage::Browse(browse) if browse.ip.is_none())));
+        plain.shows("http://localhost:");
+        plain.click_on(" open ");
+        plain.shows("copied http://localhost:");
+        assert!(!plain.received(|_| true).iter().any(|m| matches!(m, ServerMessage::Browse(_))));
+    });
+}

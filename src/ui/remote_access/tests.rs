@@ -22,9 +22,3 @@ fn a_window_too_short_shows_the_address_instead_of_the_code() {
     assert_eq!(short[0].to_string(), TOO_SMALL);
     assert!(tall.len() > 20 && tall.iter().any(|line| line.to_string() == URL));
 }
-
-#[test]
-fn the_button_needs_room_beside_usage() {
-    assert!(button(Rect::new(0, 0, 30, 1), true).width > 0);
-    assert_eq!(button(Rect::new(0, 0, 12, 1), false), Rect::default());
-}

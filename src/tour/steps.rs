@@ -80,8 +80,8 @@ const CORE: [Step; 7] = [
         step(
             "settings",
             "Essential settings",
-            "In Settings: the default agent and its mode, resuming agents after a restart, desktop notifications \
-             and sound, the working icon and the icon bar. Nothing changes until you change it.",
+            "In Settings, under More: the default agent and its mode, resuming agents after a restart, desktop \
+             notifications and sound, the working icon and the icon bar. Nothing changes until you change it.",
             Target::Settings,
             Done::Next,
         ),
@@ -308,7 +308,7 @@ const PHONE: [Step; 3] = [
         step(
             "pair",
             "Pair a phone",
-            "Remote, then open in your phone's browser, shows a code to scan.",
+            "More, remote, then open in your phone's browser, shows a code to scan.",
             Target::Remote,
             Done::Next,
         ),
@@ -338,7 +338,7 @@ const CHATS: [Step; 3] = [
         step(
             "away",
             "Away",
-            "Remote, then continue on Telegram or Discord, turns messages on until you turn them off.",
+            "More, remote, then continue on Telegram or Discord, turns messages on until you turn them off.",
             Target::Remote,
             Done::Next,
         ),

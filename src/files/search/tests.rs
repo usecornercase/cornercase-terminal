@@ -12,7 +12,7 @@ fn indexes_the_files_git_does_not_ignore() {
     let repo = git_repo(&[(".gitignore", "target/\n"), ("src/main.rs", ""), ("README.md", "")]);
     fs::create_dir_all(repo.path().join("target/debug")).expect("mkdir");
     fs::write(repo.path().join("target/debug/app"), "").expect("write");
-    assert_eq!(index(repo.path()), [".gitignore", "README.md", "src/main.rs"]);
+    assert_eq!(index(repo.path(), &AtomicBool::new(false)), [".gitignore", "README.md", "src/main.rs"]);
 }
 
 #[test]
@@ -101,4 +101,10 @@ fn a_cancelled_search_finds_nothing_more() {
     let repo = git_repo(&[("a.txt", "needle\n")]);
     let text = text(repo.path(), &paths(&["a.txt"]), "needle", &AtomicBool::new(true));
     assert_eq!(text.matches, 0);
+}
+
+#[test]
+fn a_cancelled_walk_indexes_nothing() {
+    let repo = git_repo(&[("src/a.rs", ""), ("src/b.rs", "")]);
+    assert_eq!(index(repo.path(), &AtomicBool::new(true)), Vec::<String>::new());
 }

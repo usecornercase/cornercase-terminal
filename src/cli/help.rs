@@ -236,12 +236,22 @@ pub(super) const RENAME_HELP: &str = "Examples:
   cornercase rename --workspace 5 ''";
 pub(super) const FOCUS_HELP: &str =
     "Shows it in the window, or with --view ID in that view only (`cornercase view`), which then
-follows it: the window and other views stay where they are. With --view it prints the view's new
-tab and its `projection`, the number a view's lines and surface frames carry, which goes up each time
-what the view shows changes.
+follows it: the window and other views stay where they are.
+
+--reveal TEXT (a pane only) also scrolls the pane to the text and selects it, as Enter on a result of
+`cornercase search` does: TEXT is what the search looked for, and --line is the match's line from
+`search --json` for a screen match. Leave --line out for an agent's prompt or reply, which takes the
+newest place the pane shows the text. The scroll and the selection are the pane's, so the window and
+every view show them. When the pane no longer holds the text it is still shown, a warning goes to
+stderr and the exit status is 0.
+
+--json prints the answer: `revealed` with --reveal, and with --view the view's new tab and its
+`projection`, the number a view's lines and surface frames carry, which goes up each time what the
+view shows changes.
 
 Examples:
   cornercase focus --pane 12
+  cornercase focus --pane 12 --reveal 'migration failed' --line 340
   cornercase focus --view 41 --tab 7";
 pub(super) const GO_HELP: &str =
     "Does what a click on an agent's desktop notification does, or the go button of its toast: shows
@@ -283,7 +293,7 @@ also has its tab, workspace and project ids and, for an agent's message, when it
 Examples:
   cornercase search 'migration failed'
   pane=$(cornercase search --json checkout | jq -r '.matches[0].pane')
-  cornercase focus --pane \"$pane\"";
+  cornercase focus --pane \"$pane\" --reveal checkout";
 pub(super) const MARK_HELP: &str =
     "A pane marked as pending review shows a blue ● on its tab, and on its workspace, project and
 group rows, until it is marked as reviewed or its agent starts working again on a new prompt or an
@@ -493,7 +503,9 @@ forgets a token, a bot, a paired chat or the paired browsers.
 
 `export` writes the settings a colleague can use, as TOML, and says on standard error what it left
 out: tokens, accounts, personal keys. `import` shows what a shared file would change and asks first;
-reading standard input or without a terminal it needs --yes. --only limits it to some sections.
+reading standard input or without a terminal it needs --yes. --preview prints that preview and exits
+without asking or importing: the same text on standard output, or, with --json, the preview a program
+draws. --only limits either one to some sections. --preview and --yes cannot be combined.
 
 The server notices edits to config.json within a second and applies them. What cornercase changes
 meanwhile only rewrites the keys it touches, and it does not write over a file it cannot read.
@@ -508,7 +520,8 @@ Examples:
   cornercase config remove linear
   cornercase config project ~/code/web-shop --setup 'npm ci'
   cornercase config export --to team.toml
-  cornercase config import team.toml --only agents,worktrees";
+  cornercase config import team.toml --only agents,worktrees
+  cornercase config import team.toml --preview --json";
 
 pub(super) const ISSUE_HELP: &str =
     "These read the trackers through the server's own connections, the ones the Issues dialog uses:
@@ -675,9 +688,9 @@ Examples:
 pub(super) const CHANGES_HELP: &str =
     "`list` prints the changed files of a workspace (the one you are in, or the one --workspace or --worktree names), or of \
 every project with --every, and with --follow keeps printing them as JSON lines each time they change. `file` prints one \
-file's diff, `gap` the unchanged lines before one of its hunks, `base` the branches the Commits and All modes can compare \
-with (naming one sets it, --default goes back to following the default branch), and `viewed` marks a file as viewed or clears \
-the mark. `discard` throws a file's uncommitted changes away (a file git does not track is deleted), asks first on a terminal \
+file's diff, `gap` the unchanged lines between one of its hunks and the one before (hunks count from 0, so the first has \
+no gap), `base` the branches the Commits and All modes can compare with (naming one sets it, --default goes back to \
+following the default branch), and `viewed` marks a file as viewed or clears the mark. `discard` throws a file's uncommitted changes away (a file git does not track is deleted), asks first on a terminal \
 and needs --yes in a script; it cannot be undone. `stage` puts a file's changes in git's index, as `git add` does, and \
 `unstage` takes them out of it; both act on the version `changes file` shows, so a file that changed since is left alone. \
 The modes are uncommitted (the default), \
@@ -700,6 +713,7 @@ mod flow;
 pub(in crate::cli) use flow::{
     FLOW_DEFAULT_HELP, FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP, FLOW_HELP, FLOW_HIDE_HELP,
     FLOW_IMPORT_HELP, FLOW_MESSAGES_HELP, FLOW_ORDER_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP,
+    FLOW_SAVE_HELP,
 };
 
 #[cfg(test)]
@@ -715,6 +729,12 @@ several plugins, each in its own folder (owner/repo/folder on GitHub, address//f
 from, what it asks for and every command it runs before anything runs, and it is installed turned off. Link a \
 folder of yours instead while you write one.
 
+`--preview` fetches a plugin, or an update of one, and prints that same preview, then exits without asking or \
+installing, also with no terminal; with `--json` (and an ID for `update`) it is one JSON object, for a program that \
+shows it and asks itself. `--commit` then installs, or updates to, exactly the commit the preview printed: it fails \
+and installs nothing once the source gives another commit, and unlike SOURCE@COMMIT, which pins the plugin there, \
+later updates still follow its branch or tag.
+
 A plugin runs as you and can do anything you can, including typing into every terminal. What it asks for is shown \
 before you turn it on, not enforced. A running server picks up changes within a second.
 
@@ -726,14 +746,22 @@ shows. A popup action waits until its popup closes, and needs a window attached;
 listed before the plugins changed is refused (pass the --revision `actions --json` printed, or none for the current \
 one).
 
+`status` prints the plugins as Settings › Plugins shows them: on, off or cannot run, the label and the note, and \
+what each service is doing (running, restarting or still starting), and why `plugins.json` cannot be read. It asks \
+the running server. `list` still reads the files and works with no server.
+
 Examples:
   cornercase plugin install acme/notes
   cornercase plugin install acme/notes@v1.2.0
+  cornercase plugin install acme/notes --preview --json
+  cornercase plugin update acme.notes --preview
   cornercase plugin install acme/tools/plugins/notes
   cornercase plugin install https://git.example.com/acme/tools.git//plugins/notes
   cornercase plugin link ~/code/my-plugin
   cornercase plugin enable my-plugin
   cornercase plugin list
+  cornercase plugin status
+  cornercase plugin status --json
   cornercase plugin actions --context pane
   cornercase plugin run acme.notes open --pane 5
   cornercase plugin run acme.notes browse
@@ -795,6 +823,40 @@ Examples:
   cornercase tour start todo
   cornercase tour list --json
   cornercase tour reset";
+
+pub(super) const PORTS_HELP: &str =
+    "Lists the TCP ports in LISTEN state held by the programs of a workspace: the processes its panes
+started (and their children), and, in a workspace with a worktree of its own, any of your processes
+working in that worktree. Each line gives the URL to open (http://localhost:PORT when it listens on
+every address or on 127.0.0.1), the addresses, the program and its pid, and how it belongs to the
+workspace: pane N, agent claude in pane N (the agent itself or a program it started), or cwd. A
+plain workspace (no worktree of its own) shares its folder with the others, so only its panes count.
+--all lists every port your processes listen on, those of no workspace too. Ports published by
+Docker are held by Docker, not by the workspace that started the containers, so they show only
+with --all. With --json it prints {\"ports\": [...]}: port, addresses, url, pid, program, args,
+project, workspace, pane, via (pane, agent or cwd) and agent, null when they do not apply.
+
+The text shows the program and its arguments cut to 40 characters; --json gives them whole.
+`cornercase ports stop PORT` stops one (see its --help).
+
+Examples:
+  cornercase ports
+  cornercase ports --worktree feat/login --json
+  cornercase ports --all
+  cornercase ports stop 5173";
+
+pub(crate) const PORTS_STOP_HELP: &str =
+    "Stops the program that listens on PORT, if it belongs to a workspace (`cornercase ports --all`
+lists the others, which it refuses). It checks first that the program still holds the port, sends
+it SIGTERM, waits up to 3 s for the port to be released, then sends SIGKILL. Only that process is
+signalled, never its process group, so the shell or the agent that started it stays. When several
+programs listen on the port, --pid says which. It prints stopped, killed (it ignored SIGTERM) or
+still running, and exits with 1 when it is still running. With --json it prints {\"port\",
+\"pid\", \"program\", \"outcome\"}, the outcome being stopped, killed or still-running.
+
+Examples:
+  cornercase ports stop 5173
+  cornercase ports stop 3000 --pid 48211 --json";
 
 pub(super) const USAGE_HELP: &str =
     "Asks Claude Code and Codex for your plan limits as the Limits tab of the Usage dialog does, and

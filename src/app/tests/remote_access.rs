@@ -74,7 +74,7 @@ fn shown(app: &App) -> Option<ui::RemoteAccess> {
 }
 
 fn open_dialog(r: &mut Remote) {
-    click(&mut r.app, ui::remote_button(areas().usage, false).as_position());
+    from_more(&mut r.app, "remote…");
     pick(&mut r.app, "open in your phone's browser");
 }
 

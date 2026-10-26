@@ -66,3 +66,16 @@ fn takes_accounts_for_add_and_edit() {
     }
     assert!(Cli::try_parse_from(["cornercase", "queue", "edit", "3", "--account", "claude"]).is_err());
 }
+
+#[test]
+fn removals_take_json_and_restore_takes_the_undo_number() {
+    for (args, command, json) in [
+        (&["remove", "5"][..], control::Queue::Remove(5), false),
+        (&["remove", "5", "--json"][..], control::Queue::Remove(5), true),
+        (&["clear-started"][..], control::Queue::ClearStarted, false),
+        (&["clear-started", "--json"][..], control::Queue::ClearStarted, true),
+        (&["restore", "8"][..], control::Queue::Restore(8), false),
+    ] {
+        assert_eq!(request_of(action(args)).expect("queue request"), (command, json), "{args:?}");
+    }
+}

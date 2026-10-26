@@ -65,7 +65,7 @@ fn titles(app: &App) -> Vec<String> {
 #[test]
 fn stats_opens_without_a_probe_and_tab_hits_switch_to_limits() {
     let (mut app, _rx, dir) = with_claude("echo run > \"$(dirname \"$0\")/runs\"\nexit 1");
-    click(&mut app, areas().usage.as_position());
+    from_more(&mut app, "usage");
     assert_eq!(shown(&app).expect("dialog").page, usage::Page::Stats);
     assert!(sections(&app).is_empty());
     assert!(!dir.path().join("runs").exists());
@@ -101,7 +101,7 @@ fn sharing_copies_only_after_something_was_counted() {
 #[test]
 fn the_button_shows_loading_then_the_windows() {
     let (mut app, rx, _dir) = with_claude(&format!("read -r a\nread -r b\necho '{ANSWER}'"));
-    click(&mut app, areas().usage.as_position());
+    from_more(&mut app, "usage");
     app.switch_usage(usage::Page::Limits);
     let loading: Vec<(String, String)> = sections(&app).into_iter().map(|s| (s.title, s.status)).collect();
     assert_eq!((loading, windows(&app)), (vec![("Claude Code".into(), "loading…".into())], Vec::new()));
@@ -116,7 +116,7 @@ fn every_installed_agent_gets_a_section() {
         (agents::Known::Claude.name(), &format!("read -r a\nread -r b\necho '{ANSWER}'")),
         (agents::Known::Codex.name(), &format!("read -r a\nread -r b\nread -r c\necho '{CODEX_ANSWER}'")),
     ]);
-    click(&mut app, areas().usage.as_position());
+    from_more(&mut app, "usage");
     app.switch_usage(usage::Page::Limits);
     pump_until(&mut app, &rx, "both answers arrive", |a| windows(a).len() == 2);
     assert_eq!(
@@ -132,7 +132,7 @@ fn every_installed_agent_gets_a_section() {
 fn an_agent_that_is_not_installed_has_no_section() {
     let (mut app, _rx, _dir) = with_agents(&[(agents::Known::Codex.name(), "exec sleep 30")]);
     app.usages.set_timeout(Duration::from_millis(200));
-    click(&mut app, areas().usage.as_position());
+    from_more(&mut app, "usage");
     app.switch_usage(usage::Page::Limits);
     assert_eq!(titles(&app), ["Codex"]);
 }
@@ -140,7 +140,7 @@ fn an_agent_that_is_not_installed_has_no_section() {
 #[test]
 fn without_any_agent_installed_each_one_says_why() {
     let (mut app, rx, _dir) = with_agents(&[]);
-    click(&mut app, areas().usage.as_position());
+    from_more(&mut app, "usage");
     app.switch_usage(usage::Page::Limits);
     pump_until(&mut app, &rx, "both probes fail", |a| errors(a).len() == 2);
     let errors = errors(&app);
@@ -152,7 +152,7 @@ fn without_any_agent_installed_each_one_says_why() {
 fn a_claude_that_hangs_shows_usage_unavailable() {
     let (mut app, rx, _dir) = with_claude("exec sleep 30");
     app.usages.set_timeout(Duration::from_millis(200));
-    click(&mut app, areas().usage.as_position());
+    from_more(&mut app, "usage");
     app.switch_usage(usage::Page::Limits);
     pump_until(&mut app, &rx, "the probe times out", |a| !errors(a).is_empty());
     assert_eq!(errors(&app), ["usage unavailable: claude did not answer in time"]);
@@ -163,11 +163,11 @@ fn reopening_while_loading_starts_no_second_probe() {
     let (mut app, rx, dir) = with_claude("echo run >> \"$(dirname \"$0\")/runs\"\nexec sleep 30");
     app.usages.set_timeout(Duration::from_secs(3));
     let runs = dir.path().join("runs");
-    click(&mut app, areas().usage.as_position());
+    from_more(&mut app, "usage");
     app.switch_usage(usage::Page::Limits);
     wait_until("the probe runs", || runs.exists());
     send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
-    click(&mut app, areas().usage.as_position());
+    from_more(&mut app, "usage");
     app.switch_usage(usage::Page::Limits);
     pump_until(&mut app, &rx, "the probe times out", |a| !errors(a).is_empty());
     let runs = std::fs::read_to_string(runs).expect("the probe ran");
@@ -179,7 +179,7 @@ fn reopening_while_loading_starts_no_second_probe() {
 #[case::escape(false)]
 fn done_and_escape_close_it(#[case] button: bool) {
     let (mut app, _rx, _dir) = with_claude("exit 1");
-    click(&mut app, areas().usage.as_position());
+    from_more(&mut app, "usage");
     app.switch_usage(usage::Page::Limits);
     if button {
         let usage = shown(&app).expect("the modal is open");

@@ -455,9 +455,13 @@ impl Server {
         rx: &Receiver<ServerEvent>,
         run: &impl Fn(&mut Self, Step) -> ControlFlow<()>,
     ) -> ControlFlow<()> {
+        let started = Instant::now();
         for ev in first.into_iter().chain(std::iter::from_fn(|| rx.try_recv().ok())) {
             if self.contain(Step::Event(ev), run) == Some(ControlFlow::Break(())) {
                 return ControlFlow::Break(());
+            }
+            if started.elapsed() >= FRAME {
+                break;
             }
         }
         ControlFlow::Continue(())
@@ -656,6 +660,12 @@ impl Server {
             if let Some(client) = clients.iter().find(|c| c.id == id && c.screen.is_some() && !c.browser) {
                 log::info!("server", "open sent", client = id, opener = open.opener.id());
                 client.send(ServerMessage::Open(open));
+            }
+        }
+        for (id, browse) in app.take_browses() {
+            if let Some(client) = clients.iter().find(|c| c.id == id && c.screen.is_some() && !c.browser) {
+                log::info!("server", "browse sent", client = id, port = browse.port);
+                client.send(ServerMessage::Browse(browse));
             }
         }
     }

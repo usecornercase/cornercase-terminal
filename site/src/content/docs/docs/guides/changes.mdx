@@ -70,7 +70,7 @@ The branch you pick is remembered for that workspace. Picking the default branch
 - Each file has a row with its status (`M` modified, `A` added, `D` deleted, `R` renamed), an icon for its type (a renamed file takes its new name's), its path and its counts. The icon is dimmed with the row once you mark it viewed. Click it to expand or collapse it.
 - Each hunk starts with a thin line naming the function or block it is in. Lines carry their old and new numbers, a green or red bar, and a stronger colour on the words that changed when a line was edited rather than replaced.
 - In Uncommitted and Every project, a green **`●`** at the right of a row marks a file whose changes are all in git's index (staged), and **`◐`** one that is only partly staged because it changed after you staged it.
-- Code is highlighted with your terminal's palette.
+- Code is highlighted with the same tree-sitter grammars as the files panel, in your terminal's palette. A hunk that takes too long to colour is shown as plain text and is not coloured again until it changes.
 - Between two hunks, **`↕ 12 unchanged lines`** shows the code in between when you click it.
 - Lockfiles (`Cargo.lock`, `package-lock.json`, `pnpm-lock.yaml` and the like) start collapsed. Binary files and files with more than 3,000 added and removed lines show their counts but no lines in either scope. Every project leaves their patches unread.
 - When a diff is long, every file starts collapsed. **`expand all`** at the bottom expands them all, and **`collapse all`** collapses them again.

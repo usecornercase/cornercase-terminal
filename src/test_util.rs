@@ -201,6 +201,12 @@ pub(crate) fn is_sh(name: &str) -> bool {
     matches!(name, "sh" | "bash" | "dash")
 }
 
+pub(crate) fn sleep_named(path: &Path) -> Running {
+    let copied = std::process::Command::new("cp").arg("/bin/sleep").arg(path).status().expect("run cp");
+    assert!(copied.success(), "copy sleep to {}", path.display());
+    Running::spawn(std::process::Command::new(path).arg("30"))
+}
+
 pub(crate) fn write_executable(path: &Path, contents: &str) {
     let mut child = std::process::Command::new("/bin/sh")
         .arg("-c")

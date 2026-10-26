@@ -22,7 +22,7 @@ fn removing_workspace(app: &mut App, rx: &Receiver<AppEvent>) -> u64 {
     id
 }
 
-fn repo() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) {
+pub(super) fn repo() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) {
     let repo = git_repo(&[("README", "hi")]);
     let (worktrees, config, config_path) = with_worktrees_config();
     let (app, rx) = app_in(repo.path(), config_path);
@@ -46,7 +46,7 @@ fn a_worktree_opens_with_a_tab_and_leaves_the_window_as_it_is() {
     assert!(workspace.path.starts_with(worktrees.path()), "{}", workspace.path.display());
 }
 
-fn made(app: &mut App, rx: &Receiver<AppEvent>) -> (u64, PathBuf) {
+pub(super) fn made(app: &mut App, rx: &Receiver<AppEvent>) -> (u64, PathBuf) {
     ask(app, None, worktree("feat/x"));
     let id = done(answered(app, rx, "git makes the worktree")).ids.workspace.expect("the workspace");
     let (p, w) = app.projects.workspace_index(id).map(|at| (at.project(), at.index())).expect("it");

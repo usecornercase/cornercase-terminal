@@ -9,6 +9,79 @@ Every pull request that changes the app adds a section here for its new version.
 - Like a pane, a popup can be read and typed into by any program that talks to cornercase, agents in your panes included: don't use one for a secret or a confirmation only you should see or give.
 - Scripts: `surface` and `input` take `popup`, and `cornercase contract` lists the feature `popup-terminal`.
 
+## 0.12.209
+
+- **See what each plugin's service is doing from the command line.** `cornercase plugin status` prints the plugins as Settings › Plugins shows them: on, off or cannot run, the note, and whether each service is running, waiting to start again or still starting. `--json` prints that for another app, with hidden characters escaped as in `plugin list --json`, including why `plugins.json` cannot be read. `plugin list` still reads the files and works with no server.
+
+## 0.12.208
+
+- **Preview a shared flow before importing it.** `cornercase flow import SOURCE --check` shows its roles, variables and arguments that run unattended, and agents missing on this machine, then exits without asking or saving, even without a terminal or when reading standard input. `--json` gives the preview as data for another app to show before importing with `--yes`. The same destination, name and replacement options apply, and a bad flow or a name conflict still fails.
+
+## 0.12.207
+
+- **Show a search match from a script.** `cornercase focus --pane ID --reveal TEXT` goes to the pane, scrolls it to the text and selects it, as `Enter` on a result of the search in sessions does. Pass `--line N` from `cornercase search --json` for a match on the pane's screen; leave it out for an agent's prompt or reply. `--json` prints `revealed`, which is `false` when the pane no longer holds the text (the pane is still shown and nothing stays selected). Other UIs find the `reveal` field of the `focus` request through the `focus-reveal` contract feature.
+- `cornercase focus --json` prints its answer, so `focus --view --json` now gives the view's new tab and its `projection`, as the help already said.
+
+## 0.12.206
+
+- **Preview a plugin without installing it.** `cornercase plugin install SOURCE --preview` fetches the plugin and prints what installing it would do (where it comes from, its commit, what it asks for, how it is built or downloaded, and every command it runs), then exits without asking or installing anything, even with no terminal. `plugin update --preview` does the same for updates, or says a plugin is up to date. With `--json` (and an ID for `update`) the preview is data, so another app can show it in its own dialog.
+- **Install exactly the commit you reviewed.** `--commit SHA` installs, or updates to, the commit the preview showed, and refuses if the plugin has changed since, so nothing you have not seen gets installed. Unlike `SOURCE@SHA`, which pins the plugin to that commit, later updates keep following its branch or tag.
+
+## 0.12.205
+
+- **`cornercase flow save` saves a flow from JSON.** It takes a flow as `cornercase flow list --json` gives it (each entry's `flow`), from a file or from standard input with `-`, checks it as Settings › Flows does and saves it into your flows, or the project's with `--to project`. `--check` lists its problems without saving, `--path` names the file of the flow you are editing so a new name renames it and `--to` moves it, and `--json` prints what was saved. Apps with an editor of their own can now create and edit flows from the command line instead of writing the TOML file themselves.
+
+## 0.12.204
+
+- **See and stop a workspace's dev servers.** A workspace's menu (` ⋯ ` or right-click) has **ports**: every port its programs listen on, with the address, the program, its pid and the tab it runs in (or the agent that started it), refreshed every two seconds. Each row can **copy** the address, **open** it in your browser, **go** to its tab and **stop** it; tick several to stop them together, or stop them all. Stopping always asks first, warns when it's an agent's or a program no tab started, sends `SIGTERM`, then `SIGKILL` after three seconds, and only to the program holding the port, never the shell or agent that started it.
+- **open** works in a window on the server's own computer. In a remote window, your phone's browser or over `ssh`, the address is copied instead, since `localhost` there is the other machine.
+- **`cornercase ports stop PORT`** stops a workspace's program on that port the same way, for scripts and agents, and says whether it stopped, had to be killed or is still running.
+- `cornercase ports` now shows each program with its arguments cut to 40 characters, so a long command line no longer floods the list; `--json` still has them whole.
+
+## 0.12.203
+
+- **A large diff no longer keeps the server busy after you close Changes.** Files, the changes panel and Markdown code blocks now share one highlighter. While Changes is closed, the button's count is read without colouring every hunk, and a refresh does not start another copy of itself while the previous one is still working. A git command or a highlight that runs too long is stopped, and that text stays plain until it changes.
+
+## 0.12.202
+
+- `cornercase changes gap --help` now says that `--hunk N` counts from 0, as the hunks of `changes file` do: `--hunk 1` is the unchanged lines between the first and the second hunk, and the first hunk has no gap. Asking for a hunk with no gap says so too.
+
+## 0.12.201
+
+- **`cornercase config import --preview` shows a shared setup without applying it.** It prints what would change, section by section, and exits 0, without asking and without writing `config.json`. `--json` prints the same preview a program can draw, so a settings window can show the changes and the notes, then import the chosen sections with `--only` and `--yes`. A file that is not a setup, or one that does not fit this machine, still exits with 1 and changes nothing.
+
+## 0.12.200
+
+- **Undo queue removals from the command line.** `cornercase queue remove ID` now prints an undo number, and `queue clear-started` removes every started entry at once with the same undo. `queue restore NUMBER` puts that removal back with its captured prompt, agent, mode, destination, accounts and state. The last 16 command removals stay available until the server stops, independently of the window's undo notice. Both removal commands support `--json` with the removed entries and undo number; clearing nothing prints no number. External UIs can discover these actions through the `queue-undo` contract feature.
+
+## 0.12.199
+
+- **`cornercase ports` lists the ports a workspace listens on.** Each TCP port held by a program its tabs started, or, in a workspace with a worktree of its own, by any of your programs working in that worktree, with the URL to open (`http://localhost:5173`), the program and its pid, and the pane that started it when a tab did. A port opened by an agent, or by something it started, says which agent. From a tab it lists that tab's workspace; `--worktree BRANCH` picks another and `--all` lists every port your programs listen on. `--json` gives the same for scripts and agents, so an agent that just started a dev server can find its address. Ports published by Docker belong to Docker, not to a workspace.
+
+## 0.12.198
+
+- Leaving the Files search idle no longer scans the whole workspace every ten seconds. Its file list refreshes when you change the query, return to the search bar, or the tree sees files added, removed or renamed. New scans cancel the previous one and use at most eight threads, keeping large workspaces quieter.
+
+## 0.12.197
+
+- Internal change with nothing new to see: the code that works out which tab started a process, used by the Worktrees dialog to name processes running in a worktree, is now shared so upcoming views can use it too.
+
+## 0.12.196
+
+- A pane that floods output now slows its program instead of building an unbounded backlog in memory. Keys, clicks and script requests keep being handled, and interrupting the program no longer leaves the server busy parsing old output for minutes.
+
+## 0.12.195
+
+- **A tidier footer: the tools, then More.** Under the lists, **Issues**, **Changes**, **Files** and **TODO** now sit in two columns, and Settings, Usage, Remote, the update and Quit moved into one button, **More ▴**, at the bottom next to **Help**. Click it for **settings**, **usage**, **remote…** (once browser access or a chat bot is set up), **update to x.y.z** when there is one, and **quit**. More turns cyan when an update is waiting and shows a green dot while a browser is attached or you're away on a chat app.
+- **Worktrees has a button of its own.** The dialog that lists every worktree on disk, with when it last changed and what makes it safe to remove, now opens from **Worktrees** at the bottom of the sidebar (above More when the lists are side by side), instead of from Settings › Worktrees › worktrees on disk. A project's menu still opens it for that project alone.
+- In the icon bar, Worktrees gets a slot after TODO, and Settings, Usage, Remote, the update and Quit are now behind a gear at the bottom that opens the same menu, with Help just above it.
+- TODO's dot now follows its label: ` TODO ● `.
+
+## 0.12.194
+
+- **The name field has a cursor.** In **New workspace**, **New group** and **Rename**, the arrows, `Home` and `End` now move the cursor, `Ctrl+←` `Ctrl+→` or `Option+←` `Option+→` move by word, and a click puts the cursor where you click, so you can fix a letter in the middle without deleting the rest. `Shift` and the mouse select, and a right-click copies or cuts, as in the other text fields.
+- **`Cmd+←` and `Cmd+→` reach the start and end of a text field** in Ghostty on a Mac. It sends them as `Ctrl+A` and `Ctrl+E`, which every text field with a cursor now takes, like `Home` and `End`. Outside the fields, `Ctrl+A` and `Ctrl+E` still go to the program in the pane.
+
 ## 0.12.193
 
 - **A rejected tracker token says which one it was.** When GitLab, Shortcut, Linear, Jira, Plane or Asana rejects a token, the message now says whether it was the token saved in Settings (paste a new one there or with `cornercase config secret`) or one from a variable such as `LINEAR_API_KEY` in the server's environment, which wins over a saved one until you unset it and restart the server. This shows in the Issues dialog and in `cornercase issue sources`, `issue list`, `issue read`, `issue people` and `start --issue`.

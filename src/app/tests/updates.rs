@@ -27,8 +27,8 @@ fn replaced() -> Install {
 }
 
 fn open(app: &mut App) {
-    let label = app.update_label().expect("an update is shown");
-    click(app, ui::update_button(areas().settings, &label).as_position());
+    let entry = app.update_entry().expect("an update is offered");
+    from_more(app, &entry);
 }
 
 fn step(app: &App) -> Option<&UpdateStep> {
@@ -107,9 +107,9 @@ fn the_button_asks_before_updating() {
 }
 
 #[test]
-fn the_settings_button_still_opens_settings() {
+fn the_more_menu_still_opens_settings() {
     let (mut app, _rx) = found(replaced());
-    click(&mut app, areas().settings.as_position());
+    from_more(&mut app, "settings");
     assert!(matches!(app.overlay, Some(Overlay::Settings(_))));
 }
 

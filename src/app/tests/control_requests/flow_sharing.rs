@@ -131,7 +131,19 @@ mod importing {
     #[test]
     fn a_check_writes_nothing() {
         let mut s = Share::new();
-        let done = imported(s.import(&text("Pair"), |i| i.check = true));
+        s.app.config.agent_commands.insert("grok".into(), "/nonexistent/grok".into());
+        let mut flow = flow("Pair");
+        flow.roles[0].agent = "grok".into();
+        flow.roles[0].env.insert("TOKEN".into(), "demo".into());
+        let done = imported(s.import(&share::to_share(&flow).expect("export"), |i| {
+            i.check = true;
+            i.name = Some("Renamed".into());
+        }));
+        assert_eq!(done.name, "Renamed");
+        assert_eq!(done.roles.iter().map(|r| r.role.as_str()).collect::<Vec<_>>(), ["orchestrator", "coder"]);
+        assert_eq!(done.roles[1].agent, "grok");
+        assert!(done.check.expect("risks").contains("TOKEN=demo"));
+        assert!(done.note.expect("missing agent").contains("not installed here"));
         assert_eq!(done.path, None);
         assert!(!s.yours().exists());
         assert!(error(s.import(&text("Quick"), |i| i.check = true)).contains("--replace"));

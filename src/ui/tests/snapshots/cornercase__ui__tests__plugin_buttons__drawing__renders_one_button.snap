@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/plugin_buttons.rs
-assertion_line: 122
 expression: "render_sized(&with_buttons(&[\"Deploy\"], Sidebar::SideBySide), W, H).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -16,8 +15,8 @@ expression: "render_sized(&with_buttons(&[\"Deploy\"], Sidebar::SideBySide), W, 
 "                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
+"                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
 "  Deploy                       │                         │                                          "
-"  Settings                     │                         │                                          "
-"  Usage                        │                         │                                          "
-"  Quit                   Help  │                         │                                          "
+"  Worktrees                    │                         │                                          "
+"  More ▴                 Help  │                         │                                          "

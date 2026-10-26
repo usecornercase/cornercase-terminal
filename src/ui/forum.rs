@@ -6,7 +6,8 @@ use ratatui::widgets::{Clear, Paragraph};
 
 use super::dialog::{dialog_button_style, pick_background};
 use super::remote_access::{Linked, rows, sized, text, with_code};
-use super::{View, button_width, draw_submit, hovered, overlay_block, update_button};
+use super::widgets::{button_width, update_button};
+use super::{View, draw_submit, hovered, overlay_block};
 use crate::settings::DONE;
 use crate::text::truncate_right;
 

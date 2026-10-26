@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/splits.rs
-assertion_line: 6904
 expression: "render_sized(&v, W, 6).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │ $ top                                    "
@@ -8,4 +7,4 @@ expression: "render_sized(&v, W, 6).backend()"
 " Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
 "  + New                        │                         │                                          "
-"  Settings                     │                         │                                          "
+" ───────────────────────────── │                         │                                          "

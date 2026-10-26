@@ -101,7 +101,7 @@ fn an_issue_scheduled_from_the_browser_keeps_the_account_picked_there() {
     press_button(&mut s, "schedule");
     let Some(Overlay::Queue(form)) = &mut s.app.overlay else { panic!("the schedule form is not open") };
     assert_eq!(form.chosen_account(), Some(("claude", "home")));
-    form.prompt = crate::editor::Editor::new("fix the login");
+    form.prompt = Editor::new("fix the login");
     s.app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
 
     let entry = s.app.panels.queued.queue().entries.last().expect("the entry");

@@ -16,7 +16,7 @@ use crate::error;
 use crate::flows::dialog::project_risks;
 use crate::flows::share::{self, To};
 use crate::flows::store::{self, Listing, Origin, Saved};
-use crate::flows::{self, Flow, Role, builtin};
+use crate::flows::{self, Flow, builtin};
 use crate::git;
 use crate::git::worktree;
 use crate::log;
@@ -76,14 +76,7 @@ impl App {
         }
         let listing = self.flow_listing(path.as_deref());
         let replaced = share::collision(&listing, &flow.name, to, import.replace)?;
-        let missing = share::missing_agents(&flow, &builtin::installed(&self.config));
-        let mut imported = Imported {
-            name: flow.name.clone(),
-            origin: if to == To::Yours { "user" } else { "project" }.into(),
-            replaced: replaced.is_some(),
-            note: (!missing.is_empty()).then(|| missing.join("; ")),
-            path: None,
-        };
+        let mut imported = self.flow_import_preview(&flow, to, replaced.is_some());
         if import.check {
             return Ok(Some(json(&imported)));
         }
@@ -97,6 +90,19 @@ impl App {
         imported.path = Some(saved);
         self.refresh_flows();
         Ok(Some(json(&imported)))
+    }
+
+    fn flow_import_preview(&self, flow: &Flow, to: To, replaced: bool) -> Imported {
+        let missing = share::missing_agents(flow, &builtin::installed(&self.config));
+        Imported {
+            name: flow.name.clone(),
+            origin: if to == To::Yours { "user" } else { "project" }.into(),
+            replaced,
+            roles: RoleInfo::of_flow(flow),
+            check: share::risks(flow, "it"),
+            note: (!missing.is_empty()).then(|| missing.join("; ")),
+            path: None,
+        }
     }
 
     fn flows_scope(&self, caller: Option<u64>, project: Option<u64>) -> Result<Option<PathBuf>, Refusal> {
@@ -343,20 +349,12 @@ impl Branches<'_> {
 }
 
 fn flow_info(flow: &Flow, origin: &Origin) -> FlowInfo {
-    let role = |role: &Role| RoleInfo {
-        role: role.name.clone(),
-        agent: role.agent.clone(),
-        model: role.model.clone(),
-        effort: role.effort.clone(),
-        edits: role.edits,
-        worktree: role.worktree,
-    };
     FlowInfo {
         name: flow.name.clone(),
         origin: origin_name(origin).into(),
         path: origin.path().map(PathBuf::from),
         description: flow.description.clone(),
-        roles: std::iter::once(&flow.orchestrator).chain(&flow.roles).map(role).collect(),
+        roles: RoleInfo::of_flow(flow),
         problems: flow.problems(),
         check: risks(flow, origin),
         flow: FlowSpec::from(flow),

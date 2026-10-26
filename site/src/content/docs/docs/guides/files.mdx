@@ -50,7 +50,7 @@ The header shows the file's path, its number of lines and its language; **`‹`*
   crop={[0, 0, 140, 20]}
 />
 
-- Code is coloured with your terminal's palette by tree-sitter grammars, for about 60 languages. A language without a grammar of its own borrows a close relative's, so its comments and strings still read right. Files over 2 MB show without colours.
+- Code is coloured with your terminal's palette by tree-sitter grammars, for about 60 languages. The changes panel and Markdown code blocks use the same grammars. A language without a grammar of its own borrows a close relative's, so its comments and strings still read right. Files over 2 MB show without colours.
 - Beside the line numbers, git's marks show what changed: a green `▎` on added lines, a blue `▎` on changed ones, and a red `▁` under the line after which lines were deleted (`▔` when they were at the top). A new file is green all the way down.
 - Click the mark of a changed or deleted block to see the lines that were there before, in red, and again to hide them.
 - The viewer follows the file on disk: when an agent edits it, you see the new version within a second, marks included.
@@ -147,7 +147,7 @@ tmux shows pictures in one of two ways, depending on your terminal. Ghostty, kit
 set -g allow-passthrough on
 ```
 
-Load it into the running tmux, then quit cornercase with **Quit** and start it again, since cornercase checks your terminal when it starts:
+Load it into the running tmux, then quit cornercase with **`More ▴` › quit** and start it again, since cornercase checks your terminal when it starts:
 
 ```sh
 tmux source-file ~/.tmux.conf
@@ -246,6 +246,8 @@ Click **`▤`** at the right of the bar to search file **names** instead, and ag
 | `Esc` | Clears the bar and gives the keys back to your pane. On an empty bar, closes the panel. |
 
 **`×`** in the bar clears it too. A click in a pane gives the keys back and keeps the search; a click on the bar takes them again.
+
+The search refreshes its file list when you change the query, take focus again, or the tree sees files added, removed or renamed in the root or an open folder. For changes inside a closed folder, give focus back to the search bar or edit the query. Leaving the search idle does not repeatedly scan the workspace; a new scan cancels the previous one.
 
 ## Paths in your panes are links
 

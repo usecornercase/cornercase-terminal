@@ -28,6 +28,7 @@ mod flow;
 mod help;
 mod issue;
 mod plugin;
+mod ports;
 mod queue;
 mod read;
 mod search;
@@ -252,6 +253,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
     ControlFlow::Break(match command {
         Control::Issue(args) => return ControlFlow::Break(issue::run(args.action)),
         Control::Usage(args) => return ControlFlow::Break(usage::run(&args)),
+        Control::Ports(args) => return ControlFlow::Break(ports::run(&args)),
         Control::Tour(args) => tour::run(&args).map(|()| true),
         Control::Queue(queue) => queue::run(queue.action).map(|()| true),
         Control::Away(away) => run_away(&away).map(|()| true),
@@ -352,7 +354,18 @@ fn run_close(close: &args::CloseArgs) -> Result<bool> {
 
 fn run_focus(focus: &args::FocusArgs) -> Result<()> {
     let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
-    ask("focus", control::Command::Focus(control::Focus { item })).map(drop)
+    let reveal = focus.reveal.clone().map(|query| control::Reveal { query, line: focus.line });
+    if reveal.is_some() {
+        client::use_focus_reveal()?;
+    }
+    let value = ask("focus", control::Command::Focus(control::Focus { item, reveal }))?;
+    if focus.print.json {
+        return print_json(&value);
+    }
+    if let Some(warning) = search::unrevealed(&value, item) {
+        eprintln!("warning: {warning}");
+    }
+    Ok(())
 }
 
 fn run_go(go: args::GoArgs) -> Result<()> {
@@ -445,7 +458,7 @@ fn event_line(value: &Value) -> String {
     }
 }
 
-fn workspace(command: &'static str, id: Option<u64>, branch: Option<&str>) -> Result<Option<u64>> {
+pub(super) fn workspace(command: &'static str, id: Option<u64>, branch: Option<&str>) -> Result<Option<u64>> {
     let Some(branch) = branch else { return Ok(id) };
     let report: Report = answer(ask(command, control::Command::Status(control::Status {}))?)?;
     report.workspace_on(branch).map(Some).map_err(Error::WrongUsage)

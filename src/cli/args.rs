@@ -6,6 +6,7 @@ pub(crate) mod config;
 pub(crate) mod flow;
 pub(crate) mod issue;
 pub(crate) mod plugin;
+pub(crate) mod ports;
 pub(crate) mod queue;
 pub(crate) mod terminal;
 pub(crate) mod theme;
@@ -28,7 +29,7 @@ use super::help::{
     SURFACE_HELP, THEME_HELP, TODO_HELP, TOUR_HELP, UNTIL_AFTER, UPDATE_HELP, USAGE_HELP, VIEW_ARG, VIEW_HELP,
     VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
-use super::help::{AGENTS_HELP, CHANGES_HELP};
+use super::help::{AGENTS_HELP, CHANGES_HELP, PORTS_HELP};
 use crate::control::Until;
 use crate::term::keys;
 
@@ -225,6 +226,11 @@ pub(crate) enum Control {
         after_help = USAGE_HELP
     )]
     Usage(usage::UsageArgs),
+    #[command(
+        about = "List the TCP ports a workspace's programs listen on, with the URL to open each",
+        after_help = PORTS_HELP
+    )]
+    Ports(ports::PortsArgs),
     #[command(about = "Show the guided tour in the window, or move, end or reset it", after_help = TOUR_HELP)]
     Tour(tour::TourArgs),
     #[command(
@@ -627,6 +633,22 @@ pub(crate) struct FocusArgs {
     pub(crate) which: Which,
     #[command(flatten)]
     pub(crate) view: ViewArg,
+    #[arg(
+        long,
+        value_name = "TEXT",
+        conflicts_with_all = ["tab", "workspace", "worktree", "project"],
+        help = "Also scroll the pane to this text and select it, as Enter on a result of the search does: the text `cornercase search` looked for"
+    )]
+    pub(crate) reveal: Option<String>,
+    #[arg(
+        long,
+        value_name = "LINE",
+        requires = "reveal",
+        help = "The match's line as `cornercase search` printed it (screen matches); without it, the newest place the pane shows the text"
+    )]
+    pub(crate) line: Option<usize>,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]

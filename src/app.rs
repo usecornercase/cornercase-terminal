@@ -108,6 +108,7 @@ mod links;
 mod menus;
 mod merged_pull_requests;
 mod messenger;
+mod more_menu;
 mod notifications;
 mod opening;
 mod outbox;
@@ -116,6 +117,7 @@ mod panes;
 mod picker_dialog;
 mod plugin_popup;
 mod plugins;
+mod ports_dialog;
 mod project_settings_dialog;
 mod pull_requests;
 mod queue_dialog;
@@ -424,6 +426,7 @@ impl App {
         self.check_requests(now);
         self.ring_bells(now);
         self.watch_worktrees_dialog(now);
+        self.watch_ports_dialog(now);
         self.close_gone_flow_message();
         self.check_updates(now);
     }
@@ -581,6 +584,7 @@ impl App {
             AppEvent::FlowModels(agent, models) => self.flow_models(agent, models),
             AppEvent::FlowFetched(source, result) => self.flow_fetched(&source, result),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
+            AppEvent::Ports(event) => self.ports_answered(event),
             AppEvent::Encoded { key, result } => self.encoded(key, result),
             AppEvent::RunFiles(run, result) => self.run_files_listed(run, result),
             AppEvent::FlowFiles { request, result } => self.flow_files_listed(request, result),

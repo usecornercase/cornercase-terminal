@@ -26,6 +26,7 @@ pub mod host;
 pub(crate) mod issues;
 pub(crate) mod messenger;
 pub(crate) mod plugins;
+pub(crate) mod ports;
 pub mod project;
 pub(crate) mod pull_request;
 pub(crate) mod queue;
@@ -54,3 +55,7 @@ pub(crate) mod web;
 
 #[cfg(test)]
 mod test_util;
+
+pub fn highlight_worker() -> i32 {
+    highlight::worker_main()
+}

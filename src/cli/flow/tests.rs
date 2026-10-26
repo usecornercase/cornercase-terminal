@@ -1,5 +1,59 @@
 use super::*;
 
+fn shared_flow() -> Flow {
+    let spec: FlowSpec =
+        serde_json::from_str(crate::test_util::fixture!("control/flows/flow.json")).expect("the flow contract fixture");
+    spec.into_flow()
+}
+
+#[rstest::rstest]
+#[case::stdin(Source::Stdin, false)]
+#[case::web(Source::Repo("octocat/audit".into()), true)]
+fn an_older_servers_preview_keeps_the_roles_and_risks_in_text_and_json(#[case] source: Source, #[case] web: bool) {
+    let legacy = serde_json::json!({
+        "name": "Renamed", "origin": "project", "path": null, "replaced": true, "note": "missing agent", "future": true
+    });
+    let value = complete_preview(legacy, &shared_flow(), &source).expect("a complete preview");
+    assert_eq!((value["name"].as_str(), value["origin"].as_str()), (Some("Renamed"), Some("project")));
+    assert_eq!((value["roles"].as_array().map(Vec::len), value["roles"][0]["model"].as_str()), (Some(3), Some("opus")));
+    assert_eq!(value["roles"][1]["worktree"], "own");
+    let risks = value["check"].as_str().expect("risks");
+    assert!(risks.contains("NODE_ENV=test") && risks.contains("--verbose"));
+    assert_eq!(risks.contains("nobody here reviewed"), web);
+    assert_eq!((value["future"].as_bool(), value["replaced"].as_bool()), (Some(true), Some(true)));
+    let text = checked_line(&answer(value).expect("a preview"));
+    assert!(text.contains("coder: claude · high (edits, own worktree)") && text.contains("NODE_ENV=test"));
+    assert!(text.contains("missing agent") && text.contains("nothing was imported"));
+}
+
+#[test]
+fn a_modern_servers_preview_keeps_its_details_and_unknown_fields() {
+    let modern = serde_json::json!({
+        "roles": [{"role": "orchestrator", "agent": "claude", "future": true}],
+        "check": "the server's risks", "future": true
+    });
+    assert_eq!(complete_preview(modern.clone(), &shared_flow(), &Source::Stdin).expect("a preview"), modern);
+}
+
+#[test]
+fn an_import_preview_names_its_destination_replacement_risks_and_missing_agents() {
+    let preview = Imported {
+        name: "Mine\x1b[2J".into(),
+        origin: "project".into(),
+        replaced: true,
+        roles: vec![RoleInfo { role: "coder".into(), agent: "claude".into(), edits: true, ..RoleInfo::default() }],
+        check: Some("it sets TOKEN=demo; they run without asking, so check them".into()),
+        note: Some("`coder` runs claude, which is not installed here".into()),
+        ..Imported::default()
+    };
+    assert_eq!(
+        checked_line(&preview),
+        "Mine\\u{1b}[2J\n  coder: claude (edits)\nit sets TOKEN=demo; they run without asking, so check them\n\
+         `coder` runs claude, which is not installed here\n\
+         would import into this project (replaces the existing flow); nothing was imported\n"
+    );
+}
+
 fn removed(changed: bool, deleted: Option<&str>) -> FlowRemoved {
     FlowRemoved {
         name: "Quick".into(),
@@ -247,5 +301,92 @@ mod runs {
             files_text(&files),
             "name\tbytes\tmodified\tpath\ncoder-1.md\t12\t2026-10-18T09:30:00.000Z\t/r/coder-1.md\na b.md\t0\t-\t/r/a b.md\n"
         );
+    }
+}
+
+mod saving {
+    use super::*;
+    use crate::control::RoleSpec;
+
+    fn saved(path: Option<&str>, origin: &str, problems: &[&str]) -> FlowSaved {
+        FlowSaved {
+            name: "Mine".into(),
+            origin: origin.into(),
+            saved: path.is_some(),
+            path: path.map(Into::into),
+            problems: problems.iter().map(ToString::to_string).collect(),
+            check: None,
+        }
+    }
+
+    #[test]
+    fn a_save_names_its_place_and_its_file_then_what_still_stops_the_flow() {
+        assert_eq!(
+            saved_text(&saved(Some("/c/flows/mine.toml"), "user", &[])),
+            "saved Mine into yours: /c/flows/mine.toml\n"
+        );
+        let clash = "yours is also named `Mine` and runs instead";
+        let project = FlowSaved {
+            check: Some("it sets A for `coder`".into()),
+            ..saved(Some("/r/.cornercase/flows/mine.toml"), "project", &[clash])
+        };
+        assert_eq!(
+            saved_text(&project),
+            "saved Mine into this project: /r/.cornercase/flows/mine.toml\n  cannot run: yours is also named `Mine` and runs instead\n  it sets A for `coder`\n"
+        );
+    }
+
+    #[test]
+    fn a_check_says_nothing_was_written_and_lists_the_problems() {
+        assert_eq!(saved_text(&saved(None, "user", &[])), "Mine can be saved into yours; nothing was written\n");
+        assert_eq!(
+            saved_text(&saved(None, "user", &["the flow has no stages"])),
+            "Mine has problems; nothing was written\n  cannot run: the flow has no stages\n"
+        );
+    }
+
+    #[test]
+    fn a_draft_is_a_flow_as_the_list_gives_it_and_may_leave_keys_out() {
+        let spec = FlowSpec {
+            name: "Mine".into(),
+            roles: vec![RoleSpec { name: "coder".into(), agent: "claude".into(), edits: true, ..RoleSpec::default() }],
+            ..FlowSpec::default()
+        };
+        assert_eq!(parsed(&serde_json::to_string(&spec).expect("json")), Ok(spec));
+        assert_eq!(parsed(r#"{"name": "Mine"}"#), Ok(FlowSpec { name: "Mine".into(), ..FlowSpec::default() }));
+    }
+
+    #[test]
+    fn a_key_a_flow_does_not_have_is_refused_with_its_place() {
+        let typo = parsed(r#"{"name":"Mine","roles":[{"name":"coder","promt":"x"}]}"#).expect_err("a stray key");
+        assert!(typo.starts_with("`roles.0.promt` is not a key of a flow"), "{typo}");
+        let entry = serde_json::to_string(&FlowInfo::default()).expect("json");
+        assert!(parsed(&entry).expect_err("an entry").contains("jq '.flows[0].flow'"));
+        assert!(parsed("[]").is_err());
+        assert!(parsed("{").is_err());
+    }
+
+    #[test]
+    fn a_path_is_made_absolute_without_dots_before_it_is_matched_with_a_listed_file() {
+        assert_eq!(
+            listed_path(Path::new("/c/flows/../flows/./mine.toml")).expect("a path"),
+            Path::new("/c/flows/mine.toml")
+        );
+        let here = std::env::current_dir().expect("a folder");
+        assert_eq!(listed_path(Path::new("a/../mine.toml")).expect("a path"), here.join("mine.toml"));
+    }
+
+    #[test]
+    fn an_edit_stays_in_the_place_its_file_is_listed_in() {
+        let entry = |origin: &str, path: &str| FlowInfo {
+            origin: origin.into(),
+            path: Some(path.into()),
+            ..FlowInfo::default()
+        };
+        let flows =
+            Flows { flows: vec![entry("user", "/c/a.toml"), entry("project", "/r/b.toml")], ..Flows::default() };
+        assert_eq!(listed_place(&flows, Path::new("/c/a.toml")), Some(ImportTo::Yours));
+        assert_eq!(listed_place(&flows, Path::new("/r/b.toml")), Some(ImportTo::Project));
+        assert_eq!(listed_place(&flows, Path::new("/x.toml")), None);
     }
 }

@@ -36,6 +36,7 @@ mod opening;
 mod panels;
 mod panes;
 mod plugins;
+mod ports;
 mod queue;
 mod remote;
 mod server;
@@ -363,6 +364,17 @@ impl Harness {
                 Some(Position::new(u16::try_from(row[..at].chars().count()).ok()?, y))
             })
             .expect("the text is on screen")
+    }
+
+    fn pick_in_more(&mut self, entry: &str) {
+        self.click(areas().more.as_position());
+        self.wait_for("the more menu opens", |s| s.contains(entry) && s.contains("quit"));
+        let at = self.position_of(entry);
+        self.click(at);
+    }
+
+    fn quit(&mut self) {
+        self.pick_in_more("quit");
     }
 
     fn restart_server(&mut self) {

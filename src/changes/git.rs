@@ -5,13 +5,14 @@ use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 
 use super::Mode;
 use super::diff::{self, Diff, File, MAX_UNTRACKED_BYTES, Status};
 use super::porcelain::{Porcelain, path_prefix};
 use crate::error::{Error, Result};
 use crate::git::worktree;
+use crate::process;
 
 const GLOBAL: [&str; 5] = ["--no-optional-locks", "-c", "core.quotepath=false", "-c", "diff.autoRefreshIndex=false"];
 const DIFF: [&str; 9] = [
@@ -47,7 +48,13 @@ pub(crate) struct Loaded {
 }
 
 pub(super) fn run(dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
-    worktree::check(worktree::git(dir, GLOBAL.iter().chain(args))?)
+    let timeout = process::time_left(super::GIVE_UP_AFTER);
+    if timeout.is_zero() {
+        return Err(Error::Git("timed out".into()));
+    }
+    let output = worktree::git_within(dir, GLOBAL.iter().chain(args), timeout)?;
+    let Some(output) = output else { return Err(Error::Git("timed out".into())) };
+    worktree::check(output)
 }
 
 fn text(dir: &Path, args: &[&str]) -> Option<String> {
@@ -152,6 +159,11 @@ pub(crate) fn listed(dir: &Path, path: &str) -> Result<Option<Arc<File>>> {
 }
 
 pub(crate) fn load(request: &Request) -> Result<Loaded> {
+    let _deadline = Deadline::arm();
+    load_now(request)
+}
+
+fn load_now(request: &Request) -> Result<Loaded> {
     if let Some(expanded) = &request.expanded {
         return super::summary::load(request, expanded);
     }
@@ -192,7 +204,7 @@ fn listing(mode: Mode, dir: &Path) -> Result<Listing> {
     }
 }
 
-fn comparison(request: &Request, dir: &Path) -> Result<(Option<String>, String)> {
+pub(super) fn comparison(request: &Request, dir: &Path) -> Result<(Option<String>, String)> {
     let base = match request.mode {
         Mode::Uncommitted => None,
         Mode::Commits | Mode::All => Some(
@@ -257,11 +269,33 @@ pub(super) fn fingerprint(dir: &Path, from: &str, file: &File) -> u64 {
 }
 
 pub(super) fn patch(dir: &Path, from: &str, paths: &[&str]) -> Result<Vec<u8>> {
+    patch_between(dir, from, None, paths)
+}
+
+pub(super) fn patch_between(dir: &Path, from: &str, to: Option<&str>, paths: &[&str]) -> Result<Vec<u8>> {
     let mut args = vec!["diff", from];
+    if let Some(to) = to {
+        args.push(to);
+    }
     args.extend(DIFF);
     args.push("--");
     args.extend(paths);
     run(dir, &args)
+}
+
+struct Deadline;
+
+impl Deadline {
+    fn arm() -> Self {
+        process::set_deadline(Some(Instant::now() + super::GIVE_UP_AFTER));
+        Self
+    }
+}
+
+impl Drop for Deadline {
+    fn drop(&mut self) {
+        process::set_deadline(None);
+    }
 }
 
 pub(crate) fn new_side(dir: &Path, mode: Mode, path: &str) -> Option<Vec<String>> {

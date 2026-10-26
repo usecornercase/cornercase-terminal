@@ -2,10 +2,11 @@ pub(crate) mod emulator;
 pub(crate) mod keys;
 pub(crate) mod memory;
 pub(crate) mod mouse;
+pub(crate) mod reader;
 mod status;
 pub(crate) mod typing;
 
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -29,7 +30,6 @@ use crate::host::theme::HostTheme;
 use crate::process;
 
 const SCROLLBACK_BYTES: usize = 10_000_000;
-const READ_BUFFER: usize = 16 * 1024;
 const INTERPRETERS: [&str; 6] = ["node", "bun", "deno", "python", "python3", "ruby"];
 const NODE_MAIN_THREAD: &str = "node-MainThread";
 const MAIN_THREAD: &str = "MainThread";
@@ -76,7 +76,7 @@ pub(crate) struct Term {
 
 #[derive(Debug)]
 pub(crate) enum Event {
-    Output(u64, u32, Vec<u8>),
+    Output(u64, u32, reader::Output),
     Exited(u64, u32),
 }
 
@@ -200,7 +200,7 @@ impl Term {
         let emulator =
             Emulator::new(rows, cols, SCROLLBACK_BYTES, theme, Box::new(move |bytes| _ = write_to(&replies, bytes)))
                 .map_err(|e| Error::Emulator(e.into()))?;
-        spawn_reader(id, generation, reader, tx);
+        reader::spawn(id, generation, reader, tx);
 
         let master = pair.master;
         Ok(Wired { id, generation, emulator, master, writer, child, size: (rows, cols), interactive: args.is_empty() }
@@ -455,23 +455,6 @@ fn spawn_writer(mut pty: Box<dyn Write + Send>) -> Writer {
         }
     });
     Writer { tx, queued }
-}
-
-fn spawn_reader<E: From<Event> + Send + 'static>(
-    id: u64,
-    generation: u32,
-    mut reader: Box<dyn Read + Send>,
-    tx: Sender<E>,
-) {
-    thread::spawn(move || {
-        let mut buf = vec![0u8; READ_BUFFER];
-        while let Ok(n @ 1..) = reader.read(&mut buf) {
-            if tx.send(E::from(Event::Output(id, generation, buf[..n].to_vec()))).is_err() {
-                return;
-            }
-        }
-        let _ = tx.send(E::from(Event::Exited(id, generation)));
-    });
 }
 
 #[cfg(test)]

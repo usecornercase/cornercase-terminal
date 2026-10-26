@@ -109,9 +109,7 @@ impl App {
             Target::Changes => ActivityItem::Changes,
             Target::Files => ActivityItem::Files,
             Target::Todo => ActivityItem::Todo,
-            Target::Settings => ActivityItem::Settings,
-            Target::Usage => ActivityItem::Usage,
-            Target::Remote => ActivityItem::Remote,
+            Target::Settings | Target::Usage | Target::Remote => ActivityItem::More,
             Target::Help => ActivityItem::Help,
             _ => return None,
         };
@@ -147,10 +145,8 @@ impl App {
             Target::Files => areas.files_button,
             Target::Todo => areas.todo_button,
             Target::Search => areas.search_button,
-            Target::Settings => label_cells(areas.settings, "Settings"),
-            Target::Usage => label_cells(areas.usage, "Usage"),
-            Target::Remote => self.remote_button().map(|on| ui::remote_button(areas.usage, on)).unwrap_or_default(),
-            _ => ui::help_button(areas.quit),
+            Target::Settings | Target::Usage | Target::Remote => label_cells(areas.more, ui::MORE_LABEL),
+            _ => ui::help_button(areas.more),
         }
     }
 }

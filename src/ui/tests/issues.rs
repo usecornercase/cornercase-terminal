@@ -184,8 +184,8 @@ fn the_button_shows_only_with_a_project() {
 }
 
 #[test]
-fn the_button_sits_level_with_settings() {
-    assert_eq!(areas().issues.y, areas().settings.y);
+fn the_button_sits_right_under_the_line() {
+    assert_eq!(areas().issues.y, areas().workspaces_separator.y + 1);
 }
 
 #[test]

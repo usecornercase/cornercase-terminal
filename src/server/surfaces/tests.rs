@@ -116,7 +116,10 @@ fn a_reader_with_frames_queued_gets_a_complete_frame_once_it_has_room() {
     attached
         .server
         .app
-        .handle_event(crate::app::AppEvent::Output(pane, 0, b"held".to_vec()), ratatui::layout::Rect::new(0, 0, 80, 24))
+        .handle_event(
+            crate::app::AppEvent::Output(pane, 0, b"held".to_vec().into()),
+            ratatui::layout::Rect::new(0, 0, 80, 24),
+        )
         .expect("output");
     let ready = attached.server.with_room();
     attached.server.app.render_surfaces(&ready, Instant::now() + FRAME_EVERY);
@@ -143,7 +146,8 @@ fn output_only_a_surface_shows_sends_a_frame_and_draws_no_window() {
     surface(&mut attached, tab);
     let _ = attached.server.step(Step::Draw);
 
-    let _ = attached.server.handle(ServerEvent::App(crate::app::AppEvent::Output(pane, 0, b"hidden-text".to_vec())));
+    let _ =
+        attached.server.handle(ServerEvent::App(crate::app::AppEvent::Output(pane, 0, b"hidden-text".to_vec().into())));
 
     assert!(!attached.server.due(Instant::now()));
     let got = until_frame(&mut attached, 2);

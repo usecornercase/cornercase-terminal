@@ -7,6 +7,14 @@ use crate::flows::{ORCHESTRATOR, builtin};
 use crate::test_util::fixture;
 use serde_json::Value;
 
+#[test]
+fn an_import_answer_from_an_older_server_has_no_roles_or_risks() {
+    let imported: Imported =
+        serde_json::from_str(r#"{"name":"Mine","origin":"user","path":null,"replaced":false,"future":true}"#)
+            .expect("an older answer with an unknown field");
+    assert_eq!((imported.name.as_str(), imported.roles, imported.check, imported.note), ("Mine", vec![], None, None));
+}
+
 fn member(name: &str, prompt: &str) -> Role {
     let mut role = Role { name: name.into(), agent: "claude".into(), ..Role::default() };
     role.prompt = prompt.into();

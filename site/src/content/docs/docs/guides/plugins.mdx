@@ -25,6 +25,14 @@ cornercase plugin install https://git.example.com/acme/tools.git//plugins/notes@
 
 `install` takes `owner/repo` on GitHub, any `https://` git address, or a git folder on your machine. A repository can hold several plugins, each in its own folder with its own `cornercase-plugin.toml`: on GitHub, add the folder after the repository (`owner/repo/plugins/notes`); for any other address or a folder on your machine, put it after `//` (`https://host/acme/tools.git//plugins/notes`, `~/code/tools//plugins/notes`). The folder is the plugin's: only it is installed, and its commands must stay inside it. Folder parts are letters, digits, `.`, `_` and `-`, never `.`, `..` or starting with `-`. It fetches the plugin at one commit and, before anything in it runs, shows where it comes from, that commit, what it asks for, how it is built or downloaded, and every command it will run once on. Then it asks; with no terminal to ask in, pass `--yes` once you have read the preview. The plugin is installed **turned off**.
 
+`--preview` prints the same preview and exits without asking or installing, also with no terminal. `--json` prints it as data for a program (see [scripts and agents](../scripts-and-agents/#plugins)). `--commit` then installs exactly the commit the preview showed, and refuses if the plugin has changed since. Unlike `acme/notes@<commit>`, which pins the plugin, the plugin keeps following its branch or tag.
+
+```sh
+cornercase plugin install acme/notes --preview          # what it would install; installs nothing
+cornercase plugin install acme/notes --preview --json   # the same, as data for a program
+cornercase plugin install acme/notes --commit <the commit it showed> --yes
+```
+
 A plugin can ship ready-made archives, one per platform, each with its sha256. cornercase downloads the one for your machine, checks it against that sha256 before anything is unpacked, and unpacks only files and folders into the plugin's folder. Without an archive for your machine, the plugin's build steps run instead, once you have confirmed, in its folder; their output goes to the plugin's log.
 
 ```sh
@@ -33,7 +41,7 @@ cornercase plugin update acme.notes   # one
 cornercase plugin remove acme.notes   # turns it off, waits for it to stop, deletes its installed copy
 ```
 
-`update` fetches the same address, folder and tag or branch again. If the commit did not change, it says the plugin is up to date and changes nothing; otherwise it shows the whole preview again and asks. An update keeps the plugin on or off as it was. A plugin pinned to a commit stays on it: install it again at another one. `remove` keeps the plugin's settings and data folders.
+`update` fetches the same address, folder and tag or branch again. If the commit did not change, it says the plugin is up to date and changes nothing; otherwise it shows the whole preview again and asks. An update keeps the plugin on or off as it was. `update acme.notes --preview` shows what an update would install, or that the plugin is up to date, without changing anything, and `--commit` then updates to exactly that commit. A plugin pinned to a commit stays on it: install it again at another one. `remove` keeps the plugin's settings and data folders.
 
 ## Find plugins
 
@@ -55,13 +63,14 @@ While you write a plugin, link its folder instead: cornercase reads it where it 
 cornercase plugin link ~/code/my-plugin    # adds it, turned off
 cornercase plugin enable my-plugin         # turns it on, then says what it asks for
 cornercase plugin list                     # every plugin, on or off, and what it runs
+cornercase plugin status                   # the same rows Settings shows, with each service (asks the server)
 cornercase plugin actions --context pane   # what the plugins add to the menus (asks the server)
 cornercase plugin logs my-plugin -f        # what its commands print
 cornercase plugin disable my-plugin        # stops its service and window processes
 cornercase plugin unlink my-plugin         # forgets it; the folder stays
 ```
 
-A plugin starts **off**, installed or linked: none of its actions, hooks, services or window processes run until you turn it on. An installed plugin's build steps, if it has any, run once you confirm the install. `plugin list` and Settings show what it asks for before you do. You can also turn plugins on and off in **Settings › Plugins**: each row shows the plugin's name and version, whether it is on, and what it asks for. `Enter` switches it.
+A plugin starts **off**, installed or linked: none of its actions, hooks, services or window processes run until you turn it on. An installed plugin's build steps, if it has any, run once you confirm the install. `plugin list` and Settings show what it asks for before you do. You can also turn plugins on and off in **Settings › Plugins**: each row shows the plugin's name and version, whether it is on, and what it asks for. `Enter` switches it. `cornercase plugin status` prints those rows from the command line, including whether each service is running, and `plugin status --json` is the same data another app reads with the `plugin-list` request. `plugin list` keeps reading the files and needs no server.
 
 A running server notices changes within a second: turning a plugin on starts its service, turning it off stops it, and editing the manifest of a linked plugin reloads it. No restart is needed.
 
@@ -138,7 +147,7 @@ Another app or a script lists the actions with `cornercase plugin actions` and r
 
 Put `button` in an action's `contexts` and the plugin gets a button in the window. With one such action, a click runs it; with several, the click opens a menu of their titles, in the order of the manifest. The optional `[button]` table names the button (`title`, the plugin's `name` by default) and gives it an `icon`, one character one cell wide, for the icon bar (the title's first letter by default).
 
-The buttons sit in a row of their own at the foot of the projects column, above **Settings**, which shows only while a plugin you turned on has one. Buttons that do not fit leave a ` ⋯ ` at the end of the row, which lists the rest. With the **icon bar** on, each button is a slot after Flow, named when you hover it; a short bar leaves them out first. On a small screen, they are in the projects menu.
+The buttons sit in a row of their own above **`More ▴`**: under the projects column's line when the lists are side by side, and under `Files` and `TODO` in one column, where the row shows only while a plugin you turned on has one. Buttons that do not fit leave a ` ⋯ ` at the end of the row, which lists the rest. With the **icon bar** on, each button is a slot after Flow, named when you hover it; a short bar leaves them out first. On a small screen, they are in the projects menu.
 
 An action run from its button gets `CORNERCASE_CONTEXT=button` and the ids of what the window shows (the project, workspace, tab and pane on screen, those there are), and runs in the folder of the workspace on screen, or your home folder with no project open.
 

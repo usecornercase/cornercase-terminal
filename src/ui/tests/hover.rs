@@ -60,34 +60,19 @@ fn new_button_has_no_background_by_default() {
     assert_eq!(render(&view(&["~"])).backend().buffer()[new_pos()].bg, Color::Reset);
 }
 
-fn quit_pos() -> Position {
-    areas().quit.as_position().offset(ratatui::layout::Offset { x: 2, y: 0 })
+fn more_pos() -> Position {
+    areas().more.as_position().offset(ratatui::layout::Offset { x: 2, y: 0 })
 }
 
 #[test]
-fn quit_button_is_dim_by_default() {
-    assert_eq!(render(&view(&["~"])).backend().buffer()[quit_pos()].bg, Color::Reset);
-}
-
-fn settings_pos() -> Position {
-    areas().settings.as_position().offset(ratatui::layout::Offset { x: 2, y: 0 })
+fn more_button_is_dim_by_default() {
+    assert_eq!(render(&view(&["~"])).backend().buffer()[more_pos()].bg, Color::Reset);
 }
 
 #[test]
-fn settings_button_is_dim_by_default() {
-    assert_eq!(render(&view(&["~"])).backend().buffer()[settings_pos()].bg, Color::Reset);
-}
-
-#[test]
-fn settings_button_is_filled_on_hover() {
-    let v = View { hover: Some(settings_pos()), ..view(&["~"]) };
-    assert_eq!(render(&v).backend().buffer()[settings_pos()].bg, Color::Cyan);
-}
-
-#[test]
-fn quit_button_turns_red_on_hover() {
-    let v = View { hover: Some(quit_pos()), ..view(&["~"]) };
-    assert_eq!(render(&v).backend().buffer()[quit_pos()].bg, Color::Red);
+fn more_button_is_filled_on_hover() {
+    let v = View { hover: Some(more_pos()), ..view(&["~"]) };
+    assert_eq!(render(&v).backend().buffer()[more_pos()].bg, Color::Cyan);
 }
 
 #[test]

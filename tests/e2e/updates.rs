@@ -103,7 +103,7 @@ fn a_restart_keeps_the_window_on_the_alternate_screen() {
     app.send(b"echo restarted=[$CORNERCASE_RESTARTED]\r");
     app.wait_for("the new shell does not inherit the restart mark", |s| s.contains("restarted=[]"));
 
-    app.click(areas().quit.as_position());
+    app.quit();
     app.wait_for_raw("the shell reads the terminal's modes after the client", |raw| raw.contains("stty-done"));
     let raw = String::from_utf8_lossy(&app.raw.lock()).into_owned();
     let modes = raw.rsplit_once("\x1b[?1049l").map_or("", |(_, after)| after);
@@ -117,7 +117,7 @@ fn a_restart_keeps_the_window_on_the_alternate_screen() {
 #[test]
 fn a_restart_that_cannot_reach_the_new_server_restores_the_terminal_and_says_why() {
     let mut app = Harness::start();
-    app.click(app.position_of(" Settings "));
+    app.pick_in_more("settings");
     app.wait_for("settings open", |s| s.contains(" restart "));
     app.click(app.position_of(" restart "));
     app.wait_for("the restart dialog opens", |s| s.contains("restart now"));

@@ -341,7 +341,7 @@ mod help {
     use super::*;
 
     fn help_at(app: &App) -> Position {
-        ui::help_button(app_areas(app).quit).as_position()
+        ui::help_button(app_areas(app).more).as_position()
     }
 
     fn menu(app: &App) -> Vec<String> {
@@ -360,10 +360,10 @@ mod help {
     }
 
     #[test]
-    fn the_button_sits_on_the_quit_row_and_opens_the_menu() {
+    fn the_button_sits_on_the_more_row_and_opens_the_menu() {
         let (mut app, _rx) = app();
         render(&mut app, AREA);
-        let help = ui::help_button(app_areas(&app).quit);
+        let help = ui::help_button(app_areas(&app).more);
         assert!(!help.is_empty());
         click(&mut app, help.as_position());
         assert_eq!(menu(&app), ["tour", "catalogue…", "docs", "report a bug"]);
@@ -371,12 +371,12 @@ mod help {
     }
 
     #[test]
-    fn quit_still_quits_beside_it() {
+    fn more_still_opens_its_menu_beside_it() {
         let (mut app, _rx) = app();
         render(&mut app, AREA);
-        let quit = app_areas(&app).quit.as_position();
-        click(&mut app, quit);
-        assert!(app.take_detach());
+        let more = app_areas(&app).more.as_position();
+        click(&mut app, more);
+        assert_eq!(menu(&app), ["settings", "usage", "quit"]);
     }
 
     #[test]
@@ -433,15 +433,15 @@ mod help {
     }
 
     #[test]
-    fn the_icon_bar_has_it_under_usage() {
+    fn the_icon_bar_has_it_over_the_gear() {
         let (mut app, _rx) = app();
         app.config.icon_bar = true;
         render(&mut app, AREA);
         let bar = app_areas(&app).activity;
         let items = ui::activity_items(bar, app.activity_shown());
         let (_, help) = items.iter().find(|(i, _)| *i == ui::ActivityItem::Help).expect("help");
-        let (_, usage) = items.iter().find(|(i, _)| *i == ui::ActivityItem::Usage).expect("usage");
-        assert!(help.y > usage.y);
+        let (_, more) = items.iter().find(|(i, _)| *i == ui::ActivityItem::More).expect("more");
+        assert!(help.y < more.y);
         click(&mut app, help.as_position());
         assert_eq!(menu(&app).first().map(String::as_str), Some("tour"));
     }

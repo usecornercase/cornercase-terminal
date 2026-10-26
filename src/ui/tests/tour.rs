@@ -1,6 +1,6 @@
 use super::*;
 use crate::editor::Editor;
-use crate::ui::{TourButton, TourCard, help_button, quit_button, tour_hit, tour_layout};
+use crate::ui::{TourButton, TourCard, help_button, more_button, tour_hit, tour_layout};
 
 const TALL: u16 = 30;
 
@@ -26,14 +26,14 @@ fn tall() -> Areas {
 }
 
 fn help_menu() -> Overlay {
-    let at = help_button(tall().quit).as_position();
+    let at = help_button(tall().more).as_position();
     let items = ["tour", "catalogue…", "docs", "report a bug"].map(String::from).to_vec();
     Overlay::Menu { at, disabled: vec![false; items.len()], items }
 }
 
 #[test]
 fn the_card_points_at_help_in_the_wide_layout() {
-    let target = help_button(tall().quit);
+    let target = help_button(tall().more);
     let v = View { tour: Some(card(target, false)), ..view(&["~"]) };
     insta::assert_snapshot!(render_sized(&v, W, TALL).backend());
 }
@@ -60,13 +60,13 @@ fn the_help_menu_opens_from_the_footer() {
 }
 
 #[test]
-fn help_sits_in_the_icon_bar_under_usage() {
+fn help_sits_in_the_icon_bar_over_the_gear() {
     let v = View { icon_bar: true, icons: true, remote: Some(false), ..view(&["~"]) };
     insta::assert_snapshot!(render_sized(&v, W, TALL).backend());
 }
 
 #[test]
-fn help_shares_the_quit_row_in_compact_mode() {
+fn help_shares_the_more_row_in_compact_mode() {
     let v = View { nav: Some(Nav::Projects), ..view(&["~"]) };
     insta::assert_snapshot!(render_sized(&v, 60, TALL).backend());
 }
@@ -91,10 +91,10 @@ fn every_button_is_found_by_its_rect() {
 }
 
 #[test]
-fn a_narrow_quit_row_drops_help_and_keeps_quit_whole() {
-    let row = Rect::new(0, 0, 10, 1);
+fn a_narrow_more_row_drops_help_and_keeps_more_whole() {
+    let row = Rect::new(0, 0, 15, 1);
     assert!(help_button(row).is_empty());
-    assert_eq!(quit_button(row), row);
+    assert_eq!(more_button(row), row);
 }
 
 #[test]

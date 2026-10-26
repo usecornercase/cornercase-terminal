@@ -20,7 +20,7 @@ use crate::error::{Error, Result};
 use crate::graphics::Support;
 use crate::graphics::detect::{self, Facts, Outer};
 use crate::host::notify::{self, Channel};
-use crate::host::open::{Failed, Open, Openers};
+use crate::host::open::{Browse, Failed, Open, Openers};
 use crate::host::sound::{self, Cue, Player};
 use crate::host::theme::HostTheme;
 use crate::paths;
@@ -53,6 +53,7 @@ enum Next {
     Reconnect,
     Sound(Cue),
     Open(Open),
+    Browse(Browse),
     Nothing,
 }
 
@@ -66,6 +67,7 @@ fn next(received: Received, reconnects: bool) -> Result<Next> {
         Received::Message(ServerMessage::Response(_)) => Next::Nothing,
         Received::Message(ServerMessage::Sound(cue)) => Next::Sound(cue),
         Received::Message(ServerMessage::Open(open)) => Next::Open(open),
+        Received::Message(ServerMessage::Browse(browse)) => Next::Browse(browse),
         Received::Message(ServerMessage::Detached | ServerMessage::Shutdown) | Received::Ended => {
             Next::End(Ending::Detached)
         }
@@ -242,6 +244,12 @@ impl Window<'_> {
             Next::Open(open) => {
                 let tx = self.tx.clone();
                 self.openers.open(&open, move |failed| {
+                    let _ = tx.send(Incoming::OpenFailed(failed));
+                });
+            }
+            Next::Browse(browse) => {
+                let tx = self.tx.clone();
+                self.openers.browse(browse, move |failed| {
                     let _ = tx.send(Incoming::OpenFailed(failed));
                 });
             }

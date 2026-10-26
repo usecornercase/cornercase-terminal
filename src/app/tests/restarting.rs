@@ -1,7 +1,7 @@
 use super::*;
 
 fn open(app: &mut App) {
-    click(app, areas().settings.as_position());
+    from_more(app, "settings");
     click(app, ui::settings_restart(ui::settings_area(AREA)).as_position());
 }
 

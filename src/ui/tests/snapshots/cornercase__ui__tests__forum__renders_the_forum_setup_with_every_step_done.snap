@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/forum.rs
-assertion_line: 61
 expression: render(&with(ready())).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -17,7 +16,7 @@ expression: render(&with(ready())).backend()
 "                  │                                             turn off   done  │                  "
 "                  ╰──────────────────────────────────────────────────────────────╯                  "
 "                               │                         │                                          "
+"                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
-"  Settings                     │                         │                                          "
-"  Usage                        │                         │                                          "
-"  Quit                   Help  │                         │                                          "
+"  Worktrees                    │                         │                                          "
+"  More ▴                 Help  │                         │                                          "

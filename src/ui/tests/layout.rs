@@ -48,14 +48,19 @@ fn list_ends_right_above_the_separator() {
 }
 
 #[test]
-fn settings_and_usage_buttons_sit_right_above_the_quit_button() {
-    let row = |y| Rect::new(0, y, SIDEBAR_WIDTH - 1, 1);
-    assert_eq!((areas().settings, areas().usage), (row(H - 3), row(H - 2)));
+fn the_tools_sit_beside_more_under_one_line() {
+    let a = areas();
+    assert_eq!((a.separator.y, a.workspaces_separator.y, a.issues.y, a.more.y), (H - 3, H - 3, H - 2, H - 1));
 }
 
 #[test]
-fn quit_button_takes_the_last_row() {
-    assert_eq!(areas().quit, Rect::new(0, H - 1, SIDEBAR_WIDTH - 1, 1));
+fn worktrees_sits_over_more_in_the_projects_column() {
+    assert_eq!(areas().worktrees, Rect::new(0, H - 2, SIDEBAR_WIDTH - 1, 1));
+}
+
+#[test]
+fn more_takes_the_last_row() {
+    assert_eq!(areas().more, Rect::new(0, H - 1, SIDEBAR_WIDTH - 1, 1));
 }
 
 #[test]

@@ -6,6 +6,8 @@ use crate::state;
 use crate::test_util::TempDir;
 use crate::version;
 
+mod output;
+
 mod lock {
     use super::*;
 
@@ -254,6 +256,18 @@ pub(super) mod a_bug {
         }
 
         pub(super) fn click_on(&mut self, text: &str) {
+            let (column, row) = self.find(text);
+            self.click(column, row);
+        }
+
+        pub(super) fn right_click_on(&mut self, text: &str) {
+            let (column, row) = self.find(text);
+            for kind in [MouseEventKind::Down(MouseButton::Right), MouseEventKind::Up(MouseButton::Right)] {
+                self.input(Event::Mouse(MouseEvent { kind, column, row, modifiers: KeyModifiers::NONE }));
+            }
+        }
+
+        fn find(&mut self, text: &str) -> (u16, u16) {
             self.shows(text);
             let rows = self.screen.screen().rows(0, COLS).collect::<Vec<_>>();
             let (row, column) = rows
@@ -263,7 +277,7 @@ pub(super) mod a_bug {
                 .find_map(|(y, line)| Some((y, line.find(text)?)))
                 .expect("the text is on screen");
             let column = u16::try_from(rows[row][..column].chars().count()).expect("on screen");
-            self.click(column + 1, u16::try_from(row).expect("on screen"));
+            (column + 1, u16::try_from(row).expect("on screen"))
         }
 
         pub(super) fn type_line(&self, line: &str) {
@@ -330,7 +344,7 @@ pub(super) mod a_bug {
             server.step(step)
         };
         Attached::new().serve(run, |client| {
-            client.shows("Quit");
+            client.shows("More");
             let before = client.clears;
             client.send(BUGGY);
             client.until("the screen is cleared", |client| client.clears > before);
@@ -589,13 +603,13 @@ mod showing_images {
         client.shows("400×200");
     }
 
-    fn settings() -> Position {
+    fn more() -> Position {
         ui::full_layout(
             Rect::new(0, 0, 100, 20),
             state::Widths::default(),
             ui::Screen { changes: true, ..ui::Screen::default() },
         )
-        .settings
+        .more
         .as_position()
     }
 
@@ -621,8 +635,9 @@ mod showing_images {
             open_the_image(client);
             client.until("the image is sent", |c| c.count(ITERM) == 1);
 
-            let at = settings();
+            let at = more();
             client.click(at.x, at.y);
+            client.click_on("settings");
             client.shows("Worktrees");
             assert_eq!(client.count(ITERM), 1, "nothing while the dialog is open");
             client.key(KeyCode::Esc);
@@ -724,7 +739,7 @@ mod sounding {
         attached.server.app.queue_sound(Cue { kind: Kind::NeedsYou, path: String::new() });
         attached.server.flush();
         let copy = b"\x1b]52;c;aGVsbG8=\x07".to_vec();
-        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, copy)));
+        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, copy.into())));
         attached.server.flush();
 
         let copied = clipboard::osc52("hello");
@@ -776,7 +791,7 @@ mod drawing {
         let mut attached = Attached::new();
         let now = drawn_just_now(&mut attached);
 
-        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(u64::MAX, 0, b"hidden".to_vec())));
+        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(u64::MAX, 0, b"hidden".to_vec().into())));
 
         assert!(!attached.server.due(now));
     }
@@ -788,7 +803,7 @@ mod drawing {
         let now = drawn_just_now(&mut attached);
         attached.server.printed_at = Some(now);
 
-        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, b"shown".to_vec())));
+        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, b"shown".to_vec().into())));
 
         let server = &attached.server;
         assert_eq!((server.due(now), server.due(now + FRAME), server.next_frame(now)), (false, true, Some(FRAME)));
@@ -814,7 +829,7 @@ mod drawing {
         let _ = attached.server.handle(ServerEvent::Message(1, ClientMessage::Event(key)));
         attached.server.draw();
 
-        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, b"a".to_vec())));
+        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, b"a".to_vec().into())));
 
         assert!(attached.server.due(Instant::now()));
     }
@@ -836,7 +851,7 @@ mod drawing {
         drawn_just_now(&mut attached);
         let copy = b"\x1b]52;c;aGVsbG8=\x07".to_vec();
 
-        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, copy)));
+        let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, 0, copy.into())));
         attached.server.flush();
 
         assert!(!attached.server.app.shows(pane));

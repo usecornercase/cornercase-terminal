@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use rstest::rstest;
 
 use super::*;
@@ -68,4 +70,56 @@ fn a_huge_source_is_left_plain() {
 #[case::unknown("data.xyz", "", None)]
 fn picks_a_grammar_for_every_file(#[case] path: &str, #[case] first: &str, #[case] expected: Option<&str>) {
     assert_eq!(language(Path::new(path), first), expected);
+}
+
+#[rstest]
+#[case::attributes("js {1,3}", Some("tsx"))]
+#[case::typescript("ts", Some("typescript"))]
+#[case::tsx("tsx extra", Some("tsx"))]
+#[case::shell("console", Some("bash"))]
+#[case::json("json5", Some("json"))]
+#[case::family("kt", Some("javascript"))]
+#[case::empty("  ", None)]
+#[case::unknown("no-such-language", None)]
+fn reads_a_fence_language(#[case] info: &str, #[case] expected: Option<&str>) {
+    assert_eq!(fence(info), expected);
+}
+
+#[test]
+fn a_diff_deletion_is_red_and_an_addition_is_green() {
+    let lines = highlight("+added\n-removed\n", "diff").expect("diff");
+    let colour =
+        |word: &str| lines.iter().flatten().find(|(text, _)| text.contains(word)).and_then(|(_, style)| style.fg);
+    assert_eq!((colour("added"), colour("removed")), (Some(Color::Green), Some(Color::Red)));
+}
+
+#[test]
+fn an_incomplete_fragment_still_colours_the_tokens_it_has() {
+    let lines = highlight("fn a(\n", "rust").expect("fragment");
+    assert!(lines[0].iter().any(|(text, style)| text == "fn" && style.fg == Some(Color::Magenta)));
+}
+
+#[test]
+fn a_string_opened_in_the_fragment_stays_green_on_the_next_line() {
+    let lines = highlight("let s = \"one\ntwo\";\n", "rust").expect("string");
+    assert_eq!(lines[1].first().map(|(_, style)| style.fg), Some(Some(Color::Green)));
+}
+
+#[test]
+fn keeps_unicode_text_on_its_line() {
+    let lines = highlight("let s = \"héllo\";\n", "rust").expect("unicode");
+    let text: String = lines[0].iter().map(|(text, _)| text.as_str()).collect();
+    assert_eq!(text, "let s = \"héllo\";");
+}
+
+#[test]
+fn the_same_block_comes_from_the_cache() {
+    let first = paint_block("fn cached() {}", "rust").expect("highlighted");
+    let second = paint_block("fn cached() {}", "rust").expect("highlighted");
+    assert!(Arc::ptr_eq(&first, &second));
+}
+
+#[test]
+fn an_oversized_block_is_left_plain() {
+    assert!(paint_block(&"x".repeat(BLOCK_BYTES + 1), "rust").is_none());
 }

@@ -71,6 +71,23 @@ mod started {
     }
 }
 
+mod start_stamp {
+    use super::*;
+
+    #[test]
+    fn stays_the_same_for_a_process_and_differs_for_a_later_one() {
+        let ours = start_stamp(this_pid()).expect("a stamp");
+        assert_eq!(start_stamp(this_pid()), Some(ours));
+        let later = crate::test_util::Running::spawn(Command::new("/bin/sleep").arg("30"));
+        assert!(start_stamp(later.pid()).is_some_and(|stamp| stamp > ours));
+    }
+
+    #[test]
+    fn is_unknown_for_a_process_that_exited() {
+        assert_eq!(start_stamp(exited_pid()), None);
+    }
+}
+
 mod footprint {
     use std::ptr::null_mut;
 

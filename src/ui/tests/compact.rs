@@ -78,6 +78,15 @@ fn the_menu_shows_one_column_at_a_time(#[case] nav: Option<Nav>, #[case] project
 }
 
 #[test]
+fn worktrees_has_a_band_over_more_in_the_projects_menu_only() {
+    let (projects, workspaces) = (small().shown(Some(Nav::Projects)), small().shown(Some(Nav::Workspaces)));
+    assert_eq!(
+        (projects.worktrees.height, projects.worktrees.bottom(), workspaces.worktrees),
+        (COMPACT_PITCH, projects.more.y, Rect::default())
+    );
+}
+
+#[test]
 fn wide_terminals_show_both_columns_whatever_the_menu() {
     let areas = layout(AREA, Widths::default());
     assert_eq!(areas.shown(None), areas);

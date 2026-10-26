@@ -1,10 +1,12 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::closed_agents::forgotten;
 use super::menus::{PaneAction, Target};
 use super::overlay::{CLOSE_SUBMIT, CREATE_SUBMIT, Overlay, RENAME_SUBMIT};
+use super::text_fields::FieldArea;
+use crate::editor::Editor;
 use crate::error::Result;
 use crate::git::worktree;
 use crate::project::Hierarchy;
@@ -20,11 +22,11 @@ const NEW_GROUP_HINT: &str = "right-click a project or its ⋯ to move it into t
 const WORKTREE_TOGGLE: &str = "with its own worktree";
 
 impl App {
-    pub(super) fn new_group_view(input: &str) -> ui::Overlay {
+    pub(super) fn new_group_view(input: &Editor) -> ui::Overlay {
         ui::Overlay::Form(ui::Form {
             title: "New group",
             label: "name",
-            value: input.into(),
+            value: input.clone(),
             hint: NEW_GROUP_HINT.into(),
             toggle: None,
             note: None,
@@ -38,14 +40,14 @@ impl App {
         let home = self.home.as_deref();
         let repo = self.projects.project_index(project).map(|p| self.projects[p].path.clone()).unwrap_or_default();
         let path = if worktree == Some(true) {
-            worktree::checkout_path(&self.config.worktrees_dir(home), &repo, input.trim())
+            worktree::checkout_path(&self.config.worktrees_dir(home), &repo, input.text().trim())
         } else {
             repo
         };
         Some(ui::Overlay::Form(ui::Form {
             title: "New workspace",
             label: "name",
-            value: input.into(),
+            value: input.clone(),
             hint: format!("in {}", crate::text::display_path(&path, home)),
             toggle: worktree.map(|on| ui::Toggle { label: WORKTREE_TOGGLE, on }),
             note: if creating {
@@ -57,11 +59,11 @@ impl App {
         }))
     }
 
-    pub(super) fn rename_view(target: Target, input: &str) -> ui::Overlay {
+    pub(super) fn rename_view(target: Target, input: &Editor) -> ui::Overlay {
         ui::Overlay::Form(ui::Form {
             title: target.rename_title(),
             label: "name",
-            value: input.into(),
+            value: input.clone(),
             hint: target.rename_hint().into(),
             toggle: None,
             note: None,
@@ -149,21 +151,45 @@ impl App {
             KeyCode::Esc => self.cancel_form(),
             KeyCode::Enter => self.submit_form(area)?,
             KeyCode::Tab => self.toggle_worktree(),
+            _ if self.overlay.as_ref().is_some_and(Overlay::takes_input) => self.name_key(key, area),
             KeyCode::Up => self.scroll_dialog(-1, area),
             KeyCode::Down => self.scroll_dialog(1, area),
-            KeyCode::Backspace => {
-                if let Some(input) = self.overlay.as_mut().and_then(Overlay::input) {
-                    input.pop();
-                }
-            }
-            KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
-                if let Some(input) = self.overlay.as_mut().and_then(Overlay::input) {
-                    input.push(c);
-                }
-            }
             _ => {}
         }
         Ok(())
+    }
+
+    fn name_key(&mut self, key: KeyEvent, area: Rect) {
+        let Some((at, input)) = self.name_text(area) else { return };
+        if input.one_line_key(key, at.width) {
+            self.clear_form_error();
+        }
+    }
+
+    pub(super) fn name_paste(&mut self, text: &str, area: Rect) {
+        let Some((_, input)) = self.name_text(area) else { return };
+        input.insert(text);
+        self.clear_form_error();
+    }
+
+    fn clear_form_error(&mut self) {
+        if let Some(overlay) = &mut self.overlay {
+            overlay.clear_error();
+        }
+    }
+
+    pub(super) fn name_text(&mut self, area: Rect) -> Option<(FieldArea, &mut Editor)> {
+        let text = ui::form_text(area);
+        let width = usize::from(text.width.max(1));
+        let input = self.overlay.as_mut()?.input()?;
+        Some((FieldArea { text, width, top: input.position(width).0, scrolls: false }, input))
+    }
+
+    fn name_click(&mut self, pos: Position, area: Rect) {
+        if let Some((at, input)) = self.name_text(area).filter(|(at, _)| at.text.contains(pos)) {
+            let (line, col) = at.spot(pos);
+            input.place(at.width, line, col);
+        }
     }
 
     pub(super) fn form_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> Result<()> {
@@ -177,7 +203,7 @@ impl App {
             Some(FormHit::Extra) => self.submit_extra(),
             Some(FormHit::Cancel) => self.cancel_form(),
             Some(FormHit::Toggle) => self.toggle_worktree(),
-            None => {}
+            None => self.name_click(pos, area),
         }
         Ok(())
     }
@@ -208,15 +234,16 @@ impl App {
             Overlay::NewWorkspace { project, input, worktree, creating: false, .. } => {
                 self.create_workspace(project, input, worktree, area)?
             }
-            Overlay::Rename { target, input } => self.submit_rename(target, &input),
-            Overlay::NewGroup { input } if input.trim().is_empty() => Some(Overlay::NewGroup { input }),
-            Overlay::NewGroup { input } => self.submit_new_group(&input),
+            Overlay::Rename { target, input } => self.submit_rename(target, &input.text()),
+            Overlay::NewGroup { input } if input.text().trim().is_empty() => Some(Overlay::NewGroup { input }),
+            Overlay::NewGroup { input } => self.submit_new_group(&input.text()),
             Overlay::GroupStyle { .. }
             | Overlay::Usage
             | Overlay::Remote
             | Overlay::Pairing(_)
             | Overlay::Forum(_)
-            | Overlay::Worktrees(_) => None,
+            | Overlay::Worktrees(_)
+            | Overlay::Ports(_) => None,
             Overlay::RemoveWorkspace { project, workspace, check, lock } => {
                 self.confirm_removal(project, workspace, check, lock.is_some())
             }

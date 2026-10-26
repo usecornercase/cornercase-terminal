@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/settings.rs
-assertion_line: 88
 expression: render(&with(remote)).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -17,7 +16,7 @@ expression: render(&with(remote)).backend()
 "  │   closed workspaces         archive  what happens to the post of a workspace you close       │  "
 "  │                                                                                              │  "
 "  │                                                                                              │  "
-" ─│ enter changes the selected setting                                                           │  "
-"  │                                                                      share   restart   done  │  "
+"  │ enter changes the selected setting                                                           │  "
+" ─│                                                                      share   restart   done  │  "
 "  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  "
-"  Quit                   Help  │                         │                                          "
+"  More ▴                 Help  │                         │                                          "

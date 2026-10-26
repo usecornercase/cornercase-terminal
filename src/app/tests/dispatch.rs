@@ -3,6 +3,7 @@ use crate::agents::Known;
 use crate::app::account_menu::AccountItem;
 use crate::app::help_menu::HelpItem;
 use crate::app::menus::Marked;
+use crate::app::more_menu::MoreItem;
 use crate::app::opening::Subject;
 use crate::app::plugins::Spot;
 use crate::host::open::Opener;
@@ -113,6 +114,33 @@ fn every_shortcut_is_answered_by_a_stage_or_the_last_match() {
 
 fn every_menu_action() -> Vec<MenuAction> {
     let (subject, kind) = (Subject::Project(1), Known::Claude);
+    let mut actions = hierarchy_menu_actions();
+    actions.extend([
+        MenuAction::OpenIn(subject),
+        MenuAction::OpenWith(subject, Opener::Default),
+        MenuAction::CopyPath(subject),
+        MenuAction::SendTodo { todo: 1, pane: 1 },
+        MenuAction::Plugin { spot: Spot::Pane(1), index: 0, revision: 0 },
+        MenuAction::Account(AccountItem { pane: 1, generation: 0, kind, index: 0 }, (0, 0)),
+        MenuAction::ManageAccounts,
+        MenuAction::Worktrees(1),
+        MenuAction::CloseAgent(1),
+        MenuAction::AccountNote(AccountItem { pane: 1, generation: 0, kind, index: 0 }),
+        MenuAction::AccountsOf(AccountItem { pane: 1, generation: 0, kind, index: 0 }),
+        MenuAction::AccountMenu(1),
+        MenuAction::CloseAgents(1),
+        MenuAction::ReopenAgents(1),
+        MenuAction::ForgetAgents(1),
+        MenuAction::Help(HelpItem::Docs),
+        MenuAction::Tour(0),
+        MenuAction::PluginButton { plugin: 0, revision: 0 },
+        MenuAction::More(MoreItem::Settings),
+        MenuAction::Ports(1),
+    ]);
+    actions
+}
+
+fn hierarchy_menu_actions() -> Vec<MenuAction> {
     vec![
         MenuAction::Rename(Target::Group(1)),
         MenuAction::MoveToGroup(1),
@@ -133,24 +161,6 @@ fn every_menu_action() -> Vec<MenuAction> {
         MenuAction::StartFlow(1),
         MenuAction::ProjectSettings(1),
         MenuAction::RunSetup(1),
-        MenuAction::OpenIn(subject),
-        MenuAction::OpenWith(subject, Opener::Default),
-        MenuAction::CopyPath(subject),
-        MenuAction::SendTodo { todo: 1, pane: 1 },
-        MenuAction::Plugin { spot: Spot::Pane(1), index: 0, revision: 0 },
-        MenuAction::Account(AccountItem { pane: 1, generation: 0, kind, index: 0 }, (0, 0)),
-        MenuAction::ManageAccounts,
-        MenuAction::Worktrees(1),
-        MenuAction::CloseAgent(1),
-        MenuAction::AccountNote(AccountItem { pane: 1, generation: 0, kind, index: 0 }),
-        MenuAction::AccountsOf(AccountItem { pane: 1, generation: 0, kind, index: 0 }),
-        MenuAction::AccountMenu(1),
-        MenuAction::CloseAgents(1),
-        MenuAction::ReopenAgents(1),
-        MenuAction::ForgetAgents(1),
-        MenuAction::Help(HelpItem::Docs),
-        MenuAction::Tour(0),
-        MenuAction::PluginButton { plugin: 0, revision: 0 },
     ]
 }
 
@@ -175,6 +185,12 @@ fn menu_index(action: &MenuAction) -> usize {
         MenuAction::StartFlow(_) => 16,
         MenuAction::ProjectSettings(_) => 17,
         MenuAction::RunSetup(_) => 18,
+        other => later_menu_index(other),
+    }
+}
+
+fn later_menu_index(action: &MenuAction) -> usize {
+    match action {
         MenuAction::OpenIn(_) => 19,
         MenuAction::OpenWith(..) => 20,
         MenuAction::CopyPath(_) => 21,
@@ -193,6 +209,9 @@ fn menu_index(action: &MenuAction) -> usize {
         MenuAction::Help(_) => 34,
         MenuAction::Tour(_) => 35,
         MenuAction::PluginButton { .. } => 36,
+        MenuAction::More(_) => 37,
+        MenuAction::Ports(_) => 38,
+        other => panic!("{other:?} is counted by menu_index"),
     }
 }
 

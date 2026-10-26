@@ -287,8 +287,8 @@ mod forms {
         click(&mut app, queue_row(0));
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("edit form") };
         form.when = When::In.combo();
-        form.prompt = crate::editor::Editor::new("abcd");
-        form.amount = crate::editor::Editor::new("abcd");
+        form.prompt = Editor::new("abcd");
+        form.amount = Editor::new("abcd");
         form.focus_on(Control::Prompt);
         form.prompt.select_all();
         let text = ui::queue_form::text(AREA, form, Control::Amount);
@@ -303,9 +303,9 @@ mod forms {
         queue_tab(&mut app);
         click(&mut app, queue_row(0));
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("edit form") };
-        form.prompt = crate::editor::Editor::new("fix logout instead");
+        form.prompt = Editor::new("fix logout instead");
         form.when = When::In.combo();
-        form.amount = crate::editor::Editor::new("3");
+        form.amount = Editor::new("3");
         app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
         assert_eq!(app.panels.queued.queue().entry(id).expect("edited").task.prompt, "fix logout instead");
         assert!(matches!(&app.overlay, Some(Overlay::Issues(b)) if b.current() == IssueTab::Queue));
@@ -353,7 +353,7 @@ mod resets {
         app.config.agent_commands.insert("claude".into(), "/nonexistent/claude-probe".into());
         app.new_queue_form(None);
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
-        form.prompt = crate::editor::Editor::new("fix login");
+        form.prompt = Editor::new("fix login");
         form.when = When::ClaudeReset.combo();
         app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
         pump_until(
@@ -389,7 +389,7 @@ mod guarantees {
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
         assert_eq!(form.agent.label(), Some(original.agent.as_str()));
         assert_eq!(form.mode.label(), Some("careful"));
-        form.prompt = crate::editor::Editor::new("fix logout instead");
+        form.prompt = Editor::new("fix logout instead");
         app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
         assert!(app.overlay.is_none());
         let edited = &app.panels.queued.queue().entry(id).expect("edited").task;
@@ -412,7 +412,7 @@ mod guarantees {
         assert_eq!((&edited.mode, &edited.command), (&original.mode, &original.command));
         app.new_queue_form(Some(id));
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
-        form.prompt = crate::editor::Editor::new("fix logout instead");
+        form.prompt = Editor::new("fix logout instead");
         app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
         assert!(app.overlay.is_none());
         let edited = &app.panels.queued.queue().entry(id).expect("edited").task;
@@ -472,7 +472,7 @@ mod destinations {
         let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
         app.new_queue_form(None);
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
-        form.prompt = crate::editor::Editor::new("fix login");
+        form.prompt = Editor::new("fix login");
         if project {
             app.projects[0].closing = true;
         } else {
@@ -494,7 +494,7 @@ mod destinations {
         app.new_queue_form(None);
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
         assert_eq!(form.choice().expect("a place").place.workspace_id, Some(workspace_id));
-        form.prompt = crate::editor::Editor::new("fix login");
+        form.prompt = Editor::new("fix login");
         app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
         let id = app.panels.queued.queue().entries[0].id;
         app.projects[0].workspaces[1].name = Some("renamed notes".into());
@@ -579,7 +579,7 @@ mod panel {
         assert!(matches!(&app.overlay, Some(Overlay::Issues(b)) if b.current() == IssueTab::Queue));
         press_button(&mut app, "new");
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
-        form.prompt = crate::editor::Editor::new("fix the login");
+        form.prompt = Editor::new("fix the login");
         app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
         assert_eq!(app.panels.queued.queue().entries.len(), 1);
         let Some(Overlay::Issues(b)) = &app.overlay else { panic!("back in issues") };
@@ -617,7 +617,7 @@ mod panel {
         let (mut app, _rx, _dirs) = opened();
         app.new_queue_form(None);
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
-        form.prompt = crate::editor::Editor::new(&"word ".repeat(80));
+        form.prompt = Editor::new(&"word ".repeat(80));
         let field = ui::queue_form::text(AREA, form, Control::Prompt);
         let start = ui::queue_form::first_line(&form.prompt, field);
         assert!(start > 0);

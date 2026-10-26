@@ -13,6 +13,7 @@ use super::pull_requests::Looked;
 use super::toast::Toast;
 use super::worktrees_dialog::Deleted;
 use crate::agents::launch::Launch;
+use crate::editor::Editor;
 use crate::error::Result;
 use crate::flows::run::RoleWorktree;
 use crate::git;
@@ -245,11 +246,11 @@ impl App {
     pub(super) fn create_workspace(
         &mut self,
         project: u64,
-        input: String,
+        input: Editor,
         worktree: Option<bool>,
         area: Rect,
     ) -> Result<Option<Overlay>> {
-        let name = input.trim().to_string();
+        let name = input.text().trim().to_string();
         let Some(p) = self.projects.project_index(project) else { return Ok(None) };
         if name.is_empty() {
             let error = Some("the name is required".into());

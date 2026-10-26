@@ -356,7 +356,9 @@ fn open_changes() -> (TempDir, App, Receiver<AppEvent>) {
 fn loaded(app: &mut App, rx: &Receiver<AppEvent>) {
     pump_until(app, rx, "the changes load", |a| {
         let Some(target) = a.changes_target() else { return false };
-        a.panels.changes.model(target.workspace, target.base.as_deref()).is_some()
+        let full = a.panels.changes.model(target.workspace, target.base.as_deref()).is_some();
+        let summary = a.panels.changes.summary(target.workspace).is_some();
+        if a.screen.side == Some(Side::Changes) { full } else { full || summary }
     });
 }
 
@@ -526,6 +528,7 @@ fn with_an_agent() -> (TempDir, TempDir, App) {
     let config_path = write_config(config.path(), &settings);
     let (mut app, rx) = app_in(repo.path(), config_path);
     exec_agent(&mut app, &agent);
+    app.screen.side = Some(Side::Changes);
     refresh_until_loaded(&mut app, &rx);
     (repo, config, app)
 }
@@ -560,6 +563,7 @@ fn ask_agent_types_the_lines_into_the_agent() {
 fn without_an_agent_the_reference_is_copied() {
     let repo = repo_with_edit();
     let (mut app, rx) = app_in(repo.path(), no_config());
+    app.screen.side = Some(Side::Changes);
     refresh_until_loaded(&mut app, &rx);
     let (target, file) = first_changed_file(&app);
     app.hunk_action(&target, &file, Hunk { index: 0, action: HunkAction::Ask }, AREA).expect("ask");
@@ -651,6 +655,7 @@ fn open_starts_the_editor_in_a_new_tab() {
     let repo = repo_with_edit();
     let (mut app, rx) = app_in(repo.path(), no_config());
     app.shells.set_editor("true");
+    app.screen.side = Some(Side::Changes);
     refresh_until_loaded(&mut app, &rx);
     let (target, file) = first_changed_file(&app);
     let tabs = app.projects[0].workspaces[0].tabs.len();

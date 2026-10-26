@@ -45,6 +45,8 @@ impl Command {
             }
             Self::Focus(focus) => {
                 fields.add("item", focus.item);
+                fields.maybe("reveal_bytes", focus.reveal.as_ref().map(|reveal| reveal.query.len()));
+                fields.maybe("line", focus.reveal.as_ref().and_then(|reveal| reveal.line));
             }
             _ => return false,
         }
@@ -201,6 +203,8 @@ impl Command {
                 fields.add("off", away.off);
             }
             Self::Usage(usage) => usage.fields(fields),
+            Self::Ports(ports) => ports.fields(fields),
+            Self::StopPort(stop) => stop.fields(fields),
             Self::Tour(tour) => tour.fields(fields),
             Self::PluginActions(actions) => actions.fields(fields),
             Self::PluginRun(run) => run.fields(fields),

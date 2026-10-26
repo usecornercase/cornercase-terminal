@@ -137,18 +137,18 @@ fn the_dot_is_muted_and_inside_the_button() {
     let r = a.todo_button;
     let with = render_sized(&pending(true, true), 140, 18);
     let without = render_sized(&pending(false, true), 140, 18);
-    let row = Rect { x: r.x - 2, width: r.width + 2, ..r };
-    let dot = with.backend().buffer()[(r.right() - 2, r.y)].clone();
+    let row = Rect { width: r.width + 2, ..r };
+    let dot = with.backend().buffer()[(r.right(), r.y)].clone();
     assert_eq!(
         (row_text(&with, row), row_text(&without, row), dot.fg, a.todo_with_dot(true)),
-        (" TODO ● ".to_string(), "   TODO ".to_string(), Color::DarkGray, row)
+        (" TODO ● ".to_string(), " TODO   ".to_string(), Color::DarkGray, row)
     );
 }
 
 #[test]
-fn the_button_stays_right_aligned_with_changes() {
+fn the_button_lines_up_with_changes() {
     let a = layout(Rect::new(0, 0, 140, 18), Widths::default());
-    assert_eq!((a.todo_button.right(), a.todo_button.width), (changes_button(a.issues, "Changes").right(), 6));
+    assert_eq!((a.todo_button.x, a.todo_button.width), (changes_button(a.issues, "Changes").x, 6));
 }
 
 #[test]

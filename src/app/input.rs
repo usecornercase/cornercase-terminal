@@ -52,7 +52,7 @@ impl App {
             Some(Overlay::Flows { .. }) => self.flows_key(key, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_key(key, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_key(key, area),
-            Some(Overlay::Worktrees(_)) => self.worktrees_key(key, area),
+            Some(Overlay::Worktrees(_) | Overlay::Ports(_)) => self.listing_key(key, area),
             Some(Overlay::CloseAgent(_)) => self.close_agent_key(key, area),
             Some(Overlay::CloseAgents(_)) => self.close_agents_key(key, area),
             Some(Overlay::Usage) => {
@@ -221,7 +221,7 @@ impl App {
         if self.plugin_row_mouse(areas.plugins, pos, left) {
             return ControlFlow::Break(Ok(()));
         }
-        if let Some(item) = self.footer_hit(areas, pos) {
+        if let Some(item) = Self::footer_hit(areas, pos) {
             return ControlFlow::Break(if left { self.activity_click(item, pos, area) } else { Ok(()) });
         }
         if areas.list.contains(pos) {
@@ -376,8 +376,6 @@ impl App {
             changes: self.changes_label().is_some(),
             files: self.project().is_some(),
             flow: self.has_run(),
-            update: self.update_label().is_some(),
-            remote: self.remote_button().is_some(),
             plugins: u16::try_from(self.buttoned_plugins().count()).unwrap_or(u16::MAX),
         }
     }
@@ -397,14 +395,11 @@ impl App {
             ui::ActivityItem::Changes => self.toggle_changes(),
             ui::ActivityItem::Files => self.toggle_files(),
             ui::ActivityItem::Todo => self.toggle_todo(),
+            ui::ActivityItem::Worktrees => self.open_worktrees(None),
             ui::ActivityItem::Flow => self.toggle_flow(),
             ui::ActivityItem::Plugin(plugin) => self.click_plugin_button(plugin, pos),
-            ui::ActivityItem::Update => self.open_update(),
-            ui::ActivityItem::Remote => self.open_remote_menu(pos),
             ui::ActivityItem::Help => self.open_help(pos),
-            ui::ActivityItem::Usage => self.open_usage(),
-            ui::ActivityItem::Settings => self.open_settings(),
-            ui::ActivityItem::Quit => self.outbox.detach(),
+            ui::ActivityItem::More => self.open_more(pos),
         }
         Ok(())
     }
@@ -415,19 +410,14 @@ impl App {
         self.overlay = Some(Overlay::Menu { at, actions });
     }
 
-    fn footer_hit(&self, areas: &ui::Areas, pos: Position) -> Option<ui::ActivityItem> {
-        let update = self.update_label().is_some_and(|label| ui::update_button(areas.settings, &label).contains(pos));
-        let remote = self.remote_button().is_some_and(|on| ui::remote_button(areas.usage, on).contains(pos));
+    fn footer_hit(areas: &ui::Areas, pos: Position) -> Option<ui::ActivityItem> {
         [
-            (update, ui::ActivityItem::Update),
-            (remote, ui::ActivityItem::Remote),
-            (ui::help_button(areas.quit).contains(pos), ui::ActivityItem::Help),
-            (ui::quit_button(areas.quit).contains(pos), ui::ActivityItem::Quit),
-            (areas.usage.contains(pos), ui::ActivityItem::Usage),
-            (areas.settings.contains(pos), ui::ActivityItem::Settings),
+            (ui::help_button(areas.more), ui::ActivityItem::Help),
+            (ui::more_button(areas.more), ui::ActivityItem::More),
+            (areas.worktrees, ui::ActivityItem::Worktrees),
         ]
         .into_iter()
-        .find_map(|(hit, item)| hit.then_some(item))
+        .find_map(|(r, item)| r.contains(pos).then_some(item))
     }
 
     pub(super) fn handle_paste(&mut self, text: &str, area: Rect) {
@@ -480,11 +470,7 @@ impl App {
             Some(Overlay::StartFlow { .. }) => self.start_flow_paste(text, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_paste(text, area),
             Some(Overlay::Worktrees(_)) => self.worktrees_paste(text),
-            Some(overlay) => {
-                if let Some(input) = overlay.input() {
-                    input.extend(clean());
-                }
-            }
+            Some(_) => self.name_paste(text, area),
             None => {}
         }
     }
@@ -517,4 +503,21 @@ pub(super) fn wheel(kind: MouseEventKind) -> Option<isize> {
         MouseEventKind::ScrollDown => Some(WHEEL_ROWS),
         _ => None,
     }
+}
+
+pub(super) enum ListPointer {
+    Wheel(isize),
+    Press,
+}
+
+pub(super) fn list_pointer(kind: MouseEventKind) -> Option<ListPointer> {
+    match (wheel(kind), kind) {
+        (Some(delta), _) => Some(ListPointer::Wheel(delta)),
+        (None, MouseEventKind::Down(MouseButton::Left)) => Some(ListPointer::Press),
+        _ => None,
+    }
+}
+
+pub(super) fn wheel_span((rows, body): (usize, Rect), confirm_lines: Option<usize>) -> (usize, usize) {
+    confirm_lines.map_or((rows, 0), |lines| (usize::from(body.height), lines))
 }

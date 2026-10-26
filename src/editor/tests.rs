@@ -471,6 +471,45 @@ mod words {
     }
 }
 
+mod line_ends {
+    use super::*;
+
+    #[test]
+    fn ctrl_a_and_ctrl_e_reach_the_ends_of_a_one_line_field() {
+        let mut e = at("fix the login bug", 9);
+        assert!(press_in_line(&mut e, KeyCode::Char('a'), KeyModifiers::CONTROL));
+        assert_eq!(e.cursor(), 0);
+        assert!(press_in_line(&mut e, KeyCode::Char('e'), KeyModifiers::CONTROL));
+        assert_eq!((e.text().as_str(), e.cursor()), ("fix the login bug", 17));
+    }
+
+    #[test]
+    fn ctrl_a_and_ctrl_e_stay_on_the_line_of_a_multi_line_field() {
+        let mut e = at("abc\ndef", 5);
+        press(&mut e, KeyCode::Char('a'), KeyModifiers::CONTROL);
+        assert_eq!(e.cursor(), 4);
+        press(&mut e, KeyCode::Char('e'), KeyModifiers::CONTROL);
+        assert_eq!(e.cursor(), 7);
+    }
+
+    #[test]
+    fn ctrl_a_drops_the_selection() {
+        let mut e = Editor::new("fix the login");
+        press_in_line(&mut e, KeyCode::Left, KeyModifiers::SHIFT);
+        press_in_line(&mut e, KeyCode::Char('a'), KeyModifiers::CONTROL);
+        assert_eq!((e.selection(), e.cursor()), (None, 0));
+    }
+
+    #[rstest]
+    #[case::ctrl_alt_a(KeyCode::Char('a'), KeyModifiers::ALT | KeyModifiers::CONTROL)]
+    #[case::alt_e(KeyCode::Char('e'), KeyModifiers::ALT)]
+    fn other_a_and_e_combinations_do_nothing(#[case] code: KeyCode, #[case] modifiers: KeyModifiers) {
+        let mut e = at("fix", 1);
+        assert!(!press_in_line(&mut e, code, modifiers));
+        assert_eq!((e.text().as_str(), e.cursor()), ("fix", 1));
+    }
+}
+
 mod one_line {
     use super::*;
 

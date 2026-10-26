@@ -82,9 +82,9 @@ fn grey_text_takes_the_muted_colour() {
         (r.x..r.right()).map(|x| &buf[(x, r.y)]).find(|c| !c.symbol().trim().is_empty()).map(|c| c.fg)
     };
 
-    let greys = [a.title, middle(a.search), arrow, a.settings, a.usage, a.quit].map(first);
+    let greys = [a.title, middle(a.search), arrow, a.more].map(first);
 
-    assert_eq!(greys, [Some(Color::Indexed(243)); 6]);
+    assert_eq!(greys, [Some(Color::Indexed(243)); 4]);
 }
 
 fn row_of(v: &View, row: TreeRow) -> Rect {

@@ -61,7 +61,7 @@ group 9  personal  collapsed
 | `split` | Splits a pane right, or down, optionally typing a command. Prints the new pane's id. |
 | `start [AGENT]` | Starts a coding agent in a new tab and gives it a prompt, or with `--issue` the issue's. Prints the pane's id. |
 | `issue sources`, `issue list`, `issue read KEY`, `issue people SOURCE` | Read the [issue trackers](#issues) through the server: which are connected, their lists with the Issues dialog's filters, an issue with its comments, and whom the filters can name. |
-| `flow list`, `flow run NAME`, `flow export NAME`, `flow import SOURCE`, `flow delete NAME`, `flow hide NAME`, `flow restore NAME`, `flow default NAME`, `flow order NAME…` | Lists the [flows](../flows/), starts one (a team of agents in a worktree, run by an orchestrator agent), prints one as text to share, adds one someone shared, deletes one of yours or the project's, deletes a built-in flow and brings it back, or chooses the flow the start dialog opens on and the order of the list. |
+| `flow list`, `flow run NAME`, `flow export NAME`, `flow import SOURCE`, `flow save FILE`, `flow delete NAME`, `flow hide NAME`, `flow restore NAME`, `flow default NAME`, `flow order NAME…` | Lists the [flows](../flows/), starts one (a team of agents in a worktree, run by an orchestrator agent), prints one as text to share, adds one someone shared, saves one given as JSON, deletes one of yours or the project's, deletes a built-in flow and brings it back, or chooses the flow the start dialog opens on and the order of the list. |
 | `flow runs`, `flow messages`, `flow files` | Where each running flow stands, what its roles sent each other, and the files of its folder: see [Follow a flow run](#follow-a-flow-run). |
 | `send [TEXT]` | Pastes text into a pane, and presses Enter with `--enter`. |
 | `keys KEY…` | Presses keys in a pane. |
@@ -85,9 +85,11 @@ group 9  personal  collapsed
 | `notify TEXT` | Shows a message in the window, with a desktop notification. |
 | `todo` | Adds, lists, edits, checks off and back, reorders and removes items of the [TODO list](../todo/) (with undo), and sends one to an agent as `send --enter` would. |
 | `config` | Reads every setting, connection and project's commands, and changes them with the Settings dialog's own checks: [settings for a program that draws its own preferences](#settings). |
-| `config export`, `config import FILE` | Writes the settings to hand to a colleague, without tokens or personal ones, and imports such a file after showing what it changes: [share your setup](#share-your-setup). |
+| `config export`, `config import FILE` | Writes the settings to hand to a colleague, without tokens or personal ones, and imports such a file after showing what it changes. `--preview` prints that preview and exits 0 without importing: [share your setup](#share-your-setup). |
 | `away` | Has agents message you [on Telegram](../telegram/) or [Discord](../discord/); `--off` stops it. |
 | `usage` | Prints your Claude Code and Codex [plan limits](#plan-usage) as the Usage dialog's Limits tab shows them; `--cached` prints the last answer without asking the agents again. |
+| `plugin install SOURCE --preview`, `plugin update ID --preview` | Fetch a plugin and print what installing or updating it would run, without installing; `--json` is for a program that asks the user itself, and `--commit` then installs exactly that commit. See [Plugins](#plugins). |
+| `plugin status` | Prints the plugins as Settings › Plugins shows them, including whether each service is running, restarting or starting, and why `plugins.json` cannot be read. `--json` is the `plugin-list` answer. See [Plugins](#plugins). |
 | `plugin actions`, `plugin run PLUGIN ACTION`, `plugin popup-close` | List the actions your [plugins](../plugins/) add to the menus and buttons, run one on a project, workspace, tab or pane as its menu entry does (or on what the window shows, as its button does), waiting for it to end, and close a plugin's popup. See [Plugins](#plugins). |
 | `skill` | Prints the instructions that teach coding agents these commands. |
 | `contract` | Says what the running server supports: its version, the [contract](#contract-and-compatibility) it speaks, its boot and its operations and streams. |
@@ -197,7 +199,7 @@ cornercase changes discard src/main.rs       # put it back as in the last commit
 - A project stream has one workspace entry, with no files when there are none. An Every project stream (`--every`, only for Uncommitted) has one entry per workspace with changes, in the sidebar's order, and never ends by itself. A project stream ends when its workspace or project closes. A workspace nobody follows costs nothing: git runs only for what a stream or the window shows.
 - **The mode belongs to the stream**: `changes-mode` changes a running stream's mode, and the window's tabs don't move. It only reaches a stream the same connection opened, so it is a request for a program holding the stream's connection open over the socket: a separate command invocation uses a new connection and gets `not-found`, which is why `cornercase changes` has no command for it (start another `changes list --mode …` instead). A second `changes` on one connection is refused with `conflict`. **The base and the viewed marks are shared** with the window: choosing a base here changes what its panel compares with, and a mark set here shows as its `✓`.
 - `changes-file` answers a file's `hunks`: `old_start`, `new_start`, `context` and `lines`, each with `kind` (`context`, `removed` or `added`), `old` and `new` numbers (`null` where the line is not on that side), `text` (tabs as four spaces), `emphasis` (the words that changed, as `[start, end)` pairs in characters of `text`) and `syntax` (runs of `style` and `text`, left out where the line isn't highlighted). `styles` is the table the runs point into, in the same shape as a [surface](#stream-a-tabs-terminals)'s: palette indices, never RGB, so the client's own theme and tints apply; entry 0 is plain.
-- `changes-gap` answers `lines` with their `old` and `new` numbers and `syntax`, for the lines before hunk `hunk` (counted from 1: hunk 0 has no gap before it). `changes-base` without arguments lists `branches`, the `default` branch and the current `base`; with `base` it sets it (the default branch goes back to following the default) and with `clear` it clears it. `changes-viewed` sets a mark with the file's `digest`, or clears it with `clear`: a mark set with the digest of a version the file no longer has does not apply, as when the file changes under the window's mark.
+- `changes-gap` answers `lines` with their `old` and `new` numbers and `syntax`, for the lines between hunk `hunk` and the one before it (`hunk` is the index in `changes-file`'s `hunks`, counted from 0, so hunk 0 has no gap). `changes-base` without arguments lists `branches`, the `default` branch and the current `base`; with `base` it sets it (the default branch goes back to following the default) and with `clear` it clears it. `changes-viewed` sets a mark with the file's `digest`, or clears it with `clear`: a mark set with the digest of a version the file no longer has does not apply, as when the file changes under the window's mark.
 - `changes-discard` takes the file's `path` and the Uncommitted `digest` you saw, and throws its changes away: the file goes back to the last commit, and one that git doesn't track or that was added since is deleted. It is refused with `conflict` if the file changed since that digest, and `not-found` if the file has no change. It answers `workspace`, `path`, `old_path` and `status`. The window shows no message. One sent while another runs in the same repository can fail on git's index lock.
 - `changes-stage` takes the file's `path` and the Uncommitted `digest` you saw, and puts its changes in git's index, as `git add` does; with `staged` set to `false` it takes them out instead (`staged` is `true` when left out). The file keeps its changes either way. It is refused with `conflict` if the file changed since that digest, and `not-found` if the file has no change. It answers `workspace`, `path`, `old_path`, `status` and `staged`. The window shows no message. One sent while another git runs in the same repository can fail on git's index lock.
 - `digest` is a string of 16 hexadecimal digits that changes whenever the file's change does. `status --json` also gives each workspace `changes` (`files`, `added`, `removed` and `mode`), for a badge like the button's, while cornercase keeps it current: the window's workspace, one a stream follows, or any while a stream follows every project; it is left out otherwise.
@@ -305,7 +307,7 @@ cornercase surface --view "$id"
 ```
 
 - `view` has `id`, `projection`, `active`, `cols` and `rows` (`null` without a size), `shown` (the `project`, `workspace`, `tab` and `pane` it shows) and `controls` (whether it sizes its tab's terminals now). It starts on what the window shows, or on `--tab`, `--workspace` or `--project`; the window doesn't move. Each tab in the lines has `controller`: the id of the view sizing it, absent when the window does.
-- `--view ID` works on `status`, `focus`, `open`, `new-workspace`, `new-tab`, `split`, `start`, `send`, `keys`, `read`, `wait`, `mark`, `rename`, `go` and `surface`, also from separate commands. The view's tab is their default, and `focus`, `--focus` move the view, not the window or the other views. `focus --view` prints the view's new tab and its `projection`. Other commands refuse it. A server without views is refused up front, naming the update.
+- `--view ID` works on `status`, `focus`, `open`, `new-workspace`, `new-tab`, `split`, `start`, `send`, `keys`, `read`, `wait`, `mark`, `rename`, `go` and `surface`, also from separate commands. The view's tab is their default, and `focus`, `--focus` move the view, not the window or the other views. `focus --view --json` prints the view's new tab and its `projection`. Other commands refuse it. A server without views is refused up front, naming the update.
 - When something the view shows goes away, it moves like the window would: a closed tab to the one before it, a closing workspace or project to its neighbour. That never resizes a tab for it.
 - `surface --view ID` streams the tab the view shows, at the view's size, and follows the view to other tabs. It takes no `--tab`, `--cols` or `--rows`, and each frame carries `view` and `projection`.
 - `view-set --view ID` changes it: `--cols` and `--rows`, `--active` or `--inactive`, `--hidden` or `--visible` (see below), and `--claim` to size the tab it shows from now on. A view without a size, or inactive, sizes nothing and streams no terminals, but its lines keep following the session.
@@ -395,7 +397,7 @@ cornercase theme --clear           # back to the window's colours, or the defaul
 cornercase search 'migration failed'
 cornercase search --json checkout
 pane=$(cornercase search --json 'tax bug' | jq -r '.matches[0].pane')
-cornercase focus --pane "$pane"
+cornercase focus --pane "$pane" --reveal 'tax bug'
 ```
 
 Text is one line per match under a header, separated by tabs, the way `status --panes` is. Matches come in the order of the sidebar, an agent's messages first, newest first, then the pane's history from the bottom up.
@@ -422,6 +424,8 @@ pane	who	source	place	line	text
 - No match prints the header alone and exits 0, since finding nothing is an answer. An empty search is an error.
 - `--json` prints `{"matches": [...], "capped": false}`, each match with `pane`, `tab`, `workspace`, `project` (the ids), `place`, `who`, `source`, `line` (`null` when there is none), `text` and `written` (when an agent's message was written, in UTC, or `null`).
 - The text you search for is never written to `server.log`.
+- `focus --pane ID --reveal TEXT` goes to the pane, scrolls it to the text and selects it, as `Enter` on a result in the window does. `TEXT` is what you searched for. `--line` takes a `screen` match's `line`; leave it out for an agent's message, which takes the newest place the pane shows the text. `--json` prints `revealed`, which is `false` when the pane no longer holds the text: the pane is still shown, a warning goes to stderr and the exit status is 0. A program that reads the mouse takes the pane back to the bottom. With `--view ID` the view shows it, not the window.
+- Over the socket: `{"command": "focus", "args": {"item": {"pane": 9}, "reveal": {"query": "migration failed", "line": 118}}}` answers `{"ok": {"revealed": true}}`. Check the `focus-reveal` feature first: an older server ignores `reveal` and only shows the pane.
 
 ### Create
 
@@ -505,10 +509,13 @@ cornercase flow run 'Full issue' --issue ENG-42 --project 3
 
 `flow export NAME` prints a flow as TOML, so `cornercase flow export Quick > quick.toml` makes a file to send, and `--json` prints its name, origin, path and text. `flow import SOURCE` (a file, `-` for standard input, an `https://` address or `OWNER/REPO` on GitHub, see [community flows](../flows/#community-flows)) adds one to yours, or to the project's with `--to project`, and prints where it went. A flow from an address or a repository, or that sets `env` or `args`, asks first, or needs `--yes` without a terminal; a name that is taken is refused unless `--replace` overwrites it or `--name` gives the new one another. A text over 256 KiB is refused. See [Share a flow](../flows/#share-a-flow).
 
+`flow import SOURCE --check --json` previews an import without asking or saving, including with no terminal or with `-` for standard input. It sends `flow-import` with `check: true`, using the same `--to`, `--project`, `--name` and `--replace` options as the later import with `--yes`. The answer has `name`, `origin` (`user` or `project`), `path` (`null` when checking), `replaced` (whether an existing file would be overwritten), and `roles` (orchestrator first, each with `role`, `agent`, `model`, `effort`, `edits` and optional `worktree` (`own`; omitted for a shared worktree)). Optional `check` names the variables and arguments that run unattended; the CLI adds the warning about an unreviewed source when fetching from the web. Optional `note` names agents that are not installed here. These fields are also available over the socket and after an import; older servers omit `roles` and `check`, which the CLI fills from the source it already read before printing either text or JSON. Without `--json`, the preview is text on standard output. A successful check exits 0; bad text, a flow that cannot run or a name conflict exits 1. `--check` and `--yes` cannot be combined.
+
 ### Manage flows
 
 ```sh
 cornercase flow list --json
+cornercase flow save draft.json --check
 cornercase flow delete 'Quick mine'
 cornercase flow hide Quick
 cornercase flow restore Quick
@@ -527,6 +534,8 @@ An app with an editor of its own works on the flow as JSON. `flow list --json` g
 ```
 
 With `check` it answers `problems` (what the editor shows in red: the flow's own and a name conflict) and the `check` text (what a project's flow runs unattended: its `env` and `args`), and writes nothing; without it, it saves, answers the `path` and is refused as `malformed` while the flow has problems of its own. A request is `not-found` for a project that is not open and a `path` that is no flow file, and `malformed` for another place. The last write wins over an editor open on the same flow, as with a file edited by hand.
+
+`flow save FILE` sends that request from the command line, with the flow read as JSON from a file or, with `-`, from standard input (at most 1 MiB): `cornercase flow list --json | jq '.flows[0].flow' > draft.json` gives one to edit. `--to yours` or `--to project` is the `place` (by default the place of the `--path` file, else yours, so an edit never moves a flow unless you ask), and `--project ID`, `--path FILE` (taken without `.` and `..`, so it matches the path `flow list --json` gives) and `--check` are the request's. Keys left out take their defaults, so a form can send only what it has, and a key a flow does not have is refused with its place (`roles.0.promt`). It prints where the flow went and what still stops it from running; with `--check` it prints the problems and saves nothing, and exits with 0 whether or not the server finds problems (a draft the command cannot read, such as invalid JSON or a stray key, is still an error). `--json` prints the request's answer. Without `--path` it makes a new flow, so save again with the `--path` it printed: the same draft saved twice makes a second flow of that name, listed with the clash.
 
 ### Issues
 
@@ -713,7 +722,7 @@ cornercase mark --pane 12 --reviewed
 - `collapse` and `expand` fold or unfold a group, project or workspace (`--group`, `--project`, `--workspace`, `--worktree`), or an agent's pane (`--pane`, refused with `conflict` for a pane that runs no agent cornercase lists), whose agents then hide under it in the agents section, whatever it was.
 - `move-pane --pane ID --target ID --place swap|left|right|above|below` swaps two panes of a tab or moves one to that side of the other, as dragging a pane with the right button does. It is refused (`conflict`) when the tab would have no room for every pane at the size it has, or when the panes are in different tabs; the moved pane becomes the tab's active one. `--json` prints the tab's new `layout`. Over the socket the requests are `group-new`, `group-style`, `group-delete`, `move`, `collapse`, `expand`, `move-pane` and `removal-check`, and `close` takes `unlock`; each change shows in the next `status --follow` snapshot.
 - `rename` renames the tab it runs in, or the `--tab`, `--workspace`, `--worktree`, `--project` or `--group` you name. An empty name goes back to the default one (a group always keeps a name).
-- `focus` shows a pane, tab, workspace or project, as picking it in the [search](../search/) does.
+- `focus` shows a pane, tab, workspace or project, as picking it in the [search](../search/) does. `--reveal` also scrolls a pane to a text and selects it (see [Find where something was said](#find-where-something-was-said)).
 - `mark` marks the agent in the pane it runs in, or in the `--pane` or `--tab` you name, as [pending review](../projects-workspaces-tabs/#pending-review): its tab shows a blue `●` until it is marked `--reviewed` or the agent starts working again on a new prompt or an answer, and `status` and `events` give it as `pending`. A pane without Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI or GitHub Copilot CLI is refused. An agent that ends its turn with work for you to check can run it on its own pane.
 
 ### Close and reopen a workspace's agents
@@ -761,7 +770,7 @@ cornercase away          # agents message you on Telegram or Discord
 cornercase away --off    # they stop
 ```
 
-`away` turns on the away mode of every chat app paired, [Telegram](../telegram/) and [Discord](../discord/), as **Remote › continue on Telegram** (or **on Discord**) does: while it is on, an agent that needs you or finishes its turn sends you its question or its last message, and what you reply goes to it, until you turn it off. It succeeds when at least one of them went away, and fails when none could, saying where to set it up. An agent can run it for you when you tell it you are leaving.
+`away` turns on the away mode of every chat app paired, [Telegram](../telegram/) and [Discord](../discord/), as **`More ▴` › remote… › continue on Telegram** (or **on Discord**) does: while it is on, an agent that needs you or finishes its turn sends you its question or its last message, and what you reply goes to it, until you turn it off. It succeeds when at least one of them went away, and fails when none could, saying where to set it up. An agent can run it for you when you tell it you are leaving.
 
 ### Updates from a program
 
@@ -827,6 +836,39 @@ With `--json` it prints `{"agents": [...]}`, one entry per agent with every key 
 
 It is the request `{"command": "usage", "args": {"cached": false}}`. An older server answers that it has no `usage` command.
 
+### Ports
+
+```sh
+cornercase ports
+cornercase ports --worktree feat/login --json
+cornercase ports --all
+```
+
+`ports` lists the TCP ports a workspace's programs listen on, so an agent that just started a dev server can find its URL, and you can tell which `localhost:5173` belongs to which worktree:
+
+```text
+http://localhost:5173  127.0.0.1  node vite  pid 48211  workspace 4, pane 12
+http://localhost:6006  0.0.0.0 ::  node storybook dev  pid 48390  workspace 4, agent claude in pane 9
+http://localhost:3000  127.0.0.1  node next dev  pid 51007  workspace 4, cwd
+```
+
+A program belongs to a workspace when one of its panes started it (the shell, or anything started from it), or, in a workspace with a [worktree](../worktrees/) of its own, when it works inside that worktree. A plain workspace shares its folder with the others, so only its panes count. `agent claude in pane 9` means the agent in that pane, or a program it started, listens there; `cwd` means a program started elsewhere (another terminal, say) works in the worktree. Every TCP listener is listed, HTTP or not, with the URL to open: `http://localhost:PORT` when it listens on every address or on `127.0.0.1`, `http://[::1]:PORT` when only on `::1`, else the address it listens on.
+
+From a pane it lists that pane's workspace, elsewhere the one shown; `--workspace ID` or `--worktree BRANCH` picks another, and `--all` lists every port your programs listen on, with the workspace each belongs to, or none. Nothing listening prints `nothing is listening on a port`. cornercase's own ports (such as [browser access](../phone/)) are left out.
+
+With `--json` it prints `{"ports": [...]}`, each with every key present (`null` when it does not apply): `port`, `addresses`, `url`, `pid`, `program`, `args` (the program's command line), `project`, `workspace`, `pane`, `via` (`pane`, `agent` or `cwd`; `null` for no workspace) and `agent` (the agent's name when `via` is `agent`). It is the request `{"command": "ports", "args": {"workspace": 4, "all": false}}`, answered once the server has looked; an older server answers that it has no `ports` command.
+
+The text shows each program with its arguments cut to 40 characters; `--json` keeps `args` whole. The [Ports dialog](../projects-workspaces-tabs/#ports-a-workspace-listens-on) in a workspace's menu shows the same list.
+
+```sh
+cornercase ports stop 5173
+cornercase ports stop 3000 --pid 48211 --json
+```
+
+`ports stop PORT` stops the program of a workspace that listens on that port, as the dialog's **stop** does: it checks that the program still holds the port, sends it `SIGTERM`, waits up to three seconds for the port to be released, then sends `SIGKILL`. Only that process gets the signals, never the shell or agent that started it. It prints `stopped node (pid 48211) on port 5173`, `killed …` when it ignored `SIGTERM`, or that it is still running, and exits 1 in that last case. It refuses a port no program listens on, and one held by a program of no workspace (the ones only `--all` lists), so it never stops a program outside your workspaces. When several programs listen on the port, `--pid` says which. With `--json` it prints `{"port", "pid", "program", "outcome"}`, `outcome` being `stopped`, `killed` or `still-running`; it is the request `{"command": "stop-port", "args": {"port": 5173, "pid": null}}`.
+
+Ports published by Docker (`docker run -p`, `docker compose up`) are held by Docker's own process, not by the `docker` command in your tab, so they belong to no workspace: on macOS they show only with `--all`, and on Linux, where Docker's proxy runs as root, not at all. A program of another user, or one in a container or another network namespace, is not seen either.
+
 ### Stats
 
 ```sh
@@ -887,11 +929,14 @@ cornercase config export --to team.toml
 cornercase config import team.toml
 cornercase config import team.toml --only agents,worktrees
 cornercase config import - --yes < team.toml
+cornercase config import team.toml --preview --json
 ```
 
 `config export` prints the settings you can hand to a colleague, as the TOML text that ` copy my setup ` copies in the [settings](../../reference/configuration/#share-your-setup), or writes it to the file `--to` names, readable only by you. Standard error says what it left out (tokens, bots, paired chats and browsers, accounts and profiles, `jira_email`, remote access and keep awake, and each project that has no git remote) and, after a `!`, every place where a setup, an argument or a prompt looks like it holds a secret.
 
 `config import` shows on standard error what the file would change, section by section, with the same notes as **Settings › Import**, then asks `Import these settings? [y/N]`. Reading standard input (`-`), or with no terminal to ask on, it imports only with `--yes`. `--only` takes some of the sections: `agents`, `issues`, `worktrees`, `interface` and `repositories`. Either the ticked sections are all saved, or nothing is: a file from a newer cornercase's format, a value the settings refuse or two repositories matching one project leave `config.json` as it was, and the command exits with `1` and the reason. A setting this cornercase does not know is skipped and named, not refused.
+
+`config import --preview` prints that same preview and exits 0, without asking and without saving anything. On standard output it is the text an import shows before the question; with `--json` it is the preview a program can draw, each section's changes and notes. It works when reading standard input and when there is no terminal, so it needs no `--yes`. A file that is not a setup, a newer format, a value the settings refuse, two repositories matching one project, or a project that stopped being a repository still exits with 1 and the reason, and nothing is saved. `--preview` and `--yes` cannot be used together. Show the preview, then import the sections you want with `config import FILE --only agents,interface --yes`.
 
 Over the socket, `config-export` answers `text`, the counts of `settings` and `repositories`, `left_out` and `warnings`. `config-import` takes the `text`, `sections` (every one when left out) and `apply`:
 
@@ -905,19 +950,28 @@ Without `apply` nothing is saved and the answer is the preview: `sections`, each
 ### Plugins
 
 ```sh
+cornercase plugin status
+cornercase plugin status --json
 cornercase plugin actions
 cornercase plugin actions --context pane --json
 cornercase plugin run acme.notes note --pane 5
 cornercase plugin run acme.notes note --worktree feat/x
 cornercase plugin run acme.notes browse
 cornercase plugin popup-close
+cornercase plugin install acme/notes --preview --json
+cornercase plugin install acme/notes --commit "$commit" --yes
+cornercase plugin update acme.notes --preview --json
 ```
+
+`plugin status` prints what Settings › Plugins shows, asking the running server. The text gives the revision, then each plugin's state (`on`, `off` or `cannot-run`), its label and note, and each service (`running` with its pid, `stopped` with the seconds until it starts again, or `starting`). With no plugin it says so. When `plugins.json` cannot be read it prints why, instead of an empty list. `--json` prints the `plugin-list` answer, with hidden characters escaped as in `plugin list --json`. `plugin list` still reads the files and works with no server, and has no service states.
 
 `plugin actions` lists what the plugins you turned on add to the menus, in the order the menus show them (your plugins in the order of `plugins.json`, then each manifest's actions), for one kind of row (`--context project`, `workspace`, `tab` or `pane`), for the plugins' buttons (`--context button`) or all of them. The text is a tab-separated table under a header, `plugin`, `action`, `contexts`, `title`, so `cut` and `awk` can read it.
 
 `plugin run` runs one on what you name (`--pane`, `--tab`, `--workspace`, `--worktree` or `--project`) the way its menu entry does: in the workspace's folder (the project's for a project), with the ids of what you named in the environment, stopped after 5 minutes, its output in the plugin's log. It waits for the action, prints how it ended and exits with 1 when it failed. Nothing changes in the window: no toast, no focus. A workspace being removed or closing, and a project closing, are refused, since the action would run in a folder being deleted.
 
 An action offered on its plugin's [button](../plugins/#a-button-of-its-own) runs without naming anything, as the button does: on what the window shows, in its workspace's folder, with `CORNERCASE_CONTEXT=button`. Any other action needs a target. A [popup](../plugins/#popups) action opens its popup in the window and `plugin run` waits until it closes, then prints how its program ended; with no window attached it fails (`no window is attached`), since nobody could see it. While a dialog or another popup is open in the window it fails at once with `conflict` (`a dialog is open in the window`, `a popup is already open`), so it never replaces what you are doing there. `plugin popup-close` closes the open popup as its `×` does, and fails with `not-found` when none is open.
+
+A program that installs or updates a plugin for the user shows the preview itself and confirms the exact commit: `plugin install SOURCE --preview --json` fetches the plugin, installs nothing, asks nothing and needs no terminal, and prints one object with `id`, `name`, `version`, `description`, `repo`, `url`, `ref` and `subdir` (the same keys `plugin list --json` has in `source`, `null` when absent), the full `commit`, `permissions`, `download` (`url` and `sha256` for this machine, or `null`), `build` (the argv of each build step, empty when a download applies), `runs` (what it runs once on, in the preview's order: `entry` is `service`, `window`, `action` with `title` and `contexts`, or `hook` with `on`, each with its `command`), `replacing` (`null` for a new plugin, else the installed `commit` and whether it is `enabled`) and `lines`, the lines the terminal preview prints. Progress (`fetching …`) goes to standard error. Once the user approves, `plugin install SOURCE --commit COMMIT --yes` installs only if the source still gives that commit; otherwise it exits 1 and installs nothing. Unlike `SOURCE@COMMIT`, which pins the plugin there for good, the plugin keeps following its branch or tag. `plugin update ID --preview --json` (an ID is required with `--json`) prints the same object plus `"up_to_date": false`, or only `{"id", "commit", "up_to_date": true}` when nothing changed, and `plugin update ID --commit COMMIT --yes` updates to exactly that commit. A preview exits 0; a refusal (an unknown ref, a plugin linked or installed from another address, a commit that changed) exits 1 with the reason on standard error; a wrong combination of options (`--preview` with `--yes` or `--commit`, `--json` without `--preview`) exits 2.
 
 Actions are named by plugin id and action id, and listed with a `revision` that goes up each time the plugins change (counted from the server's start, so send `boot` too). `plugin run` refuses a revision the plugins moved past, `conflict`, as a menu opened before the change does nothing, so an action whose command or contexts changed since you listed it never runs by surprise. Left out, `--revision` is the current one, which `plugin actions --json` also prints.
 
@@ -930,7 +984,7 @@ The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `
 
 `ended` is `exited` (with `code`), `signal` (with `signal`), `timeout` or `error` (it could not start), and for a popup `closed` (its `×` or `plugin popup-close` closed it first); a popup's program ended by a signal has `signal` `null` and the signal's name in `error`. `error` is `null` exactly when it exited with 0, so `plugin run` exits with 1 for a popup closed by hand. An action that ran and failed is an answer, not a refusal. A group, or an action run on a kind of row it isn't offered for, is `malformed`; a plugin that is unknown, off or cannot run, an action it lacks, or an id that names nothing is `not-found`. A client that leaves before the action ends gets no answer, and the action runs to its end.
 
-`plugin-list` answers what Settings › Plugins shows: `revision`, `problem` (why `plugins.json` cannot be read, or `null`) and `plugins`, one row per plugin with `id`, `enabled`, `state` (`on`, `off` or `cannot-run`), `error`, Settings' `label` and `note`, `source`, `log`, `manifest`, `services` and `button`, there only for a plugin with a button (`title`, `icon` and `actions`, the ids of its `button` actions in order). A service is `running` (with its `pid`), `stopped` (with `restart_in`, the seconds until it starts again) or `starting`. Processes a plugin keeps running in each local window belong to those windows, so the server can't tell. Turning plugins on and off, installing and updating stay with `cornercase plugin`, which works on the files. `{"command": "plugin-popup-close", "args": {}}` closes the popup as its `×` does. An older server refuses each of these requests by name, and a `plugin-run` without `item` as `malformed`.
+`plugin status --json` prints this answer with those same escapes. `plugin-list` answers what Settings › Plugins shows: `revision`, `problem` (why `plugins.json` cannot be read, or `null`) and `plugins`, one row per plugin with `id`, `enabled`, `state` (`on`, `off` or `cannot-run`), `error`, Settings' `label` and `note`, `source`, `log`, `manifest`, `services` and `button`, there only for a plugin with a button (`title`, `icon` and `actions`, the ids of its `button` actions in order). A service is `running` (with its `pid`), `stopped` (with `restart_in`, the seconds until it starts again) or `starting`. Processes a plugin keeps running in each local window belong to those windows, so the server can't tell. Turning plugins on and off, installing and updating stay with `cornercase plugin`, which works on the files; a program shows an install or an update with `plugin install SOURCE --preview --json` instead (below). `{"command": "plugin-popup-close", "args": {}}` closes the popup as its `×` does. An older server refuses each of these requests by name, and a `plugin-run` without `item` as `malformed`.
 
 ## JSON
 
@@ -943,7 +997,7 @@ The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `
 | `status --app` | `revision` (with `--follow`), `version`, `boot`, `todos`, `queue`, `away`, `update`, `keep_awake`, `tour` and `popup` (while one is open), see [Follow the rest of the app](#follow-the-rest-of-the-app). |
 | `status --panes` | `panes`: one object per pane, with the [columns of `--panes`](#one-line-per-pane) as keys, in their order: `pane`, `tab`, `workspace`, `project`, `program`, `agent`, `status`, `background_shell`, `dialog`, `at_prompt`, `model`, `context`, `caller`, `shown`, `active`, `tab_name`, `workspace_name`, `branch`, `worktree`, `project_name`, `path`, `survey`, `resuming`, `parent`, `subagents`, `role`, `held_sends`, `draft`, `account_restart`, `pid`, `memory`, `compacted`. Every object has every key, `null` where there is no value. |
 | `open`, `new-workspace`, `new-tab`, `split`, `start` | `project`, `workspace`, `tab`, `pane`: the ids of what was made (for `open`, the project's shown workspace, tab and pane), and `projection` when `--focus --view` moved a view. |
-| `focus --view` | `project`, `workspace`, `tab`, `pane` the view shows now, and its `projection`. |
+| `focus` | `revealed` with `--reveal`; with `--view`, the `project`, `workspace`, `tab` and `pane` the view shows now, and its `projection`. |
 | `send`, `wait` | `pane`, and, once a wait ended, `ended` (`idle`, `done`, `pending`, `waiting`, `working`, `shell`, `text` or `quiet`) and `line` for a `--text` match. `start --wait` adds `ended` and `line` too. |
 | `wait --any`, `wait --all` | `panes`: one entry per line of text, each with `pane`, `tab` when it was given as a `--tab`, `ended` (as above, or `closed`) and `line` for a `--text` match. |
 | `flow list` | `flows` (each with `name`, `origin`, `path`, `description`, `roles`, `problems`, `check`, `flow`, `edited` and `default`, in the user's order), `broken`, `hidden` (the deleted built-in flows, like `flows`) and `builtins`. See [Manage flows](#manage-flows). |
@@ -954,9 +1008,11 @@ The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `
 | `flow runs` | `version`, `boot`, `runs` (with `--follow`, each line also has `revision`), see [Follow a flow run](#follow-a-flow-run). |
 | `flow messages` | One object per line: `run`, `workspace`, `seq`, `time`, `from`, `to`, `kind`, `text`, `bytes`, `edge`. |
 | `flow files` | `workspace`, `run`, `dir`, `files` (`name`, `path`, `bytes`, `modified`) and `more`. |
-| `flow-save` (a request) | `name`, `origin`, `path`, `saved`, `problems`, `check`. |
+| `flow save` (the `flow-save` request) | `name`, `origin`, `path`, `saved`, `problems`, `check`. |
 | `usage` | `agents`: `agent`, `title`, `loading`, `read_at`, `age`, `plan`, `limited`, `limits` (`label`, `kind`, `scope`, `percent`, `severity`, `resets_at`), `extra`, `notice`, `error`. See [Plan usage](#plan-usage). |
+| `plugin status` | The `plugin-list` answer: `revision`, `problem` and `plugins` (`id`, `enabled`, `state`, `error`, `label`, `note`, `source`, `log`, `manifest`, `services`, `button`). See [Plugins](#plugins). |
 | `plugin-list` (a socket request) | `revision`, `problem` and `plugins`: `id`, `enabled`, `state`, `error`, `label`, `note`, `source`, `log`, `manifest`, `services` (`id`, `state`, `pid`, `restart_in`) and `button` (`title`, `icon`, `actions`). See [Plugins](#plugins). |
+| `plugin install --preview`, `plugin update ID --preview` | `id`, `name`, `version`, `description`, `repo`, `url`, `ref`, `subdir`, `commit`, `permissions`, `download`, `build`, `runs`, `replacing`, `lines` (and `up_to_date`); an up-to-date plugin: `id`, `commit`, `up_to_date`. See [Plugins](#plugins). |
 | `plugin actions` | `revision` and `actions`: `plugin`, `name`, `action`, `title`, `contexts`, `placement`, `width`, `height`. |
 | `plugin run` | `plugin`, `action`, `context`, the ids it got (`project`, `workspace`, `tab`, `pane`), `ended`, `code`, `signal`, `error`, `ms` and `log`. |
 | `search` | `matches`: `pane`, `tab`, `workspace`, `project`, `place`, `who`, `source` (`prompt`, `reply` or `screen`), `line`, `text`, `written`; and `capped`. See [Find where something was said](#find-where-something-was-said). |
@@ -1044,7 +1100,7 @@ stream app 1
 stream changes 1
 stream flow-runs 1
 stream flow-messages 1
-features boot, structured-errors, strict-fields, views, host-events, theme, notices, surface-patches, config, close-unlock, sound, issues, todo-panel, changes, agent-folds, accounts, account-login, account-switch, issue-names, close-agent-tabs, popup-terminal
+features boot, structured-errors, strict-fields, views, host-events, theme, notices, surface-patches, config, close-unlock, sound, issues, todo-panel, changes, agent-folds, accounts, account-login, account-switch, issue-names, close-agent-tabs, queue-undo, focus-reveal, popup-terminal
 ```
 
 `--json` prints an object with:
@@ -1053,7 +1109,7 @@ features boot, structured-errors, strict-fields, views, host-events, theme, noti
 - `contract`: the version of the rules on this page, an integer starting at 1. It goes up only when something that was there changes meaning or shape, never when something is added.
 - `boot`: which start of the server this is. It changes on every start, `cornercase restart` included, since ids start again from 1. It is the same value as `CORNERCASE_SERVER` in the panes and `boot` in `status --json`.
 - `operations`: every request the server takes, by name, with `available`. A server with `start-server` among them can be started without a window; one without it needs a window before it opens terminals. One that is not available on this server has `available: false` and a `reason`; the others keep working.
-- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours), `notices` (a view's `visible`, the `notices` field of `events` and the `go` request; check it before sending them), `surface-patches` (the `patches` field of `surface`; an older server ignores it and sends complete lines, so check it before asking) `config` (the `config` request and `config.revision`) `close-unlock` (the `unlock` field of `close`, which an older server ignores and then refuses with the lock's message; check it before sending it), `sound` (a notice's `sound` field: an older server never sends it), `issues` (the `issue` and `source` fields of `start` and `flow-run`, which an older server ignores and then starts the agent without the issue; check it before sending them), `todo-panel` (the `todo` request's `edit`, `undone`, `move`, `clear-done` and `restore`; an older server refuses them as malformed, so check it before sending them), `changes` (the `changes` requests and the `changes` count of `status`), `agent-folds` (the `pane` item of `collapse` and `expand`; an older server refuses it as malformed, so check it before sending it), `accounts` (the `account-*` and `profile-*` requests and the `profile` field of `start`, `start-with`, `new-tab` and `flow-run`, which an older server ignores and then starts the agent with its own login; check it before sending it), `account-login` (the `check` field of `account-list` and each account's `login`; an older server ignores `check` and answers without asking, so check it before sending it), `account-switch` (the `account-rename` and `account-use` requests and the `accounts` field of `start`, `start-with`, `new-tab`, `flow-run` and the queue's `add` and `edit`, which an older server ignores and then starts with the default accounts; check it before sending it), `issue-names` (the `workspace_name` field of `start`, `start-with` and `flow-run`, which an older server ignores and then names the workspace after the issue; check it before sending it), `close-agent-tabs` (`close-agent` only closes tabs and never removes a worktree; check it before sending `close-agent`, since an older server removes an agent's own worktree), and `popup-terminal` (the `popup` field of `surface` and `input`; an older server refuses `surface` and `input` with `popup` alone for their missing tab or pane, but takes `input` with `popup` and `pane` as input to pane `pane`, so check it before sending `popup`).
+- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours), `notices` (a view's `visible`, the `notices` field of `events` and the `go` request; check it before sending them), `surface-patches` (the `patches` field of `surface`; an older server ignores it and sends complete lines, so check it before asking) `config` (the `config` request and `config.revision`) `close-unlock` (the `unlock` field of `close`, which an older server ignores and then refuses with the lock's message; check it before sending it), `sound` (a notice's `sound` field: an older server never sends it), `issues` (the `issue` and `source` fields of `start` and `flow-run`, which an older server ignores and then starts the agent without the issue; check it before sending them), `todo-panel` (the `todo` request's `edit`, `undone`, `move`, `clear-done` and `restore`; an older server refuses them as malformed, so check it before sending them), `changes` (the `changes` requests and the `changes` count of `status`), `agent-folds` (the `pane` item of `collapse` and `expand`; an older server refuses it as malformed, so check it before sending it), `accounts` (the `account-*` and `profile-*` requests and the `profile` field of `start`, `start-with`, `new-tab` and `flow-run`, which an older server ignores and then starts the agent with its own login; check it before sending it), `account-login` (the `check` field of `account-list` and each account's `login`; an older server ignores `check` and answers without asking, so check it before sending it), `account-switch` (the `account-rename` and `account-use` requests and the `accounts` field of `start`, `start-with`, `new-tab`, `flow-run` and the queue's `add` and `edit`, which an older server ignores and then starts with the default accounts; check it before sending it), `issue-names` (the `workspace_name` field of `start`, `start-with` and `flow-run`, which an older server ignores and then names the workspace after the issue; check it before sending it), `close-agent-tabs` (`close-agent` only closes tabs and never removes a worktree; check it before sending `close-agent`, since an older server removes an agent's own worktree), `queue-undo` (`queue remove` returns undo data, and the queue accepts `clear-started` and `restore`; check it before removing anything, since an older server removes without undo), `focus-reveal` (the `reveal` field of `focus`, which an older server ignores and then only shows the pane; check it before sending it), and `popup-terminal` (the `popup` field of `surface` and `input`; an older server refuses `surface` and `input` with `popup` alone for their missing tab or pane, but takes `input` with `popup` and `pane` as input to pane `pane`, so check it before sending `popup`).
 - `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals) and `{"name": "view", "version": 1}` for [`view`](#a-view-of-your-own), whose lines are `watch` format 1 plus `view`, and `{"name": "app", "version": 1}` for [`status --app`](#follow-the-rest-of-the-app), `{"name": "changes", "version": 1}` for [`changes`](#follow-a-workspaces-changes), and `{"name": "flow-runs", "version": 1}` and `{"name": "flow-messages", "version": 1}` for [`flow runs`](#follow-a-flow-run) and `flow messages`.
 
 A server from before `contract` says `the running cornercase server (…) has no contract command`, or that it is too old: it knows none of the rest of this section, so don't send it ids you kept from before.
@@ -1122,3 +1178,15 @@ As before, only your own user can reach the server's socket. But whoever reaches
 ## Queue work for later
 
 `cornercase queue add --at 'in 2h' --agent claude --prompt 'Fix the login form'` schedules work and prints its persistent id. Use `--issue URL_OR_KEY` for an issue, `--workspace ID` for a tab, or `--worktree BRANCH` for a worktree. `--at 'claude reset'` and `--at 'codex reset'` use the next five-hour plan reset. `queue list --json`, `queue edit ID --at TIME`, `queue remove ID` and `queue run ID` inspect and manage it. See [Queue agents](../queue/) for formats and flags. Queued launches accept folder trust prompts automatically.
+
+`queue remove ID` and `queue clear-started` print an undo number, or with `--json` answer `{"entries": [...], "undo": 7}`. `clear-started` removes every started entry in one request and leaves the other states alone; an empty clear prints nothing, or `{"entries": []}`, without consuming history. `queue restore 7` puts that removal back with its captured fields, state and ids in their original order. The last 16 nonempty command removals stay available until the server stops, independently of the window's undo notice. A number works once; an unknown, used or evicted number is `not-found`.
+
+Over the socket, these use the `queue` request and the `queue-undo` [feature](#ask-the-server-first), with the following `args`:
+
+```json
+{"action": "remove", "entry": 5}
+{"action": "clear-started"}
+{"action": "restore", "entry": 7}
+```
+
+`restore` answers `{"entries": [...]}` without a new undo number. The new commands check the feature first so an older server cannot silently remove an entry without undo.

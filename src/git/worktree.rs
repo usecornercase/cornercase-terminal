@@ -3,6 +3,7 @@ use std::io::Write;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+use std::time::Duration;
 
 use crate::error::{Error, Result};
 use crate::log;
@@ -138,6 +139,14 @@ fn pid_in(reason: &str) -> Option<i32> {
 
 pub(crate) fn git<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(repo: &Path, args: I) -> Result<Output> {
     command(repo, args).stdin(Stdio::null()).output().map_err(Error::RunGit)
+}
+
+pub(crate) fn git_within<I, S>(repo: &Path, args: I, timeout: Duration) -> Result<Option<Output>>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    process::output_within(command(repo, args).stdin(Stdio::null()), timeout).map_err(Error::RunGit)
 }
 
 fn command<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(repo: &Path, args: I) -> Command {

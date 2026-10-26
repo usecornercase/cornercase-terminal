@@ -53,6 +53,9 @@ fn lines(value: &Value, zone: &str) -> String {
 pub(super) fn run(action: QueueAction) -> Result<()> {
     let list = matches!(action, QueueAction::List(_));
     let (command, json) = request_of(action)?;
+    if matches!(command, control::Queue::Remove(_) | control::Queue::ClearStarted | control::Queue::Restore(_)) {
+        crate::client::use_queue_undo()?;
+    }
     let value = ask("queue", control::Command::Queue(command))?;
     if json {
         return print_json(&value);
@@ -60,7 +63,7 @@ pub(super) fn run(action: QueueAction) -> Result<()> {
     if list {
         return super::print_out(&lines(&value, &clock::local_zone()));
     }
-    if let Some(id) = value.get("id").and_then(Value::as_u64) {
+    if let Some(id) = value.get("undo").or_else(|| value.get("id")).and_then(Value::as_u64) {
         println!("{id}");
     }
     Ok(())
@@ -77,8 +80,10 @@ fn request_of(action: QueueAction) -> Result<(control::Queue, bool)> {
             (control::Queue::Edit { id, add: queue_add(add, false)? }, json)
         }
         QueueAction::List(print) => (control::Queue::List, print.json),
-        QueueAction::Remove { id } => (control::Queue::Remove(id), false),
+        QueueAction::Remove { id, print } => (control::Queue::Remove(id), print.json),
         QueueAction::Run { id } => (control::Queue::Run(id), false),
+        QueueAction::ClearStarted(print) => (control::Queue::ClearStarted, print.json),
+        QueueAction::Restore { undo } => (control::Queue::Restore(undo), false),
     })
 }
 

@@ -13,7 +13,7 @@ fn the_symbols_subset_holds_every_glyph() {
         .into_iter()
         .chain([&NERD.said, &NERD.full_screen, &NERD.restore])
         .copied()
-        .chain([ISSUES, FLOW, UPDATE, REMOTE, USAGE, HELP, SETTINGS, QUIT, DOT, MANY])
+        .chain([ISSUES, FLOW, WORKTREES, HELP, MORE, DOT, MANY])
         .chain(COUNTS);
     let kinds = NAMES.iter().chain(EXTENSIONS).map(|(_, icon)| icon.glyph);
     let types = [folder(true).glyph, folder(false).glyph, file("").glyph];

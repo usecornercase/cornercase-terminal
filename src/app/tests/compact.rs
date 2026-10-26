@@ -103,13 +103,14 @@ fn clicks_on_the_menu_never_reach_the_pane() {
 }
 
 #[test]
-fn the_usage_button_opens_the_usage_modal() {
+fn usage_in_the_more_menu_opens_the_usage_modal() {
     let (mut app, _rx) = app();
     app.config.agent_commands.insert(agents::Known::Claude.name().into(), "/nonexistent/claude".into());
     app.config.agent_commands.insert(agents::Known::Codex.name().into(), "/nonexistent/codex".into());
     open_menu(&mut app);
     press(&mut app, small().back.as_position());
-    press(&mut app, small().usage.as_position());
+    press(&mut app, small().more.as_position());
+    pick_in(&mut app, "usage", SMALL);
     assert_eq!((matches!(app.overlay, Some(Overlay::Usage)), app.screen.nav), (true, None));
 }
 

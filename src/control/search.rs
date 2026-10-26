@@ -31,3 +31,10 @@ pub(crate) struct Matches {
     pub(crate) matches: Vec<Hit>,
     pub(crate) capped: bool,
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Reveal {
+    pub(crate) query: String,
+    pub(crate) line: Option<usize>,
+}

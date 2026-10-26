@@ -85,13 +85,13 @@ mod away {
         let mut phone = Phone::paired(&mut app);
         assert_eq!(app.remote_button(), Some(false));
 
-        click(&mut app, ui::remote_button(areas().usage, false).as_position());
+        from_more(&mut app, "remote…");
         let labels = menu_labels(&app);
         pick(&mut app, "continue on Telegram");
         let away = (app.messenger(Via::Telegram).away, app.remote_button(), toast(&app).map(String::from));
         send_key(&mut app, KeyCode::Char('x'), KeyModifiers::NONE);
         let still = app.messenger(Via::Telegram).away;
-        click(&mut app, ui::remote_button(areas().usage, true).as_position());
+        from_more(&mut app, "remote…");
         pick(&mut app, "stop messaging on Telegram");
 
         assert_eq!(labels, ["set up your phone's browser…", "continue on Telegram", "set up Discord…"]);
@@ -107,7 +107,7 @@ mod away {
         let (mut app, _rx) = app();
         let _phone = Phone::set_up(&mut app, None);
 
-        click(&mut app, ui::remote_button(areas().usage, false).as_position());
+        from_more(&mut app, "remote…");
         pick(&mut app, "set up Telegram…");
 
         let Some(Overlay::Settings(settings)) = &app.overlay else { panic!("settings are not open") };
@@ -137,7 +137,7 @@ mod away {
         app.handle_event(refused, AREA).expect("the refusal is handled");
 
         let message = error(now(&mut app, None, Command::Away(wire::Away { off: false })));
-        click(&mut app, ui::remote_button(areas().usage, false).as_position());
+        from_more(&mut app, "remote…");
         let labels = menu_labels(&app);
 
         assert!(

@@ -2,14 +2,14 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime};
 
-use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyEvent, MouseEvent};
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Color;
 
 use super::App;
 use super::agent_watch::WATCH_AGENTS_EVERY;
 use super::event::AppEvent;
-use super::input::wheel;
+use super::input::{ListPointer, list_pointer, wheel_span};
 use super::layout::Side;
 use super::overlay::Overlay;
 use super::worktrees::WorktreeEvent;
@@ -359,7 +359,7 @@ impl App {
         self.spawn_job(
             job,
             move || {
-                let panes = pane_trees(&shells);
+                let panes = process::owners::trees(&shells);
                 let server = i32::try_from(std::process::id()).unwrap_or_default();
                 let found = scan::outside(&paths, &panes, server);
                 Ok(found.into_iter().map(|(at, name, tab)| (paths[at].clone(), name, tab)).collect::<Vec<_>>())
@@ -420,20 +420,14 @@ impl App {
     }
 
     pub(super) fn worktrees_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
-        let wheeled = wheel(ev.kind);
-        if wheeled.is_none() && ev.kind != MouseEventKind::Down(MouseButton::Left) {
-            return;
-        }
+        let Some(pointer) = list_pointer(ev.kind) else { return };
         self.sync_worktree_rows();
         let Some(Overlay::Worktrees(dialog)) = &self.overlay else { return };
         let view = self.worktrees_view(dialog, area);
         let shown = dialog.list.shown();
-        if let Some(delta) = wheeled {
-            let (rows, body) = ui::worktrees_room(area, view.compact);
-            let (rows, lines) = match &view.confirm {
-                Some(confirm) => (usize::from(body.height), confirm.lines.len()),
-                None => (rows, 0),
-            };
+        if let ListPointer::Wheel(delta) = pointer {
+            let lines = view.confirm.as_ref().map(|confirm| confirm.lines.len());
+            let (rows, lines) = wheel_span(ui::worktrees_room(area, view.compact), lines);
             if let Some(Overlay::Worktrees(dialog)) = &mut self.overlay {
                 dialog.scroll_by(delta, rows, lines);
             }
@@ -679,15 +673,4 @@ impl App {
 
 pub(super) fn canonical(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
-}
-
-fn pane_trees(shells: &[(i32, Vec<usize>)]) -> scan::Panes {
-    let mut panes = scan::Panes::new();
-    for (pid, owns) in shells {
-        panes.insert(*pid, owns.clone());
-        for child in process::descendants(*pid) {
-            panes.entry(child).or_insert_with(|| owns.clone());
-        }
-    }
-    panes
 }

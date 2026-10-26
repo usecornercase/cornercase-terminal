@@ -263,7 +263,7 @@ mod not_found {
 
     #[rstest::rstest]
     #[case::a_pane(close_pane(999), "pane")]
-    #[case::a_tab(Command::Focus(wire::Focus { item: Item::Tab(999) }), "tab")]
+    #[case::a_tab(Command::Focus(wire::Focus { item: Item::Tab(999), reveal: None }), "tab")]
     #[case::a_workspace(Command::Close(wire::Close { item: Item::Workspace(999), remove_worktree: false, force: false, unlock: false }), "workspace")]
     #[case::a_sent_pane(send_text(999, "hello", true, false), "pane")]
     #[case::a_followed_pane(Command::Events(wire::Events { panes: vec![999], host: false, notices: false }), "pane")]

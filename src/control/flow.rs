@@ -184,6 +184,20 @@ pub(crate) struct RoleInfo {
     pub(crate) worktree: Worktree,
 }
 
+impl RoleInfo {
+    pub(crate) fn of_flow(flow: &Flow) -> Vec<Self> {
+        let role = |role: &Role| Self {
+            role: role.name.clone(),
+            agent: role.agent.clone(),
+            model: role.model.clone(),
+            effort: role.effort.clone(),
+            edits: role.edits,
+            worktree: role.worktree,
+        };
+        std::iter::once(&flow.orchestrator).chain(&flow.roles).map(role).collect()
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct BrokenFlow {
@@ -254,6 +268,9 @@ pub(crate) struct Imported {
     pub(crate) origin: String,
     pub(crate) path: Option<PathBuf>,
     pub(crate) replaced: bool,
+    pub(crate) roles: Vec<RoleInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) check: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) note: Option<String>,
 }

@@ -43,14 +43,15 @@ pub(crate) use activity::items as activity_items;
 pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as activity_hit};
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold, agent_hit, agent_row, agent_rows};
 pub(crate) use chrome::ChangesButton;
-pub(crate) use chrome::{help_button, plugin_buttons, quit_button};
+pub use chrome::MORE_LABEL;
+pub(crate) use chrome::{help_button, more_button, plugin_buttons};
 pub(crate) use dialog::flows::{
     FlowPreview, Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_row_at, flows_text, flows_wide,
     preview_body,
 };
 #[cfg(test)]
 pub(crate) use dialog::flows::{flows_body, flows_buttons, flows_tabs};
-pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_hit};
+pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_hit, form_text};
 pub use dialog::form::{form_area, form_buttons};
 #[cfg(test)]
 pub(crate) use dialog::form::{form_extra_button, form_toggle};
@@ -69,6 +70,7 @@ pub use dialog::menu::{menu_area, menu_item};
 pub(crate) use dialog::picker::{Entry, Picker, PickerHit, picker_hit, picker_list};
 pub use dialog::picker::{picker_area, picker_buttons, picker_item};
 pub(crate) use dialog::popup::{Popup, Wanted as PopupWanted, popup_close, popup_inner, popup_size};
+pub(crate) use dialog::ports::{ConfirmBody, PortRow, Ports, PortsHit, ports_hit, ports_room};
 #[cfg(test)]
 pub(crate) use dialog::project_settings::project_settings_buttons;
 pub(crate) use dialog::project_settings::{
@@ -113,7 +115,7 @@ pub(crate) use layout::COMPACT_BUTTON_WIDTH;
 pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, layout, layout_with};
 pub(crate) use layout::{Nav, Screen, full_layout};
 pub(crate) use pane::{PaneBand, TabView, held_notice, restart_notice, resume_notice, scrollback_badge, split_footer};
-pub(crate) use remote_access::{RemoteAccess, button as remote_button, done as remote_done};
+pub(crate) use remote_access::{RemoteAccess, done as remote_done};
 pub use rows::row_close_button;
 #[cfg(test)]
 pub(crate) use rows::row_menu_button;
@@ -134,7 +136,6 @@ pub(crate) use tree::{
 };
 #[cfg(test)]
 pub(crate) use tree::{tree_arrow, tree_close};
-pub(crate) use widgets::update_button;
 pub use widths::SIDEBAR_WIDTH;
 #[cfg(test)]
 pub(crate) use widths::{MIN_COLUMN_WIDTH, MIN_PANE_WIDTH, MIN_STACK_SECTION, PANE_PADDING, WORKSPACES_WIDTH};
@@ -152,8 +153,8 @@ use crate::state::Widths;
 
 use agents_section::draw_agents;
 use chrome::{
-    USAGE_LABEL, draw_bar, draw_border, draw_borders, draw_column_border, draw_footer, draw_issues_row,
-    draw_plugin_buttons, draw_search_bar,
+    draw_bar, draw_border, draw_borders, draw_column_border, draw_footer, draw_issues_row, draw_plugin_buttons,
+    draw_search_bar,
 };
 use dialog::flows::draw_flows;
 use dialog::form::{draw_confirm, draw_form};
@@ -161,6 +162,7 @@ use dialog::group_style::draw_group_style;
 use dialog::issues::draw_issues;
 use dialog::menu::draw_menu;
 use dialog::picker::draw_picker;
+use dialog::ports::draw_ports;
 use dialog::project_settings::draw_project_settings;
 use dialog::search::draw_results;
 use dialog::settings::draw_settings;
@@ -182,8 +184,8 @@ use toast::draw_toast;
 use tour::{draw_pointer, draw_tour};
 use tree::draw_tree;
 use widgets::{
-    action_style, button_style, button_width, centered, dim, draw_band, draw_close, draw_separator, hovered,
-    hovered_at, middle, overlay_block, put, rail, sidebar_hovered, tab_style,
+    action_style, button_style, centered, dim, draw_band, draw_close, draw_separator, hovered, hovered_at,
+    overlay_block, put, rail, sidebar_hovered, tab_style,
 };
 use widgets::{fit, scroll_edge};
 use workspaces::{DetailLine, draw_details, draw_workspaces};
@@ -346,7 +348,7 @@ fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
     if let Some(agents) = &view.agents {
         draw_agents(f, view, agents, areas);
     }
-    if [areas.separator, areas.settings, areas.usage, areas.quit].iter().any(|r| !r.is_empty()) {
+    if [areas.separator, areas.worktrees, areas.more_separator, areas.more].iter().any(|r| !r.is_empty()) {
         draw_footer(f, view, areas);
     }
     if !areas.plugins.is_empty() {
@@ -460,6 +462,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::StartFlow(start)) => draw_start_flow(f, view, start),
         Some(Overlay::ProjectSettings(settings)) => draw_project_settings(f, view, settings),
         Some(Overlay::Worktrees(worktrees)) => draw_worktrees(f, view, worktrees),
+        Some(Overlay::Ports(ports)) => draw_ports(f, view, ports),
         Some(Overlay::Popup(popup)) => dialog::popup::draw(f, view, popup),
         Some(Overlay::Search(search)) if search.showing_results() => draw_results(f, view, search, areas.results),
         Some(Overlay::Keys(menu)) => keys::draw(f, view, menu, areas.pane),

@@ -217,7 +217,7 @@ fn dropping_a_project_between_grouped_projects_puts_it_there() {
 
 #[test]
 fn holding_a_drag_on_the_more_line_scrolls_the_list() {
-    const SHORT: Rect = Rect { x: 0, y: 0, width: 100, height: 12 };
+    const SHORT: Rect = Rect { x: 0, y: 0, width: 100, height: 11 };
     let (mut app, _rx, _dirs) = app_with(4);
     app.active = 0;
     app.follow(SHORT);

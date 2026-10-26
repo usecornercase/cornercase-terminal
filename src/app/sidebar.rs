@@ -14,6 +14,7 @@ use super::menus::Target;
 use super::overlay::Overlay;
 use super::plugins::Spot;
 use crate::agents::activity;
+use crate::editor::Editor;
 use crate::error::Result;
 use crate::flows;
 use crate::git;
@@ -94,7 +95,7 @@ impl App {
         let worktree = git::is_repo_root(&project.path).then_some(true);
         self.overlay = Some(Overlay::NewWorkspace {
             project: project.id,
-            input: String::new(),
+            input: Editor::default(),
             worktree,
             error: None,
             creating: false,

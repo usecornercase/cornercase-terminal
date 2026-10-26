@@ -4,9 +4,11 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::account_menu::AccountItem;
 use super::help_menu::HelpItem;
+use super::more_menu::MoreItem;
 use super::opening::Subject;
 use super::overlay::Overlay;
 use super::plugins::Spot;
+use crate::editor::Editor;
 use crate::error::Result;
 use crate::host::open::Opener;
 use crate::log::{self};
@@ -105,6 +107,7 @@ pub(super) enum MenuAction {
     StartFlow(u64),
     ProjectSettings(u64),
     Worktrees(u64),
+    Ports(u64),
     RunSetup(u64),
     OpenIn(Subject),
     OpenWith(Subject, Opener),
@@ -119,6 +122,7 @@ pub(super) enum MenuAction {
     ManageAccounts,
     Help(HelpItem),
     Tour(u8),
+    More(MoreItem),
 }
 
 impl App {
@@ -152,6 +156,7 @@ impl App {
     fn concern_menu_label(&self, action: MenuAction, blocker: Option<&str>) -> Option<String> {
         self.account_menu_label(action, blocker)
             .or_else(|| self.help_menu_label(action))
+            .or_else(|| self.more_menu_label(action))
             .or_else(|| self.closed_agents_label(action))
     }
 
@@ -173,6 +178,7 @@ impl App {
             MenuAction::StartFlow(_) => "start a flow…".into(),
             MenuAction::ProjectSettings(_) => "project settings".into(),
             MenuAction::Worktrees(_) => "worktrees".into(),
+            MenuAction::Ports(_) => "ports".into(),
             MenuAction::RunSetup(_) => "run setup".into(),
             MenuAction::OpenIn(_) => "open in…".into(),
             MenuAction::OpenWith(_, opener) => opener.name().into(),
@@ -226,8 +232,8 @@ impl App {
             _ => None,
         };
         let open = match target {
-            Target::Workspace(_, workspace) => Some(self.open_entry(Subject::Workspace(workspace))),
-            _ => None,
+            Target::Workspace(_, workspace) => self.workspace_tools(workspace).to_vec(),
+            _ => Vec::new(),
         };
         std::iter::once(MenuAction::Rename(target))
             .chain(more)
@@ -238,6 +244,10 @@ impl App {
             .chain(open)
             .chain(spot.map(|spot| self.plugin_menu(spot)).unwrap_or_default())
             .collect()
+    }
+
+    fn workspace_tools(&self, workspace: u64) -> [MenuAction; 2] {
+        [self.open_entry(Subject::Workspace(workspace)), MenuAction::Ports(workspace)]
     }
 
     pub(super) fn menu_action(&mut self, action: MenuAction, at: Position, area: Rect) -> Result<()> {
@@ -254,7 +264,8 @@ impl App {
     pub(in crate::app) fn group_action(&mut self, action: MenuAction, at: Position) -> Option<MenuAction> {
         match action {
             MenuAction::Rename(target) => {
-                self.overlay = self.current_name(target).map(|input| Overlay::Rename { target, input });
+                self.overlay =
+                    self.current_name(target).map(|name| Overlay::Rename { target, input: Editor::new(&name) });
             }
             MenuAction::MoveToGroup(project) => self.move_to_group_menu(project, at),
             MenuAction::SetGroup(project, group) => {
@@ -269,7 +280,7 @@ impl App {
             MenuAction::OpenProject => self.pick_project(None),
             MenuAction::NewGroup => {
                 self.screen.nav = None;
-                self.overlay = Some(Overlay::NewGroup { input: String::new() });
+                self.overlay = Some(Overlay::NewGroup { input: Editor::default() });
             }
             MenuAction::NewWorkspace(project) => {
                 if let Some(p) = self.projects.project_index(project) {
@@ -312,6 +323,7 @@ impl App {
             MenuAction::StartFlow(project) => self.open_start_flow(self.start_flow_in(project)),
             MenuAction::ProjectSettings(project) => self.open_project_settings(project),
             MenuAction::Worktrees(project) => self.open_worktrees(Some(project)),
+            MenuAction::Ports(workspace) => self.open_ports(workspace),
             MenuAction::RunSetup(workspace) => self.run_setup(workspace, area),
             MenuAction::OpenIn(subject) => self.open_in_menu(subject, at),
             MenuAction::OpenWith(subject, opener) => self.open_with(subject, opener),
@@ -324,6 +336,7 @@ impl App {
             MenuAction::AccountMenu(pane) => self.open_account_submenu(pane, at),
             MenuAction::AccountsOf(item) => self.open_accounts_of(item, at),
             MenuAction::Help(item) => self.help_action(item, at),
+            MenuAction::More(item) => self.more_action(item, at),
             MenuAction::Tour(index) => self.start_tour(usize::from(index), None, true),
             MenuAction::PluginButton { plugin, revision } => self.press_plugin_button(plugin, revision, at),
             other => return Some(other),

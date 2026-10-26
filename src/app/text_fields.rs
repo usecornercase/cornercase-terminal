@@ -21,6 +21,7 @@ pub(super) enum TextField {
     StartPrompt,
     Setup(SettingsField),
     SharePaste,
+    Name,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,6 +84,7 @@ impl App {
             TextField::StartPrompt => self.start_text(area),
             TextField::Setup(field) => self.project_text(area, field),
             TextField::SharePaste => self.share_text(area),
+            TextField::Name => self.name_text(area),
         }
     }
 
@@ -96,6 +98,7 @@ impl App {
             Some(Overlay::StartFlow { start, .. }) => start.typing_prompt().then_some(TextField::StartPrompt),
             Some(Overlay::ProjectSettings(form)) => Some(TextField::Setup(form.focus)),
             Some(Overlay::ShareSettings(dialog)) => dialog.paste_editor().map(|_| TextField::SharePaste),
+            Some(overlay) if overlay.takes_input() => Some(TextField::Name),
             None if self.tour_typing() => Some(TextField::Tour),
             None if self.todo_typing() => Some(TextField::Todo),
             Some(_) | None => None,
@@ -118,6 +121,7 @@ impl App {
                 vec![TextField::Setup(SettingsField::Setup), TextField::Setup(SettingsField::Teardown)]
             }
             Some(Overlay::ShareSettings(_)) => vec![TextField::SharePaste],
+            Some(overlay) if overlay.takes_input() => vec![TextField::Name],
             None if self.screen.side == Some(Side::Todo) => vec![TextField::Todo],
             Some(_) | None => Vec::new(),
         }

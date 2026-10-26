@@ -55,30 +55,40 @@ fn changes_is_left_out_of_a_plain_folder() {
 }
 
 #[test]
-fn settings_and_usage_open_their_dialogs() {
+fn the_gear_opens_the_more_menu() {
     let (mut app, _rx) = with_bar();
-    let at = button(&app, ui::ActivityItem::Settings);
+    let at = button(&app, ui::ActivityItem::More);
     click(&mut app, at);
-    let settings = matches!(app.overlay, Some(Overlay::Settings(_)));
-    send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
-    let at = button(&app, ui::ActivityItem::Usage);
-    click(&mut app, at);
-    assert_eq!((settings, matches!(app.overlay, Some(Overlay::Usage))), (true, true));
+    let labels = menu_labels(&app);
+    pick(&mut app, "settings");
+    assert_eq!(
+        (labels, matches!(app.overlay, Some(Overlay::Settings(_)))),
+        (["settings", "usage", "quit"].map(String::from).to_vec(), true)
+    );
 }
 
 #[test]
-fn quit_detaches() {
+fn the_worktrees_slot_opens_the_worktrees_dialog() {
     let (mut app, _rx) = with_bar();
-    let at = button(&app, ui::ActivityItem::Quit);
+    let at = button(&app, ui::ActivityItem::Worktrees);
     click(&mut app, at);
+    assert!(matches!(app.overlay, Some(Overlay::Worktrees(_))));
+}
+
+#[test]
+fn quit_in_the_gear_menu_detaches() {
+    let (mut app, _rx) = with_bar();
+    let at = button(&app, ui::ActivityItem::More);
+    click(&mut app, at);
+    pick(&mut app, "quit");
     assert!(app.take_detach());
 }
 
 #[test]
 fn a_press_beside_the_icons_does_nothing() {
     let (mut app, _rx) = with_bar();
-    let settings = button(&app, ui::ActivityItem::Settings);
-    click(&mut app, Position::new(settings.x, settings.y - 1));
+    let more = button(&app, ui::ActivityItem::More);
+    click(&mut app, Position::new(more.x, more.y - 1));
     assert_eq!((app.overlay.is_none(), app.screen.side), (true, None));
 }
 

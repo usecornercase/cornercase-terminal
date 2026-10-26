@@ -22,10 +22,10 @@ fn the_row_above_the_new_button_is_not_an_entry_when_overflowing() {
 
 #[rstest]
 #[case::down(0, 3, 3)]
-#[case::stops_at_the_last_entry(0, 100, 12)]
+#[case::stops_at_the_last_entry(0, 100, 11)]
 #[case::up(5, -3, 2)]
 #[case::stops_at_the_first_entry(2, -3, 0)]
-#[case::a_stale_scroll_is_clamped_first(100, -3, 9)]
+#[case::a_stale_scroll_is_clamped_first(100, -3, 8)]
 fn the_wheel_moves_within_the_entries(#[case] scroll: usize, #[case] delta: isize, #[case] expected: usize) {
     assert_eq!(rows(20, scroll).scrolled(delta), expected);
 }
@@ -37,7 +37,7 @@ fn nothing_scrolls_when_everything_fits() {
 
 #[rstest]
 #[case::already_visible(0, 2, 0)]
-#[case::below(0, 10, 3)]
+#[case::below(0, 10, 2)]
 #[case::above(10, 4, 4)]
 fn reveal_scrolls_as_little_as_it_can(#[case] scroll: usize, #[case] i: usize, #[case] expected: usize) {
     assert_eq!(rows(20, scroll).reveal(i), expected);
@@ -45,14 +45,14 @@ fn reveal_scrolls_as_little_as_it_can(#[case] scroll: usize, #[case] i: usize, #
 
 #[test]
 fn hidden_entries_are_counted_above_and_below() {
-    assert_eq!(rows(20, 3).hidden(), (0..3, 11..20));
+    assert_eq!(rows(20, 3).hidden(), (0..3, 12..20));
 }
 
 #[test]
 fn shows_how_many_projects_are_hidden() {
     let t = render(&many(20, 3));
     assert_eq!(row_text(&t, more_above(list())).trim_end(), "  ↑ 3 more");
-    assert_eq!(row_text(&t, rows(20, 3).more_below()).trim_end(), "  ↓ 9 more");
+    assert_eq!(row_text(&t, rows(20, 3).more_below()).trim_end(), "  ↓ 8 more");
 }
 
 #[test]
@@ -96,5 +96,5 @@ fn hidden_workspace_rows_count_workspaces_and_tabs_only() {
     };
     let t = render(&v);
     let below = workspace_layout(areas().workspaces_list, 1, &tabs(&[10]), 0).more_below();
-    assert_eq!(row_text(&t, below).trim_end(), "  ↓ 3 more");
+    assert_eq!(row_text(&t, below).trim_end(), "  ↓ 2 more");
 }

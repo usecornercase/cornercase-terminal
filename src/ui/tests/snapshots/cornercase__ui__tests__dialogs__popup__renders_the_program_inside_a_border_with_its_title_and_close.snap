@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/dialogs.rs
-assertion_line: 398
 expression: "render(&with(popup(b\"pick one:\\r\\n> main\"))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -17,7 +16,7 @@ expression: "render(&with(popup(b\"pick one:\\r\\n> main\"))).backend()"
 "                               │       ╰────────────────────╯                                       "
 "                               │                         │                                          "
 "                               │                         │                                          "
+"                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
-"  Settings                     │                         │                                          "
-"  Usage                        │                         │                                          "
-"  Quit                   Help  │                         │                                          "
+"  Worktrees                    │                         │                                          "
+"  More ▴                 Help  │                         │                                          "

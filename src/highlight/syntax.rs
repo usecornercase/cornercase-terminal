@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use arborium::{GrammarStore, Highlighter};
 use arborium_highlight::{FlatToken, spans_to_flat_tokens};
+use parking_lot::Mutex;
 use ratatui::style::{Color, Modifier, Style};
 
 use crate::text::TAB;
@@ -10,6 +13,18 @@ use crate::text::TAB;
 pub(crate) type Segments = Vec<(String, Style)>;
 
 pub(crate) const MAX_BYTES: usize = 2 << 20;
+pub(crate) const BLOCK_BYTES: usize = 50_000;
+const CACHE_SIZE: usize = 256;
+const FENCE_OVERRIDES: [(&str, &str); 8] = [
+    ("js", "tsx"),
+    ("jsx", "tsx"),
+    ("mjs", "tsx"),
+    ("cjs", "tsx"),
+    ("javascript", "tsx"),
+    ("console", "bash"),
+    ("json5", "json"),
+    ("golang", "go"),
+];
 const PLAIN: Style = Style::new();
 const NAMES: [(&str, &str); 24] = [
     ("Dockerfile", "dockerfile"),
@@ -213,13 +228,87 @@ fn split(source: &str, tokens: &[FlatToken]) -> Vec<Segments> {
         .collect()
 }
 
+pub(crate) fn fence(info: &str) -> Option<&'static str> {
+    let token = fence_token(info)?;
+    lookup(&FENCE_OVERRIDES, &token)
+        .or_else(|| detected(&token))
+        .or_else(|| lookup(&FAMILIES, &token))
+        .filter(|language| arborium::get_language(language).is_some())
+}
+
+fn fence_token(info: &str) -> Option<String> {
+    let token = info.split(|c: char| c.is_whitespace() || c == ',' || c == '{').next()?.trim();
+    (!token.is_empty()).then(|| token.to_ascii_lowercase())
+}
+
+fn detected(token: &str) -> Option<&'static str> {
+    let name = format!("file.{token}");
+    arborium::detect_language(&name).filter(|language| arborium::get_language(language).is_some())
+}
+
+pub(crate) fn paint_fence(code: &str, info: &str) -> Option<Arc<Vec<Segments>>> {
+    paint_block(code, fence(info)?)
+}
+
+pub(crate) fn paint_block(source: &str, language: &str) -> Option<Arc<Vec<Segments>>> {
+    if source.len() > BLOCK_BYTES {
+        return None;
+    }
+    let key = hash_of(language, source);
+    if let Some(found) = block_cache().lock().get(&key) {
+        return Some(Arc::clone(found));
+    }
+    Some(remember(key, highlight(source, language)?))
+}
+
+fn remember(key: u64, lines: Vec<Segments>) -> Arc<Vec<Segments>> {
+    let painted = Arc::new(lines);
+    let mut cache = block_cache().lock();
+    if cache.len() >= CACHE_SIZE {
+        cache.clear();
+    }
+    cache.insert(key, Arc::clone(&painted));
+    painted
+}
+
+fn hash_of(language: &str, source: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    (language, source).hash(&mut hasher);
+    hasher.finish()
+}
+
+fn block_cache() -> &'static Mutex<HashMap<u64, Arc<Vec<Segments>>>> {
+    static CACHE: OnceLock<Mutex<HashMap<u64, Arc<Vec<Segments>>>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
 pub(crate) fn highlight(source: &str, language: &str) -> Option<Vec<Segments>> {
+    if source.len() > MAX_BYTES {
+        return None;
+    }
+    super::limit::paint(source, language)
+}
+
+pub(super) fn parse(source: &str, language: &str) -> Option<Vec<Segments>> {
     if source.len() > MAX_BYTES {
         return None;
     }
     let mut highlighter = Highlighter::with_store(Arc::clone(store()));
     let spans = highlighter.highlight_spans(language, source).ok()?;
-    Some(split(source, &spans_to_flat_tokens(source, spans)))
+    let lines = split(source, &spans_to_flat_tokens(source, spans));
+    Some(if language == "diff" { redden(lines) } else { lines })
+}
+
+fn redden(lines: Vec<Segments>) -> Vec<Segments> {
+    lines.into_iter().map(redden_line).collect()
+}
+
+fn redden_line(line: Segments) -> Segments {
+    line.into_iter().map(|(text, style)| (text, redden_style(style))).collect()
+}
+
+fn redden_style(style: Style) -> Style {
+    if style.fg == Some(Color::Magenta) { style.fg(Color::Red) } else { style }
 }
 
 #[cfg(test)]

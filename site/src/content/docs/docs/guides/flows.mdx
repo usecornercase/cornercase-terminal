@@ -199,9 +199,12 @@ From a shell the same two steps are commands:
 cornercase flow export Quick > quick.toml
 cornercase flow import quick.toml
 cornercase flow import quick.toml --to project --name 'Quick mine'
+cornercase flow import quick.toml --check --json
 ```
 
 `flow export` prints the flow, and names on standard error any variable it sets, so you can check that no secret goes with it. `flow import` takes a file, `-` for standard input, an `https://` address or `OWNER/REPO` of a [community flow](#community-flows). It lists the roles, and when the flow sets variables or arguments, or comes from an address or a repository, it asks before saving (without a terminal, or reading `-` from standard input, it refuses unless you pass `--yes`). It saves in yours, or in the project's `.cornercase/flows/` with `--to project`. A name that is taken is refused: `--replace` overwrites that flow, and `--name` imports this one under another name. A built-in flow's name can be taken with `--replace`, and yours then stands in its place; a name of yours or a built-in's cannot be taken in the project's flows, since they would never run. To share a flow with a whole team, commit its file to `.cornercase/flows/` instead.
+
+`flow import SOURCE --check` shows the roles, risks and agents that are missing here, then exits without asking or saving, even without a terminal or when reading `-`. With `--json`, the preview is data for a program that asks the user itself; see [Scripts and agents](../scripts-and-agents/#start-a-flow). Use the same `--to`, `--project`, `--name` and `--replace` options as the later import. It exits 0 when the preview succeeds, or 1 for a bad flow or a name conflict. `--check` and `--yes` cannot be combined.
 
 ## Community flows
 
@@ -273,10 +276,11 @@ cornercase flow list
 cornercase flow run 'Full issue' --prompt-file issue.md --worktree fix-login
 cornercase flow export Quick > quick.toml
 cornercase flow import quick.toml
+cornercase flow save draft.json --check
 cornercase flow hide Quick
 ```
 
-`flow export` and `flow import` [share a flow](#share-a-flow). `flow delete`, `flow hide` and `flow restore` [manage them](../scripts-and-agents/#manage-flows), `flow runs`, `flow messages` and `flow files` [follow a run](../scripts-and-agents/#follow-a-flow-run), and a program with an editor of its own reads each flow whole in `flow list --json` and saves one with the `flow-save` request. `flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
+`flow export` and `flow import` [share a flow](#share-a-flow). `flow save`, `flow delete`, `flow hide` and `flow restore` [manage them](../scripts-and-agents/#manage-flows), `flow runs`, `flow messages` and `flow files` [follow a run](../scripts-and-agents/#follow-a-flow-run), and a program with an editor of its own reads each flow whole in `flow list --json` and saves one with `flow save` (the `flow-save` request). `flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
 
 `cornercase status --json` gives each workspace that runs a flow a `run` with its `end` and whether it was `reached`.
 

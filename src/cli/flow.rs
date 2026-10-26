@@ -1,21 +1,21 @@
 use std::fmt::Write as _;
 use std::io::IsTerminal as _;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use super::args::{
     self, FlowAction, FlowDefaultArgs, FlowDeleteArgs, FlowFilesArgs, FlowImportArgs, FlowMessagesArgs, FlowOrderArgs,
-    FlowRunsArgs, ImportTo,
+    FlowRunsArgs, FlowSaveArgs, ImportTo,
 };
 use super::{print_json, print_out, quietly, read_limited, read_prompt, stream_json, workspace};
 use crate::client::{self, answer, ask, confirm};
 use crate::control::{
-    self, Exported, FlowBacklog, FlowDefaultSet, FlowInfo, FlowMessage, FlowOrdered, FlowRemoved, FlowRuns, Flows,
-    Imported, RoleInfo, RunEdge, RunFiles, RunInfo, RunState,
+    self, Exported, FlowBacklog, FlowDefaultSet, FlowInfo, FlowMessage, FlowOrdered, FlowRemoved, FlowRuns, FlowSaved,
+    FlowSpec, Flows, Imported, RoleInfo, RunEdge, RunFiles, RunInfo, RunState, contract,
 };
 use crate::error::{Error, Result};
-use crate::flows::Worktree;
 use crate::flows::registry::{self, Source};
 use crate::flows::share;
+use crate::flows::{Flow, Worktree};
 
 pub(super) fn run(action: FlowAction) -> Result<()> {
     match action {
@@ -23,6 +23,7 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
         FlowAction::Run(run) => flow_run(run),
         FlowAction::Export(export) => flow_export(export),
         FlowAction::Import(import) => import_flow(import),
+        FlowAction::Save(save) => save_flow(save),
         FlowAction::Runs(runs) => follow_runs(&runs),
         FlowAction::Messages(messages) => messages_of(&messages),
         FlowAction::Files(files) => files_of(&files),
@@ -90,12 +91,90 @@ fn flow_export(export: args::FlowExportArgs) -> Result<()> {
     print_out(&exported.text)
 }
 
+const MAX_DRAFT: usize = 4 * share::MAX_BYTES;
+
+fn save_flow(args: FlowSaveArgs) -> Result<()> {
+    let flow = draft(&args.source)?;
+    let path = args.path.map(|path| listed_path(&path)).transpose()?;
+    let to = match (args.to, &path) {
+        (None, Some(path)) => place_of(path, args.project)?,
+        (to, _) => to,
+    };
+    let place = to.unwrap_or(ImportTo::Yours).name().to_string();
+    let request = control::FlowSave { flow, place, project: args.project, path, check: args.check };
+    answered("flow save", control::Command::FlowSave(request), args.print.json, saved_text)
+}
+
+fn draft(source: &Path) -> Result<FlowSpec> {
+    let text = read_limited(source, MAX_DRAFT, "is too long for a flow (at most 1 MiB of JSON)")?;
+    parsed(&text).map_err(|e| Error::Control(share::visible(&format!("cannot read `{}`: {e}", source.display()))))
+}
+
+fn parsed(text: &str) -> std::result::Result<FlowSpec, String> {
+    let raw: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    if !raw.is_object() {
+        return Err("a flow is a JSON object, the `flow` of one entry of `cornercase flow list --json`".into());
+    }
+    let flow: FlowSpec = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    match contract::unknown_fields(&raw, &flow) {
+        Some(key) => Err(format!(
+            "`{key}` is not a key of a flow: give the `flow` of one entry of `cornercase flow list --json`, such as `jq '.flows[0].flow'`"
+        )),
+        None => Ok(flow),
+    }
+}
+
+fn place_of(path: &Path, project: Option<u64>) -> Result<Option<ImportTo>> {
+    let flows: Flows = answer(ask("flow save", control::Command::FlowList(control::FlowList { project }))?)?;
+    Ok(listed_place(&flows, path))
+}
+
+fn listed_place(flows: &Flows, path: &Path) -> Option<ImportTo> {
+    let listed = flows.flows.iter().find(|flow| flow.path.as_deref() == Some(path))?;
+    Some(if listed.origin == "project" { ImportTo::Project } else { ImportTo::Yours })
+}
+
+fn listed_path(path: &Path) -> Result<PathBuf> {
+    let mut clean = PathBuf::new();
+    for part in std::path::absolute(path)?.components() {
+        match part {
+            Component::ParentDir => {
+                clean.pop();
+            }
+            Component::CurDir => {}
+            other => clean.push(other),
+        }
+    }
+    Ok(clean)
+}
+
+fn into_place(origin: &str) -> &'static str {
+    if origin == "project" { "this project" } else { "yours" }
+}
+
+fn saved_text(saved: &FlowSaved) -> String {
+    let name = share::visible(&saved.name);
+    let place = into_place(&saved.origin);
+    let mut out = match &saved.path {
+        Some(path) if saved.saved => format!("saved {name} into {place}: {}\n", path.display()),
+        _ if saved.problems.is_empty() => format!("{name} can be saved into {place}; nothing was written\n"),
+        _ => format!("{name} has problems; nothing was written\n"),
+    };
+    for problem in &saved.problems {
+        let _ = writeln!(out, "  cannot run: {problem}");
+    }
+    if let Some(check) = &saved.check {
+        let _ = writeln!(out, "  {check}");
+    }
+    out
+}
+
 fn delete_flow(args: FlowDeleteArgs) -> Result<()> {
     let request = control::FlowDelete {
         name: args.name.unwrap_or_default(),
         place: args.place.map(|place| place.name().to_string()).unwrap_or_default(),
         project: args.project,
-        path: args.path.map(std::path::absolute).transpose()?,
+        path: args.path.map(|path| listed_path(&path)).transpose()?,
     };
     answered("flow delete", control::Command::FlowDelete(request), args.print.json, deleted_line)
 }
@@ -178,7 +257,6 @@ fn import_flow(args: FlowImportArgs) -> Result<()> {
     let text = import_text(&source)?;
     let flow = share::from_share(&text)
         .map_err(|e| Error::Control(share::visible(&format!("cannot read `{}`: {e}", args.source))))?;
-    eprint!("{}", share::summary(&flow));
     let risks = share::risks(&flow, "it");
     let asked = match &source {
         Source::Url(_) | Source::Repo(_) => Some(fetched(&source, risks)),
@@ -190,8 +268,12 @@ fn import_flow(args: FlowImportArgs) -> Result<()> {
         project: args.project,
         place: args.to.name().to_string(),
         replace: args.replace,
-        check: false,
+        check: args.check,
     };
+    if args.check {
+        return checked_import(request, &flow, &source, args.print.json);
+    }
+    eprint!("{}", share::summary(&flow));
     if let Some(risks) = asked.filter(|_| !args.yes)
         && !confirmed_import(&mut request, &source, &risks, args.to)?
     {
@@ -207,6 +289,47 @@ fn import_flow(args: FlowImportArgs) -> Result<()> {
         eprintln!("{note}");
     }
     print_out(&imported_line(&imported))
+}
+
+fn checked_import(request: control::FlowImport, flow: &Flow, source: &Source, json: bool) -> Result<()> {
+    let value = ask("flow import", control::Command::FlowImport(request))?;
+    let value = complete_preview(value, flow, source)?;
+    if json {
+        return print_json(&value);
+    }
+    print_out(&checked_line(&answer(value)?))
+}
+
+fn complete_preview(mut value: serde_json::Value, flow: &Flow, source: &Source) -> Result<serde_json::Value> {
+    let preview: Imported = answer(value.clone())?;
+    if preview.roles.is_empty() {
+        value["roles"] = serde_json::json!(RoleInfo::of_flow(flow));
+    }
+    let risks = preview.check.or_else(|| share::risks(flow, "it"));
+    let risks = match source {
+        Source::Url(_) | Source::Repo(_) => Some(fetched(source, risks)),
+        _ => risks,
+    };
+    if let Some(risks) = risks {
+        value["check"] = risks.into();
+    }
+    Ok(value)
+}
+
+fn checked_line(preview: &Imported) -> String {
+    let mut out = format!("{}\n", share::visible(&preview.name));
+    for role in &preview.roles {
+        let _ = writeln!(out, "  {}", share::visible(&role_summary(role)));
+    }
+    if let Some(check) = &preview.check {
+        let _ = writeln!(out, "{check}");
+    }
+    if let Some(note) = &preview.note {
+        let _ = writeln!(out, "{note}");
+    }
+    let replaced = if preview.replaced { " (replaces the existing flow)" } else { "" };
+    let _ = writeln!(out, "would import into {}{replaced}; nothing was imported", into_place(&preview.origin));
+    out
 }
 
 fn import_text(source: &Source) -> Result<String> {
@@ -253,7 +376,7 @@ pub(super) fn confirmation(risks: &str, to: ImportTo) -> String {
 }
 
 pub(super) fn imported_line(imported: &Imported) -> String {
-    let place = if imported.origin == "project" { "this project" } else { "yours" };
+    let place = into_place(&imported.origin);
     let path = imported.path.as_ref().map(|path| format!(": {}", path.display())).unwrap_or_default();
     let replaced = if imported.replaced { " (replaced)" } else { "" };
     format!("imported {} into {place}{replaced}{path}\n", share::visible(&imported.name))

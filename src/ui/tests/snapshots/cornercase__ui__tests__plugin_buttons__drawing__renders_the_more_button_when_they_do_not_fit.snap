@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/plugin_buttons.rs
-assertion_line: 128
 expression: "render_sized(&v, W, H).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -16,8 +15,8 @@ expression: "render_sized(&v, W, H).backend()"
 "                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
+"                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
 "  Deploy  Logs  Preview  ⋯     │                         │                                          "
-"  Settings                     │                         │                                          "
-"  Usage                        │                         │                                          "
-"  Quit                   Help  │                         │                                          "
+"  Worktrees                    │                         │                                          "
+"  More ▴                 Help  │                         │                                          "

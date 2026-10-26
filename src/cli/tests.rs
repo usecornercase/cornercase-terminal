@@ -51,6 +51,10 @@ mod parsing {
         assert_eq!(on.which.pane, Some(4));
         assert!(matches!(run(&["plugin", "popup-close"]), PluginAction::PopupClose));
         assert!(matches!(run(&["plugin", "actions", "--context", "button"]), PluginAction::Actions { .. }));
+        let PluginAction::Status(print) = run(&["plugin", "status", "--json"]) else { panic!("not status") };
+        assert!(print.json);
+        let PluginAction::Status(print) = run(&["plugin", "status"]) else { panic!("not status") };
+        assert!(!print.json);
     }
 
     #[test]
@@ -220,6 +224,8 @@ mod parsing {
     #[case::a_flow_without_a_task(&["flow", "run", "Quick"])]
     #[case::an_import_without_a_file(&["flow", "import"])]
     #[case::an_import_to_nowhere(&["flow", "import", "f.toml", "--to", "other"])]
+    #[case::a_save_without_a_file(&["flow", "save"])]
+    #[case::a_save_to_nowhere(&["flow", "save", "d.json", "--to", "cloud"])]
     #[case::an_export_without_a_name(&["flow", "export"])]
     #[case::a_default_without_a_name(&["flow", "default"])]
     #[case::a_default_and_clear(&["flow", "default", "Quick", "--clear"])]
@@ -365,6 +371,19 @@ mod parsing {
         let Some(Command::Control(Control::Flow(flow))) = cli.command else { panic!("not flow") };
         let args::FlowAction::Import(import) = flow.action else { panic!("not import") };
         assert_eq!((import.source, import.to, import.yes), ("-".to_string(), args::ImportTo::Yours, false));
+    }
+
+    #[test]
+    fn a_setup_can_be_previewed_without_importing_it() {
+        let cli = parse(&["config", "import", "team.toml", "--only", "agents,interface", "--preview", "--json"])
+            .expect("parse");
+        let Some(Command::Control(Control::Config(config))) = cli.command else { panic!("not config") };
+        let Some(args::config::ConfigAction::Import { source, only, yes, preview }) = config.action else {
+            panic!("not import")
+        };
+        assert_eq!((source, only), ("team.toml".to_string(), vec!["agents".to_string(), "interface".into()]));
+        assert!(preview && config.json && !yes);
+        assert!(parse(&["config", "import", "team.toml", "--preview", "--yes"]).is_err());
     }
 
     #[test]
@@ -918,29 +937,8 @@ mod output {
     }
 }
 
+mod away;
 mod flows;
-
+mod focus;
+mod known_agents;
 mod terminal;
-
-mod away {
-    use super::*;
-
-    #[rstest]
-    #[case::one_platform(serde_json::json!({"away": true, "platforms": ["Telegram"]}), "away: agents message you on Telegram until you turn it off\n")]
-    #[case::both(serde_json::json!({"away": true, "platforms": ["Telegram", "Discord"]}), "away: agents message you on Telegram and Discord until you turn it off\n")]
-    #[case::back(serde_json::json!({"away": false, "platforms": ["Discord"]}), "back: agents no longer message you on Discord\n")]
-    #[case::an_older_server(serde_json::json!({"away": true}), "away: agents message you on Telegram until you turn it off\n")]
-    #[case::nothing_was_away(serde_json::json!({"away": false, "platforms": []}), "back: nothing was away\n")]
-    fn away_names_the_platforms_it_changed(#[case] value: Value, #[case] expected: &str) {
-        assert_eq!(away_line(&value), expected);
-    }
-}
-
-mod known_agents {
-    #[test]
-    fn the_skill_names_every_known_agent() {
-        for agent in crate::agents::Known::ALL {
-            assert!(super::SKILL.contains(agent.title()), "missing {}", agent.title());
-        }
-    }
-}

@@ -187,3 +187,47 @@ fn a_summary_leaves_the_index_and_its_lock_alone() {
     assert_eq!(std::fs::read(index).expect("index"), before);
     assert_eq!(std::fs::metadata(repo.path().join(".git/index")).expect("metadata").modified().expect("time"), time);
 }
+
+#[test]
+fn counts_leave_every_file_plain_until_that_file_is_opened() {
+    let repo = git_repo(&[("a.rs", "fn a() {}\n")]);
+    std::fs::write(repo.path().join("a.rs"), "fn b() {}\n").expect("edit");
+    let plain = git::load(&request(repo.path(), &[])).expect("counts").diff.expect("diff");
+    assert!(plain.files.iter().all(|file| file.hunks.is_empty()));
+    let open = git::load(&request(repo.path(), &["a.rs"])).expect("open").diff.expect("diff");
+    let coloured = open.files.iter().flat_map(|file| &file.hunks).flat_map(|hunk| &hunk.lines).any(|line| {
+        line.syntax.as_ref().is_some_and(|spans| {
+            spans.iter().any(|(text, style)| text.contains("fn") && style.fg == Some(ratatui::style::Color::Magenta))
+        })
+    });
+    assert!(coloured);
+}
+
+#[test]
+fn commit_counts_match_the_commit_diff_without_hunks() {
+    let repo = git_repo(&[("a.rs", "fn a() {}\n")]);
+    let base = branch(repo.path());
+    git(repo.path(), &["checkout", "-q", "-b", "feature"]);
+    std::fs::write(repo.path().join("a.rs"), "fn b() {}\n").expect("edit");
+    git(repo.path(), &["add", "a.rs"]);
+    git(repo.path(), &["commit", "-q", "-m", "edit"]);
+    let counts = request(repo.path(), &[]);
+    let counts = Request { mode: Mode::Commits, base: Some(base), ..counts };
+    let summary = git::load(&counts).expect("counts").diff.expect("diff");
+    let full = git::load(&Request { expanded: None, ..counts.clone() }).expect("full").diff.expect("diff");
+    let shape = |diff: &Diff| {
+        diff.files.iter().map(|file| (file.path.clone(), file.status, file.added, file.removed)).collect::<Vec<_>>()
+    };
+    assert_eq!(shape(&summary), shape(&full));
+    assert!(summary.files.iter().all(|file| file.hunks.is_empty()));
+}
+
+fn branch(dir: &Path) -> String {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["branch", "--show-current"])
+        .output()
+        .expect("branch");
+    String::from_utf8(out.stdout).expect("utf-8").trim().to_string()
+}

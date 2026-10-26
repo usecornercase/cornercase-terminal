@@ -168,7 +168,7 @@ mod drawn {
         let (rows, cols) = s.app.term().expect("a pane").size();
         let full: String = (0..rows).map(|_| "#".repeat(usize::from(cols))).collect::<Vec<_>>().join("\r\n");
         let id = s.app.term().expect("a pane").id;
-        s.app.handle_event(AppEvent::Output(id, 0, format!("\x1b[H{full}").into_bytes()), AREA).expect("output");
+        s.app.handle_event(AppEvent::Output(id, 0, format!("\x1b[H{full}").into_bytes().into()), AREA).expect("output");
 
         let (buffer, _) = render_frame(&mut s.app, AREA, &Sight::default());
 

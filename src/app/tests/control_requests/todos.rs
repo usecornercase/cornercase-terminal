@@ -42,7 +42,7 @@ mod editing {
     fn an_edit_closes_the_panel_field_on_that_item() {
         let (mut app, _rx) = app();
         let id = add(&mut app, "a");
-        let editor = crate::editor::Editor::new("a");
+        let editor = Editor::new("a");
         app.panels.todo.start_editing(id, editor);
         todo(&mut app, &json!({"edit": {"id": id, "text": "b"}}));
         assert!(app.panels.todo.field().is_none());
@@ -161,7 +161,7 @@ mod removing {
     fn a_removal_closes_the_panel_field_on_that_item() {
         let (mut app, _rx) = app();
         let id = add(&mut app, "a");
-        let editor = crate::editor::Editor::new("a");
+        let editor = Editor::new("a");
         app.panels.todo.start_editing(id, editor);
         todo(&mut app, &json!({"rm": id}));
         assert!(app.panels.todo.field().is_none());

@@ -39,6 +39,10 @@ pub(crate) fn use_close_unlock() -> Result<()> {
     require("close-unlock", "cannot unlock a worktree to remove it")
 }
 
+pub(crate) fn use_focus_reveal() -> Result<()> {
+    require("focus-reveal", "cannot reveal a search match in its pane")
+}
+
 pub(crate) fn use_close_agent_tabs() -> Result<()> {
     require("close-agent-tabs", "would remove an agent's own worktree when it closes the agent")
 }
@@ -53,6 +57,10 @@ pub(crate) fn use_issue_names() -> Result<()> {
 
 pub(crate) fn use_todo_panel() -> Result<()> {
     require("todo-panel", "cannot edit, uncheck, reorder or restore TODO items")
+}
+
+pub(crate) fn use_queue_undo() -> Result<()> {
+    require("queue-undo", "cannot undo queue removals or clear started entries")
 }
 
 pub(crate) fn use_agent_folds() -> Result<()> {
@@ -111,7 +119,11 @@ fn ask_on(mut stream: UnixStream, name: &'static str, command: control::Command)
             Ok(Some(ServerMessage::Rejected(_))) => return Err(Error::OldServer(name)),
             Err(e) if e.kind() == io::ErrorKind::InvalidData => return Err(Error::OldServer(name)),
             Ok(Some(
-                ServerMessage::Frame(_) | ServerMessage::Detached | ServerMessage::Sound(_) | ServerMessage::Open(_),
+                ServerMessage::Frame(_)
+                | ServerMessage::Detached
+                | ServerMessage::Sound(_)
+                | ServerMessage::Open(_)
+                | ServerMessage::Browse(_),
             )) => {}
             Ok(Some(ServerMessage::Shutdown | ServerMessage::Restart(_)) | None) | Err(_) => {
                 return Err(Error::ServerGone);
@@ -179,7 +191,11 @@ fn follow_from(
             }
             Ok(Some(ServerMessage::Detached | ServerMessage::Shutdown | ServerMessage::Restart(_))) => return Ok(()),
             Ok(Some(
-                ServerMessage::Frame(_) | ServerMessage::Rejected(_) | ServerMessage::Sound(_) | ServerMessage::Open(_),
+                ServerMessage::Frame(_)
+                | ServerMessage::Rejected(_)
+                | ServerMessage::Sound(_)
+                | ServerMessage::Open(_)
+                | ServerMessage::Browse(_),
             )) => {}
             Ok(None) | Err(_) => return Err(Error::Control(LOST.into())),
         }

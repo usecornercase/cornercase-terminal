@@ -77,7 +77,7 @@ fn clicking_a_notification_shows_the_agent_that_sent_it() {
         let read = app.session.says(&["read", "--pane", &pane.id.to_string()]);
         assert!(!read.contains("99;") && !read.contains("i=cc-"), "typed into pane {}: {read}", pane.id);
     }
-    app.click(areas().quit.as_position());
+    app.quit();
     let close = format!("\x1b]99;i={token}:p=close;\x1b\\");
     app.wait_for_raw("the notification is closed on the way out", |raw| raw.contains(&close));
     let _ = std::fs::remove_dir_all(&bin);
