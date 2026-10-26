@@ -103,6 +103,10 @@ pub enum Error {
     OldServer(&'static str),
     #[error("the cornercase server stopped before answering")]
     ServerGone,
+    #[error(
+        "the cornercase server closed the connection without stopping: it crashed, or this command stopped reading what it sends"
+    )]
+    ServerLost,
     #[error("cornercase hit a bug, see server.log")]
     Bug,
     #[error("failed to run ssh: {0}")]

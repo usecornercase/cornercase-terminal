@@ -223,7 +223,7 @@ fn follow_from(
         return Ok(());
     }
     match follow_on(&mut link.reader, watched(rustix::stdio::stdout()), each) {
-        Err(Error::Control(message)) if message == LOST => Err(lost(&mut link, Error::Control(message))),
+        Err(Error::ServerLost) => Err(lost(&mut link, Error::ServerLost)),
         followed => followed,
     }
 }
@@ -252,7 +252,7 @@ fn follow_on(
                 | ServerMessage::Open(_)
                 | ServerMessage::Browse(_),
             )) => {}
-            Ok(None) | Err(_) => return Err(Error::Control(LOST.into())),
+            Ok(None) | Err(_) => return Err(Error::ServerLost),
         }
     }
 }
@@ -302,8 +302,6 @@ pub(crate) fn running_now() -> Option<Vec<restart::Running>> {
     report_now().map(|report| restart::from_report(&report))
 }
 const STATUS_TIMEOUT: Duration = Duration::from_secs(1);
-const LOST: &str = "the cornercase server closed the connection without stopping: it crashed, or this command \
-    stopped reading what it sends";
 
 #[cfg(test)]
 mod tests;

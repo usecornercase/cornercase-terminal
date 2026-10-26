@@ -157,6 +157,27 @@ fn a_stream_from_the_other_machine_ends_there_when_it_ends_here() {
 }
 
 #[test]
+fn a_remote_follow_ends_when_its_reader_leaves() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let mut following = remotely(&session, &["status", "--follow"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("run cornercase");
+    let mut out = std::io::BufReader::new(following.stdout.take().expect("stdout"));
+    std::io::BufRead::read_line(&mut out, &mut String::new()).expect("the first snapshot");
+    let proxy = ssh_pid(&session);
+
+    drop(out);
+    let ended = finish_within(following, TIMEOUT);
+
+    assert_eq!((ended.status.code(), ended.stderr.as_slice()), (Some(0), &b""[..]), "{ended:?}");
+    wait_until("the proxy there ends", || gone(&proxy));
+}
+
+#[test]
 fn cornercase_remote_reaches_it_too_but_stays_out_of_its_panes() {
     let session = Session::new();
     let started = session
