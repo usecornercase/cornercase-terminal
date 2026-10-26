@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.213
+
+- **Commands that follow a stream stop once nothing reads them.** `cornercase events`, `status --follow`, `status --app --follow`, `changes list --follow`, `flow runs --follow`, `flow messages --follow`, `surface` and `view` now end, with status 0, soon after the program reading their output exits or closes it, for example when an `ssh` running one on another machine is killed or loses its connection. Before, they kept running until they next had something to print, which on a quiet server could take hours, so an app that drives cornercase over `ssh` left one more behind each time it reconnected.
+
 ## 0.12.212
 
 - **Other UIs can show a plugin's popup and type into it.** `cornercase surface --popup` streams the popup open in the window as cells, in the same lines as a tab's terminals (one pane, at the popup's own size, with the plugin and action it belongs to), and ends when the popup closes. `cornercase input --popup` types keys, text, pastes and mouse events into its program. A browser view or another client built on the socket can now draw the popup instead of a blank. Nothing changes in the window.
