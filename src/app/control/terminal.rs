@@ -156,7 +156,9 @@ impl App {
         if let Some(wanted) = input.pane.filter(|wanted| *wanted != term.id) {
             return Err(Refusal::new(
                 Code::NotFound,
-                format!("popup {wanted} is no longer open, so nothing was sent; another one is open now"),
+                format!(
+                    "the open popup is not {wanted}, so nothing was sent; read `popup.pane` from its surface lines"
+                ),
             ));
         }
         let pane = term.id;

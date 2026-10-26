@@ -288,6 +288,12 @@ mod input {
         );
 
         assert_eq!(code(&answer), "not-found");
+        assert_eq!(
+            answer["error"]["message"],
+            json!(format!(
+                "the open popup is not {gone}, so nothing was sent; read `popup.pane` from its surface lines"
+            ))
+        );
         typed(&mut p, &json!([{"text": "next"}, {"key": {"code": "enter"}}]));
         assert!(p.line().ends_with("\nnext"), "{}", p.line());
     }
