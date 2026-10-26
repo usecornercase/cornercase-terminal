@@ -48,7 +48,7 @@ export type Counts = Record<(typeof COUNTS)[number], number>;
 export type Index = { version: number; generated: string; source: Counts; repos: Card[]; skipped: Skipped[] };
 
 export const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date);
 
 export function text(where: string, value: unknown, max: number): string {
   if (typeof value !== 'string') throw new Error(`${where} must be a string`);

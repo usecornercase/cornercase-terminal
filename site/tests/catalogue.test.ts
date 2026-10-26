@@ -318,6 +318,8 @@ test('manifests the app would refuse are invalid', () => {
     ...['width = 19', 'width = 501', 'height = 4', 'height = 201', 'width = 80.5', 'width = "80"'].map((size) => sized(`placement = "popup"\n${size}`)),
     `${MANIFEST}\n[button]\ntitle = "Top"\n`,
     `button = "x"\n${BUTTON}`,
+    `button = 1979-05-27\n${BUTTON}`,
+    `download = 1979-05-27\n${MANIFEST}`,
     ...['title = "  "', 'title = 1', 'icon = "ab"', 'icon = ""', 'icon = 1', 'icon = "\u0301"', 'icon = "界"', 'icon = "🚀"'].map((field) => `${BUTTON}\n[button]\n${field}\n`),
   ];
   assert.deepEqual(scan(bad.map((text) => ({ path: '', text }))), { plugins: [], invalid: bad.length });
