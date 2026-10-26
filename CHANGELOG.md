@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.213
+
+- **Drive another machine's cornercase from here.** `cornercase --remote devbox status --json`, `cornercase --remote devbox events --json` and every other command for scripts and agents now reach the server on `devbox` through your own `ssh`, the way `cornercase remote devbox` attaches the window. cornercase is found there even when it is not on the `PATH` of a command run through `ssh` (`--remote-command` says how to run it otherwise), arguments and standard input arrive as they are whatever the login shell there, both machines must run the same version, and a command that follows a stream ends there as soon as it ends here. Set `CORNERCASE_REMOTE=devbox` to send every command there without the flag. It never asks for a password or a passphrase: use a key in your SSH agent. As on your own machine, only `start-server` starts a server there; the other commands say `no cornercase server is running on devbox`. `update`, `restart`, `kill-server`, `logs` and the commands that install or change plugins refuse `--remote`, and `cornercase --remote devbox` alone opens the window there.
+- Commands that first check what the server supports (`events --host`, `start --issue`, `focus --reveal` and others) now say `no cornercase server is running` when none runs, instead of asking you to update cornercase.
+
 ## 0.12.212
 
 - **Other UIs can show a plugin's popup and type into it.** `cornercase surface --popup` streams the popup open in the window as cells, in the same lines as a tab's terminals (one pane, at the popup's own size, with the plugin and action it belongs to), and ends when the popup closes. `cornercase input --popup` types keys, text, pastes and mouse events into its program. A browser view or another client built on the socket can now draw the popup instead of a blank. Nothing changes in the window.
