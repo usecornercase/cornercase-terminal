@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.208
+
+- **Preview a shared flow before importing it.** `cornercase flow import SOURCE --check` shows its roles, variables and arguments that run unattended, and agents missing on this machine, then exits without asking or saving, even without a terminal or when reading standard input. `--json` gives the preview as data for another app to show before importing with `--yes`. The same destination, name and replacement options apply, and a bad flow or a name conflict still fails.
+
 ## 0.12.207
 
 - **Show a search match from a script.** `cornercase focus --pane ID --reveal TEXT` goes to the pane, scrolls it to the text and selects it, as `Enter` on a result of the search in sessions does. Pass `--line N` from `cornercase search --json` for a match on the pane's screen; leave it out for an agent's prompt or reply. `--json` prints `revealed`, which is `false` when the pane no longer holds the text (the pane is still shown and nothing stays selected). Other UIs find the `reveal` field of the `focus` request through the `focus-reveal` contract feature.
