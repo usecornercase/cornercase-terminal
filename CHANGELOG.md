@@ -2,7 +2,7 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.210
+## 0.12.212
 
 - **Other UIs can show a plugin's popup and type into it.** `cornercase surface --popup` streams the popup open in the window as cells, in the same lines as a tab's terminals (one pane, at the popup's own size, with the plugin and action it belongs to), and ends when the popup closes. `cornercase input --popup` types keys, text, pastes and mouse events into its program. A browser view or another client built on the socket can now draw the popup instead of a blank. Nothing changes in the window.
 - `input --popup --pane ID` names the popup by the id its surface lines give it, so keys meant for a popup that has closed never reach the next one.
