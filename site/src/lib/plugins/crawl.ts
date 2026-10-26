@@ -45,7 +45,11 @@ export type Scan = { plugins: Plugin[]; invalid: number; blocked?: number };
 export type Found = { repo: Repo; commit: string; scan: Scan; joined?: string; history?: Star[] };
 
 const MAX_ENTRIES = 64;
-const CONTEXTS = ['project', 'workspace', 'tab', 'pane'];
+const CONTEXTS = ['project', 'workspace', 'tab', 'pane', 'button'];
+const PLACEMENTS = ['job', 'popup'];
+const SIZES = { width: [20n, 500n], height: [5n, 200n] } as const;
+const WIDE = /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA000-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{20000}-\u{2FFFD}\u{30000}-\u{3FFFD}]/u;
+const NOT_ONE_CELL = /[\p{Cc}\p{Cf}\p{M}\p{Extended_Pictographic}]/u;
 const EVENTS = ['opened', 'closed', 'status', 'exited'];
 
 const tables = (where: string, value: unknown): Record<string, unknown>[] => {
@@ -78,6 +82,34 @@ function identified(where: string, entry: Record<string, unknown>, seen: Set<str
   seen.add(`${where}:${entry.id}`);
 }
 
+function checkAction(action: Record<string, unknown>, seen: Set<string>): void {
+  identified('action', action, seen);
+  if (typeof action.title !== 'string' || !action.title.trim()) throw new Error('an action needs a title');
+  const { contexts } = action;
+  if (!Array.isArray(contexts) || contexts.length === 0 || !contexts.every((c) => typeof c === 'string' && CONTEXTS.includes(c))) {
+    throw new Error('an action needs contexts from project, workspace, tab, pane and button');
+  }
+  const { placement } = action;
+  if (placement !== undefined && (typeof placement !== 'string' || !PLACEMENTS.includes(placement))) throw new Error('an action\'s placement must be job or popup');
+  for (const [field, [min, max]] of Object.entries(SIZES)) {
+    const size = action[field];
+    if (size === undefined) continue;
+    if (placement !== 'popup') throw new Error(`only a popup has a ${field}`);
+    if (typeof size !== 'bigint' || size < min || size > max) throw new Error(`a popup's ${field} must be a whole number from ${min} to ${max}`);
+  }
+  command('an action', action.command);
+}
+
+const oneCell = (icon: string): boolean => [...icon].length === 1 && !NOT_ONE_CELL.test(icon) && !WIDE.test(icon);
+
+function checkButton(button: unknown, actions: Record<string, unknown>[]): void {
+  if (button === undefined) return;
+  if (!isObject(button)) throw new Error('button must be a table');
+  if (!actions.some((action) => Array.isArray(action.contexts) && action.contexts.includes('button'))) throw new Error('[button] needs an action with the button context');
+  if (button.title !== undefined && (typeof button.title !== 'string' || !button.title.trim())) throw new Error('the button\'s title must be a non-empty string');
+  if (button.icon !== undefined && (typeof button.icon !== 'string' || !oneCell(button.icon))) throw new Error('the button\'s icon must be one character one cell wide');
+}
+
 function checkManifest(raw: Record<string, unknown>): void {
   if (unsafeIn(raw)) throw new Error('the manifest holds control characters');
   if (raw.api !== undefined && (typeof raw.api !== 'bigint' || raw.api < 0n || raw.api > 4294967295n)) throw new Error('api must be a whole number');
@@ -89,15 +121,8 @@ function checkManifest(raw: Record<string, unknown>): void {
   const build = tables('build', raw.build);
   if (actions.length + events.length + service.length + window.length > MAX_ENTRIES) throw new Error(`more than ${MAX_ENTRIES} entries`);
   const seen = new Set<string>();
-  for (const action of actions) {
-    identified('action', action, seen);
-    if (typeof action.title !== 'string' || !action.title.trim()) throw new Error('an action needs a title');
-    const { contexts } = action;
-    if (!Array.isArray(contexts) || contexts.length === 0 || !contexts.every((c) => typeof c === 'string' && CONTEXTS.includes(c))) {
-      throw new Error('an action needs contexts from project, workspace, tab and pane');
-    }
-    command('an action', action.command);
-  }
+  for (const action of actions) checkAction(action, seen);
+  checkButton(raw.button, actions);
   for (const hook of events) {
     if (typeof hook.on !== 'string' || !EVENTS.includes(hook.on)) throw new Error('a hook needs an event: opened, closed, status or exited');
     command('a hook', hook.command);
