@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.210
+
+- **Scripts and other apps can tell a partial answer from a failure.** `cornercase usage`, `cornercase issue list` and `cornercase read --last-message` with several panes now exit with 3, not 1, when they printed their whole answer but an agent, a tracker or a pane in it failed. Each one still says why (its `error` with `--json`; `issue list` also names failed trackers on standard error), so with `--json` the output is a complete answer whenever the status is 0 or 3. `cornercase --help` lists the statuses.
+- `cornercase read --last-message` with several panes now says `no cornercase server is running` and exits 1 when there is no server, as other commands do, instead of printing that error under each pane.
+
 ## 0.12.209
 
 - **See what each plugin's service is doing from the command line.** `cornercase plugin status` prints the plugins as Settings › Plugins shows them: on, off or cannot run, the note, and whether each service is running, waiting to start again or still starting. `--json` prints that for another app, with hidden characters escaped as in `plugin list --json`, including why `plugins.json` cannot be read. `plugin list` still reads the files and works with no server.
