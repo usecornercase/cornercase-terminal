@@ -29,6 +29,10 @@ mod parsing {
     #[case::stage(&["changes", "stage", "a.rs"])]
     #[case::unstage_in_a_workspace(&["changes", "unstage", "a.rs", "--workspace", "3"])]
     #[case::stage_in_a_branch(&["changes", "stage", "a.rs", "--worktree", "x"])]
+    #[case::viewed_as_seen(&["changes", "viewed", "src/main.rs", "--digest", "550a7a517a389403"])]
+    #[case::stage_as_seen(&["changes", "stage", "a.rs", "--digest", "550A7A517A389403"])]
+    #[case::unstage_as_seen(&["changes", "unstage", "a.rs", "--digest", "550a7a517a389403", "--worktree", "x"])]
+    #[case::discard_as_seen(&["changes", "discard", "a.rs", "--digest", "550a7a517a389403", "--yes"])]
     fn these_are_taken(#[case] args: &[&str]) {
         let parsed = parse(args).expect("parse");
 
@@ -49,6 +53,11 @@ mod parsing {
     #[case::stage_in_a_mode(&["changes", "stage", "a.rs", "--mode", "commits"])]
     #[case::stage_in_two_places(&["changes", "stage", "a.rs", "--workspace", "1", "--worktree", "x"])]
     #[case::discard_in_two_places(&["changes", "discard", "a.rs", "--workspace", "1", "--worktree", "x"])]
+    #[case::a_short_digest(&["changes", "stage", "a.rs", "--digest", "550a7a"])]
+    #[case::a_digest_not_in_hex(&["changes", "discard", "a.rs", "--digest", "zzzzzzzzzzzzzzzz", "--yes"])]
+    #[case::a_digest_without_a_value(&["changes", "unstage", "a.rs", "--digest"])]
+    #[case::clearing_with_a_digest(&["changes", "viewed", "a.rs", "--clear", "--digest", "550a7a517a389403"])]
+    #[case::a_digest_in_a_mode(&["changes", "viewed", "a.rs", "--mode", "commits", "--digest", "550a7a517a389403"])]
     fn these_are_refused(#[case] args: &[&str]) {
         assert!(parse(args).is_err());
     }

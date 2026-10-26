@@ -621,6 +621,7 @@ pub(super) const WAIT_PANE: &str = "The pane; repeat it, or add --tab, to wait o
     the shown one]";
 pub(super) const WAIT_TAB: &str = "A tab: its agent's pane, else its active one; repeat it to wait on several";
 pub(super) const HERE_WORKSPACE: &str = "The workspace [default: the one this runs in, else the shown one]";
+pub(super) const SEEN_DIGEST: &str = "Act only on the version with this digest, from `changes list --json` or `changes file --json`: a file that changed since is left alone [default: the version there now]";
 pub(super) const BY_BRANCH: &str =
     "The workspace on this branch, looked up in the project this runs in, else the shown one";
 
@@ -686,7 +687,9 @@ file's diff, `gap` the unchanged lines between one of its hunks and the one befo
 no gap), `base` the branches the Commits and All modes can compare with (naming one sets it, --default goes back to \
 following the default branch), and `viewed` marks a file as viewed or clears the mark. `discard` throws a file's uncommitted changes away (a file git does not track is deleted), asks first on a terminal \
 and needs --yes in a script; it cannot be undone. `stage` puts a file's changes in git's index, as `git add` does, and \
-`unstage` takes them out of it; both act on the version `changes file` shows, so a file that changed since is left alone. \
+`unstage` takes them out of it. `viewed`, `stage`, `unstage` and `discard` act on the version `changes file` shows; with \
+--digest, on the version whose digest `changes list --json` or `changes file --json` printed, the one you saw, so a file \
+that changed since is left alone (`viewed` does not mark it, the others fail and say so). \
 The modes are uncommitted (the default), \
 commits and all. The base and the viewed marks are shared with the window's changes panel; the mode of a stream is its own.
 
@@ -700,7 +703,8 @@ Examples:
   cornercase changes viewed src/main.rs
   cornercase changes stage src/main.rs
   cornercase changes unstage src/main.rs
-  cornercase changes discard src/main.rs --yes";
+  cornercase changes discard src/main.rs --yes
+  cornercase changes discard src/main.rs --digest 550a7a517a389403 --yes";
 
 mod flow;
 
