@@ -92,6 +92,7 @@ cornercase --remote devbox start-server
 - **Another interface can show that machine's files**: `files list`, `files read` and `files search` give the files panel's tree, viewer and search, and `files list ~/` a folder picker's listing, so a UI on your laptop needs no `ssh` of its own to read that disk. See [Browse and read a workspace's files](../scripts-and-agents/#browse-and-read-a-workspaces-files).
 - **`update`, `restart`, `kill-server`, `logs` and the plugin commands that install or change plugins** act on the machine they run on and refuse `--remote`, with status 2: run them there with `ssh`.
 - **`cornercase --remote devbox` alone** opens the window, as `cornercase remote devbox`.
+- **`input --follow` types through one connection**: a program that draws the terminals keeps one running for everything it types, instead of a command, and an `ssh` connection, for each batch of keys.
 - **One `ssh` connection per command.** To share one, use your own config:
 
 ```text

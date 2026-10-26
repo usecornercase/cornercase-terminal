@@ -1,5 +1,7 @@
 use std::io::{self, BufRead as _};
 
+mod follow;
+
 use super::args::terminal::{InputArgs, LinkArgs, RatioArgs, RedrawArgs, ResizeArgs, ScrollArgs, SelectionArgs, Side};
 use super::{print_json, print_out};
 use crate::client::{self, answer, ask};
@@ -31,7 +33,11 @@ fn events_from_stdin() -> Result<Vec<InputEvent>> {
 }
 
 fn event(text: &str) -> Result<InputEvent> {
-    serde_json::from_str(text).map_err(|e| Error::WrongUsage(format!("not an input event: {e}: {text}")))
+    serde_json::from_str(text).map_err(|e| Error::WrongUsage(not_an_event(e, text)))
+}
+
+fn not_an_event(error: impl std::fmt::Display, text: &str) -> String {
+    format!("not an input event: {error}: {text}")
 }
 
 fn skipped(why: Why) -> &'static str {
@@ -43,6 +49,9 @@ fn skipped(why: Why) -> &'static str {
 }
 
 pub(super) fn input(args: &InputArgs) -> Result<()> {
+    if args.follow {
+        return follow::run(args);
+    }
     if args.popup {
         client::use_popup_terminal()?;
     }

@@ -265,3 +265,43 @@ mod a_follow {
         assert_eq!(watched(output.0.as_fd()).is_some(), watches);
     }
 }
+
+mod one_link {
+    use super::*;
+
+    fn serving(answers: usize) -> (Link, thread::JoinHandle<usize>) {
+        let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
+        let server = thread::spawn(move || {
+            let mut seen = 0;
+            while seen < answers && protocol::recv::<ClientMessage>(&mut theirs).expect("a request").is_some() {
+                let answer = serde_json::to_string(&Response::Ok(serde_json::json!({"n": seen}))).expect("json");
+                protocol::send(&mut theirs, &ServerMessage::Response(answer)).expect("an answer");
+                seen += 1;
+            }
+            seen
+        });
+        (Link::socket(ours).expect("a link"), server)
+    }
+
+    #[test]
+    fn asks_one_request_after_another_over_it() {
+        let (mut link, server) = serving(2);
+
+        let first = link.ask("input", control::Command::Contract(control::Contract {})).expect("first");
+        let second = link.ask("input", control::Command::Contract(control::Contract {})).expect("second");
+
+        assert_eq!((first["n"].clone(), second["n"].clone()), (0.into(), 1.into()));
+        assert_eq!(server.join().expect("the fake server"), 2);
+    }
+
+    #[test]
+    fn says_the_server_stopped_when_it_left_between_two_requests() {
+        let (mut link, server) = serving(1);
+        link.ask("input", control::Command::Contract(control::Contract {})).expect("first");
+        server.join().expect("the fake server");
+
+        let error = link.ask("input", control::Command::Contract(control::Contract {})).expect_err("gone");
+
+        assert!(matches!(error, Error::ServerGone), "{error:?}");
+    }
+}

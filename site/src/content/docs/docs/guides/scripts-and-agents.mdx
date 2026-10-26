@@ -85,7 +85,7 @@ group 9  personal  collapsed
 | `changes` | Lists, reads, marks, stages and discards the changes of a workspace, as the changes panel shows them, [for a program that draws it](#follow-a-workspaces-changes). |
 | `view` | Opens a [view of your own](#a-view-of-your-own): its own tab and size, for a program that draws cornercase itself. |
 | `view-set` | Changes a view: its size, whether it is active, or takes back the tab it shows. |
-| `input --pane ID EVENT…` | Types keys with modifiers, text, pastes and mouse events into a pane, for [a program that draws it](#drive-a-tabs-terminals). |
+| `input --pane ID EVENT…` | Types keys with modifiers, text, pastes and mouse events into a pane, or with `--follow` each line of standard input as it arrives, for [a program that draws it](#drive-a-tabs-terminals). |
 | `scroll`, `selection`, `ratio`, `resize`, `link` | Scroll a pane's view, select or copy text in it, move a divider of a tab's split, lay a `surface` stream out at another size, or say which file a click on a cell opens, all [for a program that draws the terminals](#drive-a-tabs-terminals). |
 | `redraw` | Sends a `surface` stream a complete line now, for a program that applies [patches](#patches). |
 | `close` | Closes a pane, tab, workspace or project, or an agent with all it started (`--agent`); `--check` says first what removing a worktree, or closing an agent, would lose. |
@@ -363,6 +363,7 @@ A program that draws a tab with `surface` also has to type into it and handle it
 cornercase input --pane 12 '{"text": "ls"}' '{"key": {"code": "enter"}}'
 cornercase input --pane 12 '{"key": {"code": "c", "mods": ["ctrl"]}}'
 cornercase input --pane 12 '{"mouse": {"kind": "scroll-up", "x": 10, "y": 5}}'
+cornercase input --pane 12 --follow --json -
 cornercase scroll --pane 12 --up 10
 cornercase selection --pane 12 --from 0,3 --to 79,5 --copy
 cornercase ratio --tab 3 --path second 0.3
@@ -378,7 +379,11 @@ cornercase link --pane 12 --cell 10,3
 - `ratio RATIO` sets the share of the first side of a tab's divider, between 0 and 1. `--path` names the divider as the `path` of a frame's `dividers` does (`first` or `second` at each level down; without it, the outermost). The terminals follow at once, with the window's geometry. To open or close splits use `split` and `close`.
 - `resize` lays a running `surface` out at another size without starting it again; `ID` is the `surface` of its lines. Its next line comes at the new size, with the next `revision`. It resizes no terminal: they keep the size of whoever sizes the tab. A surface that follows a view (`surface --view`) takes the view's size, so `resize` refuses it: change the view with `view-set`.
 - `link --cell X,Y` says which file a click on that cell of the pane's view opens in the window (columns and rows from 0, as in `lines`), so you get cornercase's detection of the paths programs print without copying it: the path under the cell, looked up from the folder of the program in the foreground, then from the root of the pane's workspace, with its line or lines. It prints `path`, `path:12` or `path:12-30`, and nothing, with status 0, when the cell holds no file; `--json` also says whether the file is inside the workspace. It opens nothing, and OSC 8 links are in the frame's `hyperlinks`, not here.
-- Requests on different connections aren't ordered: send the next `input` after the answer to the previous one, or put several events in one request. Unlike the other commands, these six log at debug level, since a program sends them as fast as someone types or drags.
+- `input --follow -` keeps running, so a program types through one process rather than one per batch of keys, and with [`--remote`](../remote/#commands-for-scripts-and-agents) through one `ssh` connection. It reads one event per line from standard input and sends each line as soon as it arrives. Lines that arrive while the previous request is on its way go together in the next one, so there is one request at a time, in order.
+- A line can name its pane, `{"pane": 14, "key": {"code": "enter"}}`; without `pane` it goes to `--pane`. One process can type into every pane of a view.
+- Each request is all or nothing on its own. With `--json` it prints one line per request: the answer with `events` (how many of your lines it answers; blank lines are skipped) and each `skipped` event counted from the first line read, or `pane`, `error` and `events` when a request was refused or a line wasn't an event. The next lines still go.
+- `input --follow` ends when standard input ends, after the last answer: with 0, with 3 if some line wasn't sent, or with 1 once the server stops or the connection drops (it notices at the next line). A program on the socket does the same by keeping its connection and sending each `input` after the answer to the one before.
+- Requests on different connections aren't ordered: send the next `input` after the answer to the previous one, put several events in one request, or keep one `input --follow` running. Unlike the other commands, these six log at debug level, since a program sends them as fast as someone types or drags.
 
 #### A plugin's popup
 
@@ -1070,7 +1075,7 @@ The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `
 | `view` | One object per line, see [A view of your own](#a-view-of-your-own): what `status --follow` prints, plus `view` (`id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`, `visible`) and each tab's `controller`. |
 | `view-set` | The view: `id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`, `visible`. |
 | `go` | The ids it went to (`project`, `workspace`, `tab`, `pane`), and `projection` with `--view`. |
-| `input` | `pane`, `bytes` (what was written) and `skipped`: `event` (its position from 0) and `why` (`mouse`, `release`, or `key` for a press cornercase has no encoding for) of each event that was not sent. |
+| `input` | `pane`, `bytes` (what was written) and `skipped`: `event` (its position from 0) and `why` (`mouse`, `release`, or `key` for a press cornercase has no encoding for) of each event that was not sent. With `--follow --json`, one such line per request, with `events`, or `pane`, `error` and `events` for one that wasn't sent. |
 | `scroll` | `pane` and `scroll`: `total`, `offset` and `rows`, as in a frame. |
 | `selection` | `pane` and `text` (absent when nothing is selected). |
 | `resize` | `surface`, `tab`, `cols` and `rows`. |
@@ -1093,9 +1098,11 @@ The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `
 | `0` | Done. |
 | `1` | An error or a timeout; the message says which. |
 | `2` | Wrong usage, such as an unknown option. |
-| `3` | A partial answer: `usage`, `issue list`, `files list` and `read --last-message` with several targets printed their whole answer, but an agent, a tracker, a folder or a pane in it failed. Each says why in its `error` (`issue list` also names failed trackers on standard error). With `--json`, the output is a complete answer whenever the status is 0 or 3. |
+| `3` | A partial answer: `usage`, `issue list`, `files list` and `read --last-message` with several targets printed their whole answer, but an agent, a tracker, a folder or a pane in it failed, or `input --follow` couldn't send some of its lines. Each says why in its `error` (`issue list` also names failed trackers on standard error). With `--json`, the output is a complete answer whenever the status is 0 or 3. |
 
 A command that follows something until it ends (`events`, `status --follow`, `status --app --follow`, `changes list --follow`, `files list --follow`, `files read --follow`, `flow runs --follow`, `flow messages --follow`, `surface` and `view`) also ends with 0, without a message, soon after whatever reads its output is gone: the program it prints into exited or closed its end, or the `ssh` running it on another machine was killed or lost its connection. A terminal that closes ends it like any program, and one printing into a file or `/dev/null` runs until it ends by itself.
+
+`input --follow` ends when its standard input ends, once the last line is answered, or with `--json` when what reads its answers is gone.
 
 Some messages you may meet:
 
@@ -1192,7 +1199,7 @@ With `boot` set to the value from `contract` or `status`, a request kept across 
 
 ### Talking to the socket directly
 
-The [socket](../../reference/command-line/#the-socket) takes one request per connection. Each message is framed as its length, 4 bytes little-endian, then its [postcard](https://postcard.jamesmunns.com/) encoding: a request is variant 4 followed by the JSON text (its length as a varint, then its UTF-8 bytes), an answer variant 5 in the same form. `events` sends one answer per event and ends with variant 2, 3 or 4 (its panes closed, the server stopped, or it restarted); `watch`, the request behind `status --follow`, answers with the state and then sends it again in the same form after each change, until variant 3 or 4, and `app`, the request behind `status --app --follow`, does the same with the rest of the app's state; `surface` does the same with a tab's frame, and ends with variant 2 when the tab closes (or its view does); `view` sends the state, with the view in it, and holds the view open until the connection closes. A request for a view carries its id as `view` next to `command`, once `contract` lists the feature `views`. Only your own user can connect. Nothing needs to be sent before the request.
+The [socket](../../reference/command-line/#the-socket) takes one request at a time per connection: send the next once the previous one is answered (`input --follow` types through one connection this way). Each message is framed as its length, 4 bytes little-endian, then its [postcard](https://postcard.jamesmunns.com/) encoding: a request is variant 4 followed by the JSON text (its length as a varint, then its UTF-8 bytes), an answer variant 5 in the same form. `events` sends one answer per event and ends with variant 2, 3 or 4 (its panes closed, the server stopped, or it restarted); `watch`, the request behind `status --follow`, answers with the state and then sends it again in the same form after each change, until variant 3 or 4, and `app`, the request behind `status --app --follow`, does the same with the rest of the app's state; `surface` does the same with a tab's frame, and ends with variant 2 when the tab closes (or its view does); `view` sends the state, with the view in it, and holds the view open until the connection closes. A request for a view carries its id as `view` next to `command`, once `contract` lists the feature `views`. Only your own user can connect. Nothing needs to be sent before the request.
 
 ## Teach your agents
 

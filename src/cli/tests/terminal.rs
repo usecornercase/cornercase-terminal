@@ -48,6 +48,14 @@ fn input_can_type_into_the_popup_instead_of_a_pane() {
 }
 
 #[test]
+fn input_can_follow_standard_input_with_no_pane() {
+    let cli = parse(&["input", "--follow", "-"]).expect("parse");
+
+    let Some(Command::Control(Control::Input(input))) = cli.command else { panic!("not input") };
+    assert_eq!((input.follow, input.pane), (true, None));
+}
+
+#[test]
 fn input_needs_a_pane_or_the_popup() {
     assert!(parse(&["input", r#"{"text":"x"}"#]).is_err());
 }

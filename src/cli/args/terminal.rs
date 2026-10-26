@@ -6,18 +6,23 @@ use crate::control::terminal::{InputEvent, Point};
 
 #[derive(Debug, Args)]
 pub(crate) struct InputArgs {
-    #[arg(long, value_name = "ID", required_unless_present = "popup", help = INPUT_PANE)]
+    #[arg(long, value_name = "ID", required_unless_present_any = ["popup", "follow"], help = INPUT_PANE)]
     pub(crate) pane: Option<u64>,
     #[arg(long, help = "Type into the plugin popup open in the window instead of a pane")]
     pub(crate) popup: bool,
+    #[arg(long, help = INPUT_FOLLOW)]
+    pub(crate) follow: bool,
     #[arg(required = true, value_name = "EVENT", value_parser = event, help = "One JSON event, or - to read one per line from standard input")]
     pub(crate) events: Vec<String>,
     #[command(flatten)]
     pub(crate) print: Print,
 }
 
-const INPUT_PANE: &str = "The pane to type into; `cornercase status --panes` lists them. With --popup, the popup's id \
-     from its surface lines (`popup.pane`), so nothing reaches a popup opened since";
+const INPUT_PANE: &str = "The pane to type into; `cornercase status --panes` lists them. With --follow, for the lines that name \
+     none. With --popup, the popup's id from its surface lines (`popup.pane`), so nothing reaches a popup opened since";
+
+const INPUT_FOLLOW: &str =
+    "Keep running and send each line of standard input as soon as it arrives, until it ends (give - as the only EVENT)";
 
 fn event(text: &str) -> Result<String, String> {
     if text != "-" {

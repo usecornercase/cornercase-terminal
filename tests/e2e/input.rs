@@ -123,3 +123,61 @@ fn programs_see_the_host_background_color() {
 
     app.wait_for("program reads the host background", |s| s.contains("E]11;rgb:1212/5656/9a9a"));
 }
+
+pub(super) struct Typist {
+    child: std::process::Child,
+    stdin: std::process::ChildStdin,
+    answers: commands::Followed,
+}
+
+impl Typist {
+    pub(super) fn start(mut command: std::process::Command) -> Self {
+        let mut child = command
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("run cornercase");
+        let stdin = child.stdin.take().expect("its input");
+        let answers = commands::Followed::of(&mut child);
+        Self { child, stdin, answers }
+    }
+
+    pub(super) fn types(&mut self, line: &serde_json::Value) -> serde_json::Value {
+        writeln!(self.stdin, "{line}").expect("write a line");
+        self.stdin.flush().expect("flush it");
+        self.answers.next(&format!("the answer to {line}"))
+    }
+
+    pub(super) fn ends(self) -> std::process::Output {
+        drop(self.stdin);
+        finish_within(self.child, TIMEOUT)
+    }
+}
+
+#[test]
+fn input_follow_types_each_line_where_it_says_until_its_input_ends() {
+    let session = Session::new();
+    session.cold(&["start-server"]);
+    let first = session.says(&["new-tab"]);
+    let second = session.says(&["new-tab"]);
+    let mut command = session.cold_command();
+    command.args(["input", "--pane", &first, "--follow", "--json", "-"]);
+    let mut typist = Typist::start(command);
+
+    let answer = typist.types(&serde_json::json!({"text": "echo follow-\"\"one"}));
+    assert_eq!((answer["pane"].to_string(), answer["events"].as_u64()), (first.clone(), Some(1)));
+    typist.types(&serde_json::json!({"key": {"code": "enter"}}));
+    let answer = typist
+        .types(&serde_json::json!({"pane": second.parse::<u64>().expect("an id"), "text": "echo follow-\"\"two"}));
+    assert_eq!(answer["pane"].to_string(), second);
+    typist.types(&serde_json::json!({"pane": second.parse::<u64>().expect("an id"), "key": {"code": "enter"}}));
+    let wrong = typist.types(&serde_json::json!({"text": "x", "key": {"code": "a"}}));
+
+    assert!(wrong["error"].as_str().is_some_and(|e| e.starts_with("not an input event")), "{wrong}");
+    assert_eq!((wrong["events"].as_u64(), wrong.get("pane")), (Some(1), None));
+    session.says(&["wait", "--pane", &first, "--text", "^follow-one$", "--timeout", "10"]);
+    session.says(&["wait", "--pane", &second, "--text", "^follow-two$", "--timeout", "10"]);
+    let ended = typist.ends();
+    assert_eq!((ended.status.code(), ended.stderr.as_slice()), (Some(3), &b""[..]), "{ended:?}");
+}

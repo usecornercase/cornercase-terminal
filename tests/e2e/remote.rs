@@ -157,6 +157,23 @@ fn a_stream_from_the_other_machine_ends_there_when_it_ends_here() {
 }
 
 #[test]
+fn input_follow_types_through_one_ssh_connection() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let pane = remote_says(&session, &["new-tab"]);
+    let mut typist = input::Typist::start(remotely(&session, &["input", "--pane", &pane, "--follow", "--json", "-"]));
+
+    typist.types(&serde_json::json!({"text": "echo remote-\"\"follow"}));
+    let proxy = ssh_pid(&session);
+    typist.types(&serde_json::json!({"key": {"code": "enter"}}));
+    wait_until("the text is typed", || session.says(&["read", "--pane", &pane]).contains("remote-follow\n"));
+    let ended = typist.ends();
+
+    assert_eq!((ssh_pid(&session), ended.status.code()), (proxy.clone(), Some(0)), "{ended:?}");
+    wait_until("the proxy there ends", || gone(&proxy));
+}
+
+#[test]
 fn a_remote_follow_ends_when_its_reader_leaves() {
     let session = Session::new();
     remote_says(&session, &["start-server"]);

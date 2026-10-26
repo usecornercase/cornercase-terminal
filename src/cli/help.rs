@@ -15,7 +15,8 @@ instead, in that same project. Only `focus`, `go` and `--focus` change what the 
 commands exit with 1 on errors and timeouts, 2 on wrong usage, a branch no workspace is on
 included, or one several are on (both list the workspaces to pick from), and 3 when a command that
 asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
-answer but some of them failed: each failed entry says why, in its error with --json.
+answer but some of them failed, or input --follow could not send some lines: each failed entry says
+why, in its error with --json.
 
 --remote DESTINATION (or CORNERCASE_REMOTE=DESTINATION, which the flag overrides) sends a command
 to the server of another machine through ssh, found as `cornercase remote` finds it, so arguments and
@@ -425,7 +426,16 @@ or the program is not reading its input, nothing is sent. Scripts and agents sho
 in the window, its x and y being cells of the popup's terminal; add --pane with the popup's id from its
 surface lines (popup.pane) so that nothing is sent if that popup closed and another one opened.
 
+With --follow it keeps running and reads one event per line from standard input (give - as the
+only EVENT) until it ends: each line goes as soon as it arrives, and the lines that arrive while
+the answer before is on its way go together, so a program types through one process (and with
+--remote one ssh connection). A line may name its pane, {\"pane\": 14, \"key\": {\"code\": \"enter\"}},
+else it goes to --pane. Each request is all or nothing on its own: with --json it prints one line
+each, the answer with events (how many lines it answers) or its error, and a line that is wrong or
+refused does not stop the next ones; the command then exits with 3.
+
 Examples:
+  cornercase input --pane 12 --follow --json -
   cornercase input --pane 12 '{\"text\": \"ls\"}' '{\"key\": {\"code\": \"enter\"}}'
   cornercase input --pane 12 '{\"mouse\": {\"kind\": \"scroll-up\", \"x\": 10, \"y\": 5}}'
   cornercase input --popup --pane 40 '{\"key\": {\"code\": \"down\"}}' '{\"key\": {\"code\": \"enter\"}}'";

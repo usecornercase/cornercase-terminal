@@ -116,7 +116,7 @@ fn require_on(link: Result<Link>, feature: &str, lacks: &str) -> Result<()> {
     if descriptor.features.iter().any(|offered| offered == feature) { Ok(()) } else { Err(lacking()) }
 }
 
-fn connect() -> Result<Link> {
+pub(crate) fn connect() -> Result<Link> {
     connect_within(None)
 }
 
@@ -151,9 +151,15 @@ fn lost(link: &mut Link, local: Error) -> Error {
     }
 }
 
+impl Link {
+    pub(crate) fn ask(&mut self, name: &'static str, command: control::Command) -> Result<Value> {
+        ask_on(self, name, command)
+    }
+}
+
 fn ask_on(link: &mut Link, name: &'static str, command: control::Command) -> Result<Value> {
     if let Err(e) = request(&mut link.writer, command) {
-        return Err(lost(link, e));
+        return Err(lost(link, server_left(e)));
     }
     loop {
         match protocol::recv::<ServerMessage>(&mut link.reader) {
@@ -170,6 +176,15 @@ fn ask_on(link: &mut Link, name: &'static str, command: control::Command) -> Res
             Ok(Some(ServerMessage::Shutdown | ServerMessage::Restart(_))) => return Err(Error::ServerGone),
             Ok(None) | Err(_) => return Err(lost(link, Error::ServerGone)),
         }
+    }
+}
+
+fn server_left(error: Error) -> Error {
+    match error {
+        Error::Io(e) if matches!(e.kind(), io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset) => {
+            Error::ServerGone
+        }
+        error => error,
     }
 }
 

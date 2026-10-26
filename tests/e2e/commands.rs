@@ -142,12 +142,16 @@ impl Followed {
     }
 
     pub(super) fn until(&mut self, what: &str, cond: impl Fn(&serde_json::Value) -> bool) {
-        let deadline = Instant::now() + TIMEOUT;
         while !self.seen.iter().any(&cond) {
-            let left = deadline.saturating_duration_since(Instant::now());
-            let line = self.lines.recv_timeout(left).unwrap_or_else(|_| panic!("timed out waiting for: {what}"));
-            self.seen.push(serde_json::from_str(&line).expect("one JSON object per line"));
+            self.next(what);
         }
+    }
+
+    pub(super) fn next(&mut self, what: &str) -> serde_json::Value {
+        let line = self.lines.recv_timeout(TIMEOUT).unwrap_or_else(|_| panic!("timed out waiting for: {what}"));
+        let value: serde_json::Value = serde_json::from_str(&line).expect("one JSON object per line");
+        self.seen.push(value.clone());
+        value
     }
 }
 
