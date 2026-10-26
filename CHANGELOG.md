@@ -8,6 +8,14 @@ Every pull request that changes the app adds a section here for its new version.
 - `input --popup --pane ID` names the popup by the id its surface lines give it, so keys meant for a popup that has closed never reach the next one.
 - Like a pane, a popup can be read and typed into by any program that talks to cornercase, agents in your panes included: don't use one for a secret or a confirmation only you should see or give.
 - Scripts: `surface` and `input` take `popup`, and `cornercase contract` lists the feature `popup-terminal`.
+## 0.12.211
+
+- **Act only on the version of a file you saw, from the command line.** `cornercase changes viewed`, `stage`, `unstage` and `discard` take `--digest`, with the file's `digest` from `changes list --json` or `changes file --json`. The command then acts only if the file is still that version: if an agent changed it since, `stage`, `unstage` and `discard` leave it alone and say so, and `viewed` does not mark the newer version. Apps that draw their own changes panel through these commands can now discard, stage or mark exactly what you reviewed. Without `--digest` they act on the file as it is now, as before.
+
+## 0.12.210
+
+- **Scripts and other apps can tell a partial answer from a failure.** `cornercase usage`, `cornercase issue list` and `cornercase read --last-message` with several panes now exit with 3, not 1, when they printed their whole answer but an agent, a tracker or a pane in it failed. Each one still says why (its `error` with `--json`; `issue list` also names failed trackers on standard error), so with `--json` the output is a complete answer whenever the status is 0 or 3. `cornercase --help` lists the statuses.
+- `cornercase read --last-message` with several panes now says `no cornercase server is running` and exits 1 when there is no server, as other commands do, instead of printing that error under each pane.
 
 ## 0.12.209
 

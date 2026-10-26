@@ -551,6 +551,10 @@ fn several(wait: &WaitArgs) -> std::result::Result<bool, clap::Error> {
     Ok(false)
 }
 
+fn partial_unless(all_answered: bool) -> Result<bool> {
+    if all_answered { Ok(true) } else { Err(Error::Partial) }
+}
+
 fn print_json(value: &impl serde::Serialize) -> Result<()> {
     let text = serde_json::to_string_pretty(value).map_err(|e| Error::Control(e.to_string()))?;
     print_out(&(text + "\n"))

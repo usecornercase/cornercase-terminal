@@ -22,13 +22,13 @@ fn the_plan_limits_are_read_through_the_server_and_then_from_its_cache() {
     assert!(started.status.success(), "start-server failed: {started:?}");
 
     let out = session.cli(&["usage"]);
-    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(out.status.code(), Some(3), "{out:?}");
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(text.contains("Claude Code · max plan  updated"), "{text}");
     assert!(text.contains("  usage unavailable: codex exited without answering"), "{text}");
 
     let out = session.cli(&["usage", "--cached", "--json"]);
-    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(out.status.code(), Some(3), "{out:?}");
     let plans: Value = serde_json::from_slice(&out.stdout).expect("json");
     assert_eq!(plans["agents"][0]["limits"][0]["resets_at"], "2026-10-04T13:59:59.000Z");
     assert!(plans["agents"][1]["error"].is_string(), "{plans}");

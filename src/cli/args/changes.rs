@@ -2,7 +2,8 @@ use clap::{Args, Subcommand, ValueEnum};
 
 use super::{Print, branch};
 use crate::changes::Mode;
-use crate::cli::help::{BY_BRANCH, HERE_WORKSPACE};
+use crate::cli::help::{BY_BRANCH, HERE_WORKSPACE, SEEN_DIGEST};
+use crate::control::changes::parse_digest;
 
 #[derive(Debug, Args)]
 pub(crate) struct ChangesArgs {
@@ -40,6 +41,18 @@ impl From<ModeArg> for Mode {
 pub(crate) struct ModeFlag {
     #[arg(long, value_enum, default_value_t, help = "What to compare: uncommitted, commits or all")]
     pub(crate) mode: ModeArg,
+}
+
+fn digest(text: &str) -> Result<String, String> {
+    parse_digest(text)
+        .map(|_| text.to_string())
+        .ok_or_else(|| "a digest is 16 hexadecimal digits, as `changes list --json` prints it".into())
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct DigestFlag {
+    #[arg(long, value_name = "HEX", value_parser = digest, help = SEEN_DIGEST)]
+    pub(crate) digest: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -107,6 +120,8 @@ pub(crate) enum ChangesAction {
         path: String,
         #[arg(long, help = "Clear the mark")]
         clear: bool,
+        #[arg(long, value_name = "HEX", value_parser = digest, conflicts_with_all = ["clear", "mode"], help = SEEN_DIGEST)]
+        digest: Option<String>,
         #[command(flatten)]
         place: Where,
         #[command(flatten)]
@@ -118,6 +133,8 @@ pub(crate) enum ChangesAction {
         path: String,
         #[command(flatten)]
         place: Where,
+        #[command(flatten)]
+        digest: DigestFlag,
         #[arg(short, long, help = "Discard without asking")]
         yes: bool,
     },
@@ -127,6 +144,8 @@ pub(crate) enum ChangesAction {
         path: String,
         #[command(flatten)]
         place: Where,
+        #[command(flatten)]
+        digest: DigestFlag,
     },
     #[command(about = "Take a file's changes out of git's index; the file keeps them")]
     Unstage {
@@ -134,5 +153,7 @@ pub(crate) enum ChangesAction {
         path: String,
         #[command(flatten)]
         place: Where,
+        #[command(flatten)]
+        digest: DigestFlag,
     },
 }

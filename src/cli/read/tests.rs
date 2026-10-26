@@ -52,3 +52,28 @@ fn messages_and_errors_have_their_own_blocks_with_unknown_metadata_left_clear() 
              pane 9  opencode  turn_over=unknown  written=unknown\nStatus unknown.\n"
     );
 }
+
+mod a_target_that_fails {
+    use super::*;
+
+    #[rstest]
+    #[case::pane(LastMessage { pane: Some(6), tab: None }, json!({ "pane": 6, "error": "no agent" }))]
+    #[case::tab(LastMessage { pane: None, tab: Some(8) }, json!({ "tab": 8, "error": "no agent" }))]
+    fn a_refused_target_keeps_its_error_and_its_id(#[case] target: LastMessage, #[case] expected: Value) {
+        let kept = kept(&target, Err(Error::Control("no agent".into())));
+
+        assert_eq!(kept.expect("kept"), expected);
+    }
+
+    #[rstest]
+    #[case::no_server(Error::NoServer)]
+    #[case::gone(Error::ServerGone)]
+    #[case::old(Error::OldServer("read --last-message"))]
+    fn a_server_that_cannot_be_reached_fails_the_whole_read(#[case] error: Error) {
+        let target = LastMessage { pane: Some(6), tab: None };
+
+        let kept = kept(&target, Err(error));
+
+        assert!(matches!(kept, Err(Error::NoServer | Error::ServerGone | Error::OldServer(_))));
+    }
+}

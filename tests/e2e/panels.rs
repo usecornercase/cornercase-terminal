@@ -113,15 +113,24 @@ fn each_window_draws_the_icons_its_terminal_has() {
     let _ = std::fs::remove_dir_all(&repo);
 }
 
+fn listed_file(app: &Harness) -> serde_json::Value {
+    let list = app.session.says(&["changes", "list", "--json"]);
+    let summary: serde_json::Value = serde_json::from_str(&list).expect("a summary");
+    summary["workspaces"][0]["files"][0].clone()
+}
+
+fn listed_digest(app: &Harness) -> String {
+    listed_file(app)["digest"].as_str().unwrap_or_default().to_string()
+}
+
 #[test]
 fn scripts_see_the_changes_of_a_workspace() {
     let (repo, app) = opened_repo("ccsc");
 
-    let list = app.session.says(&["changes", "list", "--json"]);
-    let summary: serde_json::Value = serde_json::from_str(&list).expect("a summary");
+    let listed = listed_file(&app);
     let diff = app.session.says(&["changes", "file", "notes.txt"]);
 
-    assert_eq!(summary["workspaces"][0]["files"][0]["path"], "notes.txt", "{list}");
+    assert_eq!(listed["path"], "notes.txt", "{listed}");
     assert!(diff.contains("-two") && diff.contains("+TWO"), "{diff}");
     let _ = std::fs::remove_dir_all(&repo);
 }
@@ -166,6 +175,39 @@ fn scripts_stage_and_unstage_a_file() {
 
     assert_eq!(unstaged, "unstaged notes.txt");
     assert_eq!(git_status(&repo), " M notes.txt\n");
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+fn refuses_the_old_version(app: &Harness, seen: &str) {
+    for action in [&["stage", "notes.txt"][..], &["unstage", "notes.txt"], &["discard", "notes.txt", "--yes"]] {
+        let args = [&["changes"][..], action, &["--digest", seen]].concat();
+        let out = app.session.cli(&args);
+        assert!(refused(&out, 1, "changed since that digest"), "{action:?}: {out:?}");
+    }
+}
+
+#[test]
+fn scripts_act_only_on_the_version_they_saw() {
+    let (repo, app) = opened_repo("ccdg");
+    let seen = listed_digest(&app);
+    std::fs::write(repo.join("notes.txt"), "one\nTWO\nthree\n").expect("an agent writes again");
+    let mut now = String::new();
+    wait_until("the list shows the new version", || {
+        now = listed_digest(&app);
+        !now.is_empty() && now != seen
+    });
+
+    refuses_the_old_version(&app, &seen);
+    app.session.says(&["changes", "viewed", "notes.txt", "--digest", &seen]);
+    assert_ne!(listed_file(&app)["viewed"], true);
+    let unasked = app.session.cli(&["changes", "discard", "notes.txt", "--digest", &now]);
+    assert!(refused(&unasked, 1, "pass --yes"), "{unasked:?}");
+    assert_eq!(std::fs::read_to_string(repo.join("notes.txt")).expect("read"), "one\nTWO\nthree\n");
+    assert_eq!(git_status(&repo), " M notes.txt\n");
+    let done = app.session.says(&["changes", "discard", "notes.txt", "--digest", &now, "--yes"]);
+
+    assert_eq!(done, "discarded the changes to notes.txt");
+    assert_eq!(std::fs::read_to_string(repo.join("notes.txt")).expect("read"), "one\ntwo\n");
     let _ = std::fs::remove_dir_all(&repo);
 }
 

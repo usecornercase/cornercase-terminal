@@ -11,8 +11,10 @@ pub(super) const AFTER_HELP: &str =
 act on that pane, its tab, workspace and project unless told otherwise; elsewhere on what the window
 shows. Where a command takes --workspace ID, --worktree BRANCH names the workspace on that branch
 instead, in that same project. Only `focus`, `go` and `--focus` change what the window shows, or with --view ID what that view shows (see `cornercase view`). The
-commands exit with 1 on errors and timeouts, and 2 on wrong usage, a branch no workspace is on
-included, or one several are on (both list the workspaces to pick from).
+commands exit with 1 on errors and timeouts, 2 on wrong usage, a branch no workspace is on
+included, or one several are on (both list the workspaces to pick from), and 3 when a command that
+asks several sources (usage, issue list, read --last-message with several panes) printed its whole
+answer but some of them failed: each failed entry says why, in its error with --json.
 
 Examples:
   cornercase status
@@ -173,8 +175,8 @@ the agent wrote anything.
 With --last-message, repeat --pane or --tab to read several agents at once. Each message has a
 header with its pane, agent, turn_over and written time; --json gives {\"panes\": [...]}. Panes come
 first, then tabs, in the order given, and a repeated id is read once. Errors stay with their target,
-and it exits 1 after reading them all if any failed. One target keeps the output above. Reading
-the screen takes only one target.
+and it exits 3 after reading them all if any failed; with no server it prints nothing and exits 1.
+One target keeps the output above. Reading the screen takes only one target.
 
 Claude Code's feedback survey (`How is Claude doing this session? (optional)`, then
 `1: Bad  2: Fine  3: Good  0: Dismiss`) may show above its input box: it is Claude Code asking you,
@@ -533,7 +535,7 @@ Jira's site and email, Plane's workspace, a repository) and why one fails, then 
 that isn't tied to a repository can be worked on. list prints one line per issue, separated by
 tabs under a header; --closed, --assignee and --author are the dialog's filters: me, anyone, a
 handle, or for Jira, Plane and Asana an id from `issue people`. A tracker that fails is named on
-stderr, and the command exits 1 after listing the others. read prints an issue's details, its
+stderr, its cached list is still printed, and the command exits 3 after listing the others. read prints an issue's details, its
 description in Markdown and its comments. people lists whom a tracker's filters can name.
 
 To work on one: `cornercase start --issue KEY`, or `cornercase flow run NAME --issue KEY`.
@@ -627,6 +629,7 @@ pub(super) const WAIT_PANE: &str = "The pane; repeat it, or add --tab, to wait o
     the shown one]";
 pub(super) const WAIT_TAB: &str = "A tab: its agent's pane, else its active one; repeat it to wait on several";
 pub(super) const HERE_WORKSPACE: &str = "The workspace [default: the one this runs in, else the shown one]";
+pub(super) const SEEN_DIGEST: &str = "Act only on the version with this digest, from `changes list --json` or `changes file --json` (the Uncommitted one for stage, unstage and discard): a file that changed since is left alone [default: the version there now]";
 pub(super) const BY_BRANCH: &str =
     "The workspace on this branch, looked up in the project this runs in, else the shown one";
 
@@ -692,7 +695,9 @@ file's diff, `gap` the unchanged lines between one of its hunks and the one befo
 no gap), `base` the branches the Commits and All modes can compare with (naming one sets it, --default goes back to \
 following the default branch), and `viewed` marks a file as viewed or clears the mark. `discard` throws a file's uncommitted changes away (a file git does not track is deleted), asks first on a terminal \
 and needs --yes in a script; it cannot be undone. `stage` puts a file's changes in git's index, as `git add` does, and \
-`unstage` takes them out of it; both act on the version `changes file` shows, so a file that changed since is left alone. \
+`unstage` takes them out of it. `viewed`, `stage`, `unstage` and `discard` act on the version `changes file` shows; with \
+--digest, on the version whose digest `changes list --json` or `changes file --json` printed, the one you saw, so a file \
+that changed since is left alone (`viewed` does not mark it, the others fail and say so). \
 The modes are uncommitted (the default), \
 commits and all. The base and the viewed marks are shared with the window's changes panel; the mode of a stream is its own.
 
@@ -706,7 +711,8 @@ Examples:
   cornercase changes viewed src/main.rs
   cornercase changes stage src/main.rs
   cornercase changes unstage src/main.rs
-  cornercase changes discard src/main.rs --yes";
+  cornercase changes discard src/main.rs --yes
+  cornercase changes discard src/main.rs --digest 550a7a517a389403 --yes";
 
 mod flow;
 
@@ -845,6 +851,11 @@ Examples:
   cornercase ports --all
   cornercase ports stop 5173";
 
+pub(crate) const ISSUE_LIST_HELP: &str =
+    "A tracker that fails does not stop the others: it is named on stderr with its reason, its cached
+list is still printed (with --json, its entry in sources has an error), and the command exits 3
+after listing the others.";
+
 pub(crate) const PORTS_STOP_HELP: &str =
     "Stops the program that listens on PORT, if it belongs to a workspace (`cornercase ports --all`
 lists the others, which it refuses). It checks first that the program still holds the port, sends
@@ -867,8 +878,8 @@ tokens, and each waits at most ten seconds. A probe already running, from the di
 `cornercase usage`, is waited for rather than started again. With --cached it asks nothing and
 prints the last answers with their age. With --json it prints {\"agents\": [...]}: each agent's
 plan, its limits (label, kind, scope, percent, severity, resets_at in UTC), extra, notice, error,
-and when it was read (read_at, and age in seconds). It exits with 1 when an agent could not be
-asked, after printing the others.
+and when it was read (read_at, and age in seconds). It exits with 3 when an agent could not be
+asked, after printing them all, that one with its error.
 
 Examples:
   cornercase usage
