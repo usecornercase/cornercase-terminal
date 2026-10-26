@@ -73,10 +73,10 @@ fn a_remote_window_comes_back_after_the_connection_drops() {
 }
 
 #[rstest]
-#[case::window(&["remote", "devbox", "--command"])]
-#[case::commands(&["--remote", "devbox", "status", "--remote-command"])]
-fn a_remote_of_another_version_says_which_side_to_update(#[case] args: &[&str]) {
-    let dir = temp_dir("old-remote");
+#[case::window("window", &["remote", "devbox", "--command"])]
+#[case::commands("commands", &["--remote", "devbox", "status", "--remote-command"])]
+fn a_remote_of_another_version_says_which_side_to_update(#[case] name: &str, #[case] args: &[&str]) {
+    let dir = temp_dir(&format!("old-remote-{name}"));
     let old = dir.join("cornercase");
     write_executable(&old, "#!/bin/sh\necho 'cornercase-proxy 1 0.0.1'\ncat > /dev/null\n");
 
