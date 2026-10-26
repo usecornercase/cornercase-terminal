@@ -5,6 +5,8 @@ Every pull request that changes the app adds a section here for its new version.
 ## 0.12.194
 
 - **Other UIs can show a plugin's popup and type into it.** `cornercase surface --popup` streams the popup open in the window as cells, in the same lines as a tab's terminals (one pane, at the popup's own size, with the plugin and action it belongs to), and ends when the popup closes. `cornercase input --popup` types keys, text, pastes and mouse events into its program. A browser view or another client built on the socket can now draw the popup instead of a blank. Nothing changes in the window.
+- `input --popup --pane ID` names the popup by the id its surface lines give it, so keys meant for a popup that has closed never reach the next one.
+- Like a pane, a popup can be read and typed into by any program that talks to cornercase, agents in your panes included: don't use one for a secret or a confirmation only you should see or give.
 - Scripts: `surface` and `input` take `popup`, and `cornercase contract` lists the feature `popup-terminal`.
 
 ## 0.12.193
