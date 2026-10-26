@@ -16,7 +16,7 @@ use crate::error;
 use crate::flows::dialog::project_risks;
 use crate::flows::share::{self, To};
 use crate::flows::store::{self, Listing, Origin, Saved};
-use crate::flows::{self, Flow, Role, builtin};
+use crate::flows::{self, Flow, builtin};
 use crate::git;
 use crate::git::worktree;
 use crate::log;
@@ -98,7 +98,7 @@ impl App {
             name: flow.name.clone(),
             origin: if to == To::Yours { "user" } else { "project" }.into(),
             replaced,
-            roles: role_infos(flow),
+            roles: RoleInfo::of_flow(flow),
             check: share::risks(flow, "it"),
             note: (!missing.is_empty()).then(|| missing.join("; ")),
             path: None,
@@ -348,25 +348,13 @@ impl Branches<'_> {
     }
 }
 
-fn role_infos(flow: &Flow) -> Vec<RoleInfo> {
-    let role = |role: &Role| RoleInfo {
-        role: role.name.clone(),
-        agent: role.agent.clone(),
-        model: role.model.clone(),
-        effort: role.effort.clone(),
-        edits: role.edits,
-        worktree: role.worktree,
-    };
-    std::iter::once(&flow.orchestrator).chain(&flow.roles).map(role).collect()
-}
-
 fn flow_info(flow: &Flow, origin: &Origin) -> FlowInfo {
     FlowInfo {
         name: flow.name.clone(),
         origin: origin_name(origin).into(),
         path: origin.path().map(PathBuf::from),
         description: flow.description.clone(),
-        roles: role_infos(flow),
+        roles: RoleInfo::of_flow(flow),
         problems: flow.problems(),
         check: risks(flow, origin),
         flow: FlowSpec::from(flow),

@@ -13,9 +13,9 @@ use crate::control::{
     FlowSpec, Flows, Imported, RoleInfo, RunEdge, RunFiles, RunInfo, RunState, contract,
 };
 use crate::error::{Error, Result};
-use crate::flows::Worktree;
 use crate::flows::registry::{self, Source};
 use crate::flows::share;
+use crate::flows::{Flow, Worktree};
 
 pub(super) fn run(action: FlowAction) -> Result<()> {
     match action {
@@ -271,7 +271,7 @@ fn import_flow(args: FlowImportArgs) -> Result<()> {
         check: args.check,
     };
     if args.check {
-        return checked_import(request, &source, args.print.json);
+        return checked_import(request, &flow, &source, args.print.json);
     }
     eprint!("{}", share::summary(&flow));
     if let Some(risks) = asked.filter(|_| !args.yes)
@@ -291,16 +291,29 @@ fn import_flow(args: FlowImportArgs) -> Result<()> {
     print_out(&imported_line(&imported))
 }
 
-fn checked_import(request: control::FlowImport, source: &Source, json: bool) -> Result<()> {
-    let mut value = ask("flow import", control::Command::FlowImport(request))?;
-    if matches!(source, Source::Url(_) | Source::Repo(_)) {
-        let risks = value["check"].as_str().map(str::to_string);
-        value["check"] = fetched(source, risks).into();
-    }
+fn checked_import(request: control::FlowImport, flow: &Flow, source: &Source, json: bool) -> Result<()> {
+    let value = ask("flow import", control::Command::FlowImport(request))?;
+    let value = complete_preview(value, flow, source)?;
     if json {
         return print_json(&value);
     }
     print_out(&checked_line(&answer(value)?))
+}
+
+fn complete_preview(mut value: serde_json::Value, flow: &Flow, source: &Source) -> Result<serde_json::Value> {
+    let preview: Imported = answer(value.clone())?;
+    if preview.roles.is_empty() {
+        value["roles"] = serde_json::json!(RoleInfo::of_flow(flow));
+    }
+    let risks = preview.check.or_else(|| share::risks(flow, "it"));
+    let risks = match source {
+        Source::Url(_) | Source::Repo(_) => Some(fetched(source, risks)),
+        _ => risks,
+    };
+    if let Some(risks) = risks {
+        value["check"] = risks.into();
+    }
+    Ok(value)
 }
 
 fn checked_line(preview: &Imported) -> String {
