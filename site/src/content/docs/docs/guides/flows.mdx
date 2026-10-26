@@ -199,9 +199,12 @@ From a shell the same two steps are commands:
 cornercase flow export Quick > quick.toml
 cornercase flow import quick.toml
 cornercase flow import quick.toml --to project --name 'Quick mine'
+cornercase flow import quick.toml --check --json
 ```
 
 `flow export` prints the flow, and names on standard error any variable it sets, so you can check that no secret goes with it. `flow import` takes a file, `-` for standard input, an `https://` address or `OWNER/REPO` of a [community flow](#community-flows). It lists the roles, and when the flow sets variables or arguments, or comes from an address or a repository, it asks before saving (without a terminal, or reading `-` from standard input, it refuses unless you pass `--yes`). It saves in yours, or in the project's `.cornercase/flows/` with `--to project`. A name that is taken is refused: `--replace` overwrites that flow, and `--name` imports this one under another name. A built-in flow's name can be taken with `--replace`, and yours then stands in its place; a name of yours or a built-in's cannot be taken in the project's flows, since they would never run. To share a flow with a whole team, commit its file to `.cornercase/flows/` instead.
+
+`flow import SOURCE --check` shows the roles, risks and agents that are missing here, then exits without asking or saving, even without a terminal or when reading `-`. With `--json`, the preview is data for a program that asks the user itself; see [Scripts and agents](../scripts-and-agents/#start-a-flow). Use the same `--to`, `--project`, `--name` and `--replace` options as the later import. It exits 0 when the preview succeeds, or 1 for a bad flow or a name conflict. `--check` and `--yes` cannot be combined.
 
 ## Community flows
 

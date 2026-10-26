@@ -1,5 +1,24 @@
 use super::*;
 
+#[test]
+fn an_import_preview_names_its_destination_replacement_risks_and_missing_agents() {
+    let preview = Imported {
+        name: "Mine\x1b[2J".into(),
+        origin: "project".into(),
+        replaced: true,
+        roles: vec![RoleInfo { role: "coder".into(), agent: "claude".into(), edits: true, ..RoleInfo::default() }],
+        check: Some("it sets TOKEN=demo; they run without asking, so check them".into()),
+        note: Some("`coder` runs claude, which is not installed here".into()),
+        ..Imported::default()
+    };
+    assert_eq!(
+        checked_line(&preview),
+        "Mine\\u{1b}[2J\n  coder: claude (edits)\nit sets TOKEN=demo; they run without asking, so check them\n\
+         `coder` runs claude, which is not installed here\n\
+         would import into this project (replaces the existing flow); nothing was imported\n"
+    );
+}
+
 fn removed(changed: bool, deleted: Option<&str>) -> FlowRemoved {
     FlowRemoved {
         name: "Quick".into(),

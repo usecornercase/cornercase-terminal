@@ -254,6 +254,9 @@ pub(crate) struct Imported {
     pub(crate) origin: String,
     pub(crate) path: Option<PathBuf>,
     pub(crate) replaced: bool,
+    pub(crate) roles: Vec<RoleInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) check: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) note: Option<String>,
 }

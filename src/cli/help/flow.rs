@@ -60,6 +60,11 @@ Every agent of a flow runs without permission prompts, so a flow from an address
 which nobody reviewed, always asks first, and so does one that sets
 variables or arguments; without a terminal it refuses unless you pass --yes.
 
+--check shows the roles, risks and missing agents and exits without asking or saving, even without
+a terminal or when reading -. With --json it prints name, origin, path (null), replaced, roles,
+check (the risks, when any) and note (missing agents, when any). A bad flow or a name conflict still
+fails. --check and --yes cannot be combined.
+
 A name that is already taken is refused: pass --replace to overwrite that flow, or --name to import
 this one under another name. A built-in flow's name is yours to take, with --replace, and it then
 stands in its place. A project's flow never takes the place of one of yours or a built-in.
@@ -67,6 +72,7 @@ stands in its place. A project's flow never takes the place of one of yours or a
 Examples:
   cornercase flow import quick.toml
   cornercase flow import octocat/security-audit
+  cornercase flow import quick.toml --check --json
   cornercase flow import https://example.com/flows/mine.toml
   cornercase flow import quick.toml --to project --name 'Quick mine'
   ssh host cornercase flow export Quick | cornercase flow import - --yes";

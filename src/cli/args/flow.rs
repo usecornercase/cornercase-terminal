@@ -244,6 +244,8 @@ pub(crate) struct FlowImportArgs {
     pub(crate) name: Option<String>,
     #[arg(long, help = "Overwrite the flow that has its name")]
     pub(crate) replace: bool,
+    #[arg(long, conflicts_with = "yes", help = "Show the roles and risks without asking or importing")]
+    pub(crate) check: bool,
     #[arg(
         short = 'y',
         long,

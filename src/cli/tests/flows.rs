@@ -29,6 +29,7 @@ fn an_import_is_confirmed_with_what_it_sets_and_reported_with_where_it_went() {
         path: Some("/c/flows/pair.toml".into()),
         replaced: true,
         note: None,
+        ..Imported::default()
     };
     assert_eq!(imported_line(&done), "imported Pair into yours (replaced): /c/flows/pair.toml\n");
 }
@@ -132,4 +133,19 @@ fn a_flow_is_saved_from_a_file_or_standard_input_with_the_requests_options() {
 
     let save = parse(&["flow", "save", "-"]);
     assert_eq!((save.source.to_str(), save.to, save.check), (Some("-"), None, false));
+}
+
+#[test]
+fn an_import_can_be_checked_without_being_confirmed() {
+    let Some(Command::Control(Control::Flow(flow))) =
+        super::parse(&["flow", "import", "-", "--check", "--json", "--replace", "--name", "Mine"])
+            .expect("parse")
+            .command
+    else {
+        panic!("not flow")
+    };
+    let FlowAction::Import(import) = flow.action else { panic!("not import") };
+    assert!(import.check && import.print.json && import.replace && !import.yes);
+    assert_eq!(import.name.as_deref(), Some("Mine"));
+    assert!(super::parse(&["flow", "import", "-", "--check", "--yes"]).is_err());
 }

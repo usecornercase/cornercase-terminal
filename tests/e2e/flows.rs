@@ -85,6 +85,64 @@ fn an_imported_flow_is_deleted_by_name() {
     assert!(String::from_utf8_lossy(&again.stderr).contains("flow hide Quick"), "{again:?}");
 }
 
+fn risky_flow() -> String {
+    FLOW.replace("edits = true", "edits = true\nargs = [\"--verbose\"]\nenv = { TOKEN = \"demo\" }")
+}
+
+#[test]
+fn an_import_check_from_standard_input_gives_roles_and_risks_without_saving() {
+    let app = Harness::start();
+    let before = json(&app.session, &["flow", "list", "--json"]);
+    let out = app
+        .session
+        .fed(&["flow", "import", "-", "--check", "--json", "--name", "Ours", "--to", "project"], &risky_flow());
+    let check = answered(&out);
+
+    assert_eq!((check["name"].as_str(), check["origin"].as_str()), (Some("Ours"), Some("project")));
+    assert_eq!(
+        (check["roles"][0]["role"].as_str(), check["roles"][1]["agent"].as_str()),
+        (Some("orchestrator"), Some("claude"))
+    );
+    assert_eq!(check["roles"][1]["edits"], true);
+    let risks = check["check"].as_str().expect("risks");
+    assert!(risks.contains("TOKEN=demo") && risks.contains("--verbose") && risks.contains("without asking"));
+    assert!(check["path"].is_null());
+    assert_eq!(json(&app.session, &["flow", "list", "--json"]), before);
+    assert!(!app.session.repo.join(".cornercase/flows").exists());
+}
+
+#[test]
+fn an_import_check_from_a_file_prints_text_and_a_replacement_keeps_the_saved_flow() {
+    let app = Harness::start();
+    let file = app.session.dir.join("mine.toml");
+    std::fs::write(&file, risky_flow()).expect("a flow file");
+    let file = file.display().to_string();
+    let args = ["flow", "import", &file, "--check"];
+    let text = app.session.says(&args);
+    assert!(text.contains("orchestrator: claude") && text.contains("coder: claude (edits)"), "{text}");
+    assert!(text.contains("TOKEN=demo") && text.contains("nothing was imported"), "{text}");
+    let saved = json(&app.session, &["flow", "import", &file, "--yes", "--json"]);
+    let path = saved["path"].as_str().expect("a saved path");
+    let before = std::fs::read_to_string(path).expect("saved flow");
+    std::fs::write(&file, risky_flow().replace("Write it.", "Changed.")).expect("a changed flow");
+    let refused = app.session.cli(&args);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let check = json(&app.session, &["flow", "import", &file, "--check", "--replace", "--json"]);
+    assert_eq!(check["replaced"], true);
+    assert_eq!(std::fs::read_to_string(path).expect("unchanged flow"), before);
+}
+
+#[test]
+fn an_import_check_refuses_bad_text_and_a_flow_that_cannot_run() {
+    let app = Harness::start();
+    for text in ["name = = 1".to_string(), FLOW.replace("agent = \"claude\"", "agent = \"unknown\"")] {
+        let out = app.session.fed(&["flow", "import", "-", "--check", "--json"], &text);
+        assert_eq!(out.status.code(), Some(1), "{out:?}");
+        assert!(out.stdout.is_empty(), "{out:?}");
+    }
+    assert!(!names(&json(&app.session, &["flow", "list", "--json"]), "flows").contains(&"Mine".into()));
+}
+
 #[test]
 fn with_no_run_there_is_nothing_to_follow() {
     let app = Harness::start();
