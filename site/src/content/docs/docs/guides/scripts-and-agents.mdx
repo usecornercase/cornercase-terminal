@@ -89,6 +89,7 @@ group 9  personal  collapsed
 | `away` | Has agents message you [on Telegram](../telegram/) or [Discord](../discord/); `--off` stops it. |
 | `usage` | Prints your Claude Code and Codex [plan limits](#plan-usage) as the Usage dialog's Limits tab shows them; `--cached` prints the last answer without asking the agents again. |
 | `plugin install SOURCE --preview`, `plugin update ID --preview` | Fetch a plugin and print what installing or updating it would run, without installing; `--json` is for a program that asks the user itself, and `--commit` then installs exactly that commit. See [Plugins](#plugins). |
+| `plugin status` | Prints the plugins as Settings › Plugins shows them, including whether each service is running, restarting or starting, and why `plugins.json` cannot be read. `--json` is the `plugin-list` answer. See [Plugins](#plugins). |
 | `plugin actions`, `plugin run PLUGIN ACTION`, `plugin popup-close` | List the actions your [plugins](../plugins/) add to the menus and buttons, run one on a project, workspace, tab or pane as its menu entry does (or on what the window shows, as its button does), waiting for it to end, and close a plugin's popup. See [Plugins](#plugins). |
 | `skill` | Prints the instructions that teach coding agents these commands. |
 | `contract` | Says what the running server supports: its version, the [contract](#contract-and-compatibility) it speaks, its boot and its operations and streams. |
@@ -934,6 +935,8 @@ Without `apply` nothing is saved and the answer is the preview: `sections`, each
 ### Plugins
 
 ```sh
+cornercase plugin status
+cornercase plugin status --json
 cornercase plugin actions
 cornercase plugin actions --context pane --json
 cornercase plugin run acme.notes note --pane 5
@@ -944,6 +947,8 @@ cornercase plugin install acme/notes --preview --json
 cornercase plugin install acme/notes --commit "$commit" --yes
 cornercase plugin update acme.notes --preview --json
 ```
+
+`plugin status` prints what Settings › Plugins shows, asking the running server. The text gives the revision, then each plugin's state (`on`, `off` or `cannot-run`), its label and note, and each service (`running` with its pid, `stopped` with the seconds until it starts again, or `starting`). With no plugin it says so. When `plugins.json` cannot be read it prints why, instead of an empty list. `--json` prints the `plugin-list` answer unchanged. `plugin list` still reads the files and works with no server, and has no service states.
 
 `plugin actions` lists what the plugins you turned on add to the menus, in the order the menus show them (your plugins in the order of `plugins.json`, then each manifest's actions), for one kind of row (`--context project`, `workspace`, `tab` or `pane`), for the plugins' buttons (`--context button`) or all of them. The text is a tab-separated table under a header, `plugin`, `action`, `contexts`, `title`, so `cut` and `awk` can read it.
 
@@ -964,7 +969,7 @@ The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `
 
 `ended` is `exited` (with `code`), `signal` (with `signal`), `timeout` or `error` (it could not start), and for a popup `closed` (its `×` or `plugin popup-close` closed it first); a popup's program ended by a signal has `signal` `null` and the signal's name in `error`. `error` is `null` exactly when it exited with 0, so `plugin run` exits with 1 for a popup closed by hand. An action that ran and failed is an answer, not a refusal. A group, or an action run on a kind of row it isn't offered for, is `malformed`; a plugin that is unknown, off or cannot run, an action it lacks, or an id that names nothing is `not-found`. A client that leaves before the action ends gets no answer, and the action runs to its end.
 
-`plugin-list` answers what Settings › Plugins shows: `revision`, `problem` (why `plugins.json` cannot be read, or `null`) and `plugins`, one row per plugin with `id`, `enabled`, `state` (`on`, `off` or `cannot-run`), `error`, Settings' `label` and `note`, `source`, `log`, `manifest`, `services` and `button`, there only for a plugin with a button (`title`, `icon` and `actions`, the ids of its `button` actions in order). A service is `running` (with its `pid`), `stopped` (with `restart_in`, the seconds until it starts again) or `starting`. Processes a plugin keeps running in each local window belong to those windows, so the server can't tell. Turning plugins on and off, installing and updating stay with `cornercase plugin`, which works on the files; a program shows an install or an update with `plugin install SOURCE --preview --json` instead (below). `{"command": "plugin-popup-close", "args": {}}` closes the popup as its `×` does. An older server refuses each of these requests by name, and a `plugin-run` without `item` as `malformed`.
+`plugin status --json` prints this answer unchanged. `plugin-list` answers what Settings › Plugins shows: `revision`, `problem` (why `plugins.json` cannot be read, or `null`) and `plugins`, one row per plugin with `id`, `enabled`, `state` (`on`, `off` or `cannot-run`), `error`, Settings' `label` and `note`, `source`, `log`, `manifest`, `services` and `button`, there only for a plugin with a button (`title`, `icon` and `actions`, the ids of its `button` actions in order). A service is `running` (with its `pid`), `stopped` (with `restart_in`, the seconds until it starts again) or `starting`. Processes a plugin keeps running in each local window belong to those windows, so the server can't tell. Turning plugins on and off, installing and updating stay with `cornercase plugin`, which works on the files; a program shows an install or an update with `plugin install SOURCE --preview --json` instead (below). `{"command": "plugin-popup-close", "args": {}}` closes the popup as its `×` does. An older server refuses each of these requests by name, and a `plugin-run` without `item` as `malformed`.
 
 ## JSON
 
@@ -990,6 +995,7 @@ The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `
 | `flow files` | `workspace`, `run`, `dir`, `files` (`name`, `path`, `bytes`, `modified`) and `more`. |
 | `flow save` (the `flow-save` request) | `name`, `origin`, `path`, `saved`, `problems`, `check`. |
 | `usage` | `agents`: `agent`, `title`, `loading`, `read_at`, `age`, `plan`, `limited`, `limits` (`label`, `kind`, `scope`, `percent`, `severity`, `resets_at`), `extra`, `notice`, `error`. See [Plan usage](#plan-usage). |
+| `plugin status` | The `plugin-list` answer: `revision`, `problem` and `plugins` (`id`, `enabled`, `state`, `error`, `label`, `note`, `source`, `log`, `manifest`, `services`, `button`). See [Plugins](#plugins). |
 | `plugin-list` (a socket request) | `revision`, `problem` and `plugins`: `id`, `enabled`, `state`, `error`, `label`, `note`, `source`, `log`, `manifest`, `services` (`id`, `state`, `pid`, `restart_in`) and `button` (`title`, `icon`, `actions`). See [Plugins](#plugins). |
 | `plugin install --preview`, `plugin update ID --preview` | `id`, `name`, `version`, `description`, `repo`, `url`, `ref`, `subdir`, `commit`, `permissions`, `download`, `build`, `runs`, `replacing`, `lines` (and `up_to_date`); an up-to-date plugin: `id`, `commit`, `up_to_date`. See [Plugins](#plugins). |
 | `plugin actions` | `revision` and `actions`: `plugin`, `name`, `action`, `title`, `contexts`, `placement`, `width`, `height`. |

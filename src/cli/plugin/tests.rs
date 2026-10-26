@@ -31,6 +31,76 @@ fn info(actions: Vec<crate::control::plugins::ActionInfo>) -> ActionsInfo {
     ActionsInfo { revision: 2, actions }
 }
 
+fn listed(plugins: Vec<PluginInfo>) -> PluginsInfo {
+    PluginsInfo { revision: Some(3), problem: None, plugins }
+}
+
+fn on_plugin() -> PluginInfo {
+    PluginInfo {
+        id: "acme.notes".into(),
+        enabled: true,
+        state: "on".into(),
+        label: "Notes 1.0".into(),
+        note: "service sync runs".into(),
+        services: vec![
+            ServiceInfo { id: "sync".into(), state: "running".into(), pid: Some(4242), ..ServiceInfo::default() },
+            ServiceInfo { id: "watch".into(), state: "stopped".into(), restart_in: Some(3), ..ServiceInfo::default() },
+            ServiceInfo { id: "late".into(), state: "starting".into(), ..ServiceInfo::default() },
+            ServiceInfo { id: "odd".into(), state: "paused".into(), ..ServiceInfo::default() },
+        ],
+        button: Some(ButtonInfo { title: "Notes".into(), icon: "N".into(), actions: vec!["open".into()] }),
+        ..PluginInfo::default()
+    }
+}
+
+#[test]
+fn the_status_names_each_plugin_its_note_and_what_each_service_is_doing() {
+    let broken = PluginInfo {
+        id: "acme.broken".into(),
+        state: "cannot-run".into(),
+        label: "acme.broken".into(),
+        note: "cannot read it".into(),
+        ..PluginInfo::default()
+    };
+    let text = status_text(&listed(vec![on_plugin(), broken]));
+    assert_eq!(
+        text,
+        "\
+revision 3
+acme.notes  on  Notes 1.0
+  service sync runs
+  sync: running, pid 4242
+  watch: stopped, restarts in 3s
+  late: starting
+  odd: paused
+  button Notes (N): open
+acme.broken  cannot-run  acme.broken
+  cannot read it
+"
+    );
+}
+
+#[test]
+fn the_status_says_when_there_are_no_plugins_and_when_the_registry_cannot_be_read() {
+    assert_eq!(status_text(&PluginsInfo::default()), "no plugins\n");
+    let unread = PluginsInfo { revision: Some(4), problem: Some("cannot read plugins.json".into()), plugins: vec![] };
+    assert_eq!(status_text(&unread), "revision 4\ncannot read plugins.json\n");
+}
+
+#[test]
+fn the_status_escapes_invisible_characters() {
+    let plugin = PluginInfo {
+        id: "notes\u{202e}".into(),
+        state: "off".into(),
+        label: "Notes".into(),
+        note: "a\nb".into(),
+        ..PluginInfo::default()
+    };
+    let text = status_text(&listed(vec![plugin]));
+    assert!(!text.chars().any(|c| c != '\n' && c.is_control()), "{text}");
+    assert!(text.contains("notes\\u{202e}  off  Notes") && text.contains("  a b"), "{text}");
+}
+
 #[test]
 fn the_actions_are_a_tab_separated_table_under_a_header() {
     let action = crate::control::plugins::ActionInfo {

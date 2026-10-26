@@ -55,6 +55,36 @@ fn wait_for_pid(path: &Path, what: &str) -> i32 {
     found.expect("a live pid")
 }
 
+fn assert_status_while_off(session: &Session) {
+    let off: serde_json::Value = serde_json::from_str(&session.says(&["plugin", "status", "--json"])).expect("status");
+    assert_eq!(off["plugins"][0]["state"], "off");
+    assert_eq!(off["plugins"][0]["services"], serde_json::json!([]));
+    assert!(off["problem"].is_null(), "{off}");
+    assert!(off["revision"].as_u64().is_some(), "{off}");
+    let text = session.says(&["plugin", "status"]);
+    assert!(text.contains("acme.e2e  off  E2E 0.1.0"), "{text}");
+}
+
+fn assert_list_omits_service_state(session: &Session) {
+    let json: serde_json::Value = serde_json::from_str(&session.says(&["plugin", "list", "--json"])).expect("json");
+    assert_eq!(json["plugins"][0]["enabled"], true);
+    assert!(json["plugins"][0].get("state").is_none(), "{json}");
+    assert!(json["plugins"][0].get("services").is_none(), "{json}");
+}
+
+fn assert_status_shows_the_service(session: &Session, service: i32) {
+    let status: serde_json::Value =
+        serde_json::from_str(&session.says(&["plugin", "status", "--json"])).expect("status");
+    let row = &status["plugins"][0]["services"][0];
+    assert_eq!(status["plugins"][0]["state"], "on");
+    assert_eq!(row["id"], "serve");
+    assert_eq!(row["state"], "running");
+    assert_eq!(row["pid"], service);
+    let text = session.says(&["plugin", "status"]);
+    assert!(text.contains("acme.e2e  on  E2E 0.1.0"), "{text}");
+    assert!(text.contains(&format!("serve: running, pid {service}")), "{text}");
+}
+
 #[test]
 fn a_linked_plugin_runs_once_it_is_enabled_and_stops_once_disabled() {
     let app = Harness::start();
@@ -66,6 +96,7 @@ fn a_linked_plugin_runs_once_it_is_enabled_and_stops_once_disabled() {
     assert!(linked.starts_with("linked E2E 0.1.0 (acme.e2e), turned off"), "{linked}");
     assert!(listed.starts_with("acme.e2e  0.1.0  off  E2E"), "{listed}");
     assert!(listed.contains("runs 1 service, 1 window process"), "{listed}");
+    assert_status_while_off(&app.session);
 
     let enabled = app.session.says(&["plugin", "enable", "acme.e2e"]);
     assert!(enabled.contains("runs as you"), "{enabled}");
@@ -73,8 +104,8 @@ fn a_linked_plugin_runs_once_it_is_enabled_and_stops_once_disabled() {
     let service = wait_for_pid(&state.join("service"), "the service starts");
     let window = wait_for_pid(&state.join("window"), "the window process starts");
 
-    let json: serde_json::Value = serde_json::from_str(&app.session.says(&["plugin", "list", "--json"])).expect("json");
-    assert_eq!(json["plugins"][0]["enabled"], true);
+    assert_list_omits_service_state(&app.session);
+    assert_status_shows_the_service(&app.session, service);
     assert!(app.session.says(&["plugin", "logs", "acme.e2e"]).contains("service started"));
 
     app.session.says(&["plugin", "disable", "acme.e2e"]);

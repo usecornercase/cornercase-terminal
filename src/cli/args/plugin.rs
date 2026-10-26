@@ -36,6 +36,10 @@ pub(crate) enum PluginAction {
     },
     #[command(about = "List the plugins, whether they are on, and what they run")]
     List(Print),
+    #[command(
+        about = "Show the plugins as Settings › Plugins does, including what each service is doing; asks the server"
+    )]
+    Status(Print),
     #[command(about = "List the actions plugins add to the menus, for one kind of row or every one; asks the server")]
     Actions {
         #[arg(

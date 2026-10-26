@@ -10,8 +10,8 @@ use super::args::plugin::{InstallArgs, RunArgs, UpdatePluginArgs};
 use super::print_log;
 use crate::client::{answer, ask, confirm};
 use crate::config;
-use crate::control::plugins::{ActionRan, ActionsInfo};
-use crate::control::{Command, Item, PluginActions, PluginPopupClose, PluginRun};
+use crate::control::plugins::{ActionRan, ActionsInfo, ButtonInfo, PluginInfo, PluginsInfo, ServiceInfo};
+use crate::control::{Command, Item, PluginActions, PluginList, PluginPopupClose, PluginRun};
 use crate::error::{Error, Result};
 use crate::paths;
 use crate::plugins::install::{self, Fetched, Removed, Update};
@@ -23,6 +23,7 @@ use crate::plugins::{Places, Plugin, Registry};
 pub(super) fn run(action: PluginAction) -> Result<bool> {
     match action {
         PluginAction::Actions { context, print } => actions(context.as_deref(), print.json),
+        PluginAction::Status(print) => status(print.json),
         PluginAction::Run(args) => run_action(&args),
         PluginAction::PopupClose => popup_close(),
         action => run_here(action),
@@ -39,7 +40,7 @@ fn run_here(action: PluginAction) -> Result<bool> {
         PluginAction::Remove { id } => remove(&places, &id)?,
         PluginAction::Unlink { id } => unlink(&mut registry, &id)?,
         PluginAction::List(print) => list(&registry, &places, print.json)?,
-        PluginAction::Actions { .. } | PluginAction::Run(_) | PluginAction::PopupClose => {}
+        PluginAction::Actions { .. } | PluginAction::Run(_) | PluginAction::PopupClose | PluginAction::Status(_) => {}
         PluginAction::Enable { id } => enable(&mut registry, &id)?,
         PluginAction::Disable { id } => disable(&mut registry, &id)?,
         PluginAction::Logs { id, logs } => {
@@ -111,6 +112,78 @@ fn disable(registry: &mut Registry, id: &str) -> Result<()> {
     registry.save()?;
     println!("{} is off", plugin.name());
     Ok(())
+}
+
+fn status(json: bool) -> Result<bool> {
+    let value = ask("plugin-list", Command::PluginList(PluginList {}))?;
+    if json {
+        super::print_json(&value)?;
+    } else {
+        super::print_out(&status_text(&answer(value)?))?;
+    }
+    Ok(true)
+}
+
+fn status_text(info: &PluginsInfo) -> String {
+    let mut text = String::new();
+    if let Some(revision) = info.revision {
+        let _ = writeln!(text, "revision {revision}");
+    }
+    if let Some(problem) = &info.problem {
+        let _ = writeln!(text, "{}", shown(problem));
+    }
+    if info.plugins.is_empty() && info.problem.is_none() {
+        text.push_str("no plugins\n");
+    }
+    for plugin in &info.plugins {
+        write_plugin(&mut text, plugin);
+    }
+    text
+}
+
+fn write_plugin(text: &mut String, plugin: &PluginInfo) {
+    let _ = writeln!(text, "{}  {}  {}", shown(&plugin.id), shown(&plugin.state), shown(&plugin.label));
+    if !plugin.note.is_empty() {
+        let _ = writeln!(text, "  {}", shown(&plugin.note));
+    }
+    for service in &plugin.services {
+        let _ = writeln!(text, "  {}", service_line(service));
+    }
+    if let Some(button) = &plugin.button {
+        let _ = writeln!(text, "  {}", button_line(button));
+    }
+}
+
+fn service_line(service: &ServiceInfo) -> String {
+    let id = shown(&service.id);
+    match service.state.as_str() {
+        "running" => match service.pid {
+            Some(pid) => format!("{id}: running, pid {pid}"),
+            None => format!("{id}: running"),
+        },
+        "stopped" => match service.restart_in {
+            Some(seconds) => format!("{id}: stopped, restarts in {seconds}s"),
+            None => format!("{id}: stopped"),
+        },
+        "starting" => format!("{id}: starting"),
+        other => format!("{id}: {}", shown(other)),
+    }
+}
+
+fn button_line(button: &ButtonInfo) -> String {
+    let mut line = format!("button {}", shown(&button.title));
+    if !button.icon.is_empty() {
+        let _ = write!(line, " ({})", shown(&button.icon));
+    }
+    if !button.actions.is_empty() {
+        let actions = button.actions.iter().map(|action| shown(action)).collect::<Vec<_>>().join(", ");
+        let _ = write!(line, ": {actions}");
+    }
+    line
+}
+
+fn shown(text: &str) -> String {
+    crate::text::escape_hidden(&text.replace(|c: char| c.is_control(), " "))
 }
 
 fn actions(context: Option<&str>, json: bool) -> Result<bool> {

@@ -738,6 +738,10 @@ shows. A popup action waits until its popup closes, and needs a window attached;
 listed before the plugins changed is refused (pass the --revision `actions --json` printed, or none for the current \
 one).
 
+`status` prints the plugins as Settings › Plugins shows them: on, off or cannot run, the label and the note, and \
+what each service is doing (running, restarting or still starting), and why `plugins.json` cannot be read. It asks \
+the running server. `list` still reads the files and works with no server.
+
 Examples:
   cornercase plugin install acme/notes
   cornercase plugin install acme/notes@v1.2.0
@@ -748,6 +752,8 @@ Examples:
   cornercase plugin link ~/code/my-plugin
   cornercase plugin enable my-plugin
   cornercase plugin list
+  cornercase plugin status
+  cornercase plugin status --json
   cornercase plugin actions --context pane
   cornercase plugin run acme.notes open --pane 5
   cornercase plugin run acme.notes browse

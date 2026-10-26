@@ -51,6 +51,10 @@ mod parsing {
         assert_eq!(on.which.pane, Some(4));
         assert!(matches!(run(&["plugin", "popup-close"]), PluginAction::PopupClose));
         assert!(matches!(run(&["plugin", "actions", "--context", "button"]), PluginAction::Actions { .. }));
+        let PluginAction::Status(print) = run(&["plugin", "status", "--json"]) else { panic!("not status") };
+        assert!(print.json);
+        let PluginAction::Status(print) = run(&["plugin", "status"]) else { panic!("not status") };
+        assert!(!print.json);
     }
 
     #[test]
@@ -970,28 +974,7 @@ mod output {
     }
 }
 
+mod away;
 mod flows;
 mod focus;
-
-mod away {
-    use super::*;
-
-    #[rstest]
-    #[case::one_platform(serde_json::json!({"away": true, "platforms": ["Telegram"]}), "away: agents message you on Telegram until you turn it off\n")]
-    #[case::both(serde_json::json!({"away": true, "platforms": ["Telegram", "Discord"]}), "away: agents message you on Telegram and Discord until you turn it off\n")]
-    #[case::back(serde_json::json!({"away": false, "platforms": ["Discord"]}), "back: agents no longer message you on Discord\n")]
-    #[case::an_older_server(serde_json::json!({"away": true}), "away: agents message you on Telegram until you turn it off\n")]
-    #[case::nothing_was_away(serde_json::json!({"away": false, "platforms": []}), "back: nothing was away\n")]
-    fn away_names_the_platforms_it_changed(#[case] value: Value, #[case] expected: &str) {
-        assert_eq!(away_line(&value), expected);
-    }
-}
-
-mod known_agents {
-    #[test]
-    fn the_skill_names_every_known_agent() {
-        for agent in crate::agents::Known::ALL {
-            assert!(super::SKILL.contains(agent.title()), "missing {}", agent.title());
-        }
-    }
-}
+mod known_agents;
