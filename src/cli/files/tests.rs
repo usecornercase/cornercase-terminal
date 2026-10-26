@@ -102,6 +102,17 @@ mod a_read {
     }
 
     #[test]
+    fn json_output_only_reads_the_path_and_kind_to_tell_an_error() {
+        let gone = serde_json::json!({"path": "a.txt", "kind": "missing", "image": {"data": "x"}});
+        let folder = serde_json::json!({"path": "src", "kind": "folder"});
+        let image = serde_json::json!({"path": "a.png", "kind": "image", "image": {"data": "x"}});
+
+        assert_eq!(read_text(&outline(&gone)).expect_err("missing").to_string(), "cannot read a.txt: no such file");
+        assert!(read_text(&outline(&folder)).is_err());
+        assert!(read_text(&outline(&image)).is_ok());
+    }
+
+    #[test]
     fn of_text_is_the_file_as_it_is() {
         let text = Read { text: Some("one\ntwo".into()), ..read(ReadKind::Text) };
 

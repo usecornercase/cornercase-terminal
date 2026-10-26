@@ -225,7 +225,7 @@ The files panel's tree, viewer and search are there for another UI too, which ma
 ```sh
 cornercase files list --workspace 3 --json                 # the workspace's root: name, kind, size, modified, hidden, git status
 cornercase files list src docs --workspace 3 --json        # several folders in one answer
-cornercase files list ~/code --json                        # any folder on the server's machine
+cornercase files list '~/code' --json                      # any folder on the server's machine
 cornercase files list src --workspace 3 --follow           # a JSON line again whenever the folders change
 cornercase files read src/main.rs --workspace 3 --json     # text, an image as base64, or what else it is
 cornercase files read notes.txt                            # the text, as it is

@@ -42,10 +42,10 @@ fn notes(listing: &Listing) -> Result<()> {
     let mut failed = false;
     for folder in &listing.folders {
         if folder.more {
-            eprintln!("{}: only the first {MAX_ENTRIES} entries are listed", shown(&folder.path));
+            eprintln!("{}: only the first {MAX_ENTRIES} entries are listed", plain(shown(&folder.path)));
         }
         if let Some(error) = &folder.error {
-            eprintln!("cannot list {}: {error}", shown(&folder.path));
+            eprintln!("cannot list {}: {}", plain(shown(&folder.path)), plain(error));
             failed = true;
         }
     }
@@ -103,12 +103,18 @@ fn read(path: String, at: &Where, follow: bool, json: bool) -> Result<()> {
         return stream_json("files", command);
     }
     let value = ask("files-read", command)?;
-    let line: Line<Read> = answer(value.clone())?;
     if json {
         print_json(&value)?;
-        return read_text(&line.content).map(drop);
+        return read_text(&outline(&value)).map(drop);
     }
+    let line: Line<Read> = answer(value)?;
     print_out(&read_text(&line.content)?)
+}
+
+fn outline(value: &serde_json::Value) -> Read {
+    let path = value.get("path").and_then(serde_json::Value::as_str).unwrap_or_default();
+    let kind = value.get("kind").cloned().and_then(|kind| serde_json::from_value(kind).ok());
+    Read { path: path.into(), kind: kind.unwrap_or_default(), ..Read::default() }
 }
 
 pub(super) fn read_text(read: &Read) -> Result<String> {

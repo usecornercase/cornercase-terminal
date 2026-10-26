@@ -318,9 +318,9 @@ mod following {
         call_later(&mut app, &rx, "files-list", &json!({"follow": true})).expect("a listing");
 
         for _ in 0..5 {
-            drain(&mut app, &rx);
+            let event = rx.recv_timeout(Duration::from_secs(10)).expect("a feed ends");
+            app.handle_event(event, AREA).expect("handled");
             app.refresh(Instant::now());
-            std::thread::sleep(Duration::from_millis(20));
         }
 
         assert_eq!(lines(&mut app), Vec::<Value>::new());

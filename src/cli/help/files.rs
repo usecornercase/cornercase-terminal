@@ -31,7 +31,7 @@ is gone. A connection follows one at a time.
 Examples:
   cornercase files list --workspace 3 --json
   cornercase files list src --workspace 3 --follow
-  cornercase files list ~/code --json
+  cornercase files list '~/code' --json
   cornercase files read src/main.rs --workspace 3 --json
   cornercase files search parse --text --workspace 3 --json
   cornercase files search main.rs --names";
