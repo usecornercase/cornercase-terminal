@@ -36,7 +36,7 @@ fn assert_header(contract: &Value, session: &Session) {
     assert_eq!(contract["boot"].as_str(), Some(boot(session).as_str()));
 }
 
-const OPERATIONS: [&str; 38] = [
+const OPERATIONS: [&str; 41] = [
     "contract",
     "start-server",
     "surface",
@@ -75,6 +75,9 @@ const OPERATIONS: [&str; 38] = [
     "flow-runs",
     "flow-messages",
     "flow-files",
+    "files-list",
+    "files-read",
+    "files-search",
 ];
 
 fn assert_operations(contract: &Value) {
@@ -100,11 +103,11 @@ fn assert_features_and_streams(contract: &Value) {
     for feature in features
         .into_iter()
         .chain(["todo-panel", "agent-folds", "changes", "close-agent-tabs", "queue-undo"])
-        .chain(["focus-reveal"])
+        .chain(["focus-reveal", "files"])
     {
         assert!(has_feature(contract, feature), "{feature}: {contract}");
     }
-    let streams = ["events", "app", "changes", "flow-runs", "flow-messages", "view", "surface"];
+    let streams = ["events", "app", "changes", "flow-runs", "flow-messages", "files", "view", "surface"];
     for stream in streams {
         assert!(has_stream(contract, stream), "{stream}: {contract}");
     }

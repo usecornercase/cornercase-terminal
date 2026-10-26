@@ -1,0 +1,16 @@
+{
+  "workspace": 3,
+  "path": "logo.png",
+  "file": "/work/shop/logo.png",
+  "kind": "image",
+  "bytes": 119,
+  "modified": "2026-10-26T10:00:00.000Z",
+  "language": null,
+  "text": null,
+  "image": {
+    "format": "PNG",
+    "width": 4,
+    "height": 3,
+    "data": "iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAPklEQVR4AQEzAMz/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADMAAcS8COkAAAAASUVORK5CYII="
+  }
+}

@@ -25,6 +25,7 @@ mod arrange;
 mod changes;
 mod config;
 mod contract;
+mod files;
 mod flow;
 mod help;
 mod issue;
@@ -280,6 +281,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::Theme(args) => theme::run(&args).map(|()| true),
         Control::Config(args) => config::run(args).map(|()| true),
         Control::Changes(args) => changes::run(args).map(|()| true),
+        Control::Files(args) => files::run(args).map(|()| true),
         Control::Agents(args) => agents::run(args).map(|()| true),
         Control::Account(args) => accounts::account(args.action).map(|()| true),
         Control::Profile(args) => accounts::profile(args.action).map(|()| true),
@@ -288,7 +290,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
 }
 
 fn run_open(open: &args::OpenArgs) -> Result<()> {
-    let path = reach::server_path(&open.path)?;
+    let path = reach::open_path(&open.path)?;
     let value = ask("open", control::Command::Open(control::Open { path, focus: open.create.focus }))?;
     say(value, open.create.print.json, |done| id(done.ids.project))
 }

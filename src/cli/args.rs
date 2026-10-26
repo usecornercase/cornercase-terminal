@@ -3,6 +3,7 @@ pub(crate) mod agents;
 pub(crate) mod arrange;
 pub(crate) mod changes;
 pub(crate) mod config;
+pub(crate) mod files;
 pub(crate) mod flow;
 pub(crate) mod issue;
 pub(crate) mod plugin;
@@ -30,7 +31,7 @@ use super::help::{
     START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, TOUR_HELP, UNTIL_AFTER, UPDATE_HELP,
     USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
-use super::help::{AGENTS_HELP, CHANGES_HELP, PORTS_HELP};
+use super::help::{AGENTS_HELP, CHANGES_HELP, FILES_HELP, PORTS_HELP};
 use crate::control::Until;
 use crate::term::keys;
 
@@ -226,6 +227,11 @@ pub(crate) enum Control {
     Issue(issue::IssueArgs),
     #[command(about = "List, read, mark, stage and discard the changes of a workspace, as the changes panel shows them", after_help = CHANGES_HELP)]
     Changes(changes::ChangesArgs),
+    #[command(
+        about = "List folders, read files and search the names or text of a workspace, as the files panel does",
+        after_help = FILES_HELP
+    )]
+    Files(files::FilesArgs),
     #[command(
         about = "Print your Claude Code and Codex plan limits, as the Usage dialog's Limits tab shows them",
         after_help = USAGE_HELP

@@ -371,6 +371,7 @@ impl App {
             self.clients.events.app.wake(now, false),
             self.clients.events.runs.wake(now, false),
             self.clients.change_streams.wake(now),
+            self.clients.file_streams.wake(now),
             self.clients.events.bell_wake(now),
             self.surface_wake(now),
             self.panels.queued.wake(clock),
@@ -433,6 +434,7 @@ impl App {
 
     fn refresh_panels(&mut self, now: Instant) {
         self.refresh_files(now);
+        self.refresh_file_streams(now);
         self.refresh_run_files(now);
         self.flush_run_dirs();
         self.ask_sessions(now);

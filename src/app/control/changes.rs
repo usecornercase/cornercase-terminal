@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use serde_json::Value;
 
-use super::{Asker, Handled, Pending, Stage, conflict, json, malformed};
+use super::{Asker, Handled, conflict, json, malformed};
 use crate::app::changes_panel::{Gapped, Seen};
 use crate::app::{App, AppEvent, ChangesEvent};
 use crate::changes::act::{FileAction, Outcome};
@@ -62,17 +62,6 @@ fn read_file(place: &Place, mode: Mode, path: &str) -> Result<Option<Arc<File>>>
 }
 
 impl App {
-    fn reading(&mut self, client: u64, key: u64) {
-        let done = crate::control::Done::default();
-        self.clients.requests.pending.push(Pending {
-            client: Some(client),
-            key,
-            timeout: None,
-            done,
-            stage: Stage::Reading,
-        });
-    }
-
     fn changes_place(&self, asker: Asker, id: Option<u64>) -> std::result::Result<Place, Refusal> {
         let id = if let Some(id) = id {
             id
@@ -160,7 +149,7 @@ impl App {
                 Some(AppEvent::Changes(ChangesEvent::File { request: key, workspace, mode, path, result }))
             },
         );
-        self.reading(client, key);
+        self.pend_reading(client, key);
         Ok(None)
     }
 
@@ -177,12 +166,6 @@ impl App {
                 .usable_workspace(at.workspace)
                 .map(|_| json(&Patch::of(at.workspace, mode, &file, app.panels.changes.viewed(at.workspace, &file)))),
         });
-    }
-
-    fn answer_read(&mut self, key: u64, reply: impl FnOnce(&mut Self) -> Answer) {
-        let Some(pending) = self.clients.requests.take(key) else { return };
-        let reply = reply(self);
-        self.refuse_or_answer(pending.client, reply);
     }
 
     pub(super) fn changes_gap_request(
@@ -217,7 +200,7 @@ impl App {
                 Some(AppEvent::Changes(ChangesEvent::GapRead { request: key, workspace, path, hunk, result }))
             },
         );
-        self.reading(client, key);
+        self.pend_reading(client, key);
         Ok(None)
     }
 
@@ -245,7 +228,7 @@ impl App {
             move || Ok((changes::git::branches(&place.dir), changes::git::default_base(&place.dir))),
             move |listed, _| Some(AppEvent::Changes(ChangesEvent::Base { request: key, workspace, change, listed })),
         );
-        self.reading(client, key);
+        self.pend_reading(client, key);
         Ok(None)
     }
 
@@ -304,7 +287,7 @@ impl App {
         let key = self.clients.requests.key();
         let seen = Seen { workspace: place.id, path: wanted.path.to_string(), digest };
         self.spawn_file_action(Some(key), place.dir, seen, action);
-        self.reading(client, key);
+        self.pend_reading(client, key);
         Ok(None)
     }
 

@@ -265,6 +265,10 @@ When a program prints the path of a file, hovering it underlines it, and clickin
 - In a program that doesn't use the mouse, pressing and dragging over a path still selects text, as anywhere else.
 - In a program that uses the mouse, such as Claude Code in its full-screen mode, a click on a path that releases on the same spot opens the file, and the program doesn't see it; if you drag, the program gets the press and the drag as usual.
 
+<Aside type="note">
+Other programs read the same tree, files and search with `cornercase files`, on this machine or another: see [Browse and read a workspace's files](../scripts-and-agents/#browse-and-read-a-workspaces-files).
+</Aside>
+
 <Aside type="tip">
 The panel stays quick on large repositories: it reads only the folders you open, keeps the list of files for the search up to date in the background, and searches the text on several threads with ripgrep's own search code.
 </Aside>

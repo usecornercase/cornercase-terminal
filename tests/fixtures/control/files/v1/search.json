@@ -1,0 +1,25 @@
+{
+  "workspace": 3,
+  "query": "main",
+  "mode": "text",
+  "names": [],
+  "files": [
+    {
+      "path": "src/main.rs",
+      "lines": [
+        {
+          "number": 1,
+          "text": "fn main() {}",
+          "ranges": [
+            [
+              3,
+              7
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "matches": 1,
+  "capped": false
+}

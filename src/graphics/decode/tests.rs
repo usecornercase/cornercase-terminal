@@ -277,3 +277,19 @@ mod refusals {
         assert_eq!(decode(b"plain text", 1), Err("not an image".to_string()));
     }
 }
+
+mod dimensions {
+    use super::*;
+
+    #[test]
+    fn reads_them_from_the_header() {
+        assert_eq!(dimensions(&png_claiming(4, 3)), Some((4, 3)));
+        assert_eq!(dimensions(&file(&halves(6, 2), ImageFormat::Jpeg)), Some((6, 2)));
+    }
+
+    #[test]
+    fn a_truncated_header_or_something_else_has_none() {
+        assert_eq!(dimensions(&png_claiming(4, 3)[..12]), None);
+        assert_eq!(dimensions(b"plain text"), None);
+    }
+}

@@ -118,6 +118,24 @@ fn refused(app: &mut App, command: &str, args: &Value) -> Refused {
     }
 }
 
+fn call_later(
+    app: &mut App,
+    rx: &Receiver<AppEvent>,
+    command: &str,
+    args: &Value,
+) -> std::result::Result<Value, Refused> {
+    let text = json!({"contract": 1, "command": command, "args": args}).to_string();
+    app.request(CLIENT, &text, Some(AREA), Instant::now());
+    let mut reply = None;
+    wait_until("the request is answered", || {
+        drain(app, rx);
+        app.refresh(Instant::now());
+        reply = app.take_answers().into_iter().next().map(|(_, text)| text);
+        reply.is_some()
+    });
+    reply_of(&reply.expect("an answer"))
+}
+
 fn answers(app: &mut App) -> Vec<Response> {
     let answers = app.take_answers();
     assert!(answers.iter().all(|(client, _)| *client == CLIENT), "{answers:?}");
@@ -531,6 +549,7 @@ mod discord;
 mod discord_forum;
 mod driving;
 mod events;
+mod files;
 mod flow_sharing;
 mod flows;
 mod following_the_app;

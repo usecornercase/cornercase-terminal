@@ -147,6 +147,19 @@ mod paths {
         assert_eq!(path_on(Path::new("/a/../b"), Some(&devbox())).expect("kept"), PathBuf::from("/a/../b"));
     }
 
+    #[rstest]
+    #[case::the_home_folder("~")]
+    #[case::inside_it("~/src/shop")]
+    fn a_path_in_the_home_folder_goes_as_it_is_here_and_there(#[case] path: &str) {
+        assert_eq!(open_path(Path::new(path)).expect("kept"), PathBuf::from(path));
+    }
+
+    #[test]
+    fn a_path_that_only_looks_like_a_home_folder_is_a_relative_one() {
+        assert!(open_path(Path::new("~user/x")).expect("absolute").is_absolute());
+        assert!(open_path(Path::new("./~/x")).expect("absolute").is_absolute());
+    }
+
     #[test]
     fn here_it_becomes_absolute() {
         assert!(path_on(Path::new("src"), None).expect("absolute").is_absolute());

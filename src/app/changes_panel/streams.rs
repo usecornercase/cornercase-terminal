@@ -140,7 +140,7 @@ impl App {
             .open
             .iter()
             .enumerate()
-            .filter(|(_, s)| s.workspace.is_some_and(|w| !self.change_workspace_usable(w)))
+            .filter(|(_, s)| s.workspace.is_some_and(|w| !self.workspace_usable(w)))
             .map(|(i, _)| i)
             .collect();
         if gone.is_empty() {
@@ -160,7 +160,7 @@ impl App {
         self.panels.changes.follow(self.clients.change_streams.followed());
     }
 
-    fn change_workspace_usable(&self, workspace: u64) -> bool {
+    pub(in crate::app) fn workspace_usable(&self, workspace: u64) -> bool {
         self.projects.workspace_index(workspace).is_some_and(|at| self.workspace_open(at))
     }
 

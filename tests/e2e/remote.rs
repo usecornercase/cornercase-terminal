@@ -211,3 +211,27 @@ fn commands_of_this_machine_refuse_remote(#[case] args: &[&str], #[case] var: Op
     assert!(refused(&out, 2, &format!("`{name}` acts on this machine")), "{out:?}");
     assert_eq!(ssh_pid(&session), "", "ssh never ran");
 }
+
+#[test]
+fn the_files_of_the_other_machine_are_listed_and_read_by_absolute_path() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let dir = temp_dir("remote-files");
+    std::fs::create_dir(dir.join("sub")).expect("create a folder");
+    std::fs::write(dir.join("hello.txt"), "hi there\n").expect("write a file");
+    let folder = dir.display().to_string();
+
+    let listed = remote_says(&session, &["files", "list", &folder, "--json"]);
+    let read = remote_says(&session, &["files", "read", &format!("{folder}/hello.txt")]);
+
+    let listing: serde_json::Value = serde_json::from_str(&listed).expect("json");
+    let entries: Vec<&str> = listing["folders"][0]["entries"]
+        .as_array()
+        .expect("entries")
+        .iter()
+        .filter_map(|e| e["name"].as_str())
+        .collect();
+    assert_eq!(entries, ["sub", "hello.txt"], "{listed}");
+    assert_eq!(read, "hi there");
+    let _ = std::fs::remove_dir_all(&dir);
+}

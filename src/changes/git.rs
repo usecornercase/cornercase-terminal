@@ -88,6 +88,14 @@ pub(super) fn status(dir: &Path) -> Result<Vec<u8>> {
     run(dir, &["status", "--porcelain=v2", "-z", "--untracked-files=all", "--", "."])
 }
 
+pub(crate) fn marks(dir: &Path) -> Result<Vec<(String, Status)>> {
+    let _deadline = Deadline::arm();
+    let raw = status(dir)?;
+    let porcelain = Porcelain::parse(&raw, &path_prefix(dir));
+    let untracked = porcelain.untracked.into_iter().map(|path| (path, Status::Untracked));
+    Ok(porcelain.statuses.into_iter().chain(untracked).collect())
+}
+
 pub(super) fn head(dir: &Path) -> Result<String> {
     text(dir, &["rev-parse", "--verify", "--quiet", "HEAD"])
         .or_else(|| text(dir, &["hash-object", "-t", "tree", "/dev/null"]))

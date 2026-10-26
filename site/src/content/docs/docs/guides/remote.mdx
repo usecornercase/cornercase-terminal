@@ -77,6 +77,7 @@ The commands for [scripts and agents](../scripts-and-agents/) reach another mach
 cornercase --remote devbox status --json
 cornercase --remote devbox events --notices --host --json
 cornercase --remote devbox send --pane 12 - < prompt.md
+cornercase --remote devbox files list ~/src --json
 cornercase --remote devbox start-server
 ```
 
@@ -87,7 +88,8 @@ cornercase --remote devbox start-server
 - **It never asks** for a password, a passphrase or an unknown host key, since a script cannot answer: use a key in your SSH agent, and connect once by hand to accept the host key.
 - **Only `start-server` starts a server there.** The other commands say `no cornercase server is running on devbox`, as they do on your machine.
 - **A stream ends there when the command ends here**, even when it is killed, so `events` or `status --follow` never leaves a command running on `devbox`.
-- **Paths are the other machine's**, and the ones you type must be absolute: `open`, `config project` and `flow save --path` refuse a relative one. `status` prints full paths.
+- **Paths are the other machine's**, and the ones you type must be absolute: `open`, `config project` and `flow save --path` refuse a relative one. `open` also takes `~/…`, in that machine's home folder, and `status` shows `~/…` for paths there. `files` paths are relative to the workspace, or absolute or `~/…`.
+- **Another interface can show that machine's files**: `files list`, `files read` and `files search` give the files panel's tree, viewer and search, and `files list ~/` a folder picker's listing, so a UI on your laptop needs no `ssh` of its own to read that disk. See [Browse and read a workspace's files](../scripts-and-agents/#browse-and-read-a-workspaces-files).
 - **`update`, `restart`, `kill-server`, `logs` and the plugin commands that install or change plugins** act on the machine they run on and refuse `--remote`, with status 2: run them there with `ssh`.
 - **`cornercase --remote devbox` alone** opens the window, as `cornercase remote devbox`.
 - **One `ssh` connection per command.** To share one, use your own config:

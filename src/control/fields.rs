@@ -13,6 +13,7 @@ impl Command {
             || self.stream_fields(&mut fields)
             || self.terminal_fields(&mut fields)
             || self.change_fields(&mut fields)
+            || self.files_fields(&mut fields)
             || self.issue_fields(&mut fields)
             || self.flow_fields(&mut fields)
             || self.account_fields(&mut fields)
@@ -127,6 +128,16 @@ impl Command {
             Self::ChangesViewed(viewed) => viewed.fields(fields),
             Self::ChangesDiscard(discard) => discard.fields(fields),
             Self::ChangesStage(stage) => stage.fields(fields),
+            _ => return false,
+        }
+        true
+    }
+
+    fn files_fields(&self, fields: &mut Fields) -> bool {
+        match self {
+            Self::FilesList(list) => list.fields(fields),
+            Self::FilesRead(read) => read.fields(fields),
+            Self::FilesSearch(search) => search.fields(fields),
             _ => return false,
         }
         true

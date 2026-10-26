@@ -17,6 +17,11 @@ pub(crate) fn sniff(head: &[u8]) -> Option<&'static str> {
     kind(head).map(|(name, _)| name)
 }
 
+pub(crate) fn dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    let (_, format) = kind(bytes)?;
+    ImageReader::with_format(Cursor::new(bytes), format).into_dimensions().ok()
+}
+
 pub(crate) fn decode(bytes: &[u8], id: u64) -> Result<Picture, String> {
     let (format, kind) = kind(bytes).ok_or("not an image")?;
     let damaged = |error| reason(&error, format);

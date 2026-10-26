@@ -22,7 +22,11 @@ pub(super) fn run_status(status: &StatusArgs) -> Result<()> {
     let value = ask("status", control::Command::Status(control::Status {}))?;
     match (status.panes, status.print.json) {
         (false, true) => print_json(&value),
-        (false, false) => print_out(&render(&answer(value)?, home().as_deref())),
+        (false, false) => {
+            let report: Report = answer(value)?;
+            let home = home(&report);
+            print_out(&render(&report, home.as_deref()))
+        }
         (true, true) => print_json(&PaneRows { panes: answer::<Report>(value)?.panes() }),
         (true, false) => print_out(&pane_table(&answer::<Report>(value)?.panes())?),
     }
@@ -32,9 +36,9 @@ fn follow() -> Result<()> {
     super::stream_json("watch", control::Command::Watch(control::Watch {}))
 }
 
-fn home() -> Option<PathBuf> {
-    if crate::client::used_remote().is_some() {
-        return None;
+fn home(report: &Report) -> Option<PathBuf> {
+    if report.home.is_some() || crate::client::used_remote().is_some() {
+        return report.home.clone();
     }
     std::env::var_os("HOME").map(PathBuf::from)
 }

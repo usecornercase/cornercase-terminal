@@ -169,6 +169,9 @@ fn newest_commands() -> Vec<Command> {
         Command::PluginPopupClose(PluginPopupClose::default()),
         Command::Ports(Ports::default()),
         Command::StopPort(StopPort::default()),
+        Command::FilesList(FilesList::default()),
+        Command::FilesRead(FilesRead::default()),
+        Command::FilesSearch(FilesSearch::default()),
     ]
 }
 

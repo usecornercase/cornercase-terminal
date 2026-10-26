@@ -288,3 +288,45 @@ mod staged {
         assert_eq!(marks(dir, Mode::Uncommitted), [("a.txt".to_string(), Some(Staged::No))]);
     }
 }
+
+mod marks {
+    use super::*;
+
+    fn sorted(dir: &Path) -> Vec<(String, Status)> {
+        let mut marks = marks(dir).expect("marks");
+        marks.sort_by(|a, b| a.0.cmp(&b.0));
+        marks
+    }
+
+    #[test]
+    fn are_the_uncommitted_status_of_each_path() {
+        let repo = git_repo(&[("a.txt", "one\n"), ("src/b.txt", "two\n")]);
+        write(repo.path(), "a.txt", "one\nmore\n");
+        write(repo.path(), "new.txt", "x\n");
+        write(repo.path(), "staged.txt", "y\n");
+        git(repo.path(), &["add", "staged.txt"]);
+
+        assert_eq!(
+            sorted(repo.path()),
+            [
+                ("a.txt".into(), Status::Modified),
+                ("new.txt".into(), Status::Untracked),
+                ("staged.txt".into(), Status::Added),
+            ]
+        );
+    }
+
+    #[test]
+    fn are_relative_to_a_folder_inside_the_repository() {
+        let repo = git_repo(&[("sub/a.txt", "one\n"), ("top.txt", "t\n")]);
+        write(repo.path(), "sub/a.txt", "two\n");
+        write(repo.path(), "top.txt", "u\n");
+
+        assert_eq!(sorted(&repo.path().join("sub")), [("a.txt".into(), Status::Modified)]);
+    }
+
+    #[test]
+    fn a_folder_that_is_not_a_repository_is_an_error() {
+        assert!(marks(TempDir::new().path()).is_err());
+    }
+}

@@ -126,6 +126,7 @@ fn snapshot() -> Snapshot {
             view: None,
             theme: None,
             config: Some(ConfigInfo { revision: 2 }),
+            home: None,
         },
     }
 }

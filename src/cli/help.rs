@@ -14,14 +14,14 @@ shows. Where a command takes --workspace ID, --worktree BRANCH names the workspa
 instead, in that same project. Only `focus`, `go` and `--focus` change what the window shows, or with --view ID what that view shows (see `cornercase view`). The
 commands exit with 1 on errors and timeouts, 2 on wrong usage, a branch no workspace is on
 included, or one several are on (both list the workspaces to pick from), and 3 when a command that
-asks several sources (usage, issue list, read --last-message with several panes) printed its whole
+asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
 answer but some of them failed: each failed entry says why, in its error with --json.
 
 --remote DESTINATION (or CORNERCASE_REMOTE=DESTINATION, which the flag overrides) sends a command
 to the server of another machine through ssh, found as `cornercase remote` finds it, so arguments and
 standard input arrive as they are. Both machines need the same version, ssh never asks for a
 password, only `start-server` starts a server there, and a command that follows a stream ends it
-there when it ends here. Paths are the other machine's, absolute. `update`, `restart`, `kill-server`,
+there when it ends here. Paths are the other machine's: absolute, or starting with ~/ for its home folder; `files` also takes them relative to the workspace. `update`, `restart`, `kill-server`,
 `logs` and the plugin commands that install or change plugins act on this machine and refuse it.
 
 Examples:
@@ -729,8 +729,10 @@ Examples:
   cornercase changes discard src/main.rs --yes
   cornercase changes discard src/main.rs --digest 550a7a517a389403 --yes";
 
+mod files;
 mod flow;
 
+pub(in crate::cli) use files::FILES_HELP;
 pub(in crate::cli) use flow::{
     FLOW_DEFAULT_HELP, FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP, FLOW_HELP, FLOW_HIDE_HELP,
     FLOW_IMPORT_HELP, FLOW_MESSAGES_HELP, FLOW_ORDER_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP,

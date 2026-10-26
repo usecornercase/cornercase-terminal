@@ -150,6 +150,22 @@ fn scripts_discard_a_file_only_when_told_to() {
     let _ = std::fs::remove_dir_all(&repo);
 }
 
+#[test]
+fn scripts_list_read_and_search_a_workspace_s_files() {
+    let (repo, app) = opened_repo("ccfiles");
+
+    let listed = app.session.says(&["files", "list", "--json"]);
+    let read = app.session.says(&["files", "read", "notes.txt"]);
+    let found = app.session.says(&["files", "search", "TWO"]);
+
+    let listing: serde_json::Value = serde_json::from_str(&listed).expect("a listing");
+    let notes = listing["folders"][0]["entries"].as_array().and_then(|e| e.iter().find(|e| e["name"] == "notes.txt"));
+    assert_eq!(notes.map(|n| n["status"].clone()), Some(serde_json::json!("modified")), "{listed}");
+    assert_eq!(read, "one\nTWO");
+    assert_eq!(found, "notes.txt:2:TWO");
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
 fn git_status(repo: &std::path::Path) -> String {
     let out = std::process::Command::new("git").arg("-C").arg(repo).args(["status", "--porcelain"]).output();
     String::from_utf8_lossy(&out.expect("git").stdout).into_owned()

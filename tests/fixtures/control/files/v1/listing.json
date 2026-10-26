@@ -1,0 +1,50 @@
+{
+  "boot": "4242-1700000000",
+  "stream": 1,
+  "revision": 2,
+  "workspace": 3,
+  "folders": [
+    {
+      "path": "",
+      "dir": "/work/shop",
+      "entries": [
+        {
+          "name": "src",
+          "kind": "folder",
+          "link": false,
+          "hidden": false,
+          "bytes": null,
+          "modified": "2023-11-14T22:13:20.000Z",
+          "status": "modified"
+        },
+        {
+          "name": ".env",
+          "kind": "file",
+          "link": false,
+          "hidden": true,
+          "bytes": 12,
+          "modified": "2023-11-14T22:13:20.000Z",
+          "status": null
+        },
+        {
+          "name": "notes.txt",
+          "kind": "file",
+          "link": false,
+          "hidden": false,
+          "bytes": 8,
+          "modified": "2023-11-14T22:13:20.000Z",
+          "status": "untracked"
+        }
+      ],
+      "more": false,
+      "error": null
+    },
+    {
+      "path": "missing",
+      "dir": "/work/shop/missing",
+      "entries": [],
+      "more": false,
+      "error": "no such folder"
+    }
+  ]
+}

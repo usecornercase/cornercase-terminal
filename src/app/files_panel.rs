@@ -11,6 +11,7 @@ use super::input::wheel;
 use super::layout::Side;
 use super::{App, AppEvent};
 use crate::changes::{Checkout, Tints};
+use crate::control::contract::Refusal;
 use crate::error::Result;
 use crate::files::find::Find;
 use crate::files::search::{self, MAX_MATCHES, MAX_NAMES};
@@ -21,8 +22,13 @@ use crate::project::Hierarchy;
 use crate::ui;
 use crate::ui::files::{self as panel, Action, Bar, FileView, Found, Hit, Screen, SearchView, TreeRow, TreeView};
 
+mod feed;
 mod find;
 mod selection;
+mod streams;
+
+pub(super) use feed::{Fed, NO_WORKSPACE, is_absolute, target};
+pub(super) use streams::{Opened, Streams, Watch};
 
 fn text_rows(text: &search::Text) -> Vec<Found> {
     let mut rows = Vec::new();
@@ -88,6 +94,8 @@ pub(crate) enum FilesEvent {
     Indexed { workspace: u64, generation: u64, paths: Vec<String> },
     Names { workspace: u64, generation: u64, search: files::Search, found: Vec<search::Name> },
     Text { workspace: u64, generation: u64, search: files::Search, found: search::Text },
+    Replied { request: u64, reply: std::result::Result<serde_json::Value, Refusal> },
+    Fed { stream: u64, generation: u64, fed: std::result::Result<Fed, String> },
 }
 
 impl FilesEvent {
@@ -98,6 +106,8 @@ impl FilesEvent {
             Self::Indexed { .. } => "files indexed",
             Self::Names { .. } => "names found",
             Self::Text { .. } => "text found",
+            Self::Replied { .. } => "files answered",
+            Self::Fed { .. } => "files fed",
         }
     }
 }
@@ -122,6 +132,8 @@ impl App {
                 self.panels.files.grepped(workspace, generation, search, found);
                 self.found_answered(workspace);
             }
+            FilesEvent::Replied { request, reply } => self.files_replied(request, reply),
+            FilesEvent::Fed { stream, generation, fed } => self.file_fed(stream, generation, fed),
         }
     }
 
@@ -250,7 +262,7 @@ impl App {
             .changes_target()
             .filter(|t| t.workspace == workspace)
             .and_then(|t| self.marks_diff(&t))
-            .map(|diff| files::statuses(&diff))
+            .map(|diff| files::statuses(diff.files.iter().map(|f| (f.path.as_str(), f.status))))
             .unwrap_or_default();
         let rows = self
             .panels

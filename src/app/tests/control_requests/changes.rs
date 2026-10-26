@@ -31,24 +31,6 @@ fn paths(line: &Value) -> Vec<String> {
     files.map(|f| f["path"].as_str().expect("a path").to_string()).collect()
 }
 
-fn call_later(
-    app: &mut App,
-    rx: &Receiver<AppEvent>,
-    command: &str,
-    args: &Value,
-) -> std::result::Result<Value, Refused> {
-    let text = json!({"contract": 1, "command": command, "args": args}).to_string();
-    app.request(CLIENT, &text, Some(AREA), Instant::now());
-    let mut reply = None;
-    wait_until("the request is answered", || {
-        drain(app, rx);
-        app.refresh(Instant::now());
-        reply = app.take_answers().into_iter().next().map(|(_, text)| text);
-        reply.is_some()
-    });
-    reply_of(&reply.expect("an answer"))
-}
-
 fn topic_repo() -> TempDir {
     let repo = git_repo(&[("a.txt", "one\ntwo\n")]);
     git(repo.path(), &["checkout", "--quiet", "-b", "topic"]);

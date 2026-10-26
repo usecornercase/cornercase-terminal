@@ -7,6 +7,7 @@ mod closed_agents;
 mod config;
 mod contract;
 mod create;
+mod files;
 mod flow;
 mod held;
 mod idle_restart;
@@ -36,7 +37,7 @@ use crate::agents::launch::Launch;
 use crate::app::App;
 use crate::app::flow_runs::Starting;
 use crate::app::messenger::CLIENTS as MESSENGER_CLIENTS;
-use crate::app::{changes_panel, events, surfaces, views};
+use crate::app::{changes_panel, events, files_panel, surfaces, views};
 use crate::control::contract::{Code, Refusal};
 use crate::control::start_server::Started;
 use crate::control::{self, Command, Done, Ids, Item, Request, StartServer};
@@ -74,6 +75,7 @@ pub(super) struct Clients {
     pub(super) requests: Requests,
     pub(super) events: events::Events,
     pub(super) change_streams: changes_panel::Streams,
+    pub(super) file_streams: files_panel::Streams,
     pub(super) surfaces: surfaces::Surfaces,
     pub(super) views: views::Views,
     confirm_within: Duration,
@@ -86,6 +88,7 @@ impl Default for Clients {
             requests: Requests::default(),
             events: events::Events::default(),
             change_streams: changes_panel::Streams::default(),
+            file_streams: files_panel::Streams::default(),
             surfaces: surfaces::Surfaces::default(),
             views: views::Views::default(),
             confirm_within: CONFIRM_WITHIN,
@@ -389,6 +392,7 @@ impl App {
         }
         self.clients.events.forget(client);
         self.forget_change_streams(client);
+        self.forget_file_streams(client);
         self.forget_surfaces(client);
         self.forget_views(client);
         self.messages.notices.forget(client);
@@ -397,6 +401,12 @@ impl App {
             pending.client = None;
         }
         self.clients.requests.pending.retain(|p| p.client.is_some() || p.stage.outlives_its_client());
+    }
+
+    pub(in crate::app) fn answer_read(&mut self, key: u64, reply: impl FnOnce(&mut Self) -> Result<Value, Refusal>) {
+        let Some(pending) = self.clients.requests.take(key) else { return };
+        let reply = reply(self);
+        self.refuse_or_answer(pending.client, reply);
     }
 
     fn orphan_todo_send(&mut self, client: u64) {
@@ -509,6 +519,7 @@ impl App {
         let command = self.stream_requests(asked, command)?;
         let command = self.surface_requests(asked, command)?;
         let command = self.changes_requests(asked, command)?;
+        let command = self.files_requests(asked, command)?;
         let command = self.issue_requests(asked, command)?;
         let command = self.flow_requests(asked, command)?;
         let command = self.account_requests(asked, command)?;

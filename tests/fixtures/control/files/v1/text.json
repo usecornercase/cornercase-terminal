@@ -1,0 +1,14 @@
+{
+  "boot": "4242-1700000000",
+  "stream": 2,
+  "revision": 1,
+  "workspace": 3,
+  "path": "src/main.rs",
+  "file": "/work/shop/src/main.rs",
+  "kind": "text",
+  "bytes": 13,
+  "modified": "2026-10-26T10:00:00.000Z",
+  "language": "rust",
+  "text": "fn main() {}\n",
+  "image": null
+}

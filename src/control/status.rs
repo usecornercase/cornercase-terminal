@@ -23,6 +23,8 @@ pub struct Report {
     pub(crate) theme: Option<ThemeInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) config: Option<ConfigInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) home: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

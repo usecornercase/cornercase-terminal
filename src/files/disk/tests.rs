@@ -196,3 +196,153 @@ mod lines_of_the_source {
         assert_eq!(content.clamped(Stretch::within(5, 0..1)), None);
     }
 }
+
+mod a_folder_with_metadata {
+    use std::os::unix::fs::symlink;
+
+    use super::*;
+
+    fn listed(entries: &[Listed], name: &str) -> Listed {
+        entries.iter().find(|e| e.name == name).cloned().expect("the entry")
+    }
+
+    #[test]
+    fn tells_files_from_folders_and_gives_their_size_and_time() {
+        let dir = TempDir::new();
+        fs::create_dir(dir.path().join("src")).expect("mkdir");
+        fs::write(dir.path().join("notes.txt"), "four").expect("write");
+        let folder = folder(dir.path()).expect("listed");
+        let notes = listed(&folder.entries, "notes.txt");
+        let src = listed(&folder.entries, "src");
+        assert_eq!((notes.kind, notes.bytes, notes.link), (Kind::File, Some(4), false));
+        assert!(notes.modified.is_some());
+        assert_eq!((src.kind, src.bytes, src.link), (Kind::Folder, None, false));
+        assert!(!folder.more);
+    }
+
+    #[test]
+    fn keeps_the_order_of_the_tree_and_the_hidden_files() {
+        let dir = TempDir::new();
+        fs::create_dir(dir.path().join("src")).expect("mkdir");
+        fs::write(dir.path().join("b.rs"), "").expect("write");
+        fs::write(dir.path().join(".env"), "").expect("write");
+        let names: Vec<String> = folder(dir.path()).expect("listed").entries.into_iter().map(|e| e.name).collect();
+        assert_eq!(names, ["src", ".env", "b.rs"]);
+    }
+
+    #[test]
+    fn leaves_out_what_git_ignores_and_the_git_folder() {
+        let dir = git_repo(&[(".gitignore", "*.log\n"), ("a.rs", "")]);
+        fs::write(dir.path().join("run.log"), "").expect("write");
+        let names: Vec<String> = folder(dir.path()).expect("listed").entries.into_iter().map(|e| e.name).collect();
+        assert_eq!(names, [".gitignore", "a.rs"]);
+    }
+
+    #[test]
+    fn says_when_entries_were_left_out() {
+        let dir = TempDir::new();
+        for name in ["a", "b", "c"] {
+            fs::write(dir.path().join(name), "").expect("write");
+        }
+        let cut = folder_up_to(dir.path(), 2).expect("listed");
+        assert_eq!((cut.entries.len(), cut.more), (2, true));
+        let whole = folder_up_to(dir.path(), 3).expect("listed");
+        assert_eq!((whole.entries.len(), whole.more), (3, false));
+    }
+
+    #[test]
+    fn a_link_to_a_device_is_other_and_a_link_to_a_file_is_a_file() {
+        let dir = TempDir::new();
+        fs::write(dir.path().join("real.txt"), "abc").expect("write");
+        symlink("/dev/null", dir.path().join("null")).expect("link");
+        symlink("real.txt", dir.path().join("alias")).expect("link");
+        symlink("nowhere", dir.path().join("dangling")).expect("link");
+        let folder = folder(dir.path()).expect("listed");
+        let kinds = |name: &str| {
+            let entry = listed(&folder.entries, name);
+            (entry.kind, entry.link, entry.bytes)
+        };
+        assert_eq!(kinds("null"), (Kind::Other, true, None));
+        assert_eq!(kinds("dangling"), (Kind::Other, true, None));
+        assert_eq!(kinds("alias"), (Kind::File, true, Some(3)));
+    }
+
+    #[test]
+    fn a_file_or_a_missing_folder_is_an_error_that_says_which() {
+        let dir = TempDir::new();
+        fs::write(dir.path().join("a.txt"), "").expect("write");
+        let file = folder(&dir.path().join("a.txt")).expect_err("a file");
+        let gone = folder(&dir.path().join("gone")).expect_err("missing");
+        assert_eq!((file.kind(), gone.kind()), (io::ErrorKind::NotADirectory, io::ErrorKind::NotFound));
+    }
+}
+
+mod a_raw_read {
+    use image::{ImageFormat, RgbaImage};
+
+    use super::*;
+
+    fn png(width: u32, height: u32) -> Vec<u8> {
+        let mut out = io::Cursor::new(Vec::new());
+        RgbaImage::new(width, height).write_to(&mut out, ImageFormat::Png).expect("a png");
+        out.into_inner()
+    }
+
+    fn loaded(path: &Path) -> Raw {
+        load(path, None).expect("loaded").raw
+    }
+
+    #[test]
+    fn gives_the_text_as_it_is() {
+        let dir = TempDir::new();
+        fs::write(dir.path().join("a.txt"), "one\r\ntwo").expect("write");
+        assert_eq!(loaded(&dir.path().join("a.txt")), Raw::Text("one\r\ntwo".into()));
+    }
+
+    #[test]
+    fn gives_an_image_its_format_and_bytes_without_decoding_it() {
+        let dir = TempDir::new();
+        let bytes = png(4, 3);
+        fs::write(dir.path().join("a.png"), &bytes).expect("write");
+        assert_eq!(loaded(&dir.path().join("a.png")), Raw::Image { format: "PNG", bytes });
+    }
+
+    #[test]
+    fn tells_a_folder_a_device_and_a_missing_file_apart() {
+        let dir = TempDir::new();
+        assert_eq!(loaded(dir.path()), Raw::Folder);
+        assert_eq!(loaded(Path::new("/dev/zero")), Raw::Binary);
+        assert_eq!(loaded(&dir.path().join("gone")), Raw::Missing);
+    }
+
+    #[test]
+    fn a_nul_makes_it_binary() {
+        let dir = TempDir::new();
+        fs::write(dir.path().join("a.bin"), [b'a', 0, b'b']).expect("write");
+        assert_eq!(loaded(&dir.path().join("a.bin")), Raw::Binary);
+    }
+
+    #[test]
+    fn a_text_over_the_limit_is_too_large_and_says_its_size() {
+        let dir = TempDir::new();
+        let file = fs::File::create(dir.path().join("big.txt")).expect("create");
+        file.set_len(MAX_BYTES + 1).expect("sparse");
+        assert_eq!(loaded(&dir.path().join("big.txt")), Raw::TooLarge(MAX_BYTES + 1));
+    }
+
+    #[test]
+    fn an_unchanged_file_answers_nothing() {
+        let dir = TempDir::new();
+        fs::write(dir.path().join("a.txt"), "one").expect("write");
+        let stamp = load(&dir.path().join("a.txt"), None).expect("loaded").stamp;
+        assert_eq!(stamp.len(), Some(3));
+        assert!(load(&dir.path().join("a.txt"), Some(stamp)).is_none());
+    }
+
+    #[test]
+    fn a_missing_file_has_no_size() {
+        let dir = TempDir::new();
+        let stamp = load(&dir.path().join("gone"), None).expect("loaded").stamp;
+        assert_eq!((stamp.len(), stamp.modified()), (None, None));
+    }
+}

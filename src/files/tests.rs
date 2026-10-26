@@ -421,13 +421,21 @@ mod marks {
     #[test]
     fn folders_show_what_changed_inside() {
         let added = diff::untracked("src/ui/new.rs", 1, Some(b"a"));
-        let diff = Diff { files: vec![Arc::new(added), Arc::new(file())] };
-        let marks = statuses(&diff);
+        let changed = file();
+        let marks = statuses([(added.path.as_str(), added.status), (changed.path.as_str(), changed.status)]);
         let mark = |path: &str| marks.get(path).copied();
         assert_eq!(
             [mark("src/a.rs"), mark("src/ui/new.rs"), mark("src"), mark("src/ui"), mark("README.md")],
             [Some(Status::Modified), Some(Status::Untracked), Some(Status::Modified), Some(Status::Added), None]
         );
+    }
+
+    #[test]
+    fn a_folder_of_untracked_files_is_added_until_something_in_it_is_modified() {
+        let marks = statuses([("a/b/new.rs", Status::Untracked), ("a/c.rs", Status::Untracked)]);
+        assert_eq!((marks.get("a").copied(), marks.get("a/b").copied()), (Some(Status::Added), Some(Status::Added)));
+        let marks = statuses([("a/b/new.rs", Status::Untracked), ("a/c.rs", Status::Modified)]);
+        assert_eq!((marks.get("a").copied(), marks.get("a/b").copied()), (Some(Status::Modified), Some(Status::Added)));
     }
 
     #[test]

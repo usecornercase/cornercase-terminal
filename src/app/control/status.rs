@@ -95,6 +95,7 @@ impl App {
             view: None,
             theme: Some(self.theme_info()),
             config: Some(ConfigInfo { revision: self.config_file.revision() }),
+            home: self.home.clone(),
         }
     }
 

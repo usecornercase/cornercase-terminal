@@ -34,5 +34,6 @@ Code: `cli.rs`, `cli/`, `client/requests.rs`, `control.rs`, `app/control.rs`, `a
 - [Reading and changing settings](commands-for-scripts-and-agents/config.md): #336: the `config` request, secrets, the revision; #414: sharing a setup, `config-export` and `config-import`.
 - [Colours for programs](commands-for-scripts-and-agents/colours.md): #331: the `theme` request, precedence, mode 2031.
 - [Arranging the session](commands-for-scripts-and-agents/arranging.md): #335: groups, `move`, `collapse` and `expand`, `move-pane`, the removal check; #399: closing an agent.
+- [Reading a workspace's files](commands-for-scripts-and-agents/files.md): #477: `files list`, `files read` and `files search` over the socket, paths, the stream, `~/` in `open` and `home` in `status`.
 - [Following the changes panel](commands-for-scripts-and-agents/changes.md): #339: the `changes` stream, a file's patch, gaps, the base, viewed marks, discarding a file (#421), staging a file (#426), the version seen from the command line (#470).
 - [A versioned contract](commands-for-scripts-and-agents/contract.md): #283: discovery, `boot`, structured errors, codes, strict fields, compatibility, stream versions.

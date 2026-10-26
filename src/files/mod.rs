@@ -11,13 +11,13 @@ use std::time::{Duration, Instant};
 
 use self::disk::{Body, Content, Entry, Stamp};
 use self::find::Find;
-use crate::changes::diff::{Diff, File as Changed, Hunk, Kind, Status};
+use crate::changes::diff::{File as Changed, Hunk, Kind, Status};
 use crate::text::stretch::Stretch;
 
 pub(crate) const LIST_EVERY: Duration = Duration::from_secs(2);
 pub(crate) const CONTEXT: usize = 3;
 pub(crate) const CHECK_EVERY: Duration = Duration::from_secs(1);
-const GIVE_UP_AFTER: Duration = Duration::from_secs(30);
+pub(crate) const GIVE_UP_AFTER: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) enum Mode {
@@ -570,12 +570,12 @@ impl Panel {
     }
 }
 
-pub(crate) fn statuses(diff: &Diff) -> HashMap<String, Status> {
+pub(crate) fn statuses<'a>(files: impl IntoIterator<Item = (&'a str, Status)>) -> HashMap<String, Status> {
     let mut marks = HashMap::new();
-    for file in &diff.files {
-        marks.insert(file.path.clone(), file.status);
-        let added = matches!(file.status, Status::Added | Status::Untracked);
-        let mut folder = file.path.as_str();
+    for (path, status) in files {
+        marks.insert(path.to_string(), status);
+        let added = matches!(status, Status::Added | Status::Untracked);
+        let mut folder = path;
         while let Some((parent, _)) = folder.rsplit_once('/') {
             let mark = marks.entry(parent.to_string()).or_insert(Status::Added);
             if !added {

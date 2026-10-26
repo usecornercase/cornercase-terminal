@@ -71,6 +71,10 @@ pub(super) fn server_path(path: &Path) -> Result<PathBuf> {
     path_on(path, client::used_remote())
 }
 
+pub(super) fn open_path(path: &Path) -> Result<PathBuf> {
+    if path.starts_with("~") { Ok(path.to_path_buf()) } else { server_path(path) }
+}
+
 fn path_on(path: &Path, remote: Option<&Remote>) -> Result<PathBuf> {
     match remote {
         None => Ok(std::path::absolute(path)?),

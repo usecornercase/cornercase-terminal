@@ -28,25 +28,74 @@ pub(crate) struct Entry {
     pub(crate) dir: bool,
 }
 
-fn order(a: &Entry, b: &Entry) -> Ordering {
-    b.dir.cmp(&a.dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())).then_with(|| a.name.cmp(&b.name))
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Kind {
+    File,
+    Folder,
+    Other,
 }
 
-pub(crate) fn list(root: &Path, folder: &str) -> io::Result<Vec<Entry>> {
-    let dir = if folder.is_empty() { root.to_path_buf() } else { root.join(folder) };
-    if !dir.is_dir() {
-        return Err(io::Error::from(io::ErrorKind::NotFound));
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Listed {
+    pub(crate) name: String,
+    pub(crate) kind: Kind,
+    pub(crate) link: bool,
+    pub(crate) bytes: Option<u64>,
+    pub(crate) modified: Option<SystemTime>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Folder {
+    pub(crate) entries: Vec<Listed>,
+    pub(crate) more: bool,
+}
+
+fn order(a: &Listed, b: &Listed) -> Ordering {
+    let folder = |entry: &Listed| entry.kind == Kind::Folder;
+    folder(b)
+        .cmp(&folder(a))
+        .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        .then_with(|| a.name.cmp(&b.name))
+}
+
+fn listed(item: &ignore::DirEntry) -> Listed {
+    let meta = fs::metadata(item.path()).ok();
+    let kind = match &meta {
+        Some(meta) if meta.is_dir() => Kind::Folder,
+        Some(meta) if meta.is_file() => Kind::File,
+        _ => Kind::Other,
+    };
+    Listed {
+        name: item.file_name().to_string_lossy().into_owned(),
+        kind,
+        link: item.path_is_symlink(),
+        bytes: meta.as_ref().filter(|_| kind == Kind::File).map(fs::Metadata::len),
+        modified: meta.and_then(|meta| meta.modified().ok()),
     }
-    let walk =
-        WalkBuilder::new(&dir).max_depth(Some(1)).hidden(false).filter_entry(|e| e.file_name() != ".git").build();
-    let mut entries: Vec<Entry> = walk
-        .filter_map(Result::ok)
-        .filter(|item| item.depth() == 1)
-        .take(MAX_ENTRIES)
-        .map(|item| Entry { name: item.file_name().to_string_lossy().into_owned(), dir: item.path().is_dir() })
-        .collect();
+}
+
+pub(crate) fn folder(dir: &Path) -> io::Result<Folder> {
+    folder_up_to(dir, MAX_ENTRIES)
+}
+
+fn folder_up_to(dir: &Path, most: usize) -> io::Result<Folder> {
+    if !dir.is_dir() {
+        let kind = if dir.exists() { io::ErrorKind::NotADirectory } else { io::ErrorKind::NotFound };
+        return Err(io::Error::from(kind));
+    }
+    let walk = WalkBuilder::new(dir).max_depth(Some(1)).hidden(false).filter_entry(|e| e.file_name() != ".git").build();
+    let mut entries: Vec<Listed> =
+        walk.filter_map(Result::ok).filter(|item| item.depth() == 1).take(most + 1).map(|item| listed(&item)).collect();
+    let more = entries.len() > most;
+    entries.truncate(most);
     entries.sort_by(order);
-    Ok(entries)
+    Ok(Folder { entries, more })
+}
+
+pub(crate) fn list(root: &Path, folder_name: &str) -> io::Result<Vec<Entry>> {
+    let dir = if folder_name.is_empty() { root.to_path_buf() } else { root.join(folder_name) };
+    let listed = folder(&dir).map_err(|_| io::Error::from(io::ErrorKind::NotFound))?;
+    Ok(listed.entries.into_iter().map(|e| Entry { dir: e.kind == Kind::Folder, name: e.name }).collect())
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -57,6 +106,16 @@ pub(crate) struct Stamp {
 }
 
 const GONE: Stamp = Stamp { modified: None, len: 0, found: false };
+
+impl Stamp {
+    pub(crate) fn len(self) -> Option<u64> {
+        self.found.then_some(self.len)
+    }
+
+    pub(crate) fn modified(self) -> Option<SystemTime> {
+        self.modified
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Body {
@@ -137,43 +196,76 @@ impl Content {
     }
 }
 
-pub(crate) fn read(path: &Path, previous: Option<Stamp>) -> Option<Content> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Raw {
+    Text(String),
+    Image { format: &'static str, bytes: Vec<u8> },
+    Binary,
+    TooLarge(u64),
+    Folder,
+    Missing,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Loaded {
+    pub(crate) stamp: Stamp,
+    pub(crate) raw: Raw,
+}
+
+pub(crate) fn load(path: &Path, previous: Option<Stamp>) -> Option<Loaded> {
     let meta = fs::metadata(path).ok();
     let stamp =
         meta.as_ref().map_or(GONE, |meta| Stamp { modified: meta.modified().ok(), len: meta.len(), found: true });
     if previous == Some(stamp) {
         return None;
     }
-    let content = |language, body| Some(Content { stamp, language, body });
-    let plain = |body| content(None, body);
-    let Some(meta) = meta else { return plain(Body::Missing) };
+    Some(Loaded { stamp, raw: raw(path, meta.as_ref(), stamp.len) })
+}
+
+fn raw(path: &Path, meta: Option<&fs::Metadata>, len: u64) -> Raw {
+    let Some(meta) = meta else { return Raw::Missing };
     if !meta.is_file() {
-        return plain(Body::Binary);
+        return if meta.is_dir() { Raw::Folder } else { Raw::Binary };
     }
-    let limit = if stamp.len > MAX_BYTES && sniff(path).is_some() { MAX_IMAGE_BYTES } else { MAX_BYTES };
-    if stamp.len > limit {
-        return plain(Body::TooLarge(stamp.len));
+    let limit = if len > MAX_BYTES && sniff(path).is_some() { MAX_IMAGE_BYTES } else { MAX_BYTES };
+    if len > limit {
+        return Raw::TooLarge(len);
     }
-    let Ok(bytes) = head(path, limit + 1) else { return plain(Body::Missing) };
+    let Ok(bytes) = head(path, limit + 1) else { return Raw::Missing };
     let size = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
     if size > limit {
-        return plain(Body::TooLarge(size));
+        return Raw::TooLarge(size);
     }
     if let Some(format) = decode::sniff(&bytes) {
-        return plain(image(format, &bytes));
+        return Raw::Image { format, bytes };
     }
     if size > MAX_BYTES {
-        return plain(Body::TooLarge(size));
+        return Raw::TooLarge(size);
     }
     if bytes[..bytes.len().min(BINARY_PROBE)].contains(&0) {
-        return plain(Body::Binary);
+        return Raw::Binary;
     }
-    let source = String::from_utf8_lossy(&bytes);
+    Raw::Text(String::from_utf8(bytes).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned()))
+}
+
+pub(crate) fn read(path: &Path, previous: Option<Stamp>) -> Option<Content> {
+    let Loaded { stamp, raw } = load(path, previous)?;
+    let (language, body) = match raw {
+        Raw::Text(source) => text_body(path, source),
+        Raw::Image { format, bytes } => (None, image(format, &bytes)),
+        Raw::Binary | Raw::Folder => (None, Body::Binary),
+        Raw::TooLarge(size) => (None, Body::TooLarge(size)),
+        Raw::Missing => (None, Body::Missing),
+    };
+    Some(Content { stamp, language, body })
+}
+
+fn text_body(path: &Path, source: String) -> (Option<&'static str>, Body) {
     let (starts, lines): (Vec<usize>, Vec<String>) =
         syntax::lines(&source).map(|(start, line)| (start, syntax::expand(line))).unzip();
     let first = syntax::lines(&source).next().map_or("", |(_, line)| line);
     let language = syntax::language(path, first);
-    content(language, Body::Text { lines, styles: None, source: Arc::from(source), starts })
+    (language, Body::Text { lines, styles: None, source: Arc::from(source), starts })
 }
 
 fn head(path: &Path, limit: u64) -> io::Result<Vec<u8>> {

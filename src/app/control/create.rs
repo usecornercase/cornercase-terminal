@@ -9,6 +9,7 @@ use crate::accounts::Accounts;
 use crate::agents;
 use crate::agents::launch::{self, Launch};
 use crate::app::App;
+use crate::config;
 use crate::control::contract::Refusal;
 use crate::control::{self, Done, Ids, Item};
 use crate::error;
@@ -48,7 +49,8 @@ const NO_AGENT: &str = "say which agent to start, such as `cornercase start clau
 
 impl App {
     pub(super) fn open_request(&mut self, asker: Asker, open: &control::Open, area: Option<Rect>) -> Handled {
-        let path = open.path.canonicalize().map_err(|e| format!("cannot open `{}`: {e}", open.path.display()))?;
+        let wanted = config::expand_home(&open.path.to_string_lossy(), self.home.as_deref());
+        let path = wanted.canonicalize().map_err(|e| format!("cannot open `{}`: {e}", open.path.display()))?;
         if !path.is_dir() {
             return Err(format!("`{}` is not a folder", path.display()).into());
         }

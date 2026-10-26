@@ -578,6 +578,7 @@ mod output {
             view: None,
             theme: None,
             config: None,
+            home: None,
         }
     }
 

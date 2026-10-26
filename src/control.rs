@@ -15,6 +15,7 @@ pub(crate) mod config;
 pub(crate) mod contract;
 mod events;
 mod fields;
+pub(crate) mod files;
 mod flow;
 pub(crate) mod issues;
 pub(crate) mod plugins;
@@ -51,6 +52,7 @@ pub(crate) use closed_agents::{AgentsClose, AgentsForget, AgentsReopen};
 pub(crate) use config::{ConfigExport, ConfigImport, ConfigInfo, Configure};
 pub(crate) use contract::Contract;
 pub(crate) use events::{Event, Events, Go, Kind, What};
+pub(crate) use files::{FilesList, FilesRead, FilesSearch};
 #[cfg(test)]
 pub(crate) use flow::{BackSpec, RoleSpec, StageSpec};
 pub(crate) use flow::{
@@ -218,6 +220,9 @@ pub(crate) enum Command {
     ConfigImport(ConfigImport),
     Ports(Ports),
     StopPort(StopPort),
+    FilesList(FilesList),
+    FilesRead(FilesRead),
+    FilesSearch(FilesSearch),
 }
 
 impl Command {
@@ -228,6 +233,7 @@ impl Command {
             .or_else(|| self.stream_name())
             .or_else(|| self.terminal_name())
             .or_else(|| self.change_name())
+            .or_else(|| self.files_name())
             .or_else(|| self.issue_name())
             .or_else(|| self.flow_name())
             .or_else(|| self.account_name())
@@ -322,6 +328,15 @@ impl Command {
         })
     }
 
+    fn files_name(&self) -> Option<usize> {
+        Some(match self {
+            Self::FilesList(_) => 103,
+            Self::FilesRead(_) => 104,
+            Self::FilesSearch(_) => 105,
+            _ => return None,
+        })
+    }
+
     fn issue_name(&self) -> Option<usize> {
         Some(match self {
             Self::IssueSources(_) => 54,
@@ -392,7 +407,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 103] = [
+    pub(crate) const NAMES: [&str; 106] = [
         "status",
         "open",
         "new-workspace",
@@ -496,6 +511,9 @@ impl Command {
         "plugin-popup-close",
         "ports",
         "stop-port",
+        "files-list",
+        "files-read",
+        "files-search",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
@@ -510,6 +528,9 @@ impl Command {
                 | "changes-file"
                 | "changes-gap"
                 | "flow-files"
+                | "files-list"
+                | "files-read"
+                | "files-search"
         )
     }
 }
@@ -722,6 +743,11 @@ pub(crate) struct RestartWhenIdle {
 pub(crate) enum Response {
     Ok(Value),
     Error(String),
+}
+
+pub(crate) fn streamed_line(value: &impl Serialize) -> Option<String> {
+    let value = serde_json::to_value(value).ok()?;
+    serde_json::to_string(&Response::Ok(value)).ok()
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
