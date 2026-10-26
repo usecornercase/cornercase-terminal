@@ -21,7 +21,9 @@ const SSH: &str = "ssh";
 const BANNER: &str = "cornercase-proxy";
 const BANNER_LINES: usize = 64;
 const BANNER_BYTES: u64 = 4096;
+const KEPT_HEAD: usize = 8;
 const KEPT_LINES: usize = 20;
+const ERROR_PREFIX: &str = "Error: ";
 const KEPT_CHARS: usize = 300;
 const NOT_FOUND: i32 = 127;
 const CANNOT_EXECUTE: i32 = 126;
@@ -47,16 +49,25 @@ struct Banner {
     release: String,
 }
 
+#[derive(Default)]
+struct Kept {
+    head: Vec<String>,
+    tail: VecDeque<String>,
+}
+
 #[derive(Clone, Default)]
-pub(crate) struct Stderr(Arc<Mutex<VecDeque<String>>>);
+pub(crate) struct Stderr(Arc<Mutex<Kept>>);
 
 impl Stderr {
     pub(crate) fn last(&self) -> Option<String> {
-        self.0.lock().back().cloned()
+        let kept = self.0.lock();
+        let said = kept.head.iter().find_map(|line| line.strip_prefix(ERROR_PREFIX));
+        said.map(str::to_string).or_else(|| kept.tail.back().or(kept.head.last()).cloned())
     }
 
     fn any(&self, text: &str) -> bool {
-        self.0.lock().iter().any(|line| line.contains(text))
+        let kept = self.0.lock();
+        kept.head.iter().chain(&kept.tail).any(|line| line.contains(text))
     }
 
     fn keep(&self, line: &str) {
@@ -64,11 +75,16 @@ impl Stderr {
         if line.is_empty() {
             return;
         }
-        let mut lines = self.0.lock();
-        if lines.len() == KEPT_LINES {
-            lines.pop_front();
+        let line: String = line.chars().take(KEPT_CHARS).collect();
+        let mut kept = self.0.lock();
+        if kept.head.len() < KEPT_HEAD {
+            kept.head.push(line);
+            return;
         }
-        lines.push_back(line.chars().take(KEPT_CHARS).collect());
+        if kept.tail.len() == KEPT_LINES {
+            kept.tail.pop_front();
+        }
+        kept.tail.push_back(line);
     }
 
     fn collect(self, from: ChildStderr) -> JoinHandle<()> {

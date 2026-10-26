@@ -205,13 +205,29 @@ mod failures {
     #[test]
     fn keeps_only_the_last_lines() {
         let stderr = Stderr::default();
-        for n in 0..=KEPT_LINES {
+        for n in 0..KEPT_HEAD + KEPT_LINES {
             stderr.keep(&n.to_string());
         }
 
-        assert_eq!(stderr.0.lock().front().map(String::as_str), Some("1"));
-        assert_eq!(stderr.0.lock().len(), KEPT_LINES);
-        assert_eq!(stderr.last(), Some(KEPT_LINES.to_string()));
+        let kept = stderr.0.lock();
+        assert_eq!(kept.head.len(), KEPT_HEAD);
+        assert_eq!(kept.tail.len(), KEPT_LINES);
+        assert_eq!(kept.tail.back().map(String::as_str), Some((KEPT_HEAD + KEPT_LINES - 1).to_string().as_str()));
+    }
+
+    #[test]
+    fn a_proxy_error_followed_by_a_long_backtrace_still_says_what_failed() {
+        let mut lines = vec!["Error: no cornercase server is running".to_string(), "Stack backtrace:".to_string()];
+        lines.extend((0..60).map(|n| format!("  {n}: some::frame")));
+        let stderr = Stderr::default();
+        for line in &lines {
+            stderr.keep(line);
+        }
+
+        let error = devbox().classify(Some(exited(1)), &stderr);
+
+        assert!(matches!(error, Some(Error::RemoteNoServer(_))), "{error:?}");
+        assert_eq!(stderr.last().as_deref(), Some("no cornercase server is running"));
     }
 }
 

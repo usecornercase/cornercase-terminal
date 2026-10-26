@@ -113,7 +113,7 @@ fn commands_reach_the_server_on_the_other_machine() {
 fn a_command_without_a_server_there_says_so_and_starts_none() {
     let session = Session::new();
 
-    let out = remotely(&session, &["status"]).output().expect("run cornercase");
+    let out = remotely(&session, &["status"]).env("RUST_BACKTRACE", "1").output().expect("run cornercase");
 
     assert!(refused(&out, 1, "no cornercase server is running on `devbox`"), "{out:?}");
     assert_eq!(session.servers(), 0);
