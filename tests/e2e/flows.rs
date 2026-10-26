@@ -92,10 +92,14 @@ fn risky_flow() -> String {
 #[test]
 fn an_import_check_from_standard_input_gives_roles_and_risks_without_saving() {
     let app = Harness::start();
+    let project = app.session.dir.join("project");
+    std::fs::create_dir(&project).expect("a project folder");
+    let id = app.session.says(&["open", &project.display().to_string()]);
     let before = json(&app.session, &["flow", "list", "--json"]);
-    let out = app
-        .session
-        .fed(&["flow", "import", "-", "--check", "--json", "--name", "Ours", "--to", "project"], &risky_flow());
+    let out = app.session.fed(
+        &["flow", "import", "-", "--check", "--json", "--name", "Ours", "--to", "project", "--project", &id],
+        &risky_flow(),
+    );
     let check = answered(&out);
 
     assert_eq!((check["name"].as_str(), check["origin"].as_str()), (Some("Ours"), Some("project")));
@@ -108,7 +112,7 @@ fn an_import_check_from_standard_input_gives_roles_and_risks_without_saving() {
     assert!(risks.contains("TOKEN=demo") && risks.contains("--verbose") && risks.contains("without asking"));
     assert!(check["path"].is_null());
     assert_eq!(json(&app.session, &["flow", "list", "--json"]), before);
-    assert!(!app.session.repo.join(".cornercase/flows").exists());
+    assert!(!project.join(".cornercase/flows").exists());
 }
 
 #[test]
