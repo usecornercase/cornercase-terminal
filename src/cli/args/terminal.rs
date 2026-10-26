@@ -5,9 +5,8 @@ use crate::cli::help::PANE_REQUIRED;
 use crate::control::terminal::{InputEvent, Point};
 
 #[derive(Debug, Args)]
-#[command(group(clap::ArgGroup::new("into").required(true).args(["pane", "popup"])))]
 pub(crate) struct InputArgs {
-    #[arg(long, value_name = "ID", help = PANE_REQUIRED)]
+    #[arg(long, value_name = "ID", required_unless_present = "popup", help = INPUT_PANE)]
     pub(crate) pane: Option<u64>,
     #[arg(long, help = "Type into the plugin popup open in the window instead of a pane")]
     pub(crate) popup: bool,
@@ -16,6 +15,9 @@ pub(crate) struct InputArgs {
     #[command(flatten)]
     pub(crate) print: Print,
 }
+
+const INPUT_PANE: &str = "The pane to type into; `cornercase status --panes` lists them. With --popup, the popup's id \
+     from its surface lines (`popup.pane`), so nothing reaches a popup opened since";
 
 fn event(text: &str) -> Result<String, String> {
     if text != "-" {

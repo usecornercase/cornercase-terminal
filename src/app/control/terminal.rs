@@ -152,10 +152,13 @@ impl App {
     }
 
     fn popup_input(&mut self, input: &Input) -> Handled {
-        if input.pane.is_some() {
-            return Err(malformed("`input` types into a pane or into the popup, not both: leave out --pane"));
-        }
         let term = &mut self.popup_mut().ok_or_else(no_popup)?.term;
+        if let Some(wanted) = input.pane.filter(|wanted| *wanted != term.id) {
+            return Err(Refusal::new(
+                Code::NotFound,
+                format!("popup {wanted} is no longer open, so nothing was sent; another one is open now"),
+            ));
+        }
         let pane = term.id;
         type_into(term, pane, input, false)
     }

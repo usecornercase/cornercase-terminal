@@ -63,6 +63,7 @@ pub(crate) struct Frame<B = Content> {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct Popup {
+    pub(crate) pane: u64,
     pub(crate) plugin: String,
     pub(crate) action: String,
 }

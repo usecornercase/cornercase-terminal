@@ -46,7 +46,7 @@ struct Shown {
     tab: u64,
     area: Rect,
     view: Option<(u64, u64)>,
-    popup: bool,
+    popup: Option<u64>,
 }
 
 struct Target {
@@ -106,7 +106,7 @@ fn log_opened(client: u64, shown: Shown, patches: bool) {
         client = client,
         surface = shown.surface,
         tab = shown.tab,
-        popup = shown.popup,
+        popup = shown.popup.is_some(),
         cols = shown.area.width,
         rows = shown.area.height,
         patches = patches
@@ -166,7 +166,7 @@ impl App {
         self.clients.surfaces.issued += 1;
         let id = self.clients.surfaces.issued;
         let view_of = projection.map(|p| (view.unwrap_or_default(), p));
-        let shown = Shown { surface: id, tab, area, view: view_of, popup: popup.is_some() };
+        let shown = Shown { surface: id, tab, area, view: view_of, popup };
         let frame = self.surface_frame(shown, 1, content.clone());
         log_opened(client, shown, surface.patches);
         self.clients.surfaces.subscriptions.push(Subscription {
@@ -219,7 +219,7 @@ impl App {
             Some(own) => {
                 let what = if own.popup.is_some() { "the popup".to_string() } else { format!("tab {}", own.tab) };
                 let message =
-                    format!("this connection already streams {what}; open another connection for another tab");
+                    format!("this connection already streams {what}; open another connection for another surface");
                 Err(Refusal::from(message))
             }
             None => Ok(()),
@@ -245,6 +245,11 @@ impl App {
             hyperlinks: tables.hyperlinks.into_entries(),
             panes: vec![pane],
         })
+    }
+
+    fn popup_label(&self, id: u64) -> Option<surface::Popup> {
+        let popup = self.popup().filter(|popup| popup.term.id == id)?;
+        Some(surface::Popup { pane: id, plugin: popup.plugin.entry.id.clone(), action: popup.action.id.clone() })
     }
 
     fn popup_place(&self, id: u64) -> Place {
@@ -316,10 +321,7 @@ impl App {
             base: None,
             view: shown.view.map(|(view, _)| view),
             projection: shown.view.map(|(_, projection)| projection),
-            popup: self
-                .popup()
-                .filter(|_| shown.popup)
-                .map(|popup| surface::Popup { plugin: popup.plugin.entry.id.clone(), action: popup.action.id.clone() }),
+            popup: shown.popup.and_then(|id| self.popup_label(id)),
             boot: control::server_token().to_string(),
             session: self.clients.events.snapshots.revision(),
             revision,
@@ -367,7 +369,7 @@ impl App {
         }
         let popup = sub.popup;
         let Some(built) = crate::panics::contain(|| self.content_of(popup, tab, area)) else {
-            log::error!("control", "surface panicked", client = client, tab = tab);
+            log::error!("control", "surface panicked", client = client, tab = tab, popup = popup.is_some());
             self.report_bug();
             self.end_surface(at, "bug");
             return Rendered::Ended((client, Surfaced::End));
@@ -443,7 +445,7 @@ impl App {
         sub.projection = view.map_or(0, |(_, projection)| projection);
         sub.tab = tab;
         sub.area = area;
-        Some((Shown { surface, tab, area, view, popup: sub.popup.is_some() }, base, changes))
+        Some((Shown { surface, tab, area, view, popup: sub.popup }, base, changes))
     }
 
     fn patch_text(&self, shown: Shown, revision: u64, base: u64, changes: patch::Changes) -> Option<String> {

@@ -399,12 +399,13 @@ takes nothing. Keys, text and pastes bring the pane's view back to the bottom. M
 releases that the program does not take are not sent, and said on stderr. When one event is wrong,
 or the program is not reading its input, nothing is sent. Scripts and agents should use `send` and
 `keys`, which check before typing into an agent. With --popup the events go to the plugin popup open
-in the window, its x and y being cells of the popup's terminal.
+in the window, its x and y being cells of the popup's terminal; add --pane with the popup's id from its
+surface lines (popup.pane) so that nothing is sent if that popup closed and another one opened.
 
 Examples:
   cornercase input --pane 12 '{\"text\": \"ls\"}' '{\"key\": {\"code\": \"enter\"}}'
   cornercase input --pane 12 '{\"mouse\": {\"kind\": \"scroll-up\", \"x\": 10, \"y\": 5}}'
-  cornercase input --popup '{\"key\": {\"code\": \"down\"}}' '{\"key\": {\"code\": \"enter\"}}'";
+  cornercase input --popup --pane 40 '{\"key\": {\"code\": \"down\"}}' '{\"key\": {\"code\": \"enter\"}}'";
 pub(super) const SCROLL_HELP: &str =
     "Moves the pane's view through its history, as the wheel does in the window, which shows the same
 view. On its alternate screen, or when it reads the mouse, a program scrolls itself: send it keys or

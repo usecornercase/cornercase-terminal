@@ -47,11 +47,17 @@ fn input_can_type_into_the_popup_instead_of_a_pane() {
     assert_eq!((input.pane, input.popup), (None, true));
 }
 
-#[rstest]
-#[case::neither(&["input", r#"{"text":"x"}"#])]
-#[case::both(&["input", "--pane", "3", "--popup", r#"{"text":"x"}"#])]
-fn input_takes_a_pane_or_the_popup(#[case] args: &[&str]) {
-    assert!(parse(args).is_err());
+#[test]
+fn input_needs_a_pane_or_the_popup() {
+    assert!(parse(&["input", r#"{"text":"x"}"#]).is_err());
+}
+
+#[test]
+fn input_can_name_the_popup_by_its_id() {
+    let cli = parse(&["input", "--popup", "--pane", "40", r#"{"text":"x"}"#]).expect("parse");
+
+    let Some(Command::Control(Control::Input(input))) = cli.command else { panic!("not input") };
+    assert_eq!((input.pane, input.popup), (Some(40), true));
 }
 
 #[test]

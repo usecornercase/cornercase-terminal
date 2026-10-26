@@ -1,3 +1,4 @@
+use rstest::rstest;
 use serde_json::{Value, json};
 
 use super::*;
@@ -8,7 +9,11 @@ use crate::control::surface::Frame;
 const CLIENT: u64 = 9;
 
 fn ask(p: &mut Popped, command: &str, args: &Value) -> Value {
-    let text = json!({"contract": 1, "command": command, "args": args}).to_string();
+    ask_with(p, &json!({"contract": 1, "command": command, "args": args}))
+}
+
+fn ask_with(p: &mut Popped, request: &Value) -> Value {
+    let text = request.to_string();
     p.app.request(CLIENT, &text, Some(AREA), Instant::now());
     let answers = p.app.take_answers();
     assert_eq!(answers.len(), 1, "an answer at once");
@@ -18,6 +23,27 @@ fn ask(p: &mut Popped, command: &str, args: &Value) -> Value {
 fn subscribe(p: &mut Popped) -> Frame {
     let answer = ask(p, "surface", &json!({"popup": true}));
     serde_json::from_value(answer["ok"].clone()).expect("a frame")
+}
+
+fn printed(p: &mut Popped, text: &str) {
+    assert!(typed(p, &json!([{"text": text}]))["ok"].is_object());
+    wait_until("the popup's program echoes", || {
+        drain(&mut p.app, &p.rx);
+        p.app.popup().is_some_and(|popup| popup.term.emulator.screen_text().is_ok_and(|screen| screen.contains(text)))
+    });
+}
+
+fn lines_at(p: &mut Popped, at: Instant) -> Vec<Value> {
+    p.app
+        .render_surfaces(&[CLIENT], at)
+        .into_iter()
+        .map(|(client, surfaced)| {
+            assert_eq!(client, CLIENT);
+            let Surfaced::Frame(text) = surfaced else { panic!("the stream ended") };
+            let value: Value = serde_json::from_str(&text).expect("a line");
+            value["ok"].clone()
+        })
+        .collect()
 }
 
 fn typed(p: &mut Popped, events: &Value) -> Value {
@@ -30,15 +56,6 @@ fn code(answer: &Value) -> &str {
 
 fn shown(frame: &Frame) -> String {
     frame.content.panes[0].lines.iter().flatten().flat_map(|run| run.cells.iter().map(String::as_str)).collect()
-}
-
-fn last_shown(rendered: Vec<(u64, Surfaced)>) -> Option<String> {
-    rendered.into_iter().last().map(|(client, surfaced)| {
-        assert_eq!(client, CLIENT);
-        let Surfaced::Frame(text) = surfaced else { panic!("the stream ended") };
-        let value: Value = serde_json::from_str(&text).expect("a line");
-        shown(&serde_json::from_value(value["ok"].clone()).expect("a frame"))
-    })
 }
 
 fn popup_id(p: &Popped) -> u64 {
@@ -56,7 +73,7 @@ mod surface {
         let frame = subscribe(&mut p);
 
         let popup = frame.popup.as_ref().expect("the popup");
-        assert_eq!((popup.plugin.as_str(), popup.action.as_str()), (ID, "line"));
+        assert_eq!((popup.pane, popup.plugin.as_str(), popup.action.as_str()), (popup_id(&p), ID, "line"));
         assert_eq!((frame.tab, frame.cols, frame.rows), (0, 60, 10));
         assert!(frame.content.layout.is_none());
         assert_eq!(frame.content.panes.len(), 1);
@@ -69,19 +86,62 @@ mod surface {
         let mut p = popped();
         p.open("line", None);
         subscribe(&mut p);
-        let mut at = Instant::now();
+        let next = Instant::now() + FRAME_EVERY;
 
-        assert_eq!(typed(&mut p, &json!([{"text": "hello-popup"}]))["ok"]["pane"], json!(popup_id(&p)));
+        printed(&mut p, "hello-popup");
 
-        let mut seen = String::new();
-        wait_until("the popup's echo reaches a frame", || {
-            drain(&mut p.app, &p.rx);
-            at += FRAME_EVERY;
-            if let Some(text) = last_shown(p.app.render_surfaces(&[CLIENT], at)) {
-                seen = text;
-            }
-            seen.contains("hello-popup")
-        });
+        let lines = lines_at(&mut p, next);
+        assert_eq!(lines.len(), 1, "one frame, before the periodic refresh");
+        let frame: Frame = serde_json::from_value(lines[0].clone()).expect("a frame");
+        assert!(shown(&frame).contains("hello-popup"), "{}", shown(&frame));
+    }
+
+    #[test]
+    fn a_redraw_sends_a_complete_frame_at_once() {
+        let mut p = popped();
+        p.open("watch", None);
+        let first = subscribe(&mut p);
+
+        let answer = ask(&mut p, "redraw", &json!({"surface": first.surface}));
+        let at = Instant::now();
+
+        assert_eq!((answer["ok"]["surface"].as_u64(), answer["ok"]["tab"].as_u64()), (Some(first.surface), Some(0)));
+        let lines = lines_at(&mut p, at);
+        assert_eq!(lines.len(), 1);
+        assert_eq!((lines[0]["revision"].as_u64(), lines[0]["base"].is_null()), (Some(2), true));
+        assert_eq!(lines[0]["popup"]["pane"].as_u64(), Some(popup_id(&p)));
+    }
+
+    #[test]
+    fn with_patches_what_changed_comes_as_a_patch_naming_the_popup() {
+        let mut p = popped();
+        p.open("line", None);
+        ask(&mut p, "surface", &json!({"popup": true, "patches": true}));
+        let next = Instant::now() + FRAME_EVERY;
+
+        printed(&mut p, "patched");
+
+        let lines = lines_at(&mut p, next);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0]["base"].as_u64(), Some(1));
+        assert_eq!(lines[0]["popup"]["action"], json!("line"));
+        assert_eq!(lines[0]["panes"][0]["pane"].as_u64(), Some(popup_id(&p)));
+    }
+
+    #[test]
+    fn a_new_window_size_sends_a_complete_frame_at_the_popups_new_size() {
+        let mut p = popped();
+        p.open("line", None);
+        subscribe(&mut p);
+        let next = Instant::now() + FRAME_EVERY;
+
+        p.app.resize(Rect::new(0, 0, 50, 12));
+        p.app.touch_surfaces();
+
+        let lines = lines_at(&mut p, next);
+        assert_eq!(lines.len(), 1);
+        assert_eq!((lines[0]["cols"].as_u64(), lines[0]["rows"].as_u64()), (Some(38), Some(7)));
+        assert!(lines[0]["base"].is_null());
     }
 
     #[test]
@@ -114,12 +174,30 @@ mod surface {
         assert_eq!(code(&ask(&mut p, "surface", &json!({"popup": true}))), "not-found");
     }
 
-    #[test]
-    fn a_tab_or_a_size_with_it_is_malformed() {
+    #[rstest]
+    #[case::a_tab(json!({"contract": 1, "command": "surface", "args": {"popup": true, "tab": 1}}))]
+    #[case::a_size(json!({"contract": 1, "command": "surface", "args": {"popup": true, "cols": 80, "rows": 24}}))]
+    fn a_tab_or_a_size_with_it_is_malformed(#[case] request: Value) {
         let mut p = popped();
         p.open("watch", None);
 
-        let answer = ask(&mut p, "surface", &json!({"popup": true, "cols": 80, "rows": 24}));
+        let answer = ask_with(&mut p, &request);
+
+        assert_eq!(code(&answer), "malformed");
+    }
+
+    #[test]
+    fn a_view_with_it_is_malformed() {
+        let mut p = popped();
+        p.open("watch", None);
+        let open = json!({"command": "view", "args": {"cols": 80, "rows": 24}}).to_string();
+        p.app.request(CLIENT + 1, &open, Some(AREA), Instant::now());
+        let answers = p.app.take_answers();
+        let opened: Value = serde_json::from_str(&answers[0].1).expect("a reply");
+        let view = opened["ok"]["view"]["id"].as_u64().expect("a view");
+
+        let answer =
+            ask_with(&mut p, &json!({"contract": 1, "view": view, "command": "surface", "args": {"popup": true}}));
 
         assert_eq!(code(&answer), "malformed");
     }
@@ -180,12 +258,37 @@ mod input {
     }
 
     #[test]
-    fn a_pane_with_it_is_malformed() {
+    fn its_own_id_names_it() {
+        let mut p = popped();
+        p.open("line", None);
+        let id = popup_id(&p);
+
+        let answer = ask(
+            &mut p,
+            "input",
+            &json!({"popup": true, "pane": id, "events": [{"text": "mine"}, {"key": {"code": "enter"}}]}),
+        );
+
+        assert_eq!(answer["ok"]["pane"].as_u64(), Some(id));
+        assert!(p.line().ends_with("\nmine"), "{}", p.line());
+    }
+
+    #[test]
+    fn the_id_of_a_closed_popup_reaches_nothing_in_the_next_one() {
         let mut p = popped();
         p.open("watch", None);
+        let gone = popup_id(&p);
+        p.app.close_plugin_popup();
+        p.open("line", None);
 
-        let answer = ask(&mut p, "input", &json!({"popup": true, "pane": 1, "events": [{"text": "x"}]}));
+        let answer = ask(
+            &mut p,
+            "input",
+            &json!({"popup": true, "pane": gone, "events": [{"text": "secret"}, {"key": {"code": "enter"}}]}),
+        );
 
-        assert_eq!(code(&answer), "malformed");
+        assert_eq!(code(&answer), "not-found");
+        typed(&mut p, &json!([{"text": "next"}, {"key": {"code": "enter"}}]));
+        assert!(p.line().ends_with("\nnext"), "{}", p.line());
     }
 }
