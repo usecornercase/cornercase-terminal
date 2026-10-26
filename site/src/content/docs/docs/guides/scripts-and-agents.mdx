@@ -24,6 +24,17 @@ pane=$(cornercase start claude --prompt "fix the failing test" --worktree fix/te
 
 It starts the server if none runs, restores the saved session once (or opens the folder you ran it from), and returns once its terminals exist; run again, it does nothing and says the server is already running. Until a window attaches, terminals are 160×48, or `--cols` and `--rows`. A window that attaches later finds the same tabs, with the same ids, takes over the size and gives the terminals its colours, unless you [gave them](#colours-for-programs) with `--theme FILE`. See [Command line](../../reference/command-line/#cornercase-start-server) for its output.
 
+## On another machine
+
+`--remote DESTINATION`, or `CORNERCASE_REMOTE=DESTINATION`, sends any of these commands to the server of another machine through your own `ssh`, as [`cornercase remote`](../remote/) attaches the window:
+
+```sh
+cornercase --remote devbox status --json
+cornercase --remote devbox events --notices --host --json
+```
+
+Arguments and standard input arrive as they are, a stream ends there when the command ends here, and only `start-server` starts a server. See [Commands for scripts and agents](../remote/#commands-for-scripts-and-agents) for what it needs and which commands refuse it.
+
 ## Ids and where commands act
 
 `cornercase status` lists every project, workspace, tab and pane with its id:
@@ -1063,6 +1074,8 @@ Some messages you may meet:
 | Message | Meaning |
 | --- | --- |
 | `no cornercase server is running` | Start cornercase first, or [`cornercase start-server`](#start-without-a-window) without a window; the other commands never start one. |
+| ``no cornercase server is running on `<host>` `` | `--remote` reached the machine, but no server runs there; only `start-server` starts one. |
+| ``could not reach cornercase on `<host>`: …`` | `--remote` couldn't connect, or the connection ended; the end of the line is what `ssh` said. |
 | `the running cornercase server is too old for cornercase …` | The server comes from a release without these commands, or without this one. Restart it: `cornercase kill-server` (it closes all its terminals), then `cornercase`. |
 | `the running cornercase server (…) has no … command` | The command is newer than the server. Restart the server so it runs the version you installed. |
 | `this cornercase server has not started its session yet …` | A server started without a window has no size to give a new terminal, and hasn't restored your session yet. Run [`cornercase start-server`](#start-without-a-window), or open a window with `cornercase`. |
@@ -1081,7 +1094,7 @@ Some messages you may meet:
 
 ## Contract and compatibility
 
-The commands and the server don't have to come from the same release: after `cornercase update`, a command of the new version talks to the server still running the old one, and the other way round. A program of your own, such as another UI for cornercase, can rely on the same rules, through the commands or straight through the socket.
+The commands and the server don't have to come from the same release (except through [`--remote`](#on-another-machine), where both machines run the same version): after `cornercase update`, a command of the new version talks to the server still running the old one, and the other way round. A program of your own, such as another UI for cornercase, can rely on the same rules, through the commands or straight through the socket.
 
 ### Ask the server first
 
@@ -1171,6 +1184,7 @@ The instructions tell agents to use the commands only when you ask them to open 
 | `CORNERCASE` | `1` in every pane. The commands work there; only opening the window inside cornercase is refused. |
 | `CORNERCASE_PANE` | The id of the pane a shell runs in. The commands use it to know where they run. |
 | `CORNERCASE_RUN_DIR` | In the panes of a [flow](../flows/#the-runs-folder) run only: the folder where the team keeps its files. |
+| `CORNERCASE_REMOTE` | Send the commands to the server of this machine, through `ssh`, as `--remote` does (the flag wins). Set it for one program, not in a shell's rc file: panes see it too, though servers never hand it to them. |
 | `CORNERCASE_SERVER` | Which server started the shell, the `boot` of [`contract`](#contract-and-compatibility). A server only takes `CORNERCASE_PANE` as the pane a command runs in when this is its own, since every server numbers its panes from 1. |
 | `CORNERCASE_SOCKET` | Which server to talk to, as for every `cornercase` command. Panes don't get it: a shell inherits the server's environment, so `cornercase` in a pane finds its own server anyway, and setting it would also move `config.json` and the session (see [Files and environment](../../reference/files-and-environment/#with-cornercase_socket)). |
 

@@ -17,17 +17,18 @@ pub(crate) mod view;
 
 use std::path::PathBuf;
 
+use clap::builder::NonEmptyStringValueParser;
 use clap::{ArgGroup, Args, Parser, Subcommand, ValueEnum};
 
 use super::help::{
-    ABOUT, ACCOUNT_HELP, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, CONFIG_HELP, CONTRACT_HELP,
-    EVENTS_HELP, FLOW_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP, HERE_PANE, HERE_WORKSPACE, INPUT_HELP,
-    ISSUE_HELP, KEY_NAMES, KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, MOVE_HELP,
-    MOVE_PANE_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP, PROFILE_HELP, RATIO_HELP,
-    READ_HELP, REDRAW_HELP, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP, RESTART_TIMEOUT, SCROLL_HELP,
-    SEARCH_HELP, SELECTION_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP, STATUS_HELP,
-    SURFACE_HELP, THEME_HELP, TODO_HELP, TOUR_HELP, UNTIL_AFTER, UPDATE_HELP, USAGE_HELP, VIEW_ARG, VIEW_HELP,
-    VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
+    ABOUT, ACCOUNT_HELP, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, COMMAND_THERE, CONFIG_HELP,
+    CONTRACT_HELP, EVENTS_HELP, FLOW_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP, HERE_PANE, HERE_WORKSPACE,
+    INPUT_HELP, ISSUE_HELP, KEY_NAMES, KEYS_HELP, KILL_SERVER_HELP, LINK_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP,
+    MOVE_HELP, MOVE_PANE_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP, PROFILE_HELP,
+    RATIO_HELP, READ_HELP, REDRAW_HELP, REMOTE_ARG, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP,
+    RESTART_TIMEOUT, SCROLL_HELP, SEARCH_HELP, SELECTION_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP,
+    START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, TOUR_HELP, UNTIL_AFTER, UPDATE_HELP,
+    USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use super::help::{AGENTS_HELP, CHANGES_HELP, PORTS_HELP};
 use crate::control::Until;
@@ -39,6 +40,10 @@ pub(crate) use plugin::{PluginAction, PluginArgs};
 #[derive(Debug, Parser)]
 #[command(name = "cornercase", version, about = ABOUT, long_about = LONG_ABOUT, after_help = AFTER_HELP)]
 pub struct Cli {
+    #[arg(long, global = true, value_name = "DESTINATION", value_parser = NonEmptyStringValueParser::new(), help = REMOTE_ARG)]
+    pub(crate) remote: Option<String>,
+    #[arg(long, global = true, value_name = "COMMAND", value_parser = NonEmptyStringValueParser::new(), help = COMMAND_THERE)]
+    pub(crate) remote_command: Option<String>,
     #[command(subcommand)]
     pub(crate) command: Option<Command>,
 }
@@ -72,7 +77,7 @@ pub(crate) enum Command {
     Logs(LogsArgs),
     #[command(
         about = "Show work by agents running in cornercase",
-        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json. Merged pull requests need a running server and gh or glab.
+        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json (here; with --remote the server there must run). Merged pull requests need a running server and gh or glab.
 
 Examples:
   cornercase stats
@@ -782,12 +787,7 @@ pub(crate) struct EventsArgs {
 pub(crate) struct RemoteArgs {
     #[arg(value_name = "DESTINATION", help = "Where ssh connects: a host from ~/.ssh/config, or user@host")]
     pub(crate) destination: String,
-    #[arg(
-        long,
-        value_name = "COMMAND",
-        help = "How to run cornercase there, as sh reads it [default: cornercase, also looked for in \
-                ~/.local/bin, ~/.cargo/bin and Homebrew's folders]"
-    )]
+    #[arg(long, value_name = "COMMAND", help = COMMAND_THERE)]
     pub(crate) command: Option<String>,
 }
 

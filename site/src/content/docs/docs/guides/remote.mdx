@@ -69,9 +69,39 @@ When the other machine is the older one, it offers to run `cornercase update` th
 
 When the binary on the other machine was updated but its old server still runs, cornercase asks before restarting it, as it does [on your own machine](../../reference/command-line/#a-server-from-another-build), and then runs `cornercase kill-server` there. After an update from the window's own [update dialog](../../installation/#update), which updates the other machine, the window reconnects to the new server by itself, and tells you if your laptop now needs the same update.
 
+## Commands for scripts and agents
+
+The commands for [scripts and agents](../scripts-and-agents/) reach another machine's server too, with `--remote`. A script, an agent on your laptop or another interface can drive the server on `devbox` without building the `ssh` line itself:
+
+```sh
+cornercase --remote devbox status --json
+cornercase --remote devbox events --notices --host --json
+cornercase --remote devbox send --pane 12 - < prompt.md
+cornercase --remote devbox start-server
+```
+
+`CORNERCASE_REMOTE=devbox` does the same without the flag, and the flag wins. Set it for one program, never in a shell's rc file: it also applies in your panes, and the commands it sends away would stop acting on this machine. `--remote-command` is `--command` for these commands.
+
+- **Arguments and standard input arrive as they are**, whatever the login shell there is: they travel inside cornercase's own messages, not through a shell.
+- **Same version** on both machines, as for the window.
+- **It never asks** for a password, a passphrase or an unknown host key, since a script cannot answer: use a key in your SSH agent, and connect once by hand to accept the host key.
+- **Only `start-server` starts a server there.** The other commands say `no cornercase server is running on devbox`, as they do on your machine.
+- **A stream ends there when the command ends here**, even when it is killed, so `events` or `status --follow` never leaves a command running on `devbox`.
+- **Paths are the other machine's**, and the ones you type must be absolute: `open`, `config project` and `flow save --path` refuse a relative one. `status` prints full paths.
+- **`update`, `restart`, `kill-server`, `logs` and the plugin commands that install or change plugins** act on the machine they run on and refuse `--remote`, with status 2: run them there with `ssh`.
+- **`cornercase --remote devbox` alone** opens the window, as `cornercase remote devbox`.
+- **One `ssh` connection per command.** To share one, use your own config:
+
+```text
+Host devbox
+  ControlMaster auto
+  ControlPath ~/.ssh/cm-%C
+  ControlPersist 10m
+```
+
 ## Good to know
 
 - **Latency**: every key goes to the other machine and comes back as a screen update, the same as typing in plain `ssh`.
 - **One window, one server**: the sidebar shows the projects of one machine. Open another window for another machine.
-- **Commands for scripts and agents** act on the server of the machine they run on, so run them there: in one of its panes, or with `ssh devbox cornercase status`.
+- **Commands for scripts and agents** act on the server of the machine they run on, unless you give them [`--remote`](#commands-for-scripts-and-agents).
 - **Inside a pane**: `cornercase remote` works inside one of cornercase's own panes, unlike `cornercase`, since the other server is a different one.

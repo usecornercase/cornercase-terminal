@@ -13,7 +13,7 @@ use cornercase::config;
 use cornercase::control::{PANE_ENV, PaneInfo, PaneRow, PaneRows, Report};
 use cornercase::paths::SOCKET_ENV;
 use cornercase::project::split::{self, Dir};
-use cornercase::protocol::NESTED_ENV;
+use cornercase::protocol::{NESTED_ENV, REMOTE_ENV};
 use cornercase::state;
 use cornercase::ui::{self, SidebarRow, WorkspaceRow};
 use cornercase::update;
@@ -133,6 +133,7 @@ impl Session {
         cmd.env(SOCKET_ENV, self.socket())
             .env_remove(NESTED_ENV)
             .env_remove(PANE_ENV)
+            .env_remove(REMOTE_ENV)
             .env_remove(update::LATEST_ENV)
             .env_remove("CORNERCASE_SERVER");
         cmd
@@ -143,25 +144,23 @@ impl Session {
     }
 
     fn fed(&self, args: &[&str], input: &str) -> std::process::Output {
-        let mut child = self
-            .command()
-            .args(args)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn()
-            .expect("run cornercase");
-        child.stdin.take().expect("stdin").write_all(input.as_bytes()).expect("write to cornercase");
-        child.wait_with_output().expect("wait for cornercase")
+        let mut cmd = self.command();
+        cmd.args(args);
+        feed(cmd, input)
     }
 
-    fn cold(&self, args: &[&str]) -> std::process::Output {
+    fn cold_command(&self) -> std::process::Command {
         let mut cmd = self.command();
-        cmd.args(args).env("SHELL", "/bin/sh").env("PS1", "$ ").env(CLAUDE_DIR_ENV, self.claude_dir());
+        cmd.env("SHELL", "/bin/sh").env("PS1", "$ ").env(CLAUDE_DIR_ENV, self.claude_dir());
         for var in ["SHORTCUT_API_TOKEN", "LINEAR_API_KEY"].into_iter().chain(TERMINAL_ENV) {
             cmd.env_remove(var);
         }
-        cmd.current_dir(std::env::temp_dir()).output().expect("run cornercase")
+        cmd.current_dir(std::env::temp_dir());
+        cmd
+    }
+
+    fn cold(&self, args: &[&str]) -> std::process::Output {
+        self.cold_command().args(args).output().expect("run cornercase")
     }
 
     fn says(&self, args: &[&str]) -> String {
@@ -203,6 +202,17 @@ impl Session {
     fn wait_for_program(&self, program: &str) {
         self.wait_for_report(program, |report| panes(report).any(|p| p.program.as_deref() == Some(program)));
     }
+}
+
+fn feed(mut cmd: std::process::Command, input: &str) -> std::process::Output {
+    let mut child = cmd
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("run cornercase");
+    child.stdin.take().expect("stdin").write_all(input.as_bytes()).expect("write to cornercase");
+    child.wait_with_output().expect("wait for cornercase")
 }
 
 #[cfg(target_os = "linux")]
@@ -317,6 +327,7 @@ impl Harness {
         cmd.env("SSH_CONNECTION", "e2e");
         cmd.env_remove(NESTED_ENV);
         cmd.env_remove(PANE_ENV);
+        cmd.env_remove(REMOTE_ENV);
         cmd.env_remove("CORNERCASE_SERVER");
         for var in ["SHORTCUT_API_TOKEN", "LINEAR_API_KEY"].into_iter().chain(TERMINAL_ENV) {
             cmd.env_remove(var);

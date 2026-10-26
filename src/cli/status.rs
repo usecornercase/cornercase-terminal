@@ -33,6 +33,9 @@ fn follow() -> Result<()> {
 }
 
 fn home() -> Option<PathBuf> {
+    if crate::client::used_remote().is_some() {
+        return None;
+    }
     std::env::var_os("HOME").map(PathBuf::from)
 }
 

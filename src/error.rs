@@ -109,8 +109,10 @@ pub enum Error {
     RunSsh(std::io::Error),
     #[error("could not reach cornercase on `{host}`: {reason}")]
     Ssh { host: String, reason: String },
-    #[error("cornercase was not found on `{0}`. Install it there, or give its path with --command")]
-    RemoteMissing(String),
+    #[error("cornercase was not found on `{host}`. Install it there, or give its path with {option}")]
+    RemoteMissing { host: String, option: &'static str },
+    #[error("no cornercase server is running on `{0}`")]
+    RemoteNoServer(String),
     #[error("the cornercase on `{0}` is too old to attach to from another machine. Run `cornercase update` there")]
     RemoteTooOld(String),
     #[error(

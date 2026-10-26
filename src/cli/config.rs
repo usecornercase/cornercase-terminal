@@ -51,7 +51,7 @@ fn absolute(path: &str) -> Result<PathBuf> {
     if path.starts_with('~') || std::path::Path::new(path).is_absolute() {
         return Ok(PathBuf::from(path));
     }
-    Ok(std::env::current_dir()?.join(path))
+    super::reach::server_path(std::path::Path::new(path))
 }
 
 fn converted(pairs: &[String]) -> Result<BTreeMap<String, Value>> {

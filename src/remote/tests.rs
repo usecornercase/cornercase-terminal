@@ -1,13 +1,14 @@
 use rstest::rstest;
 
 use super::*;
+use crate::control;
 use crate::graphics::Support;
 use crate::host::notify::Channel;
 use crate::host::theme::HostTheme;
 use crate::protocol::Hello;
 
 fn devbox() -> Remote {
-    Remote { destination: "me@devbox".into(), command: None }
+    Remote { destination: "me@devbox".into(), command: None, option: "--command" }
 }
 
 fn exited(code: i32) -> ExitStatus {
@@ -150,17 +151,26 @@ mod failures {
     }
 
     #[test]
+    fn a_missing_command_names_the_option_given() {
+        let remote = Remote { option: "--remote-command", ..devbox() };
+
+        let error = remote.failure(Some(exited(127)), &with(&["sh: 1: exec: cornercase: not found"]));
+
+        assert!(error.to_string().ends_with("with --remote-command"), "{error}");
+    }
+
+    #[test]
     fn a_missing_command_says_how_to_point_at_it() {
         let error = devbox().failure(Some(exited(127)), &with(&["sh: 1: exec: cornercase: not found"]));
 
-        assert!(matches!(error, Error::RemoteMissing(_)));
+        assert!(matches!(error, Error::RemoteMissing { .. }));
     }
 
     #[test]
     fn a_missing_path_in_bash_says_so_too() {
         let stderr = with(&["sh: line 0: exec: /opt/cornercase: cannot execute: No such file or directory"]);
 
-        assert!(matches!(devbox().failure(Some(exited(126)), &stderr), Error::RemoteMissing(_)));
+        assert!(matches!(devbox().failure(Some(exited(126)), &stderr), Error::RemoteMissing { .. }));
     }
 
     #[test]
@@ -205,12 +215,69 @@ mod failures {
     }
 }
 
+mod ended {
+    use super::*;
+
+    fn with(lines: &[&str]) -> Stderr {
+        let stderr = Stderr::default();
+        for line in lines {
+            stderr.keep(line);
+        }
+        stderr
+    }
+
+    fn spawned(script: &str) -> (Child, Stderr, JoinHandle<()>) {
+        let mut child = Command::new("/bin/sh").args(["-c", script]).stderr(Stdio::piped()).spawn().expect("run sh");
+        let stderr = Stderr::default();
+        let collector = stderr.clone().collect(child.stderr.take().expect("stderr"));
+        (child, stderr, collector)
+    }
+
+    #[test]
+    fn a_clean_exit_keeps_the_local_meaning() {
+        assert!(devbox().classify(Some(exited(0)), &Stderr::default()).is_none());
+    }
+
+    #[test]
+    fn no_server_there_says_so() {
+        let stderr = with(&["Error: no cornercase server is running"]);
+
+        let error = devbox().classify(Some(exited(1)), &stderr);
+
+        assert!(matches!(error, Some(Error::RemoteNoServer(host)) if host == "me@devbox"));
+    }
+
+    #[test]
+    fn what_ssh_said_is_kept() {
+        let stderr = with(&["Connection to devbox closed by remote host."]);
+
+        let error = devbox().classify(Some(exited(255)), &stderr);
+
+        assert!(matches!(error, Some(Error::Ssh { reason, .. }) if reason.contains("closed by remote host")));
+    }
+
+    #[test]
+    fn waits_for_ssh_and_its_last_line() {
+        let (mut child, stderr, collector) = spawned("echo 'Error: no cornercase server is running' >&2; exit 1");
+
+        let error = devbox().ended(&mut child, &stderr, Some(collector));
+
+        assert!(matches!(error, Some(Error::RemoteNoServer(_))), "{error:?}");
+    }
+
+    #[test]
+    fn a_clean_end_keeps_the_local_meaning_after_waiting() {
+        let (mut child, stderr, collector) = spawned("exit 0");
+
+        assert!(devbox().ended(&mut child, &stderr, Some(collector)).is_none());
+    }
+}
+
 mod proxy {
     use super::*;
 
-    #[test]
-    fn hands_the_server_its_own_build() {
-        let hello = Hello {
+    fn hello() -> Hello {
+        Hello {
             zone: "UTC".into(),
             openers: vec![crate::host::open::Opener::Files],
             version: protocol::VERSION,
@@ -223,9 +290,27 @@ mod proxy {
             pointer: None,
             graphics: Support::default(),
             probe: String::new(),
-        };
+        }
+    }
 
-        let message = rebuilt(ClientMessage::Hello(Box::new(hello)), "the server's".into());
+    fn request(command: control::Command) -> ClientMessage {
+        let request = control::Request { caller: None, server: None, contract: None, boot: None, view: None, command };
+        ClientMessage::Request(serde_json::to_string(&request).expect("json"))
+    }
+
+    #[rstest]
+    #[case::a_window(ClientMessage::Hello(Box::new(hello())), true)]
+    #[case::start_server(request(control::Command::StartServer(control::StartServer::default())), true)]
+    #[case::another_request(request(control::Command::Status(control::Status {})), false)]
+    #[case::not_json(ClientMessage::Request("{".into()), false)]
+    #[case::kill_server(ClientMessage::KillServer, false)]
+    fn starts_a_server_only_for_a_window_or_start_server(#[case] first: ClientMessage, #[case] starts_one: bool) {
+        assert_eq!(starts(&first), starts_one);
+    }
+
+    #[test]
+    fn hands_the_server_its_own_build() {
+        let message = rebuilt(ClientMessage::Hello(Box::new(hello())), "the server's".into());
 
         assert!(
             matches!(message, ClientMessage::Hello(hello) if hello.build == "the server's" && hello.openers.is_empty())
@@ -259,7 +344,7 @@ mod proxy {
     #[test]
     fn a_slow_ssh_never_holds_the_server_back() {
         let (mut server, proxy) = UnixStream::pair().expect("a socket pair");
-        server.set_write_timeout(Some(std::time::Duration::from_secs(1))).expect("a write timeout");
+        server.set_write_timeout(Some(Duration::from_secs(1))).expect("a write timeout");
         let (open, gate) = mpsc::channel();
         let got = Arc::new(Mutex::new(Vec::new()));
         let mut ssh = Stalled { gate, got: Arc::clone(&got) };

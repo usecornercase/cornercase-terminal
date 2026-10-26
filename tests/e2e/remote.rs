@@ -21,15 +21,32 @@ fn ssh_pid(session: &Session) -> String {
     std::fs::read_to_string(session.dir.join(SSH_PID)).unwrap_or_default().trim().to_string()
 }
 
-fn remote_refusal(command: &str) -> std::process::Output {
+fn remote_refusal(args: &[&str], command: &str) -> std::process::Output {
     let session = Session::new();
     let path = fake_ssh(&session.dir, "");
-    session
-        .command()
-        .args(["remote", "devbox", "--command", command])
-        .env("PATH", path)
-        .output()
-        .expect("run cornercase")
+    session.command().args(args).args([command]).env("PATH", path).output().expect("run cornercase")
+}
+
+fn remotely(session: &Session, args: &[&str]) -> std::process::Command {
+    let mut cmd = session.cold_command();
+    cmd.env("PATH", fake_ssh(&session.dir, "")).args(["--remote", "devbox", "--remote-command", bin()]).args(args);
+    cmd
+}
+
+fn remote_says(session: &Session, args: &[&str]) -> String {
+    let out = remotely(session, args).output().expect("run cornercase");
+    assert!(out.status.success(), "cornercase --remote {args:?} failed: {out:?}");
+    String::from_utf8_lossy(&out.stdout).trim_end().to_string()
+}
+
+fn gone(pid: &str) -> bool {
+    let ps = std::process::Command::new("ps").args(["-o", "stat=", "-p", pid]).output().expect("run ps");
+    let state = String::from_utf8_lossy(&ps.stdout);
+    state.trim().is_empty() || state.trim().starts_with('Z')
+}
+
+fn boot_of(json: &str) -> serde_json::Value {
+    serde_json::from_str::<serde_json::Value>(json).expect("json")["boot"].clone()
 }
 
 #[test]
@@ -55,22 +72,121 @@ fn a_remote_window_comes_back_after_the_connection_drops() {
     assert_eq!(session.servers(), 1);
 }
 
-#[test]
-fn a_remote_of_another_version_says_which_side_to_update() {
+#[rstest]
+#[case::window(&["remote", "devbox", "--command"])]
+#[case::commands(&["--remote", "devbox", "status", "--remote-command"])]
+fn a_remote_of_another_version_says_which_side_to_update(#[case] args: &[&str]) {
     let dir = temp_dir("old-remote");
     let old = dir.join("cornercase");
     write_executable(&old, "#!/bin/sh\necho 'cornercase-proxy 1 0.0.1'\ncat > /dev/null\n");
 
-    let out = remote_refusal(&old.display().to_string());
+    let out = remote_refusal(args, &old.display().to_string());
 
     let _ = std::fs::remove_dir_all(&dir);
     assert!(refused(&out, 1, "`devbox` runs cornercase 0.0.1"), "{out:?}");
     assert!(String::from_utf8_lossy(&out.stderr).contains("Run `cornercase update` there"), "{out:?}");
 }
 
-#[test]
-fn a_remote_without_cornercase_says_how_to_point_at_it() {
-    let out = remote_refusal("/nonexistent/cornercase");
+#[rstest]
+#[case::window(&["remote", "devbox", "--command"], "give its path with --command")]
+#[case::commands(&["--remote", "devbox", "status", "--remote-command"], "give its path with --remote-command")]
+fn a_remote_without_cornercase_says_how_to_point_at_it(#[case] args: &[&str], #[case] hint: &str) {
+    let out = remote_refusal(args, "/nonexistent/cornercase");
 
     assert!(refused(&out, 1, "cornercase was not found on `devbox`"), "{out:?}");
+    assert!(String::from_utf8_lossy(&out.stderr).contains(hint), "{out:?}");
+}
+
+#[test]
+fn commands_reach_the_server_on_the_other_machine() {
+    let session = Session::new();
+
+    let started = remote_says(&session, &["start-server", "--json"]);
+
+    assert!(started.contains("\"already\": false") || started.contains("\"already\":false"), "{started}");
+    let there = remote_says(&session, &["status", "--json"]);
+    assert_eq!(boot_of(&there), boot_of(&session.says(&["status", "--json"])));
+    assert_eq!(session.servers(), 1);
+}
+
+#[test]
+fn a_command_without_a_server_there_says_so_and_starts_none() {
+    let session = Session::new();
+
+    let out = remotely(&session, &["status"]).output().expect("run cornercase");
+
+    assert!(refused(&out, 1, "no cornercase server is running on `devbox`"), "{out:?}");
+    assert_eq!(session.servers(), 0);
+}
+
+#[test]
+fn text_reaches_the_other_machine_as_it_is() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let pane = remote_says(&session, &["new-tab"]);
+    let text = r#"it's "quoted" \ and $HOME"#;
+    let out = feed(remotely(&session, &["send", "--pane", &pane, "-"]), text);
+
+    assert!(out.status.success(), "{out:?}");
+    wait_until("the text shows up", || session.says(&["read", "--pane", &pane]).contains(text));
+}
+
+#[test]
+fn a_stream_from_the_other_machine_ends_there_when_it_ends_here() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let mut following = remotely(&session, &["status", "--follow"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("run cornercase");
+    let stdout = following.stdout.take().expect("stdout");
+    let (first, line) = std::sync::mpsc::channel();
+    thread::spawn(move || {
+        let mut text = String::new();
+        let _ = std::io::BufRead::read_line(&mut std::io::BufReader::new(stdout), &mut text);
+        let _ = first.send(text);
+    });
+    assert_ne!(line.recv_timeout(TIMEOUT).expect("the stream starts"), "");
+    let proxy = ssh_pid(&session);
+
+    following.kill().expect("kill the command");
+    let _ = following.wait();
+
+    wait_until("the proxy there ends", || gone(&proxy));
+}
+
+#[test]
+fn cornercase_remote_reaches_it_too_but_stays_out_of_its_panes() {
+    let session = Session::new();
+    let started = session
+        .cold_command()
+        .env("PATH", fake_ssh(&session.dir, ""))
+        .env(REMOTE_ENV, "devbox")
+        .args(["--remote-command", bin(), "start-server"])
+        .output()
+        .expect("run cornercase");
+    assert!(started.status.success(), "{started:?}");
+
+    let pane = session.says(&["new-tab", "--", "echo remote-$((1+1))-${CORNERCASE_REMOTE-unset}"]);
+
+    wait_until("the pane ran it", || session.says(&["read", "--pane", &pane]).contains("remote-2-"));
+    assert!(session.says(&["read", "--pane", &pane]).contains("remote-2-unset"));
+}
+
+#[rstest]
+#[case::the_flag(&["--remote", "devbox", "kill-server"], None, "kill-server")]
+#[case::the_variable(&["logs"], Some("devbox"), "logs")]
+fn commands_of_this_machine_refuse_remote(#[case] args: &[&str], #[case] var: Option<&str>, #[case] name: &str) {
+    let session = Session::new();
+    let mut cmd = session.cold_command();
+    cmd.env("PATH", fake_ssh(&session.dir, "")).args(args);
+    if let Some(var) = var {
+        cmd.env(REMOTE_ENV, var);
+    }
+
+    let out = cmd.output().expect("run cornercase");
+
+    assert!(refused(&out, 2, &format!("`{name}` acts on this machine")), "{out:?}");
+    assert_eq!(ssh_pid(&session), "", "ssh never ran");
 }

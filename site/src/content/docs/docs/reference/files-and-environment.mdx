@@ -92,6 +92,7 @@ A build from source (`cargo run`) keeps to folders of its own, one set per sourc
 
 | Variable | Used for |
 | --- | --- |
+| `CORNERCASE_REMOTE` | Which machine the commands for scripts and agents reach through `ssh`, as `--remote` does (the flag wins). A server never hands it to its panes. See [Remote machines](../../guides/remote/#commands-for-scripts-and-agents). |
 | `CORNERCASE_SOCKET` | Use another socket, which means another, independent server; its files live next to it. Keep the path short: Unix sockets allow about 100 bytes. cornercase doesn't add it to panes, except a debug build's own server: a pane has it only when the server was started with it. |
 | `SHELL` | The shell started in every pane. Without it, `/bin/sh`. |
 | `CORNERCASE_LOG` | How much the server writes to `server.log`: `info` (the default), `debug` for every event it handles, every git run and slow frames, or `warn` / `error` for less. Read when the server starts. |

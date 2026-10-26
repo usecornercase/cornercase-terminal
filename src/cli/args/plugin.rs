@@ -11,6 +11,12 @@ pub(crate) struct PluginArgs {
     pub(crate) action: PluginAction,
 }
 
+impl PluginAction {
+    pub(crate) fn asks_the_server(&self) -> bool {
+        matches!(self, Self::Actions { .. } | Self::Status(_) | Self::Run(_) | Self::PopupClose)
+    }
+}
+
 #[derive(Debug, Subcommand)]
 pub(crate) enum PluginAction {
     #[command(about = "Add the plugin in a folder of yours, turned off; for writing one")]

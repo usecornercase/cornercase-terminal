@@ -1,5 +1,4 @@
-use std::io::{self};
-use std::os::unix::net::UnixStream;
+use std::io::{self, Write};
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -9,9 +8,21 @@ use serde_json::Value;
 use crate::control::{self, Request, Response};
 use crate::error::{Error, Result};
 use crate::protocol::{self, ClientMessage, ServerMessage};
+use crate::remote::Remote;
 use crate::update::restart;
 
+use super::Link;
+
 static VIEW: OnceLock<u64> = OnceLock::new();
+static REMOTE: OnceLock<Remote> = OnceLock::new();
+
+pub(crate) fn use_remote(remote: Remote) {
+    let _ = REMOTE.set(remote);
+}
+
+pub(crate) fn used_remote() -> Option<&'static Remote> {
+    REMOTE.get()
+}
 
 pub(crate) fn use_view(view: u64) -> Result<()> {
     require("views", "has no views")?;
@@ -87,34 +98,61 @@ fn require(feature: &str, lacks: &str) -> Result<()> {
     require_on(connect(), feature, lacks)
 }
 
-fn require_on(stream: Result<UnixStream>, feature: &str, lacks: &str) -> Result<()> {
+fn require_on(link: Result<Link>, feature: &str, lacks: &str) -> Result<()> {
     let lacking = || {
         Error::Control(format!(
             "the running cornercase server {lacks}; update cornercase and restart the server (this one is {})",
             crate::version::CURRENT
         ))
     };
-    let asked = stream.and_then(|stream| ask_on(stream, "contract", control::Command::Contract(control::Contract {})));
-    let descriptor: control::contract::Descriptor = answer(asked.map_err(|_| lacking())?)?;
+    let asked =
+        link.and_then(|mut link| ask_on(&mut link, "contract", control::Command::Contract(control::Contract {})));
+    let asked = asked.map_err(|e| if matches!(e, Error::Control(_) | Error::OldServer(_)) { lacking() } else { e });
+    let descriptor: control::contract::Descriptor = answer(asked?)?;
     if descriptor.features.iter().any(|offered| offered == feature) { Ok(()) } else { Err(lacking()) }
 }
 
-pub(crate) fn connect() -> Result<UnixStream> {
-    super::find()?.map(|found| found.stream).ok_or(Error::NoServer)
+fn connect() -> Result<Link> {
+    connect_within(None)
+}
+
+fn connect_within(timeout: Option<Duration>) -> Result<Link> {
+    if let Some(remote) = used_remote() {
+        return Link::remote(remote, true);
+    }
+    let stream = super::running()?;
+    stream.set_read_timeout(timeout)?;
+    Link::socket(stream)
 }
 
 pub(crate) fn ask(name: &'static str, command: control::Command) -> Result<Value> {
-    ask_on(connect()?, name, command)
+    ask_on(&mut connect()?, name, command)
 }
 
 pub(crate) fn ask_starting(name: &'static str, command: control::Command) -> Result<Value> {
-    ask_on(super::find_or_start()?.stream, name, command)
+    let mut link = match used_remote() {
+        Some(remote) => Link::remote(remote, true)?,
+        None => Link::socket(super::find_or_start()?.stream)?,
+    };
+    ask_on(&mut link, name, command)
 }
 
-fn ask_on(mut stream: UnixStream, name: &'static str, command: control::Command) -> Result<Value> {
-    request(&mut stream, command)?;
+fn lost(link: &mut Link, local: Error) -> Error {
+    let guard = &mut link.guard;
+    match (&guard.remote, guard.child.as_mut(), &guard.stderr) {
+        (Some(remote), Some(child), Some(stderr)) => {
+            remote.ended(child, stderr, guard.collector.take()).unwrap_or(local)
+        }
+        _ => local,
+    }
+}
+
+fn ask_on(link: &mut Link, name: &'static str, command: control::Command) -> Result<Value> {
+    if let Err(e) = request(&mut link.writer, command) {
+        return Err(lost(link, e));
+    }
     loop {
-        match protocol::recv::<ServerMessage>(&mut stream) {
+        match protocol::recv::<ServerMessage>(&mut link.reader) {
             Ok(Some(ServerMessage::Response(text))) => return answered(&text),
             Ok(Some(ServerMessage::Rejected(_))) => return Err(Error::OldServer(name)),
             Err(e) if e.kind() == io::ErrorKind::InvalidData => return Err(Error::OldServer(name)),
@@ -125,14 +163,13 @@ fn ask_on(mut stream: UnixStream, name: &'static str, command: control::Command)
                 | ServerMessage::Open(_)
                 | ServerMessage::Browse(_),
             )) => {}
-            Ok(Some(ServerMessage::Shutdown | ServerMessage::Restart(_)) | None) | Err(_) => {
-                return Err(Error::ServerGone);
-            }
+            Ok(Some(ServerMessage::Shutdown | ServerMessage::Restart(_))) => return Err(Error::ServerGone),
+            Ok(None) | Err(_) => return Err(lost(link, Error::ServerGone)),
         }
     }
 }
 
-pub(crate) fn request(stream: &mut UnixStream, command: control::Command) -> Result<()> {
+pub(crate) fn request(stream: &mut impl Write, command: control::Command) -> Result<()> {
     let caller = std::env::var(control::PANE_ENV).ok().and_then(|id| id.parse().ok());
     let server = std::env::var(control::SERVER_ENV).ok();
     let view = view_for(&command, VIEW.get().copied());
@@ -176,14 +213,13 @@ fn follow_from(
     first: bool,
     mut each: impl FnMut(Value) -> Result<bool>,
 ) -> Result<()> {
-    let mut stream = connect()?;
-    let reader = stream.try_clone()?;
-    let answer = ask_on(reader, name, command)?;
+    let mut link = connect()?;
+    let answer = ask_on(&mut link, name, command)?;
     if first && each(answer)? {
         return Ok(());
     }
     loop {
-        match protocol::recv::<ServerMessage>(&mut stream) {
+        match protocol::recv::<ServerMessage>(&mut link.reader) {
             Ok(Some(ServerMessage::Response(text))) => {
                 if each(answered(&text)?)? {
                     return Ok(());
@@ -197,7 +233,7 @@ fn follow_from(
                 | ServerMessage::Open(_)
                 | ServerMessage::Browse(_),
             )) => {}
-            Ok(None) | Err(_) => return Err(Error::Control(LOST.into())),
+            Ok(None) | Err(_) => return Err(lost(&mut link, Error::Control(LOST.into()))),
         }
     }
 }
@@ -207,9 +243,8 @@ pub(crate) fn answer<T: DeserializeOwned>(value: Value) -> Result<T> {
 }
 
 pub(crate) fn report_now() -> Option<control::Report> {
-    let stream = connect().ok()?;
-    stream.set_read_timeout(Some(STATUS_TIMEOUT)).ok()?;
-    let value = ask_on(stream, "status", control::Command::Status(control::Status {})).ok()?;
+    let mut link = connect_within(Some(STATUS_TIMEOUT)).ok()?;
+    let value = ask_on(&mut link, "status", control::Command::Status(control::Status {})).ok()?;
     answer(value).ok()
 }
 

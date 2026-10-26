@@ -67,6 +67,10 @@ fn find_among(socket: &Path, earlier: &[PathBuf]) -> Result<Option<Found>> {
     Ok(None)
 }
 
+pub(crate) fn running() -> Result<UnixStream> {
+    find()?.map(|found| found.stream).ok_or(Error::NoServer)
+}
+
 pub(crate) fn find_or_start() -> Result<Found> {
     if let Some(found) = find()? {
         return Ok(found);
@@ -124,6 +128,7 @@ fn start_server(log: &Path) -> io::Result<Child> {
         .env_remove(protocol::RESTARTED_ENV)
         .env_remove(control::PANE_ENV)
         .env_remove(control::SERVER_ENV)
+        .env_remove(protocol::REMOTE_ENV)
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)
         .stderr(log)

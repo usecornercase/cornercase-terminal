@@ -57,7 +57,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Scrollback](design/scrollback.md) (`term/emulator.rs`, `app/panes.rs`, `ui/pane.rs`): the wheel in a pane's history.
 - [Keyboard shortcuts](design/keyboard-shortcuts.md) (`shortcuts.rs`, `app/shortcuts.rs`, `ui/keys.rs`): the opt-in prefix key and the keys menu.
 - [Client / server](design/client-server.md) (`client.rs`, `client/`, `server.rs`, `server/startup.rs`, `protocol.rs`, `cli/start_server.rs`, #284): the server, its socket and folders, `start-server`, `kill-server`.
-- [Remote windows](design/remote-windows.md) (`remote.rs`, `client.rs`, `client/window.rs`, `ui/remote.rs`): `cornercase remote` over ssh, the proxy, reconnecting.
+- [Remote windows](design/remote-windows.md) (`remote.rs`, `client.rs`, `client/window.rs`, `client/requests.rs`, `cli/reach.rs`, `ui/remote.rs`, #104, #476): `cornercase remote` over ssh, the proxy, reconnecting, `--remote` for the commands.
 - [Browser access](design/browser-access.md) (`web/`, `web/tailscale.rs`, `app/remote_access.rs`, `ui/remote_access.rs`): the window in a phone's browser, pairing, Tailscale.
 - [Telegram](design/telegram.md) (`telegram/`, `messenger/`, `app/messenger.rs`, `app/messenger/`): away mode, the Telegram bot and what chat apps share.
 - [Discord](design/discord.md) (`discord/`, `app/messenger/pairing.rs`, `app/messenger/every.rs`, `app/messenger/forum.rs`, `app/messenger/forum/`, `ui/forum.rs`, #265, #437): the Discord bot, pairing, the Gateway, slash commands, forum mode.

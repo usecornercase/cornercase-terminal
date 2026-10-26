@@ -1,5 +1,6 @@
 use std::io::{self, Read as _, Write as _};
 use std::ops::ControlFlow;
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -30,6 +31,7 @@ mod issue;
 mod plugin;
 mod ports;
 mod queue;
+mod reach;
 mod read;
 mod search;
 mod start_server;
@@ -68,13 +70,26 @@ impl WhenArgs {
 }
 
 pub fn run(cli: Cli) -> Result<bool> {
-    let Some(command) = cli.command else {
-        client::run()?;
-        return Ok(true);
-    };
+    let remote = reach::chosen(&cli, &|name| std::env::var_os(name))?;
+    match (cli.command, remote) {
+        (None, None) => client::run()?,
+        (None, Some(remote)) => client::remote(&remote)?,
+        (Some(command), remote) => {
+            if let Some(remote) = remote {
+                client::use_remote(remote);
+            }
+            return run_command(command);
+        }
+    }
+    Ok(true)
+}
+
+fn run_command(command: Command) -> Result<bool> {
     match command {
         Command::Control(control) => return run_control(control),
-        Command::Remote(args) => client::remote(&Remote { destination: args.destination, command: args.command })?,
+        Command::Remote(args) => {
+            client::remote(&Remote { destination: args.destination, command: args.command, option: "--command" })?;
+        }
         Command::Skill => print!("{SKILL}"),
         Command::Update(update) => return update::update(update.check, update.yes, update.when.when()),
         Command::Restart(restart) => update::restart(restart.yes, restart.when.when())?,
@@ -84,9 +99,13 @@ pub fn run(cli: Cli) -> Result<bool> {
         Command::Stats(args) => return print_stats(&args),
         Command::Plugin(args) => return plugin::run(args.action),
         Command::Server => server::run()?,
-        Command::Proxy => remote::proxy(|| client::find_or_start().map(|found| found.stream))?,
+        Command::Proxy => remote::proxy(proxied)?,
     }
     Ok(true)
+}
+
+fn proxied(starting: bool) -> Result<UnixStream> {
+    if starting { client::find_or_start().map(|found| found.stream) } else { client::running() }
 }
 
 fn print_logs(args: &LogsArgs) -> Result<bool> {
@@ -269,7 +288,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
 }
 
 fn run_open(open: &args::OpenArgs) -> Result<()> {
-    let path = std::path::absolute(&open.path)?;
+    let path = reach::server_path(&open.path)?;
     let value = ask("open", control::Command::Open(control::Open { path, focus: open.create.focus }))?;
     say(value, open.create.print.json, |done| id(done.ids.project))
 }

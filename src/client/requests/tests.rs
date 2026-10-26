@@ -1,3 +1,4 @@
+use std::os::unix::net::UnixStream;
 use std::thread;
 
 use super::*;
@@ -10,7 +11,8 @@ fn old_server(answer: ServerMessage) -> Result<Value> {
         asked
     });
 
-    let answered = ask_on(ours, "contract", control::Command::Contract(control::Contract {}));
+    let answered =
+        ask_on(&mut Link::socket(ours).expect("a link"), "contract", control::Command::Contract(control::Contract {}));
 
     let Some(ClientMessage::Request(text)) = server.join().expect("the fake server") else { panic!("not a request") };
     assert!(text.contains("\"contract\""), "{text}");
@@ -37,6 +39,13 @@ fn a_server_older_than_requests_is_too_old() {
 mod features {
     use super::*;
 
+    #[test]
+    fn a_failure_to_reach_the_server_is_not_taken_for_a_missing_feature() {
+        let checked = require_on(Err(Error::NoServer), "accounts", "has no account profiles");
+
+        assert!(matches!(checked, Err(Error::NoServer)), "{checked:?}");
+    }
+
     fn offering(features: &[&str]) -> (Result<()>, Vec<String>) {
         asking(features, "accounts", "has no account profiles")
     }
@@ -55,7 +64,7 @@ mod features {
             asked
         });
 
-        let checked = require_on(Ok(ours), feature, lacks);
+        let checked = require_on(Link::socket(ours), feature, lacks);
 
         (checked, server.join().expect("the fake server"))
     }

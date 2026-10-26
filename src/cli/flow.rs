@@ -136,7 +136,7 @@ fn listed_place(flows: &Flows, path: &Path) -> Option<ImportTo> {
 
 fn listed_path(path: &Path) -> Result<PathBuf> {
     let mut clean = PathBuf::new();
-    for part in std::path::absolute(path)?.components() {
+    for part in super::reach::server_path(path)?.components() {
         match part {
             Component::ParentDir => {
                 clean.pop();

@@ -5,7 +5,8 @@ pub(super) const LONG_ABOUT: &str =
 
 Without a command, cornercase opens its window, starting the server if none is running. The other
 commands drive the running server from scripts, git hooks and the agents in its panes; they never
-start a server, except `start-server`.";
+start a server, except `start-server`. With --remote DESTINATION they drive the server of another
+machine, through ssh.";
 pub(super) const AFTER_HELP: &str =
     "Ids come from `cornercase status` and last while the server runs. Inside a pane, the commands
 act on that pane, its tab, workspace and project unless told otherwise; elsewhere on what the window
@@ -16,8 +17,16 @@ included, or one several are on (both list the workspaces to pick from), and 3 w
 asks several sources (usage, issue list, read --last-message with several panes) printed its whole
 answer but some of them failed: each failed entry says why, in its error with --json.
 
+--remote DESTINATION (or CORNERCASE_REMOTE=DESTINATION, which the flag overrides) sends a command
+to the server of another machine through ssh, found as `cornercase remote` finds it, so arguments and
+standard input arrive as they are. Both machines need the same version, ssh never asks for a
+password, only `start-server` starts a server there, and a command that follows a stream ends it
+there when it ends here. Paths are the other machine's, absolute. `update`, `restart`, `kill-server`,
+`logs` and the plugin commands that install or change plugins act on this machine and refuse it.
+
 Examples:
   cornercase status
+  cornercase --remote devbox status --json
   pane=$(cornercase new-tab --name tests -- cargo test)
   cornercase wait --pane \"$pane\" --until shell --timeout 900
   cornercase read --pane \"$pane\" --lines 40
@@ -552,13 +561,17 @@ pub(super) const SKILL_HELP: &str = "Install them for Claude Code, Codex and oth
   npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 or put this text in an AGENTS.md or CLAUDE.md.";
 
+pub(super) const REMOTE_ARG: &str = "Send the command to the cornercase server of another machine, through ssh: a host from \
+    ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)";
+pub(super) const COMMAND_THERE: &str = "How to run cornercase there, as sh reads it [default: cornercase, also looked for in \
+    ~/.local/bin, ~/.cargo/bin and Homebrew's folders]";
 pub(super) const REMOTE_HELP: &str =
     "cornercase runs `ssh DESTINATION cornercase proxy`, so your ssh config, keys, agent and
 ProxyJump apply, and starts the server there if none is running. The shells, agents and files stay
 on that machine; this one only shows them, and copies and notifications go through this terminal.
 If the connection drops, the window stays and reconnects by itself; Esc or quit gives up. Both
 machines need the same version of cornercase. Reconnecting never asks for a password, so use a
-key or an agent.
+key or an agent. To send the commands for scripts and agents there, give them --remote DESTINATION.
 
 Examples:
   cornercase remote devbox

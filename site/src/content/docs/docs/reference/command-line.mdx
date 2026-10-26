@@ -10,6 +10,7 @@ description: The cornercase command, its subcommands and the messages it can sto
 ```sh
 cornercase              # open the UI, starting the server if needed
 cornercase remote HOST  # open the UI on the server of another machine, over ssh
+cornercase --remote HOST status  # a command for scripts, on the server of another machine
 cornercase update       # install the latest release and restart the server
 cornercase restart      # restart the server; the session comes back with new shells, agents resume
 cornercase start-server # start the server and restore the session without opening a window
@@ -51,6 +52,16 @@ cornercase remote devbox --command '~/tools/cornercase'   # where cornercase is 
 ```
 
 It runs `ssh devbox cornercase proxy`, which starts the server there if none is running. If the connection drops, the window stays, says `reconnecting to devbox…` and tries again by itself; `Esc` or its ` quit ` gives up. Both machines need the same version: when they differ it says which one to update, and offers to update the other machine through `ssh` when that one is older. [Remote machines](../../guides/remote/) explains it all.
+
+### `--remote`
+
+```sh
+cornercase --remote devbox status --json
+CORNERCASE_REMOTE=devbox cornercase events --json
+cornercase --remote devbox --remote-command '~/tools/cornercase' start-server
+```
+
+A global option of the commands for scripts and agents, `start-server` and `stats`, and of the plugin commands that ask the server: it sends the command to the server of another machine, through `ssh`, with `--remote-command` as `--command` of `cornercase remote`. Without a command it opens the window there. `update`, `restart`, `kill-server`, `logs` and the plugin commands that install or change plugins refuse it with status 2. See [Remote machines](../../guides/remote/#commands-for-scripts-and-agents).
 
 ### `cornercase update`
 
@@ -186,7 +197,7 @@ Prints the version, such as `cornercase 0.1.0`, and exits. It doesn't touch the 
 
 ### `cornercase server` and `cornercase proxy`
 
-`cornercase proxy` is what [`cornercase remote`](#cornercase-remote) runs on the other machine; it passes the window's messages to the server there. `cornercase server` runs the server itself. You don't need either: `cornercase remote` runs the proxy, and `cornercase` and `cornercase start-server` start the server in the background for you, with its output going to [`server.log`](../files-and-environment/#files). They are listed here so you recognise them in your process list.
+`cornercase proxy` is what [`cornercase remote`](#cornercase-remote) runs on the other machine; it passes the window's messages, or the request of a `--remote` command, to the server there, and starts the server only for a window or `start-server`. `cornercase server` runs the server itself. You don't need either: `cornercase remote` runs the proxy, and `cornercase` and `cornercase start-server` start the server in the background for you, with its output going to [`server.log`](../files-and-environment/#files). They are listed here so you recognise them in your process list.
 
 ## The socket
 
@@ -213,8 +224,10 @@ CORNERCASE_SOCKET=/tmp/cc-demo/server.sock cornercase kill-server
 | `timed out after …: the agent in pane … has not ended its turn, so the server keeps running` | `--when-idle` reached its `--timeout` before every agent stopped working. |
 | ``the running cornercase server is too old to wait for its agents …`` | The server predates `--when-idle`. Run `cornercase restart` once no agent is working. |
 | ``this is a development build; `cornercase update` only updates released builds`` | You ran `update` from a build made with `cargo run`. Pull and build again instead. |
-| ``could not reach cornercase on `<host>`: …`` | `cornercase remote` couldn't connect; the end of the line is what `ssh` said. |
-| ``cornercase was not found on `<host>` …`` | The other machine has no `cornercase` where it looks; install it there, or give its path with `--command`. |
+| ``could not reach cornercase on `<host>`: …`` | `cornercase remote` or `--remote` couldn't connect; the end of the line is what `ssh` said. |
+| ``cornercase was not found on `<host>` …`` | The other machine has no `cornercase` where it looks; install it there, or give its path with `--command` (`--remote-command` for `--remote`). |
+| ``no cornercase server is running on `<host>` `` | A `--remote` command reached the machine, but no server runs there. |
+| ``` `<command>` acts on this machine, so it takes no --remote … ``` | `update`, `restart`, `kill-server`, `logs` and some plugin commands don't go through `ssh` (status 2). Run them there. |
 | ``the cornercase on `<host>` is too old to attach to from another machine …`` | The other machine's cornercase predates `cornercase remote`. Update it there. |
 | ``` `<host>` runs cornercase <version> and this machine <version> … ``` | The two machines run different versions; the message says which one to update. |
 | `error: unrecognized subcommand '…'` | There is no such command; `cornercase --help` lists them. |

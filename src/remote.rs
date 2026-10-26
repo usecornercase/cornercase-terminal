@@ -6,9 +6,12 @@ use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, ExitSta
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
+use serde_json::Value;
 
+use crate::control;
 use crate::error::{Error, Result};
 use crate::process;
 use crate::protocol::{self, ClientMessage};
@@ -27,12 +30,15 @@ const OLD_CLI: &str = "unrecognized subcommand";
 const GARBAGE: &str = "the remote shell printed too much before cornercase started";
 const SEARCHED: &str = "$PATH:$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin";
 const ALIVE: [&str; 6] = ["-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3", "-o", "ConnectTimeout=10"];
+const ENDED_WAIT: Duration = Duration::from_secs(2);
+const ENDED_POLL: Duration = Duration::from_millis(10);
 const BATCH: [&str; 2] = ["-o", "BatchMode=yes"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Remote {
     pub(crate) destination: String,
     pub(crate) command: Option<String>,
+    pub(crate) option: &'static str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,6 +83,7 @@ pub(crate) struct Piped {
     pub(crate) writer: ChildStdin,
     pub(crate) child: Child,
     pub(crate) stderr: Stderr,
+    pub(crate) collector: Option<JoinHandle<()>>,
 }
 
 enum Found {
@@ -108,7 +115,7 @@ impl Remote {
         let mut reader = BufReader::new(output);
         match read_banner(&mut reader) {
             Found::Banner(banner) => match self.check(&banner) {
-                Ok(()) => Ok(Piped { reader, writer: input, child, stderr }),
+                Ok(()) => Ok(Piped { reader, writer: input, child, stderr, collector: Some(collector) }),
                 Err(e) => {
                     process::stop(child);
                     Err(e)
@@ -168,11 +175,37 @@ impl Remote {
         }
     }
 
+    pub(crate) fn ended(&self, child: &mut Child, stderr: &Stderr, collector: Option<JoinHandle<()>>) -> Option<Error> {
+        let deadline = Instant::now() + ENDED_WAIT;
+        let status = if let Ok(Some(status)) = process::wait_until(child, deadline) {
+            Some(status)
+        } else {
+            let _ = child.kill();
+            child.wait().ok()
+        };
+        if let Some(collector) = collector {
+            while !collector.is_finished() && Instant::now() < deadline {
+                thread::sleep(ENDED_POLL);
+            }
+        }
+        self.classify(status, stderr)
+    }
+
+    fn classify(&self, status: Option<ExitStatus>, stderr: &Stderr) -> Option<Error> {
+        if status.is_some_and(|status| status.success()) {
+            return None;
+        }
+        if stderr.any(&Error::NoServer.to_string()) {
+            return Some(Error::RemoteNoServer(self.destination.clone()));
+        }
+        Some(self.failure(status, stderr))
+    }
+
     fn failure(&self, status: Option<ExitStatus>, stderr: &Stderr) -> Error {
         let host = self.destination.clone();
         let code = status.and_then(|s| s.code());
         if code == Some(NOT_FOUND) || (code == Some(CANNOT_EXECUTE) && stderr.any(NO_SUCH_FILE)) {
-            return Error::RemoteMissing(host);
+            return Error::RemoteMissing { host, option: self.option };
         }
         if stderr.any(OLD_CLI) {
             return Error::RemoteTooOld(host);
@@ -236,12 +269,23 @@ fn rebuilt(message: ClientMessage, build: String) -> ClientMessage {
     }
 }
 
-pub(crate) fn proxy(connect: impl FnOnce() -> Result<UnixStream>) -> Result<()> {
+fn starts(first: &ClientMessage) -> bool {
+    match first {
+        ClientMessage::Hello(_) => true,
+        ClientMessage::Request(text) => {
+            let name = control::Command::StartServer(control::StartServer::default()).name();
+            serde_json::from_str::<Value>(text).ok().as_ref().and_then(control::command_name) == Some(name)
+        }
+        _ => false,
+    }
+}
+
+pub(crate) fn proxy(connect: impl FnOnce(bool) -> Result<UnixStream>) -> Result<()> {
     let mut out = io::stdout().lock();
     writeln!(out, "{}", banner())?;
     out.flush()?;
     let Some(first) = protocol::recv::<ClientMessage>(&mut io::stdin().lock())? else { return Ok(()) };
-    let stream = connect()?;
+    let stream = connect(starts(&first))?;
     let mut to_server = stream.try_clone()?;
     protocol::send(&mut to_server, &rebuilt(first, version::build_id()))?;
     thread::spawn(move || {

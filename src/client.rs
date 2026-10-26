@@ -2,9 +2,9 @@ use std::io::{self, BufRead, IsTerminal, Read, Write, stdin, stdout};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
-use std::process::{Child, ChildStdin, Command};
+use std::process::{Child, Command};
 use std::sync::atomic::Ordering;
-use std::thread;
+use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use crossterm::event::{
@@ -35,7 +35,8 @@ pub(crate) use requests::{
     use_close_agent_tabs, use_close_unlock, use_focus_reveal, use_host_events, use_issue_names, use_issues,
     use_notices, use_popup_terminal, use_queue_undo, use_surface_patches, use_todo_panel, use_view,
 };
-pub(crate) use server_process::{Found, find, find_or_start, wait_for_exit};
+pub(crate) use requests::{use_remote, used_remote};
+pub(crate) use server_process::{Found, find, find_or_start, running, wait_for_exit};
 pub(crate) use server_process::{kill_server, restart_server};
 
 const OTHER_BUILD: &str = "The running cornercase server comes from another build; cornercase was probably updated.";
@@ -118,10 +119,7 @@ impl Target {
                 let found = find_or_start()?;
                 Link::socket(found.stream)
             }
-            Self::Remote(remote) => {
-                let piped = remote.connect(again)?;
-                Ok(Link::piped(piped.reader, piped.writer, piped.child, piped.stderr))
-            }
+            Self::Remote(remote) => Link::remote(remote, again),
         }
     }
 
@@ -147,6 +145,8 @@ pub(crate) struct Link {
 struct Guard {
     child: Option<Child>,
     stderr: Option<Stderr>,
+    collector: Option<JoinHandle<()>>,
+    remote: Option<Remote>,
 }
 
 impl Drop for Guard {
@@ -162,12 +162,18 @@ impl Link {
         Ok(Self { reader: Box::new(stream.try_clone()?), writer: Box::new(stream), guard: Guard::default() })
     }
 
-    pub(crate) fn piped(reader: impl Read + Send + 'static, writer: ChildStdin, child: Child, stderr: Stderr) -> Self {
-        Self {
-            reader: Box::new(reader),
-            writer: Box::new(writer),
-            guard: Guard { child: Some(child), stderr: Some(stderr) },
-        }
+    fn remote(remote: &Remote, batch: bool) -> Result<Self> {
+        let piped = remote.connect(batch)?;
+        Ok(Self {
+            reader: Box::new(piped.reader),
+            writer: Box::new(piped.writer),
+            guard: Guard {
+                child: Some(piped.child),
+                stderr: Some(piped.stderr),
+                collector: piped.collector,
+                remote: Some(remote.clone()),
+            },
+        })
     }
 }
 
