@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.216
+
+- **Type into cornercase through one process.** `cornercase input --pane 12 --follow -` keeps running and sends each event as soon as its line arrives on standard input, until standard input ends; lines that arrive while the previous one is on its way go together. A line can name its own pane, `{"pane": 14, "key": {"code": "enter"}}`, so one process types into every pane a program shows. Apps that draw cornercase's terminals themselves no longer start a process for each batch of keys, and with `--remote` their typing goes through one `ssh` connection instead of one per batch.
+- With `--json` it prints one line per request: the answer, with `events`, how many of your lines it answers, or an `error`. A line that is wrong or refused doesn't stop the next ones, and the command then exits with 3.
+
 ## 0.12.215
 
 - **Other apps can browse, read and search a workspace's files, on this machine or another.** `cornercase files list`, `files read` and `files search` give what the files panel shows: each folder's entries with their kind, size, modification time, whether they are hidden and their git mark; a file's text, an image's bytes with its format and size, or that it is binary, too large or gone; and the panel's search by file name or by text. They follow the panel's rules: what git ignores is left out, at most 10,000 entries per folder, text up to 8 MB and images up to 32 MB, and only regular files are read. `--follow` prints a folder or a file again each time it changes. A path is relative to the workspace, and an absolute one, or one starting with `~/`, reaches any folder on the server's machine, so with `--remote devbox` a UI on your laptop can show the tree, the viewer and a folder picker of the other machine without reading its disk itself.
