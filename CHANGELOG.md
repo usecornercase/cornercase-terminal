@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.209
+
+- **See what each plugin's service is doing from the command line.** `cornercase plugin status` prints the plugins as Settings › Plugins shows them: on, off or cannot run, the note, and whether each service is running, waiting to start again or still starting. `--json` prints that for another app, including why `plugins.json` cannot be read. `plugin list` still reads the files and works with no server.
+
 ## 0.12.208
 
 - **Preview a shared flow before importing it.** `cornercase flow import SOURCE --check` shows its roles, variables and arguments that run unattended, and agents missing on this machine, then exits without asking or saving, even without a terminal or when reading standard input. `--json` gives the preview as data for another app to show before importing with `--yes`. The same destination, name and replacement options apply, and a bad flow or a name conflict still fails.
