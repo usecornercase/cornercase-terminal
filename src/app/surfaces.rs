@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use ratatui::layout::Rect;
 
 use super::App;
-use super::control::{Handled, json, none};
+use super::control::{Handled, json, malformed, no_popup, none};
 use crate::control::contract::{Code, Refusal};
 use crate::control::surface::{
     self, Area, Content, Cursor, Frame, Modes, Pane, Scroll, Size, Surface, Tables, lines, patch,
@@ -46,6 +46,14 @@ struct Shown {
     tab: u64,
     area: Rect,
     view: Option<(u64, u64)>,
+    popup: bool,
+}
+
+struct Target {
+    tab: u64,
+    area: Rect,
+    projection: Option<u64>,
+    popup: Option<u64>,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -60,6 +68,7 @@ struct Subscription {
     id: u64,
     client: u64,
     view: Option<u64>,
+    popup: Option<u64>,
     projection: u64,
     tab: u64,
     area: Rect,
@@ -97,10 +106,16 @@ fn log_opened(client: u64, shown: Shown, patches: bool) {
         client = client,
         surface = shown.surface,
         tab = shown.tab,
+        popup = shown.popup,
         cols = shown.area.width,
         rows = shown.area.height,
         patches = patches
     );
+}
+
+fn popup_area(term: &Term) -> Rect {
+    let (rows, cols) = term.size();
+    Rect::new(0, 0, cols, rows)
 }
 
 fn pane_of(term: &mut Term, id: u64, rect: Rect, active: bool, tables: &mut Tables) -> Pane {
@@ -145,18 +160,20 @@ impl App {
         surface: &Surface,
         now: Instant,
     ) -> Handled {
-        let (tab, area, projection) = self.surface_target(view, surface)?;
+        let Target { tab, area, projection, popup } = self.surface_target(view, surface)?;
         self.refuse_second_stream(client)?;
-        let content = self.surface_content(tab, area).ok_or_else(|| none("tab", tab))?;
+        let content = self.content_of(popup, tab, area).ok_or_else(|| none("tab", tab))?;
         self.clients.surfaces.issued += 1;
         let id = self.clients.surfaces.issued;
-        let shown = Shown { surface: id, tab, area, view: projection.map(|p| (view.unwrap_or_default(), p)) };
+        let view_of = projection.map(|p| (view.unwrap_or_default(), p));
+        let shown = Shown { surface: id, tab, area, view: view_of, popup: popup.is_some() };
         let frame = self.surface_frame(shown, 1, content.clone());
         log_opened(client, shown, surface.patches);
         self.clients.surfaces.subscriptions.push(Subscription {
             id,
             client,
             view,
+            popup,
             projection: projection.unwrap_or_default(),
             tab,
             area,
@@ -172,25 +189,68 @@ impl App {
         Ok(Some(json(&frame)))
     }
 
-    fn surface_target(&self, view: Option<u64>, surface: &Surface) -> Result<(u64, Rect, Option<u64>), Refusal> {
+    fn surface_target(&self, view: Option<u64>, surface: &Surface) -> Result<Target, Refusal> {
+        if surface.popup {
+            return self.popup_target(view, surface);
+        }
         if let Some(view) = view {
-            return self.view_surface(view, surface);
+            let (tab, area, projection) = self.view_surface(view, surface)?;
+            return Ok(Target { tab, area, projection, popup: None });
         }
         let Some(tab) = surface.tab else {
             return Err(Refusal::new(Code::Malformed, "`surface` needs the tab to stream: pass --tab"));
         };
         let area = surface.area().map_err(|message| Refusal::new(Code::Malformed, message))?;
-        Ok((tab, area, None))
+        Ok(Target { tab, area, projection: None, popup: None })
+    }
+
+    fn popup_target(&self, view: Option<u64>, surface: &Surface) -> Result<Target, Refusal> {
+        if view.is_some() || surface.tab.is_some() || surface.cols != 0 || surface.rows != 0 {
+            return Err(malformed(
+                "a popup's surface takes the popup's own size: leave out --tab, --cols, --rows and --view",
+            ));
+        }
+        let popup = self.popup().ok_or_else(no_popup)?;
+        Ok(Target { tab: 0, area: popup_area(&popup.term), projection: None, popup: Some(popup.term.id) })
     }
 
     fn refuse_second_stream(&self, client: u64) -> Result<(), Refusal> {
         match self.clients.surfaces.subscriptions.iter().find(|s| s.client == client) {
             Some(own) => {
+                let what = if own.popup.is_some() { "the popup".to_string() } else { format!("tab {}", own.tab) };
                 let message =
-                    format!("this connection already streams tab {}; open another connection for another tab", own.tab);
+                    format!("this connection already streams {what}; open another connection for another tab");
                 Err(Refusal::from(message))
             }
             None => Ok(()),
+        }
+    }
+
+    fn content_of(&mut self, popup: Option<u64>, tab: u64, area: Rect) -> Option<Content> {
+        match popup {
+            Some(id) => self.popup_content(id),
+            None => self.surface_content(tab, area),
+        }
+    }
+
+    fn popup_content(&mut self, id: u64) -> Option<Content> {
+        let popup = self.popup_mut().filter(|popup| popup.term.id == id)?;
+        let area = popup_area(&popup.term);
+        let mut tables = Tables::default();
+        let pane = pane_of(&mut popup.term, id, area, true, &mut tables);
+        Some(Content {
+            layout: None,
+            dividers: Vec::new(),
+            styles: tables.styles.into_entries(),
+            hyperlinks: tables.hyperlinks.into_entries(),
+            panes: vec![pane],
+        })
+    }
+
+    fn popup_place(&self, id: u64) -> Place {
+        match self.popup() {
+            Some(popup) if popup.term.id == id => Place::At(0, popup_area(&popup.term), None),
+            _ => Place::Gone,
         }
     }
 
@@ -241,6 +301,9 @@ impl App {
     }
 
     fn sub_place(&self, sub: &Subscription) -> Place {
+        if let Some(id) = sub.popup {
+            return self.popup_place(id);
+        }
         match sub.view {
             Some(view) => self.sub_place_of(view),
             None if self.projects.tab_index(sub.tab).is_some() => Place::At(sub.tab, sub.area, None),
@@ -253,6 +316,10 @@ impl App {
             base: None,
             view: shown.view.map(|(view, _)| view),
             projection: shown.view.map(|(_, projection)| projection),
+            popup: self
+                .popup()
+                .filter(|_| shown.popup)
+                .map(|popup| surface::Popup { plugin: popup.plugin.entry.id.clone(), action: popup.action.id.clone() }),
             boot: control::server_token().to_string(),
             session: self.clients.events.snapshots.revision(),
             revision,
@@ -298,7 +365,8 @@ impl App {
         if !sub.due(now, forced, ready.contains(&client)) {
             return Rendered::Kept(None);
         }
-        let Some(built) = crate::panics::contain(|| self.surface_content(tab, area)) else {
+        let popup = sub.popup;
+        let Some(built) = crate::panics::contain(|| self.content_of(popup, tab, area)) else {
             log::error!("control", "surface panicked", client = client, tab = tab);
             self.report_bug();
             self.end_surface(at, "bug");
@@ -375,7 +443,7 @@ impl App {
         sub.projection = view.map_or(0, |(_, projection)| projection);
         sub.tab = tab;
         sub.area = area;
-        Some((Shown { surface, tab, area, view }, base, changes))
+        Some((Shown { surface, tab, area, view, popup: sub.popup.is_some() }, base, changes))
     }
 
     fn patch_text(&self, shown: Shown, revision: u64, base: u64, changes: patch::Changes) -> Option<String> {
@@ -418,6 +486,9 @@ impl App {
             .map_err(|message| Refusal::new(Code::Malformed, message))?;
         let sub = self.subscription_mut(resize.surface, "resize")?;
         let id = sub.id;
+        if sub.popup.is_some() {
+            return Err(Refusal::from(format!("surface {id} streams the popup, which keeps its own size")));
+        }
         if let Some(view) = sub.view {
             let message = format!("surface {id} follows view {view}, which sizes it: change the view with `view-set`");
             return Err(Refusal::from(message));
@@ -442,6 +513,9 @@ impl App {
     pub(super) fn surface_printed(&mut self, pane: u64) {
         if self.clients.surfaces.subscriptions.is_empty() {
             return;
+        }
+        for sub in self.clients.surfaces.subscriptions.iter_mut().filter(|sub| sub.popup == Some(pane)) {
+            sub.dirty = true;
         }
         let Some((_, tab)) = self.projects.tab_with_pane(pane) else { return };
         let id = tab.id;

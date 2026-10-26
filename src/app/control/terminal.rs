@@ -1,6 +1,6 @@
 use ratatui::layout::{Position, Rect};
 
-use super::{Handled, conflict, json, malformed, none};
+use super::{Handled, conflict, json, malformed, no_popup, none};
 use crate::app::App;
 use crate::control::contract::{Code, Refusal};
 use crate::control::surface::{self, Size};
@@ -111,38 +111,53 @@ fn note_typed(term: &mut Term, events: &[InputEvent]) {
     }
 }
 
+fn type_into(term: &mut Term, pane: u64, input: &Input, sending: bool) -> Handled {
+    let dims = fits(term, pane, input.size)?;
+    if input.events.is_empty() {
+        return Err(malformed("no events given"));
+    }
+    let sent = encode(term, pane, input, dims)?;
+    if sent.typed && sending {
+        return Err(Refusal::new(
+            Code::Busy,
+            format!(
+                "a message sent with `cornercase send` is between its paste and its Enter in pane {pane}, and what \
+                 you type would join it; nothing was sent: send again in a moment"
+            ),
+        ));
+    }
+    if !sent.bytes.is_empty() && !term.write(&sent.bytes) {
+        return Err(busy(term, pane));
+    }
+    if sent.typed {
+        term.emulator.scroll_to_bottom();
+        note_typed(term, &input.events);
+    }
+    Ok(Some(json(&Sent { pane, bytes: sent.bytes.len(), skipped: sent.skipped })))
+}
+
 impl App {
     fn pane_mut(&mut self, pane: u64) -> Result<&mut Term, Refusal> {
         self.projects.pane_by_mut(pane).ok_or_else(|| none("pane", pane))
     }
 
     pub(in crate::app) fn input_request(&mut self, input: &Input) -> Handled {
+        if input.popup {
+            return self.popup_input(input);
+        }
         let pane = explicit(input.pane, "input")?;
         let sending = self.sending(pane);
         let term = self.pane_mut(pane)?;
-        let dims = fits(term, pane, input.size)?;
-        if input.events.is_empty() {
-            return Err(malformed("no events given"));
+        type_into(term, pane, input, sending)
+    }
+
+    fn popup_input(&mut self, input: &Input) -> Handled {
+        if input.pane.is_some() {
+            return Err(malformed("`input` types into a pane or into the popup, not both: leave out --pane"));
         }
-        let sent = encode(term, pane, input, dims)?;
-        if sent.typed && sending {
-            return Err(Refusal::new(
-                Code::Busy,
-                format!(
-                    "a message sent with `cornercase send` is between its paste and its Enter in pane {pane}, and \
-                     what you type would join it; nothing was sent: send again in a moment"
-                ),
-            ));
-        }
-        if !sent.bytes.is_empty() && !term.write(&sent.bytes) {
-            return Err(busy(term, pane));
-        }
-        if sent.typed {
-            term.emulator.scroll_to_bottom();
-            note_typed(term, &input.events);
-        }
-        let answer = Sent { pane, bytes: sent.bytes.len(), skipped: sent.skipped };
-        Ok(Some(json(&answer)))
+        let term = &mut self.popup_mut().ok_or_else(no_popup)?.term;
+        let pane = term.id;
+        type_into(term, pane, input, false)
     }
 
     pub(in crate::app) fn scroll_request(&mut self, scroll: &Scroll) -> Handled {

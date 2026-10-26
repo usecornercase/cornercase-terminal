@@ -212,7 +212,7 @@ impl App {
         self.popup().is_some_and(|p| p.term.id == id && p.term.generation() == generation)
     }
 
-    pub(super) fn popup_output(&mut self, bytes: &[u8]) {
+    pub(super) fn popup_output(&mut self, id: u64, bytes: &[u8]) {
         let Some(popup) = self.popup_mut() else { return };
         popup.term.feed(bytes);
         let copied = popup.term.emulator.take_copied();
@@ -220,6 +220,7 @@ impl App {
         for text in &copied {
             self.copy(text);
         }
+        self.surface_printed(id);
     }
 
     pub(super) fn reap_popup(&mut self, now: Instant) {

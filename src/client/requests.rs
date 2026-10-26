@@ -31,6 +31,10 @@ pub(crate) fn use_surface_patches() -> Result<()> {
     require("surface-patches", "cannot send surface patches")
 }
 
+pub(crate) fn use_popup_terminal() -> Result<()> {
+    require("popup-terminal", "cannot stream or type into a plugin popup")
+}
+
 pub(crate) fn use_close_unlock() -> Result<()> {
     require("close-unlock", "cannot unlock a worktree to remove it")
 }

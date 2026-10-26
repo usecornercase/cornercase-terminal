@@ -521,3 +521,5 @@ mod guard {
         assert!(p.log().contains("popup closed"), "{}", p.log());
     }
 }
+
+mod external;

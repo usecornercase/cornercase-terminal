@@ -22,11 +22,13 @@ pub(crate) struct Surface {
     pub(crate) cols: u16,
     pub(crate) rows: u16,
     pub(crate) patches: bool,
+    pub(crate) popup: bool,
 }
 
 impl Surface {
     pub(super) fn fields(&self, fields: &mut Fields) {
         fields.maybe("tab", self.tab).add("cols", self.cols).add("rows", self.rows).add("patches", self.patches);
+        fields.maybe("popup", self.popup.then_some(true));
     }
 
     pub(crate) fn area(&self) -> Result<Rect, String> {
@@ -52,8 +54,17 @@ pub(crate) struct Frame<B = Content> {
     pub(crate) view: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) projection: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) popup: Option<Popup>,
     #[serde(flatten)]
     pub(crate) content: B,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Popup {
+    pub(crate) plugin: String,
+    pub(crate) action: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

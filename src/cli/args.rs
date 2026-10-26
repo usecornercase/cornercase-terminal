@@ -672,21 +672,21 @@ pub(crate) struct SurfaceArgs {
     #[arg(
         long,
         value_name = "ID",
-        required_unless_present = "view",
+        required_unless_present_any = ["view", "popup"],
         help = "The tab to stream; `cornercase status` lists them"
     )]
     pub(crate) tab: Option<u64>,
     #[arg(
         long,
         value_name = "N",
-        required_unless_present = "view",
+        required_unless_present_any = ["view", "popup"],
         help = "Columns of the surface the tab is laid out in (1 to 1000)"
     )]
     pub(crate) cols: Option<u16>,
     #[arg(
         long,
         value_name = "N",
-        required_unless_present = "view",
+        required_unless_present_any = ["view", "popup"],
         help = "Rows of the surface the tab is laid out in (1 to 500)"
     )]
     pub(crate) rows: Option<u16>,
@@ -697,6 +697,12 @@ pub(crate) struct SurfaceArgs {
         help = "Stream the tab this view shows, at the view's size, and follow it (see `cornercase view`)"
     )]
     pub(crate) view: Option<u64>,
+    #[arg(
+        long,
+        conflicts_with_all = ["tab", "cols", "rows", "view"],
+        help = "Stream the plugin popup open in the window, at its own size, until it closes"
+    )]
+    pub(crate) popup: bool,
     #[arg(long, help = "After the first line, send only what changed (see below)")]
     pub(crate) patches: bool,
 }

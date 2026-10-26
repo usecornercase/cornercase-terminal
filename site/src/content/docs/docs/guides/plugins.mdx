@@ -150,7 +150,7 @@ An action with `placement = "popup"` runs in a terminal inside a dialog over the
 - **Keys**: every key goes to the program, `Esc` and your [prefix key](../../reference/keyboard-and-mouse/#keyboard-shortcuts) included, and so does a paste. The mouse reaches it when the program asks for it. A click outside the popup does nothing.
 - **Closing**: it closes when the program exits, when you click `×`, or with `cornercase plugin popup-close`. `×` stops the program and its children (`SIGHUP`, then `SIGKILL` after 2 seconds). A program that exits with a code other than 0 shows its exit status in the window, like a failed action.
 - It is not stopped after 5 minutes: it stays open until it closes. One popup is open at a time, and it is not part of the session: `kill-server` and a restart close it.
-- The popup runs in the server, so every window attached to it, a phone's browser or a [`cornercase remote`](../remote/) window included, shows it, and you can type in it from any of them.
+- The popup runs in the server, so every window attached to it, a phone's browser or a [`cornercase remote`](../remote/) window included, shows it, and you can type in it from any of them. A program that draws cornercase itself shows it and types into it with [`surface --popup` and `input --popup`](../scripts-and-agents/#a-plugins-popup).
 
 <Aside type="caution" title="Set min_cornercase">
 A cornercase older than these refuses a manifest with the `button` context, and ignores `placement`, so it would run a popup's program in the background, with no terminal. A plugin that uses either should set `min_cornercase = "0.12.187"` or newer.

@@ -242,6 +242,10 @@ pub(in crate::app) fn conflict(message: impl Into<String>) -> Refusal {
     Refusal::new(Code::Conflict, message)
 }
 
+pub(in crate::app) fn no_popup() -> Refusal {
+    Refusal::new(Code::NotFound, "no plugin popup is open")
+}
+
 pub(in crate::app) fn none(kind: &str, id: u64) -> Refusal {
     Refusal::new(Code::NotFound, format!("there is no {kind} {id}; `cornercase status` lists them"))
 }

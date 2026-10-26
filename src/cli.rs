@@ -127,14 +127,17 @@ fn stream_surface(args: &SurfaceArgs) -> Result<()> {
             tab: args.tab,
             cols: args.cols.unwrap_or_default(),
             rows: args.rows.unwrap_or_default(),
-            patches: false,
+            ..control::Surface::default()
         },
     };
-    let surface = control::Surface { patches: args.patches, ..surface };
+    let surface = control::Surface { patches: args.patches, popup: args.popup, ..surface };
     if args.patches {
         client::use_surface_patches()?;
     }
-    if args.view.is_none() {
+    if args.popup {
+        client::use_popup_terminal()?;
+    }
+    if args.view.is_none() && !args.popup {
         surface.area().map_err(Error::Control)?;
     }
     stream_json("surface", control::Command::Surface(surface))

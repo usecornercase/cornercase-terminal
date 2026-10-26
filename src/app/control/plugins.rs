@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use serde_json::Value;
 
-use super::{Handled, Pending, Stage, conflict, json, malformed, none};
+use super::{Handled, Pending, Stage, conflict, json, malformed, no_popup, none};
 use crate::app::App;
 use crate::app::plugins::Spot;
 use crate::control::contract::{Code, Refusal};
@@ -62,7 +62,7 @@ impl App {
 
     pub(super) fn plugin_popup_close_request(&mut self) -> Handled {
         if !self.close_plugin_popup() {
-            return Err(not_found("no plugin popup is open".into()));
+            return Err(no_popup());
         }
         Ok(Some(json(&Done::default())))
     }

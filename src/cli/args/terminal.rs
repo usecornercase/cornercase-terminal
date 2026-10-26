@@ -5,9 +5,12 @@ use crate::cli::help::PANE_REQUIRED;
 use crate::control::terminal::{InputEvent, Point};
 
 #[derive(Debug, Args)]
+#[command(group(clap::ArgGroup::new("into").required(true).args(["pane", "popup"])))]
 pub(crate) struct InputArgs {
-    #[arg(long, value_name = "ID", required = true, help = PANE_REQUIRED)]
-    pub(crate) pane: u64,
+    #[arg(long, value_name = "ID", help = PANE_REQUIRED)]
+    pub(crate) pane: Option<u64>,
+    #[arg(long, help = "Type into the plugin popup open in the window instead of a pane")]
+    pub(crate) popup: bool,
     #[arg(required = true, value_name = "EVENT", value_parser = event, help = "One JSON event, or - to read one per line from standard input")]
     pub(crate) events: Vec<String>,
     #[command(flatten)]

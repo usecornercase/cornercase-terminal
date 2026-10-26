@@ -2,7 +2,7 @@ use std::io::{self, BufRead as _};
 
 use super::args::terminal::{InputArgs, LinkArgs, RatioArgs, RedrawArgs, ResizeArgs, ScrollArgs, SelectionArgs, Side};
 use super::{print_json, print_out};
-use crate::client::{answer, ask};
+use crate::client::{self, answer, ask};
 use crate::control::terminal::{End, InputEvent, Linked, Scrolled, Selection, Sent, Why};
 use crate::control::{self, Done};
 use crate::error::{Error, Result};
@@ -43,7 +43,10 @@ fn skipped(why: Why) -> &'static str {
 }
 
 pub(super) fn input(args: &InputArgs) -> Result<()> {
-    let request = control::Input { pane: Some(args.pane), size: None, events: events(&args.events)? };
+    if args.popup {
+        client::use_popup_terminal()?;
+    }
+    let request = control::Input { pane: args.pane, popup: args.popup, size: None, events: events(&args.events)? };
     let value = ask("input", control::Command::Input(request))?;
     if args.print.json {
         return print_json(&value);

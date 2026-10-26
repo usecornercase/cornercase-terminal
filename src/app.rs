@@ -565,7 +565,7 @@ impl App {
     pub(crate) fn handle_event(&mut self, ev: AppEvent, area: Rect) -> Result<()> {
         match ev {
             AppEvent::Input(event) => self.handle_input(event, area)?,
-            AppEvent::Output(id, generation, bytes) if self.is_popup(id, generation) => self.popup_output(&bytes),
+            AppEvent::Output(id, generation, bytes) if self.is_popup(id, generation) => self.popup_output(id, &bytes),
             AppEvent::Exited(id, generation) if self.is_popup(id, generation) => self.reap_popup(Instant::now()),
             AppEvent::Output(id, generation, bytes) if self.current_shell(id, generation) => self.output(id, &bytes),
             AppEvent::Exited(id, generation) if self.current_shell(id, generation) => self.remove(id),

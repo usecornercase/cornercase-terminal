@@ -8,7 +8,7 @@ use crate::control::surface::{Area, Colour, Frame, Shape, Surface};
 use crate::control::{Layout, Watch};
 
 fn command(tab: u64, cols: u16, rows: u16) -> Command {
-    Command::Surface(Surface { tab: Some(tab), cols, rows, patches: false })
+    Command::Surface(Surface { tab: Some(tab), cols, rows, patches: false, popup: false })
 }
 
 fn text_of(command: &Command, boot: Option<&str>, structured: bool) -> String {
@@ -278,7 +278,7 @@ fn reconnecting_starts_again_from_a_whole_frame() {
 #[rstest]
 #[case::unknown_tab(command(9999, 80, 24), None, Code::NotFound)]
 #[case::bad_size(command(1, 0, 24), None, Code::Malformed)]
-#[case::no_tab(Command::Surface(Surface { tab: None, cols: 80, rows: 24, patches: false }), None, Code::Malformed)]
+#[case::no_tab(Command::Surface(Surface { tab: None, cols: 80, rows: 24, patches: false, popup: false }), None, Code::Malformed)]
 #[case::stale_boot(command(1, 80, 24), Some("1-2"), Code::StaleBoot)]
 fn a_surface_is_refused(#[case] command: Command, #[case] boot: Option<&str>, #[case] code: Code) {
     let (mut app, _rx, _dirs) = app_with(1);

@@ -428,7 +428,7 @@ fn a_connection_holds_one_view_and_a_surface_takes_no_tab_or_size() {
         &mut app,
         80,
         Some(view.id),
-        Command::Surface(Surface { tab: Some(tab), cols: 80, rows: 24, patches: false }),
+        Command::Surface(Surface { tab: Some(tab), cols: 80, rows: 24, patches: false, popup: false }),
         true,
     );
 

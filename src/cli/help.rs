@@ -366,6 +366,10 @@ The window keeps showing what it showed, also when the tab is not the one on scr
 the server stops (status 0); stopping it leaves the shells running. A reader that falls behind gets
 fewer lines, each complete.
 
+With --popup it streams the plugin popup open in the window (see `cornercase plugin run`) instead of a tab:
+one pane, its program's terminal, at the popup's own size, with `popup` naming the plugin and the action,
+`tab` 0 and no layout. It ends when the popup closes. `cornercase input --popup` types into it.
+
 With --patches, each line after the first carries only what changed since the line before: `base` is the
 revision it applies to, and each changed pane has its cursor and what changed of the rest (`lines` by
 row number, `copy` for rows that moved). A complete line, without `base`, comes again whenever the layout,
@@ -376,7 +380,8 @@ Examples:
   cornercase surface --tab 3 --cols 120 --rows 40
   cornercase surface --tab 3 --cols 120 --rows 40 | jq -c '[.revision, [.panes[].pane]]'
   cornercase surface --tab 3 --cols 120 --rows 40 --patches
-  cornercase surface --view 41";
+  cornercase surface --view 41
+  cornercase surface --popup";
 pub(super) const INPUT_HELP: &str = "For programs that draw cornercase's terminals themselves (see `cornercase surface`). Each
 EVENT is one JSON object, sent in order:
   {\"key\": {\"code\": \"c\", \"mods\": [\"ctrl\"]}}   code as for `keys`; mods ctrl, alt, shift, super; kind press, repeat, release
@@ -393,11 +398,13 @@ cursor keys, bracketed paste, mouse mode), whatever the window shows: a dialog o
 takes nothing. Keys, text and pastes bring the pane's view back to the bottom. Mouse events and key
 releases that the program does not take are not sent, and said on stderr. When one event is wrong,
 or the program is not reading its input, nothing is sent. Scripts and agents should use `send` and
-`keys`, which check before typing into an agent.
+`keys`, which check before typing into an agent. With --popup the events go to the plugin popup open
+in the window, its x and y being cells of the popup's terminal.
 
 Examples:
   cornercase input --pane 12 '{\"text\": \"ls\"}' '{\"key\": {\"code\": \"enter\"}}'
-  cornercase input --pane 12 '{\"mouse\": {\"kind\": \"scroll-up\", \"x\": 10, \"y\": 5}}'";
+  cornercase input --pane 12 '{\"mouse\": {\"kind\": \"scroll-up\", \"x\": 10, \"y\": 5}}'
+  cornercase input --popup '{\"key\": {\"code\": \"down\"}}' '{\"key\": {\"code\": \"enter\"}}'";
 pub(super) const SCROLL_HELP: &str =
     "Moves the pane's view through its history, as the wheel does in the window, which shows the same
 view. On its alternate screen, or when it reads the mouse, a program scrolls itself: send it keys or

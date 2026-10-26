@@ -9,6 +9,7 @@ use crate::term::keys;
 #[serde(default)]
 pub(crate) struct Input {
     pub(crate) pane: Option<u64>,
+    pub(crate) popup: bool,
     pub(crate) size: Option<Size>,
     pub(crate) events: Vec<InputEvent>,
 }
@@ -128,7 +129,7 @@ impl Input {
     pub(super) fn fields(&self, fields: &mut Fields) {
         let count = |wanted: fn(&InputEvent) -> bool| self.events.iter().filter(|event| wanted(event)).count();
         let bytes = |wanted: fn(&InputEvent) -> Option<usize>| self.events.iter().filter_map(wanted).sum::<usize>();
-        fields.maybe("pane", self.pane).add("events", self.events.len());
+        fields.maybe("pane", self.pane).maybe("popup", self.popup.then_some(true)).add("events", self.events.len());
         fields.add("keys", count(|event| matches!(event, InputEvent::Key(_))));
         fields.add("mice", count(|event| matches!(event, InputEvent::Mouse(_))));
         fields

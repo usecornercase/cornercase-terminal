@@ -11,7 +11,7 @@ fn request(args: &Value) -> Request {
 
 #[test]
 fn every_event_shape_reads_and_is_written_back() {
-    let args = json!({"pane": 12, "size": {"cols": 80, "rows": 24}, "events": [
+    let args = json!({"pane": 12, "popup": false, "size": {"cols": 80, "rows": 24}, "events": [
         {"key": {"code": "c", "mods": ["ctrl"], "kind": "release"}},
         {"text": "héllo"},
         {"paste": "two\nlines"},
@@ -94,6 +94,7 @@ fn a_key_names_its_modifiers_and_kind() {
 fn the_fields_to_log_are_counts_and_sizes() {
     let input = Input {
         pane: Some(3),
+        popup: false,
         size: None,
         events: vec![
             InputEvent::Text("secret".into()),

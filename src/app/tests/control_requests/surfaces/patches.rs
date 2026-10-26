@@ -7,7 +7,7 @@ use crate::control::terminal::Redraw;
 const PEER: u64 = CLIENT + 1;
 
 fn patching(tab: u64) -> Command {
-    Command::Surface(Surface { tab: Some(tab), cols: 80, rows: 24, patches: true })
+    Command::Surface(Surface { tab: Some(tab), cols: 80, rows: 24, patches: true, popup: false })
 }
 
 fn subscribe_patching(app: &mut App, client: u64, at: Instant, tab: u64) -> String {

@@ -131,7 +131,7 @@ fn attributes_map_from_the_terminal(#[case] modifier: Modifier, #[case] key: &st
 #[case::smallest(1, 1, Ok(Rect::new(0, 0, 1, 1)))]
 #[case::largest(1000, 500, Ok(Rect::new(0, 0, 1000, 500)))]
 fn the_size_is_checked(#[case] cols: u16, #[case] rows: u16, #[case] expected: Result<Rect, &str>) {
-    let surface = Surface { tab: Some(1), cols, rows, patches: false };
+    let surface = Surface { tab: Some(1), cols, rows, patches: false, popup: false };
 
     assert_eq!(surface.area(), expected.map_err(str::to_string));
 }
@@ -144,14 +144,14 @@ fn a_surface_request_travels_with_its_tab_and_size_and_logs_them() {
         contract: None,
         boot: None,
         view: None,
-        command: Command::Surface(Surface { tab: Some(12), cols: 120, rows: 40, patches: false }),
+        command: Command::Surface(Surface { tab: Some(12), cols: 120, rows: 40, patches: false, popup: false }),
     };
 
     let sent = serde_json::to_value(&request).expect("json");
 
     assert_eq!(
         sent,
-        json!({"caller": null, "server": null, "command": "surface", "args": {"tab": 12, "cols": 120, "rows": 40, "patches": false}})
+        json!({"caller": null, "server": null, "command": "surface", "args": {"tab": 12, "cols": 120, "rows": 40, "patches": false, "popup": false}})
     );
     assert_eq!(serde_json::from_value::<Request>(sent).expect("a request"), request);
     assert_eq!(
