@@ -16,6 +16,8 @@ use crate::error::{Error, Result};
 const ONLY_STANDARD_INPUT: &str =
     "--follow reads its events from standard input, one per line: give - as the only EVENT";
 
+const NEEDS_A_PANE: &str = "this line names no pane and --pane was not given: add \"pane\": ID to the line";
+
 type Lines = Receiver<io::Result<Vec<u8>>>;
 
 pub(super) fn run(args: &InputArgs) -> Result<()> {
@@ -81,7 +83,10 @@ fn parts(lines: impl IntoIterator<Item = Line>, template: &control::Input) -> Ve
     let mut parts = Vec::new();
     for line in lines {
         match line {
-            Line::Event(pane, event) => add(&mut parts, pane.or(template.pane), event, template),
+            Line::Event(pane, event) => match pane.or(template.pane) {
+                None if !template.popup => parts.push(Part::Wrong(NEEDS_A_PANE.into())),
+                pane => add(&mut parts, pane, event, template),
+            },
             Line::Wrong(message) => parts.push(Part::Wrong(message)),
         }
     }
@@ -102,14 +107,28 @@ fn typed(
     printer: &mut Printer<impl Write, impl Write>,
 ) -> Result<()> {
     while let Ok(first) = lines.recv() {
-        let waiting = once(first).chain(lines.try_iter()).collect::<io::Result<Vec<_>>>()?;
+        let (waiting, failed) = waiting(first, lines);
         for part in parts(waiting.iter().filter_map(|bytes| line(bytes)), template) {
             if printer.part(part, &mut ask)? {
                 return Ok(());
             }
         }
+        if let Some(error) = failed {
+            return Err(error.into());
+        }
     }
     printer.finished()
+}
+
+fn waiting(first: io::Result<Vec<u8>>, lines: &Lines) -> (Vec<Vec<u8>>, Option<io::Error>) {
+    let mut waiting = Vec::new();
+    for read in once(first).chain(lines.try_iter()) {
+        match read {
+            Ok(bytes) => waiting.push(bytes),
+            Err(error) => return (waiting, Some(error)),
+        }
+    }
+    (waiting, None)
 }
 
 struct Printer<O, E> {

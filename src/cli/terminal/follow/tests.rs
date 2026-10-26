@@ -26,7 +26,12 @@ fn typing(
     json: bool,
     answer: impl FnMut(&control::Input, Option<&Sender<io::Result<Vec<u8>>>>) -> Result<Value>,
 ) -> Typing {
-    typing_with(lines, &control::Input::default(), Printer::new(json, Vec::new(), Vec::new()), answer)
+    typing_with(
+        lines,
+        &control::Input { pane: Some(1), ..control::Input::default() },
+        Printer::new(json, Vec::new(), Vec::new()),
+        answer,
+    )
 }
 
 fn typing_with(
@@ -167,7 +172,7 @@ mod typing {
         let done = typing(&[r#"{"text":"a"}"#, "", r#"{"text":"b"}"#, r#"{"text":"c"}"#], true, quiet);
 
         assert_eq!(done.asked.len(), 1);
-        assert_eq!(objects(&done.out), [json!({"pane": null, "bytes": 1, "skipped": [], "events": 3})]);
+        assert_eq!(objects(&done.out), [json!({"pane": 1, "bytes": 1, "skipped": [], "events": 3})]);
         assert!(done.result.is_ok() && done.err.is_empty());
     }
 
@@ -279,6 +284,40 @@ mod typing {
 
         assert!(result.is_ok(), "{result:?}");
         assert_eq!(asks, 1);
+    }
+
+    #[test]
+    fn answers_a_line_naming_no_pane_when_there_is_no_default_pane() {
+        let lines = [r#"{"text":"a"}"#, r#"{"pane":1,"text":"b"}"#];
+        let done = typing_with(&lines, &control::Input::default(), Printer::new(true, Vec::new(), Vec::new()), quiet);
+
+        assert_eq!(done.asked, [text(Some(1), "b")]);
+        let answers = objects(&done.out);
+        assert!(answers[0]["error"].as_str().is_some_and(|e| e.contains("names no pane")), "{answers:?}");
+        assert!(matches!(done.result, Err(Error::Partial)), "{:?}", done.result);
+    }
+
+    #[test]
+    fn sends_the_lines_read_before_a_read_error_and_then_ends_with_it() {
+        let (tx, rx) = mpsc::channel();
+        tx.send(Ok(br#"{"pane":1,"text":"a"}"#.to_vec())).expect("queue a line");
+        tx.send(Err(io::Error::other("the input broke"))).expect("queue an error");
+        let mut asked = Vec::new();
+        let mut printer = Printer::new(true, Vec::new(), Vec::new());
+
+        let result = typed(
+            &rx,
+            &control::Input::default(),
+            |input| {
+                let answer = sent(&input);
+                asked.push(input);
+                Ok(answer)
+            },
+            &mut printer,
+        );
+
+        assert_eq!(asked, [text(Some(1), "a")]);
+        assert!(matches!(result, Err(Error::Io(_))), "{result:?}");
     }
 
     #[test]
