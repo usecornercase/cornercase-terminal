@@ -330,7 +330,7 @@ test('actions on the plugin\'s button and popups are plugins', () => {
   const good = [
     BUTTON,
     sized('placement = "popup"').replace('contexts = ["pane"]', 'contexts = ["button", "project", "workspace", "tab", "pane"]'),
-    ...['title = "Top"\nicon = "T"', 'title = "Top"', 'icon = "T"', ''].map((fields) => `${BUTTON}\n[button]\n${fields}\n`),
+    ...['title = "Top"\nicon = "T"', 'title = "Top"', 'icon = "T"', 'icon = "▶"', 'icon = "⚙"', 'icon = "✔"', 'icon = "♥"', 'icon = "\u0903"', ''].map((fields) => `${BUTTON}\n[button]\n${fields}\n`),
     ...['width = 20', 'width = 500', 'height = 5', 'height = 200'].map((size) => sized(`placement = "popup"\n${size}`)),
   ];
   for (const text of good) assert.equal(pluginFrom('', text).id, 'acme.notes', text);
@@ -340,12 +340,14 @@ test('a bad context names every context there is', () => {
   assert.throws(() => pluginFrom('', MANIFEST.replace('contexts = ["pane"]', 'contexts = ["window"]')), /project, workspace, tab, pane and button/);
 });
 
-test('the plugins guide\'s example manifest is a plugin', () => {
+test('every example manifest in the plugins guide is a plugin', () => {
   const guide = readFileSync('src/content/docs/docs/guides/plugins.mdx', 'utf8');
-  const example = [...guide.matchAll(/```toml\n([\s\S]*?)```/g)].map((block) => block[1]).find((block) => block.includes('contexts = ["button"]'));
-  assert.ok(example, 'the guide has no example manifest with a button action');
-  const text = example.replace(/sha256 = "[^"]*"/, `sha256 = "${'a'.repeat(64)}"`);
-  assert.equal(pluginFrom('', text).id, 'acme.notes');
+  const examples = [...guide.matchAll(/```toml\n([\s\S]*?)```/g)].map((block) => block[1]).filter((block) => block.includes('[[actions]]'));
+  assert.ok(examples.length >= 2, 'the guide lost an example manifest');
+  for (const example of examples) {
+    const text = example.replace(/sha256 = "[^"]*"/g, `sha256 = "${'a'.repeat(64)}"`);
+    assert.doesNotThrow(() => pluginFrom('', text), example);
+  }
 });
 
 test('unblocking an id brings its unchanged plugin back', async () => {

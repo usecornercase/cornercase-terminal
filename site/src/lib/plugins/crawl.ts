@@ -49,7 +49,7 @@ const CONTEXTS = ['project', 'workspace', 'tab', 'pane', 'button'];
 const PLACEMENTS = ['job', 'popup'];
 const SIZES = { width: [20n, 500n], height: [5n, 200n] } as const;
 const WIDE = /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA000-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{20000}-\u{2FFFD}\u{30000}-\u{3FFFD}]/u;
-const NOT_ONE_CELL = /[\p{Cc}\p{Cf}\p{M}\p{Extended_Pictographic}]/u;
+const NOT_ONE_CELL = /[\p{Cc}\p{Cf}\p{Mn}\p{Me}\p{Emoji_Presentation}]/u;
 const EVENTS = ['opened', 'closed', 'status', 'exited'];
 
 const tables = (where: string, value: unknown): Record<string, unknown>[] => {
