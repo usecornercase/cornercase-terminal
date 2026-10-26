@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.194
+
+- **Other UIs can show a plugin's popup and type into it.** `cornercase surface --popup` streams the popup open in the window as cells, in the same lines as a tab's terminals (one pane, at the popup's own size, with the plugin and action it belongs to), and ends when the popup closes. `cornercase input --popup` types keys, text, pastes and mouse events into its program. A browser view or another client built on the socket can now draw the popup instead of a blank. Nothing changes in the window.
+- Scripts: `surface` and `input` take `popup`, and `cornercase contract` lists the feature `popup-terminal`.
+
 ## 0.12.193
 
 - **A rejected tracker token says which one it was.** When GitLab, Shortcut, Linear, Jira, Plane or Asana rejects a token, the message now says whether it was the token saved in Settings (paste a new one there or with `cornercase config secret`) or one from a variable such as `LINEAR_API_KEY` in the server's environment, which wins over a saved one until you unset it and restart the server. This shows in the Issues dialog and in `cornercase issue sources`, `issue list`, `issue read`, `issue people` and `start --issue`.
