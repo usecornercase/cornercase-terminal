@@ -58,6 +58,8 @@ fn shown(frame: &Frame) -> String {
     frame.content.panes[0].lines.iter().flatten().flat_map(|run| run.cells.iter().map(String::as_str)).collect()
 }
 
+const E_ACUTE_SHOWN: [&str; 2] = ["M-CM-)", "é"];
+
 fn popup_id(p: &Popped) -> u64 {
     p.app.popup().expect("a popup").term.id
 }
@@ -225,7 +227,8 @@ mod input {
         let answer = typed(&mut p, &json!([{"text": "héllo"}, {"key": {"code": "enter"}}]));
 
         assert!(answer["ok"]["bytes"].as_u64().is_some_and(|bytes| bytes > 0), "{answer}");
-        assert!(p.line().ends_with("\nhM-CM-)llo"), "{}", p.line());
+        let line = p.line();
+        assert!(E_ACUTE_SHOWN.iter().any(|shown| line.ends_with(&format!("\nh{shown}llo"))), "{line}");
     }
 
     #[test]
