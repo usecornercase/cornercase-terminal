@@ -1,8 +1,13 @@
 use std::io::{self};
+use std::net::Shutdown;
+use std::os::fd::BorrowedFd;
 use std::os::unix::net::UnixStream;
 use std::sync::OnceLock;
 use std::time::Duration;
 
+use rustix::event::{PollFd, PollFlags};
+use rustix::fs::FileType;
+use rustix::io::Errno;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -176,13 +181,25 @@ fn follow_from(
     first: bool,
     mut each: impl FnMut(Value) -> Result<bool>,
 ) -> Result<()> {
-    let mut stream = connect()?;
+    let stream = connect()?;
     let reader = stream.try_clone()?;
     let answer = ask_on(reader, name, command)?;
     if first && each(answer)? {
         return Ok(());
     }
+    follow_on(stream, watched(rustix::stdio::stdout()), each)
+}
+
+fn follow_on(
+    mut stream: UnixStream,
+    mut out: Option<BorrowedFd<'_>>,
+    mut each: impl FnMut(Value) -> Result<bool>,
+) -> Result<()> {
     loop {
+        if reader_left(&stream, &mut out) {
+            let _ = stream.shutdown(Shutdown::Both);
+            return Ok(());
+        }
         match protocol::recv::<ServerMessage>(&mut stream) {
             Ok(Some(ServerMessage::Response(text))) => {
                 if each(answered(&text)?)? {
@@ -200,6 +217,33 @@ fn follow_from(
             Ok(None) | Err(_) => return Err(Error::Control(LOST.into())),
         }
     }
+}
+
+fn watched(out: BorrowedFd<'_>) -> Option<BorrowedFd<'_>> {
+    let kind = rustix::fs::fstat(out).map(|stat| FileType::from_raw_mode(stat.st_mode));
+    matches!(kind, Ok(FileType::Fifo | FileType::Socket)).then_some(out)
+}
+
+fn reader_left(stream: &UnixStream, out: &mut Option<BorrowedFd<'_>>) -> bool {
+    while let Some(reader) = *out {
+        let mut fds = [PollFd::new(stream, PollFlags::IN), PollFd::new(&reader, PollFlags::IN | PollFlags::HUP)];
+        match rustix::event::poll(&mut fds, None) {
+            Ok(_) => {}
+            Err(Errno::INTR) => continue,
+            Err(_) => return false,
+        }
+        let (server, left) = (fds[0].revents(), fds[1].revents());
+        if left.intersects(PollFlags::HUP | PollFlags::ERR) {
+            return true;
+        }
+        if !left.is_empty() {
+            *out = None;
+        }
+        if !server.is_empty() {
+            return false;
+        }
+    }
+    false
 }
 
 pub(crate) fn answer<T: DeserializeOwned>(value: Value) -> Result<T> {

@@ -241,6 +241,26 @@ fn status_follow_streams_whole_snapshots_and_a_new_one_starts_from_now() {
     assert!(current["revision"].as_u64() >= renamed["revision"].as_u64(), "{current}");
 }
 
+#[rstest]
+#[case::events(&["events", "--json"], "command=events", 0)]
+#[case::the_rest_of_the_app(&["status", "--app", "--follow"], "command=app", 1)]
+fn a_follow_ends_soon_after_its_reader_leaves(#[case] args: &[&str], #[case] asked: &str, #[case] printed: usize) {
+    let (session, mut server) = windowless();
+    let mut follow = session.spawn(args);
+    let mut out = std::io::BufReader::new(follow.stdout.take().expect("its output"));
+    session.wait_for_file("server.log", "it follows", |log| log.contains(asked));
+    for _ in 0..printed {
+        std::io::BufRead::read_line(&mut out, &mut String::new()).expect("a line");
+    }
+
+    drop(out);
+    let ended = finish_within(follow, TIMEOUT);
+
+    assert_eq!((ended.status.code(), ended.stderr.as_slice()), (Some(0), &b""[..]), "{ended:?}");
+    drop(session);
+    let _ = server.wait();
+}
+
 #[test]
 fn several_panes_are_waited_for_at_once() {
     let app = Harness::start();

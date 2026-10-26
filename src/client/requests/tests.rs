@@ -136,3 +136,124 @@ mod the_view {
         assert_eq!(view_for(&command, Some(7)), sent);
     }
 }
+
+mod a_follow {
+    use std::fs::OpenOptions;
+    use std::io::Write as _;
+    use std::os::fd::{AsFd, OwnedFd};
+    use std::os::unix::fs::OpenOptionsExt;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    use rstest::rstest;
+    use serde_json::json;
+
+    use super::*;
+    use crate::test_util::TempDir;
+
+    const WAIT: Duration = Duration::from_secs(10);
+
+    type Output = (OwnedFd, Option<OwnedFd>);
+
+    struct Following {
+        server: UnixStream,
+        heard: mpsc::Receiver<Value>,
+        ended: mpsc::Receiver<std::result::Result<(), String>>,
+    }
+
+    impl Following {
+        fn start(out: OwnedFd) -> Self {
+            let (ours, server) = UnixStream::pair().expect("a socket pair");
+            let (told, heard) = mpsc::channel();
+            let (done, ended) = mpsc::channel();
+            thread::spawn(move || {
+                let followed = follow_on(ours, watched(out.as_fd()), |value| Ok(told.send(value).is_err()));
+                let _ = done.send(followed.map_err(|e| e.to_string()));
+            });
+            Self { server, heard, ended }
+        }
+
+        fn say(&mut self, n: u64) {
+            let text = serde_json::to_string(&Response::Ok(json!({ "n": n }))).expect("json");
+            protocol::send(&mut self.server, &ServerMessage::Response(text)).expect("a message");
+            assert_eq!(self.heard.recv_timeout(WAIT).expect("the message"), json!({ "n": n }));
+        }
+    }
+
+    fn pipe() -> Output {
+        let (reader, out) = io::pipe().expect("a pipe");
+        (out.into(), Some(reader.into()))
+    }
+
+    fn socket_pair() -> Output {
+        let (out, reader) = UnixStream::pair().expect("a socket pair");
+        (out.into(), Some(reader.into()))
+    }
+
+    fn socket_with_bytes_to_read() -> Output {
+        let (out, mut reader) = UnixStream::pair().expect("a socket pair");
+        reader.write_all(b"typed").expect("bytes for the command to read");
+        (out.into(), Some(reader.into()))
+    }
+
+    fn named_fifo() -> Output {
+        let dir = TempDir::new();
+        let path = dir.path().join("fifo");
+        assert!(std::process::Command::new("mkfifo").arg(&path).status().expect("mkfifo").success());
+        let nonblocking = rustix::fs::OFlags::NONBLOCK.bits().cast_signed();
+        let reader = OpenOptions::new().read(true).custom_flags(nonblocking).open(&path).expect("its reader");
+        let out = OpenOptions::new().write(true).open(&path).expect("its writer");
+        (out.into(), Some(reader.into()))
+    }
+
+    fn file() -> Output {
+        let dir = TempDir::new();
+        (std::fs::File::create(dir.path().join("out")).expect("a file").into(), None)
+    }
+
+    fn dev_null() -> Output {
+        (OpenOptions::new().write(true).open("/dev/null").expect("/dev/null").into(), None)
+    }
+
+    #[rstest]
+    #[case::pipe(pipe())]
+    #[case::socket_pair(socket_pair())]
+    fn ends_soon_after_its_reader_leaves_and_the_server_reads_the_end(#[case] output: Output) {
+        let (out, reader) = output;
+        let mut following = Following::start(out);
+        following.say(1);
+
+        drop(reader);
+
+        assert_eq!(following.ended.recv_timeout(WAIT).expect("it ended"), Ok(()));
+        assert!(matches!(protocol::recv::<ClientMessage>(&mut following.server), Ok(None)));
+    }
+
+    #[rstest]
+    #[case::pipe(pipe())]
+    #[case::socket_pair(socket_pair())]
+    #[case::named_fifo(named_fifo())]
+    #[case::socket_it_could_read(socket_with_bytes_to_read())]
+    #[case::file(file())]
+    #[case::dev_null(dev_null())]
+    fn goes_on_while_its_output_stays(#[case] output: Output) {
+        let (out, _reader) = output;
+        let mut following = Following::start(out);
+
+        following.say(1);
+        following.say(2);
+        protocol::send(&mut following.server, &ServerMessage::Shutdown).expect("the end");
+
+        assert_eq!(following.ended.recv_timeout(WAIT).expect("it ended"), Ok(()));
+    }
+
+    #[rstest]
+    #[case::pipe(pipe(), true)]
+    #[case::socket_pair(socket_pair(), true)]
+    #[case::named_fifo(named_fifo(), true)]
+    #[case::file(file(), false)]
+    #[case::dev_null(dev_null(), false)]
+    fn watches_standard_output_only_as_a_pipe_or_a_socket(#[case] output: Output, #[case] watches: bool) {
+        assert_eq!(watched(output.0.as_fd()).is_some(), watches);
+    }
+}
