@@ -68,7 +68,8 @@ then again shortly after each time something in it changes, always JSON, with
 --json or without. Each line is what --json prints plus `revision`, which grows with every line,
 with `caller` always null;
 `boot` names the server's run, and revisions only compare within one boot. Each line replaces the
-one before. It ends when the server stops or restarts; to go on, run it again, and its first line
+one before. It ends when the server stops or restarts, or once what reads it is gone; to go on, run
+it again, and its first line
 is the state then, so nothing is missed. A reader that falls behind reads at most four older
 lines, then the latest state.
 
@@ -360,7 +361,8 @@ With --host, a program's own requests to the terminal are told too, for programs
   pane 7  bell  3 times               it rang the bell: one line a second per pane, with how many rang
 With --json, each line is a JSON object with the event, the ids, the old and new state and the time.
 
-It ends when the server stops, or once every pane given with --pane has closed. Programs are looked
+It ends when the server stops, once every pane given with --pane has closed, or soon after what reads
+its output is gone (a closed pipe or socket, such as an ssh that ended), with status 0. Programs are looked
 at every half second while something follows events, so one that ends sooner may not show. Start it
 before what you want to follow, or read `cornercase status` once it runs, so nothing falls between.
 A reader that falls far behind loses events, and a line says how many.
@@ -383,8 +385,8 @@ another size. With --tab the surface resizes no terminal: terminals keep the siz
 window, or a view), so size can differ from rect. With --view ID it streams the tab that view
 shows, at the view's size, and follows the view to other tabs (each line carries view and
 projection); it pauses while the view is inactive or has no size, and ends when the view closes.
-The window keeps showing what it showed, also when the tab is not the one on screen. It ends when the tab closes or
-the server stops (status 0); stopping it leaves the shells running. A reader that falls behind gets
+The window keeps showing what it showed, also when the tab is not the one on screen. It ends when the tab closes, the
+server stops or what reads it is gone (status 0); stopping it leaves the shells running. A reader that falls behind gets
 fewer lines, each complete.
 
 With --popup it streams the plugin popup open in the window (see `cornercase plugin run`) instead of a tab:

@@ -1,8 +1,10 @@
-use std::io::{self, BufRead, IsTerminal, Read, Write, stdin, stdout};
+use std::io::{self, BufRead, BufReader, IsTerminal, Read, Write, stdin, stdout};
+use std::net::Shutdown;
+use std::os::fd::{AsFd, BorrowedFd};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
-use std::process::{Child, Command};
+use std::process::{Child, ChildStdout, Command};
 use std::sync::atomic::Ordering;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -135,8 +137,66 @@ impl Target {
     }
 }
 
+pub(crate) trait Source: Read + Send {
+    fn fd(&self) -> BorrowedFd<'_>;
+
+    fn buffered(&self) -> bool {
+        false
+    }
+
+    fn close(&self) {}
+}
+
+impl Source for UnixStream {
+    fn fd(&self) -> BorrowedFd<'_> {
+        self.as_fd()
+    }
+
+    fn close(&self) {
+        let _ = self.shutdown(Shutdown::Both);
+    }
+}
+
+impl Source for BufReader<ChildStdout> {
+    fn fd(&self) -> BorrowedFd<'_> {
+        self.get_ref().as_fd()
+    }
+
+    fn buffered(&self) -> bool {
+        !self.buffer().is_empty()
+    }
+}
+
+impl<S: Source + ?Sized> Source for &mut S {
+    fn fd(&self) -> BorrowedFd<'_> {
+        (**self).fd()
+    }
+
+    fn buffered(&self) -> bool {
+        (**self).buffered()
+    }
+
+    fn close(&self) {
+        (**self).close();
+    }
+}
+
+impl Source for Box<dyn Source> {
+    fn fd(&self) -> BorrowedFd<'_> {
+        (**self).fd()
+    }
+
+    fn buffered(&self) -> bool {
+        (**self).buffered()
+    }
+
+    fn close(&self) {
+        (**self).close();
+    }
+}
+
 pub(crate) struct Link {
-    reader: Box<dyn Read + Send>,
+    reader: Box<dyn Source>,
     writer: Box<dyn Write + Send>,
     guard: Guard,
 }

@@ -1,4 +1,4 @@
-use std::io::{self, Read, Write, stdin, stdout};
+use std::io::{self, Write, stdin, stdout};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -15,7 +15,7 @@ use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM, SIGWINCH};
 use signal_hook::iterator::{Handle, Signals};
 
 use super::probe::{env, finish_tmux_check, start_tmux_check, window_cell};
-use super::{Ending, Guard, Host, INPUT_POLL, Link, Target, input};
+use super::{Ending, Guard, Host, INPUT_POLL, Link, Source, Target, input};
 use crate::error::{Error, Result};
 use crate::graphics::Support;
 use crate::graphics::detect::{self, Facts, Outer};
@@ -468,7 +468,7 @@ fn spawn_writer(mut writer: Box<dyn Write + Send>) -> Sender<ClientMessage> {
     tx
 }
 
-fn spawn_reader(generation: u64, mut reader: Box<dyn Read + Send>, tx: Sender<Incoming>) {
+fn spawn_reader(generation: u64, mut reader: Box<dyn Source>, tx: Sender<Incoming>) {
     thread::spawn(move || {
         loop {
             let received = match protocol::recv::<ServerMessage>(&mut reader) {

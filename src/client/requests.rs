@@ -1,7 +1,11 @@
 use std::io::{self, Write};
+use std::os::fd::BorrowedFd;
 use std::sync::OnceLock;
 use std::time::Duration;
 
+use rustix::event::{PollFd, PollFlags};
+use rustix::fs::FileType;
+use rustix::io::Errno;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -11,7 +15,7 @@ use crate::protocol::{self, ClientMessage, ServerMessage};
 use crate::remote::Remote;
 use crate::update::restart;
 
-use super::Link;
+use super::{Link, Source};
 
 static VIEW: OnceLock<u64> = OnceLock::new();
 static REMOTE: OnceLock<Remote> = OnceLock::new();
@@ -218,8 +222,23 @@ fn follow_from(
     if first && each(answer)? {
         return Ok(());
     }
+    match follow_on(&mut link.reader, watched(rustix::stdio::stdout()), each) {
+        Err(Error::Control(message)) if message == LOST => Err(lost(&mut link, Error::Control(message))),
+        followed => followed,
+    }
+}
+
+fn follow_on(
+    mut stream: impl Source,
+    mut out: Option<BorrowedFd<'_>>,
+    mut each: impl FnMut(Value) -> Result<bool>,
+) -> Result<()> {
     loop {
-        match protocol::recv::<ServerMessage>(&mut link.reader) {
+        if reader_left(&stream, &mut out) {
+            stream.close();
+            return Ok(());
+        }
+        match protocol::recv::<ServerMessage>(&mut stream) {
             Ok(Some(ServerMessage::Response(text))) => {
                 if each(answered(&text)?)? {
                     return Ok(());
@@ -233,9 +252,40 @@ fn follow_from(
                 | ServerMessage::Open(_)
                 | ServerMessage::Browse(_),
             )) => {}
-            Ok(None) | Err(_) => return Err(lost(&mut link, Error::Control(LOST.into()))),
+            Ok(None) | Err(_) => return Err(Error::Control(LOST.into())),
         }
     }
+}
+
+fn watched(out: BorrowedFd<'_>) -> Option<BorrowedFd<'_>> {
+    let kind = rustix::fs::fstat(out).map(|stat| FileType::from_raw_mode(stat.st_mode));
+    matches!(kind, Ok(FileType::Fifo | FileType::Socket)).then_some(out)
+}
+
+fn reader_left(stream: &impl Source, out: &mut Option<BorrowedFd<'_>>) -> bool {
+    if stream.buffered() {
+        return false;
+    }
+    while let Some(reader) = *out {
+        let server = stream.fd();
+        let mut fds = [PollFd::new(&server, PollFlags::IN), PollFd::new(&reader, PollFlags::IN | PollFlags::HUP)];
+        match rustix::event::poll(&mut fds, None) {
+            Ok(_) => {}
+            Err(Errno::INTR) => continue,
+            Err(_) => return false,
+        }
+        let (heard, left) = (fds[0].revents(), fds[1].revents());
+        if left.intersects(PollFlags::HUP | PollFlags::ERR) {
+            return true;
+        }
+        if !left.is_empty() {
+            *out = None;
+        }
+        if !heard.is_empty() {
+            return false;
+        }
+    }
+    false
 }
 
 pub(crate) fn answer<T: DeserializeOwned>(value: Value) -> Result<T> {

@@ -2,10 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.213
+## 0.12.214
 
 - **Drive another machine's cornercase from here.** `cornercase --remote devbox status --json`, `cornercase --remote devbox events --json` and every other command for scripts and agents now reach the server on `devbox` through your own `ssh`, the way `cornercase remote devbox` attaches the window. cornercase is found there even when it is not on the `PATH` of a command run through `ssh` (`--remote-command` says how to run it otherwise), arguments and standard input arrive as they are whatever the login shell there, both machines must run the same version, and a command that follows a stream ends there as soon as it ends here. Set `CORNERCASE_REMOTE=devbox` to send every command there without the flag. It never asks for a password or a passphrase: use a key in your SSH agent. As on your own machine, only `start-server` starts a server there; the other commands say `no cornercase server is running on devbox`. `update`, `restart`, `kill-server`, `logs` and the commands that install or change plugins refuse `--remote`, and `cornercase --remote devbox` alone opens the window there.
 - Commands that first check what the server supports (`events --host`, `start --issue`, `focus --reveal` and others) now say `no cornercase server is running` when none runs, instead of asking you to update cornercase.
+
+## 0.12.213
+
+- **Commands that follow a stream stop once nothing reads them.** `cornercase events`, `status --follow`, `status --app --follow`, `changes list --follow`, `flow runs --follow`, `flow messages --follow`, `surface` and `view` now end, with status 0, soon after the program reading their output exits or closes it, for example when an `ssh` running one on another machine is killed or loses its connection. Before, they kept running until they next had something to print, which on a quiet server could take hours, so an app that drives cornercase over `ssh` left one more behind each time it reconnected.
 
 ## 0.12.212
 
