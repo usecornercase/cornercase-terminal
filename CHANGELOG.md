@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.215
+
+- **Other apps can browse, read and search a workspace's files, on this machine or another.** `cornercase files list`, `files read` and `files search` give what the files panel shows: each folder's entries with their kind, size, modification time, whether they are hidden and their git mark; a file's text, an image's bytes with its format and size, or that it is binary, too large or gone; and the panel's search by file name or by text. They follow the panel's rules: what git ignores is left out, at most 10,000 entries per folder, text up to 8 MB and images up to 32 MB, and only regular files are read. `--follow` prints a folder or a file again each time it changes. A path is relative to the workspace, and an absolute one, or one starting with `~/`, reaches any folder on the server's machine, so with `--remote devbox` a UI on your laptop can show the tree, the viewer and a folder picker of the other machine without reading its disk itself.
+- `cornercase open '~/src/shop'` opens a folder in the home folder even when a program passes the `~` without a shell, and with `--remote` in that machine's home.
+- `status --json` names the server's home folder (`home`), and `cornercase --remote devbox status` shows paths there as `~/…`.
+- Scripts: `cornercase contract` lists the feature `files` and the stream `files`.
+
 ## 0.12.214
 
 - **Drive another machine's cornercase from here.** `cornercase --remote devbox status --json`, `cornercase --remote devbox events --json` and every other command for scripts and agents now reach the server on `devbox` through your own `ssh`, the way `cornercase remote devbox` attaches the window. cornercase is found there even when it is not on the `PATH` of a command run through `ssh` (`--remote-command` says how to run it otherwise), arguments and standard input arrive as they are whatever the login shell there, both machines must run the same version, and a command that follows a stream ends there as soon as it ends here. Set `CORNERCASE_REMOTE=devbox` to send every command there without the flag. It never asks for a password or a passphrase: use a key in your SSH agent. As on your own machine, only `start-server` starts a server there; the other commands say `no cornercase server is running on devbox`. `update`, `restart`, `kill-server`, `logs` and the commands that install or change plugins refuse `--remote`, and `cornercase --remote devbox` alone opens the window there.
