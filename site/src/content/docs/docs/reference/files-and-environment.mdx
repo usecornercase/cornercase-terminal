@@ -24,6 +24,7 @@ import { Aside } from '@astrojs/starlight/components';
 | `stats.json` | Local counts of agent work, hourly buckets for 26 weeks and a day, and lifetime totals per agent. Compact versioned JSON, readable only by its owner (`0600`). | Next to `session.json` |
 | `star.json` | The days counted for the [star prompt](../configuration/#star_prompt), when it last asked and your answer. Nothing else. | Next to `session.json` |
 | `runs/` | The [folders of flow runs](../../guides/flows/#the-runs-folder), one per run, removed with their workspace. Readable only by you (`0700`). | Next to `session.json` |
+| `pasted/` | Files pasted with [`cornercase paste-file`](../../guides/scripts-and-agents/#paste-a-file-from-another-machine), one folder per paste, removed when their pane closes, or 7 days after an earlier server left them. Private to you (`0700`, files `0600`). | Next to `session.json` |
 | `accounts/<agent>/<name>/` | The folders of your [agent accounts](../../guides/accounts/), each with the agent's login and links to the settings of its usual folder. Private to you (`0700`). | Next to `session.json` |
 | `queue.json` | The [agent queue](../../guides/queue/), including its history and persistent ids. | Next to `session.json` |
 | `todos.json` | Your [TODO list](../../guides/todo/). | Next to `session.json` |
@@ -36,7 +37,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 Stats contains only numbers and counting times: no prompts, replies, models, projects, paths or conversation ids. It is saved at most once a minute while changed, and flushed on shutdown and before a restart. Deleting `stats.json` with the server stopped starts counting again; a running server keeps its copy in memory.
 
-The folders follow the XDG base directory variables: `config.json` goes in `$XDG_CONFIG_HOME/cornercase/` when it is set, and `session.json`, `runs/`, `issues.json`, `todos.json`, `queue.json`, `stats.json`, `star.json`, `server.log`, `server.sock` and `server.lock` in `$XDG_STATE_HOME/cornercase/`. Without `XDG_STATE_HOME` they go in `~/.local/state/cornercase/`. Set it where every shell reads it, not only in an interactive rc file, or an SSH session without it looks for another server.
+The folders follow the XDG base directory variables: `config.json` goes in `$XDG_CONFIG_HOME/cornercase/` when it is set, and `session.json`, `runs/`, `pasted/`, `issues.json`, `todos.json`, `queue.json`, `stats.json`, `star.json`, `server.log`, `server.sock` and `server.lock` in `$XDG_STATE_HOME/cornercase/`. Without `XDG_STATE_HOME` they go in `~/.local/state/cornercase/`. Set it where every shell reads it, not only in an interactive rc file, or an SSH session without it looks for another server.
 
 Versions before 0.12.140 kept the socket in `$XDG_RUNTIME_DIR/cornercase/` or `$TMPDIR/cornercase-<uid>/`. cornercase still looks there for a server started by such a version, so an update doesn't hide it; restart it as after any update.
 
@@ -54,6 +55,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | Discord bot and chat | `/tmp/cc-demo/discord.json` |
 | Session | `/tmp/cc-demo/server.json` |
 | Issue cache | `/tmp/cc-demo/issues.json` |
+| Pasted files | `/tmp/cc-demo/server.pasted/` |
 | Agent queue | `/tmp/cc-demo/server.queue.json` |
 | Flow run folders | `/tmp/cc-demo/server.runs/` |
 | Agent accounts | `/tmp/cc-demo/server.accounts/` |

@@ -105,7 +105,7 @@ mod unavailable_operations {
     fn an_operation_listed_as_off_is_unavailable(#[case] structured: bool) {
         let value = serde_json::json!({"command": "notify", "args": {"text": "hi"}});
 
-        let refusal = contract::read(&value, structured, OFF).expect_err("refused");
+        let refusal = contract::read(value, structured, OFF).expect_err("refused");
 
         assert_eq!(
             refusal,

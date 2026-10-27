@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{Args, ValueEnum};
 
 use super::Print;
@@ -85,6 +87,22 @@ pub(crate) struct LinkArgs {
     pub(crate) pane: u64,
     #[arg(long, value_name = "X,Y", required = true, value_parser = point, help = "The cell: column and row of the pane's view, from 0")]
     pub(crate) cell: Point,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct PasteFileArgs {
+    #[arg(long, value_name = "ID", required = true, help = PANE_REQUIRED)]
+    pub(crate) pane: u64,
+    #[arg(
+        long,
+        value_name = "NAME",
+        help = "The file's name there [default: FILE's name, else pasted, with an image's extension]"
+    )]
+    pub(crate) name: Option<String>,
+    #[arg(value_name = "FILE", help = "The file to paste, on this machine; - or none reads standard input")]
+    pub(crate) file: Option<PathBuf>,
     #[command(flatten)]
     pub(crate) print: Print,
 }

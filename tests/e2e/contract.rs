@@ -36,7 +36,7 @@ fn assert_header(contract: &Value, session: &Session) {
     assert_eq!(contract["boot"].as_str(), Some(boot(session).as_str()));
 }
 
-const OPERATIONS: [&str; 41] = [
+const OPERATIONS: [&str; 42] = [
     "contract",
     "start-server",
     "surface",
@@ -78,6 +78,7 @@ const OPERATIONS: [&str; 41] = [
     "files-list",
     "files-read",
     "files-search",
+    "paste-file",
 ];
 
 fn assert_operations(contract: &Value) {

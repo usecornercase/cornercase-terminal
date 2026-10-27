@@ -11,7 +11,7 @@ fn sent(app: &mut App, pane: u64, events: &Value) -> Sent {
     serde_json::from_value(ok(app, "input", &json!({"pane": pane, "events": events}))).expect("sent")
 }
 
-fn hidden_tab(app: &mut App) -> u64 {
+pub(super) fn hidden_tab(app: &mut App) -> u64 {
     let active = app.active;
     let workspace = app.projects[active].active;
     let tab = app.push_tab(workspace_at(app, active, workspace), AREA, None).expect("a hidden tab").index();
@@ -23,7 +23,7 @@ fn line_in(pane: u64, text: &'static str) -> Value {
     json!([{"text": text}, {"key": {"code": "enter"}}])
 }
 
-fn raw_cat(app: &mut App, rx: &Receiver<AppEvent>, pane: u64, setup: &'static str) {
+pub(super) fn raw_cat(app: &mut App, rx: &Receiver<AppEvent>, pane: u64, setup: &'static str) {
     raw_viewer(app, rx, pane, setup, "cat -v");
 }
 

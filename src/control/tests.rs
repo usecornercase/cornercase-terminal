@@ -172,6 +172,7 @@ fn newest_commands() -> Vec<Command> {
         Command::FilesList(FilesList::default()),
         Command::FilesRead(FilesRead::default()),
         Command::FilesSearch(FilesSearch::default()),
+        Command::PasteFile(PasteFile::default()),
     ]
 }
 

@@ -30,7 +30,7 @@ Code: `src/`, `tests/layers.rs`
   | `usages` | `Usages`, `app/usage_dialog.rs` | Plan usage probes and answers, the dialog's page and the probe timeout. |
   | `accounts` | `AccountState`, `app/control/accounts.rs` | The accounts folder, the agents' default homes (tests point them away), and the logins checked. |
   | `shells` | `Shells`, `app/tabs.rs` | The user's shell, the socket given to panes and the editor's environment. |
-  | `clients` | `Clients`, `app/control.rs` | What socket clients asked for, subscribed to or wait on: pending requests, events, change streams, surfaces, views, and the two request timings. |
+  | `clients` | `Clients`, `app/control.rs` | What socket clients asked for, subscribed to or wait on: pending requests, events, change streams, surfaces, views, the folders of pasted files, and the two request timings. |
   | `config_file` | `ConfigFile`, `app/config_file.rs` | `config.json`'s path, its mark, when it was last checked, its problem and its revision. |
   | `clock` | `Clock`, `app/clock.rs` | When the server started (the spinner's phase) and when the slow refresh last ran. |
 

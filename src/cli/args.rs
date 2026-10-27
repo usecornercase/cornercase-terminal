@@ -31,7 +31,7 @@ use super::help::{
     START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, TOUR_HELP, UNTIL_AFTER, UPDATE_HELP,
     USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
-use super::help::{AGENTS_HELP, CHANGES_HELP, FILES_HELP, PORTS_HELP};
+use super::help::{AGENTS_HELP, CHANGES_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP};
 use crate::control::Until;
 use crate::term::keys;
 
@@ -197,6 +197,11 @@ pub(crate) enum Control {
         after_help = LINK_HELP
     )]
     Link(terminal::LinkArgs),
+    #[command(
+        about = "Paste a file of this machine into a pane: kept on the server's machine, its path pasted, so an agent there can open it",
+        after_help = PASTE_FILE_HELP
+    )]
+    PasteFile(terminal::PasteFileArgs),
     #[command(
         about = "Give programs in the terminals the colours you draw them with, or say where theirs come from",
         after_help = THEME_HELP

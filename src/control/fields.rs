@@ -113,6 +113,7 @@ impl Command {
             Self::Redraw(redraw) => redraw.fields(fields),
             Self::Ratio(ratio) => ratio.fields(fields),
             Self::Link(link) => link.fields(fields),
+            Self::PasteFile(paste) => paste.fields(fields),
             _ => return false,
         }
         true

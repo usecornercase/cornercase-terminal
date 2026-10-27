@@ -30,7 +30,7 @@ pub(super) fn parse(text: &str, unavailable: &[(&str, &str)]) -> Parsed {
         }
     };
     let structured = opted_in(&value);
-    Parsed { structured, request: read(&value, structured, unavailable) }
+    Parsed { structured, request: read(value, structured, unavailable) }
 }
 
 fn without_null_opt_in(value: &Value) -> Value {
@@ -41,8 +41,8 @@ fn without_null_opt_in(value: &Value) -> Value {
     value
 }
 
-pub(super) fn read(value: &Value, structured: bool, unavailable: &[(&str, &str)]) -> Result<Request, Refusal> {
-    let name = control::command_name(value).unwrap_or_default().to_string();
+pub(super) fn read(value: Value, structured: bool, unavailable: &[(&str, &str)]) -> Result<Request, Refusal> {
+    let name = control::command_name(&value).unwrap_or_default().to_string();
     if !Command::NAMES.contains(&name.as_str()) {
         return Err(Refusal::new(Code::Unsupported, control::unknown_command(&name)));
     }
@@ -55,14 +55,15 @@ pub(super) fn read(value: &Value, structured: bool, unavailable: &[(&str, &str)]
             format!("this server speaks contract {CONTRACT}, not {asked}; update cornercase and restart the server"),
         ));
     }
-    let request: Request = serde_json::from_value(value.clone()).map_err(|e| {
+    let raw = structured.then(|| without_null_opt_in(&value));
+    let request: Request = serde_json::from_value(value).map_err(|e| {
         let server = version::CURRENT;
         Refusal::new(
             Code::Malformed,
             format!("the running cornercase server ({server}) cannot read this `{name}` request: {e}"),
         )
     })?;
-    match contract::unknown_fields(&without_null_opt_in(value), &request).filter(|_| structured) {
+    match raw.and_then(|raw| contract::unknown_fields(&raw, &request)) {
         Some(path) => {
             Err(Refusal::new(Code::UnknownField, format!("this `{name}` request has an unknown field `{path}`")))
         }

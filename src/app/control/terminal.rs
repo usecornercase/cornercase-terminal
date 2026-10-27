@@ -1,16 +1,22 @@
+use std::time::SystemTime;
+
 use ratatui::layout::{Position, Rect};
 
 use super::{Handled, conflict, json, malformed, no_popup, none};
+use crate::agents;
 use crate::app::App;
+use crate::app::AppEvent;
+use crate::app::files_panel::FilesEvent;
 use crate::control::contract::{Code, Refusal};
 use crate::control::surface::{self, Size};
 use crate::control::terminal::{
-    End, FileLink, Input, InputEvent, KeyKind, Lines, Link, Linked, Moved, Point, Ratio, Scroll, Scrolled, Selection,
-    Sent, Skipped, Why,
+    End, FileLink, Input, InputEvent, KeyKind, Lines, Link, Linked, Moved, PasteFile, Pasted, Point, Ratio, Scroll,
+    Scrolled, Selection, Sent, Skipped, Why,
 };
 use crate::control::{Done, Layout};
 use crate::files::link;
-use crate::log;
+use crate::files::pasted::{self, Problem, Stored};
+use crate::log::{self, Job, Level};
 use crate::project::Hierarchy;
 use crate::term::keys;
 use crate::term::mouse::{self, MouseMode};
@@ -47,6 +53,15 @@ fn busy(term: &Term, pane: u64) -> Refusal {
         )
     } else {
         Refusal::from(format!("cannot write to pane {pane}: its terminal is gone"))
+    }
+}
+
+fn stored_or_refused(stored: crate::error::Result<Result<Stored, Problem>>) -> Result<Stored, Refusal> {
+    match stored {
+        Ok(Ok(stored)) => Ok(stored),
+        Ok(Err(Problem::Unfit(message))) => Err(malformed(message)),
+        Ok(Err(Problem::Disk(message))) => Err(Refusal::from(message)),
+        Err(e) => Err(Refusal::from(e.to_string())),
     }
 }
 
@@ -149,6 +164,53 @@ impl App {
         let sending = self.sending(pane);
         let term = self.pane_mut(pane)?;
         type_into(term, pane, input, sending)
+    }
+
+    pub(in crate::app) fn paste_file_request(&mut self, client: u64, paste: PasteFile) -> Handled {
+        let pane = explicit(paste.pane, "paste-file")?;
+        self.pane_mut(pane)?;
+        if paste.data.is_empty() {
+            return Err(malformed("`paste-file` needs the file: `data` holds its bytes in base64"));
+        }
+        let dir = self.clients.pasted.folder().ok_or_else(|| Refusal::from("this server keeps no pasted files"))?;
+        let keep = self.clients.pasted.folders();
+        let key = self.clients.requests.key();
+        let job = Job::new(Level::Info, "files", "paste stored").with("pane", pane).with("bytes", paste.data.len());
+        self.spawn_job(
+            job,
+            move || Ok(pasted::store(&dir, &paste.name, &paste.data, &keep, SystemTime::now())),
+            move |stored, _| {
+                let stored = stored_or_refused(stored);
+                Some(AppEvent::Files(FilesEvent::Stored { request: key, pane, stored }))
+            },
+        );
+        self.pend_reading(client, key);
+        Ok(None)
+    }
+
+    pub(in crate::app) fn file_stored(&mut self, key: u64, pane: u64, stored: Result<Stored, Refusal>) {
+        let Some(pending) = self.clients.requests.take(key) else {
+            if let Ok(stored) = stored {
+                self.drop_pasted(vec![stored.dir]);
+            }
+            return;
+        };
+        let reply = stored.and_then(|stored| self.paste_stored(pane, stored));
+        self.refuse_or_answer(pending.client, reply);
+    }
+
+    fn paste_stored(&mut self, pane: u64, stored: Stored) -> Result<serde_json::Value, Refusal> {
+        let path = stored.path.to_string_lossy().into_owned();
+        let text = format!("{} ", agents::quote(&path));
+        let input = Input { pane: Some(pane), events: vec![InputEvent::Paste(text)], ..Input::default() };
+        let sending = self.sending(pane);
+        let typed = self.pane_mut(pane).and_then(|term| type_into(term, pane, &input, sending));
+        if let Err(refusal) = typed {
+            self.drop_pasted(vec![stored.dir]);
+            return Err(refusal);
+        }
+        self.clients.pasted.keep(pane, stored.dir);
+        Ok(json(&Pasted { pane, path, bytes: stored.bytes }))
     }
 
     fn popup_input(&mut self, input: &Input) -> Handled {

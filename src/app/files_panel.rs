@@ -15,7 +15,7 @@ use crate::control::contract::Refusal;
 use crate::error::Result;
 use crate::files::find::Find;
 use crate::files::search::{self, MAX_MATCHES, MAX_NAMES};
-use crate::files::{self, Mode, Query, Reading, disk};
+use crate::files::{self, Mode, Query, Reading, disk, pasted};
 use crate::log::{self, Job, Level};
 use crate::panics;
 use crate::project::Hierarchy;
@@ -96,6 +96,7 @@ pub(crate) enum FilesEvent {
     Text { workspace: u64, generation: u64, search: files::Search, found: search::Text },
     Replied { request: u64, reply: std::result::Result<serde_json::Value, Refusal> },
     Fed { stream: u64, generation: u64, fed: std::result::Result<Fed, String> },
+    Stored { request: u64, pane: u64, stored: std::result::Result<pasted::Stored, Refusal> },
 }
 
 impl FilesEvent {
@@ -108,6 +109,7 @@ impl FilesEvent {
             Self::Text { .. } => "text found",
             Self::Replied { .. } => "files answered",
             Self::Fed { .. } => "files fed",
+            Self::Stored { .. } => "file stored",
         }
     }
 }
@@ -134,6 +136,7 @@ impl App {
             }
             FilesEvent::Replied { request, reply } => self.files_replied(request, reply),
             FilesEvent::Fed { stream, generation, fed } => self.file_fed(stream, generation, fed),
+            FilesEvent::Stored { request, pane, stored } => self.file_stored(request, pane, stored),
         }
     }
 

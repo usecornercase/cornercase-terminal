@@ -102,6 +102,7 @@ group 9  personal  collapsed
 | `usage` | Prints your Claude Code and Codex [plan limits](#plan-usage) as the Usage dialog's Limits tab shows them; `--cached` prints the last answer without asking the agents again. |
 | `plugin install SOURCE --preview`, `plugin update ID --preview` | Fetch a plugin and print what installing or updating it would run, without installing; `--json` is for a program that asks the user itself, and `--commit` then installs exactly that commit. See [Plugins](#plugins). |
 | `plugin status` | Prints the plugins as Settings › Plugins shows them, including whether each service is running, restarting or starting, and why `plugins.json` cannot be read. `--json` is the `plugin-list` answer. See [Plugins](#plugins). |
+| `paste-file --pane ID [FILE]` | Keeps a file of the machine you run it on next to the server's session and pastes its path into a pane, so an agent there can open it: see [Paste a file from another machine](#paste-a-file-from-another-machine). |
 | `plugin actions`, `plugin run PLUGIN ACTION`, `plugin popup-close` | List the actions your [plugins](../plugins/) add to the menus and buttons, run one on a project, workspace, tab or pane as its menu entry does (or on what the window shows, as its button does), waiting for it to end, and close a plugin's popup. See [Plugins](#plugins). |
 | `skill` | Prints the instructions that teach coding agents these commands. |
 | `contract` | Says what the running server supports: its version, the [contract](#contract-and-compatibility) it speaks, its boot and its operations and streams. |
@@ -399,6 +400,24 @@ cornercase input --popup --pane 40 '{"key": {"code": "down"}}' '{"key": {"code":
 - Without a popup open, both fail with `not-found`. Watch [`status --app`](#follow-the-rest-of-the-app)'s `popup` to know when one opens. Nothing changes in the window: the popup is still there, and you can still type into it there.
 - Every program that can reach the server, an agent in a pane included, can read what a popup shows and type into it, as it can for panes. See [Popups](../plugins/#popups) for what that means for a plugin.
 - A server without the `popup-terminal` feature doesn't know `--popup`: it refuses `surface` and `input` with `popup` alone, but types `input --popup --pane ID` into pane `ID`, if one has that id. Check [`contract`](#contract-and-compatibility) before sending `"popup": true`.
+
+#### Paste a file from another machine
+
+An agent reads an image or a file from a path. When you work on another machine than the server (`cornercase remote`, the browser, a program that draws cornercase), a file on yours has no path there. `paste-file` sends it:
+
+```sh
+cornercase --remote devbox paste-file --pane 12 ~/Desktop/shot.png
+pngpaste - | cornercase --remote devbox paste-file --pane 12
+wl-paste --type image/png | cornercase --remote devbox paste-file --pane 12 --name error.png
+```
+
+- The command reads `FILE`, or standard input without it or with `-`, **on the machine where it runs**, also with `--remote`. It takes files up to 32 MB and refuses an empty one before it connects.
+- The server keeps the bytes in a folder of its own, `pasted/` next to `session.json` (one folder per paste, `0700`; the file is `0600`), and pastes the file's path into the pane followed by a space: as a paste, bracketed when the program asked for pastes, quoted only if the path needs it. It prints the path; `--json` prints `pane`, `path` and `bytes`.
+- The name there is `--name`, else the file's name, cleaned to letters, digits and `. _ + -` so the path needs no quoting (`Screenshot 2026-10-27 at 10.03.12 AM.png` becomes `Screenshot-2026-10-27-at-10.03.12-AM.png`). A name without an extension gets an image's own (`png`, `jpg`, `gif`, `webp`, `bmp` or `ico`), told by the first bytes, so `pngpaste -` gives `pasted.png`.
+- A paste's folder is removed when its pane closes, and what an earlier server left in `pasted/` after 7 days.
+- Like `input`, it pastes whatever the program in the pane is doing: a dialog or a question there gets the path too, and none of `send`'s safeguards apply.
+- A program on the socket sends `{"command": "paste-file", "args": {"pane": 12, "name": "shot.png", "data": "<base64>"}}` and gets `pane`, `path` and `bytes` once the file is kept and the path pasted. `data` is standard base64, padding optional, line breaks ignored. It fails with `malformed` (no pane, empty `data`, not base64, over 32 MB), `not-found` (no such pane), `busy` (the program is not reading its input, or a `send` is between its paste and its Enter) or `failed` (the file could not be kept). A client that leaves before the answer gets nothing pasted. An older server refuses the request by name (`unsupported`).
+- A program that types through `input --follow` should wait for `paste-file`'s answer before sending more, as the two travel on different connections and are not ordered.
 
 #### Colours for programs
 
@@ -1064,6 +1083,7 @@ The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `
 | `files list` | `boot`, `stream` (`null` without `--follow`), `revision`, `workspace` and `folders`: see [Browse and read a workspace's files](#browse-and-read-a-workspaces-files). |
 | `files read` | `boot`, `stream`, `revision`, `workspace`, `path`, `file`, `kind`, `bytes`, `modified`, `language`, `text` and `image` (`format`, `width`, `height`, `data`). |
 | `files search` | `workspace`, `query`, `mode`, `names` (`path`, `indices`), `files` (`path`, `lines`), `matches` and `capped`. |
+| `paste-file` | `pane`, `path` and `bytes`: see [Paste a file from another machine](#paste-a-file-from-another-machine). |
 | `changes-mode` | `stream`, `scope`, `workspace` and `mode`. |
 | `changes-file` | `workspace`, `mode`, the file (`path`, `old_path`, `status`, `added`, `removed`, `fold`, `viewed`, `staged`, `digest`), `styles` and `hunks`. |
 | `changes-gap` | `workspace`, `path`, `hunk`, `styles` and `lines`. |

@@ -175,6 +175,10 @@ pub(crate) fn runs(session: &Path) -> PathBuf {
     beside_session(session, "runs")
 }
 
+pub(crate) fn pasted(session: &Path) -> PathBuf {
+    beside_session(session, "pasted")
+}
+
 fn beside_session(session: &Path, name: &str) -> PathBuf {
     if session.file_name().is_some_and(|file| file == "session.json") {
         session.with_file_name(name)

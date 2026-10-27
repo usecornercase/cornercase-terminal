@@ -69,7 +69,7 @@ pub(crate) use start_server::StartServer;
 pub(crate) use status::{GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RunStatus, StackInfo};
 pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, WorkspaceInfo};
 pub(crate) use surface::Surface;
-pub(crate) use terminal::{Input, Link, Ratio, Redraw, Resize, Scroll, Selection};
+pub(crate) use terminal::{Input, Link, PasteFile, Ratio, Redraw, Resize, Scroll, Selection};
 pub(crate) use theme::{Theme, ThemeInfo};
 pub(crate) use usage::{Plans, Usage};
 pub(crate) use view::{OpenView, SetView, ViewInfo};
@@ -223,6 +223,7 @@ pub(crate) enum Command {
     FilesList(FilesList),
     FilesRead(FilesRead),
     FilesSearch(FilesSearch),
+    PasteFile(PasteFile),
 }
 
 impl Command {
@@ -310,6 +311,7 @@ impl Command {
             Self::Redraw(_) => 44,
             Self::Ratio(_) => 39,
             Self::Link(_) => 40,
+            Self::PasteFile(_) => 106,
             _ => return None,
         })
     }
@@ -407,7 +409,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 106] = [
+    pub(crate) const NAMES: [&str; 107] = [
         "status",
         "open",
         "new-workspace",
@@ -514,6 +516,7 @@ impl Command {
         "files-list",
         "files-read",
         "files-search",
+        "paste-file",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

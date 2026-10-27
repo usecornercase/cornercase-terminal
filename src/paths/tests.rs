@@ -147,3 +147,10 @@ fn the_source_file_sits_in_the_state_folder() {
 fn accounts_sit_beside_the_session(#[case] dev: Option<&str>, #[case] env: Vars, #[case] expected: &str) {
     assert_eq!(accounts_in(&vars(env), dev), PathBuf::from(expected));
 }
+
+#[rstest::rstest]
+#[case::default("/c/cornercase/session.json", "/c/cornercase/pasted")]
+#[case::custom("/c/server.json", "/c/server.pasted")]
+fn pasted_files_live_beside_the_session(#[case] session: &str, #[case] expected: &str) {
+    assert_eq!(pasted(Path::new(session)), PathBuf::from(expected));
+}

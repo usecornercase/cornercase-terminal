@@ -181,3 +181,23 @@ fn input_follow_types_each_line_where_it_says_until_its_input_ends() {
     let ended = typist.ends();
     assert_eq!((ended.status.code(), ended.stderr.as_slice()), (Some(3), &b""[..]), "{ended:?}");
 }
+
+#[test]
+fn a_file_is_kept_on_the_server_and_its_path_typed_into_the_pane() {
+    let session = Session::new();
+    session.cold(&["start-server"]);
+    let pane = session.says(&["new-tab"]);
+    let file = session.dir.join("blob.bin");
+    std::fs::write(&file, vec![7u8; 4242]).expect("write the file");
+    session.says(&["input", "--pane", &pane, r#"{"text": "wc -c "}"#]);
+
+    let path = session.says(&["paste-file", "--pane", &pane, &file.display().to_string()]);
+    session.says(&["input", "--pane", &pane, r#"{"key": {"code": "enter"}}"#]);
+
+    wait_until("the shell counts the pasted file", || session.says(&["read", "--pane", &pane]).contains("4242"));
+    let kept = PathBuf::from(&path);
+    assert!(kept.starts_with(session.dir.join("server.pasted")), "{path}");
+    assert_eq!(std::fs::read(&kept).expect("the kept file"), vec![7u8; 4242]);
+    session.says(&["close", "--pane", &pane]);
+    wait_until("the folder goes with its pane", || !kept.exists());
+}

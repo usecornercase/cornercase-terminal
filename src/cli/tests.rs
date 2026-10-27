@@ -943,3 +943,18 @@ mod flows;
 mod focus;
 mod known_agents;
 mod terminal;
+
+mod reading_capped {
+    use super::*;
+    use crate::test_util::TempDir;
+
+    #[test]
+    fn reads_one_byte_past_the_limit_so_the_caller_can_tell() {
+        let temp = TempDir::new();
+        let file = temp.path().join("f");
+        std::fs::write(&file, b"123456").expect("file");
+
+        assert_eq!(read_capped(&file, 4).expect("bytes"), b"12345");
+        assert_eq!(read_capped(&file, 10).expect("bytes"), b"123456");
+    }
+}

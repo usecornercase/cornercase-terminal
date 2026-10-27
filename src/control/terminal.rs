@@ -328,6 +328,28 @@ impl FileLink {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct PasteFile {
+    pub(crate) pane: Option<u64>,
+    pub(crate) name: String,
+    pub(crate) data: String,
+}
+
+impl PasteFile {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.maybe("pane", self.pane).add("data_bytes", self.data.len());
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Pasted {
+    pub(crate) pane: u64,
+    pub(crate) path: String,
+    pub(crate) bytes: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Moved {
     pub(crate) tab: u64,

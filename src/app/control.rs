@@ -37,7 +37,7 @@ use crate::agents::launch::Launch;
 use crate::app::App;
 use crate::app::flow_runs::Starting;
 use crate::app::messenger::CLIENTS as MESSENGER_CLIENTS;
-use crate::app::{changes_panel, events, files_panel, surfaces, views};
+use crate::app::{changes_panel, events, files_panel, pasted_files, surfaces, views};
 use crate::control::contract::{Code, Refusal};
 use crate::control::start_server::Started;
 use crate::control::{self, Command, Done, Ids, Item, Request, StartServer};
@@ -78,6 +78,7 @@ pub(super) struct Clients {
     pub(super) file_streams: files_panel::Streams,
     pub(super) surfaces: surfaces::Surfaces,
     pub(super) views: views::Views,
+    pub(super) pasted: pasted_files::PastedFiles,
     confirm_within: Duration,
     typing_holds: Duration,
 }
@@ -91,6 +92,7 @@ impl Default for Clients {
             file_streams: files_panel::Streams::default(),
             surfaces: surfaces::Surfaces::default(),
             views: views::Views::default(),
+            pasted: pasted_files::PastedFiles::default(),
             confirm_within: CONFIRM_WITHIN,
             typing_holds: INPUT_HOLDS,
         }
@@ -589,9 +591,10 @@ impl App {
     }
 
     fn surface_requests(&mut self, asked: Asked, command: Command) -> ControlFlow<Handled, Command> {
-        let Asked { area, now, .. } = asked;
+        let Asked { client, area, now, .. } = asked;
         ControlFlow::Break(match command {
             Command::Input(input) => self.input_request(&input),
+            Command::PasteFile(paste) => self.paste_file_request(client, paste),
             Command::Scroll(scroll) => self.scroll_request(&scroll),
             Command::Selection(selection) => self.selection_request(&selection),
             Command::Resize(resize) => self.resize_surface_request(&resize, now),

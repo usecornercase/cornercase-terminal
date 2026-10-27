@@ -1,6 +1,7 @@
 pub(crate) mod disk;
 pub(crate) mod find;
 pub(crate) mod link;
+pub(crate) mod pasted;
 pub(crate) mod search;
 
 use std::collections::{BTreeMap, HashMap, HashSet};

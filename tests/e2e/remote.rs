@@ -132,6 +132,30 @@ fn text_reaches_the_other_machine_as_it_is() {
 }
 
 #[test]
+fn a_file_of_this_machine_reaches_a_pane_there() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let pane = remote_says(&session, &["new-tab"]);
+    let file = session.dir.join("shot.txt");
+    std::fs::write(&file, "from the laptop").expect("write the file");
+
+    let path = remote_says(&session, &["paste-file", "--pane", &pane, &file.display().to_string()]);
+    let piped =
+        feed(remotely(&session, &["paste-file", "--pane", &pane, "--name", "notes.txt", "--json"]), "from stdin");
+
+    assert!(path.starts_with(&session.dir.join("server.pasted").display().to_string()), "{path}");
+    assert!(path.ends_with("/shot.txt"), "{path}");
+    assert_eq!(std::fs::read_to_string(&path).expect("the kept file"), "from the laptop");
+    let answer: serde_json::Value = serde_json::from_slice(&piped.stdout).expect("json");
+    let kept = answer["path"].as_str().expect("path");
+    assert!(kept.ends_with("/notes.txt"), "{answer}");
+    assert_eq!(
+        (std::fs::read_to_string(kept).expect("stdin's file"), answer["bytes"].as_u64()),
+        ("from stdin".into(), Some(10))
+    );
+}
+
+#[test]
 fn a_stream_from_the_other_machine_ends_there_when_it_ends_here() {
     let session = Session::new();
     remote_says(&session, &["start-server"]);

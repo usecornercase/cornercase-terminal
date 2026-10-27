@@ -22,7 +22,7 @@ why, in its error with --json.
 to the server of another machine through ssh, found as `cornercase remote` finds it, so arguments and
 standard input arrive as they are. Both machines need the same version, ssh never asks for a
 password, only `start-server` starts a server there, and a command that follows a stream ends it
-there when it ends here. Paths are the other machine's: absolute, or starting with ~/ for its home folder; `files` also takes them relative to the workspace. `update`, `restart`, `kill-server`,
+there when it ends here. Paths are the other machine's: absolute, or starting with ~/ for its home folder; `files` also takes them relative to the workspace; `paste-file` reads its FILE here. `update`, `restart`, `kill-server`,
 `logs` and the plugin commands that install or change plugins act on this machine and refuse it.
 
 Examples:
@@ -741,6 +741,7 @@ Examples:
 
 mod files;
 mod flow;
+mod paste_file;
 
 pub(in crate::cli) use files::FILES_HELP;
 pub(in crate::cli) use flow::{
@@ -748,6 +749,7 @@ pub(in crate::cli) use flow::{
     FLOW_IMPORT_HELP, FLOW_MESSAGES_HELP, FLOW_ORDER_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP,
     FLOW_SAVE_HELP,
 };
+pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
 
 #[cfg(test)]
 mod tests;

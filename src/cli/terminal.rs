@@ -1,13 +1,20 @@
 use std::io::{self, BufRead as _};
+use std::path::Path;
+
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 
 mod follow;
 
-use super::args::terminal::{InputArgs, LinkArgs, RatioArgs, RedrawArgs, ResizeArgs, ScrollArgs, SelectionArgs, Side};
-use super::{print_json, print_out};
+use super::args::terminal::{
+    InputArgs, LinkArgs, PasteFileArgs, RatioArgs, RedrawArgs, ResizeArgs, ScrollArgs, SelectionArgs, Side,
+};
+use super::{print_json, print_out, read_capped};
 use crate::client::{self, answer, ask};
-use crate::control::terminal::{End, InputEvent, Linked, Scrolled, Selection, Sent, Why};
+use crate::control::terminal::{End, InputEvent, Linked, Pasted, Scrolled, Selection, Sent, Why};
 use crate::control::{self, Done};
 use crate::error::{Error, Result};
+use crate::files::pasted::MAX_BYTES;
 
 fn events(args: &[String]) -> Result<Vec<InputEvent>> {
     let mut events = Vec::new();
@@ -134,3 +141,42 @@ pub(super) fn link(args: &LinkArgs) -> Result<()> {
         None => Ok(()),
     }
 }
+
+fn default_name(file: &Path) -> String {
+    file.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .filter(|_| file != Path::new("-"))
+        .unwrap_or_default()
+}
+
+fn pasted_bytes(file: &Path) -> Result<Vec<u8>> {
+    let limit = usize::try_from(MAX_BYTES).unwrap_or(usize::MAX);
+    let bytes = read_capped(file, limit)?;
+    let shown = if file == Path::new("-") { "standard input".to_string() } else { format!("`{}`", file.display()) };
+    if bytes.len() > limit {
+        return Err(Error::Control(format!(
+            "{shown} is over {} MiB: `paste-file` takes files up to {} MiB",
+            MAX_BYTES >> 20,
+            MAX_BYTES >> 20
+        )));
+    }
+    if bytes.is_empty() {
+        return Err(Error::Control(format!("{shown} is empty: there is nothing to paste")));
+    }
+    Ok(bytes)
+}
+
+pub(super) fn paste_file(args: &PasteFileArgs) -> Result<()> {
+    let file = args.file.clone().unwrap_or_else(|| "-".into());
+    let bytes = pasted_bytes(&file)?;
+    let name = args.name.clone().unwrap_or_else(|| default_name(&file));
+    let request = control::PasteFile { pane: Some(args.pane), name, data: STANDARD.encode(&bytes) };
+    let value = ask("paste-file", control::Command::PasteFile(request))?;
+    if args.print.json {
+        return print_json(&value);
+    }
+    print_out(&format!("{}\n", answer::<Pasted>(value)?.path))
+}
+
+#[cfg(test)]
+mod tests;

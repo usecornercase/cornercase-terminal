@@ -263,6 +263,7 @@ fn terminal_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
             Control::Redraw(args) => terminal::redraw(&args),
             Control::Ratio(args) => terminal::ratio(&args),
             Control::Link(args) => terminal::link(&args),
+            Control::PasteFile(args) => terminal::paste_file(&args),
             other => return ControlFlow::Continue(other),
         }
         .map(|()| true),
@@ -621,7 +622,7 @@ fn trimmed(text: &str) -> String {
     text.trim_end_matches(['\n', '\r']).to_string()
 }
 
-fn read_limited(file: &Path, limit: usize, too_long: &str) -> Result<String> {
+fn read_capped(file: &Path, limit: usize) -> Result<Vec<u8>> {
     let most = limit as u64 + 1;
     let mut bytes = Vec::new();
     if file == Path::new("-") {
@@ -631,6 +632,11 @@ fn read_limited(file: &Path, limit: usize, too_long: &str) -> Result<String> {
             std::fs::File::open(file).map_err(|e| Error::Control(format!("cannot read `{}`: {e}", file.display())))?;
         open.take(most).read_to_end(&mut bytes)?;
     }
+    Ok(bytes)
+}
+
+fn read_limited(file: &Path, limit: usize, too_long: &str) -> Result<String> {
+    let bytes = read_capped(file, limit)?;
     if bytes.len() > limit {
         return Err(Error::Control(format!("`{}` {too_long}", file.display())));
     }

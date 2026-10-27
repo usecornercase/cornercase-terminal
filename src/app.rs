@@ -114,6 +114,7 @@ mod opening;
 mod outbox;
 mod overlay;
 mod panes;
+mod pasted_files;
 mod picker_dialog;
 mod plugin_popup;
 mod plugins;
@@ -452,6 +453,7 @@ impl App {
         self.clean_gone_posts();
         self.forget_moved_run_ends();
         self.forget_files();
+        self.forget_pasted();
         self.count_behind(now);
         self.ask_pull_requests(now);
         self.ask_merged(now);

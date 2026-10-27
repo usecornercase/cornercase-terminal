@@ -135,3 +135,22 @@ fn a_location_is_the_path_with_its_lines(#[case] lines: Option<(u32, u32)>, #[ca
 
     assert_eq!(link.location(), expected);
 }
+
+#[test]
+fn a_paste_file_request_logs_its_size_but_never_its_name_or_bytes() {
+    let args = json!({"pane": 12, "name": "shot.png", "data": "aGVsbG8="});
+    let parsed: Request = serde_json::from_value(json!({"command": "paste-file", "args": args})).expect("a request");
+
+    assert_eq!(serde_json::to_value(&parsed).expect("json")["args"], args);
+    assert_eq!(parsed.command.fields(), [("pane", "12".to_string()), ("data_bytes", "8".to_string())]);
+}
+
+#[test]
+fn a_pasted_answer_holds_the_pane_the_path_and_the_size() {
+    let pasted = Pasted { pane: 12, path: "/s/pasted/a/shot.png".into(), bytes: 5 };
+
+    assert_eq!(
+        serde_json::to_value(&pasted).expect("json"),
+        json!({"pane": 12, "path": "/s/pasted/a/shot.png", "bytes": 5})
+    );
+}

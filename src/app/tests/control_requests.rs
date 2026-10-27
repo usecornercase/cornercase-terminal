@@ -562,6 +562,7 @@ mod one_folder;
 mod ordering;
 mod pane_moves;
 mod parents;
+mod pasting;
 mod plugins;
 mod ports;
 mod queue;
