@@ -89,15 +89,24 @@ mod storing {
     }
 
     #[test]
-    fn a_file_over_the_cap_is_refused() {
+    fn a_file_just_over_the_cap_is_refused_once_decoded() {
         let temp = TempDir::new();
-        let refused = store_within(
-            &Place { dir: temp.path(), keep: &[], cap: 1 << 20 },
-            "n.txt",
-            &encoded(&vec![0; 2 << 20]),
-            SystemTime::now(),
-        );
+        let place = Place { dir: temp.path(), keep: &[], cap: 1 << 20 };
+
+        let refused = store_within(&place, "n.txt", &encoded(&vec![0; (1 << 20) + 1]), SystemTime::now());
+
         assert_eq!(refused, Err(Problem::Unfit("the file is 2 MiB, over the 1 MiB `paste-file` takes".into())));
+    }
+
+    #[test]
+    fn data_far_over_the_cap_is_refused_before_it_is_decoded() {
+        let temp = TempDir::new();
+        let place = Place { dir: temp.path(), keep: &[], cap: 1 << 20 };
+
+        let refused = store_within(&place, "n.txt", &"%".repeat(4 << 20), SystemTime::now());
+
+        assert_eq!(refused, Err(Problem::Unfit("the file is over the 1 MiB `paste-file` takes".into())));
+        assert_eq!(fs::read_dir(temp.path()).expect("dir").count(), 0);
     }
 }
 

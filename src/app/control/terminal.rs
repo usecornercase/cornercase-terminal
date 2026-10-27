@@ -175,7 +175,8 @@ impl App {
         let dir = self.clients.pasted.folder().ok_or_else(|| Refusal::from("this server keeps no pasted files"))?;
         let keep = self.clients.pasted.folders();
         let key = self.clients.requests.key();
-        let job = Job::new(Level::Info, "files", "paste stored").with("pane", pane).with("bytes", paste.data.len());
+        let job =
+            Job::new(Level::Info, "files", "paste stored").with("pane", pane).with("data_bytes", paste.data.len());
         self.spawn_job(
             job,
             move || Ok(pasted::store(&dir, &paste.name, &paste.data, &keep, SystemTime::now())),

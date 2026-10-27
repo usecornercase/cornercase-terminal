@@ -129,6 +129,10 @@ pub(crate) fn store(dir: &Path, asked: &str, data: &str, keep: &[PathBuf], now: 
 
 fn store_within(place: &Place, asked: &str, data: &str, now: SystemTime) -> Result<Stored, Problem> {
     let Place { dir, keep, cap } = *place;
+    if data.len() as u64 > cap / 3 * 4 + 4 + data.len() as u64 / 76 + 4 {
+        let limit = cap >> 20;
+        return Err(Problem::Unfit(format!("the file is over the {limit} MiB `paste-file` takes")));
+    }
     let bytes = decode_data(data).map_err(|e| Problem::Unfit(format!("the file's `data` is not base64: {e}")))?;
     let len = bytes.len() as u64;
     if len > cap {
