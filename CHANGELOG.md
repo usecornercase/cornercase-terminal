@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.217
+
+- **Give an agent on another machine a file from yours.** `cornercase --remote devbox paste-file --pane 12 shot.png` copies the file to `devbox`, keeps it in cornercase's state folder there and pastes its path into pane 12, so the agent in it can open it: no more `scp` and typing the path. Without a file it reads standard input (`pngpaste - | cornercase --remote devbox paste-file --pane 12`), and a nameless image gets its extension. Files up to 32 MB; it prints the path (`--json`: `pane`, `path`, `bytes`). The file is removed when its pane closes, and files an earlier server left after 7 days.
+- Apps that draw cornercase's terminals can turn a dropped file or a pasted image into an agent's input on the server: the request is `paste-file`, with the file in base64, and `cornercase contract` lists it.
+
 ## 0.12.216
 
 - **Type into cornercase through one process.** `cornercase input --pane 12 --follow -` keeps running and sends each event as soon as its line arrives on standard input, until standard input ends; lines that arrive while the previous one is on its way go together. A line can name its own pane, `{"pane": 14, "key": {"code": "enter"}}`, so one process types into every pane a program shows. Apps that draw cornercase's terminals themselves no longer start a process for each batch of keys, and with `--remote` their typing goes through one `ssh` connection instead of one per batch.
