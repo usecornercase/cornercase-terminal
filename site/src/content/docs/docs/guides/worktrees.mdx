@@ -173,7 +173,7 @@ Files keep their place in the tree. If a file can't be copied, the worktree is s
 
 A fresh checkout has no `node_modules`, no build and no local configuration. Give a project the commands that fix that and they run in every worktree cornercase creates: click `⋯` (or right-click) on the project and choose **project settings**. It is offered for projects whose folder is a repository root.
 
-The dialog has two fields, **setup** and **teardown**; `Enter` adds a line, `Ctrl+←` `Ctrl+→` or `Option+←` `Option+→` move by word, `Shift` or the mouse select (right-click to copy or cut), `Tab` moves between them, and **save** stores them in [`config.json`](../../reference/configuration/#projects) under `projects`.
+The dialog has two fields, **setup** and **teardown**, and a one-line **build folders** field (see [Free build folders](#free-build-folders)); `Enter` adds a line in the first two and saves from the third, `Ctrl+←` `Ctrl+→` or `Option+←` `Option+→` move by word, `Shift` or the mouse select (right-click to copy or cut), `Tab` moves between the three, and **save** stores them in [`config.json`](../../reference/configuration/#projects) under `projects`.
 
 ```sh title="setup"
 npm ci
@@ -202,7 +202,7 @@ Open it with **`Worktrees`** at the bottom of the sidebar (in the [icon bar](../
 
 It lists the linked worktrees of your open projects and also those of projects you have closed, found in the [worktrees folder](#where-checkouts-go), so a repository you no longer have open still shows what it left behind. Folders left in the worktrees folder that git no longer knows about are listed too; folders reached through a symbolic link are skipped, so nothing is ever deleted at a link's target. The main checkout never is. Type in the field to filter by project or branch.
 
-Each row has a checkbox, the project, the branch, the folder, how long ago it last changed and some marks. *Last changed* is the newest of the last commit and the newest file git reports as modified or new, so ignored folders are never walked.
+Each row has a checkbox, the project, the branch, the folder, how long ago it last changed, its size and some marks. *Last changed* is the newest of the last commit and the newest file git reports as modified or new, so ignored folders are never walked.
 
 | Mark | Means |
 | --- | --- |
@@ -222,6 +222,8 @@ Each row has a checkbox, the project, the branch, the folder, how long ago it la
 
 While the checks run the dialog says `checking n of m…` and keeps a fixed order, then sorts once: first the leftovers (`prunable`, `repository gone` and `unknown to git`), then the merged ones, then the rest, the oldest first within each. Rows never move after that, so the one under your pointer stays put. A worktree of a [flow](../flows/#a-worktree-of-its-own) run's role cannot be ticked, since it goes with the run's workspace; the run's own workspace can. **changes** on a row of an open project closes the dialog and opens that workspace's [changes](../changes/) panel, to look inside before deciding; closed projects have no workspace to open, so their rows have none.
 
+The size is what removing the worktree would free, with the part in build folders after it: `2.4 GB · 2.1 GB builds`. It shows `…` while it is measured (a big tree takes a moment; the note says `measuring n of m…`) and `?` when it could not be. It counts disk usage, not file lengths, a file with several hard links only when every link is inside the worktree (so pnpm's store does not inflate it) and never follows symbolic links. Click **largest first** at the right of the filter to sort by size, **safe first** for the order above; either sorts once, when every size is known, and rows never move after that. The bottom left sums the space every worktree uses and, when worktrees idle for 7 days have builds, how much freeing those would recover: `12.4 GB in 9 worktrees · 8.1 GB of builds idle 7+ days`.
+
 Tick the rows to remove (click the circle, or press `Space`) and click **remove n**. Ticks on rows the filter hides stay ticked and are removed too, so the confirmation lists every one of them. Nothing stops and nothing is deleted until you confirm there.
 
 <Screen
@@ -235,6 +237,18 @@ The confirmation checks the ticked worktrees again, so work written since the li
 **also delete the branch** is off by default. Ticked, each branch is deleted after its worktree, and those that are neither merged nor pushed are listed in red as losing their commits. The branch deleted is the one the confirmation names, checked out when it was checked: if the worktree has switched to another branch since, or has no branch checked out, no branch is deleted and the final message says `kept the branch …: it changed since the confirmation`. The default branch and the main checkout's branch are never deleted.
 
 **remove** starts the work in the background, several worktrees at once, as a [single removal](#remove-a-worktree) does: the shells stop, the teardown runs, and git removes the checkout, with `--force` and unlocking where needed, since you confirmed knowing what each one has. Rows say `removing…` and disappear when done. A message at the end sums up, such as `removed 4 worktrees and 3 branches`, and names what failed. Branches are only deleted when you ticked the box.
+
+### Free build folders
+
+A worktree that has been idle for weeks still holds its `node_modules` or `target/`. **free builds**, on a row (hover it) or at the bottom for the ticked rows, deletes just those folders and keeps the worktree, its branch, its files and its uncommitted changes. It opens a confirmation that says how much it frees and from which folders:
+
+<Screen
+  name="worktrees-free"
+  alt="The free builds confirmation for web-shop › feat/gift-cards: frees 14 MB, node_modules 14 MB, and a yellow line saying codex runs in it and may still use these folders"
+  crop={[2, 1, 106, 6]}
+/>
+
+Only folders git ignores whose names are on the project's list are deleted, at any depth: `node_modules`, `target`, `.next`, `.turbo`, `dist`, `build`, `.venv` and `__pycache__` unless the project says otherwise. A `build/` that holds a file git tracks, or a folder git does not ignore, is never touched, and the list is checked again when you confirm, so a folder you added to git in between is kept and named. A project changes the list in **project settings → build folders**, names separated by spaces (`projects.<folder>.builds` in [`config.json`](../../reference/configuration/#projects); an empty field means none), and its [setup](#set-up-each-new-worktree) can rebuild what went. The confirmation checks the processes again and warns in yellow when a program runs there (one of the workspace's tabs, one outside cornercase, one in another tab; shells at a prompt are left out) because it may still use those folders, and when a build folder holds a git checkout of its own (`.venv/src/foo`), whose changes would go too. It warns and lets you decide. A message at the end says `freed 3.4 GB in 2 worktrees` and names what could not be deleted. Scripts do the same with [`cornercase worktrees`](../scripts-and-agents/#worktrees).
 
 ## Remove a worktree
 

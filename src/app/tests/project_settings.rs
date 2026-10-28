@@ -92,7 +92,7 @@ fn the_dialog_shows_the_saved_commands() {
     s.app.config.set_project(
         &path,
         None,
-        config::ProjectSettings { setup: "npm ci\ncp .env .env".into(), teardown: String::new() },
+        config::ProjectSettings { setup: "npm ci\ncp .env .env".into(), teardown: String::new(), ..Default::default() },
     );
     open(&mut s.app);
     insta::assert_snapshot!(format!("{}", render(&mut s.app, SIZE).backend()));
@@ -113,7 +113,11 @@ fn the_new_workspace_dialog_names_the_setup_when_a_worktree_is_chosen() {
     s.app.config.set_project(
         &path,
         None,
-        config::ProjectSettings { setup: "npm ci\nnpm run build".into(), teardown: String::new() },
+        config::ProjectSettings {
+            setup: "npm ci\nnpm run build".into(),
+            teardown: String::new(),
+            ..Default::default()
+        },
     );
     let id = s.app.projects[0].id;
     s.app.overlay = Some(Overlay::NewWorkspace {

@@ -605,10 +605,10 @@ What happens to a workspace's post when you close the workspace, in forum mode: 
 
 #### `projects`
 
-Per-project commands, keyed by the project's folder (`~/` is expanded): `setup` runs in the first tab of each new [worktree](../../guides/worktrees/#set-up-each-new-worktree) before its agent starts, `teardown` runs before a worktree is removed. Edit them in the project's `⋯` menu, **project settings**; an entry with both empty is removed.
+Per-project settings, keyed by the project's folder (`~/` is expanded): `setup` runs in the first tab of each new [worktree](../../guides/worktrees/#set-up-each-new-worktree) before its agent starts, `teardown` runs before a worktree is removed, and `builds` lists the folder names that [free builds](../../guides/worktrees/#free-build-folders) deletes in the project's worktrees when git ignores them. Without `builds` the list is `node_modules`, `target`, `.next`, `.turbo`, `dist`, `build`, `.venv` and `__pycache__`; `[]` means no folder of the project is freed. Edit them in the project's `⋯` menu, **project settings**; an entry with nothing set is removed.
 
 ```json
-"projects": { "~/code/web-shop": { "setup": "npm ci\ncp ../.env .env", "teardown": "docker compose down" } }
+"projects": { "~/code/web-shop": { "setup": "npm ci\ncp ../.env .env", "teardown": "docker compose down", "builds": ["node_modules", ".next"] } }
 ```
 
 #### `profiles`

@@ -333,7 +333,8 @@ mod following {
         let first =
             call_later(&mut app, &rx, "files-read", &json!({"path": "notes.txt", "follow": true})).expect("a read");
         assert_eq!(first["text"], "one\nTWO\n");
-        std::fs::write(repo.path().join("notes.txt"), "one\nTWO\nthree\n").expect("write");
+        std::fs::write(repo.path().join("notes.tmp"), "one\nTWO\nthree\n").expect("write");
+        std::fs::rename(repo.path().join("notes.tmp"), repo.path().join("notes.txt")).expect("replace");
 
         let line = line_until(&mut app, &rx, "the new text", |line| revision(line) >= 2);
 

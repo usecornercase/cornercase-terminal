@@ -49,6 +49,7 @@ mod todos;
 mod updates;
 mod usage;
 mod views;
+mod worktrees;
 
 const ROWS: u16 = 24;
 const COLS: u16 = 100;

@@ -7,13 +7,14 @@ use ratatui::widgets::{Clear, Paragraph};
 use super::form::Toggle;
 use super::settings::settings_area;
 use super::{
-    Note, draw_input, draw_note, draw_secondary, draw_submit, draw_tick, draw_waiting, first_visible_by, form_inner,
-    item_at, list_item_by, pick_background, right_aligned,
+    Note, draw_input, draw_note, draw_secondary, draw_submit, draw_tabs, draw_tick, draw_waiting, first_visible_by,
+    form_inner, item_at, list_item_by, pick_background, right_aligned,
 };
 use crate::text::{truncate_left, truncate_right};
 use crate::ui::View;
 use crate::ui::rows::Tags;
 use crate::ui::widgets::{button_width, hovered, overlay_block, rail};
+use crate::worktrees::Order;
 
 const LEAD: u16 = 3;
 
@@ -24,6 +25,14 @@ const MIN_FOLDER: usize = 8;
 const COMPACT_PITCH: u16 = 3;
 
 const CHANGES_LABEL: &str = "changes";
+
+const FREE_LABEL: &str = "free builds";
+
+const SAFE_LABEL: &str = "safe first";
+
+const SIZE_LABEL: &str = "largest first";
+
+const ORDERS: [(Order, &str); 2] = [(Order::Safe, SAFE_LABEL), (Order::Size, SIZE_LABEL)];
 
 const REMOVE_LABEL: &str = "remove";
 
@@ -40,11 +49,15 @@ pub(crate) struct Worktrees {
     pub(crate) selected: Option<usize>,
     pub(crate) scroll: usize,
     pub(crate) ticked: usize,
+    pub(crate) free: usize,
+    pub(crate) order: Order,
+    pub(crate) total: Option<(String, String)>,
     pub(crate) note: Option<Note>,
     pub(crate) confirm: Option<ConfirmView>,
     pub(crate) compact: bool,
 }
 
+#[expect(clippy::struct_excessive_bools, reason = "each flag is its own button or state of a row")]
 pub(crate) struct WorktreeRow {
     pub(crate) ticked: bool,
     pub(crate) tickable: bool,
@@ -54,6 +67,9 @@ pub(crate) struct WorktreeRow {
     pub(crate) age: String,
     pub(crate) marks: Vec<(String, Color)>,
     pub(crate) changes: bool,
+    pub(crate) free: bool,
+    pub(crate) size: String,
+    pub(crate) builds: Option<String>,
     pub(crate) status: Option<String>,
 }
 
@@ -62,6 +78,12 @@ pub(crate) struct ConfirmView {
     pub(crate) scroll: usize,
     pub(crate) branches: bool,
     pub(crate) checking: bool,
+    pub(crate) kind: Purpose,
+}
+
+pub(crate) enum Purpose {
+    Remove,
+    Free { label: String },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,6 +92,9 @@ pub(crate) enum WorktreesHit {
     Tick(usize),
     Row(usize),
     Changes(usize),
+    Free(usize),
+    FreeTicked,
+    Order(Order),
     Remove,
     Done,
     Back,
@@ -113,62 +138,97 @@ fn pitch(compact: bool) -> u16 {
     if compact { COMPACT_PITCH } else { 1 }
 }
 
+fn free_rect(row: Rect, compact: bool) -> Rect {
+    let changes = changes_rect(row, compact);
+    let width = button_width(FREE_LABEL);
+    Rect::new(changes.x.saturating_sub(width + 1), changes.y, width, 1).intersection(row)
+}
+
 fn changes_rect(row: Rect, compact: bool) -> Rect {
     let width = button_width(CHANGES_LABEL);
     let y = if compact { row.y + row.height.saturating_sub(1) } else { row.y };
     Rect::new(row.right().saturating_sub(width + 1), y, width, 1).intersection(row)
 }
 
-fn remove_label(view: &Worktrees) -> String {
-    if view.confirm.is_none() && view.ticked > 0 {
-        format!("{REMOVE_LABEL} {}", view.ticked)
-    } else {
-        REMOVE_LABEL.to_string()
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Button {
+    FreeTicked,
+    Remove,
+    Done,
+    Back,
 }
 
-fn remove_enabled(view: &Worktrees) -> bool {
+fn confirm_label(view: &Worktrees) -> String {
     match &view.confirm {
-        Some(confirm) => !confirm.checking,
-        None => view.ticked > 0,
+        Some(ConfirmView { kind: Purpose::Free { label }, .. }) => label.clone(),
+        None if view.ticked > 0 => format!("{REMOVE_LABEL} {}", view.ticked),
+        _ => REMOVE_LABEL.to_string(),
     }
 }
 
-fn button_rects(row: Rect, view: &Worktrees) -> [Rect; 2] {
-    let remove = remove_label(view);
-    let second = if view.confirm.is_some() { BACK_LABEL } else { DONE_LABEL };
-    let (first, second) = if view.confirm.is_some() { (second, remove.as_str()) } else { (remove.as_str(), second) };
-    let rects = right_aligned(row, &[first, second], button_width, 1);
-    [rects[0], rects[1]]
+fn free_ticked_label(view: &Worktrees) -> String {
+    if view.free > 0 { format!("{FREE_LABEL} {}", view.free) } else { FREE_LABEL.to_string() }
 }
 
-fn list_buttons(area: Rect, view: &Worktrees) -> [Rect; 2] {
-    let row = if view.confirm.is_some() { confirm_rows(area)[3] } else { list_rows(area)[3] };
-    button_rects(row, view)
+fn enabled(view: &Worktrees, button: Button) -> bool {
+    match (button, &view.confirm) {
+        (Button::FreeTicked, _) => view.free > 0,
+        (Button::Remove, Some(confirm)) => !confirm.checking,
+        (Button::Remove, None) => view.ticked > 0,
+        (Button::Done | Button::Back, _) => true,
+    }
 }
 
-fn remove_rect(area: Rect, view: &Worktrees) -> Rect {
-    let [a, b] = list_buttons(area, view);
-    if view.confirm.is_some() { b } else { a }
+fn buttons(area: Rect, view: &Worktrees) -> Vec<(Button, String, Rect)> {
+    let (row, wanted) = match &view.confirm {
+        Some(_) => {
+            (confirm_rows(area)[3], vec![(Button::Back, BACK_LABEL.to_string()), (Button::Remove, confirm_label(view))])
+        }
+        None => (
+            list_rows(area)[3],
+            vec![
+                (Button::FreeTicked, free_ticked_label(view)),
+                (Button::Remove, confirm_label(view)),
+                (Button::Done, DONE_LABEL.to_string()),
+            ],
+        ),
+    };
+    let labels: Vec<&str> = wanted.iter().map(|(_, label)| label.as_str()).collect();
+    let rects = right_aligned(row, &labels, button_width, 1);
+    wanted.into_iter().zip(rects).map(|((button, label), rect)| (button, label, rect)).collect()
 }
 
-fn other_rect(area: Rect, view: &Worktrees) -> Rect {
-    let [a, b] = list_buttons(area, view);
-    if view.confirm.is_some() { a } else { b }
+fn order_rects(filter: Rect) -> Vec<Rect> {
+    let names: Vec<&str> = ORDERS.iter().map(|(_, name)| *name).collect();
+    right_aligned(filter, &names, button_width, 1)
+}
+
+fn filter_room(filter: Rect) -> Rect {
+    let used = order_rects(filter).first().map_or(0, |r| filter.right().saturating_sub(r.x) + 1);
+    Rect { width: filter.width.saturating_sub(used), ..filter }
 }
 
 pub(crate) fn worktrees_hit(screen: Rect, view: &Worktrees, pos: Position) -> Option<WorktreesHit> {
     let area = worktrees_area(screen, view.compact);
-    if remove_enabled(view) && remove_rect(area, view).contains(pos) {
-        return Some(WorktreesHit::Remove);
+    for (button, _, rect) in buttons(area, view) {
+        if rect.contains(pos) && enabled(view, button) {
+            return Some(match button {
+                Button::FreeTicked => WorktreesHit::FreeTicked,
+                Button::Remove => WorktreesHit::Remove,
+                Button::Done => WorktreesHit::Done,
+                Button::Back => WorktreesHit::Back,
+            });
+        }
     }
-    if other_rect(area, view).contains(pos) {
-        return Some(if view.confirm.is_some() { WorktreesHit::Back } else { WorktreesHit::Done });
-    }
-    if view.confirm.is_some() {
-        return confirm_rows(area)[1].contains(pos).then_some(WorktreesHit::Branches);
+    if let Some(confirm) = &view.confirm {
+        let tick = matches!(confirm.kind, Purpose::Remove) && confirm_rows(area)[1].contains(pos);
+        return tick.then_some(WorktreesHit::Branches);
     }
     let [filter, list, ..] = list_rows(area);
+    let tab = ORDERS.iter().zip(order_rects(filter)).find(|(_, rect)| rect.contains(pos));
+    if let Some(((order, _), _)) = tab {
+        return Some(WorktreesHit::Order(*order));
+    }
     if filter.contains(pos) {
         return Some(WorktreesHit::Filter);
     }
@@ -176,6 +236,9 @@ pub(crate) fn worktrees_hit(screen: Rect, view: &Worktrees, pos: Position) -> Op
     let row = view.rows.get(i)?;
     if row.changes && changes_rect(rect, view.compact).contains(pos) {
         return Some(WorktreesHit::Changes(i));
+    }
+    if row.free && free_rect(rect, view.compact).contains(pos) {
+        return Some(WorktreesHit::Free(i));
     }
     if pos.x < list.x + LEAD && row.tickable {
         return Some(WorktreesHit::Tick(i));
@@ -195,14 +258,33 @@ pub(in crate::ui) fn draw_worktrees(f: &mut Frame, view: &View, worktrees: &Work
 }
 
 fn draw_buttons(f: &mut Frame, view: &View, worktrees: &Worktrees, area: Rect) {
-    let remove = remove_rect(area, worktrees);
-    if remove_enabled(worktrees) {
-        draw_submit(f, view, remove, &remove_label(worktrees));
-    } else {
-        draw_waiting(f, view, remove, &remove_label(worktrees));
+    let all = buttons(area, worktrees);
+    for (button, label, rect) in &all {
+        match button {
+            Button::Done | Button::Back => draw_secondary(f, view, *rect, label),
+            Button::FreeTicked if enabled(worktrees, *button) => draw_secondary(f, view, *rect, label),
+            _ if enabled(worktrees, *button) => draw_submit(f, view, *rect, label),
+            _ => draw_waiting(f, view, *rect, label),
+        }
     }
-    let label = if worktrees.confirm.is_some() { BACK_LABEL } else { DONE_LABEL };
-    draw_secondary(f, view, other_rect(area, worktrees), label);
+    if worktrees.confirm.is_none() {
+        let first = all.first().map_or(area.right(), |(_, _, r)| r.x);
+        draw_total(
+            f,
+            view,
+            worktrees,
+            Rect { width: first.saturating_sub(list_rows(area)[3].x + 1), ..list_rows(area)[3] },
+        );
+    }
+}
+
+fn draw_total(f: &mut Frame, view: &View, worktrees: &Worktrees, room: Rect) {
+    let Some((long, short)) = &worktrees.total else { return };
+    let width = usize::from(room.width);
+    let text = [long, short].into_iter().find(|text| text.chars().count() <= width);
+    if let Some(text) = text {
+        f.render_widget(Paragraph::new(Span::styled(text.clone(), Style::default().fg(view.muted))), room);
+    }
 }
 
 fn draw_confirm_step(f: &mut Frame, view: &View, worktrees: &Worktrees, confirm: &ConfirmView, area: Rect) {
@@ -211,13 +293,18 @@ fn draw_confirm_step(f: &mut Frame, view: &View, worktrees: &Worktrees, confirm:
         Paragraph::new(confirm.lines.clone()).scroll((u16::try_from(confirm.scroll).unwrap_or(u16::MAX), 0)),
         body,
     );
-    draw_tick(f, view, branches, &Toggle { label: BRANCHES_LABEL, on: confirm.branches });
+    if matches!(confirm.kind, Purpose::Remove) {
+        draw_tick(f, view, branches, &Toggle { label: BRANCHES_LABEL, on: confirm.branches });
+    }
     draw_note(f, view.muted, worktrees.note.as_ref(), note);
 }
 
 fn draw_list_step(f: &mut Frame, view: &View, worktrees: &Worktrees, area: Rect) {
     let [filter, list, note, _] = list_rows(area);
-    let cursor = draw_input(f, view.muted, filter, "filter", &worktrees.filter);
+    let tabs: Vec<&str> = ORDERS.iter().map(|(_, name)| *name).collect();
+    let active = ORDERS.iter().position(|(order, _)| *order == worktrees.order).unwrap_or(0);
+    draw_tabs(f, view, &order_rects(filter), &tabs, active);
+    let cursor = draw_input(f, view.muted, filter_room(filter), "filter", &worktrees.filter);
     if worktrees.rows.is_empty() && !matches!(worktrees.note, Some(Note::Busy(_))) {
         let text = if worktrees.filter.is_empty() { "no worktrees" } else { "no matches" };
         f.render_widget(Paragraph::new(Span::styled(format!(" {text}"), Style::default().fg(view.muted))), list);
@@ -255,6 +342,7 @@ struct Columns {
     project: usize,
     branch: usize,
     folder: usize,
+    size: usize,
 }
 
 fn tag_width(row: &WorktreeRow) -> usize {
@@ -265,20 +353,33 @@ fn tag_width(row: &WorktreeRow) -> usize {
     texts.iter().sum::<usize>() + texts.len().saturating_sub(1)
 }
 
-fn columns(rows: &[WorktreeRow], width: u16) -> Columns {
-    let room = usize::from(width).saturating_sub(usize::from(LEAD) + 1);
-    let reserved = usize::from(button_width(CHANGES_LABEL)) + 1;
-    let widest = rows.iter().map(tag_width).max().unwrap_or(0);
-    let zone = (widest + reserved + 2).min(room / 3 + reserved);
-    let rem = room.saturating_sub(AGE_WIDTH + 1 + zone + 3);
+fn size_text(row: &WorktreeRow) -> String {
+    match &row.builds {
+        Some(builds) => format!("{} · {builds}", row.size),
+        None => row.size.clone(),
+    }
+}
+
+fn split_room(rows: &[WorktreeRow], rem: usize) -> (usize, usize, usize) {
     let longest = |text: fn(&WorktreeRow) -> usize| rows.iter().map(text).max().unwrap_or(0);
     let project = longest(|r| r.project.chars().count()).min(rem / 2).max(1);
     let branch = longest(|r| r.branch.chars().count()).min(rem.saturating_sub(project));
-    let folder = rem.saturating_sub(project + branch);
+    (project, branch, rem.saturating_sub(project + branch))
+}
+
+fn columns(rows: &[WorktreeRow], width: u16) -> Columns {
+    let room = usize::from(width).saturating_sub(usize::from(LEAD) + 1);
+    let widest = rows.iter().map(tag_width).max().unwrap_or(0);
+    let zone = (widest + reserved() + 2).min(room / 3 + reserved());
+    let full = rows.iter().map(|r| size_text(r).chars().count()).max().unwrap_or(0);
+    let plain = rows.iter().map(|r| r.size.chars().count()).max().unwrap_or(0);
+    let rem_for = |size: usize| room.saturating_sub(AGE_WIDTH + 1 + size + 1 + zone + 3);
+    let size = if split_room(rows, rem_for(full)).2 >= MIN_FOLDER { full } else { plain };
+    let (project, branch, folder) = split_room(rows, rem_for(size));
     if folder < MIN_FOLDER {
-        return Columns { zone: zone + folder + 1, project, branch, folder: 0 };
+        return Columns { zone: zone + folder + 1, project, branch, folder: 0, size };
     }
-    Columns { zone, project, branch, folder }
+    Columns { zone, project, branch, folder, size }
 }
 
 struct Slot<'a> {
@@ -324,7 +425,7 @@ impl Look {
 }
 
 fn reserved() -> usize {
-    usize::from(button_width(CHANGES_LABEL)) + 1
+    usize::from(button_width(CHANGES_LABEL) + button_width(FREE_LABEL)) + 2
 }
 
 fn draw_row(f: &mut Frame, view: &View, row: &WorktreeRow, slot: &Slot) {
@@ -335,12 +436,21 @@ fn draw_row(f: &mut Frame, view: &View, row: &WorktreeRow, slot: &Slot) {
         vec![wide_line(row, &look, slot.rect.width, slot.cols)]
     };
     f.render_widget(Paragraph::new(lines).style(look.bg), slot.rect);
-    let button = row.changes.then(|| changes_rect(slot.rect, slot.compact));
-    if let Some(button) = button.filter(|b| slot.compact || hovered(view, slot.rect) || hovered(view, *b)) {
-        let lit = hovered(view, button);
-        let style = if lit { look.bg.fg(Color::Cyan).add_modifier(Modifier::BOLD) } else { look.bg.fg(view.muted) };
-        f.render_widget(Paragraph::new(Span::styled(format!(" {CHANGES_LABEL} "), style)), button);
+    let buttons = [
+        (row.free, free_rect(slot.rect, slot.compact), FREE_LABEL),
+        (row.changes, changes_rect(slot.rect, slot.compact), CHANGES_LABEL),
+    ];
+    for (shown, rect, label) in buttons {
+        if shown && (slot.compact || hovered(view, slot.rect) || hovered(view, rect)) {
+            draw_row_button(f, view, &look, rect, label);
+        }
     }
+}
+
+fn draw_row_button(f: &mut Frame, view: &View, look: &Look, rect: Rect, label: &str) {
+    let style =
+        if hovered(view, rect) { look.bg.fg(Color::Cyan).add_modifier(Modifier::BOLD) } else { look.bg.fg(view.muted) };
+    f.render_widget(Paragraph::new(Span::styled(format!(" {label} "), style)), rect);
 }
 
 fn compact_lines(row: &WorktreeRow, look: &Look, width: u16) -> Vec<Line<'static>> {
@@ -352,7 +462,12 @@ fn compact_lines(row: &WorktreeRow, look: &Look, width: u16) -> Vec<Line<'static
     first.push(Span::styled(truncate_right(&row.project, room), look.base));
     first.push(Span::styled(format!("  {}", truncate_right(&row.branch, branch_room)), look.base));
     let mut second = look.lead(false);
-    second.push(Span::styled(truncate_left(&row.folder, room), look.dim));
+    let size = truncate_right(&size_text(row), room / 2);
+    let folder_room = room.saturating_sub(size.chars().count() + 1);
+    let folder = truncate_left(&row.folder, folder_room);
+    let pad = room.saturating_sub(folder.chars().count() + size.chars().count());
+    second.push(Span::styled(format!("{folder}{}", " ".repeat(pad)), look.dim));
+    second.push(Span::styled(size, look.dim));
     let mut third = look.lead(false);
     third.push(Span::styled(format!("{:<AGE_WIDTH$}", row.age), look.dim));
     let used = usize::from(LEAD) + AGE_WIDTH;
@@ -375,10 +490,21 @@ fn wide_line(row: &WorktreeRow, look: &Look, width: u16, cols: &Columns) -> Line
     line.push(Span::styled(cell(&row.branch, branch_w, false), look.base));
     line.push(Span::styled(cell(&row.folder, folder_w, true), look.dim));
     line.push(Span::styled(format!("{:<AGE_WIDTH$}", row.age), look.dim));
+    line.extend(size_spans(row, look, cols.size));
     let gaps = [project_w, branch_w, folder_w].iter().filter(|w| **w > 0).count();
-    let used = usize::from(LEAD) + project_w + branch_w + folder_w + gaps + AGE_WIDTH;
+    let used = usize::from(LEAD) + project_w + branch_w + folder_w + gaps + AGE_WIDTH + cols.size + 1;
     marks.push_onto(&mut line, used, usize::from(width).saturating_sub(reserved() + 1));
     Line::from(line)
+}
+
+fn size_spans(row: &WorktreeRow, look: &Look, width: usize) -> Vec<Span<'static>> {
+    let full = size_text(row).chars().count();
+    let (size, builds) = match &row.builds {
+        Some(builds) if full <= width => (row.size.clone(), format!(" · {builds}")),
+        _ => (truncate_right(&row.size, width), String::new()),
+    };
+    let pad = width.saturating_sub(size.chars().count() + builds.chars().count());
+    vec![Span::styled(size, look.base), Span::styled(builds, look.dim), Span::styled(" ".repeat(pad + 1), look.dim)]
 }
 
 fn cell(text: &str, w: usize, left: bool) -> String {

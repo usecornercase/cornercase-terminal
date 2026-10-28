@@ -27,6 +27,7 @@ fn team(setup: &str, teardown: &str) -> Team {
             ProjectSettings {
                 setup: setup.replace("MARKER", &marker.display().to_string()),
                 teardown: teardown.replace("MARKER", &marker.display().to_string()),
+                ..Default::default()
             },
         )]
         .into(),

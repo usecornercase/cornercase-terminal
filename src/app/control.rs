@@ -25,6 +25,7 @@ mod tour;
 mod updates;
 mod usage;
 mod wait;
+mod worktrees;
 
 use std::collections::{HashMap, HashSet};
 use std::ops::ControlFlow;
@@ -709,6 +710,8 @@ impl App {
                 self.stop_process_request(client, &stop);
                 Ok(None)
             }
+            Command::WorktreeSize(size) => self.worktree_size_request(client, asker, &size),
+            Command::FreeBuilds(free) => self.free_builds_request(client, asker, &free),
             Command::Tour(tour) => self.tour_request(&tour),
             Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),
             Command::PluginActions(actions) => Ok(Some(self.plugin_actions_request(&actions))),

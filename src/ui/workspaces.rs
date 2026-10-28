@@ -568,7 +568,7 @@ pub(super) fn draw_details(f: &mut Frame, muted: Color, line: DetailLine) {
     let dim = Style::default().fg(muted);
     let percent = percent_span(details, dim);
     let subagents = (details.subagents > 0).then(|| Span::styled(activity::subagents_text(details.subagents), dim));
-    let memory = details.memory.map(|bytes| Span::styled(memory_size(bytes), dim));
+    let memory = details.memory.map(|bytes| Span::styled(crate::text::size(bytes.max(crate::text::MB / 2)), dim));
     let lead = agent.map(|agent| Span::styled(agent.to_string(), dim));
     let fixed: Vec<Span> = percent.into_iter().chain(subagents).chain(memory).collect();
     let separator = CONTEXT_SEPARATOR.chars().count();

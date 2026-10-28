@@ -298,7 +298,8 @@ impl Compared<'_> {
         let home = self.here.home.as_deref();
         let now = self.now.project(&project.folder, home);
         let wanted =
-            ProjectSettings { setup: repository.setup.clone(), teardown: repository.teardown.clone() }.normalised();
+            ProjectSettings { setup: repository.setup.clone(), teardown: repository.teardown.clone(), builds: None }
+                .normalised();
         let label = text::display_path(&project.folder, home);
         [(SETUP, now.setup, wanted.setup), (TEARDOWN, now.teardown, wanted.teardown)]
             .into_iter()

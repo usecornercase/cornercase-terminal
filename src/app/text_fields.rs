@@ -118,7 +118,11 @@ impl App {
                 vec![TextField::StartPrompt]
             }
             Some(Overlay::ProjectSettings(_)) => {
-                vec![TextField::Setup(SettingsField::Setup), TextField::Setup(SettingsField::Teardown)]
+                vec![
+                    TextField::Setup(SettingsField::Setup),
+                    TextField::Setup(SettingsField::Teardown),
+                    TextField::Setup(SettingsField::Builds),
+                ]
             }
             Some(Overlay::ShareSettings(_)) => vec![TextField::SharePaste],
             Some(overlay) if overlay.takes_input() => vec![TextField::Name],

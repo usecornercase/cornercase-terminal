@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use super::args::config::{ConfigAction, ConfigArgs};
 use super::{print_json, print_out};
-use crate::client::{answer, ask};
+use crate::client::{answer, ask, use_build_folders};
 use crate::control::Command;
 use crate::control::config::{Configure, Connection, Described, Kind, ProjectChange, SecretChange, Setting, State};
 use crate::error::{Error, Result};
@@ -24,12 +24,16 @@ pub(super) fn run(args: ConfigArgs) -> Result<()> {
     let value = match args.action {
         None => request(Configure::Get)?,
         Some(ConfigAction::Set { pairs }) => request(Configure::Set(converted(&pairs)?))?,
-        Some(ConfigAction::Project { path, project, setup, teardown }) => {
+        Some(ConfigAction::Project { path, project, setup, teardown, builds }) => {
             let path = match (&path, project) {
                 (None, None) => return Err(Error::WrongUsage("give the project's FOLDER or --project ID".into())),
                 (path, _) => path.as_deref().map(absolute).transpose()?,
             };
-            request(Configure::Project(ProjectChange { project, path, setup, teardown }))?
+            let builds = builds.as_deref().map(builds_of).transpose()?;
+            if builds.is_some() {
+                use_build_folders()?;
+            }
+            request(Configure::Project(ProjectChange { project, path, setup, teardown, builds }))?
         }
         Some(ConfigAction::Secret { key }) => {
             let value = Secret(read_secret(&key)?);
@@ -223,6 +227,14 @@ fn write_settings(out: &mut String, described: &Described, key_width: usize) {
     }
 }
 
+fn builds_of(text: &str) -> Result<Vec<String>> {
+    if text.trim() == "default" {
+        return Ok(crate::config::DEFAULT_BUILDS.iter().map(|name| (*name).to_string()).collect());
+    }
+    let names = crate::config::parse_builds(text).map_err(Error::WrongUsage)?;
+    Ok(names.unwrap_or_default())
+}
+
 fn write_projects(out: &mut String, described: &Described) {
     if described.projects.is_empty() {
         return;
@@ -230,7 +242,10 @@ fn write_projects(out: &mut String, described: &Described) {
     let _ = writeln!(out, "\nProjects");
     for p in &described.projects {
         let line = |text: &str| if text.is_empty() { "-".to_string() } else { text.replace('\n', "; ") };
-        let _ = writeln!(out, "  {}  setup: {}  teardown: {}", p.folder.display(), line(&p.setup), line(&p.teardown));
+        let builds = p.builds.join(" ");
+        let (setup, teardown) = (line(&p.setup), line(&p.teardown));
+        let _ =
+            writeln!(out, "  {}  setup: {setup}  teardown: {teardown}  builds: {}", p.folder.display(), line(&builds));
     }
 }
 

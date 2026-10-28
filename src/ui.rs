@@ -107,7 +107,9 @@ pub(crate) use dialog::usage::usage_area;
 pub(crate) use dialog::usage::{Usage, UsageSection, UsageWindow, usage_done, usage_share, usage_tabs};
 #[cfg(test)]
 pub(crate) use dialog::worktrees::worktrees_area;
-pub(crate) use dialog::worktrees::{ConfirmView, WorktreeRow, Worktrees, WorktreesHit, worktrees_hit, worktrees_room};
+pub(crate) use dialog::worktrees::{
+    ConfirmView, Purpose, WorktreeRow, Worktrees, WorktreesHit, worktrees_hit, worktrees_room,
+};
 pub(crate) use dialog::{CANCEL_LABEL, Note, Overlay};
 pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
 pub(crate) use forum::{ForumHit, ForumSetup, hit as forum_hit};

@@ -176,6 +176,8 @@ fn newest_commands() -> Vec<Command> {
         Command::ChangesMergeCheck(ChangesMergeCheck::default()),
         Command::Processes(Processes::default()),
         Command::StopProcess(StopProcess::default()),
+        Command::WorktreeSize(WorktreeSize::default()),
+        Command::FreeBuilds(FreeBuilds::default()),
     ]
 }
 

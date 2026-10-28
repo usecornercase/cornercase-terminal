@@ -7,12 +7,13 @@ use super::{Outside, canonical};
 use crate::app::App;
 use crate::app::worktrees::lock_note;
 use crate::flows::run::RoleWorktree;
+use crate::process;
 use crate::project::Hierarchy;
 use crate::text::plural;
 use crate::ui;
 use crate::worktrees::{Dialog, Kind, Live, Row, Scan, Step};
 
-const INDENT: &str = "  ";
+pub(super) const INDENT: &str = "  ";
 
 const UNCHECKED: &str = "not checked, so it may have changes";
 
@@ -68,7 +69,7 @@ impl App {
         let (_, body) = ui::worktrees_room(area, area.width < ui::COMPACT_WIDTH);
         let lines = wrap(lines, body.width);
         let most = lines.len().saturating_sub(usize::from(body.height));
-        ui::ConfirmView { lines, scroll: dialog.body.min(most), branches, checking }
+        ui::ConfirmView { lines, scroll: dialog.body.min(most), branches, checking, kind: ui::Purpose::Remove }
     }
 
     fn confirm_lines(&self, rows: &[Row], row: &Row, branches: bool) -> Vec<Line<'static>> {
@@ -119,7 +120,7 @@ impl App {
 
     fn risks(&self, row: &Row, live: Option<&Live>) -> Vec<String> {
         let mut risks = kind_risks(row);
-        risks.extend(self.presence_risks(row, live));
+        risks.extend(self.presence_risks(row, live, false));
         risks.extend(self.cleanup_risks(row, live));
         if risks.is_empty() {
             risks.push("nothing uncommitted or unpushed".to_string());
@@ -127,14 +128,17 @@ impl App {
         risks
     }
 
-    fn presence_risks(&self, row: &Row, live: Option<&Live>) -> Vec<String> {
+    pub(super) fn presence_risks(&self, row: &Row, live: Option<&Live>, free: bool) -> Vec<String> {
         let mut risks = Vec::new();
+        let effect = if free { "it may still use these folders" } else { "they stop" };
         if let Some(live) = live.filter(|live| !live.running.is_empty()) {
-            risks.push(format!("{} running in it; they stop", live.running.join(", ")));
+            risks.push(format!("{} running in it; {effect}", live.running.join(", ")));
         }
-        if !row.outside.is_empty() {
-            let processes = plural(row.outside.len(), "process", "processes");
-            risks.push(format!("{processes} outside cornercase: {}", row.outside.join(", ")));
+        let outside: Vec<&String> = row.outside.iter().filter(|name| !(free && process::is_shell(name))).collect();
+        if !outside.is_empty() {
+            let processes = plural(outside.len(), "process", "processes");
+            let names: Vec<&str> = outside.iter().map(|name| name.as_str()).collect();
+            risks.push(format!("{processes} outside cornercase: {}", names.join(", ")));
         } else if matches!(self.git.scans.outside, Outside::Failed) {
             risks.push("processes outside cornercase could not be checked".to_string());
         }

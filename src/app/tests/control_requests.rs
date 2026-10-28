@@ -535,6 +535,7 @@ mod account_home;
 mod accounts;
 mod agents;
 mod arranging;
+mod build_folders;
 mod changes;
 mod close_agent;
 mod closed_agents;

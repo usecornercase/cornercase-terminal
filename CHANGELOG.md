@@ -2,10 +2,21 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.221
+## 0.12.223
 
 - **See what every pane runs, and stop a runaway program.** **More ▴ › processes** (or `k` in the keys menu) opens a Processes dialog with one row per pane of every open project: where it is, what runs in it, and the CPU and memory of everything under its shell. The totals sit at the top and cornercase's own use is the last row. Click a row to see its processes, each with its own figures, and sort by CPU, memory or name, or type to filter. ` go ` shows the pane and ` close ` closes it (or its agent, as **close agent** does). ` stop ` on a process asks first, then sends SIGTERM to it and everything it started, and SIGKILL to what still runs 3 seconds later; a pane's shell is never offered. It measures only while it is open, every 2 seconds, and holds the order of the rows while the pointer is over them.
 - Scripts: `cornercase processes` (`--pane`, `--workspace`, `--worktree`, `--interval`, `--json`) prints the same list, and `cornercase processes stop PID` stops a program of a pane and what it started. They are the requests `processes` and `stop-process`, and `cornercase contract` lists both.
+
+## 0.12.222
+
+- **See how much disk each worktree takes, and free its build folders without removing it.** The Worktrees dialog shows each worktree's size and how much of it is build and dependency folders, such as `2.4 GB · 2.1 GB builds`; **largest first** sorts by it, and the bottom line sums every worktree and what freeing the builds of the ones idle for a week would recover. **free builds** on a row, or for the ticked rows, deletes only the folders git ignores among `node_modules`, `target`, `.next`, `.turbo`, `dist`, `build`, `.venv` and `__pycache__`: the worktree, its branch and its uncommitted changes stay. The confirmation says how much it frees and warns when a program still runs there. A project changes the list in **project settings → build folders**, and its setup can rebuild them the next time.
+- Scripts: `cornercase worktrees size` and `cornercase worktrees free-builds` (`--check` first; `--force` while programs run there), the requests `worktree-size` and `free-builds`, and `cornercase config project --builds`. `cornercase contract` lists the feature `build-folders`.
+
+## 0.12.221
+
+- **Drive another machine's cornercase while it runs a newer version.** `--remote` commands no longer need the same version on both machines: when the other machine runs a newer cornercase than this one, `cornercase --remote devbox status`, `events` and the rest keep working, so an app on your laptop doesn't stop each time only `devbox` updates. When the other machine is the older one, commands still refuse, since its server could ignore what a newer command asks for, and say how to update it from here. The window, `cornercase remote devbox`, still needs the same version on both.
+- **Update, restart and stop another machine's cornercase from here.** `cornercase --remote devbox update`, `restart`, `kill-server` and `logs` now run on `devbox` through your `ssh` instead of refusing `--remote`: same flags, the same questions when you are at a terminal (`--yes` skips them), and the exit status they have there. `cornercase --remote devbox logs --follow` follows that machine's log. The plugin commands that install or change plugins still act only on the machine they run on.
+- `cornercase logs --follow` now ends soon after the program reading it exits, as the other commands that follow a stream already do, instead of waiting for the server's next log line.
 
 ## 0.12.220
 

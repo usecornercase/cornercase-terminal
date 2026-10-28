@@ -274,6 +274,22 @@ fn a_follow_ends_soon_after_its_reader_leaves(#[case] args: &[&str], #[case] ask
 }
 
 #[test]
+fn the_log_follow_ends_soon_after_its_reader_leaves() {
+    let (session, mut server) = windowless();
+    session.wait_for_file("server.log", "the server logs its start", |log| !log.is_empty());
+    let mut follow = session.spawn(&["logs", "--follow"]);
+    let mut out = std::io::BufReader::new(follow.stdout.take().expect("its output"));
+    std::io::BufRead::read_line(&mut out, &mut String::new()).expect("a line of the tail");
+
+    drop(out);
+    let ended = finish_within(follow, TIMEOUT);
+
+    assert_eq!((ended.status.code(), ended.stderr.as_slice()), (Some(0), &b""[..]), "{ended:?}");
+    drop(session);
+    let _ = server.wait();
+}
+
+#[test]
 fn several_panes_are_waited_for_at_once() {
     let app = Harness::start();
     let quick = app.session.says(&["new-tab", "--", "sleep 0.2"]);

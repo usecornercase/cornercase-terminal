@@ -89,7 +89,7 @@ fn copy_names_a_repository_it_left_out() {
     let mut s = share();
     let repo = git_repo(&[("a", "1")]);
     let home = s.app.home.clone();
-    let settings = ProjectSettings { setup: "npm ci".into(), teardown: String::new() };
+    let settings = ProjectSettings { setup: "npm ci".into(), teardown: String::new(), ..Default::default() };
     s.app.config.set_project(repo.path(), home.as_deref(), settings);
     press(&mut s.app, COPY);
     let left_out = format!(

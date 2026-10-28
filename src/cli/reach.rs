@@ -1,7 +1,9 @@
 use std::ffi::OsString;
+use std::io::{IsTerminal, stdin, stdout};
 use std::path::{Path, PathBuf};
+use std::process::ExitStatus;
 
-use super::args::{Cli, Command};
+use super::args::{Cli, Command, KillServerArgs, LogsArgs, RestartArgs, UpdateArgs, WhenArgs};
 use crate::client;
 use crate::error::{Error, Result};
 use crate::protocol::REMOTE_ENV;
@@ -12,6 +14,7 @@ const OPTION: &str = "--remote-command";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind {
     There,
+    Run,
     Here(&'static str),
     Apart(&'static str),
 }
@@ -21,10 +24,7 @@ fn kind(command: Option<&Command>) -> Kind {
         None | Some(Command::Control(_) | Command::StartServer(_) | Command::Stats(_)) => Kind::There,
         Some(Command::Plugin(args)) if args.action.asks_the_server() => Kind::There,
         Some(Command::Plugin(_)) => Kind::Here("plugin"),
-        Some(Command::Update(_)) => Kind::Here("update"),
-        Some(Command::Restart(_)) => Kind::Here("restart"),
-        Some(Command::KillServer(_)) => Kind::Here("kill-server"),
-        Some(Command::Logs(_)) => Kind::Here("logs"),
+        Some(Command::Update(_) | Command::Restart(_) | Command::KillServer(_) | Command::Logs(_)) => Kind::Run,
         Some(Command::Remote(_)) => Kind::Apart("remote"),
         Some(Command::Skill) => Kind::Apart("skill"),
         Some(Command::Server) => Kind::Apart("server"),
@@ -43,7 +43,7 @@ fn refused(kind: Kind, destination: &str, variable: bool) -> Error {
             "`{name}` acts on this machine, so it takes no --remote{cause} on {destination} through ssh as `cornercase {name}`"
         ),
         Kind::Apart(name) => format!("`{name}` takes no --remote"),
-        Kind::There => format!("--remote {destination} was refused"),
+        Kind::There | Kind::Run => format!("--remote {destination} was refused"),
     })
 }
 
@@ -56,7 +56,7 @@ pub(super) fn chosen(cli: &Cli, var: &dyn Fn(&str) -> Option<OsString>) -> Resul
         (None, _) => None,
     };
     match (kind, wanted) {
-        (Kind::There, Some((destination, _))) => {
+        (Kind::There | Kind::Run, Some((destination, _))) => {
             Ok(Some(Remote { destination, command: cli.remote_command.clone(), option: OPTION }))
         }
         (_, Some((destination, variable))) => Err(refused(kind, &destination, variable)),
@@ -64,6 +64,60 @@ pub(super) fn chosen(cli: &Cli, var: &dyn Fn(&str) -> Option<OsString>) -> Resul
             Err(Error::WrongUsage(format!("{OPTION} needs --remote DESTINATION or {REMOTE_ENV}")))
         }
         (_, None) => Ok(None),
+    }
+}
+
+fn words(name: &str, flags: &[(&str, bool)]) -> Vec<String> {
+    let mut args = vec![name.to_string()];
+    args.extend(flags.iter().filter(|(_, on)| *on).map(|(flag, _)| (*flag).to_string()));
+    args
+}
+
+fn when_words(when: &WhenArgs) -> Vec<String> {
+    let WhenArgs { when_idle, timeout } = when;
+    let mut args: Vec<String> = when_idle.then(|| "--when-idle".to_string()).into_iter().collect();
+    if let Some(seconds) = timeout {
+        args.extend(["--timeout".to_string(), seconds.to_string()]);
+    }
+    args
+}
+
+fn logs_words(logs: &LogsArgs) -> Vec<String> {
+    let LogsArgs { lines, follow, path } = logs;
+    if *path {
+        return words("logs", &[("--path", true)]);
+    }
+    let mut args = words("logs", &[("--follow", *follow)]);
+    args.extend(["--lines".to_string(), lines.to_string()]);
+    args
+}
+
+pub(super) fn there(command: &Command) -> Option<Vec<String>> {
+    Some(match command {
+        Command::KillServer(KillServerArgs { yes }) => words("kill-server", &[("--yes", *yes)]),
+        Command::Restart(RestartArgs { yes, when }) => {
+            [words("restart", &[("--yes", *yes)]), when_words(when)].concat()
+        }
+        Command::Update(UpdateArgs { check, yes, when }) => {
+            [words("update", &[("--check", *check), ("--yes", *yes)]), when_words(when)].concat()
+        }
+        Command::Logs(logs) => logs_words(logs),
+        _ => return None,
+    })
+}
+
+pub(super) fn run_there(remote: &Remote, args: &[String]) -> Result<bool> {
+    let tty = stdin().is_terminal() && stdout().is_terminal();
+    outcome(remote, remote.run(true, tty, args)?)
+}
+
+fn outcome(remote: &Remote, status: ExitStatus) -> Result<bool> {
+    match status.code() {
+        Some(0) => Ok(true),
+        Some(1) | None => Ok(false),
+        Some(3) => Err(Error::Partial),
+        Some(126 | 127) => Err(Error::RemoteMissing { host: remote.destination.clone(), option: remote.option }),
+        Some(code) => Err(Error::Exited(u8::try_from(code).unwrap_or(1))),
     }
 }
 

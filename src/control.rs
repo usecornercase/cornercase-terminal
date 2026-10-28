@@ -32,6 +32,7 @@ pub(crate) mod tour;
 pub(crate) mod usage;
 pub(crate) mod view;
 mod watch;
+pub(crate) mod worktrees;
 
 use fields::{Fields, chosen};
 pub(crate) use todo::{Todo, TodoSend};
@@ -76,6 +77,7 @@ pub(crate) use theme::{Theme, ThemeInfo};
 pub(crate) use usage::{Plans, Usage};
 pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
+pub(crate) use worktrees::{BuildsFreed, FreeBuilds, WorktreeSize, WorktreeSized};
 
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
 pub(crate) const SERVER_ENV: &str = "CORNERCASE_SERVER";
@@ -229,6 +231,8 @@ pub(crate) enum Command {
     ChangesMergeCheck(ChangesMergeCheck),
     Processes(Processes),
     StopProcess(StopProcess),
+    WorktreeSize(WorktreeSize),
+    FreeBuilds(FreeBuilds),
 }
 
 impl Command {
@@ -404,8 +408,10 @@ impl Command {
             Self::Usage(_) => 67,
             Self::Ports(_) => 101,
             Self::StopPort(_) => 102,
-            Self::Processes(_) => 108,
-            Self::StopProcess(_) => 109,
+            Self::Processes(_) => 110,
+            Self::StopProcess(_) => 111,
+            Self::WorktreeSize(_) => 108,
+            Self::FreeBuilds(_) => 109,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
             Self::PluginActions(_) => 69,
@@ -417,7 +423,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 110] = [
+    pub(crate) const NAMES: [&str; 112] = [
         "status",
         "open",
         "new-workspace",
@@ -528,6 +534,8 @@ impl Command {
         "changes-merge-check",
         "processes",
         "stop-process",
+        "worktree-size",
+        "free-builds",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

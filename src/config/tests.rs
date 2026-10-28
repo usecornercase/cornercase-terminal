@@ -20,6 +20,15 @@ mod file {
         );
     }
 
+    fn shop_projects() -> BTreeMap<String, ProjectSettings> {
+        let shop = ProjectSettings {
+            setup: "npm ci\ncp ../.env .env".into(),
+            teardown: "docker compose down".into(),
+            builds: Some(vec!["node_modules".into(), ".next".into()]),
+        };
+        [("~/code/web-shop".to_string(), shop)].into()
+    }
+
     fn interface_keys() -> Config {
         Config {
             icon_bar: true,
@@ -48,11 +57,7 @@ mod file {
             remote_port: 47682,
             discord_forum: true,
             discord_forum_close: "delete".into(),
-            projects: [(
-                "~/code/web-shop".into(),
-                ProjectSettings { setup: "npm ci\ncp ../.env .env".into(), teardown: "docker compose down".into() },
-            )]
-            .into(),
+            projects: shop_projects(),
             account_names: [(
                 "claude".into(),
                 [(String::new(), "work".into()), ("home".into(), "Personal".into())].into(),
@@ -109,7 +114,7 @@ mod file {
     fn a_home_relative_key_names_the_absolute_folder() {
         let home = Path::new("/home/ana");
         let mut config = Config::default();
-        let settings = ProjectSettings { setup: "npm ci".into(), teardown: String::new() };
+        let settings = ProjectSettings { setup: "npm ci".into(), teardown: String::new(), ..Default::default() };
         config.set_project(Path::new("/home/ana/code/shop"), Some(home), settings.clone());
 
         assert_eq!(config.projects.keys().collect::<Vec<_>>(), ["~/code/shop"]);
@@ -124,7 +129,7 @@ mod file {
         std::fs::create_dir(&real).expect("dir");
         std::os::unix::fs::symlink(&real, dir.path().join("link")).expect("symlink");
         let mut config = Config::default();
-        let settings = ProjectSettings { setup: "make".into(), teardown: String::new() };
+        let settings = ProjectSettings { setup: "make".into(), teardown: String::new(), ..Default::default() };
         config.projects.insert(format!("{}/link/", dir.path().display()), settings.clone());
 
         assert_eq!(config.project(&real, None), settings);
@@ -140,7 +145,11 @@ mod file {
         config
             .projects
             .insert("/home/ana/code/shop".into(), ProjectSettings { setup: "old".into(), ..Default::default() });
-        config.set_project(folder, Some(home), ProjectSettings { setup: "new\r\n\n".into(), teardown: String::new() });
+        config.set_project(
+            folder,
+            Some(home),
+            ProjectSettings { setup: "new\r\n\n".into(), teardown: String::new(), ..Default::default() },
+        );
 
         assert_eq!(config.projects.len(), 1);
         assert_eq!(config.project(folder, Some(home)).setup, "new");
@@ -443,7 +452,11 @@ mod changes {
     #[test]
     fn take_the_projects_map_as_one_key() {
         let mut new = Config::default();
-        new.set_project(Path::new("/srv/a"), None, ProjectSettings { setup: "make".into(), teardown: String::new() });
+        new.set_project(
+            Path::new("/srv/a"),
+            None,
+            ProjectSettings { setup: "make".into(), teardown: String::new(), ..Default::default() },
+        );
         assert_eq!(Changes::between(&Config::default(), &new).keys(), ["projects"]);
     }
 }
@@ -572,8 +585,78 @@ mod project_settings {
     #[test]
     fn control_characters_become_spaces_and_line_breaks_stay() {
         let mut config = Config::default();
-        let settings = ProjectSettings { setup: "a\u{7}b\r\nc\n\n".into(), teardown: String::new() };
+        let settings =
+            ProjectSettings { setup: "a\u{7}b\r\nc\n\n".into(), teardown: String::new(), ..Default::default() };
         config.set_project(Path::new("/srv/a"), None, settings);
         assert_eq!(config.project(Path::new("/srv/a"), None).setup, "a b\nc");
+    }
+}
+
+mod project_builds {
+    use rstest::rstest;
+
+    use super::*;
+    use crate::config::{DEFAULT_BUILDS, parse_builds};
+
+    fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|name| (*name).to_string()).collect()
+    }
+
+    #[test]
+    fn no_list_means_the_defaults() {
+        assert_eq!(ProjectSettings::default().builds(), names(&DEFAULT_BUILDS));
+        let custom = ProjectSettings { builds: Some(names(&["out"])), ..Default::default() };
+        assert_eq!(custom.builds(), ["out"]);
+        let none = ProjectSettings { builds: Some(Vec::new()), ..Default::default() };
+        assert_eq!(none.builds(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn saving_the_defaults_stores_nothing_and_a_custom_list_alone_keeps_its_key() {
+        let mut config = Config::default();
+        let folder = Path::new("/srv/shop");
+        let defaults = ProjectSettings { builds: Some(names(&DEFAULT_BUILDS)), ..Default::default() };
+        config.set_project(folder, None, defaults);
+        assert!(config.projects.is_empty());
+        let reordered = ProjectSettings {
+            builds: Some(names(&[
+                "target",
+                "node_modules",
+                ".next",
+                ".turbo",
+                "dist",
+                "build",
+                ".venv",
+                "__pycache__",
+            ])),
+            ..Default::default()
+        };
+        config.set_project(folder, None, reordered);
+        assert!(config.projects.is_empty());
+        let custom = ProjectSettings { builds: Some(names(&["out", "out", " cache "])), ..Default::default() };
+        config.set_project(folder, None, custom);
+        assert_eq!(config.project(folder, None).builds, Some(names(&["out", "cache"])));
+        let json = serde_json::to_value(&config.projects).expect("json");
+        assert_eq!(json["/srv/shop"], serde_json::json!({"builds": ["out", "cache"]}));
+    }
+
+    #[rstest]
+    #[case::spaces("node_modules  target", Some(&["node_modules", "target"][..]))]
+    #[case::commas("a,b, c", Some(&["a", "b", "c"][..]))]
+    #[case::repeats("a a", Some(&["a"][..]))]
+    #[case::empty("  ", Some(&[][..]))]
+    fn a_text_is_split_into_names(#[case] text: &str, #[case] expected: Option<&[&str]>) {
+        assert_eq!(parse_builds(text).expect("parsed"), expected.map(names));
+    }
+
+    #[rstest]
+    #[case::a_path("a/b")]
+    #[case::the_folder_itself(".")]
+    #[case::the_parent("..")]
+    #[case::git(".git")]
+    #[case::a_control("a\u{7}b")]
+    fn a_bad_name_is_refused(#[case] text: &str) {
+        let error = parse_builds(text).expect_err("refused");
+        assert!(error.contains("is not a folder name"), "{error}");
     }
 }

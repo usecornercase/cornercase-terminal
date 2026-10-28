@@ -28,6 +28,7 @@ use crate::host::theme::HostTheme;
 use crate::project::split::{Node, Place};
 use crate::term::emulator::Emulator;
 use crate::term::emulator::Snapshot;
+use crate::text::{GB, MB, size as memory_size};
 
 const W: u16 = 100;
 const H: u16 = 18;

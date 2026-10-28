@@ -41,7 +41,7 @@ mod features {
 
     #[test]
     fn a_failure_to_reach_the_server_is_not_taken_for_a_missing_feature() {
-        let checked = require_on(Err(Error::NoServer), "accounts", "has no account profiles");
+        let checked = require_on(Err(Error::NoServer), "accounts", "has no account profiles", None);
 
         assert!(matches!(checked, Err(Error::NoServer)), "{checked:?}");
     }
@@ -64,9 +64,31 @@ mod features {
             asked
         });
 
-        let checked = require_on(Link::socket(ours), feature, lacks);
+        let checked = require_on(Link::socket(ours), feature, lacks, None);
 
         (checked, server.join().expect("the fake server"))
+    }
+
+    #[test]
+    fn a_missing_feature_there_says_how_to_restart_it_from_here() {
+        let remote =
+            Remote { destination: "devbox".into(), command: Some("/opt/cc".into()), option: "--remote-command" };
+
+        let message = missing("has no views", Some(&remote)).to_string();
+
+        assert!(
+            message.contains("`devbox`")
+                && message.contains("`cornercase --remote devbox --remote-command /opt/cc restart`")
+                && message.contains("`cornercase --remote devbox --remote-command /opt/cc update`"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn a_missing_feature_here_says_to_update_cornercase() {
+        let message = missing("has no views", None).to_string();
+
+        assert!(message.contains("update cornercase and restart the server"), "{message}");
     }
 
     fn json(descriptor: &control::contract::Descriptor) -> Value {
@@ -253,6 +275,60 @@ mod a_follow {
         protocol::send(&mut following.server, &ServerMessage::Shutdown).expect("the end");
 
         assert_eq!(following.ended.recv_timeout(WAIT).expect("it ended"), Ok(()));
+    }
+
+    const SHORT: Duration = Duration::from_millis(50);
+
+    #[test]
+    fn a_log_follow_ends_when_its_reader_hangs_up() {
+        let (out, reader) = pipe();
+        let mut out = watched(out.as_fd());
+
+        drop(reader);
+
+        assert!(reader_gone_within(&mut out, WAIT));
+    }
+
+    #[rstest]
+    #[case::pipe(pipe())]
+    #[case::named_fifo(named_fifo())]
+    fn a_log_follow_waits_the_whole_time_while_its_reader_stays(#[case] output: Output) {
+        let (out, _reader) = output;
+        let mut out = watched(out.as_fd());
+        let started = std::time::Instant::now();
+
+        assert!(!reader_gone_within(&mut out, SHORT));
+
+        assert!(started.elapsed() >= SHORT && out.is_some());
+    }
+
+    #[test]
+    fn a_log_follow_stops_watching_a_reader_that_has_bytes_to_read() {
+        let (out, _reader) = socket_with_bytes_to_read();
+        let mut out = watched(out.as_fd());
+
+        assert!(!reader_gone_within(&mut out, WAIT));
+
+        assert!(out.is_none());
+    }
+
+    #[test]
+    fn a_log_follow_stops_watching_when_it_cannot_poll() {
+        let (out, _reader) = pipe();
+        let mut out = watched(out.as_fd());
+
+        assert!(!reader_gone_within(&mut out, Duration::MAX));
+
+        assert!(out.is_none());
+    }
+
+    #[test]
+    fn a_log_follow_with_nothing_to_watch_just_waits() {
+        let started = std::time::Instant::now();
+
+        assert!(!reader_gone_within(&mut None, SHORT));
+
+        assert!(started.elapsed() >= SHORT);
     }
 
     #[rstest]

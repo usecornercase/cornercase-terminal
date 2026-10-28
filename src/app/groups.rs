@@ -19,6 +19,8 @@ use super::tour_card::TourRuntime;
 use super::worktrees::Upstream;
 use super::worktrees_dialog::{Cleanup, Scans};
 use super::{flow_panel, merged_pull_requests, ports_dialog, processes_dialog, pull_requests};
+use super::worktrees_dialog::{Cleanup, Frees, Scans};
+use super::{flow_panel, merged_pull_requests, ports_dialog, pull_requests};
 
 #[derive(Default)]
 pub(super) struct Screen {
@@ -39,6 +41,7 @@ pub(super) struct Git {
     pub(super) merged: merged_pull_requests::MergedPulls,
     pub(super) scans: Scans,
     pub(super) cleanup: Cleanup,
+    pub(super) frees: Frees,
     pub(super) overlaps: Overlaps,
 }
 

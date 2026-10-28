@@ -73,9 +73,9 @@ fn a_remote_window_comes_back_after_the_connection_drops() {
 }
 
 #[rstest]
-#[case::window("window", &["remote", "devbox", "--command"])]
-#[case::commands("commands", &["--remote", "devbox", "status", "--remote-command"])]
-fn a_remote_of_another_version_says_which_side_to_update(#[case] name: &str, #[case] args: &[&str]) {
+#[case::window("window", &["remote", "devbox", "--command"], "Run `cornercase update` there")]
+#[case::commands("commands", &["--remote", "devbox", "status", "--remote-command"], "Update it from here with `cornercase --remote devbox")]
+fn an_older_remote_says_how_to_update_it(#[case] name: &str, #[case] args: &[&str], #[case] hint: &str) {
     let dir = temp_dir(&format!("old-remote-{name}"));
     let old = dir.join("cornercase");
     write_executable(&old, "#!/bin/sh\necho 'cornercase-proxy 1 0.0.1'\ncat > /dev/null\n");
@@ -84,12 +84,13 @@ fn a_remote_of_another_version_says_which_side_to_update(#[case] name: &str, #[c
 
     let _ = std::fs::remove_dir_all(&dir);
     assert!(refused(&out, 1, "`devbox` runs cornercase 0.0.1"), "{out:?}");
-    assert!(String::from_utf8_lossy(&out.stderr).contains("Run `cornercase update` there"), "{out:?}");
+    assert!(String::from_utf8_lossy(&out.stderr).contains(hint), "{out:?}");
 }
 
 #[rstest]
 #[case::window(&["remote", "devbox", "--command"], "give its path with --command")]
 #[case::commands(&["--remote", "devbox", "status", "--remote-command"], "give its path with --remote-command")]
+#[case::kill_server(&["--remote", "devbox", "kill-server", "--remote-command"], "give its path with --remote-command")]
 fn a_remote_without_cornercase_says_how_to_point_at_it(#[case] args: &[&str], #[case] hint: &str) {
     let out = remote_refusal(args, "/nonexistent/cornercase");
 
@@ -237,8 +238,8 @@ fn cornercase_remote_reaches_it_too_but_stays_out_of_its_panes() {
 }
 
 #[rstest]
-#[case::the_flag(&["--remote", "devbox", "kill-server"], None, "kill-server")]
-#[case::the_variable(&["logs"], Some("devbox"), "logs")]
+#[case::the_flag(&["--remote", "devbox", "plugin", "install", "x"], None, "plugin")]
+#[case::the_variable(&["plugin", "install", "x"], Some("devbox"), "plugin")]
 fn commands_of_this_machine_refuse_remote(#[case] args: &[&str], #[case] var: Option<&str>, #[case] name: &str) {
     let session = Session::new();
     let mut cmd = session.cold_command();
@@ -275,4 +276,63 @@ fn the_files_of_the_other_machine_are_listed_and_read_by_absolute_path() {
     assert_eq!(entries, ["sub", "hello.txt"], "{listed}");
     assert_eq!(read, "hi there");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_newer_remote_answers_commands_but_not_the_window() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let wrapper = session.dir.join("newer");
+    write_executable(
+        &wrapper,
+        &format!(
+            "#!/bin/sh\necho 'cornercase-proxy 99 99.0.0'\n'{}' \"$@\" | {{ IFS= read -r _; exec cat; }}\n",
+            bin()
+        ),
+    );
+    let wrapper = wrapper.display().to_string();
+
+    let status = session
+        .cold_command()
+        .env("PATH", fake_ssh(&session.dir, ""))
+        .args(["--remote", "devbox"])
+        .args(["--remote-command", &wrapper, "status", "--json"])
+        .output()
+        .expect("run cornercase");
+    let window = remote_refusal(&["remote", "devbox", "--command"], &wrapper);
+
+    assert!(status.status.success(), "{status:?}");
+    assert_eq!(boot_of(&String::from_utf8_lossy(&status.stdout)), boot_of(&session.says(&["status", "--json"])));
+    assert!(refused(&window, 1, "`devbox` runs cornercase 99.0.0"), "{window:?}");
+    assert!(String::from_utf8_lossy(&window.stderr).contains("Run `cornercase update` here"), "{window:?}");
+}
+
+#[test]
+fn the_log_of_the_other_machine_is_where_its_logs_command_says() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+
+    let there = remote_says(&session, &["logs", "--path"]);
+
+    assert_eq!(there, session.says(&["logs", "--path"]));
+}
+
+#[test]
+fn the_other_machine_is_stopped_through_its_own_command() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    assert_eq!(session.servers(), 1);
+
+    remote_says(&session, &["kill-server", "--yes"]);
+
+    wait_until("the server stopped", || session.servers() == 0);
+}
+
+#[test]
+fn the_status_of_the_command_there_is_the_status_here() {
+    let session = Session::new();
+
+    let out = remotely(&session, &["logs"]).output().expect("run cornercase");
+
+    assert!(refused(&out, 1, "no log yet"), "{out:?}");
 }

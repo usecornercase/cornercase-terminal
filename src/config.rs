@@ -195,6 +195,9 @@ pub(crate) const DEFAULT_ISSUE_TABS: [&str; 8] =
 pub(crate) const DEFAULT_FETCH_MINUTES: u64 = 5;
 pub(crate) const SYSTEM_ACCOUNT: &str = "System";
 
+pub(crate) const DEFAULT_BUILDS: [&str; 8] =
+    ["node_modules", "target", ".next", ".turbo", "dist", "build", ".venv", "__pycache__"];
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct ProjectSettings {
@@ -202,21 +205,53 @@ pub(crate) struct ProjectSettings {
     pub(crate) setup: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub(crate) teardown: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) builds: Option<Vec<String>>,
+}
+
+pub(crate) fn parse_builds(text: &str) -> Result<Option<Vec<String>>, String> {
+    let mut names: Vec<String> = Vec::new();
+    for name in text.split(|c: char| c.is_whitespace() || c == ',').filter(|name| !name.is_empty()) {
+        let bad =
+            matches!(name, "." | ".." | ".git") || name.contains(['/', '\\']) || name.chars().any(char::is_control);
+        if bad {
+            return Err(format!("`{name}` is not a folder name"));
+        }
+        if !names.iter().any(|n| n == name) {
+            names.push(name.to_string());
+        }
+    }
+    Ok(Some(names))
 }
 
 impl ProjectSettings {
+    pub(crate) fn builds(&self) -> Vec<String> {
+        self.builds.clone().unwrap_or_else(|| DEFAULT_BUILDS.iter().map(|name| (*name).to_string()).collect())
+    }
+
     pub(crate) fn normalised(self) -> Self {
         let clean = |text: String| {
             let text = text.replace("\r\n", "\n");
             let text: String = text.chars().map(|c| if c.is_control() && c != '\n' { ' ' } else { c }).collect();
             text.trim_end().to_string()
         };
-        Self { setup: clean(self.setup), teardown: clean(self.teardown) }
+        Self { setup: clean(self.setup), teardown: clean(self.teardown), builds: normal_builds(self.builds) }
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.setup.is_empty() && self.teardown.is_empty()
+        self.setup.is_empty() && self.teardown.is_empty() && self.builds.is_none()
     }
+}
+
+fn normal_builds(builds: Option<Vec<String>>) -> Option<Vec<String>> {
+    let mut names: Vec<String> = Vec::new();
+    for name in builds?.into_iter().map(|name| name.trim().to_string()).filter(|name| !name.is_empty()) {
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    let defaults = names.len() == DEFAULT_BUILDS.len() && DEFAULT_BUILDS.iter().all(|d| names.iter().any(|n| n == d));
+    (!defaults).then_some(names)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

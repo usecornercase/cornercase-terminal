@@ -2,12 +2,13 @@ use std::path::{Path, PathBuf};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::{List, Scan};
+use super::{List, Order, Scan};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Step {
     List,
     Confirm { waiting: Vec<PathBuf>, branches: bool },
+    Free { paths: Vec<PathBuf> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +31,8 @@ pub(crate) enum Action {
     Back,
     Changes(usize),
     Rescan(Vec<usize>),
+    Free,
+    FreeBuilds,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +40,9 @@ pub(crate) enum Hit {
     Tick(usize),
     Row(usize),
     Changes(usize),
+    Free(usize),
+    FreeTicked,
+    Order(Order),
     Remove,
     Done,
     Back,
@@ -53,6 +59,7 @@ impl Dialog {
         match &self.step {
             Step::List => self.list_key(key),
             Step::Confirm { .. } => self.confirm_key(key),
+            Step::Free { .. } => self.free_key(key),
         }
     }
 
@@ -98,6 +105,50 @@ impl Dialog {
         }
     }
 
+    fn free_key(&mut self, key: KeyEvent) -> Action {
+        match key.code {
+            KeyCode::Esc => {
+                self.step = Step::List;
+                Action::Back
+            }
+            KeyCode::Enter => self.free_builds(),
+            _ => Action::None,
+        }
+    }
+
+    fn free_builds(&self) -> Action {
+        if self.can_free_now() { Action::FreeBuilds } else { Action::None }
+    }
+
+    pub(crate) fn can_free_now(&self) -> bool {
+        matches!(&self.step, Step::Free { paths } if self.freeable(paths).next().is_some())
+    }
+
+    pub(crate) fn freeable<'a>(&'a self, paths: &'a [PathBuf]) -> impl Iterator<Item = &'a super::Row> {
+        self.list.rows.iter().filter(move |row| paths.contains(&row.found.path) && row.can_free())
+    }
+
+    fn open_free(&mut self, paths: Vec<PathBuf>) -> Action {
+        if paths.is_empty() {
+            return Action::None;
+        }
+        self.step = Step::Free { paths };
+        self.body = 0;
+        Action::Free
+    }
+
+    fn free_row(&mut self, row: usize) -> Action {
+        match self.list.rows.get(row) {
+            Some(row) if row.can_free() => self.open_free(vec![row.found.path.clone()]),
+            _ => Action::None,
+        }
+    }
+
+    fn free_ticked(&mut self) -> Action {
+        let paths = self.list.rows.iter().filter(|row| row.ticked && row.can_free()).map(|r| r.found.path.clone());
+        self.open_free(paths.collect())
+    }
+
     fn remove(&self) -> Action {
         match &self.step {
             Step::Confirm { branches, .. } if self.can_remove() => Action::Remove { branches: *branches },
@@ -125,8 +176,16 @@ impl Dialog {
             (Hit::Changes(row), Step::List) => Action::Changes(row),
             (Hit::Remove, Step::List) => self.confirm(),
             (Hit::Done, Step::List) => Action::Close,
+            (Hit::Free(row), Step::List) => self.free_row(row),
+            (Hit::FreeTicked, Step::List) => self.free_ticked(),
+            (Hit::Order(order), Step::List) => {
+                self.list.order_by(order);
+                self.refit();
+                Action::None
+            }
             (Hit::Remove, Step::Confirm { .. }) => self.remove(),
-            (Hit::Back, Step::Confirm { .. }) => {
+            (Hit::Remove, Step::Free { .. }) => self.free_builds(),
+            (Hit::Back, Step::Confirm { .. } | Step::Free { .. }) => {
                 self.step = Step::List;
                 Action::Back
             }
@@ -226,7 +285,7 @@ impl Dialog {
                 .iter()
                 .filter(|p| self.list.rows.iter().any(|r| &r.found.path == *p && r.ticked && r.tickable()))
                 .count(),
-            Step::List => 0,
+            Step::List | Step::Free { .. } => 0,
         }
     }
 

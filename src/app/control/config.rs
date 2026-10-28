@@ -103,6 +103,7 @@ impl App {
                     key: key.clone(),
                     setup: settings.setup.clone(),
                     teardown: settings.teardown.clone(),
+                    builds: settings.builds(),
                     folder,
                 }
             })
@@ -113,6 +114,7 @@ impl App {
                     folder: project.path.clone(),
                     project: Some(project.id),
                     repository: true,
+                    builds: ProjectSettings::default().builds(),
                     ..ProjectEntry::default()
                 });
             }
@@ -170,16 +172,23 @@ impl App {
         let folder = self.project_folder(&change)?;
         let home = self.home.clone();
         let current = self.config.project(&folder, home.as_deref());
+        for name in change.builds.iter().flatten() {
+            if config::parse_builds(name).map_err(|why| malformed(&why))?.as_deref() != Some(std::slice::from_ref(name))
+            {
+                return Err(malformed(format!("`{name}` is not a folder name")));
+            }
+        }
         let settings = ProjectSettings {
             setup: change.setup.unwrap_or(current.setup),
             teardown: change.teardown.unwrap_or(current.teardown),
+            builds: change.builds.or(current.builds),
         };
         needs_a_repository(&folder, &settings)?;
         self.change_config(|config| config.set_project(&folder, home.as_deref(), settings))
             .map_err(|e| self.config_refusal(e))?;
         let name = text::display_path(&folder, home.as_deref());
         let saved = if self.config.project(&folder, home.as_deref()).is_empty() { "removed" } else { "saved" };
-        Ok(Some(json(&self.described(vec![format!("{name}: setup and teardown {saved}")]))))
+        Ok(Some(json(&self.described(vec![format!("{name}: settings {saved}")]))))
     }
 
     fn config_secret(&mut self, client: u64, secret: &SecretChange) -> Handled {
