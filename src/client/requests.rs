@@ -3,7 +3,7 @@ use std::os::fd::BorrowedFd;
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use rustix::event::{PollFd, PollFlags};
+use rustix::event::{PollFd, PollFlags, Timespec};
 use rustix::fs::FileType;
 use rustix::io::Errno;
 use serde::de::DeserializeOwned;
@@ -12,7 +12,7 @@ use serde_json::Value;
 use crate::control::{self, Request, Response};
 use crate::error::{Error, Result};
 use crate::protocol::{self, ClientMessage, ServerMessage};
-use crate::remote::Remote;
+use crate::remote::{Remote, Use};
 use crate::update::restart;
 
 use super::{Link, Source};
@@ -99,16 +99,26 @@ pub(crate) fn use_account_restart() -> Result<()> {
 }
 
 fn require(feature: &str, lacks: &str) -> Result<()> {
-    require_on(connect(), feature, lacks)
+    require_on(connect(), feature, lacks, used_remote())
 }
 
-fn require_on(link: Result<Link>, feature: &str, lacks: &str) -> Result<()> {
-    let lacking = || {
-        Error::Control(format!(
+fn missing(lacks: &str, remote: Option<&Remote>) -> Error {
+    let Some(remote) = remote else {
+        return Error::Control(format!(
             "the running cornercase server {lacks}; update cornercase and restart the server (this one is {})",
             crate::version::CURRENT
-        ))
+        ));
     };
+    let via = remote.update_line().replace(" update", "");
+    Error::Control(format!(
+        "the cornercase server on `{}` {lacks}; restart it there with `{via} restart` (update it first with `{}` if needed)",
+        remote.host(),
+        remote.update_line()
+    ))
+}
+
+fn require_on(link: Result<Link>, feature: &str, lacks: &str, remote: Option<&Remote>) -> Result<()> {
+    let lacking = || missing(lacks, remote);
     let asked =
         link.and_then(|mut link| ask_on(&mut link, "contract", control::Command::Contract(control::Contract {})));
     let asked = asked.map_err(|e| if matches!(e, Error::Control(_) | Error::OldServer(_)) { lacking() } else { e });
@@ -122,7 +132,7 @@ pub(crate) fn connect() -> Result<Link> {
 
 fn connect_within(timeout: Option<Duration>) -> Result<Link> {
     if let Some(remote) = used_remote() {
-        return Link::remote(remote, true);
+        return Link::remote(remote, Use::Command);
     }
     let stream = super::running()?;
     stream.set_read_timeout(timeout)?;
@@ -135,7 +145,7 @@ pub(crate) fn ask(name: &'static str, command: control::Command) -> Result<Value
 
 pub(crate) fn ask_starting(name: &'static str, command: control::Command) -> Result<Value> {
     let mut link = match used_remote() {
-        Some(remote) => Link::remote(remote, true)?,
+        Some(remote) => Link::remote(remote, Use::Command)?,
         None => Link::socket(super::find_or_start()?.stream)?,
     };
     ask_on(&mut link, name, command)
@@ -272,7 +282,7 @@ fn follow_on(
     }
 }
 
-fn watched(out: BorrowedFd<'_>) -> Option<BorrowedFd<'_>> {
+pub(crate) fn watched(out: BorrowedFd<'_>) -> Option<BorrowedFd<'_>> {
     let kind = rustix::fs::fstat(out).map(|stat| FileType::from_raw_mode(stat.st_mode));
     matches!(kind, Ok(FileType::Fifo | FileType::Socket)).then_some(out)
 }
@@ -282,25 +292,50 @@ fn reader_left(stream: &impl Source, out: &mut Option<BorrowedFd<'_>>) -> bool {
         return false;
     }
     while let Some(reader) = *out {
-        let server = stream.fd();
-        let mut fds = [PollFd::new(&server, PollFlags::IN), PollFd::new(&reader, PollFlags::IN | PollFlags::HUP)];
-        match rustix::event::poll(&mut fds, None) {
-            Ok(_) => {}
-            Err(Errno::INTR) => continue,
-            Err(_) => return false,
-        }
-        let (heard, left) = (fds[0].revents(), fds[1].revents());
+        let Some((heard, left)) = polled(Some(stream.fd()), reader, None) else { return false };
         if left.intersects(PollFlags::HUP | PollFlags::ERR) {
             return true;
         }
         if !left.is_empty() {
             *out = None;
         }
-        if !heard.is_empty() {
+        if heard {
             return false;
         }
     }
     false
+}
+
+pub(crate) fn reader_gone_within(out: &mut Option<BorrowedFd<'_>>, wait: Duration) -> bool {
+    let Some(reader) = *out else {
+        std::thread::sleep(wait);
+        return false;
+    };
+    let Some((_, left)) = polled(None, reader, Some(wait)) else {
+        *out = None;
+        return false;
+    };
+    if !left.is_empty() && !left.intersects(PollFlags::HUP | PollFlags::ERR) {
+        *out = None;
+    }
+    left.intersects(PollFlags::HUP | PollFlags::ERR)
+}
+
+fn polled(server: Option<BorrowedFd<'_>>, reader: BorrowedFd<'_>, wait: Option<Duration>) -> Option<(bool, PollFlags)> {
+    let wait = match wait {
+        Some(wait) => Some(Timespec::try_from(wait).ok()?),
+        None => None,
+    };
+    let mut fds = vec![PollFd::new(&reader, PollFlags::IN | PollFlags::HUP)];
+    fds.extend(server.as_ref().map(|server| PollFd::new(server, PollFlags::IN)));
+    loop {
+        match rustix::event::poll(&mut fds, wait.as_ref()) {
+            Ok(_) => break,
+            Err(Errno::INTR) => {}
+            Err(_) => return None,
+        }
+    }
+    Some((fds.get(1).is_some_and(|fd| !fd.revents().is_empty()), fds[0].revents()))
 }
 
 pub(crate) fn answer<T: DeserializeOwned>(value: Value) -> Result<T> {

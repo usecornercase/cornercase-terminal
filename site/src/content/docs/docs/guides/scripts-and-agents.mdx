@@ -1154,7 +1154,7 @@ Some messages you may meet:
 
 ## Contract and compatibility
 
-The commands and the server don't have to come from the same release (except through [`--remote`](#on-another-machine), where both machines run the same version): after `cornercase update`, a command of the new version talks to the server still running the old one, and the other way round. A program of your own, such as another UI for cornercase, can rely on the same rules, through the commands or straight through the socket.
+The commands and the server don't have to come from the same release (through [`--remote`](#on-another-machine) the other machine must run this version or a newer one): after `cornercase update`, a command of the new version talks to the server still running the old one, and the other way round. A program of your own, such as another UI for cornercase, can rely on the same rules, through the commands or straight through the socket.
 
 ### Ask the server first
 

@@ -20,7 +20,7 @@ mod ssh {
 
     #[test]
     fn runs_the_proxy_after_the_destination_without_a_terminal() {
-        let args = devbox().ssh_args(false, false, "proxy");
+        let args = devbox().ssh_args(false, false, &["proxy"]);
 
         assert_eq!(args[0], "-T");
         let at = args.iter().position(|a| a == "--").expect("options end before the destination");
@@ -31,18 +31,43 @@ mod ssh {
 
     #[test]
     fn never_prompts_when_it_reconnects() {
-        assert!(!devbox().ssh_args(false, false, "proxy").contains(&"BatchMode=yes".to_string()));
-        assert!(devbox().ssh_args(true, false, "proxy").contains(&"BatchMode=yes".to_string()));
+        assert!(!devbox().ssh_args(false, false, &["proxy"]).contains(&"BatchMode=yes".to_string()));
+        assert!(devbox().ssh_args(true, false, &["proxy"]).contains(&"BatchMode=yes".to_string()));
     }
 
     #[test]
     fn notices_a_dead_connection() {
-        assert!(devbox().ssh_args(false, false, "proxy").contains(&"ServerAliveInterval=5".to_string()));
+        assert!(devbox().ssh_args(false, false, &["proxy"]).contains(&"ServerAliveInterval=5".to_string()));
+    }
+
+    #[test]
+    fn a_command_has_no_terminal_and_never_asks_for_a_password() {
+        let args = devbox().ssh_args(true, false, &["logs", "--path"]);
+
+        assert_eq!(args[0], "-T");
+        assert!(args.contains(&"BatchMode=yes".to_string()));
+        let at = args.iter().position(|a| a == "--").expect("options end before the destination");
+        assert!(args[at + 2].ends_with("exec cornercase logs --path'"), "{}", args[at + 2]);
+    }
+
+    #[test]
+    fn a_terminal_is_asked_for() {
+        assert_eq!(devbox().ssh_args(false, true, &["update"])[0], "-t");
+    }
+
+    #[test]
+    fn arguments_arrive_as_they_were_given() {
+        let out = Command::new("/bin/sh")
+            .args(["-c", &devbox().remote_command(&["logs", "it's here", "a b"]).replace("exec ", "echo ")])
+            .output()
+            .expect("run sh");
+
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "cornercase logs it's here a b");
     }
 
     #[test]
     fn looks_for_cornercase_where_installers_put_it() {
-        let command = devbox().remote_command("proxy");
+        let command = devbox().remote_command(&["proxy"]);
 
         for folder in ["$HOME/.local/bin", "$HOME/.cargo/bin", "/opt/homebrew/bin"] {
             assert!(command.contains(folder), "{command}");
@@ -54,7 +79,7 @@ mod ssh {
         let remote = Remote { command: Some("~/bin/cornercase".into()), ..devbox() };
 
         let out = Command::new("/bin/sh")
-            .args(["-c", &remote.remote_command("proxy").replace("exec ", "echo ")])
+            .args(["-c", &remote.remote_command(&["proxy"]).replace("exec ", "echo ")])
             .env("HOME", "/home/me")
             .output()
             .expect("run sh");
@@ -109,7 +134,11 @@ mod versions {
     use super::*;
 
     fn there(release: &str) -> Result<()> {
-        devbox().check(&Banner { protocol: protocol::VERSION, release: release.into() })
+        devbox().check(&Banner { protocol: protocol::VERSION, release: release.into() }, Use::Window { again: false })
+    }
+
+    fn asked_by_a_command(protocol: u32, release: &str) -> Result<()> {
+        devbox().check(&Banner { protocol, release: release.into() }, Use::Command)
     }
 
     #[test]
@@ -135,7 +164,33 @@ mod versions {
     fn another_protocol_never_attaches() {
         let banner = Banner { protocol: protocol::VERSION + 1, release: CURRENT.into() };
 
-        assert!(devbox().check(&banner).is_err());
+        assert!(devbox().check(&banner, Use::Window { again: false }).is_err());
+    }
+
+    #[test]
+    fn a_command_takes_the_same_release() {
+        assert!(asked_by_a_command(protocol::VERSION, CURRENT).is_ok());
+    }
+
+    #[test]
+    fn a_command_takes_a_newer_release_whatever_its_protocol() {
+        assert!(asked_by_a_command(protocol::VERSION, "999.0.0").is_ok());
+        assert!(asked_by_a_command(protocol::VERSION + 1, "999.0.0").is_ok());
+    }
+
+    #[test]
+    fn a_command_refuses_an_older_release_and_says_how_to_update_it() {
+        let message = asked_by_a_command(protocol::VERSION, "0.0.1").expect_err("too old").to_string();
+
+        assert!(
+            message.contains("runs cornercase 0.0.1") && message.contains("`cornercase --remote me@devbox update`"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn a_command_refuses_a_release_it_cannot_read() {
+        assert!(asked_by_a_command(protocol::VERSION, "next").is_err());
     }
 }
 

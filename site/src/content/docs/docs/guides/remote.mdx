@@ -23,7 +23,7 @@ On the other machine, `ssh` runs `cornercase proxy`, which finds the server (or 
 
 ## What you need
 
-cornercase on both machines, in the same version (see [Versions](#versions)). On the other machine, it is looked for on the `PATH`, then in `~/.local/bin` (where the [install script](../../installation/) puts it), `~/.cargo/bin` and Homebrew's folders, since the `PATH` of a command run through `ssh` is often shorter than your login shell's. If it lives somewhere else, say how to run it with `--command`:
+cornercase on both machines, in the same version for the window, and for [commands](#commands-for-scripts-and-agents) the same or a newer one on the other machine (see [Versions](#versions)). On the other machine, it is looked for on the `PATH`, then in `~/.local/bin` (where the [install script](../../installation/) puts it), `~/.cargo/bin` and Homebrew's folders, since the `PATH` of a command run through `ssh` is often shorter than your login shell's. If it lives somewhere else, say how to run it with `--command`:
 
 ```sh
 cornercase remote devbox --command '~/tools/cornercase'
@@ -59,13 +59,19 @@ Reconnecting never asks for a password or a passphrase, since the window has you
 
 ## Versions
 
-Both machines must run the same version of cornercase. When they don't, it says which one to update before opening the window:
+For the window, both machines must run the same version of cornercase. When they don't, it says which one to update before opening the window:
 
 ```text
 `devbox` runs cornercase 0.11.9 and this machine 0.11.12. Run `cornercase update` there
 ```
 
 When the other machine is the older one, it offers to run `cornercase update` there for you, through `ssh`, and attaches once that is done. When yours is older, run `cornercase update` on it.
+
+The [commands for scripts and agents](#commands-for-scripts-and-agents) are more relaxed: the other machine may run the same version or a newer one, so a script on your laptop keeps working when only `devbox` updates. When the other machine is the older one they refuse, since its server could ignore what a newer command asks for, and say how to update it from here:
+
+```text
+`devbox` runs cornercase 0.11.9 and this machine 0.11.12. Update it from here with `cornercase --remote devbox update`
+```
 
 When the binary on the other machine was updated but its old server still runs, cornercase asks before restarting it, as it does [on your own machine](../../reference/command-line/#a-server-from-another-build), and then runs `cornercase kill-server` there. After an update from the window's own [update dialog](../../installation/#update), which updates the other machine, the window reconnects to the new server by itself, and tells you if your laptop now needs the same update.
 
@@ -85,14 +91,20 @@ cornercase --remote devbox start-server
 `CORNERCASE_REMOTE=devbox` does the same without the flag, and the flag wins. Set it for one program, never in a shell's rc file: it also applies in your panes, and the commands it sends away would stop acting on this machine. `--remote-command` is `--command` for these commands.
 
 - **Arguments and standard input arrive as they are**, whatever the login shell there is: they travel inside cornercase's own messages, not through a shell.
-- **Same version** on both machines, as for the window.
+- **The other machine may be newer** than this one, but not older: the window needs the same version on both, the commands accept a newer one there and refuse an older one, saying how to update it with `cornercase --remote devbox update`.
 - **It never asks** for a password, a passphrase or an unknown host key, since a script cannot answer: use a key in your SSH agent, and connect once by hand to accept the host key.
 - **Only `start-server` starts a server there.** The other commands say `no cornercase server is running on devbox`, as they do on your machine.
 - **A stream ends there when the command ends here**, even when it is killed, so `events` or `status --follow` never leaves a command running on `devbox`.
 - **Paths are the other machine's**, and the ones you type must be absolute: `open`, `config project` and `flow save --path` refuse a relative one. `open` also takes `~/…`, in that machine's home folder, and `status` shows `~/…` for paths there. `files` paths are relative to the workspace, or absolute or `~/…`. The exception is `paste-file`'s file, which is read here.
 - **Give an agent there a file from here**: `cornercase --remote devbox paste-file --pane 12 shot.png` copies the file to `devbox`, keeps it in cornercase's state folder there and pastes its path into pane 12, so the agent in it can open it, with no `scp`. See [Paste a file from another machine](../scripts-and-agents/#paste-a-file-from-another-machine).
 - **Another interface can show that machine's files**: `files list`, `files read` and `files search` give the files panel's tree, viewer and search, and `files list ~/` a folder picker's listing, so a UI on your laptop needs no `ssh` of its own to read that disk. See [Browse and read a workspace's files](../scripts-and-agents/#browse-and-read-a-workspaces-files).
-- **`update`, `restart`, `kill-server`, `logs` and the plugin commands that install or change plugins** act on the machine they run on and refuse `--remote`, with status 2: run them there with `ssh`.
+- **`update`, `restart`, `kill-server` and `logs` run on that machine**, as its own `cornercase` through `ssh`: they ask their questions when you are at a terminal (`--yes` skips them), print what they print there and exit with the status they have there. `logs --follow` follows that machine's log and ends when nothing reads it. The plugin commands that install or change plugins still act on the machine they run on and refuse `--remote`, with status 2.
+
+```sh
+cornercase --remote devbox update --yes
+cornercase --remote devbox restart --when-idle --yes
+cornercase --remote devbox logs --follow
+```
 - **`cornercase --remote devbox` alone** opens the window, as `cornercase remote devbox`.
 - **`input --follow` types through one connection**: a program that draws the terminals keeps one running for everything it types, instead of a command, and an `ssh` connection, for each batch of keys.
 - **One `ssh` connection per command.** To share one, use your own config:

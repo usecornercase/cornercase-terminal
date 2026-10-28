@@ -41,7 +41,7 @@ mod features {
 
     #[test]
     fn a_failure_to_reach_the_server_is_not_taken_for_a_missing_feature() {
-        let checked = require_on(Err(Error::NoServer), "accounts", "has no account profiles");
+        let checked = require_on(Err(Error::NoServer), "accounts", "has no account profiles", None);
 
         assert!(matches!(checked, Err(Error::NoServer)), "{checked:?}");
     }
@@ -64,9 +64,31 @@ mod features {
             asked
         });
 
-        let checked = require_on(Link::socket(ours), feature, lacks);
+        let checked = require_on(Link::socket(ours), feature, lacks, None);
 
         (checked, server.join().expect("the fake server"))
+    }
+
+    #[test]
+    fn a_missing_feature_there_says_how_to_restart_it_from_here() {
+        let remote =
+            Remote { destination: "devbox".into(), command: Some("/opt/cc".into()), option: "--remote-command" };
+
+        let message = missing("has no views", Some(&remote)).to_string();
+
+        assert!(
+            message.contains("`devbox`")
+                && message.contains("`cornercase --remote devbox --remote-command /opt/cc restart`")
+                && message.contains("`cornercase --remote devbox --remote-command /opt/cc update`"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn a_missing_feature_here_says_to_update_cornercase() {
+        let message = missing("has no views", None).to_string();
+
+        assert!(message.contains("update cornercase and restart the server"), "{message}");
     }
 
     fn json(descriptor: &control::contract::Descriptor) -> Value {

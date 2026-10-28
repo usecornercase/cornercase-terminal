@@ -12,7 +12,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 
 use crate::control;
-use crate::error::{Error, Result};
+use crate::error::{Behind, Error, Result};
 use crate::process;
 use crate::protocol::{self, ClientMessage};
 use crate::version::{self, CURRENT};
@@ -41,6 +41,21 @@ pub(crate) struct Remote {
     pub(crate) destination: String,
     pub(crate) command: Option<String>,
     pub(crate) option: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Use {
+    Window { again: bool },
+    Command,
+}
+
+impl Use {
+    fn batch(self) -> bool {
+        match self {
+            Self::Window { again } => again,
+            Self::Command => true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,9 +128,9 @@ impl Remote {
         &self.destination
     }
 
-    pub(crate) fn connect(&self, again: bool) -> Result<Piped> {
+    pub(crate) fn connect(&self, usage: Use) -> Result<Piped> {
         let mut child = Command::new(SSH)
-            .args(self.ssh_args(again, false, "proxy"))
+            .args(self.ssh_args(usage.batch(), false, &["proxy"]))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -130,7 +145,7 @@ impl Remote {
         let collector = stderr.clone().collect(errors);
         let mut reader = BufReader::new(output);
         match read_banner(&mut reader) {
-            Found::Banner(banner) => match self.check(&banner) {
+            Found::Banner(banner) => match self.check(&banner, usage) {
                 Ok(()) => Ok(Piped { reader, writer: input, child, stderr, collector: Some(collector) }),
                 Err(e) => {
                     process::stop(child);
@@ -151,35 +166,58 @@ impl Remote {
     }
 
     pub(crate) fn kill_server(&self) -> Result<bool> {
-        self.run(false, "kill-server")
+        Ok(self.run(false, false, &["kill-server"])?.success())
     }
 
     pub(crate) fn update(&self) -> Result<bool> {
-        self.run(true, "update")
+        Ok(self.run(false, true, &["update"])?.success())
     }
 
-    fn run(&self, tty: bool, action: &str) -> Result<bool> {
-        let status = Command::new(SSH).args(self.ssh_args(false, tty, action)).status().map_err(Error::RunSsh)?;
-        Ok(status.success())
+    pub(crate) fn run(&self, batch: bool, tty: bool, args: &[impl AsRef<str>]) -> Result<ExitStatus> {
+        Command::new(SSH).args(self.ssh_args(batch, tty, args)).status().map_err(Error::RunSsh)
     }
 
-    fn ssh_args(&self, batch: bool, tty: bool, action: &str) -> Vec<String> {
-        let mut args = vec![if tty { "-t" } else { "-T" }.to_string()];
-        args.extend(ALIVE.iter().map(ToString::to_string));
+    fn ssh_args(&self, batch: bool, tty: bool, args: &[impl AsRef<str>]) -> Vec<String> {
+        let mut ssh = vec![if tty { "-t" } else { "-T" }.to_string()];
+        ssh.extend(ALIVE.iter().map(ToString::to_string));
         if batch {
-            args.extend(BATCH.iter().map(ToString::to_string));
+            ssh.extend(BATCH.iter().map(ToString::to_string));
         }
-        args.extend(["--".to_string(), self.destination.clone(), self.remote_command(action)]);
-        args
+        ssh.extend(["--".to_string(), self.destination.clone(), self.remote_command(args)]);
+        ssh
     }
 
-    fn remote_command(&self, action: &str) -> String {
+    fn remote_command(&self, args: &[impl AsRef<str>]) -> String {
         let command = self.command.as_deref().unwrap_or("cornercase");
-        let script = format!("PATH=\"{SEARCHED}\"; export PATH; exec {command} {action}");
+        let words: Vec<String> = args.iter().map(|arg| quote_word(arg.as_ref())).collect();
+        let script = format!("PATH=\"{SEARCHED}\"; export PATH; exec {command} {}", words.join(" "));
         format!("sh -c {}", quote(&script))
     }
 
-    fn check(&self, banner: &Banner) -> Result<()> {
+    fn check(&self, banner: &Banner, usage: Use) -> Result<()> {
+        match usage {
+            Use::Window { .. } => self.check_window(banner),
+            Use::Command => self.check_command(banner),
+        }
+    }
+
+    fn check_command(&self, banner: &Banner) -> Result<()> {
+        if banner.release == CURRENT || version::newer(&banner.release, CURRENT) {
+            return Ok(());
+        }
+        Err(Error::RemoteBehind(Box::new(Behind {
+            host: self.destination.clone(),
+            there: banner.release.clone(),
+            update: self.update_line(),
+        })))
+    }
+
+    pub(crate) fn update_line(&self) -> String {
+        let command = self.command.as_ref().map(|command| format!(" --remote-command {}", quote_word(command)));
+        format!("cornercase --remote {}{} update", quote_word(&self.destination), command.unwrap_or_default())
+    }
+
+    fn check_window(&self, banner: &Banner) -> Result<()> {
         if banner.protocol == protocol::VERSION && banner.release == CURRENT {
             return Ok(());
         }
@@ -247,6 +285,14 @@ pub(crate) fn reason(error: &Error) -> String {
 
 fn quote(text: &str) -> String {
     format!("'{}'", text.replace('\'', r"'\''"))
+}
+
+fn quote_word(text: &str) -> String {
+    if !text.is_empty() && text.chars().all(|c| c.is_ascii_alphanumeric() || "-_./@:,+=%".contains(c)) {
+        text.to_string()
+    } else {
+        quote(text)
+    }
 }
 
 fn banner() -> String {

@@ -75,6 +75,9 @@ pub fn run(cli: Cli) -> Result<bool> {
     match (cli.command, remote) {
         (None, None) => client::run()?,
         (None, Some(remote)) => client::remote(&remote)?,
+        (Some(command), Some(remote)) if let Some(args) = reach::there(&command) => {
+            return reach::run_there(&remote, &args);
+        }
         (Some(command), remote) => {
             if let Some(remote) = remote {
                 client::use_remote(remote);
@@ -132,12 +135,15 @@ fn print_log(path: &Path, args: &LogsArgs) -> Result<bool> {
     }
     let Some(follower) = follower else { return Ok(true) };
     let mut follower = follower?;
+    let mut reader = client::watched(rustix::stdio::stdout());
     loop {
         let new = follower.read()?;
         if !new.is_empty() && quietly(out.write_all(&new).and_then(|()| out.flush()))? {
             return Ok(true);
         }
-        std::thread::sleep(FOLLOW_EVERY);
+        if client::reader_gone_within(&mut reader, FOLLOW_EVERY) {
+            return Ok(true);
+        }
     }
 }
 

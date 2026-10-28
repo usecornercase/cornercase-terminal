@@ -20,10 +20,12 @@ why, in its error with --json.
 
 --remote DESTINATION (or CORNERCASE_REMOTE=DESTINATION, which the flag overrides) sends a command
 to the server of another machine through ssh, found as `cornercase remote` finds it, so arguments and
-standard input arrive as they are. Both machines need the same version, ssh never asks for a
+standard input arrive as they are. The other machine may run this version or a newer one (an older one
+is refused, and `--remote DESTINATION update` updates it), ssh never asks for a
 password, only `start-server` starts a server there, and a command that follows a stream ends it
-there when it ends here. Paths are the other machine's: absolute, or starting with ~/ for its home folder; `files` also takes them relative to the workspace; `paste-file` reads its FILE here. `update`, `restart`, `kill-server`,
-`logs` and the plugin commands that install or change plugins act on this machine and refuse it.
+there when it ends here. Paths are the other machine's: absolute, or starting with ~/ for its home folder; `files` also takes them relative to the workspace; `paste-file` reads its FILE here. `update`, `restart`, `kill-server`
+and `logs` run there, as that machine's own command through ssh, and exit with its status; the plugin commands that
+install or change plugins act on this machine and refuse it.
 
 Examples:
   cornercase status
@@ -573,7 +575,7 @@ pub(super) const SKILL_HELP: &str = "Install them for Claude Code, Codex and oth
   npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 or put this text in an AGENTS.md or CLAUDE.md.";
 
-pub(super) const REMOTE_ARG: &str = "Send the command to the cornercase server of another machine, through ssh: a host from \
+pub(super) const REMOTE_ARG: &str = "Run the command against the cornercase of another machine, through ssh: a host from \
     ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)";
 pub(super) const COMMAND_THERE: &str = "How to run cornercase there, as sh reads it [default: cornercase, also looked for in \
     ~/.local/bin, ~/.cargo/bin and Homebrew's folders]";
@@ -599,6 +601,8 @@ or next to the socket when CORNERCASE_SOCKET is set. Past 8 MiB it moves to serv
 over. Start the server with CORNERCASE_LOG=debug for more: every event it handled, every git run,
 slow frames.
 
+With --remote DESTINATION it prints that machine's log, through ssh.
+
 Examples:
   cornercase logs -n 50
   cornercase logs --follow
@@ -618,7 +622,8 @@ Examples:
 pub(super) const KILL_SERVER_HELP: &str =
     "Run from a terminal inside cornercase, it would stop the server it runs in, and this terminal with
 it, so it asks first; without a terminal it refuses unless --yes is given. To stop another server from
-inside cornercase, say which with CORNERCASE_SOCKET=/absolute/path/server.sock.
+inside cornercase, say which with CORNERCASE_SOCKET=/absolute/path/server.sock. With --remote DESTINATION it
+runs on that machine, through ssh.
 
 Examples:
   cornercase kill-server
@@ -633,14 +638,14 @@ shell it started in the background still runs, but not one whose subagents still
 so no agent starts a turn in between, and every window shows that a restart is pending meanwhile,
 with a button that cancels it. Programs that are not agents, such as a dev server, stop as with any restart. The pane
 this runs in never holds the restart. --timeout gives up with status 1 and the server keeps running,
-as it does when the command is interrupted.
+as it does when the command is interrupted. With --remote DESTINATION it runs on that machine, through ssh.
 
 Examples:
   cornercase restart
   cornercase restart --when-idle --yes --timeout 3600";
 pub(super) const UPDATE_HELP: &str =
     "With --when-idle, it installs the release at once, then restarts the server on it once no agent
-is working, as `cornercase restart --when-idle` does.
+is working, as `cornercase restart --when-idle` does. With --remote DESTINATION it runs on that machine, through ssh.
 
 Examples:
   cornercase update

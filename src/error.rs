@@ -96,6 +96,8 @@ pub enum Error {
     WrongUsage(String),
     #[error("the answer is printed, but part of it failed")]
     Partial,
+    #[error("the command there exited with {0}")]
+    Exited(u8),
     #[error(
         "the running cornercase server is too old for `cornercase {0}`. Restart it: run `cornercase kill-server` \
          (it closes all its terminals) and start cornercase again"
@@ -125,12 +127,27 @@ pub enum Error {
     )]
     RemoteOlder { host: String, there: String },
     #[error(
+        "`{}` runs cornercase {} and this machine {}. Update it from here with `{}`",
+        .0.host,
+        .0.there,
+        crate::version::CURRENT,
+        .0.update
+    )]
+    RemoteBehind(Box<Behind>),
+    #[error(
         "`{host}` runs cornercase {there} and this machine {}. Run `cornercase update` here",
         crate::version::CURRENT
     )]
     RemoteNewer { host: String, there: String },
     #[error(transparent)]
     Io(#[from] std::io::Error),
+}
+
+#[derive(Debug)]
+pub struct Behind {
+    pub(crate) host: String,
+    pub(crate) there: String,
+    pub(crate) update: String,
 }
 
 pub(crate) type Result<T> = std::result::Result<T, Error>;
