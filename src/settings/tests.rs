@@ -66,7 +66,7 @@ mod pages {
     fn the_first_one_is_worktrees() {
         assert_eq!(
             settings().rows(),
-            [Row::Folder, Row::IssueBranch, Row::Fetch, Row::PullRequests, Row::MergedPullRequests]
+            [Row::Folder, Row::IssueBranch, Row::Fetch, Row::PullRequests, Row::MergedPullRequests, Row::SharedFiles]
         );
     }
 
@@ -111,10 +111,10 @@ mod pages {
     #[test]
     fn down_stays_on_the_page() {
         let mut s = settings();
-        for _ in 0..6 {
+        for _ in 0..7 {
             press(&mut s, KeyCode::Down);
         }
-        assert_eq!((s.page, s.row()), (Page::Worktrees, Some(Row::MergedPullRequests)));
+        assert_eq!((s.page, s.row()), (Page::Worktrees, Some(Row::SharedFiles)));
     }
 }
 
@@ -399,6 +399,26 @@ mod merged_pull_requests {
 
         assert_eq!((text.label.as_str(), text.value.as_str()), ("merged PRs in stats", "[x] shown"));
         assert_eq!(text.note, "from 1 GitHub account");
+    }
+}
+
+mod shared_files {
+    use super::*;
+
+    #[test]
+    fn is_a_switch_that_starts_off() {
+        let mut s = settings();
+        let before = s.config.shared_files;
+        go_to(&mut s, &Row::SharedFiles);
+        assert_eq!((before, saved(press(&mut s, KeyCode::Enter)).shared_files), (false, true));
+    }
+
+    #[test]
+    fn says_what_it_shows() {
+        let text = settings().row_text(&Row::SharedFiles);
+
+        assert_eq!((text.label.as_str(), text.value.as_str()), ("shared files", "[ ] hidden"));
+        assert_eq!(text.note, "⇄n when two workspaces change the same files");
     }
 }
 

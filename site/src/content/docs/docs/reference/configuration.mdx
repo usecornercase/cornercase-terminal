@@ -18,7 +18,7 @@ The ` share ` button hands your settings to a colleague, or imports theirs: see 
 
 <Screen
   name="settings-worktrees"
-  alt="The Worktrees tab: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; fetch branches every 5 min, commits to pull show as ↓n; pull requests shown, each workspace's pull request and its checks, from gh or glab"
+  alt="The Worktrees tab: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; fetch branches every 5 min, commits to pull show as ↓n; pull requests shown, each workspace's pull request and its checks, from gh or glab; merged PRs in stats shown; shared files hidden, ⇄n when two workspaces change the same files"
   crop={[2, 1, 106, 8]}
 />
 
@@ -194,7 +194,7 @@ The text holds five sections, each of which the other person can leave out:
 | --- | --- |
 | `agents` | [`agent`](#agent), [`agent_args`](#agent_args), [`agent_modes`](#agent_modes), [`agent_commands`](#agent_commands), [`prompt`](#prompt), [`submit`](#submit), [`accept_trust_prompts`](#accept_trust_prompts), [`resume_agents`](#resume_agents), [`trust_prompt_pattern`](#trust_prompt_pattern) |
 | `issues` | [`issue_branch`](#issue_branch), [`issue_tabs`](#issue_tabs), [`gitlab_url`](#gitlab_url), [`jira_site`](#jira_site), [`jira_jql`](#jira_jql), [`plane_url`](#plane_url), [`plane_workspace`](#plane_workspace), [`plane_filter`](#plane_filter), [`asana_workspace`](#asana_workspace), [`asana_projects`](#asana_projects) |
-| `worktrees` | [`worktrees_dir`](#worktrees_dir), [`fetch_minutes`](#fetch_minutes), [`pull_requests`](#pull_requests), [`merged_pull_requests`](#merged_pull_requests), [`gh`](#gh), [`glab`](#glab) |
+| `worktrees` | [`worktrees_dir`](#worktrees_dir), [`fetch_minutes`](#fetch_minutes), [`pull_requests`](#pull_requests), [`merged_pull_requests`](#merged_pull_requests), [`shared_files`](#shared_files), [`gh`](#gh), [`glab`](#glab) |
 | `interface` | Every switch of the UI tab, from [`sidebar`](#sidebar) to [`tour`](#tour), with the sounds and the [prefix key](#prefix_key) |
 | `repositories` | Each project's [setup and teardown](../../guides/worktrees/#set-up-each-new-worktree), found by the project's git remotes (such as `github.com/acme/web-shop`) rather than its folder, so it reaches the same repository wherever your colleague cloned it |
 
@@ -228,6 +228,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "fetch_minutes": 5,
   "pull_requests": true,
   "merged_pull_requests": true,
+  "shared_files": false,
   "issue_branch": "",
   "issue_tabs": ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"],
   "gitlab_url": "",
@@ -296,6 +297,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`fetch_minutes`](#fetch_minutes) | number | `5` |
 | [`pull_requests`](#pull_requests) | boolean | `true` |
 | [`merged_pull_requests`](#merged_pull_requests) | boolean | `true` |
+| [`shared_files`](#shared_files) | boolean | `false` |
 | [`issue_branch`](#issue_branch) | string | `""` |
 | [`issue_tabs`](#issue_tabs) | array of strings | `["all", "github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"]` |
 | [`gitlab_url`](#gitlab_url) | string | `""` |
@@ -371,6 +373,10 @@ Whether each workspace shows the pull request of its branch and the state of its
 #### `merged_pull_requests`
 
 Whether Usage → Stats counts the pull requests and merge requests you opened that were merged, read with [`gh`](#gh) and [`glab`](#glab). On by default; off asks nothing. See [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats).
+
+#### `shared_files`
+
+Whether workspaces of a project look for the files they both change: the `⇄n` badge on their rows and the `⇄` mark in the changes panel, from a git scan every few seconds in projects with two or more checkouts. Off by default; off runs no scan, and the **merge check** still checks a workspace against its base branch. See [Workspaces that change the same files](../../guides/worktrees/#workspaces-that-change-the-same-files).
 
 #### `issue_branch`
 

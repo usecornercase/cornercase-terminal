@@ -44,6 +44,10 @@ impl Settings {
                 |c| &mut c.merged_pull_requests,
                 ["Stats counts your merged pull requests", "Stats no longer counts merged pull requests"],
             ),
+            Row::SharedFiles => self.flip(
+                |c| &mut c.shared_files,
+                ["workspaces show the files they share", "workspaces no longer look for shared files"],
+            ),
             _ => Action::None,
         }
     }

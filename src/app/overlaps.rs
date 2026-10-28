@@ -52,6 +52,10 @@ impl App {
     pub(super) fn scan_overlaps(&mut self, now: Instant) {
         self.git.overlaps.scans.retain(|id, _| self.projects.project_index(*id).is_some());
         self.close_gone_merge_check();
+        if !self.config.shared_files {
+            self.git.overlaps.scans.clear();
+            return;
+        }
         for p in 0..self.projects.len() {
             self.scan_project_overlaps(p, now);
         }
@@ -91,7 +95,9 @@ impl App {
     }
 
     pub(super) fn shared_with(&self, workspace: u64) -> Vec<(u64, &[String])> {
-        let Some(at) = self.projects.workspace_index(workspace) else { return Vec::new() };
+        let Some(at) = self.projects.workspace_index(workspace).filter(|_| self.config.shared_files) else {
+            return Vec::new();
+        };
         let (project, ws) = (&self.projects[at.project()], self.projects.workspace(at));
         let Some(scanned) = self.git.overlaps.scans.get(&project.id).filter(|_| !project.closing && ws.open()) else {
             return Vec::new();

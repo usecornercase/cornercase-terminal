@@ -30,6 +30,7 @@ fn sharing() -> Sharing {
     write(&first, "a.txt", "one\nfirst\nthree\n");
     write(&second, "a.txt", "one\nsecond\nthree\n");
     let (mut app, rx) = app_in(project.repo.path(), no_config());
+    app.config.shared_files = true;
     app.sync_worktrees();
     let ids: Vec<u64> = app.projects[0].workspaces.iter().map(|w| w.id).collect();
     assert_eq!(ids.len(), 3);
@@ -72,6 +73,17 @@ mod the_scan {
         let third = found.app.projects[0].workspaces[3].id;
         let main = found.app.projects[0].workspaces[0].id;
         assert_eq!([found.first, found.second, third, main].map(|id| shared_in_row(&found.app, id)), [1, 1, 0, 0]);
+    }
+
+    #[test]
+    fn stops_while_the_setting_is_off() {
+        let mut found = sharing();
+        found.app.config.shared_files = false;
+
+        found.app.scan_overlaps(Instant::now() + SCAN_EVERY);
+
+        assert!(found.app.git.overlaps.scanning.is_empty());
+        assert_eq!(shared_in_row(&found.app, found.first), 0);
     }
 
     #[test]

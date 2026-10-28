@@ -19,7 +19,7 @@ Two workspaces of one project are two git worktrees of one repository, and nothi
 - **Paced from the end of a scan**: `SCAN_EVERY` (5 s) after the last answer, so a slow repository is never scanned back to back.
 - **Cost** measured on a repository of 1,907 files (2026-10-27, git 2.43, Linux), with the panel's flags (`--no-optional-locks`, so never `index.lock`): `git diff --name-only -z --no-renames --relative <head> -- .` 0.09–0.15 s, `git ls-files --others --exclude-standard -z` 0.01–0.06 s, `git merge-base` 0.01 s, per checkout. The pairs' own work is cached by the heads of the two branches (`Known`): commits never change, so a steady state runs no process per pair, only the two per checkout.
 - Reading is in memory only (`shared_with`, `shared_count`, `shared_files`): no git and no file reads while drawing, in `workspace_entry`, `panel_view` or the dialog's view, so the 2 ms diff view of the FAQ ("Is it fast?") is untouched. A closed or removing workspace stops counting at once, before any rescan. The FAQ and `Stats.astro` numbers are a dated snapshot and were not re-measured.
-- No setting turns the scan off: about 0.1–0.2 s of git per checkout every 5 s, and only where two checkouts exist. Add `shared_files` under Settings › Worktrees if users ask.
+- **`shared_files`, off by default** (Settings › Worktrees, the user's decision after the feature shipped on): the badges and marks were noise for most projects, and the scan costs about 0.1–0.2 s of git per checkout every 5 s. Off, `scan_overlaps` drops every result and starts no job, and `shared_with` answers nothing even before the next tick, so the badge, the panel's mark and `status`'s `shared` go at once. The merge check stays in the row menu and on the socket: it is on demand, and with nothing shared it checks only the base.
 
 ## The row, the panel and the menu
 
@@ -49,4 +49,4 @@ The demo has the menu entry only, with a "needs cornercase on your computer" toa
 
 ## Rejected or left for later
 
-Automatic dry runs in the background (a snapshot per tick), hunk-level overlap, a setting to turn the scan off, the badge turning orange after a failed check, a key in the keys menu, **ask agent** from the dialog, clicking a pair to go to that workspace, overlap across projects, and flow role worktrees (they are not workspaces).
+Automatic dry runs in the background (a snapshot per tick), hunk-level overlap, the badge turning orange after a failed check, a key in the keys menu, **ask agent** from the dialog, clicking a pair to go to that workspace, overlap across projects, and flow role worktrees (they are not workspaces).

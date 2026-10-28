@@ -3,6 +3,7 @@
   "fetch_minutes": 5,
   "pull_requests": true,
   "merged_pull_requests": true,
+  "shared_files": false,
   "issue_branch": "",
   "issue_tabs": [
     "all",

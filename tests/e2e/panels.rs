@@ -275,6 +275,7 @@ fn two_worktrees_editing_one_line(prefix: &str) -> (PathBuf, String, [PathBuf; 2
 fn scripts_check_a_merge_without_touching_the_checkouts() {
     let (repo, repo_name, trees) = two_worktrees_editing_one_line("ccmc");
     let mut app = Harness::start();
+    app.session.says(&["config", "set", "shared_files", "true"]);
     app.open_project(1, &repo);
     app.wait_for("the repo opens as project 2", |s| s.contains(&entry(&repo_name)));
     let shared_args = ["changes", "shared", "--worktree", "side-a", "--json"];

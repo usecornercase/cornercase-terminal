@@ -53,7 +53,8 @@ const ISSUES: [&str; 10] = [
     "asana_workspace",
     "asana_projects",
 ];
-const WORKTREES: [&str; 6] = ["worktrees_dir", "fetch_minutes", "pull_requests", "merged_pull_requests", "gh", "glab"];
+const WORKTREES: [&str; 7] =
+    ["worktrees_dir", "fetch_minutes", "pull_requests", "merged_pull_requests", "shared_files", "gh", "glab"];
 const INTERFACE: [&str; 24] = [
     "sidebar",
     "tabs",

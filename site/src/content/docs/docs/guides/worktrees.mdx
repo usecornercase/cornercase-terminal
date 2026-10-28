@@ -53,7 +53,7 @@ To keep them somewhere else, change **settings → Worktrees → worktrees folde
 
 <Screen
   name="settings-worktrees"
-  alt="The Worktrees tab of the settings: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; issue branches per tracker, with the default names as an example; fetch branches every 5 min, commits to pull show as ↓n; pull requests shown; merged PRs in stats shown"
+  alt="The Worktrees tab of the settings: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; issue branches per tracker, with the default names as an example; fetch branches every 5 min, commits to pull show as ↓n; pull requests shown; merged PRs in stats shown; shared files hidden"
   crop={[2, 1, 106, 9]}
 />
 
@@ -69,11 +69,11 @@ To fetch more or less often, change **settings → Worktrees → fetch branches 
 
 ## Workspaces that change the same files
 
-Worktrees keep agents from overwriting each other's files, but two branches that change the same files can still conflict when you merge them. When two workspaces of a project change the same file, each one's row shows `⇄` and how many files it shares, such as `⇄2`, and those files carry a `⇄` in the [changes panel](../changes/). A file counts when both changed it since their branches parted, in a commit, staged, unstaged or as a new file; commits a branch inherited from the other don't count.
+Worktrees keep agents from overwriting each other's files, but two branches that change the same files can still conflict when you merge them. Turn on **Settings → Worktrees → shared files** (off by default) and, when two workspaces of a project change the same file, each one's row shows `⇄` and how many files it shares, such as `⇄2`, and those files carry a `⇄` in the [changes panel](../changes/). A file counts when both changed it since their branches parted, in a commit, staged, unstaged or as a new file; commits a branch inherited from the other don't count.
 
 Click `⇄2`, or pick **merge check** in the row's ` ⋯ ` menu (or right-click it), to see which files each other workspace shares with it. It also shows whether its work merges cleanly into its base branch (the one the changes panel compares with, as of the last fetch) and with each of those workspaces, and if not, which files conflict and how (`contents`, `modify/delete`, `add/add`…). The check merges the work as it is now, committed or not, in a scratch copy with `git merge-tree`. No checkout, index, branch or object of your repository changes, so you can run it while agents work. **check again** runs it again. It needs git 2.38 or later. New files git doesn't track yet are included up to 1 MiB each, 8 MiB in all; the dialog says how many were left out.
 
-- The scan runs in the background every few seconds, only in projects with two or more checkouts, with git options that never take the index lock. A plain folder, or a project with one checkout, costs nothing.
+- The scan runs in the background every few seconds while **shared files** is on, only in projects with two or more checkouts, with git options that never take the index lock. A plain folder, or a project with one checkout, costs nothing.
 - Workspaces that share one folder are one checkout: they never count as sharing files with each other.
 - For scripts, `cornercase changes shared` prints the shared files and `cornercase changes merge-check` runs the check; see [Scripts and agents](../scripts-and-agents/).
 

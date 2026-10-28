@@ -55,6 +55,11 @@ impl Settings {
                     if config.fetch_minutes == 0 { "off".into() } else { format!("{} min", config.fetch_minutes) };
                 ("fetch branches every".into(), value, "commits to pull show as ↓n".into(), false)
             }
+            Row::SharedFiles => {
+                let value = if config.shared_files { "[x] shown" } else { "[ ] hidden" };
+                let note = "⇄n when two workspaces change the same files";
+                ("shared files".into(), value.into(), note.into(), false)
+            }
             Row::MergedPullRequests => {
                 let value = if config.merged_pull_requests { "[x] shown" } else { "[ ] hidden" };
                 ("merged PRs in stats".into(), value.into(), self.merged.clone(), false)

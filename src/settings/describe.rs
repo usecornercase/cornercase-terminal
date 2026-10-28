@@ -20,6 +20,7 @@ fn switch(row: &Row) -> Option<&'static str> {
     Some(match row {
         Row::PullRequests => "pull_requests",
         Row::MergedPullRequests => "merged_pull_requests",
+        Row::SharedFiles => "shared_files",
         Row::Submit => "submit",
         Row::Trust => "accept_trust_prompts",
         Row::Resume => "resume_agents",

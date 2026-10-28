@@ -26,6 +26,7 @@ fn unscanned() -> Two {
     write(&first, "a.txt", "one\nfirst\nthree\n");
     write(&second, "a.txt", "one\nsecond\nthree\n");
     let (mut app, rx) = app_in(project.repo.path(), no_config());
+    app.config.shared_files = true;
     app.sync_worktrees();
     let ids: Vec<u64> = app.projects[0].workspaces.iter().map(|w| w.id).collect();
     Two { app, rx, _project: project, first: ids[1], second: ids[2] }
