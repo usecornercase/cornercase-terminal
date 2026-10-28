@@ -22,7 +22,7 @@ const USAGE_REQUEST: &str = "usage";
 pub(in crate::agents) const REQUESTS: &str = concat!(
     r#"{"type":"control_request","request_id":"initialize","request":{"subtype":"initialize"}}"#,
     "\n",
-    r#"{"type":"control_request","request_id":"usage","request":{"subtype":"get_usage"}}"#,
+    r#"{"type":"control_request","request_id":"usage","request":{"subtype":"get_usage","skip_behaviors":true}}"#,
     "\n",
 );
 

@@ -254,7 +254,7 @@ cornercase types the agent's command in a new shell. If the shell is still in th
 The Limits tab of the [Usage dialog](../../guides/projects-workspaces-tabs/#usage-and-stats) runs `claude` and `codex` on the server's machine and waits up to ten seconds for each answer. `cornercase usage` runs the same probes and prints the same text after `usage unavailable:` (`error` in `--json`). The message says what went wrong with that agent:
 
 - `could not run claude` or `could not run codex`: the agent isn't on the `PATH` the server started with. Tell cornercase where it is with [`agent_commands`](../../reference/agents/#your-own-agents), or restart the server from a shell where it is found.
-- `did not answer in time` or `exited without answering`: run the agent yourself in a tab and check that it starts and that you are logged in. An older version may not know how to answer; update it.
+- `did not answer in time` or `exited without answering`: run the agent yourself in a tab and check that it starts and that you are logged in. An older version may not know how to answer; update it. Claude Code before 2.1.261 also reads every conversation of the last week before it answers, which can take longer than that with a busy week: update it too.
 - `unexpected answer`: the agent answered in a shape cornercase doesn't understand, probably after an update. Please [open an issue](https://github.com/usecornercase/cornercase-terminal/issues).
 - Any other message comes from the agent, or from reading its answer.
 

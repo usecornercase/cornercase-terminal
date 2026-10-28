@@ -137,6 +137,16 @@ fn an_error_response_carries_its_message() {
 }
 
 #[test]
+fn the_usage_request_skips_the_transcript_scan() {
+    let usage = REQUESTS
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("a request"))
+        .find(|request| request["request_id"] == USAGE_REQUEST)
+        .expect("the usage request");
+    assert_eq!(usage["request"], json!({"subtype": "get_usage", "skip_behaviors": true}));
+}
+
+#[test]
 fn the_probe_drops_claude_session_variables() {
     let cmd = command("claude");
     let removed: Vec<_> = cmd.get_envs().filter(|(_, v)| v.is_none()).map(|(k, _)| k.to_owned()).collect();
