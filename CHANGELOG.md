@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.220
+
+- **Shared files are now a setting, off by default.** The `⇄n` badge on workspace rows and the `⇄` mark in the changes panel only show once you turn on **Settings → Worktrees → shared files** (`shared_files` in `config.json`, or `cornercase config set shared_files true`). While it is off, cornercase runs no background git scan for them. The **merge check** in the row's ` ⋯ ` menu still works either way, and checks the workspace against its base branch.
+
 ## 0.12.219
 
 - **Plan limits load for Claude Code accounts with a busy week.** When cornercase asked Claude Code for your limits, Claude Code also worked out what drives your usage by reading every conversation of the last seven days, which cornercase never showed. With a lot of history that took longer than the ten seconds the Limits tab waits, so the account's section said `usage unavailable: claude did not answer in time`. cornercase now asks only for the limits, and each account answers in a second or two. This needs Claude Code 2.1.261 or later; older versions still read the conversations.
