@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use super::{add, main_repo};
 use crate::test_util::{TempDir, git};
 use crate::worktrees::Kind;
-use crate::worktrees::builds::{free, listed, measure};
+use crate::worktrees::builds::{deletable, free, listed, measure};
 
 fn names(list: &[&str]) -> Vec<String> {
     list.iter().map(|name| (*name).to_string()).collect()
@@ -123,17 +123,80 @@ fn a_folder_git_tracks_after_the_listing_is_kept_and_named() {
 }
 
 #[test]
-fn a_folder_already_gone_is_skipped() {
+fn a_folder_already_gone_is_kept_and_named() {
     let (_repo, _dirs, at) = worktree();
     write(&at.join("node_modules/x.js"), 100);
     let chosen = vec![PathBuf::from("node_modules")];
     std::fs::remove_dir_all(at.join("node_modules")).expect("remove");
     let freed = free(&at, &defaults(), &chosen).expect("free");
-    assert!(freed.folders.is_empty() && freed.failed.is_empty());
+    assert_eq!((freed.folders.len(), freed.failed.len()), (0, 0));
+    assert_eq!(freed.kept, chosen);
 }
 
 #[test]
 fn a_main_checkout_or_a_plain_folder_cannot_be_measured_as_linked() {
     let plain = TempDir::new();
     assert!(measure(plain.path(), Kind::Linked, &defaults()).is_err());
+}
+
+#[test]
+fn a_symbolic_link_inside_a_build_folder_never_deletes_its_target() {
+    let (_repo, _dirs, at) = worktree();
+    let outside = TempDir::new();
+    write(&outside.path().join("precious.txt"), 100);
+    write(&at.join("node_modules/x.js"), 100);
+    std::os::unix::fs::symlink(outside.path(), at.join("node_modules/link")).expect("symlink");
+    let freed = free(&at, &defaults(), &[PathBuf::from("node_modules")]).expect("free");
+    assert!(outside.path().join("precious.txt").exists());
+    assert!(!at.join("node_modules").exists() && freed.failed.is_empty());
+}
+
+#[test]
+fn a_build_folder_that_became_a_symbolic_link_is_kept() {
+    let (_repo, _dirs, at) = worktree();
+    let outside = TempDir::new();
+    write(&outside.path().join("precious.txt"), 100);
+    write(&at.join("node_modules/x.js"), 100);
+    let chosen = vec![PathBuf::from("node_modules")];
+    std::fs::remove_dir_all(at.join("node_modules")).expect("remove");
+    std::os::unix::fs::symlink(outside.path(), at.join("node_modules")).expect("symlink");
+    let freed = free(&at, &defaults(), &chosen).expect("free");
+    assert_eq!(freed.kept, chosen);
+    assert!(outside.path().join("precious.txt").exists());
+}
+
+#[test]
+fn a_parent_that_became_a_symbolic_link_leading_out_is_kept() {
+    let (_repo, _dirs, at) = worktree();
+    let outside = TempDir::new();
+    write(&outside.path().join("x/node_modules/precious.txt"), 100);
+    write(&at.join("packages/x/node_modules/y.js"), 100);
+    let chosen = vec![PathBuf::from("packages/x/node_modules")];
+    std::fs::remove_dir_all(at.join("packages")).expect("remove");
+    std::os::unix::fs::symlink(outside.path(), at.join("packages")).expect("symlink");
+    let freed = free(&at, &defaults(), &chosen).expect("free");
+    assert_eq!(freed.kept, chosen);
+    assert!(outside.path().join("x/node_modules/precious.txt").exists());
+}
+
+#[test]
+fn a_folder_on_another_device_is_refused_by_the_check() {
+    let (_repo, _dirs, at) = worktree();
+    write(&at.join("node_modules/sub/x.js"), 100);
+    assert!(super::super::disk::crosses_device(&at.join("node_modules"), 0));
+    assert!(!super::super::disk::crosses_device(
+        &at.join("node_modules"),
+        std::os::unix::fs::MetadataExt::dev(&std::fs::metadata(&at).expect("meta"))
+    ));
+}
+
+#[test]
+fn the_deletion_check_refuses_a_parent_that_leads_out_and_a_plain_folder_passes() {
+    let (_repo, _dirs, at) = worktree();
+    let outside = TempDir::new();
+    write(&outside.path().join("x/node_modules/y"), 10);
+    write(&at.join("node_modules/y"), 10);
+    assert_eq!(deletable(&at, &at.join("node_modules")), Ok(()));
+    std::os::unix::fs::symlink(outside.path(), at.join("linked")).expect("symlink");
+    assert!(deletable(&at, &at.join("linked/x/node_modules")).is_err());
 }

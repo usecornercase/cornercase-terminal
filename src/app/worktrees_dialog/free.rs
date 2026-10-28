@@ -18,6 +18,13 @@ use crate::ui;
 use crate::worktrees::builds::{self, Freed, Size};
 use crate::worktrees::{Dialog, Row, Step};
 
+struct FreeTarget {
+    path: PathBuf,
+    repo: PathBuf,
+    chosen: Vec<PathBuf>,
+    name: String,
+}
+
 #[derive(Default)]
 pub(in crate::app) struct Frees {
     pending: HashMap<u64, String>,
@@ -77,37 +84,35 @@ impl App {
         if !dialog.can_free_now() || self.confirm_checking() {
             return;
         }
-        let targets: Vec<(PathBuf, PathBuf, Vec<PathBuf>, String)> = dialog
+        let targets: Vec<FreeTarget> = dialog
             .freeable(paths)
             .filter_map(|row| match &row.size {
                 Some(Ok(size)) => {
                     let chosen = size.builds.iter().map(|folder| folder.path.clone()).collect();
                     let name = row.branch().map_or_else(|| row.found.path.display().to_string(), str::to_string);
-                    Some((
-                        row.found.path.clone(),
-                        row.found.repo.clone(),
-                        chosen,
-                        format!("{} › {name}", row.found.project),
-                    ))
+                    let name = format!("{} › {name}", row.found.project);
+                    Some(FreeTarget { path: row.found.path.clone(), repo: row.found.repo.clone(), chosen, name })
                 }
                 _ => None,
             })
             .collect();
         if let Some(Overlay::Worktrees(dialog)) = &mut self.overlay {
             dialog.step = Step::List;
-            for row in dialog.list.rows.iter_mut().filter(|row| targets.iter().any(|(p, ..)| *p == row.found.path)) {
+            for row in
+                dialog.list.rows.iter_mut().filter(|row| targets.iter().any(|target| target.path == row.found.path))
+            {
                 row.freeing = true;
                 row.ticked = false;
             }
         }
-        for (path, repo, chosen, name) in targets {
-            self.spawn_free(path, &repo, chosen, name);
+        for target in targets {
+            self.spawn_free(target);
         }
     }
 
-    fn spawn_free(&mut self, path: PathBuf, repo: &Path, chosen: Vec<PathBuf>, name: String) {
+    fn spawn_free(&mut self, FreeTarget { path, repo, chosen, name }: FreeTarget) {
         let key = self.take_id();
-        let names = self.builds_of(repo);
+        let names = self.builds_of(&repo);
         self.git.frees.pending.insert(key, name);
         let job = Job::new(Level::Info, "worktrees", "free builds").with("path", path.display());
         let at = path.clone();
@@ -141,12 +146,12 @@ impl App {
                         .iter()
                         .map(|(folder, why)| format!("could not free {name}: {}: {why}", folder.display())),
                 );
-                tally.problems.extend(
-                    freed
-                        .kept
-                        .iter()
-                        .map(|folder| format!("kept {name}: {} is no longer ignored by git or gone", folder.display())),
-                );
+                tally.problems.extend(freed.kept.iter().map(|folder| {
+                    format!(
+                        "kept {name}: {} is not freed: no longer an ignored folder here, or on another filesystem",
+                        folder.display()
+                    )
+                }));
             }
             Err(e) => tally.problems.push(format!("could not free {name}: {e}")),
         }

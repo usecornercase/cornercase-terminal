@@ -46,7 +46,7 @@ fn free_says_what_went_what_failed_and_what_runs() {
     };
     assert_eq!(
         free_text(&freed, None),
-        "freed 200 MB in /srv/x: node_modules 200 MB\nrunning: node\ncould not free target: busy\nkept dist: no longer ignored by git or gone\n"
+        "freed 200 MB in /srv/x: node_modules 200 MB\nrunning: node\ncould not free target: busy\nkept dist: not freed: no longer an ignored folder here, or on another filesystem\n"
     );
     let check = BuildsFreed { check: true, failed: Vec::new(), kept: Vec::new(), ..freed };
     assert!(free_text(&check, None).starts_with("would free 200 MB in /srv/x"));

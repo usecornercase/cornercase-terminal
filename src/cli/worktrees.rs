@@ -81,7 +81,7 @@ pub(crate) fn free_text(freed: &BuildsFreed, home: Option<&Path>) -> String {
         let _ = writeln!(text, "could not free {}: {}", failed.path, failed.error);
     }
     for kept in &freed.kept {
-        let _ = writeln!(text, "kept {kept}: no longer ignored by git or gone");
+        let _ = writeln!(text, "kept {kept}: not freed: no longer an ignored folder here, or on another filesystem");
     }
     text
 }

@@ -28,6 +28,14 @@ struct Walk<'a> {
     unreadable: usize,
 }
 
+pub(crate) fn crosses_device(folder: &Path, device: u64) -> bool {
+    let Ok(entries) = std::fs::read_dir(folder) else { return false };
+    entries.flatten().any(|entry| {
+        let Ok(meta) = entry.metadata() else { return false };
+        meta.is_dir() && (meta.dev() != device || crosses_device(&entry.path(), device))
+    })
+}
+
 pub(crate) fn usage(root: &Path, parts: &[PathBuf]) -> Usage {
     let Ok(meta) = std::fs::symlink_metadata(root) else {
         return Usage { parts: vec![0; parts.len()], ..Usage::default() };

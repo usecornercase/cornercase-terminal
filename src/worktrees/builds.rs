@@ -1,3 +1,4 @@
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
@@ -58,12 +59,14 @@ pub(crate) fn listed(path: &Path, names: &[String]) -> Result<Vec<PathBuf>> {
             "--ignored=matching",
         ],
     )?)?;
+    let device = std::fs::metadata(path).map(|meta| meta.dev()).ok();
     let mut found = Vec::new();
     for record in status.split(|byte| *byte == 0).map(String::from_utf8_lossy) {
         let Some(entry) = record.strip_prefix("! ").and_then(|entry| entry.strip_suffix('/')) else { continue };
         let relative = PathBuf::from(entry);
         let on_list = relative.file_name().is_some_and(|name| names.iter().any(|n| name == n.as_str()));
-        let real = std::fs::symlink_metadata(path.join(&relative)).is_ok_and(|meta| meta.is_dir());
+        let real = std::fs::symlink_metadata(path.join(&relative))
+            .is_ok_and(|meta| meta.is_dir() && device.is_none_or(|device| meta.dev() == device));
         if on_list && real {
             found.push(relative);
         }
@@ -86,6 +89,22 @@ pub(crate) fn measure(path: &Path, kind: Kind, names: &[String]) -> Result<Size>
     Ok(Size { bytes: usage.bytes, builds, nested: usage.nested })
 }
 
+pub(crate) fn deletable(root: &Path, folder: &Path) -> std::result::Result<(), &'static str> {
+    let device = std::fs::metadata(root).map_err(|_| "the worktree cannot be read")?.dev();
+    let meta = std::fs::symlink_metadata(folder).map_err(|_| "it is gone")?;
+    if !meta.is_dir() {
+        return Err("it is no longer a folder");
+    }
+    if meta.dev() != device || disk::crosses_device(folder, device) {
+        return Err("it is, or holds, another filesystem");
+    }
+    let inside = match (root.canonicalize(), folder.parent().map(Path::canonicalize)) {
+        (Ok(root), Some(Ok(parent))) => parent.starts_with(root),
+        _ => false,
+    };
+    if inside { Ok(()) } else { Err("a parent of it leads out of the worktree") }
+}
+
 pub(crate) fn free(path: &Path, names: &[String], chosen: &[PathBuf]) -> Result<Freed> {
     let now = listed(path, names)?;
     let mut freed = Freed::default();
@@ -95,7 +114,9 @@ pub(crate) fn free(path: &Path, names: &[String], chosen: &[PathBuf]) -> Result<
             continue;
         }
         let folder = path.join(relative);
-        if std::fs::symlink_metadata(&folder).is_err() {
+        if let Err(why) = deletable(path, &folder) {
+            log::info!("worktrees", "build folder kept", path = path.display(), why = why);
+            freed.kept.push(relative.clone());
             continue;
         }
         let bytes = disk::usage(&folder, &[]).bytes;
