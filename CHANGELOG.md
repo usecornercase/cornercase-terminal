@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.219
+
+- **Plan limits load for Claude Code accounts with a busy week.** When cornercase asked Claude Code for your limits, Claude Code also worked out what drives your usage by reading every conversation of the last seven days, which cornercase never showed. With a lot of history that took longer than the ten seconds the Limits tab waits, so the account's section said `usage unavailable: claude did not answer in time`. cornercase now asks only for the limits, and each account answers in a second or two. This needs Claude Code 2.1.261 or later; older versions still read the conversations.
+
 ## 0.12.218
 
 - **See when two workspaces change the same files.** When two workspaces of a project change the same files since their branches parted, committed or not, both rows show `⇄` and how many files they share, such as `⇄2`, and those files carry a `⇄` in the changes panel. Click the badge, or pick **merge check** in the row's ` ⋯ ` menu, to see which files each pair shares. It also merges the work in a scratch copy with `git merge-tree`: you see whether the workspace merges cleanly into its base branch and with each workspace it shares files with, and which files would conflict and how. No checkout, index or branch is touched. It needs git 2.38 or later.
