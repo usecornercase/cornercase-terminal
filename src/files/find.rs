@@ -48,10 +48,10 @@ impl Find {
         &self.occurrences[from..to]
     }
 
-    pub(crate) fn edit(&mut self, edit: impl FnOnce(&mut String), lines: &[String], top: u32) {
+    pub(crate) fn edit(&mut self, edit: impl FnOnce(&mut String), lines: &[String], top: (u32, u32)) {
         edit(&mut self.text);
         self.count_in(lines);
-        self.anchor = (top, 0);
+        self.anchor = top;
         self.pick(first_from);
     }
 

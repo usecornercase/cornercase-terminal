@@ -113,7 +113,7 @@ test('a selection held at the bottom scrolls the file, and copy without one take
   app.selectFileLine(1);
   app.pointerMove(panel.x + 2, panel.y + panel.h - 1, 1);
   app.advance(1000);
-  assert.ok(viewer.scroll > 0);
+  assert.ok(viewer.top.line > 0 || viewer.top.row > 0);
   assert.deepEqual(viewer.selection, [1, lines.length]);
   app.pointerUp();
   app.fileAction('copy');
@@ -194,7 +194,7 @@ test('the wheel scrolls a selection and moves its end, as the app does', () => {
   const top = panel.y + 3;
   app.selectFileLine(1);
   assert.equal(app.wheel(panel.x + 2, top, 1), true);
-  assert.equal(viewer.scroll, 3);
+  assert.deepEqual(viewer.top, { line: 3, row: 0 });
   assert.deepEqual(viewer.selection, [1, 4]);
   app.pointerUp();
   app.destroy();
@@ -298,5 +298,33 @@ test('a text search result opens the file with the field holding the query', () 
   assert.ok(app.textAt('1/1'));
   click(app, '‹');
   assert.equal(app.files.place(app.workspace()?.id ?? -1).viewer, null);
+  app.destroy();
+});
+
+test('a long line wraps under its number and a press on its second row selects it', () => {
+  const app = demo(140);
+  const first = app.textAt('pub fn first_line(&self) -> ');
+  const second = app.textAt('&str {');
+  assert.ok(first && second);
+  assert.equal(second.y, first.y + 1);
+  const on = (needle: string, y: number) => [0, 1, 2, 3, 4, 5].some((n) => app.textAt(needle, n)?.y === y);
+  assert.ok(on('11', first.y) && !on('11', second.y));
+  app.pointerDown(second.x, second.y, 0);
+  app.pointerUp();
+  const viewer = app.files.place(app.workspace()?.id ?? -1).viewer;
+  assert.deepEqual(viewer?.selection, [11, 11]);
+  app.destroy();
+});
+
+test('finding a match on a later row shows that row', () => {
+  const app = demo(140);
+  app.resize(140, 10);
+  app.render();
+  app.openFind();
+  app.editFind('unwrap');
+  app.render();
+  assert.ok(app.textAt('unwrap'));
+  const viewer = app.files.place(app.workspace()?.id ?? -1).viewer;
+  assert.ok(viewer);
   app.destroy();
 });

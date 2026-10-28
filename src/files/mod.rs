@@ -82,10 +82,17 @@ pub(crate) struct Row {
     pub(crate) open: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct Top {
+    pub(crate) line: usize,
+    pub(crate) row: usize,
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Viewer {
     pub(crate) path: String,
-    pub(crate) scroll: usize,
+    pub(crate) top: Top,
+    pub(crate) jump: Option<u32>,
     pub(crate) content: Option<Arc<Content>>,
     pub(crate) selection: Option<(u32, u32)>,
     pub(crate) stretch: Option<Stretch<u32>>,
@@ -94,6 +101,11 @@ pub(crate) struct Viewer {
 }
 
 impl Viewer {
+    pub(crate) fn scroll_to(&mut self, top: Top) {
+        self.top = top;
+        self.jump = None;
+    }
+
     pub(crate) fn selected(&self) -> Option<(u32, u32)> {
         self.stretched().as_ref().map(Stretch::lines).or(self.selection).map(|(a, b)| (a.min(b), a.max(b)))
     }
@@ -444,7 +456,7 @@ impl Panel {
         self.open_file(workspace, path);
         if let Some(viewer) = self.viewer_mut(workspace) {
             viewer.selection = Some(lines);
-            viewer.scroll = usize::try_from(lines.0.saturating_sub(1)).unwrap_or(usize::MAX).saturating_sub(CONTEXT);
+            viewer.jump = Some(lines.0);
             viewer.find = find;
         }
     }
@@ -691,19 +703,19 @@ impl<'a> Lines<'a> {
         self.count + self.blocks.iter().map(|(_, lines)| lines.len()).sum::<usize>()
     }
 
-    pub(crate) fn at(&self, row: usize) -> Option<Line> {
+    pub(crate) fn at(&self, index: usize) -> Option<Line> {
         let mut extra = 0;
         for (key, lines) in &self.blocks {
             let start = usize::try_from(*key).unwrap_or(usize::MAX).saturating_sub(1) + extra;
-            if row < start {
+            if index < start {
                 break;
             }
-            if row < start + lines.len() {
-                return Some(Line::Removed(*key, row - start));
+            if index < start + lines.len() {
+                return Some(Line::Removed(*key, index - start));
             }
             extra += lines.len();
         }
-        let line = row - extra;
+        let line = index - extra;
         (line < self.count).then(|| Line::Code(u32::try_from(line + 1).unwrap_or(u32::MAX)))
     }
 
@@ -711,7 +723,7 @@ impl<'a> Lines<'a> {
         self.blocks.iter().find(|(b, _)| *b == key).and_then(|(_, lines)| lines.get(k)).map(String::as_str)
     }
 
-    pub(crate) fn row_of(&self, line: u32) -> usize {
+    pub(crate) fn index_of(&self, line: u32) -> usize {
         let before: usize = self.blocks.iter().filter(|(key, _)| *key <= line).map(|(_, l)| l.len()).sum();
         usize::try_from(line).unwrap_or(usize::MAX).saturating_sub(1) + before
     }

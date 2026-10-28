@@ -24,8 +24,8 @@ mod every_project {
 
     pub(super) fn row(app: &App, wanted: panel::Row) -> Position {
         let view = app.panel_view().expect("panel");
-        let index = panel::rows(&view).iter().position(|r| *r == wanted).expect("row");
         let body = panel::parts(panel_area(app), &view).body;
+        let index = panel::rows(&view, body.width).iter().position(|r| *r == wanted).expect("row");
         Position::new(body.x + 8, body.y + u16::try_from(index).expect("row index"))
     }
 
@@ -55,7 +55,7 @@ mod every_project {
     }
 
     fn rows_of(app: &App) -> Vec<panel::Row> {
-        panel::rows(&app.panel_view().expect("panel"))
+        panel::lines(&app.panel_view().expect("panel"))
     }
 
     fn assert_folded_overview(app: &App) {
@@ -126,7 +126,7 @@ mod every_project {
         loaded_every(&mut app, &rx);
         let view = app.panel_view().expect("panel");
         assert_eq!(view.headers, Vec::new());
-        assert_eq!(panel::rows(&view), Vec::new());
+        assert_eq!(panel::lines(&view), Vec::new());
     }
 
     #[test]
@@ -483,7 +483,7 @@ fn unchanged_lines_open_from_a_thread() {
     app.screen.side = Some(Side::Changes);
     refresh_until_loaded(&mut app, &rx);
     let view = app.panel_view().expect("panel");
-    let gap = panel::rows(&view).iter().position(|r| matches!(r, panel::Row::Gap(0, 1))).expect("a gap");
+    let gap = panel::lines(&view).iter().position(|r| matches!(r, panel::Row::Gap(0, 1))).expect("a gap");
     let body = panel::parts(panel_area(&app), &view).body;
     let y = body.y + u16::try_from(gap).expect("row");
     click(&mut app, Position::new(body.x + 12, y));
@@ -619,7 +619,7 @@ fn the_filter_hides_the_files_that_do_not_match() {
     open_filter(&mut app, &rx);
     type_text(&mut app, "!a.txt");
     let view = app.panel_view().expect("panel");
-    assert!(!panel::rows(&view).contains(&panel::Row::File(0)));
+    assert!(!panel::lines(&view).contains(&panel::Row::File(0)));
 }
 
 #[test]

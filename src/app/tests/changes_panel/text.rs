@@ -138,3 +138,20 @@ fn the_wheel_scrolls_a_character_selection_without_ending_it() {
     let stretch: Stretch<_> = app.panels.changes.selection().and_then(|s| s.stretch).expect("characters");
     assert!(stretch.to.line > at(0));
 }
+
+#[test]
+fn a_click_and_a_character_selection_on_a_continuation_row() {
+    let line = "word ".repeat(40);
+    let repo = git_repo(&[("a.txt", "one\n")]);
+    std::fs::write(repo.path().join("a.txt"), format!("{line}\n")).expect("edit");
+    let (_repo, mut app, _rx) = opened(repo);
+    let second = row(&app, panel::Row::Line(0, 0, 1, 1));
+    click(&mut app, Position::new(second.x - 5, second.y));
+    assert_eq!(selected(&app).map(|(from, _)| from), Some(at(1)));
+    let (from, to) = (Position::new(second.x + 2, second.y), Position::new(second.x + 6, second.y));
+    drag_between(&mut app, from, to);
+    let copied = copied(&mut app);
+    let first_row = row(&app, panel::Row::Line(0, 0, 1, 0));
+    assert_ne!(first_row.y, second.y);
+    assert!(copied.is_some_and(|c| c.starts_with(b"\x1b]52") && c.len() > 8));
+}

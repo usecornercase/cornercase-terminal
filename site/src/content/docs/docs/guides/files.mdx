@@ -41,7 +41,9 @@ In a git workspace, a changed file gets its status in its colour: `M` for modifi
 
 The header shows the file's path, its number of lines and its language; **`‹`** goes back to the tree.
 
-**`▢`**, left of **`×`**, shows the file full screen, over the sidebar and your panes, so a long line or a big file has the whole window without dragging the border. **`❐`** or `Esc` puts it back in the panel, at the width it had. The file keeps its place, its selected lines and its highlights both ways, and the wheel, the lines, **open**, **ask agent** and **copy** work as in the panel. Going back to the tree, closing the panel, **open**, **ask agent** (when it finds an agent) and switching to another tab also put it back. Your programs keep their size and keep running underneath.
+A line wider than the panel wraps onto the rows under its number, breaking after a space or punctuation where it can, so you read it whole without dragging the border. The rows after the first leave the number blank and keep the line's colours, its change bar, the find matches and your selection. A line that would take more than 100 rows, such as a minified bundle, ends in `…` instead; **copy** and **open** give you the rest.
+
+**`▢`**, left of **`×`**, shows the file full screen, over the sidebar and your panes, so a big file has the whole window and long lines take fewer rows. **`❐`** or `Esc` puts it back in the panel, at the width it had. The file keeps its place, its selected lines and its highlights both ways, and the wheel, the lines, **open**, **ask agent** and **copy** work as in the panel. Going back to the tree, closing the panel, **open**, **ask agent** (when it finds an agent) and switching to another tab also put it back. Your programs keep their size and keep running underneath.
 
 <Screen
   name="files-full"
@@ -60,14 +62,14 @@ To change a file, use **open**: the panel only reads.
 
 ### Pick lines and act on them
 
-Click a line to select it, or press on its line number and drag over several. To select part of a line, press on its text and drag: the characters from where you pressed to the pointer are selected, across lines, and shown reversed as in your panes (a click on the text still selects its line). Hold the pointer on the first or last line shown, or past it, and the file scrolls while the selection follows; the wheel scrolls it too while you keep the button pressed. The header says which lines the selection covers, such as `lines 11-12`, and its buttons act on them:
+Click a line to select it, or press on its line number and drag over several. To select part of a line, press on its text and drag: the characters from where you pressed to the pointer are selected, across lines, and shown reversed as in your panes (a click on the text still selects its line). Hold the pointer on the first or last row shown, or past it, and the file scrolls while the selection follows; the wheel scrolls it too while you keep the button pressed. The header says which lines the selection covers, such as `lines 11-12`, and its buttons act on them:
 
 | Button | Does |
 | --- | --- |
 | **open** | Opens the file in a new tab with your `$VISUAL` or `$EDITOR` (or `vi`), at the first selected line. The tab closes when you quit the editor. |
 | **open in…** | A menu of your apps: **file manager** or **Finder**, **VS Code**, **Cursor**, **Zed**, **Sublime Text** when installed, and **default app**. An editor opens the file at the first selected line; **default app** opens it with the app your system picks, such as Preview for an image. It shows only on this computer (a remote window offers **copy path**), and a narrow panel leaves it out; the tree's right-click still has it. |
 | **ask agent** | Types a reference to the lines the selection covers, such as `src/returns/address.rs:11-12 `, into the agent running in this workspace and switches to its tab, so you can write your question after it. With nothing selected it types the file's path. Without an agent in the workspace, it copies the reference to your clipboard instead. |
-| **copy** | Copies the selected characters or lines to your clipboard, or the whole file when nothing is selected, exactly as it is on disk (tabs included, and the end of a line the panel cuts). For an image, a binary file, or one that is too large, gone or not read yet, it copies the file's path instead. |
+| **copy** | Copies the selected characters or lines to your clipboard, or the whole file when nothing is selected, exactly as it is on disk (tabs included, and the rest of a line too long to show). For an image, a binary file, or one that is too large, gone or not read yet, it copies the file's path instead. |
 
 ### Find in the file
 

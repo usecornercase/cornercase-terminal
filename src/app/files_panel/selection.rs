@@ -33,9 +33,10 @@ impl App {
 
     pub(in crate::app) fn scroll_viewer(&mut self, workspace: u64, panel_area: Rect, delta: isize) {
         let Some(view) = self.files_view() else { return };
-        let max = panel::max_scroll(panel_area, &view);
-        if let Some(viewer) = self.panels.files.viewer_mut(workspace) {
-            viewer.scroll = viewer.scroll.min(max).saturating_add_signed(delta).min(max);
+        if let Some(top) = panel::scrolled(panel_area, &view, delta)
+            && let Some(viewer) = self.panels.files.viewer_mut(workspace)
+        {
+            viewer.scroll_to(top);
         }
     }
 

@@ -1,4 +1,5 @@
 use super::*;
+use crate::files::Top;
 
 fn needles() -> (TempDir, App, Receiver<AppEvent>) {
     let source = (1..=200)
@@ -69,22 +70,22 @@ fn typing_goes_to_the_first_match_from_the_top_and_scrolls_only_if_needed() {
     for _ in 0..13 {
         mouse(&mut app, MouseEventKind::ScrollDown, at);
     }
-    assert_eq!(file(&app).scroll, 39);
-    let top = file(&app).scroll;
+    assert_eq!(scrolled(&app), 39);
+    let top = scrolled(&app);
     type_text(&mut app, "needle");
     assert_eq!(current(&app), Some((1, 60)));
     let shown = usize::from(panel::body(panel_area(&app), &view(&app)).height);
     assert!(60 > top + shown, "line 60 starts off screen");
-    assert_eq!(file(&app).scroll, 56);
+    assert_eq!(scrolled(&app), 56);
     let workspace = workspace(&app);
     if let Some(viewer) = app.panels.files.viewer_mut(workspace) {
-        viewer.scroll = 0;
+        viewer.scroll_to(Top::default());
     }
     for _ in 0..6 {
         key(&mut app, KeyCode::Backspace);
     }
     type_text(&mut app, "needle");
-    assert_eq!((current(&app), file(&app).scroll), (Some((0, 10)), 0));
+    assert_eq!((current(&app), scrolled(&app)), (Some((0, 10)), 0));
 }
 
 #[test]
@@ -167,7 +168,7 @@ fn a_reread_keeps_the_current_match_near_where_it_was() {
     open_field(&mut app);
     type_text(&mut app, "needle");
     key(&mut app, KeyCode::Down);
-    let scroll = file(&app).scroll;
+    let scroll = scrolled(&app);
     let before = std::fs::read_to_string(repo.path().join("src/main.rs")).expect("read");
     std::fs::write(repo.path().join("src/main.rs"), format!("// top\n{before}")).expect("edit");
     settle(
@@ -176,7 +177,7 @@ fn a_reread_keeps_the_current_match_near_where_it_was() {
         "the new text is counted",
         |v| matches!(&v.screen, Screen::File(f) if f.find.as_ref().and_then(Find::current).is_some_and(|(_, o)| o.line == 61)),
     );
-    assert_eq!((current(&app), file(&app).scroll), (Some((1, 61)), scroll));
+    assert_eq!((current(&app), scrolled(&app)), (Some((1, 61)), scroll));
 }
 
 #[test]
@@ -227,4 +228,39 @@ fn keys_that_are_not_text_do_not_edit_the_query() {
     send_key(&mut app, KeyCode::Char('x'), KeyModifiers::CONTROL);
     key(&mut app, KeyCode::Tab);
     assert_eq!(field(&app).map(|f| f.text().to_string()), Some("needle".to_string()));
+}
+
+#[test]
+fn a_match_on_a_later_row_of_a_long_line_is_revealed() {
+    let tall = (1..=30).map(|n| format!("line {n}\n")).collect::<Vec<_>>().concat();
+    let (_repo, mut app, _rx) = file_with(&format!("{tall}{}needle\n", "word ".repeat(80)));
+    open_field(&mut app);
+    type_text(&mut app, "needle");
+    assert_eq!(current(&app), Some((0, 31)));
+    let area = panel_area(&app);
+    let view = view(&app);
+    assert!(panel::top_spot(area, &view) > (1, 0), "the view moved to the match");
+    let shown = panel::line_y(area, &view, 31, 10);
+    assert!(shown.is_some(), "the row of the match is on screen");
+}
+
+#[test]
+fn finding_a_visible_match_never_moves_a_view_opened_at_a_far_row() {
+    let far = format!("{}needle", "word ".repeat(150));
+    let (_repo, mut app, rx) = file_with(&format!("first\n{far}\nneedle\n{}", "more\n".repeat(60)));
+    let workspace = workspace(&app);
+    app.panels.files.open_at(workspace, "src/main.rs", (2, 2), Some(Find::new("needle", 2, true)));
+    settle(
+        &mut app,
+        &rx,
+        "the file is read again",
+        |v| matches!(&v.screen, Screen::File(f) if f.content.is_some() && f.find.as_ref().is_some_and(|f| f.count() == 2)),
+    );
+    let area = panel_area(&app);
+    let opened = panel::top(area, &view(&app));
+    assert!(opened.row > 5, "{opened:?}");
+    key(&mut app, KeyCode::Down);
+    assert_eq!(current(&app), Some((1, 3)));
+    assert_eq!(panel::top(area, &view(&app)), opened);
+    assert!(file(&app).jump.is_none());
 }

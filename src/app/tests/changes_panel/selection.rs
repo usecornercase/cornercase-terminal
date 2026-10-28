@@ -8,7 +8,7 @@ pub(super) fn at(line: usize) -> Spot {
 }
 
 pub(super) fn line(app: &App, file: usize, l: usize) -> Position {
-    row(app, panel::Row::Line(file, 0, l))
+    row(app, panel::Row::Line(file, 0, l, 0))
 }
 
 fn click_line(app: &mut App, file: usize, l: usize) {

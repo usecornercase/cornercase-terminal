@@ -5,7 +5,7 @@ import { ADDRESS_FIXED_RS, ADDRESS_RS, RETURNS_FIXED_RS, RETURNS_RS, RETURNS_TES
 import { highlight, language } from './highlight';
 import { SLOT, fileIconAt, iconStyle } from './icons';
 import { type Areas, bottom, isEmpty, right } from './layout';
-import { type On, type Stretch, charsAt, endsBefore, on, reverse, textOf, within } from './stretch';
+import { type On, type Stretch, type WrapRow, charsAt, endsBefore, on, reverse, textOf, within, wrapRows } from './stretch';
 import type { Project, Workspace } from './model';
 import { type Line, truncateLeft, truncateRight } from './text';
 import type { Painter } from './ui';
@@ -266,7 +266,7 @@ type Row =
   | { kind: 'file'; i: number }
   | { kind: 'gap'; i: number; h: number; n: number }
   | { kind: 'hunk'; i: number; h: number }
-  | { kind: 'line'; i: number; h: number; l: number }
+  | { kind: 'line'; i: number; h: number; l: number; k: number; fit: WrapRow }
   | { kind: 'spacer' };
 
 const DARK: Style = { fg: 8 };
@@ -351,7 +351,7 @@ function headers(files: FileDiff[]): Header[] {
   return headers;
 }
 
-function rows(app: App, files: FileDiff[], kept: Set<number> | null, groups: Header[]): Row[] {
+function rows(app: App, files: FileDiff[], kept: Set<number> | null, groups: Header[], width: number): Row[] {
   const out: Row[] = [];
   const first = groups.map((header) => Array.from({ length: header.end - header.start }, (_, k) => header.start + k).find((k) => !kept || kept.has(k)));
   files.forEach((f, i) => {
@@ -368,7 +368,7 @@ function rows(app: App, files: FileDiff[], kept: Set<number> | null, groups: Hea
       const before = f.hunks[h - 1];
       if (before && hunk.newStart > before.newEnd) out.push({ kind: 'gap', i, h, n: hunk.newStart - before.newEnd });
       out.push({ kind: 'hunk', i, h });
-      hunk.lines.forEach((_, l) => out.push({ kind: 'line', i, h, l }));
+      hunk.lines.forEach((line, l) => wrapRows(line.text, width - 6 - 2 * numberWidth(f)).forEach((fit, k) => out.push({ kind: 'line', i, h, l, k, fit })));
     });
     out.push({ kind: 'spacer' });
   });
@@ -387,7 +387,7 @@ export function shownChanges(app: App, areas: Areas) {
   const area = areas.changes;
   const body = rect(area.x, area.y + top, area.w, Math.max(0, area.h - top - 2));
   const groups = app.changesScope === 'every' ? headers(files) : [];
-  const list = rows(app, files, kept, groups);
+  const list = rows(app, files, kept, groups, body.w);
   const max = Math.max(0, list.length - body.h);
   return { files, kept, groups, list, body, first: Math.min(app.changesScroll, max), max };
 }
@@ -401,7 +401,7 @@ export function selectedLines(app: App, shown: Shown): { file: number; from: Spo
   if (file < 0) return null;
   const stretch = s.stretch ?? null;
   const [from, to] = stretch ? [stretch.from.line, stretch.to.line] : inOrder(s.anchor, s.end);
-  const has = ([h, l]: Spot) => shown.list.some((row) => row.kind === 'line' && row.i === file && row.h === h && row.l === l);
+  const has = ([h, l]: Spot) => shown.list.some((row) => row.kind === 'line' && row.k === 0 && row.i === file && row.h === h && row.l === l);
   return has(from) && has(to) ? { file, from, to, stretch } : null;
 }
 
@@ -439,7 +439,7 @@ export function changesStretchNear(app: App, file: number, x: number, y: number)
   if (row.kind === 'line' && row.i === file) {
     const text = lineText([row.h, row.l]);
     const start = codeX(f, body);
-    const [a, b] = x < start ? [0, 0] : charsAt(text, body.x + body.w - start - 1, x - start);
+    const [a, b] = x < start ? [row.fit.from, row.fit.from] : charsAt(text, row.fit, x - start);
     return within<Spot>([row.h, row.l], a, b);
   }
   const spot = (r: Row): Spot | null => (r.kind === 'line' && r.i === file ? [r.h, r.l] : null);
@@ -603,7 +603,7 @@ export function drawChanges(p: Painter, areas: Areas): void {
     else if (row.kind === 'line') {
       const here = !!picked && picked.file === row.i && inRange([row.h, row.l], picked.from, picked.to);
       const lit = here && picked.stretch ? on(compareSpots, picked.stretch, [row.h, row.l], [...files[row.i].hunks[row.h].lines[row.l].text].length) : null;
-      codeRow(p, files[row.i], files[row.i].hunks[row.h].lines[row.l], r, tints, here && !picked?.stretch, lit);
+      codeRow(p, files[row.i], files[row.i].hunks[row.h].lines[row.l], r, tints, [here && !picked?.stretch, lit], [row.k, row.fit]);
       const start = codeX(files[row.i], r);
       p.region({ r, click: (cx, cy) => app.selectChangesLine(files[row.i], row.h, row.l, cx >= start ? { x: cx, y: cy } : null) });
     }
@@ -738,7 +738,7 @@ function hunkRow(p: Painter, f: FileDiff, h: number, r: Rect, hot: boolean): voi
   });
 }
 
-function codeRow(p: Painter, f: FileDiff, line: DiffLine, r: Rect, tints: ReturnType<typeof tintsOf>, marked: boolean, lit: On | null): void {
+function codeRow(p: Painter, f: FileDiff, line: DiffLine, r: Rect, tints: ReturnType<typeof tintsOf>, [marked, lit]: [boolean, On | null], [k, fit]: [number, WrapRow]): void {
   const tint = line.kind === '-' ? tints.removed : line.kind === '+' ? tints.added : undefined;
   const word = line.kind === '-' ? tints.removedWord : tints.addedWord;
   if (tint !== undefined) p.g.fill(r, { bg: tint });
@@ -746,19 +746,21 @@ function codeRow(p: Painter, f: FileDiff, line: DiffLine, r: Rect, tints: Return
   const num = (n?: number) => (n === undefined ? ' '.repeat(digits) : String(n).padStart(digits));
   const numbers: Style = marked ? { fg: 6, add: BOLD } : DARK;
   if (marked) p.span(r.x, r.y, '▌', { fg: 6 });
-  let x = p.span(r.x + 1, r.y, num(line.old), numbers);
-  x = p.span(x + 1, r.y, num(line.new), numbers);
-  if (line.kind !== ' ') p.span(x + 1, r.y, '▎', { fg: line.kind === '-' ? 1 : 2 });
-  const start = x + 3;
-  const end = right(r) - 1;
-  const room = end - start;
-  const total = [...line.text].length;
-  const limit = total > room ? room - 1 : room;
+  const start = codeX(f, r);
+  if (k === 0) {
+    const x = p.span(r.x + 1, r.y, num(line.old), numbers);
+    p.span(x + 1, r.y, num(line.new), numbers);
+  }
+  if (line.kind !== ' ') p.span(start - 2, r.y, '▎', { fg: line.kind === '-' ? 1 : 2 });
   let col = start;
   let index = 0;
   for (const s of line.syntax) {
     for (const ch of s.t) {
-      if (index >= limit) break;
+      if (index >= fit.to) break;
+      if (index < fit.from) {
+        index += 1;
+        continue;
+      }
       const strong = line.emph.some(([a, b]) => index >= a && index < b);
       const bg = strong ? word : tint;
       p.g.put(col, r.y, ch, { ...s.s, ...(bg !== undefined ? { bg } : {}) });
@@ -766,8 +768,8 @@ function codeRow(p: Painter, f: FileDiff, line: DiffLine, r: Rect, tints: Return
       index += 1;
     }
   }
-  if (total > room) p.span(col, r.y, '…', DARK);
-  if (lit) reverse(p.g, { x: start, y: r.y, w: right(r) - start }, line.text, lit);
+  if (fit.end === 'cut') p.span(col, r.y, '…', DARK);
+  if (lit) reverse(p.g, { x: start, y: r.y, w: right(r) - start }, line.text, fit, lit);
 }
 
 export function changesLabel(files: FileDiff[]): string {

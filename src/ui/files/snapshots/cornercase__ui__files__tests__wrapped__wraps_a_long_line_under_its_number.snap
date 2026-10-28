@@ -1,0 +1,16 @@
+---
+source: src/ui/files/tests.rs
+expression: "Terminal::new(TestBackend::new(AREA.width,\nAREA.height)).map(|mut t|\n{\n    t.draw(|f| draw(f, AREA, &view, None)).expect(\"draw\");\n    t.backend().to_string()\n}).expect(\"terminal\")"
+---
+"  ‹  src/main.rs                       ⌕  ▢  ×  "
+"  4 lines             open   ask agent   copy   "
+"                                                "
+"   1   fn main() {                              "
+"     -     old_call(first_argument, second_     "
+"       argument, third_argument, fourth_        "
+"       argument);                               "
+"   2 ▎     new_call(first_argument, second_     "
+"     ▎ argument, third_argument, fourth_        "
+"     ▎ argument);                               "
+"   3       done();                              "
+"   4   }                                        "

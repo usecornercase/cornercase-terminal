@@ -120,10 +120,10 @@ fn headers_are_clickable_and_hide_their_own_rows() {
         assert_eq!(hit(AREA, &view, row_of(&view, Row::Header(index)).as_position()), Some(Hit::Header(index)));
     }
     view.headers[1].folded = true;
-    assert!(!rows(&view).contains(&Row::File(0)));
-    assert!(rows(&view).contains(&Row::File(1)));
+    assert!(!lines(&view).contains(&Row::File(0)));
+    assert!(lines(&view).contains(&Row::File(1)));
     view.headers[0].folded = true;
-    assert_eq!(rows(&view), [Row::Header(0), Row::Header(3), Row::File(2)]);
+    assert_eq!(lines(&view), [Row::Header(0), Row::Header(3), Row::File(2)]);
 }
 
 #[test]
@@ -162,7 +162,7 @@ fn a_filter_hides_headers_without_matching_files() {
         filter: Some(FilterView { query: "tests/".into(), focused: false, kept: vec![false, false, true] }),
         ..every()
     };
-    assert_eq!(rows(&view), [Row::Header(3), Row::File(2)]);
+    assert_eq!(lines(&view), [Row::Header(3), Row::File(2)]);
 }
 
 #[test]
@@ -244,7 +244,7 @@ fn shows_the_base_in_commits() {
 #[test]
 fn a_hovered_hunk_shows_its_actions() {
     let view = sample();
-    let line = row_of(&view, Row::Line(0, 0, 2));
+    let line = row_of(&view, Row::Line(0, 0, 2, 0));
     let terminal = render(&view, Some(Position::new(10, line.y)));
     let header = row_of(&view, Row::Hunk(0, 0));
     let text: String =
@@ -256,7 +256,7 @@ fn a_hovered_hunk_shows_its_actions() {
 fn changed_words_get_a_stronger_tint() {
     let view = sample();
     let terminal = render(&view, None);
-    let r = row_of(&view, Row::Line(0, 0, 3));
+    let r = row_of(&view, Row::Line(0, 0, 3, 0));
     let buffer = terminal.backend().buffer();
     let x = (0..AREA.width).find(|&x| buffer[(x, r.y)].symbol() == "O").expect("Option on screen");
     assert_eq!((Some(buffer[(x, r.y)].bg), buffer[(2, r.y)].bg), (Some(TINTS.added_word), TINTS.added.expect("tint")));
@@ -264,14 +264,14 @@ fn changed_words_get_a_stronger_tint() {
 
 #[test]
 fn rows_skip_folded_files() {
-    let rows = rows(&sample());
+    let rows = lines(&sample());
     assert!(rows.contains(&Row::File(1)) && !rows.iter().any(|r| matches!(r, Row::Line(1, ..))));
 }
 
 #[test]
 fn a_gap_between_hunks_can_be_opened() {
     let view = sample();
-    assert!(rows(&view).contains(&Row::Gap(0, 1)));
+    assert!(lines(&view).contains(&Row::Gap(0, 1)));
     let gap = row_of(&view, Row::Gap(0, 1));
     assert_eq!(hit(AREA, &view, Position::new(20, gap.y)), Some(Hit::Gap(0, 1)));
 }
@@ -438,7 +438,7 @@ fn the_base_selector_is_clickable_in_commits() {
 fn scrolling_moves_the_rows() {
     let short = Rect { height: 8, ..AREA };
     let first = visible(short, &View { scroll: 2, ..sample() })[0].0;
-    assert_eq!(first, rows(&sample())[2]);
+    assert_eq!(first, lines(&sample())[2]);
 }
 
 fn filtered(view: &View, query: &str) -> View {
@@ -486,13 +486,13 @@ mod filter {
 
     #[test]
     fn hides_the_files_that_do_not_match() {
-        let rows = rows(&filtered(&sample(), "!*.lock"));
+        let rows = lines(&filtered(&sample(), "!*.lock"));
         assert!(rows.contains(&Row::File(0)) && !rows.contains(&Row::File(1)) && rows.contains(&Row::File(2)));
     }
 
     #[test]
     fn an_empty_query_hides_nothing() {
-        assert_eq!(rows(&filtered(&sample(), " ")).len(), rows(&sample()).len());
+        assert_eq!(lines(&filtered(&sample(), " ")).len(), lines(&sample()).len());
     }
 
     #[test]
@@ -556,7 +556,7 @@ mod selecting {
     #[test]
     fn line_rows_are_pressable_and_the_other_rows_keep_their_hits() {
         let view = sample();
-        let line = row_of(&view, Row::Line(0, 0, 2));
+        let line = row_of(&view, Row::Line(0, 0, 2, 0));
         assert_eq!(hit(AREA, &view, Position::new(8, line.y)), Some(Hit::Line(0, spot(0, 2))));
         assert_eq!(hit(AREA, &view, Position::new(20, line.y)), Some(Hit::Text(0, spot(0, 2))));
         let hunk = row_of(&view, Row::Hunk(0, 0));
@@ -571,7 +571,7 @@ mod selecting {
         let lines: Vec<GapLine> =
             (14..44).map(|n| GapLine { old: n, new: n, text: format!("line {n}"), raw: None, syntax: None }).collect();
         view.gaps.insert((0, 1), Arc::new(lines));
-        let r = row_of(&view, Row::GapLine(0, 1, 2));
+        let r = row_of(&view, Row::GapLine(0, 1, 2, 0));
         let gap = Spot { hunk: 1, at: At::Gap(2) };
         assert_eq!(hit(AREA, &view, Position::new(8, r.y)), Some(Hit::Line(0, gap)));
         assert_eq!(hit(AREA, &view, Position::new(20, r.y)), Some(Hit::Text(0, gap)));
@@ -583,7 +583,7 @@ mod selecting {
         let terminal = render(&view, None);
         let buffer = terminal.backend().buffer();
         let marked = |l| {
-            let r = row_of(&view, Row::Line(0, 0, l));
+            let r = row_of(&view, Row::Line(0, 0, l, 0));
             (buffer[(r.x, r.y)].symbol().to_string(), buffer[(r.x + 1, r.y)].fg, buffer[(r.x + 2, r.y)].bg)
         };
         assert_eq!(marked(0).0, " ");
@@ -623,7 +623,7 @@ mod selecting {
 
     #[rstest::rstest]
     #[case::above_the_file_is_its_first_line(Row::Header(0), spot(0, 0))]
-    #[case::a_line(Row::Line(0, 0, 2), spot(0, 2))]
+    #[case::a_line(Row::Line(0, 0, 2, 0), spot(0, 2))]
     #[case::a_hunk_header_is_the_line_above(Row::Hunk(0, 1), spot(0, 5))]
     #[case::the_spacer_is_the_last_line(Row::Spacer, spot(1, 4))]
     fn line_near_maps_a_row_to_a_line_of_the_file(#[case] row: Row, #[case] expected: Spot) {
@@ -636,9 +636,9 @@ mod selecting {
     #[case::above_the_file_is_the_start_of_its_first_line(Row::Header(0), 0, Stretch::within(spot(0, 0), 0..0))]
     #[case::a_hunk_header_is_the_end_of_the_line_above(Row::Hunk(0, 1), 3, Stretch::within(spot(0, 5), 1..1))]
     #[case::the_spacer_is_the_end_of_the_last_line(Row::Spacer, 3, Stretch::within(spot(1, 4), 1..1))]
-    #[case::a_cell_of_the_code(Row::Line(0, 0, 2), 15, Stretch::within(spot(0, 2), 4..5))]
-    #[case::the_gutter_is_the_start_of_the_line(Row::Line(0, 0, 2), 8, Stretch::within(spot(0, 2), 0..0))]
-    #[case::past_the_end_is_the_end_of_the_line(Row::Line(0, 0, 2), 55, Stretch::within(spot(0, 2), 26..26))]
+    #[case::a_cell_of_the_code(Row::Line(0, 0, 2, 0), 15, Stretch::within(spot(0, 2), 4..5))]
+    #[case::the_gutter_is_the_start_of_the_line(Row::Line(0, 0, 2, 0), 8, Stretch::within(spot(0, 2), 0..0))]
+    #[case::past_the_end_is_the_end_of_the_line(Row::Line(0, 0, 2, 0), 55, Stretch::within(spot(0, 2), 26..26))]
     fn stretch_near_maps_a_pointer_to_the_chars_of_the_file(
         #[case] row: Row,
         #[case] x: u16,
@@ -660,7 +660,7 @@ mod selecting {
         let view = stretching((spot(0, 3), 4), (spot(0, 3), 7));
         let terminal = render(&view, None);
         let buffer = terminal.backend().buffer();
-        let r = row_of(&view, Row::Line(0, 0, 3));
+        let r = row_of(&view, Row::Line(0, 0, 3, 0));
         let reversed = |x: u16| buffer[(x, r.y)].modifier.contains(Modifier::REVERSED);
         assert_eq!(
             (reversed(r.x + 14), reversed(r.x + 15), reversed(r.x + 17), reversed(r.x + 18)),
@@ -707,6 +707,60 @@ mod selecting {
         let filter = FilterView { query: "tests/".into(), focused: false, kept: vec![false, false, true] };
         assert!(selected(&View { filter: Some(filter), ..sample() }, &selection).is_none());
         assert!(selected(&sample(), &Selection { workspace: 2, ..selection }).is_none());
+    }
+
+    #[test]
+    fn a_continuation_row_is_pressable_and_gives_its_own_chars() {
+        let view = sample();
+        let r = row_of(&view, Row::Line(0, 0, 3, 1));
+        let x = code_x(r, 3);
+        assert_eq!(hit(AREA, &view, Position::new(r.x + 1, r.y)), Some(Hit::Line(0, spot(0, 3))));
+        assert_eq!(hit(AREA, &view, Position::new(x, r.y)), Some(Hit::Text(0, spot(0, 3))));
+        assert_eq!(stretch_near(AREA, &view, 0, Position::new(x, r.y)), Some(Stretch::within(spot(0, 3), 48..49)));
+        assert_eq!(stretch_near(AREA, &view, 0, Position::new(55, r.y)), Some(Stretch::within(spot(0, 3), 49..49)));
+        assert_eq!(line_near(AREA, &view, 0, r.y), Some(spot(0, 3)));
+    }
+
+    #[test]
+    fn a_character_selection_on_a_continuation_row_reverses_that_row() {
+        let view = stretching((spot(0, 3), 40), (spot(0, 3), 49));
+        let terminal = render(&view, None);
+        let buffer = terminal.backend().buffer();
+        let (first, second) = (row_of(&view, Row::Line(0, 0, 3, 0)), row_of(&view, Row::Line(0, 0, 3, 1)));
+        let reversed = |r: Rect, x: u16| buffer[(code_x(r, 3) + x, r.y)].modifier.contains(Modifier::REVERSED);
+        assert_eq!((reversed(first, 39), reversed(first, 40), reversed(first, 47)), (false, true, true));
+        assert_eq!((reversed(second, 0), reversed(second, 1)), (true, false));
+    }
+
+    #[test]
+    fn every_row_of_a_line_keeps_its_tint_and_bar_and_only_the_first_its_numbers() {
+        let view = sample();
+        let terminal = render(&view, None);
+        let buffer = terminal.backend().buffer();
+        let (first, second) = (row_of(&view, Row::Line(0, 0, 3, 0)), row_of(&view, Row::Line(0, 0, 3, 1)));
+        let bar = code_x(second, 3) - 2;
+        assert_eq!(buffer[(bar, second.y)].symbol(), "▎");
+        assert_eq!(buffer[(bar, first.y)].symbol(), "▎");
+        assert_eq!(buffer[(second.x + 2, second.y)].bg, TINTS.added.expect("tint"));
+        assert_eq!(text_of(&terminal, second.y)[..bar as usize].trim(), "");
+        assert!(text_of(&terminal, first.y).contains("10"));
+    }
+
+    #[test]
+    fn the_scroll_counts_wrapped_rows() {
+        let view = sample();
+        let body = parts(AREA, &view).body;
+        let wrapped = rows(&view, body.width).len();
+        assert!(wrapped > lines(&view).len());
+        assert_eq!(max_scroll(AREA, &view), wrapped.saturating_sub(usize::from(body.height)));
+    }
+
+    #[test]
+    fn wraps_lines_with_their_tint_bar_and_emphasis() {
+        let area = Rect::new(0, 0, 40, 18);
+        let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).expect("terminal");
+        terminal.draw(|f| draw(f, area, &sample(), None)).expect("draw");
+        insta::assert_snapshot!(terminal.backend());
     }
 
     fn ready(view: &View) -> &Diff {

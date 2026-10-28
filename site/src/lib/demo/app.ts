@@ -12,7 +12,7 @@ import { type Editable, type FieldGrip, TodoPanel, cursorAt, dragIn, editKey, in
 import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
 import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
 import { type FindState, findAll, firstFrom, nearest, start as hitStart } from './find';
-import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, compare, coveredLines, fileLines, fileMax, foundRows, lineEdge, lineNear, linkAt, resolveLink, reveal, selectable, selectedText, stretchNear, topLine, typing, viewFile, wanted, workspaceFiles } from './files';
+import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, compare, coveredLines, fileLines, fileMax, foundRows, lineEdge, lineNear, linkAt, resolveLink, reveal, scrolledTop, selectable, selectedText, stretchNear, topSpot, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
   GROUP_STYLES,
@@ -2034,10 +2034,18 @@ export class App {
   scrollFiles(dy: number, max: number): boolean {
     const place = this.filesPlace();
     if (!place) return false;
-    const before = place.viewer ? place.viewer.scroll : wanted(place) ? place.scroll : place.treeScroll;
+    if (place.viewer) {
+      const top = scrolledTop(this, dy);
+      if (!top) return false;
+      const changed = top.line !== place.viewer.top.line || top.row !== place.viewer.top.row || place.viewer.jump !== null;
+      place.viewer.top = top;
+      place.viewer.jump = null;
+      if (changed) this.dirty();
+      return changed;
+    }
+    const before = wanted(place) ? place.scroll : place.treeScroll;
     const after = Math.max(0, Math.min(max, Math.min(before, max) + dy));
-    if (place.viewer) place.viewer.scroll = after;
-    else if (wanted(place)) place.scroll = after;
+    if (wanted(place)) place.scroll = after;
     else place.treeScroll = after;
     if (after !== before) this.dirty();
     return after !== before;
@@ -2106,7 +2114,7 @@ export class App {
     const viewer = this.filesPlace()?.viewer;
     if (!viewer) return;
     if (viewer.find) viewer.find.focused = true;
-    else viewer.find = { query: '', focused: true, at: [topLine(this), 0] };
+    else viewer.find = { query: '', focused: true, at: topSpot(this) };
     this.dirty();
   }
 
@@ -2125,19 +2133,22 @@ export class App {
     const viewer = this.filesPlace()?.viewer;
     const hits = this.findHits();
     const now = viewer?.find ? nearest(hits, viewer.find.at) : null;
-    const scroll = now === null ? null : reveal(this, hits[now].line);
-    if (viewer && scroll !== null) viewer.scroll = scroll;
+    const top = now === null ? null : reveal(this, hits[now].line, hits[now].a);
+    if (viewer && top) {
+      viewer.top = top;
+      viewer.jump = null;
+    }
   }
 
   editFind(query: string): void {
     const viewer = this.filesPlace()?.viewer;
     if (!viewer?.find) return;
-    const top = topLine(this);
+    const top = topSpot(this);
     viewer.find.query = query;
     viewer.find.focused = true;
     const hits = this.findHits();
-    const first = firstFrom(hits, [top, 0]);
-    viewer.find.at = first === null ? [top, 0] : hitStart(hits[first]);
+    const first = firstFrom(hits, top);
+    viewer.find.at = first === null ? top : hitStart(hits[first]);
     this.revealFind();
     this.dirty();
   }

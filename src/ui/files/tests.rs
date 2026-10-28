@@ -4,7 +4,7 @@ use ratatui::backend::TestBackend;
 use super::*;
 use crate::changes::diff;
 use crate::files::find::Find;
-use crate::files::{self, disk};
+use crate::files::{self, Top, disk};
 
 const AREA: Rect = Rect { x: 0, y: 0, width: 48, height: 12 };
 
@@ -62,7 +62,8 @@ fn opened(selection: Option<(u32, u32)>, unfolded: &[u32]) -> View {
             content: Some(Arc::new(content)),
             gutter: Some(gutter),
             unfolded: unfolded.iter().copied().collect(),
-            scroll: 0,
+            top: Top::default(),
+            jump: None,
             selection,
             stretch: None,
             find: None,
@@ -377,7 +378,8 @@ mod images {
                 content: Some(Arc::new(content)),
                 gutter: None,
                 unfolded: HashSet::new(),
-                scroll: 0,
+                top: Top::default(),
+                jump: None,
                 selection: None,
                 stretch: None,
                 find: None,
@@ -707,7 +709,14 @@ mod find {
         let y = body(AREA, &view).y;
         let lit = (0..AREA.width).filter(|&x| buffer[(x, y)].bg != Color::Reset).count();
         assert!(lit > 10 && lit < usize::from(AREA.width));
-        assert!((0..AREA.width).any(|x| buffer[(x, y)].symbol() == "…"));
+        assert!(!(0..AREA.width).any(|x| buffer[(x, y)].symbol() == "…"));
+        if let Screen::File(file) = &mut view.screen {
+            file.top = Top { line: 0, row: 99 };
+        }
+        let buffer = drawn_at(&view);
+        let last = body(AREA, &view).bottom() - 1;
+        assert_ne!(top(AREA, &view), Top { line: 0, row: 99 });
+        assert!((0..AREA.width).any(|x| buffer[(x, last)].symbol() == "…"));
     }
 
     #[test]
@@ -724,15 +733,15 @@ mod find {
             file.content = Some(Arc::new(content));
         }
         let shown = u32::from(body(AREA, &view).height);
-        assert_eq!(reveal(AREA, &view, shown), None);
-        assert_eq!(reveal(AREA, &view, 40), Some(36));
-        assert_eq!(top_line(AREA, &view), 1);
+        assert_eq!(reveal(AREA, &view, (shown, 0)), None);
+        assert_eq!(reveal(AREA, &view, (40, 0)), Some(Top { line: 36, row: 0 }));
+        assert_eq!(top_spot(AREA, &view), (1, 0));
         if let Screen::File(file) = &mut view.screen {
-            file.scroll = 20;
+            file.top = Top { line: 20, row: 0 };
         }
-        assert_eq!(top_line(AREA, &view), 21);
-        assert_eq!(reveal(AREA, &view, 22), None);
-        assert_eq!(reveal(AREA, &view, 3), Some(0));
+        assert_eq!(top_spot(AREA, &view), (21, 0));
+        assert_eq!(reveal(AREA, &view, (22, 0)), None);
+        assert_eq!(reveal(AREA, &view, (3, 0)), Some(Top::default()));
     }
 
     #[test]
@@ -740,8 +749,162 @@ mod find {
         let mut view = finding("n", false);
         if let Screen::File(file) = &mut view.screen {
             file.unfolded = HashSet::from([2]);
-            file.scroll = 1;
+            file.top = Top { line: 1, row: 0 };
         }
-        assert_eq!(top_line(Rect::new(0, 0, 48, 6), &view), 2);
+        assert_eq!(top_spot(Rect::new(0, 0, 48, 6), &view), (2, 0));
+    }
+}
+
+mod wrapped {
+    use super::*;
+
+    const LONG_OLD: &str = "    old_call(first_argument, second_argument, third_argument, fourth_argument);";
+    const LONG_NEW: &str = "    new_call(first_argument, second_argument, third_argument, fourth_argument);";
+
+    fn long_file(unfolded: &[u32]) -> View {
+        let patch = format!(
+            "diff --git a/src/main.rs b/src/main.rs\n--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1,4 +1,4 @@\n fn main() {{\n-{LONG_OLD}\n+{LONG_NEW}\n     done();\n }}\n"
+        );
+        let source = format!("fn main() {{\n{LONG_NEW}\n    done();\n}}\n");
+        let lines = source.lines().map(String::from).collect();
+        let content = Content {
+            stamp: disk::Stamp::default(),
+            language: None,
+            body: Body::text(lines, None, source.as_str().into()),
+        };
+        let mut view = opened(None, unfolded);
+        if let Screen::File(file) = &mut view.screen {
+            file.content = Some(Arc::new(content));
+            file.gutter = Some(files::gutter(&diff::parse(&patch)[0], 4));
+        }
+        view
+    }
+
+    fn file_of(view: &View) -> &FileView {
+        let Screen::File(file) = &view.screen else { unreachable!() };
+        file
+    }
+
+    fn file_mut(view: &mut View) -> &mut FileView {
+        let Screen::File(file) = &mut view.screen else { unreachable!() };
+        file
+    }
+
+    fn text_row(buffer: &Buffer, y: u16) -> String {
+        (0..AREA.width).map(|x| buffer[(x, y)].symbol().to_string()).collect()
+    }
+
+    #[test]
+    fn wraps_a_long_line_under_its_number() {
+        let view = long_file(&[2]);
+        insta::assert_snapshot!(
+            Terminal::new(TestBackend::new(AREA.width, AREA.height))
+                .map(|mut t| {
+                    t.draw(|f| draw(f, AREA, &view, None)).expect("draw");
+                    t.backend().to_string()
+                })
+                .expect("terminal")
+        );
+    }
+
+    #[test]
+    fn the_numbers_and_the_removed_dash_stay_on_the_first_row() {
+        let view = long_file(&[2]);
+        let buffer = drawn_at(&view);
+        let y = body(AREA, &view).y;
+        let rows: Vec<String> = (0..7).map(|k| text_row(&buffer, y + k)).collect();
+        assert!(rows[1].trim_start().starts_with('-') || rows[1].contains(" - "), "{rows:?}");
+        assert!(rows[4].trim_start().starts_with('2'), "{rows:?}");
+        assert!(!rows[5].trim_start().starts_with(|c: char| c.is_ascii_digit()), "{rows:?}");
+    }
+
+    #[test]
+    fn a_continuation_row_gives_the_same_hits_as_the_first() {
+        let view = long_file(&[]);
+        let file = file_of(&view);
+        let y = line_y(AREA, &view, 2, 1).expect("the second row shows");
+        let (mark, code) = (mark_cell(AREA, file), code_x(AREA, file));
+        assert_eq!(hit(AREA, &view, Position::new(2, y)), Some(Hit::Line(2)));
+        assert_eq!(hit(AREA, &view, Position::new(code + 3, y)), Some(Hit::Text(2)));
+        assert_eq!(hit(AREA, &view, Position::new(mark, y)), Some(Hit::Fold(2)));
+    }
+
+    #[test]
+    fn a_press_on_a_continuation_row_maps_to_that_row_s_characters() {
+        let view = long_file(&[]);
+        let y = line_y(AREA, &view, 2, 1).expect("the second row shows");
+        let code = code_x(AREA, file_of(&view));
+        let first = stretch_near(AREA, &view, Position::new(code, line_y(AREA, &view, 2, 0).expect("first row")));
+        let second = stretch_near(AREA, &view, Position::new(code, y));
+        assert_eq!(first, Some(Stretch::within(2, 0..1)));
+        assert!(second.is_some_and(|s| s.from.offset > 10), "{second:?}");
+    }
+
+    #[test]
+    fn the_last_top_lays_out_from_the_end_back() {
+        let mut view = long_file(&[]);
+        file_mut(&mut view).top = Top { line: 3, row: 0 };
+        let area = Rect::new(0, 0, 48, 6);
+        let last = top(area, &view);
+        assert_eq!(last, Top { line: 1, row: 2 }, "a screenful ends on the last line");
+    }
+
+    #[test]
+    fn a_width_change_keeps_the_top_line() {
+        let mut view = long_file(&[]);
+        file_mut(&mut view).top = Top { line: 1, row: 2 };
+        let (narrow, wide) = (Rect::new(0, 0, 48, 6), Rect::new(0, 0, 100, 6));
+        assert_eq!(top(narrow, &view), Top { line: 1, row: 2 });
+        assert_eq!(top(wide, &view), Top { line: 1, row: 0 });
+    }
+
+    #[test]
+    fn the_edge_scrolls_up_while_the_top_is_inside_a_line() {
+        let mut view = long_file(&[]);
+        let area = Rect::new(0, 0, 48, 6);
+        file_mut(&mut view).top = Top { line: 1, row: 1 };
+        assert_eq!(edge(area, &view, body(area, &view).y), Some(-1));
+        file_mut(&mut view).top = Top::default();
+        assert_eq!(edge(area, &view, body(area, &view).y), None);
+    }
+
+    fn only(text: &str) -> View {
+        let mut view = long_file(&[]);
+        let file = file_mut(&mut view);
+        file.gutter = None;
+        file.content = Some(Arc::new(Content {
+            stamp: disk::Stamp::default(),
+            language: None,
+            body: Body::text(text.lines().map(String::from).collect(), None, text.into()),
+        }));
+        view
+    }
+
+    #[test]
+    fn a_jump_waits_for_the_text_and_goes_to_the_row_of_the_match() {
+        let tall = (1..=40).map(|n| format!("line {n}\n")).collect::<Vec<_>>().concat();
+        let source = format!("{tall}{}needle\n", "word ".repeat(30));
+        let mut view = only(&source);
+        let area = Rect::new(0, 0, 48, 8);
+        let file = file_mut(&mut view);
+        let text = file.content.take();
+        file.jump = Some(41);
+        assert_eq!(top(area, &view), Top::default(), "no text to lay out yet");
+        assert_eq!(top_spot(area, &view), (1, 0));
+        file_mut(&mut view).content = text;
+        assert_eq!(top(area, &view), Top { line: 37, row: 0 }, "the line, with its context");
+        let mut find = Find::new("needle", 41, false);
+        find.recount(file_of(&view).content.as_ref().map_or(&[][..], |c| c.lines()));
+        file_mut(&mut view).find = Some(find);
+        assert_eq!(top(area, &view), Top { line: 40, row: 0 }, "the row of the match, with its context");
+    }
+
+    #[test]
+    fn a_match_on_a_later_row_is_revealed_and_one_on_a_shown_row_is_not() {
+        let view = only(&"word ".repeat(60));
+        let area = Rect::new(0, 0, 48, 6);
+        assert_eq!(reveal(area, &view, (1, 80)), None);
+        assert_eq!(reveal(area, &view, (1, 150)), Some(Top::default()));
+        assert_eq!(reveal(area, &view, (1, 280)), Some(Top { line: 0, row: 4 }));
     }
 }

@@ -351,7 +351,7 @@ test('folding the file drops a selection', () => {
 
 test('a selection held at the bottom of a short panel scrolls it and moves the end', () => {
   const app = demo(140);
-  app.resize(140, 14);
+  app.resize(140, 17);
   const [first] = lineRows(app);
   assert.ok(first !== undefined);
   pressAt(app, first);
@@ -362,5 +362,24 @@ test('a selection held at the bottom of a short panel scrolls it and moves the e
   assert.ok(app.changesScroll > 0);
   assert.notDeepEqual(app.changesSelection?.end, before);
   app.pointerUp();
+  app.destroy();
+});
+
+test('a long diff line wraps under its numbers and a press on its second row selects it', () => {
+  const app = demo(140);
+  app.render();
+  const first = app.textAt('Theme::Dark =>');
+  const second = app.textAt('"#0e0d14",');
+  assert.ok(first && second);
+  assert.equal(second.y, first.y + 1);
+  assert.equal(app.textAt('▎', 0)?.y, first.y);
+  assert.equal(app.textAt('▎', 1)?.y, second.y);
+  const on = (needle: string, y: number) => [0, 1, 2, 3, 4, 5].some((n) => app.textAt(needle, n)?.y === y);
+  assert.ok(on('10', first.y) && !on('10', second.y));
+  app.pointerDown(second.x, second.y, 0);
+  app.pointerUp();
+  assert.ok(app.changesSelection);
+  app.render();
+  assert.ok(app.textAt('line 10'));
   app.destroy();
 });

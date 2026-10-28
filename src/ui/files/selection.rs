@@ -1,10 +1,11 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 
-use super::{FileView, Screen, View, body, code_x, first};
+use super::rows::{self, Rows};
+use super::{FileView, Screen, View, body, code_x};
 use crate::files::Line;
 use crate::text::stretch::Stretch;
-use crate::ui::code;
+use crate::ui::code::{self, Fit};
 
 fn texts(file: &FileView, n: u32) -> Option<(&str, &str)> {
     let content = file.content.as_ref()?;
@@ -12,11 +13,11 @@ fn texts(file: &FileView, n: u32) -> Option<(&str, &str)> {
     Some((shown, content.source_line(n)?))
 }
 
-pub(super) fn paint(buf: &mut Buffer, file: &FileView, n: u32, (code, text): (Rect, &str)) {
+pub(super) fn paint(buf: &mut Buffer, file: &FileView, n: u32, (code, text): (Rect, &str), fit: &Fit) {
     let Some(stretch) = &file.stretch else { return };
     let Some(raw) = file.content.as_ref().and_then(|c| c.source_line(n)) else { return };
     if let Some(on) = stretch.on(n, raw.chars().count()) {
-        code::paint(buf, code, (text, raw), &on);
+        code::paint(buf, code, (text, raw), fit, &on);
     }
 }
 
@@ -33,11 +34,13 @@ pub(crate) fn stretch_near(area: Rect, view: &View, pos: Position) -> Option<Str
     }
     let lines = file.lines();
     let y = pos.y.clamp(body.y, body.bottom() - 1);
-    let row = (first(area, view) + usize::from(y - body.y)).min(lines.len().checked_sub(1)?);
+    let (row, k) = rows::under(area, view, y)?;
     if let Some(Line::Code(n)) = lines.at(row) {
         let (text, raw) = texts(file, n)?;
         let code = Rect::new(code_x(area, file), y, area.right().saturating_sub(code_x(area, file)), 1);
-        return Some(Stretch::within(n, code::source_at(code, text, raw, pos.x)));
+        let fits = Rows::new(area, file).fits(row);
+        let fit = fits.get(k).or(fits.last())?;
+        return Some(Stretch::within(n, code::source_at(code, (text, raw), fit, pos.x)));
     }
     let above = (0..row).rev().find_map(|r| match lines.at(r) {
         Some(Line::Code(n)) => Some(end_of(file, n)),

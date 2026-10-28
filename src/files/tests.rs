@@ -309,8 +309,8 @@ mod searching {
         panel.open_at(1, "src/main.rs", (40, 40), Some(Find::new("run", 40, false)));
         let viewer = panel.viewer(1).expect("a viewer");
         assert_eq!(
-            (viewer.selection, viewer.scroll, viewer.find.as_ref().map(Find::text)),
-            (Some((40, 40)), 36, Some("run"))
+            (viewer.selection, viewer.top, viewer.jump, viewer.find.as_ref().map(Find::text)),
+            (Some((40, 40)), Top::default(), Some(40), Some("run"))
         );
     }
 
@@ -457,6 +457,6 @@ mod marks {
                 Line::Code(6)
             ]
         );
-        assert_eq!((lines.row_of(2), lines.row_of(6), lines.removed(6, 0)), (2, 7, Some("five")));
+        assert_eq!((lines.index_of(2), lines.index_of(6), lines.removed(6, 0)), (2, 7, Some("five")));
     }
 }

@@ -9,7 +9,7 @@ import { SLOT, fileIcon, fileIconAt, folderIcon, iconStyle } from './icons';
 import { highlight, language } from './highlight';
 import { type Areas, FILES_LABEL, bottom, right } from './layout';
 import { type Project, type Workspace, isModal } from './model';
-import { type Stretch, charsAt, endsBefore, on, reverse, textOf, within } from './stretch';
+import { type Stretch, type WrapRow, charsAt, endsBefore, on, reverse, textOf, within, wrapRows } from './stretch';
 import { type Line, truncateLeft, truncateRight } from './text';
 import type { Painter } from './ui';
 
@@ -43,9 +43,15 @@ const LANGUAGES: [RegExp, string][] = [
   [/(^|\/)\.zshrc$/, 'zsh'],
 ];
 
+export interface Top {
+  line: number;
+  row: number;
+}
+
 export interface FilesViewer {
   path: string;
-  scroll: number;
+  top: Top;
+  jump: number | null;
   selection: Lines | null;
   stretch: Stretch<number> | null;
   unfolded: Set<number>;
@@ -102,7 +108,7 @@ export const typing = (place: FilesPlace): boolean => (place.viewer ? !!place.vi
 
 export function viewFile(place: FilesPlace, path: string, lines: Lines | null = null, find: FindState | null = null): void {
   place.last = path;
-  place.viewer = { path, scroll: lines ? Math.max(0, lines[0] - 4) : 0, selection: lines, stretch: null, unfolded: new Set(), find };
+  place.viewer = { path, top: { line: 0, row: 0 }, jump: lines ? lines[0] : null, selection: lines, stretch: null, unfolded: new Set(), find };
 }
 
 export const ordered = ([a, b]: Lines): Lines => [Math.min(a, b), Math.max(a, b)];
@@ -392,15 +398,18 @@ function tail(path: string, indices: number[], room: number): [string, number[]]
   return [`…${chars.slice(skip).join('')}`, indices.filter((i) => i >= skip).map((i) => i - skip + 1)];
 }
 
-function paint(p: Painter, x: number, y: number, end: number, segments: Line, ranges: Lines[], lit: Style, current: Lines | null = null): void {
+function paint(p: Painter, x: number, y: number, end: number, segments: Line, ranges: Lines[], lit: Style, current: Lines | null = null, row?: WrapRow): void {
   const room = Math.max(0, end - x);
-  const total = segments.reduce((n, s) => n + [...s.t].length, 0);
-  const limit = total > room ? room - 1 : room;
+  const shown = row ?? wrapRows(segments.map((s) => s.t).join(''), room, 1)[0];
   let col = x;
   let index = 0;
   for (const s of segments) {
     for (const ch of s.t) {
-      if (index >= limit) break;
+      if (index >= shown.to) break;
+      if (index < shown.from) {
+        index += 1;
+        continue;
+      }
       const now = !!current && index >= current[0] && index < current[1];
       const on = ranges.some(([a, b]) => index >= a && index < b);
       p.g.put(col, y, ch, now ? { ...s.s, ...CURRENT } : on ? { ...s.s, ...lit } : (s.s ?? {}));
@@ -408,7 +417,7 @@ function paint(p: Painter, x: number, y: number, end: number, segments: Line, ra
       index += 1;
     }
   }
-  if (total > room) p.span(col, y, '…', DARK);
+  if (shown.end === 'cut') p.span(col, y, '…', DARK);
 }
 
 function pathLine(path: string, name: Style): Line {
@@ -681,20 +690,20 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
     app.activeChangesDiff().find((d) => d.change.path === viewer.path),
     text.length,
   );
-  const rows = codeRows(text.length, g, viewer.unfolded);
   const digits = Math.max(3, String(text.length).length);
   const markX = body.x + 2 + digits;
-  const max = Math.max(0, rows.length - body.h);
-  const first = Math.min(viewer.scroll, max);
+  const codeX = markX + 2;
+  const { rows, visual, first, max } = lay(f, viewer, text, g);
   const lang = language(viewer.path);
   const tints = tintsOf(app);
   p.region({ r: body, wheel: (dy) => app.scrollFiles(dy, max) });
-  rows.slice(first, first + body.h).forEach((row, k) => {
-    const r = rect(body.x, body.y + k, body.w, 1);
+  visual.slice(first, first + body.h).forEach(({ i, k, fit }, y) => {
+    const row = rows[i];
+    const r = rect(body.x, body.y + y, body.w, 1);
     if (row.kind === 'gone') {
       p.g.fill(r, { bg: tints.removed });
-      p.span(markX, r.y, '-', { fg: 1 });
-      paint(p, markX + 2, r.y, right(r) - 1, [{ t: row.text, s: { fg: 1 } }], [], {});
+      if (k === 0) p.span(markX, r.y, '-', { fg: 1 });
+      paint(p, codeX, r.y, right(r) - 1, [{ t: row.text, s: { fg: 1 } }], [], {}, null, fit);
       p.region({ r, click: () => app.toggleFileBlock(row.key), cursor: 'pointer' });
       return;
     }
@@ -702,22 +711,69 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
     const picked = !viewer.stretch && !!sel && n >= sel[0] && n <= sel[1];
     if (picked) p.g.fill(r, { bg: f.surface });
     const number = rect(r.x + 1, r.y, markX - r.x - 1, 1);
-    p.span(r.x + 1, r.y, String(n).padStart(digits), picked || p.hovered(number) ? { fg: 6, add: BOLD } : DARK);
+    if (k === 0) p.span(r.x + 1, r.y, String(n).padStart(digits), picked || p.hovered(number) ? { fg: 6, add: BOLD } : DARK);
     const mark = g?.marks[n - 1]?.[0];
-    if (mark) p.span(markX, r.y, mark === 'deleted' ? '▁' : mark === 'above' ? '▔' : '▎', { fg: mark === 'added' ? 2 : mark === 'modified' ? 4 : 1 });
+    const glyph = mark === 'deleted' ? (fit.end !== 'wrap' ? '▁' : null) : mark === 'above' ? (k === 0 ? '▔' : null) : mark ? '▎' : null;
+    if (mark && glyph) p.span(markX, r.y, glyph, { fg: mark === 'added' ? 2 : mark === 'modified' ? 4 : 1 });
     const line = text[n - 1];
     const here = hits.filter((h) => h.line === n);
     const current = now !== null && hits[now].line === n ? ([hits[now].a, hits[now].b] as Lines) : null;
-    paint(p, markX + 2, r.y, right(r) - 1, highlight(line, lang), here.map((h): Lines => [h.a, h.b]), LIT, current);
+    paint(p, codeX, r.y, right(r) - 1, highlight(line, lang), here.map((h): Lines => [h.a, h.b]), LIT, current, fit);
     if (viewer.stretch) {
       const lit = on(compare, viewer.stretch, n, [...line].length);
-      if (lit) reverse(p.g, { x: markX + 2, y: r.y, w: right(r) - markX - 2 }, line, lit);
+      if (lit) reverse(p.g, { x: codeX, y: r.y, w: right(r) - codeX }, line, fit, lit);
     }
-    p.region({ r, click: (cx, cy) => app.selectFileLine(n, cx >= markX + 2 ? { x: cx, y: cy } : null), cursor: 'pointer' });
+    p.region({ r, click: (cx, cy) => app.selectFileLine(n, cx >= codeX ? { x: cx, y: cy } : null), cursor: 'pointer' });
     const key = block(g, n);
     if (key !== null) p.region({ r: rect(markX, r.y, 1, 1), click: () => app.toggleFileBlock(key), cursor: 'pointer' });
   });
 }
+
+interface Visual {
+  i: number;
+  k: number;
+  fit: WrapRow;
+}
+
+interface Shown {
+  body: Rect;
+  rows: CodeRow[];
+  visual: Visual[];
+  first: number;
+  max: number;
+  codeX: number;
+}
+
+const CONTEXT = 3;
+
+function visualIndex(visual: Visual[], i: number, column: number): number {
+  const mine = visual.map((v, at) => ({ v, at })).filter(({ v }) => v.i === i);
+  return (mine.find(({ v }) => column < v.fit.to) ?? mine[mine.length - 1])?.at ?? 0;
+}
+
+function lay(f: Panel, viewer: FilesViewer, text: string[], g: Gutter | null): Shown {
+  const { body } = f;
+  const rows = codeRows(text.length, g, viewer.unfolded);
+  const codeX = body.x + 2 + Math.max(3, String(text.length).length) + 2;
+  const room = Math.max(0, right(body) - codeX - 1);
+  const visual = rows.flatMap((row, i) => wrapRows(row.kind === 'code' ? text[row.n - 1] : row.text, room).map((fit, k) => ({ i, k, fit })));
+  const max = Math.max(0, visual.length - body.h);
+  let at = 0;
+  if (viewer.jump !== null) {
+    const hits = viewer.find ? findAll(text, viewer.find.query) : [];
+    const now = viewer.find ? nearest(hits, viewer.find.at) : null;
+    const line = rows.findIndex((r) => r.kind === 'code' && r.n === viewer.jump);
+    const column = now !== null && hits[now].line === viewer.jump ? hits[now].a : 0;
+    at = Math.max(0, visualIndex(visual, line < 0 ? rows.length - 1 : line, column) - CONTEXT);
+  } else if (rows.length) {
+    const i = Math.min(viewer.top.line, rows.length - 1);
+    const mine = visual.filter((v) => v.i === i);
+    at = visual.findIndex((v) => v.i === i && v.k === Math.min(viewer.top.row, mine.length - 1));
+  }
+  return { body, rows, visual, first: Math.min(Math.max(0, at), max), max, codeX };
+}
+
+const topOf = (visual: Visual[], at: number): Top => ({ line: visual[at]?.i ?? 0, row: visual[at]?.k ?? 0 });
 
 function drawFind(p: Painter, f: Panel, find: FindState, hits: { line: number }[], now: number | null): void {
   const { app, inner } = f;
@@ -745,21 +801,31 @@ function drawFind(p: Painter, f: Panel, find: FindState, hits: { line: number }[
 
 export const fileLines = (files: Map<string, string>, viewer: FilesViewer): string[] => textLines(files.get(viewer.path) ?? '');
 
-export function topLine(app: App): number {
+export function topSpot(app: App): [number, number] {
   const shown = shownRows(app);
-  const row = shown?.rows.slice(shown.first).find((r) => r.kind === 'code');
-  return row?.kind === 'code' ? row.n : 1;
+  const top = shown?.visual[shown.first];
+  if (!shown || !top) return [1, 0];
+  const i = shown.rows.findIndex((r, at) => at >= top.i && r.kind === 'code');
+  const row = shown.rows[i];
+  return row?.kind === 'code' ? [row.n, i === top.i ? top.fit.from : 0] : [1, 0];
 }
 
-export function reveal(app: App, line: number): number | null {
+export function reveal(app: App, line: number, column: number): Top | null {
   const shown = shownRows(app);
   if (!shown) return null;
-  const row = shown.rows.findIndex((r) => r.kind === 'code' && r.n === line);
-  if (row < 0 || (row >= shown.first && row < shown.first + shown.body.h)) return null;
-  return Math.max(0, Math.min(shown.max, row - 3));
+  const i = shown.rows.findIndex((r) => r.kind === 'code' && r.n === line);
+  if (i < 0) return null;
+  const at = visualIndex(shown.visual, i, column);
+  if (at >= shown.first && at < shown.first + shown.body.h) return null;
+  return topOf(shown.visual, Math.max(0, Math.min(shown.max, at - CONTEXT)));
 }
 
-function shownRows(app: App): { body: Rect; rows: CodeRow[]; first: number; max: number } | null {
+export function scrolledTop(app: App, dy: number): Top | null {
+  const shown = shownRows(app);
+  return shown && topOf(shown.visual, Math.max(0, Math.min(shown.max, shown.first + dy)));
+}
+
+function shownRows(app: App): Shown | null {
   const f = panel(app, app.areas().changes);
   const viewer = f?.place.viewer;
   if (!f || !viewer || !f.body.h) return null;
@@ -770,18 +836,20 @@ function shownRows(app: App): { body: Rect; rows: CodeRow[]; first: number; max:
     app.activeChangesDiff().find((d) => d.change.path === viewer.path),
     text.length,
   );
-  const rows = codeRows(text.length, g, viewer.unfolded);
-  const max = Math.max(0, rows.length - f.body.h);
-  return { body: f.body, rows, first: Math.min(viewer.scroll, max), max };
+  return lay(f, viewer, text, g);
+}
+
+function visualUnder(shown: Shown, y: number): Visual | undefined {
+  const { body, visual, first } = shown;
+  return visual[Math.min(first + Math.max(0, Math.min(body.h - 1, y - body.y)), visual.length - 1)];
 }
 
 export function lineNear(app: App, y: number): number | null {
   const shown = shownRows(app);
-  if (!shown?.rows.length) return null;
-  const { body, rows, first } = shown;
-  const at = Math.min(first + Math.max(0, Math.min(body.h - 1, y - body.y)), rows.length - 1);
-  for (let i = at; i >= 0; i--) {
-    const row = rows[i];
+  const under = shown && visualUnder(shown, y);
+  if (!shown || !under) return null;
+  for (let i = under.i; i >= 0; i--) {
+    const row = shown.rows[i];
     if (row.kind === 'code') return row.n;
   }
   return null;
@@ -804,17 +872,16 @@ export function stretchNear(app: App, x: number, y: number): Stretch<number> | n
   const shown = shownRows(app);
   const f = panel(app, app.areas().changes);
   const content = f?.files.get(f.place.viewer?.path ?? '');
-  if (!shown?.rows.length || content === undefined) return null;
-  const { body, rows, first } = shown;
+  const under = shown && visualUnder(shown, y);
+  if (!shown || !under || content === undefined) return null;
+  const { rows, codeX } = shown;
   const text = textLines(content);
-  const at = Math.min(first + Math.max(0, Math.min(body.h - 1, y - body.y)), rows.length - 1);
-  const row = rows[at];
+  const row = rows[under.i];
   if (row.kind === 'code') {
-    const codeX = body.x + 2 + Math.max(3, String(text.length).length) + 2;
-    const [a, b] = x < codeX ? [0, 0] : charsAt(text[row.n - 1], right(body) - codeX - 1, x - codeX);
+    const [a, b] = x < codeX ? [under.fit.from, under.fit.from] : charsAt(text[row.n - 1], under.fit, x - codeX);
     return within(row.n, a, b);
   }
-  for (let i = at; i >= 0; i--) {
+  for (let i = under.i; i >= 0; i--) {
     const above = rows[i];
     if (above.kind === 'code') return within(above.n, [...text[above.n - 1]].length, [...text[above.n - 1]].length);
   }

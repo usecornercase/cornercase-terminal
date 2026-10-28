@@ -1,9 +1,12 @@
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Style};
 
-use super::{Hit, Painter, Row, View, action_style, buttons, code, fit, number_width, parts, put, rows, scroll_edge};
+use super::{
+    Hit, Painter, Row, View, action_style, buttons, code, fit, lines, number_width, parts, put, rows, scroll_edge,
+};
 use crate::changes::selection::{self, At, Picked, Selection, Spot};
 use crate::text::stretch::Stretch;
+use crate::ui::code::Fit;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Selected {
@@ -32,17 +35,21 @@ impl LinesAction {
 
 fn row_of(file: usize, spot: Spot) -> Row {
     match spot.at {
-        At::Gap(k) => Row::GapLine(file, spot.hunk, k),
-        At::Line(l) => Row::Line(file, spot.hunk, l),
+        At::Gap(k) => Row::GapLine(file, spot.hunk, k, 0),
+        At::Line(l) => Row::Line(file, spot.hunk, l, 0),
     }
 }
 
-fn spot_of(row: Row) -> Option<(usize, Spot)> {
+pub(super) fn spot_of(row: Row) -> Option<(usize, Spot)> {
     match row {
-        Row::GapLine(i, hunk, k) => Some((i, Spot { hunk, at: At::Gap(k) })),
-        Row::Line(i, hunk, l) => Some((i, Spot { hunk, at: At::Line(l) })),
+        Row::GapLine(i, hunk, k, _) => Some((i, Spot { hunk, at: At::Gap(k) })),
+        Row::Line(i, hunk, l, _) => Some((i, Spot { hunk, at: At::Line(l) })),
         _ => None,
     }
+}
+
+pub(super) fn room(width: u16, digits: usize) -> u16 {
+    width.saturating_sub(6 + 2 * u16::try_from(digits).unwrap_or(3))
 }
 
 pub(super) fn covers(view: &View, row: Row) -> bool {
@@ -72,7 +79,7 @@ pub(crate) fn selected(view: &View, selection: &Selection) -> Option<Selected> {
         view.owners.get(i) == Some(&selection.workspace) && f.path == selection.path && f.digest == selection.digest
     })?;
     let (from, to) = selection.range();
-    let rows = rows(view);
+    let rows = lines(view);
     (rows.contains(&row_of(file, from)) && rows.contains(&row_of(file, to))).then_some(Selected {
         file,
         from,
@@ -87,20 +94,32 @@ pub(crate) fn picked<'a>(view: &'a View, selected: &Selected) -> Vec<Picked<'a>>
     selection::picked(file, gaps, (selected.from, selected.to))
 }
 
-pub(crate) fn line_near(area: Rect, view: &View, file: usize, y: u16) -> Option<Spot> {
+struct Under {
+    body: Rect,
+    rows: Vec<Row>,
+    at: usize,
+    y: u16,
+}
+
+fn under(area: Rect, view: &View, y: u16) -> Option<Under> {
     let body = parts(area, view).body;
     if body.is_empty() {
         return None;
     }
-    let rows = rows(view);
+    let rows = rows(view, body.width);
     let first = view.scroll.min(rows.len().saturating_sub(usize::from(body.height)));
     let y = y.clamp(body.y, body.bottom() - 1);
-    let under = (first + usize::from(y - body.y)).min(rows.len().checked_sub(1)?);
+    let at = (first + usize::from(y - body.y)).min(rows.len().checked_sub(1)?);
+    Some(Under { body, rows, at, y })
+}
+
+pub(crate) fn line_near(area: Rect, view: &View, file: usize, y: u16) -> Option<Spot> {
+    let Under { rows, at: under, .. } = under(area, view, y)?;
     let of_file = |row: &Row| spot_of(*row).filter(|(i, _)| *i == file).map(|(_, spot)| spot);
     rows[..=under].iter().rev().find_map(of_file).or_else(|| rows.iter().find_map(of_file))
 }
 
-fn texts(view: &View, file: usize, spot: Spot) -> Option<(&str, &str)> {
+pub(super) fn texts(view: &View, file: usize, spot: Spot) -> Option<(&str, &str)> {
     match spot.at {
         At::Gap(k) => view.gaps.get(&(file, spot.hunk))?.get(k).map(|line| (line.text.as_str(), line.source())),
         At::Line(l) => {
@@ -116,20 +135,16 @@ fn end_of(view: &View, file: usize, spot: Spot) -> Stretch<Spot> {
 }
 
 pub(crate) fn stretch_near(area: Rect, view: &View, file: usize, pos: Position) -> Option<Stretch<Spot>> {
-    let body = parts(area, view).body;
-    if body.is_empty() {
-        return None;
-    }
-    let rows = rows(view);
-    let first = view.scroll.min(rows.len().saturating_sub(usize::from(body.height)));
-    let y = pos.y.clamp(body.y, body.bottom() - 1);
-    let under = (first + usize::from(y - body.y)).min(rows.len().checked_sub(1)?);
+    let Under { body, rows, at: under, y } = under(area, view, pos.y)?;
     let of_file = |row: &Row| spot_of(*row).filter(|(i, _)| *i == file).map(|(_, spot)| spot);
     if let Some(spot) = of_file(&rows[under]) {
         let digits = number_width(view.diff()?.files.get(file)?);
         let (text, raw) = texts(view, file, spot)?;
         let code = code_rect(Rect::new(body.x, y, body.width, 1), digits);
-        return Some(Stretch::within(spot, code::source_at(code, text, raw, pos.x)));
+        let (Row::Line(.., k) | Row::GapLine(.., k)) = rows[under] else { return None };
+        let fits = code::wrap(text, room(body.width, digits));
+        let fit = fits.get(k).or(fits.last())?;
+        return Some(Stretch::within(spot, code::source_at(code, (text, raw), fit, pos.x)));
     }
     let above = rows[..=under].iter().rev().find_map(of_file).map(|spot| end_of(view, file, spot));
     above.or_else(|| rows.iter().find_map(of_file).map(|spot| Stretch::within(spot, 0..0)))
@@ -137,7 +152,8 @@ pub(crate) fn stretch_near(area: Rect, view: &View, file: usize, pos: Position) 
 
 pub(crate) fn edge(area: Rect, view: &View, y: u16) -> Option<isize> {
     let max = super::max_scroll(area, view);
-    scroll_edge(parts(area, view).body, view.scroll.min(max), max, y)
+    let first = view.scroll.min(max);
+    scroll_edge(parts(area, view).body, (first > 0, first < max), y)
 }
 
 pub(crate) fn lines_actions(area: Rect, view: &View) -> Vec<(LinesAction, Rect)> {
@@ -179,11 +195,11 @@ impl Painter<'_> {
         }
     }
 
-    pub(super) fn paint_stretch(&mut self, row: Row, code: Rect, (text, raw): (&str, &str)) {
+    pub(super) fn paint_stretch(&mut self, code: Rect, (text, raw): (&str, &str), (row, fit): (Row, &Fit)) {
         let Some(Selected { file, stretch: Some(stretch), .. }) = self.view.selection else { return };
         let Some(spot) = spot_of(row).filter(|(i, _)| *i == file).map(|(_, spot)| spot) else { return };
         if let Some(on) = stretch.on(spot, raw.chars().count()) {
-            code::paint(self.buf, code, (text, raw), &on);
+            code::paint(self.buf, code, (text, raw), fit, &on);
         }
     }
 

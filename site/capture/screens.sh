@@ -611,6 +611,7 @@ changes_commits() {
 
 screen_changes() {
   changes_open
+  cc_wait 'first_line'
   cc_hover 'first_line' 0 1 95
   cc_wait 'ask agent'
   cc_shot changes

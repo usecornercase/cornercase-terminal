@@ -69,6 +69,7 @@ The branch you pick is remembered for that workspace. Picking the default branch
 - The summary line counts the files and the lines added and removed, with a bar for the proportion.
 - Each file has a row with its status (`M` modified, `A` added, `D` deleted, `R` renamed), an icon for its type (a renamed file takes its new name's), its path and its counts. The icon is dimmed with the row once you mark it viewed. Click it to expand or collapse it.
 - Each hunk starts with a thin line naming the function or block it is in. Lines carry their old and new numbers, a green or red bar, and a stronger colour on the words that changed when a line was edited rather than replaced.
+- A line wider than the panel wraps under its numbers and keeps its colour, its bar and its changed words on every row, so an edit near the end of a line shows. A line that would take more than 100 rows ends in `…`.
 - In Uncommitted and Every project, a green **`●`** at the right of a row marks a file whose changes are all in git's index (staged), and **`◐`** one that is only partly staged because it changed after you staged it.
 - A yellow **`⇄`** before a file's counts means another workspace of the project changes it too, while **Settings → Worktrees → shared files** is on ([Workspaces that change the same files](../worktrees/#workspaces-that-change-the-same-files)).
 - Code is highlighted with the same tree-sitter grammars as the files panel, in your terminal's palette. A hunk that takes too long to colour is shown as plain text and is not coloured again until it changes.

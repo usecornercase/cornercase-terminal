@@ -57,17 +57,53 @@ fn a_cell_inside_a_tab_stands_for_the_tab() {
     assert_eq!(copied(&mut app), Some(osc("\tru")));
 }
 
+fn wrapped_pos(app: &App, line: u32, row: usize, column: u16) -> Position {
+    let view = view(app);
+    let y = panel::line_y(panel_area(app), &view, line, row).expect("the row is on screen");
+    Position::new(line_pos(app, line).x + 5 + column, y)
+}
+
 #[test]
-fn the_hidden_end_of_a_cut_line_is_copied() {
-    let line = format!("let long = \"{}\";", "x".repeat(150));
+fn dragging_across_the_rows_of_a_wrapped_line_selects_its_characters() {
+    let line = "word ".repeat(30);
     let (_repo, mut app, _rx) = file_with(&format!("{line}\nlet short = 1;\n"));
-    let code = text_pos(&app, 1, 0);
-    let cut = Position::new(panel_area(&app).right() - 2, code.y);
-    drag_between(&mut app, code, cut);
+    let from = wrapped_pos(&app, 1, 0, 0);
+    let near = wrapped_pos(&app, 1, 0, 5);
+    drag_between(&mut app, from, near);
+    let first = file(&app).stretch.expect("characters are selected").to.offset;
+    let far = wrapped_pos(&app, 1, 2, 3);
+    drag_between(&mut app, from, far);
+    let end = file(&app).stretch.expect("characters are selected").to.offset;
+    assert!(end > first * 2, "{first} {end}");
+    let taken: String = line.chars().take(end).collect();
+    assert_eq!(copied(&mut app), Some(osc(&taken)));
+}
+
+#[test]
+fn a_press_on_a_continuation_row_selects_its_line() {
+    let line = "word ".repeat(30);
+    let (_repo, mut app, _rx) = file_with(&format!("{line}\nlet short = 1;\n"));
+    let on_numbers = Position::new(line_pos(&app, 1).x, wrapped_pos(&app, 1, 1, 0).y);
+    click(&mut app, on_numbers);
+    assert_eq!((file(&app).selection, file(&app).stretch), (Some((1, 1)), None));
     assert_eq!(copied(&mut app), Some(osc(&line)));
-    let next = text_pos(&app, 2, 2);
-    drag_between(&mut app, code, next);
-    assert_eq!(copied(&mut app), Some(osc(&format!("{line}\nlet"))));
+}
+
+#[test]
+fn the_hidden_end_of_a_line_over_the_cap_is_copied() {
+    let line = "x".repeat(20_000);
+    let (_repo, mut app, _rx) = file_with(&format!("{line}\n"));
+    let area = panel_area(&app);
+    let top = files::Top { line: 0, row: usize::MAX };
+    let workspace = app.project().expect("project").workspace().expect("workspace").id;
+    app.panels.files.viewer_mut(workspace).expect("a viewer").scroll_to(top);
+    let body = panel::body(area, &view(&app));
+    let from = Position::new(body.x + 7, body.y);
+    let cut = Position::new(area.right() - 2, body.bottom() - 1);
+    drag_between(&mut app, from, cut);
+    let start = file(&app).stretch.expect("characters are selected").from.offset;
+    assert!(start > 0);
+    assert_eq!(copied(&mut app), Some(osc(&line[start..])));
 }
 
 #[test]
@@ -128,7 +164,7 @@ fn held_at_an_edge_the_file_scrolls_and_the_end_follows_the_pointer() {
     press(&mut app, first);
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), bottom);
     hold(&mut app, Instant::now(), 9);
-    assert_eq!(file(&app).scroll, 10);
+    assert_eq!(scrolled(&app), 10);
     let end = file(&app).stretch.expect("characters are selected").to;
     assert_eq!(end.line, u32::from(body.height) + 10);
 }
@@ -141,7 +177,7 @@ fn the_wheel_scrolls_a_character_selection_without_ending_it() {
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(first.x + 3, first.y));
     mouse(&mut app, MouseEventKind::ScrollDown, first);
     mouse(&mut app, MouseEventKind::ScrollDown, first);
-    assert_eq!(file(&app).scroll, 6);
+    assert_eq!(scrolled(&app), 6);
     assert_eq!(file(&app).stretch.map(|s| s.to.line), Some(7));
     let below = Position::new(first.x + 3, first.y + 1);
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), below);

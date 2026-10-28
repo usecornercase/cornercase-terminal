@@ -8,7 +8,7 @@ fn at(find: &Find) -> Option<(usize, u32)> {
     find.current().map(|(i, o)| (i, o.line))
 }
 
-fn typed(text: &str, lines: &[String], top: u32) -> Find {
+fn typed(text: &str, lines: &[String], top: (u32, u32)) -> Find {
     let mut find = Find::default();
     find.edit(|q| q.push_str(text), lines, top);
     find
@@ -49,7 +49,7 @@ mod matching {
 
     #[test]
     fn a_blank_query_finds_nothing() {
-        let find = typed("  ", &lines(&["a  b"]), 1);
+        let find = typed("  ", &lines(&["a  b"]), (1, 0));
         assert_eq!((find.count(), find.current()), (0, None));
     }
 
@@ -64,18 +64,18 @@ mod moving {
 
     #[test]
     fn typing_goes_to_the_first_occurrence_from_the_top_line() {
-        assert_eq!(at(&typed("needle", &spread(), 4)), Some((1, 5)));
-        assert_eq!(at(&typed("needle", &spread(), 1)), Some((0, 2)));
+        assert_eq!(at(&typed("needle", &spread(), (4, 0))), Some((1, 5)));
+        assert_eq!(at(&typed("needle", &spread(), (1, 0))), Some((0, 2)));
     }
 
     #[test]
     fn typing_below_the_last_occurrence_wraps_to_the_first() {
-        assert_eq!(at(&typed("needle", &spread(), 10)), Some((0, 2)));
+        assert_eq!(at(&typed("needle", &spread(), (10, 0))), Some((0, 2)));
     }
 
     #[test]
     fn steps_wrap_at_both_ends() {
-        let mut find = typed("needle", &spread(), 1);
+        let mut find = typed("needle", &spread(), (1, 0));
         find.step(-1);
         assert_eq!(at(&find), Some((2, 9)));
         find.step(1);
@@ -87,14 +87,14 @@ mod moving {
 
     #[test]
     fn stepping_with_nothing_found_does_nothing() {
-        let mut find = typed("zzz", &spread(), 1);
+        let mut find = typed("zzz", &spread(), (1, 0));
         find.step(1);
         assert_eq!(find.current(), None);
     }
 
     #[test]
     fn the_occurrences_of_a_line_come_in_order() {
-        let find = typed("a", &lines(&["a", "a a", "a"]), 1);
+        let find = typed("a", &lines(&["a", "a a", "a"]), (1, 0));
         let starts: Vec<u32> = find.on_line(2).iter().map(|o| o.start).collect();
         assert_eq!((starts, find.on_line(1).len(), find.on_line(4).len()), (vec![0, 2], 1, 0));
     }
@@ -113,7 +113,7 @@ mod rereading {
 
     #[test]
     fn a_reread_keeps_the_current_occurrence_on_the_nearest_line() {
-        let mut find = typed("run", &rows(&[2, 4, 6]), 3);
+        let mut find = typed("run", &rows(&[2, 4, 6]), (3, 0));
         assert_eq!(at(&find), Some((1, 4)));
         find.recount(&rows(&[2, 6, 8]));
         assert_eq!((find.count(), at(&find)), (3, Some((1, 6))));
@@ -121,7 +121,7 @@ mod rereading {
 
     #[test]
     fn a_reread_that_loses_every_match_finds_none() {
-        let mut find = typed("run", &rows(&[2]), 1);
+        let mut find = typed("run", &rows(&[2]), (1, 0));
         find.recount(&rows(&[]));
         assert_eq!((find.count(), find.current()), (0, None));
     }

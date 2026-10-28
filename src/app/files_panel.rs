@@ -242,7 +242,8 @@ impl App {
             content: viewer.content.clone(),
             gutter,
             unfolded: viewer.unfolded.clone(),
-            scroll: viewer.scroll,
+            top: viewer.top,
+            jump: viewer.jump,
             selection: viewer.selection,
             stretch: viewer.stretched(),
             find: viewer.finding().cloned().map(|mut find| {
@@ -388,7 +389,9 @@ impl App {
         let max = panel::max_scroll(panel_area, view);
         let scrolled = |scroll: usize| scroll.min(max).saturating_add_signed(delta).min(max);
         if let Some(viewer) = self.panels.files.viewer_mut(workspace) {
-            viewer.scroll = scrolled(viewer.scroll);
+            if let Some(top) = panel::scrolled(panel_area, view, delta) {
+                viewer.scroll_to(top);
+            }
         } else if matches!(view.screen, Screen::Search(_)) {
             let query = self.panels.files.query_mut(workspace);
             query.scroll = scrolled(query.scroll);

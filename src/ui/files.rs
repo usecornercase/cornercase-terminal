@@ -9,14 +9,15 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 
 use self::find::{draw_find, find_hit, find_slot};
+use self::rows::Rows;
 use super::changes::{buttons, close};
-use super::code::{self, clip, draw as draw_code, draw_fitted};
+use super::code::{self, Fit, draw as draw_code};
 use super::icons::{self, Glyphs, Icon};
 use super::{action_style, dim, draw_close, fit, hovered_at as hovered, put, scroll_edge};
 use crate::changes::diff::Status;
 use crate::files::disk::{Body, Content};
 use crate::files::find::{Find, Occurrence};
-use crate::files::{CONTEXT, Gutter, Line, Lines, Mark, Mode};
+use crate::files::{Gutter, Line, Lines, Mark, Mode, Top};
 use crate::graphics::kitty;
 use crate::highlight::markdown;
 use crate::highlight::syntax::Segments;
@@ -24,10 +25,14 @@ use crate::text::stretch::Stretch;
 use crate::text::{truncate_left, truncate_right};
 
 mod find;
+mod rows;
 mod selection;
 
 #[cfg(test)]
 pub(crate) use self::find::{find_button, find_close, find_field, find_next, find_previous};
+#[cfg(test)]
+pub(crate) use self::rows::line_y;
+pub(crate) use self::rows::{edge, line_near, reveal, scrolled, top, top_spot};
 pub(crate) use self::selection::stretch_near;
 
 pub(crate) const LABEL: &str = "Files";
@@ -156,7 +161,8 @@ pub(crate) struct FileView {
     pub(crate) content: Option<Arc<Content>>,
     pub(crate) gutter: Option<Gutter>,
     pub(crate) unfolded: HashSet<u32>,
-    pub(crate) scroll: usize,
+    pub(crate) top: Top,
+    pub(crate) jump: Option<u32>,
     pub(crate) selection: Option<(u32, u32)>,
     pub(crate) stretch: Option<Stretch<u32>>,
     pub(crate) find: Option<Find>,
@@ -315,7 +321,7 @@ fn rows(view: &View) -> usize {
     match &view.screen {
         Screen::Tree(tree) => tree.rows.len(),
         Screen::Search(search) => search.rows.len(),
-        Screen::File(file) => file.lines().len(),
+        Screen::File(_) => 0,
     }
 }
 
@@ -323,7 +329,7 @@ fn first(area: Rect, view: &View) -> usize {
     let scroll = match &view.screen {
         Screen::Tree(tree) => tree.scroll,
         Screen::Search(search) => search.scroll,
-        Screen::File(file) => file.scroll,
+        Screen::File(_) => 0,
     };
     scroll.min(max_scroll(area, view))
 }
@@ -393,7 +399,8 @@ fn hit_file(area: Rect, view: &View, file: &FileView, pos: Position) -> Option<H
 }
 
 fn hit_line(area: Rect, view: &View, file: &FileView, pos: Position) -> Option<Hit> {
-    match file.lines().at(row_at(area, view, pos.y)?)? {
+    let (index, _) = rows::at(area, view, pos.y)?;
+    match file.lines().at(index)? {
         Line::Removed(key, _) => Some(Hit::Fold(key)),
         Line::Code(n) => {
             let block = file.gutter.as_ref().and_then(|g| g.block(n));
@@ -404,58 +411,6 @@ fn hit_line(area: Rect, view: &View, file: &FileView, pos: Position) -> Option<H
             }
         }
     }
-}
-
-pub(crate) fn line_near(area: Rect, view: &View, y: u16) -> Option<u32> {
-    let Screen::File(file) = &view.screen else { return None };
-    let body = body(area, view);
-    if body.is_empty() {
-        return None;
-    }
-    let lines = file.lines();
-    let y = y.clamp(body.y, body.bottom() - 1);
-    let row = (first(area, view) + usize::from(y - body.y)).min(lines.len().checked_sub(1)?);
-    (0..=row).rev().find_map(|r| match lines.at(r) {
-        Some(Line::Code(n)) => Some(n),
-        _ => None,
-    })
-}
-
-pub(crate) fn edge(area: Rect, view: &View, y: u16) -> Option<isize> {
-    if !matches!(view.screen, Screen::File(_)) {
-        return None;
-    }
-    scroll_edge(body(area, view), first(area, view), max_scroll(area, view), y)
-}
-
-#[cfg(test)]
-pub(crate) fn row_of(view: &View, line: u32) -> usize {
-    match &view.screen {
-        Screen::File(file) => file.lines().row_of(line),
-        Screen::Tree(_) | Screen::Search(_) => 0,
-    }
-}
-
-pub(crate) fn top_line(area: Rect, view: &View) -> u32 {
-    let Screen::File(file) = &view.screen else { return 1 };
-    let lines = file.lines();
-    (first(area, view)..lines.len())
-        .find_map(|row| match lines.at(row) {
-            Some(Line::Code(n)) => Some(n),
-            _ => None,
-        })
-        .unwrap_or(1)
-}
-
-pub(crate) fn reveal(area: Rect, view: &View, line: u32) -> Option<usize> {
-    let Screen::File(file) = &view.screen else { return None };
-    let row = file.lines().row_of(line);
-    let first = first(area, view);
-    let shown = usize::from(body(area, view).height);
-    if (first..first + shown).contains(&row) {
-        return None;
-    }
-    Some(row.saturating_sub(CONTEXT).min(max_scroll(area, view)))
 }
 
 pub(crate) fn shown_rows(area: Rect) -> usize {
@@ -821,19 +776,20 @@ fn draw_file(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover: 
         put(buf, (body.x + 2, body.y), &note, dim(view.muted), body.right());
         return;
     }
-    let lines = file.lines();
+    let rows = Rows::new(area, file);
     let mark_x = mark_cell(area, file);
-    for (row, y) in (first(area, view)..lines.len()).zip(body.y..body.bottom()) {
+    for ((i, k), y) in rows.below(top(area, view)).zip(body.y..body.bottom()) {
         let slot = Slot { r: Rect::new(body.x, y, body.width, 1), mark_x, hover };
-        match lines.at(row) {
-            Some(Line::Code(n)) => draw_code_row(buf, view, file, slot, n),
-            Some(Line::Removed(key, k)) => draw_removed_row(buf, view, slot, lines.removed(key, k).unwrap_or_default()),
+        let fit = rows.fit((i, k));
+        match rows.line(i) {
+            Some(Line::Code(n)) => draw_code_row(buf, view, file, slot, (n, k, &fit)),
+            Some(Line::Removed(..)) => draw_removed_row(buf, view, slot, (rows.text(i), k, &fit)),
             None => {}
         }
     }
 }
 
-fn draw_code_row(buf: &mut Buffer, view: &View, file: &FileView, slot: Slot, n: u32) {
+fn draw_code_row(buf: &mut Buffer, view: &View, file: &FileView, slot: Slot, (n, k, fit): (u32, usize, &Fit)) {
     let Slot { r, mark_x, hover } = slot;
     let y = r.y;
     let digits = usize::from(file.digits());
@@ -841,54 +797,73 @@ fn draw_code_row(buf: &mut Buffer, view: &View, file: &FileView, slot: Slot, n: 
     if selected {
         buf.set_style(r, Style::default().bg(super::surface_colour(view.light)));
     }
-    let number = Rect::new(r.x + 1, y, mark_x - r.x - 1, 1);
-    let style = if selected || hovered(hover, number) {
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
-    } else {
-        dim(view.muted)
-    };
-    put(buf, (r.x + 1, y), &format!("{n:>digits$}"), style, mark_x);
-    if let Some(mark) = file.gutter.as_ref().and_then(|g| g.mark(n)) {
-        let (glyph, colour) = match mark {
-            Mark::Added => ("▎", Color::Green),
-            Mark::Modified => ("▎", Color::Blue),
-            Mark::Deleted => ("▁", Color::Red),
-            Mark::DeletedAbove => ("▔", Color::Red),
+    if k == 0 {
+        let number = Rect::new(r.x + 1, y, mark_x - r.x - 1, 1);
+        let style = if selected || hovered(hover, number) {
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+        } else {
+            dim(view.muted)
         };
-        put(buf, (mark_x, y), glyph, Style::default().fg(colour), r.right());
+        put(buf, (r.x + 1, y), &format!("{n:>digits$}"), style, mark_x);
     }
+    draw_mark(buf, file, (n, k, fit), (mark_x, r));
     let Some(content) = &file.content else { return };
     let index = usize::try_from(n).unwrap_or(usize::MAX) - 1;
     let text = &content.lines()[index];
-    let plain = [(text.clone(), Style::default())];
-    let segments = content.styles().and_then(|s| s.get(index)).map_or(&plain[..], Vec::as_slice);
+    let sliced = match content.styles().and_then(|s| s.get(index)) {
+        Some(styled) => code::slice(styled, &fit.chars),
+        None => vec![(code::slice_text(text, &fit.chars), Style::default())],
+    };
     let code = Rect::new(mark_x + 2, y, r.right().saturating_sub(mark_x + 2), 1);
-    let fit = code::fit(text, code.width.saturating_sub(1));
-    let segments = lit(file, n, fit.shown, segments);
-    draw_fitted(buf, view.muted, code, &segments, fit);
-    selection::paint(buf, file, n, (code, text));
+    let segments = lit(file, n, fit, sliced);
+    code::draw_row(buf, view.muted, code, &segments, fit);
+    selection::paint(buf, file, n, (code, text), fit);
 }
 
-fn lit(file: &FileView, n: u32, keep: usize, segments: &[(String, Style)]) -> Segments {
-    let clipped = clip(segments, keep);
-    let Some(find) = &file.find else { return clipped };
-    let visible = |o: &&Occurrence| usize::try_from(o.start).is_ok_and(|start| start < keep);
-    let range =
-        |o: &Occurrence| usize::try_from(o.start).unwrap_or(usize::MAX)..usize::try_from(o.end).unwrap_or(usize::MAX);
-    let all: Vec<Range<usize>> = find.on_line(n).iter().filter(visible).map(range).collect();
+fn draw_mark(buf: &mut Buffer, file: &FileView, (n, k, fit): (u32, usize, &Fit), (mark_x, r): (u16, Rect)) {
+    let Some(mark) = file.gutter.as_ref().and_then(|g| g.mark(n)) else { return };
+    let last = fit.end != code::End::Wrap;
+    let (glyph, colour) = match mark {
+        Mark::Added => ("▎", Color::Green),
+        Mark::Modified => ("▎", Color::Blue),
+        Mark::Deleted if last => ("▁", Color::Red),
+        Mark::DeletedAbove if k == 0 => ("▔", Color::Red),
+        Mark::Deleted | Mark::DeletedAbove => return,
+    };
+    put(buf, (mark_x, r.y), glyph, Style::default().fg(colour), r.right());
+}
+
+fn span(o: &Occurrence) -> Range<usize> {
+    usize::try_from(o.start).unwrap_or(usize::MAX)..usize::try_from(o.end).unwrap_or(usize::MAX)
+}
+
+fn lit(file: &FileView, n: u32, fit: &Fit, sliced: Segments) -> Segments {
+    let Some(find) = &file.find else { return sliced };
+    let all = find.on_line(n);
+    let from = all.partition_point(|o| span(o).end <= fit.chars.start);
+    let to = all.partition_point(|o| span(o).start < fit.chars.end);
+    let shift = |o: &Occurrence| {
+        let at = span(o);
+        at.start.max(fit.chars.start) - fit.chars.start..at.end.min(fit.chars.end) - fit.chars.start
+    };
+    let lit: Vec<Range<usize>> = all[from..to].iter().map(shift).collect();
+    let current = find.current().map(|(_, o)| o).filter(|o| o.line == n);
     let current: Vec<Range<usize>> =
-        find.current().map(|(_, o)| o).filter(|o| o.line == n).filter(|o| visible(&o)).iter().map(range).collect();
-    mark(&mark(&clipped, &all, LIT), &current, CURRENT)
+        current.filter(|o| span(o).end > fit.chars.start && span(o).start < fit.chars.end).iter().map(shift).collect();
+    mark(&mark(&sliced, &lit, LIT), &current, CURRENT)
 }
 
-fn draw_removed_row(buf: &mut Buffer, view: &View, slot: Slot, text: &str) {
+fn draw_removed_row(buf: &mut Buffer, view: &View, slot: Slot, (text, k, fit): (&str, usize, &Fit)) {
     let Slot { r, mark_x, .. } = slot;
     if let Some(tint) = view.tint {
         buf.set_style(r, Style::default().bg(tint));
     }
-    put(buf, (mark_x, r.y), "-", Style::default().fg(Color::Red), r.right());
-    let segments: Segments = vec![(text.to_string(), Style::default().fg(Color::Red))];
-    draw_code(buf, view.muted, Rect::new(mark_x + 2, r.y, r.right().saturating_sub(mark_x + 2), 1), &segments);
+    if k == 0 {
+        put(buf, (mark_x, r.y), "-", Style::default().fg(Color::Red), r.right());
+    }
+    let segments: Segments = code::slice(&[(text.to_string(), Style::default().fg(Color::Red))], &fit.chars);
+    let code = Rect::new(mark_x + 2, r.y, r.right().saturating_sub(mark_x + 2), 1);
+    code::draw_row(buf, view.muted, code, &segments, fit);
 }
 
 fn draw_image(buf: &mut Buffer, body: Rect, view: &View, image: Option<&Image>) {

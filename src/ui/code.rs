@@ -9,14 +9,25 @@ use super::{dim, put};
 use crate::highlight::syntax::Segments;
 use crate::text::stretch::{shown_range, source_range};
 
+pub(crate) const MAX_WRAPPED_ROWS: usize = 100;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Fit {
-    pub(crate) shown: usize,
-    pub(crate) width: u16,
-    pub(crate) cut: bool,
+pub(crate) enum End {
+    Line,
+    Wrap,
+    Cut,
 }
 
-fn glyphs(text: &str) -> impl Iterator<Item = (Range<usize>, u16)> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Fit {
+    pub(crate) chars: Range<usize>,
+    pub(crate) width: u16,
+    pub(crate) end: End,
+}
+
+type Glyph = (Range<usize>, u16);
+
+fn glyphs(text: &str) -> impl Iterator<Item = Glyph> {
     let mut at = 0;
     let mut start = 0;
     text.graphemes(true).filter_map(move |grapheme| {
@@ -26,99 +37,183 @@ fn glyphs(text: &str) -> impl Iterator<Item = (Range<usize>, u16)> {
     })
 }
 
-pub(crate) fn fit(text: &str, room: u16) -> Fit {
-    let keep = room.saturating_sub(1);
-    let (mut width, mut kept) = (0u16, (0usize, 0u16));
-    for (chars, cells) in glyphs(text) {
-        width = width.saturating_add(cells);
-        if width > room {
-            return Fit { shown: kept.0, width: kept.1, cut: true };
-        }
-        if width <= keep {
-            kept = (chars.end, width);
-        }
-    }
-    Fit { shown: text.chars().count(), width, cut: false }
+fn tail(text: &str, chars: usize) -> &str {
+    text.char_indices().nth(chars).map_or("", |(byte, _)| &text[byte..])
 }
 
-pub(crate) fn chars_at(text: &str, room: u16, column: u16) -> Range<usize> {
-    let fit = fit(text, room);
+fn take(rest: &str, room: u16) -> (Vec<Glyph>, bool) {
+    let (mut width, mut taken) = (0u16, Vec::new());
+    for (chars, cells) in glyphs(rest) {
+        width = width.saturating_add(cells);
+        if width > room {
+            return (taken, true);
+        }
+        taken.push((chars, cells));
+    }
+    (taken, false)
+}
+
+fn breakable(c: char) -> bool {
+    c.is_whitespace() || c.is_ascii_punctuation()
+}
+
+fn break_at(rest: &str, taken: &[Glyph]) -> usize {
+    let chars: Vec<char> = rest.chars().take(taken.last().map_or(0, |(g, _)| g.end)).collect();
+    taken.iter().rposition(|(g, _)| g.len() == 1 && breakable(chars[g.start])).map_or(taken.len(), |i| i + 1)
+}
+
+fn keep_within(taken: &[Glyph], cells: u16) -> usize {
+    let mut width = 0u16;
+    taken
+        .iter()
+        .take_while(|(_, w)| {
+            width = width.saturating_add(*w);
+            width <= cells
+        })
+        .count()
+}
+
+fn next_row(rest: &str, base: usize, room: u16, last: bool) -> Fit {
+    let (taken, more) = take(rest, room);
+    let (count, end) = match (more, last || taken.is_empty()) {
+        (false, _) => (taken.len(), End::Line),
+        (true, true) => (keep_within(&taken, room.saturating_sub(1)), End::Cut),
+        (true, false) => (break_at(rest, &taken), End::Wrap),
+    };
+    let taken = &taken[..count];
+    let width = taken.iter().map(|(_, w)| *w).sum();
+    let stop = if end == End::Line { rest.chars().count() } else { taken.last().map_or(0, |(g, _)| g.end) };
+    Fit { chars: base..base + stop, width, end }
+}
+
+fn lay_out(text: &str, room: u16, most: usize) -> Vec<Fit> {
+    let mut rows: Vec<Fit> = Vec::new();
+    let (mut rest, mut base) = (text, 0);
+    while rows.len() < most {
+        let row = next_row(rest, base, room, rows.len() + 1 == most);
+        let (end, stop) = (row.end, row.chars.end);
+        rows.push(row);
+        if end != End::Wrap {
+            break;
+        }
+        rest = tail(rest, stop - base);
+        base = stop;
+    }
+    rows
+}
+
+pub(crate) fn wrap(text: &str, room: u16) -> Vec<Fit> {
+    lay_out(text, room, MAX_WRAPPED_ROWS)
+}
+
+pub(crate) fn rows(text: &str, room: u16) -> usize {
+    if text.len() <= usize::from(room) { 1 } else { wrap(text, room).len() }
+}
+
+pub(crate) fn fit(text: &str, room: u16) -> Fit {
+    next_row(text, 0, room, true)
+}
+
+fn inside<'a>(text: &'a str, row: &'a Fit) -> impl Iterator<Item = Glyph> + 'a {
+    let start = row.chars.start;
+    glyphs(tail(text, start))
+        .map(move |(g, w)| (g.start + start..g.end + start, w))
+        .take_while(|(g, _)| g.end <= row.chars.end)
+}
+
+pub(crate) fn chars_at(text: &str, row: &Fit, column: u16) -> Range<usize> {
     let mut at = 0u16;
-    for (chars, cells) in glyphs(text).take_while(|(chars, _)| chars.end <= fit.shown) {
+    for (chars, cells) in inside(text, row) {
         if column < at + cells {
             return chars;
         }
         at += cells;
     }
-    let total = text.chars().count();
-    if fit.cut && column == fit.width { fit.shown..total } else { total..total }
+    match row.end {
+        End::Wrap => row.chars.end..row.chars.end,
+        End::Cut if column == row.width => row.chars.end..text.chars().count(),
+        End::Line | End::Cut => text.chars().count()..text.chars().count(),
+    }
 }
 
-fn columns(text: &str, room: u16, chars: &Range<usize>) -> Option<Range<u16>> {
-    let fit = fit(text, room);
+fn columns(text: &str, row: &Fit, chars: &Range<usize>) -> Option<Range<u16>> {
     let mut at = 0u16;
     let mut found: Option<Range<u16>> = None;
-    for (glyph, cells) in glyphs(text).take_while(|(glyph, _)| glyph.end <= fit.shown) {
+    for (glyph, cells) in inside(text, row) {
         if glyph.start < chars.end && chars.start < glyph.end {
             found = Some(found.map_or(at..at + cells, |f| f.start..at + cells));
         }
         at += cells;
     }
-    if fit.cut && !chars.is_empty() && chars.end > fit.shown {
-        found = Some(found.map_or(fit.width..fit.width + 1, |f| f.start..fit.width + 1));
+    if row.end == End::Cut && !chars.is_empty() && chars.end > row.chars.end {
+        found = Some(found.map_or(row.width..row.width + 1, |f| f.start..row.width + 1));
     }
     found
 }
 
-pub(crate) fn source_at(code: Rect, text: &str, raw: &str, x: u16) -> Range<usize> {
+pub(crate) fn source_at(code: Rect, (text, raw): (&str, &str), row: &Fit, x: u16) -> Range<usize> {
     if x < code.x {
-        return 0..0;
+        return source_range(raw, row.chars.start..row.chars.start);
     }
-    source_range(raw, chars_at(text, code.width.saturating_sub(1), x - code.x))
+    source_range(raw, chars_at(text, row, x - code.x))
 }
 
-pub(crate) fn paint(buf: &mut Buffer, code: Rect, (text, raw): (&str, &str), on: &(Range<usize>, bool)) {
+fn holds(row: &Fit, sel: &Range<usize>, broken: bool, total: usize) -> bool {
+    let limit = if row.end == End::Cut { total } else { row.chars.end };
+    let text = sel.start < limit && sel.end > row.chars.start;
+    text || (row.end != End::Wrap && broken && sel.start <= row.chars.end)
+}
+
+pub(crate) fn paint(buf: &mut Buffer, code: Rect, (text, raw): (&str, &str), row: &Fit, on: &(Range<usize>, bool)) {
     let (chars, broken) = on;
-    let reversed = Style::new().add_modifier(Modifier::REVERSED);
-    if *broken && chars.start == 0 {
-        buf.set_style(code, reversed);
+    let sel = shown_range(raw, chars.clone());
+    if !holds(row, &sel, *broken, text.chars().count()) {
         return;
     }
-    let room = code.width.saturating_sub(1);
-    let found = columns(text, room, &shown_range(raw, chars.clone()));
-    let edge = fit(text, room);
-    let start = found.as_ref().map_or(edge.width + u16::from(edge.cut), |f| f.start);
-    let end = if *broken { code.width } else { found.map_or(start, |f| f.end) };
+    let found = columns(text, row, &sel);
+    let past = *broken || (row.end == End::Wrap && sel.end > row.chars.end);
+    let edge = row.width + u16::from(row.end == End::Cut);
+    let start = if sel.start <= row.chars.start { 0 } else { found.as_ref().map_or(edge, |f| f.start) };
+    let end = if past { code.width } else { found.map_or(start, |f| f.end) };
+    let reversed = Style::new().add_modifier(Modifier::REVERSED);
     buf.set_style(Rect::new(code.x + start, code.y, end.saturating_sub(start), 1).intersection(code), reversed);
 }
 
-pub(crate) fn clip(segments: &[(String, Style)], keep: usize) -> Segments {
-    let mut left = keep;
+pub(crate) fn slice(segments: &[(String, Style)], chars: &Range<usize>) -> Segments {
+    let (mut skip, mut left) = (chars.start, chars.len());
     let mut out = Segments::new();
     for (text, style) in segments {
         if left == 0 {
             break;
         }
-        let piece: String = text.chars().take(left).collect();
+        let piece: String = text.chars().skip(skip).take(left).collect();
+        skip = skip.saturating_sub(text.chars().count());
         left -= piece.chars().count();
-        out.push((piece, *style));
+        if !piece.is_empty() {
+            out.push((piece, *style));
+        }
     }
     out
 }
 
-pub(crate) fn draw(buf: &mut Buffer, muted: Color, r: Rect, segments: &[(String, Style)]) {
-    let text: String = segments.iter().map(|(t, _)| t.as_str()).collect();
-    draw_fitted(buf, muted, r, segments, fit(&text, r.width.saturating_sub(1)));
+pub(crate) fn slice_text(text: &str, chars: &Range<usize>) -> String {
+    text.chars().skip(chars.start).take(chars.len()).collect()
 }
 
-pub(crate) fn draw_fitted(buf: &mut Buffer, muted: Color, r: Rect, segments: &[(String, Style)], fit: Fit) {
+pub(crate) fn draw(buf: &mut Buffer, muted: Color, r: Rect, segments: &[(String, Style)]) {
+    let text: String = segments.iter().map(|(t, _)| t.as_str()).collect();
+    let fit = fit(&text, r.width.saturating_sub(1));
+    draw_row(buf, muted, r, &slice(segments, &fit.chars), &fit);
+}
+
+pub(crate) fn draw_row(buf: &mut Buffer, muted: Color, r: Rect, segments: &[(String, Style)], fit: &Fit) {
     let end = r.right().saturating_sub(1);
     let mut x = r.x;
-    for (piece, style) in clip(segments, fit.shown) {
-        let style = if style.fg == Some(Color::DarkGray) { style.fg(muted) } else { style };
-        x = put(buf, (x, r.y), &piece, style, end);
+    for (piece, style) in segments {
+        let style = if style.fg == Some(Color::DarkGray) { style.fg(muted) } else { *style };
+        x = put(buf, (x, r.y), piece, style, end);
     }
-    if fit.cut {
+    if fit.end == End::Cut {
         put(buf, (r.x + fit.width, r.y), "…", dim(muted), end + 1);
     }
 }

@@ -75,8 +75,12 @@ fn lines(view: &panel::View) -> Vec<String> {
 fn line_pos(app: &App, line: u32) -> Position {
     let view = view(app);
     let body = panel::body(panel_area(app), &view);
-    let row = panel::row_of(&view, line) - file(app).scroll;
-    Position::new(body.x + 2, body.y + u16::try_from(row).expect("the line is on screen"))
+    let y = panel::line_y(panel_area(app), &view, line, 0).expect("the line is on screen");
+    Position::new(body.x + 2, y)
+}
+
+fn scrolled(app: &App) -> usize {
+    panel::top(panel_area(app), &view(app)).line
 }
 
 fn action_pos(app: &App, action: Action) -> Position {
@@ -241,21 +245,39 @@ fn a_selection_held_at_an_edge_scrolls_the_file() {
     let (first, bottom) = (line_pos(&app, 1), Position::new(body.x + 2, body.bottom() - 1));
     press(&mut app, first);
     hold(&mut app, Instant::now(), 3);
-    assert_eq!(file(&app).scroll, 0, "a press alone does not scroll");
+    assert_eq!(scrolled(&app), 0, "a press alone does not scroll");
 
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), bottom);
     assert!(app.tick(Instant::now()).is_some_and(|wait| wait <= LINES_SCROLL_EVERY));
     let held = hold(&mut app, Instant::now(), 9);
-    assert_eq!(file(&app).scroll, 10);
+    assert_eq!(scrolled(&app), 10);
     assert_eq!(file(&app).selection, Some((1, u32::from(body.height) + 10)));
 
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(body.x + 2, body.y - 1));
     let held = hold(&mut app, held, 3);
-    assert_eq!((file(&app).scroll, file(&app).selection), (7, Some((1, 8))));
+    assert_eq!((scrolled(&app), file(&app).selection), (7, Some((1, 8))));
 
     mouse(&mut app, MouseEventKind::Up(MouseButton::Left), bottom);
     hold(&mut app, held, 3);
-    assert_eq!((file(&app).scroll, app.lines_edge()), (7, None));
+    assert_eq!((scrolled(&app), app.lines_edge()), (7, None));
+}
+
+#[test]
+fn the_edge_scrolls_one_row_at_a_time() {
+    let line = "word ".repeat(200);
+    let (_repo, mut app, _rx) = file_with(&format!("{line}\nlet short = 1;\n"));
+    let body = panel::parts(panel_area(&app)).body;
+    let workspace = app.project().expect("project").workspace().expect("workspace").id;
+    app.panels.files.viewer_mut(workspace).expect("viewer").scroll_to(files::Top { line: 0, row: 3 });
+    let (first, edge) = (Position::new(body.x + 8, body.y + 2), Position::new(body.x + 8, body.y));
+    press(&mut app, first);
+    mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), edge);
+    let row = |app: &App| panel::top(panel_area(app), &view(app)).row;
+    assert_eq!(row(&app), 2);
+    let held = hold(&mut app, Instant::now(), 1);
+    assert_eq!(row(&app), 1);
+    hold(&mut app, held, 1);
+    assert_eq!(row(&app), 0);
 }
 
 #[test]
@@ -265,7 +287,7 @@ fn the_wheel_scrolls_a_selection_without_ending_it() {
     press(&mut app, first);
     mouse(&mut app, MouseEventKind::ScrollDown, first);
     mouse(&mut app, MouseEventKind::ScrollDown, first);
-    assert_eq!((file(&app).scroll, file(&app).selection), (6, Some((1, 7))));
+    assert_eq!((scrolled(&app), file(&app).selection), (6, Some((1, 7))));
     let below = Position::new(first.x, first.y + 1);
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), below);
     assert_eq!(file(&app).selection, Some((1, 8)));
@@ -656,10 +678,27 @@ mod full_screen {
         toggle(&mut app);
         let after = file(&app);
         let same = |a: &panel::FileView, b: &panel::FileView| {
-            (a.scroll, a.selection, a.find.clone(), a.unfolded.clone())
-                == (b.scroll, b.selection, b.find.clone(), b.unfolded.clone())
+            (a.top, a.jump, a.selection, a.find.clone(), a.unfolded.clone())
+                == (b.top, b.jump, b.selection, b.find.clone(), b.unfolded.clone())
         };
         assert!(same(&before, &full) && same(&before, &after));
+    }
+
+    #[test]
+    fn full_screen_and_back_keep_the_top_line() {
+        let source = (1..=60).map(|n| format!("line {n} {}\n", "word ".repeat(12))).collect::<Vec<_>>().concat();
+        let repo = git_repo(&[("src/main.rs", source.as_str())]);
+        let (mut app, rx) = opened(&repo);
+        show(&mut app, &rx, "src/main.rs");
+        let at = line_pos(&app, 1);
+        for _ in 0..5 {
+            mouse(&mut app, MouseEventKind::ScrollDown, at);
+        }
+        let before = panel::top(panel_area(&app), &view(&app)).line;
+        assert!(before > 0);
+        toggle(&mut app);
+        toggle(&mut app);
+        assert_eq!(panel::top(panel_area(&app), &view(&app)).line, before);
     }
 
     #[test]

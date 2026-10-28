@@ -52,7 +52,8 @@ impl App {
 
     fn edit_find(&mut self, workspace: u64, panel_area: Rect, edit: impl FnOnce(&mut String)) {
         let Some(view) = self.files_view() else { return };
-        let top = panel::top_line(panel_area, &view);
+        let top = panel::top_spot(panel_area, &view);
+        self.settle_jump(workspace, panel_area);
         let Some(viewer) = self.panels.files.viewer_mut(workspace) else { return };
         let content = viewer.content.as_ref().map(Arc::clone);
         let lines = content.as_deref().map_or(&[][..], |c| c.lines());
@@ -62,7 +63,19 @@ impl App {
         self.reveal_find(workspace, panel_area);
     }
 
+    fn settle_jump(&mut self, workspace: u64, panel_area: Rect) {
+        let Some(view) = self.files_view() else { return };
+        let top = panel::top(panel_area, &view);
+        if let Some(viewer) = self.panels.files.viewer_mut(workspace)
+            && viewer.jump.is_some()
+            && viewer.content.is_some()
+        {
+            viewer.scroll_to(top);
+        }
+    }
+
     fn step_find(&mut self, workspace: u64, delta: isize, panel_area: Rect) {
+        self.settle_jump(workspace, panel_area);
         if let Some(find) = self.panels.files.viewer_mut(workspace).and_then(|v| v.find.as_mut()) {
             find.step(delta);
         }
@@ -73,10 +86,10 @@ impl App {
         let Some(view) = self.files_view() else { return };
         let panel::Screen::File(file) = &view.screen else { return };
         let Some((_, at)) = file.find.as_ref().and_then(Find::current) else { return };
-        if let Some(scroll) = panel::reveal(panel_area, &view, at.line)
+        if let Some(top) = panel::reveal(panel_area, &view, (at.line, at.start))
             && let Some(viewer) = self.panels.files.viewer_mut(workspace)
         {
-            viewer.scroll = scroll;
+            viewer.scroll_to(top);
         }
     }
 }

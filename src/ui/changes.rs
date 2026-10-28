@@ -10,8 +10,8 @@ use ratatui::style::{Color, Modifier, Style};
 pub(crate) use self::selection::{
     LinesAction, Selected, edge, line_near, lines_actions, picked, selected, stretch_near,
 };
-use self::selection::{code_rect, code_x, covers, line_hit, numbers_style};
-use super::code;
+use self::selection::{code_rect, code_x, covers, line_hit, numbers_style, room};
+use super::code::{self, Fit};
 use super::icons::{self, Glyphs};
 use super::{action_style, dim, draw_close, fit, hovered_at as hovered, put, scroll_edge};
 use crate::changes::Body;
@@ -129,9 +129,9 @@ pub(crate) enum Row {
     Header(usize),
     File(usize),
     Gap(usize, usize),
-    GapLine(usize, usize, usize),
+    GapLine(usize, usize, usize, usize),
     Hunk(usize, usize),
-    Line(usize, usize, usize),
+    Line(usize, usize, usize, usize),
     Spacer,
 }
 
@@ -140,7 +140,7 @@ fn gap_size(file: &File, hunk: usize) -> u32 {
     file.hunks.get(hunk).map_or(0, |after| after.new_start.saturating_sub(before.new_end()))
 }
 
-pub(crate) fn rows(view: &View) -> Vec<Row> {
+pub(crate) fn lines(view: &View) -> Vec<Row> {
     let Some(diff) = view.diff() else { return Vec::new() };
     let mut rows = Vec::new();
     let first: Vec<_> = view
@@ -168,14 +168,37 @@ pub(crate) fn rows(view: &View) -> Vec<Row> {
         }
         for (h, hunk) in file.hunks.iter().enumerate() {
             match view.gaps.get(&(i, h)) {
-                Some(lines) => rows.extend((0..lines.len()).map(|k| Row::GapLine(i, h, k))),
+                Some(lines) => rows.extend((0..lines.len()).map(|k| Row::GapLine(i, h, k, 0))),
                 None if gap_size(file, h) > 0 => rows.push(Row::Gap(i, h)),
                 None => {}
             }
             rows.push(Row::Hunk(i, h));
-            rows.extend((0..hunk.lines.len()).map(|l| Row::Line(i, h, l)));
+            rows.extend((0..hunk.lines.len()).map(|l| Row::Line(i, h, l, 0)));
         }
         rows.push(Row::Spacer);
+    }
+    rows
+}
+
+fn rows_of(view: &View, row: Row, width: u16, out: &mut Vec<Row>) {
+    let Some((file, spot)) = selection::spot_of(row) else {
+        out.push(row);
+        return;
+    };
+    let digits = view.diff().and_then(|d| d.files.get(file)).map_or(3, |f| number_width(f));
+    let room = room(width, digits);
+    let count = selection::texts(view, file, spot).map_or(1, |(text, _)| code::rows(text, room));
+    out.extend((0..count).map(|k| match row {
+        Row::GapLine(i, h, l, _) => Row::GapLine(i, h, l, k),
+        Row::Line(i, h, l, _) => Row::Line(i, h, l, k),
+        other => other,
+    }));
+}
+
+pub(crate) fn rows(view: &View, width: u16) -> Vec<Row> {
+    let mut rows = Vec::new();
+    for row in lines(view) {
+        rows_of(view, row, width, &mut rows);
     }
     rows
 }
@@ -283,12 +306,13 @@ pub(crate) fn fold_all(area: Rect, view: &View) -> Rect {
 }
 
 pub(crate) fn max_scroll(area: Rect, view: &View) -> usize {
-    rows(view).len().saturating_sub(usize::from(parts(area, view).body.height))
+    let body = parts(area, view).body;
+    rows(view, body.width).len().saturating_sub(usize::from(body.height))
 }
 
 fn visible(area: Rect, view: &View) -> Vec<(Row, Rect)> {
     let body = parts(area, view).body;
-    let rows = rows(view);
+    let rows = rows(view, body.width);
     let first = view.scroll.min(rows.len().saturating_sub(usize::from(body.height)));
     rows.into_iter()
         .skip(first)
@@ -419,10 +443,11 @@ struct Painter<'a> {
     view: &'a View,
     hover: Option<Position>,
     area: Rect,
+    laid: Option<(Row, Vec<Fit>)>,
 }
 
 pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
-    let cursor = Painter { buf: f.buffer_mut(), view, hover, area }.draw();
+    let cursor = Painter { buf: f.buffer_mut(), view, hover, area, laid: None }.draw();
     if let Some(cursor) = cursor {
         f.set_cursor_position(cursor);
     }
@@ -438,19 +463,19 @@ impl Painter<'_> {
         self.tabs();
         let cursor = view.filter.as_ref().and_then(|filter| self.field(filter));
         self.summary();
-        let hovered_hunk =
-            visible(area, view).into_iter().find(|(_, r)| hovered(hover, *r)).and_then(|(row, _)| match row {
-                Row::Hunk(i, h) | Row::Line(i, h, _) => Some((i, h)),
-                _ => None,
-            });
+        let shown = visible(area, view);
+        let hovered_hunk = shown.iter().find(|(_, r)| hovered(hover, *r)).and_then(|(row, _)| match *row {
+            Row::Hunk(i, h) | Row::Line(i, h, ..) => Some((i, h)),
+            _ => None,
+        });
         if let Some(diff) = view.diff() {
-            self.body(diff, hovered_hunk);
+            self.body(diff, shown, hovered_hunk);
         }
         self.footer();
         cursor
     }
 
-    fn body(&mut self, diff: &Diff, hovered_hunk: Option<(usize, usize)>) {
+    fn body(&mut self, diff: &Diff, shown: Vec<(Row, Rect)>, hovered_hunk: Option<(usize, usize)>) {
         let (area, view) = (self.area, self.view);
         let body = parts(area, view).body;
         if diff.files.is_empty() {
@@ -458,7 +483,7 @@ impl Painter<'_> {
         } else if view.filtering().is_some_and(|f| !f.kept.contains(&true)) {
             put(self.buf, (body.x + 1, body.y), NO_FILE_MATCHES, dim(view.muted), body.right());
         }
-        for (row, r) in visible(area, view) {
+        for (row, r) in shown {
             self.row(diff, row, r, hovered_hunk);
         }
     }
@@ -604,26 +629,44 @@ impl Painter<'_> {
             Row::Header(i) => self.header(diff, &view.headers[i], r),
             Row::File(i) => self.file(&diff.files[i], i, r),
             Row::Gap(i, h) => self.gap(&diff.files[i], h, r),
-            Row::GapLine(i, h, k) => {
-                let Some(line) = view.gaps.get(&(i, h)).and_then(|g| g.get(k)) else { return };
-                let digits = number_width(&diff.files[i]);
+            Row::GapLine(file, hunk, gap, part) => {
+                let Some(line) = view.gaps.get(&(file, hunk)).and_then(|g| g.get(gap)) else { return };
+                let digits = number_width(&diff.files[file]);
                 let (old, new, text) = (Some(line.old), Some(line.new), line.text.as_str());
                 let (syntax, selected) = (line.syntax.as_ref(), covers(view, row));
-                self.code(r, Code { kind: Kind::Context, old, new, text, digits, syntax, emphasis: &[], selected });
-                self.paint_stretch(row, code_rect(r, digits), (text, line.source()));
+                let fit = self.fit(row, text, digits);
+                let at = Place { row: part, fit: &fit, digits };
+                self.code(r, Code { kind: Kind::Context, old, new, text, at, syntax, emphasis: &[], selected });
+                self.paint_stretch(code_rect(r, digits), (text, line.source()), (row, &fit));
             }
             Row::Hunk(i, h) => self.hunk(&diff.files[i].hunks[h], r, hovered_hunk == Some((i, h))),
-            Row::Line(i, h, l) => {
-                let line: &Line = &diff.files[i].hunks[h].lines[l];
+            Row::Line(file, hunk, at, part) => {
+                let line: &Line = &diff.files[file].hunks[hunk].lines[at];
                 let (kind, old, new, text) = (line.kind, line.old, line.new, line.text.as_str());
-                let digits = number_width(&diff.files[i]);
+                let digits = number_width(&diff.files[file]);
                 let (syntax, emphasis) = (line.syntax.as_ref(), line.emphasis.as_slice());
                 let selected = covers(view, row);
-                self.code(r, Code { kind, old, new, text, digits, syntax, emphasis, selected });
-                self.paint_stretch(row, code_rect(r, digits), (text, line.source()));
+                let fit = self.fit(row, text, digits);
+                let at = Place { row: part, fit: &fit, digits };
+                self.code(r, Code { kind, old, new, text, at, syntax, emphasis, selected });
+                self.paint_stretch(code_rect(r, digits), (text, line.source()), (row, &fit));
             }
             Row::Spacer => {}
         }
+    }
+
+    fn fit(&mut self, row: Row, text: &str, digits: usize) -> Fit {
+        let (first, k) = match row {
+            Row::GapLine(i, h, l, k) => (Row::GapLine(i, h, l, 0), k),
+            Row::Line(i, h, l, k) => (Row::Line(i, h, l, 0), k),
+            other => (other, 0),
+        };
+        if self.laid.as_ref().is_none_or(|(laid, _)| *laid != first) {
+            let width = parts(self.area, self.view).body.width;
+            self.laid = Some((first, code::wrap(text, room(width, digits))));
+        }
+        let fits = self.laid.as_ref().map_or(&[][..], |(_, fits)| fits.as_slice());
+        fits.get(k).or(fits.last()).cloned().unwrap_or(Fit { chars: 0..0, width: 0, end: code::End::Line })
     }
 
     fn gap(&mut self, file: &File, h: usize, r: Rect) {
@@ -774,7 +817,8 @@ impl Painter<'_> {
         if let Some(tint) = tint {
             fill(self.buf, r, tint);
         }
-        let digits = code.digits;
+        let digits = code.at.digits;
+        let first = code.at.row == 0;
         let number = |n: Option<u32>| n.map_or_else(|| " ".repeat(digits), |n| format!("{n:>digits$}"));
         let numbers = match (tint, bar) {
             (None, Some(colour)) => Style::default().fg(colour),
@@ -784,27 +828,29 @@ impl Painter<'_> {
         if code.selected {
             self.selected_mark(r);
         }
-        let mut x = put(self.buf, (r.x + 1, r.y), &number(code.old), numbers, r.right());
-        x = put(self.buf, (x + 1, r.y), &number(code.new), numbers, r.right());
-        if let Some(bar) = bar {
-            put(self.buf, (x + 1, r.y), "▎", Style::default().fg(bar), r.right());
+        if first {
+            let x = put(self.buf, (r.x + 1, r.y), &number(code.old), numbers, r.right());
+            put(self.buf, (x + 1, r.y), &number(code.new), numbers, r.right());
         }
-        self.code_text(r, &code, code_x(r, digits), (tint, word));
+        if let Some(bar) = bar {
+            put(self.buf, (code_x(r, digits) - 2, r.y), "▎", Style::default().fg(bar), r.right());
+        }
+        self.code_text(r, &code, (tint, word));
     }
 
-    fn code_text(&mut self, r: Rect, code: &Code, start: u16, (tint, word): (Option<Color>, Option<Color>)) {
+    fn code_text(&mut self, r: Rect, code: &Code, (tint, word): (Option<Color>, Option<Color>)) {
         let end = r.right().saturating_sub(1);
-        let fit = code::fit(code.text, end.saturating_sub(start));
+        let (start, fit) = (code_x(r, code.at.digits), code.at.fit);
         let plain = [(code.text.to_string(), Style::default())];
         let segments: &[(String, Style)] = code.syntax.map_or(&plain, Vec::as_slice);
         let mut x = start;
         let mut index = 0;
         for (text, style) in segments {
-            for (run, strong) in runs(text, code.emphasis, &mut index, fit.shown) {
+            for (run, strong) in runs(text, code.emphasis, &mut index, &fit.chars) {
                 x = put(self.buf, (x, r.y), &run, paint(*style, tint, word, strong), end);
             }
         }
-        if fit.cut {
+        if fit.end == code::End::Cut {
             put(self.buf, (start + fit.width, r.y), "…", dim(self.view.muted), end + 1);
         }
     }
@@ -841,11 +887,15 @@ fn file_tags(view: &View, file: &File, (muted, shared): (bool, bool)) -> Vec<(St
     right
 }
 
-fn runs(text: &str, emphasis: &[Range<usize>], index: &mut usize, limit: usize) -> Vec<(String, bool)> {
+fn runs(text: &str, emphasis: &[Range<usize>], index: &mut usize, chars: &Range<usize>) -> Vec<(String, bool)> {
     let mut runs: Vec<(String, bool)> = Vec::new();
     for c in text.chars() {
-        if *index >= limit {
+        if *index >= chars.end {
             break;
+        }
+        if *index < chars.start {
+            *index += 1;
+            continue;
         }
         let strong = emphasis.iter().any(|e| e.contains(index));
         match runs.last_mut() {
@@ -858,12 +908,19 @@ fn runs(text: &str, emphasis: &[Range<usize>], index: &mut usize, limit: usize) 
 }
 
 #[derive(Clone, Copy)]
+struct Place<'a> {
+    row: usize,
+    fit: &'a Fit,
+    digits: usize,
+}
+
+#[derive(Clone, Copy)]
 struct Code<'a> {
     kind: Kind,
     old: Option<u32>,
     new: Option<u32>,
     text: &'a str,
-    digits: usize,
+    at: Place<'a>,
     syntax: Option<&'a Segments>,
     emphasis: &'a [Range<usize>],
     selected: bool,

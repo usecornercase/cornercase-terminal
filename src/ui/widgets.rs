@@ -41,12 +41,12 @@ pub(super) fn fit(texts: &[String], room: usize) -> String {
     crate::text::truncate_right(fitting.map_or("", String::as_str), room)
 }
 
-pub(super) fn scroll_edge(body: Rect, first: usize, max: usize, y: u16) -> Option<isize> {
+pub(super) fn scroll_edge(body: Rect, (up, down): (bool, bool), y: u16) -> Option<isize> {
     if body.is_empty() {
         None
-    } else if y <= body.y && first > 0 {
+    } else if y <= body.y && up {
         Some(-1)
-    } else if y >= body.bottom() - 1 && first < max {
+    } else if y >= body.bottom() - 1 && down {
         Some(1)
     } else {
         None
