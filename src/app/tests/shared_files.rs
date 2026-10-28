@@ -197,6 +197,18 @@ mod the_dialog {
     }
 
     #[test]
+    fn says_the_other_workspaces_were_not_looked_at_while_the_setting_is_off() {
+        let mut found = sharing();
+        found.app.config.shared_files = false;
+
+        found.app.open_merge_check(found.first);
+
+        let lines = notes(&found.app);
+        assert!(lines.iter().any(|line| line.contains("Shared files are off (Settings › Worktrees)")), "{lines:?}");
+        assert!(!lines.iter().any(|line| line.contains("No other workspace")), "{lines:?}");
+    }
+
+    #[test]
     fn checks_again_and_drops_an_older_answer() {
         let mut found = sharing();
         found.app.open_merge_check(found.first);

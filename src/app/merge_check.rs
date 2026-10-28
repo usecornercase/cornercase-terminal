@@ -170,7 +170,7 @@ impl App {
             notes.result(find(&With::Workspace(*id)), self.panels.merges.running);
         }
         if others.is_empty() {
-            notes.none(&self.project_label_of(workspace));
+            notes.none(&self.project_label_of(workspace), self.config.shared_files);
         }
         notes.lines
     }
@@ -231,9 +231,14 @@ impl Notes {
         }
     }
 
-    fn none(&mut self, project: &str) {
+    fn none(&mut self, project: &str, scanned: bool) {
         self.lines.push(Line::default());
-        self.text(&format!("No other workspace of {project} changes the same files."), self.muted);
+        let text = if scanned {
+            format!("No other workspace of {project} changes the same files.")
+        } else {
+            "Shared files are off (Settings › Worktrees), so no other workspace was looked at.".into()
+        };
+        self.text(&text, self.muted);
     }
 
     fn result(&mut self, merge: Option<&Merge>, running: bool) {

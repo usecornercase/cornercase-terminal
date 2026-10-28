@@ -19,7 +19,7 @@ The ` share ` button hands your settings to a colleague, or imports theirs: see 
 <Screen
   name="settings-worktrees"
   alt="The Worktrees tab: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; fetch branches every 5 min, commits to pull show as ↓n; pull requests shown, each workspace's pull request and its checks, from gh or glab; merged PRs in stats shown; shared files hidden, ⇄n when two workspaces change the same files"
-  crop={[2, 1, 106, 8]}
+  crop={[2, 1, 106, 9]}
 />
 
 | Row | What it sets |
@@ -28,6 +28,7 @@ The ` share ` button hands your settings to a colleague, or imports theirs: see 
 | **fetch branches every** | How often, in minutes, the remotes are fetched to show the [commits to pull](../../guides/worktrees/#commits-to-pull) as `↓n` on each workspace. `0` turns it off. |
 | **merged PRs in stats** | On (the default): Usage → Stats counts your merged pull requests and merge requests, read with `gh` and `glab`. Off: nothing is asked. The note names the accounts read, or why none were. See [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats). |
 | **pull requests** | On (the default): each workspace whose branch has a pull request on GitHub, or a merge request on GitLab, shows its number, the state of its checks (its pipeline's jobs on GitLab) and whether it has merge conflicts, and on GitHub its layer in a stack, read with `gh` or `glab`. Off: nothing is asked. The note says why none show when every project read with one of them fails, because it is missing, logged out or failing. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks). |
+| **shared files** | Off (the default): no workspace is scanned for the files it shares with the others. On: when two workspaces of a project change the same files, both rows show `⇄n` and those files carry `⇄` in the changes panel, from a git scan every few seconds in projects with two or more checkouts. The **merge check** works either way. See [Workspaces that change the same files](../../guides/worktrees/#workspaces-that-change-the-same-files). |
 
 ### Agents
 
