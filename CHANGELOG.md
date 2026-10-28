@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.221
+
+- **See what every pane runs, and stop a runaway program.** **More ▴ › processes** (or `k` in the keys menu) opens a Processes dialog with one row per pane of every open project: where it is, what runs in it, and the CPU and memory of everything under its shell. The totals sit at the top and cornercase's own use is the last row. Click a row to see its processes, each with its own figures, and sort by CPU, memory or name, or type to filter. ` go ` shows the pane and ` close ` closes it (or its agent, as **close agent** does). ` stop ` on a process asks first, then sends SIGTERM to it and everything it started, and SIGKILL to what still runs 3 seconds later; a pane's shell is never offered. It measures only while it is open, every 2 seconds, and holds the order of the rows while the pointer is over them.
+- Scripts: `cornercase processes` (`--pane`, `--workspace`, `--worktree`, `--interval`, `--json`) prints the same list, and `cornercase processes stop PID` stops a program of a pane and what it started. They are the requests `processes` and `stop-process`, and `cornercase contract` lists both.
+
 ## 0.12.220
 
 - **Shared files are now a setting, off by default.** The `⇄n` badge on workspace rows and the `⇄` mark in the changes panel only show once you turn on **Settings → Worktrees → shared files** (`shared_files` in `config.json`, or `cornercase config set shared_files true`). While it is off, cornercase runs no background git scan for them. The **merge check** in the row's ` ⋯ ` menu still works either way, and checks the workspace against its base branch.
