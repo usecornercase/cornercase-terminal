@@ -22,7 +22,7 @@ use crate::processes::dialog::{Action, AgentTag, Dialog, Hit, Line as At, PaneRo
 use crate::processes::stop::{self, Stopped};
 use crate::processes::{self, PaneTree, Proc, Sample, Times, sum_cpu, sum_memory};
 use crate::project::Hierarchy;
-use crate::text::{CRUMB_SEPARATOR, memory_size};
+use crate::text::{CRUMB_SEPARATOR, size};
 use crate::ui;
 
 const REFRESH_EVERY: Duration = Duration::from_secs(2);
@@ -302,7 +302,7 @@ fn totals_text(dialog: &Dialog) -> String {
         crate::text::plural(totals.panes, "pane", "panes"),
         crate::text::plural(totals.processes, "process", "processes"),
         totals.cpu,
-        memory_size(totals.memory)
+        size(totals.memory)
     )
 }
 

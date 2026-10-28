@@ -11,7 +11,7 @@ use super::{
     list_item_by, pick_background, right_aligned, row_button_rects, tabs_in,
 };
 use crate::processes::dialog::Sort;
-use crate::text::{memory_size, truncate_right};
+use crate::text::{size, truncate_right};
 use crate::ui::View;
 use crate::ui::widgets::{button_width, hovered, overlay_block, rail};
 
@@ -232,7 +232,7 @@ fn draw_list(f: &mut Frame, view: &View, processes: &Processes, list: Rect) {
 }
 
 fn figures(line: &ProcessLine) -> (String, String) {
-    (format!("{:.1}%", line.cpu), memory_size(line.memory))
+    (format!("{:.1}%", line.cpu), size(line.memory))
 }
 
 fn lead(line: &ProcessLine, bg: Style, selected: bool, first: bool, soft: Color) -> Vec<Span<'static>> {

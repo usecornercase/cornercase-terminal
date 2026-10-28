@@ -174,10 +174,10 @@ fn newest_commands() -> Vec<Command> {
         Command::FilesSearch(FilesSearch::default()),
         Command::PasteFile(PasteFile::default()),
         Command::ChangesMergeCheck(ChangesMergeCheck::default()),
-        Command::Processes(Processes::default()),
-        Command::StopProcess(StopProcess::default()),
         Command::WorktreeSize(WorktreeSize::default()),
         Command::FreeBuilds(FreeBuilds::default()),
+        Command::Processes(Processes::default()),
+        Command::StopProcess(StopProcess::default()),
     ]
 }
 

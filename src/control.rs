@@ -532,10 +532,10 @@ impl Command {
         "files-search",
         "paste-file",
         "changes-merge-check",
-        "processes",
-        "stop-process",
         "worktree-size",
         "free-builds",
+        "processes",
+        "stop-process",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

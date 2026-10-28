@@ -20,7 +20,7 @@ use super::widgets::{button_style, dim, draw_band, draw_button, draw_title, midd
 use crate::agents::activity::{self, Status};
 use crate::agents::usage::Severity;
 use crate::pull_request::Mark;
-use crate::text::{cells, clip_cells, memory_size, truncate_cells, truncate_right};
+use crate::text::{cells, clip_cells, truncate_cells, truncate_right};
 
 const SHELL_ICON: &str = "›";
 

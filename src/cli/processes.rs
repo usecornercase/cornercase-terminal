@@ -7,7 +7,7 @@ use crate::control::processes::{PaneProcesses, ProcessInfo, ProcessList};
 use crate::control::{Command, ProcessStopped, Processes, StopProcess};
 use crate::error::Result;
 use crate::process::command_line;
-use crate::text::memory_size;
+use crate::text::size;
 
 const COMMAND_WIDTH: usize = 40;
 
@@ -60,7 +60,7 @@ pub(crate) fn text(list: &ProcessList) -> String {
         pane_text(&mut text, pane);
     }
     if let Some(own) = &list.cornercase {
-        let _ = writeln!(text, "cornercase  {:.1}%  {}", own.cpu, memory_size(own.memory));
+        let _ = writeln!(text, "cornercase  {:.1}%  {}", own.cpu, size(own.memory));
     }
     let total = &list.total;
     let _ = writeln!(
@@ -69,20 +69,20 @@ pub(crate) fn text(list: &ProcessList) -> String {
         crate::text::plural(total.panes, "pane", "panes"),
         crate::text::plural(total.processes, "process", "processes"),
         total.cpu,
-        memory_size(total.memory)
+        size(total.memory)
     );
     text
 }
 
 fn pane_text(text: &mut String, pane: &PaneProcesses) {
     let program = pane.program.as_deref().unwrap_or("-");
-    let _ = writeln!(text, "pane {}  {program}  {:.1}%  {}", pane.pane, pane.cpu, memory_size(pane.memory));
+    let _ = writeln!(text, "pane {}  {program}  {:.1}%  {}", pane.pane, pane.cpu, size(pane.memory));
     for (at, proc) in pane.processes.iter().enumerate() {
         let depth = depth_of(&pane.processes, at);
         let branch = if depth == 0 { String::new() } else { format!("{}└ ", "  ".repeat(depth - 1)) };
         let command = command_line(Some(&proc.name), &proc.args, COMMAND_WIDTH);
         let cpu = proc.cpu.map_or_else(|| "-".to_string(), |cpu| format!("{cpu:.1}%"));
-        let memory = proc.memory.map_or_else(|| "-".to_string(), memory_size);
+        let memory = proc.memory.map_or_else(|| "-".to_string(), size);
         let _ = writeln!(text, "  {:<7} {branch}{command:<COMMAND_WIDTH$}  {cpu:>7}  {memory:>8}", proc.pid);
     }
 }

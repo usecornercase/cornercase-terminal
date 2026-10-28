@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use clap::builder::NonEmptyStringValueParser;
 use clap::{ArgGroup, Args, Parser, Subcommand, ValueEnum};
 
+use super::help::WORKTREES_HELP;
 use super::help::{
     ABOUT, ACCOUNT_HELP, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, COMMAND_THERE, CONFIG_HELP,
     CONTRACT_HELP, EVENTS_HELP, FLOW_HELP, FOCUS_HELP, FOLD_HELP, GO_HELP, GROUP_HELP, HERE_PANE, HERE_WORKSPACE,
@@ -34,7 +35,6 @@ use super::help::{
     USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use super::help::{AGENTS_HELP, CHANGES_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP};
-use super::help::{AGENTS_HELP, CHANGES_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, WORKTREES_HELP};
 use crate::control::Until;
 use crate::term::keys;
 
@@ -255,6 +255,7 @@ pub(crate) enum Control {
         after_help = PROCESSES_HELP
     )]
     Processes(processes::ProcessesArgs),
+    #[command(
         about = "Measure the disk a worktree takes, and free its build folders without removing it",
         after_help = WORKTREES_HELP
     )]
