@@ -16,8 +16,12 @@ impl Member {
         Self { pid, started: process::start_stamp(pid), name: process::name(pid).unwrap_or_else(|| "?".into()) }
     }
 
+    fn stamped(pid: i32) -> Option<Self> {
+        Self::read(pid).started.is_some().then(|| Self::read(pid))
+    }
+
     fn running(&self) -> bool {
-        process::running(self.pid, self.started)
+        self.started.is_some() && process::running(self.pid, self.started)
     }
 }
 
@@ -30,8 +34,14 @@ pub(crate) struct Group {
 pub(crate) type Stopped = escalation::Stopped<Group>;
 
 impl Group {
+    #[cfg(test)]
     pub(crate) fn live(pid: i32) -> Self {
-        Self { root: Member::read(pid), members: process::descendants(pid).into_iter().map(Member::read).collect() }
+        Self::live_with(pid, None)
+    }
+
+    pub(crate) fn live_with(pid: i32, started: Option<u64>) -> Self {
+        let root = Member { started: started.or_else(|| process::start_stamp(pid)), ..Member::read(pid) };
+        Self { root, members: process::descendants(pid).into_iter().filter_map(Member::stamped).collect() }
     }
 
     pub(crate) fn size(&self) -> usize {
@@ -41,7 +51,7 @@ impl Group {
     fn refreshed(mut self) -> Self {
         for pid in process::descendants(self.root.pid) {
             if !self.members.iter().any(|member| member.pid == pid) && pid != self.root.pid {
-                self.members.push(Member::read(pid));
+                self.members.extend(Member::stamped(pid));
             }
         }
         self
@@ -69,10 +79,12 @@ impl Stoppable for Group {
             let pid = Pid::from_raw(member.pid).ok_or_else(String::new)?;
             kill_process(pid, signal).map_err(|errno| format!("could not signal pid {}: {errno}", member.pid))
         };
-        for member in self.members.iter().filter(|member| member.running()) {
-            let _ = sent(member);
+        let signalled = self.members.iter().filter(|member| member.running()).filter(|member| sent(member).is_ok());
+        let members = signalled.count();
+        if !self.root.running() {
+            return Ok(());
         }
-        if self.root.running() { sent(&self.root) } else { Ok(()) }
+        sent(&self.root).or_else(|error| if members > 0 { Ok(()) } else { Err(error) })
     }
 
     fn holds(&self) -> bool {

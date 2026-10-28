@@ -197,7 +197,7 @@ fn stop_process(places: &Places, request: &StopProcess) -> Result<ProcessStopped
         return Err(conflict(format!("pid {pid} is no longer the program that was listed")));
     }
     let pane = pane_of(places, pid);
-    let (group, outcome) = stop::stop(Group::live(pid))
+    let (group, outcome) = stop::stop(Group::live_with(pid, request.started))
         .into_iter()
         .next()
         .ok_or_else(|| Refusal::new(Code::Failed, "nothing was stopped"))?;

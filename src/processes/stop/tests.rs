@@ -1,5 +1,7 @@
 use std::process::{Child, Command, Stdio};
 
+use rustix::process::Signal;
+
 use super::*;
 use crate::process::escalation::Outcome;
 use crate::test_util::{Family, wait_until};
@@ -72,6 +74,50 @@ mod stopping {
         assert!(matches!(&stopped[..], [(_, Ok(_))]), "{stopped:?}");
         wait_until("the late child ends", || gone(late));
         shell.wait().expect("reap");
+    }
+}
+
+mod reused_pids {
+    use super::*;
+
+    #[test]
+    fn a_member_without_a_start_is_never_signalled() {
+        let mut root = spawn("sleep 30");
+        let mut bystander = spawn("sleep 30");
+        let (pid, other) = (pid_of(&root), pid_of(&bystander));
+        wait_until("both run", || process::start_stamp(pid).is_some() && process::start_stamp(other).is_some());
+        let blind = Member { pid: other, started: None, name: "sleep".into() };
+        let group = Group { members: vec![blind], ..Group::live(pid) };
+        let stopped = stop(group);
+        assert!(matches!(&stopped[..], [(_, Ok(_))]), "{stopped:?}");
+        assert!(bystander.try_wait().expect("check").is_none());
+        let _ = (root.wait(), bystander.kill(), bystander.wait());
+    }
+
+    #[test]
+    fn a_group_built_with_the_requests_start_keeps_it_and_is_refused_when_it_differs() {
+        let mut child = spawn("sleep 30");
+        let pid = pid_of(&child);
+        wait_until("it runs", || process::start_stamp(pid).is_some());
+        let group = Group::live_with(pid, process::start_stamp(pid).map(|stamp| stamp + 1));
+        assert_eq!(group.root.started, process::start_stamp(pid).map(|stamp| stamp + 1));
+        let stopped = stop(group);
+        assert!(matches!(&stopped[..], [(_, Err(reason))] if reason.contains("no longer the program")), "{stopped:?}");
+        assert!(child.try_wait().expect("check").is_none());
+        let _ = (child.kill(), child.wait());
+    }
+
+    #[test]
+    fn a_root_that_cannot_be_signalled_does_not_hide_the_members_that_were() {
+        if rustix::process::getuid().is_root() {
+            return;
+        }
+        let mut child = spawn("sleep 30");
+        let pid = pid_of(&child);
+        wait_until("it runs", || process::start_stamp(pid).is_some());
+        let group = Group { root: Member::read(1), members: vec![Member::read(pid)] };
+        assert_eq!(group.signal(Signal::TERM), Ok(()));
+        wait_until("the member ends", || child.try_wait().expect("check").is_some());
     }
 }
 
