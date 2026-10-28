@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.221
+
+- **Drive another machine's cornercase while it runs a newer version.** `--remote` commands no longer need the same version on both machines: when the other machine runs a newer cornercase than this one, `cornercase --remote devbox status`, `events` and the rest keep working, so an app on your laptop doesn't stop each time only `devbox` updates. When the other machine is the older one, commands still refuse, since its server could ignore what a newer command asks for, and say how to update it from here. The window, `cornercase remote devbox`, still needs the same version on both.
+- **Update, restart and stop another machine's cornercase from here.** `cornercase --remote devbox update`, `restart`, `kill-server` and `logs` now run on `devbox` through your `ssh` instead of refusing `--remote`: same flags, the same questions when you are at a terminal (`--yes` skips them), and the exit status they have there. `cornercase --remote devbox logs --follow` follows that machine's log. The plugin commands that install or change plugins still act only on the machine they run on.
+- `cornercase logs --follow` now ends soon after the program reading it exits, as the other commands that follow a stream already do, instead of waiting for the server's next log line.
+
 ## 0.12.220
 
 - **Shared files are now a setting, off by default.** The `⇄n` badge on workspace rows and the `⇄` mark in the changes panel only show once you turn on **Settings → Worktrees → shared files** (`shared_files` in `config.json`, or `cornercase config set shared_files true`). While it is off, cornercase runs no background git scan for them. The **merge check** in the row's ` ⋯ ` menu still works either way, and checks the workspace against its base branch.
