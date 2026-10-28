@@ -15,6 +15,12 @@ use crate::ports::{self, Pane, Places, Port};
 use crate::project::Hierarchy;
 use crate::term::Term;
 
+pub(in crate::app) struct PanePids {
+    pub(in crate::app) shell: i32,
+    pub(in crate::app) foreground: Option<i32>,
+    pub(in crate::app) agent: Option<(String, i32)>,
+}
+
 impl App {
     pub(super) fn ports_request(&mut self, client: u64, asker: Asker, request: &Ports) -> Handled {
         let only = match (request.all, request.workspace) {
@@ -96,12 +102,17 @@ impl App {
     }
 
     fn port_pane(&self, term: &Term, workspace: u64) -> Option<Pane> {
+        let pids = self.pane_pids(term)?;
+        Some(Pane { id: term.id, shell: pids.shell, workspace, agent: pids.agent })
+    }
+
+    pub(in crate::app) fn pane_pids(&self, term: &Term) -> Option<PanePids> {
         let shell = term.shell_pid()?;
         let running = term.agent.agent().map(str::to_string);
         let running = running.or_else(|| agents::detect(&self.config, &term.foreground_args()));
         let known = running.as_deref().and_then(agents::Known::of).map(|agent| agent.name().to_string());
-        let agent = known.zip(term.foreground_pid());
-        Some(Pane { id: term.id, shell, workspace, agent })
+        let foreground = term.foreground_pid();
+        Some(PanePids { shell, foreground: foreground.filter(|pid| *pid != shell), agent: known.zip(foreground) })
     }
 }
 

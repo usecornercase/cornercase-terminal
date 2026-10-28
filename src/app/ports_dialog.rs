@@ -9,6 +9,7 @@ use super::App;
 use super::event::AppEvent;
 use super::input::{ListPointer, list_pointer, wheel_span};
 use super::overlay::Overlay;
+use super::refresh::Refresh;
 use super::toast::Toast;
 use super::worktrees_dialog::wrap;
 use crate::control::contract::Refusal;
@@ -17,7 +18,8 @@ use crate::error::Result;
 use crate::log::{Job, Level};
 use crate::ports::dialog::{Action, Dialog, Hit, Step};
 use crate::ports::stop::{self, Stopped, Target};
-use crate::ports::{self, Port, Via, command_line};
+use crate::ports::{self, Port, Via};
+use crate::process::command_line;
 use crate::project::Hierarchy;
 use crate::ui;
 
@@ -27,9 +29,7 @@ const COMMAND_WIDTH: usize = 40;
 
 #[derive(Debug, Default)]
 pub(super) struct PortsState {
-    generation: u64,
-    scanning: bool,
-    asked: Option<Instant>,
+    refresh: Refresh,
     stopping: usize,
 }
 
@@ -43,17 +43,14 @@ pub(crate) enum PortsEvent {
 
 impl App {
     pub(super) fn open_ports(&mut self, workspace: u64) {
-        self.panels.ports.generation += 1;
-        self.panels.ports.scanning = false;
-        self.panels.ports.asked = None;
-        self.overlay = Some(Overlay::Ports(Box::new(Dialog::new(workspace, self.panels.ports.generation))));
+        let generation = self.panels.ports.refresh.open();
+        self.overlay = Some(Overlay::Ports(Box::new(Dialog::new(workspace, generation))));
         self.watch_ports_dialog(Instant::now());
     }
 
     pub(super) fn watch_ports_dialog(&mut self, now: Instant) {
         let Some(Overlay::Ports(dialog)) = &self.overlay else { return };
-        let due = self.panels.ports.asked.is_none_or(|at| now.saturating_duration_since(at) >= REFRESH_EVERY);
-        if self.panels.ports.scanning || !due {
+        if !self.panels.ports.refresh.due(now, REFRESH_EVERY) {
             return;
         }
         let (workspace, generation) = (dialog.workspace, dialog.generation);
@@ -61,8 +58,7 @@ impl App {
             self.overlay = None;
             return;
         }
-        self.panels.ports.scanning = true;
-        self.panels.ports.asked = Some(now);
+        self.panels.ports.refresh.begin(now);
         let places = self.port_places();
         let job = Job::new(Level::Debug, "ports", "list").with("workspace", workspace);
         self.spawn_job(
@@ -82,9 +78,7 @@ impl App {
     }
 
     fn ports_listed(&mut self, generation: u64, result: Result<Vec<Port>>) {
-        if generation == self.panels.ports.generation {
-            self.panels.ports.scanning = false;
-        }
+        self.panels.ports.refresh.answered(generation);
         if let Some(Overlay::Ports(dialog)) = &mut self.overlay
             && dialog.generation == generation
         {
@@ -94,7 +88,7 @@ impl App {
 
     fn ports_stopped(&mut self, stopped: &[Stopped]) {
         self.panels.ports.stopping = self.panels.ports.stopping.saturating_sub(1);
-        self.panels.ports.asked = None;
+        self.panels.ports.refresh.again();
         let failed =
             stopped.iter().any(|(_, outcome)| !matches!(outcome, Ok(stop::Outcome::Stopped | stop::Outcome::Killed)));
         let icon = if failed { ui::ToastIcon::Bug } else { ui::ToastIcon::Check };
@@ -105,6 +99,7 @@ impl App {
         match &self.overlay {
             Some(Overlay::Worktrees(_)) => self.worktrees_key(key, area),
             Some(Overlay::Ports(_)) => self.ports_key(key, area),
+            Some(Overlay::Processes(_)) => self.processes_key(key, area),
             _ => {}
         }
     }
@@ -113,6 +108,7 @@ impl App {
         match overlay {
             Overlay::Worktrees(dialog) => Some(ui::Overlay::Worktrees(self.worktrees_view(dialog, area))),
             Overlay::Ports(dialog) => Some(ui::Overlay::Ports(self.ports_view(dialog, area))),
+            Overlay::Processes(dialog) => Some(ui::Overlay::Processes(self.processes_view(dialog, area))),
             _ => None,
         }
     }
@@ -272,7 +268,7 @@ impl App {
 #[cfg(test)]
 impl App {
     pub(super) fn ports_scanning(&self) -> bool {
-        self.panels.ports.scanning
+        self.panels.ports.refresh.busy()
     }
 }
 

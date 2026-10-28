@@ -31,6 +31,7 @@ mod help;
 mod issue;
 mod plugin;
 mod ports;
+mod processes;
 mod queue;
 mod reach;
 mod read;
@@ -275,6 +276,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::Issue(args) => return ControlFlow::Break(issue::run(args.action)),
         Control::Usage(args) => return ControlFlow::Break(usage::run(&args)),
         Control::Ports(args) => return ControlFlow::Break(ports::run(&args)),
+        Control::Processes(args) => return ControlFlow::Break(processes::run(&args)),
         Control::Tour(args) => tour::run(&args).map(|()| true),
         Control::Queue(queue) => queue::run(queue.action).map(|()| true),
         Control::Away(away) => run_away(&away).map(|()| true),

@@ -315,7 +315,7 @@ impl App {
             Stage::Check => return "git is still checking the worktree".into(),
             Stage::Issue(asking) => return format!("{} is still looking the issue up", asking.source().name()),
             Stage::Usage(_) => return "the agents have not said their usage yet".into(),
-            Stage::Ports => return "the ports are still being listed".into(),
+            Stage::Ports | Stage::Processes => return stage.listing().into(),
             Stage::Held(_) => return held::waiting(pane, self.blocked(pane, Instant::now())),
             Stage::Launch { .. } => return format!("pane {pane} is still starting"),
             Stage::Setup(workspace) => {

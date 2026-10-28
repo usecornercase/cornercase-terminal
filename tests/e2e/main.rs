@@ -37,6 +37,7 @@ mod panels;
 mod panes;
 mod plugins;
 mod ports;
+mod processes;
 mod queue;
 mod remote;
 mod server;

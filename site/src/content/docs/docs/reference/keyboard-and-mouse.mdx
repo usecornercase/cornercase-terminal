@@ -48,7 +48,7 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Click | `Agents ›` in the [compact](../../guides/small-terminals/#the-menu) projects menu | Shows the agents. |
 | Click | `Issues` | Opens the issue browser. |
 | Click | `Worktrees` (its slot in the icon bar, or the projects menu in compact mode) | Opens the [Worktrees dialog](../../guides/worktrees/#clean-up-worktrees) for every project: each worktree on disk, when it last changed and what makes it safe to remove, and removing several at once. |
-| Click | `More ▴` (the gear in the icon bar) | Opens a menu: **update to x.y.z** when a new version is out (see [Update](../../installation/#update)), **settings**, **usage** (your [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats)), **remote…** once remote access or a chat bot is set up, and **quit**, which detaches. It turns cyan while an update waits and shows a green `●` while a browser is attached or you are away. |
+| Click | `More ▴` (the gear in the icon bar) | Opens a menu: **update to x.y.z** when a new version is out (see [Update](../../installation/#update)), **settings**, **usage** (your [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats)), **processes** (the [Processes](../../guides/projects-workspaces-tabs/#processes) dialog), **remote…** once remote access or a chat bot is set up, and **quit**, which detaches. It turns cyan while an update waits and shows a green `●` while a browser is attached or you are away. |
 | Click | `Help` | Opens a menu: the [guided tour](../../first-steps/#the-guided-tour-and-help), the catalogue of short tours, the docs, the keys menu (with a prefix key) and the link to report a bug. |
 | Click | The tour's card | Its buttons move the tour: **back**, **skip**, **next**, **docs** (copies the tour's page), **end tour**. Keys still go to the pane. |
 | Click | **remote…** in the `More ▴` menu | Opens a menu to open cornercase [in your phone's browser](../../guides/phone/) or to have agents message you [on Telegram](../../guides/telegram/) or [on Discord](../../guides/discord/), or to stop. |
@@ -181,7 +181,7 @@ Press the prefix and a menu opens at the bottom of the screen with what each nex
 
 <Screen
   name="keys-menu"
-  alt="The web-shop project with git log in the pane, and the Keys menu at the bottom of the pane: n next tab, p previous tab, 1-9 go to tab, ] next workspace, [ previous workspace, } next project, { previous project, arrows pane on that side, a agent that needs you, m mark for review, / search, c new tab, | split right, - split down, x close pane, r rename tab, f find…, g git…, w workspace…, i issues, t todo, comma settings, u usage, h help, o away on chat apps, q quit, and a note that esc closes and ctrl+] twice types it in the pane"
+  alt="The web-shop project with git log in the pane, and the Keys menu at the bottom of the pane: n next tab, p previous tab, 1-9 go to tab, ] next workspace, [ previous workspace, } next project, { previous project, arrows pane on that side, a agent that needs you, m mark for review, / search, c new tab, | split right, - split down, x close pane, r rename tab, f find…, g git…, w workspace…, i issues, t todo, comma settings, u usage, k processes, h help, o away on chat apps, q quit, and a note that esc closes and ctrl+] twice types it in the pane"
   caption="The menu the prefix key opens, here Ctrl+]."
 />
 
@@ -211,6 +211,7 @@ Press the prefix and a menu opens at the bottom of the screen with what each nex
 | `w` `s` | [Starts a flow](../../guides/flows/#start-a-flow) in the project on screen. |
 | `w` `f` | Opens or closes the [Flow panel](../../guides/flows/#the-flow-panel) of the workspace's run, or says it runs no flow. |
 | `i`, `t`, `,`, `u` | Opens the issues, the [TODO list](../../guides/todo/) (on a new item), the settings, Usage and stats. |
+| `k` | Opens the [Processes](../../guides/projects-workspaces-tabs/#processes) dialog: what every pane runs, with its CPU and memory, and a way to stop a program. |
 | `h` | Opens the **`Help`** menu. |
 | `o` | Away on chat apps: turns the away mode of [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) on or off, on every one that is set up, as **More ▴ › remote…** does for each. With none paired, it opens the settings to set one up. |
 | `q` | Quits the window. Everything keeps running, as with **More ▴ › quit**. |
@@ -267,5 +268,7 @@ Everything else goes to the program in the active pane, encoded like a modern te
 <Aside type="note">
 Programs inside cornercase never receive key releases, even with the kitty protocol. That matters only for the rare program that reacts to them, such as some games.
 </Aside>
+
+In Processes, `↑` `↓` pick a line, `→` and `←` open and fold a pane, `Enter` shows the pane (or asks to stop the process on a process line), `Tab` changes the sort, and any other key types in the filter; `Esc` clears the filter, then closes it.
 
 In Usage, **Limits** and **Stats** switch by click, `Tab`, `Shift+Tab`, `←` or `→`. It opens on Stats and remembers the last tab for the server run. `Enter`, `Esc`, `done` or a click outside closes it.

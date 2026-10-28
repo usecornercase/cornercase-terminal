@@ -295,3 +295,94 @@ mod output_within {
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
     }
 }
+
+mod stat {
+    use super::*;
+
+    const STAT: &str =
+        "4210 (npm run (dev) x) S 4200 4210 4200 34816 4210 4194304 1000 0 0 0 150 50 0 0 20 0 1 0 81240 1000 100";
+
+    #[test]
+    fn cpu_time_adds_user_and_system_ticks_even_when_the_name_holds_spaces_and_parentheses() {
+        assert_eq!(stat_cpu_time(STAT, 100), Some(Duration::from_secs(2)));
+    }
+
+    #[test]
+    fn the_state_is_the_first_field_after_the_name() {
+        assert!(!stat_is_zombie(STAT));
+        assert!(stat_is_zombie(&STAT.replace(") S ", ") Z ")));
+        assert!(stat_is_zombie(&STAT.replace(") S ", ") X ")));
+    }
+}
+
+mod cpu_time {
+    use super::*;
+    use crate::test_util::{Running, wait_until};
+
+    #[test]
+    fn grows_for_a_busy_process_by_a_fair_share_of_the_wall_time() {
+        let busy = Running::spawn(Command::new("/bin/sh").args(["-c", "while :; do :; done"]));
+        let first = Instant::now();
+        let before = cpu_time(busy.pid()).expect("cpu time");
+        wait_until("the busy loop uses cpu", || {
+            cpu_time(busy.pid()).is_some_and(|now| now.saturating_sub(before) > Duration::from_millis(100))
+        });
+        let wall = first.elapsed();
+        let used = cpu_time(busy.pid()).expect("cpu time").saturating_sub(before);
+        assert!(used.as_secs_f64() >= wall.as_secs_f64() * 0.25, "{used:?} of {wall:?}");
+    }
+
+    #[test]
+    fn is_unknown_for_a_process_that_exited() {
+        assert_eq!(cpu_time(exited_pid()), None);
+    }
+}
+
+mod running {
+    use super::*;
+    use crate::test_util::{Running, wait_until};
+
+    #[test]
+    fn is_true_for_a_live_process_with_its_own_start_and_false_for_another_one() {
+        let sleeper = Running::spawn(Command::new("/bin/sleep").arg("30"));
+        let stamp = start_stamp(sleeper.pid());
+        assert!(running(sleeper.pid(), stamp));
+        assert!(running(sleeper.pid(), None));
+        assert!(!running(sleeper.pid(), stamp.map(|stamp| stamp + 1)));
+    }
+
+    #[test]
+    fn is_false_for_a_zombie_and_for_a_process_that_was_reaped() {
+        let mut child = Command::new("/bin/sh").args(["-c", "exit 0"]).spawn().expect("spawn sh");
+        let pid = i32::try_from(child.id()).expect("a pid");
+        wait_until("the child is a zombie", || alive(pid) && !running(pid, None));
+        assert!(alive(pid));
+        child.wait().expect("reap");
+        assert!(!running(pid, None));
+    }
+}
+
+mod tree {
+    use super::*;
+    use crate::test_util::Family;
+
+    #[test]
+    fn pairs_each_descendant_with_its_parent_and_matches_descendants() {
+        let family = Family::new();
+        let (child, grandchild) = (family.child().expect("a child"), family.grandchild().expect("a grandchild"));
+        assert_eq!(tree(family.pid()), [(child, family.pid()), (grandchild, child)]);
+        assert_eq!(descendants(family.pid()), [child, grandchild]);
+    }
+}
+
+mod command_line {
+    use super::*;
+
+    #[test]
+    fn shows_the_name_then_the_arguments_cut_to_the_width() {
+        let args: Vec<String> = ["/usr/bin/node", "vite", "--port", "5173"].iter().map(ToString::to_string).collect();
+        assert_eq!(command_line(Some("node"), &args, 40), "node vite --port 5173");
+        assert_eq!(command_line(None, &args, 40), "node vite --port 5173");
+        assert_eq!(command_line(Some("node"), &args, 10), "node vite…");
+    }
+}

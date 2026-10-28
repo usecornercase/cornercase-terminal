@@ -6,7 +6,7 @@ use crate::client::{answer, ask};
 use crate::control::ports::PortInfo;
 use crate::control::{Command, Listing, PortStopped, Ports, StopPort};
 use crate::error::Result;
-use crate::ports::command_line;
+use crate::process::command_line;
 
 const COMMAND_WIDTH: usize = 40;
 

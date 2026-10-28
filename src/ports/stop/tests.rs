@@ -1,7 +1,8 @@
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 
-use super::{Outcome, Target, kill, stop};
+use super::{Outcome, Target, stop};
+use crate::process::escalation::kill;
 
 const LISTEN: &str = "import signal, socket, sys, time
 if sys.argv[1] == 'ignore':

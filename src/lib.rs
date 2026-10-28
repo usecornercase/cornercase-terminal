@@ -27,6 +27,7 @@ pub(crate) mod issues;
 pub(crate) mod messenger;
 pub(crate) mod plugins;
 pub(crate) mod ports;
+pub(crate) mod processes;
 pub mod project;
 pub(crate) mod pull_request;
 pub(crate) mod queue;

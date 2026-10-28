@@ -63,7 +63,7 @@ fn the_gear_opens_the_more_menu() {
     pick(&mut app, "settings");
     assert_eq!(
         (labels, matches!(app.overlay, Some(Overlay::Settings(_)))),
-        (["settings", "usage", "quit"].map(String::from).to_vec(), true)
+        (["settings", "usage", "processes", "quit"].map(String::from).to_vec(), true)
     );
 }
 

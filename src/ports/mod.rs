@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 use std::net::IpAddr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::host::open::Browse;
+use crate::process;
 use crate::process::owners::{Owner, Trees, folder, owner, trees};
-use crate::{process, text};
 
 pub(crate) mod dialog;
 pub(crate) mod listen;
@@ -71,13 +71,6 @@ impl Port {
     pub(crate) fn url(&self) -> String {
         self.browse().url()
     }
-}
-
-pub(crate) fn command_line(program: Option<&str>, args: &[String], width: usize) -> String {
-    let first = args.first().and_then(|arg| Path::new(arg).file_name()?.to_str());
-    let name = program.or(first).unwrap_or("?");
-    let line = std::iter::once(name).chain(args.iter().skip(1).map(String::as_str)).collect::<Vec<_>>().join(" ");
-    text::truncate_right(&line, width)
 }
 
 pub(crate) fn scan(places: &Places, only: Option<u64>) -> Vec<Port> {

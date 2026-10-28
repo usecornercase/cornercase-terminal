@@ -193,7 +193,7 @@ export type MenuAction =
 
 export type HelpItem = 'tour' | 'catalogue' | 'docs' | 'keys' | 'bug';
 
-export type MoreItem = 'settings' | 'usage' | 'quit';
+export type MoreItem = 'settings' | 'usage' | 'processes' | 'quit';
 
 export interface PickItem {
   value: string;

@@ -52,7 +52,7 @@ impl App {
             Some(Overlay::Flows { .. }) => self.flows_key(key, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_key(key, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_key(key, area),
-            Some(Overlay::Worktrees(_) | Overlay::Ports(_)) => self.listing_key(key, area),
+            Some(Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_)) => self.listing_key(key, area),
             Some(Overlay::CloseAgent(_)) => self.close_agent_key(key, area),
             Some(Overlay::CloseAgents(_)) => self.close_agents_key(key, area),
             Some(Overlay::Usage) => {
@@ -470,6 +470,7 @@ impl App {
             Some(Overlay::StartFlow { .. }) => self.start_flow_paste(text, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_paste(text, area),
             Some(Overlay::Worktrees(_)) => self.worktrees_paste(text),
+            Some(Overlay::Processes(dialog)) => dialog.paste(text),
             Some(_) => self.name_paste(text, area),
             None => {}
         }

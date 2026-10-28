@@ -12,7 +12,7 @@ use crate::files::Mode;
 use crate::log;
 use crate::project::search::{Finder, Goto};
 use crate::project::split::{self, Place};
-use crate::project::{Hierarchy, Project, WorkspaceAt};
+use crate::project::{Hierarchy, Project, Tab, Workspace, WorkspaceAt};
 use crate::shortcuts::{self, Action, Group, Step};
 use crate::ui::{self, keys};
 
@@ -121,6 +121,7 @@ impl App {
             Action::Todo => self.todo_by_key(),
             Action::Settings => self.dialog_by_key(Self::open_settings),
             Action::Usage => self.dialog_by_key(Self::open_usage),
+            Action::Processes => self.dialog_by_key(Self::open_processes),
             Action::Help => self.dialog_by_key(Self::help_by_key),
             other => return Some(other),
         }
@@ -298,17 +299,24 @@ impl App {
     }
 
     fn ask_close_pane(&mut self) {
-        let Some(project) = self.project() else { return };
-        let Some(workspace) = project.workspace() else { return };
-        let Some(tab) = workspace.tab() else { return };
-        let Some(pane) = tab.pane() else { return };
-        let overlay = if tab.panes.len() == 1 {
+        let Some(pane) = self.project().and_then(Project::workspace).and_then(Workspace::tab).and_then(Tab::pane)
+        else {
+            return;
+        };
+        let pane = pane.id;
+        self.screen.nav = None;
+        self.ask_close_pane_of(pane);
+    }
+
+    pub(in crate::app) fn ask_close_pane_of(&mut self, pane: u64) {
+        let Some(at) = self.projects.tab_of_pane(pane) else { return };
+        let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at.workspace()));
+        let tab = self.projects.tab(at);
+        self.overlay = Some(if tab.panes.len() == 1 {
             Overlay::CloseTab { project: project.id, workspace: workspace.id, tab: tab.id }
         } else {
-            Overlay::ClosePane { pane: pane.id }
-        };
-        self.screen.nav = None;
-        self.overlay = Some(overlay);
+            Overlay::ClosePane { pane }
+        });
     }
 
     fn ask_close_workspace(&mut self) {

@@ -157,6 +157,7 @@ pub(crate) enum Action {
     Todo,
     Settings,
     Usage,
+    Processes,
     Help,
     Away,
     Quit,
@@ -208,7 +209,7 @@ const fn open(key: &'static str, group: Group) -> Item {
     Item { key, label: group.label(), step: Some(Step::Open(group)) }
 }
 
-const ROOT: [Item; 26] = [
+const ROOT: [Item; 27] = [
     run("n", "next tab", Action::NextTab),
     run("p", "previous tab", Action::PreviousTab),
     Item { key: "1-9", label: "go to tab", step: None },
@@ -232,6 +233,7 @@ const ROOT: [Item; 26] = [
     run("t", "todo", Action::Todo),
     run(",", "settings", Action::Settings),
     run("u", "usage", Action::Usage),
+    run("k", "processes", Action::Processes),
     run("h", "help", Action::Help),
     run("o", "away on chat apps", Action::Away),
     run("q", "quit", Action::Quit),

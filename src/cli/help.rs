@@ -742,6 +742,7 @@ Examples:
 mod files;
 mod flow;
 mod paste_file;
+mod processes;
 
 pub(in crate::cli) use files::FILES_HELP;
 pub(in crate::cli) use flow::{
@@ -750,6 +751,7 @@ pub(in crate::cli) use flow::{
     FLOW_SAVE_HELP,
 };
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
+pub(in crate::cli) use processes::{PROCESSES_HELP, PROCESSES_STOP_HELP};
 
 #[cfg(test)]
 mod tests;

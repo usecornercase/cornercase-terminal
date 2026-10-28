@@ -362,6 +362,28 @@ Tick rows (click their circle, or `Space`) and **stop 2** stops those; with noth
 
 Ports published by Docker (`docker run -p`, `docker compose up`) are held by Docker, not by the tab that ran the command, so they don't show in a workspace's list.
 
+## Processes
+
+**More ▴ › processes** (the gear of the [icon bar](../small-terminals/), compact mode's **More**, or `k` in the [keys menu](../../reference/keyboard-and-mouse/)) opens a list of what every pane runs, across all your open projects. It is for finding the program that eats a core or a gigabyte and ending it, without a second terminal and a guess about which pane it came from.
+
+<Screen
+  name="processes"
+  alt="The Processes dialog: a filter field and the cpu, memory and name sort tabs, the totals line, then one row per pane such as web-shop › main › nvim with its program, CPU and memory, the first with its go and close buttons, and a last cornercase row for the server"
+  crop={[2, 1, 106, 13]}
+/>
+
+Each row is a pane: `project › workspace › tab` (with `· pane N` in a split tab), the program in it (the agent's name for an agent) and the CPU and memory of its shell and everything under it. CPU is the share of one core, so a busy two-thread program reads about `200.0%`; memory is the same figure the tab rows show. The top line sums the rows, and the last row, **cornercase**, is cornercase's own use: its server, [plugin](../plugins/) services and popups. Click a row, or press `→`, to see its processes as a tree, each with its command line, pid, CPU and memory; `←` folds it. Sort with ` cpu `, ` memory ` and ` name ` (`Tab` cycles them), or type to filter by place, program or command line; a pane that matches only through one of its processes opens to show it. `Esc` clears the filter, then closes the dialog.
+
+The list is measured every two seconds while it is open, and not at all otherwise. It re-sorts at each sample, except while the pointer is over the list, so the row you are about to click does not move.
+
+Hover a row, or pick it with the arrows, for its buttons:
+
+- **go** shows the pane (`Enter` does the same on a row).
+- **close** closes the pane, asking first: the **close agent** dialog for an agent's pane, else the same question as closing a pane or a tab.
+- **stop**, on a process line, asks first, naming the program, its pid, its tab and what else it will stop, and warns when it is the pane's agent or something an agent started. It then sends `SIGTERM` to the process and everything it started, waits up to three seconds, and sends `SIGKILL` to what still runs. The pane's shell is never offered, nor cornercase itself, and the shell and the agent that started the program are left running. A toast says what happened. A process the list shows may end before you confirm; stopping one that changed or ended is refused.
+
+Scripts and agents get the same list and the same stop with [`cornercase processes`](../scripts-and-agents/#processes). Programs that start and end between two samples are not counted, and a program that daemonizes leaves its pane's tree; see the [limitations](../../help/limitations/).
+
 ## Close
 
 Hover a group, project, workspace or tab row: it gets a lighter background, so you can see what a click will hit, and a `×` appears at its right end. Clicking it closes that item and ends every program inside it, except on a group, which asks whether to keep its projects open or close them too. In the [compact layout](../small-terminals/) the `×` is always there, and closing a tab or a workspace asks first too:

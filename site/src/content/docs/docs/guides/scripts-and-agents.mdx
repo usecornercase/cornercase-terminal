@@ -933,6 +933,36 @@ cornercase ports stop 3000 --pid 48211 --json
 
 Ports published by Docker (`docker run -p`, `docker compose up`) are held by Docker's own process, not by the `docker` command in your tab, so they belong to no workspace: on macOS they show only with `--all`, and on Linux, where Docker's proxy runs as root, not at all. A program of another user, or one in a container or another network namespace, is not seen either.
 
+### Processes
+
+```sh
+cornercase processes
+cornercase processes --pane 12 --json
+cornercase processes --workspace 3 --interval 2000
+```
+
+`processes` lists what every pane runs, as the [Processes dialog](../projects-workspaces-tabs/#processes) does: for each pane the processes under its shell, each with its CPU and memory, then cornercase's own use and the total:
+
+```text
+pane 12  npm  98.0%  812 MB
+  4200    zsh                                         0.0%      4 MB
+  4210    npm run dev                                 0.1%     60 MB
+  4211    └ node vite                                97.9%    740 MB
+cornercase  0.8%  85 MB
+total: 1 pane, 3 processes, cpu 98.8%, 897 MB
+```
+
+CPU is the share of one core over `--interval` milliseconds (100 to 10000, default 1000: the command takes that long), so it can pass `100%`. Memory is each process's footprint, the figure the tab rows show. By default it lists every pane; `--pane ID`, `--workspace ID` or `--worktree BRANCH` narrow it, and then leave cornercase's line out. The text sorts the panes by CPU, highest first; `--json` keeps the sidebar's order.
+
+With `--json` it prints `{"interval", "total", "panes", "cornercase"}`. `total` has `cpu`, `memory`, `panes` and `processes`. Each pane has `pane`, `tab`, `workspace`, `project`, `program`, `agent`, `foreground` (the pid of its foreground program when it is not the shell), `pid` (its shell), `cpu`, `memory` and `processes`, each process with `pid`, `parent`, `name`, `args`, `started`, `cpu` and `memory`, in tree order; a figure the server cannot read is `null`. `started` is only to be passed back to `stop`. It is the request `{"command": "processes", "args": {"pane": 12, "interval": 1000}}`, answered once the server has measured; `cornercase contract` lists it.
+
+```sh
+cornercase processes stop 4211
+cornercase processes stop 4211 --started 81240 --json
+```
+
+`processes stop PID` stops a program of a pane and everything it started, as the dialog's **stop** does: `SIGTERM`, up to three seconds, then `SIGKILL` to what still runs. It prints `stopped node (pid 4211) and 2 programs it started`, `killed …` when they ignored `SIGTERM`, or that something is still running, and exits 1 in that last case. It refuses with `conflict` a pane's shell (`cornercase close --pane ID` closes the pane instead), cornercase itself and any process of no pane, and with `not-found` a pid that is not running; `--started` refuses a pid that another program reused since the list. With `--json` it prints `{"pid", "program", "pane", "outcome", "processes"}`, `outcome` being `stopped`, `killed` or `still-running`; it is the request `{"command": "stop-process", "args": {"pid": 4211, "started": null}}`. Both commands work with `--remote`.
+
 ### Stats
 
 ```sh

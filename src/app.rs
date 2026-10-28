@@ -121,10 +121,12 @@ mod picker_dialog;
 mod plugin_popup;
 mod plugins;
 mod ports_dialog;
+mod processes_dialog;
 mod project_settings_dialog;
 mod pull_requests;
 mod queue_dialog;
 mod queue_panel;
+mod refresh;
 mod remote_access;
 mod search_dialog;
 mod session;
@@ -431,6 +433,7 @@ impl App {
         self.ring_bells(now);
         self.watch_worktrees_dialog(now);
         self.watch_ports_dialog(now);
+        self.watch_processes_dialog(now);
         self.close_gone_flow_message();
         self.check_updates(now);
     }
@@ -592,6 +595,7 @@ impl App {
             AppEvent::FlowFetched(source, result) => self.flow_fetched(&source, result),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
             AppEvent::Ports(event) => self.ports_answered(event),
+            AppEvent::Processes(event) => self.processes_answered(event, area),
             AppEvent::Encoded { key, result } => self.encoded(key, result),
             AppEvent::RunFiles(run, result) => self.run_files_listed(run, result),
             AppEvent::FlowFiles { request, result } => self.flow_files_listed(request, result),

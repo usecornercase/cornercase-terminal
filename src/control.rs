@@ -20,6 +20,7 @@ mod flow;
 pub(crate) mod issues;
 pub(crate) mod plugins;
 pub(crate) mod ports;
+pub(crate) mod processes;
 mod search;
 pub(crate) mod start_server;
 mod status;
@@ -64,6 +65,7 @@ pub(crate) use flow::{
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
+pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
 pub(crate) use search::{Hit, Matches, Reveal, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use status::{GroupInfo, KeepAwake, LayerInfo, PostInfo, PullRequestInfo, RunStatus, SharedInfo, StackInfo};
@@ -225,6 +227,8 @@ pub(crate) enum Command {
     FilesSearch(FilesSearch),
     PasteFile(PasteFile),
     ChangesMergeCheck(ChangesMergeCheck),
+    Processes(Processes),
+    StopProcess(StopProcess),
 }
 
 impl Command {
@@ -400,6 +404,8 @@ impl Command {
             Self::Usage(_) => 67,
             Self::Ports(_) => 101,
             Self::StopPort(_) => 102,
+            Self::Processes(_) => 108,
+            Self::StopProcess(_) => 109,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
             Self::PluginActions(_) => 69,
@@ -411,7 +417,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 108] = [
+    pub(crate) const NAMES: [&str; 110] = [
         "status",
         "open",
         "new-workspace",
@@ -520,6 +526,8 @@ impl Command {
         "files-search",
         "paste-file",
         "changes-merge-check",
+        "processes",
+        "stop-process",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
@@ -534,6 +542,7 @@ impl Command {
                 | "changes-file"
                 | "changes-gap"
                 | "flow-files"
+                | "processes"
                 | "files-list"
                 | "files-read"
                 | "files-search"

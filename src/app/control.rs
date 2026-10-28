@@ -15,6 +15,7 @@ mod issues;
 mod merge_check;
 mod plugins;
 mod ports;
+mod processes;
 mod queue;
 mod search;
 mod status;
@@ -177,9 +178,17 @@ enum Stage {
     Issue(Box<Asking>),
     Usage(Vec<(agents::usage::Key, u64)>),
     Ports,
+    Processes,
 }
 
 impl Stage {
+    fn listing(&self) -> &'static str {
+        match self {
+            Self::Processes => "the processes are still being measured",
+            _ => "the ports are still being listed",
+        }
+    }
+
     fn launch(wait: Option<Condition>) -> Self {
         Self::Launch { confirm: None, compacts: false, wait }
     }
@@ -197,6 +206,7 @@ impl Stage {
                 | Self::Issue(_)
                 | Self::Usage(_)
                 | Self::Ports
+                | Self::Processes
         )
     }
 }
@@ -692,6 +702,11 @@ impl App {
             Command::Ports(ports) => self.ports_request(client, asker, &ports),
             Command::StopPort(stop) => {
                 self.stop_port_request(client, &stop);
+                Ok(None)
+            }
+            Command::Processes(processes) => self.processes_request(client, &processes),
+            Command::StopProcess(stop) => {
+                self.stop_process_request(client, &stop);
                 Ok(None)
             }
             Command::Tour(tour) => self.tour_request(&tour),

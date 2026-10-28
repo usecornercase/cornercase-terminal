@@ -174,6 +174,8 @@ fn newest_commands() -> Vec<Command> {
         Command::FilesSearch(FilesSearch::default()),
         Command::PasteFile(PasteFile::default()),
         Command::ChangesMergeCheck(ChangesMergeCheck::default()),
+        Command::Processes(Processes::default()),
+        Command::StopProcess(StopProcess::default()),
     ]
 }
 
@@ -830,4 +832,17 @@ fn a_pull_request_from_an_older_server_reads_without_a_stack() {
         (stack.number, stack.position, stack.size, stack.layers[0].checks.as_deref()),
         (484, 2, 3, Some("failing"))
     );
+}
+
+#[test]
+fn processes_and_stop_process_name_their_arguments_and_the_first_is_chatty() {
+    let request: Request =
+        serde_json::from_str(r#"{"command": "processes", "args": {"pane": 4, "interval": 500}}"#).expect("a request");
+    assert_eq!(request.command, Command::Processes(Processes { pane: Some(4), workspace: None, interval: Some(500) }));
+    assert_eq!(request.command.name(), "processes");
+    assert!(Command::chatty("processes") && !Command::chatty("stop-process"));
+    let stop: Request =
+        serde_json::from_str(r#"{"command": "stop-process", "args": {"pid": 41, "started": 9}}"#).expect("a request");
+    assert_eq!(stop.command, Command::StopProcess(StopProcess { pid: 41, started: Some(9) }));
+    assert_eq!(stop.command.name(), "stop-process");
 }

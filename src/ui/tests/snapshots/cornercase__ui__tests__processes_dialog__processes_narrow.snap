@@ -1,0 +1,18 @@
+---
+source: src/ui/tests/processes_dialog.rs
+expression: "snapshot(processes(), (90, 14))"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                "
+"  ╭─ Processes ────────────────────────────────────────────────────────────────────────╮  "
+" P│ › filter                                                      cpu   memory   name  │  "
+"  │  3 panes · 7 processes · cpu 136.0% · 1.9 GB                                       │  "
+"▌ │ ▌▾ web-shop › fix/login › dev              npm                    98.0% go  close  │  "
+"  │      zsh                                   pid 4200                0.0%      4 MB  │  "
+"  │        npm run dev                         pid 4210                0.1%     60 MB  │  "
+"  │          node vite --port 5173             pid 4211               97.9%    740 MB  │  "
+"  │  ▸ web-shop › main › claude                claude                 36.5%    1.2 GB  │  "
+"  │  ▸ api › main › server                     cargo                   1.2%    300 MB  │  "
+"  │                                                                                    │  "
+" ─│                                                                              done  │  "
+"  ╰────────────────────────────────────────────────────────────────────────────────────╯  "
+"  More ▴                 Help  │                         │                                "

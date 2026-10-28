@@ -20,7 +20,7 @@ use super::widgets::{button_style, dim, draw_band, draw_button, draw_title, midd
 use crate::agents::activity::{self, Status};
 use crate::agents::usage::Severity;
 use crate::pull_request::Mark;
-use crate::text::{cells, clip_cells, truncate_cells, truncate_right};
+use crate::text::{cells, clip_cells, memory_size, truncate_cells, truncate_right};
 
 const SHELL_ICON: &str = "›";
 
@@ -40,10 +40,6 @@ const CONTEXT_SEPARATOR: &str = " · ";
 
 const MIN_MODEL_WIDTH: usize = 4;
 const MIN_ACCOUNT_WIDTH: usize = 3;
-
-pub(super) const MB: u64 = 1 << 20;
-
-pub(super) const GB: u64 = 1 << 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceRow {
@@ -609,13 +605,4 @@ fn percent_span(details: &Details, dim: Style) -> Option<Span<'static>> {
         Span::styled(format!("{used}%"), level)
     });
     shown.or_else(|| details.compacted.then(|| Span::styled("compacted", dim)))
-}
-
-pub(super) fn memory_size(bytes: u64) -> String {
-    let megabytes = bytes.saturating_add(MB / 2) / MB;
-    if megabytes < 1024 {
-        return format!("{megabytes} MB");
-    }
-    let tenths = bytes.saturating_mul(10).saturating_add(GB / 2) / GB;
-    format!("{}.{} GB", tenths / 10, tenths % 10)
 }

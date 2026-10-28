@@ -6,8 +6,8 @@ use ratatui::widgets::{Clear, Paragraph};
 
 use super::settings::settings_area;
 use super::{
-    Note, draw_note, draw_secondary, draw_submit, draw_waiting, form_inner, item_at, list_item_by, pick_background,
-    right_aligned,
+    Note, draw_note, draw_row_button, draw_secondary, draw_submit, draw_waiting, form_inner, item_at, list_item_by,
+    pick_background, right_aligned, row_button_rects,
 };
 use crate::text::truncate_right;
 use crate::ui::View;
@@ -119,9 +119,8 @@ fn row_buttons(view: &Ports, row: &PortRow, rect: Rect) -> Vec<(RowButton, Rect)
     buttons.extend(view.can_open.then_some(RowButton::Open));
     buttons.extend(row.go.then_some(RowButton::Go));
     buttons.push(RowButton::Stop);
-    let line = Rect { y: rect.y + rect.height.saturating_sub(1), height: 1, ..rect };
     let labels: Vec<&str> = buttons.iter().map(|b| b.label()).collect();
-    buttons.into_iter().zip(right_aligned(line, &labels, button_width, 0)).collect()
+    buttons.into_iter().zip(row_button_rects(rect, &labels)).collect()
 }
 
 fn stop_label(view: &Ports) -> String {
@@ -250,8 +249,6 @@ fn draw_row(
 
 fn draw_row_buttons(f: &mut Frame, view: &View, ports: &Ports, (row, rect): (&PortRow, Rect), bg: Style) {
     for (button, r) in row_buttons(ports, row, rect) {
-        let lit = hovered(view, r);
-        let style = if lit { bg.fg(Color::Cyan).add_modifier(Modifier::BOLD) } else { bg.fg(view.muted) };
-        f.render_widget(Paragraph::new(Span::styled(format!(" {} ", button.label()), style)), r);
+        draw_row_button(f, view, r, button.label(), bg);
     }
 }

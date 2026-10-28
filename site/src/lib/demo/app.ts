@@ -144,11 +144,12 @@ const HELP_LABELS: Record<HelpItem, string> = {
   keys: 'keys menu',
   bug: 'report a bug',
 };
-const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'quit'];
+const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'processes', 'quit'];
 const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
 const MERGE_NEED = 'this needs cornercase on your computer: the demo has no git repositories to merge';
 const WORKTREES_NEED = 'this needs cornercase on your computer: the demo has no worktrees on disk to list';
 const PORTS_NEED = 'this needs cornercase on your computer: the demo runs no servers';
+const PROCESSES_NEED = 'this needs cornercase on your computer: the demo runs no real programs to measure';
 const SETUP_NEEDS = 'this needs cornercase on your computer: the demo runs no setup scripts';
 const SHARE_NEEDS = 'this needs cornercase on your computer: the demo has no settings to copy or import';
 
@@ -1467,6 +1468,7 @@ export class App {
   private moreAction(item: MoreItem): void {
     if (item === 'settings') this.openSettings();
     else if (item === 'usage') this.openUsage();
+    else if (item === 'processes') this.bug(PROCESSES_NEED);
     else this.quit();
   }
 
@@ -3098,6 +3100,7 @@ export class App {
       if (opening) this.addTodo();
     } else if (a.kind === 'settings') this.openSettings();
     else if (a.kind === 'usage') this.openUsage();
+    else if (a.kind === 'processes') this.bug(PROCESSES_NEED);
     else if (a.kind === 'help') this.openHelp({ x: 2, y: 2 });
     else if (a.kind === 'away') this.openSettingsOn(PAGE.remote, 'telegram');
     else if (a.kind === 'pullRequest') this.bug(PULL_REQUESTS_NEED);

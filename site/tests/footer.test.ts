@@ -49,7 +49,7 @@ for (const [columns, sidebar] of [[140, 'projects_on_top'], [140, 'side_by_side'
     const app = demo(columns, sidebar);
     for (const gone of [' Settings ', ' Usage ', ' Quit ']) assert.equal(app.textAt(gone), null, gone);
     press(app, ' More ▴ ');
-    assert.deepEqual(menu(app), ['settings', 'usage', 'quit']);
+    assert.deepEqual(menu(app), ['settings', 'usage', 'processes', 'quit']);
     press(app, 'settings');
     assert.equal(app.overlay?.kind, 'settings');
     app.closeOverlay();
@@ -60,6 +60,15 @@ for (const [columns, sidebar] of [[140, 'projects_on_top'], [140, 'side_by_side'
     app.destroy();
   });
 }
+
+test('processes in More says the demo has no real programs to measure', () => {
+  const app = demo(140, 'projects_on_top');
+  press(app, ' More ▴ ');
+  press(app, 'processes');
+  assert.equal(app.overlay, null);
+  assert.match(app.toast?.text ?? '', /the demo runs no real programs to measure/);
+  app.destroy();
+});
 
 for (const [columns, sidebar] of [[140, 'projects_on_top'], [140, 'side_by_side'], [140, 'tree'], [70, 'projects_on_top']] as const) {
   test(`Worktrees in the footer says the demo has none at ${columns} columns, ${sidebar}`, () => {

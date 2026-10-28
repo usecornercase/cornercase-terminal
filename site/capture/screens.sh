@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
+CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
 
 pane_in() {
   cc status --json | node -e '
@@ -1000,6 +1000,14 @@ screen_keys_menu() {
   cc_keys 'C-]'
   cc_wait 'next tab'
   cc_shot keys-menu
+}
+
+screen_processes() {
+  cc_s1
+  cc_more processes
+  cc_wait '╭─ Processes'
+  cc_wait ' go '
+  cc_shot processes
 }
 
 screen_remote_reconnecting() {

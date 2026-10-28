@@ -1,4 +1,5 @@
 use super::*;
+use crate::text::{GB, MB, memory_size};
 
 fn opus(percent: u16) -> Details {
     Details {

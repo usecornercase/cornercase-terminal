@@ -1,0 +1,16 @@
+---
+source: src/ui/tests/processes_dialog.rs
+expression: "snapshot(p, (60, 12))"
+---
+"╭─ Processes ──────────────────────────────────────────────╮"
+"│ › filter                            cpu   memory   name  │"
+"│  3 panes · 7 processes · cpu 136.0% · 1.9 GB             │"
+"│ Stop this program and the programs it started?           │"
+"│ • node worker 0 · pid 4000                               │"
+"│ • node worker 1 · pid 4001                               │"
+"│ • node worker 2 · pid 4002                               │"
+"│ • node worker 3 · pid 4003                               │"
+"│ • node worker 4 · pid 4004                               │"
+"│ ↓ scroll for more                                        │"
+"│                                             back   stop  │"
+"╰──────────────────────────────────────────────────────────╯"

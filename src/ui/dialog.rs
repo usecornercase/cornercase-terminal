@@ -6,6 +6,7 @@ pub(super) mod menu;
 pub(super) mod picker;
 pub(super) mod popup;
 pub(super) mod ports;
+pub(super) mod processes;
 pub(super) mod project_settings;
 pub(crate) mod queue;
 pub(super) mod search;
@@ -29,6 +30,7 @@ use super::dialog::form::{Confirm, Form, form_area};
 use super::dialog::issues::{Issues, issues_area};
 use super::dialog::picker::{Picker, picker_area};
 use super::dialog::ports::{Ports, ports_area};
+use super::dialog::processes::{Processes, processes_area};
 use super::dialog::search::Search;
 use super::dialog::settings::{Settings, settings_area};
 use super::dialog::start_flow::StartFlow;
@@ -95,6 +97,16 @@ pub(super) fn item_at(list: Rect, (items, scroll): (usize, usize), pitch: u16, p
     (i < items).then(|| (i, list_item_by(list, items, scroll, i, pitch)))
 }
 
+pub(super) fn row_button_rects(rect: Rect, labels: &[&str]) -> Vec<Rect> {
+    let line = Rect { y: rect.y + rect.height.saturating_sub(1), height: 1, ..rect };
+    right_aligned(line, labels, button_width, 0)
+}
+
+pub(super) fn draw_row_button(f: &mut Frame, view: &View, rect: Rect, label: &str, bg: Style) {
+    let style = if hovered(view, rect) { bg.fg(Color::Cyan).add_modifier(Modifier::BOLD) } else { bg.fg(view.muted) };
+    f.render_widget(Paragraph::new(Span::styled(format!(" {label} "), style)), rect);
+}
+
 fn row_of(row: Rect, x: u16, width: u16) -> Rect {
     Rect::new(x, row.y, width, 1).intersection(row)
 }
@@ -155,6 +167,7 @@ pub(crate) enum Overlay {
     Keys(keys::Keys),
     Worktrees(Box<Worktrees>),
     Ports(Box<Ports>),
+    Processes(Box<Processes>),
     Popup(Box<popup::Popup>),
 }
 
@@ -177,6 +190,7 @@ impl Overlay {
             Self::ProjectSettings(_) => Some(project_settings::project_settings_area(area)),
             Self::Worktrees(w) => Some(worktrees_area(area, w.compact)),
             Self::Ports(p) => Some(ports_area(area, p.compact)),
+            Self::Processes(p) => Some(processes_area(area, p.compact)),
             Self::Popup(p) => Some(popup::popup_area(area, p.wanted)),
             Self::Menu { .. } | Self::Search(_) | Self::Keys(_) => None,
         }

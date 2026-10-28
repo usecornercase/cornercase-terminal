@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::io::{self, Read};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Output, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
@@ -11,10 +11,13 @@ use std::time::{Duration, Instant};
 use rustix::io::Errno;
 use rustix::process::{Pid, Signal, kill_process_group, test_kill_process};
 
+use crate::text;
+
 pub(crate) use imp::{
-    all, args, children, cwd, env, footprint, name, open_files, parent, peer_uid, start_stamp, started,
+    all, args, children, cpu_time, cwd, env, footprint, name, open_files, parent, peer_uid, start_stamp, started,
 };
 
+pub(crate) mod escalation;
 pub(crate) mod owners;
 
 const MAX_DESCENDANTS: usize = 256;
@@ -95,15 +98,31 @@ pub(crate) fn alive(pid: i32) -> bool {
     Pid::from_raw(pid).is_some_and(|pid| !matches!(test_kill_process(pid), Err(Errno::SRCH)))
 }
 
-pub(crate) fn descendants(pid: i32) -> Vec<i32> {
-    let mut found = children(pid);
+pub(crate) fn running(pid: i32, started: Option<u64>) -> bool {
+    alive(pid) && !imp::zombie(pid) && (started.is_none() || start_stamp(pid) == started)
+}
+
+pub(crate) fn tree(pid: i32) -> Vec<(i32, i32)> {
+    let mut found: Vec<(i32, i32)> = children(pid).into_iter().map(|child| (child, pid)).collect();
     let mut at = 0;
     while at < found.len() && found.len() < MAX_DESCENDANTS {
-        found.extend(children(found[at]));
+        let parent = found[at].0;
+        found.extend(children(parent).into_iter().map(|child| (child, parent)));
         at += 1;
     }
     found.truncate(MAX_DESCENDANTS);
     found
+}
+
+pub(crate) fn descendants(pid: i32) -> Vec<i32> {
+    tree(pid).into_iter().map(|(child, _)| child).collect()
+}
+
+pub(crate) fn command_line(program: Option<&str>, args: &[String], width: usize) -> String {
+    let first = args.first().and_then(|arg| Path::new(arg).file_name()?.to_str());
+    let name = program.or(first).unwrap_or("?");
+    let line = std::iter::once(name).chain(args.iter().skip(1).map(String::as_str)).collect::<Vec<_>>().join(" ");
+    text::truncate_right(&line, width)
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos", test))]
@@ -123,6 +142,24 @@ fn status_footprint(status: &str) -> Option<u64> {
         status.lines().find_map(|line| line.strip_prefix(key))?.trim().strip_suffix("kB")?.trim().parse().ok()
     };
     Some(kib("RssAnon:")?.saturating_add(kib("VmSwap:").unwrap_or(0)).saturating_mul(1024))
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn stat_field(stat: &str, index: usize) -> Option<&str> {
+    stat.rsplit_once(')')?.1.split_whitespace().nth(index)
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn stat_cpu_time(stat: &str, ticks_per_second: u64) -> Option<Duration> {
+    let user: u64 = stat_field(stat, 11)?.parse().ok()?;
+    let system: u64 = stat_field(stat, 12)?.parse().ok()?;
+    let nanos = user.saturating_add(system).saturating_mul(1_000_000_000) / ticks_per_second.max(1);
+    Some(Duration::from_nanos(nanos))
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn stat_is_zombie(stat: &str) -> bool {
+    matches!(stat_field(stat, 0), Some("Z" | "X"))
 }
 
 #[cfg(any(target_os = "macos", test))]
@@ -148,7 +185,7 @@ fn procenv(buf: &[u8]) -> Vec<(String, String)> {
 
 #[cfg(target_os = "linux")]
 mod imp {
-    use super::{PathBuf, UnixStream, io, status_footprint, vars};
+    use super::{Duration, PathBuf, UnixStream, io, stat_cpu_time, stat_field, stat_is_zombie, status_footprint, vars};
 
     pub(crate) fn all() -> Vec<i32> {
         std::fs::read_dir("/proc")
@@ -205,10 +242,20 @@ mod imp {
         status_footprint(&std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?)
     }
 
+    fn stat(pid: i32) -> Option<String> {
+        std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()
+    }
+
     pub(crate) fn started(pid: i32) -> Option<u64> {
-        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
-        let rest = stat.rsplit_once(')')?.1;
-        rest.split_whitespace().nth(19)?.parse().ok()
+        stat_field(&stat(pid)?, 19)?.parse().ok()
+    }
+
+    pub(crate) fn cpu_time(pid: i32) -> Option<Duration> {
+        stat_cpu_time(&stat(pid)?, rustix::param::clock_ticks_per_second())
+    }
+
+    pub(crate) fn zombie(pid: i32) -> bool {
+        stat(pid).is_none_or(|stat| stat_is_zombie(&stat))
     }
 
     pub(crate) fn start_stamp(pid: i32) -> Option<u64> {
@@ -216,9 +263,7 @@ mod imp {
     }
 
     pub(crate) fn parent(pid: i32) -> Option<i32> {
-        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
-        let rest = stat.rsplit_once(')')?.1;
-        rest.split_whitespace().nth(1)?.parse().ok()
+        stat_field(&stat(pid)?, 1)?.parse().ok()
     }
 }
 
@@ -228,8 +273,9 @@ mod imp {
     use std::os::fd::AsRawFd;
     use std::os::unix::ffi::OsStrExt;
     use std::ptr::null_mut;
+    use std::sync::OnceLock;
 
-    use super::{PathBuf, UnixStream, io, procargs, procenv};
+    use super::{Duration, PathBuf, UnixStream, io, procargs, procenv};
 
     pub(crate) fn all() -> Vec<i32> {
         let count = unsafe { libc::proc_listallpids(null_mut(), 0) };
@@ -291,6 +337,33 @@ mod imp {
         (read == 0).then_some(info.ri_phys_footprint)
     }
 
+    fn timebase() -> (u64, u64) {
+        static TIMEBASE: OnceLock<(u64, u64)> = OnceLock::new();
+        *TIMEBASE.get_or_init(|| {
+            let mut info = libc::mach_timebase_info { numer: 0, denom: 0 };
+            #[expect(deprecated, reason = "libc marks it for mach2, which would be a new dependency for one call")]
+            let read = unsafe { libc::mach_timebase_info(&raw mut info) };
+            if read == 0 && info.denom != 0 { (u64::from(info.numer), u64::from(info.denom)) } else { (1, 1) }
+        })
+    }
+
+    pub(crate) fn cpu_time(pid: i32) -> Option<Duration> {
+        let mut info: libc::rusage_info_v0 = unsafe { std::mem::zeroed() };
+        let read = unsafe { libc::proc_pid_rusage(pid, libc::RUSAGE_INFO_V0, (&raw mut info).cast()) };
+        if read != 0 {
+            return None;
+        }
+        let (numer, denom) = timebase();
+        let ticks = u128::from(info.ri_user_time) + u128::from(info.ri_system_time);
+        let nanos = ticks * u128::from(numer) / u128::from(denom);
+        Some(Duration::from_nanos(u64::try_from(nanos).unwrap_or(u64::MAX)))
+    }
+
+    pub(crate) fn zombie(pid: i32) -> bool {
+        let info: Option<libc::proc_bsdinfo> = pid_info(pid, libc::PROC_PIDTBSDINFO);
+        info.is_none_or(|info| info.pbi_status == libc::SZOMB)
+    }
+
     pub(crate) fn name(pid: i32) -> Option<String> {
         let mut buf = [0_u8; 256];
         let len = unsafe { libc::proc_name(pid, buf.as_mut_ptr().cast(), 256) };
@@ -339,7 +412,7 @@ mod imp {
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 mod imp {
-    use super::{PathBuf, UnixStream, io};
+    use super::{Duration, PathBuf, UnixStream, io};
 
     pub(crate) fn all() -> Vec<i32> {
         Vec::new()
@@ -379,6 +452,14 @@ mod imp {
 
     pub(crate) fn started(_pid: i32) -> Option<u64> {
         None
+    }
+
+    pub(crate) fn cpu_time(_pid: i32) -> Option<Duration> {
+        None
+    }
+
+    pub(crate) fn zombie(_pid: i32) -> bool {
+        true
     }
 
     pub(crate) fn parent(_pid: i32) -> Option<i32> {
