@@ -209,9 +209,11 @@ mod outcomes {
         assert!(matches!(outcome(&devbox(), status(code)), Err(Error::Exited(c)) if c == passed));
     }
 
-    #[test]
-    fn a_missing_command_names_the_option() {
-        let error = outcome(&devbox(), status(127)).expect_err("missing");
+    #[rstest]
+    #[case::sh(127)]
+    #[case::bash(126)]
+    fn a_missing_command_names_the_option(#[case] code: i32) {
+        let error = outcome(&devbox(), status(code)).expect_err("missing");
 
         assert!(error.to_string().ends_with("with --command"), "{error}");
     }

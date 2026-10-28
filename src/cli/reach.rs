@@ -116,7 +116,7 @@ fn outcome(remote: &Remote, status: ExitStatus) -> Result<bool> {
         Some(0) => Ok(true),
         Some(1) | None => Ok(false),
         Some(3) => Err(Error::Partial),
-        Some(127) => Err(Error::RemoteMissing { host: remote.destination.clone(), option: remote.option }),
+        Some(126 | 127) => Err(Error::RemoteMissing { host: remote.destination.clone(), option: remote.option }),
         Some(code) => Err(Error::Exited(u8::try_from(code).unwrap_or(1))),
     }
 }
