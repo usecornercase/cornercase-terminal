@@ -109,10 +109,10 @@ fn missing(lacks: &str, remote: Option<&Remote>) -> Error {
             crate::version::CURRENT
         ));
     };
-    let via = remote.update_line().replace(" update", "");
     Error::Control(format!(
-        "the cornercase server on `{}` {lacks}; restart it there with `{via} restart` (update it first with `{}` if needed)",
+        "the cornercase server on `{}` {lacks}; restart it there with `{}` (update it first with `{}` if needed)",
         remote.host(),
+        remote.line("restart"),
         remote.update_line()
     ))
 }

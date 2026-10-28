@@ -277,6 +277,60 @@ mod a_follow {
         assert_eq!(following.ended.recv_timeout(WAIT).expect("it ended"), Ok(()));
     }
 
+    const SHORT: Duration = Duration::from_millis(50);
+
+    #[test]
+    fn a_log_follow_ends_when_its_reader_hangs_up() {
+        let (out, reader) = pipe();
+        let mut out = watched(out.as_fd());
+
+        drop(reader);
+
+        assert!(reader_gone_within(&mut out, WAIT));
+    }
+
+    #[rstest]
+    #[case::pipe(pipe())]
+    #[case::named_fifo(named_fifo())]
+    fn a_log_follow_waits_the_whole_time_while_its_reader_stays(#[case] output: Output) {
+        let (out, _reader) = output;
+        let mut out = watched(out.as_fd());
+        let started = std::time::Instant::now();
+
+        assert!(!reader_gone_within(&mut out, SHORT));
+
+        assert!(started.elapsed() >= SHORT && out.is_some());
+    }
+
+    #[test]
+    fn a_log_follow_stops_watching_a_reader_that_has_bytes_to_read() {
+        let (out, _reader) = socket_with_bytes_to_read();
+        let mut out = watched(out.as_fd());
+
+        assert!(!reader_gone_within(&mut out, WAIT));
+
+        assert!(out.is_none());
+    }
+
+    #[test]
+    fn a_log_follow_stops_watching_when_it_cannot_poll() {
+        let (out, _reader) = pipe();
+        let mut out = watched(out.as_fd());
+
+        assert!(!reader_gone_within(&mut out, Duration::MAX));
+
+        assert!(out.is_none());
+    }
+
+    #[test]
+    fn a_log_follow_with_nothing_to_watch_just_waits() {
+        let started = std::time::Instant::now();
+
+        assert!(!reader_gone_within(&mut None, SHORT));
+
+        assert!(started.elapsed() >= SHORT);
+    }
+
     #[rstest]
     #[case::pipe(pipe(), true)]
     #[case::socket_pair(socket_pair(), true)]

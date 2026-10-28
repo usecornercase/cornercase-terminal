@@ -212,9 +212,13 @@ impl Remote {
         })))
     }
 
-    pub(crate) fn update_line(&self) -> String {
+    pub(crate) fn line(&self, action: &str) -> String {
         let command = self.command.as_ref().map(|command| format!(" --remote-command {}", quote_word(command)));
-        format!("cornercase --remote {}{} update", quote_word(&self.destination), command.unwrap_or_default())
+        format!("cornercase --remote {}{} {action}", quote_word(&self.destination), command.unwrap_or_default())
+    }
+
+    pub(crate) fn update_line(&self) -> String {
+        self.line("update")
     }
 
     fn check_window(&self, banner: &Banner) -> Result<()> {

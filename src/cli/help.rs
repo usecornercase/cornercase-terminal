@@ -622,8 +622,8 @@ Examples:
 pub(super) const KILL_SERVER_HELP: &str =
     "Run from a terminal inside cornercase, it would stop the server it runs in, and this terminal with
 it, so it asks first; without a terminal it refuses unless --yes is given. To stop another server from
-inside cornercase, say which with CORNERCASE_SOCKET=/absolute/path/server.sock. With --remote DESTINATION it
-runs on that machine, through ssh.
+inside cornercase, say which with CORNERCASE_SOCKET=/absolute/path/server.sock. With --remote DESTINATION, or
+CORNERCASE_REMOTE=DESTINATION, it runs on that machine, through ssh.
 
 Examples:
   cornercase kill-server
