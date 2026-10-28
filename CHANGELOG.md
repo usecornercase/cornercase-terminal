@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.222
+
+- **See how much disk each worktree takes, and free its build folders without removing it.** The Worktrees dialog shows each worktree's size and how much of it is build and dependency folders, such as `2.4 GB · 2.1 GB builds`; **largest first** sorts by it, and the bottom line sums every worktree and what freeing the builds of the ones idle for a week would recover. **free builds** on a row, or for the ticked rows, deletes only the folders git ignores among `node_modules`, `target`, `.next`, `.turbo`, `dist`, `build`, `.venv` and `__pycache__`: the worktree, its branch and its uncommitted changes stay. The confirmation says how much it frees and warns when a program still runs there. A project changes the list in **project settings → build folders**, and its setup can rebuild them the next time.
+- Scripts: `cornercase worktrees size` and `cornercase worktrees free-builds` (`--check` first; `--force` while programs run there), the requests `worktree-size` and `free-builds`, and `cornercase config project --builds`. `cornercase contract` lists the feature `build-folders`.
+
 ## 0.12.221
 
 - **Drive another machine's cornercase while it runs a newer version.** `--remote` commands no longer need the same version on both machines: when the other machine runs a newer cornercase than this one, `cornercase --remote devbox status`, `events` and the rest keep working, so an app on your laptop doesn't stop each time only `devbox` updates. When the other machine is the older one, commands still refuse, since its server could ignore what a newer command asks for, and say how to update it from here. The window, `cornercase remote devbox`, still needs the same version on both.
