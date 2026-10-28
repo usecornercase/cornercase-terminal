@@ -575,6 +575,7 @@ mod tour;
 mod tree_sidebar;
 mod workspace_folds;
 mod workspaces;
+mod worktree_builds;
 mod worktrees_dialog;
 
 #[test]

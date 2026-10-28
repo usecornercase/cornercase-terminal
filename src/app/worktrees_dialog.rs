@@ -28,9 +28,12 @@ use crate::worktrees::{
 
 mod cleanup;
 mod confirm;
+mod free;
+mod sizes;
 
 pub(super) use cleanup::{Cleanup, Deleted};
 pub(super) use confirm::wrap;
+pub(super) use free::Frees;
 
 pub(super) type Place = (PathBuf, u64, u64);
 
@@ -46,6 +49,7 @@ pub(super) struct Scans {
     sent: usize,
     places: Vec<Place>,
     synced: Option<Instant>,
+    sizes: sizes::Sizes,
 }
 
 struct Queued {
@@ -149,19 +153,7 @@ impl App {
             return;
         }
         self.refresh_places();
-        let rows: Vec<Row> = found
-            .into_iter()
-            .map(|found| Row {
-                live: self.live(&found.path).map(|(_, live)| live),
-                removing: self.cleaning_path(&found.path),
-                found,
-                scan: None,
-                outside: Vec::new(),
-                elsewhere: Vec::new(),
-                ticked: false,
-                gone: false,
-            })
-            .collect();
+        let rows = self.fresh_rows(found);
         let queued: Vec<Queued> = rows
             .iter()
             .filter(|row| row.found.kind == Kind::Linked)
@@ -175,13 +167,34 @@ impl App {
             .collect();
         self.git.scans.listing = None;
         self.git.scans.queue.extend(queued);
+        self.queue_sizes(&rows);
         if let Some(dialog) = self.worktrees_dialog(generation) {
             let mut list = List::new(rows);
             list.filter = std::mem::take(&mut dialog.list.filter);
+            list.order_by(dialog.list.order);
             *dialog = Dialog::new(dialog.project.take(), generation, list);
         }
         self.spawn_outside(false);
         self.pump_worktree_scans();
+        self.pump_sizes();
+    }
+
+    fn fresh_rows(&self, found: Vec<Found>) -> Vec<Row> {
+        found
+            .into_iter()
+            .map(|found| Row {
+                live: self.live(&found.path).map(|(_, live)| live),
+                removing: self.cleaning_path(&found.path),
+                found,
+                scan: None,
+                size: None,
+                freeing: false,
+                outside: Vec::new(),
+                elsewhere: Vec::new(),
+                ticked: false,
+                gone: false,
+            })
+            .collect()
     }
 
     fn base_of(&self, path: &Path) -> Option<String> {
@@ -279,6 +292,7 @@ impl App {
         if self.git.scans.listing.is_some_and(|since| now.saturating_duration_since(since) >= SCAN_GIVE_UP) {
             self.git.scans.listing = None;
         }
+        self.give_up_sizes(now);
         self.pump_worktree_scans();
     }
 
@@ -438,6 +452,9 @@ impl App {
             Some(ui::WorktreesHit::Tick(i)) => row(i).map(Hit::Tick),
             Some(ui::WorktreesHit::Row(i)) => row(i).map(Hit::Row),
             Some(ui::WorktreesHit::Changes(i)) => row(i).map(Hit::Changes),
+            Some(ui::WorktreesHit::Free(i)) => row(i).map(Hit::Free),
+            Some(ui::WorktreesHit::FreeTicked) => Some(Hit::FreeTicked),
+            Some(ui::WorktreesHit::Order(order)) => Some(Hit::Order(order)),
             Some(ui::WorktreesHit::Remove) => Some(Hit::Remove),
             Some(ui::WorktreesHit::Done) => Some(Hit::Done),
             Some(ui::WorktreesHit::Back) => Some(Hit::Back),
@@ -456,6 +473,8 @@ impl App {
             Action::Close => self.overlay = None,
             Action::Rescan(rows) => self.rescan_worktrees(&rows),
             Action::Remove { branches } => self.remove_worktrees(branches),
+            Action::Free => self.spawn_outside(true),
+            Action::FreeBuilds => self.free_confirmed(),
             Action::Changes(row) => self.worktree_changes(row),
         }
     }
@@ -527,7 +546,13 @@ impl App {
             Some((_, label)) => format!("Worktrees › {label}"),
             None => "Worktrees".to_string(),
         };
-        let confirm = matches!(dialog.step, Step::Confirm { .. }).then(|| self.confirm_view(dialog, area));
+        let confirm = match &dialog.step {
+            Step::List => None,
+            Step::Confirm { .. } => Some(self.confirm_view(dialog, area)),
+            Step::Free { paths } => Some(self.free_view(dialog, area, paths)),
+        };
+        let free = dialog.list.rows.iter().filter(|row| row.ticked && row.can_free()).count();
+        let total = Self::total_text(dialog, now);
         let note = self.worktrees_note(dialog, confirm.as_ref(), area);
         Box::new(ui::Worktrees {
             title,
@@ -536,6 +561,9 @@ impl App {
             selected: dialog.selected,
             scroll: dialog.scroll,
             ticked,
+            free,
+            order: dialog.list.order,
+            total,
             note,
             confirm,
             compact: area.width < ui::COMPACT_WIDTH,
@@ -549,7 +577,10 @@ impl App {
         let Some(confirm) = confirm else {
             let total = dialog.list.rows.iter().filter(|row| row.found.kind == Kind::Linked).count();
             let pending = dialog.list.pending();
-            return (pending > 0).then(|| ui::Note::Info(format!("checking {} of {total}…", total - pending)));
+            if pending > 0 {
+                return Some(ui::Note::Info(format!("checking {} of {total}…", total - pending)));
+            }
+            return Self::sizes_note(dialog).map(ui::Note::Info);
         };
         if confirm.checking {
             let waiting = dialog.checking() + self.git.scans.extra.len();
@@ -573,7 +604,9 @@ impl App {
             .and_then(|l| self.projects.workspace_in(l.project, l.workspace))
             .is_some_and(|at| !self.projects.workspace(at).removing());
         let removing = row.removing || live.is_some_and(|l| l.removing);
-        let status = if removing {
+        let status = if row.freeing {
+            Some("freeing…")
+        } else if removing {
             Some(if closing && !row.removing { "closing…" } else { "removing…" })
         } else {
             live.is_some_and(|l| l.role_of_run).then_some("owned by a flow run")
@@ -588,6 +621,12 @@ impl App {
             age: row_age(row, now),
             marks: self.worktree_marks(row),
             changes: live.is_some() && !removing && row.found.kind == Kind::Linked,
+            free: row.can_free() && !removing,
+            size: row_size(row),
+            builds: row
+                .builds_bytes()
+                .filter(|bytes| *bytes > 0)
+                .map(|bytes| format!("{} builds", crate::text::size(bytes))),
             status: status.map(String::from),
         }
     }
@@ -646,6 +685,15 @@ fn scan_marks(row: &Row, scan: &Scan, muted: Color) -> Vec<(String, Color)> {
         marks.push(("locked".into(), Color::Yellow));
     }
     marks
+}
+
+fn row_size(row: &Row) -> String {
+    match &row.size {
+        _ if !row.has_folder() => String::new(),
+        Some(Ok(size)) => crate::text::size(size.bytes),
+        Some(Err(_)) => "?".into(),
+        None => "…".into(),
+    }
 }
 
 fn row_age(row: &Row, now: SystemTime) -> String {

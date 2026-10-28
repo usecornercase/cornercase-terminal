@@ -41,10 +41,6 @@ const CONTEXT_SEPARATOR: &str = " · ";
 const MIN_MODEL_WIDTH: usize = 4;
 const MIN_ACCOUNT_WIDTH: usize = 3;
 
-pub(super) const MB: u64 = 1 << 20;
-
-pub(super) const GB: u64 = 1 << 30;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceRow {
     Gap,
@@ -572,7 +568,7 @@ pub(super) fn draw_details(f: &mut Frame, muted: Color, line: DetailLine) {
     let dim = Style::default().fg(muted);
     let percent = percent_span(details, dim);
     let subagents = (details.subagents > 0).then(|| Span::styled(activity::subagents_text(details.subagents), dim));
-    let memory = details.memory.map(|bytes| Span::styled(memory_size(bytes), dim));
+    let memory = details.memory.map(|bytes| Span::styled(crate::text::size(bytes.max(crate::text::MB / 2)), dim));
     let lead = agent.map(|agent| Span::styled(agent.to_string(), dim));
     let fixed: Vec<Span> = percent.into_iter().chain(subagents).chain(memory).collect();
     let separator = CONTEXT_SEPARATOR.chars().count();
@@ -609,13 +605,4 @@ fn percent_span(details: &Details, dim: Style) -> Option<Span<'static>> {
         Span::styled(format!("{used}%"), level)
     });
     shown.or_else(|| details.compacted.then(|| Span::styled("compacted", dim)))
-}
-
-pub(super) fn memory_size(bytes: u64) -> String {
-    let megabytes = bytes.saturating_add(MB / 2) / MB;
-    if megabytes < 1024 {
-        return format!("{megabytes} MB");
-    }
-    let tenths = bytes.saturating_mul(10).saturating_add(GB / 2) / GB;
-    format!("{}.{} GB", tenths / 10, tenths % 10)
 }

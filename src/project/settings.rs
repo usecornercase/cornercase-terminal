@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
-use crate::config::ProjectSettings;
+use crate::config::{ProjectSettings, parse_builds};
 use crate::editor::Editor;
 
 pub(crate) const SAVE: &str = "save";
@@ -8,12 +8,16 @@ pub(crate) const CANCEL: &str = "cancel";
 
 const SETUP_HINT: &str = "commands for each new worktree, run with sh -e in its first tab before its agent; \
                           .worktreeinclude files are copied first · tab moves to teardown";
-const TEARDOWN_HINT: &str = "commands run before a worktree is removed, after its programs stop · tab moves to setup";
+const TEARDOWN_HINT: &str =
+    "commands run before a worktree is removed, after its programs stop · tab moves to build folders";
+const BUILDS_HINT: &str = "folders free builds deletes in this project's worktrees, when git ignores them; \
+                           separate with spaces · enter saves · tab moves to setup";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Field {
     Setup,
     Teardown,
+    Builds,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +26,7 @@ pub(crate) struct Room {
     pub(crate) setup_rows: usize,
     pub(crate) teardown_width: usize,
     pub(crate) teardown_rows: usize,
+    pub(crate) builds_width: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +48,8 @@ pub(crate) struct Form {
     pub(crate) name: String,
     pub(crate) setup: Editor,
     pub(crate) teardown: Editor,
+    pub(crate) builds: Editor,
+    pub(crate) saved: ProjectSettings,
     pub(crate) focus: Field,
     pub(crate) notice: Option<String>,
 }
@@ -51,9 +58,10 @@ impl Form {
     pub(crate) fn new(project: u64, name: String, saved: &ProjectSettings) -> Self {
         let mut setup = Editor::new(&saved.setup);
         let mut teardown = Editor::new(&saved.teardown);
+        let builds = Editor::new(&saved.builds().join(" "));
         setup.home();
         teardown.home();
-        Self { project, name, setup, teardown, focus: Field::Setup, notice: None }
+        Self { project, name, setup, teardown, builds, saved: saved.clone(), focus: Field::Setup, notice: None }
     }
 
     pub(crate) fn title(&self) -> String {
@@ -64,6 +72,7 @@ impl Form {
         match self.focus {
             Field::Setup => SETUP_HINT,
             Field::Teardown => TEARDOWN_HINT,
+            Field::Builds => BUILDS_HINT,
         }
     }
 
@@ -75,6 +84,7 @@ impl Form {
         match self.focus {
             Field::Setup => (&mut self.setup, room.setup_width, room.setup_rows),
             Field::Teardown => (&mut self.teardown, room.teardown_width, room.teardown_rows),
+            Field::Builds => (&mut self.builds, room.builds_width, 1),
         }
     }
 
@@ -83,6 +93,10 @@ impl Form {
         match key.code {
             KeyCode::Esc => return Action::Close,
             KeyCode::Tab | KeyCode::BackTab => self.switch(),
+            KeyCode::Enter if self.focus == Field::Builds => return self.save(),
+            _ if self.focus == Field::Builds => {
+                self.builds.one_line_key(key, room.builds_width);
+            }
             _ => {
                 let (editor, width, rows) = self.focused(room);
                 editor.key(key, width, rows);
@@ -93,8 +107,9 @@ impl Form {
 
     pub(crate) fn paste(&mut self, text: &str, room: Room) {
         self.notice = None;
+        let text = if self.focus == Field::Builds { crate::text::one_line(text) } else { text.to_string() };
         let (editor, width, rows) = self.focused(room);
-        editor.insert_lines(text);
+        editor.insert_lines(&text);
         editor.reveal(width, rows);
     }
 
@@ -102,7 +117,7 @@ impl Form {
         self.notice = None;
         match hit {
             Hit::Button(CANCEL) => Action::Close,
-            Hit::Button(SAVE) => Action::Save(self.settings()),
+            Hit::Button(SAVE) => self.save(),
             Hit::Button(_) => Action::None,
             Hit::Field { field, line, col } => {
                 self.focus = field;
@@ -118,6 +133,7 @@ impl Form {
         let (editor, width, rows) = match field {
             Field::Setup => (&mut self.setup, room.setup_width, room.setup_rows),
             Field::Teardown => (&mut self.teardown, room.teardown_width, room.teardown_rows),
+            Field::Builds => return,
         };
         editor.scroll_by(delta, width, rows);
     }
@@ -125,12 +141,27 @@ impl Form {
     fn switch(&mut self) {
         self.focus = match self.focus {
             Field::Setup => Field::Teardown,
-            Field::Teardown => Field::Setup,
+            Field::Teardown => Field::Builds,
+            Field::Builds => Field::Setup,
         };
     }
 
+    fn save(&mut self) -> Action {
+        match parse_builds(&self.builds.text()) {
+            Ok(builds) => {
+                let same = builds.as_ref().is_some_and(|names| *names == self.saved.builds());
+                let builds = if same { self.saved.builds.clone() } else { builds };
+                Action::Save(ProjectSettings { builds, ..self.settings() })
+            }
+            Err(why) => {
+                self.notice = Some(why);
+                Action::None
+            }
+        }
+    }
+
     pub(crate) fn settings(&self) -> ProjectSettings {
-        ProjectSettings { setup: self.setup.text(), teardown: self.teardown.text() }
+        ProjectSettings { setup: self.setup.text(), teardown: self.teardown.text(), builds: self.saved.builds.clone() }
     }
 }
 

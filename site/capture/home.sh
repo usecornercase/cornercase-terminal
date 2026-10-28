@@ -59,6 +59,13 @@ mkdir -p "$wt/web-shop" "$wt/orders-api"
 git -C "$CC_HOME/code/web-shop" worktree add -q -b feat/dark-mode "$wt/web-shop/feat-dark-mode"
 git -C "$CC_HOME/code/web-shop" worktree add -q -b feat/gift-cards "$wt/web-shop/feat-gift-cards"
 git -C "$CC_HOME/code/orders-api" worktree add -q -b fix/pagination "$wt/orders-api/fix-pagination"
+for repo in web-shop orders-api; do
+  printf 'node_modules/\n' >> "$CC_HOME/code/$repo/.git/info/exclude"
+done
+for tree in web-shop/feat-gift-cards:14 web-shop/feat-dark-mode:6 orders-api/fix-pagination:3; do
+  mkdir -p "$wt/${tree%%:*}/node_modules/.cache"
+  head -c "$((${tree##*:} * 1024 * 1024))" /dev/urandom > "$wt/${tree%%:*}/node_modules/.cache/bundle.js"
+done
 printf '\npub fn background() -> &%sstatic str {\n    "#121018"\n}\n' "'" >> "$wt/web-shop/feat-dark-mode/src/theme.rs"
 
 if [ "${CC_ISSUE_482:-0}" = 1 ]; then

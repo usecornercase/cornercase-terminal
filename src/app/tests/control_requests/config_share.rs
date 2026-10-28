@@ -276,6 +276,20 @@ mod importing {
     }
 
     #[test]
+    fn keeps_the_build_folders_the_user_chose() {
+        let mut s = setup();
+        let repo = open_clone(&mut s, &[("origin", SHOP_URL)]);
+        let home = s.app.home.clone();
+        let own = crate::config::ProjectSettings { builds: Some(vec!["out".into()]), ..Default::default() };
+        s.app.config.set_project(repo.path(), home.as_deref(), own);
+
+        imported(&mut s, &shop_setup("npm ci"), None);
+
+        let kept = s.app.config.project(repo.path(), home.as_deref());
+        assert_eq!((kept.setup.as_str(), kept.builds), ("npm ci", Some(vec!["out".to_string()])));
+    }
+
+    #[test]
     fn sets_the_setup_of_every_clone_of_a_remote() {
         let mut s = setup();
         let (first, second) =

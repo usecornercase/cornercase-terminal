@@ -15,6 +15,7 @@ pub(crate) mod todo;
 pub(crate) mod tour;
 pub(crate) mod usage;
 pub(crate) mod view;
+pub(crate) mod worktrees;
 
 use std::path::PathBuf;
 
@@ -31,7 +32,7 @@ use super::help::{
     START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, TOUR_HELP, UNTIL_AFTER, UPDATE_HELP,
     USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
-use super::help::{AGENTS_HELP, CHANGES_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP};
+use super::help::{AGENTS_HELP, CHANGES_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, WORKTREES_HELP};
 use crate::control::Until;
 use crate::term::keys;
 
@@ -247,6 +248,11 @@ pub(crate) enum Control {
         after_help = PORTS_HELP
     )]
     Ports(ports::PortsArgs),
+    #[command(
+        about = "Measure the disk a worktree takes, and free its build folders without removing it",
+        after_help = WORKTREES_HELP
+    )]
+    Worktrees(worktrees::WorktreesArgs),
     #[command(about = "Show the guided tour in the window, or move, end or reset it", after_help = TOUR_HELP)]
     Tour(tour::TourArgs),
     #[command(

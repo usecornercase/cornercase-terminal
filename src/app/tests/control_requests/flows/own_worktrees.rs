@@ -36,7 +36,7 @@ fn duel() -> Flow {
 fn team(setup: &str, teardown: &str) -> Team {
     let (setup, teardown) = (setup.to_string(), teardown.to_string());
     let team = Team::configured(AT, move |config, repo| {
-        let settings = ProjectSettings { setup, teardown };
+        let settings = ProjectSettings { setup, teardown, ..Default::default() };
         config.projects.insert(repo.display().to_string(), settings);
     });
     let flows = paths::flows(&team.config.path().join("config.json"));

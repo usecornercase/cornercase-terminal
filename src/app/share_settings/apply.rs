@@ -92,9 +92,13 @@ impl App {
         let mut set = 0;
         for (repository, open) in matched {
             claim(&mut claimed, open, repository, home)?;
-            let settings = ProjectSettings { setup: repository.setup.clone(), teardown: repository.teardown.clone() };
-            needs_a_repository(&open.folder, &settings)?;
             let before = config.project(&open.folder, home);
+            let settings = ProjectSettings {
+                setup: repository.setup.clone(),
+                teardown: repository.teardown.clone(),
+                builds: before.builds.clone(),
+            };
+            needs_a_repository(&open.folder, &settings)?;
             config.set_project(&open.folder, home, settings);
             set += usize::from(config.project(&open.folder, home) != before);
         }

@@ -4,7 +4,8 @@ use std::time::Duration;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::list::{row, scan_of};
-use crate::worktrees::{Action, Dialog, Hit, Kind, List, Live, Step};
+use crate::worktrees::builds::{Folder, Size};
+use crate::worktrees::{Action, Dialog, Hit, Kind, List, Live, Order, Step};
 
 fn press(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -265,4 +266,70 @@ fn the_selection_stays_in_view() {
     assert_eq!((d.selected, d.scroll), (Some(4), 3));
     d.scroll_by(-10, 2, 0);
     assert_eq!(d.scroll, 0);
+}
+
+fn with_builds(d: &mut Dialog, rows: &[usize]) {
+    for &i in rows {
+        let folder = Folder { path: PathBuf::from("node_modules"), bytes: 100 };
+        d.list.rows[i].size = Some(Ok(Size { bytes: 200, builds: vec![folder], nested: Vec::new() }));
+    }
+}
+
+#[test]
+fn the_row_button_opens_the_free_step_for_that_row_only_and_keeps_the_ticks() {
+    let mut d = dialog();
+    with_builds(&mut d, &[0, 1]);
+    d.toggle(1);
+    assert_eq!(d.click(Hit::Free(0)), Action::Free);
+    assert_eq!(d.step, Step::Free { paths: vec![d.list.rows[0].found.path.clone()] });
+    assert!(d.list.rows[1].ticked);
+    assert_eq!(d.key(press(KeyCode::Esc)), Action::Back);
+    assert_eq!(d.step, Step::List);
+    assert!(d.list.rows[1].ticked);
+}
+
+#[test]
+fn a_row_without_builds_does_not_open_the_free_step() {
+    let mut d = dialog();
+    assert_eq!(d.click(Hit::Free(0)), Action::None);
+    assert_eq!(d.step, Step::List);
+}
+
+#[test]
+fn the_bottom_button_takes_only_the_ticked_rows_that_can_free() {
+    let mut d = dialog();
+    with_builds(&mut d, &[1]);
+    assert_eq!(d.click(Hit::FreeTicked), Action::None);
+    d.toggle(0);
+    d.toggle(1);
+    assert_eq!(d.click(Hit::FreeTicked), Action::Free);
+    assert_eq!(d.step, Step::Free { paths: vec![d.list.rows[1].found.path.clone()] });
+}
+
+#[test]
+fn enter_frees_in_the_free_step_and_only_while_something_can_still_be_freed() {
+    let mut d = dialog();
+    with_builds(&mut d, &[0]);
+    d.click(Hit::Free(0));
+    assert_eq!(d.key(press(KeyCode::Enter)), Action::FreeBuilds);
+    d.list.rows[0].size = Some(Ok(Size::default()));
+    assert_eq!(d.key(press(KeyCode::Enter)), Action::None);
+    assert_eq!(d.click(Hit::Back), Action::Back);
+}
+
+#[test]
+fn a_row_being_freed_cannot_be_ticked() {
+    let mut d = dialog();
+    d.list.rows[0].freeing = true;
+    d.toggle(0);
+    assert!(!d.list.rows[0].ticked);
+}
+
+#[test]
+fn the_order_tabs_change_the_order_and_restart_the_selection() {
+    let mut d = dialog();
+    d.selected = Some(1);
+    assert_eq!(d.click(Hit::Order(Order::Size)), Action::None);
+    assert_eq!(d.list.order, Order::Size);
+    assert_eq!(d.selected, Some(0));
 }

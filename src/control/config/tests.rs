@@ -91,6 +91,7 @@ fn answer() -> Described {
             repository: true,
             setup: "npm ci".into(),
             teardown: String::new(),
+            builds: vec!["node_modules".into(), "target".into()],
         }],
         notices: vec!["sidebar: tree".into()],
     }

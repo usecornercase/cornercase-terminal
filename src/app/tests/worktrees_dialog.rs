@@ -45,33 +45,33 @@ fn closed(s: &Setup) -> (TempDir, PathBuf) {
     (other, checkout)
 }
 
-fn dialog(app: &App) -> &Dialog {
+pub(super) fn dialog(app: &App) -> &Dialog {
     match &app.overlay {
         Some(Overlay::Worktrees(dialog)) => dialog,
         _ => panic!("the worktrees dialog is open"),
     }
 }
 
-fn opened(s: &mut Setup, rows: usize) {
+pub(super) fn opened(s: &mut Setup, rows: usize) {
     s.app.open_worktrees(None);
     ready(s, rows);
 }
 
-fn ready(s: &mut Setup, rows: usize) {
+pub(super) fn ready(s: &mut Setup, rows: usize) {
     pump_until(&mut s.app, &s.rx, "every worktree is listed and scanned", |a| {
         let list = &dialog(a).list;
         list.rows.len() == rows && list.pending() == 0
     });
 }
 
-fn view(app: &App) -> Box<ui::Worktrees> {
+pub(super) fn view(app: &App) -> Box<ui::Worktrees> {
     match overlay_shown(app, AREA) {
         ui::Overlay::Worktrees(view) => view,
         _ => panic!("the worktrees dialog is shown"),
     }
 }
 
-fn at(app: &App, hit: ui::WorktreesHit) -> Position {
+pub(super) fn at(app: &App, hit: ui::WorktreesHit) -> Position {
     let view = view(app);
     (0..AREA.height)
         .flat_map(|y| (0..AREA.width).map(move |x| Position::new(x, y)))
@@ -79,11 +79,11 @@ fn at(app: &App, hit: ui::WorktreesHit) -> Position {
         .unwrap_or_else(|| panic!("no {hit:?} on screen"))
 }
 
-fn shown(app: &App, branch: &str) -> usize {
+pub(super) fn shown(app: &App, branch: &str) -> usize {
     view(app).rows.iter().position(|r| r.branch == branch).expect("the row is shown")
 }
 
-fn tick(s: &mut Setup, branch: &str) {
+pub(super) fn tick(s: &mut Setup, branch: &str) {
     let pos = at(&s.app, ui::WorktreesHit::Tick(shown(&s.app, branch)));
     click(&mut s.app, pos);
 }
@@ -109,7 +109,7 @@ fn ask_branches(s: &mut Setup) {
     click(&mut s.app, pos);
 }
 
-fn confirmation(app: &App) -> String {
+pub(super) fn confirmation(app: &App) -> String {
     let view = view(app);
     let lines = &view.confirm.as_ref().expect("the confirmation is shown").lines;
     lines.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n")

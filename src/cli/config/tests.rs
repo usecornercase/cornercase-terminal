@@ -96,6 +96,7 @@ fn described() -> Described {
             folder: "/home/ana/web".into(),
             repository: true,
             setup: "npm ci\nnpm run build".into(),
+            builds: vec!["node_modules".into(), "target".into()],
             ..ProjectEntry::default()
         }],
         ..Described::default()
@@ -110,7 +111,12 @@ fn the_text_groups_settings_by_page_then_connections_and_projects() {
         "{text}"
     );
     assert!(text.contains("\nConnections\n  linear    connected as @ana (saved)\n"), "{text}");
-    assert!(text.ends_with("\nProjects\n  /home/ana/web  setup: npm ci; npm run build  teardown: -\n"), "{text}");
+    assert!(
+        text.ends_with(
+            "\nProjects\n  /home/ana/web  setup: npm ci; npm run build  teardown: -  builds: node_modules target\n"
+        ),
+        "{text}"
+    );
 }
 
 #[test]

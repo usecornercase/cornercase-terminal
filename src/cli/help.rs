@@ -747,6 +747,7 @@ Examples:
 mod files;
 mod flow;
 mod paste_file;
+mod worktrees;
 
 pub(in crate::cli) use files::FILES_HELP;
 pub(in crate::cli) use flow::{
@@ -755,6 +756,7 @@ pub(in crate::cli) use flow::{
     FLOW_SAVE_HELP,
 };
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
+pub(in crate::cli) use worktrees::{WORKTREES_FREE_HELP, WORKTREES_HELP, WORKTREES_SIZE_HELP};
 
 #[cfg(test)]
 mod tests;

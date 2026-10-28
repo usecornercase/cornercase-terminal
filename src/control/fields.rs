@@ -218,6 +218,8 @@ impl Command {
             Self::Usage(usage) => usage.fields(fields),
             Self::Ports(ports) => ports.fields(fields),
             Self::StopPort(stop) => stop.fields(fields),
+            Self::WorktreeSize(size) => size.fields(fields),
+            Self::FreeBuilds(free) => free.fields(fields),
             Self::Tour(tour) => tour.fields(fields),
             Self::PluginActions(actions) => actions.fields(fields),
             Self::PluginRun(run) => run.fields(fields),

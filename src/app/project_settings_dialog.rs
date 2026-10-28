@@ -33,8 +33,10 @@ impl App {
         let editor = match field {
             Field::Setup => &mut form.setup,
             Field::Teardown => &mut form.teardown,
+            Field::Builds => &mut form.builds,
         };
-        Some((FieldArea { text, width: usize::from(text.width), top: editor.scroll(), scrolls: true }, editor))
+        let scrolls = field != Field::Builds;
+        Some((FieldArea { text, width: usize::from(text.width), top: editor.scroll(), scrolls }, editor))
     }
 
     pub(super) fn project_settings_key(&mut self, key: KeyEvent, area: Rect) {
@@ -114,6 +116,7 @@ fn room(area: Rect) -> Room {
         setup_rows: usize::from(setup.height),
         teardown_width: usize::from(teardown.width),
         teardown_rows: usize::from(teardown.height),
+        builds_width: usize::from(ui::project_settings_field(area, Field::Builds).width),
     }
 }
 
@@ -122,6 +125,7 @@ fn project_settings_view(form: &Form) -> ui::ProjectSettings {
         title: form.title(),
         setup: form.setup.clone(),
         teardown: form.teardown.clone(),
+        builds: form.builds.clone(),
         focus: form.focus,
         note: form.notice.clone().map(ui::Note::Error),
         hint: form.hint().to_string(),

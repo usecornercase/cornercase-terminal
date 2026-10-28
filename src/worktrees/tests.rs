@@ -29,7 +29,9 @@ fn commit_at(dir: &Path, date: &str) {
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
 }
 
+mod builds;
 mod dialog;
+mod disk;
 mod list;
 mod remove;
 

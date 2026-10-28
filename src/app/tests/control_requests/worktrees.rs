@@ -197,7 +197,9 @@ fn the_check_says_what_the_removal_would_lose_and_stops_nothing() {
     let (id, path) = changed_workspace(&mut app, &rx);
     lock(repo.path(), &path);
     let key = repo.path().display().to_string();
-    app.config.projects.insert(key, ProjectSettings { setup: String::new(), teardown: "echo bye".into() });
+    app.config
+        .projects
+        .insert(key, ProjectSettings { setup: String::new(), teardown: "echo bye".into(), ..Default::default() });
 
     let removal = checked(&mut app, &rx, id);
 

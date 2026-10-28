@@ -21,6 +21,15 @@ const MAX_DESCENDANTS: usize = 256;
 
 const POLL: Duration = Duration::from_millis(20);
 
+const SHELLS: [&str; 17] = [
+    "sh", "bash", "zsh", "fish", "dash", "ksh", "mksh", "oksh", "loksh", "yash", "tcsh", "csh", "nu", "elvish",
+    "xonsh", "pwsh", "ion",
+];
+
+pub(crate) fn is_shell(name: &str) -> bool {
+    SHELLS.contains(&name)
+}
+
 pub(crate) fn reap(mut child: Child) {
     thread::spawn(move || child.wait());
 }

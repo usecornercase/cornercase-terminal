@@ -3,14 +3,22 @@ use std::time::{Duration, SystemTime};
 
 use crate::git;
 
+pub(crate) mod builds;
 mod dialog;
 pub(crate) mod discover;
+pub(crate) mod disk;
 pub(crate) mod remove;
 pub(crate) mod scan;
 
 pub(crate) use dialog::{Action, Dialog, Hit, Step};
 
 pub(crate) const SCANS_AT_ONCE: usize = 4;
+
+pub(crate) const SIZES_AT_ONCE: usize = 2;
+
+pub(crate) const SIZE_GIVE_UP: Duration = Duration::from_secs(120);
+
+pub(crate) const IDLE_AFTER: Duration = Duration::from_hours(168);
 
 pub(crate) const SCAN_GIVE_UP: Duration = Duration::from_secs(30);
 
@@ -56,14 +64,17 @@ pub(crate) struct Live {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[expect(clippy::struct_excessive_bools, reason = "each flag is its own state of a row")]
 pub(crate) struct Row {
     pub(crate) found: Found,
     pub(crate) live: Option<Live>,
     pub(crate) scan: Option<Result<Scan, String>>,
+    pub(crate) size: Option<Result<builds::Size, String>>,
     pub(crate) outside: Vec<String>,
     pub(crate) elsewhere: Vec<String>,
     pub(crate) ticked: bool,
     pub(crate) removing: bool,
+    pub(crate) freeing: bool,
     pub(crate) gone: bool,
 }
 
@@ -96,7 +107,10 @@ impl Row {
     }
 
     pub(crate) fn tickable(&self) -> bool {
-        !self.gone && !self.removing && !self.live.as_ref().is_some_and(|l| l.removing || l.role_of_run)
+        !self.gone
+            && !self.removing
+            && !self.freeing
+            && !self.live.as_ref().is_some_and(|l| l.removing || l.role_of_run)
     }
 
     pub(crate) fn risky(&self) -> bool {
@@ -120,6 +134,32 @@ impl Row {
         }
     }
 
+    pub(crate) fn has_folder(&self) -> bool {
+        self.found.kind != Kind::Prunable
+    }
+
+    pub(crate) fn builds_bytes(&self) -> Option<u64> {
+        match &self.size {
+            Some(Ok(size)) => Some(size.builds_bytes()),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn can_free(&self) -> bool {
+        self.found.kind == Kind::Linked && self.tickable() && self.builds_bytes().is_some_and(|bytes| bytes > 0)
+    }
+
+    pub(crate) fn idle(&self, now: SystemTime) -> bool {
+        self.last_changed().is_some_and(|at| now.duration_since(at).is_ok_and(|age| age >= IDLE_AFTER))
+    }
+
+    fn bytes(&self) -> Option<u64> {
+        match &self.size {
+            Some(Ok(size)) => Some(size.bytes),
+            _ => None,
+        }
+    }
+
     fn last_changed(&self) -> Option<SystemTime> {
         match &self.scan {
             Some(Ok(scan)) => scan.last_changed,
@@ -128,17 +168,25 @@ impl Row {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum Order {
+    #[default]
+    Safe,
+    Size,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct List {
     pub(crate) rows: Vec<Row>,
     pub(crate) sorted: bool,
     pub(crate) filter: String,
+    pub(crate) order: Order,
 }
 
 impl List {
     pub(crate) fn new(mut rows: Vec<Row>) -> Self {
         rows.sort_by(|a, b| (&a.found.project, &a.found.branch).cmp(&(&b.found.project, &b.found.branch)));
-        let mut list = Self { rows, sorted: false, filter: String::new() };
+        let mut list = Self { rows, sorted: false, filter: String::new(), order: Order::Safe };
         list.sort_when_done();
         list
     }
@@ -158,20 +206,48 @@ impl List {
         self.rows.iter().filter(|r| r.found.kind == Kind::Linked && r.scan.is_none()).count()
     }
 
+    pub(crate) fn sizes_pending(&self) -> usize {
+        self.rows.iter().filter(|r| r.has_folder() && !r.gone && r.size.is_none()).count()
+    }
+
+    pub(crate) fn sized(&mut self, path: &Path, size: Result<builds::Size, String>) {
+        if let Some(row) = self.rows.iter_mut().find(|r| r.found.path == path) {
+            row.size = Some(size);
+        }
+        self.sort_when_done();
+    }
+
+    pub(crate) fn order_by(&mut self, order: Order) {
+        if self.order != order {
+            self.order = order;
+            self.sorted = false;
+            self.sort_when_done();
+        }
+    }
+
+    pub(crate) fn total(&self) -> (u64, usize) {
+        let sized = self.rows.iter().filter(|r| !r.gone).filter_map(Row::bytes);
+        sized.fold((0, 0), |(bytes, count), more| (bytes + more, count + 1))
+    }
+
+    pub(crate) fn idle_builds(&self, now: SystemTime) -> (u64, usize) {
+        let idle = self.rows.iter().filter(|r| !r.gone && r.found.kind == Kind::Linked && r.idle(now));
+        idle.filter_map(Row::builds_bytes).filter(|bytes| *bytes > 0).fold((0, 0), |(a, n), b| (a + b, n + 1))
+    }
+
     pub(crate) fn sort_when_done(&mut self) {
-        if self.sorted || self.pending() > 0 {
+        let waiting = match self.order {
+            Order::Safe => self.pending(),
+            Order::Size => self.pending().max(self.sizes_pending()),
+        };
+        if self.sorted || waiting > 0 {
             return;
         }
         self.sorted = true;
-        self.rows.sort_by(|a, b| {
-            let (ta, tb) = (a.last_changed(), b.last_changed());
-            a.band().cmp(&b.band()).then_with(|| match (ta, tb) {
-                (Some(x), Some(y)) => x.cmp(&y),
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (None, None) => std::cmp::Ordering::Equal,
-            })
-        });
+        match self.order {
+            Order::Safe => self.rows.sort_by(safe_order),
+            Order::Size => self.rows.sort_by_key(|row| std::cmp::Reverse(row.bytes())),
+        }
     }
 
     pub(crate) fn shown(&self) -> Vec<usize> {
@@ -190,6 +266,15 @@ impl List {
     pub(crate) fn ticked(&self) -> Vec<usize> {
         (0..self.rows.len()).filter(|&i| self.rows[i].ticked).collect()
     }
+}
+
+fn safe_order(a: &Row, b: &Row) -> std::cmp::Ordering {
+    a.band().cmp(&b.band()).then_with(|| match (a.last_changed(), b.last_changed()) {
+        (Some(x), Some(y)) => x.cmp(&y),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    })
 }
 
 #[cfg(test)]

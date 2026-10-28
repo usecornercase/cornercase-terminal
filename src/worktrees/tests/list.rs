@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
 use crate::git::worktree::Lock;
-use crate::worktrees::{Found, Kind, List, Live, Row, Scan};
+use crate::worktrees::{Found, Kind, List, Live, Order, Row, Scan};
 
 pub(super) fn found(project: &str, branch: &str, kind: Kind) -> Found {
     Found {
@@ -20,10 +20,12 @@ pub(super) fn row(project: &str, branch: &str, kind: Kind) -> Row {
         found: found(project, branch, kind),
         live: None,
         scan: None,
+        size: None,
         outside: Vec::new(),
         elsewhere: Vec::new(),
         ticked: false,
         removing: false,
+        freeing: false,
         gone: false,
     }
 }
@@ -207,4 +209,74 @@ fn a_clean_unlocked_idle_worktree_is_not_risky() {
     r.outside.clear();
     r.live = Some(Live { running: vec!["claude".into()], ..live() });
     assert!(r.risky());
+}
+
+fn size_of(bytes: u64, builds: u64) -> crate::worktrees::builds::Size {
+    use crate::worktrees::builds::{Folder, Size};
+    let folder = Folder { path: PathBuf::from("node_modules"), bytes: builds };
+    Size { bytes, builds: if builds > 0 { vec![folder] } else { Vec::new() }, nested: Vec::new() }
+}
+
+fn sized_list() -> List {
+    let mut list =
+        List::new(vec![row("p", "a", Kind::Linked), row("p", "b", Kind::Linked), row("p", "c", Kind::Linked)]);
+    for (branch, age) in [("a", 30), ("b", 20), ("c", 1)] {
+        list.scanned(&PathBuf::from(format!("/wt/p/{branch}")), Ok(scan_of(Some(age * DAY), false)));
+    }
+    list
+}
+
+#[test]
+fn the_size_order_waits_for_every_size_then_sorts_largest_first_with_unknown_last() {
+    let mut list = sized_list();
+    list.order_by(Order::Size);
+    assert_eq!(order(&list), ["a", "b", "c"]);
+    list.sized(&PathBuf::from("/wt/p/a"), Ok(size_of(10, 0)));
+    list.sized(&PathBuf::from("/wt/p/b"), Err("gave up".into()));
+    assert_eq!(order(&list), ["a", "b", "c"]);
+    list.sized(&PathBuf::from("/wt/p/c"), Ok(size_of(500, 400)));
+    assert_eq!(order(&list), ["c", "a", "b"]);
+    list.sized(&PathBuf::from("/wt/p/a"), Ok(size_of(900, 0)));
+    assert_eq!(order(&list), ["c", "a", "b"]);
+}
+
+#[test]
+fn going_back_to_the_safe_order_sorts_by_age_again() {
+    let mut list = sized_list();
+    for (branch, bytes) in [("a", 10), ("b", 30), ("c", 20)] {
+        list.sized(&PathBuf::from(format!("/wt/p/{branch}")), Ok(size_of(bytes, 0)));
+    }
+    list.order_by(Order::Size);
+    assert_eq!(order(&list), ["b", "c", "a"]);
+    list.order_by(Order::Safe);
+    assert_eq!(order(&list), ["a", "b", "c"]);
+}
+
+#[test]
+fn the_total_counts_every_known_size_and_idle_builds_start_at_seven_days() {
+    let mut list = sized_list();
+    list.rows[0].scan = Some(Ok(scan_of(Some(7 * DAY + HOUR), false)));
+    list.rows[1].scan = Some(Ok(scan_of(Some(6 * DAY + 23 * HOUR), false)));
+    list.rows[2].scan = Some(Ok(scan_of(Some(DAY), false)));
+    list.sized(&PathBuf::from("/wt/p/a"), Ok(size_of(1000, 600)));
+    list.sized(&PathBuf::from("/wt/p/b"), Ok(size_of(2000, 900)));
+    assert_eq!(list.total(), (3000, 2));
+    assert_eq!(list.idle_builds(SystemTime::now()), (600, 1));
+    list.rows[1].gone = true;
+    assert_eq!(list.total(), (1000, 1));
+}
+
+#[test]
+fn only_a_linked_row_with_builds_that_is_tickable_can_free() {
+    let mut r = row("p", "a", Kind::Linked);
+    assert!(!r.can_free());
+    r.size = Some(Ok(size_of(100, 0)));
+    assert!(!r.can_free());
+    r.size = Some(Ok(size_of(100, 50)));
+    assert!(r.can_free());
+    r.freeing = true;
+    assert!(!r.can_free() && !r.tickable());
+    r.freeing = false;
+    r.found.kind = Kind::Orphan;
+    assert!(!r.can_free());
 }

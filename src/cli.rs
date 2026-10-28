@@ -44,6 +44,7 @@ mod tour;
 mod update;
 mod usage;
 mod view;
+mod worktrees;
 
 pub use args::Cli;
 #[cfg(test)]
@@ -281,6 +282,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::Issue(args) => return ControlFlow::Break(issue::run(args.action)),
         Control::Usage(args) => return ControlFlow::Break(usage::run(&args)),
         Control::Ports(args) => return ControlFlow::Break(ports::run(&args)),
+        Control::Worktrees(args) => worktrees::run(&args).map(|()| true),
         Control::Tour(args) => tour::run(&args).map(|()| true),
         Control::Queue(queue) => queue::run(queue.action).map(|()| true),
         Control::Away(away) => run_away(&away).map(|()| true),

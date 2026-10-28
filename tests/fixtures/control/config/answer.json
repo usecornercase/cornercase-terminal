@@ -89,7 +89,11 @@
       "project": 1,
       "repository": true,
       "setup": "npm ci",
-      "teardown": ""
+      "teardown": "",
+      "builds": [
+        "node_modules",
+        "target"
+      ]
     }
   ],
   "notices": [

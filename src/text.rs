@@ -9,6 +9,8 @@ pub(crate) mod stretch;
 
 pub(crate) const CRUMB_SEPARATOR: &str = " › ";
 pub(crate) const TAB: &str = "    ";
+pub(crate) const MB: u64 = 1 << 20;
+pub(crate) const GB: u64 = 1 << 30;
 
 pub(crate) fn folder_name(path: &Path, home: Option<&Path>) -> String {
     if home == Some(path) {
@@ -88,6 +90,18 @@ pub(crate) fn truncate_left(s: &str, max: usize) -> String {
 
 pub(crate) fn plural(n: usize, one: &str, many: &str) -> String {
     if n == 1 { format!("1 {one}") } else { format!("{n} {many}") }
+}
+
+pub(crate) fn size(bytes: u64) -> String {
+    let megabytes = bytes.saturating_add(MB / 2) / MB;
+    if megabytes == 0 {
+        return format!("{} KB", bytes.saturating_add(512) / 1024);
+    }
+    if megabytes < 1024 {
+        return format!("{megabytes} MB");
+    }
+    let tenths = bytes.saturating_mul(10).saturating_add(GB / 2) / GB;
+    format!("{}.{} GB", tenths / 10, tenths % 10)
 }
 
 pub(crate) fn one_line(text: &str) -> String {

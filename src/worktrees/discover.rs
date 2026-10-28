@@ -102,6 +102,13 @@ pub(super) fn repo_of(folder: &Path) -> Origin {
     }
 }
 
+pub(crate) fn linked(folder: &Path) -> Option<PathBuf> {
+    match repo_of(folder) {
+        Origin::Repo(repo) => Some(repo),
+        Origin::Gone(_) | Origin::Unknown(_) | Origin::None => None,
+    }
+}
+
 pub(crate) fn gitdir_of(folder: &Path) -> Option<PathBuf> {
     let dot_git = folder.join(".git");
     let meta = std::fs::symlink_metadata(&dot_git).ok()?;

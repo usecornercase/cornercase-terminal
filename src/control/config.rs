@@ -25,6 +25,7 @@ pub(crate) struct ProjectChange {
     pub(crate) path: Option<PathBuf>,
     pub(crate) setup: Option<String>,
     pub(crate) teardown: Option<String>,
+    pub(crate) builds: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -229,6 +230,7 @@ pub(crate) struct ProjectEntry {
     pub(crate) repository: bool,
     pub(crate) setup: String,
     pub(crate) teardown: String,
+    pub(crate) builds: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

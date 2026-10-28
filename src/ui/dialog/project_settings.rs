@@ -21,8 +21,8 @@ pub(crate) fn project_settings_area(area: Rect) -> Rect {
     Rect::new(area.x + (area.width - width) / 2, area.y + (area.height - height) / 2, width, height)
 }
 
-fn rows(area: Rect) -> [Rect; 6] {
-    let [setup, setup_field, _, teardown, teardown_field, hint, buttons] = Layout::vertical([
+fn rows(area: Rect) -> [Rect; 8] {
+    let [setup, setup_field, _, teardown, teardown_field, _, builds, builds_field, hint, buttons] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Fill(2),
         Constraint::Length(1),
@@ -30,9 +30,12 @@ fn rows(area: Rect) -> [Rect; 6] {
         Constraint::Fill(1),
         Constraint::Length(1),
         Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
     ])
     .areas(form_inner(project_settings_area(area)));
-    [setup, setup_field, teardown, teardown_field, hint, buttons]
+    [setup, setup_field, teardown, teardown_field, builds, builds_field, hint, buttons]
 }
 
 pub(crate) fn project_settings_field(area: Rect, field: Field) -> Rect {
@@ -40,17 +43,19 @@ pub(crate) fn project_settings_field(area: Rect, field: Field) -> Rect {
     text_inside(match field {
         Field::Setup => rows[1],
         Field::Teardown => rows[3],
+        Field::Builds => rows[5],
     })
 }
 
 pub(crate) fn project_settings_buttons(area: Rect, labels: &[&str]) -> Vec<Rect> {
-    issue_buttons_in(rows(area)[5], labels)
+    issue_buttons_in(rows(area)[7], labels)
 }
 
 pub(crate) struct ProjectSettings {
     pub(crate) title: String,
     pub(crate) setup: Editor,
     pub(crate) teardown: Editor,
+    pub(crate) builds: Editor,
     pub(crate) focus: Field,
     pub(crate) note: Option<Note>,
     pub(crate) hint: String,
@@ -67,7 +72,7 @@ pub(crate) fn project_settings_hit(area: Rect, view: &ProjectSettings, pos: Posi
     if let Some(i) = project_settings_buttons(area, &view.buttons).iter().position(|r| r.contains(pos)) {
         return Some(ProjectSettingsHit::Button(i));
     }
-    [Field::Setup, Field::Teardown].into_iter().find_map(|field| {
+    [Field::Setup, Field::Teardown, Field::Builds].into_iter().find_map(|field| {
         let r = project_settings_field(area, field);
         r.contains(pos).then(|| ProjectSettingsHit::Field {
             field,
@@ -88,10 +93,12 @@ pub(in crate::ui) fn draw_project_settings(f: &mut Frame, view: &View, settings:
     f.render_widget(Paragraph::new(Span::styled("setup", lit(Field::Setup))), rows[0]);
     f.render_widget(Paragraph::new(Span::styled("teardown", lit(Field::Teardown))), rows[2]);
     let setup = draw_text(f, view, rows[1], &settings.setup, settings.focus == Field::Setup);
+    f.render_widget(Paragraph::new(Span::styled("build folders", lit(Field::Builds))), rows[4]);
     let teardown = draw_text(f, view, rows[3], &settings.teardown, settings.focus == Field::Teardown);
-    draw_hint(f, view, settings.note.as_ref(), &settings.hint, rows[4]);
+    let builds = draw_text(f, view, rows[5], &settings.builds, settings.focus == Field::Builds);
+    draw_hint(f, view, settings.note.as_ref(), &settings.hint, rows[6]);
     draw_buttons(f, view, &project_settings_buttons(area, &settings.buttons), &settings.buttons, SAVE);
-    if let Some(pos) = setup.or(teardown) {
+    if let Some(pos) = setup.or(teardown).or(builds) {
         f.set_cursor_position(pos);
     }
 }

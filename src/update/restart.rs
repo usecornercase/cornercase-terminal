@@ -9,10 +9,6 @@ const NOTHING: &str = "Nothing is running in your terminals.";
 const COMES_BACK: &str =
     "Your projects, workspaces, tabs and splits come back, each tab with a new shell in its folder.";
 const RESUME: &str = "To pick up a Claude Code conversation afterwards, run `claude --continue` in its tab.";
-const SHELLS: [&str; 17] = [
-    "sh", "bash", "zsh", "fish", "dash", "ksh", "mksh", "oksh", "loksh", "yash", "tcsh", "csh", "nu", "elvish",
-    "xonsh", "pwsh", "ion",
-];
 const STATUSES: [(Status, &str); 6] = [
     (Status::Working, "working"),
     (Status::Waiting, "waiting for you"),
@@ -54,7 +50,7 @@ fn busy(pane: &PaneInfo) -> bool {
     }
     match pane.at_prompt {
         Some(at_prompt) => !at_prompt,
-        None => pane.program.as_deref().is_some_and(|program| !SHELLS.contains(&program)),
+        None => pane.program.as_deref().is_some_and(|program| !crate::process::is_shell(program)),
     }
 }
 

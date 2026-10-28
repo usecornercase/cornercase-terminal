@@ -27,6 +27,12 @@ pub(crate) enum ConfigAction {
         setup: Option<String>,
         #[arg(long, help = "The commands to run before a worktree is removed; empty removes them")]
         teardown: Option<String>,
+        #[arg(
+            long,
+            value_name = "NAMES",
+            help = "The folders `worktrees free-builds` deletes, separated by spaces or commas; `default` restores the usual list; empty means none"
+        )]
+        builds: Option<String>,
     },
     #[command(about = "Check and save a tracker's token or a bot's, read from standard input")]
     Secret {

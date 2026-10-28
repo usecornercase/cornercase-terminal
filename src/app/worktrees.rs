@@ -13,6 +13,8 @@ use super::pull_requests::Looked;
 use super::toast::Toast;
 use super::worktrees_dialog::Deleted;
 use crate::agents::launch::Launch;
+use crate::control::BuildsFreed;
+use crate::control::contract::Refusal;
 use crate::editor::Editor;
 use crate::error::Result;
 use crate::flows::run::RoleWorktree;
@@ -24,6 +26,7 @@ use crate::log::{self, Job, Level};
 use crate::project::{Hierarchy, Phase, Workspace, WorkspaceAt};
 use crate::pull_request::glab::Host;
 use crate::ui::{self};
+use crate::worktrees::builds::{Freed, Size};
 use crate::worktrees::{Found, Scan};
 
 #[derive(Default)]
@@ -52,6 +55,12 @@ pub(super) enum Check {
     Changed,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Measure {
+    Dialog { generation: u64, ticket: u64 },
+    Request(u64),
+}
+
 #[derive(Debug)]
 pub(crate) enum WorktreeEvent {
     Created { project: u64, result: Result<PathBuf>, start: Option<Start>, request: Option<u64> },
@@ -65,6 +74,9 @@ pub(crate) enum WorktreeEvent {
     Scanned { generation: u64, ticket: u64, path: PathBuf, scan: Box<Result<Scan>>, confirm: bool },
     Outside { generation: u64, ticket: u64, found: Result<Vec<(PathBuf, String, bool)>> },
     Cleaned { key: u64, result: Result<Option<String>>, branch: Deleted },
+    Measured { answer: Measure, path: PathBuf, size: Box<Result<Size>> },
+    Freed { key: u64, path: PathBuf, result: Box<Result<Freed>> },
+    BuildsRequest { key: u64, result: Box<std::result::Result<BuildsFreed, Refusal>> },
 }
 
 impl WorktreeEvent {
@@ -81,6 +93,9 @@ impl WorktreeEvent {
             Self::Scanned { .. } => "worktree scanned",
             Self::Outside { .. } => "outside processes",
             Self::Cleaned { .. } => "worktree cleaned",
+            Self::Measured { .. } => "worktree measured",
+            Self::Freed { .. } => "builds freed",
+            Self::BuildsRequest { .. } => "builds request",
         }
     }
 }
@@ -116,6 +131,9 @@ impl App {
             }
             WorktreeEvent::Outside { generation, ticket, found } => self.outside_found((generation, ticket), found),
             WorktreeEvent::Cleaned { key, result, branch } => self.worktree_cleaned(key, result, branch),
+            WorktreeEvent::Measured { answer, path, size } => self.worktree_measured(answer, &path, *size),
+            WorktreeEvent::Freed { key, path, result } => self.builds_freed(key, &path, *result),
+            WorktreeEvent::BuildsRequest { key, result } => self.builds_request_answered(key, *result),
         }
         Ok(())
     }

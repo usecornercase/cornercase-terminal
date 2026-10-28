@@ -21,13 +21,14 @@ use super::pane::TAGLINE;
 use super::rows::{Band, CLOSE_BUTTON_WIDTH, COMPACT_CLOSE_WIDTH, MENU_BUTTON_WIDTH, MIN_MENU_ROW_WIDTH};
 use super::theme::{DARK_HOVER, DARK_LINE, DARK_SURFACE, LIGHT_HOVER, LIGHT_SURFACE, WAITING_COLOR};
 use super::widgets::middle;
-use super::workspaces::{GB, MB, draw_tab_band, memory_size};
+use super::workspaces::draw_tab_band;
 use super::*;
 use crate::agents::usage::Severity;
 use crate::host::theme::HostTheme;
 use crate::project::split::{Node, Place};
 use crate::term::emulator::Emulator;
 use crate::term::emulator::Snapshot;
+use crate::text::{GB, MB, size as memory_size};
 
 const W: u16 = 100;
 const H: u16 = 18;

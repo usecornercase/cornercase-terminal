@@ -8,6 +8,17 @@ mod truncate_cells;
 mod truncate_left;
 mod truncate_right;
 
+#[rstest]
+#[case::nothing(0, "0 KB")]
+#[case::kilobytes(300 * 1024, "300 KB")]
+#[case::just_under_a_megabyte(MB / 2 - 1, "512 KB")]
+#[case::megabytes(300 * MB, "300 MB")]
+#[case::nearly_a_gigabyte(GB - MB / 10, "1.0 GB")]
+#[case::gigabytes(GB * 25 / 2, "12.5 GB")]
+fn size_reads_in_kilobytes_megabytes_then_gigabytes(#[case] bytes: u64, #[case] expected: &str) {
+    assert_eq!(size(bytes), expected);
+}
+
 #[test]
 fn one_line_joins_lines_and_spaces() {
     assert_eq!(one_line(" a\n  b\tc "), "a b c");
