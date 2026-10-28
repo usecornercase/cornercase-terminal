@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.224
+
+- **Long lines wrap in the files viewer and the changes panel.** A line wider than the panel goes on in the rows under it instead of ending in `…`, so you can read it whole without dragging the border or going full screen, and the diff shows how a line changed even when the change is near its end. The extra rows leave the numbers blank and keep the line's colours, its change bar, the find matches and your selection. A click on any of them selects the line, and a selection can start or end on any row. A line that would take more than 100 rows, such as a minified bundle, still ends in `…`; **copy** and **open** give you the rest.
+
 ## 0.12.223
 
 - **See what every pane runs, and stop a runaway program.** **More ▴ › processes** (or `k` in the keys menu) opens a Processes dialog with one row per pane of every open project: where it is, what runs in it, and the CPU and memory of everything under its shell. The totals sit at the top and cornercase's own use is the last row. Click a row to see its processes, each with its own figures, and sort by CPU, memory or name, or type to filter. ` go ` shows the pane and ` close ` closes it (or its agent, as **close agent** does). ` stop ` on a process asks first, then sends SIGTERM to it and everything it started, and SIGKILL to what still runs 3 seconds later; a pane's shell is never offered. It measures only while it is open, every 2 seconds, and holds the order of the rows while the pointer is over them.
