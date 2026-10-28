@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use super::args::config::{ConfigAction, ConfigArgs};
 use super::{print_json, print_out};
-use crate::client::{answer, ask};
+use crate::client::{answer, ask, use_build_folders};
 use crate::control::Command;
 use crate::control::config::{Configure, Connection, Described, Kind, ProjectChange, SecretChange, Setting, State};
 use crate::error::{Error, Result};
@@ -30,6 +30,9 @@ pub(super) fn run(args: ConfigArgs) -> Result<()> {
                 (path, _) => path.as_deref().map(absolute).transpose()?,
             };
             let builds = builds.as_deref().map(builds_of).transpose()?;
+            if builds.is_some() {
+                use_build_folders()?;
+            }
             request(Configure::Project(ProjectChange { project, path, setup, teardown, builds }))?
         }
         Some(ConfigAction::Secret { key }) => {

@@ -87,7 +87,7 @@ impl App {
     pub(super) fn free_builds_request(&mut self, client: u64, asker: Asker, request: &FreeBuilds) -> Handled {
         let target = self.worktree_target(asker, request.workspace, request.path.as_deref())?;
         let names = self.config.project(&target.repo, self.home.as_deref()).builds();
-        let (own, others) = self.worktree_shells(&target.path);
+        let shells = self.shell_pids();
         let mut running = self.workspace_at_path(&target.path).map(|at| self.running_in(at)).unwrap_or_default();
         let key = self.clients.requests.key();
         let job = Job::new(Level::Info, "control", "free builds").with("path", target.path.display());
@@ -95,7 +95,7 @@ impl App {
         self.spawn_job(
             job,
             move || {
-                let found = outside_names(&path, own, others);
+                let found = outside_names(&path, shells);
                 running.extend(found);
                 running.sort();
                 running.dedup();
@@ -123,17 +123,9 @@ impl App {
         terms.filter(|t| !t.shell_in_foreground()).filter_map(|t| t.program(&self.config)).collect()
     }
 
-    fn worktree_shells(&self, path: &Path) -> (Vec<i32>, Vec<i32>) {
-        let (mut own, mut others) = (Vec::new(), Vec::new());
-        for workspace in self.projects.iter().flat_map(|project| &project.workspaces) {
-            let pids = workspace.terms().filter_map(Term::shell_pid);
-            if canonical(&workspace.path) == path {
-                own.extend(pids);
-            } else {
-                others.extend(pids);
-            }
-        }
-        (own, others)
+    fn shell_pids(&self) -> Vec<i32> {
+        let workspaces = self.projects.iter().flat_map(|project| &project.workspaces);
+        workspaces.flat_map(|workspace| workspace.terms().filter_map(Term::shell_pid)).collect()
     }
 }
 
@@ -144,9 +136,8 @@ fn linked_target(path: &Path) -> std::result::Result<Target, Refusal> {
     Ok(Target { path, repo })
 }
 
-fn outside_names(path: &Path, own: Vec<i32>, others: Vec<i32>) -> Vec<String> {
-    let shells: Vec<(i32, Vec<usize>)> =
-        own.into_iter().map(|pid| (pid, vec![0])).chain(others.into_iter().map(|pid| (pid, Vec::new()))).collect();
+fn outside_names(path: &Path, shells: Vec<i32>) -> Vec<String> {
+    let shells: Vec<(i32, Vec<usize>)> = shells.into_iter().map(|pid| (pid, Vec::new())).collect();
     let panes = trees(&shells);
     let server = i32::try_from(std::process::id()).unwrap_or_default();
     let found = scan::outside(&[path.to_path_buf()], &panes, server);

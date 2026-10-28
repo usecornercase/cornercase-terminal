@@ -23,11 +23,11 @@ Examples:
 
 pub(in crate::cli) const WORKTREES_FREE_HELP: &str =
     "Deletes the build folders of a worktree: only folders git ignores whose names are on the
-project's list, at any depth. The worktree, its branch and its uncommitted changes stay, and the
-project's setup can rebuild what went. --check prints what would go and the programs running in
+project's list, at any depth. The worktree, its branch and its changes outside those folders stay, and
+the project's setup can rebuild what went; files inside the deleted folders are lost. --check prints what would go and the programs running in
 the worktree, and deletes nothing. Without --force it refuses (exit 1, code `conflict`) while a
 program runs in the worktree or a build folder holds a git checkout, since those may still use the
-folders or lose changes; --force goes on. Folders that could not be deleted, or that git stopped
+folders or lose changes; --force goes on and deletes a nested checkout's uncommitted changes too. Folders that could not be deleted, or that git stopped
 ignoring since the measure, are named and the command exits 3. With --json it prints {\"path\",
 \"check\", \"bytes\", \"folders\": [{\"path\", \"bytes\"}], \"kept\", \"failed\": [{\"path\", \"error\"}],
 \"running\"}.

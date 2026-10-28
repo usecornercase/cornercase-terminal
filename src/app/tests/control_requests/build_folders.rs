@@ -119,3 +119,29 @@ fn the_config_request_sets_resets_and_refuses_build_folders() {
     let bad = call(&mut app, "config", &json!({"action": "project", "entry": {"project": id, "builds": ["a/b"]}}));
     assert_eq!(bad.expect_err("refused").code, "malformed");
 }
+
+#[test]
+fn a_background_program_started_from_a_panes_shell_refuses_without_force() {
+    let (mut app, rx, _repo, _worktrees, _config) = repo();
+    let (id, path) = made(&mut app, &rx);
+    with_builds(&path);
+    let at = app.projects.workspace_index(id).expect("the workspace");
+    let pane = app.projects[at.project()].workspaces[at.index()].tabs[0].pane().expect("a pane").id;
+    ok(&mut app, "input", &json!({"pane": pane, "events": [{"text": "sleep 47 &"}, {"key": {"code": "enter"}}]}));
+    wait_until("the background sleep works in the folder", || {
+        process::all().into_iter().any(|pid| {
+            process::cwd(pid).as_deref() == Some(path.as_path()) && process::name(pid).as_deref() == Some("sleep")
+        })
+    });
+
+    let refusal = asked(&mut app, &rx, "free-builds", &json!({"workspace": id})).expect_err("refused");
+
+    assert_eq!(refusal.code, "conflict");
+    assert!(refusal.message.contains("sleep"), "{}", refusal.message);
+    assert!(path.join("node_modules").exists());
+    for pid in process::all() {
+        if process::cwd(pid).as_deref() == Some(path.as_path()) && process::name(pid).as_deref() == Some("sleep") {
+            let _ = std::process::Command::new("kill").arg(pid.to_string()).status();
+        }
+    }
+}

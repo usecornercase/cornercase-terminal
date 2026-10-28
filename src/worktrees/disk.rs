@@ -29,9 +29,10 @@ struct Walk<'a> {
 }
 
 pub(crate) fn crosses_device(folder: &Path, device: u64) -> bool {
-    let Ok(entries) = std::fs::read_dir(folder) else { return false };
-    entries.flatten().any(|entry| {
-        let Ok(meta) = entry.metadata() else { return false };
+    let Ok(entries) = std::fs::read_dir(folder) else { return true };
+    entries.into_iter().any(|entry| {
+        let Ok(entry) = entry else { return true };
+        let Ok(meta) = entry.metadata() else { return true };
         meta.is_dir() && (meta.dev() != device || crosses_device(&entry.path(), device))
     })
 }

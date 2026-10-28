@@ -191,6 +191,20 @@ fn a_folder_on_another_device_is_refused_by_the_check() {
 }
 
 #[test]
+fn a_folder_that_cannot_be_read_counts_as_crossing() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_repo, _dirs, at) = worktree();
+    write(&at.join("node_modules/sub/x.js"), 100);
+    let sub = at.join("node_modules/sub");
+    std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o000)).expect("lock");
+    let readable = std::fs::read_dir(&sub).is_ok();
+    let device = std::os::unix::fs::MetadataExt::dev(&std::fs::metadata(&at).expect("meta"));
+    let crosses = super::super::disk::crosses_device(&at.join("node_modules"), device);
+    std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o755)).expect("unlock");
+    assert!(readable || crosses);
+}
+
+#[test]
 fn the_deletion_check_refuses_a_parent_that_leads_out_and_a_plain_folder_passes() {
     let (_repo, _dirs, at) = worktree();
     let outside = TempDir::new();

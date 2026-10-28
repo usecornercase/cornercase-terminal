@@ -34,8 +34,8 @@ mod window;
 pub(crate) use requests::{answer, ask, ask_starting, connect, follow, follow_all, report_now, running_now};
 pub(crate) use requests::{
     answered, request, use_account_login, use_account_restart, use_account_switch, use_accounts, use_agent_folds,
-    use_close_agent_tabs, use_close_unlock, use_focus_reveal, use_host_events, use_issue_names, use_issues,
-    use_notices, use_popup_terminal, use_queue_undo, use_surface_patches, use_todo_panel, use_view,
+    use_build_folders, use_close_agent_tabs, use_close_unlock, use_focus_reveal, use_host_events, use_issue_names,
+    use_issues, use_notices, use_popup_terminal, use_queue_undo, use_surface_patches, use_todo_panel, use_view,
 };
 pub(crate) use requests::{reader_gone_within, use_remote, used_remote, watched};
 pub(crate) use server_process::{Found, find, find_or_start, running, wait_for_exit};
