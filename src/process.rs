@@ -346,12 +346,21 @@ mod imp {
         (read == 0).then_some(info.ri_phys_footprint)
     }
 
+    #[repr(C)]
+    struct Timebase {
+        numer: u32,
+        denom: u32,
+    }
+
+    unsafe extern "C" {
+        fn mach_timebase_info(info: *mut Timebase) -> c_int;
+    }
+
     fn timebase() -> (u64, u64) {
         static TIMEBASE: OnceLock<(u64, u64)> = OnceLock::new();
         *TIMEBASE.get_or_init(|| {
-            let mut info = libc::mach_timebase_info { numer: 0, denom: 0 };
-            #[expect(deprecated, reason = "libc marks it for mach2, which would be a new dependency for one call")]
-            let read = unsafe { libc::mach_timebase_info(&raw mut info) };
+            let mut info = Timebase { numer: 0, denom: 0 };
+            let read = unsafe { mach_timebase_info(&raw mut info) };
             if read == 0 && info.denom != 0 { (u64::from(info.numer), u64::from(info.denom)) } else { (1, 1) }
         })
     }
