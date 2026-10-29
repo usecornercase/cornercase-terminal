@@ -9,6 +9,7 @@ use serde_json::{Map, Value};
 
 use crate::agents;
 use crate::host::notify;
+use crate::machines::Machine;
 use crate::persist;
 use crate::shortcuts::Prefix;
 
@@ -326,6 +327,8 @@ pub(crate) struct Config {
     pub(crate) account_names: BTreeMap<String, BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub(crate) active_accounts: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) machines: Vec<Machine>,
 }
 
 impl Config {
@@ -394,6 +397,7 @@ impl Config {
         profile: String::new(),
         account_names: BTreeMap::new(),
         active_accounts: BTreeMap::new(),
+        machines: Vec::new(),
     };
 }
 

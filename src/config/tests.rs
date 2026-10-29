@@ -1,6 +1,7 @@
 use rstest::rstest;
 
 use super::*;
+use crate::machines::Machine;
 use crate::test_util::TempDir;
 
 mod file {
@@ -658,5 +659,76 @@ mod project_builds {
     fn a_bad_name_is_refused(#[case] text: &str) {
         let error = parse_builds(text).expect_err("refused");
         assert!(error.contains("is not a folder name"), "{error}");
+    }
+}
+
+mod machines {
+    use super::*;
+
+    fn vps() -> Machine {
+        Machine {
+            name: "vps".into(),
+            icon: "☁".into(),
+            destination: "miguel@vps.example.com".into(),
+            folder: "~/code".into(),
+        }
+    }
+
+    fn saved(config: &Config) -> (TempDir, PathBuf, String) {
+        let dir = TempDir::new();
+        let path = dir.path().join("config.json");
+        save(&path, config).expect("save the config");
+        let text = std::fs::read_to_string(&path).expect("read the saved config");
+        (dir, path, text)
+    }
+
+    #[test]
+    fn are_left_out_of_the_file_while_there_are_none() {
+        let (_dir, _path, text) = saved(&Config::default());
+        assert!(!text.contains("\"machines\""), "{text}");
+    }
+
+    #[test]
+    fn round_trip_through_the_file_with_their_four_keys() {
+        let pi = Machine { name: "pi".into(), icon: "◫".into(), destination: "pi.lan".into(), folder: "/srv".into() };
+        let config = Config { machines: vec![vps(), pi], ..Config::default() };
+        let (_dir, path, text) = saved(&config);
+        let entry = "    {\n      \"name\": \"vps\",\n      \"icon\": \"☁\",\n      \"destination\": \
+                     \"miguel@vps.example.com\",\n      \"folder\": \"~/code\"\n    },";
+        assert!(text.contains(entry), "{text}");
+        assert_eq!(load(&path), config);
+    }
+
+    #[test]
+    fn an_invalid_entry_keeps_the_file_readable_and_is_written_back() {
+        let dir = TempDir::new();
+        let path = dir.path().join("config.json");
+        let file = r#"{"counts": false, "machines": [{"name": "my vps", "icon": "★", "destination": 5}]}"#;
+        std::fs::write(&path, file).expect("write");
+
+        let config = load(&path);
+        let odd = Machine { name: "my vps".into(), icon: "★".into(), ..Machine::default() };
+        assert_eq!((config.counts, &config.machines), (false, &vec![odd.clone()]));
+
+        save(&path, &config).expect("save the config");
+        assert_eq!(load(&path).machines, [odd]);
+    }
+
+    #[test]
+    fn saving_them_is_a_change_of_their_key_alone_and_keeps_an_outside_edit() {
+        let changes = Changes::between(&Config::default(), &Config { machines: vec![vps()], ..Config::default() });
+        assert_eq!(changes.keys(), ["machines"]);
+        let edited_outside = Config { counts: false, ..Config::default() };
+        let merged = changes.apply(&edited_outside);
+        assert_eq!((merged.counts, merged.machines), (false, vec![vps()]));
+    }
+
+    #[test]
+    fn removing_the_last_one_drops_their_key_and_keeps_an_outside_edit() {
+        let changes = Changes::between(&Config { machines: vec![vps()], ..Config::default() }, &Config::default());
+        assert_eq!(changes.keys(), ["machines"]);
+        let edited_outside = Config { counts: false, machines: vec![vps()], ..Config::default() };
+        let merged = changes.apply(&edited_outside);
+        assert_eq!((merged.counts, merged.machines), (false, Vec::new()));
     }
 }
