@@ -520,15 +520,17 @@ cornercase clone https://github.com/acme/orders-api          # into the current 
 cornercase --remote devbox clone git@github.com:acme/orders-api.git ~/code
 ```
 
-`clone` runs `git clone` on the server's machine into a new folder inside FOLDER, named after the repository as git names it (`orders-api` for both URLs above), opens that folder as a project, as `open` does, and prints its path once git is done. Without FOLDER the clone goes in the current folder, and with `--remote` in the other machine's home folder; a FOLDER given with `--remote` is that machine's, absolute or starting with `~/`. Folders missing on the way are made.
+`clone` runs `git clone` on the server's machine into a new folder inside FOLDER, named after the repository as git names it (`orders-api` for both URLs above), opens that folder as a project, as `open` does, and prints its path once git is done. Without FOLDER the clone goes in the current folder, and with `--remote` in the other machine's home folder; a FOLDER given with `--remote` is that machine's, absolute or starting with `~/`, and a FOLDER with `..` in it is refused. Folders missing on the way are made.
 
 - A folder of that name that exists and is not empty is refused; an empty one is used.
-- A clone that fails leaves no folder behind, the folders it made on the way included, and says what failed: the URL is not a git repository (or one you can read), access was denied, or git's own reason, such as a host it cannot reach.
-- git never asks for a password or a passphrase: it uses the ssh keys, ssh agent and git credentials of the server's machine as they are, and a missing one fails at once as access denied.
+- A repository on the same machine can be given by its path: a relative one is read from the folder you run the command in. With `--remote`, give the other machine's absolute path.
+- A repository named `.git` (such as `…/.git.git`) is refused, since its clone would be a `.git` folder that every git command under FOLDER would read.
+- A clone that fails leaves no folder behind, the folders it made on the way included, and says what failed: the URL is not a git repository (or one you can read), access was denied, or git's own reason, such as a host it cannot reach. A folder that was there before is never removed. The messages never repeat the URL, so a token in it stays out of them and out of the [log](../../reference/files-and-environment/).
+- git never asks for a password, a passphrase or a browser login: it uses the ssh keys, ssh agent and git credentials of the server's machine as they are, and a missing one fails at once as access denied. Prefer a credential helper to a token in the URL: like `git clone`, the clone keeps its URL in `.git/config`.
 - The command waits for git with no timeout, as long as the clone takes. Stopping the command does not stop the clone, and its project still opens.
 - `--json` prints `{"path": "/home/ana/code/orders-api", "project": 4, "workspace": 9, "tab": 12, "pane": 13}`. `--focus` also shows the project.
 
-It is the request `{"command": "clone", "args": {"url": "…", "parent": "~/code", "focus": false}}`; a refusal has the [code](#errors-with-a-code) `not-found` when the URL is not a repository, `conflict` when the folder is not empty, `busy` when a clone into that folder is already running, `malformed` for a relative folder or a URL with no name in it, and `failed` for the rest. An older server answers that it has no such command. There is no button for it in the window.
+It is the request `{"command": "clone", "args": {"url": "…", "parent": "~/code", "focus": false}}`; a refusal has the [code](#errors-with-a-code) `not-found` when the URL is not a repository, `conflict` when the folder is not empty, `busy` when a clone into that folder is already running, `malformed` for a relative folder or one with `..`, a relative path to a repository, or a URL with no usable name in it, and `failed` for the rest, access denied included. An older server answers that it has no such command. There is no button for it in the window.
 
 ### Start an agent
 

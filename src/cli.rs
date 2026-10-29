@@ -16,7 +16,7 @@ use crate::client::{self, answer, ask};
 use crate::control::{self, Done, Event, Item, Report, Until, What};
 use crate::error::{Error, Result};
 use crate::remote::{self, Remote};
-use crate::{log, server};
+use crate::{git, log, server};
 
 mod accounts;
 mod agents;
@@ -309,13 +309,26 @@ fn run_open(open: &args::OpenArgs) -> Result<()> {
     say(value, open.create.print.json, |done| id(done.ids.project))
 }
 
+fn clone_parent(folder: Option<&Path>, remote: Option<&Remote>) -> Result<PathBuf> {
+    match folder {
+        Some(folder) => reach::open_path_on(folder, remote),
+        None if remote.is_some() => Ok(PathBuf::from("~")),
+        None => Ok(std::env::current_dir()?),
+    }
+}
+
+fn clone_url(url: &str, remote: Option<&Remote>) -> Result<String> {
+    let path = Path::new(url);
+    if remote.is_some() || !git::clone::is_local_path(url) || path.is_absolute() || url.starts_with('~') {
+        return Ok(url.to_string());
+    }
+    Ok(std::path::absolute(path)?.to_string_lossy().into_owned())
+}
+
 fn run_clone(clone: &args::CloneArgs) -> Result<()> {
-    let parent = match &clone.folder {
-        Some(folder) => reach::open_path(folder)?,
-        None if client::used_remote().is_some() => PathBuf::from("~"),
-        None => std::env::current_dir()?,
-    };
-    let request = control::CloneRepository { url: clone.url.clone(), parent, focus: clone.create.focus };
+    let remote = client::used_remote();
+    let (url, parent) = (clone_url(&clone.url, remote)?, clone_parent(clone.folder.as_deref(), remote)?);
+    let request = control::CloneRepository { url, parent, focus: clone.create.focus };
     let value = ask("clone", control::Command::Clone(request))?;
     if clone.create.print.json {
         return print_json(&value);

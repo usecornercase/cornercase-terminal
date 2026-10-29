@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.232
 
-- **Clone a repository and open it from a terminal or a script.** `cornercase clone URL [FOLDER]` runs `git clone` into a new folder inside FOLDER (the current one by default), named after the repository, opens it as a project and prints its path. It refuses a folder that is already there and not empty, says what failed when the URL is not a repository or access is denied, and a failed clone leaves no folder behind. With `--remote` it clones on the other machine, into its home folder by default. It is the request `clone`, which `cornercase contract` lists.
+- **Clone a repository and open it from a terminal or a script.** `cornercase clone URL [FOLDER]` runs `git clone` into a new folder inside FOLDER (the current one by default), named after the repository, opens it as a project and prints its path. A repository on the same machine can be given by its path. It refuses a folder that is already there and not empty, says what failed when the URL is not a repository or access is denied (without repeating the URL, so a token in it stays out of the messages and the log), and a failed clone leaves no folder behind and never removes one that was there before. With `--remote` it clones on the other machine, into its home folder by default. It is the request `clone`, which `cornercase contract` lists.
 
 ## 0.12.231
 
