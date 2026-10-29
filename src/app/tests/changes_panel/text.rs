@@ -11,6 +11,10 @@ fn text_at(app: &App, file: usize, l: usize, column: u16) -> Position {
     Position::new(at.x + 3 + column, at.y)
 }
 
+fn text_at_row(app: &App, at: Position, column: u16) -> Position {
+    Position::new(text_at(app, 0, 1, column).x, at.y)
+}
+
 fn copied(app: &mut App) -> Option<Vec<u8>> {
     let copy = footer(app, LinesAction::Copy);
     click(app, copy);
@@ -148,10 +152,9 @@ fn a_click_and_a_character_selection_on_a_continuation_row() {
     let second = row(&app, panel::Row::Line(0, 0, 1, 1));
     click(&mut app, Position::new(second.x - 5, second.y));
     assert_eq!(selected(&app).map(|(from, _)| from), Some(at(1)));
-    let (from, to) = (Position::new(second.x + 2, second.y), Position::new(second.x + 6, second.y));
+    let (from, to) = (text_at_row(&app, second, 0), text_at_row(&app, second, 3));
     drag_between(&mut app, from, to);
-    let copied = copied(&mut app);
     let first_row = row(&app, panel::Row::Line(0, 0, 1, 0));
     assert_ne!(first_row.y, second.y);
-    assert!(copied.is_some_and(|c| c.starts_with(b"\x1b]52") && c.len() > 8));
+    assert_eq!(copied(&mut app), Some(clipboard::osc52("word")));
 }
