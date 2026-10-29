@@ -38,6 +38,16 @@ test('Copilot is in the agent catalogue, its modes and the program list', () => 
   assert.equal(AGENT_KINDS.copilot, 'copilot');
 });
 
+test('Vibe is in the agent catalogue, its modes and the program list', () => {
+  assert.deepEqual(AGENTS.find(([kind]) => kind === 'vibe'), ['vibe', 'vibe']);
+  assert.deepEqual(MODES.vibe, [
+    ['ask', '--agent ask'],
+    ['smart approve', '--agent smart-approve'],
+    ['auto-approve (dangerous)', '--agent auto-approve'],
+  ]);
+  assert.equal(AGENT_KINDS.vibe, 'vibe');
+});
+
 test('Settings lists Copilot with its modes', () => {
   const app = new App();
   app.virtual = true;

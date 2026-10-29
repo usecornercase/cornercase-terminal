@@ -281,6 +281,11 @@ mod program {
     )]
     #[case::copilot_through_npm("node", &["node", "/usr/lib/node_modules/@github/copilot/npm-loader.js"], "copilot")]
     #[case::copilot_standalone("MainThread", &["/home/a/.local/bin/copilot"], "copilot")]
+    #[case::vibe_through_its_launcher(
+        "vibe-rs",
+        &["/home/a/.local/share/uv/tools/mistral-vibe/lib/python3.14/site-packages/vibe/_bin/vibe-rs"],
+        "vibe"
+    )]
     #[case::another_program_with_that_thread_name("MainThread", &["/usr/bin/other", "--flag"], "MainThread")]
     #[case::grok_binary_named_agent("agent", &["/home/a/.grok/bin/agent"], "agent")]
     #[case::another_program("nvim", &["nvim", "src/main.rs"], "nvim")]

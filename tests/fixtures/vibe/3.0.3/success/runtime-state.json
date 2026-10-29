@@ -1,0 +1,36 @@
+{
+  "session_metadata": {
+    "active_model": "probe",
+    "agent_name": "accept-edits",
+    "cwd": "/work",
+    "reasoning_effort": "off",
+    "root_session_id": "dadb83b5-a40b-ec1e-b1ff-c4c8ef5ce074"
+  },
+  "core_settings": {
+    "context": {
+      "compaction": {
+        "mode": "automatic"
+      },
+      "model_facts": {
+        "compaction_threshold": 140000,
+        "compaction_threshold_max": 176000,
+        "context_window": 200000,
+        "image_cost": {
+          "kind": "fixed",
+          "tokens": 8192
+        },
+        "input_modalities": [
+          "text"
+        ]
+      },
+      "notifications": {
+        "pending_bytes": 1048576,
+        "pending_count": 1000,
+        "recent_ids": 1000
+      }
+    }
+  },
+  "subagents": {
+    "children": {}
+  }
+}

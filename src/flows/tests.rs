@@ -210,6 +210,15 @@ mod problems {
     }
 
     #[test]
+    fn a_model_must_be_one_the_agent_takes() {
+        let mut flow = sample();
+        flow.roles[0].agent = "vibe".into();
+        flow.roles[0].model = Some("mistral-medium-latest".into());
+        let refusal = "`coder`: vibe has no model flag; set its model in its own configuration";
+        assert_eq!(flow.problems(), vec![refusal.to_string()]);
+    }
+
+    #[test]
     fn a_role_works_in_one_stage() {
         let mut flow = sample();
         flow.stages.push(Stage { roles: vec!["coder".into()], back: None });

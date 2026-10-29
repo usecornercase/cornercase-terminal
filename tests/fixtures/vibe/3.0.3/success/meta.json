@@ -1,0 +1,16 @@
+{
+  "session_id": "dadb83b5-a40b-ec1e-b1ff-c4c8ef5ce074",
+  "parent_session_id": null,
+  "environment": {
+    "working_directory": "/work"
+  },
+  "origin_directory": "/work",
+  "username": "user",
+  "title": null,
+  "title_source": "auto",
+  "config": {
+    "active_model": "probe",
+    "model_name": "probe-model"
+  },
+  "child_sessions": []
+}

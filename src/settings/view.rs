@@ -6,7 +6,7 @@ use crate::shortcuts::Prefix;
 
 use super::{NO_PLUGINS, Page, Row, RowText, Settings, Status};
 
-const RESUME_NOTE: &str = "Claude, Codex, Gemini, Grok, Cursor, Copilot, in their tabs";
+const RESUME_NOTE: &str = "Claude, Codex, Gemini, Vibe, Grok, Cursor, Copilot, in their tabs";
 
 const SOUND_FILE_NOTE: &str = "an absolute or ~/ path on the window's computer; empty: built-in";
 

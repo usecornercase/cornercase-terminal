@@ -1,0 +1,29 @@
+# Captured from `vibe` 3.0.3 in a PTY (100x30).
+#
+# A successful turn, with the TUI driven by Vibe's generic OpenAI-compatible
+# provider pointed at a local fake server (no Mistral call; the account's budget
+# is exhausted, see README.md). The terminal answers the support query as
+# cornercase does, the folder is trusted, and the prompt is
+# "Reply with the word done".
+
+T <- ESC ] 7501 ; ? : states=idle,working,done,blocked,error : kinds=permission,question,auth ESC \
+V <- ESC ] 7501 ; state=idle : app=vibe ESC \
+V <- ESC ] 7501 ; state=working : app=vibe : msg=VmliZQ== ESC \
+V <- ESC ] 7501 ; state=done : app=vibe : msg=VmliZQ== ESC \
+
+# `done` is real: Vibe reports it at the end of a successful turn, so cornercase
+# gets the unseen-finish mark without inferring it from idle. `msg` is base64
+# ("Vibe"); the working report carries the same message.
+#
+# `/compact` emits no OSC 7501 report. The TUI prints "✓ Compaction completed."
+# and the store's checkpoint compaction_count goes from 0 to 1:
+#
+#   ✓ Compaction completed.
+#   probe[off] · 0/140k tokens (0%)
+
+# A failed turn, with the real Mistral key (HTTP 402 "Vibe budget exhausted"),
+# goes error then idle at once. The red failure may pass before the one-second
+# failure notice:
+#
+# V <- ESC ] 7501 ; state=error : app=vibe : msg=<base64 402 body> ESC \
+# V <- ESC ] 7501 ; state=idle : app=vibe ESC \

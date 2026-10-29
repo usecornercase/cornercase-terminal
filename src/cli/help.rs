@@ -148,13 +148,15 @@ its shell mode instead of its input box (`dialog` in `cornercase status --json`)
 after a restart (`resuming` in the JSON), where the text would reach its shell or its start-up:
 send again once it is back, or pass --force.
 
-With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI or
-GitHub Copilot CLI has recorded the prompt in its own history, and fails with `not confirmed: the prompt may not
+With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI,
+Vibe CLI or GitHub Copilot CLI has recorded the prompt in its own history, and fails with `not confirmed: the prompt may not
 have been submitted` when it records none: read the pane before sending it again. A working Codex,
-Gemini, Grok Build, Cursor CLI or GitHub Copilot CLI holds a prompt until it takes it, so the command returns then.
+Gemini, Grok Build, Cursor CLI, Vibe CLI or GitHub Copilot CLI holds a prompt until it takes it, so the command returns
+then.
 Grok Build queues that prompt; pressing Enter again sends it now and cancels the turn. Gemini local
 slash commands, ? help and ! shell input, and the / and ! commands of Grok Build and Cursor CLI, and the / and !
-commands and a lone ? of GitHub Copilot CLI, return after Enter without confirming a prompt record. A compact command
+commands and a lone ? of GitHub Copilot CLI, and the / (but not /skill), ! and & commands of Vibe CLI, return after Enter without
+confirming a prompt record. A compact command
 (`/compact` of Claude Code and Codex) returns once the agent records the compaction, however long that takes
 while the agent works on it; --timeout bounds it. In other programs it returns once Enter is pressed.
 
@@ -179,10 +181,10 @@ pub(super) const READ_HELP: &str =
 
 With --last-message it prints the last message the agent in the pane wrote, as plain text, from
 its own record (Claude Code's transcript, Codex's rollout, Gemini's session file, opencode's
-database, Grok Build's session, Cursor CLI's chat store, GitHub Copilot CLI's session events) instead of the
+database, Grok Build's session, Cursor CLI's chat store, GitHub Copilot CLI's session events, Vibe CLI's unified session store) instead of the
 screen, so it comes whole even once it scrolled off, without the input box or status lines. While the agent works
 it is the newest one so far. --json adds when it was written and whether the agent's turn is over. It fails on a
-pane without Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI or GitHub Copilot CLI, and before
+pane without Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, Vibe CLI or GitHub Copilot CLI, and before
 the agent wrote anything.
 
 With --last-message, repeat --pane or --tab to read several agents at once. Each message has a
@@ -210,7 +212,7 @@ agent goes on when they end. It then prints how it ended (idle, done, failed, pe
 or the line that matched.
 Waiting for an agent needs OSC 7501 reports, or a reader for Claude Code, Codex, Gemini CLI,
 opencode, Grok Build, Cursor CLI or GitHub Copilot CLI in the pane. Without reports, Gemini status needs its dynamic window title,
-and Cursor CLI's waiting needs /status-indicators. A timeout exits with 1 and does not prove that the
+and Cursor CLI's waiting needs /status-indicators. Vibe CLI's status comes only from its reports. A timeout exits with 1 and does not prove that the
 agent missed what you sent: read the pane before sending it again.
 
 Several panes and tabs take --any or --all, and the condition applies to each. --any returns once
@@ -297,7 +299,7 @@ Examples:
   cornercase away --off";
 pub(super) const SEARCH_HELP: &str =
     "Looks in what the coding agents in the panes were told and answered (Claude Code, Codex, Gemini CLI,
-opencode, Grok Build, Cursor CLI and GitHub Copilot CLI, the same records as `read --last-message`) and in the history of every
+opencode, Grok Build, Cursor CLI, Vibe CLI and GitHub Copilot CLI, the same records as `read --last-message`) and in the history of every
 pane, shells included, ignoring case. Panes of projects being closed and workspaces being removed
 are left out. It prints one line per match, newest first within a pane, its columns separated by
 tabs under a header: the pane, the agent or program, where the text was found (prompt, reply or

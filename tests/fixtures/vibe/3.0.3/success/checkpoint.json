@@ -1,0 +1,23 @@
+{
+  "checkpoint_version": 1,
+  "compaction_count": 0,
+  "context": {
+    "messages": []
+  },
+  "last_finished_turn_id": "turn-2ea8515cc7579a17ab4fb560c68f64c7",
+  "last_reported_context_tokens": 1246,
+  "notifications": [],
+  "turn": {
+    "outcome": {
+      "output": [
+        {
+          "text": "done",
+          "type": "text"
+        }
+      ],
+      "type": "completed"
+    },
+    "turn_id": "turn-2ea8515cc7579a17ab4fb560c68f64c7",
+    "type": "terminal"
+  }
+}

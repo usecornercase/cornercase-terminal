@@ -1,0 +1,13 @@
+{
+  "checkpoint_version": 1,
+  "compaction_count": 1,
+  "context": {
+    "messages": []
+  },
+  "last_finished_turn_id": "turn-baf0635f6371f81a1a5a616b1e2c2dac",
+  "notifications": [],
+  "rebuilt_since_reply": true,
+  "turn": {
+    "type": "idle"
+  }
+}

@@ -1,0 +1,28 @@
+# The trust dialog of Vibe 3.0.3, rendered in a folder holding AGENTS.md.
+# Styles stripped; the highlight is on " 1. Trust folder " (bold, 38;5;15 on 48;5;4).
+
+Malicious configs can modify AI behavior, exfiltrate data,
+run destructive commands, or silently alter your code.
+
+Detected in current folder:
+• AGENTS.md
+
+──────────────────────────────────────────────────────────
+Trust this folder?
+──────────────────────────────────────────────────────────
+
+/private/var/folders/.../work
+
+ 1. Trust folder   2. Don't trust
+
+↑↓/jk scroll  ←→ navigate  Enter select
+
+Setting will be saved in:
+/private/var/folders/.../home/trusted_folders.toml
+
+# Enter picks "Trust folder" and appends the path to <VIBE_HOME>/trusted_folders.toml:
+#   trusted = [ "/path" ]
+#   untrusted = []
+# The binary also holds a two-option variant, "Trust folder or repository?" with
+# "Trust full repo", "Trust folder" and "Don't trust"; only the folder variant above
+# was seen live. DEFAULT_TRUST_PROMPT already matches "Trust this folder?".

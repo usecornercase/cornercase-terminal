@@ -14,6 +14,7 @@ pub(crate) mod opencode;
 pub mod stats;
 pub(crate) mod tree;
 pub(crate) mod usage;
+pub(crate) mod vibe;
 
 pub use known::Known;
 
@@ -155,7 +156,7 @@ pub(crate) fn with_mode(kind: &str, args: &[String], modes: &[Mode], name: Optio
 
 pub(crate) fn without_model(kind: &str, args: &[String]) -> Vec<String> {
     let Some(known) = Known::of(kind) else { return args.to_vec() };
-    let flags: Vec<&str> = std::iter::once(known.model_flag()).chain(known.model_alias()).collect();
+    let flags: Vec<&str> = known.model_flag().into_iter().chain(known.model_alias()).collect();
     let mut out = Vec::with_capacity(args.len());
     let mut args = args.iter();
     while let Some(arg) = args.next() {
@@ -262,11 +263,13 @@ pub(crate) fn names_model(kind: &str, args: &[String]) -> bool {
 }
 
 pub(crate) fn with_model(kind: &str, args: Vec<String>, model: Option<&str>) -> Vec<String> {
-    let (Some(known), Some(model)) = (Known::of(kind), model.map(str::trim).filter(|m| !m.is_empty())) else {
+    let (Some(model), Some(flag)) =
+        (model.map(str::trim).filter(|m| !m.is_empty()), Known::of(kind).and_then(Known::model_flag))
+    else {
         return args;
     };
     let mut out = without_model(kind, &args);
-    out.extend([known.model_flag().to_string(), model.to_string()]);
+    out.extend([flag.to_string(), model.to_string()]);
     out
 }
 
@@ -344,14 +347,24 @@ pub(crate) fn start_line(
         chosen = with_mode(kind, &chosen, &table, Some(name));
     }
     if model.is_some_and(|m| !m.trim().is_empty()) && Known::of(kind).is_none() {
-        let known = Known::ALL.map(Known::name).join(", ");
+        let known: Vec<&str> = Known::ALL.into_iter().filter(|k| k.model_flag().is_some()).map(Known::name).collect();
+        let known = known.join(", ");
         return Err(format!("cornercase passes a model to {known} only; give {kind} its model in agent_args"));
+    }
+    if let Some(refusal) = model_refusal(kind, model) {
+        return Err(refusal);
     }
     let effort = effort.map(str::trim).filter(|level| !level.is_empty());
     if let Some(refusal) = effort.and_then(|level| effort_refusal(kind, level)) {
         return Err(refusal);
     }
     Ok(line(config, kind, with_effort(kind, with_model(kind, chosen, model), effort)))
+}
+
+pub(crate) fn model_refusal(kind: &str, model: Option<&str>) -> Option<String> {
+    model.map(str::trim).filter(|model| !model.is_empty())?;
+    let known = Known::of(kind)?;
+    known.model_flag().is_none().then(|| format!("{kind} has no model flag; set its model in its own configuration"))
 }
 
 pub(crate) fn effort_refusal(kind: &str, level: &str) -> Option<String> {
@@ -385,11 +398,12 @@ fn basename(arg: &str) -> &str {
 
 pub(crate) fn detect(config: &Config, argv: &[String]) -> Option<String> {
     let names: Vec<&str> = argv.iter().take(2).map(|a| basename(a)).collect();
-    let script = argv.iter().skip(1).find(|arg| !arg.starts_with('-')).map(String::as_str);
+    let script = argv.iter().skip(1).find(|arg| !arg.starts_with('-'));
+    let scripts: Vec<&str> = argv.first().into_iter().chain(script).map(String::as_str).collect();
     kinds(config).into_iter().find(|kind| {
         let bin = command(config, kind);
         names.contains(&basename(&bin))
-            || Known::of(kind).is_some_and(|kind| script.is_some_and(|arg| kind.runs_as(arg)))
+            || Known::of(kind).is_some_and(|kind| scripts.iter().any(|arg| kind.runs_as(arg)))
     })
 }
 

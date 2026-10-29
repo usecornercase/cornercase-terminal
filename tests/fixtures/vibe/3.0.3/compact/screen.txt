@@ -1,0 +1,16 @@
+# The final screen after `/compact` in the same TUI session, replayed through pyte.
+# The compaction consumed the conversation: the footer falls to 0/140k and the
+# checkpoint's compaction_count becomes 1.
+
+  ⡠⣒⠄  ⡔⢄⠔⡄   Mistral Vibe v3.0.3
+ ⢸⠸⣀⡔⢉⠱⣃⡢⣂⣣   probe[off] · [Subscription] Pro
+  ⠉⠒⠣⠤⠵⠤⠬⠮⠆   Type /help for more information
+> Reply with the word done
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  done
+/ compact
+✓ Compaction completed.
+───────────────────────────────────────────────────────────────────────────────────── accept edits ─
+>
+────────────────────────────────────────────────────────────────────────────────────────────────────
+/private/var/folders/.../vp-tui-... probe… · 0/140k tokens (0%)

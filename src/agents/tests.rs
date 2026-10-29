@@ -208,6 +208,19 @@ mod arguments {
     }
 
     #[test]
+    fn vibe_modes_follow_its_agent_flag() {
+        let modes = modes(&config(), Known::Vibe.name());
+        let kind = Known::Vibe.name();
+        let mode = |argv: &[&str]| mode_of(kind, &strings(argv), &modes);
+        assert_eq!(mode(&["vibe", "--agent", "ask"]).as_deref(), Some("ask"));
+        assert_eq!(mode(&["vibe", "--agent=smart-approve"]).as_deref(), Some("smart approve"));
+        assert_eq!(mode(&["vibe", "--smart-approve"]).as_deref(), Some("smart approve"));
+        assert_eq!(mode(&["vibe", "--yolo"]).as_deref(), Some("auto-approve (dangerous)"));
+        assert_eq!(mode(&["vibe", "--auto-approve"]).as_deref(), Some("auto-approve (dangerous)"));
+        assert_eq!(mode(&["vibe", "--agent", "debug"]), None);
+    }
+
+    #[test]
     fn join_quotes_what_a_shell_would_split() {
         assert_eq!(join_args(&strings(&["--add-dir", "../my dir", "it's"])), r"--add-dir '../my dir' 'it'\''s'");
     }
@@ -305,6 +318,10 @@ mod arguments {
         assert_eq!(
             start_line(&c, "aider", Some("plan"), None, None),
             Err("aider has no modes in cornercase; add some with agent_modes in config.json".into())
+        );
+        assert_eq!(
+            start_line(&c, "vibe", None, Some("mistral-medium-latest"), None),
+            Err("vibe has no model flag; set its model in its own configuration".into())
         );
         let refused = start_line(&c, "aider", None, Some("gpt"), None).expect_err("aider takes no model");
         assert_eq!(
@@ -410,6 +427,12 @@ mod choosing {
     #[case::copilot_npx(&["node", "/home/a/.npm/_npx/9f2/node_modules/@github/copilot/npm-loader.js"], Some("copilot"))]
     #[case::copilot_standalone(&["/home/a/.local/bin/copilot"], Some("copilot"))]
     #[case::gh_copilot(&["gh", "copilot", "--", "--model", "auto"], Some("copilot"))]
+    #[case::vibe_through_its_launcher(
+        &["/home/a/.local/share/uv/tools/mistral-vibe/lib/python3.14/site-packages/vibe/_bin/vibe-rs"],
+        Some("vibe")
+    )]
+    #[case::vibe_after_flags(&["python3", "-I", "-B", "-u", "/x/vibe/_bin/vibe-rs"], Some("vibe"))]
+    #[case::vibe_as_a_later_argument(&["less", "notes.txt", "/x/vibe/_bin/vibe-rs"], None)]
     #[case::another_npm_loader(&["node", "/x/node_modules/other/npm-loader.js"], None)]
     #[case::grok_binary_named_agent(&["/home/a/.grok/bin/agent"], None)]
     #[case::a_worker_server_of_another_app(&["node", "/home/a/app/versions/1/index.js", "worker-server"], None)]

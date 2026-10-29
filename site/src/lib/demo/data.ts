@@ -528,6 +528,7 @@ export const AGENTS: [string, string][] = [
   ['grok', 'grok'],
   ['cursor', 'cursor-agent'],
   ['copilot', 'copilot'],
+  ['vibe', 'vibe'],
   ['amp', 'amp'],
   ['droid', 'droid'],
   ['pi', 'pi'],
@@ -574,6 +575,11 @@ export const MODES: Record<string, [string, string][]> = {
     ['plan', '--mode plan'],
     ['autopilot', '--mode autopilot'],
     ['allow all (dangerous)', '--allow-all'],
+  ],
+  vibe: [
+    ['ask', '--agent ask'],
+    ['smart approve', '--agent smart-approve'],
+    ['auto-approve (dangerous)', '--agent auto-approve'],
   ],
 };
 

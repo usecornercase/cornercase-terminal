@@ -52,6 +52,7 @@ export const AGENT_KINDS: Record<string, string> = {
   grok: 'grok',
   'cursor-agent': 'cursor',
   copilot: 'copilot',
+  vibe: 'vibe',
   amp: 'amp',
   droid: 'droid',
   pi: 'pi',

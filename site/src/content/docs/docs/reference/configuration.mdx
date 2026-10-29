@@ -34,7 +34,7 @@ The ` share ` button hands your settings to a colleague, or imports theirs: see 
 
 <Screen
   name="settings-agents"
-  alt="The Agents tab: default agent auto, the agent in your tab, otherwise ask; send the prompt unticked; trust prompts left to you; conversations resumed after a restart; keep awake off; how each agent starts: claude, codex, gemini, opencode, grok, cursor and copilot in their default mode, plus another agent"
+  alt="The Agents tab: default agent auto, the agent in your tab, otherwise ask; send the prompt unticked; trust prompts left to you; conversations resumed after a restart; keep awake off; how each agent starts: claude, codex, gemini, opencode, grok, cursor, copilot and vibe in their default mode, plus another agent"
   crop={[2, 1, 106, 20]}
 />
 
@@ -43,7 +43,7 @@ The ` share ` button hands your settings to a colleague, or imports theirs: see 
 | **default agent** | The agent that takes an issue when you don't pick one: a specific agent, or `auto`, which uses the agent running in your current tab and otherwise asks. |
 | **send the prompt** | Off: the prompt is typed on one line and you press `Enter`. On: it is pasted as written and sent for you. |
 | **trust prompts** | Off (the default): when an agent cornercase starts asks "do you trust this folder?", you answer, and the prompt waits. On: cornercase answers yes for you, which lets the repository's agent configuration run. |
-| **resume conversations** | On (the default): after a server restart, `kill-server` or a reboot, each pane that ran Claude Code, Codex, Gemini CLI, Grok Build, Cursor CLI or GitHub Copilot CLI comes back in the same conversation. Off: it comes back as a plain shell. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations). |
+| **resume conversations** | On (the default): after a server restart, `kill-server` or a reboot, each pane that ran Claude Code, Codex, Gemini CLI, Grok Build, Cursor CLI, Vibe CLI or GitHub Copilot CLI comes back in the same conversation. Off: it comes back as a plain shell. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations). |
 | **keep awake** | Off (the default): the computer sleeps when idle, as it always does. On: while an agent is working, the computer does not go to sleep on its own. The note says whether it is being kept awake now, or why it can't be on this machine. See [Keep the computer awake](../agents/#keep-the-computer-awake). |
 | **How each agent starts** | One row per agent: the default agent, the agents with start modes (`claude`, `codex`, `gemini`, `opencode`, `grok`, `cursor` and `copilot` out of the box) and any you set up. Click one to choose its mode and extra arguments. |
 | **+ another agent…** | Adds one of the other [known agents](../agents/) to the list so you can set it up. |
@@ -116,12 +116,12 @@ Your [agent accounts](../../guides/accounts/). One section per agent that takes 
 | **tabs** | Where a workspace's tabs are listed: *sidebar* (the default) under their workspace, or *top* in a bar above the pane with only the active workspace's tabs. See [Tabs above the pane](../../guides/projects-workspaces-tabs/#tabs-above-the-pane). |
 | **icons** | Which windows draw Nerd Font icons: file types in the files tree, the changes panel and the search results, and the panels' buttons. `auto` decides per window, `on` and `off` force every window. See [`icons`](#icons). |
 | **icon bar** | Move the buttons at the bottom of the sidebar into a column of icons on the left edge, named when you hover them. They need a Nerd Font, which Ghostty, kitty and WezTerm include. Off by default. See [The icon bar](../../guides/projects-workspaces-tabs/#the-icon-bar). |
-| **agents section** | List every Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI and GitHub Copilot CLI, in every project, at the bottom of the sidebar; a click jumps to one. Off by default. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section). |
+| **agents section** | List every Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, Vibe CLI and GitHub Copilot CLI, in every project, at the bottom of the sidebar; a click jumps to one. Off by default. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section). |
 | **working icon** | What a working agent's tab shows: *moon* (the default), a still yellow `◐`, or *spinner*, `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` turning about ten times a second. Also in the tab bar and the agents section. See [What your agents are doing](../../guides/projects-workspaces-tabs/#what-your-agents-are-doing). |
 | **counts** | Show how many workspaces a project has, such as `(3)`, after its name, and how many projects a collapsed group holds. On by default. |
 | **TODO dot** | Show a grey `●` next to the [TODO](../../guides/todo/) button while items are left to do. On by default. |
 | **inactive panes** | Dim the panes you aren't typing in, in a split tab. |
-| **model** | Show the model of a Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI or GitHub Copilot CLI tab on a second line under its name, such as `Opus 5.5`. |
+| **model** | Show the model of a Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, Vibe CLI or GitHub Copilot CLI tab on a second line under its name, such as `Opus 5.5`. |
 | **context** | Show how full its context is on that line, such as `23%`. With the model off too, and the memory off, every tab takes one row. See [How full the context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). |
 | **memory** | Show how much memory every tab uses, at the end of an agent's line or on a second line in a shell tab, such as `1.2 GB`. Off by default. See [How much memory a tab uses](../../guides/projects-workspaces-tabs/#how-much-memory-a-tab-uses). |
 | **account** | Show the [account](../../guides/accounts/) an agent uses on its second line, such as `work`. On by default; shown only once you have an account. |
@@ -453,7 +453,7 @@ Whether cornercase answers yes to the agent's "do you trust this folder?" questi
 
 #### `resume_agents`
 
-Whether a pane that ran Claude Code, Codex, Gemini CLI, Grok Build, Cursor CLI or GitHub Copilot CLI comes back in the same conversation when a new server restores your session: cornercase types `claude --resume <id>`, `codex resume <id>`, `gemini --resume <id>`, `grok --resume <id>` or `cursor-agent --resume <id>` or `copilot --resume=<id>` into its new shell, with the agent's command and arguments and the mode it was running in. On by default. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
+Whether a pane that ran Claude Code, Codex, Gemini CLI, Grok Build, Cursor CLI, Vibe CLI or GitHub Copilot CLI comes back in the same conversation when a new server restores your session: cornercase types `claude --resume <id>`, `codex resume <id>`, `gemini --resume <id>`, `grok --resume <id>`, `cursor-agent --resume <id>`, `copilot --resume=<id>` or `vibe --resume <id>` into its new shell, with the agent's command and arguments and the mode it was running in. On by default. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
 
 #### `keep_awake`
 
@@ -507,7 +507,7 @@ The browser window ships a subset of Symbols Nerd Font: Nerd Fonts (MIT), Seti U
 
 #### `agents_section`
 
-Whether the sidebar ends with a list of every Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI and GitHub Copilot CLI running in any project, with what each is doing, its model and context; a click on one jumps to it. In every layout; below 90 columns it is a third menu. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section).
+Whether the sidebar ends with a list of every Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, Vibe CLI and GitHub Copilot CLI running in any project, with what each is doing, its model and context; a click on one jumps to it. In every layout; below 90 columns it is a third menu. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section).
 
 #### `working_icon`
 
@@ -531,7 +531,7 @@ The key that opens the menu of [keyboard shortcuts](../keyboard-and-mouse/#keybo
 
 #### `model`
 
-Whether a Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI or GitHub Copilot CLI tab shows its model on a second line under its name, such as `Opus 5.5`. When the file has no `model`, it takes the value of [`context`](#context), so a line turned off in 0.6 stays off.
+Whether a Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, Vibe CLI or GitHub Copilot CLI tab shows its model on a second line under its name, such as `Opus 5.5`. When the file has no `model`, it takes the value of [`context`](#context), so a line turned off in 0.6 stays off.
 
 #### `context`
 

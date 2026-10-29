@@ -42,12 +42,12 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Files panel](design/files-panel.md) (`files/`, `highlight/syntax.rs`, `ui/files.rs`, `ui/code.rs`, `text/stretch.rs`, `app/files_panel.rs`, `app/links.rs`): tree, viewer, highlighting, search, paths in panes, full screen.
 - [Images](design/images.md) (`graphics/`, files panel): pictures in the files panel, by kitty, iTerm2 or sixel.
 - [Issues](design/issues.md) (`issues/`, `issues/browser/`, `http.rs`, `app/issues_dialog.rs`): the issues browser, its seven trackers and the issue requests.
-- [Agents](design/agents.md) (`agents.rs`, `agents/known.rs`, `agents/{claude,codex,gemini,opencode,grok,cursor}/`, `agents/launch.rs`, `app/launches.rs`): the supported agents, adding one, launching, the trust prompt.
+- [Agents](design/agents.md) (`agents.rs`, `agents/known.rs`, `agents/{claude,codex,gemini,opencode,grok,cursor,copilot,vibe}/`, `agents/launch.rs`, `app/launches.rs`): the supported agents, adding one, launching, the trust prompt.
 - [Accounts and profiles](design/accounts-and-profiles.md) (`accounts/`, `agents.rs`, `app/tabs.rs`, `app/control/accounts.rs`, `app/accounts_page.rs`, `app/account_menu.rs`, `settings/accounts.rs`, `ui/accounts_bar.rs`, `control/accounts.rs`, `cli/accounts.rs`, #379): agent logins in folders of their own, the switcher, profiles.
-- [Agent status](design/agent-status.md) (`agents/activity.rs`, `agents/{claude,codex,gemini,opencode,grok,cursor,copilot}/mod.rs`, `app/agent_watch.rs`): working, waiting, done; notifications and their clicks.
+- [Agent status](design/agent-status.md) (`agents/activity.rs`, `agents/{claude,codex,gemini,opencode,grok,cursor,copilot,vibe}/mod.rs`, `app/agent_watch.rs`): working, waiting, done; notifications and their clicks.
 - [Sound](design/sound.md) (`host/sound.rs`, `app/agent_watch.rs`, `app/notifications.rs`, `server.rs`, `client/window.rs`, #230): a sound when an agent needs you or finishes, played by the window.
 - [Opening in other apps](design/opening-in-other-apps.md) (`host/open.rs`, `app/opening.rs`, `client/window.rs`, `server.rs`, `protocol.rs`, #388): Finder, the file manager or an editor, run by the window.
-- [Context use](design/context-use.md) (`agents/context.rs`, `agents/claude/transcript.rs`, `agents/codex/rollout.rs`, `agents/gemini/session.rs`, `agents/opencode/database.rs`, `agents/grok/session.rs`, `agents/cursor/store.rs`, `agents/copilot/session.rs`): the model and context line, from each agent's records.
+- [Context use](design/context-use.md) (`agents/context.rs`, `agents/claude/transcript.rs`, `agents/codex/rollout.rs`, `agents/gemini/session.rs`, `agents/opencode/database.rs`, `agents/grok/session.rs`, `agents/cursor/store.rs`, `agents/copilot/session.rs`, `agents/vibe/session.rs`): the model and context line, from each agent's records.
 - [Memory](design/memory.md) (`term/memory.rs`, `app/agent_watch.rs`): the memory a tab uses.
 - [Plan usage](design/plan-usage.md) (`agents/usage/`, `agents/{claude,codex}/usage.rs`, `app/usage_dialog.rs`, `control/usage.rs`, `app/control/usage.rs`, `cli/usage.rs`): plan limits per agent and account, the `usage` request.
 - [Stats](design/stats.md) (`agents/stats.rs`, `agents/known.rs`, `app/agent_watch.rs`, `app/usage_dialog.rs`): counters, the heatmap, `cornercase stats`, the share card.
@@ -71,4 +71,4 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Releases](design/releases.md) (`.github/`, `dist-workspace.toml`): how a push to `main` becomes a release.
 - [Saved session](design/saved-session.md) (`state.rs`, `persist.rs`, `app.rs`, `app/session.rs`, `app/closed_agents.rs`, `app/closed_agents/`, `control/closed_agents.rs`, `cli/agents.rs`, #430): `session.json`, restoring, resuming agents, closing a workspace's agents and reopening them.
 - [Website](design/website.md) (`site/`): the brand, the landing demo, captures, translations.
-- [Test helpers](design/test-helpers.md) (`test_util.rs`, `agents/{claude,codex,gemini,opencode,grok,cursor,copilot}/fake.rs`, `app/tests.rs`): fakes, fixtures, keeping tests away from the user's files.
+- [Test helpers](design/test-helpers.md) (`test_util.rs`, `agents/{claude,codex,gemini,opencode,grok,cursor,copilot,vibe}/fake.rs`, `app/tests.rs`): fakes, fixtures, keeping tests away from the user's files.

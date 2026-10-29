@@ -241,7 +241,7 @@ fn count_and_token_formats_fit_the_table() {
     );
 }
 fn first_agent(counts: Counts) -> Vec<Counts> {
-    let mut by_agent = vec![Counts::default(); 7];
+    let mut by_agent = vec![Counts::default(); Known::ALL.len()];
     by_agent[0] = counts;
     by_agent
 }

@@ -12,6 +12,7 @@ use super::overlay::Overlay;
 use crate::accounts;
 use crate::agents;
 use crate::agents::AgentState;
+use crate::agents::Known;
 use crate::agents::activity;
 use crate::agents::awake::{self, Awake};
 use crate::agents::context::Look;
@@ -31,6 +32,7 @@ type Listed = (Vec<AgentPlace>, Vec<(u64, Option<u64>)>, HashSet<u64>);
 pub(super) struct AgentRuntime {
     pub(super) launches: Launches,
     claude_dir: Option<PathBuf>,
+    vibe_dir: Option<PathBuf>,
     watched: Option<Instant>,
     pub(super) awake: Awake,
     pub(super) stats: agents::stats::Stats,
@@ -43,6 +45,7 @@ impl AgentRuntime {
         Self {
             launches: Launches::default(),
             claude_dir: agents::claude::claude_dir(home),
+            vibe_dir: None,
             watched: None,
             awake: Awake::new(awake::tools()),
             stats: agents::stats::Stats::new(SystemTime::now()),
@@ -58,6 +61,11 @@ impl AgentRuntime {
     #[cfg(test)]
     pub(super) fn set_claude_dir(&mut self, dir: &Path) {
         self.claude_dir = Some(dir.to_path_buf());
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_vibe_dir(&mut self, dir: &Path) {
+        self.vibe_dir = Some(dir.to_path_buf());
     }
 
     #[cfg(test)]
@@ -95,7 +103,7 @@ impl App {
             now,
             read,
             config: &self.config,
-            dirs: (self.agents.claude_dir.as_deref(), self.accounts.dir()),
+            dirs: (self.agents.claude_dir.as_deref(), self.accounts.dir(), self.agents.vibe_dir.as_deref()),
             seen_tabs,
             folds: tree || self.screen.drawn.tab_bar.is_empty(),
             members,
@@ -260,7 +268,7 @@ struct Round<'a> {
     now: Instant,
     read: bool,
     config: &'a Config,
-    dirs: (Option<&'a Path>, &'a Path),
+    dirs: (Option<&'a Path>, &'a Path, Option<&'a Path>),
     seen_tabs: Vec<u64>,
     folds: bool,
     members: Vec<u64>,
@@ -387,7 +395,7 @@ fn log_status(term: &Term, found: Option<&(String, activity::Activity)>, before:
 
 fn agent_in(
     config: &Config,
-    (dir, root): (Option<&Path>, &Path),
+    (dir, root, vibe): (Option<&Path>, &Path, Option<&Path>),
     term: &mut Term,
     now: Instant,
 ) -> Option<(String, activity::Activity)> {
@@ -398,7 +406,7 @@ fn agent_in(
     if let Some((pid, name)) = pid.zip(name.as_ref()) {
         term.status_agent = Some((pid, name.clone()));
     }
-    let agent = name.as_deref().and_then(agents::Known::of);
+    let agent = name.as_deref().and_then(Known::of);
     let given = agent.and_then(|kind| Some(kind.account()?.config(&term.accounts().get(kind)?.home)));
     let (args, title) = {
         let screen = || term.emulator.screen_text().unwrap_or_default();
@@ -408,6 +416,7 @@ fn agent_in(
             title: term.emulator.title(),
             screen: &screen,
             claude_dir: dir,
+            vibe_dir: vibe,
             account_dir: given.as_deref(),
         };
         term.context.update(agent, &look);
@@ -416,12 +425,7 @@ fn agent_in(
     let found = pid.zip(agent).map(|(pid, kind)| (pid, kind, args.as_slice()));
     term.see_account(root, found, process::env);
     remember(config, term, agent.map(|agent| (agent.name(), args.as_slice())), now);
-    if let Some((pid, agent)) = pid.zip(agent)
-        && term.input_seen != Some(pid)
-        && agent.input_box(|| term.emulator.screen_text().unwrap_or_default()) == Some(true)
-    {
-        term.input_seen = Some(pid);
-    }
+    calibrate(term, pid, agent);
     if let Some(name) = name {
         let activity = term.emulator.program_activity().or_else(|| term.context.activity(&title))?;
         return Some((name, activity));
@@ -431,6 +435,15 @@ fn agent_in(
         term.emulator.acknowledge_status(*pid);
     }
     term.emulator.finished_activity(*pid).map(|activity| (name.clone(), activity))
+}
+
+fn calibrate(term: &mut Term, pid: Option<i32>, agent: Option<Known>) {
+    if let Some((pid, agent)) = pid.zip(agent)
+        && term.input_seen != Some(pid)
+        && agent.input_box(|| term.emulator.screen_text().unwrap_or_default()) == Some(true)
+    {
+        term.input_seen = Some(pid);
+    }
 }
 
 fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, now: Instant) {

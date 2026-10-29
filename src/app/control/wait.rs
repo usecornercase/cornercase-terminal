@@ -120,7 +120,7 @@ enum Verdict {
     Failed(String),
 }
 
-const CANNOT_WATCH: &str = "cornercase needs OSC 7501 reports or a reader for Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI or GitHub Copilot CLI";
+const CANNOT_WATCH: &str = "cornercase needs OSC 7501 reports or a reader for Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, Vibe CLI or GitHub Copilot CLI";
 
 const SHELL_SETTLES: Duration = Duration::from_millis(300);
 

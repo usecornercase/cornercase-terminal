@@ -108,6 +108,14 @@ test('a community repository cannot take the built-in flows folder', () => {
   assert.ok(said[0].includes('built-in'));
 });
 
+test('a role can run vibe, which takes no model', () => {
+  const [{ text }] = JSON.parse(JSON.stringify(registry(fixture)));
+  const vibe = text.replace('agent = "codex"', 'agent = "vibe"');
+  assert.deepEqual(problems(vibe), []);
+  const model = vibe.replace('agent = "vibe"', 'agent = "vibe"\nmodel = "mistral-medium-latest"');
+  assert.ok(problems(model).some((p) => p.includes('checker sets a model, but vibe has no model flag')));
+});
+
 test('a role can have a worktree of its own, with version 2', () => {
   const [{ text }] = JSON.parse(JSON.stringify(registry(fixture)));
   const own = text.replace('version = 1', 'version = 2').replace('edits = true', 'edits = true\nworktree = "own"');

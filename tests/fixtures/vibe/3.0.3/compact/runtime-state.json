@@ -1,0 +1,36 @@
+{
+  "session_metadata": {
+    "active_model": null,
+    "agent_name": null,
+    "cwd": "/work",
+    "reasoning_effort": null,
+    "root_session_id": "727dea63-ebcc-6824-09d5-4b65f46e1ae4"
+  },
+  "core_settings": {
+    "context": {
+      "compaction": {
+        "mode": "automatic"
+      },
+      "model_facts": {
+        "compaction_threshold": 140000,
+        "compaction_threshold_max": 176000,
+        "context_window": 200000,
+        "image_cost": {
+          "kind": "fixed",
+          "tokens": 8192
+        },
+        "input_modalities": [
+          "text"
+        ]
+      },
+      "notifications": {
+        "pending_bytes": 1048576,
+        "pending_count": 1000,
+        "recent_ids": 1000
+      }
+    }
+  },
+  "subagents": {
+    "children": {}
+  }
+}

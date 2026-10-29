@@ -380,6 +380,8 @@ fn role_problems(role: &Role, name: &str) -> Vec<String> {
     if Known::of(&role.agent).is_none() {
         let known = Known::ALL.map(Known::name).join(", ");
         out.push(format!("`{name}` runs `{}`, but a flow takes one of {known}", role.agent));
+    } else if let Some(refusal) = agents::model_refusal(&role.agent, role.model.as_deref()) {
+        out.push(format!("`{name}`: {refusal}"));
     } else if let Some(refusal) =
         chosen(role.effort.as_ref()).and_then(|level| agents::effort_refusal(&role.agent, level))
     {

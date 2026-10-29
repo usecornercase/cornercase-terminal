@@ -42,7 +42,7 @@ The server saves your session to `~/.local/state/cornercase/session.json` (or `$
 - which workspaces are collapsed, and which projects in the [tree](../projects-workspaces-tabs/#the-tree), and which agents' teams are collapsed in the [agents section](../projects-workspaces-tabs/#the-agents-section);
 - the branch each workspace's changes panel compares with, when you picked one;
 - which panes send right-clicks to their program;
-- the conversation of each Claude Code, Codex, Gemini CLI, Grok Build, Cursor CLI or GitHub Copilot CLI pane, so it can [resume](#agents-resume-their-conversations);
+- the conversation of each Claude Code, Codex, Gemini CLI, Grok Build, Cursor CLI, Vibe CLI or GitHub Copilot CLI pane, so it can [resume](#agents-resume-their-conversations);
 - the agents you [closed](../projects-workspaces-tabs/#close-agents-and-reopen-them-later) in a workspace to reopen later, with each one's conversation, mode and account, and a flow's kept run;
 - the issue browser's last tab and filters.
 
@@ -58,7 +58,7 @@ A server that is already running never restores: reattaching just shows what is 
 
 ### Agents resume their conversations
 
-A pane where Claude Code, Codex, Gemini CLI, Grok Build, Cursor CLI or GitHub Copilot CLI was running comes back in the same conversation: once its new shell is ready, cornercase types `claude --resume <id>`, `codex resume <id>`, `gemini --resume <id>`, `grok --resume <id>` or `cursor-agent --resume <id>` or `copilot --resume=<id>` into it, with the command and arguments from **settings → Agents** and the mode the agent was running in (plan, read only, accept edits…). The agent opens idle, with the conversation on screen, waiting for you; whatever it was doing when the server stopped is not started again.
+A pane where Claude Code, Codex, Gemini CLI, Grok Build, Cursor CLI, Vibe CLI or GitHub Copilot CLI was running comes back in the same conversation: once its new shell is ready, cornercase types `claude --resume <id>`, `codex resume <id>`, `gemini --resume <id>`, `grok --resume <id>`, `cursor-agent --resume <id>`, `copilot --resume=<id>` or `vibe --resume <id>` into it, with the command and arguments from **settings → Agents** and the mode the agent was running in (plan, read only, accept edits…). The agent opens idle, with the conversation on screen, waiting for you; whatever it was doing when the server stopped is not started again. Vibe CLI comes back this way only with its session logging on, since the session id comes from those logs.
 
 While a conversation comes back, its pane shows **resuming claude…** and takes no input: keys and pastes are dropped with a note saying why, since typed before the agent is back they would land in front of the resume command or in the agent's start-up. The pane takes your keys again once the agent has drawn its screen, or once it gives up (the agent exits, or 30 seconds pass). **cancel** next to the note gives the pane back at once: before the resume command is typed, it is not typed and the pane stays a plain shell; after, the agent keeps starting and only the keys come back. If the agent asks whether to trust the folder, the pane takes your keys so you can answer.
 
@@ -72,7 +72,7 @@ Open **`More ▴` › settings**, then click **restart** next to **done**, or ru
 cornercase restart
 ```
 
-Restarting stops every program in your terminals, agents included, so cornercase first lists what is running and asks. Then it saves your session, starts a new server and reopens every attached window on it (with no window attached, no new server starts: run `cornercase start-server` again): your projects, workspaces, tabs and splits come back, each pane with a new shell in its folder, and Claude Code, Codex, Gemini CLI, Grok Build, Cursor CLI and GitHub Copilot CLI [resume their conversations](#agents-resume-their-conversations).
+Restarting stops every program in your terminals, agents included, so cornercase first lists what is running and asks. Then it saves your session, starts a new server and reopens every attached window on it (with no window attached, no new server starts: run `cornercase start-server` again): your projects, workspaces, tabs and splits come back, each pane with a new shell in its folder, and Claude Code, Codex, Gemini CLI, Grok Build, Cursor CLI, Vibe CLI and GitHub Copilot CLI [resume their conversations](#agents-resume-their-conversations).
 
 An agent in the middle of a turn still loses that turn. To restart only once no agent is working, run `cornercase restart --when-idle`: every window says a restart is pending until then (see [Command line](../../reference/command-line/#once-no-agent-is-working)).
 

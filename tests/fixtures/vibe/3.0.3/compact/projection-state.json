@@ -1,0 +1,58 @@
+{
+  "projection_state_version": 1,
+  "session_id": "727dea63-ebcc-6824-09d5-4b65f46e1ae4",
+  "snapshot": {
+    "activeCallbacks": [],
+    "format": "harness.public-session-state/v1",
+    "history": {
+      "cursor": {
+        "after": null,
+        "before": null
+      },
+      "entries": [],
+      "range": "latest"
+    },
+    "latestTurn": {
+      "completedAt": 1793133951962,
+      "id": "turn-baf0635f6371f81a1a5a616b1e2c2dac",
+      "inputEntryId": "rs-18e27dd428bb4110",
+      "queueItemId": "bdb1054d-f610-4d92-a970-4acdda24920e",
+      "sessionId": "727dea63-ebcc-6824-09d5-4b65f46e1ae4",
+      "startedAt": 1793133951923,
+      "status": "completed",
+      "stopReason": null
+    },
+    "session": {
+      "contextUsage": {
+        "cachedInputTokens": 0,
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "totalTokens": 0
+      },
+      "createdAt": 1793133947966,
+      "id": "727dea63-ebcc-6824-09d5-4b65f46e1ae4",
+      "parentSessionId": null,
+      "preview": "Reply with the word done",
+      "rootSessionId": "727dea63-ebcc-6824-09d5-4b65f46e1ae4",
+      "status": {
+        "type": "idle"
+      },
+      "title": null,
+      "titleSource": "auto",
+      "tokenUsage": {
+        "cachedInputTokens": 2000,
+        "inputTokens": 2468,
+        "outputTokens": 24,
+        "totalTokens": 2492
+      },
+      "updatedAt": 1793133977761
+    },
+    "turnQueue": {
+      "items": [],
+      "maxItems": 32,
+      "paused": false
+    }
+  },
+  "snapshot_sequence": 17,
+  "watermark": 5
+}

@@ -20,6 +20,7 @@ mod osc;
 mod resuming;
 mod sound;
 mod tree;
+mod vibe;
 mod views;
 
 fn working_claude() -> (App, Receiver<AppEvent>, Vec<TempDir>, FakeClaude) {
@@ -331,6 +332,7 @@ enum Fake {
     Grok(FakeGrok, usize),
     Cursor(FakeCursor, usize),
     Copilot(FakeCopilot, usize),
+    Vibe { _dir: TempDir, tab: usize },
 }
 
 fn start_opencode(app: &mut App, rx: &Receiver<AppEvent>) -> FakeOpencode {
@@ -360,6 +362,14 @@ fn start_codex(app: &mut App, rx: &Receiver<AppEvent>) -> Fake {
     type_line(app, &codex.command_line());
     watch_until(app, rx, "codex runs", |a| a.tab().is_some_and(|t| t.context().is_some()));
     Fake::Codex(codex, app.projects[0].workspaces[0].active)
+}
+
+fn start_vibe(app: &mut App, rx: &Receiver<AppEvent>, tab: usize) -> Fake {
+    let dir = TempDir::new();
+    let script = dir.path().join("vibe-rs");
+    write_executable(&script, "#!/bin/sh\nwhile :; do sleep 1; done\n");
+    start_fake(app, rx, &agents::quote(&script.to_string_lossy()), agents::Known::Vibe);
+    Fake::Vibe { _dir: dir, tab }
 }
 
 fn start_copilot(app: &mut App, rx: &Receiver<AppEvent>, tab: usize) -> Fake {
@@ -496,6 +506,7 @@ impl Watched {
                 Fake::Cursor(cursor, tab)
             }
             agents::Known::Copilot => start_copilot(app, rx, tab),
+            agents::Known::Vibe => start_vibe(app, rx, tab),
             agents::Known::Claude => {
                 let claude = FakeClaude::running(FakeClaude::SILENT);
                 claude.start(app);
@@ -516,6 +527,15 @@ impl Watched {
                 Fake::Opencode(opencode, tab) => report_opencode(app, rx, (opencode, *tab), status),
                 Fake::Cursor(cursor, tab) => report_cursor(app, rx, (cursor, *tab), status),
                 Fake::Copilot(copilot, tab) => report_copilot(app, rx, (copilot, *tab), status),
+                Fake::Vibe { tab, .. } => {
+                    let state = match status {
+                        "busy" => "working",
+                        "waiting" => "blocked:kind=permission",
+                        _ => "done",
+                    };
+                    app.projects[0].workspaces[0].tabs[0].panes[*tab]
+                        .feed(format!("\x1b]7501;state={state}:app=vibe\x1b\\").as_bytes());
+                }
                 Fake::Grok(grok, tab) => report_grok(app, rx, (grok, *tab), status),
             }
         }
@@ -546,7 +566,8 @@ fn a_restart_names_the_agent_at_work_and_the_other_program(
         agents::Known::Opencode,
         agents::Known::Grok,
         agents::Known::Cursor,
-        agents::Known::Copilot
+        agents::Known::Copilot,
+        agents::Known::Vibe
     )]
     agent: agents::Known,
 ) {
@@ -574,7 +595,8 @@ fn a_tab_follows_turns_and_approvals(
         agents::Known::Gemini,
         agents::Known::Grok,
         agents::Known::Cursor,
-        agents::Known::Copilot
+        agents::Known::Copilot,
+        agents::Known::Vibe
     )]
     agent: agents::Known,
 ) {
@@ -598,7 +620,8 @@ fn a_hidden_tab_that_needs_you_shows_a_toast_and_sends_one_notification(
         agents::Known::Gemini,
         agents::Known::Grok,
         agents::Known::Cursor,
-        agents::Known::Copilot
+        agents::Known::Copilot,
+        agents::Known::Vibe
     )]
     agent: agents::Known,
 ) {
@@ -731,7 +754,8 @@ fn a_hidden_tab_that_finishes_says_so(
         agents::Known::Opencode,
         agents::Known::Grok,
         agents::Known::Cursor,
-        agents::Known::Copilot
+        agents::Known::Copilot,
+        agents::Known::Vibe
     )]
     agent: agents::Known,
 ) {
@@ -752,7 +776,8 @@ fn a_settled_change_notifies_once(
         agents::Known::Gemini,
         agents::Known::Grok,
         agents::Known::Cursor,
-        agents::Known::Copilot
+        agents::Known::Copilot,
+        agents::Known::Vibe
     )]
     agent: agents::Known,
 ) {
@@ -773,7 +798,8 @@ fn the_visible_tab_stays_quiet(
         agents::Known::Gemini,
         agents::Known::Grok,
         agents::Known::Cursor,
-        agents::Known::Copilot
+        agents::Known::Copilot,
+        agents::Known::Vibe
     )]
     agent: agents::Known,
 ) {

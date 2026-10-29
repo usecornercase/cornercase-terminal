@@ -116,7 +116,7 @@ export const page: Page = {
       {
         title: 'Diez agentes, un vistazo.',
         text: 'Cada agente tiene su propia rama, carpeta y pestaña, así que dos de ellos nunca tocan el mismo archivo. La barra lateral te dice quién está trabajando {working}, quién te espera {waiting} y quién ha terminado {done}, con el modelo y cuánto contexto lleva usado. Cuando uno te necesita, tu terminal te toca el hombro. Incluso por SSH.',
-        more: 'Funciona con Claude Code, Codex, Gemini, Grok, Cursor, Copilot y 9 más →',
+        more: 'Funciona con Claude Code, Codex, Gemini, Vibe, Grok, Cursor, Copilot y 9 más →',
         label:
           'Una ventana estrecha de cornercase: arriba, los siete proyectos, donde orders-api te necesita y el agente de blog ha terminado; debajo, los tres worktrees de web-shop, cada uno con un Claude trabajando; y en el panel, la conversación sobre el modo oscuro, con la ruta que menciona subrayada.',
       },

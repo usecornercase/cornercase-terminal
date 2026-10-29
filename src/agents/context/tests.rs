@@ -1,7 +1,15 @@
 use super::*;
 
 pub(in crate::agents) fn pane_look(pid: i32) -> Look<'static> {
-    Look { pid, args: Vec::new(), title: String::new(), screen: &String::new, claude_dir: None, account_dir: None }
+    Look {
+        pid,
+        args: Vec::new(),
+        title: String::new(),
+        screen: &String::new,
+        claude_dir: None,
+        vibe_dir: None,
+        account_dir: None,
+    }
 }
 
 mod pane {
@@ -26,7 +34,7 @@ mod pane {
 
         let found = Known::ALL.map(|agent| replaced.record_for(agent));
 
-        assert_eq!(found, [Some(Record::Claude(path)), None, None, None, None, None, None]);
+        assert_eq!(found, [Some(Record::Claude(path)), None, None, None, None, None, None, None]);
     }
 }
 

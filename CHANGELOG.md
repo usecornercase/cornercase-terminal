@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.227
+
+- **Mistral's Vibe CLI is a known agent.** Start an issue with `vibe` or launch it in a tab: cornercase recognises it (its launcher becomes `vibe-rs`), leaves its "Trust this folder?" question to you, and shows whether it is working, waiting, finished or failed from its own OSC 7501 reports. Its modes (`ask`, `smart approve`, `auto-approve`) and `--add-dir` work, a prompt typed while it works waits, and flow roles run it unattended with `--agent auto-approve`. It has no `--model` flag, so a role that names a model says so instead of starting it with one.
+- **Vibe CLI shows its model and context use, resumes, and counts in Stats.** Its tab shows `mistral-medium-latest · 23%` (or the configured alias) from its own session store under `$VIBE_HOME` or `~/.vibe`, and `compacted` after `/compact` until the next reply; the second line also says how many subagents it still runs. `cornercase read --last-message` and search read its journal, a restart resumes it with `vibe --resume <id>` (session logging must stay on), and Stats count its prompts, turns and token use (no cache-write split). The reader is pinned to Vibe 3.0.3, with fixtures from a successful turn and a live `/compact` captured through the real TUI, store and OSC path.
+
 ## 0.12.226
 
 - **Killing `cornercase --remote devbox restart --when-idle` now calls the restart off on `devbox`.** Run without a terminal, as a script, an agent or another interface runs it, ending or killing the command here used to leave the restart pending there, and `devbox` still restarted once its agents were idle, stopping every program in its panes. Now the command there stops waiting within a second, as `Ctrl+C` does on your own machine, and its `ssh` ends too. The same goes for `update --when-idle`. Both machines need this version or a newer one.

@@ -1,0 +1,14 @@
+# The final 100x30 screen of the successful turn, replayed from the PTY bytes
+# through pyte (styles and cursor moves applied). The fake provider reports
+# 1234 prompt tokens (1000 cached) and 12 completion tokens.
+
+  ⡠⣒⠄  ⡔⢄⠔⡄   Mistral Vibe v3.0.3
+ ⢸⠸⣀⡔⢉⠱⣃⡢⣂⣣   probe[off] · [Subscription] Pro
+  ⠉⠒⠣⠤⠵⠤⠬⠮⠆   Type /help for more information
+> Reply with the word done
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  done
+───────────────────────────────────────────────────────────────────────────────────── accept edits ─
+>
+────────────────────────────────────────────────────────────────────────────────────────────────────
+/private/var/folders/.../vp-tui-... probe… · 1.25k/140k tokens (1%)

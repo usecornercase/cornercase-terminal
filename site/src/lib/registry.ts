@@ -16,7 +16,8 @@ export const REPO = /^[\w.-]+\/[\w.-]+$/;
 export const TOPIC = 'cornercase-flow';
 export const FILES = ['flow.toml', 'cornercase-flow.toml'];
 export const VERSION = 2;
-export const AGENTS = ['claude', 'codex', 'gemini', 'opencode', 'grok', 'cursor', 'copilot'];
+export const AGENTS = ['claude', 'codex', 'gemini', 'opencode', 'grok', 'cursor', 'copilot', 'vibe'];
+const NO_MODEL = ['vibe'];
 
 export interface RegistryRole {
   name: string;
@@ -100,6 +101,7 @@ export function problems(text: string): string[] {
   const names = new Set<string>();
   for (const [who, r] of [['orchestrator', lead] as const, ...roles.map((r) => [String(r.name ?? ''), r] as const)]) {
     if (!AGENTS.includes(String(r.agent))) out.push(`${who || 'a role'} runs an unknown agent`);
+    if (NO_MODEL.includes(String(r.agent)) && typeof r.model === 'string' && r.model.trim()) out.push(`${who || 'a role'} sets a model, but ${String(r.agent)} has no model flag`);
     if (r.env !== undefined || r.args !== undefined) out.push(`${who} sets env or args`);
     if (r.prompt !== undefined && (typeof r.prompt !== 'string' || r.prompt.length > MAX_PROMPT || control(r.prompt, '\n\t\r'))) {
       out.push(`${who} has a prompt that is too long, not text or has a control character`);

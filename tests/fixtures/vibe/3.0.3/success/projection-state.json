@@ -1,0 +1,58 @@
+{
+  "projection_state_version": 1,
+  "session_id": "dadb83b5-a40b-ec1e-b1ff-c4c8ef5ce074",
+  "snapshot": {
+    "activeCallbacks": [],
+    "format": "harness.public-session-state/v1",
+    "history": {
+      "cursor": {
+        "after": null,
+        "before": null
+      },
+      "entries": [],
+      "range": "latest"
+    },
+    "latestTurn": {
+      "completedAt": 1793133921857,
+      "id": "turn-2ea8515cc7579a17ab4fb560c68f64c7",
+      "inputEntryId": "user-turn-2ea8515cc7579a17ab4fb560c68f64c7-1",
+      "queueItemId": null,
+      "sessionId": "dadb83b5-a40b-ec1e-b1ff-c4c8ef5ce074",
+      "startedAt": 1793133921819,
+      "status": "completed",
+      "stopReason": null
+    },
+    "session": {
+      "contextUsage": {
+        "cachedInputTokens": 1000,
+        "inputTokens": 1234,
+        "outputTokens": 12,
+        "totalTokens": 1246
+      },
+      "createdAt": 1793133921157,
+      "id": "dadb83b5-a40b-ec1e-b1ff-c4c8ef5ce074",
+      "parentSessionId": null,
+      "preview": "Reply with the word done",
+      "rootSessionId": "dadb83b5-a40b-ec1e-b1ff-c4c8ef5ce074",
+      "status": {
+        "type": "idle"
+      },
+      "title": null,
+      "titleSource": "auto",
+      "tokenUsage": {
+        "cachedInputTokens": 1000,
+        "inputTokens": 1234,
+        "outputTokens": 12,
+        "totalTokens": 1246
+      },
+      "updatedAt": 1793133921857
+    },
+    "turnQueue": {
+      "items": [],
+      "maxItems": 32,
+      "paused": false
+    }
+  },
+  "snapshot_sequence": 8,
+  "watermark": 2
+}

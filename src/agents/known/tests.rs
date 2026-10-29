@@ -2,7 +2,10 @@ use super::*;
 
 #[test]
 fn names_and_order_keep_the_saved_stats_positions() {
-    assert_eq!(Known::ALL.map(Known::name), ["claude", "codex", "gemini", "opencode", "grok", "cursor", "copilot"]);
+    assert_eq!(
+        Known::ALL.map(Known::name),
+        ["claude", "codex", "gemini", "opencode", "grok", "cursor", "copilot", "vibe"]
+    );
 }
 
 #[test]
@@ -30,6 +33,7 @@ fn claude_codex_cursor_and_copilot_take_one_more_folder_by_flag() {
             (Known::Grok, None),
             (Known::Cursor, Some("--add-dir")),
             (Known::Copilot, Some("--add-dir")),
+            (Known::Vibe, Some("--add-dir")),
         ]
     );
 }
@@ -47,6 +51,7 @@ fn each_agent_compacts_with_its_own_command() {
             Some(("/compact", false)),
             Some(("/summarize", false)),
             Some(("/compact", true)),
+            Some(("/compact", true)),
         ]
     );
 }
@@ -58,6 +63,8 @@ fn each_agent_compacts_with_its_own_command() {
 #[case::not_first(Known::Claude, "please /compact", false)]
 #[case::gemini_own(Known::Gemini, "/compress", true)]
 #[case::gemini_not_claudes(Known::Gemini, "/compact", false)]
+#[case::vibe(Known::Vibe, "/compact keep the login", true)]
+#[case::vibe_not_claudes(Known::Vibe, "/compress", false)]
 fn knows_a_compact_command(#[case] kind: Known, #[case] text: &str, #[case] compacts: bool) {
     assert_eq!(kind.compacts(text), compacts);
 }

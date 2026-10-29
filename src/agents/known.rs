@@ -1,4 +1,4 @@
-use super::{ModeTable, claude, codex, copilot, cursor, gemini, grok, opencode, usage};
+use super::{ModeTable, claude, codex, copilot, cursor, gemini, grok, opencode, usage, vibe};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Known {
@@ -9,11 +9,12 @@ pub enum Known {
     Grok,
     Cursor,
     Copilot,
+    Vibe,
 }
 
 impl Known {
-    pub(crate) const ALL: [Self; 7] =
-        [Self::Claude, Self::Codex, Self::Gemini, Self::Opencode, Self::Grok, Self::Cursor, Self::Copilot];
+    pub(crate) const ALL: [Self; 8] =
+        [Self::Claude, Self::Codex, Self::Gemini, Self::Opencode, Self::Grok, Self::Cursor, Self::Copilot, Self::Vibe];
 
     pub(crate) fn of(name: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|kind| kind.name() == name)
@@ -28,6 +29,7 @@ impl Known {
             Self::Grok => grok::NAME,
             Self::Cursor => cursor::NAME,
             Self::Copilot => copilot::NAME,
+            Self::Vibe => vibe::NAME,
         }
     }
 
@@ -40,6 +42,7 @@ impl Known {
             Self::Grok => grok::COMMAND,
             Self::Cursor => cursor::COMMAND,
             Self::Copilot => copilot::COMMAND,
+            Self::Vibe => vibe::COMMAND,
         }
     }
 
@@ -52,6 +55,7 @@ impl Known {
             Self::Grok => grok::TITLE,
             Self::Cursor => cursor::TITLE,
             Self::Copilot => copilot::TITLE,
+            Self::Vibe => vibe::TITLE,
         }
     }
 
@@ -64,6 +68,7 @@ impl Known {
             Self::Grok => grok::MODES,
             Self::Cursor => cursor::MODES,
             Self::Copilot => copilot::MODES,
+            Self::Vibe => vibe::MODES,
         }
     }
 
@@ -76,6 +81,7 @@ impl Known {
             Self::Grok => grok::ADD_DIR,
             Self::Cursor => cursor::ADD_DIR,
             Self::Copilot => copilot::ADD_DIR,
+            Self::Vibe => vibe::ADD_DIR,
         }
     }
 
@@ -88,6 +94,7 @@ impl Known {
             Self::Grok => grok::ACCOUNT,
             Self::Cursor => cursor::ACCOUNT,
             Self::Copilot => copilot::ACCOUNT,
+            Self::Vibe => vibe::ACCOUNT,
         }
     }
 
@@ -95,7 +102,7 @@ impl Known {
         match self {
             Self::Claude => claude::login(text),
             Self::Codex => codex::login(text),
-            Self::Gemini | Self::Opencode | Self::Grok | Self::Cursor | Self::Copilot => {
+            Self::Gemini | Self::Opencode | Self::Grok | Self::Cursor | Self::Copilot | Self::Vibe => {
                 crate::accounts::login::Login::default()
             }
         }
@@ -110,6 +117,7 @@ impl Known {
             Self::Grok => grok::EFFORT,
             Self::Cursor => cursor::EFFORT,
             Self::Copilot => copilot::EFFORT,
+            Self::Vibe => vibe::EFFORT,
         }
     }
 
@@ -122,6 +130,7 @@ impl Known {
             Self::Grok => grok::COMPACT,
             Self::Cursor => cursor::COMPACT,
             Self::Copilot => copilot::COMPACT,
+            Self::Vibe => vibe::COMPACT,
         }
     }
 
@@ -138,18 +147,20 @@ impl Known {
             Self::Grok => grok::MODEL_ALIAS,
             Self::Cursor => cursor::MODEL_ALIAS,
             Self::Copilot => copilot::MODEL_ALIAS,
+            Self::Vibe => vibe::MODEL_ALIAS,
         }
     }
 
-    pub(crate) fn model_flag(self) -> &'static str {
+    pub(crate) fn model_flag(self) -> Option<&'static str> {
         match self {
-            Self::Claude => claude::MODEL_FLAG,
-            Self::Codex => codex::MODEL_FLAG,
-            Self::Gemini => gemini::MODEL_FLAG,
-            Self::Opencode => opencode::MODEL_FLAG,
-            Self::Grok => grok::MODEL_FLAG,
-            Self::Cursor => cursor::MODEL_FLAG,
-            Self::Copilot => copilot::MODEL_FLAG,
+            Self::Claude => Some(claude::MODEL_FLAG),
+            Self::Codex => Some(codex::MODEL_FLAG),
+            Self::Gemini => Some(gemini::MODEL_FLAG),
+            Self::Opencode => Some(opencode::MODEL_FLAG),
+            Self::Grok => Some(grok::MODEL_FLAG),
+            Self::Cursor => Some(cursor::MODEL_FLAG),
+            Self::Copilot => Some(copilot::MODEL_FLAG),
+            Self::Vibe => vibe::MODEL_FLAG,
         }
     }
 
@@ -162,6 +173,7 @@ impl Known {
             Self::Grok => grok::UNATTENDED,
             Self::Cursor => cursor::UNATTENDED,
             Self::Copilot => copilot::UNATTENDED,
+            Self::Vibe => vibe::UNATTENDED,
         }
     }
 
@@ -174,6 +186,7 @@ impl Known {
             Self::Grok => grok::MODELS,
             Self::Cursor => cursor::MODELS,
             Self::Copilot => copilot::MODELS,
+            Self::Vibe => vibe::MODELS,
         }
     }
 
@@ -186,6 +199,7 @@ impl Known {
             Self::Grok => grok::CATALOGUE,
             Self::Cursor => cursor::CATALOGUE,
             Self::Copilot => copilot::CATALOGUE,
+            Self::Vibe => vibe::CATALOGUE,
         }
     }
 
@@ -198,6 +212,7 @@ impl Known {
             Self::Grok => grok::STATUS_BY_FOLDER,
             Self::Cursor => cursor::STATUS_BY_FOLDER,
             Self::Copilot => copilot::STATUS_BY_FOLDER,
+            Self::Vibe => vibe::STATUS_BY_FOLDER,
         }
     }
 
@@ -210,6 +225,7 @@ impl Known {
             Self::Grok => grok::RECORD_BY_FOLDER,
             Self::Cursor => cursor::RECORD_BY_FOLDER,
             Self::Copilot => copilot::RECORD_BY_FOLDER,
+            Self::Vibe => vibe::RECORD_BY_FOLDER,
         }
     }
 
@@ -222,6 +238,7 @@ impl Known {
             Self::Grok => grok::normalized(args),
             Self::Cursor => cursor::normalized(args),
             Self::Copilot => copilot::normalized(args),
+            Self::Vibe => vibe::normalized(args),
         }
     }
 
@@ -234,6 +251,7 @@ impl Known {
             Self::Grok => grok::resume(args, conversation),
             Self::Cursor => cursor::resume(args, conversation),
             Self::Copilot => copilot::resume(args, conversation),
+            Self::Vibe => vibe::resume(args, conversation),
         }
     }
 
@@ -246,6 +264,7 @@ impl Known {
             Self::Grok => grok::RUNS_AS,
             Self::Cursor => cursor::runs_as(arg),
             Self::Copilot => copilot::runs_as(arg),
+            Self::Vibe => vibe::runs_as(arg),
         }
     }
 
@@ -258,6 +277,7 @@ impl Known {
             Self::Grok => grok::INPUT_BOX,
             Self::Cursor => cursor::INPUT_BOX,
             Self::Copilot => copilot::INPUT_BOX,
+            Self::Vibe => vibe::INPUT_BOX,
         }
     }
 
@@ -270,6 +290,7 @@ impl Known {
             Self::Grok => grok::INPUT_BOX,
             Self::Cursor => cursor::INPUT_BOX,
             Self::Copilot => copilot::INPUT_BOX,
+            Self::Vibe => vibe::INPUT_BOX,
         }
     }
 
@@ -282,6 +303,7 @@ impl Known {
             Self::Grok => grok::SURVEY,
             Self::Cursor => cursor::SURVEY,
             Self::Copilot => copilot::SURVEY,
+            Self::Vibe => vibe::SURVEY,
         }
     }
 
@@ -294,6 +316,7 @@ impl Known {
             Self::Grok => grok::HOLDS_PROMPTS,
             Self::Cursor => cursor::HOLDS_PROMPTS,
             Self::Copilot => copilot::HOLDS_PROMPTS,
+            Self::Vibe => vibe::HOLDS_PROMPTS,
         }
     }
 
@@ -306,6 +329,7 @@ impl Known {
             Self::Grok => grok::local_command(text),
             Self::Cursor => cursor::local_command(text),
             Self::Copilot => copilot::local_command(text),
+            Self::Vibe => vibe::local_command(text),
         }
     }
 
@@ -318,6 +342,7 @@ impl Known {
             Self::Grok => grok::UNFOUND,
             Self::Cursor => cursor::UNFOUND,
             Self::Copilot => copilot::UNFOUND,
+            Self::Vibe => vibe::UNFOUND,
         }
     }
 
@@ -330,6 +355,7 @@ impl Known {
             Self::Grok => grok::USAGE,
             Self::Cursor => cursor::USAGE,
             Self::Copilot => copilot::USAGE,
+            Self::Vibe => vibe::USAGE,
         }
     }
 }
