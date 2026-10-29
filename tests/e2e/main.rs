@@ -551,6 +551,14 @@ fn git(dir: &std::path::Path, args: &[&str]) {
     assert!(out.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
 }
 
+fn repository(dir: &std::path::Path, name: &str) -> PathBuf {
+    let repo = dir.join(name);
+    std::fs::create_dir_all(&repo).expect("create the repository's folder");
+    git(&repo, &["init", "--quiet"]);
+    git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "init"]);
+    repo
+}
+
 fn write_executable(path: &std::path::Path, contents: &str) {
     let mut child = std::process::Command::new("/bin/sh")
         .arg("-c")

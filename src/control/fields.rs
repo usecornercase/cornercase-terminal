@@ -222,6 +222,7 @@ impl Command {
             Self::StopProcess(stop) => stop.fields(fields),
             Self::WorktreeSize(size) => size.fields(fields),
             Self::Worktrees(list) => list.fields(fields),
+            Self::Clone(clone) => clone.fields(fields),
             Self::FreeBuilds(free) => free.fields(fields),
             Self::Machines(machines) => machines.fields(fields),
             Self::Tour(tour) => tour.fields(fields),

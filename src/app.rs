@@ -616,6 +616,7 @@ impl App {
             AppEvent::Login(kind, name, login) => self.login_checked(kind, name, login),
             AppEvent::Restarted(restarted) => self.restarted(*restarted),
             AppEvent::Machine(event) => self.machine_event(event),
+            AppEvent::Cloned { request, result } => self.clone_answered(request, result, area),
         }
         Ok(())
     }

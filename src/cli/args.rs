@@ -35,7 +35,7 @@ use super::help::{
     USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use super::help::{AGENTS_HELP, CHANGES_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP};
-use super::help::{MACHINES_HELP, WORKTREES_HELP};
+use super::help::{CLONE_HELP, MACHINES_HELP, WORKTREES_HELP};
 use crate::control::Until;
 use crate::term::keys;
 
@@ -104,6 +104,11 @@ pub(crate) enum Control {
     Status(StatusArgs),
     #[command(about = "Open a folder as a project, or find the open one, and print its id", after_help = OPEN_HELP)]
     Open(OpenArgs),
+    #[command(
+        about = "Clone a git repository into a folder, open it as a project, and print its path",
+        after_help = CLONE_HELP
+    )]
+    Clone(CloneArgs),
     #[command(
         about = "Add a workspace to a project, or a git worktree, and print its id",
         after_help = NEW_WORKSPACE_HELP
@@ -284,6 +289,7 @@ impl Control {
         match self {
             Self::Status(a) => a.view.view,
             Self::Open(a) => a.create.view.view,
+            Self::Clone(a) => a.create.view.view,
             Self::NewWorkspace(a) => a.create.view.view,
             Self::NewTab(a) => a.create.view.view,
             Self::Split(a) => a.create.view.view,
@@ -362,6 +368,20 @@ pub(crate) struct Target {
 pub(crate) struct OpenArgs {
     #[arg(value_name = "PATH", help = "The folder")]
     pub(crate) path: PathBuf,
+    #[command(flatten)]
+    pub(crate) create: Create,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct CloneArgs {
+    #[arg(value_name = "URL", value_parser = NonEmptyStringValueParser::new(), help = "The repository, as `git clone` takes it")]
+    pub(crate) url: String,
+    #[arg(
+        value_name = "FOLDER",
+        help = "The folder the clone goes in, as a new folder named after the repository [default: the current one; \
+                with --remote, the home folder there]"
+    )]
+    pub(crate) folder: Option<PathBuf>,
     #[command(flatten)]
     pub(crate) create: Create,
 }

@@ -207,6 +207,7 @@ fn control_route(command: Control) -> ControlFlow<Result<bool>, Control> {
 fn create_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
     ControlFlow::Break(match command {
         Control::Open(open) => run_open(&open).map(|()| true),
+        Control::Clone(clone) => run_clone(&clone).map(|()| true),
         Control::NewWorkspace(new) => run_new_workspace(new).map(|()| true),
         Control::NewTab(new) => run_new_tab(new).map(|()| true),
         Control::Split(split) => run_split(&split).map(|()| true),
@@ -306,6 +307,22 @@ fn run_open(open: &args::OpenArgs) -> Result<()> {
     let path = reach::open_path(&open.path)?;
     let value = ask("open", control::Command::Open(control::Open { path, focus: open.create.focus }))?;
     say(value, open.create.print.json, |done| id(done.ids.project))
+}
+
+fn run_clone(clone: &args::CloneArgs) -> Result<()> {
+    let parent = match &clone.folder {
+        Some(folder) => reach::open_path(folder)?,
+        None if client::used_remote().is_some() => PathBuf::from("~"),
+        None => std::env::current_dir()?,
+    };
+    let request = control::CloneRepository { url: clone.url.clone(), parent, focus: clone.create.focus };
+    let value = ask("clone", control::Command::Clone(request))?;
+    if clone.create.print.json {
+        return print_json(&value);
+    }
+    let cloned: control::Cloned = answer(value)?;
+    println!("{}", cloned.path.display());
+    Ok(())
 }
 
 fn run_new_workspace(new: args::NewWorkspaceArgs) -> Result<()> {
