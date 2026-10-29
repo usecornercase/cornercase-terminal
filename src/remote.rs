@@ -34,6 +34,7 @@ const SEARCHED: &str = "$PATH:$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bi
 const ALIVE: [&str; 6] = ["-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3", "-o", "ConnectTimeout=10"];
 const ENDED_WAIT: Duration = Duration::from_secs(2);
 const ENDED_POLL: Duration = Duration::from_millis(10);
+const TIED: &str = protocol::TIED_ENV;
 const BATCH: [&str; 2] = ["-o", "BatchMode=yes"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +42,13 @@ pub(crate) struct Remote {
     pub(crate) destination: String,
     pub(crate) command: Option<String>,
     pub(crate) option: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Run {
+    Plain,
+    Terminal,
+    Tied,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,7 +138,7 @@ impl Remote {
 
     pub(crate) fn connect(&self, usage: Use) -> Result<Piped> {
         let mut child = Command::new(SSH)
-            .args(self.ssh_args(usage.batch(), false, &["proxy"]))
+            .args(self.ssh_args(usage.batch(), Run::Plain, &["proxy"]))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -166,31 +174,41 @@ impl Remote {
     }
 
     pub(crate) fn kill_server(&self) -> Result<bool> {
-        Ok(self.run(false, false, &["kill-server"])?.success())
+        Ok(self.run(false, Run::Plain, &["kill-server"])?.success())
     }
 
     pub(crate) fn update(&self) -> Result<bool> {
-        Ok(self.run(false, true, &["update"])?.success())
+        Ok(self.run(false, Run::Terminal, &["update"])?.success())
     }
 
-    pub(crate) fn run(&self, batch: bool, tty: bool, args: &[impl AsRef<str>]) -> Result<ExitStatus> {
-        Command::new(SSH).args(self.ssh_args(batch, tty, args)).status().map_err(Error::RunSsh)
+    pub(crate) fn run(&self, batch: bool, run: Run, args: &[impl AsRef<str>]) -> Result<ExitStatus> {
+        let mut command = Command::new(SSH);
+        command.args(self.ssh_args(batch, run, args));
+        if run != Run::Tied {
+            return command.status().map_err(Error::RunSsh);
+        }
+        let mut child = command.stdin(Stdio::piped()).spawn().map_err(Error::RunSsh)?;
+        let held = child.stdin.take();
+        let status = child.wait().map_err(Error::RunSsh);
+        drop(held);
+        status
     }
 
-    fn ssh_args(&self, batch: bool, tty: bool, args: &[impl AsRef<str>]) -> Vec<String> {
-        let mut ssh = vec![if tty { "-t" } else { "-T" }.to_string()];
+    fn ssh_args(&self, batch: bool, run: Run, args: &[impl AsRef<str>]) -> Vec<String> {
+        let mut ssh = vec![if run == Run::Terminal { "-t" } else { "-T" }.to_string()];
         ssh.extend(ALIVE.iter().map(ToString::to_string));
         if batch {
             ssh.extend(BATCH.iter().map(ToString::to_string));
         }
-        ssh.extend(["--".to_string(), self.destination.clone(), self.remote_command(args)]);
+        ssh.extend(["--".to_string(), self.destination.clone(), self.remote_command(args, run == Run::Tied)]);
         ssh
     }
 
-    fn remote_command(&self, args: &[impl AsRef<str>]) -> String {
+    fn remote_command(&self, args: &[impl AsRef<str>], tied: bool) -> String {
         let command = self.command.as_deref().unwrap_or("cornercase");
         let words: Vec<String> = args.iter().map(|arg| quote_word(arg.as_ref())).collect();
-        let script = format!("PATH=\"{SEARCHED}\"; export PATH; exec {command} {}", words.join(" "));
+        let tie = if tied { format!(" {TIED}=1; export {TIED};") } else { String::new() };
+        let script = format!("PATH=\"{SEARCHED}\"; export PATH;{tie} exec {command} {}", words.join(" "));
         format!("sh -c {}", quote(&script))
     }
 

@@ -27,7 +27,7 @@ fn remote_refusal(args: &[&str], command: &str) -> std::process::Output {
     session.command().args(args).args([command]).env("PATH", path).output().expect("run cornercase")
 }
 
-fn remotely(session: &Session, args: &[&str]) -> std::process::Command {
+pub(super) fn remotely(session: &Session, args: &[&str]) -> std::process::Command {
     let mut cmd = session.cold_command();
     cmd.env("PATH", fake_ssh(&session.dir, "")).args(["--remote", "devbox", "--remote-command", bin()]).args(args);
     cmd
@@ -335,4 +335,26 @@ fn the_status_of_the_command_there_is_the_status_here() {
     let out = remotely(&session, &["logs"]).output().expect("run cornercase");
 
     assert!(refused(&out, 1, "no log yet"), "{out:?}");
+}
+
+#[test]
+fn killing_a_remote_restart_when_idle_calls_it_off_there() {
+    let mut app = Harness::start();
+    let agent = updates::busy_claude(&app.session);
+    app.session.says(&["new-tab", "--", &agent.display().to_string()]);
+    app.session.wait_for_working();
+    let mut waiting = remotely(&app.session, &["restart", "--when-idle", "--yes"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("run cornercase");
+    app.wait_for("the window says a restart is pending", |s| s.contains("restart pending until 1 agent ends its turn"));
+    let there = ssh_pid(&app.session);
+
+    waiting.kill().expect("kill the command");
+    let _ = waiting.wait();
+
+    app.wait_for("the restart is called off", |s| !s.contains("restart pending"));
+    wait_until("the command there and its ssh end", || gone(&there));
 }

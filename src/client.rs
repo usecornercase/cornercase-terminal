@@ -37,7 +37,7 @@ pub(crate) use requests::{
     use_build_folders, use_close_agent_tabs, use_close_unlock, use_focus_reveal, use_host_events, use_issue_names,
     use_issues, use_notices, use_popup_terminal, use_queue_undo, use_surface_patches, use_todo_panel, use_view,
 };
-pub(crate) use requests::{reader_gone_within, use_remote, used_remote, watched};
+pub(crate) use requests::{input_ended, reader_gone_within, use_remote, used_remote, watched};
 pub(crate) use server_process::{Found, find, find_or_start, running, wait_for_exit};
 pub(crate) use server_process::{kill_server, restart_server};
 

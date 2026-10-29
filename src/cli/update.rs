@@ -1,9 +1,13 @@
 use std::fs;
 use std::io::{self, IsTerminal, Write, stdin, stdout};
+use std::net::Shutdown;
+use std::os::fd::{AsFd, BorrowedFd};
+use std::os::unix::net::UnixStream;
+use std::time::Duration;
 
 use crate::client::{
-    Found, RESTART, answer, answered, confirm, find, kill_server, report_now, request, restart_server, running_now,
-    wait_for_exit,
+    Found, RESTART, answer, answered, confirm, find, input_ended, kill_server, report_now, request, restart_server,
+    running_now, wait_for_exit, watched,
 };
 use crate::error::{Error, Result};
 use crate::protocol::{self, ServerMessage};
@@ -162,21 +166,52 @@ fn restart_if_confirmed(intro: Option<&str>, yes: bool, when: When) -> Result<bo
     Ok(true)
 }
 
+fn tied_input() -> Option<BorrowedFd<'static>> {
+    std::env::var_os(protocol::TIED_ENV).and_then(|_| watched(rustix::stdio::stdin()))
+}
+
+#[derive(Debug)]
+enum Waited {
+    Restarted(Option<Box<control::Report>>),
+    InputEnded,
+}
+
 fn restart_when_idle(timeout: Option<f64>, inside: bool) -> Result<()> {
+    let mut input = tied_input();
+    if input_ended(None, &mut input, Some(Duration::ZERO)) {
+        return Ok(());
+    }
     let Found { socket, mut stream } = find()?.ok_or(Error::NoServer)?;
     request(&mut stream, control::Command::RestartWhenIdle(control::RestartWhenIdle { timeout }))?;
     println!("{WAITING}");
     let _ = stdout().flush();
+    let report = match wait_for_restart(&mut stream, input, inside)? {
+        Waited::InputEnded => return Ok(()),
+        Waited::Restarted(report) => report.map(|report| *report),
+    };
+    wait_for_exit(&socket);
+    println!("{RESTARTED}");
+    if let Some(line) = report.as_ref().map(restart::from_report).as_deref().and_then(restart::stopped) {
+        println!("{line}");
+    }
+    Ok(())
+}
+
+fn wait_for_restart(stream: &mut UnixStream, mut input: Option<BorrowedFd<'_>>, inside: bool) -> Result<Waited> {
     let mut report: Option<control::Report> = None;
     loop {
-        match protocol::recv::<ServerMessage>(&mut stream) {
+        if report.is_none() && input_ended(Some(stream.as_fd()), &mut input, None) {
+            let _ = stream.shutdown(Shutdown::Both);
+            return Ok(Waited::InputEnded);
+        }
+        match protocol::recv::<ServerMessage>(stream) {
             Ok(Some(ServerMessage::Response(text))) => {
                 report = Some(answer(answered(&text).map_err(too_old_to_wait)?)?);
                 if inside {
                     println!("restarting the cornercase server");
                 }
             }
-            Ok(Some(ServerMessage::Restart(_))) => break,
+            Ok(Some(ServerMessage::Restart(_))) => return Ok(Waited::Restarted(report.map(Box::new))),
             Ok(Some(ServerMessage::Shutdown)) => return Err(Error::Control(STOPPED_INSTEAD.into())),
             Ok(Some(ServerMessage::Rejected(_))) => return Err(Error::OldServer("restart --when-idle")),
             Err(e) if e.kind() == io::ErrorKind::InvalidData => return Err(Error::OldServer("restart --when-idle")),
@@ -187,16 +222,10 @@ fn restart_when_idle(timeout: Option<f64>, inside: bool) -> Result<()> {
                 | ServerMessage::Open(_)
                 | ServerMessage::Browse(_),
             )) => {}
-            Ok(None) | Err(_) if report.is_some() => break,
+            Ok(None) | Err(_) if report.is_some() => return Ok(Waited::Restarted(report.map(Box::new))),
             Ok(None) | Err(_) => return Err(Error::ServerGone),
         }
     }
-    wait_for_exit(&socket);
-    println!("{RESTARTED}");
-    if let Some(line) = report.as_ref().map(restart::from_report).as_deref().and_then(restart::stopped) {
-        println!("{line}");
-    }
-    Ok(())
 }
 
 fn too_old_to_wait(error: Error) -> Error {

@@ -7,7 +7,7 @@ use super::args::{Cli, Command, KillServerArgs, LogsArgs, RestartArgs, UpdateArg
 use crate::client;
 use crate::error::{Error, Result};
 use crate::protocol::REMOTE_ENV;
-use crate::remote::Remote;
+use crate::remote::{Remote, Run};
 
 const OPTION: &str = "--remote-command";
 
@@ -107,8 +107,14 @@ pub(super) fn there(command: &Command) -> Option<Vec<String>> {
 }
 
 pub(super) fn run_there(remote: &Remote, args: &[String]) -> Result<bool> {
-    let tty = stdin().is_terminal() && stdout().is_terminal();
-    outcome(remote, remote.run(true, tty, args)?)
+    let run = if stdin().is_terminal() && stdout().is_terminal() {
+        Run::Terminal
+    } else if args.iter().any(|arg| arg == "--when-idle") {
+        Run::Tied
+    } else {
+        Run::Plain
+    };
+    outcome(remote, remote.run(true, run, args)?)
 }
 
 fn outcome(remote: &Remote, status: ExitStatus) -> Result<bool> {

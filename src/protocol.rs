@@ -23,6 +23,7 @@ pub(crate) const VERSION: u32 = 9;
 pub const NESTED_ENV: &str = "CORNERCASE";
 pub const REMOTE_ENV: &str = "CORNERCASE_REMOTE";
 pub(crate) const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
+pub(crate) const TIED_ENV: &str = "CORNERCASE_TIED";
 pub(crate) const BROWSER: &str = "browser";
 const MAX_MESSAGE: usize = 64 * 1024 * 1024;
 

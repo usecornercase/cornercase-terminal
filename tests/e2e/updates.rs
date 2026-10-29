@@ -136,11 +136,9 @@ fn a_restart_that_cannot_reach_the_new_server_restores_the_terminal_and_says_why
     assert!(!app.screen.lock().screen().alternate_screen(), "the terminal stayed on the alternate screen");
 }
 
-#[test]
-fn restart_when_idle_waits_for_the_agent_to_end_its_turn() {
-    let mut app = Harness::start();
-    std::fs::create_dir(app.session.dir.join("bin")).expect("create bin");
-    let agent = app.session.dir.join("bin").join("claude");
+pub(super) fn busy_claude(session: &Session) -> PathBuf {
+    std::fs::create_dir_all(session.dir.join("bin")).expect("create bin");
+    let agent = session.dir.join("bin").join("claude");
     write_executable(
         &agent,
         r#"#!/bin/sh
@@ -149,11 +147,30 @@ while [ ! -e "$d/finish" ]; do sleep 0.02; done
 printf '{"pid":%s,"status":"idle"}' $$ > "$d/sessions/$$.json"; while :; do sleep 1; done
 "#,
     );
+    agent
+}
+
+#[rstest]
+#[case::here(false)]
+#[case::through_ssh(true)]
+fn restart_when_idle_waits_for_the_agent_to_end_its_turn(#[case] through_ssh: bool) {
+    let mut app = Harness::start();
+    let agent = busy_claude(&app.session);
     let pane = app.session.says(&["new-tab", "--", &agent.display().to_string()]);
     app.session.wait_for_working();
+    let run = |args: &[&str]| {
+        let mut cmd = if through_ssh { remote::remotely(&app.session, args) } else { app.session.command() };
+        if !through_ssh {
+            cmd.args(args);
+        }
+        cmd.stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        cmd
+    };
 
-    let early = app.session.cli(&["restart", "--when-idle", "--yes", "--timeout", "0.5"]);
-    let restart = app.session.spawn(&["restart", "--when-idle", "--yes", "--timeout", "30"]);
+    let early = run(&["restart", "--when-idle", "--yes", "--timeout", "0.5"]).output().expect("run cornercase");
+    let restart = run(&["restart", "--when-idle", "--yes", "--timeout", "30"]).spawn().expect("run cornercase");
     app.wait_for("the window says a restart is pending", |s| s.contains("restart pending until 1 agent ends its turn"));
     std::fs::write(app.session.claude_dir().join("finish"), "").expect("let the agent finish");
     let out = Session::output(restart);

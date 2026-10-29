@@ -342,6 +342,95 @@ mod a_follow {
     }
 }
 
+mod an_input {
+    use std::io::{self, Write};
+    use std::net::Shutdown;
+    use std::os::fd::{AsFd, OwnedFd};
+    use std::time::{Duration, Instant};
+
+    use rstest::rstest;
+
+    use super::*;
+
+    const WAIT: Duration = Duration::from_secs(10);
+    const SHORT: Duration = Duration::from_millis(50);
+
+    fn closed_pipe() -> OwnedFd {
+        let (reader, writer) = io::pipe().expect("a pipe");
+        drop(writer);
+        reader.into()
+    }
+
+    #[rstest]
+    #[case::pipe(true)]
+    #[case::socket_pair_closed(false)]
+    fn ends_when_the_other_end_closes(#[case] pipe: bool) {
+        let (input, keep): (OwnedFd, Box<dyn std::any::Any>) = if pipe {
+            let (reader, writer) = io::pipe().expect("a pipe");
+            (reader.into(), Box::new(writer))
+        } else {
+            let (ours, peer) = UnixStream::pair().expect("a socket pair");
+            (ours.into(), Box::new(peer))
+        };
+        drop(keep);
+
+        assert!(input_ended(None, &mut Some(input.as_fd()), Some(WAIT)));
+    }
+
+    #[test]
+    fn ends_when_a_socket_peer_only_shuts_its_writing_half() {
+        let (ours, peer) = UnixStream::pair().expect("a socket pair");
+        peer.shutdown(Shutdown::Write).expect("shut");
+
+        assert!(input_ended(None, &mut Some(ours.as_fd()), Some(WAIT)));
+    }
+
+    #[test]
+    fn an_end_already_there_is_seen_without_waiting() {
+        let input = closed_pipe();
+
+        assert!(input_ended(None, &mut Some(input.as_fd()), Some(Duration::ZERO)));
+    }
+
+    #[test]
+    fn an_open_input_does_not_end_at_once() {
+        let (reader, _writer) = io::pipe().expect("a pipe");
+        let started = Instant::now();
+
+        assert!(!input_ended(None, &mut Some(reader.as_fd()), Some(Duration::ZERO)));
+
+        assert!(started.elapsed() < WAIT);
+    }
+
+    #[test]
+    fn bytes_are_not_an_end() {
+        let (ours, mut peer) = UnixStream::pair().expect("a socket pair");
+        peer.write_all(b"x").expect("bytes");
+        let mut input = Some(ours.as_fd());
+
+        assert!(!input_ended(None, &mut input, Some(SHORT)));
+
+        assert!(input.is_some());
+    }
+
+    #[test]
+    fn a_server_message_comes_first() {
+        let (server, mut theirs) = UnixStream::pair().expect("a socket pair");
+        theirs.write_all(b"x").expect("bytes");
+        let (reader, _writer) = io::pipe().expect("a pipe");
+        let mut input = Some(reader.as_fd());
+
+        assert!(!input_ended(Some(server.as_fd()), &mut input, None));
+
+        assert!(input.is_some());
+    }
+
+    #[test]
+    fn nothing_to_watch_never_ends() {
+        assert!(!input_ended(None, &mut None, Some(SHORT)));
+    }
+}
+
 mod one_link {
     use super::*;
 

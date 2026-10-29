@@ -325,6 +325,46 @@ pub(crate) fn reader_gone_within(out: &mut Option<BorrowedFd<'_>>, wait: Duratio
     left.intersects(PollFlags::HUP | PollFlags::ERR)
 }
 
+pub(crate) fn input_ended(
+    server: Option<BorrowedFd<'_>>,
+    input: &mut Option<BorrowedFd<'_>>,
+    wait: Option<Duration>,
+) -> bool {
+    while let Some(fd) = *input {
+        let Some((heard, events)) = polled(server, fd, wait) else {
+            *input = None;
+            return false;
+        };
+        match input_state(fd, events) {
+            Some(true) => return true,
+            Some(false) => {}
+            None => *input = None,
+        }
+        if heard || events.is_empty() {
+            return false;
+        }
+    }
+    false
+}
+
+fn input_state(fd: BorrowedFd<'_>, events: PollFlags) -> Option<bool> {
+    if events.intersects(PollFlags::HUP | PollFlags::ERR) {
+        return Some(true);
+    }
+    if events.is_empty() {
+        return Some(false);
+    }
+    if events != PollFlags::IN {
+        return None;
+    }
+    let mut buffer = [0u8; 64];
+    match rustix::io::read(fd, &mut buffer) {
+        Ok(0) => Some(true),
+        Ok(_) | Err(Errno::INTR | Errno::AGAIN) => Some(false),
+        Err(_) => None,
+    }
+}
+
 fn polled(server: Option<BorrowedFd<'_>>, reader: BorrowedFd<'_>, wait: Option<Duration>) -> Option<(bool, PollFlags)> {
     let wait = match wait {
         Some(wait) => Some(Timespec::try_from(wait).ok()?),

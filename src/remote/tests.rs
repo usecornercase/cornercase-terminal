@@ -20,7 +20,7 @@ mod ssh {
 
     #[test]
     fn runs_the_proxy_after_the_destination_without_a_terminal() {
-        let args = devbox().ssh_args(false, false, &["proxy"]);
+        let args = devbox().ssh_args(false, Run::Plain, &["proxy"]);
 
         assert_eq!(args[0], "-T");
         let at = args.iter().position(|a| a == "--").expect("options end before the destination");
@@ -31,18 +31,18 @@ mod ssh {
 
     #[test]
     fn never_prompts_when_it_reconnects() {
-        assert!(!devbox().ssh_args(false, false, &["proxy"]).contains(&"BatchMode=yes".to_string()));
-        assert!(devbox().ssh_args(true, false, &["proxy"]).contains(&"BatchMode=yes".to_string()));
+        assert!(!devbox().ssh_args(false, Run::Plain, &["proxy"]).contains(&"BatchMode=yes".to_string()));
+        assert!(devbox().ssh_args(true, Run::Plain, &["proxy"]).contains(&"BatchMode=yes".to_string()));
     }
 
     #[test]
     fn notices_a_dead_connection() {
-        assert!(devbox().ssh_args(false, false, &["proxy"]).contains(&"ServerAliveInterval=5".to_string()));
+        assert!(devbox().ssh_args(false, Run::Plain, &["proxy"]).contains(&"ServerAliveInterval=5".to_string()));
     }
 
     #[test]
     fn a_command_has_no_terminal_and_never_asks_for_a_password() {
-        let args = devbox().ssh_args(true, false, &["logs", "--path"]);
+        let args = devbox().ssh_args(true, Run::Plain, &["logs", "--path"]);
 
         assert_eq!(args[0], "-T");
         assert!(args.contains(&"BatchMode=yes".to_string()));
@@ -52,13 +52,42 @@ mod ssh {
 
     #[test]
     fn a_terminal_is_asked_for() {
-        assert_eq!(devbox().ssh_args(false, true, &["update"])[0], "-t");
+        assert_eq!(devbox().ssh_args(false, Run::Terminal, &["update"])[0], "-t");
+    }
+
+    #[test]
+    fn a_tied_command_tells_cornercase_there_that_its_input_is_the_link() {
+        let remote = Remote { command: Some("env".into()), ..devbox() };
+        let run = |tied| {
+            let script = remote.remote_command(&[] as &[&str], tied);
+            let out = Command::new("/bin/sh").args(["-c", &script]).env_remove("CORNERCASE_TIED").output().expect("sh");
+            String::from_utf8_lossy(&out.stdout).into_owned()
+        };
+
+        assert!(run(true).contains("CORNERCASE_TIED=1"));
+        assert!(!run(false).contains("CORNERCASE_TIED"));
+    }
+
+    #[test]
+    fn the_proxy_is_never_tied() {
+        let args = devbox().ssh_args(false, Run::Plain, &["proxy"]);
+
+        assert!(!args.iter().any(|arg| arg.contains("CORNERCASE_TIED")));
+    }
+
+    #[test]
+    fn a_tied_command_has_no_terminal_and_never_asks_for_a_password() {
+        let args = devbox().ssh_args(true, Run::Tied, &["restart"]);
+
+        assert_eq!(args[0], "-T");
+        assert!(args.contains(&"BatchMode=yes".to_string()));
+        assert!(args.last().is_some_and(|script| script.contains("CORNERCASE_TIED=1")));
     }
 
     #[test]
     fn arguments_arrive_as_they_were_given() {
         let out = Command::new("/bin/sh")
-            .args(["-c", &devbox().remote_command(&["logs", "it's here", "a b"]).replace("exec ", "echo ")])
+            .args(["-c", &devbox().remote_command(&["logs", "it's here", "a b"], false).replace("exec ", "echo ")])
             .output()
             .expect("run sh");
 
@@ -67,7 +96,7 @@ mod ssh {
 
     #[test]
     fn looks_for_cornercase_where_installers_put_it() {
-        let command = devbox().remote_command(&["proxy"]);
+        let command = devbox().remote_command(&["proxy"], false);
 
         for folder in ["$HOME/.local/bin", "$HOME/.cargo/bin", "/opt/homebrew/bin"] {
             assert!(command.contains(folder), "{command}");
@@ -79,7 +108,7 @@ mod ssh {
         let remote = Remote { command: Some("~/bin/cornercase".into()), ..devbox() };
 
         let out = Command::new("/bin/sh")
-            .args(["-c", &remote.remote_command(&["proxy"]).replace("exec ", "echo ")])
+            .args(["-c", &remote.remote_command(&["proxy"], false).replace("exec ", "echo ")])
             .env("HOME", "/home/me")
             .output()
             .expect("run sh");

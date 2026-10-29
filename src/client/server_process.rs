@@ -129,6 +129,7 @@ fn start_server(log: &Path) -> io::Result<Child> {
         .env_remove(control::PANE_ENV)
         .env_remove(control::SERVER_ENV)
         .env_remove(protocol::REMOTE_ENV)
+        .env_remove(protocol::TIED_ENV)
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)
         .stderr(log)
