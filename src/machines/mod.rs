@@ -4,6 +4,7 @@ use serde_json::Value;
 use crate::text;
 
 pub(crate) mod link;
+pub(crate) mod wake;
 
 pub(crate) const ICONS: [(char, &str); 6] =
     [('☁', "server"), ('▭', "laptop"), ('▣', "desktop"), ('◫', "mini"), ('⌂', "home server"), ('◆', "other")];
