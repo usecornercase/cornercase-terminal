@@ -178,6 +178,7 @@ fn newest_commands() -> Vec<Command> {
         Command::FreeBuilds(FreeBuilds::default()),
         Command::Processes(Processes::default()),
         Command::StopProcess(StopProcess::default()),
+        Command::Worktrees(ListWorktrees::default()),
     ]
 }
 

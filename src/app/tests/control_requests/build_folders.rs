@@ -7,7 +7,7 @@ fn write(path: &Path, bytes: usize) {
     std::fs::write(path, vec![7_u8; bytes]).expect("write");
 }
 
-fn with_builds(path: &Path) {
+pub(super) fn with_builds(path: &Path) {
     std::fs::write(path.join(".gitignore"), "node_modules/\n").expect("ignore");
     write(&path.join("node_modules/x.js"), 300_000);
 }

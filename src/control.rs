@@ -77,7 +77,9 @@ pub(crate) use theme::{Theme, ThemeInfo};
 pub(crate) use usage::{Plans, Usage};
 pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
-pub(crate) use worktrees::{BuildsFreed, FreeBuilds, WorktreeSize, WorktreeSized};
+pub(crate) use worktrees::{
+    BuildsFreed, FreeBuilds, ListWorktrees, WorktreeInfo, WorktreeListing, WorktreeSize, WorktreeSized,
+};
 
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
 pub(crate) const SERVER_ENV: &str = "CORNERCASE_SERVER";
@@ -233,6 +235,7 @@ pub(crate) enum Command {
     StopProcess(StopProcess),
     WorktreeSize(WorktreeSize),
     FreeBuilds(FreeBuilds),
+    Worktrees(ListWorktrees),
 }
 
 impl Command {
@@ -412,6 +415,7 @@ impl Command {
             Self::StopProcess(_) => 111,
             Self::WorktreeSize(_) => 108,
             Self::FreeBuilds(_) => 109,
+            Self::Worktrees(_) => 112,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
             Self::PluginActions(_) => 69,
@@ -423,7 +427,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 112] = [
+    pub(crate) const NAMES: [&str; 113] = [
         "status",
         "open",
         "new-workspace",
@@ -536,6 +540,7 @@ impl Command {
         "free-builds",
         "processes",
         "stop-process",
+        "worktrees",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

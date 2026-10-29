@@ -88,18 +88,7 @@ impl App {
 
     fn removal(&self, at: WorkspaceAt, status: &worktree::Status) -> Removal {
         let workspace = self.projects.workspace(at);
-        let lock = status.lock.as_ref().map(|lock| {
-            let (role, path) = match &lock.role {
-                Some((name, path)) => (Some(name.clone()), path.clone()),
-                None => (None, workspace.path.clone()),
-            };
-            let (pid, running) = match lock.holder {
-                Some(worktree::Holder::Running(pid)) => (Some(pid), Some(true)),
-                Some(worktree::Holder::Gone(pid)) => (Some(pid), Some(false)),
-                None => (None, None),
-            };
-            Locked { reason: lock.reason.clone(), path, role, pid, running }
-        });
+        let lock = status.lock.as_ref().map(|lock| Locked::of(lock, workspace.path.clone()));
         let roles = workspace.role_worktrees.iter().filter(|tree| tree.path.is_dir());
         Removal {
             workspace: workspace.id,

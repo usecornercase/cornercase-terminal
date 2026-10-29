@@ -119,16 +119,22 @@ impl App {
     }
 
     fn risks(&self, row: &Row, live: Option<&Live>) -> Vec<String> {
-        let mut risks = kind_risks(row);
-        risks.extend(self.presence_risks(row, live, false));
-        risks.extend(self.cleanup_risks(row, live));
+        let failed = matches!(self.git.scans.outside, Outside::Failed);
+        let mut risks = self.risk_list(row, live, failed);
         if risks.is_empty() {
             risks.push("nothing uncommitted or unpushed".to_string());
         }
         risks
     }
 
-    pub(super) fn presence_risks(&self, row: &Row, live: Option<&Live>, free: bool) -> Vec<String> {
+    pub(in crate::app) fn risk_list(&self, row: &Row, live: Option<&Live>, outside_failed: bool) -> Vec<String> {
+        let mut risks = kind_risks(row);
+        risks.extend(Self::presence_risks(row, live, false, outside_failed));
+        risks.extend(self.cleanup_risks(row, live));
+        risks
+    }
+
+    pub(super) fn presence_risks(row: &Row, live: Option<&Live>, free: bool, failed: bool) -> Vec<String> {
         let mut risks = Vec::new();
         let effect = if free { "it may still use these folders" } else { "they stop" };
         if let Some(live) = live.filter(|live| !live.running.is_empty()) {
@@ -139,7 +145,7 @@ impl App {
             let processes = plural(outside.len(), "process", "processes");
             let names: Vec<&str> = outside.iter().map(|name| name.as_str()).collect();
             risks.push(format!("{processes} outside cornercase: {}", names.join(", ")));
-        } else if matches!(self.git.scans.outside, Outside::Failed) {
+        } else if failed {
             risks.push("processes outside cornercase could not be checked".to_string());
         }
         match row.elsewhere.as_slice() {

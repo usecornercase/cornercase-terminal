@@ -25,7 +25,7 @@ struct Measuring {
 }
 
 impl App {
-    pub(super) fn builds_of(&self, repo: &Path) -> Vec<String> {
+    pub(in crate::app) fn builds_of(&self, repo: &Path) -> Vec<String> {
         self.config.project(repo, self.home.as_deref()).builds()
     }
 

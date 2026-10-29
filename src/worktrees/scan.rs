@@ -136,3 +136,18 @@ pub(crate) fn outside(paths: &[PathBuf], panes: &Panes, server: i32) -> Vec<(usi
     }
     found
 }
+
+pub(crate) fn scan_or_count(path: &Path, repo: &Path, base: Option<String>, branch: Option<&str>) -> Result<Scan> {
+    let base = base.or_else(|| crate::changes::git::default_base(repo));
+    match branch {
+        Some(branch) => branch_commits(repo, branch, base.as_deref()),
+        None => scan(path, base.as_deref()),
+    }
+}
+
+pub(crate) fn processes(paths: &[PathBuf], shells: &[(i32, Vec<usize>)]) -> Vec<(PathBuf, String, bool)> {
+    let panes = process::owners::trees(shells);
+    let server = i32::try_from(std::process::id()).unwrap_or_default();
+    let found = outside(paths, &panes, server);
+    found.into_iter().map(|(at, name, tab)| (paths[at].clone(), name, tab)).collect()
+}

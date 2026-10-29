@@ -758,7 +758,7 @@ pub(in crate::cli) use flow::{
 };
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
 pub(in crate::cli) use processes::{PROCESSES_HELP, PROCESSES_STOP_HELP};
-pub(in crate::cli) use worktrees::{WORKTREES_FREE_HELP, WORKTREES_HELP, WORKTREES_SIZE_HELP};
+pub(in crate::cli) use worktrees::{WORKTREES_FREE_HELP, WORKTREES_HELP, WORKTREES_LIST_HELP, WORKTREES_SIZE_HELP};
 
 #[cfg(test)]
 mod tests;

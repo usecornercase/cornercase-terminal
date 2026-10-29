@@ -7,10 +7,12 @@ pub(crate) mod builds;
 mod dialog;
 pub(crate) mod discover;
 pub(crate) mod disk;
+pub(crate) mod fill;
 pub(crate) mod remove;
 pub(crate) mod scan;
 
 pub(crate) use dialog::{Action, Dialog, Hit, Step};
+pub(crate) use fill::{Asks, fill};
 
 pub(crate) const SCANS_AT_ONCE: usize = 4;
 
@@ -79,6 +81,13 @@ pub(crate) struct Row {
 }
 
 impl Row {
+    pub(crate) fn set_processes(&mut self, found: &[(PathBuf, String, bool)]) {
+        let of = |tab: bool| -> Vec<String> {
+            found.iter().filter(|(path, _, t)| *path == self.found.path && *t == tab).map(|f| f.1.clone()).collect()
+        };
+        (self.outside, self.elsewhere) = (of(false), of(true));
+    }
+
     pub(crate) fn merged(&self) -> bool {
         self.pull_merged() || matches!(&self.scan, Some(Ok(scan)) if scan.merged && scan.has_upstream)
     }
@@ -160,7 +169,7 @@ impl Row {
         }
     }
 
-    fn last_changed(&self) -> Option<SystemTime> {
+    pub(crate) fn last_changed(&self) -> Option<SystemTime> {
         match &self.scan {
             Some(Ok(scan)) => scan.last_changed,
             _ => None,
@@ -266,6 +275,10 @@ impl List {
     pub(crate) fn ticked(&self) -> Vec<usize> {
         (0..self.rows.len()).filter(|&i| self.rows[i].ticked).collect()
     }
+}
+
+pub(crate) fn folders_of(rows: &[Row]) -> Vec<PathBuf> {
+    rows.iter().filter(|row| row.found.kind != Kind::Prunable && !row.gone).map(|row| row.found.path.clone()).collect()
 }
 
 fn safe_order(a: &Row, b: &Row) -> std::cmp::Ordering {

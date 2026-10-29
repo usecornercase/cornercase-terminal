@@ -712,6 +712,7 @@ impl App {
             }
             Command::WorktreeSize(size) => self.worktree_size_request(client, asker, &size),
             Command::FreeBuilds(free) => self.free_builds_request(client, asker, &free),
+            Command::Worktrees(list) => self.worktrees_request(client, &list),
             Command::Tour(tour) => self.tour_request(&tour),
             Command::PluginList(_) => Ok(Some(self.plugin_list_request(now))),
             Command::PluginActions(actions) => Ok(Some(self.plugin_actions_request(&actions))),

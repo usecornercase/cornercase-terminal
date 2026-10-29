@@ -32,6 +32,7 @@ fn commit_at(dir: &Path, date: &str) {
 mod builds;
 mod dialog;
 mod disk;
+mod fill;
 mod list;
 mod remove;
 

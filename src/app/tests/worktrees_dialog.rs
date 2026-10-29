@@ -37,7 +37,7 @@ pub(super) fn path_of(s: &Setup, branch: &str) -> PathBuf {
     found.expect("the workspace exists").path.clone()
 }
 
-fn closed(s: &Setup) -> (TempDir, PathBuf) {
+pub(super) fn closed(s: &Setup) -> (TempDir, PathBuf) {
     let other = git_repo(&[("README", "other")]);
     let name = other.path().file_name().expect("a name").to_string_lossy().into_owned();
     let checkout = s.worktrees.path().join(&name).join("side");

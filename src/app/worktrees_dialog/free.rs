@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
+use super::Outside;
 use super::confirm::{INDENT, wrap};
 use crate::app::App;
 use crate::app::event::AppEvent;
@@ -69,7 +70,8 @@ impl App {
     }
 
     fn free_warnings(&self, row: &Row, size: &Size) -> Vec<String> {
-        let mut warnings = self.presence_risks(row, row.live.as_ref(), true);
+        let mut warnings =
+            Self::presence_risks(row, row.live.as_ref(), true, matches!(self.git.scans.outside, Outside::Failed));
         warnings.extend(
             size.nested.iter().map(|path| {
                 format!("{} is a git checkout; its changes go too", path.parent().unwrap_or(path).display())

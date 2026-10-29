@@ -1,10 +1,33 @@
 pub(in crate::cli) const WORKTREES_HELP: &str =
-    "Commands for the worktrees cornercase makes for workspaces. `size` reports the disk a worktree
-takes and how much of it is build and dependency folders; `free-builds` deletes those folders.
+    "Commands for the worktrees cornercase makes for workspaces. `list` shows every worktree on disk
+and what makes each safe to remove; `size` reports the disk a worktree takes and how much of it is
+build and dependency folders; `free-builds` deletes those folders.
 
 Examples:
+  cornercase worktrees list
   cornercase worktrees size --worktree feat/login
   cornercase worktrees free-builds --worktree feat/login --check";
+
+pub(in crate::cli) const WORKTREES_LIST_HELP: &str =
+    "Lists every worktree on disk as the Worktrees dialog does, in its order: the leftovers first
+(prunable, repository gone, unknown to git), then the merged ones, then the rest, the oldest first.
+Each one shows its project and branch, folder, when it last changed, its size with the part in
+build folders and, under it, what removing it would lose or stop: uncommitted files, commits not
+pushed, a lock, programs running in it. It covers the worktrees of the open projects and those of
+closed projects left in the worktrees folder; --project ID lists one project's. It removes
+nothing. Measuring walks every worktree, two at a time, which takes a while with big trees;
+--no-sizes answers without it. A worktree that could not be checked or measured says so, and the
+command exits 3 after printing the rest. With --json it prints {\"worktrees\": [...]}, each with
+\"path\", \"kind\" (linked, prunable, repository-gone, unknown-to-git), \"project_name\",
+\"repository\", \"branch\", \"project\" and \"workspace\" (when open in cornercase),
+\"last_changed\", \"changed\", \"unpushed\", \"merged\", \"no_commits\", \"upstream_gone\", \"lock\",
+\"running\", \"outside\", \"other_tabs\", \"removing\", \"run_role\", \"safe\" (removing it loses no
+uncommitted file and stops no program), \"risks\", \"error\", \"size\" and \"size_error\".
+
+Examples:
+  cornercase worktrees list
+  cornercase worktrees list --project 2 --json
+  cornercase worktrees list --no-sizes";
 
 pub(in crate::cli) const WORKTREES_SIZE_HELP: &str =
     "Measures a worktree on disk: the bytes that removing it would free, and the part in build

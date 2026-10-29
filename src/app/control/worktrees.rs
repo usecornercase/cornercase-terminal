@@ -1,20 +1,23 @@
 use std::path::{Path, PathBuf};
 
-use super::{Asker, Handled, conflict, json, malformed};
+use super::{Asker, Handled, conflict, json, malformed, none};
 use crate::app::App;
 use crate::app::event::AppEvent;
-use crate::app::worktrees::{Measure, WorktreeEvent};
+use crate::app::worktrees::{ListFor, Measure, WorktreeEvent};
 use crate::app::worktrees_dialog::canonical;
 use crate::control::contract::{Code, Refusal};
-use crate::control::{BuildsFreed, FreeBuilds, WorktreeSize, WorktreeSized};
+use crate::control::{
+    BuildsFreed, FreeBuilds, ListWorktrees, WorktreeInfo, WorktreeListing, WorktreeSize, WorktreeSized,
+};
 use crate::error::Result;
+use crate::git;
 use crate::log::{Job, Level};
 use crate::process;
 use crate::process::owners::trees;
 use crate::project::{Hierarchy, WorkspaceAt};
 use crate::term::Term;
 use crate::worktrees::builds::{self, Size};
-use crate::worktrees::{Kind, discover, scan};
+use crate::worktrees::{Asks, Found, Kind, Row, discover, fill, folders_of, scan};
 
 struct Target {
     path: PathBuf,
@@ -116,6 +119,74 @@ impl App {
         result: std::result::Result<BuildsFreed, Refusal>,
     ) {
         self.answer_read(key, |_| result.map(|freed| json(&freed)));
+    }
+
+    pub(super) fn worktrees_request(&mut self, client: u64, request: &ListWorktrees) -> Handled {
+        let keep = self.worktrees_repo(request.project)?;
+        let key = self.clients.requests.key();
+        self.spawn_worktree_listing(ListFor::Request { key, sizes: request.sizes }, keep);
+        self.pend_reading(client, key);
+        Ok(None)
+    }
+
+    fn worktrees_repo(&self, project: Option<u64>) -> std::result::Result<Option<PathBuf>, Refusal> {
+        let Some(id) = project else { return Ok(None) };
+        let at = self.projects.project_index(id).ok_or_else(|| none("project", id))?;
+        let path = self.projects[at].path.clone();
+        if !git::is_repo_root(&path) {
+            return Err(conflict(format!("project {id} is not at a repository's root, so it has no worktrees")));
+        }
+        Ok(Some(path))
+    }
+
+    pub(in crate::app) fn worktree_rows_listed(&mut self, key: u64, sizes: bool, found: Result<Vec<Found>>) {
+        let Some(pending) = self.clients.requests.take(key) else { return };
+        if pending.client.is_none() {
+            return;
+        }
+        let found = match found {
+            Ok(found) => found,
+            Err(e) => return self.refuse_or_answer(pending.client, Err(Refusal::new(Code::Failed, e.to_string()))),
+        };
+        self.refresh_places();
+        let rows = self.fresh_rows(found);
+        let asks = self.row_asks(&rows, sizes);
+        let job = Job::new(Level::Debug, "control", "worktrees").with("rows", rows.len()).with("sizes", sizes);
+        self.spawn_job(
+            job,
+            move || Ok(fill(rows, asks)),
+            move |rows, _| {
+                let rows = Box::new(rows);
+                Some(AppEvent::Worktree(WorktreeEvent::Rows { key, rows }))
+            },
+        );
+        self.clients.requests.pending.push(pending);
+    }
+
+    fn row_asks(&self, rows: &[Row], sizes: bool) -> Asks {
+        let paths = folders_of(rows);
+        Asks {
+            bases: rows.iter().map(|row| self.base_of(&row.found.path)).collect(),
+            names: sizes.then(|| rows.iter().map(|row| self.builds_of(&row.found.repo)).collect()),
+            shells: self.pane_shells(&paths),
+            paths,
+        }
+    }
+
+    pub(in crate::app) fn worktree_rows_answered(&mut self, key: u64, rows: Result<Vec<Row>>) {
+        self.answer_read(key, |app| {
+            let rows = rows.map_err(|e| Refusal::new(Code::Failed, e.to_string()))?;
+            Ok(json(&app.worktree_listing(rows)))
+        });
+    }
+
+    fn worktree_listing(&mut self, mut rows: Vec<Row>) -> WorktreeListing {
+        self.refresh_places();
+        for row in &mut rows {
+            self.relive(row);
+        }
+        let worktrees = rows.iter().map(|row| WorktreeInfo::of(row, self.risk_list(row, row.live.as_ref(), false)));
+        WorktreeListing { worktrees: worktrees.collect() }
     }
 
     fn running_in(&self, at: WorkspaceAt) -> Vec<String> {

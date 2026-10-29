@@ -96,7 +96,7 @@ group 9  personal  collapsed
 | `go TOKEN` | Goes to the agent a notice is about, as a click on its desktop notification does, in the window or with `--view` in a view. |
 | `notify TEXT` | Shows a message in the window, with a desktop notification. |
 | `todo` | Adds, lists, edits, checks off and back, reorders and removes items of the [TODO list](../todo/) (with undo), and sends one to an agent as `send --enter` would. |
-| `worktrees size`, `worktrees free-builds` | Measure the disk a worktree takes and delete its git-ignored build folders, keeping the worktree: [worktrees](#worktrees). |
+| `worktrees list`, `worktrees size`, `worktrees free-builds` | List every worktree on disk with what makes it safe to remove and its size, measure one, and delete its git-ignored build folders, keeping the worktree: [worktrees](#worktrees). |
 | `config` | Reads every setting, connection and project's commands, and changes them with the Settings dialog's own checks: [settings for a program that draws its own preferences](#settings). |
 | `config export`, `config import FILE` | Writes the settings to hand to a colleague, without tokens or personal ones, and imports such a file after showing what it changes. `--preview` prints that preview and exits 0 without importing: [share your setup](#share-your-setup). |
 | `away` | Has agents message you [on Telegram](../telegram/) or [Discord](../discord/); `--off` stops it. |
@@ -967,10 +967,28 @@ cornercase processes stop 4211 --started 81240 --json
 ### Worktrees
 
 ```sh
+cornercase worktrees list
+cornercase worktrees list --project 2 --json
 cornercase worktrees size --worktree feat/login
 cornercase worktrees free-builds --worktree feat/login --check
 cornercase worktrees free-builds --worktree feat/login
 ```
+
+`worktrees list` prints every worktree on disk as the [Worktrees dialog](../worktrees/#clean-up-worktrees) lists it, in its order: the leftovers first (`prunable`, `repository gone`, `unknown to git`), then the merged ones, then the rest, the oldest first. Each shows its project and branch, its folder, when it last changed, its size with the part in build folders and, under it, what removing it would lose or stop, in the words of the dialog's confirmation:
+
+```text
+web-shop › fix/login  ~/.cornercase/worktrees/web-shop/fix-login  3 days ago  2.4 GB (2.1 GB of builds)  merged  workspace 7
+  nothing uncommitted or unpushed
+web-shop › feat/gift-cards  ~/.cornercase/worktrees/web-shop/feat-gift-cards  2h ago  1.1 GB (900 MB of builds)  workspace 9
+  3 files changed
+  2 commits not pushed
+  codex running in it; they stop
+3.5 GB in 2 worktrees · 2.1 GB of builds idle 7+ days
+```
+
+It covers the worktrees of the open projects and those that closed projects left in the worktrees folder; `--project ID` lists one project's (it must be at a repository's root, else it is refused). It removes nothing. Measuring walks every worktree, two at a time, which takes a while with a big `node_modules` or `target/`; `--no-sizes` answers without it. A worktree that could not be checked or measured says so, and the command exits 3 after printing the rest.
+
+With `--json` it prints `{"worktrees": [...]}`, each with `path`, `kind` (`linked`, `prunable`, `repository-gone` or `unknown-to-git`), `project_name`, `repository`, `branch`, `project` and `workspace` (their ids when it is open in cornercase, else `null`), `last_changed` (UTC), `changed` and `unpushed` (`null` when it was not checked), `merged`, `no_commits`, `upstream_gone`, `lock` (as `close --check` gives it), `running` (the programs of its workspace), `outside` (processes working in it that cornercase did not start), `other_tabs`, `removing`, `run_role` (it goes with its flow run's workspace), `safe`, `risks`, `error`, `size` (as `worktrees size --json`, `null` with `--no-sizes`) and `size_error`. `safe` is true when removing it loses no uncommitted file and stops no program: it was checked, has no changed or untracked file and no lock, and nothing runs in it. Commits not pushed stay on its branch, so they do not make it unsafe; deleting the branch too loses them unless it is `merged`. `risks` lists what the dialog's confirmation would say, empty when nothing. It is the request `{"command": "worktrees", "args": {"project": null, "sizes": true}}`; [`cornercase contract`](#contract-and-compatibility) lists the operation `worktrees`, and an older server answers that it has no such command. To remove a worktree, use the dialog, or `cornercase close --worktree BRANCH --remove-worktree` for one open in cornercase.
 
 `worktrees size` measures a worktree, as the [Worktrees dialog](../worktrees/#clean-up-worktrees) does: the bytes removing it would free, and the part in build folders, the folders git ignores whose names are on the project's list (`node_modules`, `target`, `.next`, `.turbo`, `dist`, `build`, `.venv` and `__pycache__` unless `config project --builds` changed it):
 
@@ -1177,7 +1195,7 @@ The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `
 | `0` | Done. |
 | `1` | An error or a timeout; the message says which. |
 | `2` | Wrong usage, such as an unknown option. |
-| `3` | A partial answer: `usage`, `issue list`, `files list` and `read --last-message` with several targets printed their whole answer, but an agent, a tracker, a folder or a pane in it failed, or `input --follow` couldn't send some of its lines. Each says why in its `error` (`issue list` also names failed trackers on standard error). With `--json`, the output is a complete answer whenever the status is 0 or 3. |
+| `3` | A partial answer: `usage`, `issue list`, `files list`, `worktrees list`, `worktrees free-builds` and `read --last-message` with several targets printed their whole answer, but an agent, a tracker, a folder, a worktree or a pane in it failed, or `input --follow` couldn't send some of its lines. Each says why in its `error` (`issue list` also names failed trackers on standard error). With `--json`, the output is a complete answer whenever the status is 0 or 3. |
 
 A command that follows something until it ends (`events`, `status --follow`, `status --app --follow`, `changes list --follow`, `files list --follow`, `files read --follow`, `flow runs --follow`, `flow messages --follow`, `surface` and `view`) also ends with 0, without a message, soon after whatever reads its output is gone: the program it prints into exited or closed its end, or the `ssh` running it on another machine was killed or lost its connection. A terminal that closes ends it like any program, and one printing into a file or `/dev/null` runs until it ends by itself.
 

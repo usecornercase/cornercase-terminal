@@ -54,7 +54,7 @@ src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state
 src/tour.rs       the guided tours: steps, what completes each, the section each opens, progress in tour.json, first-run detection; tour/steps.rs the tours as data
 src/processes/    every pane's process tree with CPU and memory: mod.rs (the model and the CPU arithmetic), sample.rs (the job that walks the trees), stop.rs (a process and what it started), dialog.rs (the Processes dialog's rows, sort, filter, keys and confirmation)
 src/ports/        the TCP ports programs listen on: mod.rs (merging, URLs, which workspace a program belongs to), listen.rs (libproc on macOS, /proc/net/tcp on Linux), stop.rs (the target and the summary, on the shared escalation), dialog.rs (the Ports dialog's rows, ticks and confirmation)
-src/worktrees/    Worktrees dialog: mod.rs (list), dialog.rs (state, keys), discover.rs, scan.rs, remove.rs, disk.rs (the walk that measures), builds.rs (build folders: list, measure, free)
+src/worktrees/    Worktrees dialog: mod.rs (list), dialog.rs (state, keys), discover.rs, scan.rs, remove.rs, disk.rs (the walk that measures), builds.rs (build folders: list, measure, free), fill.rs (the rows the `worktrees` request answers: scans and sizes at the dialog's limits, the process check)
 
 src/update.rs     update check against GitHub releases, download, checksum, binary swap; update/restart.rs what a server restart stops: running programs from a status Report, the confirmation texts
 

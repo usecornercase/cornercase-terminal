@@ -584,4 +584,5 @@ mod updating;
 mod usage;
 mod views;
 mod watching;
+mod worktree_list;
 mod worktrees;

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use super::{Fields, Item};
+use crate::git::worktree;
 use crate::project::split;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -145,6 +146,21 @@ pub(crate) struct Locked {
     pub(crate) role: Option<String>,
     pub(crate) pid: Option<i32>,
     pub(crate) running: Option<bool>,
+}
+
+impl Locked {
+    pub(crate) fn of(lock: &worktree::Lock, own: PathBuf) -> Self {
+        let (role, path) = match &lock.role {
+            Some((name, path)) => (Some(name.clone()), path.clone()),
+            None => (None, own),
+        };
+        let (pid, running) = match lock.holder {
+            Some(worktree::Holder::Running(pid)) => (Some(pid), Some(true)),
+            Some(worktree::Holder::Gone(pid)) => (Some(pid), Some(false)),
+            None => (None, None),
+        };
+        Self { reason: lock.reason.clone(), path, role, pid, running }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

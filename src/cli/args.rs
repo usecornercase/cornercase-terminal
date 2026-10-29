@@ -256,7 +256,7 @@ pub(crate) enum Control {
     )]
     Processes(processes::ProcessesArgs),
     #[command(
-        about = "Measure the disk a worktree takes, and free its build folders without removing it",
+        about = "List the worktrees on disk and what makes each safe to remove, measure one, and free its build folders",
         after_help = WORKTREES_HELP
     )]
     Worktrees(worktrees::WorktreesArgs),
