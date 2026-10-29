@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.226
+
+- **Killing `cornercase --remote devbox restart --when-idle` now calls the restart off on `devbox`.** Run without a terminal, as a script, an agent or another interface runs it, ending or killing the command here used to leave the restart pending there, and `devbox` still restarted once its agents were idle, stopping every program in its panes. Now the command there stops waiting within a second, as `Ctrl+C` does on your own machine, and its `ssh` ends too. The same goes for `update --when-idle`. Both machines need this version or a newer one.
+
 ## 0.12.225
 
 - **List every worktree on disk from a script.** `cornercase worktrees list` prints the Worktrees dialog's rows in its order: each worktree's project and branch, folder, when it last changed, its size and the part in build folders, and what removing it would lose or stop (uncommitted files, unpushed commits, a lock, programs running there), with `merged` or `no commits`. `--json` adds each one's `safe` and the facts behind it, `--project ID` lists one project's, and `--no-sizes` answers without measuring. It removes nothing. It is the request `worktrees`, which `cornercase contract` lists.
