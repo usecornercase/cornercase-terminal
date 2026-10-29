@@ -1,5 +1,3 @@
-use std::io::BufReader;
-use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -8,6 +6,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TryRecvError};
 use rstest::rstest;
 use serde_json::Value;
 
+use super::fake::{answer, ended, line, request, respond};
 use super::*;
 use crate::error::Behind;
 use crate::host::open::{Browse, Open, Opener};
@@ -17,21 +16,6 @@ const WAIT: Duration = Duration::from_secs(10);
 const HERE: &str = "4242-1";
 const VERSION: &str = "0.12.225";
 const REFUSED: &str = "ssh: connect to host down port 22: Connection refused";
-
-struct Pipe {
-    ours: UnixStream,
-    why: Option<String>,
-}
-
-impl Ends for Pipe {
-    fn cut(&self) {
-        let _ = self.ours.shutdown(Shutdown::Both);
-    }
-
-    fn why(&self) -> Option<String> {
-        self.why.clone()
-    }
-}
 
 struct Script {
     attempts: Mutex<Receiver<Result<Line>>>,
@@ -160,14 +144,6 @@ impl Rig {
     }
 }
 
-fn line(release: &str, why: Option<&str>) -> (Line, UnixStream) {
-    let (ours, theirs) = UnixStream::pair().expect("a socket pair");
-    let reader = BufReader::new(ours.try_clone().expect("a reader"));
-    let writer = ours.try_clone().expect("a writer");
-    let ends = Arc::new(Pipe { ours, why: why.map(str::to_string) });
-    (Line { release: release.into(), reader: Box::new(reader), writer: Box::new(writer), ends }, theirs)
-}
-
 fn down(down: Down, failed: u32) -> Event {
     Event::Down { down, failed }
 }
@@ -178,28 +154,6 @@ fn refused() -> Error {
 
 fn behind() -> Error {
     Error::RemoteBehind(Box::new(Behind { host: "vps".into(), there: "0.0.1".into(), update: String::new() }))
-}
-
-fn request(theirs: &mut UnixStream) -> Value {
-    match protocol::recv::<ClientMessage>(theirs) {
-        Ok(Some(ClientMessage::Request(text))) => serde_json::from_str(&text).expect("a JSON request"),
-        other => panic!("not a request: {other:?}"),
-    }
-}
-
-fn respond(theirs: &mut UnixStream, response: &Response) {
-    let text = serde_json::to_string(response).expect("an answer");
-    protocol::send(theirs, &ServerMessage::Response(text)).expect("answer the link");
-}
-
-fn answer(theirs: &mut UnixStream, boot: &str, version: &str) {
-    request(theirs);
-    let started = Started { boot: boot.into(), version: version.into(), ..Started::default() };
-    respond(theirs, &Response::Ok(serde_json::to_value(started).expect("a JSON answer")));
-}
-
-fn ended(theirs: &mut UnixStream) -> bool {
-    matches!(protocol::recv::<ClientMessage>(theirs), Ok(None))
 }
 
 fn window_messages() -> Vec<ServerMessage> {

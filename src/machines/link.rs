@@ -99,9 +99,16 @@ pub(crate) trait Connect: Send + 'static {
     fn connect(&self, killer: &Killer) -> Result<Line>;
 }
 
-#[cfg_attr(test, expect(dead_code, reason = "tests connect with fakes and never run ssh"))]
 pub(crate) fn ssh(destination: &str) -> Box<dyn Connect> {
-    Box::new(Ssh(Remote { destination: destination.into(), command: None, option: "" }))
+    Box::new(Ssh(remote(destination)))
+}
+
+pub(crate) fn remote(destination: &str) -> Remote {
+    Remote { destination: destination.into(), command: None, option: "" }
+}
+
+pub(crate) fn failure(error: &Error, name: &str) -> String {
+    Down::of(error).reason(name, None).unwrap_or_else(|| clean(&error.to_string()))
 }
 
 struct Ssh(Remote);
@@ -506,5 +513,7 @@ fn listen(reader: &mut impl Read) -> Heard {
     }
 }
 
+#[cfg(test)]
+pub(crate) mod fake;
 #[cfg(test)]
 mod tests;

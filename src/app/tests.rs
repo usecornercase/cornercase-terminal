@@ -158,9 +158,19 @@ fn no_config() -> PathBuf {
     std::env::temp_dir().join("cornercase-test-no-config").join("config.json")
 }
 
-fn new_app(config_path: PathBuf) -> (App, Receiver<AppEvent>) {
+const NO_SSH: &str = "app tests never run ssh";
+
+struct NoSsh;
+
+impl crate::machines::link::Connect for NoSsh {
+    fn connect(&self, _: &crate::remote::Killer) -> Result<crate::machines::link::Line> {
+        Err(Error::Ssh { host: "a machine".into(), reason: NO_SSH.into() })
+    }
+}
+
+fn new_app(config_path: impl AsRef<Path>) -> (App, Receiver<AppEvent>) {
     let (tx, rx) = mpsc::channel();
-    let mut app = App::new("/bin/sh".into(), HostTheme::default(), config_path, tx);
+    let mut app = App::new("/bin/sh".into(), HostTheme::default(), config_path.as_ref(), tx);
     app.config.sidebar = config::Sidebar::SideBySide.id().into();
     app.config.sound = false;
     app.clients.set_typing_holds(Duration::ZERO);
@@ -171,6 +181,8 @@ fn new_app(config_path: PathBuf) -> (App, Receiver<AppEvent>) {
     if app.config.glab == config::DEFAULT_GLAB {
         app.config.glab = "/nonexistent/glab".into();
     }
+    app.machines.connect = Box::new(|_| Box::new(NoSsh));
+    app.machines.update = std::sync::Arc::new(|_| Err(Error::Ssh { host: "a machine".into(), reason: NO_SSH.into() }));
     (app, rx)
 }
 
@@ -538,6 +550,7 @@ mod icon_bar;
 mod icons;
 mod keys;
 mod lock_text;
+mod machines;
 mod merge_requests;
 mod merged_pull_requests;
 mod muted_text;

@@ -57,11 +57,8 @@ pub(crate) enum Run {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Use {
-    Window {
-        again: bool,
-    },
+    Window { again: bool },
     Command,
-    #[cfg_attr(not(test), expect(dead_code, reason = "the machines' links connect with it in the next commits"))]
     Link,
 }
 
@@ -238,7 +235,6 @@ impl Remote {
         Ok(self.run(false, Run::Terminal, &["update"])?.success())
     }
 
-    #[expect(dead_code, reason = "a machine's update runs it in the next commits")]
     pub(crate) fn install_update(&self) -> Result<()> {
         let mut ssh = Command::new(SSH);
         ssh.args(self.update_args());
@@ -388,7 +384,6 @@ pub(crate) fn reason(error: &Error) -> String {
     }
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "the machines' links show it in the next commits"))]
 pub(crate) fn not_found(name: &str) -> String {
     format!("cornercase was not found on {name}: install it there")
 }
