@@ -18,6 +18,7 @@ mod fields;
 pub(crate) mod files;
 mod flow;
 pub(crate) mod issues;
+pub(crate) mod machines;
 pub(crate) mod plugins;
 pub(crate) mod ports;
 pub(crate) mod processes;
@@ -64,6 +65,7 @@ pub(crate) use flow::{
     RunEdge, RunFile, RunFiles, RunInfo, RunState, StepInfo,
 };
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
+pub(crate) use machines::{MachineList, MachineSet, Machines};
 pub(crate) use plugins::{PluginActions, PluginList, PluginPopupClose, PluginRun};
 pub(crate) use ports::{Listing, PortStopped, Ports, StopPort};
 pub(crate) use processes::{ProcessStopped, Processes, StopProcess};
@@ -236,6 +238,7 @@ pub(crate) enum Command {
     WorktreeSize(WorktreeSize),
     FreeBuilds(FreeBuilds),
     Worktrees(ListWorktrees),
+    Machines(Machines),
 }
 
 impl Command {
@@ -416,6 +419,7 @@ impl Command {
             Self::WorktreeSize(_) => 108,
             Self::FreeBuilds(_) => 109,
             Self::Worktrees(_) => 112,
+            Self::Machines(_) => 113,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
             Self::PluginActions(_) => 69,
@@ -427,7 +431,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 113] = [
+    pub(crate) const NAMES: [&str; 114] = [
         "status",
         "open",
         "new-workspace",
@@ -541,6 +545,7 @@ impl Command {
         "processes",
         "stop-process",
         "worktrees",
+        "machines",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

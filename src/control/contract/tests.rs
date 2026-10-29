@@ -43,6 +43,7 @@ mod describing {
             "todo-panel",
             "changes",
             "files",
+            "machines",
         ];
         let missing: Vec<&str> =
             wanted.into_iter().filter(|name| !descriptor.features.iter().any(|feature| feature == name)).collect();

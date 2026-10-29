@@ -335,8 +335,8 @@ mod updates {
             Ok(())
         }));
 
-        assert_eq!(rig.app.update_machine("vps"), Update::Started);
-        assert!(rig.app.machines.held()[0].status.updating);
+        assert!(matches!(rig.app.update_machine("vps"), Update::Started(_)));
+        assert!(rig.app.machines.held[0].status.updating);
         assert_eq!(rig.app.update_machine("vps"), Update::Running);
         go.send(()).expect("let the update finish");
 
@@ -388,3 +388,5 @@ mod fakes {
         assert_eq!(app.machines.reason(&app.machines.held()[0]).as_deref(), Some(NO_SSH));
     }
 }
+
+mod requests;

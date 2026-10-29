@@ -748,6 +748,7 @@ Examples:
 
 mod files;
 mod flow;
+mod machines;
 mod paste_file;
 mod processes;
 mod worktrees;
@@ -758,6 +759,7 @@ pub(in crate::cli) use flow::{
     FLOW_IMPORT_HELP, FLOW_MESSAGES_HELP, FLOW_ORDER_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP, FLOW_RUNS_HELP,
     FLOW_SAVE_HELP,
 };
+pub(in crate::cli) use machines::{MACHINES_ADD_HELP, MACHINES_HELP, MACHINES_UPDATE_HELP};
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
 pub(in crate::cli) use processes::{PROCESSES_HELP, PROCESSES_STOP_HELP};
 pub(in crate::cli) use worktrees::{WORKTREES_FREE_HELP, WORKTREES_HELP, WORKTREES_LIST_HELP, WORKTREES_SIZE_HELP};
