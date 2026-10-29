@@ -2,6 +2,7 @@ pub(super) mod flows;
 pub(super) mod form;
 pub(super) mod group_style;
 pub(super) mod issues;
+pub(crate) mod machine;
 pub(super) mod menu;
 pub(super) mod picker;
 pub(super) mod popup;
@@ -111,13 +112,25 @@ fn row_of(row: Rect, x: u16, width: u16) -> Rect {
     Rect::new(x, row.y, width, 1).intersection(row)
 }
 
+fn tab_width(name: &str, padding: u16) -> u16 {
+    button_width(name).saturating_sub(2).saturating_add(padding)
+}
+
+fn tab_spacing(row: Rect, names: &[&str]) -> (u16, u16) {
+    let width = |padding: u16, gap: u16| {
+        names.iter().map(|name| tab_width(name, padding) + gap).sum::<u16>().saturating_sub(gap)
+    };
+    [(2, 1), (2, 0), (0, 1)].into_iter().find(|&(padding, gap)| width(padding, gap) <= row.width).unwrap_or((0, 1))
+}
+
 pub(super) fn tabs_in(row: Rect, names: &[&str]) -> Vec<Rect> {
+    let (padding, gap) = tab_spacing(row, names);
     let mut x = row.x;
     names
         .iter()
         .map(|name| {
-            let r = row_of(row, x, button_width(name));
-            x = x.saturating_add(button_width(name) + 1);
+            let r = row_of(row, x, tab_width(name, padding));
+            x = x.saturating_add(tab_width(name, padding) + gap);
             r
         })
         .collect()
@@ -150,6 +163,7 @@ pub(crate) enum Overlay {
     Menu { at: Position, items: Vec<String>, disabled: Vec<bool> },
     Form(Form),
     Queue(Box<crate::queue::form::Form>),
+    Machine(Box<crate::machines::form::Form>),
     GroupStyle(GroupEntry),
     Confirm(Confirm),
     Update(Update),
@@ -179,6 +193,7 @@ impl Overlay {
     pub(crate) fn area(&self, area: Rect) -> Option<Rect> {
         match self {
             Self::Queue(form) => Some(queue::area_with_list(area, form)),
+            Self::Machine(form) => Some(machine::area_with_list(area, form)),
             Self::Form(_) | Self::GroupStyle(_) | Self::Confirm(_) => Some(form_area(area)),
             Self::Update(_) | Self::Picker(_) => Some(picker_area(area)),
             Self::Usage(usage) => Some(usage_area(area, usage)),
@@ -299,6 +314,7 @@ fn draw_input(f: &mut Frame, muted: Color, row: Rect, label: &str, value: &str) 
 fn draw_tabs(f: &mut Frame, view: &View, rects: &[Rect], names: &[&str], active: usize) {
     for (i, (rect, name)) in rects.iter().zip(names).enumerate() {
         let style = tab_style(i == active, hovered(view, *rect), view.surface(), view.soft);
-        f.render_widget(Paragraph::new(Span::styled(format!(" {name} "), style)), *rect);
+        let label = if rect.width < button_width(name) { (*name).to_string() } else { format!(" {name} ") };
+        f.render_widget(Paragraph::new(Span::styled(label, style)), *rect);
     }
 }

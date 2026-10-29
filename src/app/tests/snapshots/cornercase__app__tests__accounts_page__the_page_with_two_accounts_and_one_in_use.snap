@@ -1,10 +1,11 @@
 ---
 source: src/app/tests/accounts_page.rs
+assertion_line: 143
 expression: "format!(\"{}\", render(&mut s.app, WIDE).backend())"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                  "
 "  ╭─ Settings ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│  Worktrees   Agents   Accounts   Flows   Issues   UI   Remote   Plugins                                                              │  "
+" P│  Worktrees   Agents   Accounts   Flows   Issues   UI   Remote   Plugins   Machines                                                   │  "
 "  │                                                                                                                                      │  "
 "  │ Claude Code                                                                                                                          │  "
 "  │ ▌   Office                  signed out  claude's own login · ~/homes/claude                                                          │  "

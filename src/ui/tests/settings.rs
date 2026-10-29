@@ -10,6 +10,8 @@ fn row(section: &'static str, label: &str, value: &str, note: &str) -> SettingsR
         muted: false,
         removable: false,
         movable: false,
+        mark: None,
+        tail: String::new(),
     }
 }
 

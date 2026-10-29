@@ -11,7 +11,7 @@ use crate::host::network::Route;
 use crate::machines::link::fake::{answer, line};
 use crate::machines::link::{Connect, Event, Line, Report};
 use crate::machines::wake::Network;
-use crate::machines::{Machine, State};
+use crate::machines::{Machine, State, machine};
 use crate::protocol::{self, ClientMessage};
 use crate::remote::Killer;
 
@@ -74,10 +74,6 @@ fn serving(boot: &str) -> Line {
     line
 }
 
-fn machine(name: &str, destination: &str) -> Machine {
-    Machine { name: name.into(), icon: "☁".into(), destination: destination.into(), folder: "~/code".into() }
-}
-
 struct Rig {
     app: App,
     rx: Receiver<AppEvent>,
@@ -129,6 +125,22 @@ impl Rig {
 
     fn state(&self, name: &str) -> Option<State> {
         self.app.machines.held().iter().find(|held| held.name == name).map(|held| held.status.state)
+    }
+
+    fn gated_updates(&mut self) -> (Sender<()>, Arc<Mutex<Vec<String>>>) {
+        let (go, gate) = mpsc::channel::<()>();
+        let (gate, asked) = (Mutex::new(gate), Arc::new(Mutex::new(Vec::new())));
+        let given = Arc::clone(&asked);
+        self.app.machines.update = Arc::new(move |destination: &str| {
+            given.lock().push(destination.to_string());
+            let _ = gate.lock().recv();
+            Ok(())
+        });
+        (go, asked)
+    }
+
+    fn saved(&self) -> Vec<Machine> {
+        config::load(&self.dir.path().join("config.json")).machines
     }
 
     fn reason(&self, name: &str) -> Option<String> {
@@ -326,14 +338,7 @@ mod updates {
     #[test]
     fn run_once_at_a_time_on_the_machine_then_retry_its_link() {
         let mut rig = older();
-        let (go, gate) = mpsc::channel::<()>();
-        let (gate, asked) = (Mutex::new(gate), Arc::new(Mutex::new(Vec::new())));
-        let given = Arc::clone(&asked);
-        rig.app.machines.set_updater(Arc::new(move |destination: &str| {
-            given.lock().push(destination.to_string());
-            let _ = gate.lock().recv();
-            Ok(())
-        }));
+        let (go, asked) = rig.gated_updates();
 
         assert!(matches!(rig.app.update_machine("vps"), Update::Started(_)));
         assert!(rig.app.machines.held()[0].status.updating);
@@ -390,3 +395,4 @@ mod fakes {
 }
 
 mod requests;
+mod settings;

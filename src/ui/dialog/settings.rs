@@ -9,12 +9,15 @@ use super::{
     Note, draw_dialog_buttons, draw_input, draw_secondary, draw_tabs, first_visible, form_inner, list_item,
     pick_background, tabs_in,
 };
-use crate::text::truncate_right;
+use crate::machines::State;
+use crate::text::{truncate_left, truncate_right};
 use crate::ui::View;
 use crate::ui::rows::{GAP, row_close_button};
 use crate::ui::widgets::{hovered, overlay_block, rail};
 
 const LABEL_WIDTH: usize = 26;
+const TAIL_GAP: usize = 3;
+const STATE_ROOM: usize = 18;
 
 pub(crate) fn settings_area(area: Rect) -> Rect {
     super::flows::flows_area(area)
@@ -223,6 +226,8 @@ pub(crate) struct SettingsRow {
     pub(crate) muted: bool,
     pub(crate) removable: bool,
     pub(crate) movable: bool,
+    pub(crate) mark: Option<State>,
+    pub(crate) tail: String,
 }
 
 pub(crate) struct SettingsEdit {
@@ -402,15 +407,50 @@ fn settings_row_spans(
     } else {
         width.saturating_sub(30) / 2 + 10
     };
-    let value = truncate_right(&row.value, room);
-    let padded = format!("{:<label$}", truncate_right(&row.label, label.saturating_sub(2)));
+    let room = if row.mark.is_some() { room.min(width.saturating_sub(4 + label + STATE_ROOM)) } else { room };
+    let value = value_text(row, room);
+    let [mark, padded] = label_spans(view, row, label, bg, label_style);
     vec![
         Span::styled(marker, bg.fg(Color::Cyan)),
-        Span::styled(padded, label_style),
+        mark,
+        padded,
         Span::styled(value.clone(), value_style),
         Span::styled(if value.is_empty() || row.note.is_empty() { String::new() } else { "  ".into() }, bg),
         Span::styled(row.note.clone(), bg.fg(view.muted)),
     ]
+}
+
+fn value_text(row: &SettingsRow, room: usize) -> String {
+    if row.tail.is_empty() {
+        return truncate_right(&row.value, room);
+    }
+    let (value, tail) = (row.value.chars().count(), row.tail.chars().count());
+    if value + TAIL_GAP + tail <= room {
+        return format!("{}{:TAIL_GAP$}{}", row.value, "", row.tail);
+    }
+    let tail_room = tail.min(room / 3);
+    let value_room = room.saturating_sub(tail_room + TAIL_GAP);
+    let value = truncate_right(row.value.trim_end(), value_room);
+    let tail = truncate_left(row.tail.trim_end(), tail_room);
+    format!("{value:<value_room$}{:TAIL_GAP$}{tail:<tail_room$}", "")
+}
+
+fn mark_colour(view: &View, state: State) -> Color {
+    match state {
+        State::Linked => Color::Green,
+        State::Older => Color::Yellow,
+        State::Connecting | State::Unreachable => view.muted,
+    }
+}
+
+fn label_spans(view: &View, row: &SettingsRow, width: usize, bg: Style, style: Style) -> [Span<'static>; 2] {
+    let (mark, width) = match row.mark {
+        Some(state) => {
+            (Span::styled(format!("{} ", state.mark()), bg.fg(mark_colour(view, state))), width.saturating_sub(2))
+        }
+        None => (Span::styled("", bg), width),
+    };
+    [mark, Span::styled(format!("{:<width$}", truncate_right(&row.label, width.saturating_sub(2))), style)]
 }
 
 fn draw_row_buttons(f: &mut Frame, view: &View, row: &SettingsRow, r: Rect, bg: Style) {

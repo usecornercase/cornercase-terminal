@@ -7,6 +7,7 @@ use crate::text;
 use crate::time::Stamp;
 use link::Down;
 
+pub(crate) mod form;
 pub(crate) mod link;
 pub(crate) mod wake;
 
@@ -289,6 +290,12 @@ impl Info {
         let seen = Stamp::parse(self.seen.as_deref()?)?;
         Some(ago(now.duration_since(seen).unwrap_or_default().as_secs()))
     }
+}
+
+#[cfg(test)]
+pub(crate) fn machine(name: &str, destination: &str) -> Machine {
+    let (icon, folder) = (ICONS[0].0.to_string(), DEFAULT_FOLDER.into());
+    Machine { name: name.into(), icon, destination: destination.into(), folder }
 }
 
 #[cfg(test)]

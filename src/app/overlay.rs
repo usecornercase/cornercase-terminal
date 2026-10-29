@@ -71,6 +71,7 @@ pub(super) enum Overlay {
     NewWorkspace { project: u64, input: Editor, worktree: Option<bool>, error: Option<String>, creating: bool },
     Settings(Box<Settings>),
     ShareSettings(Box<crate::settings::share::dialog::Dialog>),
+    Machine(Box<crate::machines::form::Form>),
     RemoveAccount { kind: Known, name: String },
     DiscardChanges(changes::discard::Target),
     Flows { dialog: Box<Dialog>, back: Option<Box<Overlay>> },
@@ -114,8 +115,7 @@ impl Overlay {
             Self::CloseTab { .. } => "close tab",
             Self::ClosePane { .. } => "close pane",
             Self::NewWorkspace { .. } => "new workspace",
-            Self::Settings(_) => "settings",
-            Self::ShareSettings(_) => "share settings",
+            Self::Settings(_) | Self::ShareSettings(_) | Self::Machine(_) => self.settings_name(),
             Self::RemoveAccount { .. } => "remove account",
             Self::DiscardChanges(_) => "discard changes",
             Self::Flows { .. } => "flows",
@@ -143,6 +143,14 @@ impl Overlay {
             Self::CloseAgents(_) => "close agents",
             Self::ForgetAgents { .. } => "forget agents",
             Self::Popup(_) => "plugin popup",
+        }
+    }
+
+    fn settings_name(&self) -> &'static str {
+        match self {
+            Self::ShareSettings(_) => "share settings",
+            Self::Machine(_) => "machine",
+            _ => "settings",
         }
     }
 
@@ -274,6 +282,7 @@ impl App {
             Some(Overlay::Queue(_)) => self.queue_form_mouse(ev, pos, area),
             Some(Overlay::Settings(_)) => self.settings_mouse(ev, pos, area),
             Some(Overlay::ShareSettings(_)) => self.share_settings_mouse(ev, pos, area),
+            Some(Overlay::Machine(_)) => self.machine_form_mouse(ev, pos, area),
             Some(Overlay::Flows { .. }) => self.flows_mouse(ev, pos, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_mouse(ev, pos, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_mouse(ev, pos, area),
@@ -308,6 +317,7 @@ impl App {
             Overlay::NewWorkspace { .. } => self.new_workspace_view(overlay)?,
             Overlay::Settings(s) => ui::Overlay::Settings(settings_view(s)),
             Overlay::ShareSettings(dialog) => ui::Overlay::ShareSettings(Box::new(ui::ShareSettings::of(dialog, area))),
+            Overlay::Machine(form) => ui::Overlay::Machine(form.clone()),
             Overlay::RemoveAccount { kind, name } => Self::remove_account_view(*kind, name),
             Overlay::DiscardChanges(target) => Self::discard_view(target),
             Overlay::Flows { dialog, .. } => flows_view(dialog, area),

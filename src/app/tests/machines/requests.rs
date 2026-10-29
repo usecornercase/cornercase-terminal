@@ -51,10 +51,6 @@ impl Rig {
     fn listed(&mut self) -> MachineList {
         self.ask(&json!({"action": "list"})).expect("the list")
     }
-
-    fn saved(&self) -> Vec<Machine> {
-        config::load(&self.dir.path().join("config.json")).machines
-    }
 }
 
 fn refused(code: &str, message: &str) -> std::result::Result<MachineList, (String, String)> {

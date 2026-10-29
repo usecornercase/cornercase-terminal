@@ -27,6 +27,7 @@ impl Settings {
             Page::Remote => self.activate_remote(row),
             Page::Plugins => self.switch_plugin(row),
             Page::Accounts => self.activate_account(row),
+            Page::Machines => Self::activate_machine(&row),
             Page::Flows => Action::None,
         }
     }

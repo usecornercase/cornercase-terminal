@@ -3,10 +3,6 @@ use serde_json::json;
 
 use super::*;
 
-fn machine(name: &str, destination: &str) -> Machine {
-    Machine { name: name.into(), icon: "☁".into(), destination: destination.into(), folder: "~/code".into() }
-}
-
 mod a_name {
     use super::*;
 
