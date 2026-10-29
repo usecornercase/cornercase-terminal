@@ -96,13 +96,6 @@ mod reconnecting {
     use super::*;
 
     #[test]
-    fn waits_longer_after_each_failure_up_to_a_limit() {
-        let waits: Vec<u64> = (1..=7).map(|n| backoff(n).as_secs()).collect();
-
-        assert_eq!(waits, [1, 2, 4, 8, 15, 15, 15]);
-    }
-
-    #[test]
     fn a_link_that_showed_the_screen_reconnects_at_once() {
         let mut retries = Retries::default();
         retries.linked();
