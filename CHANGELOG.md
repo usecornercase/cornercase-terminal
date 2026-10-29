@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.225
+
+- **List every worktree on disk from a script.** `cornercase worktrees list` prints the Worktrees dialog's rows in its order: each worktree's project and branch, folder, when it last changed, its size and the part in build folders, and what removing it would lose or stop (uncommitted files, unpushed commits, a lock, programs running there), with `merged` or `no commits`. `--json` adds each one's `safe` and the facts behind it, `--project ID` lists one project's, and `--no-sizes` answers without measuring. It removes nothing. It is the request `worktrees`, which `cornercase contract` lists.
+
 ## 0.12.224
 
 - **Long lines wrap in the files viewer and the changes panel.** A line wider than the panel goes on in the rows under it instead of ending in `…`, so you can read it whole without dragging the border or going full screen, and the diff shows how a line changed even when the change is near its end. The extra rows leave the numbers blank and keep the line's colours, its change bar, the find matches and your selection. A click on any of them selects the line, and a selection can start or end on any row. A line that would take more than 100 rows, such as a minified bundle, still ends in `…`; **copy** and **open** give you the rest.
