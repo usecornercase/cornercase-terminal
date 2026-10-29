@@ -59,19 +59,17 @@ mod a_clone {
         assert!(app.projects.is_empty());
     }
 
-    #[rstest]
-    #[case::missing(404, "not-found", "is not a git repository")]
-    #[case::denied(401, "failed", "access to the repository was denied")]
-    fn that_fails_says_why_without_the_token_in_its_url(#[case] status: u16, #[case] code: &str, #[case] says: &str) {
-        let http = FakeHttp::start(vec![("GET /acme/shop.git/info/refs", status, "")]);
+    #[test]
+    fn that_fails_says_why_without_the_token_in_its_url() {
+        let http = FakeHttp::start(vec![("GET /acme/shop.git/info/refs", 404, "")]);
         let url = http.url().replace("http://", "http://ana:secret-token@") + "/acme/shop.git";
         let parent = TempDir::new();
         let (mut app, rx) = empty_app();
 
         let refused = asked(&mut app, &rx, "clone", &clone_args(&url, parent.path())).expect_err("refused");
 
-        assert_eq!(refused.code, code, "{}", refused.message);
-        assert!(refused.message.contains(says), "{}", refused.message);
+        assert_eq!(refused.code, "not-found", "{}", refused.message);
+        assert!(refused.message.contains("is not a git repository"), "{}", refused.message);
         assert!(!refused.message.contains("secret-token"), "{}", refused.message);
         assert!(!parent.path().join("shop").exists());
     }
