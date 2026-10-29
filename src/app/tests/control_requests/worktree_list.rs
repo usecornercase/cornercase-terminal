@@ -85,7 +85,8 @@ fn a_project_narrows_the_list_and_a_project_that_is_no_repository_is_refused() {
 #[test]
 fn a_prunable_entry_has_its_branch_commits_counted() {
     let mut s = with(&[]);
-    let lost = TempDir::new().path().join("lost");
+    let dirs = TempDir::new();
+    let lost = dirs.path().join("lost");
     git(s.repo.path(), &["worktree", "add", "--quiet", "-b", "lost", lost.to_str().expect("utf-8")]);
     git(&lost, &["-c", "user.name=t", "-c", "user.email=t@e.c", "commit", "--allow-empty", "-m", "work"]);
     std::fs::remove_dir_all(&lost).expect("remove");

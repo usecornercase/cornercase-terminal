@@ -130,12 +130,9 @@ fn an_empty_list_says_so() {
 
 #[test]
 fn a_row_not_checked_or_not_measured_is_marked_and_not_counted() {
+    let now = Stamp::parse("2026-10-29T12:00:00.000Z").expect("a time");
     let failed = WorktreeInfo { size: None, size_error: Some("gave up".into()), ..listing().worktrees[1].clone() };
-    let text = list_text(
-        &WorktreeListing { worktrees: vec![failed, listing().worktrees[2].clone()] },
-        None,
-        SystemTime::now(),
-    );
+    let text = list_text(&WorktreeListing { worktrees: vec![failed, listing().worktrees[2].clone()] }, None, now);
     assert!(text.contains("  ?  merged"), "{text}");
     assert!(text.ends_with("1.1 GB+ in 1 worktree\n"), "{text}");
 }
