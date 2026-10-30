@@ -41,6 +41,7 @@ pub(crate) enum AppEvent {
     Plugin(PluginEvent),
     Login(crate::agents::Known, String, crate::accounts::login::Login),
     Restarted(Box<super::account_restart::Restarted>),
+    Machine(super::machines::MachineEvent),
 }
 
 impl AppEvent {
@@ -72,6 +73,7 @@ impl AppEvent {
             Self::Plugin(event) => event.name(),
             Self::Login(..) => "login checked",
             Self::Restarted(_) => "conversation moved",
+            Self::Machine(_) => "machine",
         }
     }
 }

@@ -172,7 +172,7 @@ pub(super) mod a_bug {
             let (tx, rx) = mpsc::channel();
             let (app_tx, app_rx) = mpsc::channel();
             spawn_forwarder(app_rx, tx.clone());
-            let app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), app_tx);
+            let app = App::new("/bin/sh".into(), HostTheme::default(), &dir.path().join("config.json"), app_tx);
             let todo_saver = Saver::new(dir.path().join("todos.json"), None);
             let mut server = Server::new(app, session, todo_saver, tx.clone());
             let client = connect(&mut server, tx, 1, Hello { graphics, ..hello(HostTheme::default()) });
@@ -881,7 +881,7 @@ mod queue_persistence {
         let session = dir.path().join("session.json");
         let (tx, _) = mpsc::channel();
         let (app_tx, _) = mpsc::channel();
-        let mut app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), app_tx);
+        let mut app = App::new("/bin/sh".into(), HostTheme::default(), &dir.path().join("config.json"), app_tx);
         app.set_queue(queue::load(&paths::queue(&session), crate::time::now()));
         Server::new(app, session, Saver::new(dir.path().join("todos.json"), None), tx)
     }

@@ -2,13 +2,14 @@ use std::collections::VecDeque;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
-use std::process::{Child, ChildStdin, ChildStdout, Command, ExitStatus, Stdio};
+use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
+use rustix::process::{Pid, Signal, kill_process};
 use serde_json::Value;
 
 use crate::control;
@@ -56,11 +57,8 @@ pub(crate) enum Run {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Use {
-    Window {
-        again: bool,
-    },
+    Window { again: bool },
     Command,
-    #[cfg_attr(not(test), expect(dead_code, reason = "the machines' links connect with it in the next commits"))]
     Link,
 }
 
@@ -126,12 +124,46 @@ impl Stderr {
 }
 
 pub(crate) struct Piped {
+    pub(crate) release: String,
     pub(crate) reader: BufReader<ChildStdout>,
     pub(crate) writer: ChildStdin,
     pub(crate) child: Child,
     pub(crate) stderr: Stderr,
     pub(crate) collector: Option<JoinHandle<()>>,
 }
+
+#[derive(Default)]
+struct Target {
+    pid: Option<Pid>,
+    killed: bool,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct Killer(Arc<Mutex<Target>>);
+
+impl Killer {
+    pub(crate) fn kill(&self) {
+        let mut target = self.0.lock();
+        target.killed = true;
+        if let Some(pid) = target.pid {
+            let _ = kill_process(pid, Signal::KILL);
+        }
+    }
+
+    pub(crate) fn arm(&self, child: &Child) {
+        let mut target = self.0.lock();
+        target.pid = i32::try_from(child.id()).ok().and_then(Pid::from_raw);
+        if let Some(pid) = target.pid.filter(|_| target.killed) {
+            let _ = kill_process(pid, Signal::KILL);
+        }
+    }
+
+    pub(crate) fn disarm(&self) {
+        self.0.lock().pid = None;
+    }
+}
+
+type Pipes = (Child, ChildStdin, ChildStdout, ChildStderr);
 
 enum Found {
     Banner(Banner),
@@ -145,24 +177,22 @@ impl Remote {
     }
 
     pub(crate) fn connect(&self, usage: Use) -> Result<Piped> {
-        let mut child = Command::new(SSH)
-            .args(self.ssh_args(usage.options(), Run::Plain, &["proxy"]))
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(Error::RunSsh)?;
-        let (Some(input), Some(output), Some(errors)) = (child.stdin.take(), child.stdout.take(), child.stderr.take())
-        else {
-            let _ = child.kill();
-            return Err(Error::RunSsh(io::Error::other("ssh started without its pipes")));
-        };
+        self.connect_killable(usage, &Killer::default())
+    }
+
+    pub(crate) fn connect_killable(&self, usage: Use, killer: &Killer) -> Result<Piped> {
+        let (mut child, writer, output, errors) = self.spawn_proxy(usage)?;
         let stderr = Stderr::default();
         let collector = stderr.clone().collect(errors);
         let mut reader = BufReader::new(output);
-        match read_banner(&mut reader) {
+        killer.arm(&child);
+        let found = read_banner(&mut reader);
+        killer.disarm();
+        match found {
             Found::Banner(banner) => match self.check(&banner, usage) {
-                Ok(()) => Ok(Piped { reader, writer: input, child, stderr, collector: Some(collector) }),
+                Ok(()) => {
+                    Ok(Piped { release: banner.release, reader, writer, child, stderr, collector: Some(collector) })
+                }
                 Err(e) => {
                     process::stop(child);
                     Err(e)
@@ -173,12 +203,28 @@ impl Remote {
                 Err(Error::Ssh { host: self.destination.clone(), reason: GARBAGE.into() })
             }
             Found::Ended => {
-                drop(input);
+                drop(writer);
                 let status = child.wait().ok();
                 let _ = collector.join();
                 Err(self.failure(status, &stderr))
             }
         }
+    }
+
+    fn spawn_proxy(&self, usage: Use) -> Result<Pipes> {
+        let mut child = Command::new(SSH)
+            .args(self.ssh_args(usage.options(), Run::Plain, &["proxy"]))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(Error::RunSsh)?;
+        let (Some(writer), Some(output), Some(errors)) = (child.stdin.take(), child.stdout.take(), child.stderr.take())
+        else {
+            let _ = child.kill();
+            return Err(Error::RunSsh(io::Error::other("ssh started without its pipes")));
+        };
+        Ok((child, writer, output, errors))
     }
 
     pub(crate) fn kill_server(&self) -> Result<bool> {
@@ -189,7 +235,6 @@ impl Remote {
         Ok(self.run(false, Run::Terminal, &["update"])?.success())
     }
 
-    #[expect(dead_code, reason = "a machine's update runs it in the next commits")]
     pub(crate) fn install_update(&self) -> Result<()> {
         let mut ssh = Command::new(SSH);
         ssh.args(self.update_args());
@@ -210,7 +255,7 @@ impl Remote {
     }
 
     fn update_args(&self) -> Vec<String> {
-        self.ssh_args(Use::Command.options(), Run::Plain, &["update"])
+        self.ssh_args(Use::Link.options(), Run::Plain, &["update"])
     }
 
     pub(crate) fn run(&self, batch: bool, run: Run, args: &[impl AsRef<str>]) -> Result<ExitStatus> {
@@ -339,12 +384,8 @@ pub(crate) fn reason(error: &Error) -> String {
     }
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "the machines' links show it in the next commits"))]
-pub(crate) fn link_reason(error: &Error, name: &str) -> String {
-    match error {
-        Error::RemoteMissing { .. } => format!("cornercase was not found on {name}: install it there"),
-        error => reason(error),
-    }
+pub(crate) fn not_found(name: &str) -> String {
+    format!("cornercase was not found on {name}: install it there")
 }
 
 fn quote(text: &str) -> String {

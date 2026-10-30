@@ -143,7 +143,7 @@ impl App {
         }
     }
 
-    pub(crate) fn stop_plugins(&mut self) {
+    pub(super) fn stop_plugins(&mut self) {
         self.close_plugin_popup();
         self.plugins.popups.finish();
         self.plugins.services = None;

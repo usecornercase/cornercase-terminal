@@ -165,10 +165,10 @@ mod machine_update {
     }
 
     #[test]
-    fn runs_update_without_a_terminal_a_prompt_or_yes() {
+    fn runs_update_like_a_link_without_a_terminal_a_prompt_or_yes() {
         let args = devbox().update_args();
         let at = args.iter().position(|a| a == "--").expect("options end before the destination");
-        let options: Vec<String> = ["-T"].iter().chain(&ALIVE).chain(&BATCH).map(ToString::to_string).collect();
+        let options: Vec<String> = ["-T"].iter().chain(&ALIVE).chain(&LINK).map(ToString::to_string).collect();
         assert_eq!(args[..at], options);
         assert_eq!(args[at + 1], "me@devbox");
         assert!(args[at + 2].ends_with("exec cornercase update'"), "{}", args[at + 2]);
@@ -200,28 +200,17 @@ mod machine_update {
     }
 
     #[test]
-    fn without_cornercase_there_says_to_install_it() {
-        let error = run("exit 127").expect_err("not found");
-        assert_eq!(link_reason(&error, "vps"), "cornercase was not found on vps: install it there");
+    fn without_cornercase_there_is_a_missing_cornercase() {
+        assert!(matches!(run("exit 127"), Err(Error::RemoteMissing { .. })));
     }
 }
 
-mod a_link_s_reason {
+mod not_found {
     use super::*;
 
     #[test]
-    fn names_the_machine_and_no_option_when_cornercase_is_missing() {
-        let remote = Remote { option: "--remote-command", ..devbox() };
-        let error = remote.failure(Some(exited(127)), &Stderr::default());
-        let text = link_reason(&error, "vps");
-        assert_eq!(text, "cornercase was not found on vps: install it there");
-        assert!(!text.contains("--remote-command") && !text.contains("me@devbox"), "{text}");
-    }
-
-    #[test]
-    fn is_what_ssh_said_otherwise() {
-        let error = Error::Ssh { host: "me@devbox".into(), reason: "Host key verification failed.".into() };
-        assert_eq!(link_reason(&error, "vps"), "Host key verification failed.");
+    fn names_the_machine_and_no_option() {
+        assert_eq!(not_found("vps"), "cornercase was not found on vps: install it there");
     }
 }
 
@@ -576,5 +565,54 @@ mod proxy {
 
         assert!(relayed.join().expect("the relay ends"));
         assert_eq!(got.lock().len(), frame.len());
+    }
+}
+
+mod a_killer {
+    use std::os::unix::process::ExitStatusExt;
+
+    use super::*;
+
+    fn sleeping() -> Child {
+        Command::new("/bin/sleep").arg("60").spawn().expect("run sleep")
+    }
+
+    fn ended_by(mut child: Child) -> Option<i32> {
+        let _ = kill_process(Pid::from_child(&child), Signal::TERM);
+        child.wait().expect("sleep ends").signal()
+    }
+
+    #[test]
+    fn ends_the_ssh_it_holds() {
+        let killer = Killer::default();
+        let child = sleeping();
+
+        killer.arm(&child);
+        killer.kill();
+
+        assert_eq!(ended_by(child), Some(Signal::KILL.as_raw()));
+    }
+
+    #[test]
+    fn spares_the_ssh_it_let_go() {
+        let killer = Killer::default();
+        let child = sleeping();
+
+        killer.arm(&child);
+        killer.disarm();
+        killer.kill();
+
+        assert_eq!(ended_by(child), Some(Signal::TERM.as_raw()));
+    }
+
+    #[test]
+    fn stopped_first_ends_the_ssh_as_soon_as_it_holds_it() {
+        let killer = Killer::default();
+        let child = sleeping();
+
+        killer.kill();
+        killer.arm(&child);
+
+        assert_eq!(ended_by(child), Some(Signal::KILL.as_raw()));
     }
 }

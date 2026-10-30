@@ -227,3 +227,127 @@ mod info {
         assert_eq!(Info::default().state, State::Connecting);
     }
 }
+
+mod a_status {
+    use super::*;
+
+    const NOW: i64 = 1_793_000_000;
+
+    fn linked(release: &str, running: &str) -> Status {
+        let mut status = Status::default();
+        status.linked(release.into(), running.into(), NOW - 60);
+        status
+    }
+
+    #[test]
+    fn starts_connecting() {
+        assert_eq!(Status::default().note(NOW), "connecting…");
+    }
+
+    #[test]
+    fn linked_shows_the_cornercase_there() {
+        assert_eq!(linked("0.12.225", "0.12.225").note(NOW), "linked · 0.12.225");
+    }
+
+    #[test]
+    fn linked_to_an_older_running_server_says_until_when() {
+        assert_eq!(
+            linked("0.12.225", "0.12.224").note(NOW),
+            "linked · 0.12.225 · its server runs 0.12.224 until it restarts there"
+        );
+    }
+
+    #[rstest]
+    #[case::seconds(8, "unreachable · 8 s")]
+    #[case::minutes(3 * 60 + 5, "unreachable · 3 min")]
+    #[case::hours(2 * 3_600, "unreachable · 2 h")]
+    #[case::a_day(86_400, "unreachable · 1 day")]
+    #[case::days(4 * 86_400 + 7, "unreachable · 4 days")]
+    fn unreachable_counts_from_the_last_moment_it_was_up(#[case] ago: i64, #[case] note: &str) {
+        let mut status = linked("0.12.225", "0.12.225");
+        status.down(Down::Unreachable("Connection reset".into()), NOW - ago);
+        assert_eq!(status.note(NOW), note);
+    }
+
+    #[test]
+    fn unreachable_since_this_server_started_was_not_seen_yet() {
+        let mut status = Status::default();
+        status.down(Down::Unreachable("Connection refused".into()), NOW);
+        assert_eq!(status.note(NOW), "unreachable · not seen yet");
+    }
+
+    #[test]
+    fn a_second_failure_keeps_when_it_was_last_up() {
+        let mut status = linked("0.12.225", "0.12.225");
+        status.down(Down::Unreachable("Connection reset".into()), NOW - 30);
+        status.down(Down::Unreachable("Connection refused".into()), NOW - 10);
+        assert_eq!((status.seen, status.note(NOW).as_str()), (Some(NOW - 30), "unreachable · 30 s"));
+    }
+
+    #[rstest]
+    #[case::with_its_release(Some("0.0.1"), "older · 0.0.1")]
+    #[case::from_before_the_proxy(None, "older")]
+    fn older_names_the_release_there(#[case] there: Option<&str>, #[case] note: &str) {
+        let mut status = Status::default();
+        status.down(Down::Older(there.map(String::from)), NOW);
+        assert_eq!((status.state, status.note(NOW).as_str()), (State::Older, note));
+    }
+
+    #[test]
+    fn updating_says_so_whatever_the_state() {
+        let mut status = Status::default();
+        status.down(Down::Older(Some("0.0.1".into())), NOW);
+        status.updating = true;
+        assert_eq!(status.note(NOW), "updating…");
+    }
+
+    #[test]
+    fn linked_again_forgets_why_it_was_down() {
+        let mut status = Status::default();
+        status.down(Down::Missing, NOW);
+        status.linked("0.12.225".into(), "0.12.225".into(), NOW);
+        assert_eq!((status.state, status.down), (State::Linked, None));
+    }
+
+    #[test]
+    fn linked_while_it_updates_keeps_updating() {
+        let mut status = Status::default();
+        status.down(Down::Older(Some("0.0.1".into())), NOW);
+        status.updating = true;
+        status.linked("0.12.225".into(), "0.12.225".into(), NOW);
+        assert_eq!((status.state, status.updating), (State::Linked, true));
+    }
+}
+
+mod a_logged_error {
+    use super::*;
+
+    #[rstest]
+    #[case::the_host(
+        "ssh: Could not resolve hostname vps.example.com: Name or service not known",
+        "ssh: Could not resolve hostname vps: Name or service not known"
+    )]
+    #[case::the_whole_destination(
+        "miguel@vps.example.com: Permission denied (publickey).",
+        "vps: Permission denied (publickey)."
+    )]
+    #[case::neither("Connection refused", "Connection refused")]
+    #[case::the_host_at_the_end_of_a_sentence("cannot reach vps.example.com.", "cannot reach vps.")]
+    #[case::a_longer_host_that_contains_it(
+        "ssh: connect to host db.vps.example.com.au",
+        "ssh: connect to host db.vps.example.com.au"
+    )]
+    fn names_the_machine_instead_of_its_destination(#[case] said: &str, #[case] logged: &str) {
+        assert_eq!(hide_destination(said, "vps", "miguel@vps.example.com"), logged);
+    }
+
+    #[rstest]
+    #[case::inside_a_word("Connection refused", "Connection refused")]
+    #[case::as_a_word(
+        "ssh: connect to host c port 22: Connection refused",
+        "ssh: connect to host vps port 22: Connection refused"
+    )]
+    fn names_the_machine_only_where_a_short_host_is_a_word_of_its_own(#[case] said: &str, #[case] logged: &str) {
+        assert_eq!(hide_destination(said, "vps", "me@c"), logged);
+    }
+}
