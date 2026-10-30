@@ -188,6 +188,20 @@ mod cloning {
     }
 
     #[test]
+    fn that_fails_keeps_a_folder_it_made_once_something_else_is_in_it() {
+        let parent = TempDir::new();
+        let url = format!("file://{}", parent.path().join("missing").display());
+        let target = prepared(&url, &parent.path().join("new"));
+        std::fs::write(parent.path().join("new").join("notes.txt"), "mine").expect("write");
+
+        let failed = run(&target);
+
+        assert!(matches!(failed, Err(Failure::NotRepository(_))), "{failed:?}");
+        assert!(!target.path.exists(), "the clone's folder is gone");
+        assert_eq!(std::fs::read_to_string(parent.path().join("new").join("notes.txt")).expect("kept"), "mine");
+    }
+
+    #[test]
     fn that_fails_keeps_the_empty_folder_it_was_given() {
         let parent = TempDir::new();
         let path = parent.path().join("missing");

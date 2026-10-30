@@ -53,3 +53,28 @@ mod the_folder {
         assert!(refused.to_string().contains("give its absolute path on devbox"), "{refused}");
     }
 }
+
+mod the_command {
+    use super::*;
+
+    #[test]
+    fn is_listed_in_the_help() {
+        let help = Cli::command().render_help().to_string();
+
+        assert!(help.lines().any(|line| line.trim_start().starts_with("clone ")), "{help}");
+    }
+
+    #[test]
+    fn takes_a_url_a_folder_and_the_create_options() {
+        let cli = parse(&["clone", "git@github.com:acme/shop.git", "~/src", "--focus", "--json"]).expect("parse");
+
+        let Some(Command::Control(Control::Clone(clone))) = cli.command else { panic!("not clone") };
+        let taken = (clone.url.as_str(), clone.folder.as_deref(), clone.create.focus, clone.create.print.json);
+        assert_eq!(taken, ("git@github.com:acme/shop.git", Some(Path::new("~/src")), true, true));
+    }
+
+    #[test]
+    fn refuses_an_empty_url() {
+        assert!(parse(&["clone", ""]).is_err());
+    }
+}

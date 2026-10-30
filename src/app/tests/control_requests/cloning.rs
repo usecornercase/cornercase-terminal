@@ -44,6 +44,20 @@ mod a_clone {
         assert!(app.state().projects.iter().any(|saved| saved.path == path), "the session saves it");
     }
 
+    #[rstest]
+    #[case::focused(true, 1)]
+    #[case::not_focused(false, 0)]
+    fn shows_its_project_only_when_asked_to_focus(#[case] focus: bool, #[case] active: usize) {
+        let repo = git_repo(&[]);
+        let parent = TempDir::new();
+        let (mut app, rx, _dirs) = app_with(1);
+        let args = json!({"url": repo.path().display().to_string(), "parent": parent.path(), "focus": focus});
+
+        asked(&mut app, &rx, "clone", &args).expect("cloned");
+
+        assert_eq!((app.projects.len(), app.active), (2, active));
+    }
+
     #[test]
     fn of_something_that_is_not_a_repository_is_not_found_and_leaves_no_folder() {
         let parent = TempDir::new();
