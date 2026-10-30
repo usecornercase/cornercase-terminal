@@ -642,7 +642,7 @@ Each agent's default account while no [profile](#profile) is active: what a new 
 
 #### `machines`
 
-The other computers your work can run on: each with its `name` (letters, digits, `.`, `_` and `-`, at most 20, different from the others' ignoring case), its `icon` (`☁`, `▭`, `▣`, `◫`, `⌂` or `◆`; another one shows as `☁`), its `destination` for `ssh` (a `Host` of `~/.ssh/config` or `user@host`, different from the others') and its `folder` for clones there (an absolute path, `~`, or one starting with `~/`). Your server keeps a link to the server on each one. Left out of the file while you have none. An entry the rules refuse gets no link. It isn't part of the settings you [share](#share-your-setup).
+The other computers your work can run on, in the order cornercase lists them: each with its `name` (letters, digits, `.`, `_` and `-`, at most 20, different from the others' ignoring case), its `icon` (`☁`, `▭`, `▣`, `◫`, `⌂` or `◆`; another one shows as `☁`), its `destination` for `ssh` (a `Host` of `~/.ssh/config` or `user@host`, different from the others') and its `folder` for clones there (absolute or starting with `~/`). Your server keeps a link to the server on each one. Left out of the file while you have none. An entry the rules refuse shows in the list with what is wrong and gets no link. `cornercase machines` changes it, and it isn't part of the settings you [share](#share-your-setup).
 
 ```json
 "machines": [
