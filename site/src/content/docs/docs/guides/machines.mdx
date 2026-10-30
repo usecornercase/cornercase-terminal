@@ -1,0 +1,97 @@
+---
+title: Machines
+description: List the other computers your work can run on, a cloud VM, a desktop at home, a Mac mini, and cornercase keeps a link to the server on each one, from your own.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Screen from '../../../../components/Screen.astro';
+
+**Settings › Machines** lists the other computers your work can run on: a cloud VM, the desktop at home, a Mac mini under the desk. For each one, your cornercase server keeps a link to the cornercase server on that machine, through your own `ssh`. The link is what lets cornercase work with that machine's projects and agents, and the row shows whether it is up.
+
+<Screen
+  name="settings-machines"
+  alt="Settings › Machines: this computer first, then vps linked to cornercase on ana@vps.example.com, homelab unreachable and not seen yet, and mini, whose cornercase is older, with an update… row under it; + add machine last"
+  crop={[2, 1, 106, 10]}
+/>
+
+For now a link only keeps the connection and says how the machine is doing. Working on those machines from this window, with their workspaces in your sidebar, comes later; until then, [`cornercase remote`](../remote/) opens a window on one of them.
+
+## Add a machine
+
+Click **`+ add machine`** at the end of the list. The form asks for:
+
+| Field | What it is |
+| --- | --- |
+| **name** | What the window calls it: letters, digits, `.`, `_` and `-`, at most 20 characters, and different from every other machine's. |
+| **icon** | One of ☁ server, ▭ laptop, ▣ desktop, ◫ mini, ⌂ home server or ◆ other. |
+| **destination** | Anything `ssh` takes: a `Host` of your `~/.ssh/config`, or `user@host`. Your config, keys and agent apply, and cornercase never sees a password or a key. |
+| **folder** | Where clones go on that machine, `~/code` unless you change it: an absolute path, `~`, or one starting with `~/`. Nothing is made there yet. |
+
+` add ` saves it, and the link starts at once. A value the form refuses says why under its field, and nothing is saved. Click a machine, or select it and press `Enter`, to change it in the same form; its link carries on unless you change the destination.
+
+The `×` at the end of a row, or `Backspace`, removes a machine at once. The machine's server keeps running there.
+
+## What a link does
+
+The link is one `ssh` connection from your cornercase server to the cornercase server on the machine. It is the server's, not the window's, so it stays up while no window is open.
+
+- **It uses the server running there**, or starts one when none runs, as [`cornercase start-server`](../../reference/command-line/#cornercase-start-server) does.
+- **It never stops anything there.** Removing the machine, stopping or restarting cornercase on this computer, this computer going to sleep and a dropped connection all end the link only; the server on the machine and everything in it keep running.
+- **A server you stop there comes back.** After `cornercase kill-server` on the machine, the link starts it again on its next try. To stop it for good, remove the machine here first.
+- **It goes one way.** The machine can't act on this computer through the link: nothing it sends is drawn, played, opened or copied here, and the link's `ssh` forwards neither your agent, nor X11, nor any port.
+
+## States
+
+| Row | Means |
+| --- | --- |
+| `◌ connecting…` | The link's first try hasn't answered yet. |
+| `● linked · 0.12.225` | Linked, with the version of cornercase installed there. When its server still runs an older one, the row adds `· its server runs 0.12.224 until it restarts there`. |
+| `○ unreachable · 8 s` | Down since that long, or `not seen yet` when it has never been up since your server started. Select the row and the line at the bottom shows why: what `ssh` said, `cornercase was not found on vps: install it there`, `that is this computer`, or `the same server as vps` when two destinations reach one machine. |
+| `◐ older · 0.0.1` | Its cornercase is older than yours, so it is not linked. |
+
+A link that drops is tried again after 1, 2, 4 and 8 seconds, then every 15 seconds, and every minute while something on the machine needs you: an older cornercase, a missing one, or a destination that turns out to be this computer or a machine already listed. All of them try again at once when this computer wakes up or changes network, and when you change a machine that is down. `cornercase machines retry` tries them now.
+
+### Update an older machine
+
+An `older` machine has an **`update…`** row under it. It runs `cornercase update` on the machine, without a terminal, so it installs the new release and restarts nothing: the server there keeps running its version until it restarts, and the row says so. Once the update ends, the link tries again. When it fails, the line at the bottom shows what the update printed last, such as the Homebrew command to run there.
+
+## What you need
+
+- **cornercase on the machine**, in your version or a newer one. It is looked for on the `PATH` of a command run through `ssh`, then in `~/.local/bin` (where the [install script](../../installation/) puts it), `~/.cargo/bin` and Homebrew's folders. A machine has no `--command` as `cornercase remote` does: when it lives somewhere else, link it into one of those folders.
+- **A key that never asks.** The link's `ssh` runs with `BatchMode=yes`: it never asks for a password, a passphrase or an unknown host key, since nobody is there to answer. Use a key in your SSH agent, or one without a passphrase, and connect once by hand to accept the host key:
+
+```sh
+ssh ana@vps.example.com true
+```
+
+- **Your own `ControlMaster`, if you like.** The link holds one connection, but `cornercase machines update` and [`--remote` commands](../remote/#commands-for-scripts-and-agents) open their own; a shared one makes them faster:
+
+```text
+Host vps
+  HostName vps.example.com
+  User ana
+  ControlMaster auto
+  ControlPath ~/.ssh/cm-%C
+  ControlPersist 10m
+```
+
+<Aside>
+A connection that died without a word is noticed within about 15 seconds: `ssh` checks it every 5 (`ServerAliveInterval=5`, `ServerAliveCountMax=3`), and gives up on a machine that doesn't answer after 10 (`ConnectTimeout=10`).
+</Aside>
+
+## From the command line
+
+`cornercase machines` prints the same list, and its subcommands change it as the Settings tab does:
+
+```sh
+cornercase machines
+cornercase machines add vps ana@vps.example.com --icon server
+cornercase machines edit vps --folder '~/src'
+cornercase machines retry vps
+cornercase machines update mini
+cornercase machines remove vps
+```
+
+Scripts and other apps read and change the list with the `machines` request: see [Machines](../scripts-and-agents/#machines).
+
+The list lives under [`machines`](../../reference/configuration/#machines-1) in `config.json`, and an edit of the file applies within a second. It isn't part of the settings you [share](../../reference/configuration/#share-your-setup): a colleague can't reach your machines.

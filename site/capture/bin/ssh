@@ -1,4 +1,29 @@
 #!/bin/sh
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) shift 2 ;;
+    --) shift; break ;;
+    -*) shift ;;
+    *) break ;;
+  esac
+done
+destination=$1
+shift
+case "$destination" in
+  ana@vps.example.com)
+    mkdir -p "$CC_DATA/vps"
+    chmod 700 "$CC_DATA/vps"
+    exec env CORNERCASE_SOCKET="$CC_DATA/vps/server.sock" "$CC_CAPTURE/../../target/debug/cornercase" proxy
+    ;;
+  mac-mini.local)
+    echo 'cornercase-proxy 1 0.0.1'
+    exec cat > /dev/null
+    ;;
+  homelab.lan)
+    echo 'ssh: connect to host homelab.lan port 22: Connection refused' >&2
+    exit 255
+    ;;
+esac
 calls="$CC_DATA/ssh.calls"
 n=$(( $(cat "$calls" 2>/dev/null || echo 0) + 1 ))
 printf '%s\n' "$n" > "$calls"
@@ -11,13 +36,4 @@ if [ "$n" -gt 2 ]; then
   exit 255
 fi
 echo $$ > "$CC_DATA/ssh.pid"
-while [ $# -gt 0 ]; do
-  case "$1" in
-    -o) shift 2 ;;
-    --) shift; break ;;
-    -*) shift ;;
-    *) break ;;
-  esac
-done
-shift
 exec /bin/sh -c "exec $*"

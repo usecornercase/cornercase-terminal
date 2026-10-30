@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
@@ -89,6 +89,8 @@ impl App {
         }
         settings.plugins = self.plugin_rows();
         settings.accounts = self.accounts_listed();
+        settings.machines = self.machine_infos();
+        settings.now = SystemTime::now();
         settings
     }
 
@@ -166,7 +168,7 @@ impl App {
         Ok(format!("the {} {} was removed", source.name(), source.token_name()))
     }
 
-    fn settings_message(&mut self, notice: String) {
+    pub(super) fn settings_message(&mut self, notice: String) {
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
             s.notice = Some(notice);
         }
@@ -226,8 +228,13 @@ impl App {
             settings::Action::Accounts(order) => self.account_order(&order, area),
             settings::Action::RemoveAccount(kind, name) => self.overlay = Some(Overlay::RemoveAccount { kind, name }),
             settings::Action::Tour { reset } => self.tour_from_settings(reset),
+            action @ (settings::Action::AddMachine
+            | settings::Action::EditMachine(_)
+            | settings::Action::RemoveMachine(_)
+            | settings::Action::UpdateMachine(_)) => self.machine_action(&action),
         }
         self.watch_accounts_page(Instant::now());
+        self.refresh_machines_page();
     }
 }
 
@@ -278,6 +285,8 @@ fn row_view(settings: &Settings, i: usize, row: &settings::Row) -> ui::SettingsR
         muted: false,
         removable: settings.removal(i).is_some(),
         movable: row.movable(),
+        mark: text.mark,
+        tail: text.tail,
     }
 }
 

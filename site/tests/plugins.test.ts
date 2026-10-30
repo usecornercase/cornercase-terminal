@@ -6,9 +6,10 @@ import { world } from '../src/lib/demo/world';
 
 const key = (k: string) => ({ key: k, metaKey: false, isComposing: false, ctrlKey: false, altKey: false, shiftKey: false });
 
-test('the Plugins tab is last and says how to add one and that plugins run as you', () => {
+test('the Plugins tab comes before Machines and says how to add one and that plugins run as you', () => {
   const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
   app.openSettings();
+  inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
   assert.equal(app.overlay?.kind === 'settings' && app.overlay.page, 7);
   app.render();
@@ -18,6 +19,8 @@ test('the Plugins tab is last and says how to add one and that plugins run as yo
   inputKey(app, key('Enter'));
   app.render();
   assert.ok(app.textAt('`cornercase plugin install <owner/repo>` adds one'));
+  inputKey(app, key('Tab'));
+  assert.equal(app.overlay?.kind === 'settings' && app.overlay.page, 8);
   inputKey(app, key('Tab'));
   assert.equal(app.overlay?.kind === 'settings' && app.overlay.page, 0);
   app.destroy();

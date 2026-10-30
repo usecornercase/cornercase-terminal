@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.231
+
+- **List the machines you work on in Settings › Machines.** It lists this computer and the machines you add with **+ add machine**: a name, an icon, an ssh destination (`user@host` or a host from `~/.ssh/config`) and a folder for clones. Each row says whether the machine is **linked** (with its version), **unreachable** (for how long, and why on the line at the bottom) or **older**, and an older one has **update…**, which installs your version there without restarting anything.
+- A row of tabs that doesn't fit a narrow window, such as Settings' with its new **Machines** tab, now draws its tabs closer together instead of cutting off the last ones.
+
 ## 0.12.230
 
 - **Machines from scripts.** `cornercase machines` (`--json`) lists the machines you work on with their state: **linked** (with its version), **unreachable** (for how long, and why) or **older**. `machines add`, `edit`, `remove`, `update` and `retry` change them; `update` installs your version on an older machine without restarting anything. It is the request `machines`, `cornercase contract` lists the feature `machines`, and `status --app` carries `machines`.

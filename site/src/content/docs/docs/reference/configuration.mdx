@@ -10,7 +10,7 @@ cornercase is configured from the **Settings** modal, opened from **`More ▴` �
 
 ## The settings modal
 
-The modal has eight tabs: Worktrees, Agents, Accounts, Flows, Issues, UI, Remote and Plugins. Click a row, or select it and press `Enter`, to change it; the line at the bottom explains what the selected row does and confirms every change.
+The modal has nine tabs: Worktrees, Agents, Accounts, Flows, Issues, UI, Remote, Plugins and Machines. Click a row, or select it and press `Enter`, to change it; the line at the bottom explains what the selected row does and confirms every change.
 
 The ` share ` button hands your settings to a colleague, or imports theirs: see [Share your setup](#share-your-setup). The ` restart ` button next to ` done ` restarts cornercase. It first lists what is running in your terminals, since restarting stops every program in them; your projects, workspaces, tabs and splits come back, each tab with a new shell in its folder. See [Restart the server](../../guides/sessions/#restart-the-server).
 
@@ -164,6 +164,16 @@ The [plugins](../../guides/plugins/) you installed with `cornercase plugin insta
 
 Plugins run as you, with your rights: what they ask for is shown, not enforced. Other apps read the same rows, and what each service is doing, with `cornercase plugin status` (or the `plugin-list` request; see [Scripts and agents](../../guides/scripts-and-agents/#plugins)).
 
+### Machines
+
+<Screen
+  name="settings-machines"
+  alt="The Machines tab: this computer and its version, then vps linked, homelab unreachable and not seen yet, mini older with an update… row under it, and + add machine"
+  crop={[2, 1, 106, 10]}
+/>
+
+The other computers your work can run on, and the link your cornercase server keeps to the server on each: see [Machines](../../guides/machines/). **this computer** comes first, with its version, and can't be changed. Then a row per machine: its state's mark, icon and name, its destination and folder, and its state, `linked` with the version there, `unreachable` with how long since it was up, `older`, or `connecting…`. Select one and the line at the bottom says why it is not linked. `Enter` or a click opens the machine in a form to change it, `×` or `Backspace` removes it at once (its server keeps running there), **`update…`** under an `older` machine installs your release there, and **`+ add machine`** opens the form for a new one: a name, an icon, the `ssh` destination and a folder for clones, `~/code` unless you change it. What you set is kept in [`machines`](#machines-1).
+
 ### Keys in the settings modal
 
 | Key | Does |
@@ -172,7 +182,7 @@ Plugins run as you, with your rights: what they ask for is shown, not enforced. 
 | `↑` `↓` | Select a row. The mouse wheel does the same. |
 | `Tab`, `→` / `Shift+Tab`, `←` | Next / previous tab. |
 | `Shift+↑` `Shift+↓` | Move the selected source up or down. |
-| `Delete`, `Backspace` | Remove the selected saved token or chat bot, or forget the paired phone. |
+| `Delete`, `Backspace` | Remove the selected saved token, chat bot or machine, or forget the paired phone. |
 | `Esc` | Close the modal, or leave a list or a text field. |
 
 In a list, type to filter it and press `Enter` to pick. In a text field, `Enter` saves and `Esc` cancels.
@@ -199,7 +209,7 @@ The text holds five sections, each of which the other person can leave out:
 | `interface` | Every switch of the UI tab, from [`sidebar`](#sidebar) to [`tour`](#tour), with the sounds and the [prefix key](#prefix_key) |
 | `repositories` | Each project's [setup and teardown](../../guides/worktrees/#set-up-each-new-worktree), found by the project's git remotes (such as `github.com/acme/web-shop`) rather than its folder, so it reaches the same repository wherever your colleague cloned it |
 
-It never holds a token, a chat bot, a paired chat or browser, your accounts and profiles, [`jira_email`](#jira_email), [`remote`](#remote), [`remote_port`](#remote_port), [`keep_awake`](#keep_awake) or your [`machines`](#machines). It lists the trackers you are connected to, by name only, so the other side is told which to connect. A setup or a prompt is copied as you typed it, so when one looks like it holds a secret (`NPM_TOKEN=…`, `--api-key …`, `Bearer …`) the toast says where, in red: check before you send it.
+It never holds a token, a chat bot, a paired chat or browser, your accounts and profiles, [`jira_email`](#jira_email), [`remote`](#remote), [`remote_port`](#remote_port), [`keep_awake`](#keep_awake) or your [`machines`](#machines-1). It lists the trackers you are connected to, by name only, so the other side is told which to connect. A setup or a prompt is copied as you typed it, so when one looks like it holds a secret (`NPM_TOKEN=…`, `--api-key …`, `Bearer …`) the toast says where, in red: check before you send it.
 
 To import one, paste it on Share (or anywhere on a settings tab) and click **` preview `**. **Settings › Import** shows every setting that would change, as its value now → the shared one, grouped by section; a repository's setup and teardown are shown in full, a line at a time, in red:
 
@@ -358,7 +368,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`profile`](#profile) | string | `""` |
 | [`account_names`](#account_names) | object | `{}` |
 | [`active_accounts`](#active_accounts) | object | `{}` |
-| [`machines`](#machines) | array | `[]` |
+| [`machines`](#machines-1) | array | `[]` |
 
 #### `worktrees_dir`
 
@@ -642,7 +652,7 @@ Each agent's default account while no [profile](#profile) is active: what a new 
 
 #### `machines`
 
-The other computers your work can run on, in the order cornercase lists them: each with its `name` (letters, digits, `.`, `_` and `-`, at most 20, different from the others' ignoring case), its `icon` (`☁`, `▭`, `▣`, `◫`, `⌂` or `◆`; another one shows as `☁`), its `destination` for `ssh` (a `Host` of `~/.ssh/config` or `user@host`, different from the others') and its `folder` for clones there (an absolute path, `~`, or one starting with `~/`). Your server keeps a link to the server on each one. Left out of the file while you have none. An entry the rules refuse shows in the list with what is wrong and gets no link. `cornercase machines` changes it, and it isn't part of the settings you [share](#share-your-setup).
+The other computers your work can run on, in the order **Settings › Machines** lists them: each with its `name` (letters, digits, `.`, `_` and `-`, at most 20, different from the others' ignoring case), its `icon` (`☁`, `▭`, `▣`, `◫`, `⌂` or `◆`; another one shows as `☁`), its `destination` for `ssh` (a `Host` of `~/.ssh/config` or `user@host`, different from the others') and its `folder` for clones there (an absolute path, `~`, or one starting with `~/`). Your server keeps a link to the server on each one: see [Machines](../../guides/machines/). Left out of the file while you have none. An entry the rules refuse shows in the list with what is wrong and gets no link. `cornercase machines` changes it, and it isn't part of the settings you [share](#share-your-setup).
 
 ```json
 "machines": [

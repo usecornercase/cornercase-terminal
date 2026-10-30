@@ -1095,7 +1095,7 @@ cornercase machines retry
 cornercase machines update mini --json
 ```
 
-`machines` lists the [machines](../../reference/configuration/#machines) of `config.json`, each with the state of the link your server keeps to its server, and changes the list. It needs no window. Over the socket it is one request, with an `action` and its `entry`, and every action answers the whole list:
+`machines` lists the [machines](../machines/) of **Settings › Machines**, each with the state of the link your server keeps to its server, and changes the list with the Settings tab's own checks. It needs no window. Over the socket it is one request, with an `action` and its `entry`, and every action answers the whole list:
 
 ```json
 {"command": "machines", "args": {"action": "list"}}

@@ -12,6 +12,7 @@ test('the UI tab lists the icons choice and the icon bar, which needs a real cor
   inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
+  inputKey(app, key('ArrowLeft'));
   assert.equal(app.overlay?.kind === 'settings' && app.overlay.page, 5);
   const rows = app.settingsRows(5);
   assert.deepEqual(rows.slice(0, 4).map((row) => row.id), ['sidebar', 'tabs', 'iconBar', 'icons']);
@@ -69,6 +70,7 @@ test('the UI tab lists the sound rows after desktop notifications, which need a 
 test('the star prompt is a switch on the UI tab', () => {
   const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
   app.openSettings();
+  inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));
   inputKey(app, key('ArrowLeft'));

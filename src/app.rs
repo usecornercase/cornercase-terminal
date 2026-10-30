@@ -105,6 +105,7 @@ mod jobs;
 mod launches;
 mod layout;
 mod links;
+mod machine_form;
 mod machines;
 mod menus;
 mod merge_check;

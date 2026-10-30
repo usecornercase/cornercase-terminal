@@ -1,9 +1,10 @@
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use super::App;
 use super::control::json;
 use super::event::AppEvent;
+use super::overlay::Overlay;
 use crate::control;
 use crate::control::contract::{Code, Refusal};
 use crate::error::Result;
@@ -12,6 +13,7 @@ use crate::log::{self, Job, Level};
 use crate::machines::link::{self, Connect, Down, Event, Link, Report, Servers};
 use crate::machines::wake::{Network, Sleep};
 use crate::machines::{self, Info, Machine, State, Status};
+use crate::settings::Page;
 
 const OLDER: &str = "its cornercase is older than this one";
 
@@ -116,6 +118,10 @@ impl Machines {
     pub(super) fn set_network(&mut self, network: Network) {
         self.network = network;
     }
+
+    pub(super) fn set_status(&mut self, at: usize, status: Status) {
+        self.held[at].status = status;
+    }
 }
 
 fn updated(result: Result<Result<()>>, name: &str) -> std::result::Result<(), String> {
@@ -148,6 +154,7 @@ impl App {
             log::info!("machines", "retrying every link", woke = woke, network = moved);
             self.machines.held.iter().for_each(|held| held.link.poke());
         }
+        self.refresh_machines_page();
     }
 
     pub(super) fn follow_machines(&mut self) {
@@ -283,6 +290,17 @@ impl App {
             Info::of(machine, held.map(|held| &held.status), problem, error)
         })
         .collect()
+    }
+
+    pub(super) fn refresh_machines_page(&mut self) {
+        if !matches!(&self.overlay, Some(Overlay::Settings(s)) if s.page == Page::Machines) {
+            return;
+        }
+        let infos = self.machine_infos();
+        if let Some(Overlay::Settings(s)) = &mut self.overlay {
+            s.take_machines(infos);
+            s.now = SystemTime::now();
+        }
     }
 
     pub(super) fn stop_machines(&mut self) {

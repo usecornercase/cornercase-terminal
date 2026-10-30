@@ -143,7 +143,10 @@ mod opening {
         assert_eq!(d.entries(), 5);
         let v = view(&s.app, WIDE);
         assert_eq!(v.title, "Settings");
-        assert_eq!(v.tabs, ["Worktrees", "Agents", "Accounts", "Flows", "Issues", "UI", "Remote", "Plugins"]);
+        assert_eq!(
+            v.tabs,
+            ["Worktrees", "Agents", "Accounts", "Flows", "Issues", "UI", "Remote", "Plugins", "Machines"]
+        );
         assert_eq!(v.tab, 3);
         button(&mut s.app, WIDE, dialog::DONE);
         assert!(s.app.overlay.is_none());
@@ -181,7 +184,7 @@ mod opening {
         assert!(view(&s.app, WIDE).tabs.iter().all(|tab| tab != "Issues"));
         button(&mut s.app, WIDE, dialog::DONE);
         let v = view(&s.app, WIDE);
-        assert_eq!((v.title.as_str(), v.tabs.len(), v.tab), ("Settings", 8, 3));
+        assert_eq!((v.title.as_str(), v.tabs.len(), v.tab), ("Settings", 9, 3));
     }
 
     #[test]
