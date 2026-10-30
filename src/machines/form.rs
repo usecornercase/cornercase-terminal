@@ -169,6 +169,7 @@ impl Form {
                 match self.editor(focus) {
                     Some(editor) => {
                         editor.one_line_key(key, width);
+                        editor.reveal(width, 1);
                     }
                     None => {
                         self.icon.key(key, rows);

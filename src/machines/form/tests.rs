@@ -163,6 +163,18 @@ mod keys {
     use super::*;
 
     #[test]
+    fn typing_past_a_field_s_width_scrolls_it_to_the_cursor() {
+        let mut form = filled("vps", "", "~/code");
+        form.focus = Field::Destination;
+
+        for c in "me@a-very-long-host.example.com".chars() {
+            form.key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE), 10, 8);
+        }
+
+        assert_eq!(form.destination.scroll(), 3);
+    }
+
+    #[test]
     fn tab_goes_through_the_fields_and_around() {
         let mut form = Form::new();
         let mut seen = Vec::new();

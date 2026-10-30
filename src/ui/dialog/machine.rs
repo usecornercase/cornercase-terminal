@@ -23,9 +23,14 @@ const PITCH: usize = 3;
 const INTRO: &str = "Another computer you reach with ssh. cornercase keeps a link to its server, starts one there \
                      when none runs, and never stops it: removing the machine here leaves its server running.";
 
+fn pitch(body: Rect) -> usize {
+    let spaced = Field::ALL.len() * PITCH - 1;
+    if usize::from(body.height) >= spaced { PITCH } else { PITCH - 1 }
+}
+
 fn line(area: Rect, field: Field) -> Rect {
     let body = rows(area)[1];
-    let at = Field::ALL.iter().position(|f| *f == field).unwrap_or_default() * PITCH;
+    let at = Field::ALL.iter().position(|f| *f == field).unwrap_or_default() * pitch(body);
     let y = body.y.saturating_add(u16::try_from(at).unwrap_or(u16::MAX));
     Rect::new(body.x, y, body.width, 2).intersection(body)
 }

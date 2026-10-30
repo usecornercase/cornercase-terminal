@@ -25,7 +25,7 @@ Click **`+ add machine`** at the end of the list. The form asks for:
 | **name** | What the window calls it: letters, digits, `.`, `_` and `-`, at most 20 characters, and different from every other machine's. |
 | **icon** | One of ☁ server, ▭ laptop, ▣ desktop, ◫ mini, ⌂ home server or ◆ other. |
 | **destination** | Anything `ssh` takes: a `Host` of your `~/.ssh/config`, or `user@host`. Your config, keys and agent apply, and cornercase never sees a password or a key. |
-| **folder** | Where clones go on that machine, `~/code` unless you change it: an absolute path, or one starting with `~/`. Nothing is made there yet. |
+| **folder** | Where clones go on that machine, `~/code` unless you change it: an absolute path, `~`, or one starting with `~/`. Nothing is made there yet. |
 
 ` add ` saves it, and the link starts at once. A value the form refuses says why under its field, and nothing is saved. Click a machine, or select it and press `Enter`, to change it in the same form; its link carries on unless you change the destination.
 
@@ -86,7 +86,7 @@ A connection that died without a word is noticed within about 15 seconds: `ssh` 
 ```sh
 cornercase machines
 cornercase machines add vps ana@vps.example.com --icon server
-cornercase machines edit vps --folder ~/src
+cornercase machines edit vps --folder '~/src'
 cornercase machines retry vps
 cornercase machines update mini
 cornercase machines remove vps

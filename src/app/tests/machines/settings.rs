@@ -299,6 +299,16 @@ mod the_form {
     }
 
     #[test]
+    fn keeps_every_field_on_a_short_window() {
+        let short = Rect { x: 0, y: 0, width: 80, height: 18 };
+
+        let fields = Field::ALL.map(|field| ui::machine_form::field(short, field));
+
+        assert!(fields.iter().all(|field| field.height == 1), "{fields:?}");
+        assert!(fields.windows(2).all(|pair| pair[0].y < pair[1].y), "{fields:?}");
+    }
+
+    #[test]
     fn its_icons_open_below_their_field() {
         let mut rig = on_the_page(Vec::new());
         rig.click_row(&Row::AddMachine);
@@ -326,6 +336,19 @@ mod removing {
 
         assert_eq!(rig.saved(), [machine("pi", "pi.lan")]);
         assert_eq!(rig.page().notice.as_deref(), Some("vps removed: its server keeps running there"));
+    }
+
+    #[test]
+    fn of_a_machine_changed_outside_removes_nothing_and_says_so() {
+        let mut rig = on_the_page(vec![machine("vps", "vps.lan")]);
+        let outside = vec![Machine { icon: "▣".into(), ..machine("vps", "vps.lan") }];
+        write_config(rig.dir.path(), &Config { machines: outside.clone(), ..Config::default() });
+
+        let at = cross(&rig, &Row::Machine(0));
+        click(&mut rig.app, at);
+
+        assert_eq!(rig.saved(), outside);
+        assert_eq!(rig.page().notice.as_deref(), Some("vps changed outside the settings: nothing was removed"));
     }
 
     #[test]
@@ -359,5 +382,17 @@ mod updating {
 
         rig.until("the update ends", |app| !app.machines.held()[0].status.updating);
         assert_eq!(*asked.lock(), ["pi.lan"]);
+    }
+
+    #[test]
+    fn right_after_a_destination_edit_never_reaches_the_old_one() {
+        let mut rig = Rig::new(vec![machine("pi", "pi.lan")], There::Older);
+        rig.until("the link reports", |app| app.machines.held()[0].status.state == State::Older);
+        let (_go, _asked) = rig.gated_updates();
+        rig.app.change_config(|config| config.machines[0].destination = "new.lan".into()).expect("edited");
+
+        rig.app.machine_action(&crate::settings::Action::UpdateMachine(0));
+
+        assert!(rig.app.machines.held().iter().all(|held| !held.status.updating && held.destination == "new.lan"));
     }
 }

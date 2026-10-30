@@ -44,7 +44,7 @@ impl Settings {
         let listed =
             self.machines.get(at).filter(|info| info.name == machine.name && info.destination == machine.destination);
         Some(listed.cloned().unwrap_or_else(|| {
-            let problem = machines::problems(&self.config.machines).into_iter().nth(at).flatten();
+            let problem = machine.problem(&self.config.machines[..at]);
             Info::of(machine, None, problem, None)
         }))
     }

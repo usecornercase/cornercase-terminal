@@ -39,7 +39,7 @@ impl<'de> Deserialize<'de> for Machine {
 }
 
 impl Machine {
-    fn problem(&self, others: &[Self]) -> Option<String> {
+    pub(crate) fn problem(&self, others: &[Self]) -> Option<String> {
         let shape = valid_name(&self.name).and(valid_destination(&self.destination)).and(valid_folder(&self.folder));
         match shape {
             Err(why) => Some(why.to_string()),

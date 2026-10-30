@@ -24,6 +24,7 @@ impl App {
             settings::Action::EditMachine(at) => self.open_machine_form(Some(at)),
             settings::Action::RemoveMachine(at) => self.remove_machine_row(at),
             settings::Action::UpdateMachine(at) => {
+                self.follow_machines();
                 if let Some(name) = self.config.machines.get(at).map(|machine| machine.name.clone()) {
                     self.update_machine(&name);
                 }
@@ -39,18 +40,21 @@ impl App {
 
     fn remove_machine_row(&mut self, at: usize) {
         let Some(gone) = self.config.machines.get(at).cloned() else { return };
+        let mut found = false;
         let removed = self.change_config(|config| {
-            if let Some(found) = config.machines.iter().position(|machine| *machine == gone) {
-                config.machines.remove(found);
+            if let Some(at) = config.machines.iter().position(|machine| *machine == gone) {
+                config.machines.remove(at);
+                found = true;
             }
         });
-        let notice = removed.map_or_else(
-            |why| why,
-            |()| {
+        let notice = match removed {
+            Err(why) => why,
+            Ok(()) if !found => format!("{} changed outside the settings: nothing was removed", gone.name),
+            Ok(()) => {
                 log::info!("machines", "machine removed", name = gone.name);
                 format!("{} removed: its server keeps running there", gone.name)
-            },
-        );
+            }
+        };
         self.settings_message(notice);
     }
 
@@ -131,32 +135,31 @@ impl App {
         }
     }
 
-    fn checked_machine(&mut self) -> Option<(Option<usize>, Machine)> {
-        let read = self.reload_config().map_err(|e| format!("failed to save the settings: {e}"));
-        let machines = self.config.machines.clone();
-        let form = self.machine_form()?;
-        let gone = form.was.as_ref().is_some_and(|was| !machines.contains(was));
-        match read {
-            Err(why) => form.notice = Some(why),
-            Ok(()) if gone => form.notice = Some(CHANGED.into()),
-            Ok(()) => return form.checked(&machines),
-        }
-        None
-    }
-
     fn save_machine(&mut self) {
-        let Some((at, machine)) = self.checked_machine() else { return };
-        let (saved, added) = (machine.clone(), at.is_none());
-        let written = self.change_config(|config| match at.filter(|at| *at < config.machines.len()) {
-            Some(at) => config.machines[at] = machine,
-            None => config.machines.push(machine),
+        let Some(mut form) = self.machine_form().cloned() else { return };
+        let mut checked = None;
+        let written = self.change_config(|config| {
+            if form.was.as_ref().is_some_and(|was| !config.machines.contains(was)) {
+                form.notice = Some(CHANGED.into());
+                return;
+            }
+            let Some((at, machine)) = form.checked(&config.machines) else { return };
+            checked = Some((machine.clone(), at.is_none()));
+            match at {
+                Some(at) => config.machines[at] = machine,
+                None => config.machines.push(machine),
+            }
         });
         if let Err(why) = written {
-            if let Some(form) = self.machine_form() {
-                form.notice = Some(why);
+            form.notice = Some(why);
+            checked = None;
+        }
+        let Some((saved, added)) = checked else {
+            if let Some(shown) = self.machine_form() {
+                *shown = form;
             }
             return;
-        }
+        };
         log::info!("machines", "machine set", name = saved.name, new = added);
         let notice = format!("{} {}", saved.name, if added { "added" } else { "saved" });
         let row = self.machine_row_of(Some(&saved));
