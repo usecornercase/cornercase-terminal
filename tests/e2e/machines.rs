@@ -47,15 +47,12 @@ fn machines(here: &Session) -> Vec<Value> {
 }
 
 fn wait_for_machine(here: &Session, name: &str, what: &str, cond: impl Fn(&Value) -> bool) -> Value {
-    let deadline = Instant::now() + TIMEOUT;
-    loop {
-        let machine = machines(here).into_iter().find(|m| m["name"] == name).unwrap_or_default();
-        if cond(&machine) {
-            return machine;
-        }
-        assert!(Instant::now() < deadline, "timed out waiting for: {what}\n{machine}");
-        thread::sleep(POLL);
-    }
+    let mut machine = Value::Null;
+    wait_until(what, || {
+        machine = machines(here).into_iter().find(|m| m["name"] == name).unwrap_or_default();
+        cond(&machine)
+    });
+    machine
 }
 
 fn in_state(state: &'static str) -> impl Fn(&Value) -> bool {
