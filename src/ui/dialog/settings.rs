@@ -10,7 +10,7 @@ use super::{
     pick_background, tabs_in,
 };
 use crate::machines::State;
-use crate::text::{cells, pad_cells, truncate_cells, truncate_cells_left, truncate_right};
+use crate::text::{cells, clip_cells, pad_cells, truncate_cells, truncate_cells_left, truncate_right};
 use crate::ui::View;
 use crate::ui::rows::{GAP, row_close_button};
 use crate::ui::widgets::{hovered, overlay_block, rail};
@@ -420,7 +420,11 @@ fn settings_row_spans(
     ]
 }
 
-fn value_text(row: &SettingsRow, room: usize) -> String {
+fn fitted(text: &str, room: usize) -> String {
+    if room < 2 { clip_cells(text, room) } else { truncate_cells(text, room) }
+}
+
+pub(in crate::ui) fn value_text(row: &SettingsRow, room: usize) -> String {
     if row.tail.is_empty() {
         return truncate_right(&row.value, room);
     }
@@ -430,6 +434,9 @@ fn value_text(row: &SettingsRow, room: usize) -> String {
     }
     let tail_room = tail.min(room / 3);
     let value_room = room.saturating_sub(tail_room + TAIL_GAP);
+    if tail_room < 2 || value_room < 2 {
+        return fitted(row.value.trim_end(), room);
+    }
     let value = truncate_cells(row.value.trim_end(), value_room);
     let tail = truncate_cells_left(row.tail.trim_end(), tail_room);
     format!("{}{:TAIL_GAP$}{}", pad_cells(&value, value_room), "", pad_cells(&tail, tail_room))
