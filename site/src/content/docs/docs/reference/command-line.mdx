@@ -157,7 +157,7 @@ Keep several logins of Claude Code, Codex or Gemini CLI and choose which ones ne
 
 ### `cornercase machines`
 
-Lists the other computers your work can run on, each with the state of the link your server keeps to its server, and changes the list:
+Lists the other computers your work can run on, as **Settings › Machines** does, each with the state of the link your server keeps to its server, and changes the list:
 
 ```sh
 cornercase machines                                    # this computer, then each machine and its state
@@ -168,7 +168,7 @@ cornercase machines update mini                        # install your release on
 cornercase machines retry [vps]                        # try one link, or every link, now
 ```
 
-`--icon` takes the glyph or its name (`server`, `laptop`, `desktop`, `mini`, `home server`, `other`), `--folder` is `~/code` unless you give one, and `edit` changes only what you give. `add` refuses a name already listed and `edit` one that isn't. Every subcommand prints the list, or with `--json` the `machines` answer. A value the rules refuse, or an update that failed on the machine, exits with status 1 and says why.
+`--icon` takes the glyph or its name (`server`, `laptop`, `desktop`, `mini`, `home server`, `other`), `--folder` is `~/code` unless you give one, and `edit` changes only what you give. `add` refuses a name already listed and `edit` one that isn't. Every subcommand prints the list, or with `--json` the `machines` answer. A value the rules refuse, or an update that failed on the machine, exits with status 1 and says why. See [Machines](../../guides/machines/).
 
 ### `cornercase tour`
 
