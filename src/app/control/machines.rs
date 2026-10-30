@@ -112,7 +112,7 @@ impl App {
         match self.update_machine(name) {
             Update::Started(link) => {
                 let key = self.clients.requests.key();
-                self.machines.waiting.push((link, key));
+                self.machines.wait_for_update(link, key);
                 self.pend_reading(client, key);
                 Ok(None)
             }
@@ -128,11 +128,7 @@ impl App {
         if let Some(name) = name.filter(|name| self.machine_at(name).is_none()) {
             return Err(unknown(name));
         }
-        let picked = |held: &&crate::app::machines::Held| name.is_none_or(|name| held.name.eq_ignore_ascii_case(name));
-        for held in self.machines.held.iter().filter(picked) {
-            log::info!("machines", "retrying", name = held.name);
-            held.link.poke();
-        }
+        self.machines.retry(name);
         Ok(())
     }
 }

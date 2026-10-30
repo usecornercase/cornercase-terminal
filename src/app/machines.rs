@@ -38,11 +38,11 @@ pub(super) struct Held {
 }
 
 pub(super) struct Machines {
-    pub(super) held: Vec<Held>,
-    pub(super) connect: Connector,
-    pub(super) update: Updater,
-    pub(super) network: Network,
-    pub(super) waiting: Vec<(u64, u64)>,
+    held: Vec<Held>,
+    connect: Connector,
+    update: Updater,
+    network: Network,
+    waiting: Vec<(u64, u64)>,
     synced: Vec<Machine>,
     servers: Servers,
     next: u64,
@@ -78,6 +78,18 @@ impl Machines {
             _ => None,
         };
         down.reason(&held.name, other)
+    }
+
+    pub(super) fn retry(&self, name: Option<&str>) {
+        let picked = |held: &&Held| name.is_none_or(|name| held.name.eq_ignore_ascii_case(name));
+        for held in self.held.iter().filter(picked) {
+            log::info!("machines", "retrying", name = held.name);
+            held.link.poke();
+        }
+    }
+
+    pub(super) fn wait_for_update(&mut self, link: u64, key: u64) {
+        self.waiting.push((link, key));
     }
 
     fn log_down(&self, held: &Held, failed: u32) {

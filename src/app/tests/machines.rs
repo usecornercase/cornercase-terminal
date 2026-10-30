@@ -336,7 +336,7 @@ mod updates {
         }));
 
         assert!(matches!(rig.app.update_machine("vps"), Update::Started(_)));
-        assert!(rig.app.machines.held[0].status.updating);
+        assert!(rig.app.machines.held()[0].status.updating);
         assert_eq!(rig.app.update_machine("vps"), Update::Running);
         go.send(()).expect("let the update finish");
 

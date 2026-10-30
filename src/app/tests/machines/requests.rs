@@ -80,7 +80,7 @@ mod list {
     #[test]
     fn carries_each_link_s_state_and_why() {
         let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Missing);
-        rig.until("the link reports", |app| app.machines.held[0].status.state == State::Unreachable);
+        rig.until("the link reports", |app| app.machines.held()[0].status.state == State::Unreachable);
 
         let list = rig.listed();
 
@@ -186,14 +186,14 @@ mod update {
 
     fn older() -> Rig {
         let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Older);
-        rig.until("the link reports", |app| app.machines.held[0].status.state == State::Older);
+        rig.until("the link reports", |app| app.machines.held()[0].status.state == State::Older);
         rig
     }
 
     #[test]
     fn answers_once_the_install_ends() {
         let mut rig = older();
-        rig.app.machines.update = Arc::new(|_: &str| Ok(()));
+        rig.app.machines.set_updater(Arc::new(|_: &str| Ok(())));
 
         let list = rig.ask_later(&json!({"action": "update", "entry": "vps"})).expect("updated");
 
@@ -204,8 +204,9 @@ mod update {
     #[test]
     fn that_fails_there_is_refused_with_what_was_printed() {
         let mut rig = older();
-        rig.app.machines.update =
-            Arc::new(|_: &str| Err(Error::Ssh { host: "vps.lan".into(), reason: "brew upgrade cornercase".into() }));
+        rig.app.machines.set_updater(Arc::new(|_: &str| {
+            Err(Error::Ssh { host: "vps.lan".into(), reason: "brew upgrade cornercase".into() })
+        }));
 
         assert_eq!(
             rig.ask_later(&json!({"action": "update", "entry": "vps"})),
@@ -218,13 +219,13 @@ mod update {
         let mut rig = older();
         let (go, gate) = mpsc::channel::<()>();
         let gate = Mutex::new(gate);
-        rig.app.machines.update = Arc::new(move |_: &str| {
+        rig.app.machines.set_updater(Arc::new(move |_: &str| {
             let _ = gate.lock().recv();
             Err(Error::Ssh { host: "vps.lan".into(), reason: "cannot reach vps.lan port 443".into() })
-        });
+        }));
         sent(&mut rig.app, &json!({"action": "update", "entry": "vps"}));
         rig.edit(Vec::new(), Duration::from_secs(2));
-        assert!(rig.app.machines.held.is_empty());
+        assert!(rig.app.machines.held().is_empty());
 
         go.send(()).expect("let the update fail");
 
@@ -248,7 +249,7 @@ mod retry {
     #[test]
     fn tries_a_link_again_at_once() {
         let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Missing);
-        rig.until("the first attempt fails", |app| app.machines.held[0].status.state == State::Unreachable);
+        rig.until("the first attempt fails", |app| app.machines.held()[0].status.state == State::Unreachable);
 
         rig.ask(&json!({"action": "retry", "entry": "vps"})).expect("retried");
 
@@ -302,7 +303,7 @@ mod the_app_stream {
 
         rig.app.trace_refresh();
         assert_eq!(machines_in(rig.app.take_events()), Vec::<Vec<State>>::new());
-        rig.until("the link reports", |app| app.machines.held[0].status.state == State::Unreachable);
+        rig.until("the link reports", |app| app.machines.held()[0].status.state == State::Unreachable);
         rig.app.trace_refresh();
 
         assert_eq!(machines_in(rig.app.take_events()), [[State::Unreachable]]);
