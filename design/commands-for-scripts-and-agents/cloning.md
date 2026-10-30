@@ -2,7 +2,7 @@
 
 Code: `git/clone.rs`, `control/clone.rs`, `app/control/clone.rs`, `cli.rs` (`run_clone`, `clone_url`, `clone_parent`), `cli/help/clone.rs`, #541
 
-- **One operation, `clone`** (index 113 of `Command::NAMES`): `url`, `parent` and `focus`.
+- **One operation, `clone`** (index 114 of `Command::NAMES`): `url`, `parent` and `focus`.
   - It runs `git clone` into a new folder inside `parent`. The folder is named after the repository as git names it: the URL's last part without `/`, `.git` or `.bundle` (`git/clone.rs` `folder_name`).
   - It then opens that folder as a project as `open` does, through `App::open_folder`, which both share: an open project of that path is reused, else `add_project`. So the project is saved with the session and shows in the sidebar.
   - It answers `path` (canonical), the project's `project`, `workspace`, `tab` and `pane` ids, and `projection` with `focus`.
