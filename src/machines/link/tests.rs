@@ -491,6 +491,7 @@ mod bugs {
     fn ends_the_connection_it_held_before_its_wait() {
         let rig = Rig::held(1, &Servers::new(HERE));
         let (mut line, mut theirs) = line(VERSION, None);
+        theirs.set_read_timeout(Some(WAIT)).expect("a read timeout");
         let armed = Arc::new(AtomicBool::new(false));
         line.reader = Box::new(Tripwire { inner: line.reader, armed: Arc::clone(&armed) });
         rig.attempts.send(Ok(line)).expect("the link asks for an attempt");
@@ -501,7 +502,6 @@ mod bugs {
         protocol::send(&mut theirs, &ServerMessage::Frame(Vec::new())).expect("send to the link");
 
         assert_eq!(rig.event(), down(Down::Unreachable(Error::Bug.to_string()), 1));
-        theirs.set_read_timeout(Some(WAIT)).expect("a read timeout");
         assert!(ended(&mut theirs));
     }
 
