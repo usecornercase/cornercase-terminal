@@ -118,6 +118,10 @@ impl Machines {
     pub(super) fn set_network(&mut self, network: Network) {
         self.network = network;
     }
+
+    pub(super) fn set_status(&mut self, at: usize, status: Status) {
+        self.held[at].status = status;
+    }
 }
 
 fn updated(result: Result<Result<()>>, name: &str) -> std::result::Result<(), String> {

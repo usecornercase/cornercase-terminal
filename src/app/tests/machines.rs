@@ -131,11 +131,11 @@ impl Rig {
         let (go, gate) = mpsc::channel::<()>();
         let (gate, asked) = (Mutex::new(gate), Arc::new(Mutex::new(Vec::new())));
         let given = Arc::clone(&asked);
-        self.app.machines.update = Arc::new(move |destination: &str| {
+        self.app.machines.set_updater(Arc::new(move |destination: &str| {
             given.lock().push(destination.to_string());
             let _ = gate.lock().recv();
             Ok(())
-        });
+        }));
         (go, asked)
     }
 

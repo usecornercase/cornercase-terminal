@@ -78,8 +78,8 @@ fn every_state() -> Rig {
     ];
     let mut rig = Rig::new(machines, There::Missing);
     let states = [State::Linked, State::Unreachable, State::Older, State::Connecting];
-    for (held, state) in rig.app.machines.held.iter_mut().zip(states) {
-        held.status = status(state);
+    for (at, state) in states.into_iter().enumerate() {
+        rig.app.machines.set_status(at, status(state));
     }
     rig.machines_page();
     rig
@@ -124,7 +124,7 @@ mod the_page {
     #[test]
     fn shows_the_selected_machine_s_reason_on_the_hint_line() {
         let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Missing);
-        rig.until("the link reports", |app| app.machines.held[0].status.state == State::Unreachable);
+        rig.until("the link reports", |app| app.machines.held()[0].status.state == State::Unreachable);
         rig.machines_page();
 
         send_key(&mut rig.app, KeyCode::Down, KeyModifiers::NONE);
@@ -137,7 +137,7 @@ mod the_page {
         let mut rig = on_the_page(vec![machine("vps", "vps.lan")]);
         assert_eq!(rig.page().machine_info(0).map(|info| info.state), Some(State::Connecting));
 
-        rig.until("the link reports", |app| app.machines.held[0].status.state == State::Unreachable);
+        rig.until("the link reports", |app| app.machines.held()[0].status.state == State::Unreachable);
         rig.refresh(Duration::from_millis(500));
 
         assert_eq!(rig.page().machine_info(0).map(|info| info.state), Some(State::Unreachable));
@@ -150,7 +150,7 @@ mod the_page {
         send_key(&mut rig.app, KeyCode::Down, KeyModifiers::NONE);
         assert_eq!(rig.selected(), Row::AddMachine);
 
-        rig.app.machines.held[0].status = status(State::Older);
+        rig.app.machines.set_status(0, status(State::Older));
         rig.refresh(Duration::from_millis(500));
 
         assert_eq!((rig.page().rows().len(), rig.selected()), (4, Row::AddMachine));
@@ -348,7 +348,7 @@ mod updating {
     #[test]
     fn the_row_under_an_older_machine_runs_it_once_at_a_time() {
         let mut rig = Rig::new(vec![machine("pi", "pi.lan")], There::Older);
-        rig.until("the link reports", |app| app.machines.held[0].status.state == State::Older);
+        rig.until("the link reports", |app| app.machines.held()[0].status.state == State::Older);
         let (go, asked) = rig.gated_updates();
         rig.machines_page();
 
@@ -357,7 +357,7 @@ mod updating {
         rig.click_row(&Row::UpdateMachine(0));
         go.send(()).expect("let the update finish");
 
-        rig.until("the update ends", |app| !app.machines.held[0].status.updating);
+        rig.until("the update ends", |app| !app.machines.held()[0].status.updating);
         assert_eq!(*asked.lock(), ["pi.lan"]);
     }
 }
