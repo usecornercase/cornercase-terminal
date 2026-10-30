@@ -170,6 +170,44 @@ mod the_page {
     }
 
     #[test]
+    fn keeps_add_machine_selected_when_a_machine_is_added_outside() {
+        let mut rig = on_the_page(vec![machine("vps", "vps.lan")]);
+        send_key(&mut rig.app, KeyCode::Down, KeyModifiers::NONE);
+        send_key(&mut rig.app, KeyCode::Down, KeyModifiers::NONE);
+        assert_eq!(rig.selected(), Row::AddMachine);
+
+        rig.edit(vec![machine("vps", "vps.lan"), machine("pi", "pi.lan")], Duration::from_secs(2));
+
+        assert_eq!(rig.selected(), Row::AddMachine);
+    }
+
+    #[test]
+    fn goes_to_this_computer_when_the_selected_machine_is_removed_outside() {
+        let mut rig = on_the_page(vec![machine("vps", "vps.lan"), machine("pi", "pi.lan")]);
+        send_key(&mut rig.app, KeyCode::Down, KeyModifiers::NONE);
+        send_key(&mut rig.app, KeyCode::Down, KeyModifiers::NONE);
+        assert_eq!(rig.selected(), Row::Machine(1));
+
+        rig.edit(vec![machine("vps", "vps.lan")], Duration::from_secs(2));
+
+        assert_eq!(rig.selected(), Row::Here);
+    }
+
+    #[test]
+    fn keeps_the_second_of_two_entries_written_alike() {
+        let twins = vec![machine("vps", "vps.lan"), machine("vps", "vps.lan")];
+        let mut rig = on_the_page(twins.clone());
+        send_key(&mut rig.app, KeyCode::Down, KeyModifiers::NONE);
+        send_key(&mut rig.app, KeyCode::Down, KeyModifiers::NONE);
+        assert_eq!(rig.selected(), Row::Machine(1));
+
+        write_config(rig.dir.path(), &Config { machines: twins, sidebar: "tree".into(), ..Config::default() });
+        rig.refresh(Duration::from_secs(2));
+
+        assert_eq!(rig.selected(), Row::Machine(1));
+    }
+
+    #[test]
     fn keeps_a_machine_s_state_in_its_row_when_its_folder_is_wide() {
         let wide = Machine { folder: "~/项目/客户端/前端".into(), ..machine("vps", "miguel@vps.example.com") };
         let mut rig = on_the_page(vec![wide]);

@@ -588,10 +588,10 @@ impl Settings {
         if config.asana_workspace != self.config.asana_workspace {
             self.forget_asana_projects();
         }
-        let selected = self.selected_machine();
+        let picked = self.picked_machine();
         self.config = config;
-        if let Some(selected) = selected {
-            self.select_machine(selected);
+        if let Some(picked) = picked {
+            self.pick_machine_again(picked);
         }
     }
 

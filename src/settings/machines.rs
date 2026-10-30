@@ -10,6 +10,11 @@ const HERE_HINT: &str = "this computer runs the server you are using; it links t
 const UPDATE_NOTE: &str = "installs this version there with cornercase update; nothing restarts";
 const ADD_NOTE: &str = "another computer you reach with ssh";
 
+pub(super) enum Picked {
+    Machine { at: usize, machine: Machine, update: bool },
+    Add,
+}
+
 impl Settings {
     pub(super) fn machine_rows(&self) -> Vec<Row> {
         let mut rows = vec![Row::Here];
@@ -23,20 +28,37 @@ impl Settings {
         rows
     }
 
-    pub(super) fn selected_machine(&self) -> Option<(Machine, bool)> {
+    pub(super) fn picked_machine(&self) -> Option<Picked> {
+        let machine = |at: usize, update: bool| {
+            self.config.machines.get(at).map(|machine| Picked::Machine { at, machine: machine.clone(), update })
+        };
         match self.row()? {
-            Row::Machine(at) => Some((self.config.machines.get(at)?.clone(), false)),
-            Row::UpdateMachine(at) => Some((self.config.machines.get(at)?.clone(), true)),
+            Row::Machine(at) => machine(at, false),
+            Row::UpdateMachine(at) => machine(at, true),
+            Row::AddMachine => Some(Picked::Add),
             _ => None,
         }
     }
 
-    pub(super) fn select_machine(&mut self, (machine, update): (Machine, bool)) {
-        let Some(at) = self.config.machines.iter().position(|listed| *listed == machine) else { return };
+    pub(super) fn pick_machine_again(&mut self, picked: Picked) {
+        let wanted = match picked {
+            Picked::Add => Row::AddMachine,
+            Picked::Machine { at, machine, update } => {
+                let machines = &self.config.machines;
+                let kept = (machines.get(at) == Some(&machine)).then_some(at);
+                match kept.or_else(|| machines.iter().position(|listed| *listed == machine)) {
+                    Some(at) if update => Row::UpdateMachine(at),
+                    Some(at) => Row::Machine(at),
+                    None => Row::Here,
+                }
+            }
+        };
         let rows = self.rows();
-        let wanted = if update { Row::UpdateMachine(at) } else { Row::Machine(at) };
-        let found = rows.iter().position(|row| *row == wanted);
-        if let Some(i) = found.or_else(|| rows.iter().position(|row| *row == Row::Machine(at))) {
+        let found = rows.iter().position(|row| *row == wanted).or_else(|| match wanted {
+            Row::UpdateMachine(at) => rows.iter().position(|row| *row == Row::Machine(at)),
+            _ => None,
+        });
+        if let Some(i) = found {
             self.cursor = i;
         }
     }
