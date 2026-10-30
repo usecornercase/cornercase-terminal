@@ -355,6 +355,17 @@ mod handshake {
     }
 
     #[test]
+    fn a_long_unreadable_answer_is_cut_like_all_it_says() {
+        let rig = Rig::new(1, &Servers::new(HERE));
+        let mut theirs = rig.reach(VERSION, None);
+        request(&mut theirs);
+        respond(&mut theirs, &Response::Ok(Value::from("x".repeat(KEPT * 2))));
+        let said = "cannot read the answer from there: invalid type: string \"";
+        let why = format!("{said}{}", "x".repeat(KEPT - said.len()));
+        assert_eq!(rig.event(), down(Down::Unreachable(why), 1));
+    }
+
+    #[test]
     fn a_server_that_answers_with_this_one_s_boot_is_this_computer() {
         let rig = Rig::new(1, &Servers::new(HERE));
         let mut theirs = rig.reach(VERSION, None);

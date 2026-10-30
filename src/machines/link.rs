@@ -478,7 +478,8 @@ fn handshake(line: &mut Line) -> std::result::Result<Started, Ended> {
 }
 
 fn started(text: &str) -> std::result::Result<Started, Down> {
-    let unreadable = |e: serde_json::Error| Down::Unreachable(format!("cannot read the answer from there: {e}"));
+    let unreadable =
+        |e: serde_json::Error| Down::Unreachable(clean(&format!("cannot read the answer from there: {e}")));
     match serde_json::from_str(text).map_err(unreadable)? {
         Response::Ok(value) => serde_json::from_value(value).map_err(unreadable),
         Response::Error(message) => Err(Down::Unreachable(clean(&message))),
