@@ -588,7 +588,11 @@ impl Settings {
         if config.asana_workspace != self.config.asana_workspace {
             self.forget_asana_projects();
         }
+        let selected = self.selected_machine();
         self.config = config;
+        if let Some(selected) = selected {
+            self.select_machine(selected);
+        }
     }
 
     fn forget_asana_projects(&mut self) {

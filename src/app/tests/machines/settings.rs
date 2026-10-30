@@ -157,6 +157,32 @@ mod the_page {
     }
 
     #[test]
+    fn keeps_the_selected_machine_when_one_above_is_removed_outside() {
+        let three = vec![machine("vps", "vps.lan"), machine("pi", "pi.lan"), machine("mini", "mini.local")];
+        let mut rig = on_the_page(three);
+        send_key(&mut rig.app, KeyCode::Down, KeyModifiers::NONE);
+        send_key(&mut rig.app, KeyCode::Down, KeyModifiers::NONE);
+        assert_eq!(rig.selected(), Row::Machine(1));
+
+        rig.edit(vec![machine("pi", "pi.lan"), machine("mini", "mini.local")], Duration::from_secs(2));
+
+        assert_eq!(rig.selected(), Row::Machine(0));
+    }
+
+    #[test]
+    fn keeps_a_machine_s_state_in_its_row_when_its_folder_is_wide() {
+        let wide = Machine { folder: "~/项目/客户端/前端".into(), ..machine("vps", "miguel@vps.example.com") };
+        let mut rig = on_the_page(vec![wide]);
+        rig.app.machines.set_status(0, status(State::Linked));
+        rig.refresh(Duration::from_millis(500));
+
+        let shown = rig.shown(NARROW);
+
+        let row = shown.lines().find(|line| line.contains("vps")).expect("the machine's row");
+        assert!(row.contains("linked · 0.12.200  │"), "{row}");
+    }
+
+    #[test]
     fn shows_a_machine_added_outside() {
         let mut rig = on_the_page(Vec::new());
 

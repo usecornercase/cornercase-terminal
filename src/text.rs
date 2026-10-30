@@ -54,6 +54,28 @@ pub(crate) fn truncate_cells(s: &str, max: usize) -> String {
     format!("{}…", head.trim_end_matches('…'))
 }
 
+pub(crate) fn truncate_cells_left(s: &str, max: usize) -> String {
+    if cells(s) <= max || max < 2 {
+        return s.to_string();
+    }
+    let mut used = 0;
+    let mut tail: Vec<char> = s
+        .chars()
+        .rev()
+        .take_while(|ch| {
+            used += ch.width().unwrap_or(0);
+            used < max
+        })
+        .collect();
+    tail.reverse();
+    let tail: String = tail.into_iter().collect();
+    format!("…{}", tail.trim_start_matches('…'))
+}
+
+pub(crate) fn pad_cells(s: &str, width: usize) -> String {
+    format!("{s}{}", " ".repeat(width.saturating_sub(cells(s))))
+}
+
 pub(crate) fn clip_cells(s: &str, max: usize) -> String {
     let mut used = 0;
     s.chars()

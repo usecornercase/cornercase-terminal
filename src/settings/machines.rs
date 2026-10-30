@@ -1,5 +1,5 @@
 use crate::machines::{self, HERE_ICON, Info, Machine, State};
-use crate::text::truncate_left;
+use crate::text::{cells, pad_cells, truncate_cells_left};
 use crate::version;
 
 use super::{Action, Row, Settings};
@@ -21,6 +21,24 @@ impl Settings {
         }
         rows.push(Row::AddMachine);
         rows
+    }
+
+    pub(super) fn selected_machine(&self) -> Option<(Machine, bool)> {
+        match self.row()? {
+            Row::Machine(at) => Some((self.config.machines.get(at)?.clone(), false)),
+            Row::UpdateMachine(at) => Some((self.config.machines.get(at)?.clone(), true)),
+            _ => None,
+        }
+    }
+
+    pub(super) fn select_machine(&mut self, (machine, update): (Machine, bool)) {
+        let Some(at) = self.config.machines.iter().position(|listed| *listed == machine) else { return };
+        let rows = self.rows();
+        let wanted = if update { Row::UpdateMachine(at) } else { Row::Machine(at) };
+        let found = rows.iter().position(|row| *row == wanted);
+        if let Some(i) = found.or_else(|| rows.iter().position(|row| *row == Row::Machine(at))) {
+            self.cursor = i;
+        }
     }
 
     pub(crate) fn take_machines(&mut self, infos: Vec<Info>) {
@@ -71,12 +89,12 @@ impl Settings {
     }
 
     fn longest(&self, text: fn(&Machine) -> &str, most: usize) -> usize {
-        self.config.machines.iter().map(|machine| text(machine).chars().count()).max().unwrap_or_default().min(most)
+        self.config.machines.iter().map(|machine| cells(text(machine))).max().unwrap_or_default().min(most)
     }
 
     fn place(&self, machine: &Machine) -> String {
         let width = self.longest(|machine| &machine.destination, usize::MAX);
-        format!("{:<width$}", machine.destination)
+        pad_cells(&machine.destination, width)
     }
 
     pub(super) fn machine_tail(&self, row: &Row) -> String {
@@ -87,7 +105,7 @@ impl Settings {
             return String::new();
         };
         let width = self.longest(|machine| &machine.folder, FOLDER_WIDTH);
-        format!("{:<width$}", truncate_left(&machine.folder, width))
+        pad_cells(&truncate_cells_left(&machine.folder, width), width)
     }
 
     pub(super) fn machine_mark(&self, row: &Row) -> Option<State> {

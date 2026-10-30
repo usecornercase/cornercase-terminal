@@ -10,7 +10,7 @@ use super::{
     pick_background, tabs_in,
 };
 use crate::machines::State;
-use crate::text::{truncate_left, truncate_right};
+use crate::text::{cells, pad_cells, truncate_cells, truncate_cells_left, truncate_right};
 use crate::ui::View;
 use crate::ui::rows::{GAP, row_close_button};
 use crate::ui::widgets::{hovered, overlay_block, rail};
@@ -424,15 +424,15 @@ fn value_text(row: &SettingsRow, room: usize) -> String {
     if row.tail.is_empty() {
         return truncate_right(&row.value, room);
     }
-    let (value, tail) = (row.value.chars().count(), row.tail.chars().count());
+    let (value, tail) = (cells(&row.value), cells(&row.tail));
     if value + TAIL_GAP + tail <= room {
         return format!("{}{:TAIL_GAP$}{}", row.value, "", row.tail);
     }
     let tail_room = tail.min(room / 3);
     let value_room = room.saturating_sub(tail_room + TAIL_GAP);
-    let value = truncate_right(row.value.trim_end(), value_room);
-    let tail = truncate_left(row.tail.trim_end(), tail_room);
-    format!("{value:<value_room$}{:TAIL_GAP$}{tail:<tail_room$}", "")
+    let value = truncate_cells(row.value.trim_end(), value_room);
+    let tail = truncate_cells_left(row.tail.trim_end(), tail_room);
+    format!("{}{:TAIL_GAP$}{}", pad_cells(&value, value_room), "", pad_cells(&tail, tail_room))
 }
 
 fn mark_colour(view: &View, state: State) -> Color {
