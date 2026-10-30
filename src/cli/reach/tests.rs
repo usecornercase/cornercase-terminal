@@ -45,6 +45,7 @@ mod reaching {
     #[case::start_server(&["--remote", "devbox", "start-server"])]
     #[case::stats(&["--remote", "devbox", "stats"])]
     #[case::plugin_status(&["--remote", "devbox", "plugin", "status"])]
+    #[case::machines(&["--remote", "devbox", "machines", "retry", "vps"])]
     #[case::the_window(&["--remote", "devbox"])]
     fn goes_there(#[case] args: &[&str]) {
         let chosen = chosen(&parsed(args), &nothing).expect("allowed");

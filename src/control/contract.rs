@@ -14,7 +14,7 @@ pub(crate) const CHANGES_VERSION: u32 = 1;
 pub(crate) const FLOW_RUNS_VERSION: u32 = 1;
 pub(crate) const FLOW_MESSAGES_VERSION: u32 = 1;
 pub(crate) const FILES_VERSION: u32 = 1;
-pub(crate) const FEATURES: [&str; 28] = [
+pub(crate) const FEATURES: [&str; 29] = [
     "boot",
     "structured-errors",
     "strict-fields",
@@ -43,6 +43,7 @@ pub(crate) const FEATURES: [&str; 28] = [
     "files",
     "shared-files",
     "build-folders",
+    "machines",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

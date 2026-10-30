@@ -29,6 +29,7 @@ mod files;
 mod flow;
 mod help;
 mod issue;
+mod machines;
 mod plugin;
 mod ports;
 mod processes;
@@ -285,6 +286,7 @@ fn other_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
         Control::Ports(args) => return ControlFlow::Break(ports::run(&args)),
         Control::Processes(args) => return ControlFlow::Break(processes::run(&args)),
         Control::Worktrees(args) => worktrees::run(&args).map(|()| true),
+        Control::Machines(args) => machines::run(&args).map(|()| true),
         Control::Tour(args) => tour::run(&args).map(|()| true),
         Control::Queue(queue) => queue::run(queue.action).map(|()| true),
         Control::Away(away) => run_away(&away).map(|()| true),

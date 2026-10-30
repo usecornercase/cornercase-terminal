@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.230
+
+- **Machines from scripts.** `cornercase machines` (`--json`) lists the machines you work on with their state: **linked** (with its version), **unreachable** (for how long, and why) or **older**. `machines add`, `edit`, `remove`, `update` and `retry` change them; `update` installs your version on an older machine without restarting anything. It is the request `machines`, `cornercase contract` lists the feature `machines`, and `status --app` carries `machines`.
+
 ## 0.12.229
 
 - **cornercase keeps a link to each machine in `config.json`'s `machines`.** It goes through your own `ssh` and keys, and starts the machine's server with `cornercase start-server` when none is running. It never stops that server: not when the link drops, when this computer sleeps, or when you remove the machine. Links come back by themselves, all at once when this computer wakes up or its network address changes, and nothing on the machine can act on this computer through them. For now the list is edited by hand; the next versions add the ways to see and manage it.

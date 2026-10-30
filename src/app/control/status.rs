@@ -183,6 +183,7 @@ impl App {
             profile: self.config.active_profile().map(|(name, _)| name.to_string()),
             accounts: self.config.selected_accounts().clone(),
             popup: self.popup_info(),
+            machines: self.machine_infos(),
         }
     }
 

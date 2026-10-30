@@ -2,14 +2,16 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use super::App;
+use super::control::json;
 use super::event::AppEvent;
 use crate::control;
+use crate::control::contract::{Code, Refusal};
 use crate::error::Result;
 use crate::host::network;
 use crate::log::{self, Job, Level};
 use crate::machines::link::{self, Connect, Down, Event, Link, Report, Servers};
 use crate::machines::wake::{Network, Sleep};
-use crate::machines::{self, Machine, State, Status};
+use crate::machines::{self, Info, Machine, State, Status};
 
 const OLDER: &str = "its cornercase is older than this one";
 
@@ -19,7 +21,7 @@ pub(super) type Updater = Arc<dyn Fn(&str) -> Result<()> + Send + Sync>;
 #[derive(Debug)]
 pub(crate) enum MachineEvent {
     Link(Report),
-    Updated { link: u64, result: std::result::Result<(), String> },
+    Updated { link: u64, result: std::result::Result<(), String>, hidden: std::result::Result<(), String> },
 }
 
 impl From<Report> for AppEvent {
@@ -40,6 +42,7 @@ pub(super) struct Machines {
     connect: Connector,
     update: Updater,
     network: Network,
+    waiting: Vec<(u64, u64)>,
     synced: Vec<Machine>,
     servers: Servers,
     next: u64,
@@ -53,6 +56,7 @@ impl Machines {
             connect: Box::new(link::ssh),
             update: Arc::new(|destination| link::remote(destination).install_update()),
             network: Network::new(Box::new(network::default_route)),
+            waiting: Vec::new(),
             synced: Vec::new(),
             servers: Servers::new(control::server_token()),
             next: 1,
@@ -74,6 +78,18 @@ impl Machines {
             _ => None,
         };
         down.reason(&held.name, other)
+    }
+
+    pub(super) fn retry(&self, name: Option<&str>) {
+        let picked = |held: &&Held| name.is_none_or(|name| held.name.eq_ignore_ascii_case(name));
+        for held in self.held.iter().filter(picked) {
+            log::info!("machines", "retrying", name = held.name);
+            held.link.poke();
+        }
+    }
+
+    pub(super) fn wait_for_update(&mut self, link: u64, key: u64) {
+        self.waiting.push((link, key));
     }
 
     fn log_down(&self, held: &Held, failed: u32) {
@@ -112,7 +128,7 @@ fn updated(result: Result<Result<()>>, name: &str) -> std::result::Result<(), St
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Update {
-    Started,
+    Started(u64),
     Running,
     NotOlder,
     Unknown,
@@ -120,9 +136,7 @@ pub(super) enum Update {
 
 impl App {
     pub(super) fn sync_machines(&mut self, now: Instant, clock: i64) {
-        if self.machines.synced != self.config.machines {
-            self.match_machines();
-        }
+        self.follow_machines();
         let woke = self.machines.sleep.woke(clock, now);
         let moved = if self.machines.held.is_empty() {
             self.machines.network.rest();
@@ -133,6 +147,12 @@ impl App {
         if (woke || moved) && !self.machines.held.is_empty() {
             log::info!("machines", "retrying every link", woke = woke, network = moved);
             self.machines.held.iter().for_each(|held| held.link.poke());
+        }
+    }
+
+    pub(super) fn follow_machines(&mut self) {
+        if self.machines.synced != self.config.machines {
+            self.match_machines();
         }
     }
 
@@ -177,7 +197,7 @@ impl App {
     pub(super) fn machine_event(&mut self, event: MachineEvent) {
         match event {
             MachineEvent::Link(report) => self.machine_reported(report),
-            MachineEvent::Updated { link, result } => self.machine_updated(link, result),
+            MachineEvent::Updated { link, result, hidden } => self.machine_updated(link, &result, &hidden),
         }
     }
 
@@ -201,9 +221,9 @@ impl App {
         }
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "the settings and the request start it in the next commits"))]
     pub(super) fn update_machine(&mut self, name: &str) -> Update {
-        let Some(held) = self.machines.held.iter_mut().find(|held| held.name == name) else { return Update::Unknown };
+        let named = self.machines.held.iter_mut().find(|held| held.name.eq_ignore_ascii_case(name));
+        let Some(held) = named else { return Update::Unknown };
         if held.status.updating {
             return Update::Running;
         }
@@ -218,20 +238,51 @@ impl App {
         let there = destination.clone();
         let work = move || Ok(update(&there));
         self.spawn_job(job, work, move |result, job| {
-            let result = updated(result, &name)
-                .inspect_err(|why| job.fail(machines::hide_destination(why, &name, &destination)));
-            Some(AppEvent::Machine(MachineEvent::Updated { link, result }))
+            let result = updated(result, &name);
+            let hidden = result.clone().map_err(|why| machines::hide_destination(&why, &name, &destination));
+            if let Err(why) = &hidden {
+                job.fail(why);
+            }
+            Some(AppEvent::Machine(MachineEvent::Updated { link, result, hidden }))
         });
-        Update::Started
+        Update::Started(link)
     }
 
-    fn machine_updated(&mut self, link: u64, result: std::result::Result<(), String>) {
-        let Some(held) = self.machines.by_link(link) else { return };
-        held.status.updating = false;
-        match result {
-            Ok(()) => held.link.poke(),
-            Err(why) => held.status.update_failed = Some(why),
+    fn machine_updated(
+        &mut self,
+        link: u64,
+        result: &std::result::Result<(), String>,
+        told: &std::result::Result<(), String>,
+    ) {
+        if let Some(held) = self.machines.by_link(link) {
+            held.status.updating = false;
+            match result {
+                Ok(()) => held.link.poke(),
+                Err(why) => held.status.update_failed = Some(why.clone()),
+            }
         }
+        let (asked, left): (Vec<_>, Vec<_>) =
+            std::mem::take(&mut self.machines.waiting).into_iter().partition(|(waits, _)| *waits == link);
+        self.machines.waiting = left;
+        for (_, key) in asked {
+            let result = told.clone();
+            self.answer_read(key, move |app| match result {
+                Ok(()) => Ok(json(&app.machine_list())),
+                Err(why) => Err(Refusal::new(Code::Failed, why)),
+            });
+        }
+    }
+
+    pub(super) fn machine_infos(&self) -> Vec<Info> {
+        let problems = machines::problems(&self.config.machines);
+        let rows = self.config.machines.iter().zip(problems);
+        rows.map(|(machine, problem)| {
+            let unheld = problem.is_some();
+            let held = self.machines.held.iter().find(|held| !unheld && held.destination == machine.destination);
+            let error = held.and_then(|held| self.machines.reason(held));
+            Info::of(machine, held.map(|held| &held.status), problem, error)
+        })
+        .collect()
     }
 
     pub(super) fn stop_machines(&mut self) {

@@ -125,6 +125,15 @@ mod an_icon {
     fn unknown_is_shown_as_a_server(#[case] icon: &str) {
         assert_eq!(known_icon(icon), '☁');
     }
+
+    #[rstest]
+    #[case::its_glyph("◫", Some('◫'))]
+    #[case::its_name("home server", Some('⌂'))]
+    #[case::its_name_in_capitals("Laptop", Some('▭'))]
+    #[case::nothing_known("castle", None)]
+    fn is_named_by_its_glyph_or_its_name(#[case] text: &str, #[case] icon: Option<char>) {
+        assert_eq!(icon_named(text), icon);
+    }
 }
 
 mod an_entry_of_the_file {
@@ -233,6 +242,14 @@ mod a_status {
 
     const NOW: i64 = 1_793_000_000;
 
+    fn at(secs: i64) -> SystemTime {
+        UNIX_EPOCH + Duration::from_secs(u64::try_from(secs).expect("after 1970"))
+    }
+
+    fn note(status: &Status) -> String {
+        Info::of(&machine("vps", "vps.lan"), Some(status), None, None).note(at(NOW))
+    }
+
     fn linked(release: &str, running: &str) -> Status {
         let mut status = Status::default();
         status.linked(release.into(), running.into(), NOW - 60);
@@ -241,18 +258,18 @@ mod a_status {
 
     #[test]
     fn starts_connecting() {
-        assert_eq!(Status::default().note(NOW), "connecting…");
+        assert_eq!(note(&Status::default()), "connecting…");
     }
 
     #[test]
     fn linked_shows_the_cornercase_there() {
-        assert_eq!(linked("0.12.225", "0.12.225").note(NOW), "linked · 0.12.225");
+        assert_eq!(note(&linked("0.12.225", "0.12.225")), "linked · 0.12.225");
     }
 
     #[test]
     fn linked_to_an_older_running_server_says_until_when() {
         assert_eq!(
-            linked("0.12.225", "0.12.224").note(NOW),
+            note(&linked("0.12.225", "0.12.224")),
             "linked · 0.12.225 · its server runs 0.12.224 until it restarts there"
         );
     }
@@ -263,17 +280,17 @@ mod a_status {
     #[case::hours(2 * 3_600, "unreachable · 2 h")]
     #[case::a_day(86_400, "unreachable · 1 day")]
     #[case::days(4 * 86_400 + 7, "unreachable · 4 days")]
-    fn unreachable_counts_from_the_last_moment_it_was_up(#[case] ago: i64, #[case] note: &str) {
+    fn unreachable_counts_from_the_last_moment_it_was_up(#[case] ago: i64, #[case] expected: &str) {
         let mut status = linked("0.12.225", "0.12.225");
         status.down(Down::Unreachable("Connection reset".into()), NOW - ago);
-        assert_eq!(status.note(NOW), note);
+        assert_eq!(note(&status), expected);
     }
 
     #[test]
     fn unreachable_since_this_server_started_was_not_seen_yet() {
         let mut status = Status::default();
         status.down(Down::Unreachable("Connection refused".into()), NOW);
-        assert_eq!(status.note(NOW), "unreachable · not seen yet");
+        assert_eq!(note(&status), "unreachable · not seen yet");
     }
 
     #[test]
@@ -281,16 +298,16 @@ mod a_status {
         let mut status = linked("0.12.225", "0.12.225");
         status.down(Down::Unreachable("Connection reset".into()), NOW - 30);
         status.down(Down::Unreachable("Connection refused".into()), NOW - 10);
-        assert_eq!((status.seen, status.note(NOW).as_str()), (Some(NOW - 30), "unreachable · 30 s"));
+        assert_eq!((status.seen, note(&status).as_str()), (Some(NOW - 30), "unreachable · 30 s"));
     }
 
     #[rstest]
     #[case::with_its_release(Some("0.0.1"), "older · 0.0.1")]
     #[case::from_before_the_proxy(None, "older")]
-    fn older_names_the_release_there(#[case] there: Option<&str>, #[case] note: &str) {
+    fn older_names_the_release_there(#[case] there: Option<&str>, #[case] expected: &str) {
         let mut status = Status::default();
         status.down(Down::Older(there.map(String::from)), NOW);
-        assert_eq!((status.state, status.note(NOW).as_str()), (State::Older, note));
+        assert_eq!((status.state, note(&status).as_str()), (State::Older, expected));
     }
 
     #[test]
@@ -298,7 +315,7 @@ mod a_status {
         let mut status = Status::default();
         status.down(Down::Older(Some("0.0.1".into())), NOW);
         status.updating = true;
-        assert_eq!(status.note(NOW), "updating…");
+        assert_eq!(note(&status), "updating…");
     }
 
     #[test]
@@ -316,6 +333,43 @@ mod a_status {
         status.updating = true;
         status.linked("0.12.225".into(), "0.12.225".into(), NOW);
         assert_eq!((status.state, status.updating), (State::Linked, true));
+    }
+}
+
+mod a_row {
+    use super::*;
+
+    #[test]
+    fn of_an_entry_with_a_problem_says_it_and_has_no_link() {
+        let info = Info::of(&machine("my vps", "vps.lan"), None, Some("use letters".into()), None);
+        assert_eq!(
+            (info.state, info.mark(), info.note(SystemTime::now())),
+            (State::Unreachable, '○', "use letters".into())
+        );
+    }
+
+    #[test]
+    fn of_a_machine_not_linked_yet_is_connecting() {
+        let info = Info::of(&machine("vps", "vps.lan"), None, None, None);
+        assert_eq!((info.state, info.mark()), (State::Connecting, '◌'));
+    }
+
+    #[test]
+    fn shows_an_unknown_icon_as_a_server_and_its_last_moment_up_as_a_time() {
+        let mut status = Status::default();
+        status.linked("0.12.225".into(), "0.12.225".into(), 1_793_000_000);
+        let odd = Machine { icon: "★".into(), ..machine("vps", "vps.lan") };
+        let info = Info::of(&odd, Some(&status), None, None);
+        assert_eq!((info.icon.as_str(), info.seen.as_deref()), ("☁", Some("2026-10-26T07:33:20.000Z")));
+    }
+
+    #[rstest]
+    #[case::connecting(State::Connecting, '◌')]
+    #[case::linked(State::Linked, '●')]
+    #[case::unreachable(State::Unreachable, '○')]
+    #[case::older(State::Older, '◐')]
+    fn marks_its_state(#[case] state: State, #[case] mark: char) {
+        assert_eq!(state.mark(), mark);
     }
 }
 

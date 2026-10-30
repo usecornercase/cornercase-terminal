@@ -1,15 +1,19 @@
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 use crate::text;
+use crate::time::Stamp;
 use link::Down;
 
 pub(crate) mod link;
 pub(crate) mod wake;
 
-#[cfg_attr(not(test), expect(dead_code, reason = "the settings and the request show them in the next commits"))]
 pub(crate) const ICONS: [(char, &str); 6] =
     [('☁', "server"), ('▭', "laptop"), ('▣', "desktop"), ('◫', "mini"), ('⌂', "home server"), ('◆', "other")];
+pub(crate) const HERE_ICON: char = '▭';
+pub(crate) const DEFAULT_FOLDER: &str = "~/code";
 
 const NAME_MAX: usize = 20;
 const UPDATING: &str = "updating…";
@@ -47,9 +51,16 @@ pub(crate) fn problems(machines: &[Machine]) -> Vec<Option<String>> {
     machines.iter().enumerate().map(|(at, machine)| machine.problem(&machines[..at])).collect()
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "the settings and the request show it in the next commits"))]
 pub(crate) fn known_icon(icon: &str) -> char {
     ICONS.iter().map(|(glyph, _)| *glyph).find(|glyph| icon.chars().eq([*glyph])).unwrap_or(ICONS[0].0)
+}
+
+pub(crate) fn icon_named(text: &str) -> Option<char> {
+    let text = text.trim();
+    ICONS
+        .iter()
+        .find(|(glyph, name)| text.chars().eq([*glyph]) || name.eq_ignore_ascii_case(text))
+        .map(|(glyph, _)| *glyph)
 }
 
 pub(crate) fn valid_name(name: &str) -> Result<(), &'static str> {
@@ -152,35 +163,25 @@ impl Status {
         }
         self.down = Some(down);
     }
-
-    #[cfg_attr(not(test), expect(dead_code, reason = "the settings show it in the next commits"))]
-    pub(crate) fn note(&self, now: i64) -> String {
-        if self.updating {
-            return UPDATING.into();
-        }
-        match self.state {
-            State::Connecting => CONNECTING.into(),
-            State::Linked => {
-                let release = self.version.as_deref().unwrap_or_default();
-                let running = self.server_version.as_deref().filter(|running| *running != release);
-                let note = running.map(|running| format!(" · its server runs {running} until it restarts there"));
-                format!("linked · {release}{}", note.unwrap_or_default())
-            }
-            State::Unreachable => {
-                format!("unreachable · {}", self.seen.map_or_else(|| NOT_SEEN.into(), |seen| ago(now - seen)))
-            }
-            State::Older => self.version.as_ref().map_or_else(|| "older".into(), |there| format!("older · {there}")),
-        }
-    }
 }
 
-fn ago(secs: i64) -> String {
-    let secs = secs.max(0);
+fn ago(secs: u64) -> String {
     match secs {
         0..60 => format!("{secs} s"),
         60..3_600 => format!("{} min", secs / 60),
         3_600..86_400 => format!("{} h", secs / 3_600),
         _ => text::plural(usize::try_from(secs / 86_400).unwrap_or(usize::MAX), "day", "days"),
+    }
+}
+
+impl State {
+    pub(crate) fn mark(self) -> char {
+        match self {
+            Self::Connecting => '◌',
+            Self::Linked => '●',
+            Self::Unreachable => '○',
+            Self::Older => '◐',
+        }
     }
 }
 
@@ -222,7 +223,6 @@ fn in_host(c: char) -> bool {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
-#[cfg_attr(not(test), expect(dead_code, reason = "the request and the settings build it in the next commits"))]
 pub(crate) struct Info {
     pub(crate) name: String,
     pub(crate) icon: String,
@@ -235,6 +235,60 @@ pub(crate) struct Info {
     pub(crate) error: Option<String>,
     pub(crate) updating: bool,
     pub(crate) problem: Option<String>,
+}
+
+impl Info {
+    pub(crate) fn of(
+        machine: &Machine,
+        status: Option<&Status>,
+        problem: Option<String>,
+        error: Option<String>,
+    ) -> Self {
+        let unlinked = if problem.is_some() { State::Unreachable } else { State::Connecting };
+        let seen = status.and_then(|status| status.seen).and_then(|secs| u64::try_from(secs).ok());
+        Self {
+            name: machine.name.clone(),
+            icon: known_icon(&machine.icon).to_string(),
+            destination: machine.destination.clone(),
+            folder: machine.folder.clone(),
+            state: status.map_or(unlinked, |status| status.state),
+            version: status.and_then(|status| status.version.clone()),
+            server_version: status.and_then(|status| status.server_version.clone()),
+            seen: seen.map(|secs| Stamp(UNIX_EPOCH + Duration::from_secs(secs)).to_string()),
+            error,
+            updating: status.is_some_and(|status| status.updating),
+            problem,
+        }
+    }
+
+    pub(crate) fn mark(&self) -> char {
+        if self.problem.is_some() { State::Unreachable.mark() } else { self.state.mark() }
+    }
+
+    pub(crate) fn note(&self, now: SystemTime) -> String {
+        if let Some(problem) = &self.problem {
+            return problem.clone();
+        }
+        if self.updating {
+            return UPDATING.into();
+        }
+        match self.state {
+            State::Connecting => CONNECTING.into(),
+            State::Linked => {
+                let release = self.version.as_deref().unwrap_or_default();
+                let running = self.server_version.as_deref().filter(|running| *running != release);
+                let note = running.map(|running| format!(" · its server runs {running} until it restarts there"));
+                format!("linked · {release}{}", note.unwrap_or_default())
+            }
+            State::Unreachable => format!("unreachable · {}", self.seen_ago(now).unwrap_or_else(|| NOT_SEEN.into())),
+            State::Older => self.version.as_ref().map_or_else(|| "older".into(), |there| format!("older · {there}")),
+        }
+    }
+
+    fn seen_ago(&self, now: SystemTime) -> Option<String> {
+        let seen = Stamp::parse(self.seen.as_deref()?)?;
+        Some(ago(now.duration_since(seen).unwrap_or_default().as_secs()))
+    }
 }
 
 #[cfg(test)]
