@@ -24,6 +24,8 @@ pub(crate) mod graphics;
 pub(crate) mod highlight;
 pub mod host;
 pub(crate) mod issues;
+#[cfg_attr(not(test), expect(dead_code, reason = "the links, the settings and the request use it in the next commits"))]
+pub(crate) mod machines;
 pub(crate) mod messenger;
 pub(crate) mod plugins;
 pub(crate) mod ports;

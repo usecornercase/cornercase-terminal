@@ -199,7 +199,7 @@ The text holds five sections, each of which the other person can leave out:
 | `interface` | Every switch of the UI tab, from [`sidebar`](#sidebar) to [`tour`](#tour), with the sounds and the [prefix key](#prefix_key) |
 | `repositories` | Each project's [setup and teardown](../../guides/worktrees/#set-up-each-new-worktree), found by the project's git remotes (such as `github.com/acme/web-shop`) rather than its folder, so it reaches the same repository wherever your colleague cloned it |
 
-It never holds a token, a chat bot, a paired chat or browser, your accounts and profiles, [`jira_email`](#jira_email), [`remote`](#remote), [`remote_port`](#remote_port) or [`keep_awake`](#keep_awake). It lists the trackers you are connected to, by name only, so the other side is told which to connect. A setup or a prompt is copied as you typed it, so when one looks like it holds a secret (`NPM_TOKEN=…`, `--api-key …`, `Bearer …`) the toast says where, in red: check before you send it.
+It never holds a token, a chat bot, a paired chat or browser, your accounts and profiles, [`jira_email`](#jira_email), [`remote`](#remote), [`remote_port`](#remote_port), [`keep_awake`](#keep_awake) or your [`machines`](#machines). It lists the trackers you are connected to, by name only, so the other side is told which to connect. A setup or a prompt is copied as you typed it, so when one looks like it holds a secret (`NPM_TOKEN=…`, `--api-key …`, `Bearer …`) the toast says where, in red: check before you send it.
 
 To import one, paste it on Share (or anywhere on a settings tab) and click **` preview `**. **Settings › Import** shows every setting that would change, as its value now → the shared one, grouped by section; a repository's setup and teardown are shown in full, a line at a time, in red:
 
@@ -358,6 +358,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`profile`](#profile) | string | `""` |
 | [`account_names`](#account_names) | object | `{}` |
 | [`active_accounts`](#active_accounts) | object | `{}` |
+| [`machines`](#machines) | array | `[]` |
 
 #### `worktrees_dir`
 
@@ -637,6 +638,17 @@ Each agent's default account while no [profile](#profile) is active: what a new 
 
 ```json
 "active_accounts": { "claude": "personal" }
+```
+
+#### `machines`
+
+The other computers your work can run on: each with its `name` (letters, digits, `.`, `_` and `-`, at most 20, different from the others' ignoring case), its `icon` (`☁`, `▭`, `▣`, `◫`, `⌂` or `◆`; another one shows as `☁`), its `destination` for `ssh` (a `Host` of `~/.ssh/config` or `user@host`, different from the others') and its `folder` for clones there (absolute or starting with `~/`). Nothing uses them yet: the links to them come in a later version. Left out of the file while you have none. It isn't part of the settings you [share](#share-your-setup).
+
+```json
+"machines": [
+  { "name": "vps", "icon": "☁", "destination": "ana@vps.example.com", "folder": "~/code" },
+  { "name": "mini", "icon": "◫", "destination": "mac-mini.local", "folder": "~/code" }
+]
 ```
 
 ### A customised example
