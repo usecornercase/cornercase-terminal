@@ -19,7 +19,7 @@ entry of config.json, which then gets no link. Every subcommand prints the list 
 Examples:
   cornercase machines
   cornercase machines add vps miguel@vps.example.com --icon server
-  cornercase machines edit vps --folder ~/src
+  cornercase machines edit vps --folder '~/src'
   cornercase machines retry vps
   cornercase machines remove vps";
 

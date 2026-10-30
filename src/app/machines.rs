@@ -136,9 +136,7 @@ pub(super) enum Update {
 
 impl App {
     pub(super) fn sync_machines(&mut self, now: Instant, clock: i64) {
-        if self.machines.synced != self.config.machines {
-            self.match_machines();
-        }
+        self.follow_machines();
         let woke = self.machines.sleep.woke(clock, now);
         let moved = if self.machines.held.is_empty() {
             self.machines.network.rest();
@@ -149,6 +147,12 @@ impl App {
         if (woke || moved) && !self.machines.held.is_empty() {
             log::info!("machines", "retrying every link", woke = woke, network = moved);
             self.machines.held.iter().for_each(|held| held.link.poke());
+        }
+    }
+
+    pub(super) fn follow_machines(&mut self) {
+        if self.machines.synced != self.config.machines {
+            self.match_machines();
         }
     }
 

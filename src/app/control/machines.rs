@@ -41,6 +41,28 @@ fn added(set: &MachineSet) -> Result<Machine, Refusal> {
     })
 }
 
+fn position(machines: &[Machine], name: &str) -> Option<usize> {
+    machines.iter().position(|machine| machine.name.eq_ignore_ascii_case(name.trim()))
+}
+
+fn resolved(machines: &[Machine], set: &MachineSet) -> Result<(Option<usize>, Machine), Refusal> {
+    let at = position(machines, &set.name);
+    let machine = match (at, set.create) {
+        (Some(at), Some(true)) => {
+            return Err(conflict(format!("a machine is already called `{}`", machines[at].name)));
+        }
+        (None, Some(false)) => return Err(unknown(&set.name)),
+        (Some(at), _) => edited(&machines[at], set)?,
+        (None, _) => added(set)?,
+    };
+    let mut others = machines.to_vec();
+    if let Some(at) = at {
+        others.remove(at);
+    }
+    checked(&machine, &others)?;
+    Ok((at, machine))
+}
+
 fn checked(machine: &Machine, others: &[Machine]) -> Result<(), Refusal> {
     machines::valid_name(&machine.name).map_err(malformed)?;
     machines::valid_destination(&machine.destination).map_err(malformed)?;
@@ -70,45 +92,39 @@ impl App {
     }
 
     fn machine_at(&self, name: &str) -> Option<usize> {
-        self.config.machines.iter().position(|machine| machine.name.eq_ignore_ascii_case(name.trim()))
+        position(&self.config.machines, name)
     }
 
     fn set_machine(&mut self, set: &MachineSet) -> Result<(), Refusal> {
-        self.readable_config()?;
-        let at = self.machine_at(&set.name);
-        let machine = match (at, set.create) {
-            (Some(at), Some(true)) => {
-                return Err(conflict(format!("a machine is already called `{}`", self.config.machines[at].name)));
+        let mut refused = None;
+        self.change_config_for(|config| match resolved(&config.machines, set) {
+            Ok((at, machine)) => {
+                log::info!("machines", "machine set", name = machine.name, new = at.is_none());
+                match at {
+                    Some(at) => config.machines[at] = machine,
+                    None => config.machines.push(machine),
+                }
             }
-            (None, Some(false)) => return Err(unknown(&set.name)),
-            (Some(at), _) => edited(&self.config.machines[at], set)?,
-            (None, _) => added(set)?,
-        };
-        let mut others = self.config.machines.clone();
-        if let Some(at) = at {
-            others.remove(at);
-        }
-        checked(&machine, &others)?;
-        log::info!("machines", "machine set", name = machine.name, new = at.is_none());
-        self.change_config_for(|config| match at.filter(|at| *at < config.machines.len()) {
-            Some(at) => config.machines[at] = machine,
-            None => config.machines.push(machine),
-        })
+            Err(refusal) => refused = Some(refusal),
+        })?;
+        refused.map_or(Ok(()), Err)
     }
 
     fn remove_machine(&mut self, name: &str) -> Result<(), Refusal> {
-        self.readable_config()?;
-        let at = self.machine_at(name).ok_or_else(|| unknown(name))?;
-        let gone = self.config.machines[at].clone();
-        log::info!("machines", "machine removed", name = gone.name);
+        let mut found = false;
         self.change_config_for(|config| {
-            if let Some(found) = config.machines.iter().position(|machine| *machine == gone) {
-                config.machines.remove(found);
+            if let Some(at) = position(&config.machines, name) {
+                let gone = config.machines.remove(at);
+                log::info!("machines", "machine removed", name = gone.name);
+                found = true;
             }
-        })
+        })?;
+        if found { Ok(()) } else { Err(unknown(name)) }
     }
 
     fn update_machine_request(&mut self, client: u64, name: &str) -> Handled {
+        let name = name.trim();
+        self.follow_machines();
         match self.update_machine(name) {
             Update::Started(link) => {
                 let key = self.clients.requests.key();
@@ -124,10 +140,12 @@ impl App {
         }
     }
 
-    fn retry_machines(&self, name: Option<&str>) -> Result<(), Refusal> {
+    fn retry_machines(&mut self, name: Option<&str>) -> Result<(), Refusal> {
+        let name = name.map(str::trim);
         if let Some(name) = name.filter(|name| self.machine_at(name).is_none()) {
             return Err(unknown(name));
         }
+        self.follow_machines();
         self.machines.retry(name);
         Ok(())
     }

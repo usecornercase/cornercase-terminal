@@ -233,6 +233,30 @@ mod update {
     }
 
     #[test]
+    fn of_a_name_with_spaces_is_of_that_machine() {
+        let mut rig = older();
+        rig.app.machines.set_updater(Arc::new(|_: &str| Ok(())));
+
+        assert!(rig.ask_later(&json!({"action": "update", "entry": " vps "})).is_ok());
+    }
+
+    #[test]
+    fn right_after_its_destination_changed_never_reaches_the_old_one() {
+        let mut rig = older();
+        let reached = Arc::new(Mutex::new(Vec::new()));
+        let seen = Arc::clone(&reached);
+        rig.app.machines.set_updater(Arc::new(move |destination: &str| {
+            seen.lock().push(destination.to_string());
+            Ok(())
+        }));
+        rig.ask(&json!({"action": "set", "entry": {"name": "vps", "destination": "new.lan"}})).expect("edited");
+
+        let message = "`vps` is not older than this cornercase: nothing to install";
+        assert_eq!(rig.ask(&json!({"action": "update", "entry": "vps"})), refused("conflict", message));
+        assert!(reached.lock().is_empty());
+    }
+
+    #[test]
     fn of_a_machine_that_is_not_older_is_a_conflict() {
         let mut rig = Rig::new(vec![machine("vps", "vps.lan"), machine("my vps", "box.lan")], There::Missing);
 
@@ -252,6 +276,16 @@ mod retry {
         rig.until("the first attempt fails", |app| app.machines.held()[0].status.state == State::Unreachable);
 
         rig.ask(&json!({"action": "retry", "entry": "vps"})).expect("retried");
+
+        wait_until("the link tries again", || rig.seen("connect vps.lan") == 2);
+    }
+
+    #[test]
+    fn of_a_name_with_spaces_tries_that_link() {
+        let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Missing);
+        rig.until("the first attempt fails", |app| app.machines.held()[0].status.state == State::Unreachable);
+
+        rig.ask(&json!({"action": "retry", "entry": " vps "})).expect("retried");
 
         wait_until("the link tries again", || rig.seen("connect vps.lan") == 2);
     }
