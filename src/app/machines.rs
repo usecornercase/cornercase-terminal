@@ -36,10 +36,10 @@ pub(super) struct Held {
 }
 
 pub(super) struct Machines {
-    pub(super) held: Vec<Held>,
-    pub(super) connect: Connector,
-    pub(super) update: Updater,
-    pub(super) network: Network,
+    held: Vec<Held>,
+    connect: Connector,
+    update: Updater,
+    network: Network,
     synced: Vec<Machine>,
     servers: Servers,
     next: u64,
@@ -80,6 +80,25 @@ impl Machines {
         let why = self.reason(held).unwrap_or_else(|| OLDER.into());
         let error = machines::hide_destination(&why, &held.name, &held.destination);
         log::warning!("machines", "machine unreachable", name = held.name, failed = failed, error = error);
+    }
+}
+
+#[cfg(test)]
+impl Machines {
+    pub(super) fn held(&self) -> &[Held] {
+        &self.held
+    }
+
+    pub(super) fn set_connector(&mut self, connect: Connector) {
+        self.connect = connect;
+    }
+
+    pub(super) fn set_updater(&mut self, update: Updater) {
+        self.update = update;
+    }
+
+    pub(super) fn set_network(&mut self, network: Network) {
+        self.network = network;
     }
 }
 

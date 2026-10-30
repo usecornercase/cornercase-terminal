@@ -92,11 +92,11 @@ impl Rig {
         let (mut app, rx) = new_app(write_config(dir.path(), &Config { machines, ..Config::default() }));
         let seen = Seen::default();
         let given = seen.clone();
-        app.machines.connect = Box::new(move |destination| {
+        app.machines.set_connector(Box::new(move |destination| {
             given.note(format!("start {destination}"));
             Box::new(Fake { destination: destination.into(), there: there.clone(), seen: given.clone() })
-        });
-        app.machines.network = Network::new(Box::new(Route::default));
+        }));
+        app.machines.set_network(Network::new(Box::new(Route::default)));
         let start = Instant::now();
         app.refresh_at(start, CLOCK);
         Self { app, rx, dir, seen, start }
@@ -124,15 +124,15 @@ impl Rig {
     }
 
     fn links(&self) -> Vec<u64> {
-        self.app.machines.held.iter().map(|held| held.link.id()).collect()
+        self.app.machines.held().iter().map(|held| held.link.id()).collect()
     }
 
     fn state(&self, name: &str) -> Option<State> {
-        self.app.machines.held.iter().find(|held| held.name == name).map(|held| held.status.state)
+        self.app.machines.held().iter().find(|held| held.name == name).map(|held| held.status.state)
     }
 
     fn reason(&self, name: &str) -> Option<String> {
-        let held = self.app.machines.held.iter().find(|held| held.name == name)?;
+        let held = self.app.machines.held().iter().find(|held| held.name == name)?;
         self.app.machines.reason(held)
     }
 }
@@ -160,7 +160,7 @@ mod links {
         rig.edit(vec![renamed], Duration::from_secs(2));
 
         assert_eq!(rig.links(), links);
-        assert_eq!(rig.app.machines.held[0].name, "box");
+        assert_eq!(rig.app.machines.held()[0].name, "box");
         assert_eq!(rig.seen("start vps.lan"), 1);
     }
 
@@ -213,7 +213,7 @@ mod states {
         let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Missing);
         assert_eq!(rig.state("vps"), Some(State::Connecting));
 
-        rig.until("the link reports", |app| app.machines.held[0].status.state == State::Unreachable);
+        rig.until("the link reports", |app| app.machines.held()[0].status.state == State::Unreachable);
 
         assert_eq!(rig.reason("vps").as_deref(), Some("cornercase was not found on vps: install it there"));
     }
@@ -222,7 +222,7 @@ mod states {
     fn a_machine_whose_server_answers_this_one_s_boot_is_this_computer() {
         let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Server(control::server_token().into()));
 
-        rig.until("the link reports", |app| app.machines.held[0].status.state == State::Unreachable);
+        rig.until("the link reports", |app| app.machines.held()[0].status.state == State::Unreachable);
 
         assert_eq!(rig.reason("vps").as_deref(), Some("that is this computer"));
     }
@@ -233,7 +233,7 @@ mod states {
         let mut rig = Rig::new(both, There::Server("shared-1".into()));
 
         rig.until("both links report", |app| {
-            app.machines.held.iter().all(|held| held.status.state != State::Connecting)
+            app.machines.held().iter().all(|held| held.status.state != State::Connecting)
         });
 
         let linked: Vec<&str> =
@@ -248,9 +248,9 @@ mod states {
     fn a_linked_machine_has_its_versions_and_no_reason() {
         let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Server("vps-1".into()));
 
-        rig.until("the link reports", |app| app.machines.held[0].status.state == State::Linked);
+        rig.until("the link reports", |app| app.machines.held()[0].status.state == State::Linked);
 
-        let status = &rig.app.machines.held[0].status;
+        let status = &rig.app.machines.held()[0].status;
         assert_eq!(
             (status.version.as_deref(), status.server_version.as_deref()),
             (Some(version::CURRENT), Some(version::CURRENT))
@@ -275,7 +275,7 @@ mod pokes {
 
     fn tried_once() -> Rig {
         let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Missing);
-        rig.until("the first attempt fails", |app| app.machines.held[0].status.state == State::Unreachable);
+        rig.until("the first attempt fails", |app| app.machines.held()[0].status.state == State::Unreachable);
         assert_eq!(rig.seen("connect vps.lan"), 1);
         rig
     }
@@ -294,7 +294,7 @@ mod pokes {
         let mut rig = tried_once();
         let home = Route { v4: Some("192.168.1.20".parse().expect("an address")), v6: None };
         let mut routes = VecDeque::from([Route::default(), home]);
-        rig.app.machines.network = Network::new(Box::new(move || routes.pop_front().unwrap_or(home)));
+        rig.app.machines.set_network(Network::new(Box::new(move || routes.pop_front().unwrap_or(home))));
 
         rig.refresh(Duration::from_secs(1));
         assert_eq!(rig.seen("connect vps.lan"), 1);
@@ -319,7 +319,7 @@ mod updates {
 
     fn older() -> Rig {
         let mut rig = Rig::new(vec![machine("vps", "vps.lan"), machine("pi", "pi.lan")], There::Older);
-        rig.until("the links report", |app| app.machines.held.iter().all(|held| held.status.state == State::Older));
+        rig.until("the links report", |app| app.machines.held().iter().all(|held| held.status.state == State::Older));
         rig
     }
 
@@ -329,18 +329,18 @@ mod updates {
         let (go, gate) = mpsc::channel::<()>();
         let (gate, asked) = (Mutex::new(gate), Arc::new(Mutex::new(Vec::new())));
         let given = Arc::clone(&asked);
-        rig.app.machines.update = Arc::new(move |destination: &str| {
+        rig.app.machines.set_updater(Arc::new(move |destination: &str| {
             given.lock().push(destination.to_string());
             let _ = gate.lock().recv();
             Ok(())
-        });
+        }));
 
         assert_eq!(rig.app.update_machine("vps"), Update::Started);
-        assert!(rig.app.machines.held[0].status.updating);
+        assert!(rig.app.machines.held()[0].status.updating);
         assert_eq!(rig.app.update_machine("vps"), Update::Running);
         go.send(()).expect("let the update finish");
 
-        rig.until("the update ends", |app| !app.machines.held[0].status.updating);
+        rig.until("the update ends", |app| !app.machines.held()[0].status.updating);
         wait_until("the link tries again", || rig.seen("connect vps.lan") == 2);
         assert_eq!(*asked.lock(), ["vps.lan"]);
     }
@@ -348,13 +348,13 @@ mod updates {
     #[test]
     fn that_fail_say_what_was_printed_there() {
         let mut rig = older();
-        rig.app.machines.update = Arc::new(|_: &str| {
+        rig.app.machines.set_updater(Arc::new(|_: &str| {
             Err(Error::Ssh { host: "vps.lan".into(), reason: "brew update && brew upgrade cornercase".into() })
-        });
+        }));
 
         rig.app.update_machine("pi");
 
-        rig.until("the update ends", |app| !app.machines.held[1].status.updating);
+        rig.until("the update ends", |app| !app.machines.held()[1].status.updating);
         assert_eq!(rig.reason("pi").as_deref(), Some("brew update && brew upgrade cornercase"));
         assert_eq!(rig.state("pi"), Some(State::Older));
     }
@@ -362,7 +362,7 @@ mod updates {
     #[test]
     fn are_only_for_an_older_machine_that_exists() {
         let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Missing);
-        rig.until("the link reports", |app| app.machines.held[0].status.state == State::Unreachable);
+        rig.until("the link reports", |app| app.machines.held()[0].status.state == State::Unreachable);
 
         assert_eq!(rig.app.update_machine("vps"), Update::NotOlder);
         assert_eq!(rig.app.update_machine("pi"), Update::Unknown);
@@ -377,14 +377,14 @@ mod fakes {
         let dir = TempDir::new();
         let config = Config { machines: vec![machine("pi", "pi.lan")], ..Config::default() };
         let (mut app, rx) = new_app(write_config(dir.path(), &config));
-        app.machines.network = Network::new(Box::new(Route::default));
+        app.machines.set_network(Network::new(Box::new(Route::default)));
         app.refresh_at(Instant::now(), CLOCK);
 
         wait_until("the link reports", || {
             drain(&mut app, &rx);
-            app.machines.held.first().is_some_and(|held| held.status.state == State::Unreachable)
+            app.machines.held().first().is_some_and(|held| held.status.state == State::Unreachable)
         });
 
-        assert_eq!(app.machines.reason(&app.machines.held[0]).as_deref(), Some(NO_SSH));
+        assert_eq!(app.machines.reason(&app.machines.held()[0]).as_deref(), Some(NO_SSH));
     }
 }
