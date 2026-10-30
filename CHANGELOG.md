@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.232
+
+- **Clone a repository and open it from a terminal or a script.** `cornercase clone URL [FOLDER]` runs `git clone` into a new folder inside FOLDER (the current one by default), named after the repository, opens it as a project and prints its path. It refuses a folder that is already there and not empty, says what failed when the URL is not a repository or access is denied, and a failed clone leaves no folder behind. With `--remote` it clones on the other machine, into its home folder by default. It is the request `clone`, which `cornercase contract` lists.
+
 ## 0.12.231
 
 - **List the machines you work on in Settings › Machines.** It lists this computer and the machines you add with **+ add machine**: a name, an icon, an ssh destination (`user@host` or a host from `~/.ssh/config`) and a folder for clones. Each row says whether the machine is **linked** (with its version), **unreachable** (for how long, and why on the line at the bottom) or **older**, and an older one has **update…**, which installs your version there without restarting anything.
