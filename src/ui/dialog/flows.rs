@@ -6,8 +6,8 @@ use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 use super::issues::issue_buttons_in;
 use super::settings::{
-    Columns, SettingsEdit, SettingsHit, SettingsPick, SettingsRow, Table, draw_pick, draw_rows, hit_in_rows, line_rect,
-    pick_hit, pick_list_in,
+    Columns, SettingsEdit, SettingsHit, SettingsPick, SettingsRow, Table, draw_find_prompt, draw_pick, draw_rows,
+    hit_in_rows, line_rect, pick_hit, pick_list_in,
 };
 use super::{Note, draw_input, draw_secondary, draw_submit, draw_tabs, form_inner, tabs_in};
 use crate::editor::Editor;
@@ -101,6 +101,7 @@ pub(crate) enum FlowPreview {
 pub(crate) struct Flows {
     pub(crate) title: String,
     pub(crate) heading: String,
+    pub(crate) search: bool,
     pub(crate) tabs: Vec<String>,
     pub(crate) tab: usize,
     pub(crate) rows: Vec<SettingsRow>,
@@ -231,6 +232,9 @@ fn draw_flows_heading(f: &mut Frame, view: &View, flows: &Flows, area: Rect, tab
     } else {
         let names = flows.tab_names();
         draw_tabs(f, view, &flows_tabs(area, &names), &names, flows.tab);
+    }
+    if flows.search {
+        draw_find_prompt(f, view, Rect { y: tabs.bottom(), ..tabs });
     }
 }
 

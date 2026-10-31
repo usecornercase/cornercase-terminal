@@ -166,6 +166,17 @@ const NO_RUN = 'this workspace runs no flow';
 const NO_AGENT_TO_CLOSE = 'no agent to close in this workspace';
 const NO_CLOSED_AGENTS = 'this workspace has no closed agents';
 
+const searchWords = (text: string): string[] => text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+
+export interface SettingsHit {
+  page: number;
+  i?: number;
+  row?: SettingsRow;
+  title: string;
+  value: string;
+  note: string;
+}
+
 export interface SettingsRow {
   id: string;
   section: string;
@@ -3127,11 +3138,56 @@ export class App {
     if (o?.kind === 'settings') o.cursor = Math.max(0, this.settingsRows(page).findIndex((row) => row.id === id));
   }
 
+  settingsHits(query: string): SettingsHit[] {
+    const needles = searchWords(query);
+    if (!needles.length) return [];
+    const hits: (SettingsHit & { tier: number })[] = [];
+    const add = (hit: SettingsHit, place: string, rest: string) => {
+      const groups = [searchWords(hit.row?.label ?? PAGE_NAMES[hit.page]), searchWords(place), searchWords(rest)];
+      const tiers = needles.map((n) => groups.findIndex((g) => g.some((word) => word.startsWith(n))));
+      if (!tiers.includes(-1)) hits.push({ ...hit, tier: Math.max(...tiers) });
+    };
+    PAGE_NAMES.forEach((name, page) => {
+      add({ page, title: name, value: '', note: 'the tab' }, name, '');
+      this.settingsRows(page).forEach((row, i) => {
+        const title = row.section && this.sharedLabel(row.label) ? `${name} › ${row.section} › ${row.label}` : `${name} › ${row.label}`;
+        add({ page, i, row, title, value: row.value, note: row.note }, `${name} ${row.section}`, `${row.value} ${row.note}`);
+      });
+    });
+    return hits.sort((a, b) => a.tier - b.tier || a.page - b.page);
+  }
+
+  private sharedLabel(label: string): boolean {
+    return PAGE_NAMES.flatMap((_, page) => this.settingsRows(page)).filter((row) => row.label === label).length > 1;
+  }
+
+  chooseHit(i: number): void {
+    const o = this.overlay;
+    if (o?.kind !== 'settings') return;
+    const hit = this.settingsHits(o.query ?? '')[i];
+    if (!hit) return;
+    this.settingsPage(hit.page);
+    o.cursor = hit.i ?? 0;
+  }
+
+  private searchKey(o: SettingsOverlay, k: Key, ch: string | null): void {
+    const hits = this.settingsHits(o.query ?? '').length;
+    o.notice = undefined;
+    if (k.key === 'Escape') o.query = '';
+    else if (k.key === 'Enter') this.chooseHit(Math.min(o.found ?? 0, hits - 1));
+    else if (k.key === 'ArrowDown') o.found = Math.min((o.found ?? 0) + 1, hits - 1);
+    else if (k.key === 'ArrowUp') o.found = Math.max(0, (o.found ?? 0) - 1);
+    else if (k.key === 'Backspace') { o.query = (o.query ?? '').slice(0, -1); o.found = 0; }
+    else if (ch) { o.query = `${o.query ?? ''}${ch}`; o.found = 0; }
+  }
+
   settingsPage(i: number): void {
     const o = this.overlay;
     if (o?.kind !== 'settings') return;
     o.page = i;
     o.cursor = 0;
+    o.query = '';
+    o.found = 0;
     o.pick = undefined;
     o.edit = undefined;
     o.notice = undefined;
@@ -3267,6 +3323,7 @@ export class App {
   }
 
   settingsHint(o: SettingsOverlay): string {
+    if (o.query) return '↑↓ picks a result · enter goes to it · esc clears the search';
     if (o.capturing) return 'press the keys you want · backspace turns them off · esc cancels';
     if (o.edit) return 'enter saves · esc cancels';
     if (o.pick) return 'enter picks · type to filter · esc goes back';
@@ -4818,6 +4875,7 @@ export class App {
       else if (o.kind === 'search') o.query += text;
       else if (o.kind === 'picker') o.filter += text;
       else if (o.kind === 'settings' && o.edit) o.edit.input += o.edit.token ? text.replace(/\s/g, '') : text;
+      else if (o.kind === 'settings' && !o.pick) o.query = `${o.query ?? ''}${text}`;
       else if (o.kind === 'issues') o.token.input += text.trim();
       this.dirty();
       return;
@@ -5020,6 +5078,11 @@ export class App {
         o.pick.filter += ch;
         o.pick.selected = 0;
       }
+      this.dirty();
+      return true;
+    }
+    if (o.query || (ch && ch !== ' ')) {
+      this.searchKey(o, k, ch);
       this.dirty();
       return true;
     }

@@ -183,3 +183,30 @@ test('share sits before restart on every settings tab and says it needs cornerca
   assert.equal(app.overlay?.kind, 'settings');
   app.destroy();
 });
+
+test('typing when the settings open searches every tab by the start of each word', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openSettings();
+  for (const ch of 'def ag') inputKey(app, key(ch));
+  app.render();
+  assert.ok(app.textAt('Agents › default agent'));
+  assert.ok(app.textAt('Worktrees 0'));
+  assert.equal(app.settingsHits('ose').length, 0);
+  inputKey(app, key('Enter'));
+  const o = app.overlay;
+  assert.ok(o?.kind === 'settings');
+  assert.equal(o.page, 1);
+  assert.equal(app.settingsRows(1)[o.cursor].label, 'default agent');
+  app.destroy();
+});
+
+test('esc clears the settings search first, then closes', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openSettings();
+  inputKey(app, key('x'));
+  inputKey(app, key('Escape'));
+  assert.equal(app.overlay?.kind, 'settings');
+  inputKey(app, key('Escape'));
+  assert.equal(app.overlay, null);
+  app.destroy();
+});

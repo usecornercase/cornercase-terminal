@@ -61,6 +61,7 @@ pub(crate) enum Action {
     Restore { file: PathBuf, name: String },
     Tab(usize),
     StepTab(isize),
+    Find(char),
     Restart,
     Share,
     ReadModels(Known),

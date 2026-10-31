@@ -1,7 +1,7 @@
 use serde_json::json;
 
 use super::*;
-use crate::control::config::{ConnectionKind, ProjectEntry};
+use crate::control::config::{ConnectionKind, FoundSetting, ProjectEntry};
 
 fn setting(kind: Kind) -> Setting {
     Setting { key: "x".into(), kind, ..Setting::default() }
@@ -132,4 +132,20 @@ fn a_file_that_cannot_be_read_is_said_first() {
     let mut got = described();
     got.problem = Some("expected value at line 1".into());
     assert!(render(&got, false).starts_with("/home/ana/.config/cornercase/config.json cannot be read: expected"));
+}
+
+mod searching {
+    use super::*;
+
+    #[test]
+    fn prints_a_row_per_result_with_a_dash_for_what_is_missing() {
+        let result = FoundSetting { title: "Flows".into(), note: "the tab".into(), ..FoundSetting::default() };
+        let found = SettingsFound { results: vec![result] };
+        assert_eq!(render_found(&found), "place\tkey\tvalue\tnote\nFlows\t-\t-\tthe tab\n");
+    }
+
+    #[test]
+    fn no_result_prints_the_header_alone() {
+        assert_eq!(render_found(&SettingsFound::default()), "place\tkey\tvalue\tnote\n");
+    }
 }
