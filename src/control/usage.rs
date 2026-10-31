@@ -4,24 +4,73 @@ use serde::{Deserialize, Serialize};
 
 use super::Fields;
 use crate::agents::Known;
+use crate::agents::stats::View;
 use crate::agents::usage::{Probe, Window};
+use crate::machines::State;
 use crate::time::Stamp;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
-pub(crate) struct Usage {
-    pub(crate) cached: bool,
+pub(crate) struct Stats {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) machine: Option<String>,
 }
 
-impl Usage {
+impl Stats {
     pub(super) fn fields(&self, fields: &mut Fields) {
-        fields.add("cached", self.cached);
+        fields.maybe("machine", self.machine.as_ref());
     }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+pub(crate) struct Usage {
+    pub(crate) cached: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) machine: Option<String>,
+}
+
+impl Usage {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.add("cached", self.cached).maybe("machine", self.machine.as_ref());
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct MachineRead {
+    pub(crate) name: String,
+    pub(crate) state: State,
+    pub(crate) seen: Option<String>,
+    pub(crate) read_at: Option<String>,
+    pub(crate) error: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub(crate) struct MachineStats {
+    #[serde(flatten)]
+    pub(crate) view: View,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) machine: Option<MachineRead>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) machines: Vec<MachineRead>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct Plans {
+    pub(crate) agents: Vec<PlanInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) machine: Option<MachineRead>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) machines: Vec<MachineUsage>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct MachineUsage {
+    #[serde(flatten)]
+    pub(crate) machine: MachineRead,
     pub(crate) agents: Vec<PlanInfo>,
 }
 
@@ -45,6 +94,8 @@ pub(crate) struct PlanInfo {
     pub(crate) label: Option<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) active: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) identity: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,6 +129,7 @@ impl PlanInfo {
             account: None,
             label: None,
             active: false,
+            identity: report.and_then(|r| r.identity.clone()),
         }
     }
 

@@ -64,6 +64,17 @@ impl Drop for Fake {
     }
 }
 
+fn replied(text: &str) -> std::result::Result<serde_json::Value, (String, String)> {
+    let reply: serde_json::Value = serde_json::from_str(text).expect("a reply");
+    match &reply["error"] {
+        serde_json::Value::Null => Ok(reply["ok"].clone()),
+        error => Err((
+            error["code"].as_str().unwrap_or_default().into(),
+            error["message"].as_str().unwrap_or_default().into(),
+        )),
+    }
+}
+
 fn serving(boot: &str) -> Line {
     let (line, mut theirs) = line(version::CURRENT, None);
     let boot = boot.to_string();
@@ -396,3 +407,4 @@ mod fakes {
 
 mod requests;
 mod settings;
+mod usage;

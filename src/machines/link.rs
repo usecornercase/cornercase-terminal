@@ -335,7 +335,7 @@ enum Ended {
     Dropped(Option<&'static str>),
 }
 
-enum Heard {
+pub(super) enum Heard {
     Answer(String),
     Ended(Option<&'static str>),
 }
@@ -455,26 +455,26 @@ impl<E: From<Report>> Running<E> {
     }
 }
 
-fn why(line: &Line, said: Option<&str>) -> String {
+pub(super) fn why(line: &Line, said: Option<&str>) -> String {
     let ssh = line.ends.why();
     clean(said.map(str::to_string).or(ssh).as_deref().unwrap_or(LOST))
 }
 
 fn handshake(line: &mut Line) -> std::result::Result<Started, Ended> {
-    let request = Request {
-        caller: None,
-        server: None,
-        contract: None,
-        boot: None,
-        view: None,
-        command: Command::StartServer(StartServer::default()),
-    };
-    let text = serde_json::to_string(&request).map_err(|e| Ended::Refused(Down::Unreachable(e.to_string())))?;
-    protocol::send(&mut line.writer, &ClientMessage::Request(text)).map_err(|_| Ended::Lost(None))?;
-    match listen(&mut line.reader) {
+    match send_once(line, Command::StartServer(StartServer::default())) {
         Heard::Answer(text) => started(&text).map_err(Ended::Refused),
         Heard::Ended(said) => Err(Ended::Lost(said)),
     }
+}
+
+pub(super) fn send_once(line: &mut Line, command: Command) -> Heard {
+    let request = Request { caller: None, server: None, contract: None, boot: None, view: None, command };
+    let sent = serde_json::to_string(&request)
+        .is_ok_and(|text| protocol::send(&mut line.writer, &ClientMessage::Request(text)).is_ok());
+    if !sent {
+        return Heard::Ended(None);
+    }
+    listen(&mut line.reader)
 }
 
 fn started(text: &str) -> std::result::Result<Started, Down> {

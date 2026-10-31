@@ -923,11 +923,15 @@ tokens, and each waits at most ten seconds. A probe already running, from the di
 prints the last answers with their age. With --json it prints {\"agents\": [...]}: each agent's
 plan, its limits (label, kind, scope, percent, severity, resets_at in UTC), extra, notice, error,
 and when it was read (read_at, and age in seconds). It exits with 3 when an agent could not be
-asked, after printing them all, that one with its error.
+asked, after printing them all, that one with its error. --machine NAME asks that machine over ssh
+and adds \"machine\" (name, state, seen, read_at, error); --machine all prints this computer and
+then each machine under \"machines\", and exits with 3 when a machine could not be read either.
 
 Examples:
   cornercase usage
-  cornercase usage --cached --json";
+  cornercase usage --cached --json
+  cornercase usage --machine vps
+  cornercase usage --machine all --json";
 
 pub(super) const ACCOUNT_HELP: &str =
     "An account is a folder of its own under cornercase's state folder in which an agent keeps its

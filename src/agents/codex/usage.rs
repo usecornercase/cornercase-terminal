@@ -4,7 +4,7 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::agents::usage::{Reading, Report, Window, window};
+use crate::agents::usage::{Heard, Reading, Report, Window, window};
 use crate::error::{Error, Result};
 
 const ARGS: [&str; 1] = ["app-server"];
@@ -109,10 +109,11 @@ pub(super) fn parse(result: Value) -> Result<Report> {
         windows,
         extra: body.rate_limits.credits.as_ref().and_then(credits),
         notice: None,
+        identity: None,
     })
 }
 
-pub(in crate::agents) fn answer(line: &str) -> Option<Result<Report>> {
+pub(in crate::agents) fn answer(line: &str, _heard: &mut Heard) -> Option<Result<Report>> {
     let message: Value = serde_json::from_str(line).ok()?;
     if message.get("method").is_some() {
         return None;
