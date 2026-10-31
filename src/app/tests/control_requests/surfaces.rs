@@ -329,9 +329,9 @@ mod resizing {
     use super::*;
     use crate::control::terminal::Resize;
 
-    fn resize(app: &mut App, client: u64, surface: Option<u64>, cols: u16, rows: u16) -> Response {
+    fn resize(app: &mut App, surface: Option<u64>, cols: u16, rows: u16, at: Instant) -> Response {
         let command = Command::Resize(Resize { surface, cols, rows });
-        subscribe_as(app, client, Instant::now(), &command)
+        subscribe_as(app, CLIENT + 1, at, &command)
     }
 
     fn refusal(response: Response) -> String {
@@ -349,9 +349,7 @@ mod resizing {
         let size_before = term(&app, 0).emulator.size().expect("a size");
         assert_ne!(first.surface, 0);
 
-        let Response::Ok(answer) = resize(&mut app, CLIENT + 1, Some(first.surface), 100, 30) else {
-            panic!("refused")
-        };
+        let Response::Ok(answer) = resize(&mut app, Some(first.surface), 100, 30, t0) else { panic!("refused") };
         let got = ready(&mut app, t0 + FRAME_EVERY);
 
         assert_eq!((answer["surface"].as_u64(), answer["tab"].as_u64()), (Some(first.surface), Some(tab)));
@@ -368,12 +366,12 @@ mod resizing {
         let (tab, t0) = (tab_of(&app, 0), Instant::now());
         let surface = subscribe(&mut app, t0, tab).surface;
 
-        let missing = refusal(resize(&mut app, CLIENT + 1, None, 80, 24));
-        let unknown = refusal(resize(&mut app, CLIENT + 1, Some(surface + 50), 80, 24));
-        let empty = refusal(resize(&mut app, CLIENT + 1, Some(surface), 0, 0));
-        let wide = refusal(resize(&mut app, CLIENT + 1, Some(surface), 1001, 24));
+        let missing = refusal(resize(&mut app, None, 80, 24, t0));
+        let unknown = refusal(resize(&mut app, Some(surface + 50), 80, 24, t0));
+        let empty = refusal(resize(&mut app, Some(surface), 0, 0, t0));
+        let wide = refusal(resize(&mut app, Some(surface), 1001, 24, t0));
         app.forget(CLIENT);
-        let ended = refusal(resize(&mut app, CLIENT + 1, Some(surface), 80, 24));
+        let ended = refusal(resize(&mut app, Some(surface), 80, 24, t0));
 
         assert!(missing.contains("--surface"), "{missing}");
         assert!(unknown.contains("no surface") && ended.contains("no surface"), "{unknown} / {ended}");
