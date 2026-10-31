@@ -58,7 +58,6 @@ mod pages {
     #[case::issues(Page::Issues, &["Accounts", "Sources shown"])]
     #[case::ui(Page::Ui, &[""])]
     #[case::remote(Page::Remote, &["Browser", "Telegram", "Discord"])]
-    #[case::machines(Page::Machines, &[""])]
     fn hold_their_sections(#[case] page: Page, #[case] expected: &[&str]) {
         assert_eq!(sections(page), expected);
     }
@@ -74,8 +73,8 @@ mod pages {
     #[rstest]
     #[case::tab(KeyCode::Tab, KeyModifiers::NONE, Page::Agents)]
     #[case::right(KeyCode::Right, KeyModifiers::NONE, Page::Agents)]
-    #[case::shift_tab_wraps(KeyCode::BackTab, KeyModifiers::SHIFT, Page::Machines)]
-    #[case::left_wraps(KeyCode::Left, KeyModifiers::NONE, Page::Machines)]
+    #[case::shift_tab_wraps(KeyCode::BackTab, KeyModifiers::SHIFT, Page::Plugins)]
+    #[case::left_wraps(KeyCode::Left, KeyModifiers::NONE, Page::Plugins)]
     fn are_switched_with_keys(#[case] code: KeyCode, #[case] modifiers: KeyModifiers, #[case] expected: Page) {
         let mut s = settings();
         key(&mut s, code, modifiers);
@@ -184,8 +183,6 @@ mod fetch {
 }
 
 mod accounts;
-
-mod machines;
 
 mod messengers;
 

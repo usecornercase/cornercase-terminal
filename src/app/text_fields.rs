@@ -8,7 +8,6 @@ use super::interaction::Drag;
 use super::layout::Side;
 use super::overlay::Overlay;
 use crate::editor::Editor;
-use crate::machines::form::Field as MachineField;
 use crate::project::settings::Field as SettingsField;
 use crate::queue::form::Control;
 use crate::ui;
@@ -22,7 +21,6 @@ pub(super) enum TextField {
     StartPrompt,
     Setup(SettingsField),
     SharePaste,
-    Machine(MachineField),
     Name,
 }
 
@@ -86,7 +84,6 @@ impl App {
             TextField::StartPrompt => self.start_text(area),
             TextField::Setup(field) => self.project_text(area, field),
             TextField::SharePaste => self.share_text(area),
-            TextField::Machine(field) => self.machine_text(area, field),
             TextField::Name => self.name_text(area),
         }
     }
@@ -101,9 +98,6 @@ impl App {
             Some(Overlay::StartFlow { start, .. }) => start.typing_prompt().then_some(TextField::StartPrompt),
             Some(Overlay::ProjectSettings(form)) => Some(TextField::Setup(form.focus)),
             Some(Overlay::ShareSettings(dialog)) => dialog.paste_editor().map(|_| TextField::SharePaste),
-            Some(Overlay::Machine(form)) => {
-                (!form.icon.is_open() && form.editor_of(form.focus).is_some()).then_some(TextField::Machine(form.focus))
-            }
             Some(overlay) if overlay.takes_input() => Some(TextField::Name),
             None if self.tour_typing() => Some(TextField::Tour),
             None if self.todo_typing() => Some(TextField::Todo),
@@ -131,9 +125,6 @@ impl App {
                 ]
             }
             Some(Overlay::ShareSettings(_)) => vec![TextField::SharePaste],
-            Some(Overlay::Machine(form)) if !form.icon.is_open() => {
-                [MachineField::Name, MachineField::Destination, MachineField::Folder].map(TextField::Machine).into()
-            }
             Some(overlay) if overlay.takes_input() => vec![TextField::Name],
             None if self.screen.side == Some(Side::Todo) => vec![TextField::Todo],
             Some(_) | None => Vec::new(),

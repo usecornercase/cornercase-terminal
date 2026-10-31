@@ -187,15 +187,6 @@ fn usage_tabs_and_border_share_the_drawn_geometry() {
     assert_eq!(corners, ("╭".into(), "╯".into()));
 }
 
-#[test]
-fn tabs_that_do_not_fit_drop_their_gaps_then_their_padding() {
-    let names = ["Worktrees", "Agents", "Accounts", "Flows", "Issues", "UI", "Remote", "Plugins", "Machines"];
-
-    let last = |width: u16| tabs_in(Rect::new(0, 0, width, 1), &names).last().map(|r| (r.x, r.width));
-
-    assert_eq!([last(90), last(80), last(72)], [Some((73, 10)), Some((65, 10)), Some((57, 8))]);
-}
-
 const TALL: u16 = 34;
 
 #[test]

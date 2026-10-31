@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use super::{KeepAwake, TodoItem};
-use crate::machines::Info;
 use crate::queue::Entry;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,8 +27,6 @@ pub(crate) struct AppState {
     pub(crate) accounts: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) popup: Option<PopupInfo>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub(crate) machines: Vec<Info>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

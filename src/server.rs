@@ -299,7 +299,7 @@ pub(crate) fn run() -> Result<()> {
     spawn_forwarder(app_rx, tx.clone());
 
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
-    let mut app = App::new(shell, HostTheme::default(), &paths::config(), app_tx);
+    let mut app = App::new(shell, HostTheme::default(), paths::config(), app_tx);
     let session = paths::session();
     log_started(&path, &session, level);
     let todo_saver = prepare_app(&mut app, &path, &session);
@@ -901,7 +901,7 @@ impl Server {
     }
 
     fn shutdown(&mut self) {
-        self.app.stop_background();
+        self.app.stop_plugins();
         self.answer();
         if let Err(e) = self.stats_saver.flush(self.app.stats(), SystemTime::now()) {
             log::error!("stats", "failed to save", error = e);

@@ -38,7 +38,7 @@ impl Cold {
         }
         let (tx, _) = mpsc::channel();
         let (app_tx, _) = mpsc::channel();
-        let app = App::new(shell.into(), HostTheme::default(), &dir.path().join("config.json"), app_tx);
+        let app = App::new(shell.into(), HostTheme::default(), dir.path().join("config.json"), app_tx);
         let todo_saver = Saver::new(dir.path().join("todos.json"), None);
         Self { server: Server::new(app, session, todo_saver, tx), _dir: dir }
     }

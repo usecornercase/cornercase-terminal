@@ -80,7 +80,7 @@ impl Settings {
             }
             Some(Row::Bot(via)) if self.messenger(*via).bot.is_some() => Some(Action::RemoveBot(*via)),
             Some(Row::Chat(via)) if self.messenger(*via).chat.is_some() => Some(Action::ForgetChat(*via)),
-            Some(row) => Self::account_removal(row).or_else(|| Self::machine_removal(row)),
+            Some(row) => Self::account_removal(row),
             None => None,
         }
     }

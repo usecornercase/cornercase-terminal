@@ -230,7 +230,6 @@ cc_shot() {
 
 cc_stop() {
   cc kill-server >/dev/null 2>&1 || true
-  [ ! -e "$CC_DATA/vps/server.sock" ] || cc_env env CORNERCASE_SOCKET="$CC_DATA/vps/server.sock" "$CC_BIN" kill-server >/dev/null 2>&1 || true
   rm -rf "$CC_HOME/.codex/app-server-daemon" "$CC_DATA/ssh.calls"
   tmux -L "$CC_TMUX" kill-server 2>/dev/null || true
 }

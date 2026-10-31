@@ -76,7 +76,6 @@ export default defineConfig({
             { label: 'Search', slug: 'docs/guides/search' },
             { label: 'Sessions and the server', slug: 'docs/guides/sessions' },
             { label: 'Remote machines', slug: 'docs/guides/remote' },
-            { label: 'Machines', slug: 'docs/guides/machines' },
             { label: 'From your phone', slug: 'docs/guides/phone' },
             { label: 'On Telegram', slug: 'docs/guides/telegram' },
             { label: 'On Discord', slug: 'docs/guides/discord' },

@@ -108,9 +108,6 @@ import { type Line, folderSlug, seg, slug, truncateRight } from './text';
 import { type Drag, type Frame, Painter, type Region } from './ui';
 
 const NO_PLUGINS = '`cornercase plugin install <owner/repo>` adds one, then enter turns it on here';
-const MACHINES_NEED = 'this needs cornercase on your computer: the demo has no other machines to reach';
-const MACHINES_HINT = 'enter edits a machine · × removes it, and its server keeps running there';
-const HERE_HINT = 'this computer runs the server you are using; it links to each machine below';
 const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neither Tailscale nor a chat app';
 
 const ICONS_CHOICES: [string, string][] = [
@@ -124,8 +121,8 @@ const MERGED_NEED = 'this needs cornercase on your computer: the demo has no Git
 const SOUND_NEEDS = 'this needs cornercase on your computer: the demo plays no sound';
 const ACCOUNTS_NEED = 'this needs cornercase on your computer: the demo has no agent accounts';
 
-export const PAGE = { worktrees: 0, agents: 1, accounts: 2, flows: 3, issues: 4, ui: 5, remote: 6, plugins: 7, machines: 8 } as const;
-export const PAGE_NAMES = ['Worktrees', 'Agents', 'Accounts', 'Flows', 'Issues', 'UI', 'Remote', 'Plugins', 'Machines'];
+export const PAGE = { worktrees: 0, agents: 1, accounts: 2, flows: 3, issues: 4, ui: 5, remote: 6, plugins: 7 } as const;
+export const PAGE_NAMES = ['Worktrees', 'Agents', 'Accounts', 'Flows', 'Issues', 'UI', 'Remote', 'Plugins'];
 const ACCOUNT_AGENTS = [['Claude Code', 'claude'], ['Codex', 'codex'], ['Gemini CLI', 'gemini']] as const;
 const ACCOUNT_SWITCHES = [
   ['account', 'account', 'the account an agent uses; only once you add an account'],
@@ -3204,12 +3201,6 @@ export class App {
     if (page === PAGE.plugins) {
       return [{ id: 'plugins', section: 'Installed', label: 'no plugins yet', value: '', note: NO_PLUGINS }];
     }
-    if (page === PAGE.machines) {
-      return [
-        { id: 'here', section: '', label: '  ▭ this computer', value: '', note: 'the demo, in your browser' },
-        { id: 'addMachine', section: '', label: '+ add machine', value: '', note: 'another computer you reach with ssh' },
-      ];
-    }
     if (page === PAGE.remote) {
       return [
         { id: 'remote', section: 'Browser', label: 'remote access', value: '[ ] off', note: "open this computer's cornercase from your phone over Tailscale" },
@@ -3280,7 +3271,6 @@ export class App {
     if (o.edit) return 'enter saves · esc cancels';
     if (o.pick) return 'enter picks · type to filter · esc goes back';
     if (o.page === PAGE.plugins) return 'plugins run as you and can do what you can; what they ask for is shown, not enforced';
-    if (o.page === PAGE.machines) return this.settingsRows(o.page)[o.cursor]?.id === 'here' ? HERE_HINT : MACHINES_HINT;
     if (o.page === PAGE.flows) return 'enter or a click on the selected flow edits it · tab or ←→ switches tabs';
     return 'enter changes the selected setting · tab or ←→ switches tabs · every change is saved at once';
   }
@@ -3388,8 +3378,6 @@ export class App {
       o.notice = FLOWS_NEED;
     } else if (row.id === 'plugins') {
       o.notice = NO_PLUGINS;
-    } else if (row.id === 'addMachine') {
-      o.notice = MACHINES_NEED;
     } else if (row.id.startsWith('token:')) {
       const source = row.id.slice(6) as Remote;
       if (c.accounts[source]) o.notice = `${REMOTES[source].name} is connected; delete removes the token`;

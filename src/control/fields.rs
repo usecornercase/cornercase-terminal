@@ -223,7 +223,6 @@ impl Command {
             Self::WorktreeSize(size) => size.fields(fields),
             Self::Worktrees(list) => list.fields(fields),
             Self::FreeBuilds(free) => free.fields(fields),
-            Self::Machines(machines) => machines.fields(fields),
             Self::Tour(tour) => tour.fields(fields),
             Self::PluginActions(actions) => actions.fields(fields),
             Self::PluginRun(run) => run.fields(fields),
