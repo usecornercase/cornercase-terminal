@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.234
+
+- **Keep one `cornercase` running for a program's commands.** `cornercase requests --follow -` reads one command per line of standard input as JSON (`{"args": ["focus", "--tab", "6"], "stdin": "…"}`), runs each in order through one connection and prints one JSON answer per line: its exit status, what it printed (`json` with `--json`, else `text`) and its error. A window that draws cornercase on another machine through `--remote` then pays one round trip per action instead of an `ssh` connection. Streams and `update`, `restart`, `kill-server` and `logs` are refused on their line, since they need a process of their own.
+
 ## 0.12.233
 
 - **Commands through `--remote` that first ask the server what it supports open one `ssh` connection instead of two.** That is the commands with `--view`, which a program that draws cornercase sends to switch tabs, projects or agents, and options such as `focus --reveal`, `close --unlock`, `start --issue`, `--profile`, `--account` and `events --notices`. They asked on a connection of their own before sending the command on another, so switching tabs took about twice as long as scrolling. A command that sends a request of its own first, such as `focus --worktree BRANCH`, still opens two. On your own machine they save a connection too.
