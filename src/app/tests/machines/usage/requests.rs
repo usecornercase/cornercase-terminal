@@ -5,6 +5,8 @@ use serde_json::{Value, json};
 use super::*;
 use crate::agents::Known;
 use crate::agents::stats::Counted;
+use crate::app::machine_usage::{CONNECTING, NOT_READ};
+use crate::app::machines::OLDER;
 use crate::app::tests::usage_modal::ANSWER;
 use crate::machines::Status;
 use crate::test_util::write_executable;
@@ -154,7 +156,7 @@ mod one_machine {
 
         let refused = rig.asks("usage", &json!({"machine": "vps", "cached": true}));
 
-        assert_eq!(refused, Err(("failed".into(), "no usage from `vps` yet".into())));
+        assert_eq!(refused, Err(("failed".into(), format!("no usage from `vps`: {NOT_READ}"))));
         assert_eq!(rig.seen("ask"), 0);
     }
 
@@ -187,6 +189,33 @@ mod every_machine {
         assert_eq!((machines.len(), &machines[0]["name"]), (1, &json!("vps")));
         assert!(machines[0]["read_at"].is_string());
         assert!(all.get("machine").is_none());
+    }
+
+    #[test]
+    fn counts_a_machine_listed_twice_once() {
+        let mut rig = linked(answer(&counted()));
+        rig.edit(vec![machine("vps", "vps.lan"), machine("pi", "vps.lan")], Duration::from_secs(3));
+
+        let all = rig.asks("stats", &json!({"machine": "all"})).expect("the sum");
+
+        assert_eq!(prompts(&all), 5);
+        let machines = all["machines"].as_array().expect("the machines");
+        assert_eq!((machines.len(), &machines[0]["name"]), (1, &json!("vps")));
+    }
+
+    #[rstest]
+    #[case::still_connecting(Status::default(), CONNECTING)]
+    #[case::older(Status { state: State::Older, down: Some(Down::Older(None)), ..Status::default() }, OLDER)]
+    #[case::linked_but_never_asked(Status { state: State::Linked, ..Status::default() }, NOT_READ)]
+    fn says_why_a_machine_never_read_has_no_numbers(#[case] status: Status, #[case] why: &str) {
+        let mut rig = linked(answer(&plans_of("remote")));
+        rig.app.machines.set_status(0, status);
+
+        let all = rig.asks("usage", &json!({"machine": "all", "cached": true})).expect("every usage");
+
+        let there = &all["machines"][0];
+        assert_eq!((&there["error"], &there["read_at"], &there["agents"]), (&json!(why), &json!(null), &json!([])));
+        assert_eq!(rig.seen("ask"), 0);
     }
 
     #[test]

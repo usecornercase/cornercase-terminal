@@ -191,7 +191,7 @@ mod the_answer {
     use super::*;
 
     fn every(here: Option<&str>, there: Option<&str>, machine: Option<&str>) -> Plans {
-        let machines = vec![MachineUsage { machine: read("vps", None, machine), agents: vec![codex(there)] }];
+        let machines = vec![MachineUsage { machine: read("vps", Some(READ_AT), machine), agents: vec![codex(there)] }];
         Plans { agents: vec![codex(here)], machines, ..Plans::default() }
     }
 
@@ -200,6 +200,10 @@ mod the_answer {
     #[case::an_agent_here_failed(every(Some("no"), None, None), false)]
     #[case::an_agent_there_failed(every(None, Some("no"), None), false)]
     #[case::a_machine_failed(every(None, None, Some("down")), false)]
+    #[case::a_machine_never_read(
+        Plans { machines: vec![MachineUsage { machine: read("vps", None, None), agents: Vec::new() }], ..Plans::default() },
+        false
+    )]
     #[case::the_one_machine_failed(
         Plans { machine: Some(read("vps", Some(READ_AT), Some("down"))), ..Plans::default() },
         false

@@ -29,7 +29,8 @@ pub(super) fn run(args: &UsageArgs) -> Result<bool> {
 fn answered(plans: &Plans) -> bool {
     let mut machines = plans.machine.iter().chain(plans.machines.iter().map(|there| &there.machine));
     let mut agents = plans.agents.iter().chain(plans.machines.iter().flat_map(|there| &there.agents));
-    machines.all(|machine| machine.error.is_none()) && agents.all(|plan| plan.error.is_none())
+    machines.all(|machine| machine.error.is_none() && machine.read_at.is_some())
+        && agents.all(|plan| plan.error.is_none())
 }
 
 fn every_text(plans: &Plans, clock: i64) -> String {

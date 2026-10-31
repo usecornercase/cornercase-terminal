@@ -54,6 +54,10 @@ pub(crate) fn problems(machines: &[Machine]) -> Vec<Option<String>> {
     machines.iter().enumerate().map(|(at, machine)| machine.problem(&machines[..at])).collect()
 }
 
+pub(crate) fn accepted(machines: &[Machine]) -> impl Iterator<Item = &Machine> {
+    machines.iter().zip(problems(machines)).filter_map(|(machine, problem)| problem.is_none().then_some(machine))
+}
+
 pub(crate) fn known_icon(icon: &str) -> char {
     ICONS.iter().map(|(glyph, _)| *glyph).find(|glyph| icon.chars().eq([*glyph])).unwrap_or(ICONS[0].0)
 }

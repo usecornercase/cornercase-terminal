@@ -18,7 +18,7 @@ use crate::machines::wake::{Network, Sleep};
 use crate::machines::{self, Info, Machine, State, Status};
 use crate::settings::Page;
 
-const OLDER: &str = "its cornercase is older than this one";
+pub(super) const OLDER: &str = "its cornercase is older than this one";
 
 pub(super) type Connector = Box<dyn Fn(&str) -> Box<dyn Connect> + Send>;
 pub(super) type Updater = Arc<dyn Fn(&str) -> Result<()> + Send + Sync>;
@@ -180,11 +180,7 @@ impl App {
     fn match_machines(&mut self) {
         let listed = self.config.machines.clone();
         let before = std::mem::replace(&mut self.machines.synced, listed.clone());
-        let wanted: Vec<Machine> = listed
-            .into_iter()
-            .zip(machines::problems(&self.config.machines))
-            .filter_map(|(machine, problem)| problem.is_none().then_some(machine))
-            .collect();
+        let wanted: Vec<Machine> = machines::accepted(&listed).cloned().collect();
         self.machines.held.retain(|held| {
             let kept = wanted.iter().any(|machine| machine.destination == held.destination);
             if !kept {

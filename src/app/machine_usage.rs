@@ -6,7 +6,7 @@ use serde_json::Value;
 use super::App;
 use super::control::json;
 use super::event::AppEvent;
-use super::machines::{Held, MachineEvent};
+use super::machines::{Held, MachineEvent, OLDER};
 use crate::agents::stats::View;
 use crate::control::contract::{Code, Refusal};
 use crate::control::usage::{MachineRead, MachineStats, Plans};
@@ -20,6 +20,8 @@ const STATS: Duration = Duration::from_secs(15);
 const SLACK: Duration = Duration::from_secs(15);
 pub(super) const UNREADABLE: &str = "its answer could not be read";
 pub(super) const GONE: &str = "the machine was removed before it answered";
+pub(super) const CONNECTING: &str = "still connecting";
+pub(super) const NOT_READ: &str = "not read yet";
 
 pub(super) struct Cached<T> {
     pub(super) read: Option<(T, SystemTime)>,
@@ -191,7 +193,7 @@ impl App {
 
     fn machines_in_order(&self) -> impl Iterator<Item = &Held> {
         let held = self.machines.held();
-        let listed = self.config.machines.iter();
+        let listed = machines::accepted(&self.config.machines);
         listed.filter_map(move |machine| held.iter().find(|held| held.destination == machine.destination))
     }
 
@@ -199,12 +201,13 @@ impl App {
         let cached = T::kept(&held.cache);
         let read = cached.read.as_ref().filter(|_| held.another_computer());
         let hidden = |why: String| machines::hide_destination(&why, &held.name, &held.destination);
+        let error = self.machines.reason(held).map(hidden).or_else(|| cached.error.clone());
         let machine = MachineRead {
             name: held.name.clone(),
             state: held.status.state,
             seen: held.status.seen.and_then(stamp),
             read_at: read.map(|(_, at)| Stamp(*at).to_string()),
-            error: self.machines.reason(held).map(hidden).or_else(|| cached.error.clone()),
+            error: error.or_else(|| read.is_none().then(|| unread_reason(held.status.state).into())),
         };
         (machine, read.map(|(value, _)| value.clone()))
     }
@@ -216,9 +219,14 @@ fn stamp(secs: i64) -> Option<String> {
 }
 
 fn unread(what: &str, machine: &MachineRead) -> String {
-    match &machine.error {
-        Some(why) => format!("no {what} from `{}`: {why}", machine.name),
-        None => format!("no {what} from `{}` yet", machine.name),
+    format!("no {what} from `{}`: {}", machine.name, machine.error.as_deref().unwrap_or(NOT_READ))
+}
+
+fn unread_reason(state: State) -> &'static str {
+    match state {
+        State::Connecting => CONNECTING,
+        State::Older => OLDER,
+        State::Linked | State::Unreachable => NOT_READ,
     }
 }
 
