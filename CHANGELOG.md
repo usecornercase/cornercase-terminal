@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - **Clone a repository and open it from a terminal or a script.** `cornercase clone URL [FOLDER]` runs `git clone` into a new folder inside FOLDER (the current one by default), named after the repository, opens it as a project and prints its path. A repository on the same machine can be given by its path. It refuses a folder that is already there and not empty, says what failed when the URL is not a repository or access is denied (without repeating the URL, so a token in it stays out of the messages and the log), and a failed clone leaves no folder behind and never removes one that was there before. With `--remote` it clones on the other machine, into its home folder by default. It is the request `clone`, which `cornercase contract` lists.
 
+## 0.12.232
+
+- **Machines are out again for now.** Settings › Machines, `cornercase machines` and the `machines` request, added in 0.12.228 to 0.12.231, are taken out until running work on another machine is ready, so they come back as one feature that does something. A `machines` list already in `config.json` is ignored, and the next change to the settings leaves it out of the file. Narrow windows cut off the last of Settings' tabs again, as before 0.12.231.
+
 ## 0.12.231
 
 - **List the machines you work on in Settings › Machines.** It lists this computer and the machines you add with **+ add machine**: a name, an icon, an ssh destination (`user@host` or a host from `~/.ssh/config`) and a folder for clones. Each row says whether the machine is **linked** (with its version), **unreachable** (for how long, and why on the line at the bottom) or **older**, and an older one has **update…**, which installs your version there without restarting anything.
