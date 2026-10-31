@@ -173,6 +173,22 @@ mod a_clone {
     }
 
     #[test]
+    fn focused_in_an_open_view_moves_that_view_and_not_the_window() {
+        let repo = git_repo(&[]);
+        let parent = TempDir::new();
+        let (mut app, rx, _dirs) = app_with(1);
+        let view = open_view(&mut app, CLIENT + 2);
+        let args = json!({"url": repo.path().display().to_string(), "parent": parent.path(), "focus": true});
+        start_clone(&mut app, CLIENT, Some(view), &args);
+
+        let answers = answered_at_last(&mut app, &rx);
+        let (_, text) = answers.iter().find(|(client, _)| *client == CLIENT).expect("the clone's answer");
+        let answer = reply_of(text).expect("cloned");
+
+        assert_eq!((answer["projection"].clone(), app.projects.len(), app.active), (json!(2), 2, 0));
+    }
+
+    #[test]
     fn whose_command_left_still_opens_its_project() {
         let repo = git_repo(&[]);
         let parent = TempDir::new();
