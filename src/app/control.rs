@@ -562,6 +562,7 @@ impl App {
             Command::Mark(mark) => self.mark_request(asker, &mark),
             Command::Notify(notify) => self.notify_request(&notify.text),
             Command::Focus(focus) => self.focus_request(asker, &focus),
+            Command::FocusMachine(focus) => self.focus_machine_request(&focus),
             other => return ControlFlow::Continue(other),
         })
     }

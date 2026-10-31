@@ -469,6 +469,7 @@ impl App {
         self.forget_files();
         self.forget_pasted();
         self.count_behind(now);
+        self.read_repos(now);
         self.scan_overlaps(now);
         self.ask_pull_requests(now);
         self.ask_merged(now);

@@ -4,10 +4,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TryRecvError};
 
 use rstest::rstest;
-use serde_json::Value;
+use serde_json::{Value, json};
 
-use super::fake::{answer, ended, line, request, respond};
+use super::fake::{answer, ended, line, request, respond, serve};
 use super::*;
+use crate::control::{GroupInfo, Ids, PaneInfo, ProjectInfo, TabInfo, WorkspaceInfo};
 use crate::error::Behind;
 use crate::host::open::{Browse, Open, Opener};
 use crate::host::sound::{Cue, Kind};
@@ -132,6 +133,7 @@ impl Rig {
         let mut theirs = self.reach(VERSION, None);
         answer(&mut theirs, boot, VERSION);
         assert_eq!(self.event(), Event::Linked { release: VERSION.into(), server_version: VERSION.into() });
+        assert_eq!(request(&mut theirs)["command"], "watch");
         theirs
     }
 
@@ -154,6 +156,39 @@ fn refused() -> Error {
 
 fn behind() -> Error {
     Error::RemoteBehind(Box::new(Behind { host: "vps".into(), there: "0.0.1".into(), update: String::new() }))
+}
+
+fn shop(boot: &str) -> control::Report {
+    let pane = PaneInfo {
+        id: 4,
+        agent: Some("claude".into()),
+        status: Some("working".into()),
+        model: Some("Opus 5.5".into()),
+        ..PaneInfo::default()
+    };
+    let tab = TabInfo { id: 3, name: "agents".into(), panes: vec![pane], ..TabInfo::default() };
+    let workspace = WorkspaceInfo {
+        id: 2,
+        name: "main".into(),
+        path: "/home/ana/web-shop".into(),
+        branch: Some("main".into()),
+        tabs: vec![tab],
+        ..WorkspaceInfo::default()
+    };
+    let project = ProjectInfo {
+        id: 1,
+        name: "web-shop".into(),
+        path: "/home/ana/web-shop".into(),
+        workspaces: vec![workspace],
+        repo: Some("github.com/acme/web-shop".into()),
+        ..ProjectInfo::default()
+    };
+    control::Report {
+        boot: boot.into(),
+        home: Some("/home/ana".into()),
+        projects: vec![project],
+        ..control::Report::default()
+    }
 }
 
 fn window_messages() -> Vec<ServerMessage> {
@@ -326,15 +361,21 @@ mod handshake {
     use super::*;
 
     #[test]
-    fn only_asks_the_machine_to_start_its_server() {
+    fn asks_the_machine_to_start_its_server_then_to_watch_it_on_the_same_connection() {
         let rig = Rig::on_the_wall(1, &Servers::new(HERE));
         let mut theirs = rig.reach(VERSION, None);
+        let bare = |asked: &Value| {
+            assert!(asked["caller"].is_null() && asked["server"].is_null(), "{asked}");
+            assert!(["view", "contract", "boot"].iter().all(|key| asked.get(key).is_none()), "{asked}");
+        };
         let asked = request(&mut theirs);
         assert_eq!(asked["command"], "start-server");
-        assert!(asked["caller"].is_null() && asked["server"].is_null(), "{asked}");
-        assert!(["view", "contract", "boot"].iter().all(|key| asked.get(key).is_none()), "{asked}");
+        bare(&asked);
         respond(&mut theirs, &Response::Ok(serde_json::to_value(Started::default()).expect("an answer")));
         assert!(matches!(rig.event(), Event::Linked { .. }));
+        let watching = request(&mut theirs);
+        assert_eq!(watching["command"], "watch");
+        bare(&watching);
         drop(rig);
         assert!(ended(&mut theirs));
     }
@@ -424,8 +465,10 @@ mod holding {
         noise(&mut theirs);
         respond(&mut theirs, &Response::Ok(serde_json::to_value(Started::default()).expect("an answer")));
         assert!(matches!(rig.event(), Event::Linked { .. }));
+        assert_eq!(request(&mut theirs)["command"], "watch");
         noise(&mut theirs);
-        respond(&mut theirs, &Response::Ok(Value::Null));
+        serve(&mut theirs, 1, shop("vps-1"));
+        assert_eq!(rig.event(), Event::Seen(Box::new(shop("vps-1"))));
         protocol::send(&mut theirs, &ServerMessage::Shutdown).expect("end the link");
         assert_eq!(rig.event(), down(Down::Unreachable(STOPPED.into()), 1));
     }
@@ -438,6 +481,95 @@ mod holding {
         assert!(matches!(rig.event(), Event::Linked { .. }));
         drop(theirs);
         assert_eq!(rig.event(), down(Down::Unreachable("Connection to vps closed by remote host.".into()), 1));
+    }
+}
+
+mod watching {
+    use super::*;
+
+    #[test]
+    fn hands_on_each_snapshot_in_order_with_only_the_machine_s_own_projects() {
+        let rig = Rig::new(1, &Servers::new(HERE));
+        let mut theirs = rig.linked("vps-1");
+        let full = control::Report {
+            version: VERSION.into(),
+            caller: Some(9),
+            shown: Ids { project: Some(1), ..Ids::default() },
+            groups: vec![GroupInfo { id: 10, name: "work".into(), ..GroupInfo::default() }],
+            ..shop("vps-1")
+        };
+        let mut first = serde_json::to_value(Snapshot { revision: 1, report: full }).expect("a snapshot");
+        first["machines"] = json!([{"name": "pi", "projects": [{"id": 7, "name": "elsewhere"}]}]);
+        let mut later = shop("vps-1");
+        later.projects[0].workspaces[0].tabs[0].panes[0].status = Some("waiting".into());
+
+        respond(&mut theirs, &Response::Ok(first));
+        serve(&mut theirs, 2, later.clone());
+
+        assert_eq!(rig.event(), Event::Seen(Box::new(shop("vps-1"))));
+        assert_eq!(rig.event(), Event::Seen(Box::new(later)));
+    }
+
+    #[test]
+    fn cleans_and_cuts_every_text_from_the_machine_but_keeps_paths_whole() {
+        let rig = Rig::new(1, &Servers::new(HERE));
+        let mut theirs = rig.linked("vps-1");
+        let mut report = shop("vps-1");
+        report.projects[0].name = "\u{1b}]52;c;cm0gLXJmIH4K\u{7}web\nshop\u{200b}".into();
+        report.projects[0].path = "/home/ana/web  shop\u{200b}\u{1b}[2J/x".repeat(20).into();
+        report.projects[0].workspaces[0].path = format!("/home/ana/{}", "x".repeat(10 * 1024)).into();
+        report.projects[0].workspaces[0].run_dir = Some("/home/ana/a\tb".into());
+        report.home = Some(format!("/home/{}", "a".repeat(KEPT)).into());
+        let pane = &mut report.projects[0].workspaces[0].tabs[0].panes[0];
+        pane.model = Some("Opus\r\n5.5\u{1b}[2J".into());
+        pane.accounts = [("cl\u{7}aude".to_string(), "wo\nrk".to_string())].into();
+
+        serve(&mut theirs, 1, report);
+
+        let Event::Seen(seen) = rig.event() else { panic!("not a snapshot") };
+        let project = &seen.projects[0];
+        assert_eq!(project.name, "]52;c;cm0gLXJmIH4Kweb shop");
+        assert_eq!(project.path, PathBuf::from("/home/ana/web  shop[2J/x".repeat(20)));
+        assert_eq!(project.workspaces[0].path.as_os_str().len(), PATH_KEPT);
+        assert_eq!(project.workspaces[0].run_dir, Some(PathBuf::from("/home/ana/ab")));
+        assert_eq!(seen.home.as_ref().map(|home| home.as_os_str().len()), Some(KEPT + 6));
+        let pane = &project.workspaces[0].tabs[0].panes[0];
+        assert_eq!(pane.model.as_deref(), Some("Opus 5.5[2J"));
+        assert_eq!(pane.accounts, [("claude".to_string(), "wo rk".to_string())].into());
+    }
+
+    #[rstest]
+    #[case::unreadable(Response::Ok(json!({"boot": "vps-1", "projects": "none"})), "cannot read the answer from there: ")]
+    #[case::refused(Response::Error("no \u{1b}watching\nhere".into()), "no watching here")]
+    fn a_snapshot_it_cannot_take_cuts_the_link_which_is_tried_again(#[case] answer: Response, #[case] why: &str) {
+        let rig = Rig::new(1, &Servers::new(HERE));
+        let mut theirs = rig.linked("vps-1");
+
+        respond(&mut theirs, &answer);
+
+        let event = rig.event();
+        assert!(
+            matches!(&event, Event::Down { down: Down::Unreachable(said), failed: 1 } if said.starts_with(why)),
+            "{event:?}"
+        );
+        assert!(ended(&mut theirs));
+        assert_eq!(rig.waited(), Duration::from_secs(1));
+        drop(rig.linked("vps-1"));
+    }
+
+    #[test]
+    fn the_end_of_the_stream_drops_the_link_which_asks_for_a_server_again() {
+        let rig = Rig::new(1, &Servers::new(HERE));
+        let mut theirs = rig.linked("vps-1");
+        serve(&mut theirs, 1, shop("vps-1"));
+        assert!(matches!(rig.event(), Event::Seen(_)));
+
+        drop(theirs);
+
+        assert_eq!(rig.event(), down(Down::Unreachable(LOST.into()), 1));
+        assert_eq!(rig.waited(), Duration::from_secs(1));
+        let mut again = rig.reach(VERSION, None);
+        assert_eq!(request(&mut again)["command"], "start-server");
     }
 }
 
@@ -497,6 +629,7 @@ mod bugs {
         rig.attempts.send(Ok(line)).expect("the link asks for an attempt");
         answer(&mut theirs, "vps-1", VERSION);
         assert!(matches!(rig.event(), Event::Linked { .. }));
+        assert_eq!(request(&mut theirs)["command"], "watch");
 
         armed.store(true, Ordering::SeqCst);
         protocol::send(&mut theirs, &ServerMessage::Frame(Vec::new())).expect("send to the link");

@@ -220,12 +220,14 @@ impl App {
         let Some(workspace) = self.project_mut().and_then(Project::workspace_mut) else { return };
         if let Some(t) = cycle(workspace.active, workspace.tabs.len(), delta) {
             workspace.active = t;
+            self.leave_remote();
         }
     }
 
     fn go_to_tab(&mut self, t: usize) {
         if let Some(workspace) = self.project_mut().and_then(Project::workspace_mut).filter(|w| t < w.tabs.len()) {
             workspace.active = t;
+            self.leave_remote();
         }
     }
 

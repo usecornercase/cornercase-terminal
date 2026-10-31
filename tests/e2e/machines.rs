@@ -233,3 +233,62 @@ fn an_update_that_fails_there_is_logged_by_the_machine_s_name_only() {
     let log = std::fs::read_to_string(here.dir.join("server.log")).expect("read the log");
     assert!(log.contains("cannot reach vps port 443") && !log.contains("vps.example.com"), "{log}");
 }
+
+const SHOP: &str = "github.com/acme/web-shop";
+
+fn clone_of(session: &Session, name: &str, url: &str) -> String {
+    let dir = folder(session, name);
+    git(&dir, &["init", "--quiet"]);
+    git(&dir, &["remote", "add", "origin", url]);
+    dir.display().to_string()
+}
+
+fn status(session: &Session) -> Value {
+    serde_json::from_str(&session.says(&["status", "--json"])).expect("a status report")
+}
+
+fn project_named<'a>(projects: &'a Value, name: &str) -> &'a Value {
+    projects.as_array().and_then(|list| list.iter().find(|p| p["name"] == name)).unwrap_or(&Value::Null)
+}
+
+fn sent_with_their_repos(here: &Session, names: &[&str]) -> Value {
+    let mut sent = Value::Null;
+    wait_until("the machine sends its projects with their repos", || {
+        sent = status(here)["machines"][0]["projects"].clone();
+        names.iter().all(|name| project_named(&sent, name)["repo"].is_string())
+    });
+    sent
+}
+
+#[test]
+fn a_machine_s_clone_is_paired_with_the_local_clone_of_the_same_repo_by_another_url() {
+    let (machine, here) = linked_to_one();
+    let local = here.says(&["open", &clone_of(&here, "web-shop", "https://github.com/acme/web-shop")]);
+    machine.says(&["open", &clone_of(&machine, "web-shop", "git@github.com:acme/web-shop.git")]);
+    machine.says(&["open", &clone_of(&machine, "blog", "git@github.com:ana/blog.git")]);
+
+    let sent = sent_with_their_repos(&here, &["web-shop", "blog"]);
+
+    let (shop, blog) = (project_named(&sent, "web-shop"), project_named(&sent, "blog"));
+    let local: u64 = local.parse().expect("a project id");
+    assert_eq!((&shop["repo"], &shop["paired"], &shop["machine"]), (&json!(SHOP), &json!(local), &json!(VPS)));
+    assert_eq!((&blog["repo"], &blog["paired"]), (&json!("github.com/ana/blog"), &Value::Null));
+    let ours = project_named(&status(&here)["projects"], "web-shop").clone();
+    assert_eq!((&ours["repo"], &ours["remotes"][0]["url"]), (&json!(SHOP), &json!("https://github.com/acme/web-shop")));
+}
+
+#[test]
+fn a_machine_s_workspace_is_shown_from_the_command_line() {
+    let (machine, here) = linked_to_one();
+    machine.says(&["open", &clone_of(&machine, "blog", "git@github.com:ana/blog.git")]);
+    let sent = sent_with_their_repos(&here, &["blog"]);
+    let blog = project_named(&sent, "blog");
+    let workspace = blog["workspaces"][0]["id"].as_u64().expect("a workspace id").to_string();
+
+    let answer: Value =
+        serde_json::from_str(&here.says(&["focus", "--machine", VPS, "--workspace", &workspace, "--json"]))
+            .expect("the shown workspace");
+
+    assert_eq!((&answer["machine"], &answer["project"]), (&json!(VPS), &blog["id"]));
+    assert_eq!(status(&here)["shown_remote"], answer);
+}

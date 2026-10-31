@@ -417,6 +417,9 @@ fn run_close(close: &args::CloseArgs) -> Result<bool> {
 }
 
 fn run_focus(focus: &args::FocusArgs) -> Result<()> {
+    if let Some(machine) = &focus.machine {
+        return run_focus_machine(machine, focus);
+    }
     let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
     let reveal = focus.reveal.clone().map(|query| control::Reveal { query, line: focus.line });
     if reveal.is_some() {
@@ -430,6 +433,13 @@ fn run_focus(focus: &args::FocusArgs) -> Result<()> {
         eprintln!("warning: {warning}");
     }
     Ok(())
+}
+
+fn run_focus_machine(machine: &str, focus: &args::FocusArgs) -> Result<()> {
+    let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
+    let request = control::FocusMachine { machine: machine.to_string(), item };
+    let value = ask("focus-machine", control::Command::FocusMachine(request))?;
+    if focus.print.json { print_json(&value) } else { Ok(()) }
 }
 
 fn run_go(go: args::GoArgs) -> Result<()> {

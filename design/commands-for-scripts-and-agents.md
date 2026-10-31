@@ -26,6 +26,7 @@ Code: `cli.rs`, `cli/`, `client/requests.rs`, `control.rs`, `app/control.rs`, `a
   - **`retry`** pokes one machine's link, or every link.
   - **The log** has the action, the name, and whether a destination was given, never the destination itself.
   - **`cornercase machines`** prints this computer, then a line per machine with its mark, icon, name, destination, folder and state, and the reason on the line under it; `--json` prints the answer. A refusal, or an update that failed there, exits 1. `--remote` reaches it like any request.
+  - **`focus-machine`** (#542; `cornercase focus --machine vps --workspace ID|--tab ID`) shows a machine's workspace or tab, by the ids in `status`'s `machines`, as a click on its row does, and answers the `shown_remote` it made. A machine not listed, an id it does not have and a `pane` or anything but a workspace or a tab are `not-found` or `malformed`, and a machine that has sent nothing yet is `unavailable`; each leaves the shown workspace alone. A request of its own, not a field of `focus`: an older server would drop the field and show one of its own workspaces with that id. It takes no `--view`, since the remote selection is the window's, shared by every client.
 
 ## Topics
 

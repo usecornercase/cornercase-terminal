@@ -690,6 +690,13 @@ pub(crate) struct FocusArgs {
     pub(crate) view: ViewArg,
     #[arg(
         long,
+        value_name = "NAME",
+        conflicts_with_all = ["pane", "worktree", "project", "view", "reveal"],
+        help = "Show one of this machine's workspaces or tabs, as a click on its row does: --workspace and --tab are its ids"
+    )]
+    pub(crate) machine: Option<String>,
+    #[arg(
+        long,
         value_name = "TEXT",
         conflicts_with_all = ["tab", "workspace", "worktree", "project"],
         help = "Also scroll the pane to this text and select it, as Enter on a result of the search does: the text `cornercase search` looked for"

@@ -66,6 +66,7 @@ impl App {
             }
             Target::Project(id) => {
                 if let Some(p) = self.projects.project_index(id) {
+                    self.leave_remote();
                     self.active = p;
                     self.screen.nav = self.screen.nav.map(|_| ui::Nav::Workspaces);
                     self.unfold_focus();

@@ -257,6 +257,101 @@ mod primary_remote {
     }
 }
 
+mod repo_identity {
+    use std::cell::RefCell;
+
+    use super::*;
+    use crate::git::remote::identity;
+
+    const SHOP: &str = "github.com/acme/web-shop";
+
+    fn listed(remotes: &[(&str, &str)]) -> Vec<(String, String)> {
+        remotes.iter().map(|(name, url)| ((*name).to_string(), (*url).to_string())).collect()
+    }
+
+    fn aliases(host: &str) -> Option<String> {
+        match host {
+            "gh-work" => Some("GitHub.com".into()),
+            "github.com" => Some("github.com".into()),
+            _ => None,
+        }
+    }
+
+    #[rstest]
+    #[case::scp_like(&[("origin", "git@github.com:acme/web-shop.git")], Some(SHOP))]
+    #[case::https(&[("origin", "https://github.com/acme/web-shop")], Some(SHOP))]
+    #[case::https_with_dot_git(&[("origin", "https://github.com/acme/web-shop.git")], Some(SHOP))]
+    #[case::ssh_scheme(&[("origin", "ssh://git@github.com/acme/web-shop")], Some(SHOP))]
+    #[case::ssh_scheme_with_a_port(&[("origin", "ssh://git@github.com:2222/acme/web-shop/")], Some(SHOP))]
+    #[case::an_ssh_alias(&[("origin", "gh-work:acme/web-shop.git")], Some(SHOP))]
+    #[case::upper_case(&[("origin", "https://GitHub.com/Acme/Web-Shop.git")], Some(SHOP))]
+    #[case::a_fork(&[("origin", "git@github.com:me/web-shop.git"), ("upstream", "https://github.com/acme/web-shop")], Some(SHOP))]
+    #[case::origin_before_others(&[("mirror", "https://gitlab.com/x/y"), ("origin", "git@github.com:acme/web-shop")], Some(SHOP))]
+    #[case::the_first_without_upstream_or_origin(&[("mine", "https://github.com/acme/web-shop"), ("other", "https://gitlab.com/x/y")], Some(SHOP))]
+    #[case::the_first_that_parses(&[("upstream", "/srv/git/shop"), ("origin", "https://github.com/acme/web-shop")], Some(SHOP))]
+    #[case::the_first_with_a_path(&[("upstream", "https://github.com"), ("origin", "https://github.com/acme/web-shop")], Some(SHOP))]
+    #[case::an_upper_case_suffix(&[("origin", "https://github.com/acme/web-shop.GIT")], Some(SHOP))]
+    #[case::an_unresolved_alias(&[("origin", "box:acme/web-shop")], Some("box/acme/web-shop"))]
+    #[case::no_remotes(&[], None)]
+    #[case::only_a_local_path(&[("origin", "/srv/git/shop")], None)]
+    #[case::no_path(&[("origin", "https://github.com")], None)]
+    fn is_host_and_path_in_lower_case(#[case] remotes: &[(&str, &str)], #[case] expected: Option<&str>) {
+        assert_eq!(identity(&listed(remotes), aliases).as_deref(), expected);
+    }
+
+    #[test]
+    fn resolves_only_the_host_of_ssh_urls() {
+        let asked = RefCell::new(Vec::new());
+        let resolve = |host: &str| {
+            asked.borrow_mut().push(host.to_string());
+            Some("elsewhere.example".to_string())
+        };
+
+        assert_eq!(
+            identity(&listed(&[("origin", "https://github.com/acme/web-shop")]), resolve).as_deref(),
+            Some(SHOP)
+        );
+        assert_eq!(identity(&listed(&[("origin", "http://github.com/acme/web-shop")]), resolve).as_deref(), Some(SHOP));
+        assert!(asked.borrow().is_empty());
+
+        for url in [
+            "ssh://github.com/acme/web-shop",
+            "git+ssh://github.com/acme/web-shop",
+            "ssh+git://github.com/acme/web-shop",
+        ] {
+            let ssh = identity(&listed(&[("origin", url)]), resolve);
+
+            assert_eq!(ssh.as_deref(), Some("elsewhere.example/acme/web-shop"));
+        }
+        assert_eq!(*asked.borrow(), ["github.com", "github.com", "github.com"]);
+    }
+}
+
+mod remote_without_credentials {
+    use super::*;
+    use crate::git::remote::without_credentials;
+
+    #[rstest]
+    #[case::a_user_and_password(
+        "https://ana:s3cret@github.com/acme/web-shop.git",
+        "https://github.com/acme/web-shop.git"
+    )]
+    #[case::a_token("https://ghp_abc123@github.com/acme/web-shop", "https://github.com/acme/web-shop")]
+    #[case::an_at_in_the_password("https://ana:p@ss@github.com:8443/acme/shop", "https://github.com:8443/acme/shop")]
+    #[case::an_ssh_user("ssh://git@github.com:2222/acme/web-shop", "ssh://git@github.com:2222/acme/web-shop")]
+    #[case::an_ssh_password("ssh://git:s3cret@github.com/acme/web-shop", "ssh://git@github.com/acme/web-shop")]
+    #[case::only_an_ssh_password("ssh://:s3cret@github.com/acme/web-shop", "ssh://github.com/acme/web-shop")]
+    #[case::an_upper_case_scheme("HTTPS://ghp_abc123@github.com/acme/web-shop", "HTTPS://github.com/acme/web-shop")]
+    #[case::no_path("https://token@github.com", "https://github.com")]
+    #[case::an_at_in_the_path("https://github.com/acme/web@shop", "https://github.com/acme/web@shop")]
+    #[case::no_credentials("https://github.com/acme/web-shop", "https://github.com/acme/web-shop")]
+    #[case::scp_like("git@github.com:acme/web-shop.git", "git@github.com:acme/web-shop.git")]
+    #[case::a_local_path("/srv/git/shop", "/srv/git/shop")]
+    fn keeps_everything_but_the_secrets(#[case] url: &str, #[case] expected: &str) {
+        assert_eq!(without_credentials(url), expected);
+    }
+}
+
 mod user_name {
     use super::*;
 

@@ -2,8 +2,9 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
+use super::machines::{MachineSeen, ShownRemote};
 use super::{ConfigInfo, Ids, Layout, ThemeInfo, ViewInfo};
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -25,6 +26,10 @@ pub struct Report {
     pub(crate) config: Option<ConfigInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) home: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) machines: Vec<MachineSeen>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) shown_remote: Option<ShownRemote>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -251,6 +256,33 @@ pub struct ProjectInfo {
     pub workspaces: Vec<WorkspaceInfo>,
     pub(crate) custom_name: Option<String>,
     pub(crate) collapsed: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) remotes: Vec<RemoteInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) repo: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) machine: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "present")]
+    #[expect(
+        clippy::option_option,
+        reason = "absent on this computer's projects, null on a machine's project that pairs with none of them"
+    )]
+    pub(crate) paired: Option<Option<u64>>,
+}
+
+#[expect(
+    clippy::option_option,
+    reason = "absent on this computer's projects, null on a machine's project that pairs with none of them"
+)]
+fn present<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Option<u64>>, D::Error> {
+    Option::deserialize(deserializer).map(Some)
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct RemoteInfo {
+    pub(crate) name: String,
+    pub(crate) url: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -279,6 +311,8 @@ pub struct WorkspaceInfo {
     pub(crate) post: Option<PostInfo>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) shared: Vec<SharedInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) machine: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

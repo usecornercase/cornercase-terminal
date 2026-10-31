@@ -1,14 +1,30 @@
 use super::{Handled, conflict, json, malformed};
 use crate::app::App;
-use crate::app::machines::Update;
+use crate::app::machines::{RemoteItem, Update};
 use crate::control::contract::{Code, Refusal};
-use crate::control::{MachineList, MachineSet, Machines, machines::ThisComputer};
+use crate::control::{FocusMachine, Item, MachineList, MachineSet, Machines, machines::ThisComputer};
 use crate::log;
 use crate::machines::{self, DEFAULT_FOLDER, HERE_ICON, ICONS, Machine};
 use crate::version;
 
 fn unknown(name: &str) -> Refusal {
     Refusal::new(Code::NotFound, format!("no machine is called `{name}`; `cornercase machines` lists them"))
+}
+
+fn remote_item(item: Item) -> Result<RemoteItem, Refusal> {
+    match item {
+        Item::Workspace(id) => Ok(RemoteItem::Workspace(id)),
+        Item::Tab(id) => Ok(RemoteItem::Tab(id)),
+        other => Err(malformed(format!("`{other}` is not a machine's workspace or tab: say one of them"))),
+    }
+}
+
+fn missing(name: &str, item: RemoteItem) -> Refusal {
+    let what = match item {
+        RemoteItem::Workspace(id) => format!("workspace {id}"),
+        RemoteItem::Tab(id) => format!("tab {id}"),
+    };
+    Refusal::new(Code::NotFound, format!("`{name}` has no {what}: `cornercase status` lists its workspaces and tabs"))
 }
 
 fn icon(text: &str) -> Result<String, Refusal> {
@@ -84,6 +100,21 @@ impl App {
             Machines::Retry(name) => self.retry_machines(name.as_deref())?,
         }
         Ok(Some(json(&self.machine_list())))
+    }
+
+    pub(super) fn focus_machine_request(&mut self, focus: &FocusMachine) -> Handled {
+        let item = remote_item(focus.item)?;
+        let name = focus.machine.trim();
+        let at = self.machine_at(name).ok_or_else(|| unknown(name))?;
+        let name = self.config.machines[at].name.clone();
+        if !self.sent_workspaces(&name) {
+            let message = format!("`{name}` has not sent its workspaces yet: `cornercase machines` says how it is");
+            return Err(Refusal::new(Code::Unavailable, message));
+        }
+        if !self.select_remote(&name, item) {
+            return Err(missing(&name, item));
+        }
+        Ok(Some(json(&self.shown_remote_info())))
     }
 
     pub(in crate::app) fn machine_list(&self) -> MachineList {

@@ -9,6 +9,7 @@ use link::Down;
 
 pub(crate) mod form;
 pub(crate) mod link;
+pub(crate) mod repo;
 pub(crate) mod wake;
 
 pub(crate) const ICONS: [(char, &str); 6] =
@@ -287,9 +288,13 @@ impl Info {
     }
 
     fn seen_ago(&self, now: SystemTime) -> Option<String> {
-        let seen = Stamp::parse(self.seen.as_deref()?)?;
-        Some(ago(now.duration_since(seen).unwrap_or_default().as_secs()))
+        seen_ago(self.seen.as_deref()?, now)
     }
+}
+
+pub(crate) fn seen_ago(seen: &str, now: SystemTime) -> Option<String> {
+    let seen = Stamp::parse(seen)?;
+    Some(ago(now.duration_since(seen).unwrap_or_default().as_secs()))
 }
 
 #[cfg(test)]

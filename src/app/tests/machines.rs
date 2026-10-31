@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::os::unix::net::UnixStream;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
@@ -35,7 +36,10 @@ enum There {
     Missing,
     Older,
     Server(String),
+    Watched(Ends),
 }
+
+type Ends = Arc<Mutex<Vec<UnixStream>>>;
 
 struct Fake {
     destination: String,
@@ -54,6 +58,11 @@ impl Connect for Fake {
                 update: String::new(),
             }))),
             There::Server(boot) => Ok(serving(boot)),
+            There::Watched(ends) => {
+                let (line, theirs) = line(version::CURRENT, None);
+                ends.lock().push(theirs);
+                Ok(line)
+            }
         }
     }
 }
@@ -395,4 +404,5 @@ mod fakes {
 }
 
 mod requests;
+mod seen;
 mod settings;
