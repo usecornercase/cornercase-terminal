@@ -937,7 +937,7 @@ With `--json`, a machine adds `machine`, and `all` adds `machines`, one per mach
    "read_at": "2026-10-31T16:04:12.000Z", "error": null, "agents": [...]}]}
 ```
 
-`state` and `seen` are the link's, as [`machines`](#machines) gives them; `read_at` is when your server read that machine's answer, `null` if never; `error` is why the last try failed, or why the machine is down, or, with no `read_at`, why it was never read (`still connecting`, `its cornercase is older than this one`, `not read yet`). A machine that is down answers the numbers it gave last; with none, the request fails with why. An unknown name is `not-found`.
+`state` and `seen` are the link's, as [`machines`](#machines) gives them; `read_at` is when your server read that machine's answer, `null` if never; `error` is why the last try failed, or why the machine is down, or, with no `read_at`, why it was never read (`still connecting`, `its cornercase is older than this one`, `not read yet`). A machine that is down answers the numbers it gave last. With none, `--machine NAME` fails with why, while `--machine all` still answers this computer's and the other machines' agents and lists that machine with its `error` and no `agents`. An unknown name is `not-found`.
 
 An agent whose account can be told apart has `identity`, the same text on every machine for the same account of the same provider, so another app can list an account seen on two machines once. It is a fingerprint: it holds neither the email nor the organization, though whoever knows both can check them against it. Only Claude Code gives one, for a claude.ai login; Codex, an API key, Bedrock and Vertex don't, and rows without it are never merged.
 
