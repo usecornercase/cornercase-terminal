@@ -59,13 +59,13 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - [Scrollback](design/scrollback.md) (`term/emulator.rs`, `app/panes.rs`, `ui/pane.rs`): the wheel in a pane's history.
 - [Keyboard shortcuts](design/keyboard-shortcuts.md) (`shortcuts.rs`, `app/shortcuts.rs`, `ui/keys.rs`): the opt-in prefix key and the keys menu.
 - [Client / server](design/client-server.md) (`client.rs`, `client/`, `server.rs`, `server/startup.rs`, `protocol.rs`, `cli/start_server.rs`, #284): the server, its socket and folders, `start-server`, `kill-server`.
-- [Remote windows](design/remote-windows.md) (`remote.rs`, `client.rs`, `client/window.rs`, `client/requests.rs`, `cli/reach.rs`, `ui/remote.rs`, #104, #476, #480, #537, #557): `cornercase remote` over ssh, the proxy, reconnecting, `--remote` for the commands.
+- [Remote windows](design/remote-windows.md) (`remote.rs`, `client.rs`, `client/window.rs`, `client/requests.rs`, `cli/reach.rs`, `ui/remote.rs`, #104, #476, #480, #537, #557, #558): `cornercase remote` over ssh, the proxy, reconnecting, `--remote` for the commands.
 - [Browser access](design/browser-access.md) (`web/`, `web/tailscale.rs`, `app/remote_access.rs`, `ui/remote_access.rs`): the window in a phone's browser, pairing, Tailscale.
 - [Telegram](design/telegram.md) (`telegram/`, `messenger/`, `app/messenger.rs`, `app/messenger/`): away mode, the Telegram bot and what chat apps share.
 - [Discord](design/discord.md) (`discord/`, `app/messenger/pairing.rs`, `app/messenger/every.rs`, `app/messenger/forum.rs`, `app/messenger/forum/`, `ui/forum.rs`, #265, #437): the Discord bot, pairing, the Gateway, slash commands, forum mode.
 - [Panics](design/panics.md) (`panics.rs`, `server.rs`): containing panics so that the shells survive.
 - [Log](design/log.md) (`log.rs`, `paths.rs`, `time.rs`, `app/trace.rs`): `server.log`, its format, levels and what it never holds.
-- [Commands for scripts and agents](design/commands-for-scripts-and-agents.md) (`cli.rs`, `cli/`, `control.rs`, `app/control.rs`, `app/control/`, `app/events.rs`, `files/pasted.rs`, `app/pasted_files.rs`, `control/worktrees.rs`, `cli/worktrees.rs`, #479, #485, #536): the commands and socket requests, streams, the contract.
+- [Commands for scripts and agents](design/commands-for-scripts-and-agents.md) (`cli.rs`, `cli/`, `control.rs`, `app/control.rs`, `app/control/`, `app/events.rs`, `files/pasted.rs`, `app/pasted_files.rs`, `control/worktrees.rs`, `cli/worktrees.rs`, #479, #485, #536, #558): the commands and socket requests, streams, the contract.
 - [Plugins](design/plugins.md) (`plugins/`, `app/plugins.rs`, `app/plugin_popup.rs`, `ui/dialog/popup.rs`, `cli/plugin.rs`, `client/window.rs`): manifests, trust, actions, buttons, popups, hooks, services, installing, the catalogue.
 - [Updates](design/updates.md) (`update.rs`, `cli/update.rs`, `version.rs`, `http.rs`, `app/update_dialog.rs`): checking, installing and restarting, also once agents are idle.
 - [Releases](design/releases.md) (`.github/`, `dist-workspace.toml`): how a push to `main` becomes a release.

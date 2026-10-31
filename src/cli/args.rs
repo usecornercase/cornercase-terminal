@@ -10,6 +10,7 @@ pub(crate) mod plugin;
 pub(crate) mod ports;
 pub(crate) mod processes;
 pub(crate) mod queue;
+pub(crate) mod requests;
 pub(crate) mod terminal;
 pub(crate) mod theme;
 pub(crate) mod todo;
@@ -34,7 +35,7 @@ use super::help::{
     START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, THEME_HELP, TODO_HELP, TOUR_HELP, UNTIL_AFTER, UPDATE_HELP,
     USAGE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
-use super::help::{AGENTS_HELP, CHANGES_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP};
+use super::help::{AGENTS_HELP, CHANGES_HELP, FILES_HELP, PASTE_FILE_HELP, PORTS_HELP, PROCESSES_HELP, REQUESTS_HELP};
 use crate::control::Until;
 use crate::term::keys;
 
@@ -185,6 +186,11 @@ pub(crate) enum Control {
         after_help = INPUT_HELP
     )]
     Input(terminal::InputArgs),
+    #[command(
+        about = "Keep one connection and run each command of standard input as it arrives, for programs that send many",
+        after_help = REQUESTS_HELP
+    )]
+    Requests(requests::RequestsArgs),
     #[command(about = "Scroll a pane's view through its history", after_help = SCROLL_HELP)]
     Scroll(terminal::ScrollArgs),
     #[command(about = "Select text in a pane, print or copy the selection, or clear it", after_help = SELECTION_HELP)]

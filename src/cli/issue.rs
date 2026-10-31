@@ -2,7 +2,7 @@ use std::fmt::Write as _;
 
 use super::args::issue::{IssueAction, ListArgs, PeopleArgs, ReadArgs, SourcesArgs};
 use super::status::tsv;
-use super::{print_json, print_out};
+use super::{note, print_json, print_out};
 use crate::client::{answer, ask};
 use crate::control::issues::{Lists, PeopleInfo, ReadIssue, SourceInfo, SourceState, Sources, Who};
 use crate::control::{Command, IssueList, IssuePeople, IssueRead, IssueSources};
@@ -104,7 +104,7 @@ fn list(args: &ListArgs) -> Result<bool> {
 pub(crate) fn failures(lists: &Lists) -> bool {
     let errors = failure_lines(lists);
     for line in &errors {
-        eprintln!("{line}");
+        note(&format!("{line}\n"));
     }
     errors.is_empty()
 }

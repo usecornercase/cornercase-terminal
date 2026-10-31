@@ -1,4 +1,4 @@
-use std::io::{self, BufRead as _};
+use std::io::BufRead as _;
 use std::path::Path;
 
 use base64::Engine as _;
@@ -9,7 +9,7 @@ mod follow;
 use super::args::terminal::{
     InputArgs, LinkArgs, PasteFileArgs, RatioArgs, RedrawArgs, ResizeArgs, ScrollArgs, SelectionArgs, Side,
 };
-use super::{print_json, print_out, read_capped};
+use super::{line, note, print_json, print_out, read_capped};
 use crate::client::{self, answer, ask};
 use crate::control::terminal::{End, InputEvent, Linked, Pasted, Scrolled, Selection, Sent, Why};
 use crate::control::{self, Done};
@@ -30,7 +30,7 @@ fn events(args: &[String]) -> Result<Vec<InputEvent>> {
 
 fn events_from_stdin() -> Result<Vec<InputEvent>> {
     let mut events = Vec::new();
-    for line in io::stdin().lock().lines() {
+    for line in line::input().lines() {
         let line = line?;
         if !line.trim().is_empty() {
             events.push(event(&line)?);
@@ -68,7 +68,7 @@ pub(super) fn input(args: &InputArgs) -> Result<()> {
         return print_json(&value);
     }
     for skip in answer::<Sent>(value)?.skipped {
-        eprintln!("warning: event {} was not sent: {}", skip.event + 1, skipped(skip.why));
+        note(&format!("warning: event {} was not sent: {}\n", skip.event + 1, skipped(skip.why)));
     }
     Ok(())
 }

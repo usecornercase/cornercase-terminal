@@ -256,6 +256,20 @@ mod parsing {
         }
     }
 
+    #[test]
+    fn a_usage_message_has_no_error_prefix_and_no_trailing_newline() {
+        let error = parse(&["wait", "--pane", "1", "--pane", "2"]).ok().and_then(|cli| match cli.command {
+            Some(Command::Control(Control::Wait(wait))) => several(&wait).err(),
+            _ => None,
+        });
+
+        let text = usage(&error.expect("a usage error"));
+
+        assert!(text.starts_with("several panes need --any or --all"), "{text}");
+        assert!(text.contains("Usage: cornercase wait"), "{text}");
+        assert!(!text.ends_with('\n'));
+    }
+
     #[rstest]
     #[case::wait(&["wait", "--until", "turn-over"])]
     #[case::send(&["send", "--enter", "--wait", "--until", "turn-over", "hi"])]

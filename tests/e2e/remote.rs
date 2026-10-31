@@ -205,6 +205,25 @@ fn input_follow_types_through_one_ssh_connection() {
 }
 
 #[test]
+fn requests_follow_sends_every_line_through_one_ssh_connection() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let pane = remote_says(&session, &["new-tab"]);
+    let mut typist = input::Typist::start(remotely(&session, &["requests", "--follow", "-"]));
+
+    let status = typist.types(&serde_json::json!({"args": ["status", "--json"]}));
+    assert_eq!(status["status"], 0, "{status}");
+    let proxy = ssh_pid(&session);
+    typist.types(&serde_json::json!({"args": ["send", "--pane", &pane, "-"], "stdin": "echo remote-\"\"requests"}));
+    typist.types(&serde_json::json!({"args": ["keys", "--pane", &pane, "enter"]}));
+    wait_until("the text is typed", || session.says(&["read", "--pane", &pane]).contains("remote-requests\n"));
+    let ended = typist.ends();
+
+    assert_eq!((ssh_pid(&session), ended.status.code()), (proxy.clone(), Some(0)), "{ended:?}");
+    wait_until("the proxy there ends", || gone(&proxy));
+}
+
+#[test]
 fn a_remote_follow_ends_when_its_reader_leaves() {
     let session = Session::new();
     remote_says(&session, &["start-server"]);

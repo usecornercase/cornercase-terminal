@@ -1,5 +1,5 @@
 use super::args::StartServerArgs;
-use super::{print_json, print_out};
+use super::{note, print_json, print_out};
 use crate::client::{answer, ask_starting};
 use crate::control::start_server::{SizeFrom, Started};
 use crate::control::{self, StartServer};
@@ -15,7 +15,7 @@ pub(super) fn run(args: &StartServerArgs) -> Result<()> {
     let started: Started = answer(value.clone())?;
     ignored_theme(sent, &started)?;
     for warning in warnings(&started) {
-        eprintln!("warning: {warning}");
+        note(&format!("warning: {warning}\n"));
     }
     if args.print.json { print_json(&value) } else { print_out(&summary(&started)) }
 }

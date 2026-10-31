@@ -109,6 +109,10 @@ pub enum Error {
         "the cornercase server closed the connection without stopping: it crashed, or this command stopped reading what it sends"
     )]
     ServerLost,
+    #[error("this command keeps a connection of its own, so it cannot run on a line of `cornercase requests`")]
+    OwnConnection,
+    #[error("what reads the answers is gone")]
+    ReaderGone,
     #[error("cornercase hit a bug, see server.log")]
     Bug,
     #[error("failed to run ssh: {0}")]

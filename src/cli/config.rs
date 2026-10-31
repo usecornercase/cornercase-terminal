@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use serde_json::Value;
 
 use super::args::config::{ConfigAction, ConfigArgs};
-use super::{print_json, print_out};
+use super::{line, print_json, print_out};
 use crate::client::{answer, ask, use_build_folders};
 use crate::control::Command;
 use crate::control::config::{Configure, Connection, Described, Kind, ProjectChange, SecretChange, Setting, State};
@@ -115,7 +115,7 @@ fn read_secret(key: &str) -> Result<String> {
         eprintln!();
         read?;
     } else {
-        stdin.lock().take(1 << 16).read_to_string(&mut text)?;
+        line::input().take(1 << 16).read_to_string(&mut text)?;
     }
     let token = text.trim().to_string();
     if token.is_empty() {

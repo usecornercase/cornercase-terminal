@@ -486,3 +486,187 @@ mod one_link {
         assert!(matches!(error, Error::ServerGone), "{error:?}");
     }
 }
+
+mod a_shared_link {
+    use std::os::fd::OwnedFd;
+    use std::time::Duration;
+
+    use super::*;
+
+    const WAIT: Duration = Duration::from_secs(10);
+
+    type Seen = thread::JoinHandle<Vec<String>>;
+
+    fn status() -> control::Command {
+        control::Command::Status(control::Status {})
+    }
+
+    fn sharing(features: &[&str], watch: Option<OwnedFd>) -> Seen {
+        let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
+        let mut descriptor = control::contract::describe("boot", &[]);
+        descriptor.features.retain(|feature| features.contains(&feature.as_str()));
+        let server = thread::spawn(move || {
+            let mut seen = Vec::new();
+            while let Ok(Some(ClientMessage::Request(text))) = protocol::recv::<ClientMessage>(&mut theirs) {
+                let value = reply(&text, &descriptor, seen.len());
+                seen.push(text);
+                let answer = serde_json::to_string(&Response::Ok(value)).expect("json");
+                protocol::send(&mut theirs, &ServerMessage::Response(answer)).expect("an answer");
+            }
+            seen
+        });
+        share(Link::socket(ours).expect("a link"), watch);
+        server
+    }
+
+    fn reply(text: &str, descriptor: &control::contract::Descriptor, n: usize) -> Value {
+        if text.contains("\"contract\"") {
+            serde_json::to_value(descriptor).expect("json")
+        } else {
+            serde_json::json!({"n": n})
+        }
+    }
+
+    fn finish(server: Seen) -> Vec<String> {
+        unshare();
+        server.join().expect("the fake server")
+    }
+
+    #[test]
+    fn asks_one_after_another_over_the_same_socket() {
+        let server = sharing(&[], None);
+
+        let answers: Vec<Value> = (0..3).map(|_| ask("status", status()).expect("an answer")).collect();
+
+        assert_eq!(answers.iter().map(|answer| answer["n"].clone()).collect::<Vec<_>>(), [0, 1, 2]);
+        assert_eq!(finish(server).len(), 3);
+    }
+
+    #[test]
+    fn asks_the_contract_once_for_every_check() {
+        let server = sharing(&["focus-reveal", "accounts"], None);
+
+        use_focus_reveal().expect("offered");
+        use_accounts().expect("offered");
+        use_focus_reveal().expect("offered");
+
+        let seen = finish(server);
+        assert_eq!(seen.iter().filter(|text| text.contains("\"contract\"")).count(), 1, "{seen:?}");
+    }
+
+    #[test]
+    fn refuses_a_feature_the_server_lacks_like_one_shot_commands_do() {
+        let server = sharing(&[], None);
+
+        let error = use_accounts().expect_err("lacking");
+
+        assert!(error.to_string().contains("has no account profiles"), "{error}");
+        assert!(line_done().is_none());
+        finish(server);
+    }
+
+    #[test]
+    fn a_lines_view_goes_with_that_line_only() {
+        let server = sharing(&["views"], None);
+
+        use_view(7).expect("views");
+        ask("status", status()).expect("an answer");
+        assert!(line_done().is_none());
+        ask("status", status()).expect("an answer");
+
+        let seen = finish(server);
+        assert!(seen[0].contains("\"contract\"") && !seen[0].contains("\"view\":7"), "{seen:?}");
+        assert!(seen[1].contains("\"view\":7"), "{seen:?}");
+        assert!(!seen[2].contains("\"view\":7"), "{seen:?}");
+    }
+
+    #[test]
+    fn a_command_with_a_connection_of_its_own_is_refused_before_anything_is_sent() {
+        let server = sharing(&[], None);
+
+        let connected = connect().err().expect("refused");
+        let followed = follow("events", status(), |_| Ok(false)).expect_err("refused");
+
+        assert!(matches!(connected, Error::OwnConnection), "{connected:?}");
+        assert!(matches!(followed, Error::OwnConnection), "{followed:?}");
+        assert_eq!(finish(server), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_lost_link_is_reported_when_the_line_ends() {
+        let (ours, theirs) = UnixStream::pair().expect("a socket pair");
+        share(Link::socket(ours).expect("a link"), None);
+        drop(theirs);
+
+        let error = ask("status", status()).expect_err("gone");
+
+        assert!(matches!(error, Error::ServerGone), "{error:?}");
+        assert!(matches!(line_done(), Some(Error::ServerGone)));
+        assert!(line_done().is_none());
+        unshare();
+    }
+
+    #[test]
+    fn a_command_error_does_not_lose_the_link() {
+        let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
+        share(Link::socket(ours).expect("a link"), None);
+        let server = thread::spawn(move || {
+            protocol::recv::<ClientMessage>(&mut theirs).expect("a request");
+            let refusal = serde_json::to_string(&Response::Error("no such pane".into())).expect("json");
+            protocol::send(&mut theirs, &ServerMessage::Response(refusal)).expect("an answer");
+        });
+
+        let error = ask("status", status()).expect_err("refused");
+
+        server.join().expect("the fake server");
+        assert!(matches!(error, Error::Control(_)), "{error:?}");
+        assert!(line_done().is_none());
+        unshare();
+    }
+
+    #[test]
+    fn an_ask_ends_when_its_reader_leaves_and_the_server_reads_the_end() {
+        let (reader, out) = io::pipe().expect("a pipe");
+        let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
+        let link = Link::socket(ours).expect("a link");
+        let (asked, asking) = std::sync::mpsc::channel();
+        let server = thread::spawn(move || {
+            protocol::recv::<ClientMessage>(&mut theirs).expect("a request");
+            asked.send(()).expect("told");
+            protocol::recv::<ClientMessage>(&mut theirs)
+        });
+        let client = thread::spawn(move || {
+            share(link, Some(out.into()));
+            let error = ask("status", status()).expect_err("the reader left");
+            let ended = line_done();
+            unshare();
+            (error, ended)
+        });
+        asking.recv_timeout(WAIT).expect("the request arrived");
+
+        drop(reader);
+
+        let (error, ended) = client.join().expect("the client");
+        assert!(matches!(error, Error::ReaderGone), "{error:?}");
+        assert!(matches!(ended, Some(Error::ReaderGone)));
+        assert!(matches!(server.join().expect("the fake server"), Ok(None)));
+    }
+
+    #[test]
+    fn a_server_without_a_contract_offers_no_features_but_keeps_the_link() {
+        let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
+        share(Link::socket(ours).expect("a link"), None);
+        let server = thread::spawn(move || {
+            protocol::recv::<ClientMessage>(&mut theirs).expect("a request");
+            let refusal = serde_json::to_string(&Response::Error(control::unknown_command("contract"))).expect("json");
+            protocol::send(&mut theirs, &ServerMessage::Response(refusal)).expect("an answer");
+        });
+
+        let error = use_accounts().expect_err("lacking");
+
+        server.join().expect("the fake server");
+        assert!(error.to_string().contains("has no account profiles"), "{error}");
+        assert!(line_done().is_none());
+        unshare();
+    }
+}
