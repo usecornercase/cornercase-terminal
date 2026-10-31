@@ -12,7 +12,7 @@ pub(crate) const SIGNED_OUT: &str =
     r#"{"error":{"code":-32600,"message":"codex account authentication required to read rate limits"},"id":2}"#;
 
 pub(crate) fn report(line: &str) -> Report {
-    answer(line).expect("the usage answer").expect("a report")
+    answer(line, &mut Heard::default()).expect("the usage answer").expect("a report")
 }
 
 fn limit(percent: u8, minutes: Option<i64>) -> Value {
@@ -54,6 +54,7 @@ fn a_recorded_answer_gives_the_session_and_the_week() {
         ],
         extra: None,
         notice: None,
+        identity: None,
     };
     assert_eq!(report(RECORDED), expected);
 }
@@ -158,7 +159,13 @@ fn an_answer_without_rate_limits_is_unavailable() {
 #[case::server_request(r#"{"id":2,"method":"item/tool/requestUserInput","params":{}}"#)]
 #[case::not_json("starting")]
 fn other_lines_are_skipped(#[case] line: &str) {
-    assert!(answer(line).is_none());
+    assert!(answer(line, &mut Heard::default()).is_none());
+}
+
+#[test]
+fn a_codex_report_never_carries_an_identity() {
+    assert!(RECORDED.contains("accountId"));
+    assert_eq!(report(RECORDED).identity, None);
 }
 
 #[test]
@@ -170,6 +177,6 @@ fn a_codex_without_a_login_is_signed_out_not_failed() {
 #[case::usage(r#"{"error":{"code":-32603,"message":"backend unavailable"},"id":2}"#, "backend unavailable")]
 #[case::initialize(r#"{"error":{"code":-32603},"id":1}"#, "codex refused the request")]
 fn an_error_carries_its_message(#[case] line: &str, #[case] expected: &str) {
-    let error = answer(line).expect("an answer").expect_err("an error");
+    let error = answer(line, &mut Heard::default()).expect("an answer").expect_err("an error");
     assert_eq!(error.to_string(), expected);
 }

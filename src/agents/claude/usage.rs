@@ -3,7 +3,8 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::agents::usage::{Reading, Report, Window, window};
+use crate::agents::Known;
+use crate::agents::usage::{Heard, Reading, Report, Window, fingerprint, window};
 use crate::error::{Error, Result};
 use crate::time;
 
@@ -18,7 +19,9 @@ const ARGS: [&str; 9] = [
     "stream-json",
     "--verbose",
 ];
+const INITIALIZE_REQUEST: &str = "initialize";
 const USAGE_REQUEST: &str = "usage";
+const FIRST_PARTY: &str = "firstParty";
 pub(in crate::agents) const REQUESTS: &str = concat!(
     r#"{"type":"control_request","request_id":"initialize","request":{"subtype":"initialize"}}"#,
     "\n",
@@ -166,17 +169,29 @@ pub(super) fn parse(body: Value) -> Result<Report> {
         windows: limits.as_ref().map(windows).unwrap_or_default(),
         extra: limits.as_ref().and_then(|l| l.spend.as_ref()).and_then(extra),
         notice: None,
+        identity: None,
     })
 }
 
-pub(in crate::agents) fn answer(line: &str) -> Option<Result<Report>> {
+fn identity(account: &Value) -> Option<String> {
+    let text = |key: &str| account[key].as_str().filter(|text| !text.is_empty());
+    let (email, organization) = (text("email")?, text("organization")?);
+    (account["apiProvider"] == FIRST_PARTY).then(|| fingerprint(Known::Claude, &[email, organization]))
+}
+
+pub(in crate::agents) fn answer(line: &str, heard: &mut Heard) -> Option<Result<Report>> {
     let message: Value = serde_json::from_str(line).ok()?;
     let response = message.get("response").filter(|_| message["type"] == "control_response")?;
+    if response["request_id"] == INITIALIZE_REQUEST {
+        heard.identity = identity(&response["response"]["account"]);
+        return None;
+    }
     if response["request_id"] != USAGE_REQUEST {
         return None;
     }
     if response["subtype"] == "success" {
-        return Some(parse(response["response"].clone()));
+        let identity = heard.identity.take();
+        return Some(parse(response["response"].clone()).map(|report| Report { identity, ..report }));
     }
     let error = response["error"].as_str().unwrap_or("claude refused the request");
     Some(Err(Error::Usage(error.to_string())))

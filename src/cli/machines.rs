@@ -5,9 +5,13 @@ use super::args::Print;
 use super::args::machines::{MachinesAction, MachinesArgs};
 use super::{print_json, print_out};
 use crate::client::{answer, ask};
+use crate::control::usage::MachineRead;
 use crate::control::{Command, MachineList, MachineSet, Machines};
 use crate::error::Result;
 use crate::text;
+use crate::time::{self, Stamp};
+
+const NOT_READ: &str = "not read yet";
 
 pub(super) fn run(args: &MachinesArgs) -> Result<()> {
     let (request, print) = request(args);
@@ -63,6 +67,15 @@ pub(crate) fn list_text(list: &MachineList, now: SystemTime) -> String {
         }
     }
     text
+}
+
+pub(super) fn read_line(machine: &MachineRead, width: usize, now: SystemTime) -> String {
+    let read = machine.read_at.as_deref().and_then(Stamp::parse);
+    let read = read.map(|at| format!("read {}", time::ago(now.duration_since(at).unwrap_or_default())));
+    let notes: Vec<&str> = [read.as_deref(), machine.error.as_deref()].into_iter().flatten().collect();
+    let note = if notes.is_empty() { NOT_READ.into() } else { notes.join(" · ") };
+    let pad = width.saturating_sub(text::cells(&machine.name));
+    format!("{} {}{}  {note}", machine.state.mark(), machine.name, " ".repeat(pad))
 }
 
 #[cfg(test)]

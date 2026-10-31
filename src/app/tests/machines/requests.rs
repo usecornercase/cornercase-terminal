@@ -13,14 +13,7 @@ fn sent(app: &mut App, args: &Value) {
 }
 
 fn reply(text: &str) -> std::result::Result<MachineList, (String, String)> {
-    let reply: Value = serde_json::from_str(text).expect("a reply");
-    match &reply["error"] {
-        Value::Null => Ok(serde_json::from_value(reply["ok"].clone()).expect("a machine list")),
-        error => Err((
-            error["code"].as_str().unwrap_or_default().into(),
-            error["message"].as_str().unwrap_or_default().into(),
-        )),
-    }
+    replied(text).map(|ok| serde_json::from_value(ok).expect("a machine list"))
 }
 
 impl Rig {
