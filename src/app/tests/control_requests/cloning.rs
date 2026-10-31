@@ -173,6 +173,27 @@ mod a_clone {
     }
 
     #[test]
+    fn next_to_one_being_cloned_into_runs_too_even_when_its_name_starts_the_same() {
+        let (first, second) = (git_repo(&[]), git_repo(&[]));
+        let parent = TempDir::new();
+        let name = first.path().file_name().expect("a name").to_string_lossy().into_owned();
+        let (mut app, rx) = empty_app();
+        start_clone(&mut app, CLIENT + 1, None, &clone_args(&first.path().display().to_string(), parent.path()));
+
+        let beside = parent.path().join(format!("{name}2"));
+        start_clone(&mut app, CLIENT, None, &clone_args(&second.path().display().to_string(), &beside));
+
+        let mut answers = Vec::new();
+        wait_until("both clones' answers", || {
+            drain(&mut app, &rx);
+            answers.extend(app.take_answers());
+            answers.len() == 2
+        });
+        assert!(answers.iter().all(|(_, text)| reply_of(text).is_ok()), "{answers:?}");
+        assert_eq!(app.projects.len(), 2);
+    }
+
+    #[test]
     fn focused_in_an_open_view_moves_that_view_and_not_the_window() {
         let repo = git_repo(&[]);
         let parent = TempDir::new();
