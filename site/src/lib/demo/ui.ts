@@ -1429,7 +1429,7 @@ export class Painter {
   private tabs(row: Rect, names: string[], active: number, onClick: (i: number) => void): void {
     tabsIn(row, names).forEach((r, i) => {
       const style: Style = i === active ? { fg: 6, bg: this.surface, add: BOLD } : this.hovered(r) ? CYAN : { fg: 7 };
-      this.span(r.x, r.y, r.w < buttonWidth(names[i]) ? names[i] : ` ${names[i]} `, style, r.w);
+      this.span(r.x, r.y, ` ${names[i]} `, style, r.w);
       this.region({ r, click: () => onClick(i), cursor: 'pointer' });
     });
   }

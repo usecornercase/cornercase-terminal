@@ -32,9 +32,9 @@ impl ConfigFile {
         self.problem.as_deref()
     }
 
-    pub(super) fn open(path: &Path) -> (Config, Self) {
-        let mark = persist::mark(path);
-        let (config, problem) = match config::read(path) {
+    pub(super) fn open(path: PathBuf) -> (Config, Self) {
+        let mark = persist::mark(&path);
+        let (config, problem) = match config::read(&path) {
             Ok(config) => (config.unwrap_or_default(), None),
             Err(why) => {
                 log::warning!("app", "config.json cannot be read, using the defaults", why = why.as_str());
@@ -42,7 +42,7 @@ impl ConfigFile {
             }
         };
         warn_unknown_profile(None, &config);
-        (config, Self { path: path.to_path_buf(), mark, checked: None, problem, revision: 1 })
+        (config, Self { path, mark, checked: None, problem, revision: 1 })
     }
 }
 

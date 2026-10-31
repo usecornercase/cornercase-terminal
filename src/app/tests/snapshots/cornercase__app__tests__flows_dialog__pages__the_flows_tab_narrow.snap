@@ -1,11 +1,10 @@
 ---
 source: src/app/tests/flows_dialog.rs
-assertion_line: 617
 expression: "shown(&mut s.app, area)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                "
 "  ╭─ Settings ─────────────────────────────────────────────────────────────────────────╮  "
-" P│  Worktrees  Agents  Accounts  Flows  Issues  UI  Remote  Plugins  Machines         │  "
+" P│  Worktrees   Agents   Accounts   Flows   Issues   UI   Remote   Plugins            │  "
 "  │                                                                                    │  "
 "  │ ▌ Arena                     6 …  coder A + coder B → judge → integrator → reviewer │  "
 "  │   Bug, test first           4 agents  reproducer → coder → tester                  │  "

@@ -24,7 +24,6 @@ pub(crate) mod graphics;
 pub(crate) mod highlight;
 pub mod host;
 pub(crate) mod issues;
-pub(crate) mod machines;
 pub(crate) mod messenger;
 pub(crate) mod plugins;
 pub(crate) mod ports;

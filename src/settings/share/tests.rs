@@ -5,7 +5,6 @@ use serde_json::{Value, json};
 
 use super::*;
 use crate::config::ProjectSettings;
-use crate::machines::Machine;
 
 fn changed_config() -> Config {
     Config {
@@ -43,7 +42,6 @@ mod the_sections {
         config.account_names.insert("claude".into(), BTreeMap::new());
         config.active_accounts.insert("claude".into(), "x".into());
         config.projects.insert("~/x".into(), ProjectSettings::default());
-        config.machines.push(Machine { name: "vps".into(), ..Machine::default() });
         let Value::Object(keys) = serde_json::to_value(&config).expect("json") else { panic!("an object") };
         for key in keys.keys() {
             assert!(section_of(key).is_some() != LEFT_OUT.contains(&key.as_str()), "{key} is placed nowhere or twice");

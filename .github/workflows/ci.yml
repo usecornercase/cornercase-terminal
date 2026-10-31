@@ -60,7 +60,7 @@ jobs:
           fetch-depth: 0
 
       - name: version
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' }}
         run: .github/version.sh check "origin/${{ github.base_ref }}"
 
       - name: toolchain

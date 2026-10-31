@@ -79,7 +79,6 @@ fn snapshot() -> Snapshot<AppState> {
             profile: None,
             accounts: BTreeMap::new(),
             popup: None,
-            machines: Vec::new(),
         },
     }
 }
@@ -128,17 +127,4 @@ fn an_open_popup_names_its_plugin_action_and_size() {
     );
     let read: AppState = serde_json::from_value(value).expect("an app state");
     assert_eq!(read.popup, Some(popup));
-}
-
-#[test]
-fn the_machines_are_there_only_when_some_are_listed() {
-    let vps = Info { name: "vps".into(), icon: "☁".into(), ..Info::default() };
-    let value = serde_json::to_value(AppState { machines: vec![vps.clone()], ..AppState::default() }).expect("json");
-
-    assert_eq!(
-        (value["machines"][0]["name"].as_str(), value["machines"][0]["state"].as_str()),
-        (Some("vps"), Some("connecting"))
-    );
-    let read: AppState = serde_json::from_value(value).expect("an app state");
-    assert_eq!(read.machines, [vps]);
 }

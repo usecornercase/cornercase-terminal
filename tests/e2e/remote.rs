@@ -1,49 +1,24 @@
 use super::*;
 
 const SSH_PID: &str = "ssh.pid";
-const REFUSED: &str = "*) echo \"ssh: connect to host $1 port 22: Connection refused\" >&2; exit 255 ;;";
 
 pub(super) fn fake_ssh(dir: &std::path::Path, prefix: &str) -> String {
-    fake_ssh_with(dir, &format!("*) there='{prefix}' ;;"))
-}
-
-pub(super) fn fake_ssh_to(dir: &std::path::Path, machines: &[(&str, &str)]) -> String {
-    let mapped: Vec<String> =
-        machines.iter().map(|(destination, prefix)| format!("'{destination}') there='{prefix}' ;;")).collect();
-    let path = fake_ssh_with(dir, &format!("{}\n  {REFUSED}", mapped.join("\n  ")));
-    cornercase_in(&dir.join("bin"));
-    path
-}
-
-pub(super) fn cornercase_in(folder: &std::path::Path) {
-    write_executable(&folder.join("cornercase"), &format!("#!/bin/sh\nexec '{}' \"$@\"\n", bin()));
-}
-
-fn fake_ssh_with(dir: &std::path::Path, cases: &str) -> String {
     let bin = dir.join("bin");
     std::fs::create_dir_all(&bin).expect("create the fake ssh's folder");
-    let dir = dir.display();
+    let pid = dir.join(SSH_PID);
     write_executable(
         &bin.join("ssh"),
         &format!(
-            "#!/bin/sh\necho $$ > '{dir}/{SSH_PID}'\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    -o) shift 2 ;;\n    \
-             --) shift; break ;;\n    -*) shift ;;\n    *) break ;;\n  esac\ndone\necho $$ > '{dir}/ssh-'\"$1\"'.pid'\n\
-             case \"$1\" in\n  {cases}\nesac\nshift\nexec /bin/sh -c \"exec $there $*\"\n"
+            "#!/bin/sh\necho $$ > '{}'\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    -o) shift 2 ;;\n    --) shift; break ;;\n    \
+             -*) shift ;;\n    *) break ;;\n  esac\ndone\nshift\nexec /bin/sh -c \"exec {prefix} $*\"\n",
+            pid.display()
         ),
     );
     format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default())
 }
 
 fn ssh_pid(session: &Session) -> String {
-    pid_in(session, SSH_PID)
-}
-
-pub(super) fn ssh_pid_to(session: &Session, destination: &str) -> String {
-    pid_in(session, &format!("ssh-{destination}.pid"))
-}
-
-fn pid_in(session: &Session, file: &str) -> String {
-    std::fs::read_to_string(session.dir.join(file)).unwrap_or_default().trim().to_string()
+    std::fs::read_to_string(session.dir.join(SSH_PID)).unwrap_or_default().trim().to_string()
 }
 
 fn remote_refusal(args: &[&str], command: &str) -> std::process::Output {
@@ -64,13 +39,13 @@ fn remote_says(session: &Session, args: &[&str]) -> String {
     String::from_utf8_lossy(&out.stdout).trim_end().to_string()
 }
 
-pub(super) fn gone(pid: &str) -> bool {
+fn gone(pid: &str) -> bool {
     let ps = std::process::Command::new("ps").args(["-o", "stat=", "-p", pid]).output().expect("run ps");
     let state = String::from_utf8_lossy(&ps.stdout);
     state.trim().is_empty() || state.trim().starts_with('Z')
 }
 
-pub(super) fn boot_of(json: &str) -> serde_json::Value {
+fn boot_of(json: &str) -> serde_json::Value {
     serde_json::from_str::<serde_json::Value>(json).expect("json")["boot"].clone()
 }
 
