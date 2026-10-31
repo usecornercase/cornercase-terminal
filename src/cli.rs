@@ -29,12 +29,15 @@ mod files;
 mod flow;
 mod help;
 mod issue;
+mod line;
+mod lines;
 mod plugin;
 mod ports;
 mod processes;
 mod queue;
 mod reach;
 mod read;
+mod requests;
 mod search;
 mod start_server;
 mod status;
@@ -253,6 +256,7 @@ fn stream_commands(command: Control) -> ControlFlow<Result<bool>, Control> {
             Control::Status(status) => run_status(&status),
             Control::Events(events) => follow_events(events),
             Control::Contract(contract) => contract::run(contract.print.json),
+            Control::Requests(args) => requests::run(&args),
             Control::Surface(args) => stream_surface(&args),
             Control::View(args) => view::open(&args),
             Control::ViewSet(args) => view::set(&args),
@@ -381,7 +385,7 @@ fn run_close(close: &args::CloseArgs) -> Result<bool> {
         control::Close { item, remove_worktree: close.remove_worktree, force: close.force, unlock: close.unlock };
     let value = ask("close", control::Command::Close(request))?;
     if let Some(warning) = value.get("warning").and_then(Value::as_str) {
-        eprintln!("warning: {warning}");
+        note(&format!("warning: {warning}\n"));
     }
     Ok(true)
 }
@@ -397,7 +401,7 @@ fn run_focus(focus: &args::FocusArgs) -> Result<()> {
         return print_json(&value);
     }
     if let Some(warning) = search::unrevealed(&value, item) {
-        eprintln!("warning: {warning}");
+        note(&format!("warning: {warning}\n"));
     }
     Ok(())
 }
@@ -553,7 +557,7 @@ fn run_start(start: StartArgs) -> Result<()> {
 }
 
 fn run_wait(wait: WaitArgs) -> Result<()> {
-    let several = several(&wait).unwrap_or_else(|e| e.exit());
+    let several = several(&wait).map_err(|e| Error::WrongUsage(usage(&e)))?;
     let until = match (wait.until, wait.text, wait.quiet) {
         (Some(until), ..) => until.into(),
         (None, Some(text), _) => Until::Text(text),
@@ -573,6 +577,11 @@ fn run_wait(wait: WaitArgs) -> Result<()> {
     say(ask("wait", control::Command::WaitSeveral(request))?, wait.print.json, endings)
 }
 
+pub(super) fn usage(error: &clap::Error) -> String {
+    let text = error.to_string();
+    text.strip_prefix("error: ").unwrap_or(&text).trim_end().to_string()
+}
+
 fn several(wait: &WaitArgs) -> std::result::Result<bool, clap::Error> {
     if wait.any || wait.all {
         return Ok(true);
@@ -590,11 +599,17 @@ fn partial_unless(all_answered: bool) -> Result<bool> {
 }
 
 fn print_json(value: &impl serde::Serialize) -> Result<()> {
-    let text = serde_json::to_string_pretty(value).map_err(|e| Error::Control(e.to_string()))?;
-    print_out(&(text + "\n"))
+    let text = serde_json::to_string_pretty(value).map_err(|e| Error::Control(e.to_string()))? + "\n";
+    if line::json(&text) {
+        return Ok(());
+    }
+    print_out(&text)
 }
 
 fn print_out(text: &str) -> Result<()> {
+    if line::text(text) {
+        return Ok(());
+    }
     let mut out = io::stdout().lock();
     quietly(out.write_all(text.as_bytes()).and_then(|()| out.flush())).map(drop)
 }
@@ -604,9 +619,15 @@ fn say(value: Value, json: bool, lines: impl Fn(&Done) -> Vec<String>) -> Result
         return print_json(&value);
     }
     for line in lines(&answer(value)?) {
-        println!("{line}");
+        print_out(&format!("{line}\n"))?;
     }
     Ok(())
+}
+
+pub(super) fn note(text: &str) {
+    if !line::stderr(text) {
+        eprint!("{text}");
+    }
 }
 
 fn id(id: Option<u64>) -> Vec<String> {
@@ -638,7 +659,7 @@ fn read_capped(file: &Path, limit: usize) -> Result<Vec<u8>> {
     let most = limit as u64 + 1;
     let mut bytes = Vec::new();
     if file == Path::new("-") {
-        io::stdin().take(most).read_to_end(&mut bytes)?;
+        line::input().take(most).read_to_end(&mut bytes)?;
     } else {
         let open =
             std::fs::File::open(file).map_err(|e| Error::Control(format!("cannot read `{}`: {e}", file.display())))?;
@@ -657,7 +678,7 @@ fn read_limited(file: &Path, limit: usize, too_long: &str) -> Result<String> {
 
 fn stdin() -> Result<String> {
     let mut text = String::new();
-    io::stdin().read_to_string(&mut text)?;
+    line::input().read_to_string(&mut text)?;
     Ok(trimmed(&text))
 }
 

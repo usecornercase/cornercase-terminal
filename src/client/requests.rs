@@ -18,6 +18,10 @@ use crate::update::restart;
 
 use super::{Link, Source};
 
+mod shared;
+
+pub(crate) use shared::{line_done, share, unshare};
+
 static VIEW: OnceLock<u64> = OnceLock::new();
 static REMOTE: OnceLock<Remote> = OnceLock::new();
 static CHECKED: Mutex<Option<Link>> = Mutex::new(None);
@@ -32,7 +36,11 @@ pub(crate) fn used_remote() -> Option<&'static Remote> {
 
 pub(crate) fn use_view(view: u64) -> Result<()> {
     require("views", "has no views")?;
-    let _ = VIEW.set(view);
+    if shared::active() {
+        shared::set_view(view);
+    } else {
+        let _ = VIEW.set(view);
+    }
     Ok(())
 }
 
@@ -105,6 +113,9 @@ pub(crate) fn use_account_restart() -> Result<()> {
 }
 
 fn require(feature: &str, lacks: &str) -> Result<()> {
+    if shared::active() {
+        return shared::require(feature, lacks);
+    }
     let link = require_on(connect(), feature, lacks, used_remote())?;
     *CHECKED.lock() = Some(link);
     Ok(())
@@ -134,7 +145,11 @@ fn require_on(link: Result<Link>, feature: &str, lacks: &str, remote: Option<&Re
     let (link, value) =
         asked.map_err(|e| if matches!(e, Error::Control(_) | Error::OldServer(_)) { lacking() } else { e })?;
     let descriptor: control::contract::Descriptor = answer(value)?;
-    if descriptor.features.iter().any(|offered| offered == feature) { Ok(link) } else { Err(lacking()) }
+    offered(&descriptor.features, feature, lacks, remote).map(|()| link)
+}
+
+fn offered(features: &[String], feature: &str, lacks: &str, remote: Option<&Remote>) -> Result<()> {
+    if features.iter().any(|offered| offered == feature) { Ok(()) } else { Err(missing(lacks, remote)) }
 }
 
 pub(crate) fn close_unused_link() {
@@ -148,6 +163,9 @@ pub(crate) fn connect() -> Result<Link> {
 }
 
 fn connect_within(timeout: Option<Duration>) -> Result<Link> {
+    if shared::active() {
+        return Err(Error::OwnConnection);
+    }
     if let Some(remote) = used_remote() {
         return Link::remote(remote, Use::Command);
     }
@@ -157,10 +175,16 @@ fn connect_within(timeout: Option<Duration>) -> Result<Link> {
 }
 
 pub(crate) fn ask(name: &'static str, command: control::Command) -> Result<Value> {
+    if shared::active() {
+        return shared::ask(name, command);
+    }
     ask_on(&mut connect()?, name, command)
 }
 
 pub(crate) fn ask_starting(name: &'static str, command: control::Command) -> Result<Value> {
+    if shared::active() {
+        return shared::ask(name, command);
+    }
     let mut link = match used_remote() {
         Some(remote) => Link::remote(remote, Use::Command)?,
         None => Link::socket(super::find_or_start()?.stream)?,
@@ -185,24 +209,44 @@ impl Link {
 }
 
 fn ask_on(link: &mut Link, name: &'static str, command: control::Command) -> Result<Value> {
-    if let Err(e) = request(&mut link.writer, command) {
+    ask_with(link, name, command, VIEW.get().copied(), &mut None)
+}
+
+fn ask_with(
+    link: &mut Link,
+    name: &'static str,
+    command: control::Command,
+    view: Option<u64>,
+    out: &mut Option<BorrowedFd<'_>>,
+) -> Result<Value> {
+    if let Err(e) = send_request(&mut link.writer, command, view) {
         return Err(lost(link, server_left(e)));
     }
     loop {
-        match protocol::recv::<ServerMessage>(&mut link.reader) {
-            Ok(Some(ServerMessage::Response(text))) => return answered(&text),
-            Ok(Some(ServerMessage::Rejected(_))) => return Err(Error::OldServer(name)),
-            Err(e) if e.kind() == io::ErrorKind::InvalidData => return Err(Error::OldServer(name)),
-            Ok(Some(
-                ServerMessage::Frame(_)
-                | ServerMessage::Detached
-                | ServerMessage::Sound(_)
-                | ServerMessage::Open(_)
-                | ServerMessage::Browse(_),
-            )) => {}
-            Ok(Some(ServerMessage::Shutdown | ServerMessage::Restart(_))) => return Err(Error::ServerGone),
-            Ok(None) | Err(_) => return Err(lost(link, Error::ServerGone)),
+        if reader_left(&link.reader, out) {
+            link.reader.close();
+            return Err(Error::ReaderGone);
         }
+        if let Some(done) = received(link, name) {
+            return done;
+        }
+    }
+}
+
+fn received(link: &mut Link, name: &'static str) -> Option<Result<Value>> {
+    match protocol::recv::<ServerMessage>(&mut link.reader) {
+        Ok(Some(ServerMessage::Response(text))) => Some(answered(&text)),
+        Ok(Some(ServerMessage::Rejected(_))) => Some(Err(Error::OldServer(name))),
+        Err(e) if e.kind() == io::ErrorKind::InvalidData => Some(Err(Error::OldServer(name))),
+        Ok(Some(
+            ServerMessage::Frame(_)
+            | ServerMessage::Detached
+            | ServerMessage::Sound(_)
+            | ServerMessage::Open(_)
+            | ServerMessage::Browse(_),
+        )) => None,
+        Ok(Some(ServerMessage::Shutdown | ServerMessage::Restart(_))) => Some(Err(Error::ServerGone)),
+        Ok(None) | Err(_) => Some(Err(lost(link, Error::ServerGone))),
     }
 }
 
@@ -216,9 +260,13 @@ fn server_left(error: Error) -> Error {
 }
 
 pub(crate) fn request(stream: &mut impl Write, command: control::Command) -> Result<()> {
+    send_request(stream, command, VIEW.get().copied())
+}
+
+fn send_request(stream: &mut impl Write, command: control::Command, view: Option<u64>) -> Result<()> {
     let caller = std::env::var(control::PANE_ENV).ok().and_then(|id| id.parse().ok());
     let server = std::env::var(control::SERVER_ENV).ok();
-    let view = view_for(&command, VIEW.get().copied());
+    let view = view_for(&command, view);
     let request = serde_json::to_string(&Request { caller, server, contract: None, boot: None, view, command })
         .map_err(|e| Error::Control(e.to_string()))?;
     protocol::send(stream, &ClientMessage::Request(request))?;

@@ -12,14 +12,14 @@ use crate::remote::{Remote, Run};
 const OPTION: &str = "--remote-command";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Kind {
+pub(super) enum Kind {
     There,
     Run,
     Here(&'static str),
     Apart(&'static str),
 }
 
-fn kind(command: Option<&Command>) -> Kind {
+pub(super) fn kind(command: Option<&Command>) -> Kind {
     match command {
         None | Some(Command::Control(_) | Command::StartServer(_) | Command::Stats(_)) => Kind::There,
         Some(Command::Plugin(args)) if args.action.asks_the_server() => Kind::There,

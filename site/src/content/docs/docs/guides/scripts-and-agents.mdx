@@ -391,6 +391,27 @@ cornercase link --pane 12 --cell 10,3
 - `input --follow` ends when standard input ends, after the last answer: with 0, with 3 if some line wasn't sent, or with 1 once the server stops or the connection drops (it notices at the next line). A program on the socket does the same by keeping its connection and sending each `input` after the answer to the one before.
 - Requests on different connections aren't ordered: send the next `input` after the answer to the previous one, put several events in one request, or keep one `input --follow` running. Unlike the other commands, these six log at debug level, since a program sends them as fast as someone types or drags.
 
+#### Many commands through one process
+
+A program that draws cornercase (a window of its own, an editor's panel) sends many small commands: a focus, a scroll, a split. Run one by one, each is a whole process, and through [`--remote`](../remote/#commands-for-scripts-and-agents) a whole `ssh` session. `requests --follow -` keeps one running and sends them all through one connection:
+
+```sh
+cornercase requests --follow -
+cornercase --remote devbox requests --follow -
+printf '%s\n' '{"args": ["status", "--json"]}' | cornercase requests --follow -
+```
+
+```json
+{"args": ["focus", "--tab", "6", "--view", "21"]}
+{"args": ["send", "--pane", "5", "-"], "stdin": "cargo test"}
+```
+
+- A line is one JSON object: `args` is the command line after `cornercase`, read by the same parser, so every flag works and each command's `--help` stays the contract; `stdin` is what the command reads from `-` (text; for bytes use a file argument). Other keys are refused, so a typo never runs `send -` with no text. Blank lines are skipped.
+- Each line gets one answer line, in order: `status` (the exit status the command would have had: 0, 1, 2 or 3), `json` (what it printed with `--json`), `text` (what else it printed, such as the id `new-tab` prints), `stderr` (its warnings) and `error` (its message). New fields may be added; read what you know. A line that isn't JSON, is refused or fails does not stop the next ones.
+- It runs the commands that send requests. The streams (`events`, `surface`, `view`, `changes list`, every `--follow`), `update`, `restart`, `kill-server` and `logs` need a process of their own and are refused with status 2, as are `--remote` on a line and the commands that act on this machine (`remote`, `skill`, `plugin link` and so on).
+- Lines run one at a time, each after the answer to the one before. A line that waits (`wait`, `send --wait`, `start --wait`) holds the lines after it; to put a key before a focus, send both through `requests`. Lines aren't ordered with other connections.
+- It ends when standard input ends, after the last answer: with 0 if every line had status 0, with 3 if some didn't, with 1 once the server stops or the connection drops (it never reconnects, because ids change with a restart: start it again and look at `status`), and with 0 when what reads its answers is gone, even while a line waits.
+
 #### A plugin's popup
 
 A plugin's [popup](../plugins/#popups) is a terminal too, so a program that draws cornercase can show it and type into it the same way, with `--popup` instead of a tab or a pane:
@@ -1195,11 +1216,11 @@ The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `
 | `0` | Done. |
 | `1` | An error or a timeout; the message says which. |
 | `2` | Wrong usage, such as an unknown option. |
-| `3` | A partial answer: `usage`, `issue list`, `files list`, `worktrees list`, `worktrees free-builds` and `read --last-message` with several targets printed their whole answer, but an agent, a tracker, a folder, a worktree or a pane in it failed, or `input --follow` couldn't send some of its lines. Each says why in its `error` (`issue list` also names failed trackers on standard error). With `--json`, the output is a complete answer whenever the status is 0 or 3. |
+| `3` | A partial answer: `usage`, `issue list`, `files list`, `worktrees list`, `worktrees free-builds` and `read --last-message` with several targets printed their whole answer, but an agent, a tracker, a folder, a worktree or a pane in it failed, `input --follow` couldn't send some of its lines, or a line of `requests --follow` failed. Each says why in its `error` (`issue list` also names failed trackers on standard error). With `--json`, the output is a complete answer whenever the status is 0 or 3. |
 
 A command that follows something until it ends (`events`, `status --follow`, `status --app --follow`, `changes list --follow`, `files list --follow`, `files read --follow`, `flow runs --follow`, `flow messages --follow`, `surface` and `view`) also ends with 0, without a message, soon after whatever reads its output is gone: the program it prints into exited or closed its end, or the `ssh` running it on another machine was killed or lost its connection. A terminal that closes ends it like any program, and one printing into a file or `/dev/null` runs until it ends by itself.
 
-`input --follow` ends when its standard input ends, once the last line is answered, or with `--json` when what reads its answers is gone.
+`input --follow` and `requests --follow` end when their standard input ends, once the last line is answered, or when what reads their answers is gone (`input --follow` with `--json`).
 
 Some messages you may meet:
 
@@ -1296,7 +1317,7 @@ With `boot` set to the value from `contract` or `status`, a request kept across 
 
 ### Talking to the socket directly
 
-The [socket](../../reference/command-line/#the-socket) takes one request at a time per connection: send the next once the previous one is answered (`input --follow` types through one connection this way). Each message is framed as its length, 4 bytes little-endian, then its [postcard](https://postcard.jamesmunns.com/) encoding: a request is variant 4 followed by the JSON text (its length as a varint, then its UTF-8 bytes), an answer variant 5 in the same form. `events` sends one answer per event and ends with variant 2, 3 or 4 (its panes closed, the server stopped, or it restarted); `watch`, the request behind `status --follow`, answers with the state and then sends it again in the same form after each change, until variant 3 or 4, and `app`, the request behind `status --app --follow`, does the same with the rest of the app's state; `surface` does the same with a tab's frame, and ends with variant 2 when the tab closes (or its view does); `view` sends the state, with the view in it, and holds the view open until the connection closes. A request for a view carries its id as `view` next to `command`, once `contract` lists the feature `views`. Only your own user can connect. Nothing needs to be sent before the request.
+The [socket](../../reference/command-line/#the-socket) takes one request at a time per connection: send the next once the previous one is answered (`input --follow` and `requests --follow` send through one connection this way). Each message is framed as its length, 4 bytes little-endian, then its [postcard](https://postcard.jamesmunns.com/) encoding: a request is variant 4 followed by the JSON text (its length as a varint, then its UTF-8 bytes), an answer variant 5 in the same form. `events` sends one answer per event and ends with variant 2, 3 or 4 (its panes closed, the server stopped, or it restarted); `watch`, the request behind `status --follow`, answers with the state and then sends it again in the same form after each change, until variant 3 or 4, and `app`, the request behind `status --app --follow`, does the same with the rest of the app's state; `surface` does the same with a tab's frame, and ends with variant 2 when the tab closes (or its view does); `view` sends the state, with the view in it, and holds the view open until the connection closes. A request for a view carries its id as `view` next to `command`, once `contract` lists the feature `views`. Only your own user can connect. Nothing needs to be sent before the request.
 
 ## Teach your agents
 

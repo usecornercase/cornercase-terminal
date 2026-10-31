@@ -1,5 +1,5 @@
 use super::args::todo::TodoAction;
-use super::{id, print_json, say};
+use super::{id, print_json, print_out, say};
 use crate::client::{answer, ask, use_todo_panel};
 use crate::control::{self, TodoList};
 use crate::error::Result;
@@ -34,7 +34,7 @@ fn list(json: bool) -> Result<()> {
     }
     let list: TodoList = answer(value)?;
     for item in list.todos {
-        println!("{} [{}] {}", item.id, if item.done { 'x' } else { ' ' }, item.text);
+        print_out(&format!("{} [{}] {}\n", item.id, if item.done { 'x' } else { ' ' }, item.text))?;
     }
     Ok(())
 }
@@ -67,7 +67,7 @@ fn removal(todo: control::Todo, json: bool) -> Result<()> {
     }
     let list: TodoList = answer(value)?;
     if let Some(undo) = list.undo {
-        println!("{undo}");
+        print_out(&format!("{undo}\n"))?;
     }
     Ok(())
 }

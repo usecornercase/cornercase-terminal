@@ -15,7 +15,7 @@ instead, in that same project. Only `focus`, `go` and `--focus` change what the 
 commands exit with 1 on errors and timeouts, 2 on wrong usage, a branch no workspace is on
 included, or one several are on (both list the workspaces to pick from), and 3 when a command that
 asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
-answer but some of them failed, or input --follow could not send some lines: each failed entry says
+answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
 why, in its error with --json.
 
 --remote DESTINATION (or CORNERCASE_REMOTE=DESTINATION, which the flag overrides) sends a command
@@ -750,6 +750,7 @@ mod files;
 mod flow;
 mod paste_file;
 mod processes;
+mod requests;
 mod worktrees;
 
 pub(in crate::cli) use files::FILES_HELP;
@@ -760,6 +761,7 @@ pub(in crate::cli) use flow::{
 };
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
 pub(in crate::cli) use processes::{PROCESSES_HELP, PROCESSES_STOP_HELP};
+pub(in crate::cli) use requests::REQUESTS_HELP;
 pub(in crate::cli) use worktrees::{WORKTREES_FREE_HELP, WORKTREES_HELP, WORKTREES_LIST_HELP, WORKTREES_SIZE_HELP};
 
 #[cfg(test)]

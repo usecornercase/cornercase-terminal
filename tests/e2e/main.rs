@@ -40,6 +40,7 @@ mod ports;
 mod processes;
 mod queue;
 mod remote;
+mod requests;
 mod server;
 mod settings;
 mod sidebar;

@@ -2,7 +2,7 @@ use std::fmt::Write as _;
 
 use super::args::changes::Where;
 use super::args::files::{FilesAction, FilesArgs};
-use super::{print_json, print_out, stream_json, workspace};
+use super::{note, print_json, print_out, stream_json, workspace};
 use crate::client::{answer, ask};
 use crate::control::changes::FileStatus;
 use crate::control::files::{EntryKind, Found, Line, Listing, Read, ReadKind, SearchMode};
@@ -42,10 +42,10 @@ fn notes(listing: &Listing) -> Result<()> {
     let mut failed = false;
     for folder in &listing.folders {
         if folder.more {
-            eprintln!("{}: only the first {MAX_ENTRIES} entries are listed", plain(shown(&folder.path)));
+            note(&format!("{}: only the first {MAX_ENTRIES} entries are listed\n", plain(shown(&folder.path))));
         }
         if let Some(error) = &folder.error {
-            eprintln!("cannot list {}: {}", plain(shown(&folder.path)), plain(error));
+            note(&format!("cannot list {}: {}\n", plain(shown(&folder.path)), plain(error)));
             failed = true;
         }
     }
@@ -142,8 +142,8 @@ fn search(query: String, names: bool, at: &Where, json: bool) -> Result<()> {
     let found: Found = answer(value.clone())?;
     if found.capped {
         match mode {
-            SearchMode::Names => eprintln!("only the best {MAX_NAMES} files are listed"),
-            SearchMode::Text => eprintln!("only the first {MAX_MATCHES} matches are listed"),
+            SearchMode::Names => note(&format!("only the best {MAX_NAMES} files are listed\n")),
+            SearchMode::Text => note(&format!("only the first {MAX_MATCHES} matches are listed\n")),
         }
     }
     if json {

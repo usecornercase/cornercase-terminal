@@ -1,13 +1,12 @@
-use std::io::{self, BufRead as _, Write};
+use std::io::{self, Write};
 use std::iter::once;
-use std::sync::mpsc::{self, Receiver};
-use std::thread;
 
 use serde::Deserialize as _;
 use serde_json::{Value, json};
 
 use super::{not_an_event, skipped};
 use crate::cli::args::terminal::InputArgs;
+use crate::cli::lines::{self, Lines};
 use crate::client::{self, answer};
 use crate::control::terminal::{InputEvent, Sent};
 use crate::control::{self, Command};
@@ -18,15 +17,13 @@ const ONLY_STANDARD_INPUT: &str =
 
 const NEEDS_A_PANE: &str = "this line names no pane and --pane was not given: add \"pane\": ID to the line";
 
-type Lines = Receiver<io::Result<Vec<u8>>>;
-
 pub(super) fn run(args: &InputArgs) -> Result<()> {
     only_standard_input(&args.events)?;
     if args.popup {
         client::use_popup_terminal()?;
     }
     let mut link = client::connect()?;
-    let lines = read_lines();
+    let lines = lines::read(io::stdin());
     let template = control::Input { pane: args.pane, popup: args.popup, ..control::Input::default() };
     let mut printer = Printer::new(args.print.json, io::stdout(), io::stderr());
     typed(&lines, &template, |input| link.ask("input", Command::Input(input)), &mut printer)
@@ -37,19 +34,6 @@ fn only_standard_input(events: &[String]) -> Result<()> {
         [only] if only == "-" => Ok(()),
         _ => Err(Error::WrongUsage(ONLY_STANDARD_INPUT.into())),
     }
-}
-
-fn read_lines() -> Lines {
-    let (tx, lines) = mpsc::channel();
-    thread::spawn(move || {
-        for line in io::stdin().lock().split(b'\n') {
-            let failed = line.is_err();
-            if tx.send(line).is_err() || failed {
-                return;
-            }
-        }
-    });
-    lines
 }
 
 enum Line {

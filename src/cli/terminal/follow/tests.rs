@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{self, Sender};
 
 use rstest::rstest;
 

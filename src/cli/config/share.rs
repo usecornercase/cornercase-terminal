@@ -7,7 +7,7 @@ use std::path::Path;
 use serde_json::Value;
 
 use super::render;
-use crate::cli::{print_json, print_out, read_limited};
+use crate::cli::{note, print_json, print_out, read_limited};
 use crate::client::{answer, ask, confirm};
 use crate::control::Command;
 use crate::control::config::{
@@ -27,10 +27,10 @@ pub(super) fn export(to: Option<&Path>, json: bool) -> Result<()> {
     let value = ask("config export", Command::ConfigExport(ConfigExport {}))?;
     let exported: SetupExported = answer(value.clone())?;
     if !exported.left_out.is_empty() {
-        eprintln!("left out: {}", exported.left_out.join("; "));
+        note(&format!("left out: {}\n", exported.left_out.join("; ")));
     }
     for warning in &exported.warnings {
-        eprintln!("! {warning}");
+        note(&format!("! {warning}\n"));
     }
     if let Some(file) = to {
         written(file, &exported.text)?;
@@ -75,7 +75,7 @@ pub(super) fn import(import: &Import, json: bool) -> Result<()> {
         return show_preview(&value, json);
     }
     let preview: SetupPreview = answer(value.clone())?;
-    eprint!("{}", preview_text(&preview));
+    note(&preview_text(&preview));
     if !changes_anything(&preview) {
         return stopped(&value, json, "nothing to import");
     }
