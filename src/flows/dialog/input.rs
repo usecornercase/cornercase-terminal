@@ -185,6 +185,7 @@ impl Dialog {
             return;
         }
         let Some(edit) = &mut self.edit else {
+            self.erase = Erase::Asks;
             self.select(self.cursor.saturating_add_signed(delta).min(self.entries().saturating_sub(1)));
             return;
         };

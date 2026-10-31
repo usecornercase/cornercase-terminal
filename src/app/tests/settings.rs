@@ -476,6 +476,19 @@ mod searching {
     }
 
     #[test]
+    fn a_backspace_asks_again_once_the_wheel_moves_the_flows_list() {
+        let mut s = open();
+        show(&mut s.app, Page::Flows);
+        typed(&mut s, "x");
+        send_key(&mut s.app, KeyCode::Backspace, KeyModifiers::NONE);
+        let down = MouseEvent { kind: MouseEventKind::ScrollDown, column: 10, row: 10, modifiers: KeyModifiers::NONE };
+        s.app.handle_event(AppEvent::Input(Event::Mouse(down)), AREA).expect("handle the wheel");
+        send_key(&mut s.app, KeyCode::Backspace, KeyModifiers::NONE);
+        let Some(Overlay::Flows { dialog, .. }) = &s.app.overlay else { panic!("not on the flows tab") };
+        assert!(dialog.confirm.is_some());
+    }
+
+    #[test]
     fn a_paste_with_bare_carriage_returns_opens_share() {
         let mut s = open();
         s.app.handle_event(AppEvent::Input(Event::Paste("a\rb".into())), AREA).expect("handle paste");

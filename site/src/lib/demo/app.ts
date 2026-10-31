@@ -3171,6 +3171,15 @@ export class App {
     o.cursor = hit.i ?? 0;
   }
 
+  settingsHitsWheel(dy: number): boolean {
+    const o = this.overlay;
+    if (o?.kind !== 'settings' || !o.query) return false;
+    const last = this.settingsHits(o.query).length - 1;
+    o.found = Math.max(0, Math.min((o.found ?? 0) + Math.sign(dy), last));
+    this.dirty();
+    return true;
+  }
+
   private searchKey(o: SettingsOverlay, k: Key, ch: string | null): void {
     const hits = this.settingsHits(o.query ?? '').length;
     o.notice = undefined;

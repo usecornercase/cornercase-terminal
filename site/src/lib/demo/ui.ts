@@ -1472,6 +1472,7 @@ export class Painter {
       });
     } else if (query) {
       if (!hits.length) this.span(body.x, body.y, ' nothing matches', DARK);
+      this.region({ r: body, wheel: (dy) => app.settingsHitsWheel(dy) });
       const chosen = Math.min(o.found ?? 0, hits.length - 1);
       const scroll = Math.max(0, chosen + 1 - body.h);
       hits.slice(scroll, scroll + body.h).forEach((hit, n) => {

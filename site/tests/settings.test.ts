@@ -244,3 +244,24 @@ test('the settings search dims a tab with no results and leaves single flows out
   assert.deepEqual([dim(at), dim(shown)], [true, false]);
   app.destroy();
 });
+
+test('the wheel moves the selected result of the settings search, one at a time', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 16); world(app, { scripted: true });
+  app.openSettings();
+  inputKey(app, key('a'));
+  app.render();
+  const row = app.settingsHits('a').slice(0, 8).find((hit) => hit.title.includes('›'));
+  assert.ok(row);
+  const first = app.textAt(row.title.slice(0, 40));
+  assert.ok(first);
+  const selected = () => (app.overlay?.kind === 'settings' ? app.overlay.found : -1);
+  assert.equal(app.wheel(first.x, first.y, 1), true);
+  assert.equal(selected(), 1);
+  assert.equal(app.wheel(first.x, first.y, -1), true);
+  app.wheel(first.x, first.y, -1);
+  assert.equal(selected(), 0);
+  const hits = app.settingsHits('a').length;
+  for (let i = 0; i < hits + 2; i++) app.wheel(first.x, first.y, 1);
+  assert.equal(selected(), hits - 1);
+  app.destroy();
+});
