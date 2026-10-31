@@ -1,11 +1,12 @@
 ---
 source: src/app/tests/flows_dialog/order.rs
+assertion_line: 234
 expression: "shown(&mut s.app, WIDE)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                            "
 "                                                         │                                                                                            "
 " Proj╭─ Settings ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
-"     │  Worktrees   Agents   Accounts   Flows   Issues   UI   Remote   Plugins                                                                  │     "
+"     │  Worktrees   Agents   Accounts   Flows   Issues   UI   Remote   Plugins   Machines                                                       │     "
 "  + N│                                                                                                                                          │     "
 "     │   Arena                     6 agents  coder A + coder B → judge → integrator → reviewer   ╭─ Diagram ──────────────────────────────────╮ │     "
 "     │  ──────────────────────────────────────────────────────────────────────────────────────   │           ╭─ orchestrator ───╮             │ │     "

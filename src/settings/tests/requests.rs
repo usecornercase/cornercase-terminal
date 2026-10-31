@@ -53,7 +53,7 @@ mod describing {
                     | Row::NoPlugins
                     | Row::TourStart
                     | Row::TourReset
-            ) || row.page() == Page::Accounts;
+            ) || matches!(row.page(), Page::Accounts | Page::Machines);
             assert!(skipped || rows.contains(&row), "{row:?} has no key");
         }
     }
@@ -363,6 +363,7 @@ mod activating {
             s.cursor = s.rows().iter().position(|r| *r == row).expect("the row is on its page");
             let action = s.activate();
             if matches!(action, Action::None)
+                && row != Row::Here
                 && s.notice.is_none()
                 && s.edit.is_none()
                 && s.pick.is_none()

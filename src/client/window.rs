@@ -74,10 +74,6 @@ fn next(received: Received, reconnects: bool) -> Result<Next> {
     })
 }
 
-fn backoff(failures: u32) -> Duration {
-    SECOND.saturating_mul(1 << failures.saturating_sub(1).min(4)).min(MAX_BACKOFF)
-}
-
 fn until_next_second(left: Duration) -> Duration {
     match left.subsec_nanos() {
         0 => left.min(SECOND),
@@ -118,7 +114,7 @@ impl Retries {
     }
 
     fn delay(&self) -> Duration {
-        if self.failures == 0 { Duration::ZERO } else { backoff(self.failures) }
+        if self.failures == 0 { Duration::ZERO } else { remote::backoff(self.failures) }
     }
 }
 
@@ -562,7 +558,6 @@ impl Drop for Threads {
 }
 const INCOMPATIBLE: &str = "the running cornercase server is incompatible with this build. \
     Run `cornercase kill-server` (it closes all its terminals) and start cornercase again";
-const MAX_BACKOFF: Duration = Duration::from_secs(15);
 const SECOND: Duration = Duration::from_secs(1);
 
 #[cfg(test)]

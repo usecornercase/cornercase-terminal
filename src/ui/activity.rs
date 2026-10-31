@@ -96,6 +96,7 @@ impl Item {
                 Some(
                     Overlay::Settings(_)
                         | Overlay::ShareSettings(_)
+                        | Overlay::Machine(_)
                         | Overlay::Flows(_)
                         | Overlay::Usage(_)
                         | Overlay::Remote(_)

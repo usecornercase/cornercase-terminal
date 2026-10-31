@@ -50,6 +50,27 @@ mod framing {
         let err = recv::<ClientMessage>(&mut len.as_slice()).expect_err("too big");
 
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(!undecoded(&err));
+    }
+
+    #[test]
+    fn a_whole_message_it_cannot_decode_leaves_the_next_one_readable() {
+        let mut buf = Vec::new();
+        send(&mut buf, &99u8).expect("send");
+        send(&mut buf, &ServerMessage::Detached).expect("send");
+        let mut reader = buf.as_slice();
+
+        let err = recv::<ServerMessage>(&mut reader).expect_err("an unknown variant");
+
+        assert!(undecoded(&err));
+        assert!(matches!(recv(&mut reader), Ok(Some(ServerMessage::Detached))));
+    }
+
+    #[test]
+    fn a_broken_stream_is_not_an_undecoded_message() {
+        let err = recv::<ServerMessage>(&mut [2u8, 0, 0, 0, 1].as_slice()).expect_err("cut short");
+
+        assert!(!undecoded(&err));
     }
 }
 

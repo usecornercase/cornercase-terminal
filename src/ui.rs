@@ -11,6 +11,7 @@ mod chrome;
 mod code;
 pub(crate) mod combo;
 mod dialog;
+pub(crate) use dialog::machine as machine_form;
 pub(crate) use dialog::queue as queue_form;
 mod drop;
 pub(crate) mod files;
@@ -462,6 +463,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::Issues(issues)) => draw_issues(f, view, issues),
         Some(Overlay::Settings(settings)) => draw_settings(f, view, settings),
         Some(Overlay::ShareSettings(share)) => draw_share_settings(f, view, share),
+        Some(Overlay::Machine(form)) => dialog::machine::draw(f, view, form),
         Some(Overlay::Flows(flows)) => draw_flows(f, view, flows),
         Some(Overlay::StartFlow(start)) => draw_start_flow(f, view, start),
         Some(Overlay::ProjectSettings(settings)) => draw_project_settings(f, view, settings),

@@ -20,7 +20,7 @@ cornercase --version    # print the version
 cornercase --help       # list every command; cornercase COMMAND --help explains one
 ```
 
-The commands for scripts and agents, `status`, `stats`, `usage`, `ports`, `processes`, `worktrees`, `open`, `new-workspace`, `new-tab`, `split`, `start`, `send`, `keys`, `read`, `wait`, `events`, `surface`, `changes`, `files`, `view`, `view-set`, `input`, `scroll`, `selection`, `resize`, `redraw`, `ratio`, `link`, `paste-file`, `theme`, `config`, `account`, `profile`, `issue`, `search`, `close`, `agents`, `group`, `move`, `move-pane`, `collapse`, `expand`, `rename`, `focus`, `go`, `notify`, `todo`, `queue`, `away`, `mark`, `skill` and `contract`, have their own page: [Scripts and agents](../../guides/scripts-and-agents/). Among them, `status --follow` keeps running and prints the whole session as one JSON line each time it changes, for [another UI or a script that mirrors it](../../guides/scripts-and-agents/#follow-the-whole-state), and `status --app` prints (with `--follow`, keeps printing) the [TODO list, queue, away, update and keep awake](../../guides/scripts-and-agents/#follow-the-rest-of-the-app).
+The commands for scripts and agents, `status`, `stats`, `usage`, `ports`, `processes`, `worktrees`, `open`, `new-workspace`, `new-tab`, `split`, `start`, `send`, `keys`, `read`, `wait`, `events`, `surface`, `changes`, `files`, `view`, `view-set`, `input`, `scroll`, `selection`, `resize`, `redraw`, `ratio`, `link`, `paste-file`, `theme`, `config`, `account`, `profile`, `machines`, `issue`, `search`, `close`, `agents`, `group`, `move`, `move-pane`, `collapse`, `expand`, `rename`, `focus`, `go`, `notify`, `todo`, `queue`, `away`, `mark`, `skill` and `contract`, have their own page: [Scripts and agents](../../guides/scripts-and-agents/). Among them, `status --follow` keeps running and prints the whole session as one JSON line each time it changes, for [another UI or a script that mirrors it](../../guides/scripts-and-agents/#follow-the-whole-state), and `status --app` prints (with `--follow`, keeps printing) the [TODO list, queue, away, update and keep awake](../../guides/scripts-and-agents/#follow-the-rest-of-the-app).
 
 ### `cornercase`
 
@@ -154,6 +154,21 @@ When the log is short since it last [moved to `server.log.1`](../files-and-envir
 ### `cornercase account` and `cornercase profile`
 
 Keep several logins of Claude Code, Codex or Gemini CLI and choose which ones new agents start with: `account add|list|remove` (`list --check` asks each account whether it is logged in), `account use AGENT ACCOUNT|--system` (the default, for new workspaces and scripts), `account restart AGENT [ACCOUNT|--system] [--pane ID]…` (restart the open agents on it, in the same conversation, or with `--pane` also a shell at its prompt), `account rename AGENT ACCOUNT|--system NAME|--clear` (a name for the window; the folder stays), `profile new|set|use|delete|list` (a set of accounts to switch at once, for scripts), `--account AGENT=ACCOUNT` on `start`, `new-tab`, `flow run` and `queue add|edit`, and `--profile NAME` on `start`, `new-tab` and `flow run`. See [Accounts and profiles](../../guides/accounts/).
+
+### `cornercase machines`
+
+Lists the other computers your work can run on, as **Settings › Machines** does, each with the state of the link your server keeps to its server, and changes the list:
+
+```sh
+cornercase machines                                    # this computer, then each machine and its state
+cornercase machines add vps ana@vps.example.com --icon server --folder '~/code'
+cornercase machines edit vps --name box --destination box.lan
+cornercase machines remove vps                         # its server keeps running there
+cornercase machines update mini                        # install your release on an older machine
+cornercase machines retry [vps]                        # try one link, or every link, now
+```
+
+`--icon` takes the glyph or its name (`server`, `laptop`, `desktop`, `mini`, `home server`, `other`), `--folder` is `~/code` unless you give one, and `edit` changes only what you give. `add` refuses a name already listed and `edit` one that isn't. Every subcommand prints the list, or with `--json` the `machines` answer. A value the rules refuse, or an update that failed on the machine, exits with status 1 and says why. See [Machines](../../guides/machines/).
 
 ### `cornercase tour`
 
