@@ -4,6 +4,10 @@ use super::edit::{Editing, Row};
 use super::{Action, Dialog, Entry, Hit, Room};
 use crate::editor::Editor;
 
+fn typing(key: KeyEvent) -> bool {
+    !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+}
+
 impl Dialog {
     pub(crate) fn text(&self) -> Option<&Editor> {
         if self.confirm.is_some() || self.drag.is_some() {
@@ -37,7 +41,7 @@ impl Dialog {
             self.import_key(key, room);
             return Action::None;
         }
-        let typing = !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+        let typing = typing(key);
         let Some(edit) = &mut self.edit else { return self.list_key(key) };
         if typed_key(edit, key, typing, room) {
             return Action::None;
@@ -89,6 +93,7 @@ impl Dialog {
             KeyCode::Up | KeyCode::BackTab => self.select(self.cursor.saturating_sub(1)),
             KeyCode::Down | KeyCode::Tab => self.select(self.cursor + 1),
             KeyCode::Delete | KeyCode::Backspace => self.ask_delete(),
+            KeyCode::Char(c) if self.settings_tabs() && c != ' ' && typing(key) => return Action::Find(c),
             _ => {}
         }
         Action::None

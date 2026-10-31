@@ -6,11 +6,13 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::input::wheel;
 use super::overlay::Overlay;
+use super::text_fields::FieldArea;
 use crate::config::{self, Config};
+use crate::editor::Editor;
 use crate::issues::Source;
 use crate::log::{self, Level};
 use crate::messenger::Via;
-use crate::settings::{self, DONE, Page, Settings, Status};
+use crate::settings::{self, DONE, Hit, Page, Settings, Status};
 use crate::ui::{self};
 
 impl App {
@@ -61,6 +63,20 @@ impl App {
         }
         let settings = self.settings_model(self.settings_page);
         self.overlay = Some(Overlay::Settings(Box::new(settings)));
+    }
+
+    pub(super) fn search_from_flows(&mut self, typed: char) {
+        let mut settings = self.settings_model(Page::Flows);
+        settings.paste(typed.encode_utf8(&mut [0; 4]));
+        self.overlay = Some(Overlay::Settings(Box::new(settings)));
+    }
+
+    pub(super) fn settings_find_text(&mut self, area: Rect) -> Option<(FieldArea, &mut Editor)> {
+        let text = ui::settings_find(ui::settings_area(area));
+        let width = usize::from(text.width.max(1));
+        let Some(Overlay::Settings(s)) = &mut self.overlay else { return None };
+        let editor = &mut s.find.field;
+        Some((FieldArea { text, width, top: editor.position(width).0, scrolls: false }, editor))
     }
 
     pub(super) fn token_statuses(&self) -> Vec<(Source, Status)> {
@@ -126,7 +142,8 @@ impl App {
     }
 
     fn settings_handled(&mut self, action: settings::Action, area: Rect) {
-        if self.settings_page == Page::Flows {
+        let searching = matches!(&self.overlay, Some(Overlay::Settings(s)) if s.find.searching());
+        if self.settings_page == Page::Flows && !searching {
             self.open_flows_tab();
             return;
         }
@@ -141,6 +158,10 @@ impl App {
         }
         if let (Some(pick), Some(delta)) = (&mut s.pick, wheel(ev.kind)) {
             pick.search.scroll_by(delta, pick.items.len(), rows);
+            return;
+        }
+        if let (true, Some(delta)) = (s.find.searching(), wheel(ev.kind)) {
+            s.wheel_hits(delta);
             return;
         }
         match ev.kind {
@@ -231,22 +252,62 @@ impl App {
     }
 }
 
+fn place_find(s: &mut Settings, area: Rect, pos: Position) {
+    let text = ui::settings_find(ui::settings_area(area));
+    let width = usize::from(text.width.max(1));
+    let line = s.find.field.position(width).0;
+    s.find.field.place(width, line, usize::from(pos.x.saturating_sub(text.x)));
+    s.edit = None;
+    s.pick = None;
+}
+
+struct ClickRows {
+    sections: Vec<&'static str>,
+    removable: Vec<bool>,
+    movable: Vec<bool>,
+    cursor: usize,
+}
+
+fn click_rows(s: &Settings, hits: &[Hit]) -> ClickRows {
+    if s.find.searching() {
+        let count = hits.len();
+        let cursor = s.find.selected(count);
+        return ClickRows {
+            sections: vec![""; count],
+            removable: vec![false; count],
+            movable: vec![false; count],
+            cursor,
+        };
+    }
+    let rows = s.rows();
+    ClickRows {
+        sections: rows.iter().map(settings::Row::section).collect(),
+        removable: (0..rows.len()).map(|i| s.removal(i).is_some()).collect(),
+        movable: rows.iter().map(settings::Row::movable).collect(),
+        cursor: s.cursor,
+    }
+}
+
 fn settings_click(s: &mut Settings, area: Rect, pos: Position) -> settings::Action {
-    let rows_now = s.rows();
-    let sections: Vec<&'static str> = rows_now.iter().map(settings::Row::section).collect();
-    let removable: Vec<bool> = (0..rows_now.len()).map(|i| s.removal(i).is_some()).collect();
-    let movable: Vec<bool> = rows_now.iter().map(settings::Row::movable).collect();
+    let hits = s.hits();
+    let rows = click_rows(s, &hits);
     let pick = s.pick.as_ref().map(|p| (s.pick_choices().len(), p.search.scroll()));
-    let tabs = Page::ALL.map(Page::name);
+    let tabs = tab_labels(s, &hits);
+    let tabs: Vec<&str> = tabs.iter().map(|(name, _)| name.as_str()).collect();
     let layout = ui::SettingsLayout {
         tabs: &tabs,
-        sections: &sections,
-        removable: &removable,
-        movable: &movable,
-        cursor: s.cursor,
+        sections: &rows.sections,
+        removable: &rows.removable,
+        movable: &rows.movable,
+        cursor: rows.cursor,
         pick,
     };
     match ui::settings_hit(area, &layout, pos) {
+        Some(ui::SettingsHit::Find) => {
+            place_find(s, area, pos);
+            settings::Action::None
+        }
+        Some(ui::SettingsHit::Row(i)) if s.find.searching() => s.choose_hit(i),
         Some(ui::SettingsHit::Done) => settings::Action::Close,
         Some(ui::SettingsHit::Restart) => settings::Action::Restart,
         Some(ui::SettingsHit::Share) => settings::Action::Share,
@@ -264,6 +325,29 @@ fn settings_click(s: &mut Settings, area: Rect, pos: Position) -> settings::Acti
             s.activate()
         }
         None => settings::Action::None,
+    }
+}
+
+fn tab_labels(settings: &Settings, hits: &[Hit]) -> Vec<(String, bool)> {
+    let searching = settings.find.searching();
+    let label = |page: &Page| {
+        let count = hits.iter().filter(|hit| hit.page == *page).count();
+        let name = if searching { format!("{} {count}", page.name()) } else { page.name().to_string() };
+        (name, searching && count == 0)
+    };
+    Page::ALL.iter().map(label).collect()
+}
+
+fn hit_view(hit: &Hit) -> ui::SettingsRow {
+    ui::SettingsRow {
+        section: "",
+        label: hit.title.clone(),
+        value: hit.value.clone(),
+        note: hit.note.clone(),
+        dangerous: hit.dangerous,
+        muted: hit.hidden(),
+        removable: false,
+        movable: false,
     }
 }
 
@@ -293,17 +377,25 @@ fn pick_view(settings: &Settings, pick: &settings::Pick) -> ui::SettingsPick {
 }
 
 pub(super) fn settings_view(settings: &Settings) -> ui::Settings {
-    let rows: Vec<ui::SettingsRow> =
-        settings.rows().iter().enumerate().map(|(i, row)| row_view(settings, i, row)).collect();
+    let hits = settings.hits();
+    let searching = settings.find.searching();
+    let rows: Vec<ui::SettingsRow> = if searching {
+        hits.iter().map(hit_view).collect()
+    } else {
+        settings.rows().iter().enumerate().map(|(i, row)| row_view(settings, i, row)).collect()
+    };
+    let (tabs, dimmed) = tab_labels(settings, &hits).into_iter().unzip();
     let edit = settings.edit_field().map(|(label, value)| ui::SettingsEdit { label, value });
     let pick = settings.pick.as_ref().map(|pick| pick_view(settings, pick));
     let error = settings.edit.as_ref().and_then(|e| e.error.clone());
     let note = if settings.busy() { Some(ui::Note::Busy("checking…")) } else { error.map(ui::Note::Error) };
     ui::Settings {
-        tabs: Page::ALL.iter().map(|p| p.name()).collect(),
+        tabs,
+        dimmed,
         tab: settings.page.index(),
         rows,
-        cursor: settings.cursor,
+        cursor: if searching { settings.find.selected(hits.len()) } else { settings.cursor },
+        find: ui::SettingsFind { field: settings.find.field.clone(), focused: settings.idle(), searching },
         edit,
         pick,
         note,

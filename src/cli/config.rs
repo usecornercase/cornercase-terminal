@@ -7,9 +7,11 @@ use serde_json::Value;
 
 use super::args::config::{ConfigAction, ConfigArgs};
 use super::{line, print_json, print_out};
-use crate::client::{answer, ask, use_build_folders};
+use crate::client::{answer, ask, use_build_folders, use_settings_search};
 use crate::control::Command;
-use crate::control::config::{Configure, Connection, Described, Kind, ProjectChange, SecretChange, Setting, State};
+use crate::control::config::{
+    Configure, Connection, Described, Kind, ProjectChange, SecretChange, Setting, SettingsFound, State,
+};
 use crate::error::{Error, Result};
 use crate::issues::Secret;
 
@@ -22,6 +24,7 @@ fn request(change: Configure) -> Result<Value> {
 pub(super) fn run(args: ConfigArgs) -> Result<()> {
     let changing = args.action.is_some();
     let value = match args.action {
+        Some(ConfigAction::Search { text }) => return search(&text.join(" "), args.json),
         None => request(Configure::Get)?,
         Some(ConfigAction::Set { pairs }) => request(Configure::Set(converted(&pairs)?))?,
         Some(ConfigAction::Project { path, project, setup, teardown, builds }) => {
@@ -49,6 +52,25 @@ pub(super) fn run(args: ConfigArgs) -> Result<()> {
         return print_json(&value);
     }
     print_out(&render(&answer::<Described>(value)?, changing))
+}
+
+fn search(text: &str, as_json: bool) -> Result<()> {
+    use_settings_search()?;
+    let value = request(Configure::Search(text.to_string()))?;
+    if as_json {
+        return print_json(&value);
+    }
+    print_out(&render_found(&answer::<SettingsFound>(value)?))
+}
+
+pub(super) fn render_found(found: &SettingsFound) -> String {
+    let mut out = String::from("place\tkey\tvalue\tnote\n");
+    for result in &found.results {
+        let cell = |text: &str| if text.is_empty() { "-".to_string() } else { text.replace(['\t', '\n'], " ") };
+        let key = result.key.as_deref().unwrap_or_default();
+        let _ = writeln!(out, "{}\t{}\t{}\t{}", result.title, cell(key), cell(&result.shown), cell(&result.note));
+    }
+    out
 }
 
 fn absolute(path: &str) -> Result<PathBuf> {

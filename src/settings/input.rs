@@ -25,6 +25,9 @@ impl Settings {
         if self.pick.is_some() {
             return self.pick_key(key, rows);
         }
+        if self.wants_search(key) {
+            return self.search_key(key);
+        }
         self.list_key(key)
     }
 
@@ -74,9 +77,9 @@ impl Settings {
             KeyCode::Down if shift => return self.move_tab(self.cursor, Move::Down),
             KeyCode::Tab | KeyCode::Right => self.switch_page(1),
             KeyCode::BackTab | KeyCode::Left => self.switch_page(-1),
-            KeyCode::Up => self.cursor = self.cursor.saturating_sub(1),
-            KeyCode::Down => self.cursor = (self.cursor + 1).min(count.saturating_sub(1)),
-            KeyCode::Delete | KeyCode::Backspace => {
+            KeyCode::Up => self.select(self.cursor.saturating_sub(1)),
+            KeyCode::Down => self.select((self.cursor + 1).min(count.saturating_sub(1))),
+            KeyCode::Delete | KeyCode::Backspace if !self.find.just_typed() => {
                 if let Some(action) = self.removal(self.cursor) {
                     return action;
                 }
@@ -138,6 +141,8 @@ impl Settings {
             edit.error = None;
         } else if let Some(pick) = &mut self.pick {
             text.chars().filter(|c| !c.is_control()).for_each(|c| pick.search.push(c));
+        } else if self.idle() {
+            self.find.insert(text);
         }
     }
 }

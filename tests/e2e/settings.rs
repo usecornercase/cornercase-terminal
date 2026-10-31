@@ -143,3 +143,13 @@ fn exported_tree() -> (Arc<Session>, String) {
     colleague.says(&["config", "export", "--to", &file.display().to_string()]);
     (colleague, file.display().to_string())
 }
+
+#[test]
+fn config_search_prints_what_the_modal_finds() {
+    let session = Session::new();
+    session.says(&["start-server"]);
+    let said = session.says(&["config", "search", "def", "ag"]);
+    assert!(said.contains("Agents › default agent\tagent"), "{said}");
+    let found: Value = serde_json::from_str(&session.says(&["config", "search", "ose", "--json"])).expect("json");
+    assert_eq!(found["results"], serde_json::json!([]));
+}

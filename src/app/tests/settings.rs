@@ -381,3 +381,98 @@ mod config_file {
         assert!(!s.app.config.counts);
     }
 }
+
+mod searching {
+    use super::*;
+    use crate::messenger::Via;
+
+    fn typed(s: &mut Setup, text: &str) {
+        text.chars().for_each(|c| send_key(&mut s.app, KeyCode::Char(c), KeyModifiers::NONE));
+    }
+
+    fn found_row(s: &mut Setup, title: &str) -> Position {
+        let hits = form(&s.app).hits();
+        let i = hits.iter().position(|hit| hit.title == title).expect("the result");
+        let sections = vec![""; hits.len()];
+        ui::settings_row(AREA, &sections, 0, i).as_position()
+    }
+
+    #[test]
+    fn typing_when_the_modal_opens_searches_every_tab() {
+        let mut s = open();
+        typed(&mut s, "def ag");
+        assert_eq!(form(&s.app).hits()[0].title, "Agents › default agent");
+    }
+
+    #[test]
+    fn a_click_on_a_result_lands_on_its_tab_and_row() {
+        let mut s = open();
+        typed(&mut s, "sound");
+        let pos = found_row(&mut s, "UI › sound");
+        click(&mut s.app, pos);
+        let settings = form(&s.app);
+        assert_eq!((settings.page, settings.rows()[settings.cursor].clone()), (Page::Ui, Row::Sound));
+        assert_eq!(s.app.settings_page, Page::Ui);
+    }
+
+    #[test]
+    fn a_click_on_a_result_never_changes_the_setting() {
+        let mut s = open();
+        typed(&mut s, "sound");
+        let before = form(&s.app).config.clone();
+        let pos = found_row(&mut s, "UI › sound");
+        click(&mut s.app, pos);
+        assert_eq!(form(&s.app).config, before);
+    }
+
+    #[test]
+    fn a_hidden_row_lands_on_what_shows_with_a_notice() {
+        let mut s = open();
+        typed(&mut s, "closed workspaces");
+        enter(&mut s);
+        let settings = form(&s.app);
+        assert_eq!(settings.rows()[settings.cursor], Row::Bot(Via::Discord));
+        assert_eq!(settings.notice.as_deref(), Some("closed workspaces shows once forum mode is on"));
+    }
+
+    #[test]
+    fn the_flows_result_leaves_for_the_flows_tab() {
+        let mut s = open();
+        typed(&mut s, "flows");
+        enter(&mut s);
+        assert!(matches!(s.app.overlay, Some(Overlay::Flows { .. })));
+    }
+
+    #[test]
+    fn typing_on_the_flows_tab_searches_and_esc_comes_back() {
+        let mut s = open();
+        show(&mut s.app, Page::Flows);
+        typed(&mut s, "so");
+        assert_eq!(form(&s.app).find.query(), "so");
+        send_key(&mut s.app, KeyCode::Esc, KeyModifiers::NONE);
+        assert!(matches!(s.app.overlay, Some(Overlay::Flows { .. })));
+    }
+
+    #[test]
+    fn a_paste_of_one_line_goes_to_the_field() {
+        let mut s = open();
+        s.app.handle_event(AppEvent::Input(Event::Paste("sound".into())), AREA).expect("handle paste");
+        assert_eq!(form(&s.app).find.query(), "sound");
+    }
+
+    #[test]
+    fn a_click_on_the_field_takes_the_cursor_there_and_keeps_the_dialog() {
+        let mut s = open();
+        typed(&mut s, "sound");
+        click(&mut s.app, ui::settings_find(ui::settings_area(AREA)).as_position());
+        typed(&mut s, "x");
+        assert_eq!(form(&s.app).find.query(), "xsound");
+    }
+
+    #[test]
+    fn the_shortcut_in_the_find_group_opens_it() {
+        let items = crate::shortcuts::items(Some(crate::shortcuts::Group::Find));
+        let run = crate::shortcuts::Step::Run(crate::shortcuts::Action::Settings);
+        assert!(items.iter().any(|item| item.key == "," && item.step == Some(run)));
+    }
+}
