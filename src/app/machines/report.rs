@@ -1,7 +1,7 @@
 use super::Held;
 use crate::app::App;
 use crate::control::{MachineSeen, ProjectInfo, ShownRemote};
-use crate::machines::Info;
+use crate::machines::{self, Info};
 
 impl App {
     pub(in crate::app) fn machines_seen(&self) -> Vec<MachineSeen> {
@@ -20,7 +20,7 @@ impl App {
             name: held.name.clone(),
             icon: info.icon.clone(),
             state: info.state,
-            seen: info.seen.clone(),
+            seen: held.seen_at.and_then(machines::stamp),
             boot: seen.boot.clone(),
             projects: projects.collect(),
         })

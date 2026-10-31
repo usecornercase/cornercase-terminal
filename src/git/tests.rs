@@ -347,6 +347,9 @@ mod remote_without_credentials {
     #[case::no_credentials("https://github.com/acme/web-shop", "https://github.com/acme/web-shop")]
     #[case::scp_like("git@github.com:acme/web-shop.git", "git@github.com:acme/web-shop.git")]
     #[case::a_local_path("/srv/git/shop", "/srv/git/shop")]
+    #[case::a_stray_quote("\"https://ghp_abc123@github.com/acme/shop\"", "\"https://github.com/acme/shop\"")]
+    #[case::a_git_scheme_user("git://ghp_abc123@github.com/acme/shop", "git://github.com/acme/shop")]
+    #[case::a_git_ssh_user("GIT+SSH://git:s3cret@github.com/acme/shop", "GIT+SSH://git@github.com/acme/shop")]
     fn keeps_everything_but_the_secrets(#[case] url: &str, #[case] expected: &str) {
         assert_eq!(without_credentials(url), expected);
     }

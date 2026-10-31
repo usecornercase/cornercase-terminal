@@ -1,5 +1,8 @@
+use std::time::SystemTime;
+
 use super::*;
 use crate::machines::Info;
+use crate::time::Stamp;
 
 struct Seeing {
     rig: Rig,
@@ -64,6 +67,22 @@ mod machines_in_status {
         let written = serde_json::to_value(rig.app.report(None)).expect("json");
 
         assert!(written.get("machines").is_none() && written.get("shown_remote").is_none(), "{written}");
+    }
+
+    #[test]
+    fn say_when_the_last_snapshot_arrived_not_when_the_link_came_up() {
+        let Seeing { mut rig, mut theirs, .. } = seeing_two();
+        let held = &mut rig.app.machines.held_mut()[0];
+        (held.status.seen, held.seen_at) = (Some(0), Some(0));
+        let before = SystemTime::now() - Duration::from_secs(1);
+
+        serve(&mut theirs, 2, worked(report(&[("docs", None)])));
+        seeing(&mut rig, &["docs"]);
+
+        let status = rig.app.report(None);
+        let seen = status.machines[0].seen.as_deref().and_then(Stamp::parse).expect("a time");
+        assert!(seen >= before, "{seen:?}");
+        assert_eq!(rig.app.machines.held()[0].status.seen, Some(0));
     }
 
     #[test]

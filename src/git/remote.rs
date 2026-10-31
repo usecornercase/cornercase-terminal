@@ -80,14 +80,14 @@ pub(crate) fn without_credentials(url: &str) -> String {
     let (authority, tail) = rest.split_at(end);
     let Some((user_info, host)) = authority.rsplit_once('@') else { return url.to_string() };
     let user = user_info.split(':').next().unwrap_or_default();
-    if is_web(scheme) || user.is_empty() {
+    if !is_ssh_scheme(scheme) || user.is_empty() {
         return format!("{scheme}://{host}{tail}");
     }
     format!("{scheme}://{user}@{host}{tail}")
 }
 
-fn is_web(scheme: &str) -> bool {
-    scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")
+fn is_ssh_scheme(scheme: &str) -> bool {
+    ["ssh", "git+ssh", "ssh+git"].iter().any(|ssh| scheme.eq_ignore_ascii_case(ssh))
 }
 
 fn is_ssh(url: &str) -> bool {

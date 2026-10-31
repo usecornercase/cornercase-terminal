@@ -82,6 +82,19 @@ fn status_names_each_project_s_remotes_without_credentials_and_its_identity() {
 }
 
 #[test]
+fn status_reads_a_quoted_remote_url_as_git_does_and_drops_its_token() {
+    let quoted = "[remote \"origin\"]\n\turl = \"https://ghp_s3cret@github.com/me/web-shop.git\" # mine\n";
+    let mut rig = Resolving::new(&[quoted]);
+    rig.wait_for(&[Some("github.com/me/web-shop")], Instant::now());
+
+    let status = value(&mut rig.app, None, Command::Status(wire::Status {}));
+
+    let remotes = json!([{"name": "origin", "url": "https://github.com/me/web-shop.git"}]);
+    assert_eq!(status["projects"][0]["remotes"], remotes);
+    assert!(!status.to_string().contains("s3cret"), "{status}");
+}
+
+#[test]
 fn a_status_request_never_resolves_a_host() {
     let mut rig = Resolving::new(&[SHOP]);
     rig.wait_for(&[Some("github.com/acme/web-shop")], Instant::now());

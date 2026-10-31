@@ -46,6 +46,7 @@ pub(super) struct Held {
     pub(super) link: Link,
     pub(super) status: Status,
     pub(super) seen: Option<Box<control::Report>>,
+    pub(super) seen_at: Option<i64>,
     pub(super) down_at: Option<(Instant, u32)>,
 }
 
@@ -119,6 +120,10 @@ impl Machines {
 impl Machines {
     pub(super) fn held(&self) -> &[Held] {
         &self.held
+    }
+
+    pub(super) fn held_mut(&mut self) -> &mut [Held] {
+        &mut self.held
     }
 
     pub(super) fn set_connector(&mut self, connect: Connector) {
@@ -218,6 +223,7 @@ impl App {
             link,
             status: Status::default(),
             seen: None,
+            seen_at: None,
             down_at: None,
         };
         self.machines.held.push(held);
@@ -245,6 +251,7 @@ impl App {
             }
             Event::Seen(seen) => {
                 held.seen = Some(seen);
+                held.seen_at = Some(now);
                 self.log_seen(&self.machines.held[at]);
                 self.follow_selection();
             }
