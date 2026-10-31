@@ -483,3 +483,15 @@ pub(crate) fn theme(background: libghostty_vt::style::RgbColor) -> crate::host::
     }
     theme
 }
+
+pub(crate) struct BrokenPipe;
+
+impl std::io::Write for BrokenPipe {
+    fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::ErrorKind::BrokenPipe.into())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}

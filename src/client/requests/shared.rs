@@ -30,6 +30,11 @@ pub(crate) fn unshare() {
     drop(SHARED.take());
 }
 
+#[cfg(test)]
+pub(crate) fn share_socket(stream: std::os::unix::net::UnixStream) {
+    share(Link::socket(stream).expect("a link"), None);
+}
+
 pub(super) fn active() -> bool {
     ACTIVE.get()
 }

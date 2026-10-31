@@ -133,6 +133,11 @@ fn checked(cli: Cli, name: &str) -> std::result::Result<Command, Answer> {
         ));
     }
     let Some(command) = cli.command else { return Err(Answer::refused("a line needs a command")) };
+    if matches!(command, Command::StartServer(_)) {
+        return Err(Answer::refused(
+            "`start-server` cannot run on a line, since `requests` needs a running server: run `cornercase start-server` first",
+        ));
+    }
     match reach::kind(Some(&command)) {
         Kind::There => Ok(command),
         Kind::Run => Err(Answer::refused(alone(name))),

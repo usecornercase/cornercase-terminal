@@ -33,6 +33,7 @@ mod a_line {
     #[case::update(r#"{"args": ["update", "--yes"]}"#, "run `cornercase update` on its own")]
     #[case::restart(r#"{"args": ["restart", "--when-idle"]}"#, "run `cornercase restart` on its own")]
     #[case::logs(r#"{"args": ["logs"]}"#, "run `cornercase logs` on its own")]
+    #[case::start_server(r#"{"args": ["start-server"]}"#, "run `cornercase start-server` first")]
     #[case::remote_window(r#"{"args": ["remote", "devbox"]}"#, "`remote` cannot run")]
     #[case::skill(r#"{"args": ["skill"]}"#, "`skill` cannot run")]
     #[case::plugin_here(r#"{"args": ["plugin", "link", "/x"]}"#, "acts on this machine")]
@@ -173,21 +174,9 @@ mod serving {
         assert_eq!(out, "");
     }
 
-    struct Broken;
-
-    impl Write for Broken {
-        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
-            Err(io::ErrorKind::BrokenPipe.into())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
     #[test]
     fn a_closed_output_ends_it_quietly() {
-        let done = serve(&lines(vec![Ok("a"), Ok("b")]), &mut Broken, |_| Some(answering(0)));
+        let done = serve(&lines(vec![Ok("a"), Ok("b")]), &mut crate::test_util::BrokenPipe, |_| Some(answering(0)));
 
         assert!(done.is_ok(), "{done:?}");
     }
@@ -200,5 +189,52 @@ mod serving {
 
         assert!(matches!(done, Err(Error::Io(_))), "{done:?}");
         assert_eq!(out.lines().count(), 2);
+    }
+}
+
+mod streams {
+    use std::os::unix::net::UnixStream;
+    use std::thread;
+
+    use super::*;
+    use crate::control;
+    use crate::protocol::{self, ClientMessage, ServerMessage};
+
+    fn fake_server(mut stream: UnixStream) -> thread::JoinHandle<Vec<String>> {
+        let features = control::contract::describe("boot", &[]);
+        thread::spawn(move || {
+            let mut seen = Vec::new();
+            while let Ok(Some(ClientMessage::Request(text))) = protocol::recv::<ClientMessage>(&mut stream) {
+                seen.push(text);
+                let value = serde_json::to_value(&features).expect("json");
+                let answer = serde_json::to_string(&control::Response::Ok(value)).expect("json");
+                protocol::send(&mut stream, &ServerMessage::Response(answer)).expect("an answer");
+            }
+            seen
+        })
+    }
+
+    #[rstest]
+    #[case::events(r#"{"args": ["events"]}"#)]
+    #[case::surface(r#"{"args": ["surface", "--tab", "1", "--cols", "80", "--rows", "24"]}"#)]
+    #[case::view(r#"{"args": ["view"]}"#)]
+    #[case::input_follow(r#"{"args": ["input", "--follow", "-"]}"#)]
+    #[case::status_follow(r#"{"args": ["status", "--follow"]}"#)]
+    #[case::changes_list(r#"{"args": ["changes", "list"]}"#)]
+    #[case::flow_messages(r#"{"args": ["flow", "messages", "--follow"]}"#)]
+    #[case::requests(r#"{"args": ["requests", "--follow", "-"]}"#)]
+    fn a_stream_is_refused_before_it_sends_anything(#[case] line: &str) {
+        let (ours, theirs) = UnixStream::pair().expect("a socket pair");
+        let server = fake_server(theirs);
+        client::share_socket(ours);
+
+        let answer = answer_of(line).expect("an answer");
+
+        client::unshare();
+        let seen = server.join().expect("the fake server");
+        assert_eq!(answer.status, 2, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains("connection of its own"), "{error}");
+        assert!(seen.iter().all(|text| text.contains("\"contract\"")), "{seen:?}");
     }
 }

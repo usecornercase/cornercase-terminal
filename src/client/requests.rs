@@ -20,6 +20,8 @@ use super::{Link, Source};
 
 mod shared;
 
+#[cfg(test)]
+pub(crate) use shared::share_socket;
 pub(crate) use shared::{line_done, share, unshare};
 
 static VIEW: OnceLock<u64> = OnceLock::new();

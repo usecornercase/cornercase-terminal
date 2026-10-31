@@ -251,18 +251,6 @@ mod typing {
         assert!(matches!(done.result, Err(Error::ServerGone)), "{:?}", done.result);
     }
 
-    struct Closed;
-
-    impl Write for Closed {
-        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
-            Err(io::ErrorKind::BrokenPipe.into())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
     #[test]
     fn ends_quietly_once_nothing_reads_its_answers() {
         let (tx, rx) = mpsc::channel();
@@ -270,7 +258,7 @@ mod typing {
             tx.send(Ok(line.as_bytes().to_vec())).expect("queue a line");
         }
         let mut asks = 0;
-        let mut printer = Printer::new(true, Closed, Vec::new());
+        let mut printer = Printer::new(true, crate::test_util::BrokenPipe, Vec::new());
 
         let result = typed(
             &rx,

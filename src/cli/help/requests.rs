@@ -8,7 +8,7 @@ it reads from - in stdin:
 Other keys are refused, so a typo never runs a command without its text. Each line gets one answer line, in order: \
 status (the exit status the command would have had), json (what it printed with --json) or text, stderr (its \
 warnings) and error. A wrong or refused line does not stop the next ones. Streams (events, surface, view, \
-changes list, every --follow) and update, restart, kill-server and logs need a process of their own and are \
+changes list, every --follow), start-server, update, restart, kill-server and logs need a process of their own and are \
 refused with 2, as is --remote on a line. A line that waits (wait, send --wait, start --wait) holds the lines after \
 it until it is answered. It exits with 0 when every line had 0, 3 when some did not, 1 when the server stops or the \
 connection drops (it never reconnects: ids change with a restart), and 0 once what reads its answers is gone.
