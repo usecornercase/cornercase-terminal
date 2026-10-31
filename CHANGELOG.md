@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.233
 
-- **Commands through `--remote` that first ask the server what it supports open one `ssh` connection instead of two.** That is every command with `--view`, which a program that draws cornercase sends to switch tabs, projects or agents, and options such as `focus --reveal`, `close --unlock`, `start --issue`, `--profile`, `--account` and `events --notices`. They asked on a connection of their own before sending the command on another, so switching tabs took about twice as long as scrolling. On your own machine they save a connection too.
+- **Commands through `--remote` that first ask the server what it supports open one `ssh` connection instead of two.** That is the commands with `--view`, which a program that draws cornercase sends to switch tabs, projects or agents, and options such as `focus --reveal`, `close --unlock`, `start --issue`, `--profile`, `--account` and `events --notices`. They asked on a connection of their own before sending the command on another, so switching tabs took about twice as long as scrolling. A command that sends a request of its own first, such as `focus --worktree BRANCH`, still opens two. On your own machine they save a connection too.
 
 ## 0.12.232
 
