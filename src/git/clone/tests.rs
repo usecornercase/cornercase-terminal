@@ -285,4 +285,36 @@ mod cloning {
         assert!(matches!(refused, Err(Failure::Folder(_))), "{refused:?}");
         assert_eq!(std::fs::read_to_string(parent.path().join("file")).expect("kept"), "not a folder");
     }
+
+    fn removing_the_parent_before(clone: &Path, times: u32) -> impl FnMut(&Path) -> io::Result<()> + use<> {
+        let (clone, mut left) = (clone.to_path_buf(), times);
+        move |dir| {
+            if dir == clone && left > 0 {
+                left -= 1;
+                std::fs::remove_dir(clone.parent().expect("a parent")).expect("the sibling's undo");
+            }
+            std::fs::create_dir(dir)
+        }
+    }
+
+    #[test]
+    fn whose_parent_another_clone_removes_makes_it_again() {
+        let parent = TempDir::new();
+        let path = parent.path().join("new").join("shop");
+
+        let target = prepare_with("/srv/shop.git", path.clone(), removing_the_parent_before(&path, 1));
+
+        assert!(target.is_ok(), "{target:?}");
+        assert!(path.is_dir(), "the clone's folder is there");
+    }
+
+    #[test]
+    fn whose_parent_keeps_going_says_so() {
+        let parent = TempDir::new();
+        let path = parent.path().join("new").join("shop");
+
+        let refused = prepare_with("/srv/shop.git", path.clone(), removing_the_parent_before(&path, ATTEMPTS));
+
+        assert!(matches!(refused, Err(Failure::Folder(_))), "{refused:?}");
+    }
 }

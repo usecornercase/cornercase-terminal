@@ -18,6 +18,7 @@ const DENIED: [&str; 7] = [
 ];
 const PREFIXES: [&str; 4] = ["fatal: ", "error: ", "remote: ", "ERROR: "];
 const SKIPPED: [&str; 2] = ["hint:", "warning:"];
+const ATTEMPTS: u32 = 3;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Target {
@@ -117,8 +118,12 @@ pub(crate) fn destination(url: &str, parent: &Path) -> Result<PathBuf, Failure> 
 }
 
 pub(crate) fn prepare(url: &str, path: PathBuf) -> Result<Target, Failure> {
+    prepare_with(url, path, |dir| std::fs::create_dir(dir))
+}
+
+fn prepare_with(url: &str, path: PathBuf, create: impl FnMut(&Path) -> io::Result<()>) -> Result<Target, Failure> {
     let mut target = Target { url: url.to_string(), path, made: Vec::new() };
-    match target.make() {
+    match target.make(create) {
         Ok(()) => Ok(target),
         Err(failure) => {
             target.undo();
@@ -139,20 +144,34 @@ pub(crate) fn run(target: &Target) -> Result<(), Failure> {
 }
 
 impl Target {
-    fn make(&mut self) -> Result<(), Failure> {
-        let missing = self.path.ancestors().skip(1).take_while(|at| std::fs::symlink_metadata(at).is_err());
-        let missing: Vec<PathBuf> = missing.map(Path::to_path_buf).collect();
-        for dir in missing.into_iter().rev() {
-            if made(&dir)? {
-                self.made.push(dir);
+    fn make(&mut self, mut create: impl FnMut(&Path) -> io::Result<()>) -> Result<(), Failure> {
+        let mut attempt = 1;
+        let created = loop {
+            match self.make_once(&mut create) {
+                Ok(created) => break created,
+                Err((_, e)) if e.kind() == io::ErrorKind::NotFound && attempt < ATTEMPTS => attempt += 1,
+                Err((dir, e)) => return Err(Failure::Folder(format!("`{}`: {e}", dir.display()))),
             }
-        }
-        if made(&self.path)? {
-            self.made.push(self.path.clone());
-        } else if !std::fs::read_dir(&self.path).is_ok_and(|mut entries| entries.next().is_none()) {
+        };
+        if !created && !std::fs::read_dir(&self.path).is_ok_and(|mut entries| entries.next().is_none()) {
             return Err(Failure::NotEmpty(self.path.clone()));
         }
         Ok(())
+    }
+
+    fn make_once(&mut self, create: &mut impl FnMut(&Path) -> io::Result<()>) -> Result<bool, (PathBuf, io::Error)> {
+        let missing = self.path.ancestors().skip(1).take_while(|at| std::fs::symlink_metadata(at).is_err());
+        let missing: Vec<PathBuf> = missing.map(Path::to_path_buf).collect();
+        for dir in missing.into_iter().rev() {
+            if made(&dir, create)? {
+                self.made.push(dir);
+            }
+        }
+        let created = made(&self.path, create)?;
+        if created {
+            self.made.push(self.path.clone());
+        }
+        Ok(created)
     }
 
     fn undo(&self) {
@@ -162,11 +181,11 @@ impl Target {
     }
 }
 
-fn made(dir: &Path) -> Result<bool, Failure> {
-    match std::fs::create_dir(dir) {
+fn made(dir: &Path, create: &mut impl FnMut(&Path) -> io::Result<()>) -> Result<bool, (PathBuf, io::Error)> {
+    match create(dir) {
         Ok(()) => Ok(true),
         Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(false),
-        Err(e) => Err(Failure::Folder(format!("`{}`: {e}", dir.display()))),
+        Err(e) => Err((dir.to_path_buf(), e)),
     }
 }
 
