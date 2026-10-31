@@ -33,6 +33,18 @@ fn open_view(app: &mut App, client: u64) -> u64 {
     opened["view"]["id"].as_u64().expect("its id")
 }
 
+fn start_focused_clone_in_a_view(app: &mut App, repo: &Path, parent: &Path) {
+    let view = open_view(app, CLIENT + 2);
+    let args = json!({"url": repo.display().to_string(), "parent": parent, "focus": true});
+    start_clone(app, CLIENT, Some(view), &args);
+}
+
+fn the_clones_answer(app: &mut App, rx: &Receiver<AppEvent>) -> Value {
+    let answers = answered_at_last(app, rx);
+    let (_, text) = answers.iter().find(|(client, _)| *client == CLIENT).expect("the clone's answer");
+    reply_of(text).expect("cloned")
+}
+
 mod a_clone {
     use super::*;
 
@@ -158,15 +170,11 @@ mod a_clone {
         let repo = git_repo(&[]);
         let parent = TempDir::new();
         let (mut app, rx) = empty_app();
-        let view = open_view(&mut app, CLIENT + 2);
-        let args = json!({"url": repo.path().display().to_string(), "parent": parent.path(), "focus": true});
-        start_clone(&mut app, CLIENT, Some(view), &args);
+        start_focused_clone_in_a_view(&mut app, repo.path(), parent.path());
 
         app.forget(CLIENT + 2);
 
-        let answers = answered_at_last(&mut app, &rx);
-        let (_, text) = answers.iter().find(|(client, _)| *client == CLIENT).expect("the clone's answer");
-        let answer = reply_of(text).expect("cloned");
+        let answer = the_clones_answer(&mut app, &rx);
         let path = parent.path().join(repo.path().file_name().expect("a name"));
         assert_eq!((answer["path"].clone(), answer.get("projection")), (json!(path), None));
         assert_eq!(app.projects.len(), 1);
@@ -198,13 +206,9 @@ mod a_clone {
         let repo = git_repo(&[]);
         let parent = TempDir::new();
         let (mut app, rx, _dirs) = app_with(1);
-        let view = open_view(&mut app, CLIENT + 2);
-        let args = json!({"url": repo.path().display().to_string(), "parent": parent.path(), "focus": true});
-        start_clone(&mut app, CLIENT, Some(view), &args);
+        start_focused_clone_in_a_view(&mut app, repo.path(), parent.path());
 
-        let answers = answered_at_last(&mut app, &rx);
-        let (_, text) = answers.iter().find(|(client, _)| *client == CLIENT).expect("the clone's answer");
-        let answer = reply_of(text).expect("cloned");
+        let answer = the_clones_answer(&mut app, &rx);
 
         assert_eq!((answer["projection"].clone(), app.projects.len(), app.active), (json!(2), 2, 0));
     }
