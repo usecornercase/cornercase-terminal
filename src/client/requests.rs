@@ -3,6 +3,7 @@ use std::os::fd::BorrowedFd;
 use std::sync::OnceLock;
 use std::time::Duration;
 
+use parking_lot::Mutex;
 use rustix::event::{PollFd, PollFlags, Timespec};
 use rustix::fs::FileType;
 use rustix::io::Errno;
@@ -19,6 +20,7 @@ use super::{Link, Source};
 
 static VIEW: OnceLock<u64> = OnceLock::new();
 static REMOTE: OnceLock<Remote> = OnceLock::new();
+static CHECKED: Mutex<Option<Link>> = Mutex::new(None);
 
 pub(crate) fn use_remote(remote: Remote) {
     let _ = REMOTE.set(remote);
@@ -103,7 +105,9 @@ pub(crate) fn use_account_restart() -> Result<()> {
 }
 
 fn require(feature: &str, lacks: &str) -> Result<()> {
-    require_on(connect(), feature, lacks, used_remote())
+    let link = require_on(connect(), feature, lacks, used_remote())?;
+    *CHECKED.lock() = Some(link);
+    Ok(())
 }
 
 fn missing(lacks: &str, remote: Option<&Remote>) -> Error {
@@ -121,17 +125,26 @@ fn missing(lacks: &str, remote: Option<&Remote>) -> Error {
     ))
 }
 
-fn require_on(link: Result<Link>, feature: &str, lacks: &str, remote: Option<&Remote>) -> Result<()> {
+fn require_on(link: Result<Link>, feature: &str, lacks: &str, remote: Option<&Remote>) -> Result<Link> {
     let lacking = || missing(lacks, remote);
-    let asked =
-        link.and_then(|mut link| ask_on(&mut link, "contract", control::Command::Contract(control::Contract {})));
-    let asked = asked.map_err(|e| if matches!(e, Error::Control(_) | Error::OldServer(_)) { lacking() } else { e });
-    let descriptor: control::contract::Descriptor = answer(asked?)?;
-    if descriptor.features.iter().any(|offered| offered == feature) { Ok(()) } else { Err(lacking()) }
+    let asked = link.and_then(|mut link| {
+        let value = ask_on(&mut link, "contract", control::Command::Contract(control::Contract {}))?;
+        Ok((link, value))
+    });
+    let (link, value) =
+        asked.map_err(|e| if matches!(e, Error::Control(_) | Error::OldServer(_)) { lacking() } else { e })?;
+    let descriptor: control::contract::Descriptor = answer(value)?;
+    if descriptor.features.iter().any(|offered| offered == feature) { Ok(link) } else { Err(lacking()) }
+}
+
+pub(crate) fn close_unused_link() {
+    let unused = CHECKED.lock().take();
+    drop(unused);
 }
 
 pub(crate) fn connect() -> Result<Link> {
-    connect_within(None)
+    let checked = CHECKED.lock().take();
+    checked.map_or_else(|| connect_within(None), Ok)
 }
 
 fn connect_within(timeout: Option<Duration>) -> Result<Link> {

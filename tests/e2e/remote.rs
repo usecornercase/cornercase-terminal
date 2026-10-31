@@ -1,6 +1,7 @@
 use super::*;
 
 const SSH_PID: &str = "ssh.pid";
+const SSH_RUNS: &str = "ssh.runs";
 
 pub(super) fn fake_ssh(dir: &std::path::Path, prefix: &str) -> String {
     let bin = dir.join("bin");
@@ -9,9 +10,10 @@ pub(super) fn fake_ssh(dir: &std::path::Path, prefix: &str) -> String {
     write_executable(
         &bin.join("ssh"),
         &format!(
-            "#!/bin/sh\necho $$ > '{}'\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    -o) shift 2 ;;\n    --) shift; break ;;\n    \
+            "#!/bin/sh\necho $$ > '{}'\necho $$ >> '{}'\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    -o) shift 2 ;;\n    --) shift; break ;;\n    \
              -*) shift ;;\n    *) break ;;\n  esac\ndone\nshift\nexec /bin/sh -c \"exec {prefix} $*\"\n",
-            pid.display()
+            pid.display(),
+            dir.join(SSH_RUNS).display()
         ),
     );
     format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default())
@@ -19,6 +21,10 @@ pub(super) fn fake_ssh(dir: &std::path::Path, prefix: &str) -> String {
 
 fn ssh_pid(session: &Session) -> String {
     std::fs::read_to_string(session.dir.join(SSH_PID)).unwrap_or_default().trim().to_string()
+}
+
+fn ssh_runs(session: &Session) -> usize {
+    std::fs::read_to_string(session.dir.join(SSH_RUNS)).unwrap_or_default().lines().count()
 }
 
 fn remote_refusal(args: &[&str], command: &str) -> std::process::Output {
@@ -357,4 +363,25 @@ fn killing_a_remote_restart_when_idle_calls_it_off_there() {
 
     app.wait_for("the restart is called off", |s| !s.contains("restart pending"));
     wait_until("the command there and its ssh end", || gone(&there));
+}
+
+#[test]
+fn a_command_that_checks_the_server_first_opens_one_ssh_connection() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let created: serde_json::Value = serde_json::from_str(&session.says(&["new-tab", "--json"])).expect("json");
+    let tab = created["tab"].to_string();
+    let (mut opened, _followed, view) = views::opened(&session, &tab);
+    let runs = |args: &[&str]| {
+        let before = ssh_runs(&session);
+        remote_says(&session, args);
+        ssh_runs(&session) - before
+    };
+
+    let focused = runs(&["focus", "--tab", &tab, "--view", &view]);
+    let hidden = runs(&["view-set", "--view", &view, "--hidden"]);
+    let _ = opened.kill();
+    let _ = opened.wait();
+
+    assert_eq!((focused, hidden), (1, 1));
 }

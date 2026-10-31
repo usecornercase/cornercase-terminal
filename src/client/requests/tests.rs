@@ -41,7 +41,7 @@ mod features {
 
     #[test]
     fn a_failure_to_reach_the_server_is_not_taken_for_a_missing_feature() {
-        let checked = require_on(Err(Error::NoServer), "accounts", "has no account profiles", None);
+        let checked = require_on(Err(Error::NoServer), "accounts", "has no account profiles", None).map(drop);
 
         assert!(matches!(checked, Err(Error::NoServer)), "{checked:?}");
     }
@@ -50,7 +50,7 @@ mod features {
         asking(features, "accounts", "has no account profiles")
     }
 
-    fn asking(features: &[&str], feature: &str, lacks: &str) -> (Result<()>, Vec<String>) {
+    fn serving(features: &[&str]) -> (UnixStream, thread::JoinHandle<Vec<String>>) {
         let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
         let mut descriptor = control::contract::describe("boot", &[]);
         descriptor.features.retain(|feature| features.contains(&feature.as_str()));
@@ -63,10 +63,26 @@ mod features {
             }
             asked
         });
+        (ours, server)
+    }
 
-        let checked = require_on(Link::socket(ours), feature, lacks, None);
-
+    fn asking(features: &[&str], feature: &str, lacks: &str) -> (Result<()>, Vec<String>) {
+        let (ours, server) = serving(features);
+        let checked = require_on(Link::socket(ours), feature, lacks, None).map(drop);
         (checked, server.join().expect("the fake server"))
+    }
+
+    #[test]
+    fn a_passed_check_hands_its_link_to_the_request() {
+        let (ours, server) = serving(&["views"]);
+
+        let mut link = require_on(Link::socket(ours), "views", "has no views", None).expect("accepted");
+        link.ask("status", control::Command::Status(control::Status {})).expect("an answer");
+        drop(link);
+
+        let asked = server.join().expect("the fake server");
+        assert_eq!(asked.len(), 2, "{asked:?}");
+        assert!(asked[0].contains("\"contract\"") && asked[1].contains("\"status\""), "{asked:?}");
     }
 
     #[test]

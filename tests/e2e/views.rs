@@ -45,14 +45,19 @@ fn a_view_sizes_its_tab_and_moves_without_the_window_and_gives_both_back_when_it
     assert_eq!(finish_within(streaming, TIMEOUT).status.code(), Some(0));
 }
 
+pub(super) fn opened(session: &Session, tab: &str) -> (std::process::Child, Followed, String) {
+    let mut opened = session.spawn(&["view", "--cols", "80", "--rows", "24", "--tab", tab]);
+    let mut followed = Followed::of(&mut opened);
+    followed.until("the view's first line", |line| line["revision"] == 1);
+    let id = followed.seen[0]["view"]["id"].as_u64().expect("an id").to_string();
+    (opened, followed, id)
+}
+
 #[test]
 fn commands_with_a_view_pass_the_feature_checks_they_need() {
     let app = Harness::start();
     let (pane, tab) = new_tab(&app);
-    let mut opened = app.session.spawn(&["view", "--cols", "80", "--rows", "24", "--tab", &tab]);
-    let mut followed = Followed::of(&mut opened);
-    followed.until("the view's first line", |line| line["revision"] == 1);
-    let id = followed.seen[0]["view"]["id"].as_u64().expect("an id").to_string();
+    let (mut opened, _followed, id) = opened(&app.session, &tab);
 
     let hidden = app.session.says(&["view-set", "--view", &id, "--hidden"]);
     let visible = app.session.says(&["view-set", "--view", &id, "--visible"]);

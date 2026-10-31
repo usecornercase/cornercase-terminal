@@ -188,10 +188,12 @@ fn run_control(command: Control) -> Result<bool> {
     if let Some(view) = command.view() {
         client::use_view(view)?;
     }
-    match control_route(command) {
+    let done = match control_route(command) {
         ControlFlow::Break(done) => done,
         ControlFlow::Continue(_) => Err(Error::Control("no area runs this command".into())),
-    }
+    };
+    client::close_unused_link();
+    done
 }
 
 fn control_route(command: Control) -> ControlFlow<Result<bool>, Control> {
