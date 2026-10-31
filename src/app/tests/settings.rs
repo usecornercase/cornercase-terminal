@@ -512,6 +512,30 @@ mod searching {
     }
 
     #[test]
+    fn one_wheel_tick_moves_one_result() {
+        let mut s = open();
+        typed(&mut s, "a");
+        assert!(form(&s.app).hits().len() > 2);
+        let down = MouseEvent { kind: MouseEventKind::ScrollDown, column: 10, row: 10, modifiers: KeyModifiers::NONE };
+        s.app.handle_event(AppEvent::Input(Event::Mouse(down)), AREA).expect("handle the wheel");
+        let count = form(&s.app).hits().len();
+        assert_eq!(form(&s.app).find.selected(count), 1);
+    }
+
+    #[test]
+    fn a_click_on_the_field_of_the_flows_tab_leaves_the_cursor_there() {
+        let mut s = open();
+        show(&mut s.app, Page::Flows);
+        let field = ui::settings_find(ui::settings_area(AREA)).as_position();
+        click(&mut s.app, field);
+        assert!(matches!(s.app.overlay, Some(Overlay::Flows { .. })));
+        let mut t = render(&mut s.app, AREA);
+        assert_eq!(t.get_cursor_position().expect("cursor"), field);
+        typed(&mut s, "so");
+        assert_eq!(form(&s.app).find.query(), "so");
+    }
+
+    #[test]
     fn the_shortcut_in_the_find_group_opens_it() {
         let items = crate::shortcuts::items(Some(crate::shortcuts::Group::Find));
         let run = crate::shortcuts::Step::Run(crate::shortcuts::Action::Settings);

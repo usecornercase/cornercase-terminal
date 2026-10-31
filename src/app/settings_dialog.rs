@@ -169,7 +169,7 @@ impl App {
             return;
         }
         if let (true, Some(delta)) = (s.find.searching(), wheel(ev.kind)) {
-            s.wheel_hits(delta);
+            s.wheel_hits(delta.signum());
             return;
         }
         match ev.kind {

@@ -202,8 +202,7 @@ pub(in crate::ui) fn draw_flows(f: &mut Frame, view: &View, flows: &Flows) {
     f.render_widget(overlay_block(view.muted, &flows.title), r);
     let [tabs, _, warnings, edit_row, note, _] = flows_rows(area, flows.warnings.len());
     let body = flows.body(area);
-    let mut cursor = None;
-    draw_flows_heading(f, view, flows, area, tabs);
+    let mut cursor = draw_flows_heading(f, view, flows, area, tabs);
     draw_flows_preview(f, view, flows, area);
     if let Some(editor) = &flows.text {
         cursor = draw_text(f, view, body, editor, true);
@@ -224,7 +223,7 @@ pub(in crate::ui) fn draw_flows(f: &mut Frame, view: &View, flows: &Flows) {
     }
 }
 
-fn draw_flows_heading(f: &mut Frame, view: &View, flows: &Flows, area: Rect, tabs: Rect) {
+fn draw_flows_heading(f: &mut Frame, view: &View, flows: &Flows, area: Rect, tabs: Rect) -> Option<Position> {
     if flows.tabs.is_empty() || flows.text.is_some() {
         let dim = Style::default().fg(view.muted);
         let heading = truncate_right(&flows.heading, usize::from(tabs.width));
@@ -233,9 +232,11 @@ fn draw_flows_heading(f: &mut Frame, view: &View, flows: &Flows, area: Rect, tab
         let names = flows.tab_names();
         draw_tabs(f, view, &flows_tabs(area, &names), &names, flows.tab);
     }
-    if flows.search {
-        draw_find_prompt(f, view, Rect { y: tabs.bottom(), ..tabs });
+    if !flows.search {
+        return None;
     }
+    let text = draw_find_prompt(f, view, Rect { y: tabs.bottom(), ..tabs });
+    (!text.is_empty()).then(|| text.as_position())
 }
 
 fn draw_flows_preview(f: &mut Frame, view: &View, flows: &Flows, area: Rect) {
