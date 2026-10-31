@@ -138,6 +138,22 @@ mod a_clone {
     }
 
     #[test]
+    fn into_the_folder_behind_a_link_that_is_being_cloned_into_is_busy() {
+        let (outer, inner) = (git_repo(&[]), git_repo(&[]));
+        let parent = TempDir::new();
+        let empty = TempDir::new();
+        let link = parent.path().join(outer.path().file_name().expect("a name"));
+        std::os::unix::fs::symlink(empty.path(), &link).expect("link");
+        let (mut app, rx) = empty_app();
+        start_clone(&mut app, CLIENT + 1, None, &clone_args(&outer.path().display().to_string(), parent.path()));
+
+        let busy = refused(&mut app, "clone", &clone_args(&inner.path().display().to_string(), empty.path()));
+
+        assert_eq!(busy.code, "busy", "{}", busy.message);
+        assert_eq!(answered_at_last(&mut app, &rx).len(), 1);
+    }
+
+    #[test]
     fn focused_in_a_view_that_closed_while_git_ran_still_answers_its_path() {
         let repo = git_repo(&[]);
         let parent = TempDir::new();

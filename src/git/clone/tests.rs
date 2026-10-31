@@ -24,6 +24,9 @@ mod folder_name {
     #[case::query_after_a_slash("https://example.com/acme/shop/?ref=main#top", "shop")]
     #[case::scp_like_query("git@github.com:acme/shop.git?token=secret", "shop")]
     #[case::local_path_with_a_hash("/srv/git/shop#2", "shop#2")]
+    #[case::credentials_without_a_path("https://user:secret@example.com", "example.com")]
+    #[case::credentials_with_a_hash("https://user:ab#secret@example.com/acme/shop.git", "shop")]
+    #[case::credentials_with_a_question_mark("https://user:ab?secret@example.com/", "example.com")]
     fn is_the_repositorys_last_part(#[case] url: &str, #[case] name: &str) {
         assert_eq!(folder_name(url).as_deref(), Ok(name));
     }
@@ -126,6 +129,28 @@ mod failure {
         assert!(matches!(failure(stderr), Failure::Failed(_)), "{:?}", failure(stderr));
     }
 
+    #[rstest]
+    #[case::not_found(
+        "fatal: repository 'http://127.0.0.1:9/acme/shop.git?token=secret/' not found\n",
+        Failure::NotRepository("repository 'http://127.0.0.1:9/acme/shop.git' not found".into())
+    )]
+    #[case::unreachable(
+        "fatal: unable to access 'http://127.0.0.1:9/acme/shop.git?token=secret/': Failed to connect to 127.0.0.1 \
+         port 9 after 0 ms: Couldn't connect to server\n",
+        Failure::Failed(
+            "unable to access 'http://127.0.0.1:9/acme/shop.git': Failed to connect to 127.0.0.1 port 9 after 0 ms: \
+             Couldn't connect to server"
+                .into()
+        )
+    )]
+    #[case::fragment(
+        "fatal: unable to access 'https://example.com/shop.git#secret/': Could not resolve host: example.com\n",
+        Failure::Failed("unable to access 'https://example.com/shop.git': Could not resolve host: example.com".into())
+    )]
+    fn never_quotes_the_query_or_the_fragment_of_a_url(#[case] stderr: &str, #[case] expected: Failure) {
+        assert_eq!(failure(stderr), expected);
+    }
+
     #[test]
     fn never_quotes_a_password_or_a_token() {
         let stderr = "fatal: unable to access 'https://ana:hunter2@example.com/shop.git/': Could not resolve host\n";
@@ -149,6 +174,17 @@ mod destination {
         let path = destination("/srv/shop.git", &temp.path().join("link").join("new")).expect("a destination");
 
         assert_eq!(path, temp.path().join("real").join("new").join("shop"));
+    }
+
+    #[test]
+    fn follows_a_link_that_is_the_clones_own_folder() {
+        let temp = TempDir::new();
+        std::fs::create_dir(temp.path().join("empty")).expect("mkdir");
+        std::os::unix::fs::symlink(temp.path().join("empty"), temp.path().join("shop")).expect("link");
+
+        let path = destination("/srv/shop.git", temp.path()).expect("a destination");
+
+        assert_eq!(path, temp.path().join("empty"));
     }
 }
 

@@ -76,12 +76,27 @@ pub(crate) fn is_local_path(url: &str) -> bool {
     }
 }
 
-fn without_query(url: &str) -> &str {
-    if is_local_path(url) { url } else { url.split(['?', '#']).next().unwrap_or(url) }
+fn naming_part(url: &str) -> String {
+    if is_local_path(url) {
+        return url.to_string();
+    }
+    match url.split_once("://") {
+        Some((_, rest)) => bare(rest),
+        None => url.split(['?', '#']).next().unwrap_or(url).to_string(),
+    }
+}
+
+fn bare(url: &str) -> String {
+    let (authority, path) = url.split_at(url.find('/').unwrap_or(url.len()));
+    let host = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
+    let host = host.split(['?', '#']).next().unwrap_or(host);
+    let path = path.split(['?', '#']).next().unwrap_or(path);
+    format!("{host}{path}")
 }
 
 fn folder_name(url: &str) -> Result<String, Failure> {
-    let url = without_query(url.trim()).trim_end_matches('/');
+    let url = naming_part(url.trim());
+    let url = url.trim_end_matches('/');
     let url = url.strip_suffix("/.git").unwrap_or(url).trim_end_matches('/');
     let last = url.rsplit(['/', ':']).next().unwrap_or_default();
     let name = last.strip_suffix(".git").or_else(|| last.strip_suffix(".bundle")).unwrap_or(last);
@@ -99,7 +114,8 @@ pub(crate) fn destination(url: &str, parent: &Path) -> Result<PathBuf, Failure> 
         Some((at, real)) => real.join(parent.strip_prefix(at).unwrap_or(Path::new(""))),
         None => parent.to_path_buf(),
     };
-    Ok(parent.join(name))
+    let path = parent.join(name);
+    Ok(path.canonicalize().unwrap_or(path))
 }
 
 pub(crate) fn prepare(url: &str, path: PathBuf) -> Result<Target, Failure> {
@@ -180,10 +196,9 @@ fn redacted(line: &str) -> String {
     let mut rest = line;
     while let Some(at) = rest.find("://") {
         let (head, tail) = rest.split_at(at + 3);
-        let end = tail.find(['/', ' ', '\'', '"']).unwrap_or(tail.len());
-        let authority = &tail[..end];
+        let end = tail.find([' ', '\'', '"']).unwrap_or(tail.len());
         text.push_str(head);
-        text.push_str(authority.rsplit_once('@').map_or(authority, |(_, host)| host));
+        text.push_str(&bare(&tail[..end]));
         rest = &tail[end..];
     }
     text.push_str(rest);
