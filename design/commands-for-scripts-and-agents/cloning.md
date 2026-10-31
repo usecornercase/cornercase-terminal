@@ -4,6 +4,7 @@ Code: `git/clone.rs`, `control/clone.rs`, `app/control/clone.rs`, `cli.rs` (`run
 
 - **One operation, `clone`** (index 114 of `Command::NAMES`): `url`, `parent` and `focus`.
   - It runs `git clone` into a new folder inside `parent`. The folder is named after the repository as git names it: the URL's last part without `/`, `.git` or `.bundle` (`git/clone.rs` `folder_name`).
+  - A URL that is not a local path loses its `?query` and `#fragment` first (`https://host/shop.git?token=…` is `shop`). A query can carry a token, and the folder's name reaches the path, the job's log line and the `busy` and `conflict` messages. A local path keeps them, since `#` and `?` are ordinary characters in a folder's name.
   - It then opens that folder as a project as `open` does, through `App::open_folder`, which both share: an open project of that path is reused, else `add_project`. So the project is saved with the session and shows in the sidebar.
   - It answers `path` (canonical), the project's `project`, `workspace`, `tab` and `pane` ids, and `projection` with `focus`.
   - `CONTRACT` stays 1: it is a new operation, which an older server refuses by name.
@@ -17,7 +18,8 @@ Code: `git/clone.rs`, `control/clone.rs`, `app/control/clone.rs`, `cli.rs` (`run
   - The server refuses a relative one as `malformed` (`git/clone.rs` `is_local_path`: no `://`, and no `:` before the first `/`, which git reads as `host:path`). `~/…` is expanded with the server's home folder, as `parent` is.
 - **The folder is made by the request, not by git**, so that a failed clone removes only what it made (`git/clone.rs` `prepare`):
   - The parent's deepest existing folder is canonicalized first (`destination`), so the same folder spelled through a symlink is one destination.
-  - Then a clone already pending into that destination is `busy` (`Stage::Clone`). This is checked before anything looks at the disk, because the running clone has already made the folder and filled it, so a check of the folder first would answer `conflict`.
+  - Then a clone already pending into that destination, or into a folder inside it or around it, is `busy` (`Stage::Clone`, compared by path components). This is checked before anything looks at the disk, because the running clone has already made the folder and filled it, so a check of the folder first would answer `conflict`.
+  - Nested destinations are refused too: a failed outer clone removes its folder whole, which would take an inner clone with it, and an inner clone writes into the folder the outer one is filling.
   - Then each missing folder on the way is made with `create_dir`, and each one this request made is recorded. The clone's own folder is made last, also with `create_dir`, which fails at once when the folder exists.
   - An existing folder is taken only when it is empty: the issue keeps an empty folder usable, as git does. It is not recorded, so a failure never removes it. One that is not empty, a file or a dangling link is `conflict`.
   - git then clones into that folder (`git -C <folder> clone -- URL <folder>`). On failure, the clone's folder is removed whole only when this request made it, and the folders above it only when made by it and only while empty (`remove_dir`). A clone running next to it in the same new parent keeps its files.
@@ -41,5 +43,6 @@ Code: `git/clone.rs`, `control/clone.rs`, `app/control/clone.rs`, `cli.rs` (`run
   - The request still refuses at once without a size (`NO_SIZE`), as `open` does.
   - The pending entry outlives its client: a command interrupted while git works still gets its project opened, since the clone it asked for is on disk.
   - `clone_answered` takes the entry out before it opens the project, as `worktree_ready` does (see Panics).
+  - With `focus` and a view, a view that closed while git ran skips the focus, as `focus_in_view` does for a new pane: the clone is on disk and its project open, so the answer still gives its path and ids, without `projection`.
 - **The log holds no URL**: the job logs the target folder and, on failure, only the kind (`not a repository`, `access denied`, `git failed`). The request's fields log `parent` and `focus`, and the refusal messages leave the URL out (above). A token in the URL still reaches git's command line and the clone's `.git/config`, as with `git clone` by hand; the docs advise a credential helper instead.
 - **No timeout**: a clone of a big repository can take many minutes, and `ask` waits with no read timeout, as `start --worktree` waits for git. Ctrl+C ends the command, and the clone goes on.

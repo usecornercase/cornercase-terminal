@@ -76,8 +76,12 @@ pub(crate) fn is_local_path(url: &str) -> bool {
     }
 }
 
+fn without_query(url: &str) -> &str {
+    if is_local_path(url) { url } else { url.split(['?', '#']).next().unwrap_or(url) }
+}
+
 fn folder_name(url: &str) -> Result<String, Failure> {
-    let url = url.trim().trim_end_matches('/');
+    let url = without_query(url.trim()).trim_end_matches('/');
     let url = url.strip_suffix("/.git").unwrap_or(url).trim_end_matches('/');
     let last = url.rsplit(['/', ':']).next().unwrap_or_default();
     let name = last.strip_suffix(".git").or_else(|| last.strip_suffix(".bundle")).unwrap_or(last);

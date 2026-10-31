@@ -10,7 +10,7 @@ use crate::config;
 use crate::control::contract::{Code, Refusal};
 use crate::control::{CloneRepository, Cloned, Done, Item};
 use crate::git::clone::{self, Failure};
-use crate::log::{Job, Level};
+use crate::log::{self, Job, Level};
 
 pub(super) struct Cloning {
     path: PathBuf,
@@ -52,12 +52,22 @@ fn checked_parent(parent: PathBuf, given: &Path) -> Result<PathBuf, Refusal> {
     Ok(parent)
 }
 
+fn overlapping<'a>(pending: &'a Pending, path: &Path) -> Option<&'a Path> {
+    match &pending.stage {
+        Stage::Clone(cloning) if cloning.path.starts_with(path) || path.starts_with(&cloning.path) => {
+            Some(&cloning.path)
+        }
+        _ => None,
+    }
+}
+
 impl App {
     pub(super) fn clone_request(&mut self, asked: Asked, request: &CloneRepository) -> Handled {
         sized(asked.area)?;
         let (url, path) = self.clone_destination(request)?;
-        if self.clients.requests.pending.iter().any(|p| matches!(&p.stage, Stage::Clone(c) if c.path == path)) {
-            return Err(Refusal::new(Code::Busy, format!("a clone into `{}` is already running", path.display())));
+        if let Some(running) = self.clients.requests.pending.iter().find_map(|p| overlapping(p, &path)) {
+            let message = format!("a clone into `{}` is already running", running.display());
+            return Err(Refusal::new(Code::Busy, message));
         }
         let target = clone::prepare(&url, path.clone()).map_err(|failure| refusal(&failure))?;
         let key = self.clients.requests.key();
@@ -100,8 +110,19 @@ impl App {
             format!("the repository was cloned into `{}`, but it could not be opened as a project: {e}", path.display())
         })?;
         let ids = self.shown_ids(p);
-        let projection = self.show_if(cloning.view, cloning.focus, Item::Project(self.projects[p].id))?;
+        let projection = self.show_clone(cloning, self.projects[p].id)?;
         Ok(json(&Cloned { path, ids, projection }))
+    }
+
+    fn show_clone(&mut self, cloning: &Cloning, project: u64) -> Result<Option<u64>, Refusal> {
+        if let Some(view) = cloning.view
+            && cloning.focus
+            && self.clients.views.get(view).is_none()
+        {
+            log::info!("control", "view closed before the clone's focus", view = view, project = project);
+            return Ok(None);
+        }
+        self.show_if(cloning.view, cloning.focus, Item::Project(project))
     }
 }
 

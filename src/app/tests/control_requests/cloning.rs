@@ -17,9 +17,20 @@ fn answered_at_last(app: &mut App, rx: &Receiver<AppEvent>) -> Vec<(u64, String)
     got
 }
 
-fn start_clone(app: &mut App, client: u64, args: &Value) {
-    let text = json!({"contract": 1, "command": "clone", "args": args}).to_string();
+fn start_clone(app: &mut App, client: u64, view: Option<u64>, args: &Value) {
+    let mut text = json!({"contract": 1, "command": "clone", "args": args});
+    if let Some(view) = view {
+        text["view"] = json!(view);
+    }
+    app.request(client, &text.to_string(), Some(AREA), Instant::now());
+}
+
+fn open_view(app: &mut App, client: u64) -> u64 {
+    let text = json!({"contract": 1, "command": "view", "args": {}}).to_string();
     app.request(client, &text, Some(AREA), Instant::now());
+    let answers = app.take_answers();
+    let opened = reply_of(&answers.first().expect("an answer").1).expect("a view");
+    opened["view"]["id"].as_u64().expect("its id")
 }
 
 mod a_clone {
@@ -97,7 +108,7 @@ mod a_clone {
         std::os::unix::fs::symlink(parent.path(), &spelled).expect("link");
         let (mut app, rx) = empty_app();
         let url = repo.path().display().to_string();
-        start_clone(&mut app, CLIENT + 1, &clone_args(&url, parent.path()));
+        start_clone(&mut app, CLIENT + 1, None, &clone_args(&url, parent.path()));
         let folder = parent.path().join(repo.path().file_name().expect("a name"));
         std::fs::write(folder.join("started"), "git is at work").expect("write");
 
@@ -107,12 +118,50 @@ mod a_clone {
         assert_eq!(answered_at_last(&mut app, &rx).len(), 1);
     }
 
+    #[rstest]
+    #[case::inside(true)]
+    #[case::around(false)]
+    fn into_a_folder_inside_or_around_one_being_cloned_into_is_busy(#[case] inside: bool) {
+        let (outer, inner) = (git_repo(&[]), git_repo(&[]));
+        let parent = TempDir::new();
+        let outer_folder = parent.path().join(outer.path().file_name().expect("a name"));
+        let around = clone_args(&outer.path().display().to_string(), parent.path());
+        let within = clone_args(&inner.path().display().to_string(), &outer_folder);
+        let (first, second) = if inside { (around, within) } else { (within, around) };
+        let (mut app, rx) = empty_app();
+        start_clone(&mut app, CLIENT + 1, None, &first);
+
+        let busy = refused(&mut app, "clone", &second);
+
+        assert_eq!(busy.code, "busy", "{}", busy.message);
+        assert_eq!(answered_at_last(&mut app, &rx).len(), 1);
+    }
+
+    #[test]
+    fn focused_in_a_view_that_closed_while_git_ran_still_answers_its_path() {
+        let repo = git_repo(&[]);
+        let parent = TempDir::new();
+        let (mut app, rx) = empty_app();
+        let view = open_view(&mut app, CLIENT + 2);
+        let args = json!({"url": repo.path().display().to_string(), "parent": parent.path(), "focus": true});
+        start_clone(&mut app, CLIENT, Some(view), &args);
+
+        app.forget(CLIENT + 2);
+
+        let answers = answered_at_last(&mut app, &rx);
+        let (_, text) = answers.iter().find(|(client, _)| *client == CLIENT).expect("the clone's answer");
+        let answer = reply_of(text).expect("cloned");
+        let path = parent.path().join(repo.path().file_name().expect("a name"));
+        assert_eq!((answer["path"].clone(), answer.get("projection")), (json!(path), None));
+        assert_eq!(app.projects.len(), 1);
+    }
+
     #[test]
     fn whose_command_left_still_opens_its_project() {
         let repo = git_repo(&[]);
         let parent = TempDir::new();
         let (mut app, rx) = empty_app();
-        start_clone(&mut app, CLIENT, &clone_args(&repo.path().display().to_string(), parent.path()));
+        start_clone(&mut app, CLIENT, None, &clone_args(&repo.path().display().to_string(), parent.path()));
 
         app.forget(CLIENT);
 
@@ -141,6 +190,22 @@ mod refused_at_once {
         assert_eq!(refused.code, "conflict");
         assert!(refused.message.contains("already exists and is not an empty folder"), "{}", refused.message);
         assert_eq!(std::fs::read_to_string(taken.join("notes.txt")).expect("kept"), "mine");
+    }
+
+    #[test]
+    fn a_folder_that_is_there_named_without_the_query_of_the_url() {
+        let parent = TempDir::new();
+        let taken = parent.path().join("shop");
+        std::fs::create_dir(&taken).expect("mkdir");
+        std::fs::write(taken.join("notes.txt"), "mine").expect("write");
+        let (mut app, _rx) = empty_app();
+        let url = "https://example.com/acme/shop.git?token=secret#main";
+
+        let refused = refused(&mut app, "clone", &clone_args(url, parent.path()));
+
+        assert_eq!(refused.code, "conflict", "{}", refused.message);
+        assert!(refused.message.contains(&taken.display().to_string()), "{}", refused.message);
+        assert!(!refused.message.contains("secret"), "{}", refused.message);
     }
 
     #[test]

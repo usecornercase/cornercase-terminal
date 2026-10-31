@@ -19,6 +19,11 @@ mod folder_name {
     #[case::dot_git_folder("/srv/git/shop/.git", "shop")]
     #[case::bundle("/tmp/shop.bundle", "shop")]
     #[case::host_only("https://example.com/", "example.com")]
+    #[case::query("https://example.com/acme/shop.git?token=secret", "shop")]
+    #[case::fragment("https://example.com/acme/shop.git#main", "shop")]
+    #[case::query_after_a_slash("https://example.com/acme/shop/?ref=main#top", "shop")]
+    #[case::scp_like_query("git@github.com:acme/shop.git?token=secret", "shop")]
+    #[case::local_path_with_a_hash("/srv/git/shop#2", "shop#2")]
     fn is_the_repositorys_last_part(#[case] url: &str, #[case] name: &str) {
         assert_eq!(folder_name(url).as_deref(), Ok(name));
     }

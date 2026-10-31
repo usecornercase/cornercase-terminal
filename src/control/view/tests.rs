@@ -46,6 +46,7 @@ fn the_commands_that_take_a_view_are_the_ones_that_act_on_a_place() {
     assert!(takes_view(&Command::Status(Status {})));
     assert!(takes_view(&Command::ViewSet(SetView::default())));
     assert!(takes_view(&Command::Go(crate::control::Go::default())));
+    assert!(takes_view(&Command::Clone(crate::control::CloneRepository::default())));
     assert!(!takes_view(&Command::Stats(crate::control::Stats {})));
     assert!(!takes_view(&Command::View(OpenView::default())));
 }
