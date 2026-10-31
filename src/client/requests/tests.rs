@@ -159,7 +159,10 @@ mod the_view {
     #[rstest]
     #[case::stays_out_of_the_contract(control::Command::Contract(control::Contract {}), None)]
     #[case::goes_with_a_command_that_takes_one(control::Command::Status(control::Status {}), Some(7))]
-    #[case::goes_with_one_that_takes_none_for_the_server_to_refuse(control::Command::Stats(control::Stats {}), Some(7))]
+    #[case::goes_with_one_that_takes_none_for_the_server_to_refuse(
+        control::Command::Stats(control::Stats::default()),
+        Some(7)
+    )]
     fn of_the_invocation_goes_with_every_request_but_the_contract(
         #[case] command: control::Command,
         #[case] sent: Option<u64>,

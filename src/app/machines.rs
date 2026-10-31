@@ -4,9 +4,12 @@ use std::time::{Instant, SystemTime};
 use super::App;
 use super::control::json;
 use super::event::AppEvent;
+use super::machine_usage::Cache;
 use super::overlay::Overlay;
+use crate::agents::stats::View;
 use crate::control;
 use crate::control::contract::{Code, Refusal};
+use crate::control::usage::Plans;
 use crate::error::Result;
 use crate::host::network;
 use crate::log::{self, Job, Level};
@@ -15,7 +18,7 @@ use crate::machines::wake::{Network, Sleep};
 use crate::machines::{self, Info, Machine, State, Status};
 use crate::settings::Page;
 
-const OLDER: &str = "its cornercase is older than this one";
+pub(super) const OLDER: &str = "its cornercase is older than this one";
 
 pub(super) type Connector = Box<dyn Fn(&str) -> Box<dyn Connect> + Send>;
 pub(super) type Updater = Arc<dyn Fn(&str) -> Result<()> + Send + Sync>;
@@ -24,6 +27,8 @@ pub(super) type Updater = Arc<dyn Fn(&str) -> Result<()> + Send + Sync>;
 pub(crate) enum MachineEvent {
     Link(Report),
     Updated { link: u64, result: std::result::Result<(), String>, hidden: std::result::Result<(), String> },
+    Stats { link: u64, result: std::result::Result<View, String> },
+    Usage { link: u64, result: std::result::Result<Plans, String> },
 }
 
 impl From<Report> for AppEvent {
@@ -37,6 +42,7 @@ pub(super) struct Held {
     pub(super) destination: String,
     pub(super) link: Link,
     pub(super) status: Status,
+    pub(super) cache: Cache,
 }
 
 pub(super) struct Machines {
@@ -66,8 +72,20 @@ impl Machines {
         }
     }
 
-    fn by_link(&mut self, link: u64) -> Option<&mut Held> {
+    pub(super) fn held(&self) -> &[Held] {
+        &self.held
+    }
+
+    pub(super) fn by_link(&mut self, link: u64) -> Option<&mut Held> {
         self.held.iter_mut().find(|held| held.link.id() == link)
+    }
+
+    pub(super) fn named(&mut self, name: &str) -> Option<&mut Held> {
+        self.held.iter_mut().find(|held| held.name.eq_ignore_ascii_case(name))
+    }
+
+    pub(super) fn connector(&self, destination: &str) -> Box<dyn Connect> {
+        (self.connect)(destination)
     }
 
     pub(super) fn reason(&self, held: &Held) -> Option<String> {
@@ -103,10 +121,6 @@ impl Machines {
 
 #[cfg(test)]
 impl Machines {
-    pub(super) fn held(&self) -> &[Held] {
-        &self.held
-    }
-
     pub(super) fn set_connector(&mut self, connect: Connector) {
         self.connect = connect;
     }
@@ -166,11 +180,7 @@ impl App {
     fn match_machines(&mut self) {
         let listed = self.config.machines.clone();
         let before = std::mem::replace(&mut self.machines.synced, listed.clone());
-        let wanted: Vec<Machine> = listed
-            .into_iter()
-            .zip(machines::problems(&self.config.machines))
-            .filter_map(|(machine, problem)| problem.is_none().then_some(machine))
-            .collect();
+        let wanted: Vec<Machine> = machines::accepted(&listed).cloned().collect();
         self.machines.held.retain(|held| {
             let kept = wanted.iter().any(|machine| machine.destination == held.destination);
             if !kept {
@@ -197,7 +207,8 @@ impl App {
         let connector = (self.machines.connect)(&machine.destination);
         let link = Link::start(id, connector, &self.machines.servers, &self.tx);
         log::info!("machines", "linking", name = machine.name, link = id);
-        let held = Held { name: machine.name, destination: machine.destination, link, status: Status::default() };
+        let (name, destination) = (machine.name, machine.destination);
+        let held = Held { name, destination, link, status: Status::default(), cache: Cache::default() };
         self.machines.held.push(held);
     }
 
@@ -205,6 +216,8 @@ impl App {
         match event {
             MachineEvent::Link(report) => self.machine_reported(report),
             MachineEvent::Updated { link, result, hidden } => self.machine_updated(link, &result, &hidden),
+            MachineEvent::Stats { link, result } => self.machine_answered(link, result),
+            MachineEvent::Usage { link, result } => self.machine_answered(link, result),
         }
     }
 
@@ -221,6 +234,9 @@ impl App {
             }
             Event::Down { down, failed } => {
                 held.status.down(down, now);
+                if !held.another_computer() {
+                    held.cache = Cache::default();
+                }
                 if failed.is_power_of_two() {
                     self.machines.log_down(&self.machines.held[at], failed);
                 }
@@ -229,8 +245,7 @@ impl App {
     }
 
     pub(super) fn update_machine(&mut self, name: &str) -> Update {
-        let named = self.machines.held.iter_mut().find(|held| held.name.eq_ignore_ascii_case(name));
-        let Some(held) = named else { return Update::Unknown };
+        let Some(held) = self.machines.named(name) else { return Update::Unknown };
         if held.status.updating {
             return Update::Running;
         }

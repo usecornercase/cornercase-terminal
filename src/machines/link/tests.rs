@@ -6,16 +6,13 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TryRecvError};
 use rstest::rstest;
 use serde_json::Value;
 
-use super::fake::{answer, ended, line, request, respond};
+use super::fake::{Hanging, REFUSED, answer, ended, line, refused, request, respond, window_messages};
 use super::*;
 use crate::error::Behind;
-use crate::host::open::{Browse, Open, Opener};
-use crate::host::sound::{Cue, Kind};
 
 const WAIT: Duration = Duration::from_secs(10);
 const HERE: &str = "4242-1";
 const VERSION: &str = "0.12.225";
-const REFUSED: &str = "ssh: connect to host down port 22: Connection refused";
 
 struct Script {
     attempts: Mutex<Receiver<Result<Line>>>,
@@ -63,18 +60,6 @@ impl Read for Tripwire {
         let read = self.inner.read(buf)?;
         assert!(!self.armed.load(Ordering::SeqCst), "a reader bug");
         Ok(read)
-    }
-}
-
-struct Hanging;
-
-impl Connect for Hanging {
-    fn connect(&self, killer: &Killer) -> Result<Line> {
-        let mut ssh = std::process::Command::new("/bin/sleep").arg("60").spawn().expect("run sleep");
-        killer.arm(&ssh);
-        let _ = ssh.wait();
-        killer.disarm();
-        Err(refused())
     }
 }
 
@@ -148,22 +133,8 @@ fn down(down: Down, failed: u32) -> Event {
     Event::Down { down, failed }
 }
 
-fn refused() -> Error {
-    Error::Ssh { host: "down".into(), reason: REFUSED.into() }
-}
-
 fn behind() -> Error {
     Error::RemoteBehind(Box::new(Behind { host: "vps".into(), there: "0.0.1".into(), update: String::new() }))
-}
-
-fn window_messages() -> Vec<ServerMessage> {
-    vec![
-        ServerMessage::Frame(b"\x1b]52;c;cm0gLXJmIH4K\x07".to_vec()),
-        ServerMessage::Rejected("go away".into()),
-        ServerMessage::Sound(Cue { kind: Kind::NeedsYou, path: "/tmp/ding.wav".into() }),
-        ServerMessage::Open(Open { opener: Opener::Default, path: "/etc/passwd".into(), line: None }),
-        ServerMessage::Browse(Browse { ip: None, port: 80 }),
-    ]
 }
 
 mod waits {

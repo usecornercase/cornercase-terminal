@@ -46,7 +46,7 @@ mod work_stats {
         );
         assert_eq!(after.counts.tokens.input, 20);
         assert_eq!(after.counts.tokens.cache_write, 10);
-        let value = value(&mut agent.app, None, Command::Stats(wire::Stats {}));
+        let value = value(&mut agent.app, None, Command::Stats(wire::Stats::default()));
         assert_eq!(value["windows"]["total"]["tokens"]["cache_read"], 200);
     }
 

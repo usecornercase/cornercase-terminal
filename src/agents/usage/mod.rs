@@ -4,9 +4,12 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use sha2::{Digest, Sha256};
+
 use crate::accounts::Account;
 use crate::agents::Known;
 use crate::error::{Error, Result};
+use crate::text::hex;
 use crate::time;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -29,6 +32,7 @@ impl Page {
 pub(crate) const TIMEOUT: Duration = Duration::from_secs(10);
 const WARNING_FROM: u16 = 75;
 const CRITICAL_FROM: u16 = 90;
+const FINGERPRINT_BYTES: usize = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Severity {
@@ -82,6 +86,7 @@ pub(crate) struct Report {
     pub(crate) windows: Vec<Window>,
     pub(crate) extra: Option<String>,
     pub(crate) notice: Option<&'static str>,
+    pub(crate) identity: Option<String>,
 }
 
 impl Report {
@@ -115,11 +120,27 @@ pub(in crate::agents) fn window(label: String, kind: String, scope: Option<Strin
     Window { label, kind, scope, percent, severity, resets_at: reading.resets_at }
 }
 
-type Answer = fn(&str) -> Option<Result<Report>>;
+pub(in crate::agents) fn fingerprint(agent: Known, parts: &[&str]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(agent.name().as_bytes());
+    for part in parts {
+        hasher.update([0]);
+        hasher.update(part.as_bytes());
+    }
+    hex(&hasher.finalize()[..FINGERPRINT_BYTES])
+}
+
+#[derive(Debug, Default)]
+pub(in crate::agents) struct Heard {
+    pub(in crate::agents) identity: Option<String>,
+}
+
+type Answer = fn(&str, &mut Heard) -> Option<Result<Report>>;
 
 fn read_answer(reader: impl BufRead, answer: Answer, name: &str) -> Result<Report> {
+    let mut heard = Heard::default();
     for line in reader.lines() {
-        if let Some(result) = answer(&line?) {
+        if let Some(result) = answer(&line?, &mut heard) {
             return result;
         }
     }

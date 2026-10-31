@@ -170,6 +170,14 @@ cornercase machines retry [vps]                        # try one link, or every 
 
 `--icon` takes the glyph or its name (`server`, `laptop`, `desktop`, `mini`, `home server`, `other`), `--folder` is `~/code` unless you give one, and `edit` changes only what you give. `add` refuses a name already listed and `edit` one that isn't. Every subcommand prints the list, or with `--json` the `machines` answer. A value the rules refuse, or an update that failed on the machine, exits with status 1 and says why. See [Machines](../../guides/machines/).
 
+`stats` and `usage` read the machines too: `--machine NAME` prints that machine's stats or plan limits, and `--machine all` this computer's and every machine's, the stats summed. Your server asks each machine through `ssh`, so the command needs it running. See [Stats and usage of each machine](../../guides/machines/#stats-and-usage-of-each-machine).
+
+```sh
+cornercase stats --machine vps
+cornercase stats --machine all
+cornercase usage --machine all --json
+```
+
 ### `cornercase tour`
 
 Shows the [guided tour](../../first-steps/#the-guided-tour-and-help) in the window, where it stopped. `tour start TOUR` starts another one (`--step` at a step), `next`, `back`, `skip` and `end` move it, `complete TOUR STEP` marks a step done, and `reset [TOUR]` forgets the progress. `tour list` prints every tour and its steps with your progress; with `--json` the steps come as data (ids, texts, what each points at and what completes it), so another UI can draw the same tour, and `start --no-card` keeps the window's card hidden for it.

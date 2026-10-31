@@ -7,6 +7,7 @@ use crate::text;
 use crate::time::Stamp;
 use link::Down;
 
+pub(crate) mod ask;
 pub(crate) mod form;
 pub(crate) mod link;
 pub(crate) mod wake;
@@ -17,6 +18,7 @@ pub(crate) const HERE_ICON: char = '▭';
 pub(crate) const DEFAULT_FOLDER: &str = "~/code";
 
 const NAME_MAX: usize = 20;
+pub(crate) const EVERY: &str = "all";
 const UPDATING: &str = "updating…";
 const CONNECTING: &str = "connecting…";
 const NOT_SEEN: &str = "not seen yet";
@@ -52,6 +54,10 @@ pub(crate) fn problems(machines: &[Machine]) -> Vec<Option<String>> {
     machines.iter().enumerate().map(|(at, machine)| machine.problem(&machines[..at])).collect()
 }
 
+pub(crate) fn accepted(machines: &[Machine]) -> impl Iterator<Item = &Machine> {
+    machines.iter().zip(problems(machines)).filter_map(|(machine, problem)| problem.is_none().then_some(machine))
+}
+
 pub(crate) fn known_icon(icon: &str) -> char {
     ICONS.iter().map(|(glyph, _)| *glyph).find(|glyph| icon.chars().eq([*glyph])).unwrap_or(ICONS[0].0)
 }
@@ -71,6 +77,9 @@ pub(crate) fn valid_name(name: &str) -> Result<(), &'static str> {
     let allowed = |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-');
     if name.chars().count() > NAME_MAX || !name.chars().all(allowed) {
         return Err("use letters, digits, `.`, `_` and `-`, at most 20 characters");
+    }
+    if name.eq_ignore_ascii_case(EVERY) {
+        return Err("`all` is kept for every machine at once");
     }
     Ok(())
 }

@@ -26,6 +26,11 @@ Code: `cli.rs`, `cli/`, `client/requests.rs`, `control.rs`, `app/control.rs`, `a
   - **`retry`** pokes one machine's link, or every link.
   - **The log** has the action, the name, and whether a destination was given, never the destination itself.
   - **`cornercase machines`** prints this computer, then a line per machine with its mark, icon, name, destination, folder and state, and the reason on the line under it; `--json` prints the answer. A refusal, or an update that failed there, exits 1. `--remote` reaches it like any request.
+- **Every machine's stats and usage** (#547; the answers are Stats and Plan usage, the asking Remote windows › Asking a machine): `stats` and `usage` take `machine`, a machine's name (any case) or `all` for this computer and every machine, so a client reads the numbers of each machine from one server. Without it both answer for this computer, byte for byte as before.
+  - **A field, not a new operation**: the answers keep their shape and add `machine` or `machines`, so two more names would only repeat `stats` and `usage`. The cost is that an older server in legacy mode drops the field and answers for itself, which reads like the machine's numbers. Hence the feature `machine-usage`, which `stats --machine` and `usage --machine` require (`client::use_machine_usage`) before they send it.
+  - **`all` is a value, not a flag** (a separate `every: bool` was rejected: it makes the CLI harder than `--machine all`), so no machine may be called `all` (Settings › Machines tab).
+  - **Strict fields**: `machine` is skipped when absent, so the CLI's requests are as before; a structured client that sends `"machine": null` gets `unknown-field` (see Contract), and leaves the key out instead.
+  - **`--machine` and `--remote` do different things**: `--remote vps stats` asks the server there for its own numbers, `--machine vps` asks this server for its copy of them, and only the latter can sum.
 
 ## Topics
 

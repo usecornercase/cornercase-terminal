@@ -11,6 +11,8 @@ use crate::agents::activity::Status;
 use crate::persist;
 use crate::time::Stamp;
 
+mod sum;
+
 pub(crate) const WEEKS: usize = 26;
 pub(crate) const BLOCKS: usize = WEEKS * 7;
 const RETAIN: u64 = (BLOCKS as u64 + 1) * 24;
@@ -208,6 +210,9 @@ fn epoch(at: SystemTime) -> u64 {
 fn hour(at: SystemTime) -> u64 {
     epoch(at) / 3_600
 }
+fn days(since: SystemTime, now: SystemTime) -> u64 {
+    now.duration_since(since).unwrap_or_default().as_secs() / 86_400
+}
 #[expect(clippy::cast_precision_loss, reason = "millisecond counters retain practical duration precision")]
 fn seconds(ms: u64) -> f64 {
     ms as f64 / 1_000.0
@@ -345,9 +350,6 @@ impl Stats {
     pub(crate) fn since(&self) -> SystemTime {
         self.since
     }
-    pub(crate) fn days(&self, now: SystemTime) -> u64 {
-        now.duration_since(self.since).unwrap_or_default().as_secs() / 86_400
-    }
     fn day_seconds(&self, end: u64) -> f64 {
         let mut bucket = Bucket::default();
         for (_, b) in self.hours.range(end.saturating_sub(23)..=end) {
@@ -370,7 +372,7 @@ impl Stats {
                 ("total".into(), self.total.window()),
             ]),
             blocks,
-            days: self.days(now),
+            days: days(self.since, now),
             empty: self.total == Bucket::default(),
             merged: None,
         }

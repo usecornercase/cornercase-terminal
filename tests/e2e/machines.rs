@@ -4,9 +4,9 @@ use serde_json::{Value, json};
 use super::remote::{boot_of, cornercase_in, fake_ssh_to, gone, ssh_pid_to};
 use super::*;
 
-const VPS: &str = "vps";
+pub(super) const VPS: &str = "vps";
 
-fn reach(machine: &Session) -> String {
+pub(super) fn reach(machine: &Session) -> String {
     format!("env {}", machine.socket_var())
 }
 
@@ -23,15 +23,20 @@ fn here_with(listed: &[&str], reached: &[(&str, &str)]) -> Arc<Session> {
 
 fn here_listing(listed: &[(&str, &str)], reached: &[(&str, &str)]) -> Arc<Session> {
     let here = Session::new();
+    start_listing(&here, listed, reached, json!({}));
+    here
+}
+
+pub(super) fn start_listing(here: &Session, listed: &[(&str, &str)], reached: &[(&str, &str)], mut config: Value) {
     let machines: Vec<Value> = listed
         .iter()
         .map(|(name, destination)| json!({"name": name, "icon": "☁", "destination": destination, "folder": "~/code"}))
         .collect();
-    std::fs::write(here.dir.join("config.json"), json!({"machines": machines}).to_string()).expect("write the config");
+    config["machines"] = Value::Array(machines);
+    std::fs::write(here.dir.join("config.json"), config.to_string()).expect("write the config");
     let path = fake_ssh_to(&here.dir, reached);
     let started = here.cold_command().env("PATH", path).arg("start-server").output().expect("run cornercase");
     assert!(started.status.success(), "{started:?}");
-    here
 }
 
 fn linked_to_one() -> (Arc<Session>, Arc<Session>) {
@@ -46,7 +51,7 @@ fn machines(here: &Session) -> Vec<Value> {
     list["machines"].as_array().cloned().unwrap_or_default()
 }
 
-fn wait_for_machine(here: &Session, name: &str, what: &str, cond: impl Fn(&Value) -> bool) -> Value {
+pub(super) fn wait_for_machine(here: &Session, name: &str, what: &str, cond: impl Fn(&Value) -> bool) -> Value {
     let mut machine = Value::Null;
     wait_until(what, || {
         machine = machines(here).into_iter().find(|m| m["name"] == name).unwrap_or_default();
@@ -55,7 +60,7 @@ fn wait_for_machine(here: &Session, name: &str, what: &str, cond: impl Fn(&Value
     machine
 }
 
-fn in_state(state: &'static str) -> impl Fn(&Value) -> bool {
+pub(super) fn in_state(state: &'static str) -> impl Fn(&Value) -> bool {
     move |machine| machine["state"] == state
 }
 
