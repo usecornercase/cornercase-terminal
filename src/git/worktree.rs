@@ -151,6 +151,14 @@ pub(crate) fn git<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(repo: &Path, args:
     command(repo, args).stdin(Stdio::null()).output().map_err(Error::RunGit)
 }
 
+pub(crate) fn git_env<I, S>(repo: &Path, args: I, env: &[(&str, &OsStr)]) -> Result<Output>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    scoped(repo, args, env).output().map_err(Error::RunGit)
+}
+
 pub(crate) fn git_within<I, S>(repo: &Path, args: I, timeout: Duration) -> Result<Option<Output>>
 where
     I: IntoIterator<Item = S>,

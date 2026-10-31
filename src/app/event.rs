@@ -42,6 +42,7 @@ pub(crate) enum AppEvent {
     Login(crate::agents::Known, String, crate::accounts::login::Login),
     Restarted(Box<super::account_restart::Restarted>),
     Machine(super::machines::MachineEvent),
+    Cloned { request: u64, result: std::result::Result<(), crate::git::clone::Failure> },
 }
 
 impl AppEvent {
@@ -74,6 +75,7 @@ impl AppEvent {
             Self::Login(..) => "login checked",
             Self::Restarted(_) => "conversation moved",
             Self::Machine(_) => "machine",
+            Self::Cloned { .. } => "cloned",
         }
     }
 }

@@ -180,6 +180,7 @@ fn newest_commands() -> Vec<Command> {
         Command::StopProcess(StopProcess::default()),
         Command::Worktrees(ListWorktrees::default()),
         Command::Machines(Machines::default()),
+        Command::Clone(CloneRepository::default()),
     ]
 }
 
@@ -509,6 +510,14 @@ fn an_imports_logged_fields_carry_its_size_and_never_its_text() {
     let fields = Command::FlowImport(import).fields();
     assert!(fields.contains(&("text_bytes", "15".to_string())), "{fields:?}");
     assert!(fields.iter().all(|(_, value)| !value.contains("SECRET")), "{fields:?}");
+}
+
+#[test]
+fn a_clones_logged_fields_carry_its_folder_and_never_its_url() {
+    let url = "https://ana:SECRET@example.com/acme/shop.git".into();
+    let clone = CloneRepository { url, parent: "/srv/src".into(), focus: true };
+    let fields = Command::Clone(clone).fields();
+    assert_eq!(fields, [("parent", "/srv/src".to_string()), ("focus", "true".to_string())]);
 }
 
 mod events_v1 {

@@ -426,6 +426,7 @@ mod parsing {
     #[case::surface(&["surface", "--view", "41"])]
     #[case::view_set(&["view-set", "--view", "41", "--claim"])]
     #[case::go(&["go", "cc-1-2", "--view", "41"])]
+    #[case::clone(&["clone", "/srv/git/shop", "--view", "41"])]
     fn view_names_the_view_a_command_acts_in(#[case] args: &[&str]) {
         let cli = parse(args).expect("parse");
 
@@ -940,6 +941,7 @@ mod output {
 }
 
 mod away;
+mod cloning;
 mod flows;
 mod focus;
 mod known_agents;

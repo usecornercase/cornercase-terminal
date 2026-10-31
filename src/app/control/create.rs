@@ -54,13 +54,17 @@ impl App {
         if !path.is_dir() {
             return Err(format!("`{}` is not a folder", path.display()).into());
         }
-        let p = match self.projects.iter().position(|p| p.path == path && !p.closing) {
-            Some(p) => p,
-            None => self.add_project(path, sized(area)?).map_err(|e| e.to_string())?,
-        };
+        let p = self.open_folder(path, area)?;
         let ids = self.shown_ids(p);
         let projection = self.show_if(asker.view, open.focus, Item::Project(self.projects[p].id))?;
         Ok(Some(json(&Done { ids, projection, ..Done::default() })))
+    }
+
+    pub(super) fn open_folder(&mut self, path: PathBuf, area: Option<Rect>) -> Result<usize, String> {
+        match self.projects.iter().position(|p| p.path == path && !p.closing) {
+            Some(p) => Ok(p),
+            None => self.add_project(path, sized(area)?).map_err(|e| e.to_string()),
+        }
     }
 
     pub(super) fn project_of(&self, asker: Asker, id: Option<u64>) -> Result<usize, Refusal> {

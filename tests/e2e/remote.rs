@@ -136,6 +136,22 @@ fn commands_reach_the_server_on_the_other_machine() {
 }
 
 #[test]
+fn clone_puts_the_repository_in_a_folder_of_the_other_machine() {
+    let session = Session::new();
+    remote_says(&session, &["start-server"]);
+    let repo = repository(&session.dir, "shop");
+    let parent = session.dir.join("src");
+
+    let path = remote_says(&session, &["clone", &repo.display().to_string(), &parent.display().to_string()]);
+    let relative = remotely(&session, &["clone", &repo.display().to_string(), "src"]).output().expect("run cornercase");
+
+    let cloned = session.dir.canonicalize().expect("canonical").join("src").join("shop");
+    assert_eq!(path, cloned.display().to_string());
+    assert!(session.report().projects.iter().any(|p| p.path == cloned), "the project is open there");
+    assert!(refused(&relative, 2, "with --remote, give its absolute path on devbox"), "{relative:?}");
+}
+
+#[test]
 fn a_command_without_a_server_there_says_so_and_starts_none() {
     let session = Session::new();
 

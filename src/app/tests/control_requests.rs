@@ -537,6 +537,7 @@ mod agents;
 mod arranging;
 mod build_folders;
 mod changes;
+mod cloning;
 mod close_agent;
 mod closed_agents;
 mod compacting;

@@ -56,6 +56,23 @@ fn open_adds_a_project_and_leaves_the_window_as_it_is() {
 }
 
 #[test]
+fn clone_checks_a_repository_out_opens_it_and_prints_its_path() {
+    let session = Session::new();
+    session.says(&["start-server"]);
+    let repo = repository(&session.dir, "shop");
+    let parent = session.dir.join("src");
+    std::fs::create_dir(&parent).expect("create the parent");
+
+    let path = session.says(&["clone", &repo.display().to_string(), &parent.display().to_string()]);
+
+    let cloned = parent.canonicalize().expect("canonical").join("shop");
+    assert_eq!(path, cloned.display().to_string());
+    assert!(session.report().projects.iter().any(|p| p.path == cloned), "the project is open");
+    let again = session.cli(&["clone", &repo.display().to_string(), &parent.display().to_string()]);
+    assert!(refused(&again, 1, "already exists and is not an empty folder"), "{again:?}");
+}
+
+#[test]
 fn new_workspace_adds_one_to_the_project() {
     let app = Harness::start();
 

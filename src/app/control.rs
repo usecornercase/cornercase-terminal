@@ -2,6 +2,7 @@ mod account_restart;
 pub(in crate::app) mod accounts;
 mod arrange;
 mod changes;
+mod clone;
 mod close;
 mod closed_agents;
 mod config;
@@ -181,12 +182,14 @@ enum Stage {
     Usage(Vec<(agents::usage::Key, u64)>),
     Ports,
     Processes,
+    Clone(clone::Cloning),
 }
 
 impl Stage {
     fn listing(&self) -> &'static str {
         match self {
             Self::Processes => "the processes are still being measured",
+            Self::Clone(_) => "git is still cloning the repository",
             _ => "the ports are still being listed",
         }
     }
@@ -545,6 +548,7 @@ impl App {
         let Asked { client, asker, area, now } = asked;
         ControlFlow::Break(match command {
             Command::Open(open) => self.open_request(asker, &open, area),
+            Command::Clone(clone) => self.clone_request(asked, &clone),
             Command::NewWorkspace(new) => self.new_workspace_request(client, asker, new, area),
             Command::NewTab(new) => self.new_tab_request(asked, new),
             Command::Split(split) => self.split_request(asked, split),

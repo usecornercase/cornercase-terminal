@@ -67,6 +67,7 @@ group 9  personal  collapsed
 | --- | --- |
 | `status` | Lists groups, projects, workspaces, tabs and panes with their ids, or one line per pane with `--panes`; `--follow` keeps printing the whole state as it changes. |
 | `open PATH` | Opens a folder as a project, or finds the open one. Prints the project's id. A path starting with `~/` is in the server's home folder. |
+| `clone URL [FOLDER]` | Clones a git repository into a new folder inside FOLDER and opens it as a project: see [Clone a repository](#clone-a-repository). Prints the clone's path. |
 | `new-workspace NAME` | Adds a workspace to a project, or a git worktree with `--worktree`. Prints its id. |
 | `new-tab` | Opens a tab, optionally typing a command into it. Prints the pane's id. |
 | `split` | Splits a pane right, or down, optionally typing a command. Prints the new pane's id. |
@@ -510,6 +511,26 @@ cornercase split --down -- tail -f server.log    # splits the pane below
 - After `--`, the words of a command are joined with spaces and typed at the prompt once the shell is ready, as `ssh` does with its command, so quote what the shell should read as one argument: `-- 'cargo test 2>&1 | tee test.log'`. The command returns once it is typed.
 - Each prints the new pane's, workspace's or project's id, so `pane=$(cornercase new-tab …)` needs nothing else. `--json` prints every id: `{"project": 1, "workspace": 2, "tab": 8, "pane": 9}`.
 - `--focus` also shows what was made.
+
+#### Clone a repository
+
+```sh
+cornercase clone git@github.com:acme/orders-api.git ~/code   # prints ~/code/orders-api in full
+cornercase clone https://github.com/acme/orders-api          # into the current folder
+cornercase --remote devbox clone git@github.com:acme/orders-api.git ~/code
+```
+
+`clone` runs `git clone` on the server's machine into a new folder inside FOLDER, named after the repository as git names it (`orders-api` for both URLs above; a `?query` or `#fragment` of the URL is left out), opens that folder as a project, as `open` does, and prints its path once git is done. Without FOLDER the clone goes in the current folder, and with `--remote` in the other machine's home folder; a FOLDER given with `--remote` is that machine's, absolute or starting with `~/`, and a FOLDER with `..` in it is refused. Folders missing on the way are made.
+
+- A folder of that name that exists and is not empty is refused; an empty one is used. While a clone runs, another one into the same folder, or into a folder inside it or around it, is refused.
+- A repository on the same machine can be given by its path: a relative one is read from the folder you run the command in. With `--remote`, give the other machine's absolute path.
+- A repository named `.git` (such as `…/.git.git`) is refused, since its clone would be a `.git` folder that every git command under FOLDER would read.
+- A clone that fails leaves no folder behind, the folders it made on the way included, and says what failed: the URL is not a git repository (or one you can read), access was denied, or git's own reason, such as a host it cannot reach. A folder that was there before is never removed. The messages never repeat the URL (git's own reason may name its host and path, never its user name, password, query or fragment), so a token in it stays out of them and out of the [log](../../reference/files-and-environment/).
+- git never asks for a password, a passphrase or a browser login: it uses the ssh keys, ssh agent and git credentials of the server's machine as they are, and a missing one fails at once as access denied. Prefer a credential helper to a token in the URL: like `git clone`, the clone keeps its URL in `.git/config`.
+- The command waits for git with no timeout, as long as the clone takes. Stopping the command does not stop the clone, and its project still opens.
+- `--json` prints `{"path": "/home/ana/code/orders-api", "project": 4, "workspace": 9, "tab": 12, "pane": 13}`. `--focus` also shows the project; when the view it should show in closed while git ran, the clone is still answered, without showing it.
+
+It is the request `{"command": "clone", "args": {"url": "…", "parent": "~/code", "focus": false}}`; a refusal has the [code](#errors-with-a-code) `not-found` when the URL is not a repository, `conflict` when the folder is not empty, `busy` when a clone into that folder, or into one inside or around it, is already running, `malformed` for a relative folder or one with `..`, a relative path to a repository, or a URL with no usable name in it, and `failed` for the rest, access denied included. An older server answers that it has no such command. There is no button for it in the window.
 
 ### Start an agent
 
@@ -1320,11 +1341,11 @@ A request through the socket is JSON: `{"command": "status", "args": {}}`, its `
 | `unsupported` | The server has no such request, or the request's `contract` is newer than the server's. Nothing was done. |
 | `malformed` | The request is not one: a plugin action run on a group or on a kind of row it isn't offered for, its arguments don't have the expected types, a setting's value is of the wrong type or one the Settings dialog refuses, or it names a `view` and takes none (`` `stats` takes no view ``). |
 | `stale-boot` | The request's `boot` is not this server's: it restarted since, and the ids you hold may name other panes now. Nothing was done. |
-| `not-found` | A plugin that isn't on or an action it doesn't have, no group, project, workspace, tab, pane, view, surface or changes stream has that id, a file has no change or a hunk no gap, `changes-mode` names a stream another connection opened, a branch doesn't exist, no setting or connection has that key, or the tab has no divider at that path. A view is gone once the connection that opened it closes. |
+| `not-found` | A plugin that isn't on or an action it doesn't have, no group, project, workspace, tab, pane, view, surface or changes stream has that id, a file has no change or a hunk no gap, `changes-mode` names a stream another connection opened, a branch doesn't exist, no setting or connection has that key, the tab has no divider at that path, or the URL given to `clone` is not a git repository. A view is gone once the connection that opened it closes. |
 | `unknown-field` | A field this server doesn't know, named by its path, such as `args.bogus`. Nothing was done. |
 | `unavailable` | The request is listed in `operations` with `available: false`, with the `reason` as its message. A development build turns off `update-check` and `update-install`; a release turns off none. |
-| `busy` | The pane's program isn't reading its input: 16 MiB are waiting for it. Only `input` answers this; `send` and `keys` keep answering `failed`. Nothing was sent. |
-| `conflict` | The request doesn't fit the current state: a plugin action listed at another `revision` of the plugins, the pane's terminal has another size, a cell is outside it, the program scrolls itself, nothing is selected to copy, or, for `update-install`, no release found or a cornercase that can't replace itself, a workspace for `changes` or `changes-merge-check` isn't in a git repository, a `with` of `changes-merge-check` in another project or in the same folder, a connection already follows changes, a file changed since the digest `changes-discard` or `changes-stage` was given, or, for `config`, a token set by an environment variable, a project folder that isn't a repository or a `config.json` that cannot be read; or a row moved before one of another workspace or project, a pane moved to another tab, or where its tab has no room; or an issue of a tracker that is not connected, a place to choose for an issue that isn't tied to a repository, or tracker settings that changed during the lookup. Read the latest state and try again. Nothing was done. |
+| `busy` | The pane's program isn't reading its input: 16 MiB are waiting for it. Only `input` answers this; `send` and `keys` keep answering `failed`. Nothing was sent. For `clone`, a clone into that folder, or into one inside or around it, is already running. |
+| `conflict` | The request doesn't fit the current state: a plugin action listed at another `revision` of the plugins, the pane's terminal has another size, a cell is outside it, the program scrolls itself, nothing is selected to copy, or, for `update-install`, no release found or a cornercase that can't replace itself, a workspace for `changes` or `changes-merge-check` isn't in a git repository, a `with` of `changes-merge-check` in another project or in the same folder, a connection already follows changes, a file changed since the digest `changes-discard` or `changes-stage` was given, or, for `config`, a token set by an environment variable, a project folder that isn't a repository or a `config.json` that cannot be read; or a row moved before one of another workspace or project, a pane moved to another tab, or where its tab has no room; or an issue of a tracker that is not connected, a place to choose for an issue that isn't tied to a repository, or tracker settings that changed during the lookup; or, for `clone`, a folder that exists and isn't empty. Read the latest state and try again. Nothing was done. |
 | `failed` | Anything else. |
 
 The `message` is the text the command would print. Text that is not JSON at all gets the plain form, `{"error": "…"}`, since the server can't tell what the request asked for. Without `contract` or `boot`, a field the server doesn't know is ignored, as it always was; with them it is refused, so a newer option never passes for done on an older server. Either one set to `null` counts as not sent. A `contract` newer than the server's is refused with `unsupported`, so a client written for later rules learns it at once instead of being read under older ones. The `cornercase` commands themselves send neither, so what they print doesn't change.

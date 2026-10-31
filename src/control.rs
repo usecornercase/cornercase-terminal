@@ -10,6 +10,7 @@ pub(crate) mod accounts;
 mod app_state;
 pub(crate) mod arrange;
 pub(crate) mod changes;
+pub(crate) mod clone;
 pub(crate) mod closed_agents;
 pub(crate) mod config;
 pub(crate) mod contract;
@@ -51,6 +52,7 @@ pub(crate) use changes::{
     Changes, ChangesBase, ChangesCount, ChangesDiscard, ChangesFile, ChangesGap, ChangesMergeCheck, ChangesMode,
     ChangesStage, ChangesViewed,
 };
+pub(crate) use clone::{CloneRepository, Cloned};
 pub(crate) use closed_agents::{AgentsClose, AgentsForget, AgentsReopen};
 pub(crate) use config::{ConfigExport, ConfigImport, ConfigInfo, Configure};
 pub(crate) use contract::Contract;
@@ -239,6 +241,7 @@ pub(crate) enum Command {
     FreeBuilds(FreeBuilds),
     Worktrees(ListWorktrees),
     Machines(Machines),
+    Clone(CloneRepository),
 }
 
 impl Command {
@@ -420,6 +423,7 @@ impl Command {
             Self::FreeBuilds(_) => 109,
             Self::Worktrees(_) => 112,
             Self::Machines(_) => 113,
+            Self::Clone(_) => 114,
             Self::Tour(_) => 95,
             Self::PluginList(_) => 68,
             Self::PluginActions(_) => 69,
@@ -431,7 +435,7 @@ impl Command {
         })
     }
 
-    pub(crate) const NAMES: [&str; 114] = [
+    pub(crate) const NAMES: [&str; 115] = [
         "status",
         "open",
         "new-workspace",
@@ -546,6 +550,7 @@ impl Command {
         "stop-process",
         "worktrees",
         "machines",
+        "clone",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {
