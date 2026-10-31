@@ -27,6 +27,7 @@ mod folder_name {
     #[case::credentials_without_a_path("https://user:secret@example.com", "example.com")]
     #[case::credentials_with_a_hash("https://user:ab#secret@example.com/acme/shop.git", "shop")]
     #[case::credentials_with_a_question_mark("https://user:ab?secret@example.com/", "example.com")]
+    #[case::query_with_a_slash_without_a_path("https://example.com?token=ab/cd", "example.com")]
     fn is_the_repositorys_last_part(#[case] url: &str, #[case] name: &str) {
         assert_eq!(folder_name(url).as_deref(), Ok(name));
     }
@@ -142,6 +143,10 @@ mod failure {
              Couldn't connect to server"
                 .into()
         )
+    )]
+    #[case::query_with_a_slash_without_a_path(
+        "fatal: repository 'https://example.com?token=ab/cd/' not found\n",
+        Failure::NotRepository("repository 'https://example.com' not found".into())
     )]
     #[case::fragment(
         "fatal: unable to access 'https://example.com/shop.git#secret/': Could not resolve host: example.com\n",

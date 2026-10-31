@@ -87,11 +87,9 @@ fn naming_part(url: &str) -> String {
 }
 
 fn bare(url: &str) -> String {
-    let (authority, path) = url.split_at(url.find('/').unwrap_or(url.len()));
-    let host = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
-    let host = host.split(['?', '#']).next().unwrap_or(host);
-    let path = path.split(['?', '#']).next().unwrap_or(path);
-    format!("{host}{path}")
+    let before_path = &url[..url.find('/').unwrap_or(url.len())];
+    let rest = &url[before_path.rfind('@').map_or(0, |at| at + 1)..];
+    rest.split(['?', '#']).next().unwrap_or(rest).to_string()
 }
 
 fn folder_name(url: &str) -> Result<String, Failure> {
