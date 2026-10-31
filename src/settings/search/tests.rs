@@ -128,6 +128,13 @@ mod hidden_rows {
     }
 
     #[test]
+    fn match_what_they_show_and_not_the_note_they_hide() {
+        let s = paired();
+        let found = |query: &str| s.search(query).iter().any(|hit| hit.label == "closed workspaces");
+        assert_eq!((found("once forum"), found("archive")), (true, false));
+    }
+
+    #[test]
     fn stop_being_hidden_once_their_row_shows() {
         let mut s = paired();
         s.config.discord_forum = true;

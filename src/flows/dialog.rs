@@ -68,6 +68,13 @@ pub(crate) enum Action {
     Fetch(registry::Source),
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum Erase {
+    #[default]
+    Asks,
+    Waits,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Then {
     List,
@@ -159,6 +166,7 @@ pub(crate) struct Dialog {
     pub(crate) flows: Vec<Saved>,
     pub(crate) hidden: Vec<Flow>,
     pub(crate) in_settings: bool,
+    pub(crate) erase: Erase,
     pub(crate) show_hidden: bool,
     pub(crate) broken: Vec<(PathBuf, String)>,
     pub(crate) cursor: usize,
@@ -182,6 +190,7 @@ impl Dialog {
             flows: listing.flows,
             hidden: listing.hidden,
             in_settings: false,
+            erase: Erase::default(),
             show_hidden: false,
             broken: listing.broken,
             builtins: listing.builtins,

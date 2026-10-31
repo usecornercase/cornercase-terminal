@@ -28,7 +28,7 @@ impl Finder {
         self.selected.min(hits.saturating_sub(1))
     }
 
-    pub(super) fn just_typed(&self) -> bool {
+    pub(crate) fn just_typed(&self) -> bool {
         self.typed
     }
 
@@ -171,11 +171,8 @@ impl Settings {
         let reason = format!("shows once {}", condition(row));
         let notice = format!("{} {reason}", self.row_text(row).label);
         let goal = Goal::Parent { row: row.clone(), landing: landing.unwrap_or(Row::Remote), notice };
-        let mut candidate = self.hit_of(row, goal);
-        candidate.hit.value = String::new();
-        candidate.hit.note = reason;
-        candidate.hit.dangerous = false;
-        candidate
+        let hit = Hit { value: String::new(), note: reason.clone(), dangerous: false, ..self.hit_of(row, goal).hit };
+        Candidate::new(hit, "", &reason)
     }
 
     fn candidates(&self) -> Vec<Candidate> {

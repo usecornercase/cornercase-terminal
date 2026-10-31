@@ -9,6 +9,7 @@ use super::overlay::Overlay;
 use super::text_fields::FieldArea;
 use crate::config::{self, Config};
 use crate::editor::Editor;
+use crate::flows::dialog::Erase;
 use crate::issues::Source;
 use crate::log::{self, Level};
 use crate::messenger::Via;
@@ -63,6 +64,13 @@ impl App {
         }
         let settings = self.settings_model(self.settings_page);
         self.overlay = Some(Overlay::Settings(Box::new(settings)));
+    }
+
+    fn back_on_flows(&mut self, erase: Erase) {
+        self.open_flows_tab();
+        if let Some(Overlay::Flows { dialog, .. }) = &mut self.overlay {
+            dialog.erase = erase;
+        }
     }
 
     pub(super) fn search_from_flows(&mut self, typed: char) {
@@ -142,10 +150,10 @@ impl App {
     }
 
     fn settings_handled(&mut self, action: settings::Action, area: Rect) {
-        let searching = matches!(&self.overlay, Some(Overlay::Settings(s)) if s.find.searching());
+        let Some(Overlay::Settings(s)) = &self.overlay else { return self.settings_act(action, area) };
+        let (searching, typed) = (s.find.searching(), s.find.just_typed());
         if self.settings_page == Page::Flows && !searching {
-            self.open_flows_tab();
-            return;
+            return self.back_on_flows(if typed { Erase::Waits } else { Erase::Asks });
         }
         self.settings_act(action, area);
     }

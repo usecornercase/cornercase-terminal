@@ -445,7 +445,7 @@ impl App {
     }
 
     fn overlay_paste(&mut self, text: &str, area: Rect) {
-        if text.contains('\n') && matches!(&self.overlay, Some(Overlay::Settings(s)) if s.idle()) {
+        if text.contains(['\n', '\r']) && matches!(&self.overlay, Some(Overlay::Settings(s)) if s.idle()) {
             self.share_pasted(text, area);
             return;
         }

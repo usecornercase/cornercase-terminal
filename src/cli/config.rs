@@ -66,9 +66,13 @@ fn search(text: &str, as_json: bool) -> Result<()> {
 pub(super) fn render_found(found: &SettingsFound) -> String {
     let mut out = String::from("place\tkey\tvalue\tnote\n");
     for result in &found.results {
-        let cell = |text: &str| if text.is_empty() { "-".to_string() } else { text.replace(['\t', '\n'], " ") };
+        let cell = |text: &str| match text {
+            "" => "-".to_string(),
+            text => text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect(),
+        };
         let key = result.key.as_deref().unwrap_or_default();
-        let _ = writeln!(out, "{}\t{}\t{}\t{}", result.title, cell(key), cell(&result.shown), cell(&result.note));
+        let _ =
+            writeln!(out, "{}\t{}\t{}\t{}", cell(&result.title), cell(key), cell(&result.shown), cell(&result.note));
     }
     out
 }

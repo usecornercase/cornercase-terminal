@@ -1426,9 +1426,10 @@ export class Painter {
     this.dialogButtons(rect(c.x, bottom(c) - 1, c.w, 1), 'open', () => app.pickerOpen(), () => app.closeOverlay());
   }
 
-  private tabs(row: Rect, names: string[], active: number, onClick: (i: number) => void): void {
+  private tabs(row: Rect, names: string[], active: number, onClick: (i: number) => void, dimmed: boolean[] = []): void {
     tabsIn(row, names).forEach((r, i) => {
-      const style: Style = i === active ? { fg: 6, bg: this.surface, add: BOLD } : this.hovered(r) ? CYAN : { fg: 7 };
+      const lit: Style = i === active ? { fg: 6, bg: this.surface, add: BOLD } : this.hovered(r) ? CYAN : { fg: 7 };
+      const style: Style = dimmed[i] ? { ...lit, fg: 8, add: DIM } : lit;
       this.span(r.x, r.y, ` ${names[i]} `, style, r.w);
       this.region({ r, click: () => onClick(i), cursor: 'pointer' });
     });
@@ -1448,7 +1449,8 @@ export class Painter {
     const query = o.query ?? '';
     const hits = app.settingsHits(query);
     const names = query ? PAGE_NAMES.map((name, page) => `${name} ${hits.filter((hit) => hit.page === page).length}`) : PAGE_NAMES;
-    this.tabs(tabsRow, names, o.page, (i) => app.settingsPage(i));
+    const empty = PAGE_NAMES.map((_, page) => !!query && !hits.some((hit) => hit.page === page));
+    this.tabs(tabsRow, names, o.page, (i) => app.settingsPage(i), empty);
     const findRow = rect(c.x, c.y + 1, c.w, 1);
     const x = this.span(findRow.x, findRow.y, ' ⌕ ', { fg: 6 });
     this.span(x, findRow.y, query || 'search settings', query ? { add: BOLD } : { fg: 8 }, right(findRow) - x);
@@ -1470,9 +1472,12 @@ export class Painter {
       });
     } else if (query) {
       if (!hits.length) this.span(body.x, body.y, ' nothing matches', DARK);
-      hits.slice(0, body.h).forEach((hit, i) => {
-        const rr = rect(body.x, body.y + i, body.w, 1);
-        const selected = Math.min(o.found ?? 0, hits.length - 1) === i;
+      const chosen = Math.min(o.found ?? 0, hits.length - 1);
+      const scroll = Math.max(0, chosen + 1 - body.h);
+      hits.slice(scroll, scroll + body.h).forEach((hit, n) => {
+        const i = scroll + n;
+        const rr = rect(body.x, body.y + n, body.w, 1);
+        const selected = chosen === i;
         const bg: Style = selected ? { bg: this.surface } : {};
         this.g.fill(rr, bg);
         let at = this.span(rr.x, rr.y, selected ? '▌ ' : '  ', { ...bg, fg: 6 });

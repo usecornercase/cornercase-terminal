@@ -145,6 +145,19 @@ mod searching {
     }
 
     #[test]
+    fn a_control_character_never_breaks_a_row() {
+        let result = FoundSetting {
+            title: "a\rb".into(),
+            key: Some("k\u{1b}".into()),
+            shown: "c\td".into(),
+            note: "e\nf".into(),
+            ..FoundSetting::default()
+        };
+        let found = SettingsFound { results: vec![result] };
+        assert_eq!(render_found(&found), "place\tkey\tvalue\tnote\na b\tk \tc d\te f\n");
+    }
+
+    #[test]
     fn no_result_prints_the_header_alone() {
         assert_eq!(render_found(&SettingsFound::default()), "place\tkey\tvalue\tnote\n");
     }

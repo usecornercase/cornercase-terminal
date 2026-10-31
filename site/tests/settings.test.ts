@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { App } from '../src/lib/demo/app';
 import { inputKey } from '../src/lib/demo/client';
 import { world } from '../src/lib/demo/world';
+import { DIM } from '../src/lib/term/grid';
 
 const key = (k: string) => ({ key: k, metaKey: false, isComposing: false, ctrlKey: false, altKey: false, shiftKey: false });
 
@@ -208,5 +209,38 @@ test('esc clears the settings search first, then closes', () => {
   assert.equal(app.overlay?.kind, 'settings');
   inputKey(app, key('Escape'));
   assert.equal(app.overlay, null);
+  app.destroy();
+});
+
+test('the settings search keeps the selected result on screen and a click takes the one drawn', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 16); world(app, { scripted: true });
+  app.openSettings();
+  for (const ch of 'a') inputKey(app, key(ch));
+  const hits = app.settingsHits('a');
+  assert.ok(hits.length > 12, `${hits.length} results`);
+  for (let i = 0; i < hits.length; i++) inputKey(app, key('ArrowDown'));
+  app.render();
+  const last = hits[hits.length - 1];
+  const at = app.textAt(last.title.slice(0, 40));
+  assert.ok(at, last.title);
+  app.pointerDown(at.x, at.y, 0); app.pointerUp();
+  const o = app.overlay;
+  assert.ok(o?.kind === 'settings');
+  assert.equal(o.page, last.page);
+  app.destroy();
+});
+
+test('the settings search dims a tab with no results and leaves single flows out', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openSettings();
+  assert.deepEqual(app.settingsHits('flows').map((hit) => hit.title).filter((title) => title.startsWith('Flows')), ['Flows']);
+  assert.equal(app.settingsHits('arena').length, 0);
+  for (const ch of 'sidebar') inputKey(app, key(ch));
+  const { grid } = app.render();
+  const at = app.textAt('Worktrees 0');
+  const shown = app.textAt(`UI ${app.settingsHits('sidebar').filter((hit) => hit.page === 5).length}`);
+  assert.ok(at && shown);
+  const dim = (pos: { x: number; y: number }) => ((grid.at(pos.x, pos.y)?.attr ?? 0) & DIM) !== 0;
+  assert.deepEqual([dim(at), dim(shown)], [true, false]);
   app.destroy();
 });
