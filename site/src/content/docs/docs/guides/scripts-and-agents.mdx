@@ -407,10 +407,10 @@ printf '%s\n' '{"args": ["status", "--json"]}' | cornercase requests --follow -
 ```
 
 - A line is one JSON object: `args` is the command line after `cornercase`, read by the same parser, so every flag works and each command's `--help` stays the contract; `stdin` is what the command reads from `-` (text; for bytes use a file argument). Other keys are refused, so a typo never runs `send -` with no text. Blank lines are skipped.
-- Each line gets one answer line, in order: `status` (the exit status the command would have had: 0, 1, 2 or 3), `json` (what it printed with `--json`), `text` (what else it printed, such as the id `new-tab` prints), `stderr` (its warnings) and `error` (its message). New fields may be added; read what you know. A line that isn't JSON, is refused or fails does not stop the next ones.
+- Each line gets one answer line, in order: `status` (the exit status the command would have had: 0, 1, 2 or 3), `json` (what it printed with `--json`), `text` (what else it printed, such as the id `new-tab` prints), `stderr` (its warnings) and `error` (its message). Only `status` is always there: empty `json`, `text`, `stderr` and `error` are left out, and a status 1 or 3 may have no `error` (its reason is in `stderr` or in its `json`). New fields may be added; read what you know. A line that isn't JSON, is refused or fails does not stop the next ones.
 - It runs the commands that send requests. The streams (`events`, `surface`, `view`, `changes list`, every `--follow`), `update`, `restart`, `kill-server` and `logs` need a process of their own and are refused with status 2, as are `start-server` (it needs no connection, and `requests` needs a running server: run it first), `--remote` on a line and the commands that act on this machine (`remote`, `skill`, `plugin link` and so on).
 - Lines run one at a time, each after the answer to the one before. A line that waits (`wait`, `send --wait`, `start --wait`) holds the lines after it; to put a key before a focus, send both through `requests`. Lines aren't ordered with other connections.
-- It ends when standard input ends, after the last answer: with 0 if every line had status 0, with 3 if some didn't, with 1 once the server stops or the connection drops (it never reconnects, because ids change with a restart: start it again and look at `status`), and with 0 when what reads its answers is gone, even while a line waits.
+- It ends when standard input ends, after the last answer: with 0 if every line had status 0, with 3 if some didn't, with 1 once the server stops or the connection drops (it never reconnects, because ids change with a restart: start it again and look at `status`), and with 0 when what reads its answers is gone, even while a line waits. Between lines it waits for the next one without watching the server or the reader, so it notices that either is gone at the next line.
 
 #### A plugin's popup
 
@@ -1220,7 +1220,7 @@ The requests behind them are `plugin-list`, `plugin-actions` and `plugin-run`. `
 
 A command that follows something until it ends (`events`, `status --follow`, `status --app --follow`, `changes list --follow`, `files list --follow`, `files read --follow`, `flow runs --follow`, `flow messages --follow`, `surface` and `view`) also ends with 0, without a message, soon after whatever reads its output is gone: the program it prints into exited or closed its end, or the `ssh` running it on another machine was killed or lost its connection. A terminal that closes ends it like any program, and one printing into a file or `/dev/null` runs until it ends by itself.
 
-`input --follow` and `requests --follow` end when their standard input ends, once the last line is answered, or when what reads their answers is gone (`input --follow` with `--json`).
+`input --follow` and `requests --follow` end when their standard input ends, once the last line is answered, or when what reads their answers is gone (`input --follow` with `--json`); while they wait for the next line they notice neither that nor a stopped server, until that line comes.
 
 Some messages you may meet:
 

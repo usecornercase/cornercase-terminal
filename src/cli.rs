@@ -600,10 +600,14 @@ fn partial_unless(all_answered: bool) -> Result<bool> {
 
 fn print_json(value: &impl serde::Serialize) -> Result<()> {
     let text = serde_json::to_string_pretty(value).map_err(|e| Error::Control(e.to_string()))? + "\n";
-    if line::json(&text) {
+    print_json_text(&text)
+}
+
+fn print_json_text(text: &str) -> Result<()> {
+    if line::json(text) {
         return Ok(());
     }
-    print_out(&text)
+    print_out(text)
 }
 
 fn print_out(text: &str) -> Result<()> {

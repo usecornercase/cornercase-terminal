@@ -214,6 +214,21 @@ mod streams {
         })
     }
 
+    #[test]
+    fn plugin_status_json_lands_in_json_not_text() {
+        let (ours, theirs) = UnixStream::pair().expect("a socket pair");
+        let server = fake_server(theirs);
+        client::share_socket(ours);
+
+        let answer = answer_of(r#"{"args": ["plugin", "status", "--json"]}"#).expect("an answer");
+
+        client::unshare();
+        server.join().expect("the fake server");
+        assert_eq!(answer.status, 0, "{answer:?}");
+        assert!(answer.json.is_some(), "{answer:?}");
+        assert_eq!(answer.text, "");
+    }
+
     #[rstest]
     #[case::events(r#"{"args": ["events"]}"#)]
     #[case::surface(r#"{"args": ["surface", "--tab", "1", "--cols", "80", "--rows", "24"]}"#)]
