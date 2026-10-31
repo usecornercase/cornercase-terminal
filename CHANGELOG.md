@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.235
+
+- **Coming back to a window now repairs a garbled screen.** cornercase only sends the cells that changed, so when the terminal around it lost part of its screen, such as lines of a pane left as scattered letters or stale cells in the sidebar, they stayed that way until you resized the window. A window that regains focus is now drawn in full. The cause of the garbling is still being looked for, and terminals that don't report focus aren't helped.
+
 ## 0.12.234
 
 - **Keep one `cornercase` running for a program's commands.** `cornercase requests --follow -` reads one command per line of standard input as JSON (`{"args": ["focus", "--tab", "6"], "stdin": "…"}`), runs each in order through one connection and prints one JSON answer per line: its exit status, what it printed (`json` with `--json`, else `text`) and its error. A window that draws cornercase on another machine through `--remote` then pays one round trip per action instead of an `ssh` connection. Streams and `update`, `restart`, `kill-server` and `logs` are refused on their line, since they need a process of their own.
