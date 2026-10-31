@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.233
+
+- **Commands through `--remote` that first ask the server what it supports open one `ssh` connection instead of two.** That is every command with `--view`, which a program that draws cornercase sends to switch tabs, projects or agents, and options such as `focus --reveal`, `close --unlock`, `start --issue`, `--profile`, `--account` and `events --notices`. They asked on a connection of their own before sending the command on another, so switching tabs took about twice as long as scrolling. On your own machine they save a connection too.
+
 ## 0.12.232
 
 - **Machines are out again for now.** Settings › Machines, `cornercase machines` and the `machines` request, added in 0.12.228 to 0.12.231, are taken out until running work on another machine is ready, so they come back as one feature that does something. A `machines` list already in `config.json` is ignored, and the next change to the settings leaves it out of the file. Narrow windows cut off the last of Settings' tabs again, as before 0.12.231.
