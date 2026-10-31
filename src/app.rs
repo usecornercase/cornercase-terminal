@@ -1,6 +1,6 @@
 #[cfg(test)]
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 #[cfg(test)]
 use std::time::SystemTime;
@@ -105,8 +105,6 @@ mod jobs;
 mod launches;
 mod layout;
 mod links;
-mod machine_form;
-mod machines;
 mod menus;
 mod merge_check;
 mod merged_pull_requests;
@@ -200,13 +198,13 @@ pub(crate) struct App {
     seen: trace::Seen,
     images: images::Payloads,
     plugins: Plugins,
-    machines: machines::Machines,
 }
 
 impl App {
-    pub(crate) fn new(shell: String, theme: HostTheme, config_path: &Path, tx: Sender<AppEvent>) -> Self {
+    pub(crate) fn new(shell: String, theme: HostTheme, config_path: PathBuf, tx: Sender<AppEvent>) -> Self {
         let home = std::env::var_os("HOME").map(PathBuf::from);
         let (config, config_file) = config_file::ConfigFile::open(config_path);
+        let config_path = config_file.path();
         Self {
             screen: groups::Screen::default(),
             git: groups::Git::default(),
@@ -239,7 +237,6 @@ impl App {
             seen: trace::Seen::default(),
             images: images::Payloads::default(),
             plugins: Plugins::new(crate::plugins::Places::new(config_path, config_path)),
-            machines: machines::Machines::new(),
             config,
             config_file,
             home,
@@ -256,11 +253,6 @@ impl App {
             return None;
         }
         Some(self.update.restart_exe())
-    }
-
-    pub(crate) fn stop_background(&mut self) {
-        self.stop_plugins();
-        self.stop_machines();
     }
 
     pub(crate) fn take_start(&mut self) -> Option<(u64, (u16, u16))> {
@@ -433,7 +425,6 @@ impl App {
         self.offer_tour(now);
         self.watch_messengers(now);
         self.sync_remote();
-        self.sync_machines(now, clock);
         self.sync_messengers();
         self.pair_by_owner(now);
         self.set_up_forums(now);
@@ -615,7 +606,6 @@ impl App {
             AppEvent::Plugin(event) => self.plugin_answered(event),
             AppEvent::Login(kind, name, login) => self.login_checked(kind, name, login),
             AppEvent::Restarted(restarted) => self.restarted(*restarted),
-            AppEvent::Machine(event) => self.machine_event(event),
         }
         Ok(())
     }

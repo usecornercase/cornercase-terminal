@@ -93,10 +93,6 @@ pub(crate) fn recv<T: DeserializeOwned>(r: &mut impl Read) -> io::Result<Option<
     postcard::from_bytes(&body).map(Some).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
-pub(crate) fn undecoded(error: &io::Error) -> bool {
-    matches!(error.get_ref(), Some(inner) if inner.is::<postcard::Error>())
-}
-
 pub(crate) fn try_lock(socket: &Path) -> io::Result<Option<File>> {
     let file = OpenOptions::new().create(true).write(true).truncate(false).open(paths::lock(socket))?;
     match flock(&file, FlockOperation::NonBlockingLockExclusive) {

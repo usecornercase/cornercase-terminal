@@ -49,14 +49,15 @@ impl App {
             Some(Overlay::Issues(_)) => return self.issues_key(key, area),
             Some(Overlay::Settings(_)) => self.settings_key(key, area),
             Some(Overlay::ShareSettings(_)) => self.share_settings_key(key, area),
-            Some(Overlay::Machine(_)) => self.machine_form_key(key, area),
             Some(Overlay::Flows { .. }) => self.flows_key(key, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_key(key, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_key(key, area),
             Some(Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_)) => self.listing_key(key, area),
             Some(Overlay::CloseAgent(_)) => self.close_agent_key(key, area),
             Some(Overlay::CloseAgents(_)) => self.close_agents_key(key, area),
-            Some(Overlay::Usage) => self.usage_key(key),
+            Some(Overlay::Usage) => {
+                self.usage_key(key);
+            }
             Some(Overlay::Search(_)) => self.search_key(key, area),
             None if self.tour_typing() => self.tour_key(key, area),
             None if self.todo_typing() => self.todo_key(key, area),
@@ -465,7 +466,6 @@ impl App {
             Some(Overlay::Issues(b)) => b.paste(text),
             Some(Overlay::Settings(s)) => s.paste(text),
             Some(Overlay::ShareSettings(_)) => self.share_settings_paste(text, area),
-            Some(Overlay::Machine(_)) => self.machine_form_paste(text, area),
             Some(Overlay::Flows { .. }) => self.flows_paste(text, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_paste(text, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_paste(text, area),

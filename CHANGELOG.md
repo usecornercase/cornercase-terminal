@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.232
+
+- **Machines are out again for now.** Settings › Machines, `cornercase machines` and the `machines` request, added in 0.12.228 to 0.12.231, are taken out until running work on another machine is ready, so they come back as one feature that does something. A `machines` list already in `config.json` is ignored, and the next change to the settings leaves it out of the file. Narrow windows cut off the last of Settings' tabs again, as before 0.12.231.
+
 ## 0.12.231
 
 - **List the machines you work on in Settings › Machines.** It lists this computer and the machines you add with **+ add machine**: a name, an icon, an ssh destination (`user@host` or a host from `~/.ssh/config`) and a folder for clones. Each row says whether the machine is **linked** (with its version), **unreachable** (for how long, and why on the line at the bottom) or **older**, and an older one has **update…**, which installs your version there without restarting anything.

@@ -94,9 +94,8 @@ impl Settings {
             Page::Remote => self.remote_row(row),
             Page::Plugins => self.plugin_row(row),
             Page::Accounts => self.account_row(row),
-            Page::Machines => self.machine_row(row),
         };
-        RowText { label, value, note, dangerous, mark: self.machine_mark(row), tail: self.machine_tail(row) }
+        RowText { label, value, note, dangerous }
     }
 
     fn agents_row(&self, row: &Row) -> (String, String, String, bool) {
@@ -354,8 +353,6 @@ impl Settings {
                 "enter saves · esc cancels".into()
             } else if self.pick.is_some() {
                 "enter picks · type to filter · esc goes back".into()
-            } else if self.page == Page::Machines {
-                self.machine_hint()
             } else if self.page == Page::Accounts {
                 "enter makes an account the default · backspace removes it · each pane keeps its own".into()
             } else if self.page == Page::Plugins {

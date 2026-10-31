@@ -20,7 +20,7 @@ mod ssh {
 
     #[test]
     fn runs_the_proxy_after_the_destination_without_a_terminal() {
-        let args = devbox().ssh_args(&[], Run::Plain, &["proxy"]);
+        let args = devbox().ssh_args(false, Run::Plain, &["proxy"]);
 
         assert_eq!(args[0], "-T");
         let at = args.iter().position(|a| a == "--").expect("options end before the destination");
@@ -31,18 +31,18 @@ mod ssh {
 
     #[test]
     fn never_prompts_when_it_reconnects() {
-        assert!(!devbox().ssh_args(&[], Run::Plain, &["proxy"]).contains(&"BatchMode=yes".to_string()));
-        assert!(devbox().ssh_args(&BATCH, Run::Plain, &["proxy"]).contains(&"BatchMode=yes".to_string()));
+        assert!(!devbox().ssh_args(false, Run::Plain, &["proxy"]).contains(&"BatchMode=yes".to_string()));
+        assert!(devbox().ssh_args(true, Run::Plain, &["proxy"]).contains(&"BatchMode=yes".to_string()));
     }
 
     #[test]
     fn notices_a_dead_connection() {
-        assert!(devbox().ssh_args(&[], Run::Plain, &["proxy"]).contains(&"ServerAliveInterval=5".to_string()));
+        assert!(devbox().ssh_args(false, Run::Plain, &["proxy"]).contains(&"ServerAliveInterval=5".to_string()));
     }
 
     #[test]
     fn a_command_has_no_terminal_and_never_asks_for_a_password() {
-        let args = devbox().ssh_args(&BATCH, Run::Plain, &["logs", "--path"]);
+        let args = devbox().ssh_args(true, Run::Plain, &["logs", "--path"]);
 
         assert_eq!(args[0], "-T");
         assert!(args.contains(&"BatchMode=yes".to_string()));
@@ -52,7 +52,7 @@ mod ssh {
 
     #[test]
     fn a_terminal_is_asked_for() {
-        assert_eq!(devbox().ssh_args(&[], Run::Terminal, &["update"])[0], "-t");
+        assert_eq!(devbox().ssh_args(false, Run::Terminal, &["update"])[0], "-t");
     }
 
     #[test]
@@ -70,14 +70,14 @@ mod ssh {
 
     #[test]
     fn the_proxy_is_never_tied() {
-        let args = devbox().ssh_args(&[], Run::Plain, &["proxy"]);
+        let args = devbox().ssh_args(false, Run::Plain, &["proxy"]);
 
         assert!(!args.iter().any(|arg| arg.contains("CORNERCASE_TIED")));
     }
 
     #[test]
     fn a_tied_command_has_no_terminal_and_never_asks_for_a_password() {
-        let args = devbox().ssh_args(&BATCH, Run::Tied, &["restart"]);
+        let args = devbox().ssh_args(true, Run::Tied, &["restart"]);
 
         assert_eq!(args[0], "-T");
         assert!(args.contains(&"BatchMode=yes".to_string()));
@@ -114,114 +114,6 @@ mod ssh {
             .expect("run sh");
 
         assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "/home/me/bin/cornercase proxy");
-    }
-}
-
-mod one_way {
-    use super::*;
-
-    fn options(usage: Use) -> Vec<String> {
-        let args = devbox().ssh_args(usage.options(), Run::Plain, &["proxy"]);
-        let at = args.iter().position(|a| a == "--").expect("options end before the destination");
-        assert_eq!(args[at + 1], "me@devbox");
-        args[..at].to_vec()
-    }
-
-    fn with(extra: &[&str]) -> Vec<String> {
-        ["-T"].iter().chain(&ALIVE).chain(extra).map(ToString::to_string).collect()
-    }
-
-    #[test]
-    fn a_link_never_prompts_and_forwards_nothing() {
-        let expected = with(&["-o", "BatchMode=yes", "-a", "-x", "-o", "ClearAllForwardings=yes"]);
-        assert_eq!(options(Use::Link), expected);
-    }
-
-    #[rstest]
-    #[case::a_window(Use::Window { again: false }, &[][..])]
-    #[case::a_window_reconnecting(Use::Window { again: true }, &["-o", "BatchMode=yes"][..])]
-    #[case::a_command(Use::Command, &["-o", "BatchMode=yes"][..])]
-    fn a_window_and_a_command_keep_what_they_had(#[case] usage: Use, #[case] extra: &[&str]) {
-        assert_eq!(options(usage), with(extra));
-    }
-
-    #[test]
-    fn a_link_takes_a_newer_release_and_refuses_an_older_one() {
-        let check = |release: &str| {
-            devbox().check(&Banner { protocol: protocol::VERSION + 1, release: release.into() }, Use::Link)
-        };
-        assert!(check(CURRENT).is_ok() && check("999.0.0").is_ok());
-        assert!(matches!(check("0.0.1"), Err(Error::RemoteBehind(_))));
-    }
-}
-
-mod machine_update {
-    use super::*;
-
-    fn run(script: &str) -> Result<()> {
-        let mut sh = Command::new("/bin/sh");
-        sh.args(["-c", script]);
-        devbox().installed(sh)
-    }
-
-    #[test]
-    fn runs_update_like_a_link_without_a_terminal_a_prompt_or_yes() {
-        let args = devbox().update_args();
-        let at = args.iter().position(|a| a == "--").expect("options end before the destination");
-        let options: Vec<String> = ["-T"].iter().chain(&ALIVE).chain(&LINK).map(ToString::to_string).collect();
-        assert_eq!(args[..at], options);
-        assert_eq!(args[at + 1], "me@devbox");
-        assert!(args[at + 2].ends_with("exec cornercase update'"), "{}", args[at + 2]);
-        assert_eq!(args.len(), at + 3);
-    }
-
-    #[test]
-    fn that_ends_well_is_done() {
-        assert!(run("echo updated cornercase; exit 0").is_ok());
-    }
-
-    #[test]
-    fn that_cannot_install_says_the_last_line_it_printed() {
-        let error = run("echo 'cornercase 9.9.9 is out. Update it with:'; echo 'brew upgrade cornercase'; exit 1")
-            .expect_err("not installed");
-        assert_eq!(reason(&error), "brew upgrade cornercase");
-    }
-
-    #[test]
-    fn that_fails_says_what_cornercase_said_there() {
-        let error = run("echo 'Error: no release for this machine' >&2; echo more >&2; exit 1").expect_err("failed");
-        assert_eq!(reason(&error), "no release for this machine");
-    }
-
-    #[test]
-    fn never_waits_for_an_answer() {
-        let error = run("read answer; echo \"read $?\"; exit 1").expect_err("no answer");
-        assert_eq!(reason(&error), "read 1");
-    }
-
-    #[test]
-    fn without_cornercase_there_is_a_missing_cornercase() {
-        assert!(matches!(run("exit 127"), Err(Error::RemoteMissing { .. })));
-    }
-}
-
-mod not_found {
-    use super::*;
-
-    #[test]
-    fn names_the_machine_and_no_option() {
-        assert_eq!(not_found("vps"), "cornercase was not found on vps: install it there");
-    }
-}
-
-mod retrying {
-    use super::*;
-
-    #[test]
-    fn waits_longer_after_each_failure_up_to_a_limit() {
-        let waits: Vec<u64> = (1..=7).map(|n| backoff(n).as_secs()).collect();
-
-        assert_eq!(waits, [1, 2, 4, 8, 15, 15, 15]);
     }
 }
 
@@ -565,54 +457,5 @@ mod proxy {
 
         assert!(relayed.join().expect("the relay ends"));
         assert_eq!(got.lock().len(), frame.len());
-    }
-}
-
-mod a_killer {
-    use std::os::unix::process::ExitStatusExt;
-
-    use super::*;
-
-    fn sleeping() -> Child {
-        Command::new("/bin/sleep").arg("60").spawn().expect("run sleep")
-    }
-
-    fn ended_by(mut child: Child) -> Option<i32> {
-        let _ = kill_process(Pid::from_child(&child), Signal::TERM);
-        child.wait().expect("sleep ends").signal()
-    }
-
-    #[test]
-    fn ends_the_ssh_it_holds() {
-        let killer = Killer::default();
-        let child = sleeping();
-
-        killer.arm(&child);
-        killer.kill();
-
-        assert_eq!(ended_by(child), Some(Signal::KILL.as_raw()));
-    }
-
-    #[test]
-    fn spares_the_ssh_it_let_go() {
-        let killer = Killer::default();
-        let child = sleeping();
-
-        killer.arm(&child);
-        killer.disarm();
-        killer.kill();
-
-        assert_eq!(ended_by(child), Some(Signal::TERM.as_raw()));
-    }
-
-    #[test]
-    fn stopped_first_ends_the_ssh_as_soon_as_it_holds_it() {
-        let killer = Killer::default();
-        let child = sleeping();
-
-        killer.kill();
-        killer.arm(&child);
-
-        assert_eq!(ended_by(child), Some(Signal::KILL.as_raw()));
     }
 }

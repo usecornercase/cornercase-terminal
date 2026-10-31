@@ -10,26 +10,10 @@ fn row(section: &'static str, label: &str, value: &str, note: &str) -> SettingsR
         muted: false,
         removable: false,
         movable: false,
-        mark: None,
-        tail: String::new(),
     }
 }
 
 const TABS: [&str; 4] = ["Worktrees", "Agents", "Issues", "TUI"];
-
-#[rstest]
-#[case::no_room(0)]
-#[case::one_cell(1)]
-#[case::too_little_for_the_tail(4)]
-#[case::room_for_both(40)]
-fn a_value_and_its_tail_never_pass_their_room(#[case] room: usize) {
-    let machine =
-        SettingsRow { tail: "~/项目/客户端".into(), ..row("Machines", "vps", "miguel@vps.example.com", "linked") };
-
-    let shown = dialog::settings::value_text(&machine, room);
-
-    assert!(crate::text::cells(&shown) <= room, "{shown:?} in {room}");
-}
 
 fn source(label: &str, note: &str) -> SettingsRow {
     SettingsRow { movable: true, ..row("Sources shown", label, "", note) }
