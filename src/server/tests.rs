@@ -118,7 +118,7 @@ pub(super) mod a_bug {
         frames: Receiver<ServerMessage>,
         screen: vt100::Parser,
         pub(super) raw: Vec<u8>,
-        clears: usize,
+        pub(super) clears: usize,
     }
 
     pub(in crate::server) fn hello(theme: HostTheme) -> Hello {
@@ -856,6 +856,18 @@ mod drawing {
 
         assert!(!attached.server.app.shows(pane));
         attached.shows_frame(&clipboard::osc52("hello"));
+    }
+
+    #[test]
+    fn a_window_coming_back_into_focus_is_drawn_whole() {
+        Attached::new().serve(Server::step, |client| {
+            client.shows("More");
+            let before = client.clears;
+            client.input(Event::FocusLost);
+            client.input(Event::FocusGained);
+            client.until("the screen is cleared", |client| client.clears > before);
+            client.shows("More");
+        });
     }
 
     #[test]
