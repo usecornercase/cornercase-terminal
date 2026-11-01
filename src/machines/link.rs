@@ -134,7 +134,7 @@ pub(crate) trait Ends: Send + Sync {
     fn why(&self) -> Option<String>;
 }
 
-pub(crate) trait Connect: Send + 'static {
+pub(crate) trait Connect: Send + Sync + 'static {
     fn connect(&self, killer: &Killer) -> Result<Line>;
 }
 
@@ -222,8 +222,14 @@ impl Servers {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Envelope {
+    pub(crate) view: Option<u64>,
+    pub(crate) boot: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Asked {
+pub(super) enum Asked {
     Stop,
     Poke,
     Nothing,
@@ -237,19 +243,19 @@ struct Wants {
 }
 
 #[derive(Default)]
-struct Control {
+pub(super) struct Control {
     wants: Mutex<Wants>,
     wake: Condvar,
     killer: Killer,
 }
 
 impl Control {
-    fn stop(&self) {
+    pub(super) fn stop(&self) {
         self.ask(|wants| wants.stop = true);
         self.killer.kill();
     }
 
-    fn poke(&self) {
+    pub(super) fn poke(&self) {
         self.ask(|wants| wants.poke = true);
     }
 
@@ -262,11 +268,15 @@ impl Control {
         self.wake.notify_all();
     }
 
-    fn stopped(&self) -> bool {
+    pub(super) fn killer(&self) -> &Killer {
+        &self.killer
+    }
+
+    pub(super) fn stopped(&self) -> bool {
         self.wants.lock().stop
     }
 
-    fn hold(&self, ends: &Arc<dyn Ends>) -> Asked {
+    pub(super) fn hold(&self, ends: &Arc<dyn Ends>) -> Asked {
         let mut wants = self.wants.lock();
         let asked = Self::asked(&mut wants);
         if asked == Asked::Nothing {
@@ -275,19 +285,19 @@ impl Control {
         asked
     }
 
-    fn drop_line(&self) {
+    pub(super) fn drop_line(&self) {
         if let Some(ends) = self.wants.lock().ends.take() {
             ends.cut();
         }
     }
 
-    fn release(&self) -> Asked {
+    pub(super) fn release(&self) -> Asked {
         let mut wants = self.wants.lock();
         wants.ends = None;
         Self::asked(&mut wants)
     }
 
-    fn nap(&self, wait: Duration) -> Asked {
+    pub(super) fn nap(&self, wait: Duration) -> Asked {
         let until = Instant::now() + wait;
         let mut wants = self.wants.lock();
         loop {
@@ -310,11 +320,11 @@ impl Control {
     }
 }
 
-trait Clock: Send + 'static {
+pub(super) trait Clock: Send + 'static {
     fn nap(&self, control: &Control, wait: Duration) -> Asked;
 }
 
-struct Wall;
+pub(super) struct Wall;
 
 impl Clock for Wall {
     fn nap(&self, control: &Control, wait: Duration) -> Asked {
@@ -467,7 +477,7 @@ impl<E: From<Report>> Running<E> {
     }
 
     fn watch(&self, line: &mut Line) -> Ended {
-        if let Err(ended) = ask(line, Command::Watch(Watch::default()), None, Ended::Dropped(None)) {
+        if let Err(ended) = ask(line, &Envelope::default(), Command::Watch(Watch::default()), Ended::Dropped(None)) {
             return ended;
         }
         loop {
@@ -515,22 +525,27 @@ pub(super) fn why(line: &Line, said: Option<&str>) -> String {
 }
 
 fn handshake(line: &mut Line) -> std::result::Result<Started, Ended> {
-    ask(line, Command::StartServer(StartServer::default()), None, Ended::Lost(None))?;
+    ask(line, &Envelope::default(), Command::StartServer(StartServer::default()), Ended::Lost(None))?;
     match listen(&mut line.reader) {
         Heard::Answer(text) => answered(&text).map_err(Ended::Refused),
         Heard::Ended(said) => Err(Ended::Lost(said)),
     }
 }
 
-pub(super) fn send_once(line: &mut Line, command: Command, boot: Option<String>) -> Heard {
-    if ask(line, command, boot, Ended::Lost(None)).is_err() {
+pub(super) fn send_once(line: &mut Line, envelope: &Envelope, command: Command) -> Heard {
+    if !send(line, envelope, command) {
         return Heard::Ended(None);
     }
     listen(&mut line.reader)
 }
 
-fn ask(line: &mut Line, command: Command, boot: Option<String>, lost: Ended) -> std::result::Result<(), Ended> {
-    let request = Request { caller: None, server: None, contract: None, boot, view: None, command };
+pub(super) fn send(line: &mut Line, envelope: &Envelope, command: Command) -> bool {
+    ask(line, envelope, command, Ended::Lost(None)).is_ok()
+}
+
+fn ask(line: &mut Line, envelope: &Envelope, command: Command, lost: Ended) -> std::result::Result<(), Ended> {
+    let (boot, view) = (envelope.boot.clone(), envelope.view);
+    let request = Request { caller: None, server: None, contract: None, boot, view, command };
     let text = serde_json::to_string(&request).map_err(|e| Ended::Refused(Down::Unreachable(e.to_string())))?;
     protocol::send(&mut line.writer, &ClientMessage::Request(text)).map_err(|_| lost)
 }
@@ -548,7 +563,7 @@ fn seen(report: control::Report) -> control::Report {
     control::Report { boot: report.boot, home: report.home, projects: report.projects, ..control::Report::default() }
 }
 
-fn listen(reader: &mut impl Read) -> Heard {
+pub(super) fn listen(reader: &mut impl Read) -> Heard {
     loop {
         match protocol::recv::<ServerMessage>(reader) {
             Ok(Some(ServerMessage::Response(text))) => return Heard::Answer(text),

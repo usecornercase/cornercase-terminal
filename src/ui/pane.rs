@@ -292,7 +292,7 @@ fn draw_held_notice(f: &mut Frame, view: &View, pane: (Rect, usize), label: &str
     }
 }
 
-fn draw_scrollback_badge(f: &mut Frame, view: &View, pane: Rect, below: usize) {
+pub(super) fn draw_scrollback_badge(f: &mut Frame, view: &View, pane: Rect, below: usize) {
     let Some(badge) = scrollback_badge(pane, below) else { return };
     let lit = view.overlay.is_none() && view.hover.is_some_and(|p| badge.contains(p));
     let style = if lit {
@@ -332,7 +332,7 @@ pub(super) fn draw_tab(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
     if let Some((r, place)) = tab.landing {
         draw_pane_landing(f, view, r, place);
     }
-    draw_dividers(f, view, tab, area);
+    draw_dividers(f, view, &tab.layout.dividers(area), tab.dragging.as_deref());
 }
 
 fn draw_pane_landing(f: &mut Frame, view: &View, r: Rect, place: Place) {
@@ -385,15 +385,14 @@ fn divider_symbol(links: u8) -> &'static str {
 
 type DividerCells = HashMap<(u16, u16), (u8, bool)>;
 
-fn draw_dividers(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
-    let dividers = tab.layout.dividers(area);
+pub(super) fn draw_dividers(f: &mut Frame, view: &View, dividers: &[Divider], dragging: Option<&[bool]>) {
     let mut cells = DividerCells::new();
-    for d in &dividers {
-        let lit = tab.dragging.as_ref() == Some(&d.path) || (tab.dragging.is_none() && sidebar_hovered(view, d.line));
+    for d in dividers {
+        let lit = dragging == Some(d.path.as_slice()) || (dragging.is_none() && sidebar_hovered(view, d.line));
         mark_line(&mut cells, d, lit);
     }
-    bridge_dividers(&mut cells, &dividers);
-    for d in &dividers {
+    bridge_dividers(&mut cells, dividers);
+    for d in dividers {
         join_ends(&mut cells, d);
     }
     let buf = f.buffer_mut();

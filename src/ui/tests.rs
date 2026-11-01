@@ -145,6 +145,7 @@ mod ports_dialog;
 mod processes_dialog;
 mod queue;
 mod remote_card;
+mod remote_tab;
 mod reorder;
 mod resuming;
 mod row_hover;

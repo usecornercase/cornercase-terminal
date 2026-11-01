@@ -14,7 +14,7 @@ import Screen from '../../../../components/Screen.astro';
   crop={[2, 1, 106, 10]}
 />
 
-A linked machine's workspaces show [in your sidebar](#in-your-sidebar), under the project here that is a clone of the same repository, and its agents tell you when they need you as yours do. Your server can also [ask each machine for its stats and plan usage](#stats-and-usage-of-each-machine). You can [rename, close and remove the worktree of a machine's workspace](#acting-on-a-machines-workspace) from its row. Opening tabs and typing on those machines from this window comes later; until then, [`cornercase remote`](../remote/) opens a window on one of them.
+A linked machine's workspaces show [in your sidebar](#in-your-sidebar), under the project here that is a clone of the same repository, and its agents tell you when they need you as yours do. Your server can also [ask each machine for its stats and plan usage](#stats-and-usage-of-each-machine). Click one of those workspaces and its tab shows here, live, and you [work in it](#working-in-a-machines-tab) as in one of yours. You can [rename, close and remove the worktree of a machine's workspace](#acting-on-a-machines-workspace) from its row. Opening tabs or starting agents on those machines from this window comes later; until then, [`cornercase remote`](../remote/) opens a window on one of them.
 
 ## Add a machine
 
@@ -38,7 +38,7 @@ The link is one `ssh` connection from your cornercase server to the cornercase s
 - **It uses the server running there**, or starts one when none runs, as [`cornercase start-server`](../../reference/command-line/#cornercase-start-server) does.
 - **It never stops anything there.** Removing the machine, stopping or restarting cornercase on this computer, this computer going to sleep and a dropped connection all end the link only; the server on the machine and everything in it keep running.
 - **A server you stop there comes back.** After `cornercase kill-server` on the machine, the link starts it again on its next try. To stop it for good, remove the machine here first.
-- **It goes one way.** The machine can't act on this computer through the link: nothing it sends is drawn, played, opened or copied here, and the link's `ssh` forwards neither your agent, nor X11, nor any port.
+- **It goes one way.** The machine can't act on this computer through the link: a tab you look at is drawn as text and colours only, nothing it sends is played or opened here, the one thing copied is the text you select on it, and the link's `ssh` forwards neither your agent, nor X11, nor any port.
 
 ## States
 
@@ -118,7 +118,9 @@ A rename or a close gives up after 15 seconds, the check after a minute and a re
 
 ### Clicking a machine's workspace
 
-Click a machine's workspace or tab, or [`cornercase focus --machine vps --workspace ID`](../scripts-and-agents/#machines), and its row is marked as picked. Where a pane would be, a card says where it runs:
+Click a machine's workspace or tab, or [`cornercase focus --machine vps --workspace ID`](../scripts-and-agents/#machines), and its row is marked as picked. Where a pane would be, you see that workspace's active tab as it is on the machine: its panes, its splits and what their programs print, as it happens. Its panes take the size of this window's pane area, and follow it when you resize the window or open a side panel, so what runs there draws for this window. If someone uses that tab in the machine's own window meanwhile, the last one to size it wins, and the other sees it cut or with blank space, as with any tab shown in two windows.
+
+Until the machine sends the tab's first screen, a card says where it runs:
 
 ```text
 ╭─ runs on vps ──────────────────────╮
@@ -129,9 +131,21 @@ Click a machine's workspace or tab, or [`cornercase focus --machine vps --worksp
 ╰────────────────────────────────────╯
 ```
 
-While the machine is down the card reads `vps unreachable`, then `reconnecting in 4 s`, counted down to the link's next try (or why it is waiting, such as an older cornercase there), and `claude keeps working there`: the link going down stops nothing on the machine.
+While the machine is down, the tab's last screen stays, dimmed, under a card that reads `vps unreachable`, then `reconnecting in 4 s`, counted down to the link's next try (or why it is waiting, such as an older cornercase there), and `claude keeps working there`: the link going down stops nothing on the machine. When only the connection that shows the tab dropped, the card says `reconnecting…` and the tab comes back by itself. Once the machine is back, the tab is live again, with nothing restarted here or there.
 
-While the card shows, what you type, paste or click in that area reaches no pane here. The sidebar, the tools, the tabs above the pane and the prefix key's menu still work; what that menu does to a tab or a pane, such as a split, first goes back to this computer. The project here it pairs with becomes the active one, and the tabs above the pane, **Changes** and **Files** keep showing that project's workspace you were on here. Click anything of this computer to go back to it.
+### Working in a machine's tab
+
+Once its screen shows, the tab works as one of yours, on the machine:
+
+- **What you type and paste** goes to its active pane, keys as the program there asked for them.
+- **The mouse** goes to a program that reads it, such as `vim` or `htop`, as it would here. A click on another pane makes it the active one; a right-click on it goes on to its program when it reads the mouse.
+- **The wheel** scrolls a pane's history, or moves through a full-screen program's lines, and a click on ` ↓ 12 more `, at the bottom of a pane that is scrolled up, takes it back down.
+- **Selecting text** with the mouse, where no program reads it, copies it to this computer's clipboard, cleaned as a selection here is, and a toast says so. A click where you pressed clears it.
+- **The dividers** between its panes drag, and a double click puts one back in the middle. `Esc` ends a drag.
+
+Before its first screen arrives, and while the machine is down, nothing you type, click or scroll there is sent, or kept for later: a toast says `vps unreachable: nothing was sent`. When the program in a pane doesn't take what you send, the toast says so too.
+
+While a machine's workspace shows, the sidebar, the tools, the tabs above the pane and the prefix key's menu still work; what that menu does to a tab or a pane, such as a split, first goes back to this computer. The project here it pairs with becomes the active one, and the tabs above the pane, **Changes** and **Files** keep showing that project's workspace you were on here. Click anything of this computer to go back to it.
 
 ### Notices from a machine
 
@@ -146,6 +160,10 @@ Scripts get them from [`cornercase events --notices`](../scripts-and-agents/#fol
 ### What isn't there yet
 
 - A project on a machine with no workspaces can't be picked.
+- Starting an agent, a script or an issue's work on a machine.
+- Closing or renaming a machine's tabs, `+ Tab`, splitting or closing its panes, and the prefix key's menu acting there.
+- **Changes** and **Files** for a machine's workspace.
+- In a machine's tab: clicking a path, the pane's right-click menu, moving panes, the accounts row, opening links, and pictures.
 - Picking a machine's workspace with ` go ` or `focus --machine` doesn't scroll the tree, or the workspaces column, to its row.
 
 ## Stats and usage of each machine

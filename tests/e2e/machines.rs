@@ -3,7 +3,8 @@ use serde_json::{Value, json};
 
 use super::agents::claude_asking_on_cue;
 use super::commands::Followed;
-use super::remote::{boot_of, cornercase_in, fake_ssh_to, gone, ssh_pid_to};
+use super::remote::{boot_of, cornercase_in, fake_ssh_to, gone, hold_ssh_to, let_ssh_to, ssh_pid_to, ssh_pids_to};
+use super::views::size_of;
 use super::*;
 
 pub(super) const VPS: &str = "vps";
@@ -350,4 +351,142 @@ fn a_machine_s_agent_shows_under_the_local_project_and_tells_when_it_needs_you()
         s.contains("runs on vps") && s.contains("claude is waiting for you")
     });
     let _ = std::fs::remove_dir_all(&bin);
+}
+
+const PRINTED: &str = "printed-there";
+
+struct ShownThere {
+    machine: Arc<Session>,
+    here: Arc<Session>,
+    app: Harness,
+    pane: String,
+    link: String,
+}
+
+fn echo_of(text: &str) -> String {
+    let (head, tail) = text.split_at(text.len() / 2);
+    format!("echo {head}\"\"{tail}")
+}
+
+fn printed_there(machine: &Session, pane: &str, text: &str) {
+    machine.says(&["send", "--pane", pane, "--enter", &echo_of(text)]);
+}
+
+fn shown_there() -> ShownThere {
+    let (machine, here) = linked_to_one();
+    let link = ssh_pid_to(&here, VPS);
+    machine.says(&["open", &clone_of(&machine, "blog", "git@github.com:ana/blog.git")]);
+    let workspace = project_named(&sent_with_their_repos(&here, &["blog"]), "blog")["workspaces"][0].clone();
+    let pane = workspace["tabs"][0]["panes"][0]["id"].to_string();
+    let mut app = Harness::open(Arc::clone(&here), ROWS, COLS);
+    app.wait_for("the window opens", |s| s.contains("☁ vps"));
+    here.says(&["focus", "--machine", VPS, "--workspace", &workspace["id"].to_string()]);
+    printed_there(&machine, &pane, PRINTED);
+    app.wait_for("what the pane there prints shows here", |s| s.contains(PRINTED));
+    ShownThere { machine, here, app, pane, link }
+}
+
+fn pane_area(rows: u16, cols: u16) -> String {
+    let pane =
+        ui::layout_with(Rect::new(0, 0, cols, rows), state::Widths::default(), false, config::Sidebar::default()).pane;
+    format!("{}x{}", pane.height, pane.width)
+}
+
+fn dim_at(app: &Harness, text: &str) -> bool {
+    let at = app.position_of(text);
+    app.screen.lock().screen().cell(at.y, at.x).is_some_and(vt100::Cell::dim)
+}
+
+#[test]
+fn a_machine_s_tab_shows_here_at_the_size_of_the_pane_area() {
+    let mut shown = shown_there();
+    let before = size_of(&shown.machine, &shown.pane, "before");
+    let (rows, cols) = (ROWS + 6, COLS + 20);
+
+    shown.app.resize(rows, cols);
+
+    let mut tries = 0;
+    wait_until("the pane there takes the new size", || {
+        tries += 1;
+        size_of(&shown.machine, &shown.pane, &format!("after{tries}")) == pane_area(rows, cols)
+    });
+    assert_eq!(before, pane_area(ROWS, COLS));
+}
+
+fn stream_lines(shown: &ShownThere) -> Vec<String> {
+    ssh_pids_to(&shown.here, VPS).into_iter().filter(|pid| *pid != shown.link && !gone(pid)).collect()
+}
+
+fn killed(lines: &[String]) {
+    assert!(!lines.is_empty(), "no stream line to kill");
+    let killed = std::process::Command::new("kill").arg("-9").args(lines).status().expect("run kill");
+    assert!(killed.success(), "kill failed: {lines:?}");
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Dropped {
+    Stream,
+    Link,
+}
+
+#[rstest]
+#[case::its_stream(Dropped::Stream, "reconnecting…", "linked")]
+#[case::the_link(Dropped::Link, "reconnecting in", "unreachable")]
+fn a_dropped_line_dims_the_tab_under_the_card_until_it_streams_again(
+    #[case] dropped: Dropped,
+    #[case] card: &str,
+    #[case] state: &'static str,
+) {
+    let mut shown = shown_there();
+    hold_ssh_to(&shown.here, VPS);
+    let lines = match dropped {
+        Dropped::Stream => stream_lines(&shown),
+        Dropped::Link => vec![shown.link.clone()],
+    };
+
+    killed(&lines);
+
+    shown.app.wait_for("the card over the last screen", |s| s.contains("vps unreachable") && s.contains(card));
+    let dimmed = dim_at(&shown.app, PRINTED);
+    wait_for_machine(&shown.here, VPS, "the link is as it should be", in_state(state));
+    let_ssh_to(&shown.here, VPS);
+    if matches!(dropped, Dropped::Link) {
+        shown.here.says(&["machines", "retry", VPS]);
+    }
+    shown.app.wait_for("the tab is live again", |s| !s.contains("vps unreachable") && s.contains(PRINTED));
+    printed_there(&shown.machine, &shown.pane, "back-again");
+    shown.app.wait_for("what it prints next shows", |s| s.contains("back-again"));
+    assert!(dimmed && !dim_at(&shown.app, "back-again"));
+}
+
+fn printed_there_by_typing(shown: &mut ShownThere, text: &str) {
+    shown.app.send(format!("{}\r", echo_of(text)).as_bytes());
+}
+
+#[test]
+fn what_is_typed_here_reaches_the_pane_there_and_what_it_prints_shows_here() {
+    let mut shown = shown_there();
+
+    printed_there_by_typing(&mut shown, "typed-here");
+
+    let pattern = "^typed-here$";
+    shown.machine.says(&["wait", "--pane", &shown.pane, "--text", pattern, "--timeout", "10"]);
+    shown.app.wait_for("what the pane there prints shows here", |s| s.contains("typed-here"));
+}
+
+#[test]
+fn with_its_stream_dropped_what_is_typed_says_so_and_never_reaches_the_pane_there() {
+    let mut shown = shown_there();
+    hold_ssh_to(&shown.here, VPS);
+    killed(&stream_lines(&shown));
+    shown.app.wait_for("the card over the last screen", |s| s.contains("reconnecting…"));
+
+    printed_there_by_typing(&mut shown, "lost-keys");
+
+    shown.app.wait_for("the toast", |s| s.contains("nothing was sent"));
+    let_ssh_to(&shown.here, VPS);
+    shown.app.wait_for("the tab is live again", |s| !s.contains("reconnecting…") && s.contains(PRINTED));
+    printed_there_by_typing(&mut shown, "typed-after");
+    shown.machine.says(&["wait", "--pane", &shown.pane, "--text", "^typed-after$", "--timeout", "10"]);
+    assert!(!shown.machine.says(&["read", "--pane", &shown.pane]).contains("lost"));
 }

@@ -90,6 +90,64 @@ fn a_key_names_its_modifiers_and_kind() {
     assert_eq!(Key { code: "nope".into(), ..Key::default() }.event(), Err("unknown key `nope`".to_string()));
 }
 
+#[rstest]
+#[case::letter(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE), "a", vec![])]
+#[case::ctrl_c(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL), "c", vec![Modifier::Ctrl])]
+#[case::shift_tab(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE), "tab", vec![Modifier::Shift])]
+#[case::shift_tab_said(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT), "tab", vec![Modifier::Shift])]
+#[case::f5(KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE), "f5", vec![])]
+#[case::alt_up(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT), "up", vec![Modifier::Alt])]
+#[case::esc(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), "esc", vec![])]
+#[case::every_modifier(
+    KeyEvent::new(KeyCode::Right, KeyModifiers::all()),
+    "right",
+    vec![Modifier::Ctrl, Modifier::Alt, Modifier::Shift, Modifier::Super],
+)]
+fn a_key_event_becomes_an_input_key(#[case] event: KeyEvent, #[case] code: &str, #[case] mods: Vec<Modifier>) {
+    let key = Key::of(&event).expect("a key");
+
+    assert_eq!(key, Key { code: code.into(), mods, kind: KeyKind::Press });
+    assert_eq!(key.event().map(|back| (back.code, back.kind)), Ok((event.code, event.kind)));
+}
+
+#[rstest]
+#[case::press(KeyEventKind::Press, KeyKind::Press)]
+#[case::repeat(KeyEventKind::Repeat, KeyKind::Repeat)]
+#[case::release(KeyEventKind::Release, KeyKind::Release)]
+fn a_key_event_keeps_its_kind(#[case] kind: KeyEventKind, #[case] expected: KeyKind) {
+    let event = KeyEvent::new_with_kind(KeyCode::Enter, KeyModifiers::NONE, kind);
+
+    assert_eq!(Key::of(&event).map(|key| key.kind), Some(expected));
+}
+
+#[test]
+fn a_key_with_no_name_there_is_not_sent() {
+    assert_eq!(Key::of(&KeyEvent::new(KeyCode::KeypadBegin, KeyModifiers::NONE)), None);
+    assert_eq!(Key::of(&KeyEvent::new(KeyCode::CapsLock, KeyModifiers::SHIFT)), None);
+}
+
+#[rstest]
+#[case::press(MouseEventKind::Down(MouseButton::Left), MouseKind::Down, Button::Left)]
+#[case::release(MouseEventKind::Up(MouseButton::Right), MouseKind::Up, Button::Right)]
+#[case::drag(MouseEventKind::Drag(MouseButton::Middle), MouseKind::Drag, Button::Middle)]
+#[case::moved(MouseEventKind::Moved, MouseKind::Moved, Button::Left)]
+#[case::wheel_up(MouseEventKind::ScrollUp, MouseKind::ScrollUp, Button::Left)]
+#[case::wheel_down(MouseEventKind::ScrollDown, MouseKind::ScrollDown, Button::Left)]
+#[case::wheel_left(MouseEventKind::ScrollLeft, MouseKind::ScrollLeft, Button::Left)]
+#[case::wheel_right(MouseEventKind::ScrollRight, MouseKind::ScrollRight, Button::Left)]
+fn a_mouse_event_becomes_an_input_mouse_at_its_cell(
+    #[case] kind: MouseEventKind,
+    #[case] expected: MouseKind,
+    #[case] button: Button,
+) {
+    let event = MouseEvent { kind, column: 40, row: 9, modifiers: KeyModifiers::SHIFT | KeyModifiers::ALT };
+
+    let mouse = Mouse::of(event, 4, 2);
+
+    assert_eq!(mouse, Mouse { kind: expected, button, x: 4, y: 2, mods: vec![Modifier::Alt, Modifier::Shift] });
+    assert_eq!(mouse.event(), MouseEvent { column: 4, row: 2, ..event });
+}
+
 #[test]
 fn the_fields_to_log_are_counts_and_sizes() {
     let input = Input {

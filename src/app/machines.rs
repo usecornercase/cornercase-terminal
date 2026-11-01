@@ -16,6 +16,7 @@ use crate::git::remote::Repo;
 use crate::host::network;
 use crate::log::{self, Job, Level};
 use crate::machines::link::{self, Connect, Down, Event, Link, Report, Servers};
+use crate::machines::stream::StreamReport;
 use crate::machines::wake::{Network, Sleep};
 use crate::machines::{self, Info, Machine, State, Status};
 use crate::settings::Page;
@@ -24,15 +25,21 @@ pub(super) mod acting;
 mod card;
 mod clicks;
 mod column;
+mod drag;
+mod mouse;
 mod notices;
 mod repo;
 mod report;
 mod rows;
 mod selection;
+mod stream;
+mod typing;
 
 pub(super) use clicks::RemoteAt;
+pub(super) use drag::RemoteDrag;
 pub(super) use rows::{RemoteProject, machine_project, machine_shape, paired, remote_only, statuses};
 pub(super) use selection::RemoteItem;
+pub(super) use stream::Flow;
 
 pub(super) const OLDER: &str = "its cornercase is older than this one";
 
@@ -47,6 +54,7 @@ pub(crate) enum MachineEvent {
     Stats { link: u64, result: std::result::Result<View, String> },
     Usage { link: u64, result: std::result::Result<Plans, String> },
     Acted(acting::Acted),
+    Stream(StreamReport),
 }
 
 impl From<Report> for AppEvent {
@@ -82,6 +90,8 @@ pub(super) struct Machines {
     pub(super) acting: acting::Acting,
     selection: Option<selection::RemoteSelection>,
     folded: Vec<(String, PathBuf)>,
+    watched: Option<stream::Watched>,
+    streams: u64,
 }
 
 impl Machines {
@@ -100,6 +110,8 @@ impl Machines {
             acting: acting::Acting::default(),
             selection: None,
             folded: Vec::new(),
+            watched: None,
+            streams: 1,
         }
     }
 
@@ -205,6 +217,7 @@ impl App {
             self.machines.held.iter().for_each(|held| held.link.poke());
         }
         self.refresh_machines_page();
+        self.follow_stream();
     }
 
     pub(super) fn follow_machines(&mut self) {
@@ -268,6 +281,7 @@ impl App {
             MachineEvent::Stats { link, result } => self.machine_answered(link, result),
             MachineEvent::Usage { link, result } => self.machine_answered(link, result),
             MachineEvent::Acted(acted) => self.acted(acted),
+            MachineEvent::Stream(report) => self.stream_reported(report),
         }
     }
 
@@ -296,6 +310,7 @@ impl App {
                 }
             }
         }
+        self.follow_stream();
     }
 
     fn seen_arrived(&mut self, at: usize, seen: Box<control::Report>, now: i64) {
@@ -401,6 +416,7 @@ impl App {
     }
 
     pub(super) fn stop_machines(&mut self) {
+        self.machines.watched = None;
         self.machines.held.clear();
         self.machines.synced.clear();
         self.machines.selection = None;
