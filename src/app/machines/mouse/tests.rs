@@ -32,7 +32,7 @@ fn screen(mouse: surface::Mouse, alternate_screen: bool, alternate_scroll: bool)
         ..RemotePane::default()
     };
     let divider = Divider::seen(Vec::new(), Dir::Right, Rect::new(0, 0, 30, 4), Rect::new(15, 0, 1, 4), None);
-    RemoteScreen { area: Rect::new(0, 0, 30, 4), panes: vec![active, other], dividers: vec![divider] }
+    RemoteScreen { tab: 0, area: Rect::new(0, 0, 30, 4), panes: vec![active, other], dividers: vec![divider] }
 }
 
 fn at(kind: MouseEventKind, column: u16, row: u16) -> (MouseEvent, Position) {

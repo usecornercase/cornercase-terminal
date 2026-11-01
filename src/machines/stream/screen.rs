@@ -14,6 +14,7 @@ const PANES: usize = 256;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct RemoteScreen {
+    pub(crate) tab: u64,
     pub(crate) area: Rect,
     pub(crate) panes: Vec<RemotePane>,
     pub(crate) dividers: Vec<Divider>,
@@ -36,6 +37,7 @@ impl RemoteScreen {
         let area = Rect::new(0, 0, shown.cols.min(*COLS.end()), shown.rows.min(*ROWS.end()));
         let layout = shown.layout.as_ref().map(Node::from);
         Self {
+            tab: mirror.tab,
             area,
             panes: panes(&shown.panes, area),
             dividers: shown

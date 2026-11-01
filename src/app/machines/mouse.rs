@@ -53,9 +53,10 @@ impl App {
 
     pub(super) fn point(&mut self, pointed: Pointed) {
         self.screen.drag = pointed.drag.map(Drag::Remote);
-        if let Some((stream, _)) = self.watched().and_then(Watched::live) {
-            pointed.orders.into_iter().for_each(|order| stream.send(order));
-        }
+        let dropped = self.machines.watched.as_mut().is_some_and(|watched| {
+            pointed.orders.into_iter().map(|order| watched.order(order)).filter(|dropped| *dropped).count() > 0
+        });
+        self.typed_dropped(dropped);
     }
 }
 

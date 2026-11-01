@@ -218,6 +218,7 @@ impl App {
         }
         self.refresh_machines_page();
         self.follow_stream();
+        self.drop_late_typed(now);
     }
 
     pub(super) fn follow_machines(&mut self) {

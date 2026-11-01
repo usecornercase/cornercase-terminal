@@ -6,7 +6,8 @@ use serde_json::json;
 use super::*;
 use crate::control::surface::Size;
 use crate::control::terminal::{End, InputEvent, Key, Point};
-use crate::machines::link::fake::request;
+use crate::machines::link::fake::{ended, request};
+use crate::machines::stream::Stream;
 use crate::machines::stream::tests::{BOOT, Rig, TAB, VIEW, complete, say, shown};
 
 fn focus(tab: u64) -> Value {
@@ -181,14 +182,14 @@ mod answers {
     fn a_lost_line_is_told_and_the_next_order_connects_again() {
         let rig = Rig::new();
         let _streams = rig.opened();
-        let orders = showing(&rig, 12);
+        let orders = sent(&rig, typed(vec![key("a")]));
 
         drop(orders);
         let told = rig.event();
-        rig.stream.show(13);
+        rig.stream.send(typed(vec![key("b")]));
 
-        assert_eq!(told, answered(Order::Show(12), Err(Refusal::new(Code::Unavailable, "the link ended"))));
-        assert_eq!(request(&mut rig.reach())["args"]["item"], focus(13));
+        assert_eq!(told, answered(typed(vec![key("a")]), Err(Refusal::new(Code::Unavailable, "the link ended"))));
+        assert_eq!(events(&request(&mut rig.reach())), [key("b")]);
     }
 
     #[test]
@@ -196,16 +197,53 @@ mod answers {
         let rig = Rig::new();
         let _streams = rig.opened();
         let _opening = rig.alarm();
-        rig.stream.show(12);
+        rig.stream.send(typed(vec![key("a")]));
         let mut silent = rig.reach();
         request(&mut silent);
 
         rig.alarm().ring();
         let told = rig.event();
-        rig.stream.show(13);
+        rig.stream.send(typed(vec![key("b")]));
 
-        assert_eq!(told, answered(Order::Show(12), Err(Refusal::new(Code::Unavailable, LATE))));
-        assert_eq!(request(&mut rig.reach())["args"]["item"], focus(13));
+        assert_eq!(told, answered(typed(vec![key("a")]), Err(Refusal::new(Code::Unavailable, LATE))));
+        assert_eq!(events(&request(&mut rig.reach())), [key("b")]);
+    }
+
+    #[test]
+    fn one_whose_connection_is_stuck_before_its_banner_is_told_late() {
+        let rig = Rig::new();
+        let _streams = rig.opened();
+        let _opening = rig.alarm();
+        rig.hang();
+        rig.stream.send(typed(vec![key("a")]));
+
+        rig.alarm().ring();
+
+        assert_eq!(rig.event(), answered(typed(vec![key("a")]), Err(Refusal::new(Code::Unavailable, LATE))));
+    }
+
+    #[rstest]
+    #[case::a_tab(|stream: &Stream| { stream.show(12); }, Order::Show(12), "tab", json!(12))]
+    #[case::a_size(|stream: &Stream| stream.resize(100, 30), Order::Size { cols: 100, rows: 30 }, "cols", json!(100))]
+    fn lost_with_the_orders_line_opens_the_view_again_with_it(
+        #[case] change: fn(&Stream),
+        #[case] order: Order,
+        #[case] arg: &str,
+        #[case] value: Value,
+    ) {
+        let rig = Rig::new();
+        let (mut view, mut surface) = rig.opened();
+        change(&rig.stream);
+        let mut orders = rig.reach();
+        request(&mut orders);
+
+        drop(orders);
+
+        assert_eq!(rig.event(), answered(order, Err(Refusal::new(Code::Unavailable, "the link ended"))));
+        assert!(ended(&mut surface) && ended(&mut view));
+        assert_eq!(rig.event(), StreamEvent::Down("the link ended".into()));
+        let asked = request(&mut rig.reach());
+        assert_eq!((&asked["command"], &asked["args"][arg]), (&json!("view"), &value));
     }
 }
 

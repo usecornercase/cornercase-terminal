@@ -1,7 +1,5 @@
 use crossterm::event::KeyEvent;
 
-use super::mouse::typed;
-use super::stream::Watched;
 use crate::app::App;
 use crate::app::toast::{NOT_READING, Toast};
 use crate::control::contract::Code;
@@ -48,10 +46,10 @@ impl App {
     }
 
     fn remote_input(&mut self, event: InputEvent) {
-        let Some((stream, screen)) = self.watched().and_then(Watched::live) else { return self.nothing_sent() };
-        if let Some(pane) = screen.panes.iter().find(|pane| pane.active) {
-            stream.send(typed(pane.pane, vec![event]));
-        }
+        let watched = self.machines.watched.as_mut().filter(|watched| watched.live().is_some());
+        let Some(watched) = watched else { return self.nothing_sent() };
+        let dropped = watched.type_in(event);
+        self.typed_dropped(dropped);
     }
 }
 

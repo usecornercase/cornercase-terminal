@@ -6,7 +6,7 @@ use std::thread;
 use parking_lot::{Condvar, Mutex};
 use serde_json::Value;
 
-use super::{Shared, StreamEvent, Tell, reply};
+use super::{Group, Shared, StreamEvent, Tell, reply};
 use crate::control::contract::{Code, Refusal};
 use crate::control::surface::COLS;
 use crate::control::terminal::InputEvent;
@@ -178,12 +178,14 @@ impl Sender {
 
     fn send(&self, line: &mut Option<Line>, order: Order) {
         let Some((view, envelope, command)) = self.request(&order) else { return };
-        let (heard, late) = match self.connected(line) {
-            Ok(connected) => {
-                let alarm = self.shared.alarms.set(Arc::clone(&connected.ends));
-                (link::send_once(connected, &envelope, command), alarm)
+        let group = Arc::new(Group::default());
+        let late = self.shared.alarms.set(Group::held(&group));
+        let heard = match self.connected(line, &group) {
+            Ok(connected) => link::send_once(connected, &envelope, command),
+            Err(why) => {
+                let why = if late.rang() { LATE.into() } else { why };
+                return self.refused(order, view, Refusal::new(Code::Unavailable, why));
             }
-            Err(why) => return self.refused(order, view, Refusal::new(Code::Unavailable, why)),
         };
         match heard {
             Heard::Answer(text) => self.answered(order, view, &text),
@@ -220,17 +222,17 @@ impl Sender {
         Some((id, envelope, command))
     }
 
-    fn connected<'a>(&self, line: &'a mut Option<Line>) -> Result<&'a mut Line, String> {
+    fn connected<'a>(&self, line: &'a mut Option<Line>, group: &Arc<Group>) -> Result<&'a mut Line, String> {
+        if self.orders.control.hold(&Group::held(group)) == Asked::Stop {
+            return Err(LOST.into());
+        }
         if line.is_none() {
-            let connected =
-                self.connector.connect(self.orders.control.killer()).map_err(|e| link::clean(&remote::reason(&e)))?;
-            if self.orders.control.hold(&connected.ends) == Asked::Stop {
-                connected.ends.cut();
-                return Err(LOST.into());
-            }
+            let connected = self.connector.connect(&group.killer).map_err(|e| link::clean(&remote::reason(&e)))?;
             *line = Some(connected);
         }
-        line.as_mut().ok_or_else(|| LOST.into())
+        let connected = line.as_mut().ok_or_else(|| String::from(LOST))?;
+        group.add(&connected.ends);
+        Ok(connected)
     }
 
     fn drop_line(&self, line: &mut Option<Line>) {
@@ -262,16 +264,22 @@ impl Sender {
 
     fn refused(&self, order: Order, view: u64, refusal: Refusal) {
         let answer = match (order, refusal.code) {
-            (Order::Redraw(_), _) => return self.redraw_refused(view),
+            (Order::Redraw(_), _) => return self.reopen(view, None),
             (_, Code::Conflict | Code::NotFound) => return,
             (_, Code::Busy) => Answer::NotReading,
+            (order @ (Order::Size { .. } | Order::Show(_)), Code::Unavailable) => {
+                let why = refusal.message.clone();
+                (self.tell)(StreamEvent::Answer(Answer::Refused { order, refusal }));
+                return self.reopen(view, Some(why));
+            }
             (order, _) => Answer::Refused { order, refusal },
         };
         (self.tell)(StreamEvent::Answer(answer));
     }
 
-    fn redraw_refused(&self, view: u64) {
+    fn reopen(&self, view: u64, why: Option<String>) {
         if self.shared.opened.lock().as_ref().is_some_and(|opened| opened.view == view) {
+            *self.shared.lost.lock() = why;
             self.stream.poke();
         }
     }

@@ -264,8 +264,8 @@ stderr and the exit status is 0.
 
 --machine NAME picks one of a machine's workspaces or tabs as the one shown: --workspace and --tab
 take the ids `cornercase status` lists under that machine. The machine must have sent its workspaces
-since this server started. The window then shows that workspace's active tab, streamed from the
-machine, and `status --json` reports it as `shown_remote`, with its stream's state.
+since this server started. The window then shows that tab, or the workspace's active tab, streamed
+from the machine, and `status --json` reports it as `shown_remote`, with its stream's state.
 
 --json prints the answer: `revealed` with --reveal, and with --view the view's new tab and its
 `projection`, the number a view's lines and surface frames carry, which goes up each time what the

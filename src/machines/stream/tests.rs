@@ -8,7 +8,7 @@ use super::alarm::{Armed, Bell};
 use super::fake::{self, SURFACE, There};
 use super::*;
 use crate::error::Result;
-use crate::machines::link::fake::{ended, line, refused, request};
+use crate::machines::link::fake::{Hanging, ended, line, refused, request};
 use crate::protocol::{self, ServerMessage};
 use crate::remote::Killer;
 use crate::test_util;
@@ -20,12 +20,13 @@ pub(super) const TAB: u64 = 9;
 const THERE: There = There { boot: BOOT, view: VIEW, tab: TAB };
 
 struct Script {
-    lines: Mutex<Receiver<Line>>,
+    lines: Mutex<Receiver<Option<Line>>>,
 }
 
 impl Connect for Script {
-    fn connect(&self, _: &Killer) -> Result<Line> {
-        self.lines.lock().recv().map_err(|_| refused())
+    fn connect(&self, killer: &Killer) -> Result<Line> {
+        let next = self.lines.lock().recv().map_err(|_| refused())?;
+        next.map_or_else(|| Hanging.connect(killer), Ok)
     }
 }
 
@@ -53,7 +54,7 @@ impl Clock for Ticks {
 
 pub(super) struct Rig {
     pub(super) stream: Stream,
-    lines: Sender<Line>,
+    lines: Sender<Option<Line>>,
     reports: Receiver<StreamReport>,
     waits: Receiver<Duration>,
     alarms: Receiver<Arc<Armed>>,
@@ -80,8 +81,12 @@ impl Rig {
     pub(super) fn reach(&self) -> UnixStream {
         let (line, theirs) = line("0.12.225", None);
         theirs.set_read_timeout(Some(WAIT)).expect("a read timeout");
-        self.lines.send(line).expect("the stream connects");
+        self.lines.send(Some(line)).expect("the stream connects");
         theirs
+    }
+
+    pub(super) fn hang(&self) {
+        self.lines.send(None).expect("the stream connects");
     }
 
     pub(super) fn event(&self) -> StreamEvent {
@@ -198,7 +203,7 @@ mod opening {
         let connector = Box::new(Script { lines: Mutex::new(script) });
         let _stream = Stream::start(1, connector, Wanted { tab: TAB, cols: 5000, rows: 0 }, &tx);
         let (line, mut view) = line("0.12.225", None);
-        lines.send(line).expect("the stream connects");
+        lines.send(Some(line)).expect("the stream connects");
 
         let asked = request(&mut view);
 
@@ -422,6 +427,17 @@ mod silence {
 
         assert_eq!(rig.event(), StreamEvent::Down(LATE.into()));
         assert!(ended(&mut view));
+        assert_eq!(request(&mut rig.reach())["command"], "view");
+    }
+
+    #[test]
+    fn a_connection_stuck_before_its_banner_is_cut_in_time_and_tried_again() {
+        let rig = Rig::new();
+        rig.hang();
+
+        rig.alarm().ring();
+
+        assert_eq!(rig.event(), StreamEvent::Down(LATE.into()));
         assert_eq!(request(&mut rig.reach())["command"], "view");
     }
 

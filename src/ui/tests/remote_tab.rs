@@ -22,7 +22,7 @@ fn mirrored(tab: &TabView, down: bool) -> RemoteTab {
         ..RemotePane::default()
     };
     let panes = tab.layout.visible(area, tab.active).into_iter().map(pane).collect();
-    let screen = RemoteScreen { area, panes, dividers: tab.layout.dividers(area) };
+    let screen = RemoteScreen { tab: 0, area, panes, dividers: tab.layout.dividers(area) };
     RemoteTab { screen: Arc::new(screen), dim_inactive: tab.dim_inactive, down, dragging: tab.dragging.clone() }
 }
 
@@ -111,7 +111,7 @@ mod a_hostile_frame {
         let pane = RemotePane { rect, active: true, snapshot, ..RemotePane::default() };
         let crossing = Divider::seen(Vec::new(), Dir::Right, rect, Rect::new(5, 0, 1, 100), None);
         let beyond = Divider::seen(vec![true], Dir::Down, rect, Rect::new(0, 400, 300, 1), None);
-        let screen = RemoteScreen { area: rect, panes: vec![pane], dividers: vec![crossing, beyond] };
+        let screen = RemoteScreen { tab: 0, area: rect, panes: vec![pane], dividers: vec![crossing, beyond] };
         RemoteTab { screen: Arc::new(screen), dim_inactive: true, down: false, dragging: None }
     }
 

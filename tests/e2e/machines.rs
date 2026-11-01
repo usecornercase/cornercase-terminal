@@ -347,8 +347,15 @@ fn a_machine_s_agent_shows_under_the_local_project_and_tells_when_it_needs_you()
     app.wait_for("a toast says where", |s| s.contains("claude on vps needs you in web-shop"));
     app.wait_for("the tab there says it needs you", |s| s.contains("└ ! "));
     app.click(app.position_of("└ ! "));
-    app.wait_for("the card says where it runs", |s| {
-        s.contains("runs on vps") && s.contains("claude is waiting for you")
+    let tabs = project_named(&status(&machine)["projects"], "web-shop")["workspaces"][0]["tabs"].clone();
+    let asking = tabs.as_array().and_then(|tabs| tabs.last()).expect("claude's tab there")["id"].clone();
+    wait_until("the tab there that needs you is shown", || {
+        let shown = status(&here)["shown_remote"].clone();
+        (&shown["machine"], &shown["tab"]) == (&json!(VPS), &asking)
+    });
+    app.wait_for("the card says where it runs, or the tab streams from there", |s| {
+        (s.contains("runs on vps") && s.contains("claude is waiting for you"))
+            || status(&here)["shown_remote"]["stream"] == "live"
     });
     let _ = std::fs::remove_dir_all(&bin);
 }

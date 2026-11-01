@@ -17,7 +17,7 @@ use crate::control::surface::{COLS, ROWS};
 use crate::control::{Command, OpenView, Response, Snapshot, Surface, ViewInfo};
 use crate::error::Error;
 use crate::panics;
-use crate::remote;
+use crate::remote::{self, Killer};
 use alarm::{Alarm, Alarms, Timer};
 use orders::{Order, Orders};
 use screen::RemoteScreen;
@@ -30,7 +30,7 @@ const UNREADABLE: &str = "cannot read the answer from there";
 const NO_VIEW: &str = "the server there opened no view";
 const REDRAWN: &str = "the server there could not draw the tab again";
 const AFTER_A_BUG: u32 = 5;
-const ANSWERS_WITHIN: Duration = Duration::from_secs(20);
+pub(crate) const ANSWERS_WITHIN: Duration = Duration::from_secs(20);
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct StreamReport {
@@ -82,13 +82,18 @@ struct Shared {
     wanted: Mutex<Wanted>,
     opened: Mutex<Option<Opened>>,
     fence: Mutex<Fence>,
+    lost: Mutex<Option<String>>,
     alarms: Alarms,
 }
 
 impl Shared {
     fn new(wanted: Wanted, alarms: Alarms) -> Self {
         let (wanted, opened) = (Mutex::new(wanted.bounded()), Mutex::default());
-        Self { wanted, opened, fence: Mutex::default(), alarms }
+        Self { wanted, opened, fence: Mutex::default(), lost: Mutex::default(), alarms }
+    }
+
+    fn reopened(&self) -> String {
+        self.lost.lock().take().unwrap_or_else(|| REDRAWN.into())
     }
 
     fn seen(&self, view: u64, projection: u64) -> u64 {
@@ -117,9 +122,14 @@ where
 #[derive(Default)]
 struct Group {
     lines: Mutex<(bool, Vec<Arc<dyn Ends>>)>,
+    killer: Killer,
 }
 
 impl Group {
+    fn held(group: &Arc<Self>) -> Arc<dyn Ends> {
+        Arc::clone(group) as Arc<dyn Ends>
+    }
+
     fn add(&self, ends: &Arc<dyn Ends>) {
         let mut lines = self.lines.lock();
         if lines.0 {
@@ -133,6 +143,7 @@ impl Ends for Group {
     fn cut(&self) {
         let mut lines = self.lines.lock();
         lines.0 = true;
+        self.killer.kill();
         lines.1.iter().for_each(|ends| ends.cut());
     }
 
@@ -199,12 +210,14 @@ impl Stream {
         self.shared.wanted.lock().tab
     }
 
-    pub(crate) fn show(&self, tab: u64) {
+    pub(crate) fn show(&self, tab: u64) -> bool {
         let mut wanted = self.shared.wanted.lock();
-        if wanted.tab != tab {
+        let moved = wanted.tab != tab;
+        if moved {
             wanted.tab = tab;
             self.orders.push(Order::Show(tab));
         }
+        moved
     }
 }
 
@@ -222,11 +235,11 @@ enum Outcome {
 }
 
 impl Outcome {
-    fn redrawn(self) -> Self {
+    fn reopened(self, why: String) -> Self {
         match self {
             Self::Stop => Self::Stop,
-            Self::Failed(_) => Self::Failed(REDRAWN.into()),
-            Self::Dropped(_) => Self::Dropped(REDRAWN.into()),
+            Self::Failed(_) => Self::Failed(why),
+            Self::Dropped(_) => Self::Dropped(why),
         }
     }
 }
@@ -291,13 +304,18 @@ impl Running {
         *self.shared.opened.lock() = None;
         match asked {
             Asked::Stop => Outcome::Stop,
-            Asked::Poke => outcome.redrawn(),
+            Asked::Poke => outcome.reopened(self.shared.reopened()),
             Asked::Nothing => outcome,
         }
     }
 
     fn streamed(&self, group: &Arc<Group>) -> Result<Outcome, Outcome> {
-        let alarm = self.shared.alarms.set(Arc::clone(group) as Arc<dyn Ends>);
+        let alarm = self.shared.alarms.set(Group::held(group));
+        match self.control.hold(&Group::held(group)) {
+            Asked::Nothing => {}
+            Asked::Stop => return Err(Outcome::Stop),
+            Asked::Poke => return Err(Outcome::Failed(self.shared.reopened())),
+        }
         let streamed = self.opening(group, &alarm);
         if alarm.rang() {
             return Err(Outcome::Failed(LATE.into()));
@@ -324,15 +342,10 @@ impl Running {
     fn line(&self, group: &Arc<Group>) -> Result<Line, Outcome> {
         let line = self
             .connector
-            .connect(self.control.killer())
+            .connect(&group.killer)
             .map_err(|error| Outcome::Failed(link::clean(&remote::reason(&error))))?;
         group.add(&line.ends);
-        let held: Arc<dyn Ends> = Arc::clone(group) as Arc<dyn Ends>;
-        match self.control.hold(&held) {
-            Asked::Nothing => Ok(line),
-            Asked::Stop => Err(Outcome::Stop),
-            Asked::Poke => Err(Outcome::Failed(REDRAWN.into())),
-        }
+        Ok(line)
     }
 
     fn opened(&self, opened: &Opened) {

@@ -398,6 +398,7 @@ impl App {
             self.panels.queued.wake(clock),
             self.popup_wake(now),
             self.card_wake(now),
+            self.typed_wake(now),
         ]
         .into_iter()
         .flatten()

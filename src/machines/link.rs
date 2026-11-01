@@ -268,10 +268,6 @@ impl Control {
         self.wake.notify_all();
     }
 
-    pub(super) fn killer(&self) -> &Killer {
-        &self.killer
-    }
-
     pub(super) fn stopped(&self) -> bool {
         self.wants.lock().stop
     }

@@ -21,7 +21,7 @@ fn screen(mouse: surface::Mouse) -> RemoteScreen {
     let modes = Modes { mouse, ..Modes::default() };
     let rect = node.panes(area)[0].1;
     let pane = RemotePane { pane: PANE, rect, size: SIZE, active: true, modes, ..RemotePane::default() };
-    RemoteScreen { area, panes: vec![pane], dividers: node.dividers(area) }
+    RemoteScreen { tab: 0, area, panes: vec![pane], dividers: node.dividers(area) }
 }
 
 fn on(kind: MouseEventKind, column: u16) -> MouseEvent {

@@ -29,6 +29,17 @@ fn row(text: &str) -> Value {
     json!([{"style": 0, "cells": text.chars().map(|c| c.to_string()).collect::<Vec<_>>()}])
 }
 
+fn linked(rows: usize, linking: usize, runs: usize, mib: usize) -> Value {
+    let run = json!({"style": 0, "hyperlink": 0, "cells": ["a"]});
+    let lines: Vec<Value> =
+        (0..rows).map(|y| if y < linking { json!(vec![run.clone(); runs]) } else { json!([]) }).collect();
+    json!({"ok": {
+        "revision": 1, "cols": 20, "rows": rows, "layout": {"leaf": 1}, "styles": [{}],
+        "hyperlinks": [{"uri": "x".repeat(mib * 1024 * 1024)}],
+        "panes": [{"pane": 1, "active": true, "lines": lines}]
+    }})
+}
+
 fn text(mirror: &Mirror, y: usize) -> String {
     mirror.shown.panes[0].rows[y].iter().flat_map(|(cells, ..)| cells.iter().map(String::as_str)).collect()
 }
@@ -75,6 +86,45 @@ mod a_hostile_line {
         assert_eq!(applied, Err(Unapplied::Behind));
     }
 
+    #[test]
+    fn a_long_link_on_many_runs_is_refused_before_it_is_copied_onto_each() {
+        let mut mirror = held();
+
+        let applied = mirror.apply(&linked(1, 1, 100, 1).to_string());
+
+        assert!(matches!(applied, Err(Unapplied::Wrong(_))), "{applied:?}");
+        assert_eq!(text(&mirror, 0), "a");
+    }
+
+    #[test]
+    fn a_copy_that_would_hold_more_than_a_screen_is_refused() {
+        let mut mirror = Mirror::default();
+        mirror.apply(&linked(16, 8, 1, 4).to_string()).expect("half the rows hold the link");
+        let copy = json!([{"pane": 1, "copy": {"from": 0, "to": 8, "count": 8}}]);
+
+        let applied = mirror.apply(&patch(&copy).to_string());
+
+        assert!(matches!(applied, Err(Unapplied::Wrong(_))), "{applied:?}");
+        assert_eq!((mirror.revision, text(&mirror, 8)), (1, String::new()));
+    }
+
+    #[test]
+    fn lines_that_would_hold_more_than_a_screen_are_refused() {
+        let mut mirror = held();
+        let run = json!({"style": 0, "hyperlink": 0, "cells": ["a"]});
+        let lines: serde_json::Map<String, Value> =
+            (0..3).map(|y| (y.to_string(), json!(vec![run.clone(); 8]))).collect();
+        let changes = json!({"ok": {
+            "revision": 2, "base": 1, "styles": [{}], "hyperlinks": [{"uri": "x".repeat(4 * 1024 * 1024)}],
+            "panes": [{"pane": 1, "lines": lines}]
+        }});
+
+        let applied = mirror.apply(&changes.to_string());
+
+        assert!(matches!(applied, Err(Unapplied::Wrong(_))), "{applied:?}");
+        assert_eq!(text(&mirror, 0), "a");
+    }
+
     #[rstest]
     #[case::broken_json("{\"ok\": {".to_string())]
     #[case::an_error_line(json!({"error": {"code": "busy"}}).to_string())]
@@ -103,6 +153,21 @@ mod a_good_line {
     }
 
     #[test]
+    fn patches_keep_what_each_row_weighs() {
+        let mut mirror = held();
+        let panes = json!([
+            {"pane": 1, "copy": {"from": 0, "to": 1, "count": 2}},
+            {"pane": 1, "lines": {"0": row("longer")}}
+        ]);
+
+        mirror.apply(&patch(&panes).to_string()).expect("a patch");
+
+        let pane = &mirror.shown.panes[0];
+        let weights: Vec<usize> = pane.rows.iter().map(weight).collect();
+        assert_eq!((&pane.weights, mirror.held), (&weights, weights.iter().sum()));
+    }
+
+    #[test]
     fn a_complete_frame_replaces_everything_held() {
         let mut mirror = held();
         let other = json!({"ok": {"revision": 7, "cols": 5, "rows": 1, "layout": {"leaf": 4}, "panes": [{"pane": 4, "lines": [[]]}]}});
@@ -122,12 +187,29 @@ mod a_good_line {
     }
 
     #[test]
+    fn a_link_on_many_runs_is_held_once_for_all() {
+        let mut mirror = Mirror::default();
+
+        mirror.apply(&linked(1, 1, 3, 1).to_string()).expect("a frame with a link");
+
+        let row = &mirror.shown.panes[0].rows[0];
+        assert!(
+            row.windows(2).all(|pair| pair[0]
+                .2
+                .as_ref()
+                .zip(pair[1].2.as_ref())
+                .is_some_and(|(a, b)| Arc::ptr_eq(a, b)))
+        );
+    }
+
+    #[test]
     fn each_line_keeps_the_frame_s_boot_surface_and_projection() {
         let mut mirror = held();
-        let header = json!({"boot": "b-1", "surface": 3, "projection": 2, "revision": 2, "base": 1, "panes": []});
+        let header =
+            json!({"boot": "b-1", "surface": 3, "tab": 5, "projection": 2, "revision": 2, "base": 1, "panes": []});
 
         mirror.apply(&json!({"ok": header}).to_string()).expect("a patch");
 
-        assert_eq!((mirror.boot.as_str(), mirror.surface, mirror.projection), ("b-1", 3, Some(2)));
+        assert_eq!((mirror.boot.as_str(), mirror.surface, mirror.tab, mirror.projection), ("b-1", 3, 5, Some(2)));
     }
 }
