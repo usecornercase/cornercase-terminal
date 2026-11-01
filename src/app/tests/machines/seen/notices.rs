@@ -4,9 +4,11 @@ use super::*;
 use crate::agents::activity::Status;
 use crate::agents::claude::fake::FakeClaude;
 use crate::app::agent_watch::WATCH_AGENTS_EVERY;
+use crate::app::control::Asker;
 use crate::app::machines::RemoteItem;
 use crate::app::tests::control_requests::told;
-use crate::control::{Ids, PaneInfo, What};
+use crate::control::contract::Code;
+use crate::control::{Go, Ids, PaneInfo, What};
 use crate::host::sound::Kind;
 use crate::project::Tab;
 
@@ -112,10 +114,25 @@ fn the_notice_event_names_the_machine_and_no_local_ids() {
 }
 
 #[test]
-fn go_picks_the_machine_s_workspace_out_of_full_screen_and_the_menu() {
+fn nothing_is_told_once_another_agent_runs_in_the_pane() {
+    let mut seeing = seeing_claude();
+    loud(&mut seeing);
+
+    claude_is(&mut seeing, 3, "done", |pane| pane.agent = Some("codex".into()));
+
+    assert_eq!(heard(&mut seeing), (None, Vec::new()));
+}
+
+fn told_waiting() -> (Seeing, String) {
     let mut seeing = seeing_claude();
     claude_is(&mut seeing, 3, "waiting", |_| {});
     let token = seeing.rig.app.messages.toast.as_ref().and_then(|toast| toast.go.clone()).expect("a go button");
+    (seeing, token)
+}
+
+#[test]
+fn go_picks_the_machine_s_workspace_out_of_full_screen_and_the_menu() {
+    let (mut seeing, token) = told_waiting();
     seeing.rig.app.panels.files.set_full_screen(true);
     seeing.rig.app.screen.nav = Some(ui::Nav::Workspaces);
 
@@ -124,6 +141,27 @@ fn go_picks_the_machine_s_workspace_out_of_full_screen_and_the_menu() {
     let app = &seeing.rig.app;
     assert_eq!((picked(app), toast(app)), (Some((10, Some(13))), None));
     assert_eq!((app.panels.files.full_screen(), app.screen.nav), (false, None));
+}
+
+#[test]
+fn go_finds_the_machine_once_it_is_renamed() {
+    let (mut seeing, token) = told_waiting();
+    seeing.rig.edit(vec![machine("box", "vps.lan")], Duration::from_secs(2));
+    assert_eq!(seeing.rig.app.machines.held()[0].name, "box");
+
+    seeing.rig.app.notification_clicked(&token);
+
+    assert_eq!(picked(&seeing.rig.app), Some((10, Some(13))));
+}
+
+#[test]
+fn go_for_a_view_is_refused_and_picks_nothing() {
+    let (mut seeing, token) = told_waiting();
+
+    let refused = seeing.rig.app.go_request(Asker { caller: None, view: Some(1) }, &Go { token }).expect_err("refused");
+
+    assert_eq!((refused.code, picked(&seeing.rig.app)), (Code::Malformed, None));
+    assert!(refused.message.contains("drop --view"), "{}", refused.message);
 }
 
 fn watch_until(rig: &mut Rig, what: &str, done: impl Fn(&App) -> bool) {

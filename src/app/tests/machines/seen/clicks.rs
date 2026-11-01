@@ -70,6 +70,21 @@ mod a_machine_s_row {
     }
 
     #[test]
+    fn takes_a_local_workspace_dropped_on_it_to_the_end_of_this_computer_s_own() {
+        let Seeing { mut rig, _dir, .. } = seeing_two();
+        let path = rig.app.projects[0].path.clone();
+        let workspace = rig.app.new_workspace(AREA, path, Some("feature".into()), false).expect("workspace");
+        rig.app.projects[0].workspaces.push(workspace);
+        let ids = |app: &App| app.projects[0].workspaces.iter().map(|w| w.id).collect::<Vec<_>>();
+        let (before, w) = (ids(&rig.app), theirs_at(&rig.app));
+
+        let (from, to) = (row_pos(&rig.app, WorkspaceRow::Workspace(0)), row_pos(&rig.app, WorkspaceRow::Tab(w, 1)));
+        drag(&mut rig.app, from, to);
+
+        assert_eq!(ids(&rig.app), [before[1], before[0]]);
+    }
+
+    #[test]
     fn folds_here_with_its_arrow_and_stays_folded_in_the_next_snapshot() {
         let Seeing { mut rig, mut theirs, .. } = seeing_two();
         let w = theirs_at(&rig.app);

@@ -29,6 +29,11 @@ impl App {
     }
 
     pub(in crate::app) fn go_request(&mut self, asker: Asker, go: &control::Go) -> Handled {
+        if asker.view.is_some() && self.notice_from_a_machine(&go.token) {
+            let message =
+                format!("notice {} is from another machine, which only the window shows: drop --view", go.token);
+            return Err(malformed(message));
+        }
         let item = match self.act_on_notice(&go.token) {
             None => {
                 let message = format!(

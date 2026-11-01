@@ -50,20 +50,30 @@ impl App {
 
     pub(in crate::app) fn select_remote(&mut self, machine: &str, item: RemoteItem) -> bool {
         let named = self.machines.held.iter().find(|held| held.name.eq_ignore_ascii_case(machine));
-        let Some((held, seen)) = named.and_then(|held| Some((held, held.seen.as_deref()?))) else { return false };
+        named.map(|held| held.link.id()).is_some_and(|link| self.select_on(link, item))
+    }
+
+    pub(in crate::app) fn select_on(&mut self, link: u64, item: RemoteItem) -> bool {
+        let linked = self.machines.held.iter().find(|held| held.link.id() == link);
+        let Some((held, seen)) = linked.and_then(|held| Some((held, held.seen.as_deref()?))) else { return false };
         let found = match item {
             RemoteItem::Workspace(id) => place(seen, |w| w.id == id).map(|(p, w)| (p, w, active_tab(w))),
             RemoteItem::Tab(id) => place(seen, |w| w.tabs.iter().any(|t| t.id == id)).map(|(p, w)| (p, w, Some(id))),
         };
         let Some((project, workspace, tab)) = found else { return false };
         log::info!("machines", "remote selected", name = held.name, workspace = workspace.id);
-        let (link, id) = (held.link.id(), project.id);
         self.machines.selection = Some(selected(link, seen, project, workspace, tab));
         self.panels.files.set_full_screen(false);
-        if let Some(p) = self.paired_index(link, id) {
+        self.follow_pairing();
+        true
+    }
+
+    pub(super) fn follow_pairing(&mut self) {
+        let Some(shown) = self.shown_remote() else { return };
+        if let Some(p) = self.paired_index(shown.link, shown.project).filter(|&p| p != self.active) {
+            log::info!("machines", "paired project followed", project = self.projects[p].id);
             self.active = p;
         }
-        true
     }
 
     fn paired_index(&self, link: u64, project: u64) -> Option<usize> {
@@ -88,6 +98,7 @@ impl App {
             log::info!("machines", "remote selection dropped", link = selection.link);
         }
         self.machines.selection = kept;
+        self.follow_pairing();
     }
 }
 

@@ -10,7 +10,8 @@ impl App {
 
     pub(super) fn machines_held(&self) -> Vec<(Info, &Held)> {
         let held = |destination: &str| self.machines.held.iter().find(|held| held.destination == destination);
-        let listed = self.config.machines.iter().filter_map(|machine| Some((machine, held(&machine.destination)?)));
+        let accepted = machines::accepted(&self.config.machines);
+        let listed = accepted.filter_map(|machine| Some((machine, held(&machine.destination)?)));
         listed.map(|(machine, held)| (Info::of(machine, Some(&held.status), None, None), held)).collect()
     }
 

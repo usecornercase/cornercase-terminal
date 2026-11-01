@@ -28,6 +28,7 @@ struct Notice {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct There {
+    pub(super) link: u64,
     pub(super) name: String,
     pub(super) boot: String,
 }
@@ -139,6 +140,10 @@ impl App {
 
     pub(super) fn sound_for(&self, kind: sound::Kind, principal: bool) -> Option<sound::Kind> {
         (self.config.sound && (principal || self.config.sound_subagents)).then_some(kind)
+    }
+
+    pub(in crate::app) fn notice_from_a_machine(&self, token: &str) -> bool {
+        self.messages.notices.find(token).is_some_and(|notice| notice.machine.is_some())
     }
 
     pub(in crate::app) fn act_on_notice(&mut self, token: &str) -> Option<Result<Went, String>> {

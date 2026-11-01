@@ -58,5 +58,6 @@ impl App {
         if let (Some(p), Some(repo)) = (self.projects.project_index(project), repo) {
             self.projects[p].repo = repo;
         }
+        self.follow_pairing();
     }
 }

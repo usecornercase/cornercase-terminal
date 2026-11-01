@@ -112,7 +112,7 @@ impl App {
             ui::Drag::Sidebar(row, ui::sidebar_drop(&layout, &rows, row, pos))
         };
         let workspaces = |row: WorkspaceRow| {
-            let (list, tabs) = (areas.workspaces_list, self.tab_lines());
+            let (list, tabs) = (areas.workspaces_list, self.local_tab_lines());
             let layout = ui::workspace_layout(list, areas.pitch, &tabs, self.scroll.of(List::Workspaces));
             ui::Drag::Workspaces(row, ui::workspace_drop(&layout, &tabs, row, pos))
         };

@@ -187,6 +187,7 @@ pub(super) enum Update {
 impl App {
     pub(super) fn sync_machines(&mut self, now: Instant, clock: i64) {
         self.follow_machines();
+        self.follow_pairing();
         let woke = self.machines.sleep.woke(clock, now);
         let moved = if self.machines.held.is_empty() {
             self.machines.network.rest();

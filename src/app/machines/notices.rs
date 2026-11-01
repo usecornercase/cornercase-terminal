@@ -27,7 +27,7 @@ impl App {
         else {
             return;
         };
-        let there = There { name: held.name.clone(), boot: after.boot.clone() };
+        let there = There { link: held.link.id(), name: held.name.clone(), boot: after.boot.clone() };
         let shown = self.shown_remote().filter(|shown| shown.link == held.link.id()).map(|shown| shown.workspace);
         for turn in turns(before, after).into_iter().filter(|turn| Some(turn.workspace) != shown) {
             self.tell_turn(turn, there.clone());
@@ -63,11 +63,10 @@ impl App {
     }
 
     pub(in crate::app) fn go_there(&mut self, there: &There, workspace: u64) -> bool {
-        let same =
-            self.machines.held.iter().any(|held| {
-                held.name == there.name && held.seen.as_deref().is_some_and(|seen| seen.boot == there.boot)
-            });
-        let went = same && self.select_remote(&there.name, RemoteItem::Workspace(workspace));
+        let same = self.machines.held.iter().any(|held| {
+            held.link.id() == there.link && held.seen.as_deref().is_some_and(|seen| seen.boot == there.boot)
+        });
+        let went = same && self.select_on(there.link, RemoteItem::Workspace(workspace));
         if went {
             self.screen.nav = None;
         }
@@ -76,10 +75,14 @@ impl App {
 }
 
 fn turns(before: &control::Report, after: &control::Report) -> Vec<Turn> {
-    let working: HashSet<u64> =
-        before.panes().iter().filter(|row| watched(row) == Some(Status::Working)).map(|row| row.pane).collect();
+    let working: HashSet<(u64, Option<String>)> = before
+        .panes()
+        .into_iter()
+        .filter(|row| watched(row) == Some(Status::Working))
+        .map(|row| (row.pane, row.agent))
+        .collect();
     let mut turns = Vec::new();
-    for row in after.panes().into_iter().filter(|row| working.contains(&row.pane)) {
+    for row in after.panes().into_iter().filter(|row| working.contains(&(row.pane, row.agent.clone()))) {
         if let Some(status) =
             watched(&row).filter(|status| matches!(status, Status::Waiting | Status::Failed | Status::Done))
         {

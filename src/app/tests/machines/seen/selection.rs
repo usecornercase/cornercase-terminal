@@ -173,6 +173,43 @@ mod following {
         assert_eq!(shown(&rig.app), Some(at(BOOT, 2, 23, "blog")));
     }
 
+    fn with_another_project(rig: &mut Rig) -> TempDir {
+        let dir = TempDir::new();
+        rig.app.open_project(dir.path().to_path_buf(), AREA).expect("open project");
+        dir
+    }
+
+    #[test]
+    fn a_project_paired_later_brings_its_pair_forward() {
+        let Seeing { mut rig, mut theirs, .. } = seeing_two();
+        let _dir = with_another_project(&mut rig);
+        rig.app.select_remote("vps", RemoteItem::Workspace(20));
+        assert_eq!(rig.app.active, 1);
+
+        serve(&mut theirs, 2, worked(report(&[("web-shop", Some(SHOP)), ("blog", Some(SHOP))])));
+        rig.until("blog has a repository", |app| {
+            app.machines.held()[0].seen.as_ref().is_some_and(|seen| seen.projects[1].repo.is_some())
+        });
+
+        let view = rig.app.lists_view(AREA, Instant::now());
+        assert_eq!((rig.app.active, view.active, view.active_workspace), (0, 0, theirs_at(&rig.app) + 1));
+    }
+
+    #[test]
+    fn its_pair_closed_here_hands_it_to_the_next_one() {
+        let Seeing { mut rig, ours, .. } = seeing_two();
+        let _dirs = [with_another_project(&mut rig), with_another_project(&mut rig)];
+        rig.app.projects[2].repo.identity = Some(SHOP.into());
+        let next = rig.app.projects[2].id;
+        rig.app.select_remote("vps", RemoteItem::Workspace(10));
+        assert_eq!(rig.app.active, 0);
+
+        rig.app.close_project(ours);
+        rig.refresh(Duration::from_secs(1));
+
+        assert_eq!((rig.app.project().map(|p| p.id), picked(&rig.app)), (Some(next), Some((10, Some(13)))));
+    }
+
     #[test]
     fn giving_the_machine_another_destination_goes_back_to_what_is_here() {
         let (mut rig, _ends, _theirs) = seen_by();

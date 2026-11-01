@@ -26,6 +26,17 @@ mod machines_in_status {
     }
 
     #[test]
+    fn leave_out_an_entry_that_repeats_a_machine_s_destination() {
+        let Seeing { mut rig, .. } = seeing_two();
+        rig.app.config.machines.push(machine("box", "vps.lan"));
+
+        let status = rig.app.report(None);
+
+        assert_eq!(status.machines.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), ["vps"]);
+        assert_eq!(rig.app.remote_projects().len(), 2);
+    }
+
+    #[test]
     fn leave_the_projects_and_the_panes_to_this_computer() {
         let Seeing { rig, ours, .. } = seeing_two();
 
