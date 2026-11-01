@@ -19,6 +19,17 @@ pub(crate) enum Kind {
     Wait,
 }
 
+impl Kind {
+    pub(crate) fn word(self) -> &'static str {
+        match self {
+            Self::Keys => "keys pressed",
+            Self::Read => "read",
+            Self::Wait => "waited for",
+            Self::Send => "sent",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Message {
     pub(crate) from: String,

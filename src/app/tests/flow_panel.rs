@@ -3,7 +3,7 @@ use serde_json::json;
 use super::*;
 use crate::agents::Known;
 use crate::agents::activity::Activity;
-use crate::app::flow_panel::FRAME_EVERY;
+use crate::app::flow_panel::{FRAME_EVERY, Shown};
 use crate::control::{self as wire, Command};
 use crate::flows::ORCHESTRATOR;
 use crate::flows::builtin;
@@ -57,19 +57,21 @@ fn messages(app: &App) -> Vec<(String, String, Kind, Option<String>)> {
     run.messages.iter().map(|m| (m.from.clone(), m.to.clone(), m.kind, m.text.clone())).collect()
 }
 
-pub(super) fn spot(app: &mut App, text: &str) -> Position {
+pub(super) fn spots(app: &mut App, text: &str) -> Vec<Position> {
     let t = render(app, TALL);
     let buf = t.backend().buffer();
     let panel = app.layout(TALL).changes;
     let width = u16::try_from(text.chars().count()).expect("short");
-    (panel.y..panel.bottom())
-        .find_map(|y| {
-            (panel.x..panel.right().saturating_sub(width)).find_map(|x| {
-                let found: String = (x..x + width).map(|x| buf[(x, y)].symbol()).collect();
-                (found == text).then(|| Position::new(x, y))
-            })
-        })
-        .expect("on screen")
+    let cells =
+        (panel.y..panel.bottom()).flat_map(|y| (panel.x..panel.right().saturating_sub(width)).map(move |x| (x, y)));
+    cells
+        .filter(|&(x, y)| (x..x + width).map(|x| buf[(x, y)].symbol()).collect::<String>() == text)
+        .map(|(x, y)| Position::new(x, y))
+        .collect()
+}
+
+pub(super) fn spot(app: &mut App, text: &str) -> Position {
+    spots(app, text).first().copied().expect("on screen")
 }
 
 mod opening {
@@ -309,8 +311,8 @@ mod clicks {
         app.show_flow();
         let at = spot(&mut app, "├▶");
         click_in(&mut app, at, TALL);
-        let Some(overlay @ Overlay::FlowMessage { edge, .. }) = &app.overlay else { panic!("no message dialog") };
-        assert_eq!(*edge, Edge::Forward(0));
+        let Some(overlay @ Overlay::FlowMessage { shown, .. }) = &app.overlay else { panic!("no message dialog") };
+        assert_eq!(*shown, Shown::Along(Edge::Forward(0), None));
         let Some(ui::Overlay::Update(view)) = app.overlay_view(overlay, TALL) else { panic!("not drawn") };
         let notes: Vec<String> = view.notes.iter().map(ToString::to_string).collect();
         assert_eq!((view.message.as_str(), notes), ("orchestrator → reviewer · sent", vec!["review the fix".into()]));
@@ -343,7 +345,7 @@ mod clicks {
         send(&mut app, ORCHESTRATOR, "coder", "fix the login");
         send(&mut app, ORCHESTRATOR, "reviewer", "review the fix");
         let workspace = app.runs.all()[0].workspace;
-        app.overlay = Some(Overlay::FlowMessage { workspace, edge: Edge::Forward(0), to: None, scroll: 0 });
+        app.overlay = Some(Overlay::FlowMessage { workspace, shown: Shown::Along(Edge::Forward(0), None), scroll: 0 });
         app.runs.clear();
         app.refresh(Instant::now());
         assert!(app.overlay.is_none());
@@ -372,7 +374,7 @@ mod animation {
         let term = app.projects.pane_by_mut(coder).expect("the coder");
         term.agent.update(Some(Activity::Working), true, Instant::now());
         app.show_flow();
-        let at = spot(&mut app, "coder");
+        let at = spots(&mut app, "coder")[1];
         let t = render(&mut app, TALL);
         assert_eq!(t.backend().buffer()[(at.x - 2, at.y)].symbol(), "━");
     }
@@ -461,5 +463,280 @@ mod files {
         let t = render(&mut app, TALL);
         let screen = screen_text(&t);
         assert!(!screen.contains("Files ·"), "{screen}");
+    }
+}
+
+fn give_agents(app: &mut App) {
+    for role in ROLES {
+        let pane = pane(app, role);
+        let term = app.projects.pane_by_mut(pane).expect("a pane");
+        term.agent.follow(Some("claude"));
+        term.agent.update(Some(Activity::Idle), true, Instant::now());
+    }
+}
+
+fn screen(app: &mut App) -> String {
+    let t = render(app, TALL);
+    t.backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect()
+}
+
+mod heading {
+    use super::*;
+
+    #[test]
+    fn it_shows_the_state_the_place_and_the_stage() {
+        let (mut app, _rx, _dir) = team();
+        send(&mut app, ORCHESTRATOR, "coder", "fix the login");
+        send(&mut app, ORCHESTRATOR, "reviewer", "review the fix");
+        app.show_flow();
+        let screen = screen(&mut app);
+        assert!(screen.contains("Full issue · running"), "{screen}");
+        assert!(screen.contains("stage 2 of 3"));
+        assert!(screen.contains("run 1 · 2 messages") || screen.contains("2 messages"));
+        assert!(screen.contains('›'));
+    }
+
+    #[test]
+    fn a_loop_shows_its_rounds() {
+        let (mut app, _rx, _dir) = team();
+        for to in ["coder", "reviewer", "coder"] {
+            send(&mut app, ORCHESTRATOR, to, "go");
+        }
+        app.show_flow();
+        assert!(screen(&mut app).contains("findings 1/3"));
+    }
+
+    #[test]
+    fn a_run_that_has_not_started_says_so() {
+        let (mut app, _rx, _dir) = team();
+        app.show_flow();
+        assert!(screen(&mut app).contains("not started"));
+    }
+}
+
+mod team_rows {
+    use super::*;
+
+    #[test]
+    fn the_orchestrator_comes_first_with_every_role_after_it() {
+        let (mut app, _rx, _dir) = team();
+        app.show_flow();
+        let rows: Vec<u16> = ROLES.iter().map(|role| spots(&mut app, role)[0].y).collect();
+        assert!(rows.windows(2).all(|pair| pair[0] < pair[1]), "{rows:?}");
+        assert!(screen(&mut app).contains("Team · 5"));
+    }
+
+    #[test]
+    fn a_click_on_a_row_goes_to_the_pane() {
+        let (mut app, _rx, _dir) = team();
+        app.show_flow();
+        let at = spots(&mut app, "reviewer")[0];
+        click_in(&mut app, at, TALL);
+        let reviewer = pane(&app, "reviewer");
+        assert_eq!(app.term().map(|term| term.id), Some(reviewer));
+        assert_eq!(app.screen.side, Some(Side::Flow));
+    }
+
+    #[test]
+    fn a_closed_member_reads_closed_and_a_click_does_nothing() {
+        let (mut app, rx, _dir) = team();
+        let tester = pane(&app, "tester");
+        let at = app.projects.tab_of_pane(tester).expect("its tab");
+        app.close_tab(at);
+        wait_until_within("the tab is gone", Duration::from_secs(10), || {
+            drain(&mut app, &rx);
+            app.refresh(Instant::now());
+            app.projects.pane_by(tester).is_none()
+        });
+        app.show_flow();
+        let before = app.term().map(|term| term.id);
+        let at = spots(&mut app, "tester")[0];
+        assert!(screen(&mut app).contains("closed"));
+        click_in(&mut app, at, TALL);
+        assert_eq!(app.term().map(|term| term.id), before);
+    }
+
+    #[test]
+    fn a_role_with_its_own_worktree_shows_its_branch() {
+        let (mut app, _rx, _dir) = team();
+        let tree =
+            crate::flows::run::RoleWorktree { role: "coder".into(), path: "/x".into(), branch: "fix/coder".into() };
+        app.projects[0].workspaces[0].role_worktrees.push(tree);
+        let view = app.flow_view(Instant::now(), None).expect("a view");
+        assert_eq!(view.team[1].branch.as_deref(), Some("fix/coder"));
+        assert_eq!(view.team[2].branch, None);
+    }
+}
+
+mod buttons {
+    use super::*;
+
+    fn press(app: &mut App, text: &str) {
+        let at = spot(app, text);
+        click_in(app, Position::new(at.x + 1, at.y), TALL);
+    }
+
+    #[test]
+    fn the_orchestrator_button_goes_to_its_pane() {
+        let (mut app, _rx, _dir) = team();
+        app.show_flow();
+        let reviewer = pane(&app, "reviewer");
+        app.jump_to_pane(reviewer);
+        press(&mut app, "orchestrator ");
+        assert_eq!(app.term().map(|term| term.id), Some(pane(&app, ORCHESTRATOR)));
+    }
+
+    #[test]
+    fn stop_asks_before_closing_the_team() {
+        let (mut app, _rx, _dir) = team();
+        give_agents(&mut app);
+        app.show_flow();
+        press(&mut app, " stop ");
+        let Some(Overlay::CloseAgent(dialog)) = &app.overlay else { panic!("no confirmation") };
+        assert_eq!(dialog.plan.pane, pane(&app, ORCHESTRATOR));
+        assert!(dialog.plan.run.is_some());
+    }
+
+    #[test]
+    fn stop_confirmed_closes_every_member_and_the_panel_goes() {
+        let (mut app, _rx, _dir) = team();
+        give_agents(&mut app);
+        app.show_flow();
+        press(&mut app, " stop ");
+        send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+        app.refresh(Instant::now());
+        assert!(app.runs.all().is_empty());
+        assert!(!app.has_run());
+    }
+
+    #[test]
+    fn stop_picks_the_first_member_that_has_an_agent() {
+        let (mut app, _rx, _dir) = team();
+        give_agents(&mut app);
+        let orchestrator = pane(&app, ORCHESTRATOR);
+        app.projects.pane_by_mut(orchestrator).expect("its pane").agent.follow(None);
+        app.show_flow();
+        press(&mut app, " stop ");
+        let Some(Overlay::CloseAgent(dialog)) = &app.overlay else { panic!("no confirmation") };
+        assert_eq!(dialog.plan.pane, pane(&app, "coder"));
+    }
+}
+
+mod history {
+    use super::*;
+
+    fn opened(app: &mut App, text: &str) -> (String, Vec<String>) {
+        let at = spots(app, text)[0];
+        click_in(app, at, TALL);
+        let overlay = app.overlay.take().expect("a dialog");
+        let Some(ui::Overlay::Update(view)) = app.overlay_view(&overlay, TALL) else { panic!("not drawn") };
+        app.overlay = Some(overlay);
+        (view.message, view.notes.iter().map(ToString::to_string).collect())
+    }
+
+    #[test]
+    fn messages_come_newest_first_with_their_step() {
+        let (mut app, _rx, _dir) = team();
+        for to in ["coder", "reviewer", "coder"] {
+            send(&mut app, ORCHESTRATOR, to, "go");
+        }
+        app.show_flow();
+        let (third, first) = (spot(&mut app, "#3"), spot(&mut app, "#1"));
+        assert!(third.y < first.y);
+        let screen = screen(&mut app);
+        assert!(screen.contains("stage 1 → 2") && screen.contains("findings"));
+        assert!(screen.contains("Messages · 3"));
+    }
+
+    #[test]
+    fn a_click_opens_the_message_and_enter_copies_it() {
+        let (mut app, _rx, _dir) = team();
+        send(&mut app, ORCHESTRATOR, "coder", "fix the login");
+        send(&mut app, ORCHESTRATOR, "reviewer", "review the fix");
+        app.show_flow();
+        assert_eq!(opened(&mut app, "#1"), ("orchestrator → coder · sent".into(), vec!["fix the login".into()]));
+        send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+        assert_eq!(app.take_host_writes(), vec![clipboard::osc52("fix the login")]);
+    }
+
+    #[test]
+    fn a_dialog_goes_when_its_message_is_no_longer_kept() {
+        let (mut app, _rx, _dir) = team();
+        send(&mut app, ORCHESTRATOR, "coder", "first");
+        app.show_flow();
+        let workspace = app.runs.all()[0].workspace;
+        app.overlay = Some(Overlay::FlowMessage { workspace, shown: Shown::Number(1), scroll: 0 });
+        for _ in 0..crate::flows::run::MAX_MESSAGES {
+            send(&mut app, ORCHESTRATOR, "coder", "more");
+        }
+        app.refresh(Instant::now());
+        assert!(app.overlay.is_none());
+    }
+
+    #[test]
+    fn a_long_text_shows_two_rows_at_most() {
+        let (mut app, _rx, _dir) = team();
+        let text = "word ".repeat(2000);
+        send(&mut app, ORCHESTRATOR, "coder", &text);
+        app.show_flow();
+        let at = spot(&mut app, "#1");
+        let t = render(&mut app, TALL);
+        let row = |y: u16| -> String { (at.x..TALL.right()).map(|x| t.backend().buffer()[(x, y)].symbol()).collect() };
+        assert!(row(at.y + 1).contains("word") && row(at.y + 2).contains("word"));
+        assert!(row(at.y + 3).trim().is_empty() || !row(at.y + 3).contains("word"));
+    }
+}
+
+mod folder {
+    use std::time::SystemTime;
+
+    use super::*;
+    use crate::host::open::{Open, Opener};
+
+    fn with_folder(app: &mut App, dir: &TempDir) -> PathBuf {
+        let folder = dir.path().join("run");
+        std::fs::create_dir_all(&folder).expect("the run's folder");
+        let file = std::fs::File::create(folder.join("coder-1.md")).expect("a file");
+        file.set_len(2048).expect("a size");
+        file.set_modified(SystemTime::now()).expect("a time");
+        app.runs.first_mut().dir = Some(folder.clone());
+        folder
+    }
+
+    #[test]
+    fn a_file_shows_its_size() {
+        let (mut app, rx, dir) = team();
+        with_folder(&mut app, &dir);
+        app.show_flow();
+        wait_until_within("the size", Duration::from_secs(10), || {
+            drain(&mut app, &rx);
+            app.refresh(Instant::now());
+            screen(&mut app).contains("2 KB")
+        });
+    }
+
+    #[test]
+    fn open_folder_offers_the_openers_and_the_file_manager_gets_the_run_folder() {
+        let (mut app, _rx, dir) = team();
+        let folder = with_folder(&mut app, &dir);
+        app.set_window(CLIENT, &[Opener::Files, Opener::Vscode]);
+        app.show_flow();
+        let at = spot(&mut app, "open folder");
+        click_in(&mut app, at, TALL);
+        pick(&mut app, "file manager");
+        let path = folder.to_str().expect("UTF-8").to_string();
+        assert_eq!(app.take_opens(), [(CLIENT, Open { opener: Opener::Files, path, line: None })]);
+    }
+
+    #[test]
+    fn without_openers_open_folder_copies_the_path() {
+        let (mut app, _rx, dir) = team();
+        let folder = with_folder(&mut app, &dir);
+        app.show_flow();
+        let at = spot(&mut app, "open folder");
+        click_in(&mut app, at, TALL);
+        let path = folder.to_str().expect("UTF-8");
+        assert_eq!(app.take_host_writes(), vec![clipboard::osc52(path)]);
+        assert!(toast(&app).is_some());
     }
 }

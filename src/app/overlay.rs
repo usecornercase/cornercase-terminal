@@ -4,7 +4,7 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::close_agent::CloseAgent;
 use super::closed_agents::dialog::{CLOSE_AGENTS_SUBMIT, CloseAgents, FORGET_SUBMIT};
-use super::flow_panel::COPY;
+use super::flow_panel::{COPY, Shown};
 use super::flows_dialog::flows_view;
 use super::issues_dialog::{room, view};
 use super::menus::MenuAction;
@@ -20,7 +20,6 @@ use crate::changes::{self, BranchPicker};
 use crate::editor::Editor;
 use crate::error::Result;
 use crate::flows::dialog::Dialog;
-use crate::flows::progress::Edge;
 use crate::flows::start::Start;
 use crate::git::worktree;
 use crate::issues::browser::Browser;
@@ -91,7 +90,7 @@ pub(super) enum Overlay {
     Branches(BranchPicker),
     PullRequest { workspace: u64, scroll: usize },
     MergeCheck { workspace: u64, scroll: usize },
-    FlowMessage { workspace: u64, edge: Edge, to: Option<String>, scroll: usize },
+    FlowMessage { workspace: u64, shown: Shown, scroll: usize },
     Keys(Option<KeysGroup>),
     Worktrees(Box<crate::worktrees::Dialog>),
     Ports(Box<crate::ports::dialog::Dialog>),
@@ -347,8 +346,8 @@ impl App {
         Some(match overlay {
             Overlay::PullRequest { workspace, scroll } => self.pull_request_view(*workspace, *scroll, area)?,
             Overlay::MergeCheck { workspace, scroll } => self.merge_check_view(*workspace, *scroll, area)?,
-            Overlay::FlowMessage { workspace, edge, to, scroll } => {
-                self.flow_message_view(*workspace, (*edge, to.as_deref()), *scroll, area)?
+            Overlay::FlowMessage { workspace, shown, scroll } => {
+                self.flow_message_view(*workspace, shown, *scroll, area)?
             }
             _ => return None,
         })

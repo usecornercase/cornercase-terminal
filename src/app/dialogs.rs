@@ -265,9 +265,7 @@ impl App {
                 self.check_merges(workspace);
                 Some(Overlay::MergeCheck { workspace, scroll })
             }
-            Overlay::FlowMessage { workspace, edge, to, .. } => {
-                self.submit_flow_message(workspace, edge, to.as_deref())
-            }
+            Overlay::FlowMessage { workspace, shown, .. } => self.submit_flow_message(workspace, &shown),
             busy => Some(busy),
         };
         Ok(())
