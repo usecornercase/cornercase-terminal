@@ -9,6 +9,7 @@ use serde_json::Value;
 use super::event::AppEvent;
 use super::input::wheel;
 use super::layout::Side;
+use super::opening::Subject;
 use super::overlay::Overlay;
 use super::pull_requests::DONE;
 use super::{App, Toast};
@@ -16,15 +17,17 @@ use crate::control::{Command, FlowMessage};
 use crate::editor::wrap;
 use crate::error::Result;
 use crate::files::link::Target;
+use crate::flows::ORCHESTRATOR;
 use crate::flows::folder::{self, Listing};
 use crate::flows::progress::Edge;
 use crate::flows::run::{Kind, Message, Run};
 use crate::log::{Job, Level};
 use crate::project::search::Goto;
 use crate::project::{Hierarchy, Project};
-use crate::pull_request::PullRequest;
-use crate::time;
 use crate::ui::{self, flow};
+
+mod branch;
+mod view;
 
 pub(super) const COPY: &str = "copy";
 pub(super) const FRAME_EVERY: Duration = Duration::from_millis(40);
@@ -32,6 +35,7 @@ const LIST_EVERY: Duration = Duration::from_secs(2);
 const LIST_GIVE_UP: Duration = Duration::from_secs(30);
 const TITLE: &str = "Message";
 const MAX_TEXT: usize = 32 * 1024;
+const HEAD: usize = 1024;
 const MAX_READS: usize = 16;
 const NO_RUN: &str = "this workspace runs no flow";
 const NOTHING_SENT: &str = "(enter, with nothing typed)";
@@ -43,6 +47,9 @@ pub(super) struct FlowPanel {
     files: Option<(u64, Listing)>,
     listing: Option<(u64, Instant)>,
     listed: Option<Instant>,
+    branch: Option<(u64, Option<String>)>,
+    branching: Option<Instant>,
+    reading: bool,
 }
 
 pub(super) struct Noted {
@@ -57,16 +64,14 @@ fn kept(text: &str) -> String {
     text[..cut].to_string()
 }
 
-pub(super) type Sent<'a> = (Edge, Option<&'a str>);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Shown {
+    Along(Edge, Option<String>),
+    Number(u64),
+}
 
 fn heading(message: &Message) -> String {
-    let what = match message.kind {
-        Kind::Keys => "keys pressed",
-        Kind::Read => "read",
-        Kind::Wait => "waited for",
-        Kind::Send => "sent",
-    };
-    format!("{} → {} · {what}", message.from, message.to)
+    format!("{} → {} · {}", message.from, message.to, message.kind.word())
 }
 
 fn lines(message: &Message, width: usize, muted: Color) -> Vec<Line<'static>> {
@@ -141,27 +146,15 @@ impl App {
 
     pub(super) fn flow_view(&self, now: Instant, spin: Option<u8>) -> Option<flow::View> {
         let run = self.shown_run()?;
-        let (muted, light) = (ui::muted(self.themes.host()), self.themes.light());
-        let plan = flow::Diagram::plan(&run.flow, muted, light);
-        let pull = run.pull(self.pull_request(run.workspace));
-        let end = flow::Ending { reached: run.reached(pull), pull: pull.map(PullRequest::mark) };
-        let mut diagram = plan.live(&run.progress, |role| self.role_state(run, role), end, now);
-        diagram.spin = spin;
-        let files = self.panels.flow.files.as_ref().filter(|(id, _)| *id == run.id).map(|(_, listing)| {
-            let now = SystemTime::now();
-            let age = |file: &folder::File| {
-                let secs = file.modified.and_then(|at| now.duration_since(at).ok()).map_or(0, |d| d.as_secs());
-                time::age(i64::try_from(secs).unwrap_or(i64::MAX))
-            };
-            let rows = listing.files.iter().map(|file| flow::FileRow { name: file.name.clone(), age: age(file) });
-            flow::Files { rows: rows.collect(), more: listing.more }
-        });
-        let files = files.or_else(|| run.dir.as_ref().map(|_| flow::Files { rows: Vec::new(), more: false }));
+        let at = self.projects.workspace_index(run.workspace)?;
         Some(flow::View {
             name: run.flow.name.clone(),
             task: run.task.clone(),
-            diagram,
-            files,
+            heading: self.run_heading(run, at),
+            team: self.run_team(run, at),
+            diagram: self.run_diagram(run, now, spin),
+            history: Self::run_history(run),
+            files: self.run_files(run),
             scroll: self.panels.flow.scroll,
         })
     }
@@ -228,20 +221,35 @@ impl App {
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
             return;
         }
-        match flow::hit(panel, &view, pos) {
-            Some(flow::Hit::Close) => self.show_side(None),
-            Some(flow::Hit::Role(role)) => self.jump_to_role(&role),
-            Some(flow::Hit::File(index)) => self.open_run_file(index),
-            Some(flow::Hit::Pull) => {
-                if let Some(workspace) = self.shown_run().map(|run| run.workspace) {
-                    self.open_pull_request(workspace);
-                }
+        if let Some(hit) = flow::hit(panel, &view, pos) {
+            self.flow_hit(hit, pos);
+        }
+    }
+
+    fn flow_hit(&mut self, hit: flow::Hit, pos: Position) {
+        let Some(workspace) = self.shown_run().map(|run| run.workspace) else { return };
+        match hit {
+            flow::Hit::Close => self.show_side(None),
+            flow::Hit::Role(role) => self.jump_to_role(&role),
+            flow::Hit::File(index) => self.open_run_file(index),
+            flow::Hit::Pull => self.open_pull_request(workspace),
+            flow::Hit::Edge(edge, to) => {
+                self.overlay = Some(Overlay::FlowMessage { workspace, shown: Shown::Along(edge, to), scroll: 0 });
             }
-            Some(flow::Hit::Edge(edge, to)) => {
-                let Some(workspace) = self.shown_run().map(|run| run.workspace) else { return };
-                self.overlay = Some(Overlay::FlowMessage { workspace, edge, to, scroll: 0 });
+            flow::Hit::Message(seq) => {
+                self.overlay = Some(Overlay::FlowMessage { workspace, shown: Shown::Number(seq), scroll: 0 });
             }
-            None => {}
+            flow::Hit::Stop => self.stop_run(),
+            flow::Hit::Folder => self.open_menu_or_copy(Subject::Run(workspace), pos),
+        }
+    }
+
+    fn stop_run(&mut self) {
+        let Some(run) = self.shown_run() else { return };
+        let panes: Vec<u64> = run.pane_of(ORCHESTRATOR).into_iter().chain(run.members.iter().map(|m| m.pane)).collect();
+        let lead = panes.iter().copied().find(|&pane| self.projects.pane_by(pane).is_some());
+        if let Some(pane) = lead {
+            self.ask_stop_run(pane);
         }
     }
 
@@ -256,27 +264,31 @@ impl App {
         self.jump_to_pane(pane);
     }
 
-    fn flow_message(&self, workspace: u64, edge: Edge, to: Option<&str>) -> Option<&Message> {
-        self.run_of(workspace)?.progress.along(edge, to)
+    fn flow_message(&self, workspace: u64, shown: &Shown) -> Option<&Message> {
+        let run = self.run_of(workspace)?;
+        match shown {
+            Shown::Along(edge, to) => run.progress.along(*edge, to.as_deref()),
+            Shown::Number(seq) => run.messages.iter().rev().find(|message| message.seq == *seq),
+        }
     }
 
-    fn flow_message_lines(&self, workspace: u64, sent: Sent<'_>, area: Rect) -> Option<Vec<Line<'static>>> {
+    fn flow_message_lines(&self, workspace: u64, shown: &Shown, area: Rect) -> Option<Vec<Line<'static>>> {
         let width = usize::from(ui::update_notes(area).width.max(1));
-        self.flow_message(workspace, sent.0, sent.1).map(|message| lines(message, width, ui::muted(self.themes.host())))
+        self.flow_message(workspace, shown).map(|message| lines(message, width, ui::muted(self.themes.host())))
     }
 
     pub(super) fn flow_message_view(
         &self,
         workspace: u64,
-        sent: Sent<'_>,
+        shown: &Shown,
         scroll: usize,
         area: Rect,
     ) -> Option<ui::Overlay> {
-        let message = self.flow_message(workspace, sent.0, sent.1)?;
+        let message = self.flow_message(workspace, shown)?;
         Some(ui::Overlay::Update(ui::Update {
             title: TITLE,
             message: heading(message),
-            notes: self.flow_message_lines(workspace, sent, area)?,
+            notes: self.flow_message_lines(workspace, shown, area)?,
             scroll,
             note: None,
             submit: COPY,
@@ -286,8 +298,8 @@ impl App {
     }
 
     pub(super) fn flow_message_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
-        let Some(Overlay::FlowMessage { workspace, edge, to, .. }) = &self.overlay else { return };
-        let (workspace, edge, to) = (*workspace, *edge, to.clone());
+        let Some(Overlay::FlowMessage { workspace, shown, .. }) = &self.overlay else { return };
+        let (workspace, shown) = (*workspace, shown.clone());
         if let Some(delta) = wheel(ev.kind) {
             self.scroll_flow_message(delta, area);
             return;
@@ -297,23 +309,23 @@ impl App {
         }
         let [submit, cancel] = ui::update_buttons(area, COPY, DONE);
         if submit.contains(pos) {
-            self.overlay = self.submit_flow_message(workspace, edge, to.as_deref());
+            self.overlay = self.submit_flow_message(workspace, &shown);
         } else if cancel.contains(pos) {
             self.overlay = None;
         }
     }
 
     pub(super) fn scroll_flow_message(&mut self, delta: isize, area: Rect) {
-        let Some(Overlay::FlowMessage { workspace, edge, to, scroll }) = &self.overlay else { return };
-        let count = self.flow_message_lines(*workspace, (*edge, to.as_deref()), area).map_or(0, |lines| lines.len());
+        let Some(Overlay::FlowMessage { workspace, shown, scroll }) = &self.overlay else { return };
+        let count = self.flow_message_lines(*workspace, shown, area).map_or(0, |lines| lines.len());
         let scroll = ui::update_scroll(area, count, scroll.saturating_add_signed(delta));
         if let Some(Overlay::FlowMessage { scroll: kept, .. }) = &mut self.overlay {
             *kept = scroll;
         }
     }
 
-    pub(super) fn submit_flow_message(&mut self, workspace: u64, edge: Edge, to: Option<&str>) -> Option<Overlay> {
-        let text = self.flow_message(workspace, edge, to).and_then(|message| message.text.clone());
+    pub(super) fn submit_flow_message(&mut self, workspace: u64, shown: &Shown) -> Option<Overlay> {
+        let text = self.flow_message(workspace, shown).and_then(|message| message.text.clone());
         if let Some(text) = text {
             self.copy(&text);
         }
@@ -321,8 +333,8 @@ impl App {
     }
 
     pub(super) fn close_gone_flow_message(&mut self) {
-        if let Some(Overlay::FlowMessage { workspace, edge, to, .. }) = &self.overlay
-            && self.flow_message(*workspace, *edge, to.as_deref()).is_none()
+        if let Some(Overlay::FlowMessage { workspace, shown, .. }) = &self.overlay
+            && self.flow_message(*workspace, shown).is_none()
         {
             self.overlay = None;
         }

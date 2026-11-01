@@ -6,7 +6,7 @@ import { DEFAULT } from '../term/palette';
 import { type AgentRow, type App, PAGE_NAMES, crop } from './app';
 import { changesLabel, drawChanges, hasChanges } from './changes';
 import { drawFiles } from './files';
-import { drawFlow } from './flow';
+import { drawFlow } from './flowpanel';
 import { type FieldGrip, drawTodo, fieldLines, fieldPosition } from './todo';
 import { type KeysGroup, keyWidth, keysArea, keysFrame, keysItem, keysItems } from './keys';
 import {

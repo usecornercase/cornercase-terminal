@@ -3,7 +3,7 @@ use std::time::Instant;
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::Color;
 use ratatui::text::Span;
 
 pub(crate) use super::todo::close;
@@ -19,12 +19,20 @@ use crate::ui::theme::{WAITING_COLOR, pull_tag};
 
 mod files;
 mod geometry;
+mod heading;
+mod history;
 mod paint;
+mod stack;
+mod team;
 
 pub(crate) use files::{FileRow, Files};
+pub(crate) use heading::Heading;
+pub(crate) use history::{Entry, History, Step};
+pub(crate) use team::Member;
 
 use geometry::{Geometry, Place, layout};
 use paint::Canvas;
+use stack::{Look, slot};
 
 pub(crate) const LABEL: &str = "Flow";
 const RED: u8 = 9;
@@ -112,6 +120,9 @@ pub(crate) enum Hit {
     Edge(Edge, Option<String>),
     File(usize),
     Pull,
+    Stop,
+    Message(u64),
+    Folder,
 }
 
 pub(crate) fn role_colour(index: usize) -> Color {
@@ -326,13 +337,34 @@ pub(crate) fn diagram_hit(area: Rect, diagram: &Diagram, scroll: u16, pos: Posit
 pub(crate) struct View {
     pub(crate) name: String,
     pub(crate) task: String,
+    pub(crate) heading: Heading,
+    pub(crate) team: Vec<Member>,
     pub(crate) diagram: Diagram,
+    pub(crate) history: History,
     pub(crate) files: Option<Files>,
     pub(crate) scroll: u16,
 }
 
+struct Tops {
+    team: u16,
+    diagram: u16,
+    history: u16,
+    files: u16,
+    total: u16,
+}
+
+fn tops(view: &View, width: u16) -> Tops {
+    let team = heading::height(view, width);
+    let team_height = team::height(&view.team);
+    let diagram = team.saturating_add(team_height).saturating_add(u16::from(team_height > 0));
+    let history = diagram.saturating_add(diagram_height(&view.diagram, width));
+    let files = history.saturating_add(history::height(&view.history, width));
+    let total = files.saturating_add(files::height(view.files.as_ref()));
+    Tops { team, diagram, history, files, total }
+}
+
 fn content_height(view: &View, width: u16) -> u16 {
-    diagram_height(&view.diagram, width).saturating_add(files::height(view.files.as_ref()))
+    tops(view, width).total
 }
 
 pub(crate) fn body(area: Rect) -> Rect {
@@ -347,6 +379,27 @@ pub(crate) fn scrolled(area: Rect, view: &View, delta: isize) -> u16 {
     u16::try_from(scroll).unwrap_or(u16::MAX).min(most)
 }
 
+fn section_hit(body: Rect, view: &View, scroll: u16, pos: Position) -> Option<Hit> {
+    let tops = tops(view, body.width);
+    let at = |top| slot(body, top, scroll);
+    if let Some(hit) = at(0).and_then(|s| heading::hit(&s, view, pos)) {
+        return Some(hit);
+    }
+    if let Some(hit) = at(tops.team).and_then(|s| team::hit(&s, &view.team, pos)) {
+        return Some(hit);
+    }
+    if let Some(hit) = at(tops.history).and_then(|s| history::hit(&s, &view.history, pos)) {
+        return Some(hit);
+    }
+    if let (Some(files), Some(s)) = (&view.files, at(tops.files))
+        && let Some(hit) = files::hit(&s, files, pos)
+    {
+        return Some(hit);
+    }
+    let s = at(tops.diagram)?;
+    diagram_hit(s.area, &view.diagram, s.skip, pos)
+}
+
 pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     if close(area).contains(pos) {
         return Some(Hit::Close);
@@ -355,38 +408,42 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     if !body.contains(pos) {
         return None;
     }
-    let scroll = scrolled(area, view, 0);
-    let top = diagram_height(&view.diagram, body.width);
-    if let Some(files) = &view.files
-        && let Some(hit) = files::hit(body, files, top, scroll, pos)
-    {
-        return Some(hit);
+    section_hit(body, view, scrolled(area, view, 0), pos)
+}
+
+fn draw_sections(buf: &mut Buffer, body: Rect, view: &View, (scroll, hover): (u16, Option<Position>)) {
+    let (muted, light) = (view.diagram.muted, view.diagram.light);
+    let look = Look { muted, light, hover };
+    let tops = tops(view, body.width);
+    let at = |top| slot(body, top, scroll);
+    if let Some(s) = at(0) {
+        heading::draw(buf, &s, view, look);
     }
-    diagram_hit(body, &view.diagram, scroll, pos)
+    if let Some(s) = at(tops.team) {
+        team::draw(buf, &s, &view.team, (look, view.diagram.spin));
+    }
+    if let Some(s) = at(tops.diagram) {
+        draw_diagram(buf, s.area, &view.diagram, s.skip, hover);
+    }
+    if let Some(s) = at(tops.history) {
+        history::draw(buf, &s, &view.history, look);
+    }
+    if let (Some(files), Some(s)) = (&view.files, at(tops.files)) {
+        files::draw(buf, &s, files, look);
+    }
 }
 
 pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
     let buf = f.buffer_mut();
     let row = header(area);
-    let name = text::truncate_cells(&view.name, usize::from(row.width.saturating_sub(4)));
-    put(buf, (row.x, row.y), &name, Style::default().add_modifier(Modifier::BOLD), row.right());
+    heading::draw_title(buf, row, view);
     draw_close(buf, close(area), hover, view.diagram.muted);
     let task = text::truncate_cells(view.task.lines().next().unwrap_or_default(), usize::from(row.width));
     put(buf, (row.x, row.y + 1), &task, dim(view.diagram.muted), row.right().min(area.right()));
     let body = body(area);
     let scroll = scrolled(area, view, 0);
     let hover = hover.filter(|p| body.contains(*p));
-    draw_diagram(buf, body, &view.diagram, scroll, hover);
-    let top = diagram_height(&view.diagram, body.width);
-    if let Some(files) = &view.files {
-        files::draw(
-            buf,
-            body,
-            files,
-            (top, scroll),
-            files::Look { muted: view.diagram.muted, light: view.diagram.light, hover },
-        );
-    }
+    draw_sections(buf, body, view, (scroll, hover));
     markers(buf, body, view.diagram.muted, scroll, content_height(view, body.width));
 }
 

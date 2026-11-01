@@ -263,7 +263,7 @@ export type Overlay =
   | { kind: 'keys'; group: KeysGroup | null }
   | { kind: 'closePane'; pane: number }
   | { kind: 'discard'; key: string; path: string; status: string; untracked: boolean; old?: string }
-  | { kind: 'flowMessage'; workspace: number; edge: string; to: string | null; scroll: number }
+  | { kind: 'flowMessage'; workspace: number; edge: string; to: string | null; seq?: number; scroll: number }
   | import('./queue').QueueForm
   | SettingsOverlay
   | IssuesOverlay;
