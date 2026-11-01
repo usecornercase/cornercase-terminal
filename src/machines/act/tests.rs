@@ -97,6 +97,17 @@ mod an_answer {
         assert_eq!(heard(&text), Ok(json!({"workspace": 3, "path": "/srv/ab", "branch": "xy"})));
     }
 
+    #[test]
+    fn that_warns_keeps_its_whole_warning_on_one_line_without_hidden_characters() {
+        let why = format!("the teardown of `qa` failed: {}", "x".repeat(300));
+        let text = json!({"ok": {"warning": format!("{why}\n\u{1b}[31m"), "branch": "y".repeat(300)}}).to_string();
+
+        let value = heard(&text).expect("a value");
+
+        assert_eq!(value[WARNING], format!("{why} [31m"));
+        assert_eq!(value["branch"].as_str().map(str::len), Some(200));
+    }
+
     #[rstest]
     #[case::stale_boot(Code::StaleBoot, "this request is for the cornercase server started as 1-2")]
     #[case::not_found(Code::NotFound, "there is no workspace 3; `cornercase status` lists them")]

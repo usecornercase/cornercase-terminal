@@ -1,4 +1,5 @@
 use super::*;
+use crate::config::ProjectSettings;
 use crate::test_util::{exited_pid, git};
 
 struct Setup {
@@ -76,6 +77,23 @@ fn the_row_goes_once_git_is_done_and_the_branch_stays() {
 
     gone(&mut s);
     assert_eq!((toast(&s.app), s.path.exists(), branch_exists(s.repo.path(), "wt")), (Some("removed wt"), false, true));
+}
+
+#[test]
+fn a_failed_teardown_still_removes_it_and_points_at_the_log() {
+    let mut s = with_worktree();
+    let teardown = ProjectSettings { teardown: "echo no route; exit 1".into(), ..Default::default() };
+    s.app.config.projects.insert(s.repo.path().display().to_string(), teardown);
+    checked(&mut s);
+
+    click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
+
+    gone(&mut s);
+    let toast = s.app.messages.toast.as_ref().expect("a toast");
+    assert_eq!(
+        (toast.message.as_str(), toast.icon, s.path.exists()),
+        ("removed wt, cleanup failed in part, see server.log", ui::ToastIcon::Bug, false)
+    );
 }
 
 #[test]

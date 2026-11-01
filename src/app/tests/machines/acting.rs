@@ -289,11 +289,7 @@ mod an_answer {
 
     #[rstest]
     #[case::removed(Reply::Agree, "removed api on vps", ui::ToastIcon::Check)]
-    #[case::warned(
-        Reply::Warn,
-        "removed api on vps, but its teardown failed: exit status 1: no route to vps",
-        ui::ToastIcon::Bug
-    )]
+    #[case::warned(Reply::Warn, "removed api on vps, cleanup failed in part, see server.log", ui::ToastIcon::Bug)]
     fn to_a_removal_is_told_as_a_removal_here(#[case] reply: Reply, #[case] told: &str, #[case] icon: ui::ToastIcon) {
         let mut remote = seeing(reply);
 

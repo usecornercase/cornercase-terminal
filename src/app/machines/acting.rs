@@ -13,7 +13,7 @@ use crate::control::contract::{Code, Refusal};
 use crate::control::{self, WorkspaceInfo};
 use crate::error;
 use crate::log::{self, Job, Level};
-use crate::machines::act::{self, Act};
+use crate::machines::act::{self, Act, WARNING};
 use crate::machines::link::Down;
 use crate::machines::{self, State, ask};
 use crate::ui;
@@ -24,7 +24,6 @@ const NOTHING_SENT: &str = "nothing was sent";
 const UNLISTED: &str = "that machine is no longer listed";
 const NOTHING_REMOVED: &str = "nothing was removed";
 const WAITING: &str = "is still waiting for its last action";
-const WARNING: &str = "warning";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::app) struct Aim {
@@ -237,7 +236,9 @@ fn told(act: &Act, label: &str, machine: &str, result: &Result<Value, Refusal>) 
             (format!("could not check {named}: {}; {NOTHING_REMOVED}", refusal.message), ui::ToastIcon::Bug)
         }
         (_, Err(refusal)) => (format!("could not {} {named}: {}", act.verb(), refusal.message), ui::ToastIcon::Bug),
-        (Act::Remove { .. }, Ok(value)) => return Some(worktrees::removed(&named, value[WARNING].as_str())),
+        (Act::Remove { .. }, Ok(value)) => {
+            return Some(worktrees::removed(label, Some(machine), value[WARNING].as_str()));
+        }
         _ => return None,
     };
     Some(Toast::new(message, icon))

@@ -10,6 +10,7 @@ const QUICK: Duration = Duration::from_secs(15);
 const CHECK: Duration = Duration::from_secs(60);
 const REMOVE: Duration = Duration::from_mins(10);
 pub(crate) const UNREADABLE: &str = "its answer could not be read";
+pub(crate) const WARNING: &str = "warning";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Act {
@@ -52,10 +53,19 @@ impl Act {
 
 pub(crate) fn heard(text: &str) -> Result<Value, Refusal> {
     match serde_json::from_str::<Structured>(text) {
-        Ok(Structured::Ok(value)) => Ok(link::cleaned(value)),
+        Ok(Structured::Ok(value)) => Ok(cleaned(value)),
         Ok(Structured::Error(refusal)) => Err(Refusal::new(refusal.code, link::clean(&refusal.message))),
         Err(_) => Err(Refusal::new(Code::Malformed, UNREADABLE)),
     }
+}
+
+fn cleaned(mut value: Value) -> Value {
+    let warning = value.get_mut(WARNING).map(Value::take);
+    let mut value = link::cleaned(value);
+    if let (Some(Value::String(text)), Some(slot)) = (warning, value.get_mut(WARNING)) {
+        *slot = Value::String(link::clean_warning(&text));
+    }
+    value
 }
 
 #[cfg(test)]

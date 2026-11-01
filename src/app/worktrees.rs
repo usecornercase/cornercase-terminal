@@ -44,6 +44,8 @@ const UNCOMMITTED_TOO: &str = "It has uncommitted changes, which are deleted.";
 
 const MAX_LOCK_REASON: usize = 100;
 
+const PARTLY_CLEANED: &str = "cleanup failed in part";
+
 pub(super) const SYNC_EVERY: Duration = Duration::from_secs(1);
 
 pub(super) const COUNT_BEHIND_EVERY: Duration = Duration::from_secs(3);
@@ -503,7 +505,7 @@ impl App {
         }
         let Some(name) = self.settle_removal(project, workspace, result.is_ok()) else { return };
         let toast = match result {
-            Ok(warning) => removed(&name, warning.as_deref()),
+            Ok(warning) => removed(&name, None, warning.as_deref()),
             Err(e) => Toast::new(format!("could not remove {name}: {e}"), ui::ToastIcon::Bug),
         };
         self.messages.toast = Some(toast);
@@ -544,11 +546,14 @@ pub(super) struct Removing<'a> {
     pub(super) on: Option<&'a str>,
 }
 
-pub(super) fn removed(name: &str, warning: Option<&str>) -> Toast {
-    match warning {
-        None => Toast::new(format!("removed {name}"), ui::ToastIcon::Check),
-        Some(why) => Toast::new(format!("removed {name}, but its teardown failed: {why}"), ui::ToastIcon::Bug),
-    }
+pub(super) fn removed(label: &str, machine: Option<&str>, warning: Option<&str>) -> Toast {
+    let name = named(label, machine);
+    let Some(why) = warning else { return Toast::new(format!("removed {name}"), ui::ToastIcon::Check) };
+    let mut fields = vec![("workspace", label.to_string())];
+    fields.extend(machine.map(|machine| ("machine", machine.to_string())));
+    fields.push(("warning", why.to_string()));
+    log::write_fields(Level::Warn, "worktree", &format!("removed, {PARTLY_CLEANED}"), &fields);
+    Toast::new(format!("removed {name}, {PARTLY_CLEANED}, see server.log"), ui::ToastIcon::Bug)
 }
 
 pub(super) fn removal_question(removing: &Removing<'_>) -> String {

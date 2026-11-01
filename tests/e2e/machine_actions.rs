@@ -11,11 +11,18 @@ struct Linked {
 }
 
 fn showing(workspace: &str, worktree: bool) -> Linked {
+    showing_at(workspace, worktree, VPS, "")
+}
+
+fn showing_at(workspace: &str, worktree: bool, destination: &str, teardown: &str) -> Linked {
     let machine = Session::new();
-    let config = json!({"worktrees_dir": machine.dir.join("worktrees")});
+    let mut config = json!({"worktrees_dir": machine.dir.join("worktrees"), "projects": {}});
+    if !teardown.is_empty() {
+        config["projects"][machine.dir.join("api").display().to_string()] = json!({"teardown": teardown});
+    }
     std::fs::write(machine.dir.join("config.json"), config.to_string()).expect("write the machine's config");
     let here = Session::new();
-    start_listing(&here, &[(VPS, VPS)], &[(VPS, &reach(&machine))], json!({}));
+    start_listing(&here, &[(VPS, destination)], &[(destination, &reach(&machine))], json!({}));
     wait_for_machine(&here, VPS, "the machine is linked", in_state("linked"));
     let repo = repository(&machine.dir, "api").display().to_string();
     let project = machine.says(&["open", &repo]);
@@ -97,6 +104,23 @@ fn a_machine_s_worktree_is_removed_there_from_its_close_button() {
     linked.app.wait_for("the toast says it is gone", |s| s.contains("removed e2e/gone on vps"));
     linked.until_gone("e2e/gone");
     assert!(!checkout.exists(), "the checkout is still there");
+}
+
+#[test]
+fn a_machine_s_teardown_warning_is_logged_here_whole_and_without_its_destination() {
+    let said = format!("no route to vps.lan {}", "x".repeat(120));
+    let mut linked = showing_at("e2e/gone", true, "vps.lan", &format!("echo '{said}'; exit 1"));
+
+    linked.close("e2e/gone");
+    linked.app.wait_for("the machine checks it first", |s| s.contains("Remove workspace") && s.contains("on vps"));
+    linked.app.send(b"\r");
+
+    linked.app.wait_for("the toast points at the log", |s| s.contains("cleanup failed in part"));
+    let logged = format!("exit status 1: no route to vps {}", "x".repeat(120));
+    linked.app.session.wait_for_file("server.log", "the warning is logged", |log| log.contains(&logged));
+    let log = std::fs::read_to_string(linked.app.session.dir.join("server.log")).expect("read the log");
+    let line = log.lines().find(|line| line.contains(&logged)).expect("the warning's line");
+    assert!(line.contains("workspace=e2e/gone machine=vps") && !line.contains("vps.lan"), "{line}");
 }
 
 #[test]

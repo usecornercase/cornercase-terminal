@@ -22,6 +22,7 @@ use crate::text;
 const PERSON: Duration = Duration::from_secs(60);
 const KEPT: usize = 200;
 const PATH_KEPT: usize = 4096;
+const WARNING_KEPT: usize = 4096;
 const PATHS: [&str; 3] = ["path", "home", "run_dir"];
 const STOPPED: &str = "the server there stopped";
 const RESTARTING: &str = "the server there is restarting";
@@ -80,11 +81,19 @@ impl Down {
 }
 
 pub(super) fn clean(text: &str) -> String {
+    clean_within(text, KEPT)
+}
+
+pub(super) fn clean_warning(text: &str) -> String {
+    clean_within(text, WARNING_KEPT)
+}
+
+fn clean_within(text: &str, kept: usize) -> String {
     let shown: String = text
         .chars()
         .filter_map(|c| if c.is_whitespace() { Some(' ') } else { (!text::hidden(c)).then_some(c) })
         .collect();
-    text::one_line(&shown).chars().take(KEPT).collect()
+    text::one_line(&shown).chars().take(kept).collect()
 }
 
 fn clean_path(text: &str) -> String {
