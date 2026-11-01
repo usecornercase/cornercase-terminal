@@ -1,9 +1,10 @@
 use rstest::rstest;
 
 use super::*;
-use crate::app::pull_requests::PullRead;
+use crate::app::pull_requests::{Answered, PullRead};
 use crate::app::tests::merge_requests::gitlab;
 use crate::app::tests::pull_requests::{Repo, printing, repo_on, repo_with};
+use crate::pull_request::Provider;
 use crate::pull_request::glab::LOGGED_OUT;
 use crate::test_util::{fake_gh, fixture, git, git_repo};
 
@@ -174,6 +175,21 @@ mod asking_at_once {
         let read = repo.app.pull_request_read(repo.worktree());
 
         assert!(matches!(read, PullRead::Waiting));
+    }
+
+    #[test]
+    fn a_failure_of_the_project_still_counts_after_the_branch_changed() {
+        let mut repo = repo_with(&printing(), |_| {});
+        repo.ask("gh answers");
+        let path = repo.app.projects[0].workspaces[1].path.clone();
+        git(&path, &["checkout", "--quiet", "-b", "feat/y"]);
+        let project = repo.app.projects[0].id;
+        let failed = Answered { at: Instant::now(), error: Some("boom".into()), provider: Provider::Github };
+        repo.app.git.pulls.answered.insert(project, failed);
+
+        let read = repo.app.pull_request_read(repo.worktree());
+
+        assert!(matches!(read, PullRead::Failed(why) if why == "boom"));
     }
 }
 

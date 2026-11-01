@@ -325,8 +325,10 @@ impl App {
             Ok(current) => current,
             Err(why) => return unasked(why.reason()),
         };
-        if let Some(Found { branch, at: Some(_), pull, .. }) = self.git.pulls.found.get(&workspace) {
-            return if *branch == current { PullRead::Read { branch, pull: pull.as_ref() } } else { PullRead::Waiting };
+        if let Some(Found { branch, at: Some(_), pull, .. }) = self.git.pulls.found.get(&workspace)
+            && *branch == current
+        {
+            return PullRead::Read { branch, pull: pull.as_ref() };
         }
         let error = self.git.pulls.answered.get(&self.projects[at.project()].id).and_then(|a| a.error.clone());
         error.map_or(PullRead::Waiting, PullRead::Failed)
