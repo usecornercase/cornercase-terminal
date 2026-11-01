@@ -59,6 +59,60 @@ fn seeing(rig: &mut Rig, wanted: &[&str]) {
     rig.until("the snapshot arrives", |app| names(app).is_some_and(|names| names == wanted));
 }
 
+struct Seeing {
+    rig: Rig,
+    theirs: UnixStream,
+    ours: u64,
+    ends: Ends,
+    _dir: TempDir,
+}
+
+fn seeing_two() -> Seeing {
+    let (mut rig, ends) = watched();
+    let dir = TempDir::new();
+    rig.app.open_project(dir.path().to_path_buf(), AREA).expect("open project");
+    rig.app.projects[0].repo.identity = Some(SHOP.into());
+    let ours = rig.app.projects[0].id;
+    let mut theirs = linked(&ends);
+    serve(&mut theirs, 1, worked(report(&[("web-shop", Some(SHOP)), ("blog", None)])));
+    seeing(&mut rig, &["web-shop", "blog"]);
+    Seeing { rig, theirs, ours, ends, _dir: dir }
+}
+
+fn theirs_at(app: &App) -> usize {
+    app.project().map_or(0, |p| p.workspaces.len())
+}
+
+fn picked(app: &App) -> Option<(u64, Option<u64>)> {
+    app.shown_remote().map(|shown| (shown.workspace, shown.tab))
+}
+
+fn with_agent(mut report: control::Report) -> control::Report {
+    report.home = Some("/home/ana".into());
+    let pane = &mut report.projects[0].workspaces[0].tabs[0].panes[0];
+    pane.agent = Some("claude".into());
+    pane.status = Some("working".into());
+    report.projects[0].workspaces[0].tabs[0].status = Some("working".into());
+    report
+}
+
+fn seeing_claude() -> Seeing {
+    let mut seeing = seeing_two();
+    serve(&mut seeing.theirs, 2, with_agent(worked(report(&[("web-shop", Some(SHOP)), ("blog", None)]))));
+    seeing.rig.until("claude works there", |app| {
+        let seen = app.machines.held()[0].seen.as_ref();
+        seen.is_some_and(|seen| seen.home.is_some())
+    });
+    seeing
+}
+
+fn seeing_fall() -> Rig {
+    let Seeing { mut rig, theirs, .. } = seeing_two();
+    drop(theirs);
+    rig.until("the machine falls", |app| app.machines.held()[0].status.state == State::Unreachable);
+    rig
+}
+
 mod snapshots {
     use super::*;
 
@@ -169,5 +223,11 @@ mod pairing {
     }
 }
 
+mod card;
+mod clicks;
+mod input;
+mod notices;
 mod report;
+mod rows;
 mod selection;
+mod tree;

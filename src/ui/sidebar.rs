@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -13,6 +15,7 @@ use super::rows::{
 };
 use super::theme::status_icon;
 use super::widgets::{button_style, draw_band, draw_button, draw_title};
+use super::workspaces::{MachineTag, dim_row, machine_span, spin};
 use crate::agents::activity::{self, Status};
 use crate::project::group::GroupEntry;
 use crate::text::truncate_right;
@@ -43,6 +46,14 @@ pub fn sidebar_rows(groups: &[Option<usize>], collapsed: &[bool]) -> Vec<Sidebar
             rows.extend(in_group(Some(g)));
         }
     }
+    rows
+}
+
+pub(crate) fn machine_rows(mut rows: Vec<SidebarRow>, projects: Range<usize>) -> Vec<SidebarRow> {
+    if !projects.is_empty() && rows.iter().any(|row| matches!(row, SidebarRow::Group(_))) {
+        rows.push(SidebarRow::Gap);
+    }
+    rows.extend(projects.map(SidebarRow::Project));
     rows
 }
 
@@ -106,11 +117,13 @@ pub(crate) fn sidebar_hit(
     }
 }
 
+#[derive(Default)]
 pub(crate) struct ProjectEntry {
     pub(crate) name: String,
     pub(crate) workspaces: usize,
     pub(crate) group: Option<usize>,
     pub(crate) status: Option<Status>,
+    pub(crate) machine: Option<MachineTag>,
 }
 
 pub(super) fn group_header(group: &GroupEntry, max: usize) -> Span<'static> {
@@ -142,7 +155,7 @@ fn group_attention(view: &View, g: usize) -> Option<Status> {
 
 fn draw_entries(f: &mut Frame, view: &View, rows: &Rows, sidebar: &[SidebarRow], pitch: u16) {
     let group = view.projects.get(view.active).and_then(|p| p.group);
-    let active = active_row(sidebar, view.active, group).filter(|_| view.has_project);
+    let active = view.marked_project().and_then(|p| active_row(sidebar, p, group));
     for (i, &row) in sidebar.iter().enumerate() {
         let r = rows.item(i);
         if r.is_empty() {
@@ -159,11 +172,12 @@ fn draw_entries(f: &mut Frame, view: &View, rows: &Rows, sidebar: &[SidebarRow],
                 }
             }
             SidebarRow::Project(p) => {
-                let bg = view.row_background(r, p == view.active || view.dragging_entry(row));
+                let shown = view.marked_project() == Some(p);
+                let bg = view.row_background(r, shown || view.dragging_entry(row));
                 let indent = if view.projects[p].group.is_some() { GROUP_INDENT } else { "" };
-                let lead = vec![marker(p == view.active), Span::raw(indent)];
+                let lead = vec![marker(shown), Span::raw(indent)];
                 draw_project_band(f, view, Band { r, pitch, lead, bg }, p, true);
-                if p == view.active {
+                if shown {
                     draw_rail(f, r);
                 }
             }
@@ -201,15 +215,18 @@ pub(super) fn draw_group(f: &mut Frame, view: &View, g: usize, band: Band) {
 
 pub(super) fn draw_project_band(f: &mut Frame, view: &View, band: Band, p: usize, summary: bool) {
     let entry = &view.projects[p];
-    let title_style = if p == view.active {
+    let title_style = if view.marked_project() == Some(p) {
         Style::default().fg(Color::Reset).add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(view.soft)
     };
     let count = if summary && view.counts { format!(" ({})", entry.workspaces) } else { String::new() };
     let room = band.room();
-    let badge = entry.status.filter(|_| summary).map(|status| status_icon(view.muted, status, view.spin));
-    let marks = Tags::fit(badge.into_iter().collect(), room.saturating_sub(count.chars().count()));
+    let machine = entry.machine.as_ref();
+    let badge =
+        entry.status.filter(|_| summary).map(|status| status_icon(view.muted, status, spin(machine, view.spin)));
+    let tags = badge.into_iter().chain(machine.map(|machine| machine_span(machine, room, view.muted)));
+    let marks = Tags::fit(tags.collect(), room.saturating_sub(count.chars().count()));
     let max = room.saturating_sub(count.chars().count() + marks.reserved());
     let name = truncate_right(&entry.name, max);
     let shown = name.chars().count() + count.chars().count();
@@ -217,5 +234,8 @@ pub(super) fn draw_project_band(f: &mut Frame, view: &View, band: Band, p: usize
     line.extend([Span::styled(name, title_style), Span::styled(count, Style::default().fg(view.muted))]);
     marks.push_onto(&mut line, shown, room);
     draw_band(f, band.r, Line::from(line), band.bg);
-    draw_row_buttons(f, view, band.r, band.pitch, band.bg);
+    if machine.is_none() {
+        draw_row_buttons(f, view, band.r, band.pitch, band.bg);
+    }
+    dim_row(f, band.r, machine);
 }

@@ -5,6 +5,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::input::wheel;
+use super::machines::RemoteAt;
 use super::menus::Target;
 use super::text_fields::TextField;
 use crate::changes::selection::Spot;
@@ -24,6 +25,7 @@ pub(super) enum Grab {
     Row(Target),
     Todo(u64),
     Agent(u64),
+    Remote(RemoteAt),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

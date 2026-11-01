@@ -15,4 +15,5 @@ Code: `config.rs`, `state.rs`, `ui.rs`, `ui/`, `app/layout.rs`, `app/sidebar.rs`
 - [Row menus, the account row and counts](layout/row-menus-and-account-row.md): Row menus; The account row under each pane; Counts.
 - [Tabs above the pane, the icon bar and icons](layout/tab-bar-and-icon-bar.md): Tabs above the pane; Icon bar: icons, places, indicators, names on hover, colours; Icons (#450): the `icons` setting, per window, the file type table.
 - [Side panels, folding, scrolling and the active row](layout/panels-and-folding.md): Side panels; Folding; scrolling lists by item; the active row and its rail.
+- [A machine's rows and its card](layout/machine-rows.md): a machine's workspaces under their project, its projects alone, dimmed rows, the card, input stopping at it.
 - [Lines, wording and the colours of text](layout/lines-and-text.md): Lines; Tree lines; Empty panes; Capitals; Expand and collapse; Grey text; Soft text; the hover fill.

@@ -4,25 +4,6 @@ use super::*;
 use crate::machines::Info;
 use crate::time::Stamp;
 
-struct Seeing {
-    rig: Rig,
-    theirs: UnixStream,
-    ours: u64,
-    _dir: TempDir,
-}
-
-fn seeing_two() -> Seeing {
-    let (mut rig, ends) = watched();
-    let dir = TempDir::new();
-    rig.app.open_project(dir.path().to_path_buf(), AREA).expect("open project");
-    rig.app.projects[0].repo.identity = Some(SHOP.into());
-    let ours = rig.app.projects[0].id;
-    let mut theirs = linked(&ends);
-    serve(&mut theirs, 1, worked(report(&[("web-shop", Some(SHOP)), ("blog", None)])));
-    seeing(&mut rig, &["web-shop", "blog"]);
-    Seeing { rig, theirs, ours, _dir: dir }
-}
-
 mod machines_in_status {
     use super::*;
 
@@ -87,10 +68,7 @@ mod machines_in_status {
 
     #[test]
     fn keep_a_fallen_machine_with_its_state_and_when_it_was_seen() {
-        let Seeing { mut rig, theirs, .. } = seeing_two();
-
-        drop(theirs);
-        rig.until("the machine falls", |app| app.machines.held()[0].status.state == State::Unreachable);
+        let rig = seeing_fall();
 
         let status = rig.app.report(None);
         let [vps] = &status.machines[..] else { panic!("one machine: {:?}", status.machines) };

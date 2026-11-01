@@ -28,6 +28,7 @@ fn with_workspaces(active_tab: Option<usize>) -> View<'static> {
                 removing: false,
                 setting_up: false,
                 closed: 0,
+                machine: None,
             },
             WorkspaceEntry {
                 shared: 0,
@@ -39,6 +40,7 @@ fn with_workspaces(active_tab: Option<usize>) -> View<'static> {
                 removing: false,
                 setting_up: false,
                 closed: 0,
+                machine: None,
             },
         ],
         active_tab,
@@ -127,6 +129,7 @@ fn renders_a_workspace_being_removed_without_its_buttons() {
         closed: 0,
         tabs: Vec::new(),
         name: "login".into(),
+        machine: None,
     };
     insta::assert_snapshot!(render(&v).backend());
 }
@@ -166,6 +169,7 @@ fn an_empty_workspace_says_so_in_the_pane() {
             removing: false,
             setting_up: false,
             closed: 0,
+            machine: None,
         }],
         ..with_workspaces(None)
     };

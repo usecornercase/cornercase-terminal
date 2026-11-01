@@ -264,8 +264,8 @@ stderr and the exit status is 0.
 
 --machine NAME picks one of a machine's workspaces or tabs as the one shown: --workspace and --tab
 take the ids `cornercase status` lists under that machine. The machine must have sent its workspaces
-since this server started. For now it only records the pick, which `status` reports as shown; the
-window keeps showing what it showed.
+since this server started. The window then shows a card that says where it runs and what its agent
+is doing, and `status` reports it as shown; showing the machine's tab itself comes later.
 
 --json prints the answer: `revealed` with --reveal, and with --view the view's new tab and its
 `projection`, the number a view's lines and surface frames carry, which goes up each time what the
@@ -366,6 +366,8 @@ With --notices, each notice about an agent is told too, as the window's toast an
 say it, with the same rules (a second's wait, once per change, never for a tab seen in the window or
 in a view), and with --json its token, agent, status, place, message and panes:
   workspace 2  notice  claude needs you in shop › main  cc-3f2a9c-4
+An agent on a linked machine tells its notices too, with the machine's name and without ids here:
+  machine vps  notice  claude on vps needs you in shop › main  cc-3f2a9c-5
 `cornercase go TOKEN` then does what a click on that notification does.
 With --host, a program's own requests to the terminal are told too, for programs that draw the panes:
   pane 7  clipboard  11 bytes         it wrote to the clipboard (OSC 52); the text itself only with --json

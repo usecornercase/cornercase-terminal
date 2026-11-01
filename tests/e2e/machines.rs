@@ -1,6 +1,8 @@
 use cornercase::version;
 use serde_json::{Value, json};
 
+use super::agents::claude_asking_on_cue;
+use super::commands::Followed;
 use super::remote::{boot_of, cornercase_in, fake_ssh_to, gone, ssh_pid_to};
 use super::*;
 
@@ -299,4 +301,46 @@ fn a_machine_s_workspace_is_shown_from_the_command_line() {
 
     assert_eq!((&answer["machine"], &answer["project"]), (&json!(VPS), &blog["id"]));
     assert_eq!(status(&here)["shown_remote"], answer);
+}
+
+fn claude_working_there(machine: &Session, workspace: &str) -> (PathBuf, PathBuf) {
+    let (sessions, bin) = claude_asking_on_cue(machine, "claude-there");
+    let command = format!("{} {}", bin.join("claude").display(), sessions.display());
+    machine.says(&["new-tab", "--workspace", workspace, "--", &command]);
+    machine.wait_for_working();
+    (sessions, bin)
+}
+
+#[test]
+fn a_machine_s_agent_shows_under_the_local_project_and_tells_when_it_needs_you() {
+    let machine = Session::new();
+    assert!(machine.cold(&["start-server"]).status.success(), "the server there starts");
+    let here = here_with(&[VPS], &[(VPS, &reach(&machine))]);
+    wait_for_machine(&here, VPS, "the machine is linked", in_state("linked"));
+    here.says(&["open", &clone_of(&here, "web-shop", "https://github.com/acme/web-shop")]);
+    machine.says(&["open", &clone_of(&machine, "web-shop", "git@github.com:acme/web-shop.git")]);
+    let sent = sent_with_their_repos(&here, &["web-shop"]);
+    let workspace = project_named(&sent, "web-shop")["workspaces"][0]["id"].to_string();
+    let (sessions, bin) = claude_working_there(&machine, &workspace);
+    wait_until("claude works there", || status(&here)["machines"].to_string().contains(r#""status":"working""#));
+    let mut app = Harness::open(Arc::clone(&here), 40, COLS);
+    app.wait_for("the machine's project with no clone here", |s| s.contains("☁ vps"));
+    app.click(app.position_of("web-shop ("));
+    app.wait_for("the machine's workspace under the local project", |s| s.matches("☁ vps").count() == 2);
+    let mut notices = here.spawn(&["events", "--notices", "--json"]);
+    here.wait_for_file("server.log", "it follows", |log| log.contains("command=events"));
+    let mut followed = Followed::of(&mut notices);
+
+    std::fs::write(sessions.join("ask"), "").expect("ask");
+
+    followed.until("the machine's notice", |e| e["event"] == "notice" && e["machine"] == VPS);
+    app.wait_for_raw("the desktop is told", |raw| {
+        raw.contains("\x1b]777;notify;cornercase;claude on vps needs you in ")
+    });
+    app.wait_for("a toast says where", |s| s.contains("claude on vps needs you in web-shop"));
+    app.click(app.position_of("└ ! claude"));
+    app.wait_for("the card says where it runs", |s| {
+        s.contains("runs on vps") && s.contains("claude is waiting for you")
+    });
+    let _ = std::fs::remove_dir_all(&bin);
 }

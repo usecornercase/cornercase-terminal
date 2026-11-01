@@ -3,7 +3,7 @@ use super::*;
 const TALL: Rect = Rect { x: 0, y: 0, width: W, height: 30 };
 
 fn project(name: &str, workspaces: usize, group: Option<usize>, status: Option<Status>) -> ProjectEntry {
-    ProjectEntry { name: name.into(), workspaces, group, status }
+    ProjectEntry { name: name.into(), workspaces, group, status, machine: None }
 }
 
 fn tree_shape() -> TreeShape {
@@ -11,16 +11,17 @@ fn tree_shape() -> TreeShape {
         groups: vec![false],
         tab_bar: false,
         projects: vec![
-            ProjectShape { group: None, collapsed: true, workspaces: Vec::new() },
+            ProjectShape { group: None, collapsed: true, machine: false, workspaces: Vec::new() },
             ProjectShape {
                 group: Some(0),
                 collapsed: false,
+                machine: false,
                 workspaces: vec![
-                    WorkspaceShape { collapsed: false, tabs: vec![2, 1] },
-                    WorkspaceShape { collapsed: true, tabs: Vec::new() },
+                    WorkspaceShape { collapsed: false, machine: false, tabs: vec![2, 1] },
+                    WorkspaceShape { collapsed: true, machine: false, tabs: Vec::new() },
                 ],
             },
-            ProjectShape { group: Some(0), collapsed: true, workspaces: Vec::new() },
+            ProjectShape { group: Some(0), collapsed: true, machine: false, workspaces: Vec::new() },
         ],
     }
 }
@@ -46,6 +47,7 @@ fn tree_workspaces() -> Vec<Vec<WorkspaceEntry>> {
         removing: false,
         setting_up: false,
         closed: 0,
+        machine: None,
     };
     vec![
         Vec::new(),

@@ -61,7 +61,7 @@ impl Down {
         }
     }
 
-    fn wait(&self, failed: u32) -> Duration {
+    pub(crate) fn wait(&self, failed: u32) -> Duration {
         match self {
             Self::Unreachable(_) => remote::backoff(failed),
             _ => PERSON,

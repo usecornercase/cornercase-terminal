@@ -4,6 +4,7 @@ use ratatui::layout::Rect;
 
 use super::{Asker, Handled, conflict, json, malformed, name_of, none, pane_ids, sized};
 use crate::app::menus::{Marked, Target};
+use crate::app::notifications::Went;
 use crate::app::{App, Toast};
 use crate::control::arrange::{GroupDelete, GroupNew, GroupStyle, Move, MovePane, Styled};
 use crate::control::contract::{Code, Refusal};
@@ -38,7 +39,8 @@ impl App {
                 return Err(Refusal::new(Code::NotFound, message));
             }
             Some(Err(gone)) => return Err(Refusal::new(Code::NotFound, gone)),
-            Some(Ok((_, item))) => item,
+            Some(Ok(Went::Here(_, item))) => item,
+            Some(Ok(Went::There)) => return Ok(Some(json(&Done::default()))),
         };
         let projection = self.show_to(asker.view, item)?;
         let ids = match asker.view {

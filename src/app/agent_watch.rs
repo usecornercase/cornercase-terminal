@@ -7,7 +7,7 @@ use super::account_restart::Restarts;
 use super::closed_agents::ClosedAgents;
 use super::launches::Launches;
 use super::menus::{Marked, MenuAction};
-use super::notifications::Said;
+use super::notifications::{self, Said};
 use super::overlay::Overlay;
 use crate::accounts;
 use crate::agents;
@@ -159,16 +159,8 @@ impl App {
     pub(super) fn notify(&mut self, notice: Notice<'_>) {
         let Notice { agent, status, at: (project, workspace), panes, principal } = notice;
         let Some(at) = self.projects.workspace_in(project, workspace) else { return };
-        let what = match status {
-            activity::Status::Waiting => "needs you",
-            activity::Status::Failed => "failed",
-            _ => "finished",
-        };
-        let kind = match status {
-            activity::Status::Waiting | activity::Status::Failed => sound::Kind::NeedsYou,
-            _ => sound::Kind::Finished,
-        };
-        let sound = (self.config.sound && (principal || self.config.sound_subagents)).then_some(kind);
+        let (what, kind) = notifications::wording(status);
+        let sound = self.sound_for(kind, principal);
         let place = self.place_name(at);
         let (project, workspace) = (&self.projects[at.project()], self.projects.workspace(at));
         let message = notify::clean(&format!("{agent} {what} in {place}"));
@@ -182,7 +174,8 @@ impl App {
             panes = panes.len(),
             sound = sound.map_or("none", sound::Kind::id)
         );
-        self.tell(Said { agent, status, place, message, project: project.id, workspace: workspace.id, panes, sound });
+        let (project, workspace) = (project.id, workspace.id);
+        self.tell(Said { agent, status, place, message, project, workspace, panes, sound, machine: None });
     }
 
     fn marked_panes(&self, marked: Marked) -> Vec<&Term> {

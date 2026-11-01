@@ -7,6 +7,7 @@ use super::images::Sight;
 use super::interaction::{Drag, Grab};
 use super::layout::{List, Side};
 use super::links::Resolving;
+use super::machines;
 use super::toast::Toast;
 use crate::accounts;
 use crate::agents::context::Context;
@@ -22,16 +23,19 @@ impl App {
     }
 
     pub(super) fn project_entries(&self) -> Vec<ui::ProjectEntry> {
-        self.projects
-            .iter()
-            .zip(crate::project::group_indices(&self.projects, &self.groups))
-            .map(|(p, group)| ui::ProjectEntry {
+        let remote = self.remote_projects();
+        let ours = self.projects.iter().zip(crate::project::group_indices(&self.projects, &self.groups));
+        let ours = ours.map(|(p, group)| {
+            let local = p.workspaces.iter().flat_map(|w| &w.tabs).map(Tab::status);
+            ui::ProjectEntry {
                 name: self.project_label(p),
-                workspaces: p.workspaces.len(),
+                workspaces: p.workspaces.len() + machines::paired(&remote, p.id).count(),
                 group,
-                status: activity::attention(p.workspaces.iter().flat_map(|w| &w.tabs).map(Tab::status)),
-            })
-            .collect()
+                status: activity::attention(local.chain(machines::statuses(machines::paired(&remote, p.id)))),
+                machine: None,
+            }
+        });
+        ours.chain(machines::remote_only(&remote)).collect()
     }
 
     pub(super) fn tab_details(&self, tab: &Tab) -> ui::Details {
@@ -63,10 +67,21 @@ impl App {
         subagents: usize,
         account: Option<String>,
     ) -> ui::Details {
+        let context = (context.map(|c| c.model.clone()), context.and_then(|c| c.percent));
+        self.context_details(context, memory, subagents, account)
+    }
+
+    pub(super) fn context_details(
+        &self,
+        (model, percent): (Option<String>, Option<u16>),
+        memory: Option<u64>,
+        subagents: usize,
+        account: Option<String>,
+    ) -> ui::Details {
         ui::Details {
-            model: context.filter(|_| self.config.model).map(|c| c.model.clone()),
+            model: model.filter(|_| self.config.model),
             account: account.filter(|_| self.config.account_mark && self.has_accounts()),
-            percent: context.and_then(|c| c.percent).filter(|_| self.config.context),
+            percent: percent.filter(|_| self.config.context),
             subagents,
             memory: memory.filter(|_| self.config.memory),
             compacted: false,
@@ -94,6 +109,7 @@ impl App {
             removing: w.removing(),
             setting_up: w.setting_up(),
             closed: self.agents.closed.count(w.id),
+            machine: None,
         }
     }
 
@@ -104,15 +120,17 @@ impl App {
             ui::tree_layout_rows(self.screen.drawn.list, &shape, &rows, self.scroll.of(List::Projects)).hidden();
         let shown = &rows[above.end..below.start];
         let open = self.tree_open();
-        let workspaces = self.projects.iter().enumerate().map(|(p, project)| {
-            let entries = project.workspaces.iter().enumerate();
-            if open[p] {
-                entries.map(|(w, workspace)| self.tree_entry(p, w, workspace, shown)).collect()
-            } else {
-                Vec::new()
+        let remote = self.remote_projects();
+        let ours = self.projects.iter().enumerate().map(|(p, project)| {
+            if !open[p] {
+                return Vec::new();
             }
+            let ours =
+                project.workspaces.iter().enumerate().map(|(w, workspace)| self.tree_entry(p, w, workspace, shown));
+            ours.chain(self.paired_entries(&remote, project.id)).collect()
         });
-        ui::TreeView { workspaces: workspaces.collect(), shape }
+        let workspaces = ours.chain(self.alone_entries(&remote)).collect();
+        ui::TreeView { shape, workspaces }
     }
 
     fn tree_entry(&self, p: usize, w: usize, workspace: &Workspace, shown: &[ui::TreeRow]) -> ui::WorkspaceEntry {
@@ -134,10 +152,14 @@ impl App {
             collapsed: workspace.collapsed,
             setting_up: workspace.setting_up(),
             closed: self.agents.closed.count(workspace.id),
+            machine: None,
         }
     }
 
     pub(super) fn tab_view(&mut self, area: Rect) -> Option<ui::TabView> {
+        if self.shown_remote().is_some() {
+            return None;
+        }
         let dragging = self.screen.drag.as_ref().and_then(Drag::divider);
         let pane_area = self.layout(area).shown(self.screen.nav).pane;
         let landing = self.pane_landing(pane_area);
@@ -171,10 +193,9 @@ impl App {
     }
 
     pub(super) fn lists_view(&self, area: Rect, now: Instant) -> ui::View<'_> {
-        let project = self.project();
-        let workspaces = project
-            .filter(|_| !self.screen.drawn.tree)
-            .map(|p| p.workspaces.iter().map(|w| self.workspace_entry(w)).collect());
+        let remote = self.remote_projects();
+        let column = self.column(&remote);
+        let (active_workspace, active_tab) = self.column_active(&column);
         ui::View {
             tree: self.screen.drawn.tree.then(|| self.tree_view()),
             agents: self.config.agents_section.then(|| self.agents_view()),
@@ -184,12 +205,13 @@ impl App {
             no_tab: self.no_tab(),
             groups: self.groups.iter().map(|g| g.entry.clone()).collect(),
             projects: self.project_entries(),
-            active: self.active,
+            active: column.alone.map_or(self.active, |k| self.projects.len() + k),
             projects_scroll: self.scroll.of(List::Projects),
-            has_project: project.is_some(),
-            workspaces: workspaces.unwrap_or_default(),
-            active_workspace: project.map_or(0, |p| p.active),
-            active_tab: project.and_then(Project::workspace).filter(|w| !w.tabs.is_empty()).map(|w| w.active),
+            has_project: self.project().is_some(),
+            remote_project: column.alone.is_some(),
+            workspaces: if self.screen.drawn.tree { Vec::new() } else { self.column_entries(&column) },
+            active_workspace,
+            active_tab,
             workspaces_scroll: self.scroll.of(List::Workspaces),
             issues: self.issues_available(),
             ..self.chrome_view(area, now)
@@ -247,7 +269,7 @@ impl App {
         moved.and_then(|(d, pos)| match d.target {
             Grab::Row(target) => self.drag_view(target, pos, area),
             Grab::Todo(id) => Some(ui::Drag::Todo(id)),
-            Grab::Agent(_) => None,
+            Grab::Agent(_) | Grab::Remote(_) => None,
         })
     }
 }

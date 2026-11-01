@@ -128,7 +128,9 @@ impl App {
     }
 
     pub(super) fn visible_tab(&self) -> Option<u64> {
-        self.focus().tab.filter(|_| self.screen.nav.is_none() && !self.file_full_screen())
+        self.focus()
+            .tab
+            .filter(|_| self.screen.nav.is_none() && !self.file_full_screen() && self.shown_remote().is_none())
     }
 
     pub(super) fn focus(&self) -> Focus {

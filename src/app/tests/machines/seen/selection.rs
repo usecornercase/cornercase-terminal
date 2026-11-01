@@ -94,6 +94,11 @@ mod picking {
     #[case::a_project_s_row(|app: &mut App, id| app.click_row(Target::Project(id)))]
     #[case::the_next_tab_by_key(|app: &mut App, _| { app.go_shortcut(Action::NextTab, AREA); })]
     #[case::a_tab_by_key(|app: &mut App, _| { app.go_shortcut(Action::Tab(0), AREA); })]
+    #[case::a_split_by_key(|app: &mut App, _| {
+        app.config.prefix_key = "ctrl+]".into();
+        send_key(app, KeyCode::Char(']'), KeyModifiers::CONTROL);
+        send_key(app, KeyCode::Char('|'), KeyModifiers::NONE);
+    })]
     fn something_here_goes_back_to_it(#[case] pick: fn(&mut App, u64)) {
         let (mut rig, _ends, _theirs) = seen_by();
         let dir = TempDir::new();
@@ -213,6 +218,8 @@ mod requested {
     fn picks_it_as_a_click_does_and_answers_what_is_shown() {
         let (mut rig, _ends, _theirs) = seen_by();
 
+        rig.app.screen.nav = Some(ui::Nav::Workspaces);
+
         let answer = focused(&mut rig.app, " VPS ", &json!({"tab": 21})).expect("shown");
 
         let expected = ShownRemote {
@@ -224,7 +231,7 @@ mod requested {
             path: "/home/ana/blog".into(),
         };
         assert_eq!(serde_json::from_value::<ShownRemote>(answer).expect("a shown remote"), expected);
-        assert_eq!(shown(&rig.app), Some(at(BOOT, 2, 21, "blog")));
+        assert_eq!((shown(&rig.app), rig.app.screen.nav), (Some(at(BOOT, 2, 21, "blog")), None));
     }
 
     #[rstest]

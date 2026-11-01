@@ -18,6 +18,7 @@ fn with_agents() -> View<'static> {
                 removing: false,
                 setting_up: false,
                 closed: 0,
+                machine: None,
             },
             WorkspaceEntry {
                 shared: 0,
@@ -29,6 +30,7 @@ fn with_agents() -> View<'static> {
                 removing: false,
                 setting_up: false,
                 closed: 0,
+                machine: None,
             },
         ],
         active_tab: Some(0),
@@ -165,7 +167,7 @@ fn a_row_too_narrow_for_the_name_still_shows_the_count() {
     let band = Band { r, pitch: 1, lead: vec![Span::raw("  ├ ")], bg: Style::default() };
     let tab = TabEntry { others: 1, .."claude".into() };
     let mut t = Terminal::new(TestBackend::new(r.width, 1)).expect("test backend");
-    t.draw(|f| draw_tab_band(f, &v, band, &tab, false)).expect("draw");
+    t.draw(|f| draw_tab_band(f, &v, band, (&tab, None), false)).expect("draw");
     assert_eq!(row_text(&t, r).trim_end(), "  ├ › c +1");
 }
 

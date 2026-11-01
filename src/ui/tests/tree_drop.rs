@@ -3,14 +3,19 @@ use super::*;
 const LIST: Rect = Rect { x: 0, y: 4, width: SIDEBAR_WIDTH - 1, height: 24 };
 
 fn shape() -> TreeShape {
-    let workspace = |tabs: usize| WorkspaceShape { collapsed: false, tabs: vec![1; tabs] };
+    let workspace = |tabs: usize| WorkspaceShape { collapsed: false, machine: false, tabs: vec![1; tabs] };
     TreeShape {
         groups: vec![false],
         tab_bar: false,
         projects: vec![
-            ProjectShape { group: None, collapsed: false, workspaces: vec![workspace(1)] },
-            ProjectShape { group: Some(0), collapsed: false, workspaces: vec![workspace(2), workspace(1)] },
-            ProjectShape { group: Some(0), collapsed: true, workspaces: vec![workspace(1)] },
+            ProjectShape { group: None, collapsed: false, machine: false, workspaces: vec![workspace(1)] },
+            ProjectShape {
+                group: Some(0),
+                collapsed: false,
+                machine: false,
+                workspaces: vec![workspace(2), workspace(1)],
+            },
+            ProjectShape { group: Some(0), collapsed: true, machine: false, workspaces: vec![workspace(1)] },
         ],
     }
 }

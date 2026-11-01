@@ -70,6 +70,9 @@ impl App {
 
     fn shortcut(&mut self, action: Action, area: Rect) -> Result<()> {
         log::info!("ui", "shortcut", action = format!("{action:?}"));
+        if acts_here(action) {
+            self.leave_remote();
+        }
         let Some(action) = self.go_shortcut(action, area) else { return Ok(()) };
         let Some(action) = self.panel_shortcut(action) else { return Ok(()) };
         let Some(action) = self.edit_shortcut(action) else { return Ok(()) };
@@ -363,6 +366,21 @@ impl App {
         }
         self.open_branches(&target);
     }
+}
+
+fn acts_here(action: Action) -> bool {
+    matches!(
+        action,
+        Action::Split(_)
+            | Action::Pane(_)
+            | Action::Mark
+            | Action::ClosePane
+            | Action::RenameTab
+            | Action::RenameWorkspace
+            | Action::CloseWorkspace
+            | Action::CloseAgents
+            | Action::ReopenAgents
+    )
 }
 
 fn cycle(at: usize, len: usize, delta: isize) -> Option<usize> {

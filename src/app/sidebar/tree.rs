@@ -2,9 +2,10 @@ use ratatui::layout::{Position, Rect};
 
 use crate::app::App;
 use crate::app::layout::List;
+use crate::app::machines::{self, RemoteProject};
 use crate::app::menus::Target;
 use crate::error::Result;
-use crate::project::Hierarchy;
+use crate::project::{Hierarchy, Project};
 use crate::ui::{self};
 
 impl App {
@@ -30,24 +31,35 @@ impl App {
     }
 
     pub(in crate::app) fn tree_shape(&self) -> ui::TreeShape {
+        let remote = self.remote_projects();
         let groups = self.groups.iter().map(|g| g.entry.collapsed).collect();
-        let projects = self
-            .projects
-            .iter()
-            .zip(crate::project::group_indices(&self.projects, &self.groups))
-            .zip(self.tree_open())
-            .map(|((p, group), open)| {
-                let workspaces = p.workspaces.iter().map(|w| ui::WorkspaceShape {
-                    collapsed: w.collapsed,
-                    tabs: if open && !w.collapsed {
-                        w.tabs.iter().map(|t| self.tab_details(t).lines()).collect()
-                    } else {
-                        Vec::new()
-                    },
-                });
-                ui::ProjectShape { group, collapsed: p.collapsed, workspaces: workspaces.collect() }
-            });
-        ui::TreeShape { groups, projects: projects.collect(), tab_bar: !self.screen.drawn.tab_bar.is_empty() }
+        let indices = crate::project::group_indices(&self.projects, &self.groups);
+        let ours = self.projects.iter().zip(indices).zip(self.tree_open());
+        let ours = ours.map(|((p, group), open)| self.project_shape(p, group, open, &remote));
+        let theirs = self.alone_entries(&remote).map(|entries| machines::machine_project(&entries));
+        let projects = ours.chain(theirs).collect();
+        ui::TreeShape { groups, projects, tab_bar: !self.screen.drawn.tab_bar.is_empty() }
+    }
+
+    fn project_shape(
+        &self,
+        p: &Project,
+        group: Option<usize>,
+        open: bool,
+        remote: &[RemoteProject],
+    ) -> ui::ProjectShape {
+        let ours = p.workspaces.iter().map(|w| ui::WorkspaceShape {
+            collapsed: w.collapsed,
+            machine: false,
+            tabs: if open && !w.collapsed {
+                w.tabs.iter().map(|t| self.tab_details(t).lines()).collect()
+            } else {
+                Vec::new()
+            },
+        });
+        let theirs = self.paired_entries(remote, p.id);
+        let workspaces = ours.chain(theirs.iter().map(|entry| machines::machine_shape(entry, open))).collect();
+        ui::ProjectShape { group, collapsed: p.collapsed, machine: false, workspaces }
     }
 
     pub(in crate::app) fn tree_layout(&self, list: Rect) -> ui::Rows {
@@ -84,6 +96,9 @@ impl App {
         let shape = self.tree_shape();
         let scroll = self.scroll.of(List::Projects);
         let hit = self.tree_hit(list, &shape, pos);
+        if self.press_remote_tree(list, &shape, hit, area) {
+            return Ok(());
+        }
         if let Some(ui::TreeHit::Select(ui::TreeRow::Workspace(p, w))) = hit
             && let Some(tag) = self.tag_in_tree(list, &shape, (p, w), pos)
         {

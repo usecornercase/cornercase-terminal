@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use crate::app::App;
 use crate::control::{self, ProjectInfo, WorkspaceInfo};
 use crate::log;
+use crate::project::Hierarchy;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::app) struct RemoteSelection {
@@ -56,9 +57,19 @@ impl App {
         };
         let Some((project, workspace, tab)) = found else { return false };
         log::info!("machines", "remote selected", name = held.name, workspace = workspace.id);
-        let link = held.link.id();
+        let (link, id) = (held.link.id(), project.id);
         self.machines.selection = Some(selected(link, seen, project, workspace, tab));
+        self.panels.files.set_full_screen(false);
+        if let Some(p) = self.paired_index(link, id) {
+            self.active = p;
+        }
         true
+    }
+
+    fn paired_index(&self, link: u64, project: u64) -> Option<usize> {
+        let remote = self.remote_projects();
+        let paired = remote.iter().find(|r| r.link == link && r.project.id == project)?.paired?;
+        self.projects.project_index(paired)
     }
 
     pub(in crate::app) fn sent_workspaces(&self, machine: &str) -> bool {

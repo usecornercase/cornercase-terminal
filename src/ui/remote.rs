@@ -21,8 +21,12 @@ pub(crate) struct Notice<'a> {
 }
 
 pub(crate) fn area(screen: Rect) -> Rect {
-    let width = WIDTH.min(screen.width);
-    let height = HEIGHT.min(screen.height);
+    centred(screen, WIDTH, HEIGHT)
+}
+
+pub(super) fn centred(screen: Rect, width: u16, height: u16) -> Rect {
+    let width = width.min(screen.width);
+    let height = height.min(screen.height);
     Rect { x: screen.x + (screen.width - width) / 2, y: screen.y + (screen.height - height) / 2, width, height }
 }
 

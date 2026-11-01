@@ -366,7 +366,7 @@ fn lines(app: &mut App) -> Vec<Value> {
         .collect()
 }
 
-fn told(streamed: &[Streamed]) -> Vec<(wire::What, wire::Ids)> {
+pub(super) fn told(streamed: &[Streamed]) -> Vec<(wire::What, wire::Ids)> {
     streamed
         .iter()
         .filter_map(|streamed| match streamed {

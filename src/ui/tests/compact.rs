@@ -24,6 +24,7 @@ fn in_a_project(nav: Option<Nav>) -> View<'static> {
                 removing: false,
                 setting_up: false,
                 closed: 0,
+                machine: None,
             },
             WorkspaceEntry {
                 shared: 0,
@@ -35,6 +36,7 @@ fn in_a_project(nav: Option<Nav>) -> View<'static> {
                 removing: false,
                 setting_up: false,
                 closed: 0,
+                machine: None,
             },
         ],
         active_tab: Some(0),
