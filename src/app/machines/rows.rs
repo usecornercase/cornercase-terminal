@@ -42,6 +42,7 @@ impl App {
             collapsed: self.machines.folded.iter().any(folded),
             tabs: workspace.tabs.iter().map(|tab| self.remote_tab(tab)).collect(),
             machine: Some(remote.tag.clone()),
+            removing: self.machines.acting.removing(remote.link, workspace.id),
             ..ui::WorkspaceEntry::default()
         }
     }

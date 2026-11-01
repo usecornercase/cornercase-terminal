@@ -7,6 +7,7 @@ use crate::text;
 use crate::time::Stamp;
 use link::Down;
 
+pub(crate) mod act;
 pub(crate) mod ask;
 pub(crate) mod form;
 pub(crate) mod link;

@@ -590,6 +590,7 @@ mod tabs;
 mod tour;
 mod tree_sidebar;
 mod workspace_folds;
+mod workspace_text;
 mod workspaces;
 mod worktree_builds;
 mod worktrees_dialog;

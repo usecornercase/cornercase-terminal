@@ -370,6 +370,9 @@ impl App {
     }
 
     pub(super) fn open_tree_menu(&mut self, list: Rect, pos: Position) {
+        if self.remote_tree_menu(list, pos) {
+            return;
+        }
         let Some(ui::TreeHit::Fold(row) | ui::TreeHit::Select(row) | ui::TreeHit::Close(row) | ui::TreeHit::Menu(row)) =
             self.tree_hit(list, &self.tree_shape(), pos)
         else {
@@ -385,7 +388,7 @@ impl App {
     }
 
     pub(super) fn open_workspace_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
-        if self.project().is_none() {
+        if self.remote_row_menu(list, pitch, pos) || self.project().is_none() {
             return;
         }
         let hit = self.workspace_hit(list, pitch, &self.tab_lines(), pos);

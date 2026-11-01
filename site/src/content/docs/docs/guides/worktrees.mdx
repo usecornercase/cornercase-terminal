@@ -270,6 +270,8 @@ A worktree can also be locked with `git worktree lock`; Claude Code locks the wo
 
 A run of a [flow](../flows/#a-worktree-of-its-own) can give roles worktrees of their own: they go with the run's workspace, which is checked, torn down and removed together with them (the message names how many), and one cannot be removed alone while its run lives. Their branches are kept, unless you remove the run's workspace from the [Worktrees dialog](#clean-up-worktrees) with **also delete the branch** ticked.
 
+A workspace of one of your [machines](../machines/#acting-on-a-machines-workspace) has the same `×` and the same dialog, which names the machine (`… on vps`) and shows what the machine found. Its programs stop and its folder is deleted on the machine. If the machine can't check, the dialog closes and nothing is removed.
+
 <Aside type="note" title="Removing a worktree keeps its branch">
 Removing a worktree only deletes its folder. The branch and its commits stay in the repository; delete the branch yourself with `git branch -d` when you no longer need it. Only the [Worktrees dialog](#clean-up-worktrees) can delete branches, and only when you tick **also delete the branch**.
 </Aside>

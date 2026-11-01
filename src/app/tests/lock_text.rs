@@ -14,7 +14,7 @@ fn lock(reason: &str, holder: Option<Holder>) -> Lock {
 )]
 #[case::without_one("", "The worktree of wt is locked. Unlock it and delete its folder? The branch is kept.")]
 fn the_message_names_the_reason(#[case] reason: &str, #[case] expected: &str) {
-    assert_eq!(lock_message("wt", &lock(reason, None)), expected);
+    assert_eq!(lock_message("wt", &lock(reason, None), None), expected);
 }
 
 #[rstest]
@@ -35,8 +35,26 @@ fn the_note_says_who_holds_it(#[case] holder: Option<Holder>, #[case] changed: b
 fn a_lock_on_a_role_worktree_names_the_role_and_its_folder_not_the_run() {
     let lock = Lock { role: Some(("coder A".into(), "/wt/coder-a".into())), ..lock("busy", None) };
     assert_eq!(
-        lock_message("fix-login", &lock),
+        lock_message("fix-login", &lock, None),
         "The worktree of `coder A` (/wt/coder-a) is locked: busy. Unlock it and remove fix-login with its worktrees? \
          The branches are kept."
     );
+}
+
+#[rstest]
+#[case::of_its_own(
+    None,
+    "The worktree of api on vps is locked: busy. Unlock it and delete its folder? The branch is kept."
+)]
+#[case::of_a_role(
+    Some(("coder A".into(), "/wt/coder-a".into())),
+    "The worktree of `coder A` (/wt/coder-a) is locked: busy. Unlock it and remove api on vps with its worktrees? \
+     The branches are kept."
+)]
+fn the_message_names_the_machine_of_a_remote_workspace(
+    #[case] role: Option<(String, PathBuf)>,
+    #[case] expected: &str,
+) {
+    let lock = Lock { role, ..lock("busy", None) };
+    assert_eq!(lock_message("api", &lock, Some("vps")), expected);
 }

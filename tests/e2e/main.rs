@@ -32,6 +32,7 @@ mod contract;
 mod flows;
 mod input;
 mod issues;
+mod machine_actions;
 mod machines;
 mod opening;
 mod panels;

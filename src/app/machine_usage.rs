@@ -139,7 +139,7 @@ impl App {
         let connect = self.machines.connector(&destination);
         let job = Job::new(Level::Info, "machines", T::WHAT).with("name", &name).slow_after(timeout);
         let there = name.clone();
-        let work = move || Ok(ask::ask(connect.as_ref(), &there, T::command(), timeout));
+        let work = move || Ok(ask::ask(connect.as_ref(), &there, T::command(), None, timeout));
         self.spawn_job(job, work, move |result, job| {
             let result = heard::<T>(result).map_err(|why| machines::hide_destination(&why, &name, &destination));
             if let Err(why) = &result {

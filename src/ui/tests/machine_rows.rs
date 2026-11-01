@@ -86,10 +86,22 @@ fn row_of(t: &Terminal<TestBackend>, text: &str) -> String {
     (0..buffer.area.width).map(|x| buffer[(x, at.y)].symbol().to_string()).collect()
 }
 
-fn hovered(text: &str) -> String {
-    let t = rendered(Sidebar::SideBySide, None);
-    let v = View { hover: Some(find(&t, text)), ..with_machines(Sidebar::SideBySide, None) };
+fn beside() -> View<'static> {
+    with_machines(Sidebar::SideBySide, None)
+}
+
+fn hovered_in(view: fn() -> View<'static>, text: &str) -> String {
+    let t = render_sized(&view(), W, TALL);
+    let v = View { hover: Some(find(&t, text)), ..view() };
     row_of(&render_sized(&v, W, TALL), text)
+}
+
+fn hovered(text: &str) -> String {
+    hovered_in(beside, text)
+}
+
+fn buttons(row: &str) -> (bool, bool) {
+    (row.contains(ROW_MENU_ICON), row.contains('×'))
 }
 
 #[test]
@@ -144,16 +156,40 @@ fn a_fallen_machine_s_spinner_stands_still() {
 }
 
 #[test]
-fn a_machine_s_rows_have_no_new_tab_nor_buttons_on_hover() {
+fn a_machine_s_workspaces_have_no_new_tab() {
     let t = rendered(Sidebar::SideBySide, None);
     let tabs = (0..TALL).filter(|&y| row_text(&t, Rect::new(0, y, W, 1)).contains("└ + Tab")).count();
 
     assert_eq!(tabs, 1);
-    assert!(hovered("login").contains(ROW_MENU_ICON));
-    for text in ["api-vps", "zsh"] {
-        let row = hovered(text);
-        assert!(!row.contains(ROW_MENU_ICON) && !row.contains('×'), "{row}");
-    }
+}
+
+#[rstest]
+#[case::side_by_side(beside)]
+#[case::tree(in_tree)]
+fn a_machine_s_workspace_has_buttons_on_hover_and_its_tabs_do_not(#[case] view: fn() -> View<'static>) {
+    let shown = ["login", "api-vps", "zsh"].map(|text| buttons(&hovered_in(view, text)));
+
+    assert_eq!(shown, [(true, true), (true, true), (false, false)]);
+}
+
+#[test]
+fn a_machine_s_workspace_shows_its_buttons_in_the_compact_menu_and_its_tabs_do_not() {
+    let t = rendered(Sidebar::SideBySide, Some(Nav::Workspaces));
+
+    assert_eq!((buttons(&row_of(&t, "api-vps")), buttons(&row_of(&t, "zsh"))), ((true, true), (false, false)));
+}
+
+#[test]
+fn a_machine_s_workspace_being_removed_has_no_buttons_on_hover() {
+    let removing = || {
+        let mut v = beside();
+        v.workspaces[1].removing = true;
+        v
+    };
+
+    let row = hovered_in(removing, "removing…");
+
+    assert!(row.contains("api-") && buttons(&row) == (false, false), "{row}");
 }
 
 #[test]
@@ -186,8 +222,7 @@ fn a_fallen_machine_s_project_is_dim_and_a_linked_one_s_is_not(#[case] sidebar: 
 #[test]
 fn a_machine_s_project_has_no_buttons_on_hover() {
     assert!(hovered("web-shop").contains(ROW_MENU_ICON));
-    let row = hovered("blog");
-    assert!(!row.contains(ROW_MENU_ICON) && !row.contains('×'), "{row}");
+    assert_eq!(buttons(&hovered("blog")), (false, false));
 }
 
 #[test]

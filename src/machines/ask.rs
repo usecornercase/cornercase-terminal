@@ -50,7 +50,13 @@ impl Deadline {
     }
 }
 
-pub(crate) fn ask(connect: &dyn Connect, name: &str, command: Command, timeout: Duration) -> Result<String, String> {
+pub(crate) fn ask(
+    connect: &dyn Connect,
+    name: &str,
+    command: Command,
+    boot: Option<String>,
+    timeout: Duration,
+) -> Result<String, String> {
     let deadline = Arc::new(Deadline::default());
     let (done, finished) = mpsc::channel::<()>();
     let watcher = Arc::clone(&deadline);
@@ -59,15 +65,21 @@ pub(crate) fn ask(connect: &dyn Connect, name: &str, command: Command, timeout: 
             watcher.pass();
         }
     });
-    let asked = asked(connect, name, command, &deadline);
+    let asked = asked(connect, name, command, boot, &deadline);
     drop(done);
     asked.map_err(|why| if deadline.passed() { LATE.into() } else { why })
 }
 
-fn asked(connect: &dyn Connect, name: &str, command: Command, deadline: &Deadline) -> Result<String, String> {
+fn asked(
+    connect: &dyn Connect,
+    name: &str,
+    command: Command,
+    boot: Option<String>,
+    deadline: &Deadline,
+) -> Result<String, String> {
     let mut line = connect.connect(&deadline.killer).map_err(|error| link::failure(&error, name))?;
     deadline.hold(&line.ends);
-    let heard = link::send_once(&mut line, command);
+    let heard = link::send_once(&mut line, command, boot);
     deadline.release();
     match heard {
         Heard::Answer(text) => Ok(text),

@@ -64,7 +64,7 @@ mod a_machine_s_row {
         let w = theirs_at(&rig.app);
 
         click_close(&mut rig.app, WorkspaceRow::Tab(w, 0));
-        right_click_row(&mut rig.app, WorkspaceRow::Workspace(w));
+        right_click_row(&mut rig.app, WorkspaceRow::Tab(w, 0));
 
         assert_eq!((picked(&rig.app), rig.app.overlay.is_none()), (Some((10, Some(11))), true));
     }

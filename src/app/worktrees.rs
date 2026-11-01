@@ -5,10 +5,11 @@ use std::time::{Duration, Instant};
 use ratatui::layout::Rect;
 
 use super::App;
+use super::dialogs::named;
 use super::event::AppEvent;
 use super::event::Start;
 use super::flow_runs::Made;
-use super::overlay::Overlay;
+use super::overlay::{FORCE_REMOVE_SUBMIT, Overlay, REMOVE_SUBMIT, UNLOCK_SUBMIT};
 use super::pull_requests::Looked;
 use super::toast::Toast;
 use super::worktrees_dialog::Deleted;
@@ -522,48 +523,69 @@ impl App {
 
     pub(super) fn remove_view(&self, overlay: &Overlay) -> Option<ui::Overlay> {
         let Overlay::RemoveWorkspace { project, workspace, check, lock } = overlay else { return None };
-        let (check, lock, submit) = (*check, lock.as_ref(), overlay.submit_label());
         let found = self.projects.workspace_in(*project, *workspace);
         let teardown = found.is_some_and(|at| self.teardown_script(at.project()).is_some());
-        let (message, note) = match lock {
-            Some(lock) => (
-                lock_message(&self.found_label(found), lock) + if teardown { " Its teardown runs first." } else { "" },
-                lock_note(lock, check == Check::Changed).map(ui::Note::Error),
-            ),
-            None => (
-                self.remove_question(found, teardown),
-                match check {
-                    Check::Confirmed => Some(ui::Note::Busy("checking…")),
-                    Check::Changed => Some(ui::Note::Error(UNCOMMITTED.into())),
-                    Check::Running | Check::Clean => None,
-                },
-            ),
-        };
-        Some(ui::Overlay::Confirm(ui::Confirm {
-            title: "Remove workspace",
-            message,
-            note,
-            submit,
-            extra: None,
-            dangerous: false,
-        }))
-    }
-
-    fn found_label(&self, found: Option<WorkspaceAt>) -> String {
-        found.map(|at| self.projects.workspace(at).label()).unwrap_or_default()
-    }
-
-    fn remove_question(&self, found: Option<WorkspaceAt>, teardown: bool) -> String {
-        let label = self.found_label(found);
         let found = found.map(|at| self.projects.workspace(at));
+        let label = found.map(Workspace::label).unwrap_or_default();
         let path = found.map(|w| crate::text::display_path(&w.path, self.home.as_deref())).unwrap_or_default();
         let roles = found.map_or(0, |w| w.role_worktrees.iter().filter(|tree| tree.path.is_dir()).count());
-        let kept = if roles == 0 { "The branch is kept." } else { "The branches are kept." };
-        let with_roles = if roles == 0 { String::new() } else { format!(", with the worktrees of its {roles} roles") };
-        let first = if teardown { "Its teardown runs first. " } else { "" };
-        let id = found.map_or(0, |w| w.id);
-        let closed = self.forgotten_note(id);
-        format!("Remove the workspace {label} and delete its worktree folder {path}{with_roles}? {first}{kept}{closed}")
+        let closed = self.forgotten_note(found.map_or(0, |w| w.id));
+        let removing = Removing { label: &label, path: &path, roles, teardown, closed: &closed, on: None };
+        Some(removal_view(&removing, *check, lock.as_ref()))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Removing<'a> {
+    pub(super) label: &'a str,
+    pub(super) path: &'a str,
+    pub(super) roles: usize,
+    pub(super) teardown: bool,
+    pub(super) closed: &'a str,
+    pub(super) on: Option<&'a str>,
+}
+
+pub(super) fn removal_question(removing: &Removing<'_>) -> String {
+    let Removing { label, path, roles, teardown, closed, on } = *removing;
+    let kept = if roles == 0 { "The branch is kept." } else { "The branches are kept." };
+    let with_roles = if roles == 0 { String::new() } else { format!(", with the worktrees of its {roles} roles") };
+    let first = if teardown { "Its teardown runs first. " } else { "" };
+    let label = named(label, on);
+    format!("Remove the workspace {label} and delete its worktree folder {path}{with_roles}? {first}{kept}{closed}")
+}
+
+pub(super) fn removal_view(removing: &Removing<'_>, check: Check, lock: Option<&worktree::Lock>) -> ui::Overlay {
+    let (message, note) = match lock {
+        Some(lock) => (
+            lock_message(removing.label, lock, removing.on)
+                + if removing.teardown { " Its teardown runs first." } else { "" },
+            lock_note(lock, check == Check::Changed).map(ui::Note::Error),
+        ),
+        None => (
+            removal_question(removing),
+            match check {
+                Check::Confirmed => Some(ui::Note::Busy("checking…")),
+                Check::Changed => Some(ui::Note::Error(UNCOMMITTED.into())),
+                Check::Running | Check::Clean => None,
+            },
+        ),
+    };
+    let submit = removal_submit(check, lock.is_some());
+    ui::Overlay::Confirm(ui::Confirm {
+        title: "Remove workspace",
+        message,
+        note,
+        submit,
+        extra: None,
+        dangerous: false,
+    })
+}
+
+pub(super) fn removal_submit(check: Check, locked: bool) -> &'static str {
+    match check {
+        _ if locked => UNLOCK_SUBMIT,
+        Check::Changed => FORCE_REMOVE_SUBMIT,
+        _ => REMOVE_SUBMIT,
     }
 }
 
@@ -614,7 +636,8 @@ fn checked_status(path: &Path, roles: &[(String, PathBuf)]) -> worktree::Status 
     status
 }
 
-pub(super) fn lock_message(label: &str, lock: &worktree::Lock) -> String {
+pub(super) fn lock_message(label: &str, lock: &worktree::Lock, on: Option<&str>) -> String {
+    let label = named(label, on);
     let reason = crate::text::truncate_right(&lock.reason, MAX_LOCK_REASON);
     let locked = if reason.is_empty() { "is locked".to_string() } else { format!("is locked: {reason}") };
     match &lock.role {

@@ -12,7 +12,7 @@ use crate::ui::{self, SidebarHit, SidebarRow, TreeHit, TreeRow, WorkspaceHit, Wo
 pub(in crate::app) enum RemoteAt {
     Project { link: u64, id: u64 },
     Workspace { link: u64, id: u64 },
-    Tab { link: u64, id: u64 },
+    Tab { link: u64, workspace: u64, id: u64 },
 }
 
 impl RemoteAt {
@@ -21,6 +21,48 @@ impl RemoteAt {
             Self::Project { link, .. } | Self::Workspace { link, .. } | Self::Tab { link, .. } => link,
         }
     }
+
+    fn workspace(self) -> Option<u64> {
+        match self {
+            Self::Workspace { id, .. } | Self::Tab { workspace: id, .. } => Some(id),
+            Self::Project { .. } => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Button {
+    Close,
+    Menu,
+}
+
+fn row_of(hit: WorkspaceHit) -> Option<(WorkspaceRow, bool)> {
+    Some(match hit {
+        WorkspaceHit::Fold(w) => (WorkspaceRow::Workspace(w), true),
+        WorkspaceHit::Workspace(w) | WorkspaceHit::CloseWorkspace(w) | WorkspaceHit::WorkspaceMenu(w) => {
+            (WorkspaceRow::Workspace(w), false)
+        }
+        WorkspaceHit::Tab(w, t) | WorkspaceHit::CloseTab(w, t) | WorkspaceHit::TabMenu(w, t) => {
+            (WorkspaceRow::Tab(w, t), false)
+        }
+        _ => return None,
+    })
+}
+
+fn row_button(hit: WorkspaceHit) -> Option<Button> {
+    match hit {
+        WorkspaceHit::CloseWorkspace(_) => Some(Button::Close),
+        WorkspaceHit::WorkspaceMenu(_) => Some(Button::Menu),
+        _ => None,
+    }
+}
+
+fn tree_button(hit: TreeHit) -> Option<Button> {
+    match hit {
+        TreeHit::Close(_) => Some(Button::Close),
+        TreeHit::Menu(_) => Some(Button::Menu),
+        _ => None,
+    }
 }
 
 fn remote_row(column: &Column, row: WorkspaceRow) -> Option<RemoteAt> {
@@ -28,7 +70,7 @@ fn remote_row(column: &Column, row: WorkspaceRow) -> Option<RemoteAt> {
         WorkspaceRow::Workspace(w) => column.remote(w).map(|(r, w)| RemoteAt::Workspace { link: r.link, id: w.id }),
         WorkspaceRow::Tab(w, t) => {
             let (r, w) = column.remote(w)?;
-            Some(RemoteAt::Tab { link: r.link, id: w.tabs.get(t)?.id })
+            Some(RemoteAt::Tab { link: r.link, workspace: w.id, id: w.tabs.get(t)?.id })
         }
         _ => None,
     }
@@ -43,20 +85,45 @@ impl App {
         (pos, area): (Position, Rect),
     ) -> bool {
         let scroll = self.scroll.of(List::Workspaces);
-        let (row, fold) = match ui::workspace_hit(list, pitch, tabs, scroll, pos) {
-            Some(WorkspaceHit::Fold(w)) => (WorkspaceRow::Workspace(w), true),
-            Some(WorkspaceHit::Workspace(w) | WorkspaceHit::CloseWorkspace(w) | WorkspaceHit::WorkspaceMenu(w)) => {
-                (WorkspaceRow::Workspace(w), false)
-            }
-            Some(WorkspaceHit::Tab(w, t) | WorkspaceHit::CloseTab(w, t) | WorkspaceHit::TabMenu(w, t)) => {
-                (WorkspaceRow::Tab(w, t), false)
-            }
-            _ => return false,
-        };
-        let remote = self.remote_projects();
-        let Some(at) = remote_row(&self.column(&remote), row) else { return false };
-        drop(remote);
+        let Some((hit, at)) = self.remote_hit(list, pitch, tabs, pos) else { return false };
+        if self.press_remote_button(at, row_button(hit), pos) {
+            return true;
+        }
+        let Some((row, fold)) = row_of(hit) else { return false };
         self.grab_with(Grab::Remote(at), ui::workspace_row(list, pitch, tabs, scroll, row), area, fold);
+        true
+    }
+
+    fn remote_hit(
+        &self,
+        list: Rect,
+        pitch: u16,
+        tabs: &ui::TabLines,
+        pos: Position,
+    ) -> Option<(WorkspaceHit, RemoteAt)> {
+        let hit = ui::workspace_hit(list, pitch, tabs, self.scroll.of(List::Workspaces), pos)?;
+        let (row, _) = row_of(hit)?;
+        let remote = self.remote_projects();
+        let at = remote_row(&self.column(&remote), row)?;
+        Some((hit, at))
+    }
+
+    pub(in crate::app) fn remote_row_menu(&mut self, list: Rect, pitch: u16, pos: Position) -> bool {
+        let tabs = self.tab_lines();
+        let Some((_, at)) = self.remote_hit(list, pitch, &tabs, pos) else { return false };
+        self.press_remote_button(at, Some(Button::Menu), pos)
+    }
+
+    fn press_remote_button(&mut self, at: RemoteAt, button: Option<Button>, pos: Position) -> bool {
+        if at.workspace().is_some_and(|id| self.machines.acting.removing(at.link(), id)) {
+            return true;
+        }
+        let (Some(button), RemoteAt::Workspace { link, id }) = (button, at) else { return false };
+        let Some(aim) = self.aim_at(link, id) else { return true };
+        match button {
+            Button::Close => self.remote_close(aim),
+            Button::Menu => self.remote_menu(aim, pos),
+        }
         true
     }
 
@@ -65,24 +132,40 @@ impl App {
         list: Rect,
         shape: &ui::TreeShape,
         hit: Option<TreeHit>,
-        area: Rect,
+        (pos, area): (Position, Rect),
     ) -> bool {
         let Some(hit @ (TreeHit::Select(row) | TreeHit::Fold(row) | TreeHit::Close(row) | TreeHit::Menu(row))) = hit
         else {
             return false;
         };
+        let Some(at) = self.remote_tree_at(row) else { return false };
+        if self.press_remote_button(at, tree_button(hit), pos) {
+            return true;
+        }
+        let rect = ui::tree_row(list, shape, self.scroll.of(List::Projects), row);
+        self.grab_with(Grab::Remote(at), rect, area, matches!(hit, TreeHit::Fold(_)));
+        true
+    }
+
+    pub(in crate::app) fn remote_tree_menu(&mut self, list: Rect, pos: Position) -> bool {
+        let shape = self.tree_shape();
+        let Some(TreeHit::Select(row) | TreeHit::Fold(row) | TreeHit::Close(row) | TreeHit::Menu(row)) =
+            self.tree_hit(list, &shape, pos)
+        else {
+            return false;
+        };
+        let at = self.remote_tree_at(row);
+        at.is_some_and(|at| self.press_remote_button(at, Some(Button::Menu), pos))
+    }
+
+    fn remote_tree_at(&self, row: TreeRow) -> Option<RemoteAt> {
         let remote = self.remote_projects();
-        let at = match row {
+        match row {
             TreeRow::Project(p) => self.remote_project_at(&remote, p),
             TreeRow::Workspace(p, w) => remote_row(&self.column_at(&remote, p), WorkspaceRow::Workspace(w)),
             TreeRow::Tab(p, w, t) => remote_row(&self.column_at(&remote, p), WorkspaceRow::Tab(w, t)),
             _ => None,
-        };
-        drop(remote);
-        let Some(at) = at else { return false };
-        let rect = ui::tree_row(list, shape, self.scroll.of(List::Projects), row);
-        self.grab_with(Grab::Remote(at), rect, area, matches!(hit, TreeHit::Fold(_)));
-        true
+        }
     }
 
     fn remote_project_at(&self, remote: &[RemoteProject], p: usize) -> Option<RemoteAt> {
