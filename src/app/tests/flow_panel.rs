@@ -598,6 +598,18 @@ mod buttons {
     }
 
     #[test]
+    fn stop_works_before_any_agent_reports_status() {
+        let (mut app, _rx, _dir) = team();
+        app.show_flow();
+        press(&mut app, " stop ");
+        let Some(Overlay::CloseAgent(dialog)) = &app.overlay else { panic!("no confirmation") };
+        assert_eq!(dialog.plan.pane, pane(&app, ORCHESTRATOR));
+        send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+        app.refresh(Instant::now());
+        assert!(app.runs.all().is_empty());
+    }
+
+    #[test]
     fn stop_confirmed_closes_every_member_and_the_panel_goes() {
         let (mut app, _rx, _dir) = team();
         give_agents(&mut app);
@@ -610,11 +622,17 @@ mod buttons {
     }
 
     #[test]
-    fn stop_picks_the_first_member_that_has_an_agent() {
-        let (mut app, _rx, _dir) = team();
+    fn stop_picks_the_first_member_whose_pane_is_still_there() {
+        let (mut app, rx, _dir) = team();
         give_agents(&mut app);
         let orchestrator = pane(&app, ORCHESTRATOR);
-        app.projects.pane_by_mut(orchestrator).expect("its pane").agent.follow(None);
+        let at = app.projects.tab_of_pane(orchestrator).expect("its tab");
+        app.close_tab(at);
+        wait_until_within("the tab is gone", Duration::from_secs(10), || {
+            drain(&mut app, &rx);
+            app.refresh(Instant::now());
+            app.projects.pane_by(orchestrator).is_none()
+        });
         app.show_flow();
         press(&mut app, " stop ");
         let Some(Overlay::CloseAgent(dialog)) = &app.overlay else { panic!("no confirmation") };
@@ -762,5 +780,27 @@ mod loop_label {
         assert_eq!(steps(&app)[0], Some(flow::Step::Loop("loop".into())));
         app.runs.first_mut().flow.stages[1].back = None;
         assert_eq!(steps(&app)[0], Some(flow::Step::Loop("loop".into())));
+    }
+}
+
+mod branch {
+    use super::*;
+
+    #[test]
+    fn the_heading_reads_the_branch_in_the_background_and_never_on_a_draw() {
+        let (mut app, rx, dir) = team();
+        app.projects[0].workspaces[0].name = Some("my run".into());
+        app.projects[0].workspaces[0].path = dir.path().to_path_buf();
+        std::fs::create_dir_all(dir.path().join(".git")).expect("a .git");
+        std::fs::write(dir.path().join(".git/HEAD"), "ref: refs/heads/fix/login\n").expect("HEAD");
+        app.show_flow();
+        let place = |app: &App| app.flow_view(Instant::now(), None).expect("a view").heading.place;
+        assert!(!place(&app).contains("fix/login"));
+        wait_until_within("the branch is read", Duration::from_secs(10), || {
+            drain(&mut app, &rx);
+            app.refresh(Instant::now());
+            place(&app).contains("fix/login")
+        });
+        assert!(place(&app).contains("my run"));
     }
 }

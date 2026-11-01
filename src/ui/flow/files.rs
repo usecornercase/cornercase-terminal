@@ -48,7 +48,7 @@ fn draw_row(buf: &mut Buffer, slot: &Slot, (i, file): (u16, &FileRow), muted: ra
     let row = LEAD + i;
     let width = slot.area.width;
     let both = format!("{} · {}", file.size, file.age);
-    let tail = if width.saturating_sub(cells(&both) + 1) >= MIN_NAME { both } else { file.age.clone() };
+    let tail = if width.saturating_sub(cells(&both).saturating_add(1)) >= MIN_NAME { both } else { file.age.clone() };
     let tail = slot.put_right(buf, row, &tail, dim(muted));
     let room = usize::from(width.saturating_sub(tail.saturating_add(1)));
     slot.put(buf, (row, 0), &crate::text::truncate_cells(&file.name, room), Style::default());

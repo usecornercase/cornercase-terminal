@@ -39,17 +39,17 @@ fn state(view: &View) -> (&'static str, Color) {
 pub(super) fn draw_title(buf: &mut Buffer, row: Rect, view: &View) {
     let (word, colour) = state(view);
     let room = usize::from(row.width.saturating_sub(CLOSE_ROOM));
-    let tail = text::cells(word) + 3;
+    let tail = text::cells(word).saturating_add(3);
     let limit = row.right();
-    if room < tail + MIN_NAME {
+    if room < tail.saturating_add(MIN_NAME) {
         put(buf, (row.x, row.y), &text::truncate_cells(word, room), Style::default().fg(colour), limit);
         return;
     }
     let name = text::truncate_cells(&view.name, room - tail);
     put(buf, (row.x, row.y), &name, Style::default().add_modifier(Modifier::BOLD), limit);
-    let x = row.x + u16::try_from(text::cells(&name)).unwrap_or(0);
+    let x = row.x.saturating_add(u16::try_from(text::cells(&name)).unwrap_or(0));
     put(buf, (x, row.y), " · ", dim(view.diagram.muted), limit);
-    put(buf, (x + 3, row.y), word, Style::default().fg(colour), limit);
+    put(buf, (x.saturating_add(3), row.y), word, Style::default().fg(colour), limit);
 }
 
 fn summary(view: &View) -> Vec<Span<'static>> {
@@ -69,11 +69,11 @@ fn summary(view: &View) -> Vec<Span<'static>> {
 
 fn buttons_width(view: &View) -> u16 {
     let stop = cells(STOP_BUTTON);
-    if view.heading.lead { cells(LEAD_BUTTON) + 1 + stop } else { stop }
+    if view.heading.lead { cells(LEAD_BUTTON).saturating_add(1).saturating_add(stop) } else { stop }
 }
 
 fn fits(view: &View, width: u16) -> bool {
-    let summary: u16 = summary(view).iter().map(|span| cells(&span.content)).sum();
+    let summary = summary(view).iter().fold(0u16, |n, span| n.saturating_add(cells(&span.content)));
     summary.saturating_add(1).saturating_add(buttons_width(view)) <= width
 }
 
@@ -92,7 +92,7 @@ fn buttons(slot: &Slot, view: &View) -> Vec<(Rect, &'static str, Hit)> {
     let mut out = vec![at(x, STOP_BUTTON, Hit::Stop)];
     if view.heading.lead {
         let lead = cells(LEAD_BUTTON);
-        out.push(at(x.saturating_sub(lead + 1), LEAD_BUTTON, Hit::Role(ORCHESTRATOR.into())));
+        out.push(at(x.saturating_sub(lead.saturating_add(1)), LEAD_BUTTON, Hit::Role(ORCHESTRATOR.into())));
     }
     out
 }
@@ -132,14 +132,15 @@ pub(super) fn draw(buf: &mut Buffer, slot: &Slot, view: &View, look: Look) {
     let messages = if heading.messages == 1 { "message" } else { "messages" };
     let right = format!("run {} · {} {messages}", heading.run, heading.messages);
     let width = slot.area.width;
-    let tail = if cells(&right) + 9 <= width { slot.put_right(buf, 0, &right, dim(look.muted)) } else { 0 };
-    let room = usize::from(width.saturating_sub(tail + 1));
+    let tail =
+        if cells(&right).saturating_add(9) <= width { slot.put_right(buf, 0, &right, dim(look.muted)) } else { 0 };
+    let room = usize::from(width.saturating_sub(tail.saturating_add(1)));
     slot.put(buf, (0, 0), &text::truncate_cells(&heading.place, room), Style::default());
     draw_bar(buf, slot, view);
     let mut x = 0;
     for span in summary(view) {
         slot.put(buf, (2, x), &span.content, span.style);
-        x += cells(&span.content);
+        x = x.saturating_add(cells(&span.content));
     }
     for (rect, label, _) in buttons(slot, view) {
         let lit = look.hover.is_some_and(|pos| rect.contains(pos));

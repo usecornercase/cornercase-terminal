@@ -56,15 +56,15 @@ fn fit(member: &Member, width: u16, longest: u16) -> Fit {
     let pane = pane_text(member);
     let pane_w = cells(&pane);
     let gap = u16::from(pane_w > 0);
-    let after_icon = width.saturating_sub(2).saturating_sub(pane_w + gap);
+    let after_icon = width.saturating_sub(2).saturating_sub(pane_w.saturating_add(gap));
     let role_w = longest.min(after_icon).max(MIN_ROLE.min(longest));
     let role = text::truncate_cells(&member.role, usize::from(role_w));
-    let left = after_icon.saturating_sub(role_w + 2);
+    let left = after_icon.saturating_sub(role_w.saturating_add(2));
     let said = if member.state == State::Closed { "closed" } else { member.agent.as_str() };
     let agent = cut(said, left, MIN_TEXT);
-    let left = left.saturating_sub(agent.as_deref().map_or(0, |a| cells(a) + 2));
+    let left = left.saturating_sub(agent.as_deref().map_or(0, |a| cells(a).saturating_add(2)));
     let branch = member.branch.as_deref().filter(|_| member.state != State::Closed);
-    let branch = branch.filter(|b| cells(b) + 2 <= left).and_then(|b| cut(b, left - 2, MIN_BRANCH));
+    let branch = branch.filter(|b| cells(b).saturating_add(2) <= left).and_then(|b| cut(b, left - 2, MIN_BRANCH));
     Fit { role, role_w, agent, branch, pane }
 }
 
@@ -84,10 +84,10 @@ fn draw_row(buf: &mut Buffer, slot: &Slot, (row, member): (u16, &Member), longes
     slot.put(buf, (row, 0), &icon.content, icon.style);
     let role = if closed { dim(look.muted) } else { Style::default().fg(member.colour).add_modifier(Modifier::BOLD) };
     slot.put(buf, (row, 2), &fit.role, role);
-    let mut x = 2 + fit.role_w + 2;
+    let mut x = fit.role_w.saturating_add(4);
     for part in [&fit.agent, &fit.branch].into_iter().flatten() {
         slot.put(buf, (row, x), part, dim(look.muted));
-        x += cells(part) + 2;
+        x = x.saturating_add(cells(part)).saturating_add(2);
     }
     slot.put_right(buf, row, &fit.pane, dim(look.muted));
 }

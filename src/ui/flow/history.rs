@@ -76,31 +76,32 @@ struct Plan {
 impl Plan {
     fn of(entry: &Entry, width: u16) -> Self {
         let step = entry.step.as_ref().map_or(0, |step| cells(&format!(" · {}", step.label())));
-        let left = INDENT + cells(&entry.from) + cells(" → ") + cells(&entry.to) + cells(&format!(" · {}", entry.kind));
+        let parts = [INDENT, cells(&entry.from), cells(" → "), cells(&entry.to), cells(&format!(" · {}", entry.kind))];
+        let left = parts.into_iter().fold(0u16, u16::saturating_add);
         let tail = cells(&format!("#{} · {}", entry.seq, entry.age));
-        let inline = left.saturating_add(step).saturating_add(tail + 1) <= width;
+        let inline = left.saturating_add(step).saturating_add(tail.saturating_add(1)) <= width;
         Self { inline, lines: preview(entry.head.as_deref(), width) }
     }
 
     fn rows(&self, entry: &Entry) -> u16 {
-        1 + u16::from(!self.inline && entry.step.is_some()) + count(self.lines.len())
+        1u16.saturating_add(u16::from(!self.inline && entry.step.is_some())).saturating_add(count(self.lines.len()))
     }
 }
 
 pub(super) fn height(history: &History, width: u16) -> u16 {
-    let rows = history.entries.iter().map(|entry| Plan::of(entry, width).rows(entry)).sum::<u16>();
+    let rows = history.entries.iter().fold(0u16, |n, entry| n.saturating_add(Plan::of(entry, width).rows(entry)));
     LEAD.saturating_add(if history.entries.is_empty() { 1 } else { rows })
 }
 
 pub(super) fn hit(slot: &Slot, history: &History, pos: Position) -> Option<Hit> {
     let row = slot.row_at(pos)?.checked_sub(LEAD)?;
-    let mut top = 0;
+    let mut top = 0u16;
     for entry in &history.entries {
         let rows = Plan::of(entry, slot.area.width).rows(entry);
-        if row < top + rows {
+        if row < top.saturating_add(rows) {
             return Some(Hit::Message(entry.seq));
         }
-        top += rows;
+        top = top.saturating_add(rows);
     }
     None
 }
@@ -111,7 +112,7 @@ fn step_style(step: &Step, look: Look) -> Style {
 
 fn first_row(buf: &mut Buffer, slot: &Slot, (row, entry): (u16, &Entry), (inline, look): (bool, Look)) {
     let tail = slot.put_right(buf, row, &format!("#{} · {}", entry.seq, entry.age), dim(look.muted));
-    let limit = slot.area.width.saturating_sub(tail + 1);
+    let limit = slot.area.width.saturating_sub(tail.saturating_add(1));
     let mut x = INDENT;
     let mut put = |buf: &mut Buffer, text: &str, style: Style| {
         let room = usize::from(limit.saturating_sub(x));
@@ -132,18 +133,19 @@ fn first_row(buf: &mut Buffer, slot: &Slot, (row, entry): (u16, &Entry), (inline
 fn draw_entry(buf: &mut Buffer, slot: &Slot, (top, entry): (u16, &Entry), look: Look) -> u16 {
     let plan = Plan::of(entry, slot.area.width);
     let rows = plan.rows(entry);
-    slot.shade(buf, top..top + rows, look);
-    for row in top..top + rows {
+    let end = top.saturating_add(rows);
+    slot.shade(buf, top..end, look);
+    for row in top..end {
         slot.put(buf, (row, 0), GUTTER, Style::default().fg(entry.colour));
     }
     first_row(buf, slot, (top, entry), (plan.inline, look));
-    let mut next = top + 1;
+    let mut next = top.saturating_add(1);
     if let Some(step) = entry.step.as_ref().filter(|_| !plan.inline) {
         slot.put(buf, (next, INDENT), &step.label(), step_style(step, look));
-        next += 1;
+        next = next.saturating_add(1);
     }
     for (i, line) in plan.lines.iter().enumerate() {
-        slot.put(buf, (next + count(i), INDENT), line, dim(look.muted));
+        slot.put(buf, (next.saturating_add(count(i)), INDENT), line, dim(look.muted));
     }
     rows
 }
@@ -156,6 +158,6 @@ pub(super) fn draw(buf: &mut Buffer, slot: &Slot, history: &History, look: Look)
     }
     let mut top = LEAD;
     for entry in &history.entries {
-        top += draw_entry(buf, slot, (top, entry), look);
+        top = top.saturating_add(draw_entry(buf, slot, (top, entry), look));
     }
 }

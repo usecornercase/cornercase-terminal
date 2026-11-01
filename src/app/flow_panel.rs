@@ -26,6 +26,7 @@ use crate::project::search::Goto;
 use crate::project::{Hierarchy, Project};
 use crate::ui::{self, flow};
 
+mod branch;
 mod view;
 
 pub(super) const COPY: &str = "copy";
@@ -46,6 +47,8 @@ pub(super) struct FlowPanel {
     files: Option<(u64, Listing)>,
     listing: Option<(u64, Instant)>,
     listed: Option<Instant>,
+    branch: Option<(u64, Option<String>)>,
+    branching: Option<Instant>,
 }
 
 pub(super) struct Noted {
@@ -243,9 +246,9 @@ impl App {
     fn stop_run(&mut self) {
         let Some(run) = self.shown_run() else { return };
         let panes: Vec<u64> = run.pane_of(ORCHESTRATOR).into_iter().chain(run.members.iter().map(|m| m.pane)).collect();
-        let lead = panes.iter().copied().find(|&pane| self.agent_close_plan(pane).is_ok()).or(panes.first().copied());
+        let lead = panes.iter().copied().find(|&pane| self.projects.pane_by(pane).is_some());
         if let Some(pane) = lead {
-            self.ask_close_agent(pane);
+            self.ask_stop_run(pane);
         }
     }
 

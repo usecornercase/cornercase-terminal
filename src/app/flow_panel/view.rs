@@ -61,10 +61,13 @@ impl App {
 
     pub(super) fn run_heading(&self, run: &Run, at: WorkspaceAt) -> flow::Heading {
         let workspace = self.projects.workspace(at);
-        let label = workspace.label();
-        let branch = crate::git::branch(&workspace.path).filter(|branch| *branch != label);
-        let place = self.place_name(at);
-        let place = branch.map_or(place.clone(), |branch| format!("{place} · {branch}"));
+        let read = self.panels.flow.branch.as_ref().filter(|(id, _)| *id == workspace.id).and_then(|(_, b)| b.clone());
+        let label = workspace.name.clone().or_else(|| read.clone()).unwrap_or_else(|| "default".into());
+        let place = format!("{} › {label}", self.project_label(&self.projects[at.project()]));
+        let place = match read.filter(|branch| *branch != label) {
+            Some(branch) => format!("{place} · {branch}"),
+            None => place,
+        };
         let lead = run.pane_of(ORCHESTRATOR).is_some_and(|pane| self.projects.pane_by(pane).is_some());
         flow::Heading { place, run: run.id, messages: run.recorded, active: run.progress.active, lead }
     }

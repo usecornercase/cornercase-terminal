@@ -861,4 +861,23 @@ mod panel {
         let bottom = View { scroll: most, ..view };
         assert!(find(&drawn(&bottom, short), "reviewer-2.md").is_some());
     }
+
+    #[test]
+    fn huge_labels_overflow_nothing() {
+        let mut view = full(false);
+        let huge = "x".repeat(40_000);
+        view.diagram.loops.iter_mut().flatten().for_each(|back| {
+            back.when.clone_from(&huge);
+            back.rounds = 1;
+        });
+        view.history.entries[0].from = huge.clone();
+        view.history.entries[0].to = huge.clone();
+        view.history.entries[0].head = Some(huge.clone());
+        view.team[1].role = huge.clone();
+        view.team[1].agent = huge;
+        let t = drawn(&view, WIDE);
+        assert!(find(&t, "Messages").is_some());
+        let _ = hit(WIDE, &view, Position::new(5, 8));
+        let _ = scrolled(WIDE, &view, 5);
+    }
 }
