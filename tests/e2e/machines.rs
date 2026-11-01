@@ -37,7 +37,13 @@ pub(super) fn start_listing(here: &Session, listed: &[(&str, &str)], reached: &[
     config["machines"] = Value::Array(machines);
     std::fs::write(here.dir.join("config.json"), config.to_string()).expect("write the config");
     let path = fake_ssh_to(&here.dir, reached);
-    let started = here.cold_command().env("PATH", path).arg("start-server").output().expect("run cornercase");
+    let started = here
+        .cold_command()
+        .env("PATH", path)
+        .env("CORNERCASE_LOG", "info")
+        .arg("start-server")
+        .output()
+        .expect("run cornercase");
     assert!(started.status.success(), "{started:?}");
 }
 
