@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.238
+
+- **The Flow panel shows where a run stands, its team and what they sent each other.** Above the diagram: whether the run is running or reached its end, where it runs, its number and how many messages went through, a bar of its stages with `stage 2 of 3 · findings 1/3`, ` orchestrator ` to go to its pane and ` stop ` to close the whole team (it asks first). Then the team, one row per role with its status, agent, branch and pane: click one to go to it.
+- **Every message, newest first.** Under the diagram, each message the team sent, with the step it moved the work along (`stage 1 → 2`, a loop, `outside the plan`), its number and age and its first lines, in the colour of the role it went to. Click one to read it whole and copy it.
+- **The run's files show their size**, and ` open folder ` opens the run's folder in your file manager or editor (or copies its path when the window can open nothing).
+
 ## 0.12.237
 
 - **`cornercase pull-request` reads a workspace's pull request as its dialog shows it.** It asks gh (or glab) at once, as opening the dialog does, even while cornercase waits after a failed read, and prints the pull request with every check: failed, pending, passed and skipped, each with its workflow (a GitLab job's stage) and the link to its job. `--json` gives the `pull_request` object of `status --json` plus `all_checks`, so a program that draws cornercase can show the same dialog and hand an agent the failed jobs' links. A read that fails exits with 1 and says why (`gh is not logged in: run gh auth login`); a workspace that is not on a branch, is on the default branch or has pull requests turned off says so.
