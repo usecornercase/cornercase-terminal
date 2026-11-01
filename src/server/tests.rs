@@ -862,11 +862,14 @@ mod drawing {
     fn a_window_coming_back_into_focus_is_drawn_whole() {
         Attached::new().serve(Server::step, |client| {
             client.shows("More");
+            client.type_line("echo pane-\"\"output");
+            client.shows("pane-output");
             let before = client.clears;
             client.input(Event::FocusLost);
             client.input(Event::FocusGained);
             client.until("the screen is cleared", |client| client.clears > before);
             client.shows("More");
+            client.shows("pane-output");
         });
     }
 
