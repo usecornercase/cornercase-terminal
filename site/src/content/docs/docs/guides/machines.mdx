@@ -14,7 +14,7 @@ import Screen from '../../../../components/Screen.astro';
   crop={[2, 1, 106, 10]}
 />
 
-For now a link keeps the connection and says how the machine is doing, and your server can [ask each machine for its stats and plan usage](#stats-and-usage-of-each-machine). Working on those machines from this window, with their workspaces in your sidebar, comes later; until then, [`cornercase remote`](../remote/) opens a window on one of them.
+A linked machine's workspaces show [in your sidebar](#in-your-sidebar), under the project here that is a clone of the same repository, and its agents tell you when they need you as yours do. Your server can also [ask each machine for its stats and plan usage](#stats-and-usage-of-each-machine). Opening tabs and typing on those machines from this window comes later; until then, [`cornercase remote`](../remote/) opens a window on one of them.
 
 ## Add a machine
 
@@ -78,6 +78,62 @@ Host vps
 <Aside>
 A connection that died without a word is noticed within about 15 seconds: `ssh` checks it every 5 (`ServerAliveInterval=5`, `ServerAliveCountMax=3`), and gives up on a machine that doesn't answer after 10 (`ConnectTimeout=10`).
 </Aside>
+
+## In your sidebar
+
+Once a machine is linked, your server reads what it has, and the sidebar shows it beside your own projects:
+
+```text
+▌ web-shop (2)          !
+  blog (1)          ☁ vps
+
+  ▾ login
+▌ ├ › nvim
+  └ + Tab
+
+  ▾ api           ! ☁ vps
+  ├ ! claude
+  │   opus · 40%
+  └ › zsh
+```
+
+- **A workspace on a machine shows under the project here that is a clone of the same repository**, after its own workspaces, with the machine's icon and name. Two clones pair whatever address each one was cloned with: `git@github.com:acme/web-shop.git`, `https://github.com/acme/web-shop` and an ssh alias from that machine's `~/.ssh/config` are the same repository, read from the `upstream` remote, else `origin`, else the first one. The project's count and its `!` include them.
+- **A project on the machine with no clone here** is a row of its own at the end of the list, outside your groups, with the machine's tag.
+- **Its tabs show what their agents are doing**, with the same icons and the model and context line as yours.
+- **A machine that is down keeps its rows**, dimmed, and an agent's tab says what it was doing and when the machine was last seen: `working · seen 2 min ago`.
+- **For now you can look, not act**: a machine's rows have no `×`, no ` ⋯ ` menu, no `+ Tab`, and can't be dragged. Folding a workspace works: it is kept by your server, not on the machine, until your server restarts.
+
+### Clicking a machine's workspace
+
+Click a machine's workspace or tab, or [`cornercase focus --machine vps --workspace ID`](../scripts-and-agents/#machines), and its row is marked as picked. Where a pane would be, a card says where it runs:
+
+```text
+╭─ runs on vps ──────────────────────╮
+│                                    │
+│ claude is waiting for you          │
+│ ~/code/web-shop                    │
+│                                    │
+╰────────────────────────────────────╯
+```
+
+While the machine is down the card reads `vps unreachable`, then `reconnecting in 4 s`, counted down to the link's next try (or why it is waiting, such as an older cornercase there), and `claude keeps working there`: the link going down stops nothing on the machine.
+
+While the card shows, what you type, paste or click in that area reaches no pane here. The sidebar, the tools, the tabs above the pane and the prefix key's menu still work; what that menu does to a tab or a pane, such as a split, first goes back to this computer. The project here it pairs with becomes the active one, and the tabs above the pane, **Changes** and **Files** keep showing that project's workspace you were on here. Click anything of this computer to go back to it.
+
+### Notices from a machine
+
+When an agent on a linked machine that was working needs you, fails or finishes, you get the toast, the desktop notification and the [sound](../projects-workspaces-tabs/#a-sound) you'd get for one here, with the machine's name: `claude on vps needs you in web-shop › main`. ` go `, or a click on the notification, shows that workspace of the machine.
+
+- The machine's workspace you have picked never tells you, like the tab on your screen.
+- Nothing is told for what changed while the link was down, nor for a shell an agent left running in the background.
+- A notice you missed while the window was in the background doesn't show again when you come back, unlike one about an agent here.
+
+Scripts get them from [`cornercase events --notices`](../scripts-and-agents/#follow-events), with the machine's name.
+
+### What isn't there yet
+
+- A project on a machine with no workspaces can't be picked.
+- Picking a machine's workspace with ` go ` or `focus --machine` doesn't scroll the tree, or the workspaces column, to its row.
 
 ## Stats and usage of each machine
 

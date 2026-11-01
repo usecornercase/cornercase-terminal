@@ -109,6 +109,8 @@ A workspace is called after its custom name, otherwise its branch, otherwise `de
 
 Worktrees of the repository that you create outside cornercase, with `git worktree add`, appear as workspaces by themselves, at the end of the list. A worktree you remove outside cornercase goes away once its tabs are closed, also when git forgot it but its folder is still there (after `git worktree prune`, or a removal that failed half way); that folder stays on disk for you to delete.
 
+A workspace on one of your [machines](../machines/#in-your-sidebar) shows after the project's own when that machine has a clone of the same repository, tagged with the machine's icon and name, such as `☁ vps`; a project there with no clone here is a row of its own at the end of the projects. Clicking one shows a card that says where it runs instead of a pane.
+
 When a workspace's branch is behind its upstream, its row ends with the number of commits to pull, such as `↓3`. See [Commits to pull](../worktrees/#commits-to-pull). When the branch has a pull request on GitHub (or a merge request on GitLab), the row shows its number, coloured by its checks, such as `#485✗` when one failed, or `#486!` in orange when it has merge conflicts; click it to see its checks. See [Pull requests and their checks](../worktrees/#pull-requests-and-their-checks).
 
 ## Tabs
@@ -224,6 +226,8 @@ When an agent asks you something or finishes in a tab you aren't looking at, cor
 
 - a **toast** in the bottom right corner says which agent and where, such as `! claude needs you in web-shop › main` or `✓ codex finished in web-shop › main`;
 - your terminal shows a **desktop notification**, so you find out while you are in another window.
+
+An agent on one of your [machines](../machines/#notices-from-a-machine) tells you too, with the machine's name: `! claude on vps needs you in web-shop › main`.
 
 cornercase waits a second before telling you, so a question answered at once stays quiet, and it tells you once each time. The tab on screen doesn't notify you, even while cornercase's window is in the background, and neither does one that a program that draws cornercase shows ([A view of your own](../scripts-and-agents/#a-view-of-your-own)).
 

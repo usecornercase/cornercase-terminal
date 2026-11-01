@@ -92,6 +92,7 @@ fn with_lists(sidebar: Sidebar) -> View<'static> {
                 removing: false,
                 setting_up: false,
                 closed: 0,
+                machine: None,
             },
             WorkspaceEntry {
                 shared: 0,
@@ -103,6 +104,7 @@ fn with_lists(sidebar: Sidebar) -> View<'static> {
                 removing: false,
                 setting_up: false,
                 closed: 0,
+                machine: None,
             },
         ],
         ..view(&["tmp", "api", "cornercase"])

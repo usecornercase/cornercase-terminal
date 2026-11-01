@@ -114,6 +114,7 @@ impl App {
         if !self.select_remote(&name, item) {
             return Err(missing(&name, item));
         }
+        self.screen.nav = None;
         Ok(Some(json(&self.shown_remote_info())))
     }
 

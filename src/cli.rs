@@ -524,6 +524,9 @@ fn event_line(value: &Value) -> String {
         (Some(subject), What::Bell { count }) if *count > 1 => format!("{subject}  bell  {count} times"),
         (Some(subject), What::Bell { .. }) => format!("{subject}  bell"),
         (Some(subject), What::Notice { token, message, .. }) => format!("{subject}  notice  {message}  {token}"),
+        (None, What::Notice { token, message, machine: Some(machine), .. }) => {
+            format!("machine {machine}  notice  {message}  {token}")
+        }
         (_, What::Dropped { count }) => format!(
             "{count} event{} dropped: this command fell behind; `cornercase status` shows where things are now",
             if *count == 1 { "" } else { "s" }

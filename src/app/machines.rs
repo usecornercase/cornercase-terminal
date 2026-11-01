@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 
@@ -19,10 +20,17 @@ use crate::machines::wake::{Network, Sleep};
 use crate::machines::{self, Info, Machine, State, Status};
 use crate::settings::Page;
 
+mod card;
+mod clicks;
+mod column;
+mod notices;
 mod repo;
 mod report;
+mod rows;
 mod selection;
 
+pub(super) use clicks::RemoteAt;
+pub(super) use rows::{RemoteProject, machine_project, machine_shape, paired, remote_only, statuses};
 pub(super) use selection::RemoteItem;
 
 pub(super) const OLDER: &str = "its cornercase is older than this one";
@@ -52,6 +60,7 @@ pub(super) struct Held {
     pub(super) status: Status,
     pub(super) seen: Option<Box<control::Report>>,
     pub(super) seen_at: Option<i64>,
+    pub(super) watching: bool,
     pub(super) down_at: Option<(Instant, u32)>,
     pub(super) cache: Cache,
 }
@@ -68,6 +77,7 @@ pub(super) struct Machines {
     sleep: Sleep,
     pub(super) repos: repo::Repos,
     selection: Option<selection::RemoteSelection>,
+    folded: Vec<(String, PathBuf)>,
 }
 
 impl Machines {
@@ -84,6 +94,7 @@ impl Machines {
             sleep: Sleep::default(),
             repos: repo::Repos::new(),
             selection: None,
+            folded: Vec::new(),
         }
     }
 
@@ -176,6 +187,7 @@ pub(super) enum Update {
 impl App {
     pub(super) fn sync_machines(&mut self, now: Instant, clock: i64) {
         self.follow_machines();
+        self.follow_pairing();
         let woke = self.machines.sleep.woke(clock, now);
         let moved = if self.machines.held.is_empty() {
             self.machines.network.rest();
@@ -234,6 +246,7 @@ impl App {
             status: Status::default(),
             seen: None,
             seen_at: None,
+            watching: false,
             down_at: None,
             cache: Cache::default(),
         };
@@ -261,13 +274,9 @@ impl App {
                 }
                 held.status.linked(release, server_version, now);
                 held.down_at = None;
+                held.watching = false;
             }
-            Event::Seen(seen) => {
-                held.seen = Some(seen);
-                held.seen_at = Some(now);
-                self.log_seen(&self.machines.held[at]);
-                self.follow_selection();
-            }
+            Event::Seen(seen) => self.seen_arrived(at, seen, now),
             Event::Down { down, failed } => {
                 held.status.down(down, now);
                 held.down_at = Some((Instant::now(), failed));
@@ -279,6 +288,16 @@ impl App {
                 }
             }
         }
+    }
+
+    fn seen_arrived(&mut self, at: usize, seen: Box<control::Report>, now: i64) {
+        let held = &mut self.machines.held[at];
+        let before = held.seen.replace(seen).filter(|_| held.watching);
+        held.watching = true;
+        held.seen_at = Some(now);
+        self.log_seen(&self.machines.held[at]);
+        self.follow_selection();
+        self.tell_turns(at, before.as_deref());
     }
 
     pub(super) fn paired(&self, seen: &control::Report) -> Vec<Option<u64>> {

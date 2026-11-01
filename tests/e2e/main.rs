@@ -370,7 +370,8 @@ impl Harness {
     }
 
     fn position_of(&self, text: &str) -> Position {
-        (0..ROWS)
+        let rows = self.screen.lock().screen().size().0;
+        (0..rows)
             .rev()
             .find_map(|y| {
                 let row = self.row(y);

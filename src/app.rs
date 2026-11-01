@@ -390,6 +390,7 @@ impl App {
             self.surface_wake(now),
             self.panels.queued.wake(clock),
             self.popup_wake(now),
+            self.card_wake(now),
         ]
         .into_iter()
         .flatten()
@@ -397,7 +398,7 @@ impl App {
     }
 
     fn agent_working(&self) -> bool {
-        self.projects.tabs().any(|tab| tab.status() == Some(activity::Status::Working))
+        self.projects.tabs().any(|tab| tab.status() == Some(activity::Status::Working)) || self.remote_working()
     }
 
     pub(crate) fn refresh(&mut self, now: Instant) {
@@ -709,8 +710,10 @@ impl App {
         let modal = overlay.as_ref().is_some_and(ui::Overlay::is_modal);
         let (files, placed) = self.files_seen(sight, area, modal);
         let tab = self.tab_view(area);
+        let remote_card = self.remote_card(now);
         self.messages.toast = self.messages.toast.take().filter(|t| t.at.elapsed() < t.lasts());
-        let view = ui::View { tab, overlay, files, ..self.lists_view(area, now) }.with_icons(self.icons_in(sight));
+        let view = ui::View { remote_card, tab, overlay, files, ..self.lists_view(area, now) }
+            .with_icons(self.icons_in(sight));
         ui::draw(f, &view);
         placed.map(|placed| images::owned(f.buffer_mut(), placed))
     }

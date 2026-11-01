@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/remote_card.rs
+expression: shown(card(None)).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ web-shop (1)                 │                         │                                          "
+"                               │                         │                                          "
+"  + New                        │                         │ ╭─ runs on vps ─────────────────────────╮"
+"                               │                         │ │                                       │"
+"                               │                         │ │ claude is waiting for you             │"
+"                               │                         │ │ ~/code/web-shop                       │"
+"                               │                         │ │                                       │"
+"                               │                         │ ╰───────────────────────────────────────╯"
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Worktrees                    │                         │                                          "
+"  More ▴                 Help  │  Files       TODO       │                                          "

@@ -537,6 +537,19 @@ mod events_v1 {
         Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) }
     }
 
+    fn notice(token: u64, status: &str, message: &str, sound: Option<&str>, machine: Option<&str>) -> What {
+        What::Notice {
+            token: format!("cc-ab12cd-{token}"),
+            agent: "claude".into(),
+            status: status.into(),
+            place: "shop › default".into(),
+            message: message.into(),
+            panes: vec![4],
+            sound: sound.map(str::to_string),
+            machine: machine.map(str::to_string),
+        }
+    }
+
     fn plain_samples() -> Vec<(Event, &'static str)> {
         vec![
             (
@@ -568,15 +581,7 @@ mod events_v1 {
         vec![
             (
                 event(
-                    What::Notice {
-                        token: "cc-ab12cd-3".into(),
-                        agent: "claude".into(),
-                        status: "waiting".into(),
-                        place: "shop › default".into(),
-                        message: "claude needs you in shop › default".into(),
-                        panes: vec![4],
-                        sound: None,
-                    },
+                    notice(3, "waiting", "claude needs you in shop › default", None, None),
                     Ids { pane: None, tab: None, ..pane() },
                 ),
                 fixture!("control/events/v1/notice.json"),
@@ -592,15 +597,7 @@ mod events_v1 {
         vec![
             (
                 event(
-                    What::Notice {
-                        token: "cc-ab12cd-4".into(),
-                        agent: "claude".into(),
-                        status: "done".into(),
-                        place: "shop › default".into(),
-                        message: "claude finished in shop › default".into(),
-                        panes: vec![4],
-                        sound: Some("finished".into()),
-                    },
+                    notice(4, "done", "claude finished in shop › default", Some("finished"), None),
                     Ids { pane: None, tab: None, ..pane() },
                 ),
                 fixture!("control/events/v1/notice-sound.json"),
@@ -622,8 +619,16 @@ mod events_v1 {
         ]
     }
 
+    fn machines() -> Vec<(Event, &'static str)> {
+        let message = "claude on vps needs you in shop › default";
+        vec![(
+            event(notice(5, "waiting", message, None, Some("vps")), Ids::default()),
+            fixture!("control/events/v1/notice-machine.json"),
+        )]
+    }
+
     fn samples() -> Vec<(Event, &'static str)> {
-        [plain_samples(), rich_samples(), sound_and_accounts()].concat()
+        [plain_samples(), rich_samples(), sound_and_accounts(), machines()].concat()
     }
 
     #[test]
@@ -643,6 +648,7 @@ mod events_v1 {
     #[case::notice(7)]
     #[case::notice_with_a_sound(9)]
     #[case::opened_with_accounts(10)]
+    #[case::notice_from_a_machine(11)]
     fn an_event_is_written_as_its_fixture(#[case] index: usize) {
         let (event, fixture) = &samples()[index];
 
@@ -661,6 +667,7 @@ mod events_v1 {
     #[case::notice(7)]
     #[case::notice_with_a_sound(9)]
     #[case::opened_with_accounts(10)]
+    #[case::notice_from_a_machine(11)]
     fn a_fixture_reads_back_as_its_event(#[case] index: usize) {
         let (event, fixture) = &samples()[index];
 

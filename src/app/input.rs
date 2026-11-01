@@ -71,7 +71,7 @@ impl App {
     }
 
     pub(super) fn forward_key(&mut self, key: KeyEvent) {
-        if self.holds_input() {
+        if self.shown_remote().is_some() || self.holds_input() {
             return;
         }
         let Some(term) = self.term_mut() else { return };
@@ -275,6 +275,9 @@ impl App {
         if areas.tab_bar.contains(pos) {
             return self.tab_bar_mouse(areas, pos, ev.kind, area);
         }
+        if self.shown_remote().is_some() {
+            return Ok(());
+        }
         if self.tab().is_none() {
             return self.empty_pane_mouse(ev.kind, pos, areas.pane, area);
         }
@@ -431,7 +434,7 @@ impl App {
             self.overlay_paste(text, area);
             return;
         }
-        if self.typing_paste(text, area) || self.holds_input() {
+        if self.typing_paste(text, area) || self.shown_remote().is_some() || self.holds_input() {
             return;
         }
         if let Some(term) = self.term_mut() {

@@ -228,7 +228,7 @@ pub(super) fn draw_bar(f: &mut Frame, view: &View, areas: &Areas) {
 }
 
 fn breadcrumb(view: &View, room: usize) -> Vec<Span<'static>> {
-    let Some(project) = view.projects.get(view.active).filter(|_| view.has_project) else {
+    let Some(project) = view.shown_project().and_then(|p| view.projects.get(p)) else {
         return wordmark();
     };
     let workspace = view.workspaces.get(view.active_workspace);

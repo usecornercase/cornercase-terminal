@@ -865,6 +865,20 @@ mod output {
         Ids::default(),
         "1 event dropped: this command fell behind; `cornercase status` shows where things are now"
     )]
+    #[case::a_notice_from_a_machine(
+        What::Notice {
+            token: "cc-1-2".into(),
+            agent: "claude".into(),
+            status: "waiting".into(),
+            place: "shop › main".into(),
+            message: "claude on vps needs you in shop › main".into(),
+            panes: vec![4],
+            sound: None,
+            machine: Some("vps".into()),
+        },
+        Ids::default(),
+        "machine vps  notice  claude on vps needs you in shop › main  cc-1-2"
+    )]
     fn an_event_reads_as_one_line(#[case] what: What, #[case] ids: Ids, #[case] expected: &str) {
         assert_eq!(event_line(&event(what, ids)), expected);
     }

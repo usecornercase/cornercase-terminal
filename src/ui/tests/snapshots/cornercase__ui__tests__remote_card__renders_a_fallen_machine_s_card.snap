@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/remote_card.rs
+expression: "shown(card(Some(Retry::In(4)))).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ web-shop (1)                 │                         │                                          "
+"                               │                         │ ╭─ vps unreachable ─────────────────────╮"
+"  + New                        │                         │ │                                       │"
+"                               │                         │ │ reconnecting in 4 s                   │"
+"                               │                         │ │ claude keeps working there            │"
+"                               │                         │ │ ~/code/web-shop                       │"
+"                               │                         │ │                                       │"
+"                               │                         │ ╰───────────────────────────────────────╯"
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Worktrees                    │                         │                                          "
+"  More ▴                 Help  │  Files       TODO       │                                          "

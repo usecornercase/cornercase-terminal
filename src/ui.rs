@@ -23,6 +23,7 @@ mod layout;
 mod pane;
 pub(crate) mod remote;
 pub(crate) mod remote_access;
+mod remote_card;
 mod rows;
 mod sidebar;
 mod star;
@@ -122,12 +123,13 @@ pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, la
 pub(crate) use layout::{Nav, Screen, full_layout};
 pub(crate) use pane::{PaneBand, TabView, held_notice, restart_notice, resume_notice, scrollback_badge, split_footer};
 pub(crate) use remote_access::{RemoteAccess, done as remote_done};
+pub(crate) use remote_card::{RemoteCard, Retry};
 pub use rows::row_close_button;
 #[cfg(test)]
 pub(crate) use rows::row_menu_button;
 pub(crate) use rows::{MIN_MENU_ROW_WIDTH, ROW_MENU_ICON, Rows, more_above};
 pub use sidebar::{NEW_BUTTON, SidebarRow, close_button, new_project_button, sidebar_rows};
-pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, project_rows, sidebar_hit};
+pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, machine_rows, project_rows, sidebar_hit};
 #[cfg(test)]
 pub(crate) use star::star_buttons;
 pub(crate) use star::{StarButton, star_area, star_hit};
@@ -147,7 +149,7 @@ pub use widths::SIDEBAR_WIDTH;
 pub(crate) use widths::{MIN_COLUMN_WIDTH, MIN_PANE_WIDTH, MIN_STACK_SECTION, PANE_PADDING, WORKSPACES_WIDTH};
 pub use workspaces::{Details, TabLines, WorkspaceRow, new_workspace_button, workspace_row};
 pub(crate) use workspaces::{
-    ICON_WIDTH, REOPEN_ICON, TabEntry, Tag, WorkspaceEntry, WorkspaceHit, workspace_hit, workspace_layout,
+    ICON_WIDTH, MachineTag, REOPEN_ICON, TabEntry, Tag, WorkspaceEntry, WorkspaceHit, workspace_hit, workspace_layout,
     workspace_rows, workspace_tag,
 };
 
@@ -205,6 +207,8 @@ pub(crate) struct View<'a> {
     pub(crate) active: usize,
     pub(crate) projects_scroll: usize,
     pub(crate) has_project: bool,
+    pub(crate) remote_project: bool,
+    pub(crate) remote_card: Option<RemoteCard>,
     pub(crate) workspaces: Vec<WorkspaceEntry>,
     pub(crate) active_workspace: usize,
     pub(crate) active_tab: Option<usize>,
@@ -255,15 +259,27 @@ pub(crate) struct FieldMenu {
 }
 
 impl View<'_> {
+    pub(crate) fn shown_project(&self) -> Option<usize> {
+        (self.has_project || self.remote_project).then_some(self.active)
+    }
+
+    pub(crate) fn marked_project(&self) -> Option<usize> {
+        let theirs = self.projects.get(self.active).is_some_and(|p| p.machine.is_some());
+        (!theirs || self.remote_project).then_some(self.active)
+    }
+
     pub(crate) fn sidebar_rows(&self) -> Vec<SidebarRow> {
-        let groups: Vec<Option<usize>> = self.projects.iter().map(|p| p.group).collect();
+        let local = self.projects.iter().filter(|p| p.machine.is_none());
+        let groups: Vec<Option<usize>> = local.map(|p| p.group).collect();
         let collapsed: Vec<bool> = self.groups.iter().map(|g| g.collapsed).collect();
-        sidebar_rows(&groups, &collapsed)
+        machine_rows(sidebar_rows(&groups, &collapsed), groups.len()..self.projects.len())
     }
 
     pub(crate) fn tab_lines(&self) -> TabLines {
-        let lines = self.workspaces.iter().map(|w| w.tabs.iter().map(|t| t.details.lines()).collect()).collect();
-        TabLines::new(lines, self.tab_bar.is_none()).folded(self.workspaces.iter().map(|w| w.collapsed).collect())
+        let lines = self.workspaces.iter().map(WorkspaceEntry::tab_lines).collect();
+        TabLines::new(lines, self.tab_bar.is_none())
+            .folded(self.workspaces.iter().map(|w| w.collapsed).collect())
+            .bare(self.workspaces.iter().map(|w| w.machine.is_some()).collect())
     }
 
     fn glyphs(&self) -> &'static icons::Glyphs {
@@ -370,10 +386,15 @@ fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
 }
 
 fn draw_tab_or_empty(f: &mut Frame, view: &View, areas: &Areas) {
+    if let Some(card) = &view.remote_card {
+        remote_card::draw_remote_card(f, view, card, areas.pane);
+        return;
+    }
     match &view.tab {
         Some(tab) => draw_tab(f, view, tab, areas.pane),
+        None if view.remote_project => {}
         None if view.has_project => draw_no_tab(f, view, areas.pane),
-        None if view.projects.is_empty() => draw_welcome(f, view, areas.pane),
+        None if view.projects.iter().all(|p| p.machine.is_some()) => draw_welcome(f, view, areas.pane),
         None => {}
     }
 }

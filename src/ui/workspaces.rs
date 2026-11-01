@@ -22,6 +22,12 @@ use crate::agents::usage::Severity;
 use crate::pull_request::Mark;
 use crate::text::{cells, clip_cells, truncate_cells, truncate_right};
 
+mod machine;
+
+pub(crate) use machine::MachineTag;
+use machine::seen_note;
+pub(super) use machine::{dim_row, machine_span, spin};
+
 const SHELL_ICON: &str = "›";
 
 const PROGRAM_ICON: &str = "▸";
@@ -55,16 +61,29 @@ pub struct TabLines {
     lines: Vec<Vec<u16>>,
     listed: bool,
     folded: Vec<bool>,
+    bare: Vec<bool>,
 }
 
 impl TabLines {
     pub(crate) fn new(lines: Vec<Vec<u16>>, listed: bool) -> Self {
         let lines = if listed { lines } else { vec![Vec::new(); lines.len()] };
-        Self { lines, listed, folded: Vec::new() }
+        Self { lines, listed, folded: Vec::new(), bare: Vec::new() }
     }
 
     pub(crate) fn folded(self, folded: Vec<bool>) -> Self {
         Self { folded, ..self }
+    }
+
+    pub(crate) fn bare(self, bare: Vec<bool>) -> Self {
+        Self { bare, ..self }
+    }
+
+    fn adds_tabs(&self, w: usize) -> bool {
+        self.listed && self.bare.get(w) != Some(&true)
+    }
+
+    pub(crate) fn ours(&self) -> usize {
+        self.bare.iter().position(|bare| *bare).unwrap_or(self.lines.len())
     }
 
     pub(crate) fn is_folded(&self, w: usize) -> bool {
@@ -89,7 +108,7 @@ pub(crate) fn workspace_rows(tabs: &TabLines) -> Vec<WorkspaceRow> {
                 .into_iter()
                 .chain(std::iter::once(WorkspaceRow::Workspace(w)))
                 .chain((0..lines.len()).filter(move |_| open).map(move |t| WorkspaceRow::Tab(w, t)))
-                .chain((tabs.listed && open).then_some(WorkspaceRow::NewTab(w)))
+                .chain((tabs.adds_tabs(w) && open).then_some(WorkspaceRow::NewTab(w)))
         })
         .collect()
 }
@@ -189,6 +208,7 @@ pub(crate) fn workspace_hit(
     })
 }
 
+#[derive(Default)]
 pub(crate) struct WorkspaceEntry {
     pub(crate) name: String,
     pub(crate) collapsed: bool,
@@ -199,6 +219,7 @@ pub(crate) struct WorkspaceEntry {
     pub(crate) removing: bool,
     pub(crate) setting_up: bool,
     pub(crate) closed: usize,
+    pub(crate) machine: Option<MachineTag>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -263,10 +284,10 @@ pub(super) fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
     if areas.back.is_empty() {
         draw_title(f, view.muted, areas.workspaces_title, "Workspaces");
     } else {
-        let name = view.projects.get(view.active).filter(|_| view.has_project).map(|p| p.name.as_str());
+        let name = view.shown_project().and_then(|p| view.projects.get(p)).map(|p| p.name.as_str());
         draw_back(f, view, areas, name.unwrap_or_default());
     }
-    if !view.has_project {
+    if view.shown_project().is_none() {
         return;
     }
 
@@ -289,7 +310,9 @@ pub(super) fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
 
     let r = layout.button();
     let accent = Style::default().fg(Color::Cyan);
-    draw_button(f, r, " ", NEW_BUTTON, button_style(view, r, accent, Color::Cyan));
+    if !view.remote_project {
+        draw_button(f, r, " ", NEW_BUTTON, button_style(view, r, accent, Color::Cyan));
+    }
     draw_landing(f, landing_line, paint.indent);
 }
 
@@ -318,8 +341,10 @@ impl WorkspacePaint<'_> {
                 let active = w == view.active_workspace && view.active_tab == Some(t);
                 let bg = view.row_background(r, active || view.dragging_workspace_row(row));
                 let band = Band { r, pitch: self.pitch, lead: vec![marker(active), Span::raw("  ")], bg };
-                draw_tab_band(f, view, band, &view.workspaces[w].tabs[t], active);
-                draw_guide(f, view.line(), guide, r, Guide::Tee);
+                let entry = &view.workspaces[w];
+                draw_tab_band(f, view, band, (&entry.tabs[t], entry.machine.as_ref()), active);
+                let end = if ends_tabs(self.rows, index, w) { Guide::End } else { Guide::Tee };
+                draw_guide(f, view.line(), guide, r, end);
                 if active {
                     draw_rail(f, r);
                 }
@@ -381,6 +406,11 @@ pub(super) fn draw_guide(f: &mut Frame, colour: Color, x: u16, r: Rect, guide: G
             cell.set_symbol(symbol).set_fg(colour);
         }
     }
+}
+
+fn ends_tabs(rows: &[WorkspaceRow], i: usize, w: usize) -> bool {
+    let next = rows.iter().skip(i + 1).find(|row| **row != WorkspaceRow::Landing);
+    !matches!(next, Some(WorkspaceRow::Tab(v, _) | WorkspaceRow::NewTab(v)) if *v == w)
 }
 
 fn among_tabs(rows: &[WorkspaceRow], i: usize) -> bool {
@@ -499,7 +529,9 @@ pub(super) fn draw_workspace_band(f: &mut Frame, view: &View, band: Band, line: 
     };
     let style = Style::default().fg(colour).add_modifier(Modifier::BOLD);
     let room = band.room();
-    let (spans, places) = marks(entry, badge, view.muted, view.spin);
+    let machine = entry.machine.as_ref();
+    let (mut spans, places) = marks(entry, badge, view.muted, spin(machine, view.spin));
+    spans.extend(machine.map(|machine| machine_span(machine, room, view.muted)));
     let mut marks = Tags::fit(spans, room);
     for (tag, add) in [
         (Tag::Pull, Modifier::UNDERLINED),
@@ -521,12 +553,19 @@ pub(super) fn draw_workspace_band(f: &mut Frame, view: &View, band: Band, line: 
     line.push(Span::styled(name, style));
     marks.push_onto(&mut line, used, room);
     draw_band(f, band.r, Line::from(line), band.bg);
-    if !entry.removing {
+    if !entry.removing && machine.is_none() {
         draw_row_buttons(f, view, band.r, band.pitch, band.bg);
     }
+    dim_row(f, band.r, machine);
 }
 
-pub(super) fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEntry, active: bool) {
+pub(super) fn draw_tab_band(
+    f: &mut Frame,
+    view: &View,
+    band: Band,
+    (tab, machine): (&TabEntry, Option<&MachineTag>),
+    active: bool,
+) {
     let style = Style::default().fg(if active { Color::Reset } else { view.soft });
     let indent = band.lead_width() + ICON_WIDTH;
     let max = band.room().saturating_sub(ICON_WIDTH);
@@ -540,16 +579,21 @@ pub(super) fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEnt
     };
     let used = name.chars().count();
     let mut line = band.lead;
-    line.extend(tab.prefix(view.muted, Style::default(), view.spin));
+    line.extend(tab.prefix(view.muted, Style::default(), spin(machine, view.spin)));
     line.push(Span::styled(name, style));
     marks.push_onto(&mut line, used, max);
     draw_band(f, band.r, Line::from(line), band.bg);
-    if tab.details.lines() > 1 {
+    let note = seen_note(tab, machine);
+    if tab.lines(machine) > 1 {
         let buttons = row_menu_button(band.r, band.pitch).union(row_close_button(band.r, band.pitch));
-        let line = DetailLine { row: band.r, buttons, details: &tab.details, agent: None, indent };
+        let details = if note.is_some() { &Details::default() } else { &tab.details };
+        let line = DetailLine { row: band.r, buttons, details, agent: note.as_deref(), indent };
         draw_details(f, view.muted, line);
     }
-    draw_row_buttons(f, view, band.r, band.pitch, band.bg);
+    if machine.is_none() {
+        draw_row_buttons(f, view, band.r, band.pitch, band.bg);
+    }
+    dim_row(f, band.r, machine);
 }
 
 #[derive(Clone, Copy)]

@@ -24,7 +24,10 @@ pub(crate) fn tree_drop(
             Some(Landing { at, spot: Spot::Group(g) })
         }
         TreeRow::Project(_) => tree_project_drop(&rows, &layout, zone, rows.iter().position(|r| *r == dragged)?),
-        TreeRow::Workspace(p, w) => tree_workspace_drop(&rows, &layout, zone, p, w),
+        TreeRow::Workspace(p, w) => {
+            let ours = shape.projects.get(p)?.workspaces.iter().filter(|w| !w.machine).count();
+            tree_workspace_drop(&rows, &layout, zone, (p, ours), w)
+        }
         TreeRow::Tab(p, w, t) => {
             let tab = |r| if let TreeRow::Tab(q, v, u) = r { (q == p && v == w).then_some(u) } else { None };
             sibling_drop(
@@ -233,12 +236,19 @@ fn tree_project_drop(rows: &[TreeRow], layout: &Rows, zone: Zone, d: usize) -> O
     Some(Landing { at, spot: project_spot(rows, d..block_end(rows, d), at) })
 }
 
-fn tree_workspace_drop(rows: &[TreeRow], layout: &Rows, zone: Zone, p: usize, w: usize) -> Option<Landing> {
+fn tree_workspace_drop(
+    rows: &[TreeRow],
+    layout: &Rows,
+    zone: Zone,
+    (p, ours): (usize, usize),
+    moved: usize,
+) -> Option<Landing> {
     let header = rows.iter().position(|r| *r == TreeRow::Project(p))?;
-    let end = rows.iter().position(|r| *r == TreeRow::NewWorkspace(p))?;
-    let d = rows.iter().position(|r| *r == TreeRow::Workspace(p, w))?;
-    let is_workspace = |r| matches!(r, TreeRow::Workspace(q, _) if q == p);
-    let at = block_drop_at(rows, layout, zone, d, is_workspace)?.clamp(header + 1, end);
+    let theirs = |r| matches!(r, TreeRow::Workspace(q, v) if q == p && v >= ours);
+    let end = rows.iter().position(|&r| r == TreeRow::NewWorkspace(p) || theirs(r))?;
+    let from = rows.iter().position(|r| *r == TreeRow::Workspace(p, moved))?;
+    let is_workspace = |r| matches!(r, TreeRow::Workspace(q, v) if q == p && v < ours);
+    let at = block_drop_at(rows, layout, zone, from, is_workspace)?.clamp(header + 1, end);
     let index = |r: &TreeRow| if let TreeRow::Workspace(q, v) = *r { (q == p).then_some(v) } else { None };
     let before =
         rows[at..end].iter().find_map(index).unwrap_or_else(|| rows[header..end].iter().filter_map(index).count());
@@ -263,9 +273,14 @@ pub(crate) fn workspace_drop(layout: &Rows, tabs: &TabLines, dragged: WorkspaceR
     let rows = workspace_rows(tabs);
     match dragged {
         WorkspaceRow::Workspace(_) => {
-            let header = |r| if let WorkspaceRow::Workspace(w) = r { Some(w) } else { None };
+            let ours = tabs.ours();
+            let header = |r| if let WorkspaceRow::Workspace(w) = r { (w < ours).then_some(w) } else { None };
             let (at, w) = block_drop(&rows, over, dragged, WorkspaceRow::Gap, header)?;
-            Some(Landing { at, spot: Spot::Workspace(w) })
+            let end = rows
+                .iter()
+                .position(|r| *r == WorkspaceRow::Workspace(ours))
+                .map_or(rows.len(), |t| t.saturating_sub(1));
+            Some(Landing { at: at.min(end), spot: Spot::Workspace(w) })
         }
         WorkspaceRow::Tab(w, t) => tab_drop(&rows, over, w, t),
         WorkspaceRow::Gap | WorkspaceRow::NewTab(_) | WorkspaceRow::Landing => None,

@@ -264,8 +264,8 @@ stderr and the exit status is 0.
 
 --machine NAME picks one of a machine's workspaces or tabs as the one shown: --workspace and --tab
 take the ids `cornercase status` lists under that machine. The machine must have sent its workspaces
-since this server started. For now it only records the pick, which `status` reports as shown; the
-window keeps showing what it showed.
+since this server started. The window then shows a card that says where it runs and what its agent
+is doing, and `status` reports it as shown; showing the machine's tab itself comes later.
 
 --json prints the answer: `revealed` with --reveal, and with --view the view's new tab and its
 `projection`, the number a view's lines and surface frames carry, which goes up each time what the
@@ -280,7 +280,8 @@ pub(super) const GO_HELP: &str =
     "Does what a click on an agent's desktop notification does, or the go button of its toast: shows
 the agent's pane (the one still needing you, when the notice covered several), or its workspace once
 they are all closed, and prints the pane's id. With --view ID it moves that view (see
-`cornercase view`) instead of the window. TOKEN is a notice's, from `cornercase events --notices`.
+`cornercase view`) instead of the window; a notice about an agent on one of your machines refuses
+--view, since only the window shows that machine's workspace. TOKEN is from `cornercase events --notices`.
 It fails for a token this server never gave or no longer keeps (the last 64; a restart forgets them),
 and when the agent and its workspace are gone.
 
@@ -366,6 +367,8 @@ With --notices, each notice about an agent is told too, as the window's toast an
 say it, with the same rules (a second's wait, once per change, never for a tab seen in the window or
 in a view), and with --json its token, agent, status, place, message and panes:
   workspace 2  notice  claude needs you in shop › main  cc-3f2a9c-4
+An agent on a linked machine tells its notices too, with the machine's name and without ids here:
+  machine vps  notice  claude on vps needs you in shop › main  cc-3f2a9c-5
 `cornercase go TOKEN` then does what a click on that notification does.
 With --host, a program's own requests to the terminal are told too, for programs that draw the panes:
   pane 7  clipboard  11 bytes         it wrote to the clipboard (OSC 52); the text itself only with --json
