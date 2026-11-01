@@ -4,17 +4,16 @@ use std::time::SystemTime;
 use super::args::StatsArgs;
 use super::machines::read_line;
 use super::{print_json, print_out};
-use crate::agents::stats::{self, View};
+use crate::agents::stats::{self, PEAK, View};
 use crate::client::{answer, ask, use_machine_usage};
 use crate::control::usage::{MachineRead, MachineStats};
 use crate::control::{Command, Stats};
 use crate::error::{Error, Result};
-use crate::machines::HERE_ICON;
+use crate::machines::{HERE, HERE_ICON};
 use crate::paths;
 use crate::text;
 
 const NOT_SUMMED: &str = "not summed";
-const PEAK: &str = "most at once: the largest peak of one machine, not a sum";
 
 pub(super) fn run(args: &StatsArgs) -> Result<bool> {
     let now = SystemTime::now();
@@ -65,7 +64,7 @@ pub(crate) fn machine_text(read: &MachineStats, share: bool, now: SystemTime) ->
 
 fn summed(machines: &[MachineRead], now: SystemTime) -> String {
     let width = machines.iter().map(|machine| text::cells(&machine.name)).max().unwrap_or_default();
-    let mut text = format!("{PEAK}\nsummed from:\n{HERE_ICON} this computer");
+    let mut text = format!("{PEAK}\nsummed from:\n{HERE_ICON} {HERE}");
     for machine in machines {
         let left_out = if machine.read_at.is_none() { format!(" · {NOT_SUMMED}") } else { String::new() };
         let _ = write!(text, "\n{}{left_out}", read_line(machine, width, now));

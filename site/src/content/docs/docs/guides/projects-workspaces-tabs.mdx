@@ -295,6 +295,8 @@ Each heatmap square is a 24-hour block, newest at the bottom right. Rows are not
 
 **share** copies a link to [a stats card](https://usecornercase.dev/stats/): a ticket with a holographic finish that tilts as you move the pointer over it, or drag it on a touch screen. The page makes a PNG of it in your browser, with download, copy and supported share options. The card shows the same rows as the Stats tab for the window you pick, so the link holds those numbers for the three windows, plus busy time, counting days and heatmap levels. The merged PRs row goes on the card only when every account was read; a `+` count is never shared. Anyone with the link can see these numbers. It omits agent breakdowns, models, projects, paths and names. The fragment after `#` is never sent to the site, which has no analytics; nothing is uploaded. Attach the downloaded PNG to posts: link previews show an example card.
 
+With [machines](../machines/) listed in **Settings › Machines**, a row above the tabs picks **this computer**, one machine, or **all**, where it starts, and both tabs show what you picked: under **all**, Stats sums every machine and Limits lists each machine's accounts after this computer's. See [In the Usage dialog](../machines/#in-the-usage-dialog). Without machines the row isn't there.
+
 The local numbers live in [`stats.json`](../../reference/files-and-environment/). To start over, delete that file **with the server stopped**. [`cornercase stats`](../scripts-and-agents/#stats) reads the same numbers for scripts, even with no server running.
 
 ## Reorder

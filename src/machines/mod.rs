@@ -16,13 +16,14 @@ pub(crate) mod wake;
 pub(crate) const ICONS: [(char, &str); 6] =
     [('☁', "server"), ('▭', "laptop"), ('▣', "desktop"), ('◫', "mini"), ('⌂', "home server"), ('◆', "other")];
 pub(crate) const HERE_ICON: char = '▭';
+pub(crate) const HERE: &str = "this computer";
 pub(crate) const DEFAULT_FOLDER: &str = "~/code";
 
 const NAME_MAX: usize = 20;
 pub(crate) const EVERY: &str = "all";
 const UPDATING: &str = "updating…";
 const CONNECTING: &str = "connecting…";
-const NOT_SEEN: &str = "not seen yet";
+pub(crate) const NOT_SEEN: &str = "not seen yet";
 const DESTINATION_MAX: usize = 255;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]

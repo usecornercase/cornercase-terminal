@@ -95,7 +95,7 @@ fn an_account_without_limits_says_so(#[case] agent: Known, #[case] expected: &st
     let mut state = State::default();
     state.start(vec![(agent, None)]);
     state.answered((agent, None), Ok(Report::default()), Instant::now());
-    assert_eq!(sections(&state, &Config::default(), Instant::now(), CLOCK)[0].empty, Some(expected));
+    assert_eq!(sections(&state, &Config::default(), Instant::now(), CLOCK)[0].empty.as_deref(), Some(expected));
 }
 
 #[test]
@@ -106,7 +106,7 @@ fn a_codex_without_a_login_says_how_to_sign_in_without_an_error() {
     state.answered((Known::Codex, None), Ok(signed_out), Instant::now());
     let section = &sections(&state, &Config::default(), Instant::now(), CLOCK)[0];
     assert_eq!(
-        (section.title.as_str(), section.empty, &section.error),
+        (section.title.as_str(), section.empty.as_deref(), &section.error),
         ("Codex", Some("not signed in · run codex login"), &None)
     );
 }

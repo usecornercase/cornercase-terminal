@@ -99,6 +99,15 @@ fn sharing_copies_only_after_something_was_counted() {
 }
 
 #[test]
+fn without_machines_there_is_no_machine_picker() {
+    let (mut app, _rx, _dir) = with_agents(&[]);
+    app.open_usage();
+    let view = shown(&app).expect("dialog");
+    assert_eq!((view.machines, view.notes), (Vec::<String>::new(), Vec::<String>::new()));
+    assert_eq!(ui::usage_picks(AREA, &shown(&app).expect("dialog")), Vec::<Rect>::new());
+}
+
+#[test]
 fn the_button_shows_loading_then_the_windows() {
     let (mut app, rx, _dir) = with_claude(&format!("read -r a\nread -r b\necho '{ANSWER}'"));
     from_more(&mut app, "usage");

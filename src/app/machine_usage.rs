@@ -191,7 +191,20 @@ impl App {
         }
     }
 
-    fn machines_in_order(&self) -> impl Iterator<Item = &Held> {
+    pub(super) fn summed_stats(&self, now: SystemTime) -> (View, Vec<MachineRead>) {
+        let reads = self.machine_reads::<View>();
+        let mut views = vec![self.stats_view(now)];
+        views.extend(reads.iter().filter_map(|read| current(read, now)));
+        (View::sum(&views, now), reads.into_iter().map(|(machine, _)| machine).collect())
+    }
+
+    pub(super) fn machine_stats(&self, name: &str, now: SystemTime) -> Option<(Option<View>, MachineRead)> {
+        let held = self.machines_in_order().find(|held| held.name == name)?;
+        let read = self.machine_read::<View>(held);
+        Some((current(&read, now), read.0))
+    }
+
+    pub(super) fn machines_in_order(&self) -> impl Iterator<Item = &Held> {
         let held = self.machines.held();
         let listed = machines::accepted(&self.config.machines);
         listed.filter_map(move |machine| held.iter().find(|held| held.destination == machine.destination))
@@ -211,6 +224,11 @@ impl App {
         };
         (machine, read.map(|(value, _)| value.clone()))
     }
+}
+
+fn current((machine, view): &(MachineRead, Option<View>), now: SystemTime) -> Option<View> {
+    let read_at = Stamp::parse(machine.read_at.as_deref()?)?;
+    Some(view.clone()?.moved_on(read_at, now))
 }
 
 fn stamp(secs: i64) -> Option<String> {

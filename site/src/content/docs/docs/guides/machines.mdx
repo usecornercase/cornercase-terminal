@@ -81,7 +81,19 @@ A connection that died without a word is noticed within about 15 seconds: `ssh` 
 
 ## Stats and usage of each machine
 
-`cornercase stats` and `cornercase usage` read the other machines too. Your server asks the machine's server for them, through a new `ssh` connection each time, as [`--remote`](../remote/#commands-for-scripts-and-agents) does:
+The [Usage dialog](../projects-workspaces-tabs/#usage-and-stats) and `cornercase stats` and `cornercase usage` read the other machines too. Your server asks the machine's server for them, through a new `ssh` connection each time, as [`--remote`](../remote/#commands-for-scripts-and-agents) does.
+
+### In the Usage dialog
+
+Click **`More ▴`**, then **usage**. With machines listed, a row above **Limits** and **Stats** picks **this computer**, one machine by its name, or **all**. It starts on **all** and keeps your pick until the server restarts. Opening the dialog, switching tabs or picking asks the machines you picked; nothing is asked while it is closed.
+
+- **Stats** shows what you picked: this computer's numbers, one machine's, or under **all** their sum (see [how the numbers add up](#how-the-numbers-add-up)). Under the table, notes say that **most at once** is the largest peak of one machine, not a sum, which machines were summed from the numbers they gave last (`vps: seen 5 min ago`), and which weren't summed and why. **share** copies the link of what you picked: under **all**, the sum.
+- **Limits** under **all** lists this computer, then each machine under its name, with the accounts logged in there and their own labels. A Claude Code account logged in with a claude.ai login on two machines shows once, under the first, marked `on this computer, vps` under its title, with the most recent of the two readings; its percentages are never added, since it is the same limit. Every other row shows once per machine: Codex, API keys, Bedrock and Vertex give no way to tell two machines' accounts apart. Picking one machine shows its accounts as that machine sees them, merged with nothing.
+- A machine that is down shows the numbers it gave last, with when it was last seen; one whose last answer failed shows them too, with why and when they were read (`vps: … · numbers read 5 min ago`); one never read says `not seen yet` or why. With many machines on a narrow window, their names in the row are shortened so that every one, and **all**, can still be clicked.
+
+### From a terminal
+
+`cornercase stats` and `cornercase usage` take `--machine`:
 
 ```sh
 cornercase stats --machine vps      # the stats of the agents that run on vps
@@ -104,13 +116,15 @@ Claude Code · max plan  updated just now
   week           81% · resets in 3d 4h
 ```
 
-- **Stats under `all` are a sum**: prompts, turns, tokens and agent time add up, hour by hour, and so does the heatmap. The peak of agents working at once is the largest one machine had, since nobody knows whether two machines' peaks came at the same time. Busy time adds up too, so the hours it shows are machine-hours. Merged pull requests are never added: the row stays only when every machine reads the same accounts. A list at the end says which machines are in the sum and which aren't, and why. A machine that is down is summed from the numbers it gave last: its heatmap moves on by the days since they were read, but its 24 h and 7 days count as they were then, so a machine down for three days still adds its last 24 hours.
-- **Limits are never added**: they are the provider's. Each machine lists the accounts logged in there, with its own labels.
+Scripts and other apps send the same `machine` to the `stats` and `usage` requests: see [Stats](../scripts-and-agents/#stats) and [Plan usage](../scripts-and-agents/#plan-usage). To ask a machine you haven't listed, use `cornercase --remote vps usage`.
+
+### How the numbers add up
+
+- **Stats under `all` are a sum**: prompts, turns, tokens and agent time add up, hour by hour, and so does the heatmap. The peak of agents working at once is the largest one machine had, since nobody knows whether two machines' peaks came at the same time. Busy time adds up too, so the hours it shows are machine-hours. Merged pull requests are never added: the row stays only when every machine reads the same accounts. The dialog's notes and the list at the end of `cornercase stats --machine all` say which machines are in the sum and which aren't, and why. A machine that is down is summed from the numbers it gave last: its heatmap moves on by the days since they were read, but its 24 h and 7 days count as they were then, so a machine down for three days still adds its last 24 hours.
+- **Limits are never added**: they are the provider's. Each machine lists the accounts logged in there, with its own labels. The dialog shows an account it can tell is the same on two machines once; `cornercase usage` lists it under each machine, with the same `identity`.
 - **Only a linked machine is asked**, and it gets 15 seconds to answer, plus the time its own probes take for plan limits. When it is down or doesn't answer, you get the numbers it gave last, with why it is down. With none, asking for that machine alone is an error, and `all` lists it with why and no numbers. `usage` exits with status 3 when a machine or an agent couldn't be read.
 - **Its numbers stay in your server's memory**, and are gone when it restarts. `cornercase stats` without a server reads this computer's `stats.json` only.
 - **Each machine runs its own probes**, with the `claude` and `codex` of its own [`agent_commands`](../../reference/agents/#your-own-agents).
-
-Scripts and other apps send the same `machine` to the `stats` and `usage` requests: see [Stats](../scripts-and-agents/#stats) and [Plan usage](../scripts-and-agents/#plan-usage). To ask a machine you haven't listed, use `cornercase --remote vps usage`.
 
 ## From the command line
 

@@ -94,6 +94,12 @@ fn serving(boot: &str) -> Line {
     line
 }
 
+fn rig_config(machines: Vec<Machine>) -> Config {
+    let agents = [agents::Known::Claude, agents::Known::Codex].map(agents::Known::name);
+    let agent_commands = agents.map(|name| (name.to_string(), format!("/nonexistent/{name}"))).into();
+    Config { agent_commands, machines, ..Config::default() }
+}
+
 struct Rig {
     app: App,
     rx: Receiver<AppEvent>,
@@ -105,7 +111,7 @@ struct Rig {
 impl Rig {
     fn new(machines: Vec<Machine>, there: There) -> Self {
         let dir = TempDir::new();
-        let (mut app, rx) = new_app(write_config(dir.path(), &Config { machines, ..Config::default() }));
+        let (mut app, rx) = new_app(write_config(dir.path(), &rig_config(machines)));
         let seen = Seen::default();
         let given = seen.clone();
         app.machines.set_connector(Box::new(move |destination| {
@@ -119,7 +125,7 @@ impl Rig {
     }
 
     fn edit(&mut self, machines: Vec<Machine>, after: Duration) {
-        write_config(self.dir.path(), &Config { machines, ..Config::default() });
+        write_config(self.dir.path(), &rig_config(machines));
         self.refresh(after);
     }
 

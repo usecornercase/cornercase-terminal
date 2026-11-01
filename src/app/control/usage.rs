@@ -8,8 +8,8 @@ use crate::accounts::Account;
 use crate::agents::Known;
 use crate::agents::usage::{self, Key};
 use crate::app::App;
-use crate::app::usage_dialog::{active, labelled};
-use crate::control::usage::{MachineUsage, PlanInfo};
+use crate::app::usage_dialog::infos;
+use crate::control::usage::MachineUsage;
 use crate::control::{Done, Plans, Usage};
 
 impl App {
@@ -79,22 +79,9 @@ impl App {
     }
 
     fn plans(&self, keys: &[Key], now: Instant) -> Plans {
-        let clock = SystemTime::now();
         let listed: Vec<(Known, Option<&str>)> =
             keys.iter().map(|(agent, account)| (*agent, account.as_deref())).collect();
-        let chosen = self.config.selected_accounts();
-        Plans {
-            agents: listed
-                .iter()
-                .map(|&(agent, account)| {
-                    let probe = self.usages.state.probe_of(agent, account);
-                    let key = (agent, account);
-                    let label = labelled(&self.config, &listed, key);
-                    PlanInfo::of(agent, probe, now, clock).for_account(account, label, active(&listed, chosen, key))
-                })
-                .collect(),
-            ..Plans::default()
-        }
+        Plans { agents: infos(&self.usages.state, &self.config, &listed, now, SystemTime::now()), ..Plans::default() }
     }
 }
 
