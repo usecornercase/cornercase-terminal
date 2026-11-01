@@ -9,10 +9,11 @@ import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
 import { BASES, type ChangesMode, type ChangesSelection, type FileDiff, type HunkAction, type LinesAction, type Spot, changesLineEdge, changesLineNear, changesStretchNear, compareSpots, hasChanges, hunkLines, linesReference, linesText, selectedLines, shownChanges, workspaceDiff } from './changes';
 import { type Editable, type FieldGrip, TodoPanel, cursorAt, dragIn, editKey, insertText, removeSelection, selectAll, selectWord, selectedText as fieldText, selectionOf, todoWidth } from './todo';
-import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
+import { type Edge, describe as describeRole, live, plan, roleColour } from './flow';
+import { type PanelHit, type PanelHistory, type PanelMember, type PanelStep, type PanelView, fileAge, scrolled as flowScrolled } from './flowpanel';
 import { ORCHESTRATOR, RUN_DIR, type Run } from './flowrun';
 import { type FindState, findAll, firstFrom, nearest, start as hitStart } from './find';
-import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, compare, coveredLines, fileLines, fileMax, foundRows, lineEdge, lineNear, linkAt, resolveLink, reveal, scrolledTop, selectable, selectedText, stretchNear, topSpot, typing, viewFile, wanted, workspaceFiles } from './files';
+import { type FileAction, FilesPanel, size as fileSize, type FilesPlace, type PathLink, absolutePath, compare, coveredLines, fileLines, fileMax, foundRows, lineEdge, lineNear, linkAt, resolveLink, reveal, scrolledTop, selectable, selectedText, stretchNear, topSpot, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
   GROUP_STYLES,
@@ -1731,8 +1732,36 @@ export class App {
     const own = run.members.find((m) => m.role === ORCHESTRATOR)?.pane;
     if (own !== undefined && this.findPane(own)?.pane.pending) run.ended = true;
     const diagram = live(plan(run.flow), run.progress, state, run.ended, this.now());
-    const files = run.files.map((f) => ({ name: f.name, age: fileAge(this.now() - f.at) })).reverse();
-    return { name: run.flow.name, task: run.task, diagram, files, scroll: this.flowScroll };
+    const files = run.files.map((f) => ({ name: f.name, size: fileSize(f.bytes), age: fileAge(this.now() - f.at) })).reverse();
+    const heading = { place: this.runPlace(run), run: 1, messages: run.recorded, active: run.progress.active, lead: state(ORCHESTRATOR) !== 'closed' };
+    return { name: run.flow.name, task: run.task, heading, team: this.runTeam(run, state), diagram, history: this.runHistory(run), files, scroll: this.flowScroll };
+  }
+
+  private runPlace(run: Run): string {
+    const project = this.projects.find((p) => p.workspaces.some((w) => w.id === run.workspace));
+    const workspace = project?.workspaces.find((w) => w.id === run.workspace);
+    return project && workspace ? `${project.folder} › ${workspaceLabel(workspace)}` : '';
+  }
+
+  private runTeam(run: Run, state: (role: string) => PanelMember['state']): PanelMember[] {
+    return [run.flow.orchestrator, ...run.flow.roles].map((role, i) => {
+      const pane = run.members.find((m) => m.role === role.name)?.pane ?? null;
+      return { role: role.name, agent: describeRole(role), colour: roleColour(i), state: state(role.name), branch: null, pane };
+    });
+  }
+
+  private runHistory(run: Run): PanelHistory {
+    const colour = (role: string) => roleColour(run.flow.roles.findIndex((r) => r.name === role) + 1);
+    const step = (edge: Edge | null): PanelStep | null => {
+      if (!edge) return null;
+      if (edge.kind === 'forward') return { kind: 'forward', stage: edge.stage };
+      if (edge.kind === 'loop') return { kind: 'loop', when: (run.flow.stages[edge.stage]?.back?.when ?? '').trim() };
+      return { kind: 'outside' };
+    };
+    const entries = run.messages
+      .map((m) => ({ seq: m.seq, from: m.from, to: m.to, kind: 'sent', step: step(m.edge), colour: colour(m.to), age: fileAge(this.now() - m.at), head: m.text.slice(0, 1024) }))
+      .reverse();
+    return { entries, recorded: run.recorded };
   }
 
   scrollFlow(delta: number): boolean {
@@ -1743,10 +1772,15 @@ export class App {
     return true;
   }
 
-  flowClick(hit: DiagramHit): void {
+  flowClick(hit: PanelHit): void {
     const run = this.shownRun();
     if (!run) return;
-    if (hit.role) {
+    if (hit.stop) {
+      const lead = run.members.find((m) => m.role === ORCHESTRATOR)?.pane;
+      if (lead !== undefined) this.askCloseAgent(lead);
+    } else if (hit.folder) this.bug(OPEN_IN_NEEDS);
+    else if (hit.message !== undefined) this.overlay = { kind: 'flowMessage', workspace: run.workspace, edge: '', to: null, seq: hit.message, scroll: 0 };
+    else if (hit.role) {
       const pane = run.members.find((m) => m.role === hit.role)?.pane;
       if (pane === undefined || !this.findPane(pane)) return;
       if (this.areas().compact) this.flowOpen = false;
@@ -1761,9 +1795,10 @@ export class App {
     this.dirty();
   }
 
-  flowMessage(o: { workspace: number; edge: string; to: string | null }): { from: string; to: string; text: string } | null {
+  flowMessage(o: { workspace: number; edge: string; to: string | null; seq?: number }): { from: string; to: string; text: string } | null {
     const run = this.runOf(o.workspace);
     if (!run) return null;
+    if (o.seq !== undefined) return run.messages.find((m) => m.seq === o.seq) ?? null;
     const progress = run.progress;
     const [kind, a, b] = o.edge.split(':');
     const edge =

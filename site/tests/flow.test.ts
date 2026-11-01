@@ -289,3 +289,82 @@ test('the end stays lit once the orchestrator marked it, until the run starts ov
   assert.notEqual(app.render().grid.at(end.x, end.y)?.fg, 27);
   app.destroy();
 });
+
+test('the Flow panel heading follows the run: running, its stage, its loop and its end', () => {
+  const app = demo(140, 60);
+  toRun(app);
+  app.toggleFlow();
+  assert.ok(shown(app, 'Full issue · running'));
+  assert.ok(shown(app, 'not started'));
+  playUntil(app, 'stage 1 of 3');
+  assert.ok(shown(app, 'payments ›'));
+  playUntil(app, 'findings 1/3');
+  assert.ok(shown(app, 'stage 1 of 3 · findings 1/3'));
+  playUntil(app, 'reached its end');
+  assert.equal(app.textAt('Full issue · running'), null);
+  app.destroy();
+});
+
+test('the Flow panel lists the team, and a click on a row goes to that role', () => {
+  const app = demo(140, 60);
+  toRun(app);
+  app.toggleFlow();
+  assert.ok(shown(app, 'Team · 5'));
+  const rows = ['orchestrator', 'coder', 'reviewer', 'security', 'tester'].map((role) => {
+    const at = app.textAt(`${role} `);
+    assert.ok(at, role);
+    return at.y;
+  });
+  assert.deepEqual([...rows].sort((a, b) => a - b), rows);
+  assert.ok(shown(app, 'codex · gpt-5.4'));
+  const reviewer = app.textAt('reviewer ');
+  assert.ok(reviewer);
+  app.pointerDown(reviewer.x + 1, reviewer.y, 0);
+  app.pointerUp();
+  assert.equal(app.tab()?.name, 'reviewer');
+  app.destroy();
+});
+
+test('the Flow panel lists the messages newest first, and a click opens one with copy', () => {
+  const app = demo(140, 60);
+  toRun(app);
+  app.toggleFlow();
+  assert.ok(shown(app, 'Messages · 0'));
+  playUntil(app, 'Messages · 3');
+  const first = app.textAt('#1 ·');
+  const last = app.textAt('#3 ·');
+  assert.ok(first && last);
+  assert.ok(last.y < first.y);
+  assert.ok(shown(app, 'stage 1 → 2'));
+  const copied: string[] = [];
+  app.on((event, detail) => {
+    if (event === 'copy' && detail) copied.push(detail);
+  });
+  app.pointerDown(first.x, first.y, 0);
+  app.pointerUp();
+  assert.equal(app.overlay?.kind, 'flowMessage');
+  assert.ok(shown(app, 'orchestrator → coder · sent'));
+  inputKey(app, key('Enter'));
+  assert.deepEqual(copied, ['Check the Stripe signature before handling a webhook, then commit.']);
+  app.destroy();
+});
+
+test('the Flow panel shows file sizes, and open folder and stop need a real cornercase', () => {
+  const app = demo(140, 60);
+  toRun(app);
+  app.toggleFlow();
+  playUntil(app, 'coder-1.md');
+  assert.ok(shown(app, ' bytes · ') || shown(app, ' KB · '));
+  const folder = app.textAt('open folder');
+  assert.ok(folder);
+  app.pointerDown(folder.x + 1, folder.y, 0);
+  app.pointerUp();
+  assert.match(app.toast?.text ?? '', /the demo opens no other apps/);
+  app.advance(7000);
+  const stop = app.textAt(' stop ');
+  assert.ok(stop);
+  app.pointerDown(stop.x + 1, stop.y, 0);
+  app.pointerUp();
+  assert.match(app.toast?.text ?? '', /the demo closes no agents/);
+  app.destroy();
+});

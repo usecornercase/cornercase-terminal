@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form flow-run flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
+CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form flow-run flow-messages flow-agents flows-list flows-deleted flows-import flows-edit flow-start"
 
 pane_in() {
   cc status --json | node -e '
@@ -1056,21 +1056,32 @@ flow_482() {
   cc_wait 'Sending issue #482 to coder' 60
 }
 
-screen_flow_run() {
+flow_settled() {
   flow_482
-  cc_wait 'findings · 1/3' 60
+  cc_wait 'findings 1/3' 60
   cc_wait 'waiting for reviewer…' 30
   cc_wheel 'feat/dark-mode' down 3
   cc_hover 'Workspaces'
   cc_wait '├ ○ tester'
-  cc_wait 'coder-2.md' 30
   i=0
   while cc_text | grep -qF 'finished in'; do
     i=$((i + 1))
     [ "$i" -lt 100 ] || { echo "capture: the toast never went"; cc_text; exit 1; }
     sleep 0.1
   done
+}
+
+screen_flow_run() {
+  flow_settled
   cc_shot flow-run
+}
+
+screen_flow_messages() {
+  flow_settled
+  cc_wheel 'Messages' down 20
+  cc_wait 'coder-2.md' 30
+  cc_hover 'Workspaces'
+  cc_shot flow-messages
 }
 
 screen_flow_agents() {
