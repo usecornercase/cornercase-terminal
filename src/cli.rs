@@ -8,8 +8,7 @@ use clap::CommandFactory;
 use serde_json::Value;
 
 use self::args::{
-    Command, Control, EventsArgs, LogsArgs, Renamed, StartArgs, StatsArgs, SurfaceArgs, Target, WaitArgs, WhenArgs,
-    Which,
+    Command, Control, EventsArgs, LogsArgs, Renamed, StartArgs, SurfaceArgs, Target, WaitArgs, WhenArgs, Which,
 };
 use self::status::run_status;
 use crate::client::{self, answer, ask};
@@ -38,6 +37,7 @@ mod reach;
 mod read;
 mod search;
 mod start_server;
+mod stats;
 mod status;
 mod terminal;
 mod theme;
@@ -103,7 +103,7 @@ fn run_command(command: Command) -> Result<bool> {
         Command::StartServer(start) => start_server::run(&start)?,
         Command::KillServer(kill) => return update::kill(kill.yes),
         Command::Logs(args) => return print_logs(&args),
-        Command::Stats(args) => return print_stats(&args),
+        Command::Stats(args) => return stats::run(&args),
         Command::Plugin(args) => return plugin::run(args.action),
         Command::Server => server::run()?,
         Command::Proxy => remote::proxy(proxied)?,
@@ -699,27 +699,6 @@ fn stdin() -> Result<String> {
     let mut text = String::new();
     io::stdin().read_to_string(&mut text)?;
     Ok(trimmed(&text))
-}
-
-fn print_stats(args: &StatsArgs) -> Result<bool> {
-    let now = std::time::SystemTime::now();
-    let path = crate::paths::stats(&crate::paths::session());
-    let view = match ask("stats", control::Command::Stats(control::Stats {})) {
-        Ok(value) => {
-            let mut view: crate::agents::stats::View = answer(value)?;
-            view.days = crate::time::Stamp::parse(&view.since)
-                .map_or(0, |since| now.duration_since(since).unwrap_or_default().as_secs() / 86_400);
-            view
-        }
-        Err(Error::NoServer) => crate::agents::stats::load(&path, now).view(now),
-        Err(e) => return Err(e),
-    };
-    if args.json {
-        print_json(&view)?;
-    } else {
-        print_out(&(if args.share { view.share_link() } else { view.text() } + "\n"))?;
-    }
-    Ok(true)
 }
 
 #[cfg(test)]

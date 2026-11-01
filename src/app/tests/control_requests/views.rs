@@ -404,7 +404,7 @@ fn closing_the_views_tab_settles_it_on_a_neighbour_without_resizing_for_it() {
 #[rstest]
 #[case::no_view(Command::ViewSet(SetView::default()), None, Code::Malformed)]
 #[case::unknown_view(Command::Status(wire::Status {}), Some(9999), Code::NotFound)]
-#[case::takes_no_view(Command::Stats(wire::Stats {}), Some(1), Code::Malformed)]
+#[case::takes_no_view(Command::Stats(wire::Stats::default()), Some(1), Code::Malformed)]
 #[case::view_in_a_view(Command::View(OpenView::default()), Some(1), Code::Malformed)]
 #[case::half_a_size(Command::View(OpenView { cols: Some(10), ..OpenView::default() }), None, Code::Malformed)]
 #[case::too_big(Command::View(OpenView { cols: Some(5000), rows: Some(10), ..OpenView::default() }), None, Code::Malformed)]

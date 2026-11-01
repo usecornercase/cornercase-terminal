@@ -102,6 +102,10 @@ pub(crate) fn use_account_restart() -> Result<()> {
     require("account-restart", "cannot restart agents on another account")
 }
 
+pub(crate) fn use_machine_usage() -> Result<()> {
+    require("machine-usage", "cannot read the stats and usage of other machines")
+}
+
 fn require(feature: &str, lacks: &str) -> Result<()> {
     require_on(connect(), feature, lacks, used_remote())
 }

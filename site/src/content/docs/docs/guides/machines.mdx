@@ -14,7 +14,7 @@ import Screen from '../../../../components/Screen.astro';
   crop={[2, 1, 106, 10]}
 />
 
-For now a link only keeps the connection and says how the machine is doing. Working on those machines from this window, with their workspaces in your sidebar, comes later; until then, [`cornercase remote`](../remote/) opens a window on one of them.
+For now a link keeps the connection and says how the machine is doing, and your server can [ask each machine for its stats and plan usage](#stats-and-usage-of-each-machine). Working on those machines from this window, with their workspaces in your sidebar, comes later; until then, [`cornercase remote`](../remote/) opens a window on one of them.
 
 ## Add a machine
 
@@ -22,7 +22,7 @@ Click **`+ add machine`** at the end of the list. The form asks for:
 
 | Field | What it is |
 | --- | --- |
-| **name** | What the window calls it: letters, digits, `.`, `_` and `-`, at most 20 characters, and different from every other machine's. |
+| **name** | What the window calls it: letters, digits, `.`, `_` and `-`, at most 20 characters, different from every other machine's, and not `all`, which means every machine. |
 | **icon** | One of ☁ server, ▭ laptop, ▣ desktop, ◫ mini, ⌂ home server or ◆ other. |
 | **destination** | Anything `ssh` takes: a `Host` of your `~/.ssh/config`, or `user@host`. Your config, keys and agent apply, and cornercase never sees a password or a key. |
 | **folder** | Where clones go on that machine, `~/code` unless you change it: an absolute path, `~`, or one starting with `~/`. Nothing is made there yet. |
@@ -78,6 +78,39 @@ Host vps
 <Aside>
 A connection that died without a word is noticed within about 15 seconds: `ssh` checks it every 5 (`ServerAliveInterval=5`, `ServerAliveCountMax=3`), and gives up on a machine that doesn't answer after 10 (`ConnectTimeout=10`).
 </Aside>
+
+## Stats and usage of each machine
+
+`cornercase stats` and `cornercase usage` read the other machines too. Your server asks the machine's server for them, through a new `ssh` connection each time, as [`--remote`](../remote/#commands-for-scripts-and-agents) does:
+
+```sh
+cornercase stats --machine vps      # the stats of the agents that run on vps
+cornercase usage --machine vps      # the plan limits of the accounts logged in on vps
+cornercase stats --machine all      # this computer's stats and every machine's, summed
+cornercase usage --machine all      # this computer's limits, then each machine's
+```
+
+A line above the numbers says which machine they come from and when they were read:
+
+```text
+▭ this computer
+Claude Code · max plan  updated just now
+  session (5h)   34% · resets in 2h 14m
+  week           81% · resets in 3d 4h
+
+● vps  read just now
+Claude Code · max plan  updated just now
+  session (5h)   34% · resets in 2h 14m
+  week           81% · resets in 3d 4h
+```
+
+- **Stats under `all` are a sum**: prompts, turns, tokens and agent time add up, hour by hour, and so does the heatmap. The peak of agents working at once is the largest one machine had, since nobody knows whether two machines' peaks came at the same time. Busy time adds up too, so the hours it shows are machine-hours. Merged pull requests are never added: the row stays only when every machine reads the same accounts. A list at the end says which machines are in the sum and which aren't, and why. A machine that is down is summed from the numbers it gave last: its heatmap moves on by the days since they were read, but its 24 h and 7 days count as they were then, so a machine down for three days still adds its last 24 hours.
+- **Limits are never added**: they are the provider's. Each machine lists the accounts logged in there, with its own labels.
+- **Only a linked machine is asked**, and it gets 15 seconds to answer, plus the time its own probes take for plan limits. When it is down or doesn't answer, you get the numbers it gave last, with why it is down. With none, asking for that machine alone is an error, and `all` lists it with why and no numbers. `usage` exits with status 3 when a machine or an agent couldn't be read.
+- **Its numbers stay in your server's memory**, and are gone when it restarts. `cornercase stats` without a server reads this computer's `stats.json` only.
+- **Each machine runs its own probes**, with the `claude` and `codex` of its own [`agent_commands`](../../reference/agents/#your-own-agents).
+
+Scripts and other apps send the same `machine` to the `stats` and `usage` requests: see [Stats](../scripts-and-agents/#stats) and [Plan usage](../scripts-and-agents/#plan-usage). To ask a machine you haven't listed, use `cornercase --remote vps usage`.
 
 ## From the command line
 

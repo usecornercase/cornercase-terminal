@@ -245,6 +245,7 @@ impl App {
         let pane = pending.done.ids.pane.unwrap_or_default();
         match &pending.stage {
             Stage::Usage(waiting) => self.usage_read(waiting, now).map(|plans| Ok(json(&plans))),
+            Stage::Machines(gathering) => self.gathered(gathering, now),
             Stage::Setup(workspace) if !self.workspace_setting_up(*workspace) => {
                 Some(self.setup_failure(pane).map_or_else(|| Ok(json(&pending.done)), Err))
             }
@@ -315,7 +316,7 @@ impl App {
             Stage::Check => return "git is still checking the worktree".into(),
             Stage::Issue(asking) => return format!("{} is still looking the issue up", asking.source().name()),
             Stage::Usage(_) => return "the agents have not said their usage yet".into(),
-            Stage::Ports | Stage::Processes | Stage::Clone(_) => return stage.listing().into(),
+            Stage::Ports | Stage::Processes | Stage::Machines(_) | Stage::Clone(_) => return stage.listing().into(),
             Stage::Held(_) => return held::waiting(pane, self.blocked(pane, Instant::now())),
             Stage::Launch { .. } => return format!("pane {pane} is still starting"),
             Stage::Setup(workspace) => {

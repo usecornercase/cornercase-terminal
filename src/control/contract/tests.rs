@@ -44,6 +44,7 @@ mod describing {
             "changes",
             "files",
             "machines",
+            "machine-usage",
             "machine-workspaces",
         ];
         let missing: Vec<&str> =

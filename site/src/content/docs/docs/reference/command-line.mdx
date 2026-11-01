@@ -172,6 +172,14 @@ cornercase machines retry [vps]                        # try one link, or every 
 
 [`cornercase status`](../../guides/scripts-and-agents/#machines-workspaces) lists, after the projects of this computer, what each linked machine has, with `paired with project N` on a project that is a clone of the same repository as one here, and `cornercase focus --machine vps --workspace ID` shows one of its workspaces in the window.
 
+`stats` and `usage` read the machines too: `--machine NAME` prints that machine's stats or plan limits, and `--machine all` this computer's and every machine's, the stats summed. Your server asks each machine through `ssh`, so the command needs it running. See [Stats and usage of each machine](../../guides/machines/#stats-and-usage-of-each-machine).
+
+```sh
+cornercase stats --machine vps
+cornercase stats --machine all
+cornercase usage --machine all --json
+```
+
 ### `cornercase tour`
 
 Shows the [guided tour](../../first-steps/#the-guided-tour-and-help) in the window, where it stopped. `tour start TOUR` starts another one (`--step` at a step), `next`, `back`, `skip` and `end` move it, `complete TOUR STEP` marks a step done, and `reset [TOUR]` forgets the progress. `tour list` prints every tour and its steps with your progress; with `--json` the steps come as data (ids, texts, what each points at and what completes it), so another UI can draw the same tour, and `start --no-card` keeps the window's card hidden for it.

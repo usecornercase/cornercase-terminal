@@ -10,6 +10,7 @@ mod a_name {
     #[case::word("vps")]
     #[case::symbols("pi.lan_2-b")]
     #[case::longest("abcdefghijabcdefghij")]
+    #[case::starting_with_all("allison")]
     fn is_letters_digits_and_dots_dashes_or_underscores(#[case] name: &str) {
         assert_eq!(valid_name(name), Ok(()));
     }
@@ -22,6 +23,14 @@ mod a_name {
     #[case::over_twenty("abcdefghijabcdefghijk", "use letters, digits, `.`, `_` and `-`, at most 20 characters")]
     fn is_refused_otherwise(#[case] name: &str, #[case] why: &str) {
         assert_eq!(valid_name(name), Err(why));
+    }
+
+    #[rstest]
+    #[case::lower("all")]
+    #[case::upper("ALL")]
+    #[case::mixed("All")]
+    fn all_is_kept_for_every_machine(#[case] name: &str) {
+        assert_eq!(valid_name(name), Err("`all` is kept for every machine at once"));
     }
 
     #[rstest]

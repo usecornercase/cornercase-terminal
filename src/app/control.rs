@@ -20,6 +20,7 @@ mod ports;
 mod processes;
 mod queue;
 mod search;
+mod stats;
 mod status;
 mod talk;
 mod terminal;
@@ -57,6 +58,7 @@ pub(in crate::app) use config::needs_a_repository;
 use create::Then;
 use held::Held;
 use issues::Asking;
+use stats::Gathering;
 use wait::{Condition, Confirm, Watch};
 
 const STARTS_WITHIN: Duration = Duration::from_secs(10);
@@ -180,6 +182,7 @@ enum Stage {
     Restart { caller: Option<u64> },
     Issue(Box<Asking>),
     Usage(Vec<(agents::usage::Key, u64)>),
+    Machines(Gathering),
     Ports,
     Processes,
     Clone(clone::Cloning),
@@ -189,6 +192,7 @@ impl Stage {
     fn listing(&self) -> &'static str {
         match self {
             Self::Processes => "the processes are still being measured",
+            Self::Machines(_) => "the machines have not answered yet",
             Self::Clone(_) => "git is still cloning the repository",
             _ => "the ports are still being listed",
         }
@@ -210,6 +214,7 @@ impl Stage {
                 | Self::Check
                 | Self::Issue(_)
                 | Self::Usage(_)
+                | Self::Machines(_)
                 | Self::Ports
                 | Self::Processes
         )
@@ -594,7 +599,7 @@ impl App {
         let Asked { client, asker, area, now } = asked;
         ControlFlow::Break(match command {
             Command::Status(_) => Ok(Some(self.status_value(asker))),
-            Command::Stats(_) => Ok(Some(json(&self.stats_view(SystemTime::now())))),
+            Command::Stats(stats) => self.stats_request(client, &stats, now),
             Command::Contract(_) => Ok(Some(json(&contract::descriptor(self.unavailable())))),
             Command::Watch(_) => Ok(Some(json(&self.watch_snapshots(client, now)))),
             Command::App(_) => Ok(Some(json(&self.app_snapshots(client, now)))),
@@ -705,7 +710,7 @@ impl App {
             Command::RestartWhenIdle(restart) => self.restart_request(client, asker.caller, &restart, now),
             Command::StartServer(start) => self.start_server_request(client, &start),
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),
-            Command::Usage(usage) => Ok(self.usage_request(client, &usage, now)),
+            Command::Usage(usage) => self.usage_request(client, &usage, now),
             Command::Ports(ports) => self.ports_request(client, asker, &ports),
             Command::StopPort(stop) => {
                 self.stop_port_request(client, &stop);

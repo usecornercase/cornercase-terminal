@@ -80,7 +80,7 @@ pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, Work
 pub(crate) use surface::Surface;
 pub(crate) use terminal::{Input, Link, PasteFile, Ratio, Redraw, Resize, Scroll, Selection};
 pub(crate) use theme::{Theme, ThemeInfo};
-pub(crate) use usage::{Plans, Usage};
+pub(crate) use usage::{Plans, Stats, Usage};
 pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
 pub(crate) use worktrees::{
@@ -867,9 +867,6 @@ pub(crate) fn unknown_command(name: &str) -> String {
 pub(crate) fn command_name(request: &Value) -> Option<&str> {
     request.get("command").and_then(Value::as_str)
 }
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct Stats {}
 
 #[cfg(test)]
 pub(crate) mod tests;

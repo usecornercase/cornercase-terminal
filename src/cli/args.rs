@@ -82,12 +82,14 @@ pub(crate) enum Command {
     Logs(LogsArgs),
     #[command(
         about = "Show work by agents running in cornercase",
-        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json (here; with --remote the server there must run). Merged pull requests need a running server and gh or glab.
+        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json (here; with --remote the server there must run). --machine needs the server, which asks the machine over ssh; with `all` it sums the machines it could read and lists each. Merged pull requests need a running server and gh or glab.
 
 Examples:
   cornercase stats
   cornercase stats --json
-  cornercase stats --share"
+  cornercase stats --share
+  cornercase stats --machine vps
+  cornercase stats --machine all --json"
     )]
     Stats(StatsArgs),
     #[command(about = "Install, add, list, turn on and off the plugins that extend cornercase", after_help = PLUGIN_HELP)]
@@ -936,4 +938,11 @@ pub(crate) struct StatsArgs {
     pub(super) json: bool,
     #[arg(long, help = "Print a link to a card made locally in the browser")]
     pub(super) share: bool,
+    #[arg(
+        long,
+        value_name = "NAME",
+        value_parser = NonEmptyStringValueParser::new(),
+        help = "Read a machine's stats through the server, or with `all` this computer's and every machine's summed"
+    )]
+    pub(super) machine: Option<String>,
 }

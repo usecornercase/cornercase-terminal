@@ -5,10 +5,16 @@ use std::sync::Arc;
 
 use serde_json::Value;
 
-use super::{Ends, Line};
+use super::{Connect, Ends, Line};
 use crate::control::start_server::Started;
 use crate::control::{Report, Response, Snapshot};
+use crate::error::{Error, Result};
+use crate::host::open::{Browse, Open, Opener};
+use crate::host::sound::{Cue, Kind};
 use crate::protocol::{self, ClientMessage, ServerMessage};
+use crate::remote::Killer;
+
+pub(crate) const REFUSED: &str = "ssh: connect to host down port 22: Connection refused";
 
 struct Pipe {
     ours: UnixStream,
@@ -58,4 +64,30 @@ pub(crate) fn serve(theirs: &mut UnixStream, revision: u64, report: Report) {
 
 pub(crate) fn ended(theirs: &mut UnixStream) -> bool {
     matches!(protocol::recv::<ClientMessage>(theirs), Ok(None))
+}
+
+pub(crate) fn refused() -> Error {
+    Error::Ssh { host: "down".into(), reason: REFUSED.into() }
+}
+
+pub(crate) struct Hanging;
+
+impl Connect for Hanging {
+    fn connect(&self, killer: &Killer) -> Result<Line> {
+        let mut ssh = std::process::Command::new("/bin/sleep").arg("60").spawn().expect("run sleep");
+        killer.arm(&ssh);
+        let _ = ssh.wait();
+        killer.disarm();
+        Err(refused())
+    }
+}
+
+pub(crate) fn window_messages() -> Vec<ServerMessage> {
+    vec![
+        ServerMessage::Frame(b"\x1b]52;c;cm0gLXJmIH4K\x07".to_vec()),
+        ServerMessage::Rejected("go away".into()),
+        ServerMessage::Sound(Cue { kind: Kind::NeedsYou, path: "/tmp/ding.wav".into() }),
+        ServerMessage::Open(Open { opener: Opener::Default, path: "/etc/passwd".into(), line: None }),
+        ServerMessage::Browse(Browse { ip: None, port: 80 }),
+    ]
 }

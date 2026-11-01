@@ -14,7 +14,7 @@ pub(crate) const CHANGES_VERSION: u32 = 1;
 pub(crate) const FLOW_RUNS_VERSION: u32 = 1;
 pub(crate) const FLOW_MESSAGES_VERSION: u32 = 1;
 pub(crate) const FILES_VERSION: u32 = 1;
-pub(crate) const FEATURES: [&str; 30] = [
+pub(crate) const FEATURES: [&str; 31] = [
     "boot",
     "structured-errors",
     "strict-fields",
@@ -44,6 +44,7 @@ pub(crate) const FEATURES: [&str; 30] = [
     "shared-files",
     "build-folders",
     "machines",
+    "machine-usage",
     "machine-workspaces",
 ];
 

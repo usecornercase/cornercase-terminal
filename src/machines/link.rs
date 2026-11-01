@@ -365,7 +365,7 @@ enum Ended {
     Dropped(Option<&'static str>),
 }
 
-enum Heard {
+pub(super) enum Heard {
     Answer(String),
     Ended(Option<&'static str>),
 }
@@ -500,7 +500,7 @@ impl<E: From<Report>> Running<E> {
     }
 }
 
-fn why(line: &Line, said: Option<&str>) -> String {
+pub(super) fn why(line: &Line, said: Option<&str>) -> String {
     let ssh = line.ends.why();
     clean(said.map(str::to_string).or(ssh).as_deref().unwrap_or(LOST))
 }
@@ -511,6 +511,13 @@ fn handshake(line: &mut Line) -> std::result::Result<Started, Ended> {
         Heard::Answer(text) => answered(&text).map_err(Ended::Refused),
         Heard::Ended(said) => Err(Ended::Lost(said)),
     }
+}
+
+pub(super) fn send_once(line: &mut Line, command: Command) -> Heard {
+    if ask(line, command, Ended::Lost(None)).is_err() {
+        return Heard::Ended(None);
+    }
+    listen(&mut line.reader)
 }
 
 fn ask(line: &mut Line, command: Command, lost: Ended) -> std::result::Result<(), Ended> {
