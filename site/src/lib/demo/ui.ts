@@ -1497,7 +1497,9 @@ export class Painter {
         }
         lines.push({ kind: 'row', i });
       });
-      lines.slice(0, body.h).forEach((line, n) => {
+      const at = Math.max(0, lines.findIndex((line) => line.kind === 'row' && line.i === o.cursor));
+      const first = at < body.h ? 0 : Math.min(at + 1 - body.h, at - 1);
+      lines.slice(first, first + body.h).forEach((line, n) => {
         const y = body.y + n;
         if (line.kind === 'header') this.span(body.x, y, line.text, { fg: 8, add: BOLD });
         if (line.kind !== 'row') return;

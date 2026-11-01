@@ -132,6 +132,20 @@ test('the name search lists settings after the names, by the start of each word'
   app.destroy();
 });
 
+test('choosing a setting far down its page scrolls Settings to the row', () => {
+  const app = started();
+  app.resize(140, 20);
+  app.openSearch(); type(app, 'asana projects'); app.render();
+  const results = app.searchResults('asana projects', 'names');
+  results[results.length - 1].go(); app.render();
+  const o = app.overlay;
+  assert.equal(o?.kind, 'settings');
+  if (o?.kind !== 'settings') return;
+  assert.equal(app.settingsRows(o.page)[o.cursor].label, 'Asana projects');
+  assert.ok(app.textAt('▌ Asana projects'));
+  app.destroy();
+});
+
 test('choosing a setting from the name search opens Settings on its row and saves nothing', () => {
   const app = started();
   const results = app.searchResults('prefix key');
