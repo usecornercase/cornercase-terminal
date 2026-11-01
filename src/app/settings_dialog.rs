@@ -142,7 +142,7 @@ impl App {
         self.settings_page = hit.page;
         self.open_settings();
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
-            s.land_on(hit.goal);
+            s.land_on_current(hit.goal);
         }
         self.watch_accounts_page(Instant::now());
     }

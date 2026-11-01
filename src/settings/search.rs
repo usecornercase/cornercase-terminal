@@ -77,6 +77,18 @@ pub(crate) struct Hit {
     pub(crate) goal: Goal,
 }
 
+impl Goal {
+    fn same_place(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Row(row) | Self::Parent { row, .. }, Self::Row(other) | Self::Parent { row: other, .. }) => {
+                row == other
+            }
+            (Self::Page(page), Self::Page(other)) => page == other,
+            _ => false,
+        }
+    }
+}
+
 impl Hit {
     pub(crate) fn hidden(&self) -> bool {
         matches!(self.goal, Goal::Parent { .. })
@@ -263,7 +275,13 @@ impl Settings {
         Action::None
     }
 
-    pub(crate) fn land_on(&mut self, goal: Goal) {
+    pub(crate) fn land_on_current(&mut self, goal: Goal) {
+        let mut current = self.candidates().into_iter().map(|candidate| candidate.hit.goal);
+        let goal = current.find(|now| now.same_place(&goal)).unwrap_or(goal);
+        self.land_on(goal);
+    }
+
+    fn land_on(&mut self, goal: Goal) {
         match goal {
             Goal::Row(row) => self.go_to(&row),
             Goal::Page(page) => self.open_page(page),
