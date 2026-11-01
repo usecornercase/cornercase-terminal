@@ -4,7 +4,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.235
 
-- **Coming back to a window now repairs a garbled screen.** cornercase only sends the cells that changed, so when the terminal around it lost part of its screen, such as lines of a pane left as scattered letters or stale cells in the sidebar, they stayed that way until you resized the window. A window that regains focus is now drawn in full. The cause of the garbling is still being looked for, and terminals that don't report focus aren't helped.
+- **Search the settings.** Settings now opens with a search field under the tabs: type and every tab is searched, by the start of each word (`def ag` finds **default agent**). Each tab shows how many results it holds, and `Enter` or a click goes to the row without changing it. A row that doesn't show yet, such as **closed workspaces**, is listed with what it needs.
+- **`f ,` in the keys menu opens Settings**, next to the other searches, and a terminal can map one key to it: the docs show how for Ghostty.
+- **`cornercase config search WORDS`** finds settings the same way, for scripts and other apps.
+- Pasting into Settings now puts a single line in the search; several lines still open Share.
 
 ## 0.12.234
 

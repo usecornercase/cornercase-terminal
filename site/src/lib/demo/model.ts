@@ -205,6 +205,8 @@ export interface SettingsOverlay {
   kind: 'settings';
   page: number;
   cursor: number;
+  query?: string;
+  found?: number;
   pick?: { row: string; title: string; items: PickItem[]; selected: number; filter: string };
   edit?: { row: string; label: string; input: string; token: boolean; error?: string };
   notice?: string;

@@ -347,7 +347,9 @@ impl Settings {
 
     pub(crate) fn hint(&self) -> String {
         self.notice.clone().unwrap_or_else(|| {
-            if self.capturing {
+            if self.find.searching() {
+                "↑↓ picks a result · enter goes to it · esc clears the search".into()
+            } else if self.capturing {
                 "press the keys you want · backspace turns them off · esc cancels".into()
             } else if self.edit.is_some() {
                 "enter saves · esc cancels".into()

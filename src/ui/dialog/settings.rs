@@ -9,19 +9,23 @@ use super::{
     Note, draw_dialog_buttons, draw_input, draw_secondary, draw_tabs, first_visible, form_inner, list_item,
     pick_background, tabs_in,
 };
+use crate::editor::Editor;
 use crate::text::truncate_right;
 use crate::ui::View;
 use crate::ui::rows::{GAP, row_close_button};
-use crate::ui::widgets::{hovered, overlay_block, rail};
+use crate::ui::widgets::{hovered, overlay_block, paint_selection, rail};
 
 const LABEL_WIDTH: usize = 26;
+const HIT_WIDTH: usize = 44;
+const FIND_GLYPH: &str = " ⌕ ";
+const FIND_PROMPT: &str = "search settings";
 
 pub(crate) fn settings_area(area: Rect) -> Rect {
     super::flows::flows_area(area)
 }
 
-fn settings_rows(settings: Rect) -> [Rect; 5] {
-    let [tabs, _, body, edit, note, buttons] = Layout::vertical([
+fn settings_rows(settings: Rect) -> [Rect; 6] {
+    let [tabs, find, body, edit, note, buttons] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(GAP),
         Constraint::Min(0),
@@ -30,20 +34,29 @@ fn settings_rows(settings: Rect) -> [Rect; 5] {
         Constraint::Length(1),
     ])
     .areas(form_inner(settings));
-    [tabs, body, edit, note, buttons]
+    [tabs, find, body, edit, note, buttons]
 }
 
 pub(crate) fn settings_tabs(settings: Rect, names: &[&str]) -> Vec<Rect> {
     tabs_in(settings_rows(settings)[0], names)
 }
 
+pub(crate) fn settings_find(settings: Rect) -> Rect {
+    find_text(settings_rows(settings)[1])
+}
+
+fn find_text(row: Rect) -> Rect {
+    let glyph = u16::try_from(FIND_GLYPH.chars().count()).unwrap_or(0);
+    Rect { x: row.x.saturating_add(glyph), width: row.width.saturating_sub(glyph), ..row }
+}
+
 pub(crate) fn settings_body(settings: Rect) -> Rect {
-    settings_rows(settings)[1]
+    settings_rows(settings)[2]
 }
 
 #[cfg(test)]
 pub(crate) fn settings_edit(settings: Rect) -> Rect {
-    settings_rows(settings)[2]
+    settings_rows(settings)[3]
 }
 
 pub(crate) fn settings_done(settings: Rect) -> Rect {
@@ -60,7 +73,7 @@ pub(crate) fn settings_share(settings: Rect) -> Rect {
 
 fn settings_buttons(settings: Rect) -> [Rect; 3] {
     let labels = [crate::settings::SHARE, crate::settings::RESTART, crate::settings::DONE];
-    let rects = issue_buttons_in(settings_rows(settings)[4], &labels);
+    let rects = issue_buttons_in(settings_rows(settings)[5], &labels);
     [rects[0], rects[1], rects[2]]
 }
 
@@ -142,6 +155,7 @@ pub(in crate::ui) fn pick_hit(list: Rect, items: usize, scroll: usize, pos: Posi
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SettingsHit {
     Tab(usize),
+    Find,
     Row(usize),
     Remove(usize),
     MoveUp(usize),
@@ -174,6 +188,9 @@ pub(crate) fn settings_hit(area: Rect, layout: &SettingsLayout, pos: Position) -
     }
     if let Some(i) = settings_tabs(settings, layout.tabs).iter().position(|r| r.contains(pos)) {
         return Some(SettingsHit::Tab(i));
+    }
+    if settings_rows(settings)[1].contains(pos) {
+        return Some(SettingsHit::Find);
     }
     if let Some((items, scroll)) = layout.pick {
         return pick_hit(settings_pick_list(settings), items, scroll, pos).map(SettingsHit::Pick);
@@ -238,11 +255,19 @@ pub(crate) struct SettingsPick {
     pub(crate) scroll: usize,
 }
 
+pub(crate) struct SettingsFind {
+    pub(crate) field: Editor,
+    pub(crate) focused: bool,
+    pub(crate) searching: bool,
+}
+
 pub(crate) struct Settings {
-    pub(crate) tabs: Vec<&'static str>,
+    pub(crate) tabs: Vec<String>,
+    pub(crate) dimmed: Vec<bool>,
     pub(crate) tab: usize,
     pub(crate) rows: Vec<SettingsRow>,
     pub(crate) cursor: usize,
+    pub(crate) find: SettingsFind,
     pub(crate) edit: Option<SettingsEdit>,
     pub(crate) pick: Option<SettingsPick>,
     pub(crate) note: Option<Note>,
@@ -251,6 +276,10 @@ pub(crate) struct Settings {
 }
 
 impl Settings {
+    fn tab_names(&self) -> Vec<&str> {
+        self.tabs.iter().map(String::as_str).collect()
+    }
+
     #[cfg(test)]
     pub(crate) fn sections(&self) -> Vec<&'static str> {
         self.rows.iter().map(|r| r.section).collect()
@@ -262,15 +291,19 @@ pub(in crate::ui) fn draw_settings(f: &mut Frame, view: &View, settings: &Settin
     let r = settings_area(area);
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, "Settings"), r);
-    let [_, body, edit_row, note, _] = settings_rows(r);
+    let [_, find_row, body, edit_row, note, _] = settings_rows(r);
     let dim = Style::default().fg(view.muted);
     let mut cursor = None;
-    draw_tabs(f, view, &settings_tabs(r, &settings.tabs), &settings.tabs, settings.tab);
+    draw_search_tabs(f, view, settings, r);
+    let find = draw_find(f, view, find_row, &settings.find);
 
     if let Some(pick) = &settings.pick {
         cursor = draw_pick(f, view, body, pick);
+    } else if settings.find.searching && settings.rows.is_empty() {
+        f.render_widget(Paragraph::new(Span::styled(" nothing matches", dim)), body);
     } else {
-        let columns = Columns { label: LABEL_WIDTH, fill: false };
+        let label = if settings.find.searching { HIT_WIDTH } else { LABEL_WIDTH };
+        let columns = Columns { label, fill: false };
         draw_rows(f, view, body, Table { rows: &settings.rows, cursor: settings.cursor, columns, landing: None });
     }
 
@@ -287,9 +320,48 @@ pub(in crate::ui) fn draw_settings(f: &mut Frame, view: &View, settings: &Settin
     let buttons = [settings_done(r), settings_restart(r)];
     draw_dialog_buttons(f, view, buttons, settings.submit, crate::settings::RESTART);
     draw_secondary(f, view, settings_share(r), crate::settings::SHARE);
-    if let Some(pos) = cursor.filter(|_| !matches!(settings.note, Some(Note::Busy(_)))) {
+    if let Some(pos) = cursor.or(find).filter(|_| !matches!(settings.note, Some(Note::Busy(_)))) {
         f.set_cursor_position(pos);
     }
+}
+
+fn draw_search_tabs(f: &mut Frame, view: &View, settings: &Settings, r: Rect) {
+    let names = settings.tab_names();
+    let rects = settings_tabs(r, &names);
+    draw_tabs(f, view, &rects, &names, settings.tab);
+    let dimmed = rects.iter().zip(&settings.dimmed).filter(|(_, dimmed)| **dimmed);
+    for (rect, _) in dimmed {
+        f.buffer_mut().set_style(*rect, Style::default().fg(view.muted).add_modifier(Modifier::DIM));
+    }
+}
+
+pub(in crate::ui) fn draw_find_prompt(f: &mut Frame, view: &View, row: Rect) -> Rect {
+    let dim = Style::default().fg(view.muted);
+    let glyph = Span::styled(FIND_GLYPH, Style::default().fg(Color::Cyan));
+    f.render_widget(Paragraph::new(Line::from(vec![glyph, Span::styled(FIND_PROMPT, dim)])), row);
+    find_text(row)
+}
+
+fn draw_find(f: &mut Frame, view: &View, row: Rect, find: &SettingsFind) -> Option<Position> {
+    let text = draw_find_prompt(f, view, row);
+    if text.is_empty() {
+        return None;
+    }
+    let width = usize::from(text.width);
+    let (top, col) = find.field.position(width);
+    if find.searching {
+        f.render_widget(Clear, text);
+        let chars: Vec<char> = find.field.text().chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
+        let shown: String =
+            find.field.lines(width).get(top).map(|range| chars[range.clone()].iter().collect()).unwrap_or_default();
+        f.render_widget(Paragraph::new(Line::styled(shown, Style::default().add_modifier(Modifier::BOLD))), text);
+    }
+    if !find.focused {
+        return None;
+    }
+    paint_selection(f.buffer_mut(), text, top, &find.field.highlight(width));
+    let col = u16::try_from(col).unwrap_or(u16::MAX).min(text.width - 1);
+    Some(Position::new(text.x + col, text.y))
 }
 
 pub(in crate::ui) fn draw_pick(f: &mut Frame, view: &View, body: Rect, pick: &SettingsPick) -> Option<Position> {

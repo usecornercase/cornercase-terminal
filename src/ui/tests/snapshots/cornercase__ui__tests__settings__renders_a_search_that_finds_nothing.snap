@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/settings.rs
+expression: "render(&with(searching(\"zebra\", Vec::new()))).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"  ╭─ Settings ───────────────────────────────────────────────────────────────────────────────────╮  "
+" P│  Worktrees 0   Agents 2   Issues 0   TUI 1                                                   │  "
+"  │  ⌕ zebra                                                                                     │  "
+"▌ │  nothing matches                                                                             │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │                                                                                              │  "
+"  │ ↑↓ picks a result · enter goes to it · esc clears the search                                 │  "
+" ─│                                                                      share   restart   done  │  "
+"  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  "
+"  More ▴                 Help  │                         │                                          "
